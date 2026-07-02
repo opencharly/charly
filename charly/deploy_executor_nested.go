@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // deploy_executor_nested.go — the composable executor that turns the
@@ -105,6 +107,13 @@ type NestedJump struct {
 	// needed; useful for `podman exec --env FOO=bar` or
 	// `ssh -o ProxyJump=…` style tweaks.
 	ExtraArgs []string
+
+	// ProbeName names the disposable container for a JumpPodmanRun/JumpDockerRun
+	// jump so a probe KILLED before it exits (e.g. by a check ProbeTimeout) can be
+	// force-reaped instead of orphaning a "Created" container that poisons the
+	// podman container store. Set per-invocation by NestedExecutor.prepareJump;
+	// empty for non-disposable jumps.
+	ProbeName string
 }
 
 // String renders a jump as a human-readable venue segment. Used as a
@@ -153,26 +162,28 @@ func (n *NestedExecutor) Venue() string {
 // session already carries its own root-escalation semantics — we
 // don't want `sudo ssh sudo bash` triple-escalation.
 func (n *NestedExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
-	wrapped, err := wrapWithJump(n.Jump, script, true /*root*/)
+	wrapped, reap, err := n.prepareJump(script, true /*root*/)
 	if err != nil {
 		return err
 	}
 	if n.Parent == nil {
 		return fmt.Errorf("NestedExecutor: nil Parent")
 	}
+	defer reap()
 	return n.Parent.RunUser(ctx, wrapped, opts)
 }
 
 // RunUser runs as the unprivileged user inside the nested
 // environment.
 func (n *NestedExecutor) RunUser(ctx context.Context, script string, opts EmitOpts) error {
-	wrapped, err := wrapWithJump(n.Jump, script, false /*root*/)
+	wrapped, reap, err := n.prepareJump(script, false /*root*/)
 	if err != nil {
 		return err
 	}
 	if n.Parent == nil {
 		return fmt.Errorf("NestedExecutor: nil Parent")
 	}
+	defer reap()
 	return n.Parent.RunUser(ctx, wrapped, opts)
 }
 
@@ -199,14 +210,55 @@ func (n *NestedExecutor) RunBuilder(ctx context.Context, opts BuilderRunOpts) ([
 // semantics). Adding root escalation would silently change probe
 // behaviour for every existing test.
 func (n *NestedExecutor) RunCapture(ctx context.Context, script string) (string, string, int, error) {
-	wrapped, err := wrapWithJump(n.Jump, script, false /*root*/)
+	wrapped, reap, err := n.prepareJump(script, false /*root*/)
 	if err != nil {
 		return "", "", -1, err
 	}
 	if n.Parent == nil {
 		return "", "", -1, fmt.Errorf("NestedExecutor: nil Parent")
 	}
+	defer reap()
 	return n.Parent.RunCapture(ctx, wrapped)
+}
+
+// probeNameSeq makes disposable-probe container names unique within a process;
+// combined with the pid it is unique across concurrent charly processes too.
+var probeNameSeq atomic.Uint64
+
+// prepareJump wraps a script for this executor's jump and, for a DISPOSABLE
+// container jump (JumpPodmanRun/JumpDockerRun), names the throwaway container
+// deterministically and returns a reap closure. A `podman run --rm` probe KILLED
+// before it exits (e.g. by a check ProbeTimeout) leaves a "Created" container
+// that --rm never cleans; such orphans accumulate and poison the podman
+// container store (sqlite "database is locked" under concurrency). The reap
+// force-removes the named container so a killed probe can never leave an orphan.
+// A no-op reap for a non-disposable jump.
+func (n *NestedExecutor) prepareJump(script string, asRoot bool) (string, func(), error) {
+	j := n.Jump
+	if j.Kind == JumpPodmanRun || j.Kind == JumpDockerRun {
+		j.ProbeName = fmt.Sprintf("charly-probe-%d-%d", os.Getpid(), probeNameSeq.Add(1))
+	}
+	wrapped, err := wrapWithJump(j, script, asRoot)
+	if err != nil {
+		return "", func() {}, err
+	}
+	return wrapped, func() { n.reapDisposableProbe(j.Kind, j.ProbeName) }, nil
+}
+
+// reapDisposableProbe force-removes a named disposable probe container via the
+// parent executor on a DETACHED context, so it runs even when the caller's ctx
+// was cancelled (the ProbeTimeout kill path). No-op when name is empty.
+func (n *NestedExecutor) reapDisposableProbe(kind JumpKind, name string) {
+	if name == "" || n.Parent == nil {
+		return
+	}
+	engine := "podman"
+	if kind == JumpDockerRun {
+		engine = "docker"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = n.Parent.RunUser(ctx, engine+" rm -f "+deployShellQuote(name)+" >/dev/null 2>&1 || true", EmitOpts{})
 }
 
 // ResolveHome returns $HOME for `user` inside the leaf environment of
@@ -413,8 +465,15 @@ func wrapWithJump(jump NestedJump, script string, asRoot bool) (string, error) {
 			engine = "docker"
 		}
 		extras := strings.Join(escapeTokens(jump.ExtraArgs), " ")
-		cmd := fmt.Sprintf("%s run --rm -i --entrypoint= %s %s %s",
-			engine, extras, deployShellQuote(jump.Target), shell)
+		nameFlag := ""
+		if jump.ProbeName != "" {
+			// Name the disposable container so a probe killed before it exits can
+			// be force-reaped (reapDisposableProbe) rather than orphaning a
+			// "Created" container that poisons the podman store.
+			nameFlag = "--name " + deployShellQuote(jump.ProbeName) + " "
+		}
+		cmd := fmt.Sprintf("%s run --rm %s-i --entrypoint= %s %s %s",
+			engine, nameFlag, extras, deployShellQuote(jump.Target), shell)
 		return fmt.Sprintf("%s <<'%s'\n%s\n%s\n", cmd, delim, script, delim), nil
 
 	case JumpSSH:

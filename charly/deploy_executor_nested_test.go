@@ -395,3 +395,66 @@ func TestNestedExecutorGetFile_StagesRedirectOnParent(t *testing.T) {
 		t.Errorf("Parent.GetFile not called once with the parent stage path; got %v", rec.getFilePaths)
 	}
 }
+
+// probeNameOf extracts the `charly-probe-<pid>-<seq>` token from a recorded
+// script (test helper).
+func probeNameOf(s string) string {
+	i := strings.Index(s, "charly-probe-")
+	if i < 0 {
+		return ""
+	}
+	rest := s[i:]
+	end := strings.IndexFunc(rest, func(r rune) bool {
+		return !(r == '-' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z'))
+	})
+	if end < 0 {
+		return rest
+	}
+	return rest[:end]
+}
+
+// TestNestedExecutorPodmanRun_NamesAndReapsProbe guards the store-poisoning fix:
+// a JumpPodmanRun disposable probe container is given a unique --name AND is
+// force-reaped (`podman rm -f`) after the run, so a probe KILLED before it exits
+// (a check ProbeTimeout) can never leave a "Created" orphan that poisons the
+// podman container store (sqlite "database is locked" under concurrency). A
+// non-disposable jump (JumpPodmanExec) is unaffected. FAILS against the pre-fix
+// code (anonymous `podman run --rm`, no reap).
+func TestNestedExecutorPodmanRun_NamesAndReapsProbe(t *testing.T) {
+	rec := &recordingParentExecutor{}
+	n := &NestedExecutor{Parent: rec, Jump: NestedJump{Kind: JumpPodmanRun, Target: "ghcr.io/x/y:latest"}}
+	if err := n.RunUser(context.Background(), "true", EmitOpts{}); err != nil {
+		t.Fatalf("RunUser: %v", err)
+	}
+	var runCmd, reapCmd string
+	for _, s := range rec.runUserScripts {
+		if strings.Contains(s, "run --rm") && strings.Contains(s, "--name") && strings.Contains(s, "charly-probe-") {
+			runCmd = s
+		}
+		if strings.Contains(s, "rm -f") && strings.Contains(s, "charly-probe-") {
+			reapCmd = s
+		}
+	}
+	if runCmd == "" {
+		t.Fatalf("disposable `podman run --rm` was not given a --name charly-probe-...; scripts=%v", rec.runUserScripts)
+	}
+	if reapCmd == "" {
+		t.Fatalf("no reap `rm -f charly-probe-...` recorded — a killed probe would orphan a Created container; scripts=%v", rec.runUserScripts)
+	}
+	// The reap must target the SAME container the run created.
+	if name := probeNameOf(runCmd); name == "" || !strings.Contains(reapCmd, name) {
+		t.Fatalf("reap does not target the run's container: run=%q reap=%q", runCmd, reapCmd)
+	}
+
+	// Negative: a non-disposable jump (podman exec) neither names nor reaps.
+	rec2 := &recordingParentExecutor{}
+	n2 := &NestedExecutor{Parent: rec2, Jump: NestedJump{Kind: JumpPodmanExec, Target: "charly-some-pod"}}
+	if err := n2.RunUser(context.Background(), "true", EmitOpts{}); err != nil {
+		t.Fatalf("RunUser(exec): %v", err)
+	}
+	for _, s := range rec2.runUserScripts {
+		if strings.Contains(s, "charly-probe-") {
+			t.Fatalf("non-disposable jump must not name/reap a probe container; got %q", s)
+		}
+	}
+}
