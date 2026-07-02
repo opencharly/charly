@@ -119,7 +119,7 @@ type DeployRecord struct {
 	Image         string   `json:"image"`
 	Tag           string   `json:"tag,omitempty"`
 	Target        string   `json:"target"` // the deploy-record key, e.g. "vm:<name>" (only VM/local deploys write a DeployRecord)
-	Candy         []string `json:"candy"`
+	Candy         []string `json:"candy,omitempty"`
 	AddCandy      []string `json:"add_candy,omitempty"`
 	DeployedAt    string   `json:"deployed_at"`
 }
