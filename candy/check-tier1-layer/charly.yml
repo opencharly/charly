@@ -1,0 +1,38 @@
+check-tier1-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            bench-tier1 — marker file for harness tier1 scenarios
+            Writes /etc/charly-bench-marker containing the string "charly benchmark target",
+            satisfying the tier1-easy harness recipe.
+    check-tier1-layer-step-0:
+        run: mkdir=/etc
+        mkdir: /etc
+        run_as: root
+        mode: "0755"
+    check-tier1-layer-step-1:
+        run: write=/etc/charly-bench-marker
+        write: /etc/charly-bench-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            charly benchmark target
+    check-tier1-layer-step-2:
+        check: the bench marker file exists at /etc/charly-bench-marker
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench-marker
+            exists: true
+    check-tier1-layer-step-3:
+        check: the marker file is written world-readable at mode 0644
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench-marker
+            mode: "0644"
+    check-tier1-layer-step-4:
+        check: the marker file carries the tier1 benchmark target string
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench-marker
+            contains:
+                - charly benchmark target

@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""CDP reverse proxy — rewrites Host header and response URLs for Chrome 146+.
+
+Chrome 146+ validates the Host header on DevTools HTTP/WebSocket APIs and
+rejects container hostnames. Chrome also returns internal localhost:PORT
+URLs in JSON responses (webSocketDebuggerUrl) that are unreachable from
+other containers.
+
+Two-port architecture:
+  - Chrome on 127.0.0.1:9223 (internal, secure)
+  - cdp-proxy on 0.0.0.0:9222 (external, exposed to network)
+
+The proxy:
+  1. Rewrites request Host header to localhost:9223
+  2. Rewrites response body: localhost:9223 → original_host:9222
+  3. Passes WebSocket frames through unchanged after initial upgrade
+"""
+import asyncio
+import re
+import sys
+
+LISTEN_HOST = "0.0.0.0"
+LISTEN_PORT = 9222
+TARGET_HOST = "127.0.0.1"
+TARGET_PORT = 9223
+
+
+async def pipe(reader, writer):
+    try:
+        while not reader.at_eof():
+            data = await reader.read(65536)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+    except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+
+async def handle_client(client_reader, client_writer):
+    """Proxy with Host header rewrite and response URL rewrite."""
+    try:
+        first_chunk = await asyncio.wait_for(client_reader.read(65536), timeout=10)
+        if not first_chunk:
+            client_writer.close()
+            return
+
+        # Extract original Host header for response rewriting
+        original_host = None
+        m = re.search(rb"(?i)Host:\s*([^\r\n]+)", first_chunk)
+        if m:
+            original_host = m.group(1).strip()
+
+        # Rewrite request Host header to localhost:TARGET_PORT
+        rewritten = re.sub(
+            rb"(?i)Host:\s*[^\r\n]+",
+            b"Host: localhost:" + str(TARGET_PORT).encode(),
+            first_chunk,
+            count=1,
+        )
+
+        # Connect to Chrome
+        target_reader, target_writer = await asyncio.open_connection(
+            TARGET_HOST, TARGET_PORT
+        )
+        target_writer.write(rewritten)
+        await target_writer.drain()
+
+        # Read first response from Chrome
+        response = await asyncio.wait_for(target_reader.read(65536), timeout=10)
+        if response and original_host:
+            # Rewrite Chrome's internal URLs in response body
+            # localhost:9223 → original_host:9222 (so cross-container clients get reachable URLs)
+            internal = b"localhost:" + str(TARGET_PORT).encode()
+            external = original_host
+            if b":" not in external.split(b"]")[-1]:
+                external = external + b":" + str(LISTEN_PORT).encode()
+            response = response.replace(internal, external)
+
+            # Update Content-Length if present (body size changed from URL rewrite)
+            response = re.sub(
+                rb"(?i)Content-Length:\s*\d+",
+                lambda m: b"Content-Length:" + str(
+                    len(response) - response.index(b"\r\n\r\n") - 4
+                ).encode(),
+                response,
+                count=1,
+            )
+
+        if response:
+            client_writer.write(response)
+            await client_writer.drain()
+
+        # Bidirectional pipe for remaining traffic (WebSocket frames)
+        await asyncio.gather(
+            pipe(client_reader, target_writer),
+            pipe(target_reader, client_writer),
+        )
+    except (ConnectionRefusedError, asyncio.TimeoutError, ConnectionResetError):
+        pass
+    except Exception:
+        pass
+    finally:
+        try:
+            client_writer.close()
+        except Exception:
+            pass
+
+
+async def main():
+    server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
+    async with server:
+        await server.serve_forever()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        sys.exit(0)

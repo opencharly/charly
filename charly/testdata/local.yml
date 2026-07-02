@@ -1,0 +1,16 @@
+kind: local
+name: dev-workstation
+spec:
+  candy:
+    - ripgrep
+    - direnv
+  install_opts:
+    with_service: false
+    allow_repo_changes: true
+  env:
+    - EDITOR=vim
+  description:
+    feature: Standard developer workstation profile
+    tag: [working]
+  check:
+    - {id: rg-version, scope: deploy, command: "rg --version"}

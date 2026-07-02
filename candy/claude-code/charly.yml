@@ -1,0 +1,29 @@
+claude-code:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the Claude Code CLI globally via npm so `claude` is on PATH.
+            The candy depends on nodejs and ships a package.json pinning
+            @anthropic-ai/claude-code, which the build installs globally into
+            ~/.npm-global/bin. The result is verifiable: the claude binary exists at
+            that path and `claude --version` prints the Claude Code version banner.
+    claude-code-require:
+        require:
+            - nodejs
+    claude-code-path_append:
+        path_append:
+            - "~/.local/bin"
+    claude-code-step-0:
+        check: the claude binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/claude
+            exists: true
+    claude-code-step-1:
+        check: running claude --version exits cleanly and prints the Claude Code banner
+        exit_status: 0
+        stdout:
+            - contains: "Claude Code"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/claude --version

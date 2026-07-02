@@ -1,0 +1,162 @@
+charly-mcp:
+    candy:
+        version: 2026.178.1430
+        description: |
+            An MCP server exposing the full charly CLI as Streamable-HTTP tools on port 18765
+            charly-mcp is a meta-composition (candy: [charly, supervisord]) with no
+            install of its own: it bakes the charly binary + supervisord, runs
+            `charly mcp serve --listen :18765` as a supervised service, and threads
+            CHARLY_PROJECT_DIR=/workspace plus a world-writable /workspace project
+            mount so build-mode tools (box.build, box.list.*) can resolve a project
+            checkout. Verifiable at build (the composed charly binary and the
+            /workspace mount land in the image) and at deploy (the MCP endpoint comes
+            up and enumerates tools derived from the charly Kong CLI model).
+    charly-mcp-bake-plugin:
+        bake_plugin:
+            # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
+            # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in
+            # charly's core check surface). Bake its pre-built provider binary into every
+            # composing image at /usr/lib/charly/plugins/, so the in-container
+            # `charly mcp serve` resolves the external `mcp` command at runtime — the
+            # deployed container has neither the candy source nor a go toolchain to build
+            # it. (generate.go emitBakedPlugins → plugin_loader.go bakedPluginBinary.)
+            #
+            # `bake_plugin:` IMPLIES `require:` (unified.go populateCandyFromYAML): the
+            # baked plugin candy joins this candy's require chain, so (a) its version:
+            # contributes to every composing image's EffectiveVersion (a baked-plugin
+            # change forces a rebuild) and (b) it lands in the scanned candy set, where
+            # the host's collectReferencedPluginWords build-connects it before the baked
+            # `mcp:` checks dispatch — otherwise they SKIP with `unknown verb "mcp"`.
+            # (box/<distro> adopts the matching @github pin via reconcile later — the
+            # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the
+            # superproject override.)
+            - plugin-mcp
+    charly-mcp-candy:
+        candy:
+            - charly
+            - supervisord
+    charly-mcp-port:
+        port:
+            - 18765
+    charly-mcp-mcp_provide:
+        mcp_provide:
+            - name: charly
+              url: "http://{{.ContainerName}}:18765/mcp"
+              transport: http
+    charly-mcp-volume:
+        volume:
+            # Project checkout bind-mounted from the host so build-mode MCP tools
+            # (box.build, box.inspect, box.list.*) have access to charly.yml +
+            # candy/. Deployers point this at their opencharly repo via
+            # `charly config <image> --bind project=/path/to/opencharly`. When absent or
+            # empty, the project-dir-dependent MCP tools return a clear error
+            # (`charly.yml not found`); the session-wide tools (status, version,
+            # doctor, secrets, settings) continue to work.
+            #
+            # Volume name stays `project` (stable bind-mount API). In-container path
+            # is `/workspace` — a neutral term that works whether the image runs as
+            # root (HOME=/root) or uid 1000 (HOME=/home/user), and whether the
+            # contents are an opencharly checkout or any other dev workspace.
+            - name: project
+              path: /workspace
+    charly-mcp-env:
+        env:
+            # Build-mode commands resolve charly.yml via os.Getwd(); the -C / --dir /
+            # CHARLY_PROJECT_DIR global in charly/main.go honours this before dispatch.
+            CHARLY_PROJECT_DIR: "/workspace"
+    charly-mcp-service:
+        service:
+            - name: charly-mcp
+              exec: "/usr/bin/charly mcp serve --listen :18765"
+              restart: always
+              enable: true
+              scope: system
+    charly-mcp-step-0:
+        run: mkdir=/workspace
+        mkdir: /workspace
+        mode: "0777"
+        run_as: root
+    charly-mcp-step-1:
+        check: the composed charly candy bakes the charly CLI binary at /usr/bin/charly
+        plugin: file
+        plugin_input:
+            file: /usr/bin/charly
+            exists: true
+    charly-mcp-step-2:
+        check: the world-writable /workspace project mount exists in the built image
+        plugin: file
+        plugin_input:
+            file: /workspace
+            filetype: directory
+    charly-mcp-step-3:
+        check: the supervised charly-mcp service is running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: charly-mcp
+            running: true
+    charly-mcp-step-4:
+        check: the MCP endpoint enumerates charly CLI tools over Streamable HTTP
+        mcp: list-tools
+        mcp_name: charly
+        stdout:
+            - contains: box.build
+            - contains: version
+        context:
+            - runtime
+    charly-mcp-step-5:
+        agent-check: the charly-mcp service keeps answering MCP clients on port 18765, restarting automatically (restart=always) if the charly mcp serve process exits
+    charly-mcp-port-2:
+        check: addr=127.0.0.1:${HOST_PORT:18765}
+        id: charly-mcp-port
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:18765}
+            reachable: true
+    mcp-charly-ping:
+        check: mcp=ping
+        id: mcp-charly-ping
+        mcp: ping
+        mcp_name: charly
+        timeout: 30s
+        eventually: 90s
+        retry_interval: 3s
+        context:
+            - runtime
+    mcp-charly-list-tools:
+        check: mcp=list-tools
+        id: mcp-charly-list-tools
+        mcp: list-tools
+        mcp_name: charly
+        stdout:
+            - contains: box.build
+            - contains: status
+            - contains: version
+        context:
+            - runtime
+    mcp-charly-call-version:
+        check: mcp=call
+        id: mcp-charly-call-version
+        mcp: call
+        tool: version
+        input: "{}"
+        mcp_name: charly
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]{4}\\.[0-9]+"
+        context:
+            - runtime
+    mcp-charly-call-list-boxes:
+        check: mcp=call
+        id: mcp-charly-call-list-boxes
+        mcp: call
+        tool: box.list.boxes
+        input: "{}"
+        mcp_name: charly
+        exit_status: 0
+        context:
+            - runtime

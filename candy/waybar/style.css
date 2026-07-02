@@ -1,0 +1,73 @@
+/* === Base === */
+
+* {
+    font-family: "JetBrains Mono", "Symbols Nerd Font", monospace;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background-color: rgba(30, 30, 46, 0.9);
+    color: #cdd6f4;
+    border-top: 2px solid rgba(137, 180, 250, 0.3);
+}
+
+tooltip {
+    background: rgba(30, 30, 46, 0.95);
+    border: 1px solid #89b4fa;
+    border-radius: 8px;
+}
+
+tooltip label {
+    color: #cdd6f4;
+}
+
+/* === Module defaults === */
+
+#custom-chrome,
+#taskbar,
+#custom-notification {
+    padding: 0 10px;
+    margin: 3px 2px;
+    border-radius: 6px;
+    background-color: rgba(49, 50, 68, 0.6);
+}
+
+/* === Chrome restart button === */
+
+#custom-chrome {
+    color: #a6e3a1;
+    font-size: 14px;
+}
+
+#custom-chrome:hover {
+    background-color: rgba(166, 227, 161, 0.2);
+}
+
+/* === Taskbar === */
+
+#taskbar button {
+    padding: 0 4px;
+    color: #cdd6f4;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+}
+
+#taskbar button:hover {
+    background: rgba(137, 180, 250, 0.2);
+}
+
+#taskbar button.active {
+    background: rgba(137, 180, 250, 0.3);
+}
+
+/* === Notifications (swaync) === */
+
+#custom-notification {
+    color: #89b4fa;
+}
+
+#custom-notification:hover {
+    background-color: rgba(137, 180, 250, 0.2);
+}

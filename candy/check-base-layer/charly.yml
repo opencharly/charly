@@ -1,0 +1,30 @@
+check-base-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Drop /etc/check-base-marker as the first layer of the check-pod stack
+            Single-file marker layer — the build-scope smoke target AND the
+            composition-order anchor for the combined check-pod bed
+            (`charly check run check-pod`). It writes /etc/check-base-marker; the
+            check-stack-layer that composes on top asserts this marker is still
+            present, proving layer-composition order survives the build pipeline.
+    check-base-layer-step-0:
+        run: write=/etc/check-base-marker
+        write: /etc/check-base-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            check-base v1
+    check-base-layer-step-1:
+        check: the check-base marker file is present at /etc/check-base-marker
+        plugin: file
+        plugin_input:
+            file: /etc/check-base-marker
+            exists: true
+    check-base-layer-step-2:
+        check: the marker records the check-base version string "check-base v1"
+        plugin: file
+        plugin_input:
+            file: /etc/check-base-marker
+            contains:
+                - contains: "check-base v1"

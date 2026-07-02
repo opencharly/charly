@@ -1,0 +1,85 @@
+agent-forwarding:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Agent forwarding support — GPG, SSH, and direnv client tooling for the .secrets workflow
+            agent-forwarding is a pure composition candy: it installs nothing of
+            its own but pulls in gnupg, direnv, and ssh-client so a box can USE
+            host GPG and SSH agent sockets that are bind-mounted from the host at
+            `charly shell` / `charly start` (direct mode) runtime. The observable,
+            verifiable effect of the composition is that the gpg, ssh, ssh-add,
+            and direnv client binaries are all present in any box that composes
+            this candy — that is what the scenarios and check block assert.
+    agent-forwarding-candy:
+        candy:
+            - gnupg
+            - direnv
+            - ssh-client
+    agent-forwarding-step-0:
+        check: the GnuPG client binary is installed so a forwarded host GPG agent socket can be used for signing and decryption
+        plugin: file
+        plugin_input:
+            file: /usr/bin/gpg
+            exists: true
+    agent-forwarding-step-1:
+        check: the SSH client is installed so git and ssh use the forwarded host SSH agent
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ssh
+            exists: true
+    agent-forwarding-step-2:
+        check: ssh-add is installed so the forwarded host agent's keys can be listed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ssh-add
+            exists: true
+    agent-forwarding-step-3:
+        check: the direnv binary is installed for the .secrets/.envrc autoload workflow
+        plugin: file
+        plugin_input:
+            file: /usr/bin/direnv
+            exists: true
+    agent-forwarding-step-4:
+        agent-check: with a host SSH agent forwarded at runtime, ssh-add -l inside the deployment lists the host's keys
+    agent-forwarding-gnupg-package:
+        check: package=gnupg
+        id: agent-forwarding-gnupg-package
+        plugin: package
+        plugin_input:
+            package: gnupg
+            package_map:
+                fedora: gnupg2
+            installed: true
+    agent-forwarding-ssh-client-package:
+        check: package=openssh-client
+        id: agent-forwarding-ssh-client-package
+        plugin: package
+        plugin_input:
+            package: openssh-client
+            package_map:
+                arch: openssh
+                fedora: openssh-clients
+            installed: true
+    agent-forwarding-direnv-package:
+        check: package=direnv
+        id: agent-forwarding-direnv-package
+        plugin: package
+        plugin_input:
+            package: direnv
+            installed: true
+    agent-forwarding-gpg-runs:
+        check: command=/usr/bin/gpg --version
+        id: agent-forwarding-gpg-runs
+        exit_status: 0
+        stdout:
+            - contains: "gpg (GnuPG)"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/gpg --version
+    agent-forwarding-direnv-runs:
+        check: command=/usr/bin/direnv version
+        id: agent-forwarding-direnv-runs
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/direnv version

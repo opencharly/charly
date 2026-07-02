@@ -1,0 +1,14 @@
+#!/bin/sh
+# Relay from eth0 interface to loopback on the same port.
+# Used by port_relay declarations in candy.yml.
+PORT="$1"
+if [ -z "$PORT" ]; then
+    echo "Usage: relay-wrapper <port>" >&2
+    exit 1
+fi
+ETH_IP=$(ip -4 addr show scope global 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+if [ -z "$ETH_IP" ]; then
+    echo "relay-wrapper: no non-loopback IP found, skipping relay for port $PORT" >&2
+    sleep infinity
+fi
+exec socat TCP-LISTEN:${PORT},bind=${ETH_IP},reuseaddr,fork TCP:127.0.0.1:${PORT}

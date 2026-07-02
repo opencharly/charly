@@ -1,0 +1,102 @@
+[workspace]
+name = "unsloth-environment"
+version = "0.1.0"
+description = "Unsloth LLM fine-tuning environment with vLLM inference"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+[pypi-dependencies]
+# === PyTorch with CUDA 13.0 ===
+torch = { version = ">=2.9.1", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === vLLM runtime dependencies (wheel installed --no-deps in vllm layer) ===
+blake3 = "*"
+cbor2 = "*"
+compressed-tensors = "==0.13.0"
+depyf = "==0.20.0"
+flashinfer-python = "==0.5.3"
+ijson = "*"
+llguidance = ">=1.3.0, <1.4.0"
+lm-format-enforcer = "==0.11.3"
+mistral-common = ">=1.8.5"
+model-hosting-container-standards = ">=0.1.9, <1.0.0"
+numba = "==0.61.2"
+openai-harmony = ">=0.0.3"
+opencv-python-headless = ">=4.11.0"
+outlines-core = "==0.2.11"
+partial-json-parser = "*"
+prometheus-fastapi-instrumentator = ">=7.0.0"
+ray = ">=2.48.0"
+watchfiles = "*"
+xgrammar = "==0.1.29"
+lark = ">=1.2.2"
+pydantic-extra-types = "*"
+pycountry = "*"
+interegular = "*"
+hf-transfer = "*"
+cut-cross-entropy = "*"
+torchao = "*"
+tyro = "*"
+loguru = "*"
+llvmlite = ">=0.44.0, <0.45"
+apache-tvm-ffi = "*"
+nvidia-cudnn-frontend = "*"
+nvidia-cutlass-dsl = "*"
+
+# === HuggingFace Core ===
+transformers = ">=4.57.3"
+accelerate = "*"
+safetensors = ">=0.4.2"
+datasets = ">=4.3.0"
+huggingface_hub = "*"
+tokenizers = "*"
+sentencepiece = "*"
+
+# === Fine-tuning Libraries ===
+# `unsloth` provides BOTH the FastLanguageModel python API AND the `unsloth`
+# CLI console-script (the `unsloth studio` launcher the supervisord service
+# execs). It was previously absent here, so the env had no `unsloth` binary on
+# PATH and the studio service FATAL'd "can't find command 'unsloth'" (RDD-proven
+# on check-cachyos-unsloth-studio-pod). `unsloth studio` then bootstraps its own
+# ~/.unsloth/studio/.venv at first run. Upstream: https://unsloth.ai/docs/new/studio/install
+unsloth = "*"
+peft = "*"
+trl = "*"
+bitsandbytes = "*"
+liger-kernel = "*"
+
+# === Core Numerical ===
+numpy = "<2.3"
+scipy = "*"
+einops = ">=0.7.0"
+
+# === Utilities ===
+tqdm = "*"
+psutil = "*"
+pyyaml = "*"
+pydantic = ">=2.0"
+pydantic-settings = ">=2.0"
+python-dotenv = "*"
+pillow = ">=10.0.0"
+aiohttp = ">=3.9.0"
+protobuf = "*"
+
+# === GGUF Tools ===
+gguf = "*"
+
+[tasks]
+verify-cuda = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda}\") if torch.cuda.is_available() else print(\"No GPU access\")'"
+verify-pytorch = "python -c 'import torch; print(f\"PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}\")'"
+verify-unsloth = "python -c 'from unsloth import FastLanguageModel; print(\"Unsloth OK\")'"
+verify-vllm = "python -c 'import vllm; print(f\"vLLM: {vllm.__version__}\")'"
+verify-transformers = "python -c 'import transformers; print(f\"Transformers: {transformers.__version__}\")'"
+
+[environments]
+default = { features = [], solve-group = "default" }

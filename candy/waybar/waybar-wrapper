@@ -1,0 +1,23 @@
+#!/bin/bash
+# Wait for Wayland socket, then launch waybar.
+
+TIMEOUT=30
+ELAPSED=0
+while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+
+if [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; then
+    echo "ERROR: Wayland socket not found after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+# Discover sway IPC socket
+export SWAYSOCK=$(ls /tmp/sway-ipc.*.sock 2>/dev/null | head -1)
+if [ -z "$SWAYSOCK" ]; then
+    echo "ERROR: sway IPC socket not found" >&2
+    exit 1
+fi
+
+exec waybar

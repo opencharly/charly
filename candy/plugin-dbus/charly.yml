@@ -1,0 +1,33 @@
+plugin-dbus:
+    candy:
+        version: 2026.182.1805
+        description: |-
+            OUT-OF-TREE charly plugin serving the `dbus` live-container check verb — a
+            standalone Go module (go.mod + main.go) that interacts with D-Bus services inside
+            a running deployment (list, call, introspect, notify) over go-plugin gRPC via the
+            charly plugin SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS via
+            LocalTransport — so the D-Bus driver lives HERE, out of charly's core check
+            surface. STRUCTURAL externalization, NOT a dep-shed: godbus stays in charly's core
+            for the Secret Service / GPG secrets — the verb drives the venue's session bus
+            with gdbus, never godbus. `dbus:` authoring stays unchanged: the verb keeps its
+            `dbus:` discriminator + every modifier (dest/path/method/args/text/description) +
+            the #DbusMethod enum on charly's core #Op, and dispatches through the provider
+            registry exactly like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider
+            hands it the full #Op). EXEC-based (the second, after record): the host attaches
+            its live DeployExecutor over the E3b reverse channel and this plugin dials back
+            through the SDK (sdk.ExecutorFromInvoke) to RunCapture gdbus against the venue's
+            session bus — it owns no podman / SSH machinery and no godbus. The R10 consumer is
+            a desktop pod bed whose check composes this plugin (the sway-browser-vnc bed's
+            `dbus: list`).
+    plugin-dbus-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-dbus
+            providers:
+                - verb:dbus
+    dbus-verb-dispatches:
+        check: the dbus verb dispatches through the provider registry and lists the registered D-Bus services on a live deployment (the out-of-process plugin verb drives the venue's session bus over the executor reverse channel)
+        id: dbus-verb-dispatches
+        dbus: list
+        context:
+            - runtime

@@ -1,0 +1,25 @@
+plugin-group:
+    candy:
+        version: 2026.182.0440
+        description: |-
+            The `group` STRUCTURAL deploy KIND relocated into a candy (C2-group): a TARGETLESS deploy
+            group (resource members brought up ALONGSIDE on the shared network, no own workload). Its
+            OpLoad decodes the group's scalar config (disposable/lifecycle/description/…) from op.Params
+            into a spec.Deploy and ATTACHES the AUTHORED members the host pre-decoded + threaded via
+            op.Env (F5 authored-member input-threading), returning the complete spec.Deploy the host
+            folds into uf.Bundle — byte-equivalent to the former builtin groupKind. COMPILED-IN (in the
+            embedded compiled_plugins:), like the tier-1 kinds, because `group` is a core deploy
+            primitive every box/submodule must always resolve; also serves out-of-process via cmd/serve.
+    plugin-group-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-group
+            providers:
+                - kind:group
+    group-kind-module-present:
+        check: the group structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its structural entity decode is exercised by any deploy composing a `group:` node (check-group / check-k8s-deploy / box-fedora / box-cachyos)
+        id: group-kind-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

@@ -1,0 +1,7 @@
+{
+  "name": "hermes-playwright",
+  "version": "1.0.0",
+  "dependencies": {
+    "playwright": "*"
+  }
+}

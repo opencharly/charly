@@ -1,0 +1,99 @@
+package main
+
+import "testing"
+
+// Tests for the new PhaseSet / PhaseTemplates lookup added for the
+// BuildTarget refactor (Task 4). Verifies (a) fallback to legacy
+// install_template when phases: is absent, (b) fallback never kicks in
+// outside the (install, container) cell, (c) phase lookups return the
+// correct cell when phases: is present.
+
+func TestFormatDefPhaseTemplateLegacyFallback(t *testing.T) {
+	// Legacy shape: only InstallTemplate set.
+	f := &FormatDef{InstallTemplate: "RUN dnf install -y {{.Packages}}"}
+
+	// (install, container) falls back to InstallTemplate.
+	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != f.InstallTemplate {
+		t.Errorf("legacy fallback for (install, container) = %q, want %q", got, f.InstallTemplate)
+	}
+	// All other phase/venue combinations return "" (no legacy equivalent).
+	for _, p := range []Phase{PhasePrepare, PhaseInstall, PhaseCleanup} {
+		for _, v := range []Venue{VenueHostNative, VenueContainerBuilder} {
+			if p == PhaseInstall && v == VenueContainerBuilder {
+				continue
+			}
+			if got := formatPhaseTemplate(f, p, v); got != "" {
+				t.Errorf("expected empty template for (%v, %v), got %q", p, v, got)
+			}
+		}
+	}
+}
+
+func TestFormatDefPhaseTemplateNewPathPreferred(t *testing.T) {
+	f := &FormatDef{
+		InstallTemplate: "RUN legacy",
+		Phases: &PhaseSet{
+			Install: &PhaseTemplates{
+				Container: "RUN new-container",
+				Host:      "new-host",
+			},
+			Prepare: &PhaseTemplates{
+				Container: "RUN prepare-container",
+				Host:      "prepare-host",
+			},
+		},
+	}
+
+	// New path wins over legacy for (install, container).
+	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != "RUN new-container" {
+		t.Errorf("(install, container) = %q, want RUN new-container", got)
+	}
+	// Host rendering comes from new path (no legacy equivalent).
+	if got := formatPhaseTemplate(f, PhaseInstall, VenueHostNative); got != "new-host" {
+		t.Errorf("(install, host) = %q, want new-host", got)
+	}
+	// Prepare is only in new path.
+	if got := formatPhaseTemplate(f, PhasePrepare, VenueContainerBuilder); got != "RUN prepare-container" {
+		t.Errorf("(prepare, container) = %q", got)
+	}
+	if got := formatPhaseTemplate(f, PhasePrepare, VenueHostNative); got != "prepare-host" {
+		t.Errorf("(prepare, host) = %q", got)
+	}
+	// Cleanup phase is nil in PhaseSet → empty return.
+	if got := formatPhaseTemplate(f, PhaseCleanup, VenueContainerBuilder); got != "" {
+		t.Errorf("(cleanup, container) = %q, want empty", got)
+	}
+}
+
+func TestFormatDefPhaseTemplateNilSafe(t *testing.T) {
+	var f *FormatDef
+	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != "" {
+		t.Errorf("nil FormatDef lookup = %q, want empty", got)
+	}
+}
+
+func TestBuilderDefPhaseTemplateLegacyFallbacks(t *testing.T) {
+	// Inline builder → falls back to InstallTemplate.
+	inline := &BuilderDef{Inline: true, InstallTemplate: "RUN cargo install"}
+	if got := builderPhaseTemplate(inline, PhaseInstall, VenueContainerBuilder); got != inline.InstallTemplate {
+		t.Errorf("inline builder fallback = %q, want %q", got, inline.InstallTemplate)
+	}
+	// Multi-stage builder → falls back to StageTemplate.
+	multi := &BuilderDef{StageTemplate: "FROM pixi AS build"}
+	if got := builderPhaseTemplate(multi, PhaseInstall, VenueContainerBuilder); got != multi.StageTemplate {
+		t.Errorf("multi-stage fallback = %q, want %q", got, multi.StageTemplate)
+	}
+	// Host venue without phases → empty (no legacy shape for host).
+	if got := builderPhaseTemplate(multi, PhaseInstall, VenueHostNative); got != "" {
+		t.Errorf("host-venue legacy = %q, want empty", got)
+	}
+}
+
+func TestBuilderDefPathContributionsOptional(t *testing.T) {
+	// Older build.yml entries don't have path_contributions — field is
+	// optional and zero-value is nil/empty.
+	b := &BuilderDef{}
+	if len(b.PathContributions) != 0 {
+		t.Errorf("default PathContributions len = %d, want 0", len(b.PathContributions))
+	}
+}

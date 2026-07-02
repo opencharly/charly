@@ -1,0 +1,120 @@
+llama-cpp:
+    candy:
+        version: 2026.144.1443
+        description: |
+            llama.cpp prebuilt binaries and GGUF conversion tools
+            The llama-cpp candy downloads the latest llama.cpp release into
+            ~/llama.cpp: the llama-quantize and llama-cli binaries with their
+            shared libraries, plus the convert_hf_to_gguf.py script and the
+            gguf-py package for converting HuggingFace models to GGUF. Every
+            artifact lands at a fixed path under ~/llama.cpp, so its presence
+            and executability are directly checkable.
+    llama-cpp-env:
+        env:
+            LLAMA_CPP_PATH: "~/llama.cpp"
+    llama-cpp-path_append:
+        path_append:
+            - "~/llama.cpp"
+    llama-cpp-step-0:
+        run: |
+            command=LLAMA_CPP_DIR=~/llama.cpp
+            mkdir -p "$LLAMA_CPP_DIR"
+            LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
+            curl -fsSL -o /tmp/llama-bin.tar.gz \
+              "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/llama-${LLAMA_RELEASE}-bin-ubuntu-x64.tar.gz"
+            mkdir -p /tmp/llama_extract
+            tar --no-same-owner --no-same-permissions -xzf /tmp/llama-bin.tar.gz -C /tmp/llama_extract
+            EXTRACT_DIR="/tmp/llama_extract/llama-${LLAMA_RELEASE}"
+            cp "$EXTRACT_DIR/llama-quantize" "$EXTRACT_DIR/llama-cli" "$LLAMA_CPP_DIR/"
+            chmod +x "$LLAMA_CPP_DIR/llama-quantize" "$LLAMA_CPP_DIR/llama-cli"
+            cp "$EXTRACT_DIR"/lib*.so* "$EXTRACT_DIR/LICENSE" "$LLAMA_CPP_DIR/"
+            rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                LLAMA_CPP_DIR=~/llama.cpp
+                mkdir -p "$LLAMA_CPP_DIR"
+                LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
+                curl -fsSL -o /tmp/llama-bin.tar.gz \
+                  "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/llama-${LLAMA_RELEASE}-bin-ubuntu-x64.tar.gz"
+                mkdir -p /tmp/llama_extract
+                tar --no-same-owner --no-same-permissions -xzf /tmp/llama-bin.tar.gz -C /tmp/llama_extract
+                EXTRACT_DIR="/tmp/llama_extract/llama-${LLAMA_RELEASE}"
+                cp "$EXTRACT_DIR/llama-quantize" "$EXTRACT_DIR/llama-cli" "$LLAMA_CPP_DIR/"
+                chmod +x "$LLAMA_CPP_DIR/llama-quantize" "$LLAMA_CPP_DIR/llama-cli"
+                cp "$EXTRACT_DIR"/lib*.so* "$EXTRACT_DIR/LICENSE" "$LLAMA_CPP_DIR/"
+                rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz
+    llama-cpp-step-1:
+        run: |
+            command=LLAMA_CPP_DIR=~/llama.cpp
+            LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
+            curl -fsSL -o /tmp/llama-src.tar.gz \
+              "https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_RELEASE}.tar.gz"
+            mkdir -p /tmp/llama_src
+            tar --no-same-owner --no-same-permissions -xzf /tmp/llama-src.tar.gz -C /tmp/llama_src
+            SRC_DIR="/tmp/llama_src/llama.cpp-${LLAMA_RELEASE}"
+            cp "$SRC_DIR/convert_hf_to_gguf.py" "$LLAMA_CPP_DIR/"
+            cp -r "$SRC_DIR/gguf-py" "$LLAMA_CPP_DIR/"
+            rm -rf /tmp/llama_src /tmp/llama-src.tar.gz
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                LLAMA_CPP_DIR=~/llama.cpp
+                LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
+                curl -fsSL -o /tmp/llama-src.tar.gz \
+                  "https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_RELEASE}.tar.gz"
+                mkdir -p /tmp/llama_src
+                tar --no-same-owner --no-same-permissions -xzf /tmp/llama-src.tar.gz -C /tmp/llama_src
+                SRC_DIR="/tmp/llama_src/llama.cpp-${LLAMA_RELEASE}"
+                cp "$SRC_DIR/convert_hf_to_gguf.py" "$LLAMA_CPP_DIR/"
+                cp -r "$SRC_DIR/gguf-py" "$LLAMA_CPP_DIR/"
+                rm -rf /tmp/llama_src /tmp/llama-src.tar.gz
+    llama-cpp-step-2:
+        check: the llama-quantize binary is present under ~/llama.cpp
+        plugin: file
+        plugin_input:
+            file: ${HOME}/llama.cpp/llama-quantize
+            exists: true
+    llama-cpp-step-3:
+        check: the llama-cli binary is present and executable
+        stdout: ok
+        plugin: command
+        plugin_input:
+            command: test -x ${HOME}/llama.cpp/llama-cli && echo ok
+    llama-cpp-step-4:
+        check: the HuggingFace-to-GGUF conversion script is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/llama.cpp/convert_hf_to_gguf.py
+            exists: true
+    llama-cpp-step-5:
+        check: the gguf-py conversion package directory is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/llama.cpp/gguf-py
+            filetype: directory
+    llama-cpp-step-6:
+        agent-check: running "llama-cli --version" prints a llama.cpp version string, confirming the prebuilt ubuntu-x64 binary executes on this host
+    llama-cpp-cli-binary:
+        check: file=${HOME}/llama.cpp/llama-cli
+        id: llama-cpp-cli-binary
+        plugin: file
+        plugin_input:
+            file: ${HOME}/llama.cpp/llama-cli
+            exists: true
+    llama-cpp-binaries-executable:
+        check: command=test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
+        id: llama-cpp-binaries-executable
+        stdout: ok
+        plugin: command
+        plugin_input:
+            command: test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
+    llama-cpp-shared-libs:
+        check: command=ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok
+        id: llama-cpp-shared-libs
+        stdout: ok
+        plugin: command
+        plugin_input:
+            command: ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok

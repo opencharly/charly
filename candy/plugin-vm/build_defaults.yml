@@ -1,0 +1,1294 @@
+version: 2026.174.1100
+
+# providers — the registry membership manifest (provider class -> the words it
+# contributes). Read at init (registry_bootstrap.go) to drive built-in provider
+# registration from THIS embedded default config instead of a hardcoded Go list. A
+# bijection gate keeps it in sync with the compiled-in instances. External providers
+# load via plugin: candy blocks, not here. A schema-less IR provider extracted into
+# its own dedicated plugin_<class>_<name>.go file (the externalizable
+# dedicated-provider pattern — e.g. deploy:local, builder:cargo, step:Reboot)
+# self-registers from that file and is intentionally NOT listed here. Every deploy
+# target (local/pod/vm/k8s/android) and every builder (aur/pixi/cargo/npm) is now
+# externalized this way, so those two lists are empty by design. EVERY KIND is likewise
+# dedicated-file-registered (Phase 2 complete): the tier-1 build-vocab/calamares kinds as
+# schema-carrying plugin units; the 6 deploy-shape kinds group/pod/vm/k8s/local/android and
+# candy (the box⊻layer factory arm) as in-proc dedicated-builtin KindProviders, so the kind
+# list is empty by design too.
+providers:
+    kind: []
+    verb: [kill, plugin, summarize]
+    deploy: []
+    step: []
+    builder: []
+
+# compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
+# placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
+# `task build:charly` before `go build`) to emit charly/plugins_generated.go (one
+# registerCompiledPlugin() call per entry) + the repo-root go.work (a `use` directive
+# per entry, so `go build ./charly` resolves the candy imports). A plugin candy NOT
+# listed here still loads OUT-OF-PROCESS over gRPC when a plan references its word
+# (the coexist path). "which plugins are in the binary" is a normal candy-inclusion
+# choice; a consumer overrides it by pointing pluginsgen at its own charly.yml.
+compiled_plugins:
+    - plugin-example
+    - plugin-example-external
+    - plugin-port
+    - plugin-process
+    - plugin-interface
+    - plugin-addr
+    - plugin-dns
+    - plugin-examplerunverb
+    - plugin-matching
+    - plugin-http
+    - plugin-kernel-param
+    - plugin-mount
+    - plugin-user
+    - plugin-unix-group
+    - plugin-file
+    - plugin-command
+    - plugin-service
+    - plugin-package
+    - plugin-init
+    - plugin-agent
+    - plugin-builder
+    - plugin-distro
+    - plugin-module
+    - plugin-package-group
+    - plugin-resource
+    - plugin-sidecar
+    - plugin-target
+    # live-container verbs (the former schema-less in-proc live-verb seam — dispatch was
+    # delegated via the host's live-verb dispatch hook (now removed); the `charly check <verb>` driver command stays host-side)
+    - plugin-cdp
+    - plugin-wl
+    - plugin-vnc
+    - plugin-dbus
+    - plugin-record
+    - plugin-mcp
+
+# context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
+# excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by
+# generate.go to emit .containerignore / .dockerignore; a project's
+# defaults.context_ignore overlays on top of these.
+context_ignore_baseline:
+    - .git
+    - bin
+    - charly
+    - "*.md"
+    - "**/__pycache__"
+    - "**/*.pyc"
+    - "**/*.pyo"
+    - "**/*.egg-info"
+    - "**/node_modules"
+    - "**/.git"
+    - "**/.DS_Store"
+    - "**/*~"
+    - "**/*.swp"
+    - "**/*.swo"
+    - "**/.pytest_cache"
+    - "**/.mypy_cache"
+
+# install_hints — binary name -> (distro ID -> package name) for `charly doctor` host
+# dependency install suggestions, formerly the Go var installHints (distro.go). An
+# "AUR: <cmd>" value carries its own install line.
+install_hints:
+    docker: {arch: docker, fedora: docker-ce, debian: docker-ce}
+    podman: {arch: podman, fedora: podman, debian: podman}
+    git: {arch: git, fedora: git, debian: git}
+    skopeo: {arch: skopeo, fedora: skopeo, debian: skopeo}
+    gocryptfs: {arch: gocryptfs, fedora: gocryptfs, debian: gocryptfs}
+    fusermount3: {arch: fuse3, fedora: fuse3, debian: fuse3}
+    systemd-ask-password: {arch: systemd, fedora: systemd, debian: systemd}
+    qemu-system-x86_64: {arch: qemu-full, fedora: qemu-kvm, debian: qemu-system-x86}
+    qemu-system-aarch64: {arch: qemu-full, fedora: qemu-kvm, debian: qemu-system-arm}
+    qemu-img: {arch: qemu-img, fedora: qemu-img, debian: qemu-utils}
+    virtiofsd: {arch: virtiofsd, fedora: virtiofsd, debian: virtiofsd}
+    virsh: {arch: libvirt, fedora: libvirt-client, debian: libvirt-clients}
+    ssh: {arch: openssh, fedora: openssh-clients, debian: openssh-client}
+    script: {arch: util-linux, fedora: util-linux, debian: bsdutils}
+    systemctl: {arch: systemd, fedora: systemd, debian: systemd}
+    tailscale: {arch: tailscale, fedora: tailscale, debian: tailscale}
+    cloudflared: {arch: "AUR: yay -S cloudflared-bin", fedora: cloudflared, debian: cloudflared}
+    nvidia-smi: {arch: nvidia-utils, fedora: nvidia-driver, debian: nvidia-utils}
+    gvproxy: {arch: "AUR: yay -S gvisor-tap-vsock", fedora: gvisor-tap-vsock, debian: golang-github-containers-gvisor-tap-vsock}
+
+# ovmf_paths — distro family -> secure/nonsecure ordered OVMF firmware candidate path
+# pairs, formerly inline literals in ovmf_paths.go. The alias->family resolution, secure
+# selection, and unknown-distro union stay Go logic; only the path data is here.
+ovmf_paths:
+    fedora:
+        secure:
+            - {code: /usr/share/OVMF/OVMF_CODE.secboot.fd, vars: /usr/share/OVMF/OVMF_VARS.secboot.fd}
+            - {code: /usr/share/edk2/ovmf/OVMF_CODE.secboot.fd, vars: /usr/share/edk2/ovmf/OVMF_VARS.secboot.fd}
+        nonsecure:
+            - {code: /usr/share/OVMF/OVMF_CODE.fd, vars: /usr/share/OVMF/OVMF_VARS.fd}
+            - {code: /usr/share/edk2/ovmf/OVMF_CODE.fd, vars: /usr/share/edk2/ovmf/OVMF_VARS.fd}
+    arch:
+        secure:
+            - {code: /usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd, vars: /usr/share/edk2/x64/OVMF_VARS.4m.fd}
+            - {code: /usr/share/edk2-ovmf/x64/OVMF_CODE.secboot.fd, vars: /usr/share/edk2-ovmf/x64/OVMF_VARS.fd}
+        nonsecure:
+            - {code: /usr/share/edk2/x64/OVMF_CODE.4m.fd, vars: /usr/share/edk2/x64/OVMF_VARS.4m.fd}
+            - {code: /usr/share/edk2-ovmf/x64/OVMF_CODE.fd, vars: /usr/share/edk2-ovmf/x64/OVMF_VARS.fd}
+    debian:
+        secure:
+            - {code: /usr/share/OVMF/OVMF_CODE_4M.ms.fd, vars: /usr/share/OVMF/OVMF_VARS_4M.ms.fd}
+            - {code: /usr/share/OVMF/OVMF_CODE.secboot.fd, vars: /usr/share/OVMF/OVMF_VARS.secboot.fd}
+        nonsecure:
+            - {code: /usr/share/OVMF/OVMF_CODE_4M.fd, vars: /usr/share/OVMF/OVMF_VARS_4M.fd}
+            - {code: /usr/share/OVMF/OVMF_CODE.fd, vars: /usr/share/OVMF/OVMF_VARS.fd}
+
+# device_descriptions — host device path -> human description for `charly doctor`'s
+# hardware section, formerly the Go var deviceDescriptions (doctor.go).
+device_descriptions:
+    "/dev/dri/renderD*": GPU render node
+    /dev/kfd: AMD Kernel Fusion Driver (ROCm compute)
+    /dev/kvm: KVM virtualization
+    /dev/vhost-net: vhost network acceleration
+    /dev/vhost-vsock: VM socket communication
+    /dev/fuse: FUSE filesystem
+    /dev/net/tun: TUN/TAP network device
+    /dev/hwrng: hardware random number generator
+
+# device_patterns — host device glob patterns probed for auto-detection
+# (DetectHostDevices in devices.go) AND `charly doctor`'s hardware section (doctor.go),
+# formerly the Go var devicePatterns. NVIDIA GPUs are handled separately via CDI/--gpus;
+# AMD GPUs need /dev/kfd for ROCm compute access.
+device_patterns:
+    - "/dev/dri/renderD*"
+    - /dev/kfd
+    - /dev/kvm
+    - /dev/vhost-net
+    - /dev/vhost-vsock
+    - /dev/fuse
+    - /dev/net/tun
+    - /dev/hwrng
+
+# gpu_vendors — PCI vendor ID -> name for the render nodes that count as a real,
+# encode-capable GPU (vs the paravirtual virtio-gpu 0x1af4), formerly the inline switch in
+# pickRenderNode (devices.go). Key membership picks the DRINODE/DRI_NODE render node on a
+# multi-GPU/passthrough host; the name value is documentary.
+gpu_vendors:
+    "0x10de": NVIDIA
+    "0x1002": AMD
+    "0x8086": Intel
+
+# pci_class_labels — PCI class code (high 16 bits) -> human label for VFIO passthrough
+# device reporting, formerly the inline switch in pciClassLabel (devices.go). An unknown
+# class falls back to the raw class string (logic in pciClassLabel, not data).
+pci_class_labels:
+    "0x0300": VGA controller
+    "0x0302": 3D controller
+    "0x0380": Display controller
+    "0x0403": Audio device
+    "0x0604": PCI bridge
+    "0x0c03": USB controller
+    "0x0c0330": USB controller
+
+# distro_package_managers — host distro ID -> install command prefix for `charly doctor`
+# install hints, formerly the inline switch in parseOsRelease (distro.go). An unlisted
+# distro yields an empty manager (no install hint).
+distro_package_managers:
+    arch: pacman -S
+    fedora: sudo dnf install
+    rhel: sudo dnf install
+    centos: sudo dnf install
+    rocky: sudo dnf install
+    almalinux: sudo dnf install
+    debian: sudo apt-get install
+    ubuntu: sudo apt-get install
+    pop: sudo apt-get install
+    linuxmint: sudo apt-get install
+    opensuse-tumbleweed: sudo zypper install
+    opensuse-leap: sudo zypper install
+
+# distro_family_map — host distro ID -> base family for install-hint package-name lookup,
+# formerly the inline switch in distroFamily (distro.go). An unlisted distro maps to itself
+# (logic in distroFamily, not data).
+distro_family_map:
+    ubuntu: debian
+    pop: debian
+    linuxmint: debian
+    rhel: fedora
+    centos: fedora
+    rocky: fedora
+    almalinux: fedora
+    opensuse-tumbleweed: fedora
+    opensuse-leap: fedora
+
+# ovmf_distro_aliases — host distro ID -> OVMF firmware family (fedora|arch|debian),
+# formerly the inline switches in ovmfCandidatesForDistro + ovmfNotFoundError
+# (ovmf_paths.go). An unlisted distro has no entry; ovmfCandidatesForDistro then tries the
+# union of all families and ovmfNotFoundError emits the generic install hint (logic).
+ovmf_distro_aliases:
+    fedora: fedora
+    centos: fedora
+    rhel: fedora
+    rocky: fedora
+    alma: fedora
+    arch: arch
+    manjaro: arch
+    endeavouros: arch
+    debian: debian
+    ubuntu: debian
+
+nvidia-gpu:
+    resource:
+        gpu:
+            vendor: "0x10de"
+pacstrap:
+    builder:
+        cache_mount:
+            - dst: /var/cache/pacman/pkg
+              sharing: locked
+        kind: bootstrap
+        phase:
+            install:
+                container: |
+                    set -euo pipefail
+                    {{.Distro.Pacstrap.KeyringInitCmd}}
+                    mkdir -p /target /out
+                    {{- if .ExtraPacmanConf}}
+                    cat > /etc/pacman.conf.extra <<'CACHYOS_REPOS'
+                    {{.ExtraPacmanConf}}
+                    CACHYOS_REPOS
+                    cat /etc/pacman.conf.extra >> /etc/pacman.conf
+                    {{- end}}
+                    pacstrap -K -G /target {{range .Packages}}{{.}} {{end}}
+                    {{- if .RuntimePacmanConf}}
+                    # pacstrap configures only THIS container's pacman.conf for the
+                    # install; the booted guest is left without a working one. Write
+                    # the runtime config into the rootfs so add_layer pac installs
+                    # work in the guest. RuntimePacmanConf is RENDERED (Go) from the
+                    # SAME extra_repo source as the install config — one repo list,
+                    # no install-vs-runtime drift (see renderRuntimePacmanConf).
+                    cat > /target/etc/pacman.conf <<'CHARLY_RUNTIME_PACMAN_CONF'
+                    {{.RuntimePacmanConf}}
+                    CHARLY_RUNTIME_PACMAN_CONF
+                    {{- end}}
+                    tar -C /target --xattrs --xattrs-include='*' --acls -czf /out/rootfs.tar.gz .
+        privileged: true
+        output_artifact: /out/rootfs.tar.gz
+debootstrap:
+    builder:
+        cache_mount:
+            - dst: /var/cache/apt/archives
+              sharing: locked
+        kind: bootstrap
+        phase:
+            install:
+                container: |
+                    set -euo pipefail
+                    mkdir -p /target /out
+                    # Stage 1: minimal apt-aware rootfs via debootstrap.
+                    # --include adds packages so the chroot has CA certs +
+                    # gpg available before the stage-2 apt-get update runs.
+                    debootstrap \
+                      --variant={{if .Distro.Debootstrap.Variant}}{{.Distro.Debootstrap.Variant}}{{else}}minbase{{end}} \
+                      --components={{if .Distro.Debootstrap.Components}}{{.Distro.Debootstrap.Components}}{{else}}main{{end}} \
+                    {{- if .Distro.Debootstrap.IncludePackages}}
+                      --include={{join .Distro.Debootstrap.IncludePackages ","}} \
+                    {{- end}}
+                      {{.Distro.Debootstrap.Suite}} /target {{.Distro.Debootstrap.Mirror}}
+                    # debootstrap on Ubuntu 24.04+ writes deb822-format
+                    # /etc/apt/sources.list.d/ubuntu.sources with only the
+                    # FIRST component (main), even when --components had
+                    # several entries. Override with an explicit legacy
+                    # sources.list so universe/multiverse become reachable
+                    # for the chroot apt-get install on Ubuntu (where
+                    # ripgrep et al. live in universe). On Debian the file
+                    # is written by debootstrap with the right components
+                    # already, so this rewrite is harmless.
+                    rm -f /target/etc/apt/sources.list.d/ubuntu.sources
+                    cat > /target/etc/apt/sources.list <<APT_EOF
+                    deb {{.Distro.Debootstrap.Mirror}} {{.Distro.Debootstrap.Suite}} {{replace (printf "%s" .Distro.Debootstrap.Components) "," " "}}
+                    APT_EOF
+                    # Optional extra apt sources (security/backports).
+                    {{- if .ExtraAptSources}}
+                    {{.ExtraAptSources}}
+                    {{- end}}
+                    # Stage 2: chroot apt-get install for kernel, grub,
+                    # sshd, cloud-init, qemu-guest-agent, etc. Bind-mounts
+                    # required for postinst scripts that run update-grub
+                    # / update-initramfs (they probe /sys + /proc + /dev).
+                    mount -t proc proc /target/proc
+                    mount --bind /sys /target/sys
+                    mount --bind /dev /target/dev
+                    mount --bind /dev/pts /target/dev/pts
+                    # Shadow the chroot's /dev/kvm (+ vhost nodes) with throwaway
+                    # files so the stage-2 package-config systemd-tmpfiles can't
+                    # corrupt the HOST's /dev/kvm (shared via the /dev bind).
+                    # Debian's static-nodes-permissions assigns these a numeric
+                    # gid that maps to a DIFFERENT group on the Arch host, so
+                    # without this the chroot resets the shared /dev/kvm to 0660
+                    # with the wrong group — virtqemud then caches "no kvm" and
+                    # `charly vm create` fails with a misleading EFI-firmware error.
+                    # The chroot never uses KVM. See CHANGELOG (2026-05 RCA).
+                    for d in kvm vhost-net vhost-vsock; do
+                      if [ -e "/target/dev/$d" ]; then
+                        : > "/tmp/charly-devshadow-$d"
+                        mount --bind "/tmp/charly-devshadow-$d" "/target/dev/$d"
+                      fi
+                    done
+                    chroot /target apt-get update
+                    DEBIAN_FRONTEND=noninteractive chroot /target \
+                      apt-get install -y --no-install-recommends \
+                      {{range .Packages}}{{.}} {{end}}
+                    # Clean apt cache before tarring so the rootfs is lean.
+                    chroot /target apt-get clean
+                    rm -rf /target/var/lib/apt/lists/*
+                    # Drop the device shadows (sub-mounts of /target/dev) first.
+                    for d in kvm vhost-net vhost-vsock; do
+                      umount "/target/dev/$d" 2>/dev/null || true
+                    done
+                    umount /target/dev/pts /target/dev /target/sys /target/proc
+                    tar -C /target --xattrs --xattrs-include='*' --acls -czf /out/rootfs.tar.gz .
+        privileged: true
+        output_artifact: /out/rootfs.tar.gz
+aur:
+    builder:
+        detect_config: aur
+        cache_mount:
+            - dst: /var/cache/pacman/pkg
+              sharing: locked
+            - dst: /tmp/aur-srcdest
+              owned: true
+            - dst: /tmp/aur-xdg-cache
+              owned: true
+        phase:
+            install:
+                host: |
+                    set -e
+                    echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/20-nopasswd-wheel
+                    chmod 0440 /etc/sudoers.d/20-nopasswd-wheel
+                    getent group wheel >/dev/null || groupadd wheel
+                    usermod -aG wheel user
+                    id -nG user | tr ' ' '\n' | grep -qx wheel || { echo 'FATAL: user not in wheel group' >&2; exit 1; }
+                    mkdir -p /tmp/aur-build
+                    chown -R user:user /tmp/aur-build
+                    cp /etc/makepkg.conf /tmp/makepkg.conf
+                    sed -i '/^OPTIONS/s/ debug/ !debug/' /tmp/makepkg.conf
+                    chown user:user /tmp/makepkg.conf
+                    pacman -Syu --noconfirm
+                    sudo -u user -- yay -S --noconfirm --needed --builddir /tmp/aur-build --makepkgconf /tmp/makepkg.conf{{range .Packages}} {{shquote .}}{{end}}
+                    mkdir -p /tmp/aur-pkgs
+                    for src in /tmp/aur-build /home/user/.cache/yay /root/.cache/yay; do
+                      [ -d "$src" ] && find "$src" -name '*.pkg.tar.zst' -exec cp {} /tmp/aur-pkgs/ \; 2>/dev/null || true
+                    done
+                    echo 'aur artifacts staged for host install:' >&2
+                    ls -la /tmp/aur-pkgs/ >&2
+cargo:
+    builder:
+        detect_file:
+            - Cargo.toml
+        requires_src_dir: true
+        inline: true
+        cache_mount:
+            - dst: /tmp/cargo-cache
+        phase:
+            install:
+                host: |
+                    set -e
+                    if [ ! -f /work/Cargo.toml ]; then echo 'no Cargo.toml in /work' >&2; exit 1; fi
+                    cargo install --path /work --root "$CARGO_HOME"
+npm:
+    builder:
+        detect_file:
+            - package.json
+        cache_mount:
+            - dst: /tmp/npm-cache
+        phase:
+            install:
+                host: |
+                    set -e
+                    if [ ! -f /work/package.json ]; then echo 'no package.json in /work' >&2; exit 1; fi
+                    STAGE=$(mktemp -d)
+                    cp /work/package.json "$STAGE/package.json"
+                    cd "$STAGE"
+                    node -e 'var d=require("./package.json").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v==="*"?n:n+"@"+v)' | xargs -r npm install -g
+                    rm -rf "$STAGE"
+pixi:
+    builder:
+        detect_file:
+            - pixi.toml
+            - pyproject.toml
+            - environment.yml
+        cache_mount:
+            - dst: /tmp/pixi-cache
+            - dst: /tmp/rattler-cache
+        path_contribution:
+            - ~/.pixi/bin
+            - ~/.pixi/envs/default/bin
+        runtime_env:
+            PIXI_CACHE_DIR: ~/.cache/pixi
+            RATTLER_CACHE_DIR: ~/.cache/rattler
+        phase:
+            install:
+                host: |
+                    set -e
+                    cd "$HOME"
+                    if [ -f /work/pixi.toml ]; then manifest=pixi.toml
+                    elif [ -f /work/pyproject.toml ]; then manifest=pyproject.toml
+                    elif [ -f /work/environment.yml ]; then manifest=environment.yml
+                    else echo 'no pixi manifest found in /work' >&2; exit 1; fi
+                    cp /work/$manifest $manifest
+                    if [ -f /work/pixi.lock ]; then cp /work/pixi.lock pixi.lock; fi
+                    # Ensure manylinux glibc requirement is present so cross-distro compat holds.
+                    grep -q 'system-requirements' $manifest || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> $manifest
+                    case "$manifest" in
+                      pixi.toml)
+                        if [ -f pixi.lock ]; then pixi install --frozen
+                        else pixi install; fi ;;
+                      pyproject.toml) pixi install --manifest-path pyproject.toml ;;
+                      environment.yml) pixi project import environment.yml && pixi install ;;
+                    esac
+                    if [ -f /work/build.sh ]; then bash /work/build.sh; fi
+                    rm -f $manifest pixi.lock
+        install_command:
+            environment.yml: pixi project import environment.yml && pixi install
+            pixi.toml: pixi install
+            pixi.toml+lock: pixi install --frozen
+            pyproject.toml: pixi install --manifest-path pyproject.toml
+        manylinux_fix: |
+            RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
+        build_script: build.sh
+    pixi-env:
+        env:
+            PIXI_CACHE_DIR: /tmp/pixi-cache
+            RATTLER_CACHE_DIR: /tmp/rattler-cache
+arch:
+    distro:
+        bootstrap:
+            install_cmd: pacman -Syu --noconfirm
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/pacman/pkg
+                  sharing: locked
+        format:
+            aur:
+                secondary: true
+                cache_mount:
+                    - dst: /var/cache/pacman/pkg
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                install_template: |
+                    COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
+                    RUN {{cacheMounts .CacheMounts}} \
+                        pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
+                        rm -rf /tmp/aur-pkgs
+            pac:
+                cache_mount:
+                    - dst: /var/cache/pacman/pkg
+                      sharing: locked
+                section_field:
+                    keys: list
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                phase:
+                    install:
+                        host: |
+                            pacman -Sy --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                uninstall_template: |
+                    pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
+                local_pkg:
+                    pkg_glob: '*.pkg.tar.zst'
+                    source_sentinel: PKGBUILD
+                    build_template: |
+                        cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm
+                    install_template: |
+                        pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
+                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst
+                    probe: command -v pacman
+                    dep_builder: aur
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Keys}}
+                        pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                    {{- end}}
+                    {{- range .Repos}}
+                        printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
+                    {{- if .key}}
+                        pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
+                    {{- end}}
+                    {{- end}}
+                        # Reseed pacman keyring from the locally-installed
+                        # keyring packages (cachyos-keyring, archlinux-keyring).
+                        # Surfaced 2026-05 when a freshly-published cachyos-
+                        # extra-v3 package metadata signature failed to verify
+                        # against a stale keyring inside the pinned cachyos-v3
+                        # base image. `--populate` is local-only and
+                        # FAST (sub-second per repo); does NOT do keyserver
+                        # roundtrips. Made non-fatal with `|| true` so
+                        # air-gapped / restricted-network builds still succeed
+                        # when the keyring was already current. If `--populate`
+                        # alone isn't enough (i.e. cachyos rotates its master
+                        # signing key without updating the bundled keyring
+                        # package), the fix is to repin the cachyos base to a
+                        # newer cachyos-v3 digest in box/cachyos/charly.yml —
+                        # the upstream rebuild carries the updated keyring package.
+                        (pacman-key --populate 2>/dev/null || true) && \
+                        pacman -Syu --noconfirm
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+        pacstrap:
+            base_package:
+                - base
+                - base-devel
+                - linux
+                - linux-firmware
+                - openssh
+                - sudo
+                - cloud-init
+                - grub
+                - efibootmgr
+                - mkinitcpio
+            keyring_init_cmd: |
+                pacman-key --init && pacman-key --populate archlinux
+            mirrorlist_url: https://archlinux.org/mirrorlist/all/
+        bootloader:
+            install_template: |
+                # Seed common /etc files that mkinitcpio hooks expect
+                # so the initramfs build doesn't error on `file not found`.
+                : > {{.Mnt}}/etc/vconsole.conf
+                # Arch's default systemd preset is `disable *`. Without
+                # explicit enablement, sshd / cloud-init / qemu-guest-agent
+                # never start on first boot, and `charly vm ssh` times out
+                # during banner exchange because nothing is listening
+                # inside the guest. Enable them here so cloud-init can
+                # run on first boot and apply the seed-ISO user-data
+                # (user creation, ssh_authorized_keys, runcmd).
+                #
+                # Notes on unit names (Arch / cloud-init >=24.x):
+                #   - cloud-init.service no longer exists; the multi-stage
+                #     flow uses cloud-init-local, cloud-init-network,
+                #     cloud-config, cloud-final. Pulling in cloud-init.target
+                #     activates the whole chain.
+                #   - Each `systemctl enable <unit>` call is separate so a
+                #     single missing unit doesn't skip the rest.
+                #   - systemd-networkd + systemd-resolved are enabled too
+                #     because cloud-init-network.service has
+                #     `After=systemd-networkd-wait-online.service`. Without
+                #     a configured network unit, networkd-wait-online
+                #     never reaches ready, blocking cloud-init forever.
+                # cloud-init-main.service is the single-Python-process
+                # daemon (cloud-init >= 24.x); the four stage services
+                # (cloud-init-local / cloud-init-network / cloud-config /
+                # cloud-final) are SHIMS that connect to it via
+                # /run/cloud-init/share/*.sock. Without main enabled, the
+                # shims fail silently with "No such file or directory" on
+                # the socket and cloud-init never runs.
+                for unit in sshd qemu-guest-agent cloud-init-main cloud-init-local cloud-init-network cloud-config cloud-final systemd-networkd systemd-resolved; do
+                  arch-chroot {{.Mnt}} systemctl enable "$unit" 2>&1 | grep -v "^$" || true
+                done
+                # cloud-init.target has no [Install] WantedBy: it's a sync
+                # point activated by cloud-init-generator at boot time
+                # (ds-identify decides if cloud-init should run). Create the
+                # symlink statically so cloud-init.target gets pulled into
+                # multi-user.target reliably even when ds-identify mis-fires.
+                ln -sf /usr/lib/systemd/system/cloud-init.target {{.Mnt}}/etc/systemd/system/multi-user.target.wants/cloud-init.target
+                # Force-list NoCloud as the only datasource so ds-identify
+                # doesn't speculate or "FOUND nothing" when DMI / kernel
+                # cmdline aren't priming it. Without this, on bare Arch
+                # ds-identify defaults to MAYBE, the generator emits
+                # cloud-init.disabled, and cloud-init never runs.
+                mkdir -p {{.Mnt}}/etc/cloud/cloud.cfg.d
+                printf 'datasource_list: [ NoCloud ]\n' > {{.Mnt}}/etc/cloud/cloud.cfg.d/99-charly-noCloud.cfg
+                # Belt-and-suspenders: write /etc/cloud/ds-identify.cfg
+                # with `policy: enabled` so ds-identify ALWAYS enables
+                # cloud-init regardless of detection outcome — the seed
+                # ISO is guaranteed by the bootstrap-VM build path so
+                # there's nothing to detect.
+                printf 'policy: enabled\n' > {{.Mnt}}/etc/cloud/ds-identify.cfg
+                # Default DHCP profile for any virtio/eth/en* interface so
+                # systemd-networkd actually configures something at first
+                # boot. printf used (rather than heredoc) so YAML's leading
+                # whitespace doesn't end up in the .network file.
+                mkdir -p {{.Mnt}}/etc/systemd/network
+                printf '[Match]\nName=en* eth*\n[Network]\nDHCP=yes\n' > {{.Mnt}}/etc/systemd/network/20-wired.network
+                arch-chroot {{.Mnt}} grub-install --target=x86_64-efi \
+                  --efi-directory=/boot/efi --bootloader-id=charly --removable
+                arch-chroot {{.Mnt}} grub-mkconfig -o /boot/grub/grub.cfg
+                # Create the SSH login user account (NO key baked in).
+                # Per-VM SSH keys are delivered at boot via SMBIOS type 11
+                # → systemd-tmpfiles → /home/<user>/.ssh/authorized_keys.
+                # That keeps the rootfs image identity-free (any key holder
+                # of the same image cannot SSH; only the operator with the
+                # corresponding private key for THIS VM can).
+                if [ -n "{{.SSHUser}}" ] && [ "{{.SSHUser}}" != "root" ]; then
+                  arch-chroot {{.Mnt}} useradd -m -G wheel -s /bin/bash {{.SSHUser}} 2>&1 | grep -v 'already exists' || true
+                  echo '{{.SSHUser}} ALL=(ALL) NOPASSWD:ALL' > {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                  chmod 0440 {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                fi
+            initramfs_template: |
+                # mkinitcpio prints WARNING for missing optional inputs but
+                # still produces a working initramfs; let that pass.
+                arch-chroot {{.Mnt}} mkinitcpio -P || true
+            fstab_template: |
+                # genfstab -U does not reliably resolve UUIDs for loop
+                # devices in privileged-container build mode (it inserts
+                # /dev/loopXpY paths that don't exist post-boot, dropping
+                # systemd into emergency mode). Hand-roll UUID-based fstab
+                # entries via blkid which always works.
+                ROOT_UUID=$(blkid -s UUID -o value "${LOOP}p2")
+                ESP_UUID=$(blkid -s UUID -o value "${LOOP}p1")
+                mkdir -p {{.Mnt}}/boot/efi
+                cat > {{.Mnt}}/etc/fstab <<FSTAB
+                # Generated by charly bootstrap-VM build.
+                #
+                # `nofail` on /boot/efi prevents systemd from blocking the
+                # boot sequence on the ESP mount. Without it, an ESP
+                # whose udev by-uuid symlink shows up late drops the
+                # VM into emergency mode.
+                UUID=${ROOT_UUID}  /          {{.Rootfs}}  rw,relatime  0 1
+                UUID=${ESP_UUID}   /boot/efi  vfat  rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,utf8,nofail  0 2
+                FSTAB
+cachyos:
+    distro:
+        inherits: arch
+        inherit_packages: true
+        pacstrap:
+            base_package:
+                - base
+                - base-devel
+                - linux-cachyos
+                - linux-cachyos-headers
+                - linux-firmware
+                - openssh
+                - sudo
+                - cloud-init
+                - grub
+                - efibootmgr
+                - mkinitcpio
+            keyring_init_cmd: |
+                pacman-key --init && pacman-key --populate archlinux && \
+                pacman-key --recv-keys F3B607488DB35A47 && \
+                pacman-key --lsign-key F3B607488DB35A47
+            mirrorlist_url: https://mirror.cachyos.org/mirrorlist.txt
+            extra_repo:
+                - name: cachyos-v3
+                  server: https://mirror.cachyos.org/repo/x86_64_v3/$repo
+                  siglevel: Never
+                - name: cachyos-core-v3
+                  server: https://mirror.cachyos.org/repo/x86_64_v3/$repo
+                  siglevel: Never
+                - name: cachyos
+                  server: https://mirror.cachyos.org/repo/$arch/$repo
+                  siglevel: Never
+            runtime_pacman_conf: |
+                [options]
+                Architecture = x86_64 x86_64_v3
+                SigLevel = Never
+                ParallelDownloads = 5
+                {{- range .ExtraRepos}}
+                [{{.Name}}]
+                Server = {{.Server}}
+                {{- end}}
+                [core]
+                Include = /etc/pacman.d/mirrorlist
+                [extra]
+                Include = /etc/pacman.d/mirrorlist
+debian:
+    distro:
+        version: "13"
+        bootstrap:
+            install_cmd: apt-get update && apt-get install -y --no-install-recommends
+            package:
+                - curl
+                - ca-certificates
+                - gnupg
+            cache_mount:
+                - dst: /var/cache/apt
+                  sharing: locked
+                - dst: /var/lib/apt
+                  sharing: locked
+        format:
+            deb:
+                cache_mount:
+                    - dst: /var/cache/apt
+                      sharing: locked
+                    - dst: /var/lib/apt
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                local_pkg:
+                    pkg_glob: '*.deb'
+                    source_sentinel: debian/control
+                    build_template: |
+                        set -e
+                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        mkdir -p "$SUPER/bin/plugins"
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        # Build the welded command plugins beside charly (the SAME
+                        # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
+                        # `charly doctor`/`clean`/`vm` and the other welded commands resolve
+                        # project-less on the installed deb.
+                        while read -r p; do
+                          case "$p" in ''|\#*) continue ;; esac
+                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" . )
+                          "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
+                        done < "$SUPER/pkg/host-command-plugins.txt"
+                        podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/debian:13 bash -lc '
+                          set -e
+                          export DEBIAN_FRONTEND=noninteractive
+                          apt-get update -qq && apt-get install -y -qq build-essential debhelper >/dev/null
+                          cp -aT /src /tmp/src && cp /ovbin/charly /tmp/src/charly && cp -a /ovbin/plugins /tmp/src/plugins
+                          cd /tmp/src
+                          # Stamp the .deb version from the binary CalVer so each
+                          # build is upgradeable (a static changelog version would
+                          # make apt skip the reinstall on charly update).
+                          sed -i "1s/([^)]*)/($(/ovbin/charly version))/" debian/changelog
+                          dpkg-buildpackage -us -uc -b
+                          cp ../*.deb /out/
+                        '
+                    install_template: |
+                        DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y {{.StageDir}}/{{.Glob}}
+                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.deb
+                    probe: command -v apt-get
+                phase:
+                    install:
+                        host: |
+                            {{- range .Repos}}
+                            {{- if .key}}
+                            mkdir -p /etc/apt/keyrings && curl -fsSL {{quote .key}} | gpg --batch --yes --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
+                            {{- end}}
+                            {{- if .url}}
+                            echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}}{{if eq (default .suite "stable") "/"}}{{else}} {{default .components "main"}}{{end}}" > /etc/apt/sources.list.d/{{.name}}.list && \
+                            {{- end}}
+                            {{- if .ppa}}
+                            add-apt-repository -y ppa:{{.ppa}} && \
+                            {{- end}}
+                            {{- end}}
+                            DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                uninstall_template: |
+                    DEBIAN_FRONTEND=noninteractive apt-get purge -y{{range .Packages}} {{.}}{{end}}
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}
+                    {{- if .key}}
+                        curl -fsSL {{quote .key}} | gpg --batch --yes --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
+                    {{- end}}
+                    {{- if .url}}
+                        echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}}{{if eq (default .suite "stable") "/"}}{{else}} {{default .components "main"}}{{end}}" > /etc/apt/sources.list.d/{{.name}}.list && \
+                    {{- end}}
+                    {{- if .ppa}}
+                        add-apt-repository -y ppa:{{.ppa}} && \
+                    {{- end}}
+                    {{- end}}
+                        apt-get update && apt-get install -y --no-install-recommends
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+        debootstrap:
+            suite: trixie
+            mirror: http://deb.debian.org/debian
+            variant: minbase
+            components: main
+            include_package:
+                - ca-certificates
+                - curl
+                - gnupg
+            base_package:
+                - systemd-sysv
+                - dbus
+                - initramfs-tools
+                - linux-image-amd64
+                - grub-efi-amd64
+                - efibootmgr
+                - openssh-server
+                - sudo
+                - cloud-init
+                - qemu-guest-agent
+                - systemd-resolved
+                - systemd-timesyncd
+                - locales
+                - netbase
+                - iproute2
+                - iputils-ping
+        bootloader:
+            install_template: |
+                # Seed common /etc files mkinitcpio-style hooks expect.
+                # Debian's update-initramfs is more forgiving but harmless.
+                : > {{.Mnt}}/etc/vconsole.conf
+                # Enable services. Debian's default preset enables most
+                # service units on package install (unlike Arch's `disable *`),
+                # but we force-enable here for parity and to handle
+                # cloud-init.target which has no [Install] WantedBy.
+                #
+                # Notes on unit names (Debian/Ubuntu, cloud-init >= 24.x):
+                #   - sshd is named `ssh.service` (not `sshd.service` like
+                #     Fedora/Arch). Both are aliases on Ubuntu but `ssh`
+                #     is the canonical Debian name.
+                #   - cloud-init's stage services are the same on Debian
+                #     as on Arch: cloud-init-local, cloud-init,
+                #     cloud-config, cloud-final.
+                for unit in ssh qemu-guest-agent cloud-init-local cloud-init cloud-config cloud-final systemd-networkd systemd-resolved; do
+                  chroot {{.Mnt}} systemctl enable "$unit" 2>&1 | grep -v "^$" || true
+                done
+                # cloud-init.target has no [Install] WantedBy: it's a sync
+                # point activated by cloud-init-generator at boot time.
+                # Create the symlink statically so cloud-init.target gets
+                # pulled into multi-user.target reliably.
+                mkdir -p {{.Mnt}}/etc/systemd/system/multi-user.target.wants
+                ln -sf /lib/systemd/system/cloud-init.target {{.Mnt}}/etc/systemd/system/multi-user.target.wants/cloud-init.target
+                # Force-list NoCloud as the only datasource so ds-identify
+                # doesn't speculate when DMI / kernel cmdline aren't
+                # priming it. Without this, ds-identify defaults to MAYBE
+                # and cloud-init may silently no-op.
+                mkdir -p {{.Mnt}}/etc/cloud/cloud.cfg.d
+                printf 'datasource_list: [ NoCloud ]\n' > {{.Mnt}}/etc/cloud/cloud.cfg.d/99-charly-nocloud.cfg
+                printf 'policy: enabled\n' > {{.Mnt}}/etc/cloud/ds-identify.cfg
+                # Default DHCP profile for any en*/eth* interface so
+                # systemd-networkd actually configures something at first
+                # boot. printf used (rather than heredoc) so YAML's leading
+                # whitespace doesn't end up in the .network file.
+                mkdir -p {{.Mnt}}/etc/systemd/network
+                printf '[Match]\nName=en* eth*\n[Network]\nDHCP=yes\n' > {{.Mnt}}/etc/systemd/network/20-wired.network
+                # GRUB EFI install — --removable so OVMF default-path boot
+                # works (puts /EFI/BOOT/BOOTX64.EFI on the ESP).
+                # /proc is mounted FRESH (not bind-mount) inside the chroot
+                # so grub-mkconfig's grub-probe reads the chroot's mount
+                # table, not the host's. Without this, grub-mkconfig writes
+                # `root=/dev/loopXp2` into grub.cfg (the host's loop device
+                # path), which doesn't exist post-boot — the kernel panics
+                # "VFS: Cannot open root device /dev/loop0p2". Pacstrap uses
+                # arch-chroot which arranges this automatically; plain
+                # `chroot` requires the mounts to be set up by hand.
+                mount --bind /dev {{.Mnt}}/dev
+                mount -t proc proc {{.Mnt}}/proc
+                mount --bind /sys {{.Mnt}}/sys
+                chroot {{.Mnt}} grub-install --target=x86_64-efi \
+                  --efi-directory=/boot/efi --bootloader-id=charly --removable
+                chroot {{.Mnt}} update-grub
+                # grub-mkconfig writes `root=/dev/loopXp2` into the
+                # kernel cmdline because /proc/mounts (even fresh-
+                # mounted inside the chroot) reports the host's loop
+                # device — `chroot` doesn't isolate the mount namespace.
+                # The loop device doesn't exist post-boot, so the
+                # kernel panics with "VFS: Cannot open root device".
+                # Rewrite the loop path to root=UUID=<root-uuid> using
+                # blkid (which reads filesystem metadata directly, not
+                # /proc/mounts) so grub.cfg matches /etc/fstab.
+                ROOT_UUID=$(blkid -s UUID -o value "${LOOP}p2")
+                sed -i "s|root=/dev/loop[0-9]*p2|root=UUID=${ROOT_UUID}|g" {{.Mnt}}/boot/grub/grub.cfg
+                # NB: /dev /proc /sys stay mounted into the chroot — the
+                # initramfs_template runs next and also needs them. Unmount
+                # there.
+                # Create the SSH login user account (NO key baked in).
+                # Per-VM SSH keys are delivered at boot via SMBIOS type 11
+                # → systemd-tmpfiles → /home/<user>/.ssh/authorized_keys.
+                # Identity-free image: any holder of a different key
+                # cannot SSH; only the operator with the corresponding
+                # private key for THIS VM can.
+                if [ -n "{{.SSHUser}}" ] && [ "{{.SSHUser}}" != "root" ]; then
+                  chroot {{.Mnt}} useradd -m -G sudo -s /bin/bash {{.SSHUser}} 2>&1 | grep -v 'already exists' || true
+                  echo '{{.SSHUser}} ALL=(ALL) NOPASSWD:ALL' > {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                  chmod 0440 {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                fi
+            initramfs_template: |
+                # Debian uses initramfs-tools (not mkinitcpio). The
+                # linux-image postinst hooks created the
+                # /boot/initrd.img symlink during apt-get install, but
+                # in privileged-container builds the actual initrd
+                # binary often isn't written (postinst aborts silently
+                # under the constrained namespace). Force `-c` (create)
+                # for every installed kernel so the initrd target file
+                # always exists; without it the kernel boots but
+                # panics "VFS: Cannot open root device" because there's
+                # no userspace to resolve UUID= or wait for /dev/vda*.
+                for k in $(ls {{.Mnt}}/lib/modules/ 2>/dev/null); do
+                  chroot {{.Mnt}} update-initramfs -c -k "$k" 2>&1 | grep -vE '^(W:|$)' || \
+                    chroot {{.Mnt}} update-initramfs -u -k "$k" 2>&1 | grep -vE '^(W:|$)' || true
+                done
+                # Tear down the bind-mounts set up by install_template so
+                # the disk-build finalize step can cleanly unmount /mnt.
+                umount {{.Mnt}}/sys {{.Mnt}}/proc {{.Mnt}}/dev
+            fstab_template: |
+                # Hand-roll UUID-based fstab via blkid (genfstab is not
+                # available on Debian, and loop-device paths from the
+                # privileged-container build wouldn't survive boot anyway).
+                # ESP mounts at /boot/efi (standard Debian/Ubuntu layout).
+                # /boot itself lives on the rootfs partition so kernel
+                # symlinks (vmlinuz, initrd.img) work.
+                ROOT_UUID=$(blkid -s UUID -o value "${LOOP}p2")
+                ESP_UUID=$(blkid -s UUID -o value "${LOOP}p1")
+                mkdir -p {{.Mnt}}/boot/efi
+                cat > {{.Mnt}}/etc/fstab <<FSTAB
+                # Generated by charly bootstrap-VM build.
+                #
+                # `nofail` on /boot/efi prevents systemd from blocking the
+                # boot sequence on the ESP mount (mirrors the Arch
+                # bootloader template's rationale).
+                UUID=${ROOT_UUID}  /          {{.Rootfs}}  rw,relatime  0 1
+                UUID=${ESP_UUID}   /boot/efi  vfat  rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,utf8,nofail  0 2
+                FSTAB
+fedora:
+    distro:
+        version: "43"
+        bootstrap:
+            install_cmd: dnf install -y --setopt=install_weak_deps=False
+            package:
+                - curl
+                - ca-certificates
+                - tar
+                - gzip
+            cache_mount:
+                - dst: /var/cache/libdnf5
+                  sharing: locked
+        workaround:
+            - rm -f /etc/yum.repos.d/terra-mesa.repo 2>/dev/null || true
+        dnf:
+            max_parallel_downloads: 10
+            fastestmirror: true
+        format:
+            rpm:
+                cache_mount:
+                    - dst: /var/cache/libdnf5
+                      sharing: locked
+                section_field:
+                    copr: list
+                    exclude: list
+                    module: list
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                local_pkg:
+                    pkg_glob: '*.rpm'
+                    source_sentinel: '*.spec'
+                    build_template: |
+                        set -e
+                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        mkdir -p "$SUPER/bin/plugins"
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        # Build the welded command plugins beside charly (the SAME
+                        # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
+                        # `charly doctor`/`clean`/`vm` and the other welded commands resolve
+                        # project-less on the installed rpm. /ovbin/plugins = $SUPER/bin/plugins.
+                        while read -r p; do
+                          case "$p" in ''|\#*) continue ;; esac
+                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" . )
+                          "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
+                        done < "$SUPER/pkg/host-command-plugins.txt"
+                        podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/fedora:43 bash -lc '
+                          set -e
+                          dnf install -y -q rpm-build >/dev/null
+                          rpmbuild -bb --define "_topdir /tmp/rb" --define "ovbin /ovbin/charly" --define "ovplugins /ovbin/plugins" --define "ovver $(/ovbin/charly version)" /src/opencharly.spec
+                          find /tmp/rb/RPMS -name "*.rpm" -exec install -Dm644 -t /out {} +
+                        '
+                    install_template: |
+                        dnf install -y {{.StageDir}}/{{.Glob}}
+                    download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.rpm
+                    probe: command -v dnf
+                phase:
+                    install:
+                        host: |
+                            dnf install -y{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                uninstall_template: |
+                    dnf remove -y{{range .Packages}} {{.}}{{end}}
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}{{if .rpm}}
+                        dnf install -y {{quote .rpm}} && \
+                    {{- end}}{{end}}
+                    {{- if or (anyRepoHasURL .Repos) .Copr}}
+                        dnf install -y dnf5-plugins && \
+                    {{- end}}
+                    {{- range .Repos}}{{if .url}}
+                    {{- if hasSuffix (printf "%s" .url) ".repo"}}
+                        dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
+                        dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
+                    {{- else}}
+                        printf '%s\n' '[{{.name}}]' 'name={{.name}}' 'baseurl={{.url}}' 'enabled=0' 'gpgcheck={{if eq (default .gpgcheck "true") "false"}}0{{else}}1{{end}}'{{if .gpgkey}} 'gpgkey={{.gpgkey}}'{{end}} > /etc/yum.repos.d/{{.name}}.repo && \
+                    {{- end}}
+                    {{- if .gpgkey}}
+                        rpm --import {{.gpgkey}} || true && \
+                    {{- end}}
+                    {{- if eq (default .gpgcheck "true") "false"}}
+                    {{- if hasSuffix (printf "%s" .url) ".repo"}}
+                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
+                    {{- end}}
+                    {{- end}}{{end}}{{end}}
+                    {{- range .Copr}}
+                        dnf5 copr enable -y {{.}} && \
+                    {{- end}}
+                    {{- range .Modules}}
+                        dnf module reset -y {{splitFirst . ":"}} && \
+                        dnf module enable -y {{.}} && \
+                    {{- end}}
+                        dnf install -y{{range .Options}} {{.}}{{end}}
+                    {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
+                    {{- range .Exclude}} --exclude='{{.}}'{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+                    {{- range .Copr}} && \
+                        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
+                    {{- end}}
+ubuntu:
+    distro:
+        inherits: debian
+        version: "24.04"
+        bootstrap:
+            install_cmd: ""
+            package: []
+            cache_mount: []
+        base_user:
+            name: ubuntu
+            uid: 1000
+            gid: 1000
+            home: /home/ubuntu
+        debootstrap:
+            suite: noble
+            mirror: http://archive.ubuntu.com/ubuntu
+            variant: minbase
+            components: main,universe
+            include_package:
+                - ca-certificates
+                - curl
+                - gnupg
+            base_package:
+                - systemd-sysv
+                - dbus
+                - initramfs-tools
+                - linux-image-generic
+                - grub-efi-amd64
+                - efibootmgr
+                - openssh-server
+                - sudo
+                - cloud-init
+                - lsb-release
+                - qemu-guest-agent
+                - systemd-resolved
+                - systemd-timesyncd
+                - locales
+                - netbase
+                - iproute2
+                - iputils-ping
+supervisord:
+    init:
+        candy_field:
+            - service
+        depends_candy: supervisord
+        model: fragment_assembly
+        header_file: templates/supervisord.header.conf
+        fragment_dir: supervisor
+        relay_template: |
+            [program:relay-{{.Port}}]
+            command=/usr/local/bin/relay-wrapper {{.Port}}
+            autostart=true
+            autorestart=true
+            priority=1
+            startsecs=0
+            stdout_logfile=/dev/fd/1
+            stdout_logfile_maxbytes=0
+            redirect_stderr=true
+        stage_name: supervisord-conf
+        stage_header_copy: COPY templates/supervisord.header.conf /supervisor/00-header.conf
+        stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /supervisor/{{.FileName}}
+        assembly_template: |
+            # Assemble supervisord.conf
+            # chmod 0644 explicitly — relying on umask yields 0600 on Arch (breaks
+            # supervisord when run as uid 1000) vs 0644 on Fedora. Uniform perms
+            # across distros.
+            RUN --mount=type=bind,from=supervisord-conf,source=/supervisor,target=/supervisor \
+                cat /supervisor/*.conf > /etc/supervisord.conf && \
+                chmod 0644 /etc/supervisord.conf
+        entrypoint:
+            - supervisord
+            - -n
+            - -c
+            - /etc/supervisord.conf
+        fallback_entrypoint:
+            - sleep
+            - infinity
+        management_tool: supervisorctl
+        management_command:
+            restart: restart {{.Service}}
+            start: start {{.Service}}
+            status: status
+            stop: stop {{.Service}}
+        label_key: ai.opencharly.service.supervisord
+        service_schema:
+            supports_packaged: false
+            service_template: |
+                {{- if eq .Kind "eventlistener" -}}
+                [eventlistener:{{.Name}}]
+                {{- else -}}
+                [program:{{.Name}}]
+                {{- end}}
+                command={{.Exec}}
+                {{- if eq .Kind "eventlistener" -}}
+                {{- if .Events}}
+                events={{.Events}}
+                {{- end -}}
+                {{- end}}
+                {{- if .AutoStart}}
+                autostart={{if derefBool .AutoStart}}true{{else}}false{{end}}
+                {{- else if not (eq .Kind "eventlistener")}}
+                autostart=true
+                {{- end}}
+                {{- if not (eq .Kind "eventlistener")}}
+                autorestart={{if eq .Restart "no"}}false{{else}}true{{end}}
+                {{- end}}
+                {{- if .StartRetries}}
+                startretries={{.StartRetries}}
+                {{- end}}
+                {{- if .StartSecs}}
+                startsecs={{.StartSecs}}
+                {{- end}}
+                {{- if .ExitCodes}}
+                exitcodes={{.ExitCodes}}
+                {{- end}}
+                {{- if .StopSignal}}
+                stopsignal={{.StopSignal}}
+                {{- end}}
+                {{- if .StopTimeout}}
+                stopwaitsecs={{.StopTimeout}}
+                {{- end}}
+                {{- if .Priority}}
+                priority={{.Priority}}
+                {{- end}}
+                {{- if .WorkingDirectory}}
+                directory={{.WorkingDirectory}}
+                {{- end}}
+                {{- if .User}}
+                user={{.User}}
+                {{- end}}
+                {{- if .EnvList}}
+                environment={{range $i, $kv := .EnvList}}{{if $i}},{{end}}{{$kv.Key}}="{{$kv.Value}}"{{end}}
+                {{- end}}
+                stdout_logfile={{supervisordLog .Stdout}}
+                stdout_logfile_maxbytes={{supervisordLogMaxbytes .Stdout}}
+                {{- if not (eq .Kind "eventlistener")}}
+                redirect_stderr=true
+                {{- else}}
+                stderr_logfile=/dev/fd/2
+                stderr_logfile_maxbytes=0
+                {{- end}}
+systemd:
+    init:
+        candy_field:
+            - service
+        candy_file:
+            - '*.service'
+        model: file_copy
+        fragment_dir: systemd
+        stage_name: systemd-services
+        stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /systemd/{{.FileName}}
+        assembly_template: |
+            # Install systemd user services
+            RUN --mount=type=bind,from=systemd-services,source=/systemd,target=/systemd \
+                cp /systemd/*.service /usr/lib/systemd/user/ && \
+                for svc in /systemd/*.service; do systemctl --global enable "$(basename "$svc")"; done
+        system_enable_template: |
+            # Enable system-level services
+            RUN{{range $i, $unit := .Units}}{{if $i}} && \
+               {{else}} {{end}}systemctl enable {{$unit}}{{end}}
+        post_assembly_template: |
+            RUN bootc container lint
+        fallback_entrypoint:
+            - sleep
+            - infinity
+        management_tool: systemctl
+        management_command:
+            restart: --user restart {{.Service}}
+            start: --user start {{.Service}}
+            status: --user status {{.Service}}
+            stop: --user stop {{.Service}}
+        label_key: ai.opencharly.service.systemd
+        service_schema:
+            supports_packaged: true
+            unit_path_template: |-
+                {{- if eq .Scope "user" -}}
+                {{.Home}}/.config/systemd/user/{{.Name}}.service
+                {{- else -}}
+                /etc/systemd/system/{{.Name}}.service
+                {{- end -}}
+            service_template: |
+                [Unit]
+                Description={{.Candy}} service {{.Name}} (generated by charly)
+                {{- range .After}}
+                After={{.}}
+                {{- end}}
+                {{- range .Before}}
+                Before={{.}}
+                {{- end}}
+
+                [Service]
+                Type=simple
+                ExecStart={{.Exec}}
+                {{- if .Restart}}
+                {{- if eq .Restart "always"}}
+                Restart=always
+                {{- else if eq .Restart "on-failure"}}
+                Restart=on-failure
+                {{- else if eq .Restart "no"}}
+                Restart=no
+                {{- end}}
+                {{- end}}
+                {{- if .StopTimeout}}
+                TimeoutStopSec={{.StopTimeout}}
+                {{- end}}
+                {{- if .User}}
+                User={{.User}}
+                {{- end}}
+                {{- if .WorkingDirectory}}
+                WorkingDirectory={{.WorkingDirectory}}
+                {{- end}}
+                {{- if .EnvList}}
+                {{- range .EnvList}}
+                Environment={{.Key}}={{.Value}}
+                {{- end}}
+                {{- end}}
+
+                [Install]
+                {{- if .WantedBy}}
+                {{- range .WantedBy}}
+                WantedBy={{.}}
+                {{- end}}
+                {{- else if eq .Scope "user"}}
+                WantedBy=default.target
+                {{- else}}
+                WantedBy=multi-user.target
+                {{- end}}
+    systemd-requires_capability:
+        requires_capability:
+            - preserve_user
+tailscale:
+    sidecar:
+        description: Tailscale VPN sidecar for exit node routing with dual networking
+        image: ghcr.io/tailscale/tailscale:latest
+        parameter:
+            tailnet: ""
+    tailscale-env:
+        env:
+            TS_STATE_DIR: /var/lib/tailscale
+            TS_AUTH_ONCE: "true"
+            TS_USERSPACE: "false"
+            TS_DEBUG_FIREWALL_MODE: nftables
+            TS_ACCEPT_DNS: "false"
+            TS_ENABLE_HEALTH_CHECK: "true"
+            TS_LOCAL_ADDR_PORT: '[::]:9002'
+    tailscale-volume:
+        volume:
+            - name: state
+              path: /var/lib/tailscale
+    tailscale-security:
+        security:
+            cap_add:
+                - NET_ADMIN
+                - SYS_MODULE
+            devices:
+                - /dev/net/tun:/dev/net/tun
+    tailscale-secret:
+        secret:
+            - name: ts-authkey
+              env: TS_AUTHKEY
+              env_from: TS_AUTHKEY_{{.Parameter.tailnet | tailnetEnvSuffix}}
+              description: Tailscale auth key for the selected tailnet (per-tailnet env var)

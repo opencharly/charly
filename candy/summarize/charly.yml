@@ -1,0 +1,41 @@
+summarize:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the @steipete/summarize CLI globally via npm so `summarize` extracts text/transcripts from URLs and files on PATH.
+            The candy depends on nodejs and ships a package.json pinning
+            @steipete/summarize, which the build installs globally under
+            NPM_CONFIG_PREFIX (~/.npm-global). The result is verifiable: the
+            summarize binary and its summarizer alias land at ~/.npm-global/bin,
+            the scoped package is unpacked under
+            ~/.npm-global/lib/node_modules/@steipete/summarize, and
+            `summarize --version` prints a version and exits cleanly.
+    summarize-require:
+        require:
+            - nodejs
+    summarize-step-0:
+        check: the summarize binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/summarize
+            exists: true
+    summarize-step-1:
+        check: the summarizer alias binary is installed alongside it
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/summarizer
+            exists: true
+    summarize-step-2:
+        check: the @steipete/summarize package is unpacked under the npm global lib directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/lib/node_modules/@steipete/summarize/package.json
+            exists: true
+    summarize-step-3:
+        check: running summarize --version prints a version and exits cleanly
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/summarize --version

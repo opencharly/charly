@@ -1,0 +1,43 @@
+#!/bin/sh
+# sshd-wrapper: user-mode SSH server for supervisord containers
+# Runs sshd as non-root on port 2222 with user-owned config and keys
+
+set -e
+
+TARGET_HOME="${HOME:-/home/user}"
+SSH_DIR="${TARGET_HOME}/.ssh"
+HOST_KEY_DIR="${SSH_DIR}/host_keys"
+SSHD_CONFIG="${SSH_DIR}/sshd_config"
+
+mkdir -p "${HOST_KEY_DIR}"
+
+# Generate host keys in user-owned directory if missing
+for TYPE in rsa ecdsa ed25519; do
+    KEY="${HOST_KEY_DIR}/ssh_host_${TYPE}_key"
+    [ -f "$KEY" ] || ssh-keygen -q -N "" -t "$TYPE" -f "$KEY"
+done
+
+# Install authorized_keys from environment variable
+if [ -n "$SSH_AUTHORIZED_KEYS" ]; then
+    printf '%s\n' "$SSH_AUTHORIZED_KEYS" > "${SSH_DIR}/authorized_keys"
+    chmod 600 "${SSH_DIR}/authorized_keys"
+fi
+chmod 700 "${SSH_DIR}"
+
+# Write user-owned sshd_config (port 2222, no PAM, user paths)
+cat > "${SSHD_CONFIG}" <<EOF
+Port 2222
+ListenAddress 0.0.0.0
+HostKey ${HOST_KEY_DIR}/ssh_host_rsa_key
+HostKey ${HOST_KEY_DIR}/ssh_host_ecdsa_key
+HostKey ${HOST_KEY_DIR}/ssh_host_ed25519_key
+AuthorizedKeysFile ${SSH_DIR}/authorized_keys
+PasswordAuthentication no
+PermitRootLogin no
+PubkeyAuthentication yes
+UsePAM no
+Subsystem sftp /usr/libexec/openssh/sftp-server
+PidFile ${SSH_DIR}/sshd.pid
+EOF
+
+exec /usr/sbin/sshd -D -e -f "${SSHD_CONFIG}"

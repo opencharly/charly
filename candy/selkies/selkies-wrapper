@@ -1,0 +1,71 @@
+#!/bin/sh
+# selkies-wrapper: Start Selkies streaming server.
+# Pixelflux creates its own Wayland compositor (wayland-1).
+# labwc connects to it as a nested compositor.
+
+# Add NVIDIA NVRTC library path (installed by pip nvidia-cuda-nvrtc)
+NVRTC_PATH="$HOME/.pixi/envs/default/lib/python3.13/site-packages/nvidia/cu13/lib"
+if [ -d "$NVRTC_PATH" ]; then
+    export LD_LIBRARY_PATH="${NVRTC_PATH}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+# Force the headless wlroots backend. Pixelflux is a HEADLESS capture compositor
+# — it renders the nested labwc desktop OFF-SCREEN for streaming and never drives
+# a physical display. Without this, wlroots auto-selects the DRM/KMS backend and
+# tries to allocate scanout buffers on the seat's modeset device (card0); in a
+# pod that device is owned by the host/guest seat, so DRM_IOCTL_MODE_CREATE_DUMB
+# is denied, the compositor never starts, and the stream silently produces no
+# frames (falling back to a dead x264 default). Headless renders via the render
+# node (GBM/EGL) instead, so capture + the auto-detected NVENC/VAAPI encoder work
+# in any pod regardless of who owns the seat.
+export WLR_BACKENDS="${WLR_BACKENDS:-headless}"
+
+# GPU detection for NVENC hardware encoding
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    echo "selkies-wrapper: NVIDIA GPU detected, DRINODE=${DRINODE:-not set}"
+fi
+
+# Default framerate 60fps. Don't set SELKIES_ENCODER — let pixelflux
+# auto-detect GPU (NVENC/VAAPI) and fall back to CPU if unavailable.
+export SELKIES_FRAMERATE="${SELKIES_FRAMERATE:-60}"
+
+# Wait for PipeWire/PulseAudio to be ready, then setup null sinks for audio capture
+TIMEOUT=15
+ELAPSED=0
+while ! pactl info >/dev/null 2>&1 && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+
+if pactl info >/dev/null 2>&1; then
+    if [ ! -f /dev/shm/selkies-audio.lock ]; then
+        pactl load-module module-null-sink sink_name=output sink_properties=device.description="output" 2>/dev/null || true
+        pactl load-module module-null-sink sink_name=input sink_properties=device.description="input" 2>/dev/null || true
+        pactl set-default-sink output 2>/dev/null || true
+        touch /dev/shm/selkies-audio.lock
+        echo "selkies-wrapper: PulseAudio null sinks configured"
+    fi
+else
+    echo "selkies-wrapper: WARNING: PulseAudio not available after ${TIMEOUT}s"
+fi
+
+# Start the in-process capture server alongside selkies.
+# The capture server shares pixelflux's global WaylandBackend so it can
+# capture the full composited desktop (labwc renders into pixelflux's
+# compositor). Standalone scripts can't do this — they create their own
+# empty compositor. See selkies-capture-server for protocol details.
+CAPTURE_SERVER="$HOME/.local/bin/selkies-capture-server"
+# Invoke through the pixi env's python EXPLICITLY (resolved from $HOME at
+# runtime) rather than relying on selkies-capture-server's baked
+# `#!/home/user/...` shebang — that shebang is correct only in the container
+# (build user `user`, HOME /home/user); on a host/VM deploy the user is
+# different (HOME /home/<deploy-user>) and the literal interpreter path is dead
+# (exit 127). The pixi env (websockets, pixelflux, pcmflux on python 3.13) lives
+# at $HOME/.pixi regardless of which user owns it, so this is home-agnostic and
+# correct on every target. Falls back to the shebang if the pinned python is
+# absent.
+PIXI_PY="$HOME/.pixi/envs/default/bin/python"
+if [ -x "$PIXI_PY" ]; then
+    exec "$PIXI_PY" "$CAPTURE_SERVER" --addr="0.0.0.0" --mode="websockets"
+fi
+exec "$CAPTURE_SERVER" --addr="0.0.0.0" --mode="websockets"

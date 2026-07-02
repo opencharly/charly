@@ -1,0 +1,55 @@
+thunar:
+    candy:
+        version: 2026.167.2301
+        description: |
+            Thunar file manager is installed and bound to $mod+e in the Sway desktop
+            Installs the Thunar Xfce file manager (the Fedora rpm is named Thunar with a
+            capital T, which provides the lowercase thunar that dnf installs by; binary at
+            /usr/bin/thunar) and drops a Sway config.d snippet that binds $mod+e to launch
+            it. Verifiable by the installed binary + package and by the keybinding drop-in
+            whose content wires the $mod+e launcher line.
+    thunar-require:
+        require:
+            - sway
+    thunar-distro:
+        distro:
+            fedora:
+                package:
+                    - thunar
+    thunar-step-0:
+        run: mkdir=${HOME}/.config/sway/config.d
+        mkdir: "${HOME}/.config/sway/config.d"
+        run_as: "${USER}"
+    thunar-step-1:
+        run: copy=thunar.conf
+        copy: thunar.conf
+        to: "${HOME}/.config/sway/config.d/thunar.conf"
+        mode: "0644"
+        run_as: "${USER}"
+    thunar-step-2:
+        check: the thunar file manager binary is installed at /usr/bin/thunar
+        plugin: file
+        plugin_input:
+            file: /usr/bin/thunar
+            exists: true
+    thunar-step-3:
+        check: the thunar package is present in the package database
+        plugin: package
+        plugin_input:
+            package: thunar
+            package_map:
+                fedora: Thunar
+            installed: true
+    thunar-step-4:
+        check: a Sway config.d drop-in is installed for thunar
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/sway/config.d/thunar.conf
+            exists: true
+    thunar-step-5:
+        check: the drop-in binds $mod+e to launch thunar
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/sway/config.d/thunar.conf
+            contains:
+                - contains: "bindsym $mod+e exec thunar"

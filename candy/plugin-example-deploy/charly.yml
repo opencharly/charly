@@ -1,0 +1,46 @@
+plugin-example-deploy:
+    candy:
+        version: 2026.180.0001
+        description: |-
+            Reference OUT-OF-TREE charly DEPLOY plugin — a standalone Go module
+            (go.mod + main.go) serving the `exampledeploy` deploy TARGET over
+            go-plugin gRPC via the charly plugin SDK (charly/plugin/sdk). It proves
+            the E3b ExecutorService reverse channel end-to-end for the deploy class,
+            including the F2 executable deploy channel: charly's loader host-builds
+            this candy's provider binary and serves it OUT-OF-PROCESS via
+            LocalTransport, then the externalDeployTarget Add Invokes it (OpExecute)
+            with the deployment's InstallPlan views — now carrying the serializable
+            per-step IR — plus a venue descriptor; the plugin dials BACK through the
+            SDK Executor to (a) write apply/probe markers, (b) WALK + EXECUTE the
+            plan's steps on the venue (the file-write step below + an env shell-hook),
+            (c) PUSH a file via the reverse-channel PutFile leg, and (d) — when the plan
+            carries a BuilderStep or LocalPkgInstallStep, the two kinds the F2
+            RunSystem/PutFile legs cannot execute because they need the HOST build ENGINE
+            — drive the RunHostStep host-engine reverse leg so the host builds the artifact and
+            installs it onto the venue (proven by composing examplebuild-localpkg, whose
+            charly-f3-witness package is built with makepkg + installed with pacman -U
+            over the channel). It returns plugin-script reverse ops the host records in
+            the install ledger and replays at `charly bundle del`. The deploy-class
+            companion of the verb-class candy/plugin-example-external.
+    plugin-example-deploy-decl:
+        plugin:
+            providers:
+                - deploy:exampledeploy
+            source: github.com/opencharly/charly/candy/plugin-example-deploy
+    plugin-example-deploy-step-write:
+        run: place a marker file on the venue — a file-write step the external deploy plugin EXECUTES from the round-tripped per-step InstallPlan IR (proves InstallPlan.Steps travel author -> host -> wire -> plugin AND the dest is honored)
+        run_as: ${USER}
+        write: /tmp/charly-exampledeploy-steps/written
+        content: |-
+            EXAMPLEDEPLOY-STEP-WRITE-OK
+    plugin-example-deploy-env:
+        env:
+            EXAMPLEDEPLOY_STEP_ENV: present
+    exampledeploy-module-present:
+        check: the out-of-tree deploy plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+        id: exampledeploy-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

@@ -1,0 +1,643 @@
+#!/usr/bin/python3
+"""charly-overlay — Wayland overlay daemon/client using gtk4-layer-shell.
+
+Dual-mode script:
+  charly-overlay daemon              Start the overlay daemon (GTK4 event loop + socket listener)
+  charly-overlay show --type text    Send a show command to the running daemon
+  charly-overlay hide --name foo     Hide a specific overlay
+  charly-overlay hide --all          Hide all overlays
+  charly-overlay list                List active overlays (JSON)
+  charly-overlay status              Check daemon health
+
+The daemon manages multiple named overlay windows on the Wayland OVERLAY layer
+using gtk4-layer-shell. It listens on /tmp/charly-overlay.sock for JSON-line commands.
+"""
+
+import argparse
+import json
+import os
+import socket
+import sys
+import threading
+import time
+
+SOCK_PATH = "/tmp/charly-overlay.sock"
+
+# ---------------------------------------------------------------------------
+# Client mode: connect to daemon, send command, print response
+# ---------------------------------------------------------------------------
+
+def send_command(cmd):
+    """Send a JSON command to the daemon and return the parsed response."""
+    if not os.path.exists(SOCK_PATH):
+        print("error: overlay daemon not running (no socket at %s)" % SOCK_PATH, file=sys.stderr)
+        sys.exit(1)
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(SOCK_PATH)
+        s.sendall((json.dumps(cmd) + "\n").encode())
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+            if b"\n" in data:
+                break
+        s.close()
+        if data:
+            return json.loads(data.decode().strip())
+        return {"ok": False, "error": "no response from daemon"}
+    except ConnectionRefusedError:
+        # Stale socket — daemon crashed
+        print("error: overlay daemon not responding (stale socket)", file=sys.stderr)
+        sys.exit(1)
+
+
+def client_show(args):
+    cmd = {"action": "show", "type": args.type, "name": args.name or ""}
+    if args.text:
+        cmd["text"] = args.text
+    if args.subtitle:
+        cmd["subtitle"] = args.subtitle
+    if args.position:
+        cmd["position"] = args.position
+    if args.bg:
+        cmd["bg"] = args.bg
+    if args.color:
+        cmd["color"] = args.color
+    if args.font_size:
+        cmd["font_size"] = args.font_size
+    if args.opacity is not None:
+        cmd["opacity"] = args.opacity
+    if args.duration:
+        cmd["duration"] = args.duration
+    if args.seconds:
+        cmd["seconds"] = args.seconds
+    if args.region:
+        cmd["region"] = args.region
+    resp = send_command(cmd)
+    if resp.get("ok"):
+        print("overlay %s shown" % resp.get("name", ""))
+    else:
+        print("error: %s" % resp.get("error", "unknown"), file=sys.stderr)
+        sys.exit(1)
+
+
+def client_hide(args):
+    if args.all:
+        resp = send_command({"action": "hide_all"})
+    elif args.name:
+        resp = send_command({"action": "hide", "name": args.name})
+    else:
+        print("error: specify --name or --all", file=sys.stderr)
+        sys.exit(1)
+    if resp.get("ok"):
+        print("ok")
+    else:
+        print("error: %s" % resp.get("error", "unknown"), file=sys.stderr)
+        sys.exit(1)
+
+
+def client_list(args):
+    resp = send_command({"action": "list"})
+    if resp.get("ok"):
+        overlays = resp.get("overlays", [])
+        if overlays:
+            print(json.dumps(overlays, indent=2))
+        else:
+            print("no active overlays")
+    else:
+        print("error: %s" % resp.get("error", "unknown"), file=sys.stderr)
+        sys.exit(1)
+
+
+def client_status(args):
+    resp = send_command({"action": "status"})
+    if resp.get("ok"):
+        count = resp.get("overlay_count", 0)
+        print("daemon running, %d overlay(s) active" % count)
+    else:
+        print("error: %s" % resp.get("error", "unknown"), file=sys.stderr)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Daemon mode: GTK4 event loop + socket listener
+# ---------------------------------------------------------------------------
+
+def run_daemon(args):
+    """Start the overlay daemon with GTK4 + gtk4-layer-shell."""
+    # Critical: load libgtk4-layer-shell.so BEFORE importing Gtk.
+    # This registers the layer-shell protocol extension before GTK4
+    # initializes its Wayland display connection.
+    from ctypes import CDLL
+    try:
+        CDLL("libgtk4-layer-shell.so.0")
+    except OSError:
+        print("error: libgtk4-layer-shell.so.0 not found. Install gtk4-layer-shell.", file=sys.stderr)
+        sys.exit(1)
+
+    import gi
+    gi.require_version("Gtk", "4.0")
+    try:
+        gi.require_version("Gtk4LayerShell", "1.0")
+    except ValueError:
+        print("error: Gtk4LayerShell typelib not found. Install gtk4-layer-shell with introspection.", file=sys.stderr)
+        sys.exit(1)
+    from gi.repository import Gtk, Gtk4LayerShell, GLib, Gdk
+
+    # Auto-name counter
+    name_counter = [0]
+
+    def auto_name(overlay_type):
+        name_counter[0] += 1
+        return "%s-%d" % (overlay_type, name_counter[0])
+
+    class OverlayDaemon:
+        def __init__(self):
+            self.app = Gtk.Application(application_id="ai.opencharly.overlay")
+            self.overlays = {}  # name -> {"window": Gtk.Window, "type": str, "timeout_id": int|None}
+            self.app.connect("activate", self.on_activate)
+            self.server_sock = None
+            self.running = True
+
+        def on_activate(self, app):
+            # Force RGBA (transparent) window surfaces. GTK4 on Wayland creates
+            # opaque surfaces by default. Using `background: none` (not just
+            # background-color) overrides the theme's background-image and signals
+            # GTK4 to request an RGBA surface from the compositor.
+            css = Gtk.CssProvider()
+            css.load_from_string("window { background: none; }")
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+
+            # Start socket listener thread
+            t = threading.Thread(target=self.listen_socket, daemon=True)
+            t.start()
+            # Keep app alive with an invisible window (GTK4 quits if no windows)
+            self.keeper = Gtk.Window(application=app)
+            self.keeper.set_default_size(1, 1)
+            Gtk4LayerShell.init_for_window(self.keeper)
+            Gtk4LayerShell.set_layer(self.keeper, Gtk4LayerShell.Layer.BACKGROUND)
+            Gtk4LayerShell.set_namespace(self.keeper, "charly-overlay-keeper")
+            Gtk4LayerShell.set_keyboard_mode(self.keeper, Gtk4LayerShell.KeyboardMode.NONE)
+            self.keeper.set_opacity(0)
+            self.keeper.present()
+
+        def listen_socket(self):
+            # Remove stale socket
+            if os.path.exists(SOCK_PATH):
+                os.unlink(SOCK_PATH)
+            self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.server_sock.bind(SOCK_PATH)
+            self.server_sock.listen(5)
+            while self.running:
+                try:
+                    conn, _ = self.server_sock.accept()
+                    data = b""
+                    while True:
+                        chunk = conn.recv(4096)
+                        if not chunk:
+                            break
+                        data += chunk
+                        if b"\n" in data:
+                            break
+                    if data:
+                        line = data.decode().strip()
+                        try:
+                            cmd = json.loads(line)
+                            # Dispatch to main thread
+                            event = threading.Event()
+                            result = [None]
+                            def handle():
+                                result[0] = self.handle_command(cmd)
+                                event.set()
+                                return False  # remove from idle
+                            GLib.idle_add(handle)
+                            event.wait(timeout=10)
+                            resp = result[0] or {"ok": False, "error": "timeout"}
+                        except json.JSONDecodeError as e:
+                            resp = {"ok": False, "error": "invalid JSON: %s" % str(e)}
+                    else:
+                        resp = {"ok": False, "error": "empty request"}
+                    conn.sendall((json.dumps(resp) + "\n").encode())
+                    conn.close()
+                except OSError:
+                    if not self.running:
+                        break
+
+        def handle_command(self, cmd):
+            action = cmd.get("action", "")
+            if action == "show":
+                return self.cmd_show(cmd)
+            elif action == "hide":
+                return self.cmd_hide(cmd)
+            elif action == "hide_all":
+                return self.cmd_hide_all()
+            elif action == "list":
+                return self.cmd_list()
+            elif action == "status":
+                return {"ok": True, "overlay_count": len(self.overlays)}
+            else:
+                return {"ok": False, "error": "unknown action: %s" % action}
+
+        def cmd_show(self, cmd):
+            overlay_type = cmd.get("type", "text")
+            name = cmd.get("name") or auto_name(overlay_type)
+
+            # If name already exists, remove old one first
+            if name in self.overlays:
+                self._remove_overlay(name)
+
+            win = Gtk.Window(application=self.app)
+            Gtk4LayerShell.init_for_window(win)
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            Gtk4LayerShell.set_namespace(win, "charly-overlay-%s" % name)
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
+
+            # Position / anchoring
+            position = cmd.get("position", "center")
+            self._apply_position(win, position, overlay_type)
+
+            # Don't reserve space (overlay floats above everything)
+            Gtk4LayerShell.set_exclusive_zone(win, -1)
+
+            # Build content based on type.
+            # Watermark defaults to 0.3 opacity; all others default to 1.0.
+            default_opacity = 0.3 if overlay_type == "watermark" else 1.0
+            opacity = cmd.get("opacity", default_opacity)
+            if overlay_type == "text":
+                self._build_text_overlay(win, cmd)
+            elif overlay_type == "lower-third":
+                self._build_lower_third_overlay(win, cmd)
+            elif overlay_type == "watermark":
+                self._build_watermark_overlay(win, cmd)
+            elif overlay_type == "countdown":
+                self._build_countdown_overlay(win, cmd, name)
+            elif overlay_type == "highlight":
+                self._build_highlight_overlay(win, cmd)
+            elif overlay_type == "fade":
+                self._build_fade_overlay(win, cmd)
+            else:
+                return {"ok": False, "error": "unknown overlay type: %s" % overlay_type}
+
+            win.set_opacity(opacity)
+            win.present()
+
+            timeout_id = None
+            duration = cmd.get("duration")
+            if duration and overlay_type != "countdown":
+                secs = self._parse_duration(duration)
+                if secs > 0:
+                    timeout_id = GLib.timeout_add(int(secs * 1000), lambda: self._auto_hide(name))
+
+            self.overlays[name] = {
+                "window": win,
+                "type": overlay_type,
+                "timeout_id": timeout_id,
+            }
+            return {"ok": True, "name": name}
+
+        def _apply_position(self, win, position, overlay_type):
+            """Set layer-shell anchors based on position string."""
+            if overlay_type == "lower-third":
+                # Always bottom-anchored, full width
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, True)
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, True)
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, True)
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 80)
+                return
+
+            if overlay_type == "watermark":
+                # Corner-anchored based on position
+                anchors = {
+                    "top-left": (True, False, True, False),
+                    "top-right": (True, False, False, True),
+                    "bottom-left": (False, True, True, False),
+                    "bottom-right": (False, True, False, True),
+                    "top": (True, False, False, False),
+                    "bottom": (False, True, False, False),
+                }
+                top, bottom, left, right = anchors.get(position, (False, True, False, True))
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, top)
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, bottom)
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, left)
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, right)
+                margin = 20
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, margin)
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, margin)
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.LEFT, margin)
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, margin)
+                return
+
+            # Default: fullscreen (anchor all edges) for text, countdown, highlight, fade
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, True)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, True)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, True)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, True)
+
+        def _parse_color(self, color_str):
+            """Parse a CSS color string into (r, g, b, a) floats."""
+            rgba = Gdk.RGBA()
+            if rgba.parse(color_str):
+                return (rgba.red, rgba.green, rgba.blue, rgba.alpha)
+            return (0, 0, 0, 1)
+
+        def _make_bg_area(self, color_str):
+            """Create a DrawingArea that fills its allocation with a solid/alpha color.
+
+            GTK4 on Wayland does not composite rgba() CSS backgrounds on
+            layer-shell windows reliably.  Drawing with Cairo bypasses
+            the CSS pipeline entirely and gives correct alpha blending.
+            """
+            r, g, b, a = self._parse_color(color_str)
+            area = Gtk.DrawingArea()
+            area.set_vexpand(True)
+            area.set_hexpand(True)
+
+            def draw(da, ctx, width, height):
+                ctx.set_source_rgba(r, g, b, a)
+                ctx.paint()
+
+            area.set_draw_func(draw)
+            return area
+
+        def _label_css(self, color, font_size, extra=""):
+            """Return a CSS string for label styling (text only, no background)."""
+            css = "label { color: %s; font-size: %dpx; font-weight: bold; %s}" % (color, font_size, extra)
+            provider = Gtk.CssProvider()
+            provider.load_from_string(css)
+            return provider
+
+        def _style_label(self, label, color, font_size, extra=""):
+            """Apply text-only CSS to a label widget."""
+            provider = self._label_css(color, font_size, extra)
+            label.get_style_context().add_provider(
+                provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+
+        def _build_text_overlay(self, win, cmd):
+            """Full-screen centered text overlay (title card)."""
+            text = cmd.get("text", "")
+            bg = cmd.get("bg", "rgba(0,0,0,0.7)")
+            color = cmd.get("color", "white")
+            font_size = cmd.get("font_size", 48)
+
+            # Use Gtk.Overlay: Cairo-drawn background + label on top
+            overlay = Gtk.Overlay()
+            overlay.set_vexpand(True)
+            overlay.set_hexpand(True)
+            overlay.set_child(self._make_bg_area(bg))
+
+            label = Gtk.Label(label=text)
+            label.set_wrap(True)
+            label.set_justify(Gtk.Justification.CENTER)
+            label.set_valign(Gtk.Align.CENTER)
+            label.set_halign(Gtk.Align.CENTER)
+            self._style_label(label, color, font_size)
+            overlay.add_overlay(label)
+
+            win.set_child(overlay)
+
+        def _build_lower_third_overlay(self, win, cmd):
+            """Bottom-anchored name/title bar."""
+            text = cmd.get("text", "")
+            subtitle = cmd.get("subtitle", "")
+            bg = cmd.get("bg", "rgba(0,0,0,0.85)")
+            color = cmd.get("color", "white")
+            font_size = cmd.get("font_size", 28)
+
+            overlay = Gtk.Overlay()
+            overlay.set_vexpand(True)
+            overlay.set_hexpand(True)
+            overlay.set_child(self._make_bg_area(bg))
+
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            box.set_valign(Gtk.Align.CENTER)
+            box.set_halign(Gtk.Align.START)
+            box.set_margin_start(40)
+            box.set_margin_end(40)
+            box.set_margin_top(16)
+            box.set_margin_bottom(16)
+
+            name_label = Gtk.Label(label=text)
+            name_label.set_halign(Gtk.Align.START)
+            self._style_label(name_label, color, font_size)
+            box.append(name_label)
+
+            if subtitle:
+                sub_label = Gtk.Label(label=subtitle)
+                sub_label.set_halign(Gtk.Align.START)
+                sub_size = max(14, font_size - 10)
+                self._style_label(sub_label, color, sub_size, "opacity: 0.8;")
+                box.append(sub_label)
+
+            overlay.add_overlay(box)
+            win.set_child(overlay)
+
+        def _build_watermark_overlay(self, win, cmd):
+            """Corner-anchored persistent text at low opacity."""
+            text = cmd.get("text", "DRAFT")
+            color = cmd.get("color", "white")
+            font_size = cmd.get("font_size", 24)
+
+            label = Gtk.Label(label=text)
+            self._style_label(label, color, font_size)
+            win.set_child(label)
+
+        def _build_countdown_overlay(self, win, cmd, name):
+            """Full-screen countdown (3, 2, 1) that auto-hides on completion."""
+            seconds = cmd.get("seconds", 3)
+            bg = cmd.get("bg", "rgba(0,0,0,0.6)")
+            color = cmd.get("color", "white")
+            font_size = cmd.get("font_size", 120)
+
+            overlay = Gtk.Overlay()
+            overlay.set_vexpand(True)
+            overlay.set_hexpand(True)
+            overlay.set_child(self._make_bg_area(bg))
+
+            label = Gtk.Label(label=str(seconds))
+            label.set_valign(Gtk.Align.CENTER)
+            label.set_halign(Gtk.Align.CENTER)
+            self._style_label(label, color, font_size)
+            overlay.add_overlay(label)
+
+            win.set_child(overlay)
+
+            remaining = [seconds]
+
+            def tick():
+                remaining[0] -= 1
+                if remaining[0] <= 0:
+                    self._remove_overlay(name)
+                    return False  # stop timer
+                label.set_label(str(remaining[0]))
+                return True  # continue
+
+            GLib.timeout_add_seconds(1, tick)
+
+        def _build_highlight_overlay(self, win, cmd):
+            """Full-screen transparent overlay with a colored highlight rectangle."""
+            region = cmd.get("region", "100,100,400,300")
+            color = cmd.get("color", "rgba(255,0,0,0.3)")
+
+            parts = [int(x.strip()) for x in region.split(",")]
+            if len(parts) != 4:
+                return
+            rx, ry, rw, rh = parts
+            r, g, b, a = self._parse_color(color)
+
+            area = Gtk.DrawingArea()
+            area.set_vexpand(True)
+            area.set_hexpand(True)
+
+            def draw(da, ctx, width, height):
+                # Clear entire surface to transparent first (cairo OPERATOR_SOURCE=1)
+                ctx.save()
+                ctx.set_operator(1)  # OPERATOR_SOURCE
+                ctx.set_source_rgba(0, 0, 0, 0)
+                ctx.paint()
+                ctx.restore()
+                # Draw only the highlight rectangle
+                ctx.set_source_rgba(r, g, b, a)
+                ctx.rectangle(rx, ry, rw, rh)
+                ctx.fill()
+
+            area.set_draw_func(draw)
+            win.set_child(area)
+
+        def _build_fade_overlay(self, win, cmd):
+            """Full-screen solid color overlay for transitions."""
+            color = cmd.get("color", "black")
+            bg = cmd.get("bg", color)
+            win.set_child(self._make_bg_area(bg))
+
+        def _auto_hide(self, name):
+            """Auto-hide callback for duration-based overlays."""
+            self._remove_overlay(name)
+            return False  # remove from timeout
+
+        def _remove_overlay(self, name):
+            """Remove and destroy an overlay by name."""
+            entry = self.overlays.pop(name, None)
+            if entry:
+                if entry.get("timeout_id"):
+                    GLib.source_remove(entry["timeout_id"])
+                entry["window"].close()
+
+        def cmd_hide(self, cmd):
+            name = cmd.get("name", "")
+            if not name:
+                return {"ok": False, "error": "no overlay name specified"}
+            if name not in self.overlays:
+                return {"ok": False, "error": "overlay '%s' not found" % name}
+            self._remove_overlay(name)
+            return {"ok": True}
+
+        def cmd_hide_all(self):
+            names = list(self.overlays.keys())
+            for name in names:
+                self._remove_overlay(name)
+            return {"ok": True, "removed": len(names)}
+
+        def cmd_list(self):
+            overlays = [
+                {"name": name, "type": info["type"]}
+                for name, info in self.overlays.items()
+            ]
+            return {"ok": True, "overlays": overlays}
+
+        def _parse_duration(self, duration_str):
+            """Parse duration string like '5s', '1.5m', '500ms' to seconds."""
+            s = duration_str.strip().lower()
+            if s.endswith("ms"):
+                return float(s[:-2]) / 1000.0
+            elif s.endswith("m"):
+                return float(s[:-1]) * 60.0
+            elif s.endswith("s"):
+                return float(s[:-1])
+            else:
+                try:
+                    return float(s)
+                except ValueError:
+                    return 0
+
+        def shutdown(self):
+            self.running = False
+            if self.server_sock:
+                self.server_sock.close()
+            if os.path.exists(SOCK_PATH):
+                os.unlink(SOCK_PATH)
+
+        def run(self):
+            try:
+                self.app.run(None)
+            finally:
+                self.shutdown()
+
+    daemon = OverlayDaemon()
+    daemon.run()
+
+
+# ---------------------------------------------------------------------------
+# CLI argument parser
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(prog="charly-overlay", description="Wayland overlay daemon/client")
+    sub = parser.add_subparsers(dest="command")
+
+    # daemon
+    sub.add_parser("daemon", help="Start the overlay daemon")
+
+    # show
+    show_p = sub.add_parser("show", help="Show an overlay")
+    show_p.add_argument("--type", required=True,
+                        choices=["text", "lower-third", "watermark", "countdown", "highlight", "fade"],
+                        help="Overlay type")
+    show_p.add_argument("--text", default="", help="Text content")
+    show_p.add_argument("--subtitle", default="", help="Subtitle (lower-third)")
+    show_p.add_argument("--name", default="", help="Overlay name")
+    show_p.add_argument("--position", default="center",
+                        help="Position: center, top, bottom, top-left, top-right, bottom-left, bottom-right")
+    show_p.add_argument("--bg", default="", help="Background color (CSS)")
+    show_p.add_argument("--color", default="white", help="Text color")
+    show_p.add_argument("--font-size", type=int, default=48, dest="font_size", help="Font size in px")
+    show_p.add_argument("--opacity", type=float, default=None, help="Overall opacity (0.0-1.0)")
+    show_p.add_argument("--duration", default="", help="Auto-hide after duration (e.g. 5s, 1m)")
+    show_p.add_argument("--seconds", type=int, default=3, help="Countdown seconds")
+    show_p.add_argument("--region", default="", help="Highlight region 'X,Y,W,H'")
+
+    # hide
+    hide_p = sub.add_parser("hide", help="Hide an overlay")
+    hide_p.add_argument("--name", default="", help="Overlay name to hide")
+    hide_p.add_argument("--all", action="store_true", help="Hide all overlays")
+
+    # list
+    sub.add_parser("list", help="List active overlays")
+
+    # status
+    sub.add_parser("status", help="Check daemon status")
+
+    args = parser.parse_args()
+
+    if args.command == "daemon":
+        run_daemon(args)
+    elif args.command == "show":
+        client_show(args)
+    elif args.command == "hide":
+        client_hide(args)
+    elif args.command == "list":
+        client_list(args)
+    elif args.command == "status":
+        client_status(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

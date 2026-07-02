@@ -1,0 +1,47 @@
+cue:
+    candy:
+        version: 2026.166.1545
+        description: |
+            The CUE data-validation/configuration CLI (cue), pinned to v0.16.1 to match
+            charly's embedded cuelang.org/go library.
+            cue downloads the pinned release tarball from the cue-lang GitHub releases and
+            installs the single static binary at /usr/local/bin/cue. It is a DEV-TIME tool:
+            charly's runtime never shells out to it (charly uses the embedded cuelang.org/go
+            library) — cue is here so developers and agents can run the offline schema-vendoring
+            pipeline (`cue import jsonschema:`, `cue mod get`) and author/validate schemas in-box.
+            Verifiable end to end: the binary lands at a fixed path, `cue version` reports the
+            pinned v0.16.1 on stdout, and `cue` actually evaluates a CUE expression (export of a
+            computed field) so a non-functional binary fails the check.
+    cue-var:
+        var:
+            CUE_VERSION: v0.16.1
+    cue-step-0:
+        run: download the pinned cue release binary and install it to /usr/local/bin
+        download: "https://github.com/cue-lang/cue/releases/download/${CUE_VERSION}/cue_${CUE_VERSION}_linux_${ARCH}.tar.gz"
+        extract: tar.gz
+        to: /usr/local/bin
+        extract_include: [cue]
+        run_as: root
+    cue-step-1:
+        check: the cue binary is installed at /usr/local/bin/cue
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/cue
+            exists: true
+    cue-step-2:
+        check: cue reports the pinned v0.16.1 release on stdout
+        exit_status: 0
+        stdout:
+            - matches: "cue version v0.16.1"
+        plugin: command
+        plugin_input:
+            command: cue version
+    cue-step-3:
+        check: cue actually evaluates CUE (exports a computed field, proving the binary works)
+        exit_status: 0
+        stdout:
+            - contains: "42"
+        plugin: command
+        plugin_input:
+            command: |
+                printf 'x: 21\ny: x*2\n' > /tmp/charly-cue-check.cue && cue export -e y /tmp/charly-cue-check.cue

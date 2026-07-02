@@ -1,0 +1,45 @@
+plugin-udev:
+    candy:
+        version: 2026.179.0000
+        description: |-
+            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly udev …`
+            CLI — the GPU-device udev-rule manager (generate / install / remove / status),
+            a standalone Go module (go.mod + main.go) ported OUT of charly's core (the deleted
+            charly/udev.go + plugin_command_udev.go), so the GPU-detection + udev-rule-writing
+            code no longer compiles into the core binary. The FIRST externalizable-command
+            precedent in the core-externalization program: a PURE command-only plugin (no gRPC
+            verb), so it mirrors candy/plugin-example-command, not the verb+command
+            candy/plugin-mcp / candy/plugin-secrets.
+
+            charly's loader fetches this candy's repo, go-builds the provider binary on the
+            HOST, and on `charly udev <args…>` syscall.Exec's it in CLI mode (sdk.Main →
+            cliMain) — or runs the host-installed /usr/lib/charly/plugins binary on a
+            project-less host (the pkg/arch bake). The plugin owns real terminal stdio, so
+            `charly udev install` / `remove` shell out to `sudo tee` / `sudo udevadm` and reach
+            the real terminal natively.
+
+            command:udev is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
+            registry — so it is declared in plugin.providers (for the CLI-grammar prescan +
+            baked `.providers` manifest) but advertises NO Describe capability. The R10 witness
+            is the disposable check-udev-local bed: `charly udev generate` asserting the exact
+            rule-file content + `charly udev status` exit 0, run host-side (GPU-less).
+    plugin-udev-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-udev
+            providers:
+                - command:udev
+    # ADE build-context check: a deterministic check that does NOT depend on the project
+    # context the `charly udev` CLI needs (the prescan finds this candy from the project dir).
+    # It mirrors candy/plugin-example-command's pattern — a trivial build-context
+    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
+    # build + fork/exec the module. The full CLI end-to-end (`charly udev generate` → the exact
+    # rule content; `charly udev status` → exit 0) is exercised by the Go e2e
+    # (TestExternalCommandExecPlan_Udev) + the live R10 (check-udev-local).
+    udev-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly udev` end-to-end is exercised by the Go e2e + the live R10 (check-udev-local)
+        id: udev-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

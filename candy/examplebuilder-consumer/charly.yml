@@ -1,0 +1,24 @@
+examplebuilder-consumer:
+    candy:
+        version: 2026.175.0716
+        description: |-
+            Reference CONSUMER candy for the build-time plugin-execution BUILDER leg. It
+            SELECTS the out-of-tree external builder via `external_builder: examplebuilder`,
+            so at image build charly's build-path plugin connect + emitExternalBuilderStages
+            seam host-builds + connects candy/plugin-example-builder out-of-process, Invokes
+            its OpResolve, and splices the returned multi-stage block (pre-main-FROM) + the
+            COPY --from artifacts (post-main-FROM) into the generated Containerfile — baking
+            /opt/examplebuilder-artifact into the image. Compose it WITH
+            candy/plugin-example-builder (which provides the examplebuilder builder); the
+            runtime check below proves the build-resolve ran.
+        external_builder: examplebuilder
+    examplebuilder-artifact-present:
+        check: the build-time examplebuilder resolve ran — /opt/examplebuilder-artifact is present in the built image
+        id: examplebuilder-artifact-present
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /opt/examplebuilder-artifact"
+            in_container: true

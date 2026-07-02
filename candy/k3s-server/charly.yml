@@ -1,0 +1,274 @@
+k3s-server:
+    candy:
+        version: 2026.155.1203
+        description: |
+            A single-node k3s control plane that boots with ServiceLB, Traefik, and local-path-provisioner enabled by default.
+            Renders /etc/rancher/k3s/config.yaml (admin-only, disabling no
+            default addons), runs `k3s server` as a managed service, and
+            publishes the cluster kubeconfig back to the operator. The
+            observable proof the control plane came up: a live deploy reaches a
+            Ready node with Traefik as the default IngressClass and local-path
+            as the default StorageClass.
+    k3s-server-require:
+        require:
+            - k3s
+            # plugin-kube is the OUT-OF-TREE plugin that serves the `kube:` cluster-probe
+            # check verb AND the clientcmd-backed k3s kubeconfig-merge K3sPostProvision
+            # performs (the heavy k8s.io/client-go + k8s.io/apimachinery stack lives there,
+            # not in charly's core). Requiring it puts it in every k3s-server deploy's
+            # scanned candy set, so loadProjectPlugins (in the bed runner AND in
+            # `charly bundle add`) builds + connects it before the deploy's kubeconfig
+            # merge and the bed's `kube:` checks dispatch. (box/<distro> adopts the
+            # matching @github pin via reconcile later — the deliberate cross-repo lag;
+            # the R10 bed loads the LOCAL candy via the superproject override.)
+            - plugin-kube
+    k3s-server-security:
+        # Layer-intrinsic container security. Applied ONLY to pod targets via
+        # quadlet PodmanArgs; VM and host targets silently ignore this block
+        # (they have full kernel access in their own right). Verified live:
+        # k3s bootstraps in ~7s with all three set; fails with "failed to
+        # find cpuset cgroup (v2)" without cgroupns=host, fails with
+        # "overlayfs snapshotter ... failed to mount overlay" without
+        # fuse-overlayfs snapshotter (set in the config.yaml task below).
+        #
+        # - privileged: k3s runs its own containerd + CNI + kube-proxy; these
+        #   need SYS_ADMIN/NET_ADMIN/NET_RAW/SYS_MODULE. Narrower cap subsets
+        #   are fragile across k3s releases. Upstream k3s-in-docker docs
+        #   document --privileged as the supported path.
+        # - cgroupns=host: rootless podman's default cgroup sub-slice (under
+        #   user@1000.service) only delegates cpu/memory/pids — cpuset is
+        #   missing. Sharing the host's cgroup namespace surfaces the full
+        #   controller set including cpuset, which k3s's kubelet requires.
+        # - devices /dev/fuse: needed by the fuse-overlayfs snapshotter that
+        #   k3s's containerd uses (see config.yaml task comment).
+        security:
+            privileged: true
+            cgroupns: host
+            devices:
+                - /dev/fuse
+    k3s-server-secret_require:
+        # K3S_CLUSTER_TOKEN is the shared pre-shared token that authorizes
+        # k3s-agent nodes to join this server. Auto-generated on first deploy
+        # — the resolver in charly/layer_secrets.go (ensureLayerSecret) generates
+        # a 32-byte hex token via DefaultCredentialStore.Set the first time
+        # this layer (or k3s-agent — same name) resolves the secret. Both
+        # layers read the same persisted value on subsequent calls, so the
+        # server and every agent automatically share the token without
+        # operator setup. Override only when you need a specific value:
+        #   charly secrets set charly/secret/K3S_CLUSTER_TOKEN $(openssl rand -hex 32)
+        # Retrieve the auto-generated value:
+        #   charly secrets get charly/secret K3S_CLUSTER_TOKEN
+        secret_require:
+            - name: K3S_CLUSTER_TOKEN
+              description: Pre-shared token used by k3s-agent nodes to join the cluster. Auto-generated on first deploy; shared between k3s-server and every k3s-agent via the credential store.
+    k3s-server-env_accept:
+        # K3S_SERVER_HOSTNAME is the DNS name or IP by which the server is
+        # reachable from the operator's machine AND from every agent. Goes into
+        # tls-san: so the emitted kubeconfig server URL is valid.
+        #
+        # K3S_KUBECONFIG_SERVER is an optional full-URL override applied ONLY
+        # to the retrieved kubeconfig's `server:` field. Needed when the
+        # operator reaches the API via a port-forwarded host port (e.g. a VM
+        # with `port_forwards: ["16443:6443"]` — the guest-side cert SAN is
+        # still just the hostname, but the URL must point at the forwarded
+        # port). Without this, a single-hostname rewrite produces the wrong
+        # URL because the guest-side URL "https://127.0.0.1:6443" already
+        # hardcodes :6443 and K3S_SERVER_HOSTNAME alone can't change the port.
+        env_accept:
+            - name: K3S_SERVER_HOSTNAME
+              description: Public hostname/IP of the k3s server (used for tls-san). Defaults to the hostname seen by uname -n.
+            - name: K3S_KUBECONFIG_SERVER
+              description: Optional full-URL override for the retrieved kubeconfig's server field (e.g. "https://127.0.0.1:16443" for a port-forwarded VM bed). Default falls back to "https://${K3S_SERVER_HOSTNAME}:6443".
+    k3s-server-artifact:
+        # The kubeconfig ends up at /etc/rancher/k3s/k3s.yaml after k3s boots.
+        # We publish it back to the operator via the new artifacts: mechanism
+        # (charly/layer_artifacts.go), rewriting the server URL from 127.0.0.1 to
+        # the reachable K3S_SERVER_HOSTNAME so the retrieved kubeconfig works
+        # directly from the operator's machine. Mode 0600 because kubeconfig
+        # contains the cluster admin cert + key.
+        artifact:
+            - name: kubeconfig
+              path: /etc/rancher/k3s/k3s.yaml
+              mode: "0600"
+              # k3s.service reaches systemd "active" when the binary execs, but
+              # /etc/rancher/k3s/k3s.yaml lands ~3-15s later when the API
+              # server finishes starting. The 120s deadline is generous —
+              # cold-boot k3s on a slow host occasionally takes 30-60s before
+              # the kubeconfig appears. File existence is the synchronization
+              # primitive (R4); polling cadence is 1s in retrieveOne.
+              wait_second: 120
+              rewrite:
+                # K3S_KUBECONFIG_SERVER wins when set (covers port-forwarded
+                # setups where the host-side port differs from the guest-side
+                # :6443). Falls back to "https://${K3S_SERVER_HOSTNAME}:6443"
+                # when K3S_KUBECONFIG_SERVER is unset — the shell-style ${K:-d}
+                # default lets the second rewrite rule below handle plain
+                # hostname substitutions without a port change.
+                - find: "https://127.0.0.1:6443"
+                  replace: "${K3S_KUBECONFIG_SERVER:-https://127.0.0.1:6443}"
+                - find: "127.0.0.1"
+                  replace: "${K3S_SERVER_HOSTNAME:-127.0.0.1}"
+              retrieve_to: ~/.cache/charly/clusters/${deploy_name}/kubeconfig.yaml
+    k3s-server-service:
+        service:
+            - name: k3s
+              exec: /usr/local/bin/k3s server
+              restart: always
+              priority: 50
+              stop_timeout: "30"
+              after: [network-online.target]
+              scope: system
+              enable: true
+    k3s-server-step-0:
+        run: |
+            command=set -euo pipefail
+            mkdir -p /etc/rancher/k3s
+            # When running under supervisord (container pod), emit extra
+            # config to make k3s tolerant of a rootless user namespace:
+            #  - snapshotter: fuse-overlayfs — kernel overlayfs can't nest
+            #    on podman's overlayfs (see "failed to mount overlay").
+            #  - kubelet-arg feature-gates KubeletInUserNamespace=true —
+            #    kubelet tries to open /dev/kmsg to watch OOM events;
+            #    userns uid=0 → host uid=1000 can't access it; this gate
+            #    makes kubelet skip that check.
+            #  - kube-proxy-arg feature-gates KubeletInUserNamespace=true —
+            #    kube-proxy honours the same feature gate for its own
+            #    userns-aware paths.
+            # VM and host deploys run with full kernel access and skip all
+            # of these.
+            if [ -f /etc/supervisord.conf ]; then
+              cat >/etc/rancher/k3s/config.yaml <<YAML
+            write-kubeconfig-mode: "0644"
+            token: "${K3S_CLUSTER_TOKEN}"
+            tls-san:
+              - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
+            disable: []
+            snapshotter: fuse-overlayfs
+            kubelet-arg:
+              - "feature-gates=KubeletInUserNamespace=true"
+            kube-proxy-arg:
+              - "feature-gates=KubeletInUserNamespace=true"
+            YAML
+            else
+              cat >/etc/rancher/k3s/config.yaml <<YAML
+            write-kubeconfig-mode: "0644"
+            token: "${K3S_CLUSTER_TOKEN}"
+            tls-san:
+              - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
+            disable: []
+            YAML
+            fi
+            chmod 0600 /etc/rancher/k3s/config.yaml
+        run_as: root
+        # K3S_CLUSTER_TOKEN comes from ResolveLayerSecrets via
+        # InjectSecretsIntoPlans (deploy_add_cmd.go) — do NOT declare it
+        # here or the "layer env takes precedence" rule would block the
+        # injection. K3S_SERVER_HOSTNAME is a plain env from deploy.yml.
+
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                mkdir -p /etc/rancher/k3s
+                # When running under supervisord (container pod), emit extra
+                # config to make k3s tolerant of a rootless user namespace:
+                #  - snapshotter: fuse-overlayfs — kernel overlayfs can't nest
+                #    on podman's overlayfs (see "failed to mount overlay").
+                #  - kubelet-arg feature-gates KubeletInUserNamespace=true —
+                #    kubelet tries to open /dev/kmsg to watch OOM events;
+                #    userns uid=0 → host uid=1000 can't access it; this gate
+                #    makes kubelet skip that check.
+                #  - kube-proxy-arg feature-gates KubeletInUserNamespace=true —
+                #    kube-proxy honours the same feature gate for its own
+                #    userns-aware paths.
+                # VM and host deploys run with full kernel access and skip all
+                # of these.
+                if [ -f /etc/supervisord.conf ]; then
+                  cat >/etc/rancher/k3s/config.yaml <<YAML
+                write-kubeconfig-mode: "0644"
+                token: "${K3S_CLUSTER_TOKEN}"
+                tls-san:
+                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
+                disable: []
+                snapshotter: fuse-overlayfs
+                kubelet-arg:
+                  - "feature-gates=KubeletInUserNamespace=true"
+                kube-proxy-arg:
+                  - "feature-gates=KubeletInUserNamespace=true"
+                YAML
+                else
+                  cat >/etc/rancher/k3s/config.yaml <<YAML
+                write-kubeconfig-mode: "0644"
+                token: "${K3S_CLUSTER_TOKEN}"
+                tls-san:
+                  - "${K3S_SERVER_HOSTNAME:-$(uname -n)}"
+                disable: []
+                YAML
+                fi
+                chmod 0600 /etc/rancher/k3s/config.yaml
+    k3s-server-step-1:
+        check: the k3s server config file is rendered with admin-only (0600) permissions
+        plugin: file
+        plugin_input:
+            file: /etc/rancher/k3s/config.yaml
+            exists: true
+            mode: "0600"
+    k3s-server-step-2:
+        check: the k3s control-plane binary the service execs is installed by the required k3s candy
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/k3s
+            exists: true
+    k3s-server-step-3:
+        check: the cluster reports at least one Ready node
+        kube: wait-nodes
+        cluster: "${DEPLOY_NAME}"
+        kube_count: 1
+        timeout: 180s
+        stdout:
+            contains: "Ready"
+        context:
+            - runtime
+    k3s-server-step-4:
+        check: Traefik, ServiceLB, and local-path addons are all Ready
+        kube: addons
+        cluster: "${DEPLOY_NAME}"
+        timeout: 240s
+        exit_status: 0
+        context:
+            - runtime
+    k3s-server-step-5:
+        check: Traefik is registered as the cluster's default ingress class
+        kube: ingressclass
+        cluster: "${DEPLOY_NAME}"
+        stdout:
+            contains: "traefik"
+        context:
+            - runtime
+    k3s-server-step-6:
+        check: local-path is registered as the cluster's default storage class
+        kube: storageclass
+        cluster: "${DEPLOY_NAME}"
+        stdout:
+            contains: "local-path"
+        context:
+            - runtime
+    k3s-config-file:
+        check: file=/etc/rancher/k3s/config.yaml
+        id: k3s-config-file
+        context:
+            - build
+        plugin: file
+        plugin_input:
+            file: /etc/rancher/k3s/config.yaml
+            exists: true
+            mode: "0600"
+    k3s-binary:
+        check: file=/usr/local/bin/k3s
+        id: k3s-binary
+        context:
+            - build
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/k3s
+            exists: true

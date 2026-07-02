@@ -1,0 +1,46 @@
+plugin-kube:
+    candy:
+        version: 2026.174.1200
+        description: |-
+            OUT-OF-TREE charly plugin owning ALL Kubernetes cluster interaction: the
+            `kube` cluster-probe check VERB, the `deploy:k8s` SUBSTRATE (the
+            `target: k8s` workload deploy, F1 — `kubectl apply -k` on the
+            host-generated Kustomize tree), AND the k3s kubeconfig-merge the
+            k3s-server / target:k8s deploy seam needs — a standalone Go module
+            (go.mod + main.go) that speaks the Kubernetes API (client-go dynamic +
+            clientcmd) over go-plugin gRPC via the charly plugin SDK
+            (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS
+            via LocalTransport — so the k8s.io/client-go + k8s.io/apimachinery
+            dependency lives HERE, out of charly's core go.mod (the goadb-analog of
+            candy/plugin-adb), while `kube:` authoring stays unchanged: the verb
+            keeps its `kube:` discriminator + every modifier + the #KubeMethod enum
+            on charly's core #Op, and dispatches through the provider registry
+            exactly like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider
+            hands it the full #Op, after the host pre-resolves any --cluster profile
+            to a concrete kubeconfig context); `target: k8s` resolves to this
+            plugin's deploy:k8s provider over the E3b reverse channel — the host
+            preresolves the cluster template + image Capabilities into the
+            egress-validated Kustomize tree (k8s_deploy_preresolve.go) and this
+            plugin applies it. Provides the full 13-method probe surface
+            (nodes/wait-nodes/pods/wait-ready/ingress/ingressclass/storageclass/
+            service/lb-external-ip/addons/apply/delete/raw), the deploy:k8s
+            substrate, PLUS the internal merge-kubeconfig deploy seam (k3s_post.go's
+            kubeconfig merge into ~/.kube/config). The R10 consumers are the
+            check-k3s bed (the `kube:` verb, via the k3s-server candy) and the
+            check-k8s-deploy bed (the deploy:k8s substrate).
+    plugin-kube-decl:
+        plugin:
+            providers:
+                - verb:kube
+                - deploy:k8s
+            source: github.com/opencharly/charly/candy/plugin-kube
+    kube-nodes-ready:
+        check: the cluster reports at least one Ready node (the out-of-process plugin verb dispatches through the registry and probes the live cluster)
+        id: kube-nodes-ready
+        kube: nodes
+        cluster: "${DEPLOY_NAME}"
+        stdout:
+            - contains: Ready
+        context:
+            - deploy

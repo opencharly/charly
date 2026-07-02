@@ -1,0 +1,24 @@
+plugin-package:
+    candy:
+        version: 2026.176.3000
+        description: |-
+            The `package` TYPED-STEP state-provision verb relocated into a candy.
+            CHECK: rpm -q / dpkg -s / pacman -Q probe + optional version match via the
+            live check engine. ACT (runtime): render the dnf/apt-get/pacman install.
+            ACT (build/deploy): lower into a SystemPackagesStep (the host materializes
+            the kit descriptor — format + cross-distro name via kit.ResolvePackageName).
+            A HOST-COUPLED verb on the charly/plugin/kit contract (CheckVerbProvider +
+            ProvisionActor + StepProvider), so it is COMPILED-IN-ONLY.
+    plugin-package-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-package
+            providers:
+                - verb:package
+    package-verb-dispatches:
+        check: the package verb dispatches through the provider registry and probes that a package is installed
+        id: package-verb-dispatches
+        plugin: package
+        plugin_input:
+            package: bash
+            installed: true
+        context: [runtime]

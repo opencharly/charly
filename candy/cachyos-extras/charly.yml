@@ -1,0 +1,91 @@
+cachyos-extras:
+    candy:
+        version: 2026.149.1210
+        description: |
+            Installs the CachyOS host-parity workstation toolset — pacman/AUR helpers, diagnostic monitors, editors, tunnels, and desktop-integration packages.
+            The remaining host workstation tools not already covered by the charly dev
+            stack — the CLI/diagnostic/app gap from the CachyOS netinstall + the
+            operator's manual installs, reverse-resolved to top-level packages.
+            Excludes host-hardware/boot/firmware/network entries by design. accounts
+            service is here because SDDM/Plasma user management needs it. Every entry
+            lands as a real pacman repo or AUR package, so each tool's binary and
+            package identity is independently verifiable on the built image.
+    cachyos-extras-require:
+        require:
+            - yay
+    cachyos-extras-distro:
+        distro:
+            arch:
+                package:
+                    # System / pacman tooling
+                    - pacman-contrib
+                    - pkgfile
+                    - rebuild-detector
+                    - paru
+                    - plocate
+                    # Diagnostics / monitors
+                    - btop
+                    - duf
+                    - glances
+                    - pv
+                    # Editors / terminal / apps (host parity)
+                    - micro
+                    - nano
+                    - nano-syntax-highlighting
+                    - vim
+                    - alacritty
+                    - meld
+                    - firefox
+                    # Net / fs / mail
+                    - inetutils
+                    - nfs-utils
+                    - syncthing
+                    - s-nail
+                    - unrar
+                    # Desktop integration helpers
+                    - accountsservice
+                    - xdg-user-dirs
+                    - xdg-utils
+                    - python-defusedxml
+                    - python-packaging
+                aur:
+                    package:
+                        - cloudflared-bin
+                        - gvisor-tap-vsock
+    cachyos-extras-step-0:
+        check: the btop resource monitor binary is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/btop
+            exists: true
+    cachyos-extras-step-1:
+        check: the duf disk-usage viewer binary is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/duf
+            exists: true
+    cachyos-extras-step-2:
+        check: the paru AUR helper binary is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/paru
+            exists: true
+    cachyos-extras-step-3:
+        check: the cloudflared-bin AUR tunnel client resolves on PATH
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: command -v cloudflared
+    cachyos-extras-step-4:
+        check: the syncthing file-synchronisation daemon binary is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/syncthing
+            exists: true
+    accountsservice-installed:
+        check: package=accountsservice
+        id: accountsservice-installed
+        plugin: package
+        plugin_input:
+            package: accountsservice
+            installed: true

@@ -1,0 +1,441 @@
+#!/home/user/.pixi/envs/default/bin/python
+"""In-process capture bridge for pixelflux-based screenshot and recording.
+
+Shebang is pinned to the pixi env's python because Fedora 43 made
+/usr/bin/python3 -> python3.14 by default. The selkies pixi env is on
+python 3.13 (it pulls C extensions: pixelflux, evdev, xkbcommon that
+aren't yet wheel-available for 3.14). A bare `#!/usr/bin/env python3`
+would resolve to the system 3.14 and fail at import-time with
+`ModuleNotFoundError: websockets` (the dependency is installed in the
+3.13 site-packages, not the 3.14 one).
+
+Taps into the selkies WebSocket stream (localhost:8081) to receive the same
+H.264 frames that the browser sees. Serves them via a Unix socket to
+pixelflux-screenshot and pixelflux-record.
+
+This avoids creating a second ScreenCapture (the Rust backend only supports
+one active capture at a time). Instead, we connect as a WebSocket client to
+the existing selkies streaming server and relay frames.
+
+Architecture:
+    selkies process (existing capture)
+        └── WebSocket :8081 broadcasts H.264 frames + Opus audio
+            └── This bridge (internal WebSocket client)
+                └── Unix socket /tmp/charly-capture.sock
+                    ├── pixelflux-screenshot (SCREENSHOT → PNG)
+                    └── pixelflux-record (STREAM → continuous H.264)
+
+The bridge filters binary messages by H.264 NAL start codes, dropping Opus
+audio packets (prefixed 0x01 0x00 by selkies). Audio for recording is
+captured separately via PulseAudio, not through this bridge.
+
+Protocol on /tmp/charly-capture.sock:
+    SCREENSHOT\n  → 4-byte length + PNG data (or 0 + reason string on failure)
+    STREAM\n      → continuous (4-byte length + raw H.264 frame data)
+    STATUS\n      → 4-byte length + JSON status
+
+Mode switching:
+    Controller: starts capture pipeline (works without a browser)
+    Viewer:     receives broadcast frames (works alongside a browser)
+    KILL → switch to viewer. PIPELINE_RESETTING in viewer → switch to controller.
+    Screenshot handler can request reconnect if no valid H.264 frames available.
+
+Started by selkies-wrapper. When run as __main__, starts the capture bridge
+in a background thread, then runs selkies main().
+"""
+import json
+import os
+import socket
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+SOCK_PATH = "/tmp/charly-capture.sock"
+WS_URL_CONTROLLER = "ws://localhost:8081/"
+WS_URL_VIEWER = "ws://localhost:8081/#shared"
+
+# Monkey-patch websockets v16 to allow URI fragments.
+# Selkies uses the #shared fragment to assign "viewer" role, but websockets
+# rejects fragments as "meaningless". We strip it before validation, then
+# inject it into the path so it appears in the HTTP GET line.
+import websockets.uri
+_orig_parse_uri = websockets.uri.parse_uri
+def _parse_uri_allow_fragment(uri):
+    frag = ''
+    if '#' in uri:
+        uri, frag = uri.rsplit('#', 1)
+    result = _orig_parse_uri(uri)
+    if frag:
+        result.path = result.path + '#' + frag
+    return result
+websockets.uri.parse_uri = _parse_uri_allow_fragment
+
+# Bridge state — shared between WebSocket thread and socket server
+_frame_buffer = []       # H.264 video frames only (audio filtered out)
+_frame_seq = 0           # monotonically increasing sequence number
+_frame_cond = threading.Condition()  # notified on each new frame
+_ws_connected = threading.Event()
+_bridge_running = True
+_bridge_mode = "starting"  # "starting", "controller", "viewer", "reconnecting"
+_active_streams = 0        # number of active STREAM clients (recordings)
+_last_kill_time = 0.0      # monotonic time of last KILL from server
+_last_ffmpeg_error = ""    # last ffmpeg decode error for status reporting
+
+# Reconnect signaling — screenshot handler can request mode switch
+_reconnect_event = threading.Event()
+_reconnect_mode = "controller"
+
+
+def _is_video_frame(data):
+    """Check if binary message is an H.264 video frame (not Opus audio).
+
+    Selkies wraps binary messages with a type prefix:
+    - 0x04 + 9-byte header + H.264 NAL data = video frame
+    - 0x01 0x00 + opus_bytes = audio packet
+    """
+    return len(data) > 10 and data[0] == 0x04
+
+
+def _strip_video_header(data):
+    """Strip the 10-byte selkies header, returning raw H.264 NAL data."""
+    return data[10:]
+
+
+def _ws_bridge():
+    """Background thread: connect to selkies WebSocket, collect H.264 frames.
+
+    Dynamically switches between controller and viewer modes:
+    - Controller: starts capture pipeline (works without a browser)
+    - Viewer: passively receives broadcast frames (works alongside a browser)
+
+    Mode switches triggered by:
+    - KILL message → switch to viewer (browser took over)
+    - PIPELINE_RESETTING in viewer → switch to controller (browser may have left)
+    - _reconnect_event → switch to requested mode (screenshot handler recovery)
+    """
+    global _bridge_running, _bridge_mode, _last_kill_time
+
+    import websockets.sync.client as ws_sync
+
+    mode = "controller"
+
+    while _bridge_running:
+        _bridge_mode = "reconnecting"
+        _ws_connected.clear()
+        _reconnect_event.clear()
+        with _frame_cond:
+            global _frame_seq
+            _frame_buffer.clear()
+            _frame_seq = 0
+            _frame_cond.notify_all()
+
+        url = WS_URL_VIEWER if mode == "viewer" else WS_URL_CONTROLLER
+
+        connected = False
+        for attempt in range(60):
+            if not _bridge_running:
+                return
+            try:
+                with ws_sync.connect(url, open_timeout=2) as ws:
+                    ws.recv()   # MODE websockets
+                    ws.recv()   # JSON settings
+
+                    if mode == "controller":
+                        ws.send("SETTINGS," + json.dumps({"displayId": "primary", "framerate": 30}))
+                        ws.send("START_VIDEO")
+
+                    _bridge_mode = mode
+                    _ws_connected.set()
+                    connected = True
+                    print(f"capture-bridge: connected as {mode}", file=sys.stderr)
+
+                    while _bridge_running:
+                        # Check for reconnect request from screenshot handler
+                        if _reconnect_event.is_set():
+                            _reconnect_event.clear()
+                            mode = _reconnect_mode
+                            print(f"capture-bridge: reconnect requested as {mode}", file=sys.stderr)
+                            break
+
+                        try:
+                            msg = ws.recv(timeout=5)
+                        except TimeoutError:
+                            continue
+
+                        if isinstance(msg, bytes):
+                            # Filter: only buffer H.264 video (skip Opus audio)
+                            if not _is_video_frame(msg):
+                                continue
+                            h264_data = _strip_video_header(msg)
+                            with _frame_cond:
+                                _frame_buffer.append(h264_data)
+                                _frame_seq += 1
+                                while len(_frame_buffer) > 90:
+                                    _frame_buffer.pop(0)
+                                _frame_cond.notify_all()
+                        elif isinstance(msg, str):
+                            if msg.startswith("KILL"):
+                                _last_kill_time = time.monotonic()
+                                print("capture-bridge: killed by browser, switching to viewer", file=sys.stderr)
+                                mode = "viewer"
+                                break
+                            elif msg.startswith("PIPELINE_RESETTING"):
+                                with _frame_cond:
+                                    _frame_buffer.clear()
+                                    _frame_cond.notify_all()
+                                if mode == "viewer":
+                                    print("capture-bridge: pipeline reset in viewer, switching to controller", file=sys.stderr)
+                                    mode = "controller"
+                                    break
+                                print("capture-bridge: pipeline reset, buffer cleared", file=sys.stderr)
+
+                    if not _bridge_running:
+                        return
+                    break  # Break inner retry, outer loop reconnects
+
+            except Exception as e:
+                if connected:
+                    if mode == "viewer":
+                        print(f"capture-bridge: viewer disconnected: {e}", file=sys.stderr)
+                        mode = "controller"
+                    else:
+                        print(f"capture-bridge: connection lost: {e}", file=sys.stderr)
+                    break
+                if attempt < 59:
+                    time.sleep(1)
+                else:
+                    print(f"capture-bridge: failed to connect after 60 attempts: {e}", file=sys.stderr)
+
+        if _bridge_running:
+            _bridge_mode = "reconnecting"
+            print(f"capture-bridge: reconnecting as {mode} in 2s...", file=sys.stderr)
+            time.sleep(2)
+
+
+# --- Screenshot handling with self-healing ---
+
+def _try_ffmpeg_decode(raw_data):
+    """Try to decode H.264 data to PNG. Returns PNG bytes or None."""
+    global _last_ffmpeg_error
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-f", "h264", "-i", "pipe:0",
+             "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1"],
+            input=raw_data, capture_output=True, timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            _last_ffmpeg_error = ""
+            return proc.stdout
+        _last_ffmpeg_error = f"ffmpeg exit {proc.returncode}: {proc.stderr.decode(errors='replace').strip()[-300:]}"
+    except subprocess.TimeoutExpired:
+        _last_ffmpeg_error = "ffmpeg decode timed out"
+    except Exception as e:
+        _last_ffmpeg_error = f"ffmpeg error: {e}"
+    return None
+
+
+def _can_reconnect():
+    """Check if it's safe to request a reconnect."""
+    if _active_streams > 0:
+        return False  # Don't disrupt active recordings
+    if (time.monotonic() - _last_kill_time) < 5:
+        return False  # Browser just connected, give it time
+    if _bridge_mode == "reconnecting":
+        return False  # Already in progress
+    return True
+
+
+def _request_reconnect(mode):
+    """Signal the WebSocket thread to reconnect in the specified mode."""
+    global _reconnect_mode
+    _reconnect_mode = mode
+    with _frame_cond:
+        _frame_buffer.clear()
+    _reconnect_event.set()
+
+
+def _describe_state():
+    """Human-readable reason for no video frames."""
+    if not _ws_connected.is_set():
+        return f"not connected to selkies (mode={_bridge_mode})"
+    if _active_streams > 0:
+        return f"connected as {_bridge_mode}, no video frames (recording active, cannot reconnect)"
+    if (time.monotonic() - _last_kill_time) < 5:
+        return f"connected as {_bridge_mode}, browser just connected, waiting for video pipeline"
+    return f"connected as {_bridge_mode}, no video frames received"
+
+
+def _send_error(conn, reason):
+    """Send a 0-length response followed by a reason string."""
+    print(f"capture-bridge: screenshot failed: {reason}", file=sys.stderr)
+    conn.sendall(struct.pack(">I", 0))
+    try:
+        conn.sendall(reason.encode()[:4096])
+    except Exception:
+        pass
+
+
+def _handle_screenshot(conn):
+    """Take screenshot with self-healing.
+
+    Attempt 1: try current buffer. If empty or decode fails, request reconnect.
+    Attempt 2: retry after reconnect. If still fails, return descriptive error.
+    """
+    for attempt in range(2):
+        # Wait for H.264 frames (up to 10s)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            with _frame_cond:
+                if _frame_buffer:
+                    break
+                _frame_cond.wait(timeout=1)
+        else:
+            # No video frames
+            if attempt == 0 and _can_reconnect():
+                _request_reconnect("controller")
+                continue
+            _send_error(conn, _describe_state())
+            return
+
+        # Try decode
+        with _frame_cond:
+            raw_data = b"".join(_frame_buffer)
+
+        png = _try_ffmpeg_decode(raw_data)
+        if png is not None:
+            conn.sendall(struct.pack(">I", len(png)))
+            conn.sendall(png)
+            return
+
+        # Decode failed
+        if attempt == 0 and _can_reconnect():
+            _request_reconnect("controller")
+            continue
+        _send_error(conn, _last_ffmpeg_error or "decode failed")
+        return
+
+    _send_error(conn, "recovery failed")
+
+
+def _handle_status(conn):
+    """Return bridge status as JSON."""
+    status = json.dumps({
+        "connected": _ws_connected.is_set(),
+        "mode": _bridge_mode,
+        "frames": len(_frame_buffer),
+        "seq": _frame_seq,
+        "active_streams": _active_streams,
+        "last_error": _last_ffmpeg_error,
+    }).encode()
+    conn.sendall(struct.pack(">I", len(status)))
+    conn.sendall(status)
+
+
+def _handle_stream(conn):
+    """Stream raw H.264 frame data to the client for recording."""
+    global _active_streams
+    _active_streams += 1
+    try:
+        if not _ws_connected.is_set():
+            _ws_connected.wait(timeout=30)
+
+        client_queue = []
+
+        def _drain_new_frames():
+            nonlocal last_seq
+            with _frame_cond:
+                if _frame_seq <= last_seq:
+                    _frame_cond.wait(timeout=0.5)
+                if _frame_seq <= last_seq:
+                    return
+                new_count = _frame_seq - last_seq
+                available = len(_frame_buffer)
+                take = min(new_count, available)
+                if take > 0:
+                    client_queue.extend(_frame_buffer[-take:])
+                last_seq = _frame_seq
+
+        with _frame_cond:
+            last_seq = _frame_seq
+
+        while _bridge_running:
+            _drain_new_frames()
+            while client_queue:
+                frame_data = client_queue.pop(0)
+                try:
+                    conn.sendall(struct.pack(">I", len(frame_data)))
+                    conn.sendall(frame_data)
+                except (BrokenPipeError, ConnectionError, OSError):
+                    return
+    except Exception:
+        pass
+    finally:
+        _active_streams -= 1
+
+
+def _handle_client(conn):
+    """Handle a single Unix socket client connection."""
+    try:
+        data = b""
+        while b"\n" not in data:
+            chunk = conn.recv(1024)
+            if not chunk:
+                return
+            data += chunk
+
+        request = data.split(b"\n")[0].decode().strip()
+
+        if request == "SCREENSHOT":
+            _handle_screenshot(conn)
+        elif request == "STREAM":
+            _handle_stream(conn)
+        elif request == "STATUS":
+            _handle_status(conn)
+        else:
+            print(f"capture-bridge: unknown request: {request!r}", file=sys.stderr)
+    except Exception as e:
+        print(f"capture-bridge: client error: {e}", file=sys.stderr)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _run_socket_server():
+    """Run the Unix socket server for capture requests."""
+    try:
+        os.unlink(SOCK_PATH)
+    except OSError:
+        pass
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(SOCK_PATH)
+    os.chmod(SOCK_PATH, 0o666)
+    server.listen(5)
+    print(f"capture-bridge: listening on {SOCK_PATH}", file=sys.stderr)
+
+    while _bridge_running:
+        try:
+            conn, _ = server.accept()
+            t = threading.Thread(target=_handle_client, args=(conn,), daemon=True)
+            t.start()
+        except Exception as e:
+            print(f"capture-bridge: accept error: {e}", file=sys.stderr)
+
+
+def start():
+    """Start the capture bridge (WebSocket client + Unix socket server)."""
+    ws_thread = threading.Thread(target=_ws_bridge, daemon=True, name="ws-bridge")
+    ws_thread.start()
+    sock_thread = threading.Thread(target=_run_socket_server, daemon=True, name="sock-server")
+    sock_thread.start()
+    return ws_thread, sock_thread
+
+
+if __name__ == "__main__":
+    start()
+    from selkies.__main__ import main
+    main()

@@ -1,0 +1,404 @@
+k8s-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            harness-k8s-fixture — fake Kubernetes API surface for harness phase 5
+            Stands in for a real k3s cluster. Real k3s cannot run inside the
+            check-sandbox because the rootless user-namespace slice does not
+            delegate the `cpuset` cgroup controller — k3s aborts with
+            "failed to find cpuset cgroup (v2)" before kubelet starts.
+            Instead, this layer runs a minimal Python http.server that
+            replays just the GET endpoints the `kube:` check verb (client-go
+            dynamic, now in candy/plugin-kube)
+            reaches: nodes, services, storageclasses, ingressclasses, the
+            three k3s addons (traefik / local-path-provisioner /
+            svclb-traefik). Every list returns a single Ready object so the
+            harness's wait-nodes / addons rollups exit 0. Listens on
+            0.0.0.0:6443 over plain HTTP — the matching kubeconfig sets
+            `insecure-skip-tls-verify: true` and uses an `http://` server
+            URL, which client-go honors.
+    k8s-layer-require:
+        require:
+            - supervisord
+    k8s-layer-distro:
+        distro:
+            fedora:
+                package:
+                    - python3
+                    - iproute
+                    - procps-ng
+    k8s-layer-port:
+        port:
+            - 6443
+    k8s-layer-service:
+        service:
+            - name: harness-k8s-fixture
+              exec: "/usr/bin/python3 -u /opt/harness-k8s/fake_apiserver.py"
+              restart: always
+              priority: 50
+              enable: true
+              scope: system
+    k8s-layer-step-0:
+        run: mkdir=/opt/harness-k8s
+        mkdir: /opt/harness-k8s
+        run_as: root
+        mode: "0755"
+    k8s-layer-step-1:
+        run: write=/opt/harness-k8s/fake_apiserver.py
+        write: /opt/harness-k8s/fake_apiserver.py
+        run_as: root
+        mode: "0755"
+        content: |
+            #!/usr/bin/env python3
+            """Minimal fake Kubernetes apiserver for the harness phase 5 recipe.
+
+            Serves just enough of the Kubernetes REST API for client-go's
+            dynamic.Interface to satisfy the eight `kube:` check-verb probes
+            the kubernetes-cluster recipe runs:
+
+              - GET /api/v1/nodes                                  → 1 Ready Node
+              - GET /api/v1/services                               → 'kubernetes' Service
+              - GET /apis/storage.k8s.io/v1/storageclasses         → 'local-path' SC
+              - GET /apis/networking.k8s.io/v1/ingressclasses      → 'traefik' IC
+              - GET /apis/apps/v1/namespaces/kube-system/deployments/traefik
+              - GET /apis/apps/v1/namespaces/kube-system/deployments/local-path-provisioner
+              - GET /apis/apps/v1/namespaces/kube-system/daemonsets/svclb-traefik
+                  → all three with status.readyReplicas / status.numberReady = 1
+
+            Every response carries the right `kind` / `apiVersion` /
+            `metadata.resourceVersion` fields so the unstructured walker
+            on the client side parses them as the objects it expects.
+            """
+            import json
+            import re
+            import sys
+            from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+            # ── Fixture objects ───────────────────────────────────────────────
+            NODE = {
+                "kind": "Node",
+                "apiVersion": "v1",
+                "metadata": {
+                    "name": "charly-fixture-k8s",
+                    "uid": "node-fixture-uid",
+                    "resourceVersion": "100",
+                },
+                "spec": {},
+                "status": {
+                    "conditions": [
+                        {"type": "Ready", "status": "True", "reason": "KubeletReady"},
+                    ],
+                    "addresses": [{"type": "InternalIP", "address": "127.0.0.1"}],
+                    "nodeInfo": {"architecture": "amd64", "operatingSystem": "linux"},
+                },
+            }
+
+            SERVICE_KUBERNETES = {
+                "kind": "Service",
+                "apiVersion": "v1",
+                "metadata": {
+                    "name": "kubernetes",
+                    "namespace": "default",
+                    "uid": "svc-kubernetes-uid",
+                    "resourceVersion": "200",
+                },
+                "spec": {
+                    "type": "ClusterIP",
+                    "clusterIP": "10.43.0.1",
+                    "ports": [{"name": "https", "port": 443, "protocol": "TCP", "targetPort": 6443}],
+                },
+                "status": {"loadBalancer": {}},
+            }
+
+            STORAGE_CLASS_LOCAL_PATH = {
+                "kind": "StorageClass",
+                "apiVersion": "storage.k8s.io/v1",
+                "metadata": {
+                    "name": "local-path",
+                    "uid": "sc-local-path-uid",
+                    "resourceVersion": "300",
+                    "annotations": {
+                        "storageclass.kubernetes.io/is-default-class": "true",
+                    },
+                },
+                "provisioner": "rancher.io/local-path",
+                "reclaimPolicy": "Delete",
+                "volumeBindingMode": "WaitForFirstConsumer",
+            }
+
+            INGRESS_CLASS_TRAEFIK = {
+                "kind": "IngressClass",
+                "apiVersion": "networking.k8s.io/v1",
+                "metadata": {
+                    "name": "traefik",
+                    "uid": "ic-traefik-uid",
+                    "resourceVersion": "400",
+                    "annotations": {
+                        "ingressclass.kubernetes.io/is-default-class": "true",
+                    },
+                },
+                "spec": {"controller": "traefik.io/ingress-controller"},
+            }
+
+
+            def make_deployment(name, namespace="kube-system"):
+                return {
+                    "kind": "Deployment",
+                    "apiVersion": "apps/v1",
+                    "metadata": {
+                        "name": name,
+                        "namespace": namespace,
+                        "uid": f"deploy-{name}-uid",
+                        "resourceVersion": "500",
+                    },
+                    "spec": {"replicas": 1},
+                    "status": {
+                        "replicas": 1,
+                        "readyReplicas": 1,
+                        "availableReplicas": 1,
+                        "updatedReplicas": 1,
+                        "conditions": [
+                            {"type": "Available", "status": "True"},
+                            {"type": "Progressing", "status": "True", "reason": "NewReplicaSetAvailable"},
+                        ],
+                    },
+                }
+
+
+            def make_daemonset(name, namespace="kube-system"):
+                return {
+                    "kind": "DaemonSet",
+                    "apiVersion": "apps/v1",
+                    "metadata": {
+                        "name": name,
+                        "namespace": namespace,
+                        "uid": f"ds-{name}-uid",
+                        "resourceVersion": "600",
+                    },
+                    "spec": {},
+                    "status": {
+                        "currentNumberScheduled": 1,
+                        "desiredNumberScheduled": 1,
+                        "numberReady": 1,
+                        "updatedNumberScheduled": 1,
+                        "numberAvailable": 1,
+                    },
+                }
+
+
+            DEPLOY_TRAEFIK = make_deployment("traefik")
+            DEPLOY_LOCAL_PATH = make_deployment("local-path-provisioner")
+            DEPLOY_COREDNS = make_deployment("coredns")
+            DS_SVCLB_TRAEFIK = make_daemonset("svclb-traefik")
+
+
+            # ── List wrappers ─────────────────────────────────────────────────
+            def list_response(api_version, kind_list, items, rv="700"):
+                return {
+                    "kind": kind_list,
+                    "apiVersion": api_version,
+                    "metadata": {"resourceVersion": rv},
+                    "items": items,
+                }
+
+
+            # ── Routing ───────────────────────────────────────────────────────
+            # Each entry: (method-aware-path-regex, handler) — first match wins.
+            # The handler returns a (status, body-dict-or-None) tuple. None means
+            # "200 with empty body" (used for the few endpoints client-go probes
+            # at startup but does not parse).
+            def handle_get(path):
+                # Strip query string for matching, ignore trailing slash.
+                base = path.split("?", 1)[0].rstrip("/")
+
+                if base == "/api/v1/nodes":
+                    return 200, list_response("v1", "NodeList", [NODE])
+
+                if base == "/api/v1/services":
+                    return 200, list_response("v1", "ServiceList", [SERVICE_KUBERNETES])
+                if base == "/api/v1/namespaces/default/services":
+                    return 200, list_response("v1", "ServiceList", [SERVICE_KUBERNETES])
+                if base == "/api/v1/namespaces/default/services/kubernetes":
+                    return 200, SERVICE_KUBERNETES
+
+                if base == "/apis/storage.k8s.io/v1/storageclasses":
+                    return 200, list_response("storage.k8s.io/v1", "StorageClassList",
+                                              [STORAGE_CLASS_LOCAL_PATH])
+
+                if base == "/apis/networking.k8s.io/v1/ingressclasses":
+                    return 200, list_response("networking.k8s.io/v1", "IngressClassList",
+                                              [INGRESS_CLASS_TRAEFIK])
+
+                # Addons workload reads
+                if base == "/apis/apps/v1/namespaces/kube-system/deployments/traefik":
+                    return 200, DEPLOY_TRAEFIK
+                if base == "/apis/apps/v1/namespaces/kube-system/deployments/local-path-provisioner":
+                    return 200, DEPLOY_LOCAL_PATH
+                if base == "/apis/apps/v1/namespaces/kube-system/deployments/coredns":
+                    return 200, DEPLOY_COREDNS
+                if base == "/apis/apps/v1/namespaces/kube-system/daemonsets/svclb-traefik":
+                    return 200, DS_SVCLB_TRAEFIK
+
+                # Generic kube-system list/Get fallbacks for any other addon-style probe
+                if base == "/apis/apps/v1/namespaces/kube-system/deployments":
+                    return 200, list_response("apps/v1", "DeploymentList",
+                                              [DEPLOY_TRAEFIK, DEPLOY_LOCAL_PATH, DEPLOY_COREDNS])
+                if base == "/apis/apps/v1/namespaces/kube-system/daemonsets":
+                    return 200, list_response("apps/v1", "DaemonSetList", [DS_SVCLB_TRAEFIK])
+
+                # Generic kube-system Deployment GET fallback — return a Ready
+                # Deployment named after the path. Lets the recipe's wait-ready
+                # probes survive future drift in the addon set.
+                m = re.match(r"^/apis/apps/v1/namespaces/kube-system/deployments/([A-Za-z0-9_.\-]+)$", base)
+                if m:
+                    return 200, make_deployment(m.group(1))
+
+                # Discovery — minimal so dynamic-client doesn't bail on a hard 404.
+                if base == "/api":
+                    return 200, {"kind": "APIVersions", "versions": ["v1"]}
+                if base == "/api/v1":
+                    return 200, {
+                        "kind": "APIResourceList",
+                        "groupVersion": "v1",
+                        "resources": [
+                            {"name": "nodes", "namespaced": False, "kind": "Node"},
+                            {"name": "services", "namespaced": True, "kind": "Service"},
+                            {"name": "namespaces", "namespaced": False, "kind": "Namespace"},
+                        ],
+                    }
+                if base == "/apis":
+                    return 200, {
+                        "kind": "APIGroupList",
+                        "groups": [
+                            {"name": "apps", "preferredVersion": {"groupVersion": "apps/v1", "version": "v1"}},
+                            {"name": "storage.k8s.io",
+                             "preferredVersion": {"groupVersion": "storage.k8s.io/v1", "version": "v1"}},
+                            {"name": "networking.k8s.io",
+                             "preferredVersion": {"groupVersion": "networking.k8s.io/v1", "version": "v1"}},
+                        ],
+                    }
+
+                if base == "/version":
+                    return 200, {
+                        "major": "1", "minor": "31",
+                        "gitVersion": "v1.31.0-fake-fixture",
+                        "platform": "linux/amd64",
+                    }
+
+                # Default: a Status object with kind=Failure. Lets `k8s: raw`
+                # without a resource still surface a "kind" string — though the
+                # raw verb requires --resource so it's a long shot.
+                return 404, {
+                    "kind": "Status", "apiVersion": "v1",
+                    "status": "Failure", "code": 404,
+                    "reason": "NotFound", "message": f"path {base} not handled by fake apiserver",
+                }
+
+
+            class FakeAPIHandler(BaseHTTPRequestHandler):
+                protocol_version = "HTTP/1.1"
+                server_version = "fake-apiserver/1.0"
+
+                def log_message(self, fmt, *args):
+                    sys.stderr.write("fake-apiserver: " + fmt % args + "\n")
+
+                def _respond(self, status, payload):
+                    body = json.dumps(payload).encode("utf-8") if payload is not None else b""
+                    self.send_response(status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+                    if body:
+                        self.wfile.write(body)
+
+                def do_GET(self):
+                    status, payload = handle_get(self.path)
+                    self._respond(status, payload)
+
+                def do_POST(self):
+                    # client-go can probe with POST for some paths; respond as
+                    # "method not allowed" — none of the harness verbs need POST.
+                    self._respond(405, {"kind": "Status", "apiVersion": "v1",
+                                        "status": "Failure", "code": 405,
+                                        "message": "POST not implemented"})
+
+
+            if __name__ == "__main__":
+                srv = ThreadingHTTPServer(("0.0.0.0", 6443), FakeAPIHandler)
+                sys.stderr.write("fake-apiserver: listening on 0.0.0.0:6443\n")
+                srv.serve_forever()
+    k8s-layer-step-2:
+        check: the fake Kubernetes apiserver script is installed and executable at /opt/harness-k8s/fake_apiserver.py
+        plugin: file
+        plugin_input:
+            file: /opt/harness-k8s/fake_apiserver.py
+            exists: true
+            mode: "0755"
+    k8s-layer-step-3:
+        check: a GET to /api/v1/nodes returns HTTP 200 carrying the Ready fixture node charly-fixture-k8s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:6443}/api/v1/nodes
+            status: 200
+            body:
+                - contains: charly-fixture-k8s
+    k8s-layer-step-4:
+        agent-check: the harness `kube:` wait-nodes and addon rollups exit 0 against the fixture (nodes, storageclasses, ingressclasses, and the traefik / local-path-provisioner / svclb-traefik addons all report Ready)
+    harness-k8s-python3:
+        check: file=/usr/bin/python3
+        id: harness-k8s-python3
+        plugin: file
+        plugin_input:
+            file: /usr/bin/python3
+            exists: true
+    harness-k8s-python3-package:
+        check: package=python3
+        id: harness-k8s-python3-package
+        plugin: package
+        plugin_input:
+            package: python3
+            installed: true
+    harness-k8s-service-running:
+        check: service=harness-k8s-fixture
+        id: harness-k8s-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: harness-k8s-fixture
+            running: true
+    harness-k8s-port-listening:
+        check: port=6443
+        id: harness-k8s-port-listening
+        context:
+            - runtime
+        plugin: port
+        plugin_input:
+            port: 6443
+            listening: true
+    harness-k8s-storageclass-endpoint:
+        check: http=http://127.0.0.1:${HOST_PORT:6443}/apis/storage.k8s.io/v1/storageclasses
+        id: harness-k8s-storageclass-endpoint
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:6443}/apis/storage.k8s.io/v1/storageclasses
+            status: 200
+            body:
+                - contains: local-path
+    harness-k8s-version-endpoint:
+        check: http=http://127.0.0.1:${HOST_PORT:6443}/version
+        id: harness-k8s-version-endpoint
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:6443}/version
+            status: 200
+            body:
+                - contains: v1.31.0-fake-fixture

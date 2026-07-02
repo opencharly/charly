@@ -1,0 +1,58 @@
+title: "Unsloth Fine-tuning"
+description: "Production fine-tuning workflows using the Unsloth framework for efficient LLM training"
+order: 1
+
+subcategories:
+  - id: "setup"
+    title: "Setup"
+    description: "Initial Unsloth configuration and environment setup"
+    pattern: "00_*.ipynb"
+    order: 0
+
+  - id: "inference"
+    title: "Fast Inference"
+    description: "Quick model inference examples with Llama and Qwen models"
+    pattern: "01_*.ipynb"
+    order: 1
+
+  - id: "vision"
+    title: "Vision Training"
+    description: "Vision model fine-tuning with Ministral and Pixtral"
+    pattern: "02_*.ipynb"
+    order: 2
+
+  - id: "sft"
+    title: "SFT Training"
+    description: "Supervised Fine-Tuning for text and vision models"
+    pattern: "03_*.ipynb"
+    order: 3
+
+  - id: "grpo"
+    title: "GRPO Training"
+    description: "Generative Reward Policy Optimization training"
+    pattern: "04_*.ipynb"
+    order: 4
+
+  - id: "dpo"
+    title: "DPO Training"
+    description: "Direct Preference Optimization for alignment"
+    pattern: "05_*.ipynb"
+    order: 5
+
+  - id: "reward"
+    title: "Reward Training"
+    description: "Reward model training for RLHF"
+    pattern: "06_*.ipynb"
+    order: 6
+
+  - id: "rloo"
+    title: "RLOO Training"
+    description: "Reinforcement Learning from Language Model Optimization"
+    pattern: "07_*.ipynb"
+    order: 7
+
+  - id: "qlora"
+    title: "QLoRA Experiments"
+    description: "Quantized LoRA experiments including alpha scaling, rank comparison, and quantization"
+    pattern: "08_*.ipynb"
+    order: 8

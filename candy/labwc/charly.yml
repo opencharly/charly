@@ -1,0 +1,158 @@
+labwc:
+    candy:
+        version: 2026.155.2227
+        description: |
+            A nested labwc Wayland compositor hosting the Selkies streaming desktop
+            labwc installs a wlroots-based Wayland compositor plus the foot terminal,
+            thunar file manager, and Xwayland for X11 compatibility. The labwc-wrapper
+            connects to pixelflux's wayland-1 socket and creates its own wayland-0
+            client socket so desktop apps render into the captured desktop; rc.xml
+            maximizes every window and autostart wires the session. Every installed
+            binary and config file is verifiable on the built image, and the
+            supervised labwc service must reach a stable RUNNING state at deploy.
+    labwc-require:
+        require:
+            - dbus
+    labwc-env:
+        # autostart script has a wait-for-supervisord-socket guard (see autostart)
+        env:
+            WAYLAND_DISPLAY: "wayland-0"
+            XDG_RUNTIME_DIR: "/tmp"
+    labwc-env_accept:
+        env_accept:
+            - name: XKB_DEFAULT_LAYOUT
+              description: "XKB keyboard layout (e.g., us, de, fr, gb). Default: us"
+            - name: XKB_DEFAULT_VARIANT
+              description: "XKB keyboard variant (e.g., dvorak, nodeadkeys). Default: none"
+            - name: XKB_DEFAULT_MODEL
+              description: "XKB keyboard model (e.g., pc105, pc104, chromebook). Default: pc105"
+            - name: XKB_DEFAULT_OPTIONS
+              description: "XKB options (e.g., compose:ralt, caps:escape). Default: none"
+    labwc-distro:
+        distro:
+            arch:
+                package:
+                    - labwc
+                    - foot
+                    - xorg-xwayland
+                    - thunar
+            fedora:
+                package:
+                    - labwc
+                    - foot
+                    - xorg-x11-server-Xwayland
+                    - thunar
+    labwc-service:
+        service:
+            - name: labwc
+              exec: "%(ENV_HOME)s/.local/bin/labwc-wrapper"
+              env:
+                XDG_RUNTIME_DIR: /tmp
+              restart: always
+              priority: 12
+              start_sec: 2
+              enable: true
+              scope: system
+    labwc-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    labwc-step-1:
+        run: mkdir=${HOME}/.config/labwc
+        mkdir: "${HOME}/.config/labwc"
+        run_as: "${USER}"
+    labwc-step-2:
+        run: copy=labwc-wrapper
+        copy: labwc-wrapper
+        to: "${HOME}/.local/bin/labwc-wrapper"
+        mode: "0755"
+        run_as: "${USER}"
+    labwc-step-3:
+        run: copy=rc.xml
+        copy: rc.xml
+        to: "${HOME}/.config/labwc/rc.xml"
+        mode: "0644"
+        run_as: "${USER}"
+    labwc-step-4:
+        run: copy=autostart
+        copy: autostart
+        to: "${HOME}/.config/labwc/autostart"
+        mode: "0644"
+        run_as: "${USER}"
+    labwc-step-5:
+        check: the labwc Wayland compositor binary is installed at /usr/bin/labwc
+        plugin: file
+        plugin_input:
+            file: /usr/bin/labwc
+            exists: true
+    labwc-step-6:
+        check: the labwc-wrapper that nests the compositor under pixelflux wayland-1 is installed
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/labwc-wrapper
+            exists: true
+    labwc-step-7:
+        check: the labwc rc.xml configuration (server-side decorations, maximize-all window rule) is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/labwc/rc.xml
+            exists: true
+    labwc-step-8:
+        check: the labwc autostart session script is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/labwc/autostart
+            exists: true
+    labwc-step-9:
+        check: the foot terminal emulator is installed for the desktop session
+        plugin: file
+        plugin_input:
+            file: /usr/bin/foot
+            exists: true
+    labwc-step-10:
+        check: the thunar file manager is installed for the desktop session
+        plugin: file
+        plugin_input:
+            file: /usr/bin/thunar
+            exists: true
+    labwc-step-11:
+        check: Xwayland is installed so X11 applications run inside the Wayland session
+        plugin: file
+        plugin_input:
+            file: /usr/bin/Xwayland
+            exists: true
+    labwc-step-12:
+        agent-check: once pixelflux's wayland-1 socket is healthy, labwc creates its own wayland-0 socket and hosts the desktop applications as a stable supervised service
+    labwc-service-running:
+        check: service=labwc
+        id: labwc-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: labwc
+            running: true
+    labwc-wayland-socket:
+        check: command=test -e /tmp/wayland-0
+        id: labwc-wayland-socket
+        exit_status: 0
+        eventually: 60s
+        retry_interval: 3s
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: test -e /tmp/wayland-0
+            in_container: true
+    labwc-stable:
+        check: command=supervisorctl status labwc | awk '/RUNNING/{n=split($NF,a,":"); s=a[n]+a[n-1]*60+a[n-2]*3600; if(s>=20){f=1}} END{exit !f}'
+        id: labwc-stable
+        exit_status: 0
+        eventually: 120s
+        retry_interval: 5s
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "supervisorctl status labwc | awk '/RUNNING/{n=split($NF,a,\":\"); s=a[n]+a[n-1]*60+a[n-2]*3600; if(s>=20){f=1}} END{exit !f}'"
+            in_container: true

@@ -1,0 +1,90 @@
+redis-server-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            harness-redis-server — redis-server bound to 0.0.0.0 for cross-pod access
+            Runs /usr/bin/redis-server (provided by valkey-compat-redis on Fedora 43)
+            bound to 0.0.0.0:6379 with protected-mode off, so a sibling redis-client
+            pod on the shared `charly` network can SET/GET via `redis-cli -h charly-redis`.
+    redis-server-layer-distro:
+        distro:
+            fedora:
+                package:
+                    - redis
+                    - iproute
+                    - procps-ng
+    redis-server-layer-port:
+        port:
+            - 6379
+    redis-server-layer-service:
+        service:
+            - name: redis-server
+              exec: "/usr/bin/redis-server --bind 0.0.0.0 --port 6379 --protected-mode no --dir /var/lib/harness-redis --save '' --daemonize no"
+              restart: always
+              priority: 20
+              enable: true
+              scope: system
+    redis-server-layer-step-0:
+        run: mkdir=/var/lib/harness-redis
+        mkdir: /var/lib/harness-redis
+        run_as: root
+        mode: "0755"
+    redis-server-layer-step-1:
+        check: the redis-server daemon binary is present at /usr/bin/redis-server
+        plugin: file
+        plugin_input:
+            file: /usr/bin/redis-server
+            exists: true
+    redis-server-layer-step-2:
+        check: the redis-cli client binary is present at /usr/bin/redis-cli
+        plugin: file
+        plugin_input:
+            file: /usr/bin/redis-cli
+            exists: true
+    redis-server-layer-step-3:
+        check: the redis package (valkey-compat-redis on Fedora 43) is installed
+        plugin: package
+        plugin_input:
+            package: valkey-compat-redis
+            installed: true
+    redis-server-layer-step-4:
+        check: the running redis-server answers PING with PONG on port 6379
+        stdout: PONG
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: redis-cli -h 127.0.0.1 -p 6379 ping
+            in_container: true
+    redis-server-layer-step-5:
+        check: the published redis TCP port is reachable from the host
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:6379}
+            reachable: true
+    redis-server-layer-step-6:
+        agent-check: redis-server-layer is deployed with --bind 0.0.0.0 and protected-mode off
+    redis-server-layer-step-7:
+        agent-check: a sibling redis-client pod on the shared charly network connects to charly-redis:6379
+    redis-server-layer-step-8:
+        agent-check: the sibling pod can SET and GET keys against this redis instance
+    harness-redis-service-running:
+        check: service=redis-server
+        id: harness-redis-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: redis-server
+            running: true
+    harness-redis-port-listening:
+        check: port=6379
+        id: harness-redis-port-listening
+        context:
+            - runtime
+        plugin: port
+        plugin_input:
+            port: 6379
+            listening: true

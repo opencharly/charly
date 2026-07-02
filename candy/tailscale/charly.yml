@@ -1,0 +1,79 @@
+tailscale:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Tailscale mesh VPN daemon baked in as an enabled systemd service.
+            Installs the tailscale package (the `tailscale` CLI plus the
+            `tailscaled` daemon) and enables `tailscaled.service` at build
+            time, so the image boots as its own tailnet node. Bringing the
+            mesh up (`tailscale up --authkey=...`) is a runtime concern, so
+            every check here is a build-time fact: the binaries land on PATH,
+            the CLI runs offline, and the unit is enabled.
+    tailscale-package:
+        package:
+            - tailscale
+    tailscale-distro:
+        distro:
+            arch: {}
+            debian-13:
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/debian"
+                      key: "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+                      suite: trixie
+                      components: main
+            fedora:
+                repo:
+                    - name: tailscale-stable
+                      url: "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+            ubuntu-24.04:
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/ubuntu"
+                      key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
+                      suite: noble
+                      components: main
+    tailscale-step-0:
+        run: command=systemctl enable tailscaled.service 2>/dev/null || true
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: systemctl enable tailscaled.service 2>/dev/null || true
+    tailscale-step-1:
+        check: the tailscale CLI is installed and executable at /usr/bin/tailscale
+        plugin: file
+        plugin_input:
+            file: /usr/bin/tailscale
+            exists: true
+    tailscale-step-2:
+        check: the tailscale CLI reports its version without contacting the daemon
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: tailscale version
+    tailscale-step-3:
+        check: the tailscaled daemon binary is installed at /usr/sbin/tailscaled
+        plugin: file
+        plugin_input:
+            file: /usr/sbin/tailscaled
+            exists: true
+    tailscale-step-4:
+        check: the tailscaled systemd unit is enabled so the node joins its tailnet at boot
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: systemctl is-enabled tailscaled.service
+    tailscale-binary:
+        check: command=test -x /usr/bin/tailscale && test -x /usr/sbin/tailscaled
+        id: tailscale-binary
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: test -x /usr/bin/tailscale && test -x /usr/sbin/tailscaled
+    tailscale-package-2:
+        check: package=tailscale
+        id: tailscale-package
+        plugin: package
+        plugin_input:
+            package: tailscale
+            installed: true

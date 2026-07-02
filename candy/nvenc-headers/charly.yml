@@ -1,0 +1,44 @@
+nvenc-headers:
+    candy:
+        version: 2026.149.1210
+        description: |
+            NVIDIA Video Codec SDK headers (ffnvcodec / nvEncodeAPI.h) for building NVENC-capable encoders.
+            Installs the ffnvcodec-headers (nv-codec-headers) package on Arch, which
+            ships the NVENC/NVDEC API headers under /usr/include/ffnvcodec plus the
+            ffnvcodec.pc pkg-config descriptor. Build-time only — used by the
+            cuda-arch-builder so pixelflux's nvenc-sys crate can compile the real
+            NvencEncoder. Kept out of the shared cuda layer so the many CUDA runtime
+            images (comfyui, jupyter-ml, immich-ml, …) don't cascade-rebuild for a
+            build-only header. Verifiable: the headers and the pkg-config descriptor
+            must land in the built image.
+    nvenc-headers-distro:
+        distro:
+            arch:
+                package:
+                    - ffnvcodec-headers
+    nvenc-headers-step-0:
+        check: the NVENC encode API header is installed for nvenc-sys to compile against
+        plugin: file
+        plugin_input:
+            file: /usr/include/ffnvcodec/nvEncodeAPI.h
+            exists: true
+    nvenc-headers-step-1:
+        check: the ffnvcodec pkg-config descriptor is installed so downstream builds can link against ffnvcodec
+        plugin: file
+        plugin_input:
+            file: /usr/lib/pkgconfig/ffnvcodec.pc
+            exists: true
+    nvenc-headers-step-2:
+        check: the header declares the NvEncodeAPICreateInstance entry point the nvenc-sys crate binds to
+        plugin: file
+        plugin_input:
+            file: /usr/include/ffnvcodec/nvEncodeAPI.h
+            contains:
+                - NvEncodeAPICreateInstance
+    nvenc-headers-package:
+        check: package=ffnvcodec-headers
+        id: nvenc-headers-package
+        plugin: package
+        plugin_input:
+            package: ffnvcodec-headers
+            installed: true

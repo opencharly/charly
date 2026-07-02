@@ -1,0 +1,148 @@
+hermes:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Hermes self-improving AI agent by Nous Research, installed as a pixi CLI with a supervised entrypoint
+            The hermes candy installs the upstream Nous Research hermes-agent as a
+            non-editable pip package into the pixi default environment, so the
+            `hermes` CLI lands at ${HOME}/.pixi/envs/default/bin/hermes. It also
+            stages the full hermes-agent source tree under $HOME (for the bundled
+            .env / config examples, skills, and the WhatsApp bridge) and copies an
+            executable hermes-entrypoint wrapper onto the user PATH. At deploy time
+            the entrypoint runs under supervisord, mounts the persistent /opt/data
+            volume, and one-time auto-configures an LLM provider from the supplied
+            API key. Every claim below is observable: the binary, the wrapper, and
+            the source tree are real files in the image, and the running service +
+            data volume are probed against a live deployment.
+    hermes-require:
+        require:
+            - nodejs
+            - supervisord
+            - ripgrep
+            - ffmpeg
+            - pipewire
+    hermes-env:
+        env:
+            HERMES_HOME: "/opt/data"
+            TERMINAL_ENV: "local"
+    hermes-env_accept:
+        env_accept:
+            - name: OLLAMA_HOST
+              description: "Local Ollama server URL (auto-injected by ollama layer env_provides)"
+            - name: HERMES_MODEL
+              description: "Override default Hermes model (default depends on detected provider)"
+            - name: CHARLY_MCP_SERVERS
+              description: "JSON array of MCP servers (auto-injected by mcp_provide layers)"
+            - name: BROWSER_CDP_URL
+              description: "Chrome DevTools Protocol URL for shared browser (auto-provided by chrome layer)"
+            - name: IMMICH_API_URL
+              description: "Immich HTTP API URL (auto-injected by immich layer env_provides)"
+    hermes-secret_accept:
+        # Credential-store-backed env vars. Values live in the user's credential
+        # backend (keyring/config) and are injected at runtime via podman
+        # secrets (Secret=<name>,type=env,target=<var>). Never land in deploy.yml
+        # or the quadlet file as plaintext. The charly/api-key/* keys are shared with
+        # openwebui so one `charly secrets set` populates both consumers. See
+        # /charly-build:secrets and /charly-image:layer.
+        secret_accept:
+            - name: OPENROUTER_API_KEY
+              description: "API key for OpenRouter LLM inference"
+              key: charly/api-key/openrouter
+            - name: OLLAMA_API_KEY
+              description: "API key for Ollama Cloud inference (https://ollama.com)"
+              key: charly/api-key/ollama
+            - name: TELEGRAM_BOT_TOKEN
+              description: "Telegram bot token for messaging"
+            - name: SLACK_BOT_TOKEN
+              description: "Slack bot token"
+            - name: DISCORD_BOT_TOKEN
+              description: "Discord bot token"
+            - name: IMMICH_API_KEY
+              description: "Immich API key for programmatic access to the running immich instance"
+              key: charly/api-key/immich
+    hermes-mcp_accept:
+        mcp_accept:
+            - name: jupyter
+              description: "JupyterLab CRDT MCP server for notebook manipulation"
+            - name: chrome-devtools
+              description: "Chrome DevTools MCP server for browser automation and inspection"
+    hermes-distro:
+        distro:
+            fedora:
+                package:
+                    - alsa-lib
+                    - portaudio
+    hermes-volume:
+        volume:
+            - name: data
+              path: "/opt/data"
+    hermes-alias:
+        alias:
+            - name: hermes
+              command: hermes
+            - name: hermes-agent
+              command: hermes-agent
+    hermes-service:
+        service:
+            - name: hermes
+              exec: "%(ENV_HOME)s/.local/bin/hermes-entrypoint"
+              restart: always
+              working_directory: "%(ENV_HOME)s"
+              enable: true
+              scope: system
+            - name: hermes-whatsapp
+              exec: "node %(ENV_HOME)s/hermes-agent/scripts/whatsapp-bridge/bridge.js"
+              restart: always
+              working_directory: "%(ENV_HOME)s/hermes-agent/scripts/whatsapp-bridge"
+              enable: true
+              scope: system
+    hermes-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    hermes-step-1:
+        run: copy=hermes-entrypoint
+        copy: hermes-entrypoint
+        to: "${HOME}/.local/bin/hermes-entrypoint"
+        mode: "0755"
+        run_as: "${USER}"
+    hermes-step-2:
+        check: the hermes Python CLI is installed into the pixi default environment
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/hermes
+            exists: true
+    hermes-step-3:
+        check: the hermes entrypoint wrapper is installed and executable on the user PATH
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/hermes-entrypoint
+            exists: true
+            mode: "0755"
+    hermes-step-4:
+        check: the upstream hermes-agent source tree is staged under $HOME so the entrypoint can bootstrap config, skills, and the WhatsApp bridge
+        plugin: file
+        plugin_input:
+            file: ${HOME}/hermes-agent
+            exists: true
+            filetype: directory
+    hermes-step-5:
+        agent-check: when deployed, the persistent /opt/data volume is mounted and the supervised hermes service reaches a running state, having auto-configured an LLM provider from the supplied API key
+    hermes-data-volume-mount:
+        check: file=/opt/data
+        id: hermes-data-volume-mount
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: /opt/data
+            filetype: directory
+    hermes-service-running:
+        check: service=hermes
+        id: hermes-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: hermes
+            running: true

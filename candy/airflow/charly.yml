@@ -1,0 +1,302 @@
+airflow:
+    candy:
+        version: 2026.144.1443
+        # NB: the upstream MCP wrapper (mcp-server-apache-airflow) targets the
+        # removed /api/v1 in Airflow 3 and was removed from this layer in 2026-05;
+        # consumers drive Airflow via direct REST /api/v2 calls. Python deps live
+        # in the marimo layer's pixi.toml (the `marimo` require:), so the airflow
+        # binary itself is provided by that layer; THIS candy installs the four
+        # supervisord wrapper scripts that drive it.
+        description: |
+            Apache Airflow runs single-node (LocalExecutor + SQLite) from charly-installed wrapper scripts, serving an authenticated REST API on :8080.
+            The airflow candy installs four /usr/local/bin wrapper scripts that
+            drive Airflow 3.x under supervisord: airflow-init.sh (one-shot `db
+            migrate` + binds the SimpleAuthManager admin password to the injected
+            AIRFLOW_ADMIN_PASSWORD secret) plus airflow-webserver.sh (api-server),
+            airflow-scheduler.sh, and airflow-dag-processor.sh. At deploy the
+            three daemons serve the REST API on :8080; notebooks self-author DAGs
+            into AIRFLOW__CORE__DAGS_FOLDER at runtime. The verifiable artifacts
+            are the wrapper scripts (build scope) and the live REST API + JWT
+            issuance (deploy scope).
+    airflow-require:
+        require:
+            - marimo
+            - supervisord
+    airflow-env:
+        env:
+            AIRFLOW_HOME: "~/airflow"
+            # LocalExecutor + SQLite — zero external services. Airflow auto-creates
+            # ${AIRFLOW_HOME}/airflow.db on first `db migrate`. Suitable for
+            # single-node dev / R10 verification. For multi-node production, swap
+            # in CeleryExecutor + Postgres + Valkey (those layers stayed available
+            # under candy/postgresql/ + candy/valkey/).
+            AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+            AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+            AIRFLOW__API__PORT: "8080"
+            AIRFLOW__API__HOST: "0.0.0.0"
+            # Override the default ${AIRFLOW_HOME}/dags location so DAGs live
+            # under the user-owned workspace volume. Notebooks (e.g. the
+            # marimo osm-monaco-viz notebook) self-author their DAGs into
+            # ${AIRFLOW_DAGS_DIR} (= /workspace/dags) at runtime — no static
+            # data layer baking DAGs into the image, no /opt/airflow-defaults
+            # staging, no airflow-init.sh copy step.
+            AIRFLOW__CORE__DAGS_FOLDER: "/workspace/dags"
+            # Default is 300s (5 min) — far too slow for the runtime-DAG-write
+            # pattern (notebook drops a .py and triggers it within seconds).
+            # 10s makes the scan effectively interactive at negligible CPU cost
+            # on a single-user dev pod. NB: the Airflow-2 key path
+            # [scheduler] dag_dir_list_interval was moved to
+            # [dag_processor] refresh_interval in Airflow 3.x.
+            AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "10"
+            # Airflow 3's LocalExecutor pre-spawns `parallelism` idle Python
+            # worker processes at scheduler boot — each carries every imported
+            # DAG module and its native deps (cudf, pyarrow, …), so the default
+            # of 32 burns ~33 cgroup PIDs forever even on a quiet pod. The
+            # single-user dev workload here never has more than ~6 concurrent
+            # task instances (one DAG with 8 tasks, fan-out limited by the
+            # serialise-DuckDB-writes chain in the GTFS DAG). 4 leaves clear
+            # headroom and reclaims ~28 PIDs against the disposable pod's
+            # default pids.max=2048 cgroup cap (cap headroom matters because
+            # marimo cells using cudf-polars / dask leak ~4 PIDs per re-execute
+            # — see CLAUDE.md R1 RCA notes 2026-05-13 — and a tight Airflow
+            # baseline buys more cells before the cap pinches DuckDB's
+            # LOAD spatial thread-pool spawn).
+            AIRFLOW__CORE__PARALLELISM: "4"
+    airflow-port:
+        port:
+            - 8080
+    airflow-env_provide:
+        # Cross-container env discovery. The marimo notebook reads three vars:
+        #   AIRFLOW_PUBLIC_URL  — browser-side (UI links + OAuth callbacks);
+        #                          host port for container 8080 (resolves to
+        #                          localhost when consumer is same-pod via
+        #                          podAwareEnvProvides — but here the URL is
+        #                          INTENDED for the user's browser, so the
+        #                          host-side mapping is the right value even
+        #                          in the same-pod case).
+        #   AIRFLOW_API_INTERNAL_URL — kernel-side (Python requests calls
+        #                              from the marimo kernel process);
+        #                              same-pod resolves to localhost:8080;
+        #                              cross-pod resolves to ContainerName.
+        #   AIRFLOW_DAGS_DIR    — static path inside the workspace volume.
+        env_provide:
+            AIRFLOW_PUBLIC_URL: "http://127.0.0.1:{{.HostPort 8080}}"
+            AIRFLOW_API_INTERNAL_URL: "http://{{.ContainerName}}:8080"
+            AIRFLOW_DAGS_DIR: "/workspace/dags"
+    airflow-volume:
+        volume:
+            - name: airflow-data
+              path: "~/airflow"
+    airflow-secret:
+        secret:
+            - name: airflow-fernet-key
+              env: AIRFLOW__CORE__FERNET_KEY
+            - name: airflow-webserver-secret
+              env: AIRFLOW__API__SECRET_KEY
+            - name: airflow-admin-password
+              env: AIRFLOW_ADMIN_PASSWORD
+    airflow-service:
+        service:
+            # One-shot init: db migrate + admin user, exits 0. Priority 25 so it
+            # runs before the long-running daemons (priority 30+).
+            - name: airflow-init
+              exec: /usr/local/bin/airflow-init.sh
+              restart: "no"
+              priority: 25
+              start_sec: 0
+              exit_code: "0"
+              enable: true
+              scope: system
+            - name: airflow-scheduler
+              exec: /usr/local/bin/airflow-scheduler.sh
+              restart: always
+              priority: 30
+              enable: true
+              scope: system
+            - name: airflow-dag-processor
+              # Airflow 3.x: separate from the scheduler. Without it, DAG files
+              # in AIRFLOW__CORE__DAGS_FOLDER are never scanned (notebooks that
+              # self-author DAGs would deadlock waiting for registration).
+              exec: /usr/local/bin/airflow-dag-processor.sh
+              restart: always
+              priority: 31
+              enable: true
+              scope: system
+            - name: airflow-webserver
+              exec: /usr/local/bin/airflow-webserver.sh
+              restart: always
+              priority: 31
+              enable: true
+              scope: system
+    airflow-step-0:
+        run: mkdir=${HOME}/airflow
+        mkdir: "${HOME}/airflow"
+        run_as: "${USER}"
+    airflow-step-1:
+        run: mkdir=${HOME}/airflow/dags
+        mkdir: "${HOME}/airflow/dags"
+        run_as: "${USER}"
+    airflow-step-2:
+        run: mkdir=${HOME}/airflow/logs
+        mkdir: "${HOME}/airflow/logs"
+        run_as: "${USER}"
+    airflow-step-3:
+        run: mkdir=${HOME}/airflow/plugins
+        mkdir: "${HOME}/airflow/plugins"
+        run_as: "${USER}"
+    airflow-step-4:
+        run: write=/usr/local/bin/airflow-init.sh
+        write: /usr/local/bin/airflow-init.sh
+        mode: "0755"
+        run_as: root
+        content: |
+            #!/usr/bin/env bash
+            set -euo pipefail
+            AIRFLOW_BIN="${HOME}/.pixi/envs/default/bin/airflow"
+            "$AIRFLOW_BIN" db migrate
+            # Bind the SimpleAuthManager admin password to our injected secret.
+            # Overwrite (>) is intentional: secrets may rotate between boots.
+            mkdir -p "${HOME}/airflow"
+            printf '{"admin": "%s"}\n' "${AIRFLOW_ADMIN_PASSWORD}" \
+              > "${HOME}/airflow/simple_auth_manager_passwords.json.generated"
+            chmod 0600 "${HOME}/airflow/simple_auth_manager_passwords.json.generated"
+            # NB: prior versions copied bundled DAGs from /opt/airflow-defaults/
+            # to ${HOME}/airflow/dags/ as a volume-shadow workaround. Then a
+            # short-lived dag-osm-monaco data layer seeded a static DAG into
+            # /workspace/dags/ at deploy time. Both are gone: notebooks
+            # now self-author DAGs at runtime via the Airflow REST API + a
+            # write to AIRFLOW__CORE__DAGS_FOLDER. No init-time copy required.
+    airflow-step-5:
+        run: write=/usr/local/bin/airflow-webserver.sh
+        write: /usr/local/bin/airflow-webserver.sh
+        mode: "0755"
+        run_as: root
+        content: |
+            #!/usr/bin/env bash
+            set -euo pipefail
+            # Airflow 3.x: `webserver` was removed; use `api-server` (FastAPI).
+            exec "${HOME}/.pixi/envs/default/bin/airflow" api-server
+    airflow-step-6:
+        run: write=/usr/local/bin/airflow-scheduler.sh
+        write: /usr/local/bin/airflow-scheduler.sh
+        mode: "0755"
+        run_as: root
+        content: |
+            #!/usr/bin/env bash
+            set -euo pipefail
+            exec "${HOME}/.pixi/envs/default/bin/airflow" scheduler
+    airflow-step-7:
+        run: write=/usr/local/bin/airflow-dag-processor.sh
+        write: /usr/local/bin/airflow-dag-processor.sh
+        mode: "0755"
+        run_as: root
+        content: |
+            #!/usr/bin/env bash
+            set -euo pipefail
+            exec "${HOME}/.pixi/envs/default/bin/airflow" dag-processor
+        # NB: sample OSM pipeline DAG used to be inlined here via `write:`
+        # to /opt/airflow-defaults/dags/ + airflow-init.sh copy. Then it
+        # was extracted to a dag-osm-monaco data layer that seeded
+        # /workspace/dags/ at deploy time. Both are gone: notebooks
+        # now self-author DAGs at runtime via the Airflow REST API. The
+        # canonical example is candy/notebook-osm/data/notebooks/osm-monaco-viz.py
+        # which writes notebook_osm_pipeline.py into AIRFLOW__CORE__DAGS_FOLDER
+        # and triggers it via POST /api/v2/dags/.../dagRuns.
+    airflow-step-8:
+        check: the one-shot init wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/airflow-init.sh
+            exists: true
+            mode: "0755"
+    airflow-step-9:
+        check: the api-server wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/airflow-webserver.sh
+            exists: true
+            mode: "0755"
+    airflow-step-10:
+        check: the scheduler wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/airflow-scheduler.sh
+            exists: true
+            mode: "0755"
+    airflow-step-11:
+        check: the dag-processor wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/airflow-dag-processor.sh
+            exists: true
+            mode: "0755"
+    airflow-step-12:
+        check: the running api-server answers /api/v2/version with HTTP 200
+        timeout: 30s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: "http://127.0.0.1:${HOST_PORT:8080}/api/v2/version"
+            status: 200
+    airflow-step-13:
+        check: posting the injected admin credentials to /auth/token returns a bearer access_token
+        exit_status: 0
+        timeout: 15s
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                curl -fsS -X POST "http://localhost:8080/auth/token" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"username\":\"admin\",\"password\":\"$AIRFLOW_ADMIN_PASSWORD\"}" \
+                | grep -q '"access_token"'
+            in_container: true
+    airflow-init-db-created:
+        check: command=test -f ${HOME}/airflow/airflow.db
+        id: airflow-init-db-created
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: test -f ${HOME}/airflow/airflow.db
+            in_container: true
+    airflow-scheduler-running:
+        check: service=airflow-scheduler
+        id: airflow-scheduler-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: airflow-scheduler
+            running: true
+    airflow-dag-processor-running:
+        check: service=airflow-dag-processor
+        id: airflow-dag-processor-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: airflow-dag-processor
+            running: true
+    airflow-webserver-running:
+        check: service=airflow-webserver
+        id: airflow-webserver-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: airflow-webserver
+            running: true
+    airflow-port-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:8080}
+        id: airflow-port-reachable
+        timeout: 10s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: "127.0.0.1:${HOST_PORT:8080}"
+            reachable: true

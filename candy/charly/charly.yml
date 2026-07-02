@@ -1,0 +1,119 @@
+charly:
+    candy:
+        version: 2026.162.1430
+        description: |
+            The full charly toolchain on a deployment — the on-PATH charly CLI plus its composed VM / encrypted-storage / console-relay stack.
+            Full charly toolchain — the CLI binary + the VM stack (virtualization),
+            encrypted storage (gocryptfs), and console relay (socat) — composed into
+            ONE layer that works identically on container/pod, host/local, and
+            bootc/VM targets via the `virtualization` layer's mixed-entry `service:`
+            pattern. This is the single canonical `charly` layer: bake it where a
+            deployment needs a persistent on-`$PATH` charly or the full toolchain inside
+            (the `charly-mcp` server, the `*-charly` showcases, nested-pod orchestrators).
+            Images that only need transient in-container `charly` (the dbus delegation
+            path) need NOT bake it — the host copies `charly` in on demand
+            (`EnsureCharlyInVenue`; see `/charly-tools:charly`).
+    charly-candy:
+        candy:
+            - virtualization
+            - gocryptfs
+            - socat
+    charly-distro:
+        distro:
+            debian:
+                # tailscale is a mandatory charly dep but is NOT in Debian main, so the
+                # .deb (pkg/debian) omits it; the charly candy supplies it for deb-family
+                # via the tailscale apt repo. arch/fedora get tailscale from their
+                # native package's deps instead, so it is deb-family-scoped here.
+                package:
+                    - tailscale
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/debian"
+                      key: "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+                      suite: trixie
+                      components: main
+            ubuntu:
+                package:
+                    - tailscale
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/ubuntu"
+                      key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
+                      suite: noble
+                      components: main
+    charly-localpkg:
+        # On a DEPLOY target charly is installed as the proper OS-tracked package for the
+        # target distro's format (LocalPkgInstallStep): pac → opencharly-git built from
+        # pkg/arch via makepkg + pacman -U; rpm → opencharly built from pkg/fedora via
+        # rpmbuild + dnf install; deb → opencharly built from pkg/debian via
+        # dpkg-buildpackage + apt-get install. Each install AUTO-RESOLVES the package's
+        # dependencies from the target's repos. The sources live at the SUPERPROJECT
+        # root (pkg/<fmt>) — resolved by walking UP from the deploy project dir, so a
+        # consumer nested under box/<distro> still finds them. An IMAGE build has no
+        # host-package-build step, so it DOWNLOADS the published package
+        # (format.<fmt>.local_pkg.download_template) and installs it via the same
+        # dep-resolving install command — same OS-tracked result, no curl'd raw binary.
+        localpkg:
+            pac: pkg/arch
+            rpm: pkg/fedora
+            deb: pkg/debian
+    charly-step-0:
+        check: the charly binary resolves on the deployment's PATH
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: command -v charly
+    charly-step-1:
+        check: charly version prints a CalVer build stamp on stdout
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]{4}\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: charly version
+    charly-step-2:
+        check: the gocryptfs encrypted-storage binary (gocryptfs candy) is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/gocryptfs
+            exists: true
+    charly-step-3:
+        check: the socat console-relay binary (socat candy) is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/socat
+            exists: true
+    charly-step-4:
+        check: the libvirt virsh client (virtualization candy) is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/virsh
+            exists: true
+    charly-step-5:
+        check: the qemu system emulator (virtualization candy) is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/qemu-system-x86_64
+            exists: true
+    charly-step-6:
+        check: charly doctor runs and emits its Summary line
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: charly doctor 2>&1 | grep -q "Summary:"
+    charly-binary:
+        check: command=command -v charly
+        id: charly-binary
+        exit_status: 0
+        stdout:
+            # Path-agnostic: the package installs to /usr/bin/charly, but on a
+            # usr-merged distro (Arch/CachyOS: /usr/sbin -> bin, /usr/sbin ahead
+            # of /usr/bin in PATH) `command -v` reports it via /usr/sbin — the
+            # SAME inode. Accept any /usr[/local]/{bin,sbin}/charly so the probe
+            # passes regardless of which PATH alias resolved it (RE2: no $ anchor,
+            # which wouldn't match the trailing newline).
+            - matches: "/usr/(local/)?s?bin/charly"
+        plugin: command
+        plugin_input:
+            command: command -v charly

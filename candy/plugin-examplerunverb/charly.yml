@@ -1,0 +1,20 @@
+plugin-examplerunverb:
+    candy:
+        version: 2026.176.2000
+        description: |-
+            Reference HOST-COUPLED check verb on the kit contract: `examplerunverb`
+            echoes plugin_input.marker AND the live run mode (read off
+            kit.CheckContext), proving a verb that reaches live engine state relocates
+            into a candy and still dispatches in-process. The *Runner-keeping analogue
+            of the stateless candy/plugin-example exampleprobe; COMPILED-IN-ONLY.
+    plugin-examplerunverb-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-examplerunverb
+            providers:
+                - verb:examplerunverb
+    examplerunverb-dispatches:
+        check: the examplerunverb verb dispatches IN-PROCESS via the kit and echoes the marker + live run mode
+        id: examplerunverb-dispatches
+        plugin: examplerunverb
+        plugin_input: {marker: examplerunverb-marker-ok}
+        context: [runtime]

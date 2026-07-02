@@ -1,0 +1,56 @@
+google-cloud-npm:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the Firebase CLI and the Google Gemini CLI globally via npm so `firebase` and `gemini` are on PATH.
+            The candy depends on google-cloud + nodejs and ships a package.json
+            pinning firebase-tools and @google/gemini-cli, which the build
+            installs globally under NPM_CONFIG_PREFIX (~/.npm-global). The result
+            is verifiable: the firebase and gemini binaries land in
+            ~/.npm-global/bin, both packages are unpacked under
+            ~/.npm-global/lib/node_modules, and each CLI's --version exits cleanly
+            and prints a semantic version.
+    google-cloud-npm-require:
+        require:
+            - google-cloud
+            - nodejs
+    google-cloud-npm-step-0:
+        check: the firebase binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/firebase
+            exists: true
+    google-cloud-npm-step-1:
+        check: the firebase-tools package is unpacked under the npm global lib directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/lib/node_modules/firebase-tools/package.json
+            exists: true
+    google-cloud-npm-step-2:
+        check: running firebase --version exits cleanly and prints a semantic version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/firebase --version
+    google-cloud-npm-step-3:
+        check: the gemini binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/gemini
+            exists: true
+    google-cloud-npm-step-4:
+        check: the @google/gemini-cli scoped package is unpacked under the npm global lib directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/lib/node_modules/@google/gemini-cli/package.json
+            exists: true
+    google-cloud-npm-step-5:
+        check: running gemini --version exits cleanly and prints a semantic version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/gemini --version

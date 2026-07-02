@@ -1,0 +1,126 @@
+cloud-init:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Cloud-init NoCloud provisioning for first-boot VM/cloud instance bootstrap.
+            Installs cloud-init and the growpart partition-resize utility, then
+            pins the datasource to NoCloud via a drop-in at
+            /etc/cloud/cloud.cfg.d/99-nocloud.cfg so a bootc/VM guest reads its
+            seed ISO (user-data/meta-data) at first boot. The cloud-init binary,
+            the growpart binary, and the NoCloud drop-in are all baked into the
+            image and independently checkable.
+    cloud-init-require:
+        require:
+            - sshd
+    cloud-init-package:
+        package:
+            - cloud-init
+    cloud-init-distro:
+        distro:
+            arch:
+                package:
+                    - cloud-guest-utils
+            debian:
+                package:
+                    - cloud-guest-utils
+            fedora:
+                package:
+                    - cloud-utils-growpart
+            ubuntu:
+                package:
+                    - cloud-guest-utils
+    cloud-init-service:
+        service:
+            - name: cloud-init-local
+              use_packaged: cloud-init-local.service
+              enable: true
+              scope: system
+            - name: cloud-init
+              use_packaged: cloud-init.service
+              enable: true
+              scope: system
+            - name: cloud-config
+              use_packaged: cloud-config.service
+              enable: true
+              scope: system
+            - name: cloud-final
+              use_packaged: cloud-final.service
+              enable: true
+              scope: system
+    cloud-init-step-0:
+        run: mkdir=/etc/cloud/cloud.cfg.d
+        mkdir: /etc/cloud/cloud.cfg.d
+        run_as: root
+    cloud-init-step-1:
+        run: write=/etc/cloud/cloud.cfg.d/99-nocloud.cfg
+        write: /etc/cloud/cloud.cfg.d/99-nocloud.cfg
+        mode: "0644"
+        run_as: root
+        content: |
+            datasource_list: [ NoCloud, None ]
+    cloud-init-step-2:
+        check: the cloud-init binary is present in the image
+        plugin: file
+        plugin_input:
+            file: /usr/bin/cloud-init
+            exists: true
+    cloud-init-step-3:
+        check: cloud-init responds to --version with a version string
+        exit_status: 0
+        stdout:
+            - matches: '[0-9]+\.[0-9]'
+        plugin: command
+        plugin_input:
+            command: cloud-init --version 2>&1
+    cloud-init-step-4:
+        check: the NoCloud datasource drop-in is installed mode 0644
+        plugin: file
+        plugin_input:
+            file: /etc/cloud/cloud.cfg.d/99-nocloud.cfg
+            exists: true
+            mode: "0644"
+    cloud-init-step-5:
+        check: the drop-in restricts the datasource list to NoCloud
+        plugin: file
+        plugin_input:
+            file: /etc/cloud/cloud.cfg.d/99-nocloud.cfg
+            contains:
+                - contains: datasource_list
+                - contains: NoCloud
+    cloud-init-step-6:
+        check: the growpart partition-resize utility is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/growpart
+            exists: true
+    cloud-init-package-2:
+        check: package=cloud-init
+        id: cloud-init-package
+        plugin: package
+        plugin_input:
+            package: cloud-init
+            installed: true
+    cloud-init-nocloud-datasource:
+        check: file=/etc/cloud/cloud.cfg.d/99-nocloud.cfg
+        id: cloud-init-nocloud-datasource
+        plugin: file
+        plugin_input:
+            file: /etc/cloud/cloud.cfg.d/99-nocloud.cfg
+            exists: true
+            mode: "0644"
+            contains:
+                - contains: datasource_list
+                - contains: NoCloud
+                - contains: None
+    cloud-init-growpart-package:
+        check: package=cloud-utils-growpart
+        id: cloud-init-growpart-package
+        plugin: package
+        plugin_input:
+            package: cloud-utils-growpart
+            package_map:
+                arch: cloud-guest-utils
+                debian: cloud-guest-utils
+                ubuntu: cloud-guest-utils
+                fedora: cloud-utils-growpart
+            installed: true

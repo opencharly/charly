@@ -1,0 +1,90 @@
+wayvnc:
+    candy:
+        version: 2026.144.1443
+        description: |
+            WayVNC headless VNC server exposing a wlroots Wayland desktop on TCP 5900
+            Installs the wayvnc package (the /usr/bin/wayvnc server) plus a
+            launcher wrapper under ~/.local/bin, run as a supervised service that
+            publishes the Wayland desktop over VNC on port 5900. Verifiable: the
+            server binary and wrapper exist and the package is installed at build
+            scope; at deploy scope the wayvnc service runs and the VNC port
+            accepts a TCP connection.
+    wayvnc-require:
+        require:
+            - supervisord
+    wayvnc-port:
+        port:
+            - tcp:5900
+    wayvnc-distro:
+        distro:
+            fedora:
+                package:
+                    - wayvnc
+    wayvnc-service:
+        service:
+            - name: wayvnc
+              exec: "%(ENV_HOME)s/.local/bin/wayvnc-wrapper"
+              env:
+                WAYLAND_DISPLAY: wayland-0
+                XDG_RUNTIME_DIR: /tmp
+              restart: always
+              priority: 20
+              start_sec: 0
+              enable: true
+              scope: system
+    wayvnc-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    wayvnc-step-1:
+        run: copy=wayvnc-wrapper
+        copy: wayvnc-wrapper
+        to: "${HOME}/.local/bin/wayvnc-wrapper"
+        mode: "0755"
+        run_as: "${USER}"
+    wayvnc-step-2:
+        check: the wayvnc server binary is installed at /usr/bin/wayvnc
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wayvnc
+            exists: true
+    wayvnc-step-3:
+        check: the wayvnc launcher wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/wayvnc-wrapper
+            exists: true
+            mode: "0755"
+    wayvnc-step-4:
+        check: the supervised wayvnc service is running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: wayvnc
+            running: true
+    wayvnc-step-5:
+        check: the VNC port accepts a TCP connection on the published host port
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:5900}
+            reachable: true
+    wayvnc-package:
+        check: package=wayvnc
+        id: wayvnc-package
+        plugin: package
+        plugin_input:
+            package: wayvnc
+            installed: true
+    wayvnc-port-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:5900}
+        id: wayvnc-port-reachable
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:5900}
+            reachable: true

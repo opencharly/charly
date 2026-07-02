@@ -1,0 +1,82 @@
+heroic:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Heroic Games Launcher (Epic/GOG/Amazon) on a Sway desktop with MangoHud and GameMode
+            Installs the Heroic Games Launcher from its GitHub-release RPM
+            (the heroic package and /usr/bin/heroic launcher) alongside the
+            MangoHud FPS overlay and Feral GameMode performance optimizer from
+            the Fedora repos. Heroic config, Wine/Proton tools, and game
+            installs persist in the heroic-config and heroic-games volumes.
+    heroic-require:
+        require:
+            - sway
+    heroic-distro:
+        distro:
+            fedora:
+                package:
+                    - mangohud
+                    - gamemode
+    heroic-volume:
+        volume:
+            - name: heroic-config
+              path: "~/.config/heroic"
+            - name: heroic-games
+              path: "~/Games/Heroic"
+    heroic-var:
+        var:
+            HEROIC_VERSION: 2.20.1
+    heroic-step-0:
+        run: |
+            command=ARCH=$(uname -m)
+            curl -fsSL "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${HEROIC_VERSION}/Heroic-${HEROIC_VERSION}-linux-${ARCH}.rpm" -o /tmp/heroic.rpm
+            dnf install -y /tmp/heroic.rpm
+            rm -f /tmp/heroic.rpm
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                ARCH=$(uname -m)
+                curl -fsSL "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${HEROIC_VERSION}/Heroic-${HEROIC_VERSION}-linux-${ARCH}.rpm" -o /tmp/heroic.rpm
+                dnf install -y /tmp/heroic.rpm
+                rm -f /tmp/heroic.rpm
+    heroic-step-1:
+        check: the Heroic Games Launcher binary is installed on PATH
+        plugin: file
+        plugin_input:
+            file: /usr/bin/heroic
+            exists: true
+    heroic-step-2:
+        check: the heroic RPM is registered in the package database
+        plugin: package
+        plugin_input:
+            package: heroic
+            installed: true
+    heroic-step-3:
+        check: a desktop entry installs so the launcher appears in the application menu
+        plugin: file
+        plugin_input:
+            file: /usr/share/applications/heroic.desktop
+            exists: true
+    heroic-step-4:
+        check: the MangoHud overlay is installed for in-game FPS and stats
+        plugin: package
+        plugin_input:
+            package: mangohud
+            installed: true
+    heroic-step-5:
+        check: Feral GameMode is installed to optimize the CPU governor while gaming
+        plugin: package
+        plugin_input:
+            package: gamemode
+            installed: true
+    heroic-step-6:
+        check: the heroic-config volume is mounted as a directory so Wine/Proton tools and settings survive a rebuild
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:heroic-config}
+            filetype: directory
+    heroic-step-7:
+        agent-check: installed games and their Wine prefixes are retained between container restarts

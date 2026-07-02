@@ -1,0 +1,6 @@
+cargo-tool:
+    candy:
+        version: 2026.144.1443
+        description: |-
+            Test fixture layer — Cargo.toml + src/ trigger cargo builder detection
+            Test fixture layer — Cargo.toml + src/ trigger cargo builder detection

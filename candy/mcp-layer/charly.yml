@@ -1,0 +1,291 @@
+mcp-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            harness-mcp-fixture — minimal Streamable-HTTP MCP server stub for harness phase 4
+            Implements the MCP Streamable HTTP protocol surface that
+            the `mcp:` check verb (exercised via `charly check live <pod> --filter mcp`,
+            dispatched out-of-process by candy/plugin-mcp) probes: initialize, ping,
+            tools/list, tools/call.
+            Advertises three jupyter-named tools (list_notebooks, insert_cell,
+            execute_cell) so the mcp-protocol-probe recipe's matchers all
+            satisfy. Stdlib-only Python (no fastmcp install) keeps the image
+            small and the build fast.
+    mcp-layer-require:
+        require:
+            - supervisord
+            # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
+            # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in
+            # charly's core check surface). This candy AUTHORS `mcp:` checks, so requiring
+            # plugin-mcp puts it in every composing image's scanned candy set; the host's
+            # collectReferencedPluginWords then build-connects it before the baked `mcp:`
+            # checks dispatch — otherwise they SKIP with `unknown verb "mcp"`. (box/<distro>
+            # adopts the matching @github pin via reconcile later — the deliberate cross-repo
+            # lag; the R10 bed loads the LOCAL candy via the superproject override.)
+            - plugin-mcp
+    mcp-layer-distro:
+        distro:
+            fedora:
+                package:
+                    - python3
+                    - iproute
+                    - procps-ng
+    mcp-layer-port:
+        port:
+            - 8888
+    mcp-layer-mcp_provide:
+        mcp_provide:
+            - name: jupyter
+              url: "http://{{.ContainerName}}:8888/mcp"
+              transport: http
+    mcp-layer-service:
+        service:
+            - name: harness-mcp-fixture
+              exec: "/usr/bin/python3 -u /opt/harness-mcp/mcp_server.py"
+              restart: always
+              priority: 50
+              enable: true
+              scope: system
+    mcp-layer-step-0:
+        run: mkdir=/opt/harness-mcp
+        mkdir: /opt/harness-mcp
+        run_as: root
+        mode: "0755"
+    mcp-layer-step-1:
+        run: write=/opt/harness-mcp/mcp_server.py
+        write: /opt/harness-mcp/mcp_server.py
+        run_as: root
+        mode: "0755"
+        content: |
+            #!/usr/bin/env python3
+            """Minimal MCP Streamable HTTP server stub.
+
+            Implements just enough of the MCP 2025-11-25 protocol to satisfy
+            the `mcp:` check verb (ping / list-tools / call, via
+            `charly check live <pod> --filter mcp`):
+              - POST /mcp with JSON-RPC: initialize, notifications/initialized,
+                ping, tools/list, tools/call
+              - GET /mcp -> 405 (client tolerates this)
+              - DELETE /mcp -> 200
+            """
+            import json
+            import sys
+            from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+            PROTOCOL_VERSION = "2025-11-25"
+
+            TOOLS = [
+                {
+                    "name": "list_notebooks",
+                    "description": "List all notebooks accessible in the workspace.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "insert_cell",
+                    "description": "Insert a new cell at the given position in a notebook.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "index": {"type": "integer"},
+                            "source": {"type": "string"},
+                            "cell_type": {"type": "string"},
+                        },
+                        "required": ["path", "index", "source"],
+                        "additionalProperties": False,
+                    },
+                },
+                {
+                    "name": "execute_cell",
+                    "description": "Execute a cell and return its outputs.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "index": {"type": "integer"},
+                        },
+                        "required": ["path", "index"],
+                        "additionalProperties": False,
+                    },
+                },
+            ]
+
+
+            def call_tool(name, args):
+                if name == "list_notebooks":
+                    return [{"path": "intro.ipynb", "name": "intro.ipynb"}]
+                if name == "insert_cell":
+                    idx = (args or {}).get("index", 0)
+                    return f"Cell inserted at index {idx}"
+                if name == "execute_cell":
+                    return [{"type": "stream", "name": "stdout", "text": ""}]
+                return None
+
+
+            def handle_rpc(msg):
+                method = msg.get("method", "")
+                rid = msg.get("id")
+                params = msg.get("params") or {}
+                if method == "initialize":
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": rid,
+                        "result": {
+                            "protocolVersion": PROTOCOL_VERSION,
+                            "capabilities": {
+                                "tools": {"listChanged": False},
+                            },
+                            "serverInfo": {
+                                "name": "harness-mcp-fixture",
+                                "version": "1.0.0",
+                            },
+                        },
+                    }
+                if method.startswith("notifications/"):
+                    return None
+                if method == "ping":
+                    return {"jsonrpc": "2.0", "id": rid, "result": {}}
+                if method == "tools/list":
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": rid,
+                        "result": {"tools": TOOLS},
+                    }
+                if method == "tools/call":
+                    name = params.get("name", "")
+                    args = params.get("arguments", {})
+                    payload = call_tool(name, args)
+                    if payload is None:
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": rid,
+                            "error": {"code": -32601, "message": f"unknown tool: {name}"},
+                        }
+                    text = json.dumps(payload) if not isinstance(payload, str) else payload
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": rid,
+                        "result": {
+                            "content": [{"type": "text", "text": text}],
+                            "isError": False,
+                        },
+                    }
+                if rid is None:
+                    return None
+                return {
+                    "jsonrpc": "2.0",
+                    "id": rid,
+                    "error": {"code": -32601, "message": f"method not found: {method}"},
+                }
+
+
+            class MCPHandler(BaseHTTPRequestHandler):
+                protocol_version = "HTTP/1.1"
+
+                def log_message(self, fmt, *args):
+                    sys.stderr.write("mcp: " + fmt % args + "\n")
+
+                def _send_json(self, status, obj):
+                    body = json.dumps(obj).encode("utf-8")
+                    self.send_response(status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+                    self.wfile.write(body)
+
+                def _send_empty(self, status):
+                    self.send_response(status)
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+
+                def do_POST(self):
+                    if self.path.rstrip("/") != "/mcp":
+                        self._send_empty(404)
+                        return
+                    length = int(self.headers.get("Content-Length", "0") or "0")
+                    body = self.rfile.read(length) if length > 0 else b""
+                    try:
+                        msg = json.loads(body) if body else {}
+                    except json.JSONDecodeError:
+                        self._send_empty(400)
+                        return
+                    if isinstance(msg, list):
+                        out = [r for r in (handle_rpc(m) for m in msg) if r is not None]
+                        if not out:
+                            self._send_empty(202)
+                            return
+                        self._send_json(200, out)
+                        return
+                    resp = handle_rpc(msg)
+                    if resp is None:
+                        self._send_empty(202)
+                        return
+                    self._send_json(200, resp)
+
+                def do_GET(self):
+                    if self.path.rstrip("/") == "/mcp":
+                        self._send_empty(405)
+                        return
+                    self._send_empty(404)
+
+                def do_DELETE(self):
+                    if self.path.rstrip("/") == "/mcp":
+                        self._send_empty(200)
+                        return
+                    self._send_empty(404)
+
+
+            if __name__ == "__main__":
+                srv = ThreadingHTTPServer(("0.0.0.0", 8888), MCPHandler)
+                srv.serve_forever()
+    mcp-layer-step-2:
+        check: the stdlib MCP server script is baked into the image at /opt/harness-mcp/mcp_server.py
+        plugin: file
+        plugin_input:
+            file: /opt/harness-mcp/mcp_server.py
+            exists: true
+    mcp-layer-step-3:
+        check: the python3 interpreter that runs the stub is installed at /usr/bin/python3
+        plugin: file
+        plugin_input:
+            file: /usr/bin/python3
+            exists: true
+    mcp-layer-step-4:
+        check: the python3 package providing the interpreter is installed
+        plugin: package
+        plugin_input:
+            package: python3
+            installed: true
+    mcp-layer-step-5:
+        check: the running fixture answers an MCP ping over its Streamable HTTP endpoint
+        mcp: ping
+        timeout: 30s
+        eventually: 90s
+        retry_interval: 3s
+        context:
+            - runtime
+    mcp-layer-step-6:
+        check: a tools/list call advertises the three jupyter-named tools
+        mcp: list-tools
+        stdout:
+            - contains: list_notebooks
+            - contains: insert_cell
+            - contains: execute_cell
+        context:
+            - runtime
+    mcp-layer-step-7:
+        check: the server port accepts a TCP connection from the host
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8888}
+            reachable: true
+    mcp-layer-step-8:
+        agent-check: a tools/call invocation of list_notebooks returns a notebook listing, and insert_cell / execute_cell respond without a JSON-RPC protocol error against the live fixture

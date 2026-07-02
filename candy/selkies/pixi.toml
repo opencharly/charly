@@ -1,0 +1,10 @@
+[workspace]
+name = "selkies"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+setuptools = "*"
+libxkbcommon = "*"

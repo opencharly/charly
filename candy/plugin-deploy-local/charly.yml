@@ -1,0 +1,36 @@
+plugin-deploy-local:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            OUT-OF-TREE charly DEPLOY plugin serving the `local` deploy SUBSTRATE —
+            `target: local` (host:local direct-shell) and `host: user@machine` (SSH)
+            deploys. A standalone Go module (go.mod + main.go) served over go-plugin gRPC
+            via the charly plugin SDK; charly's loader host-builds the provider binary and
+            connects it OUT-OF-PROCESS (LocalTransport). externalDeployTarget.Add Invokes
+            it (OpExecute) with the deployment's InstallPlan VIEWS (the serializable
+            per-step IR, with secrets injected + {{.Home}} resolved + each step's teardown
+            ops captured host-side) + a venue descriptor, and the host's executor served on
+            the broker (ShellExecutor for host:local, SSHExecutor for host:user@machine).
+            The plugin dials BACK through the SDK Executor and hands the plans to the shared
+            kit.WalkPlans: the plugin-renderable step kinds (Op/File/ShellHook +
+            env.d-managed-block/ShellSnippet/Service*/RepoChange) it EXECUTES itself via the
+            F2 reverse legs (RunSystem/RunUser/PutFile), echoing the host-computed reverse
+            ops; the HOST-ENGINE kinds (Builder/LocalPkgInstall/SystemPackages/act-Op/
+            ExternalPlugin) it drives over the RunHostStep reverse leg. It returns the
+            combined plugin-script + host-step reverse ops the host records in the install
+            ledger and replays at `charly bundle del`. The local-substrate production
+            sibling of candy/plugin-example-deploy (the F2/F3 witness) and candy/plugin-kube
+            (deploy:k8s); it replaces the former in-proc LocalDeployTarget.
+    plugin-deploy-local-decl:
+        plugin:
+            providers:
+                - deploy:local
+            source: github.com/opencharly/charly/candy/plugin-deploy-local
+    deploy-local-module-present:
+        check: the out-of-tree deploy:local plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+        id: deploy-local-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

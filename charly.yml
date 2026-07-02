@@ -1,0 +1,2111 @@
+version: 2026.174.1100
+# Canonical repo identity. After the 2026-06 box inversion main imports the three
+# active distro submodules (arch / cachyos / fedora) ONE-DIRECTIONALLY to reference
+# their relocated boxes; the submodules no longer import main as a namespace (they
+# reach main's shared candies via @github refs), so the former mutual cycle is
+# dissolved. See /charly-internals:go.
+repo: github.com/opencharly/charly
+import:
+    # After the 2026-06 box inversion main owns NO boxes — it imports the three
+    # active distro submodules ONE-DIRECTIONALLY to reference their relocated boxes
+    # in the inline check/vm/local/k8s/android orchestration below (e.g. the
+    # check-cross-* mechanism beds reference `fedora.web` / `fedora.chrome-headless`).
+    # Each submodule owns its own base stack: arch + fedora are self-contained
+    # (import: []) and cachyos imports the `arch` namespace; none imports main back
+    # (they reach main's shared candies via @github refs), so the former
+    # main↔cachyos / main↔fedora mutual cycles are dissolved.
+    - arch: '@github.com/opencharly/distro-arch:v2026.183.1359'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.183.1359'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.183.1359'
+# Main owns NO boxes after the 2026-06 box inversion — only the shared candy
+# library + the inline check/vm/local/k8s orchestration. Discover candies only.
+discover:
+    - path: candy
+      recursive: true
+defaults:
+    platform:
+        - linux/amd64
+    tag: auto
+    registry: ghcr.io/opencharly
+    build:
+        - rpm
+    merge:
+        auto: false
+        max_mb: 128
+    # No defaults.builder: main owns no boxes after the box inversion, so there is
+    # nothing to build multi-stage formats for. Each submodule box declares its own
+    # builder map (arch.arch-builder / fedora.fedora-builder / cachyos via arch).
+    # Build-speed tunables (project-wide). Precedence: CLI flag / env wins,
+    # then these defaults, then a built-in fallback. See /charly-build:build.
+    jobs: 4 # outer: concurrent IMAGE builds per DAG level (--jobs / CHARLY_BUILD_JOBS)
+    podman_jobs: 0 # inner: stages per `podman build`; 0 = auto = min(NCPU, podman_jobs_cap)
+    podman_jobs_cap: 8 # ceiling for the auto calc — proven safe on podman 5.8.2 (20-run race gate)
+    # Heavy directories never COPYed by any Containerfile — merged into the
+    # generated .containerignore/.dockerignore on top of the built-in baseline
+    # (.git, bin, charly, *.md, editor/python/node cache-bust globs).
+    context_ignore:
+        - box
+        - .check
+        - output
+        - dist
+        - pkg
+        - tests
+        - .regression-snapshot
+    cache: image # default build cache mode (image local read / registry read+write)
+    # Reusable-artifact retention (auto-pruned at creation; also via `charly clean`).
+    # 0 disables. See /charly-core:clean.
+    keep_images: 3 # newest CalVer tags to keep per image after `charly box build`
+    keep_check_runs: 3 # newest run dirs to keep per bed/score after `charly check run`
+vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2
+            checksum:
+                type: sha256
+                value: 6205ae0c524b4d1816dbd3573ce29b5c44ed26c9fbc874fbe48c41c89dd0bac2
+            base_user: fedora
+        disk_size: 6G
+        ram: 2G
+        cpu: 2
+        firmware: bios
+        network:
+            mode: user
+        ssh:
+            user: fedora
+            port: 12222
+            key_source: generate
+        cloud_init:
+            package:
+                - qemu-guest-agent
+                - curl
+            runcmd:
+                - "setenforce 0 || true"
+                - "sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config || true"
+                - "echo '10.89.0.1 charly-web' >> /etc/hosts"
+                - "systemctl enable --now qemu-guest-agent"
+                - "for c in 21 33 46 82 124 196 208 220 1 5; do printf '\\033[48;5;%dm                    \\033[0m\\n' $c >> /dev/tty1; done || true"
+vm-libvirt:
+    vm: {}
+    vm-libvirt-libvirt:
+        libvirt:
+            devices:
+                channels:
+                    - type: unix
+                      name: org.qemu.guest_agent.0
+                      path: '{{.VmStateDir}}/qga.sock'
+                graphics:
+                    - type: spice
+                      autoport: "yes"
+                      listen: 127.0.0.1
+                video:
+                    - model: virtio
+                      heads: 1
+                      accel3d: false
+k3s-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            checksum:
+                type: sha256
+            base_user: arch
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        network:
+            mode: user
+            # `port_forwards` (plural) is the canonical key — VmNetwork.PortForwards
+            # (yaml:"port_forwards"), a kept-plural key in the field-singular cutover.
+            # The original bed used the singular `port_forward:`, which YAML silently
+            # dropped → no host:16443 forward → the k8s probes hit
+            # `dial 127.0.0.1:16443: connection refused`.
+            port_forwards:
+                - "16443:6443"
+        ssh:
+            # port_auto auto-allocates the host SSH port at create (was a fixed
+            # 2225 chosen to dodge collisions — port_auto does that automatically).
+            # This bed is also the R10 for the ssh.port_auto feature: the entire
+            # k3s deploy connects over SSH on the auto-allocated port.
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+            charly_install:
+                strategy: auto
+    k3s-vm-libvirt:
+        libvirt:
+            devices:
+                rng:
+                    - model: virtio
+                      backend: /dev/urandom
+                memballoon:
+                    model: virtio
+# Arch Cloud VM backing check-charly-vm — the pac localpkg deploy witness. Plain
+# disposable VM (no port forwards / k3s); charly is installed onto it by the bed's
+# localpkg deploy, so the VM itself carries no opencharly layers.
+charly-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            checksum:
+                type: sha256
+            base_user: arch
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+vm-k3s-vm:
+    k8s:
+        box: ""
+        kubeconfig_context: vm-k3s-vm
+claude:
+    agent:
+        description: Anthropic Claude Code CLI — autonomous coding agent.
+        # --verbose + --output-format stream-json emit one JSON object per
+        # message in the agent loop (system / assistant / user / tool_use /
+        # tool_result / result). The harness parses each line, embeds it
+        # into result-{calver}.yml under iteration[].runner_event, and tees
+        # the raw NDJSON to .harness/<score>/runs/<run-id>/iter<k>/runner.ndjson
+        # for byte-exact debugging. See /charly-check:check for the score
+        # runner and its stream-json wire format.
+        command: [claude, -p, --verbose, --output-format, stream-json, --dangerously-skip-permissions, "${PROMPT}"]
+        output_format: stream-json
+        version_command: [claude, --version]
+        credential:
+            - {src: ~/.claude/.credentials.json, dst: ~/.claude/.credentials.json}
+codex:
+    agent:
+        description: OpenAI Codex CLI — coding agent.
+        command: [codex, exec, "${PROMPT}"]
+        version_command: [codex, --version]
+        credential:
+            - {src: ~/.config/codex/auth.json, dst: ~/.config/codex/auth.json, optional: true}
+gemini:
+    agent:
+        description: Google Gemini CLI.
+        command: [gemini, chat, "${PROMPT}"]
+        version_command: [gemini, --version]
+        credential:
+            - {src: ~/.config/gcloud/application_default_credentials.json, dst: ~/.config/gcloud/application_default_credentials.json, optional: true}
+# =============================================================================
+# kind: check — disposable, zero-operator-side-effect R10 test beds.
+# =============================================================================
+# Each entry is a disposable deployment (a BundleNode), folded into the
+# Bundle map at load time so every deploy verb resolves it by name. Run the
+# full R10 acceptance sequence on any of them — build → check box → deploy →
+# check live → fresh update (R10 gate) → tear down — with:
+#
+#     charly check run <bed>          # one bed
+#     charly check run --all-beds     # every bed, name-sorted
+#
+# `disposable: true` is the SOLE authorization for that unattended destroy +
+# rebuild (see /charly-internals:disposable). Naming: check-<descriptor>-<kind>,
+# dropping a redundant suffix when descriptor == kind AND the short form is
+# free (check-local, check-pod). The harness AI-sandbox pod is named
+# `check-sandbox` (the score `pod:` target), kept disjoint from these beds.
+#
+# Bed-to-verb coverage map:
+#   check-k3s-vm               (vm)  — k8s (all 13 methods) + guest-side
+#                                     file/service/port/process, http via
+#                                     port-forward, the external vm deploy end-to-end
+#   check-k8s-deploy           (vm)  — the EXTERNALIZED deploy:k8s substrate (F1):
+#                                     a k3s VM cluster + a target:k8s workload
+#                                     member (check-k8s-deploy-app) applied via the
+#                                     out-of-process plugin's kubectl apply -k
+#   check-pod                  (pod) — combined: kind:image build + kind:layer
+#                                     composition order + kind:pod runtime
+#                                     (nc :18794 + supervisord) + every
+#                                     DeployTarget rendering path
+#   check-local                (local) — kind:local layer apply via ShellExecutor
+#   check-jupyter-pod          (pod) — jupyter-mcp regression coverage
+#   check-jupyter-ml-pod       (pod) — jupyter-ml spacy/quarto + GPU MCP probes
+#   check-versa-pod            (pod) — versa OSM analytics + vector-tile + marimo MCP
+#   check-android-emulator-pod (pod) — Android 16 emulator (/dev/kvm) + adb/appium
+#   check-openclaw-pod         (pod) — minimal openclaw gateway on the cachyos base
+#   check-openclaw-full-pod    (pod) — maximal openclaw-full on cachyos (AUR chrome,
+#                                     gogcli@latest, ffmpeg/sqlite arch coverage)
+#   check-openclaw-desktop-pod (pod) — all-in-one: selkies desktop + openclaw-full
+#                                     (claude-code/codex/gemini) + CPU ollama +
+#                                     nested charly toolchain (charly+container-nesting)
+#
+# Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
+# qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
+# ~/.config/opencharly, /etc, /usr, or any operator-side directory.
+# =============================================================================
+# check-k3s-vm — disposable libvirt VM running k3s-server. Kubeconfig is
+# pulled back for host-side k8s: probes (all 13 methods) via the forwarded
+# :6443. A VM (native kernel + cgroup tree) sidesteps the rootless-podman
+# cpuset-delegation blocker that makes a pod-hosted k3s impossible.
+# References the vm: entity `k3s-vm` (defined below).
+check-k3s-vm:
+    vm:
+        from: k3s-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (host 16443->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against cluster vm-k3s-vm, an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
+    check-k3s-vm-add_candy:
+        add_candy:
+            - k3s-server
+    check-k3s-vm-env:
+        env:
+            - K3S_SERVER_HOSTNAME=127.0.0.1
+            # Host port 16443 forwards into the guest's :6443; the retrieved
+            # kubeconfig's server: line is rewritten to this URL.
+            - K3S_KUBECONFIG_SERVER=https://127.0.0.1:16443
+    check-k3s-vm-install_opts:
+        install_opts:
+            with_service: true
+            allow_repo_changes: true # pacman sync / repo key import
+            skip_incompatible: true # skip rpm:/deb:-only layer sections
+            verify: true
+    kv-guest-identity:
+        check: command=id
+        id: kv-guest-identity
+        stdout: {contains: "uid=1000(arch)"}
+        context: [runtime]
+        plugin: command
+        plugin_input:
+            command: id
+    kv-guest-os-release:
+        check: command=cat /etc/os-release
+        id: kv-guest-os-release
+        stdout: {contains: "ID=arch"}
+        context: [runtime]
+        plugin: command
+        plugin_input:
+            command: "cat /etc/os-release"
+    kv-k3s-process:
+        check: process=k3s-server
+        id: kv-k3s-process
+        context: [runtime]
+        plugin: process
+        plugin_input:
+            process: "k3s-server"
+            running: true
+    kv-port-6443-listening:
+        check: port=6443
+        id: kv-port-6443-listening
+        context: [runtime]
+        plugin: port
+        plugin_input:
+            port: 6443
+            listening: true
+    kv-kubeconfig-file:
+        check: file=/etc/rancher/k3s/k3s.yaml
+        id: kv-kubeconfig-file
+        context: [runtime]
+        plugin: file
+        plugin_input:
+            file: /etc/rancher/k3s/k3s.yaml
+            exists: true
+    kv-k8s-nodes:
+        check: k8s=nodes
+        id: kv-k8s-nodes
+        kube: nodes
+        cluster: "vm-k3s-vm"
+        context: [runtime]
+    kv-k8s-wait-nodes:
+        check: k8s=wait-nodes
+        id: kv-k8s-wait-nodes
+        kube: "wait-nodes"
+        cluster: "vm-k3s-vm"
+        kube_count: 1
+        timeout: "300s"
+        context: [runtime]
+    kv-k8s-pods:
+        check: k8s=pods
+        id: kv-k8s-pods
+        kube: pods
+        cluster: "vm-k3s-vm"
+        namespace: kube-system
+        context: [runtime]
+    kv-k8s-wait-ready:
+        check: k8s=wait-ready
+        id: kv-k8s-wait-ready
+        kube: "wait-ready"
+        cluster: "vm-k3s-vm"
+        kube_kind: Deployment
+        namespace: kube-system
+        name: coredns
+        timeout: "180s"
+        context: [runtime]
+    kv-k8s-addons:
+        check: k8s=addons
+        id: kv-k8s-addons
+        kube: addons
+        cluster: "vm-k3s-vm"
+        context: [runtime]
+    kv-k8s-ingressclass-traefik:
+        check: k8s=ingressclass
+        id: kv-k8s-ingressclass-traefik
+        kube: ingressclass
+        cluster: "vm-k3s-vm"
+        stdout: {contains: "traefik"}
+        context: [runtime]
+    kv-k8s-storageclass-localpath:
+        check: k8s=storageclass
+        id: kv-k8s-storageclass-localpath
+        kube: storageclass
+        cluster: "vm-k3s-vm"
+        stdout: {contains: "local-path"}
+        context: [runtime]
+    kv-k8s-raw:
+        check: k8s=raw — the raw escape hatch lists an arbitrary resource (namespaces)
+        id: kv-k8s-raw
+        kube: raw
+        cluster: "vm-k3s-vm"
+        kube_resource: namespaces
+        context: [runtime]
+        stdout:
+            - contains: kube-system
+    kv-k8s-service-kubernetes:
+        check: k8s=service
+        id: kv-k8s-service-kubernetes
+        kube: service
+        cluster: "vm-k3s-vm"
+        namespace: default
+        name: kubernetes
+        context: [runtime]
+    kv-charly-version:
+        check: command=/tmp/charly-build/charly version || charly version
+        id: kv-charly-version
+        stdout: {matches: "[0-9]{4}\\.[0-9]+"}
+        context: [runtime]
+        plugin: command
+        plugin_input:
+            command: "/tmp/charly-build/charly version || charly version"
+            in_container: false
+    kv-matching:
+        agent-check: agent-check
+        id: kv-matching
+        context: [runtime]
+    status-shows-vm:
+        check: command=charly status --json
+        id: status-shows-vm
+        stdout:
+            - contains: '"kind": "vm"'
+            - contains: k3s-vm
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly status --json
+            in_container: false
+# check-k8s-deploy-app — the check-k8s-deploy bed's target:k8s WORKLOAD fixture.
+# A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
+# os-layer; no builder, no @github candy refs), so it builds from the root project —
+# where the distro namespace boxes (fedora.web, …) do NOT, because their candies are
+# @github refs the root resolver does not materialize. It is a disposable-bed FIXTURE
+# (the minimal charly image the deploy:k8s substrate deploys), analogous to the
+# kind:local check-*-app templates — not a production box, so it does not breach the
+# "main owns no boxes" inversion (which concerns the shipped image catalog).
+check-k8s-deploy-app:
+    candy:
+        version: 2026.180.1000
+        base: quay.io/fedora/fedora:43
+        description: |-
+            Minimal Fedora base box — the check-k8s-deploy bed's target:k8s workload.
+            A small charly image whose ai.opencharly labels the deploy:k8s preresolver
+            reads to generate the Kustomize tree. Composes supervisord + os-layer
+            (local pure-rpm candies, no builder/@github) so it builds from the root
+            project. The deployed pod is not asserted Ready (the locally-built image is
+            absent from the disposable cluster's containerd); the bed asserts only that
+            the Deployment OBJECT landed — exactly the externalized `kubectl apply -k`.
+    check-k8s-deploy-app-distro:
+        distro:
+            - fedora:43
+            - fedora
+    check-k8s-deploy-app-candy:
+        candy:
+            - supervisord
+            - os-layer
+# =============================================================================
+# check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:k8s SUBSTRATE
+# (F1, candy/plugin-kube serving deploy:k8s beside verb:kube). A GROUP bed (the
+# proven sibling-member shape — cf. box/fedora check-cross-pod-cdp) with two members
+# brought up name-sorted: check-k8s-deploy-cluster (a libvirt k3s VM reusing the
+# SAME k3s-vm entity + k3s-server candy check-k3s-vm proves) comes up FIRST and
+# merges its kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a
+# `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the HOST
+# preresolver (k8s_deploy_preresolve.go) reads the box Capabilities + the vm-k3s-vm
+# cluster template and GENERATES an egress-validated Kustomize tree, then the
+# out-of-process plugin applies it with `kubectl --context vm-k3s-vm apply -k`. The
+# kube: checks under the cluster member (host-side probes; run after BOTH members are
+# up) assert the workload Deployment OBJECT landed — the externalized apply ran
+# end-to-end. (The workload POD is not asserted Ready: the locally-built box image is
+# not in the VM's containerd, and image-into-cluster delivery is a separate concern
+# the deploy substrate does not own; the Deployment-object proof IS the substrate.)
+# =============================================================================
+check-k8s-deploy:
+    group:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, host 16443->guest 6443) brings up a control plane and merges kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-k3s-vm apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+    # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
+    # create + bundle add (k3s-server over SSH); K3sPostProvision merges the
+    # kubeconfig to context vm-k3s-vm. The kube: assertion checks live HERE (this
+    # member has a real SSH venue; the kube: verb dispatches host-side regardless,
+    # and group check-live runs them only after BOTH members are up).
+    check-k8s-deploy-cluster:
+        vm:
+            from: k3s-vm
+        check-k8s-deploy-cluster-add_candy:
+            add_candy:
+                - k3s-server
+        check-k8s-deploy-cluster-env:
+            env:
+                - K3S_SERVER_HOSTNAME=127.0.0.1
+                # Host port 16443 forwards into the guest's :6443; the retrieved
+                # kubeconfig's server: line is rewritten to this URL (cf. check-k3s-vm).
+                - K3S_KUBECONFIG_SERVER=https://127.0.0.1:16443
+        check-k8s-deploy-cluster-install_opts:
+            install_opts:
+                with_service: true
+                allow_repo_changes: true
+                skip_incompatible: true
+                verify: true
+        kd-wait-nodes:
+            check: the k3s control plane reports a Ready node before the workload assertion
+            id: kd-wait-nodes
+            kube: wait-nodes
+            cluster: "vm-k3s-vm"
+            kube_count: 1
+            timeout: "300s"
+            stdout: {contains: "Ready"}
+            context: [runtime]
+        kd-deployment-landed:
+            check: the externalized deploy:k8s substrate applied the workload Deployment object to the cluster
+            id: kd-deployment-landed
+            kube: raw
+            cluster: "vm-k3s-vm"
+            kube_resource: deployments
+            kube_group: apps
+            kube_version: v1
+            namespace: default
+            name: check-k8s-deploy-workload
+            stdout: {contains: "check-k8s-deploy-workload"}
+            context: [runtime]
+        kd-pod-scheduled:
+            check: the applied Deployment's controller scheduled the workload pod onto the cluster
+            id: kd-pod-scheduled
+            kube: pods
+            cluster: "vm-k3s-vm"
+            namespace: default
+            stdout: {contains: "check-k8s-deploy-workload"}
+            context: [runtime]
+    # MEMBER 2 (name-sorts second) — the target:k8s workload. check-k8s-deploy-app is built
+    # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
+    # preresolver's ExtractMetadata reads its OCI labels. `from: vm-k3s-vm` selects
+    # the kind:k8s cluster template (kubeconfig_context: vm-k3s-vm). Deploy-only (no
+    # own checks — it is an instrument; the cluster member's kube: checks assert it).
+    check-k8s-deploy-workload:
+        k8s:
+            image: check-k8s-deploy-app
+            from: vm-k3s-vm
+check-local:
+    local:
+        from: check-local-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the kind:local layer-application path via ShellExecutor + HostDeployTarget, and the fastest bed. Applies check-local-layer to the operator host (host: local), dropping /etc/check-local-marker, then runs host-side command/file probes plus charly status --json asserting kind:local + source:ledger (status-shows-local). ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution: add_candy composes examplestep-deploy-consumer (a DEPLOY-context `run: plugin: examplestep` step) + plugin-example-step (the out-of-tree examplestep verb), so at local deploy charly lowers the run-step to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the host venue and returns a plugin-script reverse op the host records; the fresh-rebuild (charly update) re-applies idempotently and teardown (charly bundle del) replays the recorded reverse op so the markers are gone (zero operator side-effect). The deploy-context counterpart of check-pod's build-context examplestep-build-baked.
+    check-local-add_candy:
+        add_candy:
+            # The out-of-tree examplestep verb (host-built + connected out-of-process via
+            # loadDeployPlugins) and its DEPLOY-context consumer step — drives the STEP
+            # DEPLOY-EXECUTE leg over the E3b reverse channel (ExternalPluginStep).
+            - plugin-example-step
+            - examplestep-deploy-consumer
+    status-shows-local:
+        check: command=charly status --json
+        id: status-shows-local
+        stdout:
+            # local deploy-ids are content hashes (not the bed name), so assert
+            # the substrate renders via the kind discriminator + ledger source.
+            - contains: '"kind": "local"'
+            - contains: '"source": "ledger"'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly status --json
+            in_container: false
+    examplestep-deploy-marker:
+        check: the external examplestep verb-as-step EXECUTED at local deploy — its OpExecute wrote the probe marker on the host venue over the E3b reverse channel (proves ExternalPluginStep → InvokeWithExecutor(OpExecute))
+        id: examplestep-deploy-marker
+        stdout:
+            - contains: EXAMPLESTEP-DEPLOY-PROBE-PRESENT
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe && echo EXAMPLESTEP-DEPLOY-PROBE-PRESENT"
+            in_container: false
+# =============================================================================
+# check-builder-local — dedicated builder-DEPLOY-leg bed (added with the C1.3
+# Builder build-emit externalization). Closes the flagged gap: before this bed no
+# disposable deploy applied a built-in pixi/npm/cargo/aur detection-builder candy
+# to a local:/vm: venue, so runVenueBuilderStep (the host-engine builder deploy
+# leg → runVenueHomeArtifactBuilder) was only TRANSITIVELY exercised. A kind:local
+# host deploy (host: local) composing check-builder-npm (a package.json declaring
+# the tiny zero-dep is-number): at deploy charly compiles the npm global prefix in
+# the fedora.fedora-builder image on the host and ships ~/.npm-global onto the
+# venue, then asserts is-number is present under ~/.npm-global on the host. The
+# builder image is pinned via install_opts.builder_image (a kind:local template
+# carries no base-distro builder wiring, so runVenueBuilderStep takes it from the
+# --builder-image override, exactly like check-arch-vm / check-fedora-vm). NOTE the
+# C1.3 change itself is the pod-overlay BUILD-emit (OCITarget.emitStep(BuilderStep)
+# → the step:builder plugin → stepEmitBuilder), proven by the real-chain unit tests
+# (TestOCITargetEmitBuilder{Inline,MultiStage}ViaPlugin) + the live check-addcandy-pod
+# pod-overlay dispatch gate; this bed is the complementary builder-DEPLOY-leg gate
+# the cutover adds.
+# =============================================================================
+check-builder-local:
+    local:
+        from: check-builder-local-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder)
+            applying a built-in npm detection-builder candy to a host: local venue — the dedicated
+            builder-deploy bed added with the C1.3 Builder build-emit externalization (previously
+            runVenueBuilderStep was only transitively exercised, no bed deployed a pixi/npm/cargo/aur
+            builder candy to a local:/vm: venue). Composes check-builder-npm (a package.json declaring
+            the tiny zero-dep is-number), so at local deploy charly compiles the npm global prefix in
+            the fedora.fedora-builder image on the host and ships ~/.npm-global onto the venue; the bed
+            asserts ~/.npm-global/lib/node_modules/is-number is present on the host filesystem. The
+            builder image is pinned via install_opts.builder_image (a kind:local template has no
+            base-distro builder wiring). The C1.3 change's pod-overlay BUILD-emit is proven separately
+            by the real-chain unit tests + the live check-addcandy-pod pod-overlay dispatch.
+    check-builder-local-install_opts:
+        install_opts:
+            builder_image: fedora.fedora-builder
+            allow_root_tasks: true
+    builder-artifact-present:
+        check: the npm builder deployed the is-number artifact into ~/.npm-global on the host venue (proves the builder DEPLOY leg runVenueBuilderStep → runVenueHomeArtifactBuilder applied a detection-builder candy end-to-end)
+        id: builder-artifact-present
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
+            in_container: false
+# =============================================================================
+# check-structkind — R10 witness for F5 authored-member INPUT-threading (the
+# foundation the group/pod/vm/k8s/local/android/candy structural-kind
+# externalizations land on). The TOP node is an EXTERNAL STRUCTURAL plugin kind
+# (examplestructkind, candy/plugin-example-structkind, out-of-process — NOT
+# compiled in): its authored resource-MEMBER child is pre-decoded HOST-SIDE (the
+# core buildBundleNode recursion) and threaded to the plugin's OpLoad via op.Env;
+# the plugin ATTACHES it to its spec.Deploy reply, so the host folds a COMPLETE
+# Bundle (with the AUTHORED member) into uf.Bundle — byte-equivalent to a builtin
+# group (proven hermetically by TestExternalStructKind_StructuralDecode, which
+# also covers peer + nested + cross-member ${HOST:} reconstruction). This bed is
+# the RUNTIME leg: the reconstructed member (a kind:local host deploy applying
+# check-structkind-layer) is brought up and its hoisted marker check runs on the
+# host — proving the reconstructed authored member DEPLOYS end-to-end. The
+# deploy-config scalars (disposable/lifecycle/description) ride op.Params; the
+# member rides op.Env (input-threaded).
+# =============================================================================
+check-structkind-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-structkind member — composes
+            check-structkind-layer (drops /etc/check-structkind-marker on the host) so the
+            structural-kind member has a deterministic, collision-free host-side deploy effect.
+    check-structkind-app-candy:
+        candy:
+            - check-structkind-layer
+check-structkind:
+    examplestructkind:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole RUNTIME witness of F5 authored-member INPUT-threading: the top node is the
+            external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/
+            plugin-example-structkind), whose authored resource-member child is pre-decoded
+            host-side via the core buildBundleNode recursion and threaded to the plugin's OpLoad
+            via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a
+            COMPLETE Bundle (with the authored member) into uf.Bundle, byte-equivalent to a
+            builtin group. The reconstructed member (check-structkind-member, a kind:local host
+            deploy of check-structkind-app) is brought up and its hoisted marker check asserts
+            /etc/check-structkind-marker on the host filesystem — proving the reconstructed
+            authored member deploys end-to-end. Hermetic peer/nested/cross-member reconstruction
+            is proven by TestExternalStructKind_StructuralDecode.
+    check-structkind-member:
+        local:
+            from: check-structkind-app
+            host: local
+# =============================================================================
+# check-group — R10 witness for the EXTERNALIZED `group` structural kind (C2-group).
+# `group:` is no longer a compiled-in core KindProvider; it is served by the
+# compiled-in structural plugin candy/plugin-group (kind:group, Structural:true).
+# A REAL `group:` node here therefore exercises the full path: the loader recognizes
+# `group` via the compiled-in provider, runPluginKind PRE-DECODES the authored member
+# (buildResourceMemberChildren — the core recursion) + threads it to plugin-group's
+# OpLoad via op.Env (F5 authored-member input-threading), and plugin-group attaches it
+# to a targetless spec.Deploy the host folds into uf.Bundle — byte-equivalent to the
+# former builtin groupKind. The reconstructed member (check-group-member, a kind:local
+# host deploy of check-group-app) is brought up and its hoisted marker check asserts
+# /etc/check-group-marker on the host — proving a real group decode deploys end-to-end.
+# =============================================================================
+check-group-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-group member — composes check-group-layer
+            (drops /etc/check-group-marker on the host) so the group member has a deterministic,
+            collision-free host-side deploy effect.
+    check-group-app-candy:
+        candy:
+            - check-group-layer
+check-group:
+    group:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness of the externalized `group` structural kind (candy/plugin-group,
+            C2-group): a REAL targetless `group:` deploy group decoded out of core through the
+            compiled-in plugin-group over the F5 authored-member input-threading foundation. The
+            authored member (check-group-member) is pre-decoded host-side and threaded to
+            plugin-group via op.Env; the plugin attaches it to a targetless spec.Deploy the host
+            folds into uf.Bundle. bringUpMembers deploys the member (a kind:local host deploy of
+            check-group-app applying check-group-layer), and the hoisted marker check asserts
+            /etc/check-group-marker on the host filesystem — proving a real group: decode
+            reconstructs + deploys its authored member end-to-end, identical to the former builtin.
+    check-group-member:
+        local:
+            from: check-group-app
+            host: local
+
+# =============================================================================
+# check-substrate — R10 witness for the EXTERNALIZED substrate structural kinds
+# (C2-substrate). pod/vm/k8s/local/android are no longer compiled-in core
+# KindProviders; the compiled-in structural plugin candy/plugin-substrate serves all
+# 5 (kind:pod/vm/k8s/local/android, Structural:true). This bed exercises the full
+# path in ITS lightest RUNNABLE form using the `local:` substrate (host-side, no VM/
+# image boot):
+#   - check-substrate-app is a BARE `local:` TEMPLATE (no from:/image:, no members) →
+#     runPluginKind → foldSubstrateKind pre-decodes it via the core loader, validates
+#     its value against the KEPT #LocalValue def, threads it to plugin-substrate's
+#     OpLoad, and folds the ECHO into the typed template map uf.Local — the C2-substrate
+#     TEMPLATE fold arm (the standalone counterpart of the deploy fold into uf.Bundle);
+#   - check-substrate is a `local:` DEPLOY (from: check-substrate-app) → foldSubstrateKind
+#     pre-decodes the full BundleNode, threads it, and folds the echo into uf.Bundle.
+# bringUpMembers deploys the member; the hoisted marker check asserts
+# /etc/check-substrate-marker on the host — proving BOTH substrate shapes decode +
+# deploy end-to-end through the plugin, byte-equivalent to the former in-proc
+# standaloneKind. The rich `vm:` TEMPLATE fold (the PRIMARY VM authoring form) into
+# uf.VM is proven byte-equivalent by TestSubstrateKind_BothShapesByteEquivalent and
+# LIVE by box/debian's check-debian-debootstrap-vm (a `vm:` template + `vm:` deploy,
+# both now routed through plugin-substrate).
+# =============================================================================
+check-substrate-app:
+    local:
+        description: |-
+            Minimal kind:local TEMPLATE for the check-substrate member — a BARE `local:` node (no
+            from:/image:, no members) so it folds into uf.Local via candy/plugin-substrate's TEMPLATE
+            fold arm (C2-substrate). Composes check-substrate-layer (drops /etc/check-substrate-marker
+            on the host) so the member has a deterministic, collision-free host-side deploy effect.
+    check-substrate-app-candy:
+        candy:
+            - check-substrate-layer
+check-substrate:
+    local:
+        from: check-substrate-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate,
+            C2-substrate): a REAL `local:` DEPLOY (deploy shape → uf.Bundle) inheriting a REAL BARE
+            `local:` TEMPLATE (check-substrate-app, template shape → uf.Local), BOTH decoded out of
+            core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes
+            each node via the core loader (buildBundleNode for the deploy, decodeNodeValue for the
+            template — the single decode source of truth), validates its value against the KEPT
+            #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the
+            ECHO into uf.Bundle / uf.Local. The deploy applies check-substrate-layer to the host, and
+            the marker check asserts /etc/check-substrate-marker — proving both substrate shapes
+            reconstruct + deploy end-to-end, byte-equivalent to the former in-proc standaloneKind.
+    substrate-marker-present:
+        check: command=test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK
+        id: substrate-marker-present
+        description: the substrate local DEPLOY (folded into uf.Bundle via plugin-substrate) applied its inherited template's marker layer on the host
+        stdout:
+            - contains: SUBSTRATE-DEPLOY-OK
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK"
+            in_container: false
+
+# candy/plugin-example-deploy (recognized at parse time via the plugin-declaration
+# pre-scan, connected at deploy time via loadDeployPlugins). Add Invokes the plugin
+# out-of-process; it dials back through the SDK Executor to write markers on the host
+# venue under a disposable /tmp scratch dir, and returns a plugin-script reverse op
+# the host records + replays at teardown. Zero operator side-effect (markers under
+# /tmp, removed by `charly bundle del`).
+check-exampledeploy:
+    exampledeploy:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel AND the F3 build channel. Composes plugin-example-deploy as an external deploy: substrate (plus examplebuild-localpkg for the F3 leg); Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg, and (d) drive the RunHostStep host-engine reverse leg on examplebuild-localpkg's LocalPkgInstallStep — the host runs the EXISTING build engine (makepkg + pacman -U) and installs charly-f3-witness so /opt/charly-f3-witness/marker lands on the venue. Host-side command probes assert the probe marker, the executed-step effects, the pushed file, and the F3-built package marker; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly bundle del) replays the recorded plugin-script reverse ops so every scratch dir is gone and the charly-f3-witness package is pacman -R'd (zero residue).
+    check-exampledeploy-add_candy:
+        add_candy:
+            - plugin-example-deploy
+            - examplebuild-localpkg
+    exampledeploy-applied:
+        check: command=test -f /tmp/charly-exampledeploy/check-exampledeploy/probe && echo EXAMPLEDEPLOY-PROBE-PRESENT
+        id: exampledeploy-applied
+        description: the external deploy plugin applied its probe marker on the host venue via the E3b reverse channel
+        stdout:
+            - contains: EXAMPLEDEPLOY-PROBE-PRESENT
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /tmp/charly-exampledeploy/check-exampledeploy/probe && echo EXAMPLEDEPLOY-PROBE-PRESENT"
+            in_container: false
+    exampledeploy-step-write:
+        check: the external deploy plugin EXECUTED the file-write step from the round-tripped per-step IR — the authored dest holds the step's content
+        id: exampledeploy-step-write
+        description: F2 — the serializable InstallPlan.Steps round-tripped to the plugin, which executed the Op write step on the venue
+        stdout:
+            - contains: EXAMPLEDEPLOY-STEP-WRITE-OK
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "cat /tmp/charly-exampledeploy-steps/written"
+            in_container: false
+    exampledeploy-step-env:
+        check: the external deploy plugin EXECUTED the shell-hook (env:) step — the rendered env.d file holds the contributed env var
+        id: exampledeploy-step-env
+        description: F2 — the ShellHook step round-tripped and the plugin materialized its env var on the venue
+        stdout:
+            - contains: EXAMPLEDEPLOY_STEP_ENV=present
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "cat /tmp/charly-exampledeploy-steps/env.d/plugin-example-deploy.env"
+            in_container: false
+    exampledeploy-putfile:
+        check: the external deploy plugin PUSHED a file via the new reverse-channel PutFile leg — the pushed file landed on the venue with its content
+        id: exampledeploy-putfile
+        description: F2 — the ExecutorService PutFile RPC placed plugin-originated content on the venue
+        stdout:
+            - contains: EXAMPLEDEPLOY-PUTFILE-OK
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "cat /tmp/charly-exampledeploy-steps/pushed"
+            in_container: false
+    exampledeploy-f3-buildstep:
+        check: F3 — the external deploy plugin drove the RunHostStep reverse leg on examplebuild-localpkg's LocalPkgInstallStep; the host built charly-f3-witness with makepkg and installed it with pacman -U, so its marker file is present on the venue
+        id: exampledeploy-f3-buildstep
+        description: F3 build channel — the host ran the EXISTING build engine (makepkg + pacman -U) over the reverse channel and installed the built package's artifact onto the venue
+        stdout:
+            - contains: EXAMPLEBUILD-LOCALPKG-OK
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "cat /opt/charly-f3-witness/marker"
+            in_container: false
+# pac localpkg AUTO-RESOLVE witness against the LOCAL charly candy (no @github):
+# deploys candy/charly to a disposable Arch Cloud VM, where the layer's localpkg
+# builds the opencharly-git package from pkg/arch (makepkg on the host) and
+# `pacman -U`'s it onto the guest — pacman -U AUTO-RESOLVES the mandatory repo
+# deps. This is main's own live proof of the localpkg DEPLOY path (the rpm/deb
+# legs are proven by the fedora/debian/ubuntu submodule VM beds).
+check-charly-vm:
+    vm:
+        from: charly-vm
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the pac localpkg DEPLOY auto-resolve path on Arch — opencharly-git built via makepkg and installed with pacman -U auto-resolving the mandatory repo deps. A disposable libvirt Arch cloud VM (ssh.port_auto) overlays the LOCAL candy/charly whose localpkg builds opencharly-git on the host and pacman -U's it into the guest; one command probe asserts opencharly-git/podman/libvirt/tailscale/gocryptfs present, charly resolves to /usr/bin/charly, and charly version runs (LOCALPKG-PAC-AUTORESOLVE-OK).
+    check-charly-vm-add_candy:
+        add_candy:
+            - charly
+    check-charly-vm-install_opts:
+        install_opts:
+            allow_repo_changes: true
+            allow_root_tasks: true
+    localpkg-pac-autoresolve:
+        check: |
+            command=pacman -Q opencharly-git >/dev/null 2>&1 &&
+            pacman -Q podman >/dev/null 2>&1 &&
+            pacman -Q libvirt >/dev/null 2>&1 &&
+            pacman -Q tailscale >/dev/null 2>&1 &&
+            pacman -Q gocryptfs >/dev/null 2>&1 &&
+            test "$(command -v charly)" -ef /usr/bin/charly &&
+            charly version &&
+            echo LOCALPKG-PAC-AUTORESOLVE-OK
+        id: localpkg-pac-autoresolve
+        description: charly installed as the opencharly-git pacman package via localpkg, mandatory repo deps auto-resolved by pacman -U
+        stdout:
+            - contains: LOCALPKG-PAC-AUTORESOLVE-OK
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                pacman -Q opencharly-git >/dev/null 2>&1 &&
+                pacman -Q podman >/dev/null 2>&1 &&
+                pacman -Q libvirt >/dev/null 2>&1 &&
+                pacman -Q tailscale >/dev/null 2>&1 &&
+                pacman -Q gocryptfs >/dev/null 2>&1 &&
+                test "$(command -v charly)" -ef /usr/bin/charly &&
+                charly version &&
+                echo LOCALPKG-PAC-AUTORESOLVE-OK
+    welded-command-project-less:
+        check: the welded command plugins are baked beside charly at /usr/lib/charly/plugins so a core welded command dispatches project-less on the opencharly-git install
+        id: welded-command-project-less
+        description: the opencharly-git package bakes the command:<word> plugins (doctor/vm/clean/…) beside the binary at /usr/lib/charly/plugins, so `charly doctor` dispatches project-less on the installed package (FAILS on a package that shipped only the binary)
+        stdout:
+            - contains: WELDED-CMD-PROJECT-LESS-OK
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                test -x /usr/lib/charly/plugins/plugin-doctor &&
+                test -f /usr/lib/charly/plugins/plugin-doctor.providers &&
+                test -x /usr/lib/charly/plugins/plugin-vm &&
+                test -x /usr/lib/charly/plugins/plugin-clean &&
+                cd /tmp &&
+                charly doctor 2>/dev/null | grep -q 'Container Engine' &&
+                echo WELDED-CMD-PROJECT-LESS-OK
+charly-cli:
+    group:
+        description: AI check — an agent operates the charly management command surface (build → deploy → status) end-to-end.
+    charly-cli-iterate:
+        iterate:
+            sandbox: check-sandbox
+            agent: [claude]
+            plateau_iteration: 3
+            prompt: |
+                == Where you are ==
+                Your cwd is /workspace — a fresh per-run clone of the OpenCharly
+                project, bind-mounted into this freshly-rebuilt ${TARGET_NAME}. You
+                have FULL sudo + nested podman + the `charly` CLI. Host services are
+                invisible; you cannot conflict with them.
+
+                == Bed purpose ==
+                This bed proves an agent can OPERATE the charly management command
+                surface end-to-end. Use `charly box build os` to build the `os` image,
+                then `charly bundle add os os` (or `charly start os`) to bring it up as a
+                running pod, and `charly status` to confirm it. The bed's `check:` steps
+                assert the `os` pod is running with its predetermined marker file —
+                satisfy them by driving the real charly commands, not by hand-crafting
+                state. The full `charly` CLI + the MCP surface (`charly mcp serve` on
+                ${TARGET_NAME}) are available; how you satisfy the spec is your call.
+            note: false
+            env: {}
+            mcp_endpoint: "http://localhost:18765/mcp"
+    os:
+        pod:
+            agent_provisioned: true
+        charly-cli-step-0:
+            check: the os pod the agent built with `charly box build` + started with charly is running
+            plugin: process
+            plugin_input:
+                process: supervisord
+                running: true
+        charly-cli-step-1:
+            check: the built os image's predetermined marker file is present
+            plugin: file
+            plugin_input:
+                file: /etc/charly-os-marker
+                contains: ["charly-os-content-marker"]
+default:
+    group:
+        description: Default benchmark — progressive verb-coverage curriculum across the full `charly check` surface (system state → network → cross-pod → MCP → Kubernetes → desktop → VM → nested).
+    default-iterate:
+        iterate:
+            sandbox: check-sandbox
+            agent: [claude]
+            plateau_iteration: 3
+            prompt: |
+                == Where you are ==
+                Your cwd is /workspace — the project tree, bind-mounted from the host
+                into this freshly-rebuilt ${TARGET_NAME}. You have FULL sudo + nested
+                podman + every package the plan needs. Host services are completely
+                invisible; you cannot conflict with them.
+
+                Your `/workspace` is a fresh per-run clone of the OpenCharly
+                source repository — the full git tree (with submodules
+                initialized), the `charly` CLI binary, and every layer, image,
+                pod, VM, and Kubernetes cluster definition the project
+                already ships (`candy/`, `box/<name>/charly.yml`, plus the
+                pod/vm/k8s/check kinds inline in `charly.yml`). Your session has the project's plugin skills
+                loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
+                `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
+                are available to be used if you decide to do so — they may
+                be useful for most of the steps. The plan specifies
+                what each pod must do; how you satisfy each specification
+                is entirely your call.
+
+                == Phase progression — curriculum-style ==
+                ${PHASE_INTRO}
+                You are in PHASE ${PHASE} of ${PHASE_TOTAL}. The benchmark adds one
+                include: block per phase: phase 1 starts with the easiest, each later phase
+                brings the previous plan segments BACK plus one new one. State persists
+                across phases — pods you deployed in phase 1 stay running for phase
+                2's scoring. Several later plan segments EXPLICITLY consume earlier
+                phases' fixtures (phase 6 and phase 7 both reach back to phase 2's
+                HTTP fixture across the pod network) — keeping every phase's pods
+                healthy is part of the contract.
+
+                == Iteration semantics within this phase — NO RUSHING ==
+                Iteration ${ITERATION} of an UNBOUNDED loop within phase ${PHASE}.
+                Score progression: ${BEST_SCORE} (last delta: ${SCORE_DELTA})
+
+                The phase ends when:
+                  - every in-scope check: step passes (solved-all → next phase begins), OR
+                  - you fail to improve your score for ${PLATEAU_ITERATION} iterations
+                    in a row (genuine plateau → next phase begins anyway).
+
+                There is NO maximum iteration count per phase. Take all the time you
+                need. A complete solution in iteration 7 outscores a partial solution
+                in iteration 1. Correctness > speed. NO shortcuts. NO "ship something
+                and hope" — every check the harness probes you can re-probe
+                yourself the same way before exiting.
+
+                == Plan you must solve — IN-SCOPE FOR THIS PHASE ==
+                ${PLAN}
+
+                The plan is a TREE of agent-provisioned nodes: each node's NAME
+                is the container you must deploy, and the steps nested under it
+                run in that container — the step's venue comes from its TREE
+                POSITION, not a `pod:` field. Read the tree; collect the node
+                names; deploy a container named `charly-<node>` for each. A nested
+                node (`a.b.c`) is a container deployed inside its parent (reached
+                by a dotted venue). Some `include:` steps splice fixture plans
+                whose nodes (e.g. `charly-web`) are reached from other nodes'
+                steps across the pod network — those fixtures must remain running
+                across phases.
+
+                Some steps carry `depends_on: [...]` — they only run after the
+                named upstream steps pass. If you see a step marked
+                `verdict: skipped` with `skipped_reason: "dep-unmet: <name>"`, the
+                upstream <name> failed; fix that one first.
+
+                Notes: ${NOTES}
+
+                == Ground rules ==
+                  - The bed's plan steps are immutable — they live in the check: block of the project charly.yml.
+                  - The ${TARGET_NAME} sandbox was rebuilt FRESH for this run; it persists
+                    across iters but is destroyed + recreated NEXT run.
+                  - Every pod a step references MUST be running at exit (that's
+                    what gets scored). Fixtures from earlier phases must STAY
+                    running for later phases' consumer probes.
+                  - There is NO premium on speed. There IS a premium on every
+                    check: step you can make pass.
+
+                == How harness scoring relates to your iteration ==
+                The harness scorer is AUTHORITATIVE. At iter end it physically
+                re-runs every probe against the live system EXCEPT for the
+                state-dependent capture probes listed below — for those, the
+                harness validates the artifact YOUR iteration produced (the file
+                at the step's `artifact:` path), with a strict mtime freshness
+                check that rejects pre-staged or stale files.
+
+                Re-run by harness independently (you cannot influence the verdict):
+                  - Status / evaluation / listing verbs (cdp:status, cdp:eval,
+                    wl:status, libvirt:info, libvirt:domain-xml, libvirt:guest/
+                    ping, libvirt:guest/exec, k8s:nodes/wait-ready/addons/raw,
+                    mcp:ping/list-tools/call/read, dbus:list/call/notify).
+                  - File / process / package / port / service / command /
+                    matching / http / dns / addr / interface / mount / kernel-
+                    param / user / group probes.
+                  - All deploy-tree resolution probes.
+
+                Validates YOUR iteration's artifact (state-dependent capture only):
+                  - cdp:screenshot, wl:screenshot, vnc:screenshot,
+                    libvirt:screenshot, spice:screenshot, spice:cursor, record:stop.
+                  - For these the harness validates artifact_min_bytes /
+                    artifact_min_dimensions / artifact_not_uniform /
+                    artifact_min_cast_events against the file at the step-
+                    declared `artifact:` path, with mtime ≥ iter start.
+
+                == MANDATORY before exiting this iteration ==
+                Run `charly check self-evaluate` and read its output BEFORE you
+                exit. It runs every in-scope probe against live systems via the
+                SAME code path the harness scorer will invoke at iter end. The
+                verdict it prints (pass / fail / skipped per step) is what
+                the harness will record.
+
+                Why this is mandatory: for state-dependent capture probes,
+                self-evaluate's invocation IS what writes the canonical artifact
+                the harness then validates. Skipping self-evaluate means missing
+                or stale artifacts → those steps fail. For other probes,
+                self-evaluate gives you a chance to see the harness's verdict
+                and fix your deployment BEFORE the iter ends.
+
+                Do not consider the iteration complete until self-evaluate
+                prints the verdict you intended.
+
+                == When a source-code fix can't apply mid-run ==
+                The harness loop runs as a long-lived Go process (PID inside
+                ${TARGET_NAME}). Source fixes you make to /workspace/charly/*.go and
+                rebuilds appear on disk via the bind-mount, BUT the running
+                harness PID has the OLD binary mmap'd and CANNOT hot-reload Go
+                code. Your fix takes effect on the NEXT harness run — not the
+                current one. Recommended response: record the fix in your
+                iteration notes and exit this iteration cleanly; the next run
+                will fork a fresh PID and pick up the new binary. Do NOT loop
+                iterations 3+ trying to make the running PID see your on-disk
+                fix; the score won't change this run.
+            note: true
+            env: {}
+            mcp_endpoint: "http://localhost:18765/mcp"
+    os:
+        pod:
+            agent_provisioned: true
+        default-step-0:
+            check: the predetermined marker file exists at /etc/charly-os-marker
+            plugin: file
+            plugin_input:
+                file: /etc/charly-os-marker
+                exists: true
+        default-step-1:
+            check: the marker file contains the predetermined content marker
+            plugin: file
+            plugin_input:
+                file: /etc/charly-os-marker
+                contains: ["charly-os-content-marker"]
+        default-step-2:
+            check: the predetermined system package is installed
+            plugin: package
+            plugin_input:
+                package: bash
+                installed: true
+        default-step-3:
+            check: a predetermined process is running by name
+            plugin: process
+            plugin_input:
+                process: bash
+                running: true
+        default-step-4:
+            check: the predetermined user account is present in the user database
+            plugin: user
+            plugin_input:
+                user: root
+                uid: 0
+        default-step-5:
+            check: the predetermined group is present in the group database
+            plugin: unix_group
+            plugin_input:
+                unix_group: root
+                gid: 0
+        default-step-6:
+            check: the predetermined mountpoint is listed in the mount table
+            plugin: mount
+            plugin_input:
+                mount: /proc
+                filesystem: proc
+        default-step-7:
+            check: the predetermined kernel parameter is readable from sysctl
+            plugin: kernel-param
+            plugin_input:
+                kernel-param: kernel.hostname
+                value: {matches: "."}
+        default-step-8:
+            check: the loopback interface is present
+            plugin: interface
+            plugin_input:
+                interface: lo
+                addrs: ["127.0.0.1/8"]
+        default-step-9:
+            agent-check: an in-process matcher resolves a literal predetermined string
+    web:
+        pod:
+            agent_provisioned: true
+        default-step-10:
+            check: the HTTP server's system package is installed
+            plugin: package
+            plugin_input:
+                package: nginx
+                installed: true
+        default-step-11:
+            check: the HTTP server's port is listening inside the pod
+            plugin: port
+            plugin_input:
+                port: 8080
+                listening: true
+        default-step-12:
+            check: the HTTP server's port is reachable from the host
+            plugin: addr
+            plugin_input:
+                addr: "127.0.0.1:${HOST_PORT:8080}"
+                reachable: true
+        default-step-13:
+            check: GET / returns 200 with the predetermined content marker
+            plugin: http
+            plugin_input:
+                http: "http://localhost:8080/"
+                status: 200
+                body: {contains: ["charly-web-content-marker"]}
+        default-step-14:
+            check: the served content file persists on disk with the predetermined marker
+            plugin: file
+            plugin_input:
+                file: /srv/fixture/index.html
+                exists: true
+                contains: ["charly-web-content-marker"]
+        default-step-15:
+            check: a self-curl from inside the pod returns the predetermined marker
+            exit_status: 0
+            stdout: {contains: ["charly-web-content-marker"]}
+            plugin: command
+            plugin_input:
+                command: "curl -fsS http://127.0.0.1:8080/"
+    redis:
+        pod:
+            agent_provisioned: true
+        default-step-16:
+            check: the data store's primary process is running
+            plugin: process
+            plugin_input:
+                process: redis-server
+                running: true
+        default-step-17:
+            check: the data store is reachable from a separate pod
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "ss -tln | grep ':6379' | grep -v '127.0.0.1'"
+        default-step-20:
+            check: the nonce-protected key is readable on the server pod with the correct value
+            stdout: {contains: ["${EVAL_NONCE_VALUE}"]}
+            plugin: command
+            plugin_input:
+                command: "redis-cli get bench:${EVAL_NONCE_KEY}"
+    redis-client:
+        pod:
+            agent_provisioned: true
+        default-step-18:
+            check: the client pod has the data store's client tool installed
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "command -v redis-cli"
+        default-step-19:
+            check: the client pod successfully writes the nonce-protected key into the data store
+            stdout: {contains: [OK]}
+            plugin: command
+            plugin_input:
+                command: "redis-cli -h charly-redis SET bench:${EVAL_NONCE_KEY} ${EVAL_NONCE_VALUE}"
+    mcp:
+        pod:
+            agent_provisioned: true
+        default-step-21:
+            include: box:fedora.jupyter
+        default-step-22:
+            run: remove any prior probe notebook
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "rm -f /workspace/mcp-A.ipynb"
+                in_container: true
+        default-step-23:
+            check: notebook_create writes the file but does not open a CRDT room
+            mcp: call
+            tool: notebook_create
+            input: '{"path":"mcp-A.ipynb"}'
+            timeout: 30s
+        default-step-24:
+            check: room_list does NOT contain mcp-A.ipynb
+            mcp: call
+            tool: room_list
+            input: '{}'
+            stdout: {not_contains: "mcp-A.ipynb"}
+            timeout: 30s
+        default-step-25:
+            run: clean state
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "rm -f /workspace/mcp-B.ipynb"
+                in_container: true
+        default-step-26:
+            run: create
+            mcp: call
+            tool: notebook_create
+            input: '{"path":"mcp-B.ipynb"}'
+            timeout: 30s
+        default-step-27:
+            check: cell_insert without prior open auto-creates the room
+            mcp: call
+            tool: cell_insert
+            input: '{"path":"mcp-B.ipynb","index":0,"source":"x","cell_type":"markdown"}'
+            timeout: 60s
+        default-step-28:
+            check: room_list now contains mcp-B.ipynb
+            mcp: call
+            tool: room_list
+            input: '{}'
+            stdout: {contains: "mcp-B.ipynb"}
+            timeout: 30s
+        default-step-29:
+            run: clean state
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "rm -f /workspace/mcp-D.ipynb"
+                in_container: true
+        default-step-30:
+            run: create
+            mcp: call
+            tool: notebook_create
+            input: '{"path":"mcp-D.ipynb"}'
+            timeout: 30s
+        default-step-31:
+            run: MCP-side cell_insert auto-creates the room
+            mcp: call
+            tool: cell_insert
+            input: '{"path":"mcp-D.ipynb","index":0,"source":"hello","cell_type":"markdown"}'
+            timeout: 60s
+        default-step-32:
+            check: transient UI-style WebSocket connect (in-container python)
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: |-
+                    python3 -c '
+                    import asyncio
+                    async def main():
+                        try:
+                            import websockets
+                        except ImportError:
+                            print("websockets not installed; skipping ws probe"); return
+                        try:
+                            ws = await asyncio.wait_for(
+                                websockets.connect("ws://127.0.0.1:8888/api/yjs/json:notebook:mcp-D.ipynb"),
+                                5,
+                            )
+                            await asyncio.sleep(1)
+                            await ws.close()
+                            print("ws-probe-ok")
+                        except Exception as e:
+                            print(f"ws-probe-noop: {e}")
+                    asyncio.run(main())
+                    '
+                in_container: true
+        default-step-33:
+            check: room_list still shows EXACTLY one entry for the path
+            mcp: call
+            tool: room_list
+            input: '{}'
+            stdout:
+                - matches: 'mcp-D\.ipynb'
+            timeout: 30s
+        default-step-34:
+            run: clean state
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "rm -f /workspace/mcp-E.ipynb"
+                in_container: true
+        default-step-35:
+            run: create
+            mcp: call
+            tool: notebook_create
+            input: '{"path":"mcp-E.ipynb"}'
+            timeout: 30s
+        default-step-36:
+            run: MCP cell_insert auto-creates the room
+            mcp: call
+            tool: cell_insert
+            input: '{"path":"mcp-E.ipynb","index":0,"source":"x","cell_type":"markdown"}'
+            timeout: 60s
+        default-step-37:
+            run: snapshot the pod log mark
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "date +%s > /tmp/mcp-E.markstamp"
+                in_container: true
+        default-step-38:
+            check: transient UI-style WebSocket connect to provoke _clean_room
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: |-
+                    python3 -c '
+                    import asyncio
+                    async def main():
+                        try:
+                            import websockets
+                        except ImportError:
+                            return
+                        try:
+                            ws = await asyncio.wait_for(
+                                websockets.connect("ws://127.0.0.1:8888/api/yjs/json:notebook:mcp-E.ipynb"),
+                                5,
+                            )
+                            await asyncio.sleep(0.5)
+                            await ws.close()
+                        except Exception:
+                            pass
+                    asyncio.run(main())
+                    '
+                in_container: true
+        default-step-39:
+            check: let upstream _clean_room settle
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "sleep 2"
+                in_container: true
+        default-step-40:
+            check: no 'Task exception was never retrieved' or 'is not in list' since the mark
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: |-
+                    MARK=$(cat /tmp/mcp-E.markstamp); LOG=$(journalctl -t supervisord --since "@$MARK" 2>/dev/null || cat /tmp/jupyter*.log 2>/dev/null || true); echo "$LOG" | grep -E 'Task exception was never retrieved|is not in list' && exit 1 || exit 0
+                in_container: true
+    k8s-cluster:
+        pod:
+            agent_provisioned: true
+        default-step-41:
+            check: at least one cluster node is listable
+            kube: nodes
+        default-step-42:
+            check: all cluster nodes reach Ready
+            kube: wait-nodes
+        default-step-43:
+            check: the kube-system coredns Deployment reaches Ready
+            kube: wait-ready
+            kube_kind: Deployment
+            name: coredns
+            namespace: kube-system
+        default-step-44:
+            check: a default storage class is present
+            kube: storageclass
+        default-step-45:
+            check: an ingress class is registered
+            kube: ingressclass
+        default-step-46:
+            check: the cluster addons report healthy
+            kube: addons
+        default-step-47:
+            check: the kubernetes Service is listable
+            kube: service
+            stdout: {contains: ["kubernetes"]}
+        default-step-48:
+            check: a raw API call to the /nodes resource returns a JSON document with a kind field
+            kube: raw
+            kube_resource: nodes
+            json: true
+            stdout: {contains: ["kind"]}
+    desktop:
+        pod:
+            agent_provisioned: true
+        default-step-49:
+            check: the desktop's Chrome DevTools is reachable
+            cdp: status
+            stdout: {contains: ["ok"]}
+        default-step-50:
+            check: the desktop's Wayland session is up
+            wl: status
+            stdout: {contains: ["ok"]}
+        default-step-51:
+            check: the desktop's VNC server is reachable
+            vnc: status
+            stdout: {contains: ["ok"]}
+        default-step-52:
+            check: the desktop's session bus advertises notifications
+            dbus: list
+            stdout: {contains: ["org.freedesktop.Notifications"]}
+        default-step-53:
+            check: the desktop browser navigates to the upstream HTTP fixture URL via CDP
+            cdp: open
+            url: "http://charly-web:8080/"
+            exit_status: 0
+        default-step-54:
+            check: CDP extracts the predetermined upstream content marker from the loaded page
+            cdp: text
+            tab: "1"
+            stdout: {contains: ["charly-web-content-marker"]}
+        default-step-55:
+            check: CDP correctly evaluates a predetermined JavaScript expression on the loaded page
+            cdp: eval
+            tab: "1"
+            expression: "1+1"
+            stdout: {contains: ["2"]}
+        default-step-56:
+            check: a CDP screenshot of the loaded page has real, non-uniform content at the expected dimensions
+            cdp: screenshot
+            tab: "1"
+            artifact: /tmp/cdp.png
+            artifact_min_bytes: 5000
+            artifact_min_dimensions: 800x600
+            artifact_not_uniform: true
+        default-step-57:
+            check: the Wayland toplevel listing includes at least one rendered window
+            wl: toplevel
+            stdout: {matches: "."}
+        default-step-58:
+            check: a Wayland screenshot of the desktop has real, non-uniform content at the expected dimensions
+            wl: screenshot
+            artifact: /tmp/wl.png
+            artifact_min_bytes: 10000
+            artifact_min_dimensions: 800x600
+            artifact_not_uniform: true
+        default-step-59:
+            check: a VNC framebuffer screenshot has real, non-uniform content at the expected dimensions
+            vnc: screenshot
+            artifact: /tmp/vnc.png
+            artifact_min_bytes: 5000
+            artifact_min_dimensions: 800x600
+            artifact_not_uniform: true
+        default-step-60:
+            check: a desktop notification can be sent with a predetermined body
+            dbus: notify
+            text: "charly-dbus-notify-marker"
+            exit_status: 0
+        default-step-61:
+            check: a terminal recording is captured with at least the predetermined number of events
+            record: stop
+            artifact: /tmp/session.cast
+            artifact_min_bytes: 200
+            artifact_min_cast_events: 5
+    vm-guest:
+        pod:
+            agent_provisioned: true
+        default-step-62:
+            check: the VM's libvirt domain info is queryable
+            libvirt: info
+        default-step-63:
+            check: the VM's domain definition contains the predetermined domain name
+            libvirt: domain-xml
+            stdout: {contains: ["vm"]}
+        default-step-64:
+            check: a libvirt console screenshot has real, non-uniform content at the expected dimensions
+            libvirt: screenshot
+            artifact: /tmp/lv.png
+            artifact_min_bytes: 5000
+            artifact_min_dimensions: 640x480
+            artifact_not_uniform: true
+        default-step-65:
+            check: the VM guest agent answers ping
+            libvirt: guest/ping
+        default-step-66:
+            check: the VM guest reports a Linux kernel via guest/exec
+            libvirt: guest/exec
+            command: "uname -s"
+            stdout: {contains: ["Linux"]}
+        default-step-67:
+            check: from inside the VM, fetching the upstream HTTP fixture URL returns the predetermined marker
+            libvirt: guest/exec
+            command: "curl -fsS http://charly-web:8080/"
+            stdout: {contains: ["charly-web-content-marker"]}
+        default-step-68:
+            check: snapshot listing succeeds
+            libvirt: snapshot/list
+        default-step-69:
+            check: the VM's SPICE handshake completes
+            spice: status
+            stdout: {contains: ["ok"]}
+        default-step-70:
+            check: a SPICE framebuffer screenshot has real, non-uniform content at the expected dimensions
+            spice: screenshot
+            artifact: /tmp/spice.png
+            artifact_min_bytes: 5000
+            artifact_min_dimensions: 640x480
+            artifact_not_uniform: true
+    nested-check-vm:
+        vm:
+            agent_provisioned: true
+        default-step-71:
+            check: the VM has booted and is reachable from the bench pod
+            exit_status: 0
+            plugin: command
+            plugin_input:
+                command: "uptime"
+        default-step-72:
+            check: the guest has hardware-accelerated virtualization available
+            plugin: file
+            plugin_input:
+                file: /dev/kvm
+                exists: true
+        inner-app-pod:
+            pod:
+                agent_provisioned: true
+            default-step-73:
+                check: the inner pod's primary process is running
+                plugin: process
+                plugin_input:
+                    process: nginx
+                    running: true
+            default-step-74:
+                check: the inner pod's predetermined port is listening
+                plugin: port
+                plugin_input:
+                    port: 8080
+                    listening: true
+            nested-redis-pod:
+                pod:
+                    agent_provisioned: true
+                default-step-75:
+                    check: the nested data store's primary process is running
+                    plugin: process
+                    plugin_input:
+                        process: redis-server
+                        running: true
+                default-step-76:
+                    check: the nested data store is reachable on the network (not loopback only)
+                    exit_status: 0
+                    plugin: command
+                    plugin_input:
+                        command: "ss -tln | grep ':6379' | grep -v '127.0.0.1'"
+                default-step-78:
+                    check: the nonce-protected key is readable on the deepest pod with the correct value
+                    stdout: {contains: ["${EVAL_NONCE_VALUE}"]}
+                    plugin: command
+                    plugin_input:
+                        command: "redis-cli get bench:${EVAL_NONCE_KEY}"
+            default-step-77:
+                check: the inner pod successfully writes the nonce-protected key on the nested data store
+                stdout: {contains: [OK]}
+                plugin: command
+                plugin_input:
+                    command: "redis-cli -h charly-inner-app-pod_nested-redis-pod SET bench:${EVAL_NONCE_KEY} ${EVAL_NONCE_VALUE}"
+        default-step-79:
+            check: the VM guest can reach the outermost data store from phase 3
+            stdout: {contains: [PONG]}
+            plugin: command
+            plugin_input:
+                command: "redis-cli -h charly-redis ping"
+scaffolding-selftest:
+    group:
+        description: End-to-end self-test of the harness benchmark scaffolding chain — loader + composition + cross-namespace deps + live scoring against AI-deployed pods.
+    scaffolding-selftest-iterate:
+        iterate:
+            sandbox: check-sandbox
+            agent: [claude]
+            plateau_iteration: 3
+            prompt: |
+                == Where you are ==
+                Your cwd is /workspace — the project tree, bind-mounted from the
+                host into this freshly-rebuilt ${TARGET_NAME}. You have FULL sudo +
+                nested podman + every package the plan needs. Host services are
+                completely invisible; you cannot conflict with them.
+
+                Your `/workspace` is a fresh per-run clone of the OpenCharly
+                source repository — the full git tree (with submodules
+                initialized), the `charly` CLI binary, and every layer, image,
+                pod, VM, and Kubernetes cluster definition the project
+                already ships (`candy/`, `box/<name>/charly.yml`, plus the
+                pod/vm/k8s/check kinds inline in `charly.yml`). Your session has the project's plugin skills
+                loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
+                `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
+                are available to be used if you decide to do so — they may
+                be useful for most of the steps. The plan specifies
+                what each pod must do; how you satisfy each specification
+                is entirely your call.
+
+                == Bed purpose ==
+                This bed's single plan exercises the harness scaffolding chain
+                end-to-end: the plan loader, the `include: <kind>:<name>` composition step,
+                the tag/id filter pipeline, the
+                cross-namespace `depends_on:` resolver, AND the live-state scoring
+                path. To prove every link works, the included probes must run AND
+                turn green — which requires you to deploy the pods the plan's
+                steps target, with the binaries, files, and modes those
+                probes assert against.
+
+                == Iteration semantics — NO RUSHING ==
+                Iteration ${ITERATION} of an UNBOUNDED loop. Score progression:
+                ${BEST_SCORE} (last delta: ${SCORE_DELTA}). The run ends when
+                every check: step passes (solved-all) OR when you fail to improve
+                for ${PLATEAU_ITERATION} iterations in a row (plateau). There is
+                NO maximum iteration count. Take the time you need. Correctness
+                over speed.
+
+                == Plan in scope ==
+                ${PLAN}
+
+                The plan is a TREE of agent-provisioned nodes: each node's NAME
+                is the container you must deploy, whose filesystem satisfies the
+                probes nested under it — the step's venue comes from its TREE
+                POSITION, not a `pod:` field. Read the tree; collect the node
+                names; deploy a container named `charly-<node>` for each. Some
+                steps carry `depends_on: [...]` — they only run after the
+                named upstream steps pass.
+
+                == Ground rules ==
+                  - The bed's plan steps are immutable — they live in the check: block of the project charly.yml.
+                  - Every pod a step references MUST be running at exit
+                    (that's what gets scored).
+                  - Included probes are scored identically to hand-written
+                    probes — one check: step = one point.
+
+                == When a source-code fix can't apply mid-run ==
+                The harness loop runs as a long-lived Go process. Source fixes
+                to /workspace/charly/*.go appear on disk via the bind-mount but the
+                running harness PID has the OLD binary mmap'd and CANNOT
+                hot-reload Go code. Your fix takes effect on the NEXT harness
+                run, not the current one. Record the fix in your iteration
+                notes and exit cleanly; the next run picks up the new binary.
+            note: false
+            env: {}
+            mcp_endpoint: "http://localhost:18765/mcp"
+    composition-app:
+        pod:
+            agent_provisioned: true
+        scaffolding-selftest-step-0:
+            include: candy:sshd
+        scaffolding-selftest-step-1:
+            include: box:fedora.composition-source
+        scaffolding-selftest-step-2:
+            check: a marker file written during the composition self-test is present
+            plugin: file
+            plugin_input:
+                file: /etc/charly-composition-selftest
+                exists: true
+# =================================================================
+# check-local — per-kind R10 smoke template for kind:local.
+# Applied via the check-local bed (kind:check) in this file's check: block. Single layer
+# (check-local-layer) drops a marker file the deploy-scope check probe
+# verifies on the host (not in a container).
+# =================================================================
+check-local-app:
+    local:
+        description: |-
+            Fast check bed for kind:local layer-application smoke
+            Minimal kind:local template applying check-local-layer to the operator's host.
+    check-local-candy:
+        candy:
+            - check-local-layer
+    check-local-marker:
+        check: command=test -f /etc/check-local-marker
+        id: check-local-marker
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /etc/check-local-marker"
+            in_container: false
+# =================================================================
+# check-builder-local-app — the kind:local template for the check-builder-local
+# builder-deploy bed. Composes check-builder-npm (the minimal npm builder fixture)
+# so the bed exercises the builder DEPLOY leg (runVenueBuilderStep) on a host:local
+# venue. Mirrors check-local-app / check-udev-app.
+# =================================================================
+check-builder-local-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-builder-local bed — composes the npm builder
+            fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
+            (runVenueBuilderStep → runVenueHomeArtifactBuilder) on a host: local venue.
+    check-builder-local-candy:
+        candy:
+            - check-builder-npm
+# =================================================================
+# check-udev-local — R10 witness for the externalized `charly udev` COMMAND
+# (candy/plugin-udev, command:udev) — the first externalizable-command precedent.
+# A disposable kind:local deploy on host: local that runs the two GPU-less,
+# deterministic udev sub-commands host-side:
+#   - `charly udev generate` → asserts the exact 99-charly-container-access rule lines on stdout
+#   - `charly udev status`   → exits 0 (graceful device + rule report on a GPU-less host)
+# The host `charly` resolves the `udev` word via the discovered candy/plugin-udev
+# prescan and syscall.Exec's the plugin binary (host-built, or baked at
+# /usr/lib/charly/plugins by pkg/arch). install/remove (sudo + udevadm, host-mutating)
+# stay out of the bed — the Go e2e (TestExternalCommandExecPlan_Udev) + plugin-udev's
+# build-context ADE check cover the dispatch + module-builds legs.
+# =================================================================
+check-udev-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-udev-local bed — composes the
+            command-only candy/plugin-udev (no install content) so the bed exercises the
+            externalized `charly udev` CLI host-side.
+    check-udev-candy:
+        candy:
+            - plugin-udev
+check-udev-local:
+    local:
+        from: check-udev-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the externalized `charly udev` COMMAND (candy/plugin-udev,
+            command:udev), the first externalizable-command precedent in the
+            core-externalization program. A disposable kind:local deploy on host: local runs
+            the two GPU-less udev sub-commands host-side: `charly udev generate` asserts the
+            exact 99-charly-container-access rule lines on stdout (the host charly resolves the
+            `udev` word via the discovered candy/plugin-udev prescan and syscall.Exec's the
+            plugin binary), and `charly udev status` exits 0 with a graceful device + rule
+            report on a GPU-less host.
+    udev-generate-rules:
+        check: command=charly udev generate prints the exact 99-charly-container-access rule lines
+        id: udev-generate-rules
+        stdout:
+            - contains: 'SUBSYSTEM=="drm", KERNEL=="card[0-9]*", GROUP="render", MODE="0660"'
+            - contains: 'SUBSYSTEM=="kfd", KERNEL=="kfd", GROUP="render", MODE="0660"'
+            - contains: 'SUBSYSTEM=="vfio", GROUP="kvm", MODE="0660"'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly udev generate
+            in_container: false
+    udev-status-runs:
+        check: command=charly udev status exits 0 and reports device + rule status (GPU-less graceful)
+        id: udev-status-runs
+        exit_status: 0
+        stdout:
+            - contains: 'GPU Devices:'
+            - contains: 'Udev Rules:'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly udev status
+            in_container: false
+
+# =================================================================
+# check-preempt-local — R10 witness for the externalized `charly preempt` COMMAND
+# (candy/plugin-preempt, command:preempt) — the SECOND welded-command externalization.
+# A disposable kind:local deploy on host: local that runs the GPU-less, deterministic
+# `charly preempt status` host-side:
+#   - `charly preempt status` → exits 0 and (on a fresh, lease-free bed host) prints
+#     "No active preemption leases." — proving the externalized command + the hidden-command
+#     shell-back dispatch end-to-end: the host charly resolves the `preempt` word via the
+#     discovered candy/plugin-preempt prescan, syscall.Exec's the plugin binary (host-built,
+#     or baked at /usr/lib/charly/plugins by pkg/arch), and the plugin shells back to the
+#     in-core arbiter via `charly __preempt-status` (newResourceArbiter().Status()).
+# `restore` needs a live GPU-preemption scenario (a running preemptible holder + an exclusive
+# claimant) — out of scope for this bed; its dispatch is covered by the Go e2e
+# (TestExternalCommandExecPlan_Preempt) + the hidden-command arbiter test
+# (TestPreemptStatusInternal_RendersArbiterLeases).
+# =================================================================
+check-preempt-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-preempt-local bed — composes the
+            command-only candy/plugin-preempt (no install content) so the bed exercises the
+            externalized `charly preempt` CLI host-side.
+    check-preempt-candy:
+        candy:
+            - plugin-preempt
+check-preempt-local:
+    local:
+        from: check-preempt-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt,
+            command:preempt), the second welded-command externalization in the
+            core-externalization program. A disposable kind:local deploy on host: local runs
+            `charly preempt status` host-side: the host charly resolves the `preempt` word via
+            the discovered candy/plugin-preempt prescan and syscall.Exec's the plugin binary,
+            which shells back to the in-core resource arbiter via the hidden
+            `charly __preempt-status` verb (newResourceArbiter().Status()). On a fresh, GPU-less,
+            lease-free bed host the command exits 0 and reports no active preemption leases —
+            proving the externalized command + the hidden-command shell-back dispatch end-to-end.
+    preempt-status-runs:
+        check: command=charly preempt status exits 0 and reports a clean arbiter (no active leases) on a fresh GPU-less host
+        id: preempt-status-runs
+        exit_status: 0
+        stdout:
+            - contains: 'No active preemption leases.'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly preempt status
+            in_container: false
+
+# =================================================================
+# check-feature-local — R10 witness for the externalized `charly feature` COMMAND
+# (candy/plugin-feature, command:feature) — the THIRD welded-command externalization.
+# A disposable kind:local deploy on host: local that runs the deterministic, GPU-less
+# `charly feature list candy` host-side against THIS project:
+#   - `charly feature list candy` → exits 0 and lists every candy + its plan summary; the
+#     externalized command resolves the `feature` word via the discovered candy/plugin-feature
+#     prescan, syscall.Exec's the plugin binary (host-built, or baked at /usr/lib/charly/plugins
+#     by pkg/arch), and the plugin shells back to the in-core unified loader + plan model via
+#     `charly __feature-list` (LoadConfig / ScanCandy). The output is asserted to contain the
+#     `plugin-feature` candy itself (always present in this project), proving the externalized
+#     command + the hidden-command shell-back + the in-core loader dispatch end-to-end.
+# `pending`/`validate` ride the SAME hidden-command seam (their dispatch is covered by the Go
+# e2e TestExternalCommandExecPlan_Feature + the in-core loader test
+# TestRenderFeatureList_InvokesInCoreLoader / TestRenderFeatureValidate_InvokesValidatePlanSteps).
+# =================================================================
+check-feature-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-feature-local bed — composes the
+            command-only candy/plugin-feature (no install content) so the bed exercises the
+            externalized `charly feature` CLI host-side.
+    check-feature-candy:
+        candy:
+            - plugin-feature
+check-feature-local:
+    local:
+        from: check-feature-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature,
+            command:feature), the third welded-command externalization in the
+            core-externalization program. A disposable kind:local deploy on host: local runs
+            `charly feature list candy` host-side: the host charly resolves the `feature` word
+            via the discovered candy/plugin-feature prescan and syscall.Exec's the plugin binary,
+            which shells back to the in-core unified loader + plan model via the hidden
+            `charly __feature-list` verb (LoadConfig / ScanCandy). The command exits 0 and lists
+            the project's candies — including the `plugin-feature` candy itself — proving the
+            externalized command + the hidden-command shell-back + the in-core loader dispatch
+            end-to-end.
+    feature-list-runs:
+        check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the in-core loader ran via the externalized command)
+        id: feature-list-runs
+        exit_status: 0
+        stdout:
+            - contains: 'plugin-feature'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly feature list candy
+            in_container: false
+
+# =================================================================
+# check-doctor-local — R10 witness for the externalized `charly doctor` COMMAND
+# (candy/plugin-doctor, command:doctor) — the FIFTH welded-command externalization.
+# A disposable kind:local deploy on host: local that runs the deterministic `charly doctor`
+# host-side:
+#   - `charly doctor` → exits 0 and prints the host-dependency report; the externalized command
+#     resolves the `doctor` word via the discovered candy/plugin-doctor prescan, syscall.Exec's
+#     the plugin binary (host-built, or baked at /usr/lib/charly/plugins by pkg/arch), and the
+#     plugin raw-forwards to the hidden in-core `charly __doctor` command, whose DoctorCmd.Run
+#     handler drives the package-main host-detection symbols (credentialHealth / DetectGPU /
+#     DetectVFIO …) that cannot cross the process boundary. The output is asserted to contain the
+#     stable "Container Engine" group header (always printed), proving the externalized command +
+#     the hidden-command raw-forward dispatch end-to-end. `charly doctor` exits 0 whenever a
+#     container engine (podman/docker) is present — the sole required group — which holds on any
+#     charly host, so the bed's exit-0 assertion is deterministic.
+# =================================================================
+check-doctor-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-doctor-local bed — composes the
+            command-only candy/plugin-doctor (no install content) so the bed exercises the
+            externalized `charly doctor` CLI host-side.
+    check-doctor-candy:
+        candy:
+            - plugin-doctor
+check-doctor-local:
+    local:
+        from: check-doctor-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of the externalized `charly doctor` COMMAND (candy/plugin-doctor,
+            command:doctor), the fifth welded-command externalization in the core-externalization
+            program. A disposable kind:local deploy on host: local runs `charly doctor` host-side:
+            the host charly resolves the `doctor` word via the discovered candy/plugin-doctor
+            prescan and syscall.Exec's the plugin binary, which raw-forwards to the hidden in-core
+            `charly __doctor` command (DoctorCmd.Run drives the package-main host-detection symbols
+            credentialHealth / DetectGPU / DetectVFIO that stay core). The command exits 0 and
+            prints the host-dependency report — including the "Container Engine" group header —
+            proving the externalized command + the hidden-command raw-forward dispatch end-to-end.
+    doctor-runs:
+        check: command=charly doctor exits 0 and prints the host-dependency report (proving the externalized command raw-forwards to the in-core __doctor handler)
+        id: doctor-runs
+        exit_status: 0
+        stdout:
+            - contains: 'Container Engine'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly doctor
+            in_container: false
+
+# =================================================================
+# check-commands-local — R10 witness for cutover C15's THREE remaining externalized COMMANDs
+# (candy/plugin-{clean,settings,candy}: command:clean / command:settings / command:candy) — the
+# sixth-through-eighth welded-command externalizations. ONE disposable kind:local deploy on
+# host: local composes the three command plugins and runs each command host-side with a SAFE,
+# read-only / dry-run / --help invocation, one check step per command:
+#   - `charly settings list`  → exit 0 + stdout lists the resolved runtime-config keys (auto_enable);
+#   - `charly candy --help`   → exit 0 (a TREE command whose --help proves dispatch WITHOUT mutating
+#                                any candy manifest — the tree has no non-mutating read verb);
+#   - `charly clean --dry-run`→ exit 0 + stdout carries the "would remove" retention report (dry-run
+#                                touches nothing).
+# For each the host charly resolves the command word via the discovered candy/plugin-* prescan (or
+# the /usr/lib/charly/plugins bake) and syscall.Exec's the plugin binary, which raw-forwards to the
+# hidden in-core `charly __<word>` command whose Run handler stays core — proving the externalized
+# command + the hidden-command raw-forward dispatch (leaf AND tree) end-to-end.
+# NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
+# refuted the chicken-and-egg claim (pkgver()'s `bin/charly version` is a convenience; the CalVer is already
+# Taskfile-computed via pkg/arch/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
+# make R9's canonical identity command depend on the plugin subsystem across 3 package repos — worst-value,
+# highest-blast-radius; operator-decided to keep it a core command. Not exercised here (covered by
+# candy/charly's own version check).
+# =================================================================
+check-commands-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-commands-local bed — composes the three
+            command-only candy/plugin-{clean,settings,candy} plugins (no install content) so the bed
+            exercises the externalized `charly clean`/`settings`/`candy` CLIs host-side.
+    check-commands-candy:
+        candy:
+            - plugin-clean
+            - plugin-settings
+            - plugin-candy
+check-commands-local:
+    local:
+        from: check-commands-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean,
+            plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the
+            sixth-through-eighth welded-command externalizations in the core-externalization program.
+            A disposable kind:local deploy on host: local runs each command host-side with a safe
+            read-only / dry-run / --help invocation: the host charly resolves each command word via
+            the discovered plugin prescan and syscall.Exec's the plugin binary, which raw-forwards to
+            the hidden in-core `charly __clean`/`__settings`/`__candy` command whose Run handler stays
+            core. Every command exits 0 — proving the externalized command + the hidden-command
+            raw-forward dispatch (leaf AND command-tree) end-to-end. (`charly version` is excluded
+            from C15 — it stays a core command; pkgver() stamps the package version via it.)
+    settings-list-runs:
+        check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized command TREE raw-forwards to the in-core __settings handler)
+        id: settings-list-runs
+        exit_status: 0
+        stdout:
+            - contains: 'auto_enable'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly settings list
+            in_container: false
+    candy-help-runs:
+        check: command=charly candy --help exits 0 (proving the externalized command TREE resolves + raw-forwards to the in-core __candy handler without mutating any candy manifest)
+        id: candy-help-runs
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly candy --help
+            in_container: false
+    clean-dry-run-runs:
+        check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized command raw-forwards to the in-core __clean handler, touching nothing)
+        id: clean-dry-run-runs
+        exit_status: 0
+        stdout:
+            - contains: 'would remove'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly clean --dry-run
+            in_container: false
+
+# =================================================================
+# check-gpu-local — R10 witness for cutover C11's externalized GPU/VFIO HOST-DETECTION
+# (candy/plugin-gpu, verb:gpu) — the DETECTION cluster of the core-externalization program.
+# A disposable kind:local deploy on host: local that runs the two deterministic, GPU-less
+# `charly vm gpu` sub-commands host-side:
+#   - `charly vm gpu status` → exits 0 and prints the VFIO/passthrough report; the in-core
+#     Detect* shims (gpu_shim.go) resolve verb:gpu and Invoke the COMPILED-IN plugin, so
+#     DetectVFIO() + MemlockLimitBytes() run THROUGH plugin-gpu (the IOMMU / vfio-pci /
+#     memlock lines are always printed, so the assertion is host-independent).
+#   - `charly vm gpu list`   → exits 0 (DetectVFIO() dispatches; prints the hostdevs block or
+#     "No GPUs detected" — both host-dependent, so only exit 0 is asserted).
+# The bed does NOT assert "GPUs: none detected": scanVFIO reports ANY display-class PCI
+# device (incl. an integrated GPU), so that string is not host-deterministic — the always-
+# printed header/IOMMU/vfio-pci/memlock lines are. The real driver-flip/NVENC path is NOT
+# this bed's gate (it stays the gated cachyos GPU beds); the DRIVER-SWITCH + auto-allocation
+# externalization is cutover C9 (arbiter + `charly vm gpu` coupling).
+# =================================================================
+check-gpu-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-gpu-local bed — composes the
+            compiled-in candy/plugin-gpu (verb:gpu, no install content) so the bed exercises
+            the externalized GPU/VFIO host-detection via `charly vm gpu` host-side.
+    check-gpu-candy:
+        candy:
+            - plugin-gpu
+check-gpu-local:
+    local:
+        from: check-gpu-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole proof of cutover C11's externalized GPU/VFIO HOST-DETECTION (candy/plugin-gpu,
+            verb:gpu), the DETECTION cluster of the core-externalization program. A disposable
+            kind:local deploy on host: local runs `charly vm gpu status` + `charly vm gpu list`
+            host-side: the in-core Detect* shims (gpu_shim.go) resolve verb:gpu and Invoke the
+            COMPILED-IN plugin, so DetectVFIO() + MemlockLimitBytes() run through plugin-gpu.
+            Both commands exit 0 and print the VFIO/passthrough report — proving plugin-gpu loads
+            + the detection code path dispatches through it on this host. The driver-switch +
+            auto-allocation primitives stay in core and externalize with the arbiter (cutover C9).
+    gpu-status-runs:
+        check: command=charly vm gpu status exits 0 and prints the VFIO/passthrough report (proving DetectVFIO + MemlockLimitBytes dispatch through the compiled-in verb:gpu plugin)
+        id: gpu-status-runs
+        exit_status: 0
+        stdout:
+            - contains: 'VFIO / GPU passthrough status'
+            - contains: 'IOMMU:'
+            - contains: 'vfio-pci driver:'
+            - contains: 'memlock limit:'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly vm gpu status
+            in_container: false
+    gpu-list-runs:
+        check: command=charly vm gpu list exits 0 (proving DetectVFIO dispatches through the compiled-in verb:gpu plugin on a GPU-less-or-iGPU host)
+        id: gpu-list-runs
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly vm gpu list
+            in_container: false

@@ -1,0 +1,135 @@
+language-runtimes:
+    candy:
+        version: 2026.144.1443
+        description: |
+            System language runtimes (.NET 9 SDK, PHP CLI, system Python 3) installed on PATH and version-reachable.
+            language-runtimes installs the .NET 9 SDK (distro package on
+            Fedora/Arch, Microsoft's dotnet-install.sh on Debian/Ubuntu), the PHP
+            CLI, and the system Python 3 interpreter — each landing at a /usr/bin
+            path. Every runtime exposes a version subcommand, so its presence is
+            directly verifiable from a fresh build with no service or deploy state.
+            (Go and Node.js are installed too but their acceptance is owned by the
+            golang/nodejs candies — not duplicated here, per R3.)
+    language-runtimes-require:
+        require:
+            - nodejs
+            - rust
+    language-runtimes-distro:
+        distro:
+            arch:
+                package:
+                    - dotnet-sdk
+                    - go
+                    - icu
+                    - php
+                    - python
+            debian:
+                package:
+                    - golang-go
+                    - libicu-dev
+                    - php-cli
+                    - python3-dev
+            debian-13:
+                package:
+                    - golang-go
+                    - libicu-dev
+                    - php-cli
+                    - python3-dev
+            fedora:
+                package:
+                    - dotnet-sdk-9.0
+                    - golang-bin
+                    - golang-bazil-fuse-devel
+                    - libicu
+                    - php
+                    - python3-devel
+                    - python3-ramalama
+                    - nodejs-devel
+            ubuntu:
+                package:
+                    - golang-go
+                    - libicu-dev
+                    - php-cli
+                    - python3-dev
+            ubuntu-24.04:
+                package:
+                    - golang-go
+                    - libicu-dev
+                    - php-cli
+                    - python3-dev
+    language-runtimes-step-0:
+        run: |
+            command=if command -v dotnet >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! command -v apt-get >/dev/null 2>&1; then
+              # Not a Debian-family distro — defer to the distro's declarative
+              # package section (or accept it's intentionally unavailable).
+              exit 0
+            fi
+            # Microsoft's dotnet-install.sh needs libicu at runtime but doesn't
+            # bring transitive dependencies. libicu-dev is already installed by
+            # this layer's deb: section.
+            install -d /usr/share/dotnet
+            curl -fsSL https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+            chmod +x /tmp/dotnet-install.sh
+            /tmp/dotnet-install.sh --channel 9.0 --install-dir /usr/share/dotnet
+            ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+            rm -f /tmp/dotnet-install.sh
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                if command -v dotnet >/dev/null 2>&1; then
+                  exit 0
+                fi
+                if ! command -v apt-get >/dev/null 2>&1; then
+                  # Not a Debian-family distro — defer to the distro's declarative
+                  # package section (or accept it's intentionally unavailable).
+                  exit 0
+                fi
+                # Microsoft's dotnet-install.sh needs libicu at runtime but doesn't
+                # bring transitive dependencies. libicu-dev is already installed by
+                # this layer's deb: section.
+                install -d /usr/share/dotnet
+                curl -fsSL https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+                chmod +x /tmp/dotnet-install.sh
+                /tmp/dotnet-install.sh --channel 9.0 --install-dir /usr/share/dotnet
+                ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+                rm -f /tmp/dotnet-install.sh
+    language-runtimes-step-1:
+        check: the .NET 9 SDK binary is installed at /usr/bin/dotnet
+        plugin: file
+        plugin_input:
+            file: /usr/bin/dotnet
+            exists: true
+    language-runtimes-step-2:
+        check: dotnet reports its SDK version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/dotnet --version
+    language-runtimes-step-3:
+        check: the PHP CLI binary is installed at /usr/bin/php
+        plugin: file
+        plugin_input:
+            file: /usr/bin/php
+            exists: true
+    language-runtimes-step-4:
+        check: php prints its version banner and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/php --version
+    language-runtimes-step-5:
+        check: the system Python 3 interpreter is at /usr/bin/python3 (the RPM one, not a pixi-env path)
+        plugin: file
+        plugin_input:
+            file: /usr/bin/python3
+            exists: true
+    language-runtimes-step-6:
+        check: python3 reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/python3 --version

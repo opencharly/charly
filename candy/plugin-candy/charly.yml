@@ -1,0 +1,54 @@
+plugin-candy:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly candy`
+            CLI — the TOP-LEVEL candy-manifest authoring surface (set / add-rpm / add-deb /
+            add-pac / add-aur), a standalone Go module (go.mod + main.go) ported OUT of charly's
+            core CLI registration, so the operator-facing `charly candy` command tree no longer
+            compiles into the core binary as a top-level command. (This is NOT `charly new candy`,
+            NewCandyCmd — a different command that stays a builtin.)
+
+            One of cutover C15's four remaining WELDED-command externalizations (charly
+            clean/settings/candy/version), after candy/plugin-tmux, plugin-preempt, plugin-feature,
+            plugin-vm, and plugin-doctor. `charly candy` is WELDED to core — its CandyCmd subtree
+            (set / add-{rpm,deb,pac,aur}, charly/scaffold_cmds.go) mutates candy/<name>/charly.yml
+            through the yaml.v3 Node API (SetByDotPath / appendCandyPackages, comment-preserving)
+            behind the resolveProjectFile path-traversal guard — project-authoring machinery this
+            out-of-process plugin cannot reach — so CandyCmd MUST STAY CORE (R3). The SOLUTION (the
+            vm precedent — re-home the whole subtree onto a hidden core command and raw-forward to
+            it): core re-homes CandyCmd onto the hidden `charly __candy` command, and this plugin is
+            a THIN FORWARDER that syscall.Exec's `charly __candy <args…>`. `candy` is a command TREE,
+            so the plugin raw-forwards every subcommand token through kong passthrough — ONE
+            forwarder covers the whole tree. No core symbol crosses the boundary.
+
+            charly's loader fetches this candy's repo, go-builds the provider binary on the HOST,
+            and on `charly candy <args…>` syscall.Exec's it in CLI mode (sdk.Main → cliMain) — or
+            runs the host-installed /usr/lib/charly/plugins binary on a project-less host (the
+            pkg/arch bake). The plugin owns real terminal stdio, so the authoring output reaches the
+            operator's terminal natively.
+
+            command:candy is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
+            registry — so it is declared in plugin.providers (for the CLI-grammar prescan + baked
+            `.providers` manifest) but advertises NO Describe capability. The R10 witness is the
+            disposable check-commands-local bed: `charly candy --help` exits 0 (proving the
+            command-tree dispatch resolves and forwards without mutating anything), proving the
+            externalized command tree + the hidden-command raw-forward dispatch end-to-end.
+    plugin-candy-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-candy
+            providers:
+                - command:candy
+    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+    # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
+    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
+    # build + fork/exec the module. The full CLI end-to-end (`charly candy --help` → exit 0) is
+    # exercised by the live R10 bed (check-commands-local).
+    candy-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly candy` end-to-end is exercised by the live R10 (check-commands-local)
+        id: candy-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

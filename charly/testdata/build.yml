@@ -1,0 +1,237 @@
+arch:
+    distro:
+        bootstrap:
+            install_cmd: pacman -Syu --noconfirm
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/pacman/pkg
+                  sharing: locked
+        format:
+            aur:
+                cache_mount:
+                    - dst: /var/cache/pacman/pkg
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                install_template: |
+                    COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
+                    RUN {{cacheMounts .CacheMounts}} \
+                        pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
+                        rm -rf /tmp/aur-pkgs
+            pac:
+                cache_mount:
+                    - dst: /var/cache/pacman/pkg
+                      sharing: locked
+                section_field:
+                    keys: list
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Keys}}
+                        pacman-key --recv-keys {{.}} && pacman-key --lsign-key {{.}} && \
+                    {{- end}}
+                    {{- range .Repos}}
+                        printf '[{{.name}}]\nServer = {{.server}}\nSigLevel = {{default .siglevel "Optional TrustAll"}}\n' >> /etc/pacman.conf && \
+                    {{- if .key}}
+                        pacman-key --recv-keys {{.key}} && pacman-key --lsign-key {{.key}} && \
+                    {{- end}}
+                    {{- end}}
+                        pacman -Syu --noconfirm
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+debian:
+    distro:
+        bootstrap:
+            install_cmd: apt-get update && apt-get install -y --no-install-recommends
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/apt
+                  sharing: locked
+                - dst: /var/lib/apt
+                  sharing: locked
+        format:
+            deb:
+                cache_mount:
+                    - dst: /var/cache/apt
+                      sharing: locked
+                    - dst: /var/lib/apt
+                      sharing: locked
+                section_field:
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}
+                    {{- if .key}}
+                        curl -fsSL {{quote .key}} | gpg --dearmor -o {{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}} && \
+                    {{- end}}
+                    {{- if .url}}
+                        echo "deb [{{if or .key .signed_by}}signed-by={{default .signed_by (printf "/etc/apt/keyrings/%s.gpg" .name)}}{{end}}] {{.url}} {{default .suite "stable"}} {{default .components "main"}}" > /etc/apt/sources.list.d/{{.name}}.list && \
+                    {{- end}}
+                    {{- if .ppa}}
+                        add-apt-repository -y ppa:{{.ppa}} && \
+                    {{- end}}
+                    {{- end}}
+                        apt-get update && apt-get install -y --no-install-recommends
+                    {{- range .Options}} {{.}}{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+fedora:
+    distro:
+        bootstrap:
+            install_cmd: dnf install -y --setopt=install_weak_deps=False
+            package:
+                - curl
+                - ca-certificates
+            cache_mount:
+                - dst: /var/cache/libdnf5
+                  sharing: locked
+        workaround:
+            - rm -f /etc/yum.repos.d/terra-mesa.repo 2>/dev/null || true
+        format:
+            rpm:
+                cache_mount:
+                    - dst: /var/cache/libdnf5
+                      sharing: locked
+                section_field:
+                    copr: list
+                    exclude: list
+                    module: list
+                    option: list
+                    package: list
+                    repo: list_of_maps
+                install_template: |
+                    RUN {{cacheMounts .CacheMounts}} \
+                    {{- range .Repos}}{{if .rpm}}
+                        dnf install -y {{quote .rpm}} && \
+                    {{- end}}{{end}}
+                    {{- range .Repos}}{{if .url}}
+                        dnf5 config-manager addrepo --from-repofile={{quote .url}} 2>/dev/null || true && \
+                        dnf5 config-manager setopt {{quote (printf "%s.enabled=0" .name)}} && \
+                    {{- if .gpgkey}}
+                        rpm --import {{.gpgkey}} || true && \
+                    {{- end}}
+                    {{- if eq (default .gpgcheck "true") "false"}}
+                        dnf5 config-manager setopt {{quote (printf "%s.gpgcheck=0" .name)}} && \
+                    {{- end}}{{end}}{{end}}
+                    {{- range .Copr}}
+                        dnf5 copr enable -y {{.}} && \
+                    {{- end}}
+                    {{- range .Modules}}
+                        dnf module reset -y {{splitFirst . ":"}} && \
+                        dnf module enable -y {{.}} && \
+                    {{- end}}
+                        dnf install -y{{range .Options}} {{.}}{{end}}
+                    {{- range .Repos}}{{if .url}} --enable-repo={{quote .name}}{{end}}{{end}}
+                    {{- range .Exclude}} --exclude='{{.}}'{{end}}
+                    {{- range .Packages}} \
+                          {{.}}{{end}}
+                    {{- range .Copr}} && \
+                        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
+                    {{- end}}
+ubuntu:
+    distro:
+        inherits: debian
+        bootstrap:
+            install_cmd: ""
+            package: []
+            cache_mount: []
+aur:
+    builder:
+        detect_config: aur
+        cache_mount:
+            - dst: /var/cache/pacman/pkg
+              sharing: locked
+        stage_template: |
+            FROM {{.BuilderRef}} AS {{.StageName}}
+            USER root
+            RUN echo '{{.User}} ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+            USER {{.UID}}
+            WORKDIR {{.Home}}
+            RUN {{cacheMounts .CacheMounts}} \
+                mkdir -p /tmp/aur-build && \
+                cp /etc/makepkg.conf /tmp/makepkg.conf && \
+                sed -i '/^OPTIONS/s/ debug/ !debug/' /tmp/makepkg.conf && \
+                yay -S --noconfirm --needed --builddir /tmp/aur-build --makepkgconf /tmp/makepkg.conf
+            {{- range .Options}} {{.}}{{end}}
+            {{- range .Packages}} \
+                  {{.}}{{end}} && \
+                mkdir -p /tmp/aur-pkgs && \
+                find /tmp/aur-build -name '*.pkg.tar.zst' -exec cp {} /tmp/aur-pkgs/ \;
+        copy_artifact:
+            - src: /tmp/aur-pkgs/
+              dst: /tmp/aur-pkgs/
+cargo:
+    builder:
+        detect_file:
+            - Cargo.toml
+        requires_src_dir: true
+        inline: true
+        cache_mount:
+            - dst: /tmp/cargo-cache
+        install_template: |
+            RUN --mount=type=bind,from={{.LayerStage}},source=/,target=/ctx \
+                {{cacheMountsOwned .CacheMounts .UID .GID}}cargo install --path /ctx
+npm:
+    builder:
+        detect_file:
+            - package.json
+        cache_mount:
+            - dst: /tmp/npm-cache
+        stage_template: |
+            FROM {{.BuilderRef}} AS {{.StageName}}
+            USER {{.UID}}
+            WORKDIR {{.Home}}
+            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/package.json package.json
+            RUN {{cacheMountsOwned .CacheMounts .UID .GID}}node -e 'var d=require("./package.json").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v==="*"?n:n+"@"+v)' | xargs npm install -g && rm -f package.json
+        copy_artifact:
+            - src: '{{.Home}}'
+              dst: '{{.Home}}'
+              chown: true
+pixi:
+    builder:
+        detect_file:
+            - pixi.toml
+            - pyproject.toml
+            - environment.yml
+        cache_mount:
+            - dst: /tmp/pixi-cache
+            - dst: /tmp/rattler-cache
+        stage_template: |
+            FROM {{.BuilderRef}} AS {{.StageName}}
+            USER {{.UID}}
+            WORKDIR {{.Home}}
+            {{- if .HasLockFile}}
+            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/pixi.lock pixi.lock
+            {{- end}}
+            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/{{.Manifest}} {{.Manifest}}
+            {{.ManylinuxFix}}
+            ENV PIXI_CACHE_DIR=/tmp/pixi-cache RATTLER_CACHE_DIR=/tmp/rattler-cache
+            RUN {{cacheMountsOwned .CacheMounts .UID .GID}}{{.InstallCmd}} && rm -f {{.Manifest}} pixi.lock
+        install_command:
+            environment.yml: pixi project import environment.yml && pixi install
+            pixi.toml: pixi install
+            pixi.toml+lock: pixi install --frozen
+            pyproject.toml: pixi install --manifest-path pyproject.toml
+        manylinux_fix: |
+            RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
+        copy_artifact:
+            - src: '{{.Home}}'
+              dst: '{{.Home}}'
+              chown: true
+        copy_binary:
+            src: /usr/local/bin/pixi
+            dst: /usr/local/bin/pixi
+    pixi-env:
+        env:
+            PIXI_CACHE_DIR: /tmp/pixi-cache
+            RATTLER_CACHE_DIR: /tmp/rattler-cache

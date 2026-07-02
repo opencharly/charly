@@ -1,0 +1,48 @@
+clawhub:
+    candy:
+        version: 2026.144.1443
+        description: |
+            ClawHub CLI for searching and installing OpenClaw skills
+            Installs the `clawhub` npm package globally (via package.json,
+            requires nodejs), landing the commander-based `clawhub` CLI on the
+            npm global bin path at ~/.npm-global/bin (npm also creates the
+            `clawdhub` alias). The CLI searches, installs, and updates OpenClaw
+            skills from the ClawHub registry; `clawhub --cli-version` reports its
+            version offline, so the install + bin wiring is verifiable without
+            network access.
+    clawhub-require:
+        require:
+            - nodejs
+    clawhub-step-0:
+        check: the clawhub CLI binary is installed on the npm global bin path
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/clawhub
+            exists: true
+    clawhub-step-1:
+        check: running clawhub --cli-version prints a semantic version and exits zero
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/clawhub --cli-version
+    clawhub-step-2:
+        agent-check: clawhub search <term> queries the ClawHub registry and returns matching OpenClaw skills
+    clawdhub-alias-binary:
+        check: file=${HOME}/.npm-global/bin/clawdhub
+        id: clawdhub-alias-binary
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/clawdhub
+            exists: true
+    clawhub-help-subcommands:
+        check: command=${HOME}/.npm-global/bin/clawhub --help
+        id: clawhub-help-subcommands
+        exit_status: 0
+        stdout:
+            - contains: search
+            - contains: install
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/clawhub --help

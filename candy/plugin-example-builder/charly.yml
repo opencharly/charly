@@ -1,0 +1,28 @@
+plugin-example-builder:
+    candy:
+        version: 2026.175.0716
+        description: |-
+            Reference OUT-OF-TREE charly plugin proving the BUILD-TIME plugin-execution
+            BUILDER leg — a standalone Go module (go.mod + main.go) serving the
+            `examplebuilder` builder over go-plugin gRPC via the charly plugin SDK
+            (charly/plugin/sdk). At image build, charly's build-path connect seam
+            host-builds + connects this plugin out-of-process and Invokes its OpResolve;
+            the returned BuilderResolveReply (a multi-stage FROM…AS stage baking
+            /built.txt + a COPY --from pulling it to /opt/examplebuilder-artifact) is
+            spliced into the generated Containerfile — so the artifact proves the plugin
+            EXECUTED at build. The BUILDER-leg counterpart of the verb/step
+            candy/plugin-example-step; consumed by candy/examplebuilder-consumer's
+            `external_builder: examplebuilder` selection.
+    plugin-example-builder-decl:
+        plugin:
+            providers:
+                - builder:examplebuilder
+            source: github.com/opencharly/charly/candy/plugin-example-builder
+    examplebuilder-module-present:
+        check: the out-of-tree build-resolve plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
+        id: examplebuilder-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

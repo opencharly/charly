@@ -1,0 +1,76 @@
+# Build the native `charly` package artifacts (.pkg.tar.zst / .rpm / .deb) and attach
+# them to the GitHub release on a v<CalVer> tag push. Each package is built
+# through the SAME `charly box pkg` verb + the embedded `local_pkg.build_template` used
+# locally (`task pkg:*`) and by the deploy-time localpkg path — one build
+# definition, distro-natively.
+#
+# Runs on the self-hosted CachyOS runner (labels: self-hosted, opencharly) — an
+# Arch host carrying the full charly toolchain. So `pac` builds NATIVELY: makepkg as
+# the runner's uid 1000 (makepkg refuses root, which is exactly how the rootless
+# runner executes jobs), with no archlinux container and no sudo — every PKGBUILD
+# `depends=` is already installed on the runner, so `makepkg -sf` resolves them
+# without touching pacman. `rpm`/`deb` build distro-natively in the runner's
+# rootless nested podman. `workflow_dispatch` runs the build jobs from a branch
+# (the release-upload step is tag-guarded), so the build can be exercised without
+# minting a tag.
+name: release-packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pac:
+    runs-on: [self-hosted, opencharly]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      # On a tag push actions/checkout leaves the repo in DETACHED HEAD with no
+      # local branch, so the makepkg git source (pkg/arch/PKGBUILD:
+      # `git+file://$(realpath …/../..)`) clones a repo whose `origin/HEAD` is
+      # unresolvable — makepkg's working-copy checkout then dies with
+      # "invalid reference: origin/HEAD" (the pac job's historical failure).
+      # Put HEAD back on a real branch so the source clone's origin/HEAD resolves.
+      # rpm/deb don't use makepkg's git source, so only pac needs this.
+      - name: Put HEAD on a branch (makepkg git source needs a resolvable origin/HEAD)
+        run: git checkout -B release-build
+      - name: Build .pkg.tar.zst (native makepkg, uid 1000)
+        run: |
+          go -C charly build -ldflags "-X main.BuildCalVer=$(bash pkg/arch/calver.sh)" -o ../bin/charly .
+          bin/charly box pkg pac
+          # Stable-named copy the charly candy's localpkg download_template fetches
+          # (releases/latest/download/opencharly-<arch>.pkg.tar.zst). Runner is amd64;
+          # exclude the makepkg -debug split package.
+          cp "$(ls -1 dist/*.pkg.tar.zst | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.pkg.tar.zst
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+
+  rpm-deb:
+    runs-on: [self-hosted, opencharly]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build .rpm and .deb
+        run: |
+          go -C charly build -ldflags "-X main.BuildCalVer=$(bash pkg/arch/calver.sh)" -o ../bin/charly .
+          bin/charly box pkg rpm deb
+          # Stable-named copies the charly candy's localpkg download_template fetches
+          # (releases/latest/download/opencharly-<arch>.{rpm,deb}). Runner is amd64;
+          # exclude any -debuginfo/-debugsource split package.
+          cp "$(ls -1 dist/*.rpm | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.rpm
+          cp "$(ls -1 dist/*.deb | head -1)" dist/opencharly-amd64.deb
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*

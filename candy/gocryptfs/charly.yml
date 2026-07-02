@@ -1,0 +1,37 @@
+gocryptfs:
+    candy:
+        version: 2026.166.2011
+        description: |
+            Encrypted filesystem (gocryptfs) for charly config encrypted volume operations
+            Installs the gocryptfs FUSE package — cross-distro the same name on
+            rpm (Fedora), pac (Arch) and deb (Debian/Ubuntu) — so charly can
+            mount encrypted volumes. The candy's whole deliverable is the
+            gocryptfs binary at /usr/bin/gocryptfs; the observable proof it is
+            present and runnable is that the binary exists and `gocryptfs
+            -version` reports a version string. charly drives the actual
+            encrypt/mount lifecycle (each mount runs in a per-volume
+            `charly-enc-<image>-<volume>` systemd --user scope).
+    gocryptfs-package:
+        package:
+            - gocryptfs
+    gocryptfs-step-0:
+        check: the gocryptfs encrypted-filesystem binary is installed at /usr/bin/gocryptfs
+        plugin: file
+        plugin_input:
+            file: /usr/bin/gocryptfs
+            exists: true
+    gocryptfs-step-1:
+        check: gocryptfs runs and prints a version string (gocryptfs X.Y.Z) on stdout
+        exit_status: 0
+        stdout:
+            - matches: "gocryptfs v?[0-9]"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/gocryptfs -version
+    gocryptfs-package-2:
+        check: package=gocryptfs
+        id: gocryptfs-package
+        plugin: package
+        plugin_input:
+            package: gocryptfs
+            installed: true

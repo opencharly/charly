@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Record desktop video from the selkies streaming pipeline.
+
+Connects to the capture bridge at /tmp/charly-capture.sock which relays the
+same H.264 frames that the browser sees via the selkies WebSocket stream.
+Pipes the raw H.264 data to ffmpeg for MP4 container muxing (copy, no
+re-encode — near-zero CPU overhead).
+
+Usage:
+    pixelflux-record output.mp4                     # 30fps, video only
+    pixelflux-record output.mp4 --fps 60            # 60fps
+    pixelflux-record output.mp4 --audio             # video + PulseAudio audio
+    pixelflux-record output.mp4 --fps 60 --audio    # 60fps + audio
+
+Stop recording with SIGINT (Ctrl-C) or SIGTERM.
+"""
+import argparse
+import os
+import signal
+import socket
+import struct
+import subprocess
+import sys
+import time
+
+SOCK_PATH = "/tmp/charly-capture.sock"
+
+_running = True
+_frame_count = 0
+
+
+def signal_handler(sig, frame):
+    global _running
+    _running = False
+
+
+def main():
+    global _running, _frame_count
+
+    parser = argparse.ArgumentParser(
+        description="Record desktop video from selkies pipeline"
+    )
+    parser.add_argument("output", help="Output file path (e.g. recording.mp4)")
+    parser.add_argument(
+        "--fps", type=int, default=30, help="Frames per second (default: 30)"
+    )
+    parser.add_argument(
+        "--audio", action="store_true", help="Include PulseAudio audio capture"
+    )
+    args = parser.parse_args()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    if not os.path.exists(SOCK_PATH):
+        print(
+            f"pixelflux-record: capture bridge not running "
+            f"({SOCK_PATH} not found). Is selkies started?",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Connect to capture bridge
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(SOCK_PATH)
+        sock.settimeout(10)
+    except (ConnectionRefusedError, FileNotFoundError) as e:
+        print(f"pixelflux-record: cannot connect to capture bridge: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Build ffmpeg command — re-encode H.264 with wall-clock timestamps.
+    # -use_wallclock_as_timestamps tells ffmpeg to timestamp each input frame
+    # by when it arrives (real time). Output -r forces constant framerate,
+    # duplicating the last frame to fill gaps when the screen is static.
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-use_wallclock_as_timestamps", "1",
+        "-f", "h264",
+        "-i", "pipe:0",
+    ]
+    if args.audio:
+        ffmpeg_cmd += [
+            "-f", "pulse", "-i", "default.monitor",
+            "-c:a", "aac", "-b:a", "128k",
+        ]
+    ffmpeg_cmd += [
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-r", str(args.fps),
+        "-movflags", "+faststart",
+        args.output,
+    ]
+
+    ffmpeg_proc = subprocess.Popen(
+        ffmpeg_cmd, stdin=subprocess.PIPE, stderr=sys.stderr
+    )
+
+    # Request H.264 frame stream from capture bridge
+    sock.sendall(b"STREAM\n")
+
+    start_time = time.time()
+    print(
+        f"pixelflux-record: recording @{args.fps}fps (H.264 copy)"
+        f"{' +audio' if args.audio else ''}",
+        file=sys.stderr,
+    )
+    print(f"pixelflux-record: output: {args.output}", file=sys.stderr)
+    print(f"pixelflux-record: stop with Ctrl-C or SIGTERM", file=sys.stderr)
+
+    def recv_exact(n):
+        data = b""
+        while len(data) < n:
+            try:
+                chunk = sock.recv(min(65536, n - len(data)))
+            except socket.timeout:
+                if not _running:
+                    return None
+                continue
+            if not chunk:
+                return None
+            data += chunk
+        return data
+
+    try:
+        while _running:
+            length_data = recv_exact(4)
+            if length_data is None:
+                break
+
+            length = struct.unpack(">I", length_data)[0]
+            if length == 0:
+                continue
+
+            frame_data = recv_exact(length)
+            if frame_data is None:
+                break
+
+            try:
+                ffmpeg_proc.stdin.write(frame_data)
+                _frame_count += 1
+            except (BrokenPipeError, ValueError):
+                break
+    except Exception as e:
+        print(f"pixelflux-record: error: {e}", file=sys.stderr)
+    finally:
+        print(f"\npixelflux-record: stopping...", file=sys.stderr)
+        sock.close()
+
+        if ffmpeg_proc.stdin:
+            try:
+                ffmpeg_proc.stdin.close()
+            except Exception:
+                pass
+
+        try:
+            ffmpeg_proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            ffmpeg_proc.kill()
+
+        duration = time.time() - start_time
+        print(
+            f"pixelflux-record: saved {args.output} "
+            f"({_frame_count} frames, {duration:.1f}s, "
+            f"{_frame_count / max(duration, 0.001):.1f} avg fps)",
+            file=sys.stderr,
+        )
+
+
+if __name__ == "__main__":
+    main()

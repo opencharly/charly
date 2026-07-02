@@ -1,0 +1,37 @@
+check-target-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            bench-target — demonstrates charly benchmark with a real AI
+            Minimal synthetic layer used solely to exercise charly benchmark
+            end-to-end against a real Claude Code runner. The single scenario
+            below checks for a marker file the layer does NOT currently create,
+            so baseline always fails. An AI solves it by adding a write: task
+            to this candy.yml that creates /etc/charly-bench-marker containing the
+            string "charly benchmark target".
+    check-target-layer-step-0:
+        run: mkdir=/etc/charly-bench
+        mkdir: /etc/charly-bench
+        run_as: root
+        mode: "0755"
+    check-target-layer-step-1:
+        check: the marker file exists with the expected content
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench-marker
+            exists: true
+            contains:
+                - charly benchmark target
+    check-target-layer-step-2:
+        check: the benchmark scaffold directory exists and is a directory
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench
+            exists: true
+            filetype: directory
+    check-target-layer-step-3:
+        check: the scaffold directory is world-traversable at mode 0755
+        plugin: file
+        plugin_input:
+            file: /etc/charly-bench
+            mode: "0755"

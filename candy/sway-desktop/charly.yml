@@ -1,0 +1,124 @@
+sway-desktop:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Composes a complete headless Sway desktop userland (Wayland automation, screen capture, browser, terminal, file manager, status bar, notifications, audio) with no install of its own
+            sway-desktop is a pure meta-composition: it ships no packages or
+            tasks itself and instead pulls in pipewire, the wl-tools /
+            wl-screenshot-grim / wl-overlay / wf-recorder capture stack,
+            chrome-sway, xfce4-terminal, thunar, waybar, desktop-fonts, swaync,
+            pavucontrol, tmux, asciinema, and fastfetch. The observable effect of
+            the composition is that every member candy's key binary lands in the
+            image, so the metalayer is verified by asserting those composed
+            artifacts are present and actually run inside a disposable container.
+    sway-desktop-candy:
+        candy:
+            - pipewire
+            - xdg-portal
+            - wl-tools
+            - wl-screenshot-grim
+            - wl-overlay
+            - wf-recorder
+            - chrome-sway
+            - xfce4-terminal
+            - thunar
+            - waybar
+            - desktop-fonts
+            - swaync
+            - pavucontrol
+            - tmux
+            - asciinema
+            - fastfetch
+    sway-desktop-step-0:
+        check: the waybar status bar binary from the composed waybar candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/waybar
+            exists: true
+    sway-desktop-step-1:
+        check: the swaync notification daemon from the composed swaync candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/swaync
+            exists: true
+    sway-desktop-step-2:
+        check: the thunar file manager from the composed thunar candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/thunar
+            exists: true
+    sway-desktop-step-3:
+        check: the xfce4-terminal emulator from the composed xfce4-terminal candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/xfce4-terminal
+            exists: true
+    sway-desktop-step-4:
+        check: the grim screenshot tool from the composed wl-screenshot-grim candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/grim
+            exists: true
+    sway-desktop-step-5:
+        check: the wtype keyboard-injection tool from the composed wl-tools candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wtype
+            exists: true
+    sway-desktop-step-6:
+        check: the wf-recorder Wayland screen recorder from the composed wf-recorder candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wf-recorder
+            exists: true
+    sway-desktop-step-7:
+        check: Google Chrome from the composed chrome-sway candy is installed for the desktop to launch
+        plugin: file
+        plugin_input:
+            file: /usr/bin/google-chrome-stable
+            exists: true
+    sway-desktop-step-8:
+        check: the PipeWire audio server from the composed pipewire candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pipewire
+            exists: true
+    sway-desktop-step-9:
+        check: the pavucontrol mixer from the composed pavucontrol candy is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pavucontrol
+            exists: true
+    sway-desktop-step-10:
+        check: tmux from the composed tmux candy reports its version and exits cleanly
+        exit_status: 0
+        stdout:
+            - matches: "^tmux"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/tmux -V
+    sway-desktop-step-11:
+        check: asciinema from the composed asciinema candy reports its version and exits cleanly
+        exit_status: 0
+        stdout:
+            - contains: asciinema
+        plugin: command
+        plugin_input:
+            command: /usr/bin/asciinema --version
+    sway-desktop-step-12:
+        check: fastfetch from the composed fastfetch candy reports its version and exits cleanly
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/fastfetch --version 2>&1
+    sway-desktop-step-13:
+        agent-check: the composed binaries together form a coherent headless Sway desktop userland (capture, browser, terminal, audio) with no missing member candy
+    sway-desktop-wlr-randr-binary:
+        check: file=/usr/bin/wlr-randr
+        id: sway-desktop-wlr-randr-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wlr-randr
+            exists: true

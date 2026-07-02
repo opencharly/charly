@@ -1,0 +1,122 @@
+{
+  "includeCoAuthoredBy": false,
+  "worktree": {
+    "bgIsolation": "none"
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "teammateMode": "auto",
+  "permissions": {
+    "allow": [
+      "Bash(charly check run:*)",
+      "Bash(charly check live:*)",
+      "Bash(charly check box:*)",
+      "Bash(charly status:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "charly-core@charly-plugins": true,
+    "charly-build@charly-plugins": true,
+    "charly-check@charly-plugins": true,
+    "charly-automation@charly-plugins": true,
+    "charly-image@charly-plugins": true,
+    "charly-vm@charly-plugins": true,
+    "charly-kubernetes@charly-plugins": true,
+    "charly-local@charly-plugins": true,
+    "charly-pod@charly-plugins": true,
+    "charly-internals@charly-plugins": true,
+    "charly-distros@charly-plugins": true,
+    "charly-languages@charly-plugins": true,
+    "charly-infrastructure@charly-plugins": true,
+    "charly-tools@charly-plugins": true,
+    "charly-jupyter@charly-plugins": true,
+    "charly-coder@charly-plugins": true,
+    "charly-selkies@charly-plugins": true,
+    "charly-openclaw@charly-plugins": true,
+    "charly-versa@charly-plugins": true,
+    "charly-ollama@charly-plugins": true,
+    "charly-openwebui@charly-plugins": true,
+    "charly-comfyui@charly-plugins": true,
+    "charly-immich@charly-plugins": true,
+    "charly-hermes@charly-plugins": true,
+    "charly-filebrowser@charly-plugins": true,
+    "claude-md-management@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "charly-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "./plugins"
+      }
+    }
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/runtime-verification-reminder.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/end-of-turn-challenge.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-gate.sh"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/team-coordination-reminder.sh"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/team-coordination-reminder.sh"
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/team-coordination-reminder.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

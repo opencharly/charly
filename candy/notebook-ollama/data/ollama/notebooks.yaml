@@ -1,0 +1,40 @@
+title: "Ollama Integration"
+description: "Hands-on notebooks demonstrating Ollama usage with GPU acceleration"
+order: 3
+
+subcategories:
+  - id: "requests"
+    title: "HTTP Requests"
+    description: "Direct HTTP API access to Ollama"
+    pattern: "00_*.ipynb"
+    order: 0
+
+  - id: "gpu"
+    title: "GPU Acceleration"
+    description: "GPU features and hardware verification"
+    pattern: "01_*.ipynb"
+    order: 1
+
+  - id: "openai"
+    title: "OpenAI Compatible"
+    description: "Using Ollama with OpenAI-compatible API"
+    pattern: "02_*.ipynb"
+    order: 2
+
+  - id: "library"
+    title: "Ollama Library"
+    description: "Native ollama Python library usage"
+    pattern: "03_*.ipynb"
+    order: 3
+
+  - id: "huggingface"
+    title: "HuggingFace Integration"
+    description: "Using Ollama with HuggingFace models"
+    pattern: "04_*.ipynb"
+    order: 4
+
+  - id: "anthropic"
+    title: "Anthropic Integration"
+    description: "Using Ollama with Anthropic-style API"
+    pattern: "05_*.ipynb"
+    order: 5

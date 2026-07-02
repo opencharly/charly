@@ -1,0 +1,187 @@
+pmtiles-viewer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Visual PMTiles archive inspector served as a static SPA on port 8001 (host 28001)
+            The protomaps/PMTiles TypeScript SPA — the same code deployed at
+            pmtiles.io — built from upstream source via npm at image build time
+            and served as a static Vite dist by `python -m http.server` on port
+            8001 (host 28001). Operators point it at any
+            /workspace/tiles/pmtiles/*.pmtiles archive (e.g. served by the
+            osm-tools martin tile server) to inspect its bbox, zoom range,
+            metadata, and tile contents in the browser. Verifiable: the Vite
+            build lands at /opt/pmtiles-viewer/build/index.html and the
+            supervisord service serves it over HTTP with root-relative assets.
+    pmtiles-viewer-require:
+        require:
+            - supervisord
+    pmtiles-viewer-distro:
+        distro:
+            arch:
+                package:
+                    # nodejs + npm in the cachyos extra repo (same as the maputnik
+                    # layer); git pulls the PMTiles source at image-build time. The
+                    # supervisor PAC pulls python in as a runtime dep so the
+                    # http.server service exec below resolves /usr/bin/python3.
+                    - nodejs
+                    - npm
+                    - git
+            fedora:
+                package:
+                    # Fedora 43 ships nodejs 22 + npm 10, sufficient for the
+                    # PMTiles app's Vite + TypeScript toolchain. If a node-version
+                    # build break surfaces, switch to a `nodejs:20` module stream
+                    # (the codebase already has prior art).
+                    - nodejs
+                    - npm
+                    - git
+    pmtiles-viewer-port:
+        port:
+            - 8001 # pmtiles-viewer static-dist HTTP server (host 28001)
+    pmtiles-viewer-env_provide:
+        env_provide:
+            PMTILES_VIEWER_PUBLIC_URL: "http://127.0.0.1:{{.HostPort 8001}}"
+    pmtiles-viewer-service:
+        service:
+            - name: pmtiles-viewer
+              # System python3 (from the supervisor's own dep) — same pattern
+              # as the maputnik service, keeps this layer pixi-env-free. The
+              # --directory flag pins the served root to the build artifact.
+              exec: /usr/bin/python3 -m http.server 8001 --directory /opt/pmtiles-viewer/build
+              restart: always
+              working_directory: /opt/pmtiles-viewer
+              priority: 35
+              enable: true
+              scope: system
+    pmtiles-viewer-step-0:
+        run: mkdir=/opt/pmtiles-viewer
+        mkdir: /opt/pmtiles-viewer
+        run_as: root
+    pmtiles-viewer-step-1:
+        run: |
+            command=set -euo pipefail
+            # Clone shallow + the current tip of main. PMTiles has no
+            # separately-released "viewer" tarball — source build of the
+            # /app/ subdir is the canonical install.
+            git clone --depth 1 https://github.com/protomaps/PMTiles /tmp/PMTiles
+            cd /tmp/PMTiles/app
+            # `npm ci` over `npm install` for deterministic resolution.
+            # --no-audit + --no-fund trim ~5 sec of stderr chatter.
+            npm ci --no-audit --no-fund
+            # Vite (the build tool the PMTiles app uses) defaults to
+            # --base=/ when the package.json `build` script doesn't pin
+            # it, but pass --base=/ explicitly to match the maputnik
+            # layer's lockdown — the asset-base-not-prefixed check below
+            # locks the served HTML to root-relative asset URLs. Forward
+            # the flag through npm via `--`.
+            npm run build -- --base=/
+            # Vite outputs to `dist/` by default. Copy the SPA artifact
+            # and error loudly if the upstream layout changes.
+            if [ -d dist ]; then
+              mkdir -p /opt/pmtiles-viewer
+              cp -r dist /opt/pmtiles-viewer/build
+            else
+              echo "pmtiles-viewer build did not produce ./dist directory" >&2
+              ls -la
+              exit 1
+            fi
+            cd /
+            rm -rf /tmp/PMTiles
+            # Drop npm cache to shrink image.
+            rm -rf /root/.npm
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                # Clone shallow + the current tip of main. PMTiles has no
+                # separately-released "viewer" tarball — source build of the
+                # /app/ subdir is the canonical install.
+                git clone --depth 1 https://github.com/protomaps/PMTiles /tmp/PMTiles
+                cd /tmp/PMTiles/app
+                # `npm ci` over `npm install` for deterministic resolution.
+                # --no-audit + --no-fund trim ~5 sec of stderr chatter.
+                npm ci --no-audit --no-fund
+                # Vite (the build tool the PMTiles app uses) defaults to
+                # --base=/ when the package.json `build` script doesn't pin
+                # it, but pass --base=/ explicitly to match the maputnik
+                # layer's lockdown — the asset-base-not-prefixed check below
+                # locks the served HTML to root-relative asset URLs. Forward
+                # the flag through npm via `--`.
+                npm run build -- --base=/
+                # Vite outputs to `dist/` by default. Copy the SPA artifact
+                # and error loudly if the upstream layout changes.
+                if [ -d dist ]; then
+                  mkdir -p /opt/pmtiles-viewer
+                  cp -r dist /opt/pmtiles-viewer/build
+                else
+                  echo "pmtiles-viewer build did not produce ./dist directory" >&2
+                  ls -la
+                  exit 1
+                fi
+                cd /
+                rm -rf /tmp/PMTiles
+                # Drop npm cache to shrink image.
+                rm -rf /root/.npm
+    pmtiles-viewer-step-2:
+        check: the Vite build artifact directory is present in the image
+        plugin: file
+        plugin_input:
+            file: /opt/pmtiles-viewer/build
+            exists: true
+            filetype: directory
+    pmtiles-viewer-step-3:
+        check: the SPA entry point index.html exists in the build artifact
+        plugin: file
+        plugin_input:
+            file: /opt/pmtiles-viewer/build/index.html
+            exists: true
+    pmtiles-viewer-step-4:
+        check: the node toolchain that builds the SPA is installed
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: node --version
+    pmtiles-viewer-step-5:
+        agent-check: the pmtiles-viewer service serves the built SPA over HTTP, answering GET / with status 200 and root-relative asset URLs that load in the browser
+    pmtiles-viewer-running:
+        check: service=pmtiles-viewer
+        id: pmtiles-viewer-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: pmtiles-viewer
+            running: true
+    pmtiles-viewer-port-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:8001}
+        id: pmtiles-viewer-port-reachable
+        timeout: 10s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: "127.0.0.1:${HOST_PORT:8001}"
+            reachable: true
+    pmtiles-viewer-http-up:
+        check: http=http://127.0.0.1:${HOST_PORT:8001}/
+        id: pmtiles-viewer-http-up
+        timeout: 10s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: "http://127.0.0.1:${HOST_PORT:8001}/"
+            status: 200
+    pmtiles-viewer-asset-base-not-prefixed:
+        check: |
+            command=! curl -fsS http://localhost:8001/ | grep -qE '"/(pmtiles|app)/'
+        id: pmtiles-viewer-asset-base-not-prefixed
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                ! curl -fsS http://localhost:8001/ | grep -qE '"/(pmtiles|app)/'
+            in_container: true

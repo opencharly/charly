@@ -1,0 +1,22 @@
+plugin-distro:
+    candy:
+        version: 2026.176.3203
+        description: |-
+            The `distro` plugin KIND relocated into a candy: a KIND provider dispatching
+            via the pb Invoke(OpLoad) envelope (decode the authored `distro:` entity into
+            its core spec type, re-marshal as canonical JSON). Serves itself in BOTH
+            placements (compiled-in OR out-of-process) like the matching/exampleprobe
+            verbs + the init kind — no kit contract needed (kinds are pb-shape).
+    plugin-distro-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-distro
+            providers:
+                - kind:distro
+    distro-kind-module-present:
+        check: the distro kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its entity decode is exercised by any box/deploy composing a `distro:` node
+        id: distro-kind-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

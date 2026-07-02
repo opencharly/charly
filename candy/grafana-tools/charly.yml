@@ -1,0 +1,167 @@
+grafana-tools:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Grafana observability CLI suite (mcp-grafana, logcli, promtool, mimirtool, tempo-cli, tanka, grafanactl) on the PATH
+            Installs the Grafana observability toolset as standalone binaries under
+            /usr/local/bin: the mcp-grafana MCP server, Loki's logcli, Prometheus'
+            promtool, Mimir's mimirtool, Tempo's tempo-cli, Tanka's tk, and grafanactl.
+            Each binary is fetched from its upstream release during the image build, so
+            its presence on the PATH and its ability to report a version are directly
+            verifiable.
+    grafana-tools-var:
+        var:
+            MCP_GRAFANA_VERSION: v0.7.8
+    grafana-tools-step-0:
+        run: |
+            command=curl -fsSL "https://github.com/grafana/mcp-grafana/releases/download/${MCP_GRAFANA_VERSION}/linux.x64.grafana.tar.gz" \
+              -o /tmp/mcp-grafana.tar.gz
+            mkdir -p /tmp/mcp-grafana-extract
+            tar -xzf /tmp/mcp-grafana.tar.gz -C /tmp/mcp-grafana-extract/
+            find /tmp/mcp-grafana-extract -name "mcp-grafana" -o -name "grafana" | head -1 | xargs -I{} mv {} /usr/local/bin/mcp-grafana
+            chmod +x /usr/local/bin/mcp-grafana
+            rm -rf /tmp/mcp-grafana.tar.gz /tmp/mcp-grafana-extract
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                curl -fsSL "https://github.com/grafana/mcp-grafana/releases/download/${MCP_GRAFANA_VERSION}/linux.x64.grafana.tar.gz" \
+                  -o /tmp/mcp-grafana.tar.gz
+                mkdir -p /tmp/mcp-grafana-extract
+                tar -xzf /tmp/mcp-grafana.tar.gz -C /tmp/mcp-grafana-extract/
+                find /tmp/mcp-grafana-extract -name "mcp-grafana" -o -name "grafana" | head -1 | xargs -I{} mv {} /usr/local/bin/mcp-grafana
+                chmod +x /usr/local/bin/mcp-grafana
+                rm -rf /tmp/mcp-grafana.tar.gz /tmp/mcp-grafana-extract
+    grafana-tools-step-1:
+        run: |
+            command=URL=$(curl -fsSL https://api.github.com/repos/grafana/loki/releases/latest | grep "browser_download_url.*logcli-linux-amd64.zip\"" | cut -d'"' -f4)
+            curl -fsSL "$URL" -o /tmp/logcli.zip
+            cd /tmp && unzip -q logcli.zip && mv logcli-linux-amd64 /usr/local/bin/logcli
+            chmod +x /usr/local/bin/logcli && rm -f /tmp/logcli.zip
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                URL=$(curl -fsSL https://api.github.com/repos/grafana/loki/releases/latest | grep "browser_download_url.*logcli-linux-amd64.zip\"" | cut -d'"' -f4)
+                curl -fsSL "$URL" -o /tmp/logcli.zip
+                cd /tmp && unzip -q logcli.zip && mv logcli-linux-amd64 /usr/local/bin/logcli
+                chmod +x /usr/local/bin/logcli && rm -f /tmp/logcli.zip
+    grafana-tools-step-2:
+        run: |
+            command=VER=$(curl -fsSL https://api.github.com/repos/prometheus/prometheus/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+            curl -fsSL "https://github.com/prometheus/prometheus/releases/download/v${VER}/prometheus-${VER}.linux-amd64.tar.gz" -o /tmp/prom.tar.gz
+            mkdir -p /tmp/prom && tar -xzf /tmp/prom.tar.gz -C /tmp/prom/ --strip-components=1
+            mv /tmp/prom/promtool /usr/local/bin/promtool && chmod +x /usr/local/bin/promtool
+            rm -rf /tmp/prom.tar.gz /tmp/prom
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                VER=$(curl -fsSL https://api.github.com/repos/prometheus/prometheus/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+                curl -fsSL "https://github.com/prometheus/prometheus/releases/download/v${VER}/prometheus-${VER}.linux-amd64.tar.gz" -o /tmp/prom.tar.gz
+                mkdir -p /tmp/prom && tar -xzf /tmp/prom.tar.gz -C /tmp/prom/ --strip-components=1
+                mv /tmp/prom/promtool /usr/local/bin/promtool && chmod +x /usr/local/bin/promtool
+                rm -rf /tmp/prom.tar.gz /tmp/prom
+    grafana-tools-step-3:
+        run: |
+            command=URL=$(curl -fsSL https://api.github.com/repos/grafana/mimir/releases/latest | grep "browser_download_url.*mimir-linux-amd64\"" | grep -v ".sha256" | cut -d'"' -f4)
+            curl -fsSL "$URL" -o /usr/local/bin/mimirtool && chmod +x /usr/local/bin/mimirtool
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                URL=$(curl -fsSL https://api.github.com/repos/grafana/mimir/releases/latest | grep "browser_download_url.*mimir-linux-amd64\"" | grep -v ".sha256" | cut -d'"' -f4)
+                curl -fsSL "$URL" -o /usr/local/bin/mimirtool && chmod +x /usr/local/bin/mimirtool
+    grafana-tools-step-4:
+        run: |
+            command=VER=$(curl -fsSL https://api.github.com/repos/grafana/tempo/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+            curl -fsSL "https://github.com/grafana/tempo/releases/download/v${VER}/tempo_${VER}_linux_amd64.tar.gz" -o /tmp/tempo.tar.gz
+            mkdir -p /tmp/tempo && tar -xzf /tmp/tempo.tar.gz -C /tmp/tempo/
+            find /tmp/tempo -name "tempo-cli" -o -name "tempo" | head -1 | xargs -I{} mv {} /usr/local/bin/tempo-cli
+            chmod +x /usr/local/bin/tempo-cli && rm -rf /tmp/tempo.tar.gz /tmp/tempo
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                VER=$(curl -fsSL https://api.github.com/repos/grafana/tempo/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+                curl -fsSL "https://github.com/grafana/tempo/releases/download/v${VER}/tempo_${VER}_linux_amd64.tar.gz" -o /tmp/tempo.tar.gz
+                mkdir -p /tmp/tempo && tar -xzf /tmp/tempo.tar.gz -C /tmp/tempo/
+                find /tmp/tempo -name "tempo-cli" -o -name "tempo" | head -1 | xargs -I{} mv {} /usr/local/bin/tempo-cli
+                chmod +x /usr/local/bin/tempo-cli && rm -rf /tmp/tempo.tar.gz /tmp/tempo
+    grafana-tools-step-5:
+        run: download=https://github.com/grafana/tanka/releases/latest/download/tk-linux-amd64
+        download: "https://github.com/grafana/tanka/releases/latest/download/tk-linux-amd64"
+        extract: none
+        to: /usr/local/bin/tk
+        mode: "0755"
+        run_as: root
+    grafana-tools-step-6:
+        run: |
+            command=URL=$(curl -fsSL https://api.github.com/repos/grafana/grafanactl/releases/latest | grep "browser_download_url.*grafanactl_Linux_x86_64.tar.gz\"" | cut -d'"' -f4)
+            curl -fsSL "$URL" -o /tmp/grafanactl.tar.gz
+            mkdir -p /tmp/grafanactl && tar -xzf /tmp/grafanactl.tar.gz -C /tmp/grafanactl/
+            find /tmp/grafanactl -name "grafanactl" | head -1 | xargs -I{} mv {} /usr/local/bin/grafanactl
+            chmod +x /usr/local/bin/grafanactl && rm -rf /tmp/grafanactl.tar.gz /tmp/grafanactl
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                URL=$(curl -fsSL https://api.github.com/repos/grafana/grafanactl/releases/latest | grep "browser_download_url.*grafanactl_Linux_x86_64.tar.gz\"" | cut -d'"' -f4)
+                curl -fsSL "$URL" -o /tmp/grafanactl.tar.gz
+                mkdir -p /tmp/grafanactl && tar -xzf /tmp/grafanactl.tar.gz -C /tmp/grafanactl/
+                find /tmp/grafanactl -name "grafanactl" | head -1 | xargs -I{} mv {} /usr/local/bin/grafanactl
+                chmod +x /usr/local/bin/grafanactl && rm -rf /tmp/grafanactl.tar.gz /tmp/grafanactl
+    grafana-tools-step-7:
+        check: the mcp-grafana MCP server binary is installed on the PATH
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/mcp-grafana
+            exists: true
+    grafana-tools-step-8:
+        check: Loki's logcli query client is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/logcli
+            exists: true
+    grafana-tools-step-9:
+        check: Prometheus' promtool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/promtool
+            exists: true
+    grafana-tools-step-10:
+        check: Mimir's mimirtool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/mimirtool
+            exists: true
+    grafana-tools-step-11:
+        check: Tempo's tempo-cli is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/tempo-cli
+            exists: true
+    grafana-tools-step-12:
+        check: Tanka's tk binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/tk
+            exists: true
+    grafana-tools-step-13:
+        check: grafanactl is installed
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/grafanactl
+            exists: true
+    grafana-tools-step-14:
+        check: logcli reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/local/bin/logcli --version
+    grafana-tools-step-15:
+        check: promtool reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/local/bin/promtool --version

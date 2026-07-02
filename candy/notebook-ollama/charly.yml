@@ -1,0 +1,83 @@
+notebook-ollama:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Ollama integration notebook collection
+            Provisions Ollama (https://ollama.ai) integration notebooks
+            into the workspace volume's `ollama/` subdirectory at deploy
+            time. Producer 00_Ollama_Requests demonstrates the local-LLM
+            HTTP API; consumers exercise specific patterns (chat, RAG,
+            embeddings, tool calling). Pairs naturally with the
+            `charly-ollama:ollama` server layer for a self-contained local
+            LLM stack. Data-only — no packages, no services.
+    notebook-ollama-data:
+        data:
+            - src: data/ollama
+              volume: workspace
+              dest: ollama
+    notebook-ollama-step-0:
+        check: the ollama subdirectory is provisioned in the workspace
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:workspace}/ollama
+            filetype: directory
+    notebook-ollama-step-1:
+        check: the Ollama_Requests producer notebook is present
+        exit_status: 0
+        stdout:
+            - matches: "Ollama_Requests"
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: ls ${VOLUME_CONTAINER_PATH:workspace}/ollama/
+    notebook-ollama-step-2:
+        check: the Ollama_Requests producer notebook is staged in the image data tree
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama/00_Ollama_Requests.ipynb
+            exists: true
+    notebook-ollama-step-3:
+        check: the notebooks.yaml manifest cataloguing the collection is staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama/notebooks.yaml
+            exists: true
+    notebook-ollama-step-4:
+        check: a substantial collection of integration notebooks is staged, not just the producer
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: test "$(find /data/workspace/ollama -maxdepth 1 -name '*.ipynb' | wc -l)" -ge 6
+    notebook-ollama-step-5:
+        agent-check: the notebooks span the documented client libraries (requests, OpenAI-compatible, native ollama, HuggingFace, Anthropic-style) as runnable examples
+    notebook-ollama-staged-dir:
+        check: file=/data/workspace/ollama
+        id: notebook-ollama-staged-dir
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama
+            filetype: directory
+    notebook-ollama-openai-staged:
+        check: file=/data/workspace/ollama/02_Ollama_OpenAI.ipynb
+        id: notebook-ollama-openai-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama/02_Ollama_OpenAI.ipynb
+            exists: true
+    notebook-ollama-library-staged:
+        check: file=/data/workspace/ollama/03_Ollama_Library.ipynb
+        id: notebook-ollama-library-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama/03_Ollama_Library.ipynb
+            exists: true
+    notebook-ollama-anthropic-staged:
+        check: file=/data/workspace/ollama/05_Ollama_Anthropic.ipynb
+        id: notebook-ollama-anthropic-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/ollama/05_Ollama_Anthropic.ipynb
+            exists: true

@@ -1,0 +1,109 @@
+qemu-guest-agent:
+    candy:
+        version: 2026.149.1200
+        description: |
+            QEMU guest agent — full host↔guest control channel with an application-consistent fsfreeze snapshot hook.
+            Installs the qemu-guest-agent package (identical name on Arch/CachyOS
+            and Fedora), contributes the virtio-serial control channel, enables the
+            system service, and writes /etc/qemu/qemu-ga.conf pinning the full RPC
+            surface (guest-exec, guest-file-*, guest-fsfreeze-*, guest-set-* — the
+            package default blocks none). The fsfreeze hook dispatcher runs every
+            executable in /etc/qemu/fsfreeze-hook.d/ on freeze/thaw so the host can
+            take application-consistent snapshots. Every artifact — the qemu-ga
+            binary, the package, the config, the executable dispatcher and its
+            drop-in dir — is file- and command-checkable inside the built image.
+    qemu-guest-agent-package:
+        package:
+            - qemu-guest-agent
+    qemu-guest-agent-libvirt:
+        libvirt:
+            - <channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>
+    qemu-guest-agent-service:
+        service:
+            - name: qemu-guest-agent
+              use_packaged: qemu-guest-agent.service
+              enable: true
+              scope: system
+    qemu-guest-agent-step-0:
+        run: mkdir=/etc/qemu/fsfreeze-hook.d
+        mkdir: /etc/qemu/fsfreeze-hook.d
+        run_as: root
+    qemu-guest-agent-step-1:
+        run: write=/etc/qemu/fsfreeze-hook
+        write: /etc/qemu/fsfreeze-hook
+        run_as: root
+        mode: "0755"
+        content: |
+            #!/bin/sh
+            # OpenCharly-managed qemu-ga fsfreeze hook dispatcher.
+            set -e
+            command="$1"
+            case "$command" in
+                freeze|thaw) ;;
+                *) echo "usage: $0 freeze|thaw" >&2; exit 1 ;;
+            esac
+            FSFREEZE_D=/etc/qemu/fsfreeze-hook.d
+            [ -d "$FSFREEZE_D" ] || exit 0
+            for hook in "$FSFREEZE_D"/*; do
+                [ -f "$hook" ] && [ -x "$hook" ] && "$hook" "$command"
+            done
+            exit 0
+    qemu-guest-agent-step-2:
+        run: write=/etc/qemu/qemu-ga.conf
+        write: /etc/qemu/qemu-ga.conf
+        run_as: root
+        mode: "0644"
+        content: |
+            # OpenCharly: full guest-agent functionality. No RPCs are blocked
+            # (guest-exec, guest-file-*, guest-fsfreeze-*, guest-set-* all work).
+            [general]
+            fsfreeze-hook=/etc/qemu/fsfreeze-hook
+    qemu-guest-agent-step-3:
+        check: the qemu-ga daemon binary is installed at /usr/bin/qemu-ga
+        plugin: file
+        plugin_input:
+            file: /usr/bin/qemu-ga
+            exists: true
+    qemu-guest-agent-step-4:
+        check: the cross-distro qemu-guest-agent package is installed
+        plugin: package
+        plugin_input:
+            package: qemu-guest-agent
+            installed: true
+    qemu-guest-agent-step-5:
+        check: the fsfreeze hook dispatcher is installed and references its drop-in dir
+        plugin: file
+        plugin_input:
+            file: /etc/qemu/fsfreeze-hook
+            contains: "fsfreeze-hook.d"
+    qemu-guest-agent-step-6:
+        check: the per-application freeze/thaw drop-in directory exists
+        plugin: file
+        plugin_input:
+            file: /etc/qemu/fsfreeze-hook.d
+            filetype: directory
+    qemu-guest-agent-step-7:
+        check: freezing filesystems with no hooks installed runs the dispatcher and exits 0
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /etc/qemu/fsfreeze-hook freeze
+    qemu-guest-agent-step-8:
+        check: the guest-agent config wires in the fsfreeze hook
+        plugin: file
+        plugin_input:
+            file: /etc/qemu/qemu-ga.conf
+            contains: "fsfreeze-hook=/etc/qemu/fsfreeze-hook"
+    qemu-guest-agent-step-9:
+        check: the config documents that no guest-agent RPCs are blocked
+        plugin: file
+        plugin_input:
+            file: /etc/qemu/qemu-ga.conf
+            contains: "No RPCs are blocked"
+    qemu-ga-config:
+        check: file=/etc/qemu/qemu-ga.conf
+        id: qemu-ga-config
+        plugin: file
+        plugin_input:
+            file: /etc/qemu/qemu-ga.conf
+            contains: "fsfreeze-hook"

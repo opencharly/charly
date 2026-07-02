@@ -1,0 +1,37 @@
+// The BUILT-IN `port` plugin's OWN CUE schema — the typed plugin_input for the
+// `port` verb (in-container `ss`/`netstat` listening probe, or host-side TCP dial
+// for reachability). It is the SINGLE SOURCE for this plugin's params, used two ways
+// (the same contract the reference examplerunverb and core `spec` use):
+//
+//  1. GENERATE the Go param struct — `cue exp gengotypes` (driven by task cue:gen,
+//     which wraps this with `package params` + `@go(params)`) emits
+//     ../params/cue_types_gen.go, so the provider decodes plugin_input into a TYPED
+//     struct, never a hand-parsed map.
+//  2. VALIDATE authored input AT RUNTIME — the builtin serves this source over the
+//     Describe channel (InProcTransport) exactly like an external serves it over
+//     gRPC; the host splices it onto the base (base ++ plugin) and validates every
+//     authored `port` step's plugin_input against #PortInput.
+//
+// SELF-CONTAINED: it references NO base def, so it compiles standalone (gengotypes +
+// the load-gate compile) AND splices onto the base — the base ++ plugin splice
+// exists to detect a def-name collision with the base, not to resolve base refs.
+//
+// `reachable` is a SHARED base #Op field (the `addr` verb also reads it), so it STAYS
+// in #Op; this plugin reproduces its `bool` shape standalone here (a bare primitive,
+// NO def reference, so there is no collision when base ++ plugin compiles). The
+// (distinct) box/deploy published-`port:` field is a SEPARATE schema element ([]string
+// on a pod/deploy node) and is unaffected. The provider is a CheckVerbProvider — it
+// dispatches IN-PROCESS via RunVerb and so keeps the live *Runner the probe / host
+// dial needs (mirrors examplerunverb).
+#PortInput: {
+	// port — the TCP port number to probe (the verb discriminator).
+	port: int & >0 & <=65535 @go(Port,type=int)
+	// listening — whether the port is expected to be listening in-container (default
+	// true). A tri-state pointer so an absent key means "expected listening".
+	listening?: bool @go(Listening,type=*bool)
+	// ip — optional host/IP for the reachability dial (default 127.0.0.1).
+	ip?: string @go(IP)
+	// reachable — request an outside-in host-side TCP dial instead of the in-container
+	// listening probe (default true when set). Tri-state pointer.
+	reachable?: bool @go(Reachable,type=*bool)
+}

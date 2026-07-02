@@ -1,0 +1,56 @@
+openclaw-full-ml:
+    candy:
+        version: 2026.144.1443
+        description: |
+            OpenClaw full headless stack plus the CUDA speech-ML tools (whisper STT + sherpa-onnx TTS)
+            openclaw-full-ml is a metalayer that installs nothing of its own and
+            composes three candies, so the observable effect is the union of their
+            key artifacts:
+              * openclaw-full — the OpenClaw gateway plus every headless CLI tool
+                (ffmpeg, ripgrep, gh, tmux, sqlite, uv, ...). The gateway binary
+                lands at ~/.npm-global/bin/openclaw and ffmpeg/rg at /usr/bin.
+              * whisper — OpenAI Whisper speech-to-text installed via pixi into the
+                shared default environment, exposing the `whisper` console script
+                at ~/.pixi/envs/default/bin/whisper (ffmpeg is its audio decoder).
+              * sherpa-onnx — offline text-to-speech whose VITS piper voice model
+                is downloaded and extracted to
+                ~/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high.
+            Each branch is verifiable by the presence of its landed artifact, so a
+            no-op composition fails every check below.
+    openclaw-full-ml-candy:
+        candy:
+            - openclaw-full
+            - whisper
+            - sherpa-onnx
+    openclaw-full-ml-step-0:
+        check: the OpenClaw gateway binary is installed (provided by openclaw-full)
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/openclaw
+            exists: true
+    openclaw-full-ml-step-1:
+        check: ffmpeg (whisper's audio decoder, from openclaw-full) is installed at /usr/bin/ffmpeg
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ffmpeg
+            exists: true
+    openclaw-full-ml-step-2:
+        check: the ripgrep search binary (from openclaw-full) is installed at /usr/bin/rg
+        plugin: file
+        plugin_input:
+            file: /usr/bin/rg
+            exists: true
+    openclaw-full-ml-step-3:
+        check: the whisper speech-to-text console script is installed in the default pixi environment
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/whisper
+            exists: true
+    openclaw-full-ml-step-4:
+        check: the sherpa-onnx offline TTS voice-model directory is extracted under the user data dir
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high
+            filetype: directory
+    openclaw-full-ml-step-5:
+        agent-check: the running OpenClaw gateway can transcribe audio through whisper and synthesize speech through sherpa-onnx end to end

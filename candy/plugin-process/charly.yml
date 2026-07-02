@@ -1,0 +1,20 @@
+plugin-process:
+    candy:
+        version: 2026.176.1600
+        description: |-
+            The `process` check verb relocated into a candy: a `pgrep -x` exact-name
+            match against the live deployment. A HOST-COUPLED verb — its RunVerb runs
+            against the live check engine (charly/plugin/kit.CheckContext), so it is
+            COMPILED-IN-ONLY. A pure check verb (probe-only, no act/step role); the
+            second relocation on the kit contract after candy/plugin-port.
+    plugin-process-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-process
+            providers:
+                - verb:process
+    process-verb-dispatches:
+        check: the process verb dispatches through the provider registry and probes a process on a live deployment
+        id: process-verb-dispatches
+        plugin: process
+        plugin_input: {process: charly-absent-probe, running: false}
+        context: [runtime]

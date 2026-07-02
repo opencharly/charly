@@ -1,0 +1,33 @@
+notebook-templates:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Starter notebook templates for jupyter
+            Provisions a small set of starter .ipynb files into the workspace
+            volume at deploy time so a fresh JupyterLab pod has runnable
+            examples on first open. Data-only — no packages, no services. The
+            data: block copies candy/notebook-templates/data/notebooks/
+            into the volume's root; consumers (jupyter, jupyter-ml) compose
+            this layer to ship the templates.
+    notebook-templates-data:
+        data:
+            - src: data/notebooks
+              volume: workspace
+    notebook-templates-step-0:
+        check: workspace volume is mounted as a directory at the canonical path
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:workspace}
+            filetype: directory
+    notebook-templates-step-1:
+        check: at least one .ipynb starter template is present in that workspace
+        exit_status: 0
+        stdout:
+            - matches: "\\.ipynb"
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: find ${VOLUME_CONTAINER_PATH:workspace} -maxdepth 3 -name "*.ipynb" -print -quit

@@ -1,0 +1,21 @@
+plugin-addr:
+    candy:
+        version: 2026.176.1800
+        description: |-
+            The `addr` check verb relocated into a candy: an outside-in TCP
+            reachability probe of a host:port (in-container `nc` under charly check
+            box, host-side dial under charly check live). A HOST-COUPLED verb — its
+            RunVerb runs against the live check engine (charly/plugin/kit.CheckContext),
+            so it is COMPILED-IN-ONLY. A pure check verb; a port/process-template
+            relocation on the kit contract.
+    plugin-addr-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-addr
+            providers:
+                - verb:addr
+    addr-verb-dispatches:
+        check: the addr verb dispatches through the provider registry and probes a host:port for reachability
+        id: addr-verb-dispatches
+        plugin: addr
+        plugin_input: {addr: "127.0.0.1:22", reachable: true}
+        context: [runtime]

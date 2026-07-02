@@ -1,0 +1,17 @@
+#!/bin/bash
+# Auto-tile windows restored from scratchpad.
+# Sway's scratchpad always restores as floating — this corrects it.
+# Only targets scratchpad restores (scratchpad_state: "fresh"),
+# does not interfere with intentionally floated windows.
+
+TIMEOUT=30; ELAPSED=0
+while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1; ELAPSED=$((ELAPSED + 1))
+done
+export SWAYSOCK=$(ls /tmp/sway-ipc.*.sock 2>/dev/null | head -1)
+
+swaymsg -t subscribe -m '["window"]' | while read -r event; do
+    if echo "$event" | grep -q '"scratchpad_state".*"fresh"'; then
+        swaymsg floating disable 2>/dev/null
+    fi
+done

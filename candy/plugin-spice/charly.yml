@@ -1,0 +1,37 @@
+plugin-spice:
+    candy:
+        version: 2026.174.1700
+        description: |-
+            OUT-OF-TREE charly plugin serving the `spice` SPICE-wire display/input
+            check verb — a standalone Go module (go.mod + main.go) that speaks the
+            SPICE remote-desktop protocol over go-plugin gRPC via the charly plugin
+            SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS
+            via LocalTransport — so the github.com/Shells-com/spice library lives
+            HERE (vendored under third_party/spice), out of charly's core go.mod, with
+            its cgo audio channels (the opus/portaudio decoders) removed ENTIRELY so it
+            is unambiguously pure Go — no opus/portaudio/asound/jack (the fourth
+            dep-shed after candy/plugin-appium, candy/plugin-adb, candy/plugin-kube). `spice:`
+            authoring stays unchanged: the verb keeps its `spice:` discriminator +
+            every modifier + the #SpiceMethod enum on charly's core #Op, and
+            dispatches through the provider registry exactly like a built-in
+            (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full #Op).
+            The host owns the go-libvirt VM resolution (vm_target.go's ResolveVmTarget
+            + SpiceEndpoint) and any qemu+ssh:// side tunnel, pre-resolving the VM's
+            live SPICE endpoint to a DIALABLE address it ships in the check env — so
+            this plugin needs no libvirt at all. Provides the full 7-method surface
+            (status/screenshot/cursor/click/mouse/type/key). The R10 consumer is a
+            disposable libvirt VM bed whose desktop check composes this plugin.
+    plugin-spice-decl:
+        plugin:
+            providers:
+                - verb:spice
+            source: github.com/opencharly/charly/candy/plugin-spice
+    spice-status-handshake:
+        check: the SPICE wire handshake completes against the bed VM (the out-of-process plugin verb dispatches through the registry and dials the host-resolved SPICE endpoint)
+        id: spice-status-handshake
+        spice: status
+        stdout:
+            - contains: ok
+        context:
+            - runtime

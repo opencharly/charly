@@ -1,0 +1,36 @@
+version: '3'
+
+dotenv: ['.env']
+
+includes:
+  build:
+    taskfile: ./taskfiles/Build.yml
+    dir: "{{.ROOT_DIR}}"
+  setup:
+    taskfile: ./taskfiles/Setup.yml
+    dir: "{{.ROOT_DIR}}"
+  cue:
+    taskfile: ./taskfiles/Cue.yml
+    dir: "{{.ROOT_DIR}}"
+  proto:
+    taskfile: ./taskfiles/Proto.yml
+    dir: "{{.ROOT_DIR}}"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  push:
+    desc: Build all enabled images and push to ghcr.io/opencharly
+    cmds:
+      - task: build:charly
+      - |
+        if ! gh auth status -h github.com 2>&1 | grep -q 'write:packages'; then
+          echo "ERROR: gh token missing 'write:packages' scope. Run:"
+          echo "  gh auth refresh -h github.com -s write:packages"
+          exit 1
+        fi
+      - gh auth token | podman login ghcr.io -u "$(gh api /user --jq .login)" --password-stdin
+      - bin/charly box build --push

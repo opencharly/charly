@@ -1,0 +1,81 @@
+wl-tools:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Wayland/X command-line input, clipboard, and window tools
+            Installs the wlroots input/clipboard/window toolset — wtype,
+            wl-clipboard (wl-copy/wl-paste), wlr-randr, wlrctl, xdotool, ydotool,
+            plus the xprop/xwininfo X utilities — used to drive and introspect a
+            Wayland desktop. Verifiable: each tool's binary lands on PATH under
+            /usr/bin (cross-distro; wlrctl ships from the AUR on Arch and the
+            repo on Fedora).
+    wl-tools-distro:
+        distro:
+            arch:
+                package:
+                    - wl-clipboard
+                    - wlr-randr
+                    - xdotool
+                    - xorg-xprop
+                    - xorg-xwininfo
+                    - ydotool
+                    - wtype
+                aur:
+                    package:
+                        - wlrctl
+            fedora:
+                package:
+                    - wtype
+                    - wlrctl
+                    - xdotool
+                    - xprop
+                    - xwininfo
+                    - wl-clipboard
+                    - wlr-randr
+                    - ydotool
+    wl-tools-step-0:
+        check: the wtype keyboard-injection tool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wtype
+            exists: true
+    wl-tools-step-1:
+        check: the wl-clipboard copy tool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wl-copy
+            exists: true
+    wl-tools-step-2:
+        check: the wlrctl wlroots control tool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wlrctl
+            exists: true
+    wl-paste-binary:
+        check: file=/usr/bin/wl-paste
+        id: wl-paste-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wl-paste
+            exists: true
+    wlr-randr-binary:
+        check: file=/usr/bin/wlr-randr
+        id: wlr-randr-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wlr-randr
+            exists: true
+    xdotool-binary:
+        check: file=/usr/bin/xdotool
+        id: xdotool-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/xdotool
+            exists: true
+    ydotool-binary:
+        check: file=/usr/bin/ydotool
+        id: ydotool-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ydotool
+            exists: true

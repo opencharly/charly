@@ -1,0 +1,42 @@
+songsee:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Generates spectral visualizations (spectrogram, mel, chroma) from an audio file
+            Installs the songsee CLI via `go install
+            github.com/steipete/songsee/cmd/songsee@latest` into ~/go/bin (the
+            GOPATH bin dir, appended to PATH). songsee is a kong-based Go binary
+            that renders an input audio file into a spectral image. Verifiable
+            without an audio fixture: the binary lands at ~/go/bin/songsee, and
+            `songsee --version` execs the kong CLI and exits 0.
+    songsee-require:
+        require:
+            - golang
+    songsee-env:
+        env:
+            GOPATH: "~/go"
+    songsee-path_append:
+        path_append:
+            - "~/go/bin"
+    songsee-step-0:
+        run: |
+            command=go install github.com/steipete/songsee/cmd/songsee@latest
+            go clean -cache
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                go install github.com/steipete/songsee/cmd/songsee@latest
+                go clean -cache
+    songsee-step-1:
+        check: the songsee binary is installed at ~/go/bin/songsee
+        plugin: file
+        plugin_input:
+            file: ${HOME}/go/bin/songsee
+            exists: true
+    songsee-step-2:
+        check: running `songsee --version` execs the kong CLI and exits 0
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/go/bin/songsee --version

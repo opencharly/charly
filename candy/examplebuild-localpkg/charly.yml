@@ -1,0 +1,36 @@
+examplebuild-localpkg:
+    candy:
+        version: 2026.180.0001
+        description: |-
+            Reference CONSUMER candy for the F3 BUILD channel — the deploy-time analogue
+            of examplebuilder-consumer (which proves the build-TIME external-builder leg).
+            It ships a trivial `localpkg:` (a self-contained PKGBUILD building the dummy
+            `charly-f3-witness` package, which installs one marker file under
+            /opt/charly-f3-witness/) so a deploy plan compiles a LocalPkgInstallStep.
+
+            An OUT-OF-PROCESS deploy plugin walking that plan CANNOT execute the
+            LocalPkgInstallStep via the F2 RunSystem/PutFile legs — it needs the HOST
+            build ENGINE (makepkg) + the executor-based `pacman -U`, which stay in
+            charly's core. So the plugin drives the host-served RunHostStep host-engine reverse
+            leg: the host runs the EXISTING build machinery (buildLocalPkgOnHost →
+            makepkg, then transferAndInstallPkgs → pacman -U onto the venue) and the
+            package's marker lands at /opt/charly-f3-witness/marker. Compose it as
+            add_candy on an external deploy substrate (check-exampledeploy); the plugin
+            records a `pacman -R` reverse op so `charly bundle del` removes the package
+            (zero residue). The runtime check below is the candy's ADE acceptance test —
+            the same assertion the bed runs.
+    examplebuild-localpkg-localpkg:
+        localpkg:
+            pac: pkgbuild
+    examplebuild-localpkg-present:
+        check: the F3 build channel built + installed the charly-f3-witness localpkg — its marker file is present on the venue
+        id: examplebuild-localpkg-present
+        description: F3 — an external deploy plugin drove RunHostStep; the host ran makepkg + pacman -U and the package's marker landed on the venue
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "cat /opt/charly-f3-witness/marker"
+            in_container: false
+        stdout:
+            - contains: EXAMPLEBUILD-LOCALPKG-OK

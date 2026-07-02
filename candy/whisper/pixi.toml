@@ -1,0 +1,7 @@
+[workspace]
+name = "whisper"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+openai-whisper = "*"

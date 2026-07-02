@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+
+EMULATOR_NAME="${EMULATOR_NAME:-charly_avd_36}"
+EMULATOR_API_LEVEL="${EMULATOR_API_LEVEL:-36}"
+EMULATOR_DEVICE="${EMULATOR_DEVICE:-pixel_9a}"
+EMULATOR_IMG_TYPE="${EMULATOR_IMG_TYPE:-google_apis_playstore}"
+EMULATOR_SYS_IMG="${EMULATOR_SYS_IMG:-x86_64}"
+
+# Host-derived CPU/RAM auto-sizing. When EMULATOR_CORES / EMULATOR_MEMORY are
+# unset, derive them from what the container actually sees so the SAME image
+# right-sizes on a 4-core laptop and a 16-core box. An operator override (env /
+# deploy.yml -e) always wins. All bounds are named constants (no magic numbers):
+# the Android emulator gains little past ~8 vCPU and Android caps usable guest
+# RAM, so cap at 8 vCPU / 8 GiB and leave host headroom for selkies + appium.
+CORES_HEADROOM=2     # cores left for the container's other services + host
+CORES_MIN=2
+CORES_MAX=8
+MEM_FRACTION_DIV=2   # use ~half of currently-available RAM
+MEM_MIN=2048         # MiB
+MEM_MAX=8192         # MiB
+if [ -z "${EMULATOR_CORES:-}" ]; then
+  _ncpu="$(nproc 2>/dev/null || echo 4)"
+  _cores=$(( _ncpu - CORES_HEADROOM ))
+  [ "${_cores}" -lt "${CORES_MIN}" ] && _cores="${CORES_MIN}"
+  [ "${_cores}" -gt "${CORES_MAX}" ] && _cores="${CORES_MAX}"
+  EMULATOR_CORES="${_cores}"
+fi
+if [ -z "${EMULATOR_MEMORY:-}" ]; then
+  _memavail_kb="$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  _mem=$(( _memavail_kb / 1024 / MEM_FRACTION_DIV ))
+  [ "${_mem}" -lt "${MEM_MIN}" ] && _mem="${MEM_MIN}"
+  [ "${_mem}" -gt "${MEM_MAX}" ] && _mem="${MEM_MAX}"
+  EMULATOR_MEMORY="${_mem}"
+fi
+echo "[start-emulator] auto-sized: cores=${EMULATOR_CORES} memory=${EMULATOR_MEMORY}MiB (host nproc=$(nproc 2>/dev/null || echo '?'))" >&2
+ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
+ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-${HOME}/.android/avd}"
+export ANDROID_HOME ANDROID_AVD_HOME
+
+mkdir -p "${ANDROID_AVD_HOME}"
+
+AVD_CONFIG="${ANDROID_AVD_HOME}/${EMULATOR_NAME}.avd/config.ini"
+if [ ! -f "${AVD_CONFIG}" ]; then
+  echo "[start-emulator] Creating AVD ${EMULATOR_NAME} (API ${EMULATOR_API_LEVEL}, device ${EMULATOR_DEVICE})..." >&2
+  echo "no" | "${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager" create avd \
+    --name "${EMULATOR_NAME}" \
+    --package "system-images;android-${EMULATOR_API_LEVEL};${EMULATOR_IMG_TYPE};${EMULATOR_SYS_IMG}" \
+    --device "${EMULATOR_DEVICE}" \
+    --force
+fi
+
+# Pick acceleration mode at runtime: probe KVM via KVM_GET_API_VERSION
+# ioctl (the only way to know for sure — Android emulator's own preflight
+# check reads /etc/group and gives wrong negatives in rootless containers
+# even when KVM access physically works). When KVM is reachable we force
+# `-accel on` to bypass the preflight; otherwise fall back to TCG software
+# emulation (`-accel off`) so the container at least boots (slowly) on
+# KVM-less hosts (e.g. CI runners). NB: the emulator's `-accel` flag only
+# accepts on|off|auto — `-accel kvm` is rejected ("Invalid '-accel kvm'
+# parameter, valid values are: on off auto") and the emulator exits
+# immediately, which supervisord reports as "FATAL Exited too quickly".
+if python3 -c "import os,fcntl; fd=os.open('/dev/kvm', os.O_RDWR); fcntl.ioctl(fd, 0xae00)" 2>/dev/null; then
+  ACCEL_FLAGS="-accel on"
+  echo "[start-emulator] KVM reachable; using -accel on" >&2
+else
+  ACCEL_FLAGS="-accel off"
+  echo "[start-emulator] KVM not reachable; falling back to -accel off (slow)" >&2
+fi
+
+# -no-window: run headless (no Qt UI window). With xcb-util-cursor installed
+# (via android-sdk layer), the Qt xcb plugin loads cleanly under Xwayland
+# and a window WOULD appear, but the headless flag keeps the emulator
+# alive even if Qt fails (defensive — R10 ADB/boot checks work either way).
+# Remove -no-window if you want the emulator window to appear inside the
+# Selkies streamed desktop.
+echo "[start-emulator] Launching emulator @${EMULATOR_NAME}..." >&2
+exec "${ANDROID_HOME}/emulator/emulator" "@${EMULATOR_NAME}" \
+  -no-window \
+  -no-snapshot-save \
+  -no-snapshot-load \
+  -gpu swiftshader_indirect \
+  -no-boot-anim \
+  -no-audio \
+  -memory "${EMULATOR_MEMORY}" \
+  -cores "${EMULATOR_CORES}" \
+  $ACCEL_FLAGS \
+  -ports 5554,5555

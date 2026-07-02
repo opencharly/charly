@@ -1,0 +1,22 @@
+plugin-builder:
+    candy:
+        version: 2026.176.3202
+        description: |-
+            The `builder` plugin KIND relocated into a candy: a KIND provider dispatching
+            via the pb Invoke(OpLoad) envelope (decode the authored `builder:` entity into
+            its core spec type, re-marshal as canonical JSON). Serves itself in BOTH
+            placements (compiled-in OR out-of-process) like the matching/exampleprobe
+            verbs + the init kind — no kit contract needed (kinds are pb-shape).
+    plugin-builder-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-builder
+            providers:
+                - kind:builder
+    builder-kind-module-present:
+        check: the builder kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its entity decode is exercised by any box/deploy composing a `builder:` node
+        id: builder-kind-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

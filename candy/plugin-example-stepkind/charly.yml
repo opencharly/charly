@@ -1,0 +1,30 @@
+plugin-example-stepkind:
+    candy:
+        version: 2026.182.0900
+        description: |-
+            Reference OUT-OF-TREE charly class:step plugin (F3) — a standalone Go module
+            (go.mod + main.go) serving the `examplestepkind` install-step KIND over go-plugin
+            gRPC via the charly plugin SDK. It proves the EXTERNAL-STEP-KIND contract in BOTH
+            legs: the plugin DECLARES its install-step Scope/Venue/Gate (+ Emits) in its Describe
+            StepContract, the host carries it OPAQUELY ("external:examplestepkind" + Payload)
+            through the InstallPlan IR. DEPLOY leg (OpExecute): the host's OPEN DEFAULT ARM
+            dispatches the step's OpExecute over the E3b reverse channel — where it writes a venue
+            marker and returns a teardown ReverseOp the host records + replays (record-and-replay).
+            BUILD leg (OpEmit, F-STEP-EMIT): the plugin declares Emits=true and answers OpEmit with
+            a Containerfile RUN fragment; composed into a pod overlay (add_candy), the host's
+            OCITarget open external-step arm splices it — baking /etc/examplestepkind-build-baked
+            into the overlay image. The step-class companion of the verb-class
+            candy/plugin-example-external and the deploy-class candy/plugin-example-deploy.
+    plugin-example-stepkind-decl:
+        plugin:
+            providers:
+                - step:examplestepkind
+            source: github.com/opencharly/charly/candy/plugin-example-stepkind
+    examplestepkind-module-present:
+        check: the out-of-tree class:step plugin ships a buildable Go module the host can build + serve out-of-process (both legs — OpExecute at deploy, OpEmit at build)
+        id: examplestepkind-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

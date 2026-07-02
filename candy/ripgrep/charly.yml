@@ -1,0 +1,58 @@
+ripgrep:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Fast recursive text search (rg)
+            Installs the ripgrep package, which provides the `rg` binary at
+            /usr/bin/rg — a fast recursive grep that honours .gitignore by
+            default. Verifiable end to end: the binary lands at a fixed path,
+            `rg --version` reports a parseable version on stdout, and `rg`
+            returns the matching line (exit 0) for a present pattern and
+            exit 1 for an absent one.
+    ripgrep-package:
+        package:
+            - ripgrep
+    ripgrep-step-0:
+        check: the rg binary is installed at /usr/bin/rg
+        plugin: file
+        plugin_input:
+            file: /usr/bin/rg
+            exists: true
+    ripgrep-step-1:
+        check: rg reports a parseable ripgrep version on stdout
+        exit_status: 0
+        stdout:
+            - matches: "ripgrep [0-9]"
+        plugin: command
+        plugin_input:
+            command: rg --version
+    ripgrep-step-2:
+        check: rg prints the matching line for a pattern present in piped input
+        exit_status: 0
+        stdout:
+            - contains: beta
+        plugin: command
+        plugin_input:
+            command: printf 'alpha\nbeta\ngamma\n' | rg beta
+    ripgrep-step-3:
+        check: rg exits 1 (no match) when the pattern is absent, never matching spuriously
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: printf 'alpha\nbeta\n' | rg ZZZ-no-such-pattern; test $? -eq 1
+    ripgrep-package-2:
+        check: package=ripgrep
+        id: ripgrep-package
+        plugin: package
+        plugin_input:
+            package: ripgrep
+            installed: true
+    ripgrep-search-matches:
+        check: command=printf 'needle-in-haystack\nother-line\n' | rg needle
+        id: ripgrep-search-matches
+        exit_status: 0
+        stdout:
+            - contains: needle-in-haystack
+        plugin: command
+        plugin_input:
+            command: printf 'needle-in-haystack\nother-line\n' | rg needle

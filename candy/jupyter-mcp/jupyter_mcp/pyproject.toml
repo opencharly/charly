@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jupyter-mcp"
+version = "0.1.0"
+requires-python = ">=3.10"
+# No dependencies listed — all deps come from pixi.toml at build time.
+# This package is installed with --no-deps.
+
+[tool.hatch.build.targets.wheel]
+packages = ["jupyter_mcp"]

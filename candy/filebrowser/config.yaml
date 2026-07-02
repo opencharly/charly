@@ -1,0 +1,9 @@
+server:
+  port: 8080
+  database: "/home/user/.filebrowser/data/database.db"
+  cacheDir: "/home/user/.filebrowser/data/cache"
+  sources:
+    - path: "/home/user/.filebrowser/files"
+      name: "Files"
+      config:
+        defaultEnabled: true

@@ -1,0 +1,140 @@
+version: '3'
+
+vars:
+  # Pinned cue CLI — MUST match charly's embedded cuelang.org/go library
+  # (charly/go.mod) so the CLI that runs gengotypes is the same CUE version the
+  # library compiles the schema with.
+  CUE_VERSION: v0.16.1
+  # sha256 of cue_{{.CUE_VERSION}}_linux_amd64.tar.gz (verified: the extracted
+  # binary reports `cue version v0.16.1`). A download whose digest differs is a
+  # tampering / wrong-artifact signal and HARD-FAILS the bootstrap.
+  CUE_SHA256_amd64: 5d644c1305a2b86504c8dcd2ec829cf5b4999efc2cf51ee375624e0455f774ae
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # cue:gen — regenerate the single-source `spec` package from charly/schema/*.cue.
+  #
+  #   charly/spec/cue_types_gen.go  (cue exp gengotypes — the Go param structs)
+  #   charly/spec/vocab_gen.go      (charly/internal/schemagen — the vocab lists)
+  #
+  # Self-bootstraps the pinned cue CLI into ./bin/cue (gitignored). The schema
+  # concatenation is produced by charly/internal/schemagen (-mode=concat), which
+  # mirrors the runtime sharedCueSchema concatenation in charly/cue_schema.go
+  # (R3 — one concatenation contract). Reproducible: two consecutive runs produce
+  # no diff (guarded by TestGenReproducible in charly/spec).
+  # ---------------------------------------------------------------------------
+  gen:
+    desc: Regenerate charly/spec from charly/schema/*.cue (self-bootstraps the pinned cue CLI into ./bin/cue)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - task: bootstrap-cue
+      - |
+        set -euo pipefail
+        CUE="$PWD/bin/cue"
+        GENDIR="$(mktemp -d)"
+        trap 'rm -rf "$GENDIR"' EXIT
+        mkdir -p "$GENDIR/cue.mod"
+        cat > "$GENDIR/cue.mod/module.cue" <<EOF
+        module: "github.com/opencharly/charly/charly/schema/spec-codegen"
+        language: version: "{{.CUE_VERSION}}"
+        EOF
+        # 1) Concatenate schema/*.cue the SAME way the runtime sharedCueSchema does,
+        #    headed `package spec` + `@go(spec)` (R3: one concatenation, in schemagen).
+        ( cd charly && go run ./internal/schemagen -mode=concat -schema=schema -out="$GENDIR/schema_spec.cue" )
+        # 2) cue exp gengotypes → the Go param structs (writes cue_types*_gen.go in GENDIR).
+        ( cd "$GENDIR" && "$CUE" exp gengotypes ./schema_spec.cue )
+        GEN="$(ls "$GENDIR"/cue_types*_gen.go 2>/dev/null | head -1)"
+        test -n "$GEN" || { echo "cue:gen: gengotypes produced no cue_types*_gen.go" >&2; exit 1; }
+        cp "$GEN" charly/spec/cue_types_gen.go
+        # 2b) Double every generated `json:"x"` struct tag with a matching
+        #     `yaml:"x"` (+ append ,omitempty to bare yaml keys) — gengotypes emits
+        #     json tags only, but charly persists + round-trips these structs through
+        #     yaml.v3 (saveDeployState, the deploy-overlay merge, charly.yml read/
+        #     write). yaml.v3 keys off the LOWERCASED Go field name without a yaml
+        #     tag, silently dropping every snake_case wire key; the doubled yaml tag
+        #     keeps the wire key identical on both codecs, and ,omitempty lets an
+        #     empty value fall back to the CUE default (matching the old hand
+        #     structs). This is a PRINCIPLED Go transform inside schemagen
+        #     (-mode=retag), never sed on generated Go — compiled, documented,
+        #     idempotent, reproducible.
+        ( cd charly && go run ./internal/schemagen -mode=retag -out=spec/cue_types_gen.go )
+        # 3) Companion generator → the vocab lists (compiles the same schema via the cue API).
+        ( cd charly && go run ./internal/schemagen -mode=vocab -schema=schema -out=spec/vocab_gen.go )
+        # 3b) Companion generator → the HEAD schema-version consts (SchemaVersion/SchemaFloor),
+        #     read from the CUE-owned charly/schema/version.cue #SchemaVersion/#SchemaFloor.
+        ( cd charly && go run ./internal/schemagen -mode=version -schema=schema -out=spec/version_gen.go )
+        # 4) gofmt the committed generated files.
+        gofmt -w charly/spec/cue_types_gen.go charly/spec/vocab_gen.go charly/spec/version_gen.go
+        # 5) Plugin param structs — each plugin's OWN self-contained schema → its
+        #    params package, via the SAME gengotypes pipeline as spec (-pkg=params
+        #    header, R3). A plugin schema is self-contained, so it compiles + gens
+        #    standalone; the host's base ++ plugin splice provides the collision
+        #    check. Covers every in-tree builtin unit AND the in-repo external
+        #    examples that compile generated params against their own module
+        #    (plugin-example-external — a verb; plugin-example-command — a command).
+        ROOT="$PWD"
+        for SCHEMA_DIR in candy/plugin-init/schema candy/plugin-agent/schema candy/plugin-builder/schema candy/plugin-distro/schema candy/plugin-module/schema candy/plugin-package-group/schema candy/plugin-resource/schema candy/plugin-sidecar/schema candy/plugin-target/schema candy/plugin-example/schema candy/plugin-port/schema candy/plugin-process/schema candy/plugin-interface/schema candy/plugin-addr/schema candy/plugin-dns/schema candy/plugin-examplerunverb/schema candy/plugin-matching/schema candy/plugin-http/schema candy/plugin-kernel-param/schema candy/plugin-mount/schema candy/plugin-user/schema candy/plugin-unix-group/schema candy/plugin-file/schema candy/plugin-command/schema candy/plugin-service/schema candy/plugin-package/schema candy/plugin-example-external/schema candy/plugin-example-command/schema candy/plugin-mcp/schema candy/plugin-secrets/schema candy/plugin-udev/schema candy/plugin-tmux/schema candy/plugin-preempt/schema candy/plugin-feature/schema candy/plugin-tunnel/schema; do
+          test -d "$SCHEMA_DIR" || continue
+          PARAMS_DIR="$(dirname "$SCHEMA_DIR")/params"
+          mkdir -p "$PARAMS_DIR"
+          PDIR="$(mktemp -d)"; mkdir -p "$PDIR/cue.mod"
+          cat > "$PDIR/cue.mod/module.cue" <<EOF
+        module: "github.com/opencharly/charly/charly/schema/params-codegen"
+        language: version: "{{.CUE_VERSION}}"
+        EOF
+          ( cd charly && go run ./internal/schemagen -mode=concat -pkg=params -schema="$ROOT/$SCHEMA_DIR" -out="$PDIR/p.cue" )
+          ( cd "$PDIR" && "$CUE" exp gengotypes ./p.cue )
+          PGEN="$(ls "$PDIR"/cue_types*_gen.go 2>/dev/null | head -1)"
+          test -n "$PGEN" || { echo "cue:gen: gengotypes produced no params for $SCHEMA_DIR" >&2; exit 1; }
+          cp "$PGEN" "$PARAMS_DIR/cue_types_gen.go"
+          ( cd charly && go run ./internal/schemagen -mode=retag -out="$ROOT/$PARAMS_DIR/cue_types_gen.go" )
+          gofmt -w "$PARAMS_DIR/cue_types_gen.go"
+          rm -rf "$PDIR"
+          echo "cue:gen: regenerated $PARAMS_DIR/cue_types_gen.go"
+        done
+        echo "cue:gen: regenerated charly/spec/{cue_types_gen.go,vocab_gen.go}"
+
+  bootstrap-cue:
+    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the RDD scratch binary, else checksum-verified download)
+    dir: "{{.ROOT_DIR}}"
+    status:
+      - test -x bin/cue && bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p bin
+        # Prefer a pre-fetched scratch binary (the RDD spike), else download the
+        # pinned release and checksum-verify before extracting.
+        if [ -x /tmp/cue-rdd/cue ] && /tmp/cue-rdd/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
+          cp /tmp/cue-rdd/cue bin/cue
+        else
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64) GOARCH=amd64; SHA='{{.CUE_SHA256_amd64}}' ;;
+            *) echo "bootstrap-cue: unsupported arch $ARCH (only linux/amd64 is checksum-pinned)" >&2; exit 1 ;;
+          esac
+          TARBALL="cue_{{.CUE_VERSION}}_linux_${GOARCH}.tar.gz"
+          URL="https://github.com/cue-lang/cue/releases/download/{{.CUE_VERSION}}/${TARBALL}"
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+          echo "bootstrap-cue: downloading $URL"
+          curl -fsSL -o "$TMP/$TARBALL" "$URL"
+          echo "${SHA}  $TMP/$TARBALL" | sha256sum -c - || { echo "bootstrap-cue: checksum mismatch — refusing to extract" >&2; exit 1; }
+          tar -xzf "$TMP/$TARBALL" -C "$TMP" cue
+          mv "$TMP/cue" bin/cue
+        fi
+        chmod +x bin/cue
+        bin/cue version | grep -q '{{.CUE_VERSION}}' || { echo "bootstrap-cue: bin/cue is not {{.CUE_VERSION}}" >&2; exit 1; }
+        echo "bootstrap-cue: bin/cue is $(bin/cue version | head -1)"
+
+  vendor:
+    desc: Regenerate the vendored CUE egress schemas from their pinned upstream sources (requires the cue CLI — the cue candy)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - |
+        set -e
+        command -v cue >/dev/null || { echo "cue CLI not found — deploy the cue candy: charly bundle add cue cue --target local"; exit 1; }
+        cd charly/schema/vendor
+        # cloud-init cloud-config (Canonical, Draft-04) -> #CloudConfig
+        cue import -f -p schema -l '#CloudConfig:' -o cloud_config.cue jsonschema: sources/cloud-config-v1.json
+        echo "vendored schemas regenerated — run 'cd charly && go test ./...' to verify they compile + validate"

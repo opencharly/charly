@@ -1,0 +1,203 @@
+version: '3'
+
+tasks:
+  charly:
+    desc: Build charly from source and install (portable; auto-detects distro)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - mkdir -p bin candy/charly/bin
+      # Regenerate the compiled-in plugin wiring from charly.yml `compiled_plugins:`
+      # BEFORE the go build that needs it: pluginsgen emits charly/plugins_generated.go
+      # (registerCompiledPlugin per selected plugin candy) + the repo-root go.work (the
+      # `use` directives that let `go build ./charly` resolve those candy imports).
+      # GOWORK=off so a stale go.work can't fail workspace load before regeneration;
+      # the generator imports only stdlib+yaml and runs without a pre-built charly.
+      - cd charly && GOWORK=off go run ./internal/pluginsgen -root .. -config charly/charly.yml -out charly/plugins_generated.go -gowork go.work
+      # Stamp the binary's CalVer identity (`charly version` → main.BuildCalVer) at
+      # build time, from the shared pkg/arch/calver.sh — ALWAYS the HEAD commit's
+      # UTC date (deterministic: same commit → same version, whether the tree is
+      # clean or dirty; the build clock is never consulted). Without this stamp
+      # `charly version` would read the wall clock at invocation — useless as a build
+      # identity / freshness signal. The copy into candy/charly/bin/charly carries the
+      # same stamp, so the `charly` layer (and every image/VM baking it) ships a
+      # self-identifying binary, and the PKGBUILD's pkgver() reads this same
+      # binary's `charly version` so the pacman package can never disagree.
+      - |
+        CALVER=$(bash pkg/arch/calver.sh)
+        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+      - cp bin/charly candy/charly/bin/charly
+      - task: install
+
+  install:
+    desc: Install charly for the current host (auto-detects distro; portable by default)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - |
+        set -e
+        if [ -r /etc/os-release ]; then
+          . /etc/os-release
+        else
+          ID=unknown
+          ID_LIKE=
+        fi
+        case " $ID $ID_LIKE " in
+          *" arch "*|*" manjaro "*|*" archarm "*|*" endeavouros "*)
+            if command -v makepkg >/dev/null 2>&1; then
+              # pkg/arch/PKGBUILD declares mandatory AUR deps
+              # (cloudflared-bin, gvisor-tap-vsock). Pre-install them via
+              # an AUR helper FIRST, then run makepkg directly inside
+              # pkg/arch. NEVER use yay -B / yay -Bi against the local
+              # checkout — that mode runs `git pull` against pkg/arch's
+              # subrepo and can reset uncommitted edits in the working
+              # tree (war-story 2026-05-05).
+              AUR_DEPS="cloudflared-bin gvisor-tap-vsock"
+              if command -v yay >/dev/null 2>&1; then
+                yay -S --needed --noconfirm $AUR_DEPS
+              elif command -v paru >/dev/null 2>&1; then
+                paru -S --needed --noconfirm $AUR_DEPS
+              else
+                echo "WARNING: yay/paru not found — AUR deps must be"
+                echo "         pre-installed manually for makepkg to succeed."
+                echo "         Install an AUR helper, then re-run."
+              fi
+              cd pkg/arch
+              mkdir -p src/opencharly-git
+              cp "{{.ROOT_DIR}}/LICENSE" src/opencharly-git/LICENSE
+              # Displace any package this build supersedes BEFORE installing.
+              # pacman -U (which makepkg -i runs for a local-file install) does
+              # NOT honor `replaces=` — that fires only on a sync-database
+              # upgrade (pacman -Syu) — so a conflicting/replaced package left
+              # installed fails the install with `unresolvable package
+              # conflicts` (main package) or `conflicting files` (debug
+              # sibling). The displace-list is DERIVED from the PKGBUILD's own
+              # conflicts=/replaces= arrays (the single source of truth — a
+              # hardcoded copy here drifts from the PKGBUILD and silently misses
+              # a renamed package), plus each entry's -debug sibling and this
+              # package's own -debug sibling.
+              DISPLACE=$(bash -c 'source ./PKGBUILD
+                for p in "${conflicts[@]}" "${replaces[@]}"; do printf "%s\n%s-debug\n" "$p" "$p"; done
+                printf "%s-debug\n" "$pkgname"' | sort -u)
+              LEGACY_PKGS=""
+              for pkg in $DISPLACE; do
+                if pacman -Q "$pkg" >/dev/null 2>&1; then
+                  LEGACY_PKGS="$LEGACY_PKGS $pkg"
+                fi
+              done
+              if [ -n "$LEGACY_PKGS" ]; then
+                echo "Removing superseded package(s):$LEGACY_PKGS (replaced by the opencharly-git build)..."
+                sudo pacman -Rdd --noconfirm $LEGACY_PKGS
+              fi
+              makepkg -sefi --noconfirm
+              echo "Installed system-wide via pacman (makepkg in pkg/arch)"
+              # One-time cleanup: the package is already installed via pacman, so
+              # makepkg's src/, pkg/, the built *.pkg.tar.zst, and *.log are pure
+              # transient waste. Always removed immediately so pkg/arch doesn't
+              # accumulate (war-story: 138 stale *.pkg.tar.zst = 1.3G). The
+              # `charly clean` verb sweeps these too. See /charly-core:clean.
+              rm -rf src pkg ./*.pkg.tar.zst ./*.log
+              # The system package now owns the canonical /usr/bin/charly. Any
+              # other `charly` in a $PATH dir that PRECEDES /usr/bin (a prior
+              # `install-portable` run, a pre-package manual install to
+              # /usr/local/bin, a non-Arch build) SHADOWS it and goes stale.
+              # Because this path refreshes /usr/bin/charly but never the shadow,
+              # the os.Executable freshness guard (charly/main_freshness.go) keeps
+              # tripping on the stale shadow in an unbreakable loop —
+              # `task build:charly` reports success, yet the on-PATH binary stays
+              # old. Remove every superseded shadow so the package binary is
+              # authoritative. NEVER touch a file owned by another pacman package
+              # (only orphan/manual shadows are removed); sudo handles the
+              # root-owned system locations this path already escalates for.
+              for shadow in "$HOME/.local/bin/charly" "$HOME/bin/charly" /usr/local/bin/charly /usr/local/sbin/charly; do
+                [ -e "$shadow" ] || continue
+                [ "$shadow" -ef /usr/bin/charly ] && continue
+                pacman -Qo "$shadow" >/dev/null 2>&1 && continue
+                if [ -w "$shadow" ] && [ -w "$(dirname "$shadow")" ]; then
+                  rm -f "$shadow"
+                else
+                  sudo rm -f "$shadow"
+                fi
+                echo "Removed superseded charly shadow: $shadow (canonical /usr/bin/charly is the opencharly-git package)"
+              done
+              exit 0
+            fi
+            ;;
+        esac
+        # Non-Arch (Fedora, Bazzite, Ubuntu, Debian, ...) or Arch without makepkg:
+        # portable install to $HOME/.local/bin/charly.
+        install -D -m 0755 bin/charly "$HOME/.local/bin/charly"
+        echo "Installed portable binary to $HOME/.local/bin/charly"
+        case ":$PATH:" in
+          *":$HOME/.local/bin:"*) ;;
+          *)
+            echo "WARNING: $HOME/.local/bin is not in your PATH."
+            echo "         Add it to your shell profile, e.g.:"
+            echo "         echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+            ;;
+        esac
+
+  install-arch:
+    desc: Force Arch package install (pre-resolves AUR deps via yay/paru, then makepkg)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - |
+        set -e
+        AUR_DEPS="cloudflared-bin gvisor-tap-vsock"
+        if command -v yay >/dev/null 2>&1; then
+          yay -S --needed --noconfirm $AUR_DEPS
+        elif command -v paru >/dev/null 2>&1; then
+          paru -S --needed --noconfirm $AUR_DEPS
+        else
+          echo "WARNING: yay/paru not found — AUR deps must be pre-installed."
+        fi
+        cd pkg/arch
+        mkdir -p src/opencharly-git
+        cp "{{.ROOT_DIR}}/LICENSE" src/opencharly-git/LICENSE
+        makepkg -sefi --noconfirm
+
+  install-portable:
+    desc: Force portable install to $HOME/.local/bin/charly (overrides distro detection)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - install -D -m 0755 bin/charly "$HOME/.local/bin/charly"
+      - echo "Installed to $HOME/.local/bin/charly"
+
+  binary:
+    desc: Build the charly binary to bin/charly (CalVer-stamped; NO host install)
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - mkdir -p bin candy/charly/bin
+      - |
+        CALVER=$(bash pkg/arch/calver.sh)
+        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+      - cp bin/charly candy/charly/bin/charly
+
+  # Release-artifact builds — thin wrappers over `charly box pkg`, which builds each
+  # native package distro-natively (in a podman container) via the SAME embedded
+  # local_pkg.build_template the deploy-time localpkg path uses (R3). Output → dist/.
+  pkg:arch:
+    desc: Build the charly .pkg.tar.zst release artifact into dist/
+    dir: "{{.ROOT_DIR}}"
+    deps: [binary]
+    cmds:
+      - bin/charly box pkg pac
+
+  pkg:fedora:
+    desc: Build the charly .rpm release artifact into dist/
+    dir: "{{.ROOT_DIR}}"
+    deps: [binary]
+    cmds:
+      - bin/charly box pkg rpm
+
+  pkg:debian:
+    desc: Build the charly .deb release artifact into dist/ (serves Debian + Ubuntu)
+    dir: "{{.ROOT_DIR}}"
+    deps: [binary]
+    cmds:
+      - bin/charly box pkg deb
+
+  pkg:all:
+    desc: Build every native package release artifact (.pkg.tar.zst/.rpm/.deb) into dist/
+    dir: "{{.ROOT_DIR}}"
+    deps: [binary]
+    cmds:
+      - bin/charly box pkg

@@ -1,0 +1,9 @@
+# makepkg build artifacts (the RunHostStep host-engine host build produces these in-tree; PKGDEST
+# redirects the package file to a temp dir, but makepkg still creates src/ + pkg/ here).
+# Mirrors pkg/arch/.gitignore so the working tree stays clean after a bed run.
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+*.log
+pkg/
+src/

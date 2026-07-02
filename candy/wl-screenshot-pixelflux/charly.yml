@@ -1,0 +1,28 @@
+wl-screenshot-pixelflux:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Desktop screenshot capture via the selkies pixelflux pipeline
+            Installs the pixelflux-screenshot wrapper script under ~/.local/bin,
+            which drives the selkies pixelflux capture pipeline to grab a desktop
+            frame. Verifiable: the wrapper script is installed and executable.
+    wl-screenshot-pixelflux-require:
+        require:
+            - selkies
+    wl-screenshot-pixelflux-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    wl-screenshot-pixelflux-step-1:
+        run: copy=pixelflux-screenshot
+        copy: pixelflux-screenshot
+        to: "${HOME}/.local/bin/pixelflux-screenshot"
+        mode: "0755"
+        run_as: "${USER}"
+    wl-screenshot-pixelflux-step-2:
+        check: the pixelflux-screenshot wrapper is installed and executable at the expected path
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/pixelflux-screenshot
+            exists: true
+            mode: "0755"

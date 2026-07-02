@@ -1,0 +1,73 @@
+#!/bin/sh
+# kde-selkies-session: start a full KDE Plasma Wayland session NESTED inside
+# pixelflux's virtual Wayland compositor (wayland-1), so selkies streams the
+# Plasma desktop over WebRTC. This is the KDE analogue of labwc-wrapper:
+# pixelflux owns wayland-1; KWin/Plasma renders into it; pixelflux captures +
+# H.264/NVENC-encodes the composited frames. (This streamed session is the
+# pixelflux virtual framebuffer — distinct from the SDDM/Plasma DRM session a
+# physical monitor shows on the real GPU.)
+
+PIXELFLUX_SOCKET="${XDG_RUNTIME_DIR:-/tmp}/wayland-1"
+TIMEOUT=60
+ELAPSED=0
+echo "kde-selkies-session: waiting for pixelflux socket at $PIXELFLUX_SOCKET..."
+while [ ! -e "$PIXELFLUX_SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 0.5
+    ELAPSED=$((ELAPSED + 1))
+done
+if [ ! -e "$PIXELFLUX_SOCKET" ]; then
+    echo "kde-selkies-session: pixelflux socket not ready after ${TIMEOUT}s" >&2
+    exit 1
+fi
+echo "kde-selkies-session: socket found, starting nested KDE Plasma (Wayland)"
+
+# Render into pixelflux's compositor, not the GPU scanout.
+export WAYLAND_DISPLAY=wayland-1
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=KDE
+export XDG_SESSION_DESKTOP=KDE
+export KWIN_DRM_NO_AMS=1
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+export XKB_DEFAULT_LAYOUT="${XKB_DEFAULT_LAYOUT:-us}"
+export XKB_DEFAULT_VARIANT="${XKB_DEFAULT_VARIANT:-}"
+export XKB_DEFAULT_MODEL="${XKB_DEFAULT_MODEL:-pc105}"
+export XKB_DEFAULT_OPTIONS="${XKB_DEFAULT_OPTIONS:-}"
+
+# Chrome (CDP) is NOT launched here — the supervised `[program:chrome]` service
+# in the selkies-core layer owns it for both selkies flavors. chrome-wrapper
+# polls for wayland-0 (the Plasma client socket startplasma-wayland creates
+# below) itself, and supervisord relaunches Chrome if it self-exits during the
+# nested compositor's startup-race (the former fire-once launch here had no such
+# relaunch, so Chrome stayed dead). See candy/selkies-core/candy.yml.
+
+# A private D-Bus session so this nested Plasma doesn't collide with the DRM
+# Plasma session's bus.
+#
+# startplasma-wayland brings up kwin_wayland (nested in pixelflux's wayland-1,
+# creating its own wayland-0 client socket) + kded6. In a full systemd-user login
+# session it would ALSO activate plasma-workspace.target -> plasma-plasmashell.service
+# (the panel + wallpaper shell). This supervisord pod has NO systemd-user instance
+# (PID 1 is supervisord, no /run/user/<uid>), so startplasma silently falls back to
+# the legacy plasma_session shim, which starts ONLY kwin+kded and NEVER the
+# X-systemd-skip=true autostart layer plasmashell lives in -> a black frame with no
+# panel/wallpaper. So we launch plasmashell ourselves on wayland-0 (kwin's client
+# socket, NOT pixelflux's wayland-1) once kwin has created it -- the KDE analogue of
+# how the labwc flavor launches its panel after the compositor comes up.
+exec dbus-run-session sh -c '
+    startplasma-wayland &
+    startplasma_pid=$!
+    kwin_socket="${XDG_RUNTIME_DIR:-/tmp}/wayland-0"
+    waited=0
+    while [ ! -e "$kwin_socket" ] && [ "$waited" -lt 120 ]; do
+        sleep 0.5
+        waited=$((waited + 1))
+    done
+    if [ -e "$kwin_socket" ]; then
+        echo "kde-selkies-session: kwin wayland-0 socket up, launching plasmashell"
+        WAYLAND_DISPLAY=wayland-0 plasmashell &
+    else
+        echo "kde-selkies-session: kwin wayland-0 socket never appeared in 60s; plasmashell not launched" >&2
+    fi
+    wait "$startplasma_pid"
+'

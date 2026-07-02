@@ -1,0 +1,22 @@
+title: "OpenRouter Integration"
+description: "Notebooks testing the OpenRouter API for multi-model LLM inference"
+order: 4
+
+subcategories:
+  - id: "basics"
+    title: "API Basics"
+    description: "OpenRouter API authentication and basic completion"
+    pattern: "00_*.ipynb"
+    order: 0
+
+  - id: "models"
+    title: "Model Selection"
+    description: "Querying and selecting models via OpenRouter"
+    pattern: "01_*.ipynb"
+    order: 1
+
+  - id: "inference"
+    title: "Inference"
+    description: "Practical inference: structured output, summarization, code generation, reasoning"
+    pattern: "02_*.ipynb"
+    order: 2

@@ -1,0 +1,127 @@
+kde-desktop:
+    candy:
+        version: 2026.152.2006
+        description: |
+            Bare-metal KDE Plasma desktop with an SDDM display manager that boots a real GPU seat into a graphical KDE login.
+            Bare-metal KDE Plasma desktop for a graphical workstation (host or VM
+            guest with a real GPU output). Composes the shared kde-shell layer (the
+            SDDM-free Plasma session: plasma-desktop deps-puller + core components +
+            curated apps) and adds the display-manager half: SDDM plus the
+            workstation-only extras that would only bloat the headless streaming pod
+            (system monitor, browser integration, firewall/thunderbolt KCMs, kwallet,
+            kdeconnect, bluetooth, partition tools, media players). The layer sets the
+            systemd default to graphical.target so a real GPU output lights up a KDE
+            login. CachyOS theming/settings live in the separate cachyos-kde-settings
+            layer (bare-metal seat only — NOT part of the headless streaming pod
+            path); audio in pipewire; fonts in desktop-fonts.
+
+            Only meaningful on a systemd target with a real display (bare host / VM
+            guest with GPU). On supervisord-init containers the sddm use_packaged
+            entry is skipped (warn) by design. For the headless streamed KDE pod use
+            selkies-kde-desktop, which composes kde-shell directly without SDDM.
+    kde-desktop-require:
+        require:
+            - dbus
+            - pipewire
+    kde-desktop-candy:
+        candy:
+            # The SDDM-free Plasma session packages (kwin_wayland + plasmashell + the
+            # curated app set) are shared with the headless kde-selkies pod (R3).
+            - kde-shell
+    kde-desktop-distro:
+        distro:
+            # Authored under `arch:`; CachyOS inherits arch's package sections
+            # (the embedded `distro:` vocabulary sets cachyos
+            # `inherit_packages: true`), so SDDM + the Plasma extras reach the
+            # cachyos container AND the cachyos VM with no per-distro duplication.
+            arch:
+                package:
+                    # Display manager + the systemd graphical seat.
+                    - sddm
+                    # Workstation-only Plasma extras — deliberately NOT in kde-shell,
+                    # so the headless selkies-kde streaming pod stays lean.
+                    - plasma-systemmonitor
+                    - plasma-browser-integration
+                    - plasma-firewall
+                    - plasma-thunderbolt
+                    - kdeplasma-addons
+                    - kwallet-pam
+                    - kwalletmanager
+                    - bluedevil
+                    - kinfocenter
+                    - xsettingsd
+                    - filelight
+                    - partitionmanager
+                    - kdeconnect
+                    - kdegraphics-thumbnailers
+                    - ffmpegthumbs
+                    - phonon-qt6-vlc
+                    - haruna
+    kde-desktop-service:
+        service:
+            - name: sddm
+              use_packaged: sddm.service
+              enable: true
+              scope: system
+    kde-desktop-step-0:
+        run: |
+            command=systemctl set-default graphical.target || true
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                systemctl set-default graphical.target || true
+    kde-desktop-step-1:
+        check: the SDDM display-manager binary is installed for the graphical seat
+        plugin: file
+        plugin_input:
+            file: /usr/bin/sddm
+            exists: true
+    kde-desktop-step-2:
+        check: the sddm package is present in the image
+        plugin: package
+        plugin_input:
+            package: sddm
+            installed: true
+    kde-desktop-step-3:
+        check: the workstation system monitor is available
+        plugin: file
+        plugin_input:
+            file: /usr/bin/plasma-systemmonitor
+            exists: true
+    kde-desktop-step-4:
+        check: the filelight disk-usage visualiser is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/filelight
+            exists: true
+    kde-desktop-step-5:
+        check: the KDE partition manager is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/partitionmanager
+            exists: true
+    kde-desktop-step-6:
+        check: the haruna media player package is present
+        plugin: package
+        plugin_input:
+            package: haruna
+            installed: true
+    kde-desktop-step-7:
+        check: the systemd default target is graphical so SDDM starts a KDE login on the real GPU output
+        exit_status: 0
+        stdout:
+            - matches: "graphical.target"
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: systemctl get-default
+    kde-desktop-step-8:
+        check: the packaged sddm.service is enabled to start at boot
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: sddm
+            enabled: true

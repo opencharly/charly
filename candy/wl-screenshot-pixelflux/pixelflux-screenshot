@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Capture a screenshot from pixelflux's rendering pipeline.
+
+Connects to the in-process capture server at /tmp/charly-capture.sock (started
+by selkies-capture-server inside the selkies process). This captures the
+full composited desktop including all windows because the capture server
+shares pixelflux's global WaylandBackend.
+
+Outputs PNG to stdout.
+
+Usage:
+    pixelflux-screenshot                    # full desktop PNG to stdout
+    pixelflux-screenshot --status           # query bridge status as JSON
+"""
+import os
+import socket
+import struct
+import sys
+
+SOCK_PATH = "/tmp/charly-capture.sock"
+
+
+def status():
+    """Query and print bridge status."""
+    if not os.path.exists(SOCK_PATH):
+        print("capture-bridge: not running (socket not found)", file=sys.stderr)
+        sys.exit(1)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(SOCK_PATH)
+        sock.settimeout(5)
+        sock.sendall(b"STATUS\n")
+        length_data = b""
+        while len(length_data) < 4:
+            chunk = sock.recv(4 - len(length_data))
+            if not chunk:
+                break
+            length_data += chunk
+        if len(length_data) < 4:
+            print("capture-bridge: no response", file=sys.stderr)
+            sys.exit(1)
+        length = struct.unpack(">I", length_data)[0]
+        data = b""
+        while len(data) < length:
+            chunk = sock.recv(min(65536, length - len(data)))
+            if not chunk:
+                break
+            data += chunk
+        print(data.decode(errors='replace'))
+    except Exception as e:
+        print(f"capture-bridge: status query failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        sock.close()
+
+
+def main():
+    if not os.path.exists(SOCK_PATH):
+        print(
+            "pixelflux-screenshot: capture server not running "
+            f"({SOCK_PATH} not found). Is selkies started?",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(SOCK_PATH)
+        sock.settimeout(45)
+    except (ConnectionRefusedError, FileNotFoundError) as e:
+        print(f"pixelflux-screenshot: cannot connect to capture server: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        sock.sendall(b"SCREENSHOT\n")
+
+        # Read 4-byte length prefix
+        length_data = b""
+        while len(length_data) < 4:
+            chunk = sock.recv(4 - len(length_data))
+            if not chunk:
+                print("pixelflux-screenshot: connection closed", file=sys.stderr)
+                sys.exit(1)
+            length_data += chunk
+
+        length = struct.unpack(">I", length_data)[0]
+        if length == 0:
+            # Read reason string from bridge (sent after 0-length marker)
+            reason = ""
+            try:
+                sock.settimeout(1)
+                reason = sock.recv(4096).decode(errors='replace').strip()
+            except Exception:
+                pass
+            msg = "pixelflux-screenshot: capture failed"
+            if reason:
+                msg += f" ({reason})"
+            print(msg, file=sys.stderr)
+            sys.exit(1)
+
+        # Read PNG data
+        png_data = b""
+        while len(png_data) < length:
+            chunk = sock.recv(min(65536, length - len(png_data)))
+            if not chunk:
+                break
+            png_data += chunk
+
+        if len(png_data) < length:
+            print(
+                f"pixelflux-screenshot: incomplete read ({len(png_data)}/{length} bytes)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        sys.stdout.buffer.write(png_data)
+        sys.stdout.buffer.flush()
+
+        print(
+            f"pixelflux-screenshot: {length} bytes",
+            file=sys.stderr,
+        )
+    finally:
+        sock.close()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--status":
+        status()
+    else:
+        main()

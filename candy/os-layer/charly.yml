@@ -1,0 +1,79 @@
+os-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            os — predictable system-state fixture for harness phase 1
+            Writes /etc/charly-os-marker containing the predetermined content
+            marker `charly-os-content-marker`, and registers a long-lived bash
+            service so that `pgrep -x bash` succeeds. Combined with a fedora
+            base + supervisord this satisfies every scenario in the
+            single-pod-system-state recipe.
+    os-layer-distro:
+        distro:
+            fedora:
+                package:
+                    - bash
+                    - procps-ng
+                    - iproute
+                    - util-linux
+    os-layer-service:
+        service:
+            - name: os-bash
+              exec: "/usr/bin/bash -c 'while true; do sleep 60; done'"
+              restart: always
+              priority: 50
+              enable: true
+              scope: system
+    os-layer-step-0:
+        run: mkdir=/etc
+        mkdir: /etc
+        run_as: root
+        mode: "0755"
+    os-layer-step-1:
+        run: write=/etc/charly-os-marker
+        write: /etc/charly-os-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            charly-os-content-marker
+    os-layer-step-2:
+        check: the predetermined marker file exists at /etc/charly-os-marker
+        plugin: file
+        plugin_input:
+            file: /etc/charly-os-marker
+            exists: true
+    os-layer-step-3:
+        check: the marker file carries the content marker charly-os-content-marker
+        plugin: file
+        plugin_input:
+            file: /etc/charly-os-marker
+            contains:
+                - charly-os-content-marker
+    os-layer-step-4:
+        check: bash is present at /usr/bin/bash to back the keepalive service
+        plugin: file
+        plugin_input:
+            file: /usr/bin/bash
+            exists: true
+    os-layer-step-5:
+        check: procps-ng is installed so pgrep can probe the keepalive process
+        plugin: package
+        plugin_input:
+            package: procps-ng
+            installed: true
+    os-bash-installed:
+        check: package=bash
+        id: os-bash-installed
+        plugin: package
+        plugin_input:
+            package: bash
+            installed: true
+    os-bash-service-running:
+        check: service=os-bash
+        id: os-bash-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: os-bash
+            running: true

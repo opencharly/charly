@@ -1,0 +1,29 @@
+plugin-example-external:
+    candy:
+        version: 2026.176.1200
+        description: |-
+            Reference DUAL-PLACEMENT charly plugin — ONE provider, two placements. Its
+            importable provider package (NewProvider/NewMeta, serving the externalprobe
+            check verb + its self-contained CUE schema over the SDK Describe channel) is
+            COMPILED INTO charly when this candy is listed in charly.yml
+            `compiled_plugins:` (the default — registered in-process via
+            registerCompiledPlugin), and the SAME provider is served OUT-OF-PROCESS over
+            go-plugin gRPC by the cmd/serve shim (host-built + connected via
+            LocalTransport) when it is NOT selected. The placement is invisible above the
+            provider registry — the verb dispatches identically either way, with no
+            authoring change. The companion of the built-in candy/plugin-example; the
+            out-of-process build/deploy legs are demonstrated by
+            candy/plugin-example-step / -builder / -deploy / -command.
+    plugin-example-external-decl:
+        plugin:
+            providers:
+                - verb:externalprobe
+            source: github.com/opencharly/charly/candy/plugin-example-external
+    externalprobe-dispatches:
+        check: the externalprobe verb dispatches through the provider registry and passes — transport-invisible (compiled-in in the default build, out-of-process when not selected); the plugin_input marker round-trips author -> provider -> result
+        id: externalprobe-dispatches
+        plugin: externalprobe
+        plugin_input:
+            marker: external-plugin-ok
+        context:
+            - runtime

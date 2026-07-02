@@ -1,0 +1,33 @@
+# The WELDED command plugins baked beside the charly binary at /usr/lib/charly/plugins
+# on every native package install (arch .pkg.tar.zst, fedora .rpm, debian .deb).
+#
+# Each is an out-of-process command:<word> (and, for a few, verb:<word>) plugin that
+# makes `charly <word>` dispatch to the hidden `__<word>` core command. They are NOT
+# compiled into charly (compiled_plugins: is verb/kind/step only), and they resolve
+# ONLY from bakedPluginDirs() = $CHARLY_PLUGIN_DIR + /usr/lib/charly/plugins. Without
+# them a package install would leave `charly doctor`/`clean`/`vm`/… unresolvable
+# project-less.
+#
+# SINGLE SOURCE (R3) for the plugin set, read by all three package builders' HOST
+# build stage:
+#   - pkg/arch/PKGBUILD                          build()   — makepkg on the host
+#   - charly/charly.yml (embedded build vocab)   distro.fedora.format.rpm.local_pkg
+#     + distro.debian.format.deb.local_pkg build_template host portion (mirrored in
+#     candy/plugin-vm/build_defaults.yml, the faithful copy the out-of-process
+#     plugin-vm embeds)
+# Each builder builds every listed candy with `GOWORK=off go build` and generates its
+# `.providers` manifest via `charly __plugin-providers <candy-dir>`, then stages the
+# binary (0755) + manifest (0644) into /usr/lib/charly/plugins. discoverBakedPluginWords
+# reads each `.providers` at startup to register the word WITHOUT connecting the plugin.
+#
+# One name per line; blank lines and `#` comments are ignored.
+plugin-secrets
+plugin-udev
+plugin-tmux
+plugin-preempt
+plugin-feature
+plugin-vm
+plugin-doctor
+plugin-clean
+plugin-settings
+plugin-candy

@@ -1,0 +1,30 @@
+entryPoints:
+  web:
+    address: ":8000"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":8443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+api:
+  dashboard: true
+  insecure: true
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: false
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL:-admin@example.com}
+      storage: ${HOME}/.traefik/acme/acme.json
+      httpChallenge:
+        entryPoint: web

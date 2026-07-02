@@ -1,0 +1,36 @@
+plugin-deploy-pod:
+    candy:
+        version: 2026.180.0001
+        description: |-
+            OUT-OF-TREE charly DEPLOY plugin serving the `pod` deploy SUBSTRATE —
+            `target: pod` (the DEFAULT substrate: a deployment run as a container image via
+            quadlet/podman). A standalone Go module (go.mod + main.go) served over go-plugin
+            gRPC via the charly plugin SDK; charly's loader host-builds the provider binary
+            and connects it OUT-OF-PROCESS (LocalTransport). externalDeployTarget Invokes it
+            (OpExecute) with the deployment's InstallPlan VIEWS + a venue descriptor and the
+            host's executor served on the broker. Unlike deploy:vm (whose plugin WALKS the
+            plan inside the guest), pod bakes its install steps INTO the image at BUILD time:
+            the host's pod lifecycle hook (pod_deploy_lifecycle.go) builds the overlay
+            container image HOST-SIDE in PrepareVenue (the SAME core OCITarget/Generator
+            build engine, in-process — nothing crosses gRPC, exactly as vm builds its disk
+            host-side), and the bed runner / `charly start` configs + starts the container.
+            So there is NO per-step venue walk for pod: this plugin's Invoke does NOT call
+            kit.WalkPlans — it returns an EMPTY DeployReply (pod teardown is `charly remove` +
+            drop overlay images, owned by the host lifecycle hook's PostTeardown). The
+            pod-substrate sibling of candy/plugin-deploy-vm; the host's pod lifecycle hook
+            owns the container lifecycle (overlay build + config/start/remove + the
+            `charly update` rebuild gate), this plugin only serves the substrate word
+            out-of-process.
+    plugin-deploy-pod-decl:
+        plugin:
+            providers:
+                - deploy:pod
+            source: github.com/opencharly/charly/candy/plugin-deploy-pod
+    deploy-pod-module-present:
+        check: the out-of-tree deploy:pod plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+        id: deploy-pod-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

@@ -1,0 +1,158 @@
+openwebui:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Open WebUI LLM chat front-end with an auto-configuring entrypoint, served as a supervised HTTP service on port 8080.
+            Installs the Open WebUI server (the `open-webui` PyPI package via pixi)
+            and copies a bash auto-config entrypoint to
+            ${HOME}/.local/bin/openwebui-entrypoint (mode 0755). A supervised system
+            service runs that entrypoint, which wires up LLM providers from
+            env/secrets (OpenRouter, Ollama Cloud, direct OpenAI, local Ollama, MCP
+            servers, and Jupyter code execution), enforces mandatory admin
+            credentials (WEBUI_ADMIN_EMAIL + WEBUI_ADMIN_PASSWORD), reads the
+            auto-generated WEBUI_SECRET_KEY, then exec's `open-webui serve` on port
+            8080. Every fact below is observable: the installed executable
+            entrypoint, the running service, the admin email injected into its
+            environment, and the HTTP 200 the web UI returns on its published port.
+    openwebui-require:
+        require:
+            - python
+            - supervisord
+    openwebui-env:
+        env:
+            DATA_DIR: "/opt/data"
+            PORT: "8080"
+            DOCKER: "true"
+            ENABLE_DIRECT_CONNECTIONS: "true"
+            ENABLE_CODE_EXECUTION: "true"
+            ENABLE_PERSISTENT_CONFIG: "false"
+            ENABLE_VERSION_UPDATE_CHECK: "false"
+    openwebui-env_require:
+        env_require:
+            - name: WEBUI_ADMIN_EMAIL
+              description: "Admin account email (identifier, not a credential) — pass via: charly config openwebui -e WEBUI_ADMIN_EMAIL=you@example.com"
+    openwebui-env_accept:
+        env_accept:
+            - name: OLLAMA_HOST
+              description: "Local Ollama server URL (auto-injected by ollama layer env_provides)"
+            - name: OPENAI_API_BASE_URL
+              description: "OpenAI-compatible API base URL"
+            - name: WEBUI_AUTH
+              description: "Enable authentication (default: true)"
+            - name: CHARLY_MCP_SERVERS
+              description: "JSON array of MCP servers (auto-injected by mcp_provide layers)"
+            - name: IMMICH_API_URL
+              description: "Immich HTTP API URL (auto-injected by immich layer env_provides)"
+    openwebui-secret_require:
+        # Credential-store-backed env vars. Values live in the user's credential
+        # backend (keyring/config) and are injected at runtime via podman
+        # secrets (Secret=<name>,type=env,target=<var>). Never land in deploy.yml
+        # or the quadlet file as plaintext. See /charly-build:secrets and /charly-image:layer.
+        #
+        # WEBUI_ADMIN_PASSWORD: auto-generated on first deploy as a 32-byte hex
+        # random value via DefaultCredentialStore.Set (see charly/layer_secrets.go
+        # ensureLayerSecret). To use the auto-generated password to log in for
+        # the first time:
+        #   charly secrets get charly/secret WEBUI_ADMIN_PASSWORD
+        # To override with a specific value before deploying:
+        #   charly secrets set charly/secret WEBUI_ADMIN_PASSWORD <password>
+        secret_require:
+            - name: WEBUI_ADMIN_PASSWORD
+              description: "Initial admin account password for Open WebUI first-run setup. Auto-generated on first deploy; retrieve via `charly secrets get charly/secret WEBUI_ADMIN_PASSWORD`."
+    openwebui-secret_accept:
+        secret_accept:
+            - name: OPENROUTER_API_KEY
+              description: "API key for OpenRouter (maps to OPENAI_API_KEY with OpenRouter base URL)"
+              key: charly/api-key/openrouter
+            - name: OLLAMA_API_KEY
+              description: "API key for Ollama Cloud inference"
+              key: charly/api-key/ollama
+            - name: OPENAI_API_KEY
+              description: "Direct OpenAI API key"
+              key: charly/api-key/openai
+            - name: IMMICH_API_KEY
+              description: "Immich API key for programmatic access to the running immich instance"
+              key: charly/api-key/immich
+    openwebui-mcp_accept:
+        mcp_accept:
+            - name: jupyter
+              description: "JupyterLab CRDT MCP server for notebook manipulation"
+            - name: chrome-devtools
+              description: "Chrome DevTools MCP server for browser automation"
+    openwebui-port:
+        port:
+            - 8080
+    openwebui-volume:
+        volume:
+            - name: data
+              path: "/opt/data"
+    openwebui-alias:
+        alias:
+            - name: open-webui
+              command: open-webui
+    openwebui-secret:
+        secret:
+            - name: webui-secret-key
+              env: WEBUI_SECRET_KEY
+    openwebui-service:
+        service:
+            - name: openwebui
+              exec: "%(ENV_HOME)s/.local/bin/openwebui-entrypoint"
+              restart: always
+              working_directory: "%(ENV_HOME)s"
+              enable: true
+              scope: system
+    openwebui-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    openwebui-step-1:
+        run: copy=openwebui-entrypoint
+        copy: openwebui-entrypoint
+        to: "${HOME}/.local/bin/openwebui-entrypoint"
+        mode: "0755"
+        run_as: "${USER}"
+    openwebui-step-2:
+        check: the auto-config entrypoint script is present and executable at ${HOME}/.local/bin/openwebui-entrypoint
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/openwebui-entrypoint
+            exists: true
+            mode: "0755"
+    openwebui-step-3:
+        check: the openwebui service is running under the init system
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: openwebui
+            running: true
+    openwebui-step-4:
+        check: the Open WebUI web interface answers HTTP 200 on the published port
+        timeout: 30s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:8080}/
+            status: 200
+    openwebui-step-5:
+        check: the mandatory admin email is injected into the running service environment
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: printenv WEBUI_ADMIN_EMAIL
+    openwebui-step-6:
+        agent-check: the rendered landing page presents the Open WebUI sign-in experience for the auto-provisioned admin account, ready to start an LLM chat
+    openwebui-port-2:
+        check: addr=127.0.0.1:${HOST_PORT:8080}
+        id: openwebui-port
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8080}
+            reachable: true

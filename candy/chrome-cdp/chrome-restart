@@ -1,0 +1,20 @@
+#!/bin/sh
+# Kill running Chrome and relaunch via chrome-wrapper.
+# chrome-wrapper handles proxy (HTTP_PROXY/HTTPS_PROXY/NO_PROXY),
+# CDP (--remote-debugging-port), user-agent spoofing, etc.
+# Works on both sway (swaymsg exec) and labwc (direct launch).
+
+# Kill existing Chrome gracefully, then force if still running
+pkill -f "chrome.*remote-debugging-port" 2>/dev/null
+sleep 1
+pkill -9 -f "chrome.*remote-debugging-port" 2>/dev/null
+sleep 0.5
+
+# Relaunch: try sway IPC first, fall back to direct launch (labwc)
+SWAYSOCK=$(ls -t /tmp/sway-ipc.*.sock 2>/dev/null | head -1)
+if [ -n "$SWAYSOCK" ]; then
+    export SWAYSOCK
+    swaymsg exec "chrome-wrapper" &
+else
+    chrome-wrapper &
+fi

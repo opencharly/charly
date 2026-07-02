@@ -1,0 +1,20 @@
+#!/bin/bash
+# Block until the Xwayland :0 socket (provided by labwc) is reachable.
+# Used as a startup-gate prefix by the emulator service so the emulator's
+# Qt UI doesn't crash on "no display" during the first few seconds after
+# supervisord starts both labwc (priority 12) and the emulator (priority 30).
+set -euo pipefail
+
+for i in $(seq 1 60); do
+  if [ -S /tmp/.X11-unix/X0 ]; then
+    # Extra 2s grace so the compositor finishes its initial bring-up
+    # before the emulator opens its first GL context.
+    sleep 2
+    echo "[wait-for-display] X :0 socket present after ${i}s" >&2
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "[wait-for-display] X :0 socket /tmp/.X11-unix/X0 never appeared after 60s" >&2
+exit 1

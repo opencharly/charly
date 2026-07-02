@@ -1,0 +1,38 @@
+check-structkind-layer:
+    candy:
+        version: 2026.182.0440
+        description: |
+            Drop /etc/check-structkind-marker on the host filesystem.
+            The deployable member of the check-structkind foundation bed (F5 authored-member
+            input-threading): a kind:local layer whose write: step lands a marker the member's
+            hoisted check asserts. A DEDICATED marker path (not check-local's) so the two beds
+            never collide when /verify-beds fans them out concurrently.
+    check-structkind-layer-step-0:
+        run: write=/etc/check-structkind-marker
+        write: /etc/check-structkind-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            check-structkind v1
+    check-structkind-layer-step-1:
+        check: the check-structkind marker file is present at /etc/check-structkind-marker
+        plugin: file
+        plugin_input:
+            file: /etc/check-structkind-marker
+            exists: true
+    check-structkind-layer-step-2:
+        check: the marker records the check-structkind version stamp "check-structkind v1"
+        plugin: file
+        plugin_input:
+            file: /etc/check-structkind-marker
+            contains:
+                - contains: "check-structkind v1"
+    check-structkind-marker-host:
+        check: command=test -f /etc/check-structkind-marker
+        id: check-structkind-marker-host
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /etc/check-structkind-marker"
+            in_container: false

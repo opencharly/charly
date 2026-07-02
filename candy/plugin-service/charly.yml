@@ -1,0 +1,24 @@
+plugin-service:
+    candy:
+        version: 2026.176.2900
+        description: |-
+            The `service` TYPED-STEP state-provision verb relocated into a candy.
+            CHECK: probe running/enabled via supervisorctl/systemctl through the live
+            check engine. ACT (runtime): render the enable shell. ACT (build/deploy):
+            lower into a ServicePackagedStep (the host materializes the kit descriptor,
+            keeping the load-bearing Reverse() in package main). A HOST-COUPLED verb on
+            the charly/plugin/kit contract (CheckVerbProvider + ProvisionActor +
+            StepProvider), so it is COMPILED-IN-ONLY.
+    plugin-service-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-service
+            providers:
+                - verb:service
+    service-verb-dispatches:
+        check: the service verb dispatches through the provider registry and probes that a service is running
+        id: service-verb-dispatches
+        plugin: service
+        plugin_input:
+            service: supervisord
+            running: true
+        context: [runtime]

@@ -1,0 +1,118 @@
+sway:
+    candy:
+        version: 2026.144.1443
+        description: |
+            A headless Sway Wayland compositor, staged with a launcher wrapper and config and run as a supervised service.
+            The sway candy installs the Sway compositor (plus Xwayland, fuzzel, and
+            Mesa GL/Vulkan drivers) on Fedora, strips the cap_sys_nice file capability
+            so the binary can exec inside a rootless user namespace, and stages a
+            sway-wrapper launcher plus a config file under the user's home. A
+            supervisord service runs the wrapper headless (WLR_BACKENDS=headless).
+            Every claim below is observable: the binary, the package, the staged
+            files, and the live service.
+    sway-require:
+        require:
+            - dbus
+    sway-env:
+        env:
+            WLR_BACKENDS: "headless"
+            WLR_HEADLESS_OUTPUTS: "1"
+            WLR_LIBINPUT_NO_DEVICES: "1"
+            XDG_RUNTIME_DIR: "/tmp"
+            WAYLAND_DISPLAY: "wayland-0"
+            EGL_LOG_LEVEL: "fatal"
+            XKB_DEFAULT_LAYOUT: "us"
+    sway-env_accept:
+        env_accept:
+            - name: XKB_DEFAULT_LAYOUT
+              description: "XKB keyboard layout (e.g., us, de, fr, gb). Default: us"
+            - name: XKB_DEFAULT_VARIANT
+              description: "XKB keyboard variant (e.g., dvorak, nodeadkeys). Default: none"
+    sway-distro:
+        distro:
+            fedora:
+                package:
+                    - sway
+                    - xorg-x11-server-Xwayland
+                    - fuzzel
+                    - mesa-dri-drivers
+                    - mesa-vulkan-drivers
+                    - libglvnd-egl
+                    - libglvnd-gles
+                    - egl-wayland
+                    - wlr-randr
+    sway-service:
+        service:
+            - name: sway
+              exec: "%(ENV_HOME)s/.local/bin/sway-wrapper"
+              env:
+                WAYLAND_DISPLAY: wayland-0
+                WLR_BACKENDS: headless
+                WLR_HEADLESS_OUTPUTS: 1
+                WLR_LIBINPUT_NO_DEVICES: 1
+                XDG_RUNTIME_DIR: /tmp
+              restart: always
+              priority: 10
+              start_sec: 3
+              enable: true
+              scope: system
+    sway-step-0:
+        run: setcap=/usr/bin/sway
+        setcap: /usr/bin/sway
+    sway-step-1:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    sway-step-2:
+        run: mkdir=${HOME}/.config/sway
+        mkdir: "${HOME}/.config/sway"
+        run_as: "${USER}"
+    sway-step-3:
+        run: mkdir=${HOME}/.config/sway/config.d
+        mkdir: "${HOME}/.config/sway/config.d"
+        run_as: "${USER}"
+    sway-step-4:
+        run: copy=sway-wrapper
+        copy: sway-wrapper
+        to: "${HOME}/.local/bin/sway-wrapper"
+        mode: "0755"
+        run_as: "${USER}"
+    sway-step-5:
+        run: copy=config
+        copy: config
+        to: "${HOME}/.config/sway/config"
+        mode: "0644"
+        run_as: "${USER}"
+    sway-step-6:
+        check: the Sway compositor binary is installed at /usr/bin/sway
+        plugin: file
+        plugin_input:
+            file: /usr/bin/sway
+            exists: true
+    sway-step-7:
+        check: the sway package is registered in the package database
+        plugin: package
+        plugin_input:
+            package: sway
+            installed: true
+    sway-step-8:
+        check: the sway-wrapper launcher is installed and executable
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/sway-wrapper
+            exists: true
+            mode: "0755"
+    sway-step-9:
+        check: the Sway config file is staged in the user's home
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/sway/config
+            exists: true
+    sway-step-10:
+        check: the sway compositor service is running under supervisord
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: sway
+            running: true

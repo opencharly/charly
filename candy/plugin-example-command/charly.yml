@@ -1,0 +1,35 @@
+plugin-example-command:
+    candy:
+        version: 2026.175.0900
+        description: |-
+            Reference OUT-OF-TREE charly COMMAND-class plugin — a standalone Go module
+            (go.mod + main.go) contributing the `examplecommand` command via the charly
+            plugin SDK (charly/plugin/sdk). On `charly examplecommand <args…>`, charly's
+            CLI dispatch (provider_command_external.go dispatchExternalCommand) RESOLVES
+            this plugin's binary (host-built from source, or baked into a deployed image)
+            and syscall.Exec's it with the pass-through tokens in CLI mode (sdk.Main →
+            cliMain). The plugin therefore owns real terminal stdio and does ONE
+            observable, deterministic thing: it PRINTS the joined args to STDOUT, so a test
+            can assert the command ran, received its args, AND reached a real stdout. The
+            command-class companion of the verb-class candy/plugin-example-external. The
+            command class is external-capable: charly prescans `examplecommand` into the
+            CLI grammar and fork/execs this binary on a `charly examplecommand` invocation.
+    plugin-example-command-decl:
+        plugin:
+            providers:
+                - command:examplecommand
+            source: github.com/opencharly/charly/candy/plugin-example-command
+    # ADE check: a deterministic build-context check that does NOT depend on the project
+    # context the `charly examplecommand` CLI needs (the prescan finds this candy from the
+    # project dir). It mirrors candy/plugin-example-deploy's pattern — a trivial
+    # build-context `plugin: command` (the built-in command CHECK verb) running `true`.
+    # The full CLI end-to-end (`charly examplecommand <args>` → joined args on stdout) is
+    # exercised by the Go e2e (TestExternalCommandExecPlan_*) + the live R10.
+    examplecommand-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly examplecommand` end-to-end is exercised by the Go e2e + the live R10
+        id: examplecommand-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

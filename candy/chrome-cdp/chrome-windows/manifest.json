@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Windows",
+  "version": "1.0",
+  "description": "Platform identity override",
+  "permissions": ["declarativeNetRequest"],
+  "declarative_net_request": {
+    "rule_resources": [{
+      "id": "platform_rules",
+      "enabled": true,
+      "path": "rules.json"
+    }]
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_start",
+    "world": "MAIN"
+  }]
+}

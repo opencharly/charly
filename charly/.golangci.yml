@@ -1,0 +1,55 @@
+# golangci-lint v2 config — the deterministic backbone of the CLAUDE.md-compliance audit.
+# Scope: "broadest" code-quality/idiom/duplication/dead-code — NOT security scanning.
+# gosec is deliberately excluded: on this CLI its findings are dominated by the LEGITIMATE
+# subprocess pattern (charly IS the orchestrator of podman/virsh/systemctl), i.e. the exact
+# false-positive class the audit's allowlist exists to suppress. Vulnerability scanning is a
+# separate concern (govulncheck), not a code-quality linter.
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+# Audit/CI config: show EVERY issue (no per-linter / same-issue truncation).
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  # keep the standard set (errcheck, govet, ineffassign, staticcheck, unused) and add the
+  # broadest curated quality/idiom/duplication linters on top.
+  default: standard
+  enable:
+    - dupl          # R3 cross-file / in-file duplication (bundled — no standalone tool)
+    - gocritic      # idiom / style / common mistakes
+    - misspell      # comment/string spelling
+    - revive        # golint-successor: naming, exported-doc, style
+    - gocyclo       # cyclomatic complexity hot-spots
+    - unconvert     # redundant type conversions
+    - unparam       # unused function parameters / results
+    - bodyclose     # unclosed HTTP response bodies
+    - errorlint     # error-wrapping / comparison correctness
+    - nakedret      # naked returns in long functions
+    - prealloc      # slice preallocation opportunities
+  settings:
+    errcheck:
+      # Unactionable stdlib calls whose error has no meaningful handling in a CLI:
+      # writing to stderr/stdout/string-builders never produces an actionable error,
+      # and a deferred Close on a network conn / response body / read handle is the
+      # idiomatic best-effort cleanup. Genuinely actionable errors (os.WriteFile,
+      # exec.Cmd.Run, fmt.Sscanf, io.Copy, …) are NOT excluded and ARE handled.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Closer).Close
+    dupl:
+      threshold: 150        # token threshold — high enough to flag real copy-paste, not noise
+    gocyclo:
+      min-complexity: 30    # only genuinely complex functions
+    revive:
+      rules:
+        - name: exported
+          disabled: true    # exported-doc-comment churn is out of scope for this audit
+    nakedret:
+      max-func-lines: 60

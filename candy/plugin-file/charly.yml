@@ -1,0 +1,24 @@
+plugin-file:
+    candy:
+        version: 2026.176.2700
+        description: |-
+            The `file` MULTI-ROLE state-provision verb relocated into a candy. CHECK:
+            stat the path via the live check engine and assert
+            exists/mode/owner/group/filetype/contains/sha256. ACT: render an idempotent
+            RUNTIME file-creation (mkdir/touch/cat-heredoc + chmod). A HOST-COUPLED verb
+            on the charly/plugin/kit contract (CheckVerbProvider + ProvisionActor), so it
+            is COMPILED-IN-ONLY; the `contains` matchers default a bare scalar to the
+            `contains` operator (substring) and reuse sdk.MatchAll.
+    plugin-file-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-file
+            providers:
+                - verb:file
+    file-verb-dispatches:
+        check: the file verb dispatches through the provider registry and stats a path on a live deployment
+        id: file-verb-dispatches
+        plugin: file
+        plugin_input:
+            file: /etc/hostname
+            exists: true
+        context: [runtime]

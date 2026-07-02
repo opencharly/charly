@@ -1,0 +1,31 @@
+#!/bin/sh
+# labwc-wrapper: Wait for pixelflux Wayland socket (wayland-1),
+# then start labwc as a nested compositor inside it.
+# labwc creates wayland-0 for its own clients (waybar, apps).
+
+# Pixelflux socket — hardcoded, not from env (env is wayland-0 for apps)
+PIXELFLUX_SOCKET="${XDG_RUNTIME_DIR:-/tmp}/wayland-1"
+TIMEOUT=30
+ELAPSED=0
+echo "labwc-wrapper: Waiting for pixelflux socket at $PIXELFLUX_SOCKET..."
+while [ ! -e "$PIXELFLUX_SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 0.5
+    ELAPSED=$((ELAPSED + 1))
+done
+if [ ! -e "$PIXELFLUX_SOCKET" ]; then
+    echo "labwc-wrapper: Pixelflux socket not ready after ${TIMEOUT}s" >&2
+    exit 1
+fi
+echo "labwc-wrapper: Socket found, starting labwc"
+
+# labwc connects to pixelflux (wayland-1) as its parent display
+export WAYLAND_DISPLAY=wayland-1
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+export XKB_DEFAULT_LAYOUT="${XKB_DEFAULT_LAYOUT:-us}"
+export XKB_DEFAULT_VARIANT="${XKB_DEFAULT_VARIANT:-}"
+export XKB_DEFAULT_MODEL="${XKB_DEFAULT_MODEL:-pc105}"
+export XKB_DEFAULT_OPTIONS="${XKB_DEFAULT_OPTIONS:-}"
+export XKB_DEFAULT_RULES=evdev
+
+exec labwc

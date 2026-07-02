@@ -1,0 +1,26 @@
+webservice:
+    candy:
+        version: 2026.144.1443
+    webservice-port:
+        port:
+            - 8080
+            - 9090
+    webservice-port_relay:
+        port_relay:
+            - 8080
+    webservice-route:
+        route:
+            host: webservice.localhost
+            port: 8080
+    webservice-volume:
+        volume:
+            - name: data
+              path: "~/.webservice"
+    webservice-alias:
+        alias:
+            - name: websvc
+              command: websvc-server
+    webservice-step-0:
+        run: command=echo "setup webservice"
+        command: echo "setup webservice"
+        run_as: "${USER}"

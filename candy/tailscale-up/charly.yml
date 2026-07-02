@@ -1,0 +1,261 @@
+tailscale-up:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Deploy-time tailscale runtime wiring — start the daemon, set --operator + --hostname.
+            Runtime-config sibling of the tailscale install candy, which it
+            `require:`s — so any image composing this layer carries the
+            tailscale CLI + tailscaled daemon it drives. On a target:local host
+            its single deploy task starts tailscaled, sets --operator (uid 1000)
+            so user-systemd ExecStartPost can `tailscale serve` without sudo,
+            and keeps the tailnet device name in sync with /etc/hostname across
+            hostname changes. Every step self-gates on
+            `systemctl is-active tailscaled`, so it is a no-op in image-build /
+            bootc-assembly contexts where systemd isn't PID 1 — which is exactly
+            why the build-scope composition facts (CLI + daemon present) are
+            verifiable independently of the conditional runtime operator wiring.
+    tailscale-up-require:
+        require:
+            - tailscale
+    tailscale-up-step-0:
+        run: |
+            command=set -eu
+            # Start the daemon. The /charly-infrastructure:tailscale layer's
+            # cmd task is `systemctl enable` only (no --now) because that
+            # body also runs in image-build / bootc contexts where systemd
+            # isn't PID 1 and --now would fail. Starting it here in the
+            # deploy-runtime layer is the clean-separation answer.
+            # Idempotent — no-op if already running. Suppressed (|| true)
+            # so any inability to start (no live systemd, masked unit,
+            # missing dep) doesn't fail the deploy.
+            systemctl start tailscaled.service 2>/dev/null || true
+
+            # Self-gate: skip the rest in image-build / no-daemon contexts.
+            # tailscale set --* needs a running daemon socket.
+            systemctl is-active --quiet tailscaled || exit 0
+
+            # Operator: uid 1000 is the canonical human deploy user
+            # (matches the wheel-nopasswd layer and charly/deploy_target_local.go
+            # renderBuilderScript). SUDO_USER is unreliable — runSudoShell calls
+            # `sudo -n bash -s` without -E, so env_reset strips it under
+            # default sudoers.
+            account=$(getent passwd 1000 | cut -d: -f1 || true)
+            if [ -n "$account" ]; then
+              tailscale set --operator="$account" 2>/dev/null || true
+            fi
+
+            # Hostname: keep the tailnet device name in sync with the
+            # system hostname (short form, FQDN suffix stripped). Read
+            # from /etc/hostname directly — the `hostname` binary lives
+            # in Arch's `inetutils` package, which is NOT in the minimal
+            # cloud-image base, so falling back to a kernel-level fact
+            # avoids the dep. Idempotent (no-op when already matching);
+            # silent when the daemon is logged out (test-bed expected
+            # state).
+            hn=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+            if [ -n "$hn" ]; then
+              tailscale set --hostname="$hn" 2>/dev/null || true
+            fi
+        run_as: root
+        comment: Start tailscaled + wire operator (non-root serve) + hostname matching
+        plugin: command
+        plugin_input:
+            command: |
+                set -eu
+                # Start the daemon. The /charly-infrastructure:tailscale layer's
+                # cmd task is `systemctl enable` only (no --now) because that
+                # body also runs in image-build / bootc contexts where systemd
+                # isn't PID 1 and --now would fail. Starting it here in the
+                # deploy-runtime layer is the clean-separation answer.
+                # Idempotent — no-op if already running. Suppressed (|| true)
+                # so any inability to start (no live systemd, masked unit,
+                # missing dep) doesn't fail the deploy.
+                systemctl start tailscaled.service 2>/dev/null || true
+
+                # Self-gate: skip the rest in image-build / no-daemon contexts.
+                # tailscale set --* needs a running daemon socket.
+                systemctl is-active --quiet tailscaled || exit 0
+
+                # Operator: uid 1000 is the canonical human deploy user
+                # (matches the wheel-nopasswd layer and charly/deploy_target_local.go
+                # renderBuilderScript). SUDO_USER is unreliable — runSudoShell calls
+                # `sudo -n bash -s` without -E, so env_reset strips it under
+                # default sudoers.
+                account=$(getent passwd 1000 | cut -d: -f1 || true)
+                if [ -n "$account" ]; then
+                  tailscale set --operator="$account" 2>/dev/null || true
+                fi
+
+                # Hostname: keep the tailnet device name in sync with the
+                # system hostname (short form, FQDN suffix stripped). Read
+                # from /etc/hostname directly — the `hostname` binary lives
+                # in Arch's `inetutils` package, which is NOT in the minimal
+                # cloud-image base, so falling back to a kernel-level fact
+                # avoids the dep. Idempotent (no-op when already matching);
+                # silent when the daemon is logged out (test-bed expected
+                # state).
+                hn=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+                if [ -n "$hn" ]; then
+                  tailscale set --hostname="$hn" 2>/dev/null || true
+                fi
+    tailscale-up-step-1:
+        check: the tailscale CLI is composed into the image at /usr/bin/tailscale via require:tailscale
+        plugin: file
+        plugin_input:
+            file: /usr/bin/tailscale
+            exists: true
+    tailscale-up-step-2:
+        check: the tailscaled daemon the deploy task starts is present at /usr/sbin/tailscaled
+        plugin: file
+        plugin_input:
+            file: /usr/sbin/tailscaled
+            exists: true
+    tailscale-up-step-3:
+        check: the composed tailscale CLI runs offline so the deploy task can call `tailscale set`
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: tailscale version
+    tailscale-up-step-4:
+        check: on a logged-in tailnet member the operator user is set so `tailscale debug prefs` succeeds without sudo; skip-passes when the daemon is down or logged out
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                systemctl is-active --quiet tailscaled || exit 0
+                if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+                  exit 0
+                fi
+                tailscale debug prefs 2>/dev/null | grep -E '"OperatorUser":[[:space:]]*"[^"]+"' >/dev/null
+    tailscale-up-package-composed:
+        check: package=tailscale
+        id: tailscale-up-package-composed
+        plugin: package
+        plugin_input:
+            package: tailscale
+            installed: true
+    tailscale-up-operator-readable:
+        check: |
+            command=# Three-state probe:
+            #   (a) daemon down → skip (image-build, fresh test bed pre-deploy)
+            #   (b) daemon up + logged out → skip (test bed post-deploy)
+            #   (c) daemon up + logged in → assert OperatorUser is non-empty
+            # `tailscale debug prefs` is callable without sudo by the
+            # operator user, so success-without-sudo proves --operator
+            # took effect.
+            systemctl is-active --quiet tailscaled || exit 0
+            if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+              exit 0
+            fi
+            tailscale debug prefs 2>/dev/null | grep -E '"OperatorUser":[[:space:]]*"[^"]+"' >/dev/null
+        id: tailscale-up-operator-readable
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                # Three-state probe:
+                #   (a) daemon down → skip (image-build, fresh test bed pre-deploy)
+                #   (b) daemon up + logged out → skip (test bed post-deploy)
+                #   (c) daemon up + logged in → assert OperatorUser is non-empty
+                # `tailscale debug prefs` is callable without sudo by the
+                # operator user, so success-without-sudo proves --operator
+                # took effect.
+                systemctl is-active --quiet tailscaled || exit 0
+                if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+                  exit 0
+                fi
+                tailscale debug prefs 2>/dev/null | grep -E '"OperatorUser":[[:space:]]*"[^"]+"' >/dev/null
+    tailscale-up-hostname-tracks-system:
+        check: |
+            command=# Same three-state pattern as operator-readable.
+            systemctl is-active --quiet tailscaled || exit 0
+            if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+              exit 0
+            fi
+            ts_name=$(tailscale debug prefs 2>/dev/null | grep -oP '"Hostname":[[:space:]]*"\K[^"]+' || true)
+            # Read /etc/hostname directly to avoid the `hostname` binary dep
+            # (Arch minimal cloud image doesn't ship inetutils). Same form
+            # as the layer's task body; keep them in sync.
+            sys_name=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+            # Skip silently if Hostname unset in prefs (defensive — should
+            # always be set after a successful task run).
+            [ -z "$ts_name" ] && exit 0
+            [ "$ts_name" = "$sys_name" ]
+        id: tailscale-up-hostname-tracks-system
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                # Same three-state pattern as operator-readable.
+                systemctl is-active --quiet tailscaled || exit 0
+                if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+                  exit 0
+                fi
+                ts_name=$(tailscale debug prefs 2>/dev/null | grep -oP '"Hostname":[[:space:]]*"\K[^"]+' || true)
+                # Read /etc/hostname directly to avoid the `hostname` binary dep
+                # (Arch minimal cloud image doesn't ship inetutils). Same form
+                # as the layer's task body; keep them in sync.
+                sys_name=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+                # Skip silently if Hostname unset in prefs (defensive — should
+                # always be set after a successful task run).
+                [ -z "$ts_name" ] && exit 0
+                [ "$ts_name" = "$sys_name" ]
+    tailscale-up-device-name-matches-hostname:
+        check: |
+            command=# Device-name divergence detector. The tailscale control plane
+            # treats device names as sticky from initial registration —
+            # `tailscale set --hostname=X` updates local prefs but does NOT
+            # rename the registered device. This probe surfaces the divergence
+            # so the operator notices and aligns via the admin console
+            # (https://login.tailscale.com/admin/machines, recommended) or
+            # `sudo tailscale up --reset --hostname=$(cat /etc/hostname | cut -d. -f1)`
+            # (warning: clears all non-default flags like exit-node config).
+            # Same three-state gate as the other tailscale-up probes.
+            systemctl is-active --quiet tailscaled || exit 0
+            if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+              exit 0
+            fi
+            ts_device=$(tailscale status --self --json 2>/dev/null | grep -m1 -oP '"DNSName":[[:space:]]*"\K[^."]+' || true)
+            sys_name=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+            [ -z "$ts_device" ] && exit 0
+            [ -z "$sys_name" ] && exit 0
+            if [ "$ts_device" != "$sys_name" ]; then
+              echo "tailscale-up: divergence detected — registered device='$ts_device' system hostname='$sys_name'" >&2
+              echo "tailscale-up: rename via admin console (https://login.tailscale.com/admin/machines) or" >&2
+              echo "tailscale-up: 'sudo tailscale up --reset --hostname=$sys_name' (clobbers other prefs)" >&2
+              exit 1
+            fi
+        id: tailscale-up-device-name-matches-hostname
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                # Device-name divergence detector. The tailscale control plane
+                # treats device names as sticky from initial registration —
+                # `tailscale set --hostname=X` updates local prefs but does NOT
+                # rename the registered device. This probe surfaces the divergence
+                # so the operator notices and aligns via the admin console
+                # (https://login.tailscale.com/admin/machines, recommended) or
+                # `sudo tailscale up --reset --hostname=$(cat /etc/hostname | cut -d. -f1)`
+                # (warning: clears all non-default flags like exit-node config).
+                # Same three-state gate as the other tailscale-up probes.
+                systemctl is-active --quiet tailscaled || exit 0
+                if tailscale status --peers=false 2>/dev/null | head -1 | grep -q "Logged out"; then
+                  exit 0
+                fi
+                ts_device=$(tailscale status --self --json 2>/dev/null | grep -m1 -oP '"DNSName":[[:space:]]*"\K[^."]+' || true)
+                sys_name=$(cat /etc/hostname 2>/dev/null | head -1 | cut -d. -f1 | tr -d '[:space:]' || true)
+                [ -z "$ts_device" ] && exit 0
+                [ -z "$sys_name" ] && exit 0
+                if [ "$ts_device" != "$sys_name" ]; then
+                  echo "tailscale-up: divergence detected — registered device='$ts_device' system hostname='$sys_name'" >&2
+                  echo "tailscale-up: rename via admin console (https://login.tailscale.com/admin/machines) or" >&2
+                  echo "tailscale-up: 'sudo tailscale up --reset --hostname=$sys_name' (clobbers other prefs)" >&2
+                  exit 1
+                fi

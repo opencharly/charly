@@ -1,0 +1,49 @@
+android-test-apps:
+    candy:
+        version: 2026.145.1700
+        description: |
+            Android apps installed onto a `kind: android` device via the `apk:`
+            package format — the declarative counterpart to the `charly check adb
+            install-app` probe verb. Carries the F-Droid client (org.fdroid.fdroid)
+            fetched from APKPure (apk-pure, no credentials) for the x86_64
+            emulator. A `target: android` deploy applies this layer's `apk:` list
+            onto the running device through the external deploy:android substrate
+            (candy/plugin-adb: apkeep in-pod for an image device, host apkeep + goadb
+            for a remote endpoint). Pair with
+            the `android-apidemos` layer (committed-APK path) to exercise both
+            apk-entry kinds.
+
+            The candy installs NOTHING into the image — the `apk:` list is
+            device-scoped, applied ONLY by a `target: android` deploy (skipped at
+            image build and on every other target). Its observable effect is
+            therefore on the running device: after the deploy, `pm list packages`
+            reports org.fdroid.fdroid and the app launches, so the install is
+            verifiable end to end over goadb (adb).
+    android-test-apps-apk:
+        # apk: is the Android app-install package format (parallel to package:/aur:
+        # but device-scoped). Each entry is either a `package:` (apkeep download by
+        # id) or an `apk:` (committed local file). F-Droid is the canonical
+        # sideloadable test app — unlike Chrome it has no static-library dependency,
+        # so it installs cleanly from APKPure as a single x86_64 .apk.
+        apk:
+            - package: org.fdroid.fdroid
+              source: apk-pure
+              arch: x86_64
+    android-test-apps-step-0:
+        check: F-Droid (org.fdroid.fdroid) is installed on the device after a target:android deploy
+        adb: shell
+        arg: [pm, list, packages, org.fdroid.fdroid]
+        stdout:
+            - contains: "org.fdroid.fdroid"
+        eventually: 120s
+        retry_interval: 5s
+        context:
+            - runtime
+    android-test-apps-step-1:
+        check: the installed F-Droid launches and its process is running
+        adb: shell
+        arg: [sh, -c, "monkey -p org.fdroid.fdroid -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3; pidof org.fdroid.fdroid"]
+        stdout:
+            - matches: "[0-9]"
+        context:
+            - runtime

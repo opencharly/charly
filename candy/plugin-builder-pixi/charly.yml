@@ -1,0 +1,26 @@
+plugin-builder-pixi:
+    candy:
+        version: 2026.182.0100
+        description: |-
+            OUT-OF-TREE charly plugin serving the `pixi` builder's BUILD-TIME multi-stage (OpResolve)
+            + its DEPLOY-TIME IR shim. A standalone Go module (go.mod + main.go) that dispatches to the
+            shared charly/plugin/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder>
+            AS pixi-build` stage + COPY artifacts, C10, no longer the core embedded vocabulary),
+            OpCollectContext (the per-candy stage-context keys the host records on a BuilderStep —
+            pixi → {env_name}) and OpReverse (that step's teardown ops — pixi → pixi-env-remove). The
+            deploy-time pair runs in the host build PRE-PASS, BEFORE the pure BuildDeployPlan compile,
+            so the compiler never dials a plugin. Selection stays DETECTION (a candy's pixi.toml),
+            never an authored external_builder:.
+    plugin-builder-pixi-decl:
+        plugin:
+            providers:
+                - builder:pixi
+            source: github.com/opencharly/charly/candy/plugin-builder-pixi
+    pixi-builder-module-present:
+        check: the out-of-tree pixi builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
+        id: pixi-builder-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

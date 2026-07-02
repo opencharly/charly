@@ -1,0 +1,81 @@
+direnv:
+    candy:
+        version: 2026.168.0935
+        description: |
+            direnv — automatic per-directory environment loading from .envrc files
+            direnv installs the `direnv` binary (one package name across
+            fedora/arch/debian) AND declaratively wires the per-shell hook that
+            makes .envrc autoload work. At `charly box build` the shell: schema
+            bakes the POSIX hook into /etc/profile.d/charly-direnv-<shell>.sh for
+            bash/zsh/sh (the generic body `eval "$(direnv hook <shell>)"` with
+            ${SHELL_NAME} substituted) and the fish-specific hook into
+            /etc/fish/conf.d/charly-direnv.fish (`direnv hook fish | source`).
+            The scenarios assert both the installed/runnable binary AND the baked
+            hook drop-ins, so they fail if either the package or the shell wiring
+            is missing.
+    direnv-package:
+        package:
+            - direnv
+    direnv-shell:
+        # Shell hooks installed declaratively via the shell: schema (2026-05).
+        # bash/zsh/sh use the POSIX-style hook `eval "$(direnv hook X)"` — handled
+        # by the generic body with ${SHELL_NAME} substituted at install time.
+        # fish uses different syntax, so it gets a per-shell override.
+        shell:
+            init: |
+                eval "$(direnv hook ${SHELL_NAME})"
+            fish:
+                init: |
+                    direnv hook fish | source
+    direnv-step-0:
+        check: the direnv binary is installed at /usr/bin/direnv for the .envrc/.secrets autoload workflow
+        plugin: file
+        plugin_input:
+            file: /usr/bin/direnv
+            exists: true
+    direnv-step-1:
+        check: direnv reports its version without error
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/direnv version
+    direnv-step-2:
+        check: the bash shell-init drop-in EVALs the direnv hook so .envrc loads on directory change (a check-for-eval typo would silently break the hook and spam every login shell with a command-not-found error)
+        plugin: file
+        plugin_input:
+            file: /etc/profile.d/charly-direnv-bash.sh
+            exists: true
+            contains:
+                - 'eval "$(direnv hook bash)"'
+    direnv-hook-sources-clean:
+        check: sourcing the bash direnv drop-in installs the hook cleanly, with no command-not-found error from a malformed check-for-eval hook body
+        id: direnv-hook-sources-clean
+        stdout:
+            - equals: "0"
+        plugin: command
+        plugin_input:
+            command: bash -c '. /etc/profile.d/charly-direnv-bash.sh 2>&1' | grep -c 'command not found' || true
+    direnv-step-4:
+        check: the fish shell-init drop-in is baked into its conf.d and sources the direnv fish hook
+        plugin: file
+        plugin_input:
+            file: /etc/fish/conf.d/charly-direnv.fish
+            exists: true
+            contains:
+                - "direnv hook fish"
+    direnv-package-2:
+        check: package=direnv
+        id: direnv-package
+        plugin: package
+        plugin_input:
+            package: direnv
+            installed: true
+    direnv-version:
+        check: command=/usr/bin/direnv version
+        id: direnv-version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/direnv version

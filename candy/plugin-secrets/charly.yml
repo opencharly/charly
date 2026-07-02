@@ -1,0 +1,55 @@
+plugin-secrets:
+    candy:
+        version: 2026.178.2100
+        description: |-
+            OUT-OF-TREE charly plugin serving the ENTIRE secrets subsystem — a standalone
+            Go module (go.mod + main.go) that owns the credential store (Secret Service /
+            config-file backends, the iteration-capable godbus client) AND the GPG
+            `.secrets` surface, so github.com/zalando/go-keyring lives HERE, out of charly's
+            core binary entirely (the C2 dep-shed removed go-keyring from charly/go.mod).
+            charly's loader fetches this candy's repo, go-builds the provider binary on the
+            HOST, and serves it OUT-OF-PROCESS via LocalTransport — or runs the host-installed
+            /usr/lib/charly/plugins binary on a project-less host. It provides TWO capabilities:
+
+              - verb:credential — the externalized CREDENTIAL STORE BACKEND (NOT a check
+                verb). charly's core pluginCredentialStore (charly/credential_plugin.go)
+                forwards every CredentialStore method (get/set/delete/list/name), the env-less
+                resolve (resolve → {value,source}), the doctor keyring health probe (health),
+                and the keyring re-probe (reset) over go-plugin gRPC. Every core credential
+                consumer (enc.go / secrets.go / layer_secrets.go / config_secret_migration.go /
+                runtime_config.go / vnc_preresolve.go) is UNCHANGED — it resolves
+                secret_require / secret_accept / VNC / enc passphrases exactly as before.
+
+              - command:secrets — `charly secrets …` (list / get / set / delete / import /
+                export / migrate-secrets + the `gpg` subgroup), the externalized secrets CLI.
+                charly DISPATCHES the command by syscall.Exec'ing this binary in CLI mode
+                (sdk.Main → cliMain), so it owns real terminal stdio: secure password prompts
+                (term.ReadPassword), $EDITOR for `secrets gpg edit`, and live `gpg` shell-outs
+                all reach the real terminal.
+
+            verb:credential is served over gRPC (the provider registry); command:secrets is
+            served via the CLI syscall.Exec path — so command:secrets is declared in
+            plugin.providers (for the CLI-grammar prescan + baked manifest) but NOT advertised
+            in Describe. The R10 consumer is a deploy that resolves a secret_require/secret_accept
+            through the externalized store (e.g. check-k3s-vm's K3S_CLUSTER_TOKEN autogen, or a
+            pod bed) plus a host `charly secrets` round-trip.
+    plugin-secrets-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-secrets
+            providers:
+                - verb:credential
+                - command:secrets
+    # ADE build-context check: a deterministic check that does NOT depend on a live keyring —
+    # it proves the candy ships a buildable Go module (go.mod + the provider main) the host can
+    # build, serve verb:credential over gRPC, and syscall.Exec for command:secrets. Mirrors
+    # candy/plugin-mcp's pattern (a trivial build-context `plugin: command` running `true`). The
+    # full store round-trip is exercised by the live R10 (a secret_require deploy resolves through
+    # the externalized store) + the host `charly secrets set/get` smoke test.
+    secrets-plugin-builds:
+        check: the out-of-tree plugin ships a buildable Go module providing verb:credential (the externalized credential store) + command:secrets (the externalized `charly secrets` CLI) the host can build, serve over gRPC, and syscall.Exec; the full store round-trip is exercised by the live R10
+        id: secrets-plugin-builds
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

@@ -1,0 +1,68 @@
+#!/bin/sh
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+EXPECTED="${WAYLAND_DISPLAY:-wayland-0}"
+EXPECTED_SOCKET="$XDG_RUNTIME_DIR/$EXPECTED"
+
+# GPU detection: skip if WLR_RENDERER is already set (e.g., by sway-desktop-vnc).
+# Otherwise: NVIDIA (CDI) -> DRI render nodes (AMD/Intel) -> software fallback.
+if [ -n "$WLR_RENDERER" ]; then
+    SWAY_EXTRA=""
+elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    export WLR_RENDERER=gles2
+    export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+    export GBM_BACKEND=nvidia-drm
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+    SWAY_EXTRA="--unsupported-gpu"
+elif ls /dev/dri/renderD* >/dev/null 2>&1; then
+    export WLR_RENDERER=gles2
+    SWAY_EXTRA=""
+else
+    export WLR_RENDERER=pixman
+    SWAY_EXTRA=""
+fi
+
+# Clean up stale sway IPC sockets from previous sway processes.
+# Supervisord restarts leave old sockets that confuse swaymsg, charly sway, and
+# the resolution-setting logic below (ls picks oldest PID alphabetically).
+rm -f /tmp/sway-ipc.*.sock
+
+# Unset WAYLAND_DISPLAY before starting sway — wlroots interprets it as an
+# existing display to connect to (wayland backend), causing it to skip
+# wayland-0 and create wayland-1 instead.
+unset WAYLAND_DISPLAY
+sway $SWAY_EXTRA &
+SWAY_PID=$!
+
+cleanup() {
+    kill $SWAY_PID 2>/dev/null
+    rm -f "$EXPECTED_SOCKET"
+}
+trap cleanup TERM INT QUIT
+
+# Wait for any wayland socket to appear
+TIMEOUT=30
+ELAPSED=0
+ACTUAL_SOCKET=""
+while [ -z "$ACTUAL_SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    for f in "$XDG_RUNTIME_DIR"/wayland-*; do
+        [ -e "$f" ] && case "$f" in *.lock) ;; *) ACTUAL_SOCKET="$f"; break ;; esac
+    done
+    [ -z "$ACTUAL_SOCKET" ] && sleep 1 && ELAPSED=$((ELAPSED + 1))
+done
+
+if [ -n "$ACTUAL_SOCKET" ]; then
+    # If sway created a different socket than expected (e.g. wayland-1),
+    # symlink the expected name so other services can connect via wayland-0.
+    if [ "$ACTUAL_SOCKET" != "$EXPECTED_SOCKET" ]; then
+        ln -sf "$(basename "$ACTUAL_SOCKET")" "$EXPECTED_SOCKET"
+    fi
+
+    sleep 1
+    SWAYSOCK=$(ls -t "$XDG_RUNTIME_DIR"/sway-ipc.*.sock 2>/dev/null | head -1)
+    if [ -n "$SWAYSOCK" ]; then
+        export SWAYSOCK
+        swaymsg output HEADLESS-1 resolution "${RESOLUTION:-1920x1080}" 2>/dev/null || true
+    fi
+fi
+
+wait $SWAY_PID

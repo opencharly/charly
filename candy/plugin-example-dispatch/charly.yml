@@ -1,0 +1,24 @@
+plugin-example-dispatch:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            Reference OUT-OF-TREE plugin proving the F10 reverse legs: during its own Invoke (run
+            with a reverse channel) it calls BACK to the host to (1) INVOKE ANOTHER plugin's verb
+            (sdk.Executor.InvokeProvider — plugin↔plugin via the host broker) and (2) request a
+            HOST-BUILD (sdk.Executor.HostBuild — the host runs a registered host-builder). It
+            exercises the nested-broker round-trip generically — the generalization of the
+            RunHostStep ExternalPlugin arm to any class/op + a standalone build request. The
+            machinery M13/M14/M16/M17 reuse.
+    plugin-example-dispatch-decl:
+        plugin:
+            providers:
+                - verb:exampledispatch
+            source: github.com/opencharly/charly/candy/plugin-example-dispatch
+    exampledispatch-module-present:
+        check: the F10 dispatch demo plugin ships a buildable Go module the host can build + serve out-of-process
+        id: exampledispatch-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

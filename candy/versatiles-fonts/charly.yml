@@ -1,0 +1,113 @@
+versatiles-fonts:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Pre-rendered SDF glyph PBFs for the 10 VersaTiles font families, installed locally for MapLibre GL JS label rendering.
+            Installs the versatiles-org/versatiles-fonts release bundle
+            (fonts.tar.gz — all 10 families: Fira Sans, Lato, Libre Baskerville,
+            Merriweather Sans, Noto Sans, Nunito, Open Sans, PT Sans, Roboto,
+            Source Sans 3) into /opt/versatiles-fonts as signed-distance-field
+            PBFs laid out per MapLibre's {fontstack}/{range}.pbf glyph-URL
+            convention. Serving the glyphs locally lets the shortbread MapLibre
+            cell render labels without hitting tiles.versatiles.org as a runtime
+            font CDN; the bundle is re-exported by versatiles-frontend at /fonts/.
+    versatiles-fonts-require:
+        require:
+            - supervisord
+    versatiles-fonts-distro:
+        distro:
+            arch:
+                package:
+                    - curl
+                    - jq
+            fedora:
+                package:
+                    - curl
+                    - jq
+    versatiles-fonts-step-0:
+        run: mkdir=/opt/versatiles-fonts
+        mkdir: /opt/versatiles-fonts
+        run_as: root
+    versatiles-fonts-step-1:
+        run: |
+            command=set -euo pipefail
+            ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-fonts/releases/latest" \
+              | jq -r '.assets[].browser_download_url' \
+              | grep -E '/fonts\.tar\.gz$' \
+              | head -1)
+            if [ -z "$ASSET" ]; then
+              echo "ERROR: could not find fonts.tar.gz on versatiles-fonts latest release" >&2
+              curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-fonts/releases/latest" \
+                | jq -r '.assets[].name' >&2
+              exit 1
+            fi
+            TMPDIR=$(mktemp -d)
+            cd "$TMPDIR"
+            curl -fsSL "$ASSET" -o fonts.tar.gz
+            tar -xzf fonts.tar.gz -C /opt/versatiles-fonts
+            cd /
+            rm -rf "$TMPDIR"
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-fonts/releases/latest" \
+                  | jq -r '.assets[].browser_download_url' \
+                  | grep -E '/fonts\.tar\.gz$' \
+                  | head -1)
+                if [ -z "$ASSET" ]; then
+                  echo "ERROR: could not find fonts.tar.gz on versatiles-fonts latest release" >&2
+                  curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-fonts/releases/latest" \
+                    | jq -r '.assets[].name' >&2
+                  exit 1
+                fi
+                TMPDIR=$(mktemp -d)
+                cd "$TMPDIR"
+                curl -fsSL "$ASSET" -o fonts.tar.gz
+                tar -xzf fonts.tar.gz -C /opt/versatiles-fonts
+                cd /
+                rm -rf "$TMPDIR"
+    versatiles-fonts-step-2:
+        check: the install directory /opt/versatiles-fonts exists
+        plugin: file
+        plugin_input:
+            file: /opt/versatiles-fonts
+            filetype: directory
+    versatiles-fonts-step-3:
+        check: at least one signed-distance-field glyph PBF was unpacked from the release tarball
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-fonts -name '*.pbf' -size +1c | head -1 | grep -q .
+    versatiles-fonts-step-4:
+        check: the default MapLibre font Noto Sans Regular is present
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-fonts -path '*noto_sans_regular*' -name '*.pbf' | head -1 | grep -q .
+    versatiles-fonts-step-5:
+        check: glyphs follow MapLibre's {range}.pbf naming so the base 0-255.pbf range file exists
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-fonts -name '0-255.pbf' | head -1 | grep -q .
+    versatiles-fonts-step-6:
+        agent-check: a MapLibre GL JS client can fetch any installed family's glyph ranges via the standard {fontstack}/{range}.pbf glyph-URL template
+    versatiles-fonts-curl:
+        check: package=curl
+        id: versatiles-fonts-curl
+        plugin: package
+        plugin_input:
+            package: curl
+            installed: true
+    versatiles-fonts-jq:
+        check: package=jq
+        id: versatiles-fonts-jq
+        plugin: package
+        plugin_input:
+            package: jq
+            installed: true

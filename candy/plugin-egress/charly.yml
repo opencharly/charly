@@ -1,0 +1,24 @@
+plugin-egress:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            EGRESS VALIDATION plugin (M16) — gates the config artifacts charly WRITES to a
+            system (cloud-init user-data/meta/net, k8s manifests + kustomization, traefik
+            routes, install-ledger records, the Containerfile + systemd/supervisord units,
+            the libvirt domain XML) against a CUE schema BEFORE the bytes hit disk. The
+            validation logic + the egress CUE schemas (incl. the vendored cloud-config) live
+            here; charly's in-core ValidateEgress* functions are a thin shim that Invokes this
+            plugin's OpValidate. Compiled-in (the build/deploy hot paths call it many times).
+    plugin-egress-decl:
+        plugin:
+            providers:
+                - verb:egress
+            source: github.com/opencharly/charly/candy/plugin-egress
+    egress-module-present:
+        check: the egress validation plugin ships a buildable Go module the host compiles in
+        id: egress-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

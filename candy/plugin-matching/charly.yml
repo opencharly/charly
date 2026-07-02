@@ -1,0 +1,25 @@
+plugin-matching:
+    candy:
+        version: 2026.176.2100
+        description: |-
+            The `matching` check verb relocated into a candy: pure in-process value
+            matching (no target probe) — coerces plugin_input.matching to a string and
+            asserts every plugin_input.contains goss-style matcher against it via the
+            shared sdk.MatchAll/MatchValueString helpers. A STATELESS verb, so it serves
+            itself over the pb Invoke envelope in BOTH placements (compiled-in OR
+            out-of-process) — the matcher analogue of candy/plugin-example exampleprobe.
+    plugin-matching-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-matching
+            providers:
+                - verb:matching
+    matching-verb-dispatches:
+        check: the matching verb dispatches through the provider registry and asserts goss-style matchers against a value
+        id: matching-verb-dispatches
+        plugin: matching
+        plugin_input:
+            matching: charly-candy-factory
+            contains:
+                - charly-candy-factory
+                - contains: charly
+        context: [runtime]

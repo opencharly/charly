@@ -1,0 +1,101 @@
+workspace-mount:
+    candy:
+        version: 2026.149.1200
+        description: |
+            Mount a virtiofs `workspace` share at /workspace in a VM guest via a systemd .mount unit
+            Writes and enables /etc/systemd/system/workspace.mount so a virtiofs
+            share tagged `workspace` re-mounts at /workspace on every boot
+            (load-bearing for an autostarting VM). The mount tag is the contract
+            between a kind:vm entity's filesystem `target:` and this layer's
+            `What=`. Guest-side only — meaningful on a running VM that has the
+            share attached; a no-op (start tolerated) at image build where no
+            device exists. systemd-based (Arch/CachyOS, Fedora, bootc).
+    workspace-mount-step-0:
+        run: mkdir=/workspace
+        mkdir: /workspace
+        run_as: root
+    workspace-mount-step-1:
+        run: write=/etc/systemd/system/workspace.mount
+        write: /etc/systemd/system/workspace.mount
+        run_as: root
+        mode: "0644"
+        content: |
+            [Unit]
+            Description=OpenCharly workspace share (virtiofs)
+            # No After=local-fs.target: a .mount unit is implicitly ordered
+            # Before=local-fs.target, so adding After= creates an ordering cycle
+            # that systemd breaks non-deterministically (the mount silently fails
+            # to come up on some boots). The virtiofs device is present early, so
+            # systemd mounts this when multi-user.target is reached.
+
+            [Mount]
+            What=workspace
+            Where=/workspace
+            Type=virtiofs
+            Options=defaults
+
+            [Install]
+            WantedBy=multi-user.target
+    workspace-mount-step-2:
+        run: |
+            command=systemctl daemon-reload || true
+            systemctl enable workspace.mount || true
+            systemctl start workspace.mount || true
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                systemctl daemon-reload || true
+                systemctl enable workspace.mount || true
+                systemctl start workspace.mount || true
+    workspace-mount-step-3:
+        check: the systemd .mount unit is installed and declares the virtiofs type
+        plugin: file
+        plugin_input:
+            file: /etc/systemd/system/workspace.mount
+            contains: "Type=virtiofs"
+    workspace-mount-step-4:
+        agent-check: when a workspace share is attached, /workspace is a writable virtiofs mount
+    workspace-virtiofs-rw:
+        check: |
+            command=if ! findmnt -n /workspace >/dev/null 2>&1; then
+              echo "WORKSPACE-OK (N/A: no /workspace share attached to this target)"
+              exit 0
+            fi
+            fstype=$(findmnt -n -o FSTYPE /workspace)
+            if [ "$fstype" != "virtiofs" ]; then
+              echo "FAIL: /workspace is $fstype, expected virtiofs"
+              exit 1
+            fi
+            probe=/workspace/.charly-workspace-write-probe
+            if touch "$probe" 2>/dev/null && rm -f "$probe" 2>/dev/null; then
+              echo "WORKSPACE-OK (virtiofs read-write at /workspace)"
+            else
+              echo "FAIL: /workspace virtiofs share is not writable"
+              exit 1
+            fi
+        id: workspace-virtiofs-rw
+        stdout:
+            contains: WORKSPACE-OK
+        plugin: command
+        plugin_input:
+            # Skip-aware: the share is attached only on a running VM that declares
+            # it (N/A at image build / no-device targets — mirrors the GPU gate).
+            # When mounted it MUST be virtiofs and writable.
+            command: |
+                if ! findmnt -n /workspace >/dev/null 2>&1; then
+                  echo "WORKSPACE-OK (N/A: no /workspace share attached to this target)"
+                  exit 0
+                fi
+                fstype=$(findmnt -n -o FSTYPE /workspace)
+                if [ "$fstype" != "virtiofs" ]; then
+                  echo "FAIL: /workspace is $fstype, expected virtiofs"
+                  exit 1
+                fi
+                probe=/workspace/.charly-workspace-write-probe
+                if touch "$probe" 2>/dev/null && rm -f "$probe" 2>/dev/null; then
+                  echo "WORKSPACE-OK (virtiofs read-write at /workspace)"
+                else
+                  echo "FAIL: /workspace virtiofs share is not writable"
+                  exit 1
+                fi

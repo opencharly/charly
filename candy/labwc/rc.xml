@@ -1,0 +1,38 @@
+<labwc_config>
+
+  <core>
+    <decoration>server</decoration>
+    <gap>0</gap>
+  </core>
+
+  <theme>
+    <name>Clearlooks</name>
+    <titlebar>
+      <layout>icon:iconify,max,close</layout>
+      <showTitle>yes</showTitle>
+    </titlebar>
+    <cornerRadius>8</cornerRadius>
+  </theme>
+
+  <keyboard>
+    <default />
+    <keybind key="A-F4"><action name="Close" /></keybind>
+    <keybind key="A-Escape"><action name="Close" /></keybind>
+    <keybind key="W-e"><action name="Execute" command="foot" /></keybind>
+  </keyboard>
+
+  <mouse>
+    <default />
+    <context name="Root">
+      <mousebind button="Left" action="Press" />
+      <mousebind button="Right" action="Press"><action name="ShowMenu" menu="root-menu" /></mousebind>
+    </context>
+  </mouse>
+
+  <windowRules>
+    <windowRule identifier="*" serverDecoration="yes">
+      <action name="Maximize" />
+    </windowRule>
+  </windowRules>
+
+</labwc_config>

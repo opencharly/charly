@@ -1,0 +1,129 @@
+unsloth-studio:
+    candy:
+        version: 2026.168.1108
+        description: |
+            Unsloth Studio web UI for GPU LLM fine-tuning, backed by a pixi PyTorch/transformers environment and composed llama.cpp GGUF export tools
+            unsloth-studio owns the pixi fine-tuning environment (Python 3.13 +
+            PyTorch/CUDA + transformers + PEFT/TRL) and composes the llama-cpp and
+            unsloth candies, then runs the Unsloth Studio web UI as a supervisord
+            service on port 8888. Every owned artifact lands at a fixed path -- the
+            pixi interpreter at ~/.pixi/envs/default and the composed llama.cpp CLI
+            at ~/llama.cpp -- so the environment and the composition's effect are
+            directly checkable.
+    unsloth-studio-require:
+        require:
+            - cuda
+            - supervisord
+    unsloth-studio-candy:
+        candy:
+            - llama-cpp
+            - unsloth
+    unsloth-studio-distro:
+        # The unsloth Studio installer (install.sh) builds its GGUF inference engine
+        # from source at install time and HARD-requires cmake + git + a C/C++ toolchain;
+        # on Arch it does NOT auto-install them (apt-only), so it aborts with
+        # "deps missing: cmake". Provide them so the installer run step succeeds.
+        distro:
+            arch:
+                package:
+                    - base-devel
+                    - cmake
+                    - git
+    unsloth-studio-env:
+        env:
+            NVIDIA_PYTHON_PROJECT: "~/.pixi"
+            LD_LIBRARY_PATH: "/usr/lib64:$HOME/llama.cpp"
+    unsloth-studio-port:
+        port:
+            - 8888
+            - 8000
+    unsloth-studio-volume:
+        volume:
+            - name: workspace
+              path: "/workspace"
+    unsloth-studio-service:
+        service:
+            # The `unsloth` CLI is NOT a pip console-script — it is installed by the
+            # official curl installer (the `install the Unsloth Studio CLI` run step
+            # below), which self-installs uv, lands the launcher at ~/.local/bin/unsloth,
+            # and bootstraps the studio runtime venv at ~/.unsloth/studio AT BUILD TIME
+            # so the supervised launch is immediate (no slow first-run venv bootstrap
+            # that would trip supervisord's startsecs). `unsloth studio` re-execs in
+            # place into that venv and blocks in the foreground, so the supervised PID
+            # IS the long-lived FastAPI server (no `pixi run`/deno_task_shell wrapper to
+            # leave it an untracked grandchild). Invoke via the ABSOLUTE launcher path
+            # so the service resolves it regardless of supervisord's PATH.
+            - name: unsloth-studio
+              exec: "%(ENV_HOME)s/.local/bin/unsloth studio -H 0.0.0.0 -p 8888"
+              restart: always
+              working_directory: "%(ENV_HOME)s"
+              enable: true
+              scope: system
+    unsloth-studio-step-0:
+        run: install the Unsloth Studio CLI and bootstrap its runtime venv via the official installer
+        run_as: "${USER}"
+        cache:
+            - ${HOME}/.cache/uv
+        plugin: command
+        plugin_input:
+            command: |
+                set -e
+                curl -fsSL https://unsloth.ai/install.sh | sh
+                # Fail the build loudly if the launcher did not land (a silent install
+                # failure would otherwise only surface as the supervisord FATAL
+                # "can't find command 'unsloth'" at deploy time).
+                test -x "${HOME}/.local/bin/unsloth"
+    unsloth-cli-present:
+        check: the Unsloth Studio CLI launcher is installed by the official installer (the `unsloth` console-script is NOT in the pixi env — it comes from install.sh)
+        id: unsloth-cli-present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/unsloth
+            exists: true
+    unsloth-studio-step-2:
+        check: the pixi fine-tuning environment provides a Python interpreter at ~/.pixi/envs/default
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/python
+            exists: true
+    unsloth-studio-step-3:
+        check: PyTorch imports successfully inside that environment
+        stdout:
+            - contains: torch
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import torch; print('torch', torch.__version__)"
+    unsloth-studio-step-4:
+        check: the composed llama.cpp CLI binary is present so fine-tuned models can be exported to GGUF
+        plugin: file
+        plugin_input:
+            file: ${HOME}/llama.cpp/llama-cli
+            exists: true
+    unsloth-studio-step-5:
+        agent-check: the Unsloth Studio web UI is served on port 8888 and is usable for interactive LLM fine-tuning
+    unsloth-studio-finetuning-stack:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import transformers, peft, trl; print('finetune-stack-ok')"
+        id: unsloth-studio-finetuning-stack
+        stdout:
+            - contains: finetune-stack-ok
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import transformers, peft, trl; print('finetune-stack-ok')"
+    unsloth-studio-service-running:
+        check: service=unsloth-studio
+        id: unsloth-studio-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: unsloth-studio
+            running: true
+    unsloth-studio-ui-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:8888}
+        id: unsloth-studio-ui-reachable
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8888}
+            reachable: true

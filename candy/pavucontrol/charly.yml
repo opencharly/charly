@@ -1,0 +1,39 @@
+pavucontrol:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Graphical PulseAudio/PipeWire volume control (pavucontrol) for the desktop.
+            Installs the pavucontrol GTK mixer and pulls in the pipewire candy,
+            whose PulseAudio-compatible server pavucontrol connects to. The
+            binary lands at /usr/bin/pavucontrol and is launched on demand (e.g.
+            from the waybar volume indicator), so both its presence and the audio
+            backend it drives are build-time verifiable.
+    pavucontrol-require:
+        require:
+            - pipewire
+    pavucontrol-distro:
+        distro:
+            arch:
+                package:
+                    - pavucontrol
+            fedora:
+                package:
+                    - pavucontrol
+    pavucontrol-step-0:
+        check: the pavucontrol GTK mixer binary is installed at /usr/bin/pavucontrol
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pavucontrol
+            exists: true
+    pavucontrol-step-1:
+        check: the pavucontrol package is recorded in the package database
+        plugin: package
+        plugin_input:
+            package: pavucontrol
+            installed: true
+    pavucontrol-step-2:
+        check: the required PipeWire audio server that pavucontrol controls is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pipewire
+            exists: true

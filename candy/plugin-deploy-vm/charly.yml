@@ -1,0 +1,38 @@
+plugin-deploy-vm:
+    candy:
+        version: 2026.180.0001
+        description: |-
+            OUT-OF-TREE charly DEPLOY plugin serving the `vm` deploy SUBSTRATE —
+            `target: vm` (a deployment applied INSIDE a running VM over SSH). A standalone
+            Go module (go.mod + main.go) served over go-plugin gRPC via the charly plugin
+            SDK; charly's loader host-builds the provider binary and connects it
+            OUT-OF-PROCESS (LocalTransport). externalDeployTarget Invokes it (OpExecute)
+            with the deployment's InstallPlan VIEWS + a venue descriptor, and the host's
+            executor served on the broker — for vm the GUEST SSHExecutor the host's vm
+            lifecycle hook built after booting the domain, waiting for sshd / cloud-init,
+            and ensuring charly is in the guest. The plugin dials BACK through the SDK
+            Executor and hands the plans to the shared kit.WalkPlans: the plugin-renderable
+            step kinds (Op/File/ShellHook + env.d-managed-block/ShellSnippet/Service*/
+            RepoChange) it EXECUTES itself via the F2 reverse legs
+            (RunSystem/RunUser/PutFile) INSIDE THE GUEST, echoing the host-computed reverse
+            ops; the HOST-ENGINE kinds (Builder/LocalPkgInstall/SystemPackages/act-Op/
+            ExternalPlugin) AND a `reboot: true` RebootStep it drives over the RunHostStep
+            reverse leg (builders run on the host's podman + scp into the guest; a reboot
+            reboots the guest + waits for the boot_id change). It returns the combined
+            teardown ops the host records in the install ledger and replays at
+            `charly bundle del`. The vm-substrate sibling of candy/plugin-deploy-local; the
+            host's vm lifecycle hook (vm_deploy_lifecycle.go) owns the VM lifecycle
+            (boot/destroy/console/ssh + nested pod-in-guest), this plugin owns the plan WALK.
+    plugin-deploy-vm-decl:
+        plugin:
+            providers:
+                - deploy:vm
+            source: github.com/opencharly/charly/candy/plugin-deploy-vm
+    deploy-vm-module-present:
+        check: the out-of-tree deploy:vm plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+        id: deploy-vm-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

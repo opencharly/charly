@@ -1,0 +1,31 @@
+plugin-example-step:
+    candy:
+        version: 2026.175.1200
+        description: |-
+            Reference OUT-OF-TREE charly plugin proving BOTH legs of plugin execution for
+            a VERB-as-step — a standalone Go module (go.mod + main.go) serving the
+            `examplestep` verb over go-plugin gRPC via the charly plugin SDK
+            (charly/plugin/sdk). BUILD leg (OpEmit): at image build charly's build-path
+            connect seam host-builds + connects this plugin out-of-process and Invokes its
+            OpEmit; the returned Containerfile FRAGMENT (a RUN baking /opt/examplestep-baked)
+            is spliced verbatim into the generated Containerfile (consumed by
+            candy/examplestep-consumer). DEPLOY leg (OpExecute): a `run: plugin: examplestep`
+            step composed in a LOCAL/VM deploy is lowered to charly's ExternalPluginStep,
+            which Invokes this plugin's OpExecute WITH the host's live executor on the
+            go-plugin broker (the E3b reverse channel); the plugin writes a marker on the
+            target VENUE and returns a plugin-script reverse op the host records + replays at
+            teardown (consumed by candy/examplestep-deploy-consumer). The verb-as-step
+            analogue of the deploy-TARGET candy/plugin-example-deploy.
+    plugin-example-step-decl:
+        plugin:
+            providers:
+                - verb:examplestep
+            source: github.com/opencharly/charly/candy/plugin-example-step
+    examplestep-module-present:
+        check: the out-of-tree build-emit plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
+        id: examplestep-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

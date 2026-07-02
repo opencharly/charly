@@ -1,0 +1,7 @@
+{
+  "name": "oracle-layer",
+  "version": "1.0.0",
+  "dependencies": {
+    "@steipete/oracle": "*"
+  }
+}

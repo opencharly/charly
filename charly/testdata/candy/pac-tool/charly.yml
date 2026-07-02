@@ -1,0 +1,19 @@
+pac-tool:
+    candy:
+        version: 2026.144.1443
+    pac-tool-distro:
+        distro:
+            arch:
+                package:
+                    - neovim
+                    - ripgrep
+                option:
+                    - --needed
+                repo:
+                    - name: custom-repo
+                      server: https://example.com/repo/$arch
+                      siglevel: Optional TrustAll
+                aur:
+                    package:
+                        - yay-bin
+                        - neovim-nightly-bin

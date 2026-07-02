@@ -1,0 +1,62 @@
+steam:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Steam gaming client plus the gamescope nested compositor on a Sway/XWayland desktop
+            Installs the Steam client and the gamescope micro-compositor from the
+            Fedora + RPM Fusion nonfree repos, and pins
+            STEAM_RUNTIME_PREFER_HOST_LIBRARIES=0 so Steam uses its own bundled
+            runtime instead of host libraries. The launcher binary, the gamescope
+            binary, both RPM packages, and the runtime env pin are all directly
+            verifiable inside the built image.
+    steam-require:
+        require:
+            - sway
+    steam-env:
+        env:
+            STEAM_RUNTIME_PREFER_HOST_LIBRARIES: "0"
+    steam-distro:
+        distro:
+            fedora:
+                package:
+                    - steam
+                    - gamescope
+                option:
+                    - --allowerasing
+    steam-security:
+        security:
+            shm_size: "1g"
+    steam-volume:
+        volume:
+            - name: steam-data
+              path: "~/.local/share/Steam"
+    steam-step-0:
+        check: the Steam client launcher is installed at /usr/bin/steam
+        plugin: file
+        plugin_input:
+            file: /usr/bin/steam
+            exists: true
+    steam-step-1:
+        check: the steam RPM is present in the package database
+        plugin: package
+        plugin_input:
+            package: steam
+            installed: true
+    steam-step-2:
+        check: the gamescope nested Wayland compositor binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/gamescope
+            exists: true
+    steam-step-3:
+        check: the gamescope RPM is present in the package database
+        plugin: package
+        plugin_input:
+            package: gamescope
+            installed: true
+    steam-step-4:
+        check: STEAM_RUNTIME_PREFER_HOST_LIBRARIES is pinned to 0 so Steam uses its bundled runtime
+        stdout: "0"
+        plugin: command
+        plugin_input:
+            command: printenv STEAM_RUNTIME_PREFER_HOST_LIBRARIES

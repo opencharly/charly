@@ -1,0 +1,22 @@
+#!/bin/sh
+# Wait for labwc's Wayland socket (wayland-0), then launch waybar.
+# Waybar must connect to labwc (wayland-0) for proper layer-shell
+# exclusive zones and wlr-foreign-toplevel-management (taskbar).
+# NOT to pixelflux (wayland-1) which is the capture compositor.
+
+export WAYLAND_DISPLAY=wayland-0
+
+SOCKET="${XDG_RUNTIME_DIR:-/tmp}/$WAYLAND_DISPLAY"
+TIMEOUT=30
+ELAPSED=0
+while [ ! -S "$SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+
+if [ ! -S "$SOCKET" ]; then
+    echo "waybar-labwc-wrapper: $SOCKET not found after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+exec waybar

@@ -1,0 +1,107 @@
+desktop-media:
+    candy:
+        version: 2026.149.1210
+        description: |
+            Desktop media codecs, thumbnailers, and the ALSA<->PipeWire bridge for a KDE workstation
+            Installs the GStreamer plugin set (libav/bad/ugly/va/pipewire) so Plasma,
+            Phonon and Haruna play every codec, plus the VLC plugins, DVD CSS,
+            thumbnailer support libs (libgsf/libopenraw/poppler-glib), and the
+            ALSA<->PipeWire bridge with pavucontrol. Mirrors the CachyOS netinstall
+            "desktop integration" + "audio" subgroups (host-firmware entries like
+            alsa-firmware/sof-firmware are excluded — the VM has no physical audio
+            hardware, its streamed/null sinks come from PipeWire). Every package
+            lands a known binary, an unsonamed plugin .so, or a config drop-in, so
+            each scenario below is a deterministic file/package check.
+    desktop-media-require:
+        require:
+            - pipewire
+    desktop-media-distro:
+        distro:
+            arch:
+                package:
+                    # GStreamer / codecs
+                    - gst-libav
+                    - gst-plugin-pipewire
+                    - gst-plugins-bad
+                    - gst-plugins-ugly
+                    - gst-plugin-va
+                    - vlc-plugins-all
+                    - libdvdcss
+                    # Thumbnailer / document libs
+                    - ffmpegthumbnailer
+                    - libgsf
+                    - libopenraw
+                    - poppler-glib
+                    # ALSA bridge + mixer UI
+                    - alsa-utils
+                    - alsa-plugins
+                    - pipewire-alsa
+                    - pavucontrol
+    desktop-media-step-0:
+        check: the GStreamer libav codec bridge is installed for Plasma/Phonon/Haruna playback
+        plugin: package
+        plugin_input:
+            package: gst-libav
+            installed: true
+    desktop-media-step-1:
+        check: the libav GStreamer plugin shared object is present on disk
+        plugin: file
+        plugin_input:
+            file: /usr/lib/gstreamer-1.0/libgstlibav.so
+            exists: true
+    desktop-media-step-2:
+        check: the VA-API hardware-decode GStreamer plugin is present
+        plugin: file
+        plugin_input:
+            file: /usr/lib/gstreamer-1.0/libgstva.so
+            exists: true
+    desktop-media-step-3:
+        check: the ALSA->PipeWire bridge package is installed so ALSA clients route through PipeWire
+        plugin: package
+        plugin_input:
+            package: pipewire-alsa
+            installed: true
+    desktop-media-step-4:
+        check: the PipeWire default-PCM ALSA config drop-in is installed
+        plugin: file
+        plugin_input:
+            file: /etc/alsa/conf.d/99-pipewire-default.conf
+            exists: true
+    desktop-media-step-5:
+        check: the pavucontrol mixer UI binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pavucontrol
+            exists: true
+    desktop-media-step-6:
+        check: the ffmpeg thumbnailer binary is present for video-file previews
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ffmpegthumbnailer
+            exists: true
+    desktop-media-step-7:
+        check: the libdvdcss DVD decryption library is installed
+        plugin: package
+        plugin_input:
+            package: libdvdcss
+            installed: true
+    desktop-media-step-8:
+        check: the poppler-glib PDF library that backs document thumbnails is installed
+        plugin: package
+        plugin_input:
+            package: poppler-glib
+            installed: true
+    vlc-plugins-all-installed:
+        check: package=vlc-plugins-all
+        id: vlc-plugins-all-installed
+        plugin: package
+        plugin_input:
+            package: vlc-plugins-all
+            installed: true
+    alsa-utils-aplay:
+        check: file=/usr/bin/aplay
+        id: alsa-utils-aplay
+        plugin: file
+        plugin_input:
+            file: /usr/bin/aplay
+            exists: true

@@ -1,0 +1,59 @@
+plugin-feature:
+    candy:
+        version: 2026.179.0000
+        description: |-
+            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly feature …`
+            CLI — the plan-shaped-description inspection surface (list / pending / validate), a
+            standalone Go module (go.mod + main.go) ported OUT of charly's core (the deleted
+            charly/description_cmd.go's FeatureCmd + plugin_command_feature.go), so the
+            operator-facing feature command no longer compiles into the core binary.
+
+            The THIRD WELDED-command externalization in the core-externalization program (after
+            candy/plugin-tmux and candy/plugin-preempt). `charly feature` was WELDED to the
+            DEEPEST core — its handlers call the unified loader (LoadConfig / ScanCandy), iterate
+            the Step plan model (StepKind / Kind / IsAgent / KeywordText), and call
+            validatePlanSteps, which is SHARED with `charly box validate` (validate.go) — so the
+            loader + plan model + validatePlanSteps MUST STAY CORE (R3). The SOLUTION (the
+            preempt/tmux precedent — a plugin shells back through SANCTIONED `charly` CLI verbs,
+            never ad-hoc anything, R4): this plugin re-expresses each `charly feature` leaf as a
+            shell-back through three NEW HIDDEN core commands that do the loading + inspection
+            in-core — `charly __feature-list`, `charly __feature-pending`, and
+            `charly __feature-validate`. Those hidden verbs are the SAME `charly __cli-model` /
+            `charly __plugin-providers` / `charly __preempt-status` internal-command pattern; the
+            loader + plan model + validatePlanSteps stay core, invoked ONLY there. No core symbol
+            crosses the boundary; no ad-hoc podman/virsh. (The Feature RUN verbs are NOT part of
+            this move — `charly box feature run` / `charly check feature run` stay children of
+            box/check in the core binary.)
+
+            charly's loader fetches this candy's repo, go-builds the provider binary on the
+            HOST, and on `charly feature <args…>` syscall.Exec's it in CLI mode (sdk.Main →
+            cliMain) — or runs the host-installed /usr/lib/charly/plugins binary on a
+            project-less host (the pkg/arch bake). The plugin owns real terminal stdio, so the
+            inspection output reaches the operator's terminal natively.
+
+            command:feature is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
+            registry — so it is declared in plugin.providers (for the CLI-grammar prescan +
+            baked `.providers` manifest) but advertises NO Describe capability. The R10 witness
+            is the disposable check-feature-local bed: `charly feature validate` exits 0 against
+            a project with a known candy plan, proving the externalized command + the
+            hidden-command shell-back dispatch end-to-end.
+    plugin-feature-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-feature
+            providers:
+                - command:feature
+    # ADE build-context check: a deterministic check that does NOT depend on the project
+    # context the `charly feature` CLI needs (the prescan finds this candy from the project dir).
+    # It mirrors candy/plugin-udev / plugin-tmux / plugin-preempt — a trivial build-context
+    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
+    # build + fork/exec the module. The full CLI end-to-end (`charly feature validate` → exit 0
+    # against a known plan) is exercised by the Go e2e (TestExternalCommandExecPlan_Feature) +
+    # the live R10 (check-feature-local).
+    feature-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly feature` end-to-end is exercised by the Go e2e + the live R10 (check-feature-local)
+        id: feature-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

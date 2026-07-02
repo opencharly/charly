@@ -1,0 +1,25 @@
+plugin-example:
+    candy:
+        version: 2026.176.1400
+        description: |-
+            Reference plugin candy for the `exampleprobe` check verb (a deterministic
+            pass-with-marker probe). Its Go lives IN the candy (importable provider
+            package + cmd/serve shim) — COMPILED INTO charly when listed in charly.yml
+            `compiled_plugins:` (the default, registered in-process via
+            registerCompiledPlugin), and served OUT-OF-PROCESS over gRPC by the shim
+            when not. The canonical "a plugin is a candy" example — same
+            authoring/discovery/validation/ADE as any candy, plus a `plugin:` block.
+            Companion of candy/plugin-example-external (now identical in shape; the
+            in-charly-module builtin form was retired).
+    plugin-example-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-example
+            providers:
+                - verb:exampleprobe
+    exampleprobe-passes:
+        check: the exampleprobe plugin verb dispatches through the provider registry and passes
+        id: exampleprobe-passes
+        context: [build, deploy]
+        plugin: exampleprobe
+        plugin_input:
+            marker: exampleprobe-marker-ok

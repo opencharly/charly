@@ -1,0 +1,33 @@
+examplestep-deploy-consumer:
+    candy:
+        version: 2026.175.1200
+        description: |-
+            Reference CONSUMER candy for the DEPLOY-context (verb-as-step deploy-execute)
+            leg of external plugin execution. Its plan carries a DEPLOY-context `run:`
+            step `plugin: examplestep` which, at LOCAL/VM deploy, charly lowers to an
+            ExternalPluginStep: the out-of-tree candy/plugin-example-step is host-built +
+            connected out-of-process (loadDeployPlugins), and its OpExecute is Invoked WITH
+            the live target executor stood up on the go-plugin broker (the E3b
+            ExecutorService reverse channel) — so the plugin writes
+            /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the TARGET venue
+            and returns a plugin-script reverse op the host records + replays at `charly
+            bundle del`. The deploy-time counterpart of candy/examplestep-consumer (build
+            context). Compose it WITH candy/plugin-example-step (which provides the
+            examplestep verb); the deploy-context check below proves the marker landed.
+    examplestep-deploy-apply:
+        run: at LOCAL/VM deploy charly lowers this run-step to an ExternalPluginStep, Invoking the examplestep plugin's OpExecute over the E3b reverse channel to write /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the target venue
+        id: examplestep-deploy-apply
+        context:
+            - deploy
+        plugin: examplestep
+        plugin_input:
+            marker: examplestep-deploy
+    examplestep-deploy-applied:
+        check: the deploy-time examplestep OpExecute ran over the reverse channel — the probe marker is present on the target venue
+        id: examplestep-deploy-applied
+        context:
+            - deploy
+        plugin: command
+        plugin_input:
+            command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe"
+            in_container: false

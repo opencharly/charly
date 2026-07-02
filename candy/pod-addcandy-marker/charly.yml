@@ -1,0 +1,56 @@
+pod-addcandy-marker:
+    candy:
+        version: 2026.181.1430
+        description: |
+            Drop /etc/pod-addcandy-marker + copy /etc/pod-addcandy-copied — the
+            add_candy-on-pod overlay witness (write: AND copy: legs)
+            Single-file marker layer authored solely to be add_candy'd onto a pod
+            deploy whose deploy-key differs from its image-name (the
+            check-addcandy-pod bed). It writes /etc/pod-addcandy-marker carrying the
+            distinctive token POD-ADDCANDY-MARKER-OK (the write: leg — inline COPY,
+            never references the per-candy scratch stage) AND copies the bundled
+            copied.dat to /etc/pod-addcandy-copied carrying POD-ADDCANDY-COPIED-OK
+            (the copy: leg — `COPY --from=<candy>` against the per-candy
+            `FROM scratch AS <candy>` context stage, so it exercises the REMOTE
+            add_candy source staging into .build/_candy/<name>.<version>/). The bed
+            asserts both tokens are present INSIDE the running container, so it
+            passes iff the `<deploy-key>-overlay` image (which carries this layer)
+            is the one actually deployed — and fails if `charly config` resolved the
+            BASE image instead (the add_candy-on-pod quirk) OR if the copy: source
+            was not staged (the overlay build errors at COPY .build/_candy/…). Pure
+            file layer: no packages, no host-format dependence, so it overlays
+            cleanly on any base.
+    pod-addcandy-marker-step-0:
+        run: write=/etc/pod-addcandy-marker
+        write: /etc/pod-addcandy-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            POD-ADDCANDY-MARKER-OK v1
+    pod-addcandy-marker-step-1:
+        run: copy=/etc/pod-addcandy-copied
+        copy: copied.dat
+        to: /etc/pod-addcandy-copied
+        run_as: root
+        mode: "0644"
+    pod-addcandy-marker-step-2:
+        check: the pod-addcandy marker file is present at /etc/pod-addcandy-marker
+        plugin: file
+        plugin_input:
+            file: /etc/pod-addcandy-marker
+            exists: true
+    pod-addcandy-marker-step-3:
+        check: the marker records the distinctive token "POD-ADDCANDY-MARKER-OK"
+        plugin: file
+        plugin_input:
+            file: /etc/pod-addcandy-marker
+            contains:
+                - contains: "POD-ADDCANDY-MARKER-OK"
+    pod-addcandy-marker-step-4:
+        check: the copied data file is present at /etc/pod-addcandy-copied carrying its token POD-ADDCANDY-COPIED-OK — proves the copy-verb leg's REMOTE add_candy source was staged into the overlay build context
+        plugin: file
+        plugin_input:
+            file: /etc/pod-addcandy-copied
+            exists: true
+            contains:
+                - contains: "POD-ADDCANDY-COPIED-OK"

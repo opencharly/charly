@@ -1,0 +1,10 @@
+[workspace]
+name = "chrome-devtools-mcp"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.12"
+
+[pypi-dependencies]
+mcp-proxy = "*"

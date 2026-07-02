@@ -1,0 +1,44 @@
+mcporter:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the mcporter MCP CLI globally via npm so `mcporter` is on PATH for listing, configuring, and calling MCP tools.
+            The candy depends on nodejs and ships a package.json pinning
+            mcporter, which the build installs globally under NPM_CONFIG_PREFIX
+            (~/.npm-global). The result is verifiable: the mcporter binary lands
+            at ~/.npm-global/bin/mcporter, the mcporter package is unpacked under
+            ~/.npm-global/lib/node_modules/mcporter, `mcporter --version` exits
+            cleanly and prints a semantic version, and `mcporter --help` lists the
+            core MCP commands (list, call) that define the CLI surface.
+    mcporter-require:
+        require:
+            - nodejs
+    mcporter-step-0:
+        check: the mcporter binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/mcporter
+            exists: true
+    mcporter-step-1:
+        check: the mcporter package is unpacked under the npm global lib directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/lib/node_modules/mcporter/package.json
+            exists: true
+    mcporter-step-2:
+        check: running mcporter --version exits cleanly and prints a semantic version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/mcporter --version
+    mcporter-step-3:
+        check: running mcporter --help lists the list and call MCP commands
+        exit_status: 0
+        stderr:
+            - contains: "list"
+            - contains: "call"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/mcporter --help

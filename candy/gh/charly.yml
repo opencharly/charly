@@ -1,0 +1,136 @@
+gh:
+    candy:
+        version: 2026.157.1134
+        description: |
+            GitHub CLI (gh), git, and git-lfs — the GitHub-from-the-shell toolchain
+            gh is the single-responsibility home for the GitHub command-line
+            toolchain: the `gh` CLI (packaged as github-cli on arch, gh on
+            fedora/debian/ubuntu), `git`, and `git-lfs`. git-lfs is installed
+            with its rpm %post scriptlet suppressed (tsflags=noscripts, since
+            that scriptlet tries to talk to systemd inside the build container)
+            and its system hooks are instead configured by an explicit
+            post-install task (`git-lfs install --system --skip-repo`). The
+            observable, verifiable effect is that all three binaries are present
+            and runnable in any box that composes this candy — that is what the
+            scenarios and check block assert; they FAIL if any of the three tools
+            is missing.
+    gh-package:
+        package:
+            - git
+            - git-lfs
+    gh-distro:
+        distro:
+            arch:
+                package:
+                    - github-cli
+            # github-cli's apt repo is codename-independent (suite: stable), so Debian
+            # and Ubuntu share ONE compound section — the cascade splits `debian,ubuntu`
+            # into a per-distro tag section each, both carrying this package + repo.
+            debian,ubuntu:
+                package:
+                    - gh
+                repo:
+                    - name: github-cli
+                      url: "https://cli.github.com/packages"
+                      key: "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
+                      suite: "stable"
+                      components: "main"
+            fedora:
+                package:
+                    - gh
+                option:
+                    - "--setopt=tsflags=noscripts"
+    gh-step-0:
+        run: command=/usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: /usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
+    gh-step-1:
+        check: the GitHub CLI binary is installed at /usr/bin/gh for driving GitHub (PRs, issues, releases) from the shell
+        plugin: file
+        plugin_input:
+            file: /usr/bin/gh
+            exists: true
+    gh-step-2:
+        check: gh reports its version without error
+        exit_status: 0
+        stdout:
+            - contains: "gh version"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/gh --version
+    gh-step-3:
+        check: the git binary is installed at /usr/bin/git
+        plugin: file
+        plugin_input:
+            file: /usr/bin/git
+            exists: true
+    gh-step-4:
+        check: git reports its version without error
+        exit_status: 0
+        stdout:
+            - contains: "git version"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/git --version
+    gh-step-5:
+        check: the git-lfs binary is installed at /usr/bin/git-lfs for transparent large-file storage
+        plugin: file
+        plugin_input:
+            file: /usr/bin/git-lfs
+            exists: true
+    gh-step-6:
+        check: git-lfs reports its version without error
+        exit_status: 0
+        stdout:
+            - contains: "git-lfs"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/git-lfs --version
+    gh-step-7:
+        agent-check: with the system hooks configured by the post-install task, git-lfs is registered as a git filter so large files are smudged and cleaned transparently on checkout and commit
+    gh-version:
+        check: command=/usr/bin/gh --version
+        id: gh-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/gh --version
+    git-version:
+        check: command=/usr/bin/git --version
+        id: git-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/git --version
+    git-lfs-version:
+        check: command=/usr/bin/git-lfs --version
+        id: git-lfs-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/git-lfs --version
+    gh-package-2:
+        check: package=gh
+        id: gh-package
+        plugin: package
+        plugin_input:
+            package: gh
+            package_map:
+                arch: github-cli
+            installed: true
+    git-package:
+        check: package=git
+        id: git-package
+        plugin: package
+        plugin_input:
+            package: git
+            installed: true
+    git-lfs-package:
+        check: package=git-lfs
+        id: git-lfs-package
+        plugin: package
+        plugin_input:
+            package: git-lfs
+            installed: true

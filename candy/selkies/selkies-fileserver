@@ -1,0 +1,35 @@
+#!/home/user/.pixi/envs/default/bin/python
+"""Static file server for Selkies web UI with SPA fallback.
+
+Shebang pinned to the pixi env's python — see selkies-capture-server
+for the rationale (Fedora 43 python3 → 3.14, pixi env on 3.13)."""
+import http.server
+import os
+import sys
+
+WEB_DIR = "/usr/local/share/selkies/web"
+PORT = 3001
+
+
+class SPAHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=WEB_DIR, **kwargs)
+
+    def do_GET(self):
+        path = self.translate_path(self.path)
+        if os.path.isfile(path):
+            return super().do_GET()
+        self.path = "/index.html"
+        return super().do_GET()
+
+    def log_message(self, format, *args):
+        sys.stderr.write("%s - - [%s] %s\n" %
+                         (self.address_string(),
+                          self.log_date_time_string(),
+                          format % args))
+
+
+if __name__ == "__main__":
+    server = http.server.HTTPServer(("127.0.0.1", PORT), SPAHandler)
+    print(f"selkies-fileserver: serving {WEB_DIR} on port {PORT}", file=sys.stderr)
+    server.serve_forever()

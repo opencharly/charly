@@ -1,0 +1,6 @@
+python:
+    candy:
+        version: 2026.144.1443
+    python-require:
+        require:
+            - pixi

@@ -1,0 +1,77 @@
+dbus:
+    candy:
+        version: 2026.144.1443
+        description: |
+            A supervisord-managed D-Bus session bus exported at a unix-socket address for in-container clients
+            Installs the distro D-Bus package (the dbus-daemon binary) and runs a
+            session bus under supervisord as `dbus-daemon --session --nofork
+            --address=unix:path=/tmp/dbus-session`, exporting
+            DBUS_SESSION_BUS_ADDRESS so notification senders, introspection tools,
+            and the `dbus:` check verb's gdbus clients in the container can reach the bus.
+            Every claim is verifiable: the dbus-daemon binary on disk and the
+            providing package installed at build scope, and at deploy scope the
+            session-bus address env var exported plus the dbus service running.
+    dbus-require:
+        require:
+            - supervisord
+    dbus-env:
+        env:
+            DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/dbus-session"
+    dbus-distro:
+        distro:
+            arch:
+                package:
+                    - dbus
+            debian:
+                package:
+                    - dbus
+            fedora:
+                package:
+                    - dbus-daemon
+            ubuntu:
+                package:
+                    - dbus
+    dbus-service:
+        service:
+            - name: dbus
+              exec: "dbus-daemon --session --nofork --address=unix:path=/tmp/dbus-session"
+              env:
+                XDG_RUNTIME_DIR: /tmp
+              restart: always
+              priority: 2
+              enable: true
+              scope: system
+    dbus-step-0:
+        check: the dbus-daemon binary is installed at /usr/bin/dbus-daemon
+        plugin: file
+        plugin_input:
+            file: /usr/bin/dbus-daemon
+            exists: true
+    dbus-step-1:
+        check: the providing D-Bus package is installed (dbus-daemon on Fedora, dbus on Arch/Debian/Ubuntu)
+        plugin: package
+        plugin_input:
+            package: dbus-daemon
+            package_map:
+                arch: dbus
+            installed: true
+    dbus-step-2:
+        check: the DBUS_SESSION_BUS_ADDRESS env var is exported as a unix-socket address
+        exit_status: 0
+        stdout:
+            - contains: "unix:path="
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: printenv DBUS_SESSION_BUS_ADDRESS
+    dbus-step-3:
+        check: the supervised dbus session-bus service is running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: dbus
+            running: true
+    dbus-step-4:
+        agent-check: the supervised dbus service keeps the session bus reachable, restarting automatically (restart=always) if the dbus-daemon process exits

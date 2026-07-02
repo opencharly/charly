@@ -1,0 +1,27 @@
+plugin-builder-aur:
+    candy:
+        version: 2026.182.0400
+        description: |-
+            OUT-OF-TREE charly plugin serving the `aur` builder's BUILD-TIME multi-stage (OpResolve)
+            + its DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared
+            charly/plugin/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder> AS
+            aur-build` yay/makepkg stage + the /tmp/aur-pkgs COPY artifact, C10, no longer the core
+            embedded vocabulary), OpCollectContext (aur → {packages, replaces} from the candy's aur:
+            section) and OpReverse (aur → package-remove, system scope, pac format — the host fills
+            the UninstallCmd later via fillReverseUninstallCmds). The deploy-time pair runs in the host
+            build PRE-PASS, BEFORE the pure BuildDeployPlan compile, so the compiler never dials a
+            plugin. Selection stays DETECTION (a candy's aur: section), never an authored
+            external_builder:.
+    plugin-builder-aur-decl:
+        plugin:
+            providers:
+                - builder:aur
+            source: github.com/opencharly/charly/candy/plugin-builder-aur
+    aur-builder-module-present:
+        check: the out-of-tree aur builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
+        id: aur-builder-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

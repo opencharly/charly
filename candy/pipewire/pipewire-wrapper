@@ -1,0 +1,15 @@
+#!/bin/sh
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+
+pipewire &
+PW_PID=$!
+sleep 1
+
+wireplumber &
+sleep 1
+
+pipewire-pulse &
+sleep 1
+
+trap "kill $PW_PID 2>/dev/null" TERM INT QUIT
+wait $PW_PID

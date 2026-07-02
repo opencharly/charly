@@ -1,0 +1,28 @@
+plugin-enc:
+    candy:
+        version: 2026.182.0001
+        description: |-
+            ENCRYPTED-VOLUME (gocryptfs) MECHANICS plugin (C16a) — runs the gocryptfs /
+            systemd-run --scope / fusermount3 shell mechanics that mount, unmount,
+            initialize (auto-init on charly start), and re-key charly's gocryptfs-backed
+            encrypted volumes. It is the security-sensitive external-command surface carved
+            out of charly core (charly/enc.go). charly keeps the deploy-model around it —
+            ResolvedBindMount / ResolveVolumeBacking, the config loader, the path/probe
+            helpers (which the mandatorily-core ResolveVolumeBacking + verifyBindMounts
+            consume), and the credential store — and its in-core enc shim host-prelifts a
+            self-contained per-volume plan + resolved passphrase into this plugin's
+            OpExecute. Compiled-in (charly config mount/unmount/passwd + charly start call
+            the shim, which Invokes verb:enc in-proc so the passphrase never crosses a socket).
+    plugin-enc-decl:
+        plugin:
+            providers:
+                - verb:enc
+            source: github.com/opencharly/charly/candy/plugin-enc
+    enc-module-present:
+        check: the encrypted-volume mechanics plugin ships a buildable Go module the host compiles in
+        id: enc-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

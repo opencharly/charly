@@ -1,0 +1,131 @@
+traefik:
+    candy:
+        version: 2026.167.1315
+        description: |
+            Reverse proxy with TLS termination, HTTP-to-HTTPS redirect, and dynamic file-provider routing
+            traefik downloads the pinned v3.4.0 release binary to /usr/local/bin/traefik
+            and stages a static config at /etc/traefik/traefik.yml: a web entrypoint on
+            :8000 that redirects to HTTPS, a websecure entrypoint on :8443 backed by the
+            letsencrypt ACME resolver, an insecure API/dashboard on :8080, and a watched
+            dynamic-provider directory at /etc/traefik/dynamic. It runs as a supervisord
+            service, so every install artifact and the live API are independently verifiable.
+    traefik-require:
+        require:
+            - supervisord
+    traefik-var:
+        var:
+            TRAEFIK_VERSION: v3.4.0
+    traefik-port:
+        port:
+            - 8000
+            - 8080
+            - 8443
+    traefik-volume:
+        volume:
+            - name: certs
+              path: "~/.traefik/acme"
+    traefik-service:
+        service:
+            - name: traefik
+              exec: "/usr/local/bin/traefik --configFile=/etc/traefik/traefik.yml"
+              restart: always
+              enable: true
+              scope: system
+    traefik-step-0:
+        run: download=https://github.com/traefik/traefik/releases/download/${TRAEFIK_VERSION}/traefik_${TRAEFIK_VERSION}_linux_${ARCH}.tar.gz
+        download: "https://github.com/traefik/traefik/releases/download/${TRAEFIK_VERSION}/traefik_${TRAEFIK_VERSION}_linux_${ARCH}.tar.gz"
+        extract: tar.gz
+        to: /usr/local/bin
+        extract_include: [traefik]
+        run_as: root
+    traefik-step-1:
+        run: mkdir=/etc/traefik/dynamic
+        mkdir: /etc/traefik/dynamic
+        run_as: root
+    traefik-step-2:
+        run: copy=traefik.yml
+        copy: traefik.yml
+        to: /etc/traefik/traefik.yml
+        mode: "0644"
+        run_as: root
+    traefik-step-3:
+        run: resolve ${HOME} in the ACME storage path — traefik does NOT expand env vars in static config, so the literal must be substituted at build time (getent works under both create and adopt user policies)
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                HOME_DIR=$(getent passwd 1000 | cut -d: -f6)
+                sed -i "s#\${HOME}#${HOME_DIR}#g" /etc/traefik/traefik.yml
+    traefik-step-4:
+        check: the traefik release binary is installed at /usr/local/bin/traefik
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/traefik
+            exists: true
+    traefik-step-5:
+        check: running the binary reports the pinned 3.4.0 release
+        exit_status: 0
+        stdout:
+            - contains: "3.4.0"
+        plugin: command
+        plugin_input:
+            command: /usr/local/bin/traefik version
+    traefik-step-6:
+        check: the static configuration is staged at /etc/traefik/traefik.yml with mode 0644 and the letsencrypt resolver
+        plugin: file
+        plugin_input:
+            file: /etc/traefik/traefik.yml
+            mode: "0644"
+            contains:
+                - contains: "certResolver: letsencrypt"
+    traefik-acme-storage-resolved:
+        check: the ACME storage path is resolved to an absolute /home/ path at build time (traefik does not expand env in static config; an unsubstituted literal would read "storage:" without a "/home/" prefix and fail this match)
+        id: traefik-acme-storage-resolved
+        plugin: file
+        plugin_input:
+            file: /etc/traefik/traefik.yml
+            contains:
+                - matches: "storage: /home/"
+    traefik-step-8:
+        check: the watched dynamic-provider directory exists
+        plugin: file
+        plugin_input:
+            file: /etc/traefik/dynamic
+            filetype: directory
+    traefik-step-9:
+        check: the insecure API and dashboard answer with HTTP 200 on the API port
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:8080}/api/version
+            status: 200
+    traefik-step-10:
+        agent-check: a plain HTTP request to the web entrypoint is redirected to the TLS websecure entrypoint
+    traefik-service-running:
+        check: service=traefik
+        id: traefik-service-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: traefik
+            running: true
+    traefik-web-port-open:
+        check: addr=127.0.0.1:${HOST_PORT:8000}
+        id: traefik-web-port-open
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8000}
+            reachable: true
+    traefik-websecure-port-open:
+        check: the websecure entrypoint binds on the rootless-safe :8443 port
+        id: traefik-websecure-port-open
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8443}
+            reachable: true

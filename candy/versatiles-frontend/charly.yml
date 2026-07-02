@@ -1,0 +1,273 @@
+versatiles-frontend:
+    candy:
+        version: 2026.144.1443
+        description: |
+            VersaTiles frontend SPA served by a permissive-CORS static server on port 8002 (host 28002), re-exporting the style/fonts/styler bundles single-origin
+            The pre-built versatiles-org/versatiles-frontend TypeScript SPA (the
+            `frontend` full-feature release variant) unpacked at
+            /opt/versatiles-frontend/ with index.html at the root — same family
+            as the upstream pmtiles.io viewer but for the VersaTiles tile-server
+            ecosystem. It is served by a custom permissive-CORS python-stdlib
+            static server on port 8002 (host 28002), mirroring the sibling
+            maputnik (8000) and pmtiles-viewer (8001) static-SPA services. The
+            same server re-exports the sibling layers' bundles under /style/
+            (versatiles-style), /fonts/ (versatiles-fonts SDF glyphs) and /styler/
+            (maplibre-versatiles-styler) so the notebook's MapLibre iframe loads
+            every asset single-origin without a CDN. Verifiable: the SPA index,
+            the CORS server script and the three re-exported bundles land at their
+            paths, and the live service answers GET / with 200 plus an
+            Access-Control-Allow-Origin header (the reason this layer ships a
+            custom server instead of plain `python -m http.server`).
+    versatiles-frontend-require:
+        require:
+            - supervisord
+            - versatiles-style # the http.server re-exports its bundle at /style/
+            - versatiles-fonts # re-exported at /fonts/
+            - maplibre-versatiles-styler # re-exported at /styler/
+    versatiles-frontend-distro:
+        distro:
+            arch:
+                package:
+                    - curl
+                    - jq
+            fedora:
+                package:
+                    - curl
+                    - jq
+    versatiles-frontend-port:
+        port:
+            - 8002 # versatiles-frontend SPA (host-mapped 28002)
+    versatiles-frontend-env_provide:
+        # Two browser-side URLs derived from the same container port — the
+        # versatiles-frontend layer re-exports /style/ (the versatiles-style
+        # bundle) and / (raw asset root). The notebook's shortbread map cell
+        # reads both: STYLE_PUBLIC_URL for the MapLibre style JSON, and
+        # ASSETS_PUBLIC_URL as the asset-root prefix for font glyphs and
+        # sprites referenced from the style.
+        env_provide:
+            VERSATILES_STYLE_PUBLIC_URL: "http://127.0.0.1:{{.HostPort 8002}}/style"
+            VERSATILES_ASSETS_PUBLIC_URL: "http://127.0.0.1:{{.HostPort 8002}}"
+    versatiles-frontend-service:
+        service:
+            - name: versatiles-frontend
+              # CORS-enabled static server (see the write: task above) — same
+              # python-stdlib pattern as pmtiles-viewer / maputnik but with
+              # Access-Control-Allow-Origin so the /style/, /fonts/, /styler/
+              # re-exports work when fetched cross-origin by a browser map
+              # client. priority 38 places versatiles-frontend AFTER
+              # pmtiles-viewer (35) and maputnik (34); the ordering is
+              # cosmetic (no inter-service deps).
+              exec: /usr/bin/python3 /opt/versatiles-frontend-cors-server.py 8002 /opt/versatiles-frontend
+              restart: always
+              working_directory: /opt/versatiles-frontend
+              priority: 38
+              enable: true
+              scope: system
+    versatiles-frontend-step-0:
+        run: mkdir=/opt/versatiles-frontend
+        mkdir: /opt/versatiles-frontend
+        run_as: root
+    versatiles-frontend-step-1:
+        run: |
+            command=set -euo pipefail
+            ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-frontend/releases/latest" \
+              | jq -r '.assets[].browser_download_url' \
+              | grep -E '/frontend\.tar\.gz$' \
+              | head -1)
+            if [ -z "$ASSET" ]; then
+              echo "ERROR: could not find frontend.tar.gz on versatiles-frontend latest release" >&2
+              curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-frontend/releases/latest" \
+                | jq -r '.assets[].name' >&2
+              exit 1
+            fi
+            TMPDIR=$(mktemp -d)
+            cd "$TMPDIR"
+            curl -fsSL "$ASSET" -o frontend.tar.gz
+            # The tarball expands directly at the layer root (index.html
+            # at top-level), per the upstream packaging.
+            tar -xzf frontend.tar.gz -C /opt/versatiles-frontend
+            cd /
+            rm -rf "$TMPDIR"
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-frontend/releases/latest" \
+                  | jq -r '.assets[].browser_download_url' \
+                  | grep -E '/frontend\.tar\.gz$' \
+                  | head -1)
+                if [ -z "$ASSET" ]; then
+                  echo "ERROR: could not find frontend.tar.gz on versatiles-frontend latest release" >&2
+                  curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-frontend/releases/latest" \
+                    | jq -r '.assets[].name' >&2
+                  exit 1
+                fi
+                TMPDIR=$(mktemp -d)
+                cd "$TMPDIR"
+                curl -fsSL "$ASSET" -o frontend.tar.gz
+                # The tarball expands directly at the layer root (index.html
+                # at top-level), per the upstream packaging.
+                tar -xzf frontend.tar.gz -C /opt/versatiles-frontend
+                cd /
+                rm -rf "$TMPDIR"
+    versatiles-frontend-step-2:
+        run: |
+            command=set -euo pipefail
+            mkdir -p /opt/versatiles-frontend/style \
+                     /opt/versatiles-frontend/fonts \
+                     /opt/versatiles-frontend/styler
+            cp -r /opt/versatiles-style/.              /opt/versatiles-frontend/style/
+            cp -r /opt/versatiles-fonts/.              /opt/versatiles-frontend/fonts/
+            cp -r /opt/maplibre-versatiles-styler/.    /opt/versatiles-frontend/styler/
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                mkdir -p /opt/versatiles-frontend/style \
+                         /opt/versatiles-frontend/fonts \
+                         /opt/versatiles-frontend/styler
+                cp -r /opt/versatiles-style/.              /opt/versatiles-frontend/style/
+                cp -r /opt/versatiles-fonts/.              /opt/versatiles-frontend/fonts/
+                cp -r /opt/maplibre-versatiles-styler/.    /opt/versatiles-frontend/styler/
+    versatiles-frontend-step-3:
+        run: write=/opt/versatiles-frontend-cors-server.py
+        write: /opt/versatiles-frontend-cors-server.py
+        run_as: root
+        mode: "0755"
+        content: |
+            #!/usr/bin/env python3
+            """Static file server with permissive CORS headers.
+
+            Drop-in for `python3 -m http.server` for the versatiles-frontend
+            layer. Browser map clients fetch this server's /style/, /fonts/
+            and /styler/ re-exports cross-origin, so responses MUST carry
+            Access-Control-Allow-Origin or the browser blocks the fetch.
+
+            Usage: versatiles-frontend-cors-server.py <port> <directory>
+            """
+            from __future__ import annotations
+
+            import sys
+            from functools import partial
+            from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+
+            class CORSRequestHandler(SimpleHTTPRequestHandler):
+                def end_headers(self) -> None:
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header(
+                        "Access-Control-Allow-Methods", "GET, HEAD, OPTIONS"
+                    )
+                    self.send_header("Access-Control-Allow-Headers", "*")
+                    super().end_headers()
+
+                def do_OPTIONS(self) -> None:  # CORS preflight
+                    self.send_response(204)
+                    self.end_headers()
+
+
+            def main() -> None:
+                port = int(sys.argv[1])
+                directory = sys.argv[2]
+                handler = partial(CORSRequestHandler, directory=directory)
+                with ThreadingHTTPServer(("", port), handler) as httpd:
+                    httpd.serve_forever()
+
+
+            if __name__ == "__main__":
+                main()
+    versatiles-frontend-step-4:
+        check: the pre-built frontend SPA is unpacked with its index.html at the layer root
+        plugin: file
+        plugin_input:
+            file: /opt/versatiles-frontend/index.html
+            exists: true
+    versatiles-frontend-step-5:
+        check: the CORS-enabled static server script is installed and executable
+        plugin: file
+        plugin_input:
+            file: /opt/versatiles-frontend-cors-server.py
+            exists: true
+            mode: "0755"
+    versatiles-frontend-step-6:
+        check: the versatiles-style bundle is co-located under the http.server root at /style/
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-frontend/style -maxdepth 3 -name 'versatiles-style*.js' -size +1c | head -1 | grep -q .
+    versatiles-frontend-step-7:
+        check: the SDF font glyphs are re-exported under /fonts/
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-frontend/fonts -name '*.pbf' -size +1c | head -1 | grep -q .
+    versatiles-frontend-step-8:
+        check: the maplibre-versatiles-styler bundle is re-exported under /styler/
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: |
+                find /opt/versatiles-frontend/styler -maxdepth 4 -name '*.js' -size +1c | head -1 | grep -q .
+    versatiles-frontend-step-9:
+        check: the running versatiles-frontend service answers GET / with HTTP 200
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: "http://127.0.0.1:${HOST_PORT:8002}/"
+            status: 200
+    versatiles-frontend-step-10:
+        check: every response carries an Access-Control-Allow-Origin header so browser map clients fetch the re-exported /style/, /fonts/ and /styler/ assets cross-origin
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                curl -fsSI http://localhost:8002/ | grep -i 'access-control-allow-origin'
+            in_container: true
+    versatiles-frontend-running:
+        check: service=versatiles-frontend
+        id: versatiles-frontend-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: versatiles-frontend
+            running: true
+    versatiles-frontend-port-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:8002}
+        id: versatiles-frontend-port-reachable
+        timeout: 10s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: "127.0.0.1:${HOST_PORT:8002}"
+            reachable: true
+    versatiles-frontend-http-up:
+        check: http=http://127.0.0.1:${HOST_PORT:8002}/
+        id: versatiles-frontend-http-up
+        timeout: 10s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: "http://127.0.0.1:${HOST_PORT:8002}/"
+            status: 200
+    versatiles-frontend-style-fetchable:
+        check: |
+            command=curl -fsS http://localhost:8002/style/ | grep -qi 'versatiles\|index\|<html'
+        id: versatiles-frontend-style-fetchable
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: |
+                curl -fsS http://localhost:8002/style/ | grep -qi 'versatiles\|index\|<html'
+            in_container: true

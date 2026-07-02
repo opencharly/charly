@@ -1,0 +1,55 @@
+plugin-installstep:
+    candy:
+        version: 2026.182.1600
+        description: |-
+            Compiled-in DUAL-PLACEMENT charly class:step plugin serving the BUILD-context OpEmit
+            leg for the compiler-emitted builtin InstallStep kinds. Two sub-categories: the PURE
+            kinds (C1.1) — file, shell-hook, shell-snippet, service-packaged, service-custom,
+            repo-change, apk-install, plus the no-op-emit reboot (C1.6) — whose fragment is pure
+            string formatting from the compiler-produced spec.InstallStepView (the SAME view the
+            deploy walk consumes), so the plugin returns the pod-overlay Containerfile fragment
+            directly from OpEmit (apk-install and reboot declare Emits=false and return an empty
+            fragment — an image build installs no apk / reboots nothing); and the HOST-COUPLED
+            system-packages (C1.2) + builder (C1.3) + local-pkg-install (C1.4) + op (C1.5) kinds,
+            whose build-context render needs the host build engine (system-packages: DistroDef format
+            templates + RenderTemplate; builder: the multi-stage buildStageContext + RenderTemplate
+            engine; local-pkg-install: renderLocalPkgImageInstall — buildLocalPkgOnHost + host-dir
+            staging for a dev bed, the release-download RUN for production; op: the RICHEST —
+            Generator.emitTasks, the full per-verb render pipeline with COPY staging + op coalescing)
+            and so calls back the host's "step-emit" host-builder over the reverse channel
+            (Executor.HostBuild) and echoes the returned fragment. The DEPLOY leg for ALL these kinds
+            STAYS unchanged in charly/plugin/kit.WalkPlans (system-packages + builder +
+            local-pkg-install are host-engine kinds driven via RunHostStep → renderHostPackageCommand
+            / runVenueBuilderStep / execLocalPkgInstall; op is the act-OpStep resolveProvisionScript /
+            renderOpCommand path; reboot is the host-side guest reboot via RunHostStep →
+            rebootVenueAndWait, driven only on a rebootable VM venue); this plugin serves ONLY OpEmit.
+            The C1.1–C1.6 externalization of the builtin InstallStep build-emit COMPLETES the
+            13-step externalization: the build leg moves out of charly's OCITarget.emit* methods into
+            this plugin, the deploy leg is unchanged, and every InstallStep kind is now plugin-served
+            (12 via this candy; ExternalPlugin via its own class:step plugin dispatch). Its Go lives
+            in this candy's own module (NewProvider/NewMeta + a cmd/serve out-of-process shim),
+            compiled INTO charly via charly.yml compiled_plugins:.
+    plugin-installstep-decl:
+        plugin:
+            providers:
+                - step:file
+                - step:shell-hook
+                - step:shell-snippet
+                - step:service-packaged
+                - step:service-custom
+                - step:repo-change
+                - step:apk-install
+                - step:reboot
+                - step:system-packages
+                - step:builder
+                - step:local-pkg-install
+                - step:op
+            source: github.com/opencharly/charly/candy/plugin-installstep
+    installstep-module-present:
+        check: the compiled-in class:step build-emit plugin ships a buildable Go module the host can build + serve (in-proc in the default binary, out-of-process via cmd/serve when not compiled in)
+        id: installstep-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

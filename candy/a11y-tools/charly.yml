@@ -1,0 +1,53 @@
+a11y-tools:
+    candy:
+        version: 2026.144.1443
+        description: |
+            AT-SPI accessibility bindings importable from the system Python 3
+            Installs the AT-SPI2 Python bindings (pyatspi) and PyGObject (gi) into the
+            system python3 so accessibility introspection works on the desktop image.
+            These land in the system interpreter, NOT the pixi env that dominates PATH,
+            so every check targets the absolute /usr/bin/python3. Verifiable by importing
+            both modules and by confirming each distro's package is installed.
+    a11y-tools-require:
+        require:
+            - dbus
+    a11y-tools-distro:
+        distro:
+            arch:
+                package:
+                    - python-atspi
+                    - python-gobject
+            fedora:
+                package:
+                    - python3-pyatspi
+                    - python3-gobject
+    a11y-tools-step-0:
+        check: the system python3 imports the pyatspi AT-SPI bindings without error
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/python3 -c "import pyatspi"
+    a11y-tools-step-1:
+        check: the system python3 imports the gi PyGObject introspection module
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/python3 -c "import gi"
+    a11y-tools-step-2:
+        check: the AT-SPI python binding package is installed for the running distro
+        plugin: package
+        plugin_input:
+            package: python3-pyatspi
+            package_map:
+                arch: python-atspi
+                fedora: python3-pyatspi
+            installed: true
+    a11y-tools-step-3:
+        check: the PyGObject package is installed for the running distro
+        plugin: package
+        plugin_input:
+            package: python3-gobject
+            package_map:
+                arch: python-gobject
+                fedora: python3-gobject
+            installed: true

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Wait for Wayland socket, then launch swaync.
+# Works with any wlroots compositor (sway, labwc).
+
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+
+SOCKET="${XDG_RUNTIME_DIR:-/tmp}/$WAYLAND_DISPLAY"
+TIMEOUT=30
+ELAPSED=0
+while [ ! -S "$SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+
+if [ ! -S "$SOCKET" ]; then
+    echo "swaync-wrapper: $SOCKET not found after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+# Kill any stale swaync instance (prevents D-Bus name conflict on restart)
+# Use -x for exact match — plain "pkill swaync" also matches swaync-wrapper
+pkill -9 -x swaync 2>/dev/null || true
+sleep 0.5
+
+exec swaync

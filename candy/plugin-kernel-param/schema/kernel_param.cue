@@ -1,0 +1,48 @@
+// The BUILT-IN `kernel-param` plugin's OWN CUE schema — the typed plugin_input for the
+// `kernel-param` verb (a /proc/sys read in do:assert, a `sysctl -w` in do:act). It is
+// the SINGLE SOURCE for this plugin's params, used two ways (the same contract the
+// reference examplerunverb and core `spec` use):
+//
+//  1. GENERATE the Go param struct — `cue exp gengotypes` (driven by task cue:gen,
+//     which wraps this with `package params` + `@go(params)`) emits
+//     ../params/cue_types_gen.go, so the provider decodes plugin_input into a TYPED
+//     struct, never a hand-parsed map.
+//  2. VALIDATE authored input AT RUNTIME — the builtin serves this source over the
+//     Describe channel (InProcTransport) exactly like an external serves it over
+//     gRPC; the host splices it onto the base (base ++ plugin) and validates every
+//     authored `kernel-param` step's plugin_input against #KernelParamInput.
+//
+// SELF-CONTAINED: it references NO base def — the matcher shape `value` reproduces
+// standalone under plugin-private def names (#KernelParamMatcherList / #KernelParamMatcher
+// / #KernelParamMatchOp, so there is NO collision with the base #MatcherList / #Matcher /
+// #MatchOpMap when base ++ plugin compiles) — so it compiles standalone (gengotypes +
+// the load-gate compile) AND splices onto the base.
+//
+// The plugin WORD stays `kernel-param` (hyphen) — the existing wire key, preserved verbatim
+// by the migrator (a clean extraction, NOT a rename). The Go package directory is
+// `kernel_param` (a hyphen is not a legal Go package name; the verb word is unaffected).
+//
+// `kernel-param` is DUAL-NATURED — a state-provision verb that is BOTH a CheckVerbProvider
+// (RunVerb → r.runKernelParam, which reads /proc/sys/<key-as-slashes> via the live *Runner —
+// no procps-ng dependency) AND a ProvisionActor (RenderProvisionScript → `sysctl -w`,
+// rendered at install emit AND at runtime act). `value` was a base #Op field read ONLY by
+// the `kernel-param` verb, so it MOVES here when the verb extracts and leaves #Op entirely.
+#KernelParamInput: {
+	// kernel-param — the sysctl key the CHECK reads from /proc/sys (assert) / `sysctl -w`
+	// sets (act). The verb discriminator (a quoted hyphenated key — its Go field is KernelParam).
+	"kernel-param": string @go(KernelParam)
+	// value — optional goss-style matchers the parameter value must satisfy (assert) / the
+	// scalar to set (act, the first matcher's value). Reproduces the base #MatcherList shape
+	// standalone (scalar / single operator-map / list).
+	value?: #KernelParamMatcherList @go(Value)
+}
+
+// #KernelParamMatcherList mirrors the base #MatcherList: a single matcher OR a list.
+#KernelParamMatcherList: (#KernelParamMatcher | [...#KernelParamMatcher])
+
+// #KernelParamMatcher mirrors the base #Matcher: a bare scalar (implicit match) or a
+// single-operator map.
+#KernelParamMatcher: (string | bool | number | #KernelParamMatchOp)
+
+// #KernelParamMatchOp mirrors the base #MatchOpMap: exactly one matcher operator key.
+#KernelParamMatchOp: {equals: _} | {not_equals: _} | {contains: _} | {not_contains: _} | {matches: _} | {not_matches: _} | {lt: _} | {le: _} | {gt: _} | {ge: _}

@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Open WebUI auto-configuration entrypoint.
+# ENABLE_PERSISTENT_CONFIG=false means env vars always win — no sentinel needed.
+
+# --- Data directory ---
+mkdir -p "$DATA_DIR"
+
+# --- Read WEBUI_SECRET_KEY (auto-generated podman secret) ---
+if [ -z "${WEBUI_SECRET_KEY:-}" ] && [ -f /run/secrets/webui-secret-key ]; then
+    export WEBUI_SECRET_KEY="$(cat /run/secrets/webui-secret-key)"
+fi
+
+# --- LLM Providers ---
+# Build semicolon-separated lists for multiple OpenAI-compatible backends.
+# Open WebUI supports OPENAI_API_BASE_URLS + OPENAI_API_KEYS (plural, semicolon-separated).
+URLS=""
+KEYS=""
+
+# OpenRouter
+if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+    URLS="https://openrouter.ai/api/v1"
+    KEYS="$OPENROUTER_API_KEY"
+    echo "openwebui-entrypoint: OpenRouter configured"
+fi
+
+# Ollama Cloud (additive — both can be active simultaneously)
+if [ -n "${OLLAMA_API_KEY:-}" ]; then
+    if [ -n "$URLS" ]; then
+        URLS="$URLS;https://ollama.com/v1"
+        KEYS="$KEYS;$OLLAMA_API_KEY"
+    else
+        URLS="https://ollama.com/v1"
+        KEYS="$OLLAMA_API_KEY"
+    fi
+    echo "openwebui-entrypoint: Ollama Cloud configured"
+fi
+
+# Direct OpenAI (additive)
+if [ -n "${OPENAI_API_KEY:-}" ] && [ -n "${OPENAI_API_BASE_URL:-}" ]; then
+    if [ -n "$URLS" ]; then
+        URLS="$URLS;$OPENAI_API_BASE_URL"
+        KEYS="$KEYS;$OPENAI_API_KEY"
+    else
+        URLS="$OPENAI_API_BASE_URL"
+        KEYS="$OPENAI_API_KEY"
+    fi
+    echo "openwebui-entrypoint: OpenAI-compatible at $OPENAI_API_BASE_URL"
+fi
+
+if [ -n "$URLS" ]; then
+    export OPENAI_API_BASE_URLS="$URLS"
+    export OPENAI_API_KEYS="$KEYS"
+fi
+
+# Local Ollama (native API, only when OLLAMA_HOST is provided by env_provides)
+if [ -n "${OLLAMA_HOST:-}" ]; then
+    export ENABLE_OLLAMA_API="true"
+    export OLLAMA_BASE_URL="$OLLAMA_HOST"
+    echo "openwebui-entrypoint: Local Ollama at $OLLAMA_BASE_URL"
+else
+    export ENABLE_OLLAMA_API="false"
+fi
+
+# --- MCP Servers + Jupyter from CHARLY_MCP_SERVERS ---
+if [ -n "${CHARLY_MCP_SERVERS:-}" ]; then
+    eval "$(python3 - "$CHARLY_MCP_SERVERS" "${CODE_EXECUTION_JUPYTER_AUTH_TOKEN:-}" <<'PYEOF'
+import sys, json
+
+mcp_json, jupyter_token = sys.argv[1], sys.argv[2]
+
+try:
+    servers = json.loads(mcp_json)
+except json.JSONDecodeError:
+    print('echo "openwebui-entrypoint: warning: could not parse CHARLY_MCP_SERVERS" >&2', flush=True)
+    sys.exit(0)
+
+# Build TOOL_SERVER_CONNECTIONS for Open WebUI
+tool_connections = []
+jupyter_url = ""
+for srv in servers:
+    conn = {
+        "type": "mcp",
+        "url": srv["url"],
+        "spec_type": "url", "spec": "", "path": "",
+        "auth_type": "", "key": "",
+        "config": {"enable": True},
+        "info": {"id": "", "name": srv["name"], "description": f"MCP: {srv['name']}"}
+    }
+    tool_connections.append(conn)
+    # Detect jupyter by name or port pattern
+    if srv["name"] == "jupyter" or "8888/mcp" in srv.get("url", ""):
+        jupyter_url = srv["url"].rsplit("/mcp", 1)[0]
+
+if tool_connections:
+    encoded = json.dumps(tool_connections)
+    # Shell-safe: single-quote the JSON
+    print(f"export TOOL_SERVER_CONNECTIONS='{encoded}'")
+    print(f'echo "openwebui-entrypoint: {len(tool_connections)} MCP server(s) configured" >&2')
+
+if jupyter_url:
+    print(f'export CODE_EXECUTION_ENGINE=jupyter')
+    print(f'export CODE_EXECUTION_JUPYTER_URL="{jupyter_url}"')
+    print(f'export CODE_EXECUTION_JUPYTER_AUTH=token')
+    print(f'export CODE_EXECUTION_JUPYTER_TIMEOUT=60')
+    print(f'export CODE_INTERPRETER_ENGINE=jupyter')
+    print(f'export CODE_INTERPRETER_JUPYTER_URL="{jupyter_url}"')
+    print(f'export CODE_INTERPRETER_JUPYTER_AUTH=token')
+    print(f'export CODE_INTERPRETER_JUPYTER_TIMEOUT=60')
+    if jupyter_token:
+        print(f'export CODE_EXECUTION_JUPYTER_AUTH_TOKEN="{jupyter_token}"')
+        print(f'export CODE_INTERPRETER_JUPYTER_AUTH_TOKEN="{jupyter_token}"')
+    print(f'echo "openwebui-entrypoint: Jupyter code execution at {jupyter_url}" >&2')
+PYEOF
+)"
+fi
+
+# --- Admin credentials (MANDATORY) ---
+MISSING=""
+if [ -z "${WEBUI_ADMIN_EMAIL:-}" ]; then
+    MISSING="WEBUI_ADMIN_EMAIL"
+fi
+if [ -z "${WEBUI_ADMIN_PASSWORD:-}" ]; then
+    [ -n "$MISSING" ] && MISSING="$MISSING, "
+    MISSING="${MISSING}WEBUI_ADMIN_PASSWORD"
+fi
+if [ -n "$MISSING" ]; then
+    echo "" >&2
+    echo "ERROR: Missing required environment variable(s): $MISSING" >&2
+    echo "" >&2
+    echo "Open WebUI needs admin credentials to create the first user account." >&2
+    echo "" >&2
+    echo "WEBUI_ADMIN_EMAIL is plaintext config (declared in env_require)." >&2
+    echo "WEBUI_ADMIN_PASSWORD is a credential-backed secret (declared in secret_require);" >&2
+    echo "store it once in the credential backend and it flows in via a podman secret:" >&2
+    echo "" >&2
+    echo "  charly secrets set charly/secret WEBUI_ADMIN_PASSWORD your-password" >&2
+    echo "  charly config openwebui -e WEBUI_ADMIN_EMAIL=you@example.com --update-all" >&2
+    echo "" >&2
+    echo "Or pass both via -e on first run — the password is auto-imported into" >&2
+    echo "the credential backend and stripped from deploy.yml / the quadlet:" >&2
+    echo "" >&2
+    echo "  charly config openwebui -e WEBUI_ADMIN_EMAIL=you@example.com -e WEBUI_ADMIN_PASSWORD=your-password" >&2
+    echo "" >&2
+    exit 1
+fi
+export WEBUI_ADMIN_NAME="${WEBUI_ADMIN_NAME:-Admin}"
+
+echo "openwebui-entrypoint: admin account: $WEBUI_ADMIN_EMAIL"
+echo "openwebui-entrypoint: starting Open WebUI on port ${PORT:-8080}"
+exec open-webui serve

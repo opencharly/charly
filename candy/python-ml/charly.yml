@@ -1,0 +1,84 @@
+python-ml:
+    candy:
+        version: 2026.144.1443
+        description: |
+            A CUDA-ready Python 3.13 ML environment with PyTorch, transformers, and a vLLM inference runtime
+            The python-ml candy owns the pixi.toml that builds the core ML
+            Python environment under ~/.pixi/envs/default: PyTorch (cu130),
+            torchvision/torchaudio, transformers, accelerate and the full vLLM
+            runtime-dependency closure. After the pixi environment is built, a
+            user-phase task pip-installs the vLLM nightly wheel (--no-deps) into
+            that same interpreter. Every interpreter and library lands at a
+            fixed path under ~/.pixi/envs/default, so its presence and
+            importability are directly checkable.
+    python-ml-require:
+        require:
+            - cuda
+    python-ml-candy:
+        candy:
+            - llama-cpp
+    python-ml-env:
+        env:
+            NVIDIA_PYTHON_PROJECT: "~/.pixi"
+            LD_LIBRARY_PATH: "/usr/lib64:$HOME/llama.cpp"
+    python-ml-step-0:
+        run: |
+            command=~/.pixi/envs/default/bin/python -m pip install --no-deps \
+              'https://wheels.vllm.ai/f53fa26e05c476a43f6db048a9e3b43bcb2b72fb/vllm-0.19.1rc1.dev39%2Bgf53fa26e0.cu130-cp38-abi3-manylinux_2_35_x86_64.whl'
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                ~/.pixi/envs/default/bin/python -m pip install --no-deps \
+                  'https://wheels.vllm.ai/f53fa26e05c476a43f6db048a9e3b43bcb2b72fb/vllm-0.19.1rc1.dev39%2Bgf53fa26e0.cu130-cp38-abi3-manylinux_2_35_x86_64.whl'
+    python-ml-step-1:
+        check: the pixi default-environment Python interpreter is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/python
+            exists: true
+    python-ml-step-2:
+        check: PyTorch imports inside the pixi environment and prints its version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import torch; print(torch.__version__)"
+    python-ml-step-3:
+        check: the transformers library imports inside the pixi environment and prints its version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import transformers; print(transformers.__version__)"
+    python-ml-step-4:
+        check: the vLLM nightly wheel installed by the user-phase task imports and prints its version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import vllm; print(vllm.__version__)"
+    python-ml-torch-importable:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import torch; print(torch.__version__)"
+        id: python-ml-torch-importable
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import torch; print(torch.__version__)"
+    python-ml-vllm-importable:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import vllm; print(vllm.__version__)"
+        id: python-ml-vllm-importable
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import vllm; print(vllm.__version__)"
+    python-ml-transformers-importable:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import transformers; print(transformers.__version__)"
+        id: python-ml-transformers-importable
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import transformers; print(transformers.__version__)"

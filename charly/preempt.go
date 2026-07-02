@@ -1,0 +1,445 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"syscall"
+
+	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/charly/charly/spec"
+)
+
+// preempt.go — the HOST side of the resource arbiter after cutover C9.
+//
+// The arbiter LOGIC (the 1225-LOC ResourceArbiter: AcquireExclusive/AcquireShared/
+// ReleaseClaimant/stopHolders/restoreHolders/reconcileStranded/the lease ledger/poison/
+// mode-math) MOVED into the COMPILED-IN candy/plugin-preempt (verb:arbiter). What stays here:
+//
+//   1. The in-core PROXY (arbiterProxy + Lease + the acquire*/release* shims) — the ~6
+//      consumers (check_bed_run.go, start.go, vm.go, commands.go, vm_gpu_cmd.go,
+//      preempt_internal_cmd.go) call the SAME symbol names and are invisible above the shim
+//      (R3). Each proxy method resolves verb:arbiter and Invokes it with an action-tagged
+//      spec.ArbiterInvokeInput (the gpu_shim resolve+Invoke pattern).
+//   2. The 7 arbiter HOST-SEAM helper impls (gatherPreemptibleHolders / holderRunning /
+//      holderStop / holderStart / gatherResources / holderAddrFor / lookupVMClaimant +
+//      waitStoppedHost) the arbiter calls back for mid-logic via ExecutorService.HostArbiter
+//      (arbiter_host.go delegates here). These read the project config + drive the VM/pod
+//      lifecycle — host dependencies that cannot cross into the plugin module.
+//
+// Crash-safety, the lease ledger, poison markers, liveness (owner PID/start), and the
+// stop/flip/save sequencing all live in the plugin now; the host only supplies the config +
+// lifecycle + GPU-flip dependencies over the reverse channel.
+
+// holderAddr is spec.HolderAddr — the self-contained deployment address the host seams act on.
+type holderAddr = spec.HolderAddr
+
+// envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (runCheckBed,
+// or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
+// spawns do NOT independently acquire/release the lease — the owner manages it. Managed by the
+// in-core shims (the arbiter plugin never sees the env).
+const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
+
+// --- the in-core arbiter PROXY (dispatches to the compiled-in verb:arbiter plugin) ----------
+
+// arbiterProxy is the in-core handle the ~6 consumers get from newResourceArbiter(). Its
+// methods dispatch to the compiled-in candy/plugin-preempt (verb:arbiter) over an in-proc
+// reverse channel — the arbiter runs there and calls back for its host seams.
+type arbiterProxy struct{}
+
+func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
+
+// arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
+// IN-PROC reverse channel (the arbiter host-seam server) onto the ctx so the plugin's Invoke
+// reaches its host seams over HostArbiter — the SAME dispatchBuild in-proc-executor pattern
+// (build.go), with an arbiter server instead of a build context. Infra failures (no plugin,
+// marshal, invoke) are returned as a Go error; a per-action OP failure rides reply.Error.
+func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) {
+	prov, ok := providerRegistry.resolve(ClassVerb, "arbiter")
+	if !ok {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("resource arbiter (verb:arbiter) not registered — charly built without candy/plugin-preempt")
+	}
+	params, err := marshalJSON(in)
+	if err != nil {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s marshal: %w", in.Action, err)
+	}
+	ctx := sdk.ContextWithExecutor(context.Background(),
+		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{arbiter: newArbiterHostServer()}}))
+	res, err := prov.Invoke(ctx, &Operation{Reserved: "arbiter", Op: OpRun, Params: params})
+	if err != nil {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
+	}
+	var reply spec.ArbiterInvokeReply
+	if res != nil && len(res.JSON) > 0 {
+		if err := json.Unmarshal(res.JSON, &reply); err != nil {
+			return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s decode: %w", in.Action, err)
+		}
+	}
+	return reply, nil
+}
+
+// Status returns the current lease ledger + the stranded-claimant names (`charly preempt status`).
+func (a *arbiterProxy) Status() (*spec.PreemptLedger, []string, error) {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionStatus})
+	if err != nil {
+		return nil, nil, err
+	}
+	if r.Error != "" {
+		return nil, nil, errors.New(r.Error)
+	}
+	ledger := r.Ledger
+	if ledger == nil {
+		ledger = &spec.PreemptLedger{}
+	}
+	return ledger, r.Stranded, nil
+}
+
+// ReleaseClaimant restores the holders a claimant's lease stopped + removes the lease.
+func (a *arbiterProxy) ReleaseClaimant(claimant string, success bool) error {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: claimant, Success: success})
+	if err != nil {
+		return err
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// reconcileStranded restores holders for any lease whose owner is gone (`charly preempt restore`).
+func (a *arbiterProxy) reconcileStranded() error {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionReconcile})
+	if err != nil {
+		return err
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// clearPoison removes a token's poison marker (`charly vm gpu recover`).
+func (a *arbiterProxy) clearPoison(token string) {
+	if _, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionClearPoison, Token: token}); err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: clear poison %q: %v\n", token, err)
+	}
+}
+
+// resourcePoisoned reports whether a token is poisoned for the current boot (`charly vm gpu status`).
+func (a *arbiterProxy) resourcePoisoned(token string) bool {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionResourcePoisoned, Token: token})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: resource-poisoned %q: %v\n", token, err)
+		return false
+	}
+	return r.Bool
+}
+
+// Lease is the handle returned by the acquire shims. Release()/ReleaseFailed() dispatch the
+// release through the arbiter proxy. A zero/no-op Lease (nothing claimed) is safe to Release.
+type Lease struct {
+	claimant string
+	active   bool
+}
+
+// Release restores preempted holders assuming the claim succeeded.
+func (l *Lease) Release() error {
+	if l == nil || !l.active {
+		return nil
+	}
+	return newResourceArbiter().ReleaseClaimant(l.claimant, true)
+}
+
+// ReleaseFailed applies the restore policy for a FAILED claim (on-success holders stay stopped).
+func (l *Lease) ReleaseFailed() error {
+	if l == nil || !l.active {
+		return nil
+	}
+	return newResourceArbiter().ReleaseClaimant(l.claimant, false)
+}
+
+// --- the acquire/release shims (compute tokens/addr from the node, then dispatch) -----------
+
+// acquireExclusiveForClaimant acquires (or reuses) an exclusive-resource lease for a claimant
+// that declares requires_exclusive — UNLESS an outer orchestrator already owns one
+// (envPreemptLeaseHeld). On a real acquire it marks the env so nested `charly` subprocesses
+// skip re-acquiring. A no-op lease is safe to Release.
+func acquireExclusiveForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+	if len(node.RequiredExclusive()) == 0 {
+		return &Lease{}, nil
+	}
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return &Lease{}, nil
+	}
+	return acquireDispatch(spec.ArbiterActionAcquireExclusive, claimant, dedupeNonEmpty(node.RequiredExclusive()), node, transient)
+}
+
+// acquireSharedForClaimant acquires (or reuses) a SHARED refcounted lease for a pod/bed that
+// declares requires_shared. Mirrors acquireExclusiveForClaimant.
+func acquireSharedForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+	if len(node.RequiredShared()) == 0 {
+		return &Lease{}, nil
+	}
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return &Lease{}, nil
+	}
+	return acquireDispatch(spec.ArbiterActionAcquireShared, claimant, dedupeNonEmpty(node.RequiredShared()), node, transient)
+}
+
+// acquireDispatch is the shared acquire leg (R3): it Invokes verb:arbiter with the pre-computed
+// tokens + claim address, and on an active lease marks envPreemptLeaseHeld so nested
+// subprocesses skip re-acquiring.
+func acquireDispatch(action, claimant string, tokens []string, node BundleNode, transient bool) (*Lease, error) {
+	r, err := arbiterInvoke(spec.ArbiterInvokeInput{
+		Action:    action,
+		Claimant:  claimant,
+		Tokens:    tokens,
+		ClaimAddr: holderAddrFor(claimant, node),
+		Transient: transient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if r.Error != "" {
+		return nil, errors.New(r.Error)
+	}
+	if r.Active {
+		_ = os.Setenv(envPreemptLeaseHeld, claimant)
+	}
+	return &Lease{claimant: claimant, active: r.Active}, nil
+}
+
+// acquireResourceForClaimant acquires the appropriate lease for a claimant: EXCLUSIVE when it
+// declares requires_exclusive, SHARED when it declares requires_shared, a no-op when it claims
+// nothing. The single entry point for the start + check-bed paths (R3). A node that USES the
+// nvidia GPU but declared NO explicit claim is auto-promoted to a SHARED claimant of the gpu
+// token here (withImpliedGPUShared) — so EVERY GPU-consuming deployment becomes a tracked,
+// preemptable shared claimant with no per-deploy config.
+func acquireResourceForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+	node = withImpliedGPUShared(node)
+	if len(node.RequiredExclusive()) > 0 {
+		return acquireExclusiveForClaimant(claimant, node, transient)
+	}
+	if len(node.RequiredShared()) > 0 {
+		return acquireSharedForClaimant(claimant, node, transient)
+	}
+	return &Lease{}, nil
+}
+
+// releaseResourceClaim releases a persistent claimant's lease on teardown (charly vm
+// stop/destroy, charly stop, charly remove) — kind-agnostic, best-effort, a no-op when the
+// claimant holds no lease, skipped when an outer orchestrator owns the lease.
+func releaseResourceClaim(claimant string) {
+	if os.Getenv(envPreemptLeaseHeld) != "" {
+		return
+	}
+	if err := newResourceArbiter().ReleaseClaimant(claimant, true); err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: %v\n", err)
+	}
+}
+
+// --- the arbiter HOST-SEAM impls (the arbiter calls these back over HostArbiter) ------------
+
+// gatherDeployNodes returns every deploy node visible to the current invocation: the current
+// project's deploy map (committed charly.yml, includes folded check beds) as the BASE, with the
+// operator's per-host ~/.config/charly/charly.yml overlay merged ON TOP (the overlay WINS on a
+// name clash — it carries local-only `preemptible:`, a PER-HOST decision). Keyed by deploy name.
+func gatherDeployNodes() map[string]BundleNode {
+	out := map[string]BundleNode{}
+	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
+		maps.Copy(out, uf.Bundle)
+	}
+	if dc := loadDeployConfigForRead("charly preempt"); dc != nil {
+		for name, node := range dc.Bundle {
+			out[name] = MergeBundleNode(out[name], node)
+		}
+	}
+	return out
+}
+
+// gatherPreemptibleHolders is gatherDeployNodes filtered to the preemptible holders (the
+// candidate set the arbiter may stop).
+func gatherPreemptibleHolders() map[string]BundleNode {
+	out := map[string]BundleNode{}
+	for name, node := range gatherDeployNodes() {
+		if node.IsPreemptible() {
+			out[name] = node
+		}
+	}
+	return out
+}
+
+// lookupVMClaimant finds a deploy/check node that targets the given kind:vm entity and declares
+// requires_exclusive — the claimant a standalone `charly vm create/stop/destroy <entity>`
+// acquires/releases an exclusive lease for. ok=false when none exists.
+func lookupVMClaimant(vmEntity string) (string, BundleNode, bool) {
+	for name, node := range gatherDeployNodes() {
+		if node.Target == "vm" && node.From == vmEntity && len(node.RequiredExclusive()) > 0 {
+			return name, node, true
+		}
+	}
+	return "", BundleNode{}, false
+}
+
+func holderAddrFor(name string, node BundleNode) holderAddr {
+	base, instance := parseDeployKey(name)
+	target := node.Target
+	if target == "" {
+		target = "pod"
+	}
+	addr := holderAddr{Name: name, Target: target, Base: base, Instance: instance}
+	if target == "vm" {
+		addr.Vm = node.From
+		if addr.Vm == "" {
+			addr.Vm = base
+		}
+	}
+	return addr
+}
+
+func holderRunning(addr holderAddr) bool {
+	if addr.Target == "vm" {
+		return vmIsRunning(vmName(addr.Vm, addr.Instance))
+	}
+	return podIsRunning(addr.Base, addr.Instance)
+}
+
+func holderStop(addr holderAddr) error {
+	if addr.Target == "vm" {
+		return stopVM(addr.Vm, addr.Instance, false)
+	}
+	return stopPodService(addr.Base, addr.Instance)
+}
+
+func holderStart(addr holderAddr) error {
+	if addr.Target == "vm" {
+		return startVM(addr.Vm, addr.Instance)
+	}
+	return startPodService(addr.Base, addr.Instance)
+}
+
+// waitStoppedHost polls until the holder is no longer running (its resource is released), via
+// the readiness StopGate + pollUntil (cap-only at the config StopGrace). Returns immediately
+// when already down. The folded wait leg of the `stop` host seam — the readiness machinery
+// stays host-side, never crossing into the plugin.
+func waitStoppedHost(addr holderAddr) bool {
+	cfg := loadedReadiness().StopGate("stop " + addr.Name)
+	return pollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
+		return !holderRunning(addr), 0, nil
+	}) == nil
+}
+
+// vmIsRunning reports whether the named domain is running (libvirt state via the vm plugin,
+// then the qemu pidfile).
+func vmIsRunning(name string) bool {
+	if raw, ok := invokeVmPlugin("domain-state", name, ""); ok {
+		var st struct {
+			Running bool `json:"running"`
+		}
+		if json.Unmarshal(raw, &st) == nil && st.Running {
+			return true
+		}
+	}
+	dir, err := vmDir()
+	if err != nil {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name, "qemu.pid"))
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+// podIsRunning reports whether a pod deployment is up (the quadlet service when one exists,
+// else the container's runtime state).
+func podIsRunning(base, instance string) bool {
+	if active, _ := quadletExistsInstance(base, instance); active {
+		svc := serviceNameInstance(base, instance)
+		out, _ := exec.Command("systemctl", "--user", "is-active", svc).Output()
+		return strings.TrimSpace(string(out)) == "active"
+	}
+	engine := "podman"
+	if rt, err := ResolveRuntime(); err == nil {
+		engine = EngineBinary(ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
+	}
+	name := containerNameInstance(base, instance)
+	out, err := exec.Command(engine, "inspect", "--format", "{{.State.Running}}", name).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "true"
+}
+
+// gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
+// flip) from the project charly.yml. nil when none / unreadable.
+func gatherResources() map[string]*ResourceDef {
+	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
+		return uf.Resources()
+	}
+	return nil
+}
+
+// --- small host-side set helpers -----------------------------------------------------------
+
+// dedupeNonEmpty trims + dedups a token list (the acquire shim computes the claimant's tokens).
+func dedupeNonEmpty(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+// sortedHolderKeys returns the sorted keys of a holder map (the gather projection iterates
+// deterministically).
+func sortedHolderKeys(m map[string]BundleNode) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// intersect returns the sorted set intersection of a and b — used by validate_preempt.go's
+// requires_exclusive/requires_shared overlap check (the arbiter's own copy travels with it in
+// candy/plugin-preempt, its separate module).
+func intersect(a, b []string) []string {
+	set := map[string]bool{}
+	for _, s := range a {
+		set[s] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range b {
+		if set[s] && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}

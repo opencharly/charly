@@ -1,0 +1,64 @@
+ssh-client:
+    candy:
+        version: 2026.144.1443
+        description: |
+            OpenSSH client tools for SSH agent forwarding
+            ssh-client installs the OpenSSH client package (openssh-clients on
+            Fedora, openssh-client on Debian/Ubuntu, openssh on Arch) providing
+            the ssh, ssh-add, ssh-keygen, scp and sftp binaries at /usr/bin.
+            Boxes compose it (directly or via the agent-forwarding metalayer) so
+            in-container ssh and git can reach hosts through the host's forwarded
+            SSH agent socket. The observable, verifiable effect is that the client
+            binaries are present and `ssh -V` reports the OpenSSH banner on stderr.
+    ssh-client-distro:
+        distro:
+            arch:
+                package:
+                    - openssh
+            debian:
+                package:
+                    - openssh-client
+            fedora:
+                package:
+                    - openssh-clients
+            ubuntu:
+                package:
+                    - openssh-client
+    ssh-client-step-0:
+        check: the ssh client binary is installed at /usr/bin/ssh so in-container git and ssh can connect out
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ssh
+            exists: true
+    ssh-client-step-1:
+        check: ssh-add is installed so the forwarded host agent's keys can be loaded and listed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ssh-add
+            exists: true
+    ssh-client-step-2:
+        check: ssh-keygen is installed for generating and inspecting key material
+        plugin: file
+        plugin_input:
+            file: /usr/bin/ssh-keygen
+            exists: true
+    ssh-client-step-3:
+        check: ssh -V identifies the client as OpenSSH on stderr and exits cleanly
+        exit_status: 0
+        stderr:
+            - contains: "OpenSSH"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/ssh -V
+    ssh-client-step-4:
+        agent-check: with a host SSH agent forwarded at runtime, ssh-add -l inside the deployment lists the host's keys via the forwarded SSH_AUTH_SOCK
+    ssh-client-package:
+        check: package=openssh-client
+        id: ssh-client-package
+        plugin: package
+        plugin_input:
+            package: openssh-client
+            package_map:
+                arch: openssh
+                fedora: openssh-clients
+            installed: true

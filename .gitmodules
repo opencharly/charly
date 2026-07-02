@@ -1,0 +1,28 @@
+[submodule "plugins"]
+	path = plugins
+	url = git@github.com:opencharly/plugins.git
+[submodule "pkg/arch"]
+	path = pkg/arch
+	url = git@github.com:opencharly/pkg-arch.git
+[submodule "pkg/fedora"]
+	path = pkg/fedora
+	url = git@github.com:opencharly/pkg-fedora.git
+[submodule "pkg/debian"]
+	path = pkg/debian
+	url = git@github.com:opencharly/pkg-debian.git
+[submodule "box/arch"]
+	path = box/arch
+	url = git@github.com:opencharly/distro-arch.git
+	branch = main
+[submodule "box/cachyos"]
+	path = box/cachyos
+	url = git@github.com:opencharly/distro-cachyos.git
+[submodule "box/debian"]
+	path = box/debian
+	url = git@github.com:opencharly/distro-debian.git
+[submodule "box/fedora"]
+	path = box/fedora
+	url = git@github.com:opencharly/distro-fedora.git
+[submodule "box/ubuntu"]
+	path = box/ubuntu
+	url = git@github.com:opencharly/distro-ubuntu.git

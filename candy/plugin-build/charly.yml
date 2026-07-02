@@ -1,0 +1,31 @@
+plugin-build:
+    candy:
+        version: 2026.182.1600
+        description: |-
+            The BUILD-ENGINE DISPATCH plugin: a thin dispatch/echo over the F10 HostBuild
+            reverse-channel seam, serving `build:box` (the `charly box build` engine) and
+            `build:generate` (the `charly box generate` engine). The heavy engine — the Generator,
+            the OCITarget, the runtime Candy graph — is I/O-bound with unexported state and a huge
+            blast radius, so it STAYS host-side in-process, UNCHANGED. This plugin does NOT run the
+            engine: its Invoke forwards the host-constructed spec.BuildRequest (op.Params, verbatim)
+            BACK to the host via Executor.HostBuild(kind, …) and ECHOES the host-builder's opaque
+            spec.BuildReply — build:box → HostBuild("image"), build:generate → HostBuild("generate").
+            The group/substrate/candy echo pattern applied to build: only the wire envelope crosses
+            the seam. COMPILED-IN (in the embedded compiled_plugins:) — `charly box build` /
+            `charly box generate` dispatch it IN-PROCESS, the host threading the reverse channel onto
+            the Invoke context so HostBuild is reachable without a go-plugin broker. Also serves
+            out-of-process via cmd/serve for module-shape parity (one provider, two placements).
+    plugin-build-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-build
+            providers:
+                - build:box
+                - build:generate
+    build-dispatch-module-present:
+        check: the build-engine dispatch plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its build:box / build:generate words route `charly box build` and `charly box generate` through the F10 HostBuild seam, exercised by EVERY box build across the whole ecosystem (every `charly box build` / `charly box generate` invocation)
+        id: build-dispatch-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

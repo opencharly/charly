@@ -1,0 +1,88 @@
+#!/bin/sh
+SOCKET="${XDG_RUNTIME_DIR:-/tmp}/${WAYLAND_DISPLAY:-wayland-0}"
+TIMEOUT=30
+ELAPSED=0
+
+# Phase 1: Wait for Wayland display socket
+while [ ! -e "$SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+if [ ! -e "$SOCKET" ]; then
+    echo "wayvnc-wrapper: Wayland socket $SOCKET not found after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+# Phase 2: Wait for sway IPC socket (means sway is fully initialized and
+# resolution has been set by sway-wrapper)
+ELAPSED=0
+while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    SWAYSOCK=$(ls -t /tmp/sway-ipc.*.sock 2>/dev/null | head -1)
+    [ -n "$SWAYSOCK" ] && break
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+# Extra pause to let sway-wrapper finish setting resolution
+sleep 2
+
+WAYVNC_ARGS="--render-cursor -o HEADLESS-1"
+
+# GPU-accelerated encoding — only for real displays, not headless.
+# Headless + NVIDIA: pixman renderer produces compatible buffers without --gpu.
+if [ "$WLR_BACKENDS" != "headless" ] && ls /dev/dri/renderD* >/dev/null 2>&1; then
+    WAYVNC_ARGS="$WAYVNC_ARGS --gpu"
+fi
+
+# Configurable max frame rate (default: wayvnc's built-in 30fps)
+if [ -n "$WAYVNC_MAX_FPS" ]; then
+    WAYVNC_ARGS="$WAYVNC_ARGS --max-fps=$WAYVNC_MAX_FPS"
+fi
+
+# Workaround: wayvnc 0.9.1 + headless sway outputs.
+# wayvnc gates screen capture on zwlr_output_power_v1 mode events, but sway's
+# headless backend never emits them. A VNC client connection triggers wayvnc
+# to bind the output power manager; a subsequent swaymsg "power on" forces
+# sway to emit the event. Without this, VNC screenshots return a gray frame.
+# Fixed in wayvnc git main (post-0.9.1) — remove when Fedora ships the fix.
+if [ "$WLR_BACKENDS" = "headless" ] && [ -n "$SWAYSOCK" ]; then
+    (
+        # Wait for wayvnc to start listening
+        ELAPSED=0
+        while [ "$ELAPSED" -lt 15 ]; do
+            if ss -tlnp 2>/dev/null | grep -q ':5900 '; then
+                break
+            fi
+            sleep 0.5
+            ELAPSED=$((ELAPSED + 1))
+        done
+        sleep 0.5
+        # Minimal VNC handshake to trigger output_acquire_power_on.
+        # wayvnc only binds the power manager after a client completes
+        # the RFB security handshake.
+        python3 -c "
+import socket, struct, time
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(5)
+try:
+    s.connect(('127.0.0.1', 5900))
+    s.recv(12)                          # server version
+    s.send(b'RFB 003.008\n')           # client version
+    n = struct.unpack('B', s.recv(1))[0]
+    s.recv(n)                           # security types
+    s.send(struct.pack('B', 1))         # choose None
+    s.recv(4)                           # security result
+    s.send(struct.pack('B', 1))         # ClientInit (shared)
+    time.sleep(0.5)                     # let wayvnc bind power manager
+except Exception:
+    pass
+finally:
+    s.close()
+" 2>/dev/null
+        sleep 1
+        # Toggle DPMS to emit the missing power event
+        export SWAYSOCK
+        swaymsg "output HEADLESS-1 power on" >/dev/null 2>&1
+    ) &
+fi
+
+exec wayvnc $WAYVNC_ARGS 0.0.0.0 5900

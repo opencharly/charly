@@ -1,0 +1,34 @@
+plugin-record:
+    candy:
+        version: 2026.182.1805
+        description: |-
+            OUT-OF-TREE charly plugin serving the `record` live-container check verb — a
+            standalone Go module (go.mod + main.go) that manages recording sessions inside a
+            running deployment (list, start, stop, cmd) over go-plugin gRPC via the charly
+            plugin SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS via
+            LocalTransport — so the asciinema/wf-recorder/pixelflux recording driver lives
+            HERE, out of charly's core check surface (the first live-verb dep-shed of the
+            EXEC-based kind, after the PORT-based candy/plugin-mcp/spice/kube). `record:`
+            authoring stays unchanged: the verb keeps its `record:` discriminator + every
+            modifier (record_name/record_mode/record_fps/record_audio) + the #RecordMethod
+            enum on charly's core #Op, and dispatches through the provider registry exactly
+            like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider hands it the
+            full #Op). FIRST consumer of the executor reverse channel: record is EXEC-based,
+            so the host attaches its live DeployExecutor over the E3b reverse channel and
+            this plugin dials back through the SDK (sdk.ExecutorFromInvoke) to RunCapture the
+            asciinema/wf-recorder commands in-container via tmux and GetFile the produced
+            .cast/.mp4 artifact back to the host — it owns no podman / SSH machinery. The R10
+            consumer is a desktop pod bed whose check composes this plugin (the
+            sway-browser-vnc bed's `record: start`).
+    plugin-record-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-record
+            providers:
+                - verb:record
+    record-verb-dispatches:
+        check: the record verb dispatches through the provider registry and lists the active recording sessions on a live deployment (the out-of-process plugin verb drives the venue over the executor reverse channel)
+        id: record-verb-dispatches
+        record: list
+        context:
+            - runtime

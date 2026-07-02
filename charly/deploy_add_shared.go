@@ -1,0 +1,134 @@
+package main
+
+// deploy_add_shared.go — generic helpers shared across the per-kind
+// UnifiedDeployTarget.Add methods (R3). Each one captures a step that
+// was copy-pasted across the old per-kind deploy bodies; now there is
+// ONE implementation, called from local/vm/pod Add.
+//
+// Ordering is load-bearing and preserved exactly:
+//   - secrets are injected into the plans BEFORE any Emit (a candy's
+//     OpStep body references the resolved token via env).
+//   - artifactEnv is secretEnv first, then node.Env lines overlaid
+//     (last-wins) — so a deploy entry's explicit env: overrides an
+//     auto-generated secret of the same name.
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"os"
+	"strings"
+)
+
+// prepareCandySecrets resolves the candies backing `plans`, computes their
+// secret_requires / secret_accepts env (auto-generating + persisting any
+// missing required token), and injects it into every plan's TaskSteps
+// BEFORE emission. Returns the resolved candy list (the caller reuses it
+// for artifact retricheck) and the secret env map.
+//
+// Shared by the external substrate apply path AND each lifecycle hook's PrepareVenue
+// (vm: before the in-guest walk; pod: before the host-side overlay build) — the paths that
+// previously each ran CandyForPlan + ResolveSecretForCandy + InjectSecretsIntoPlans inline.
+func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string]string, error) {
+	candyList, err := CandyForPlan(plans, dir, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	secretEnv := ResolveSecretForCandy(candyList)
+	InjectSecretsIntoPlans(plans, secretEnv)
+	return candyList, secretEnv, nil
+}
+
+// loadDeployPlugins connects the project's OUT-OF-TREE plugin candies BEFORE a
+// deploy verb resolves the target, so a deploy whose SUBSTRATE / step / verb is
+// served by an external provider resolves out-of-process. It scans the WHOLE
+// project (ScanAllCandyWithConfigOpts) but loads ONLY the plugin candies the
+// deployment REFERENCES (perf-scoped): collectReferencedPluginWords unions the
+// candy/box plans + candy external_builder selections, and deployNodePluginContext
+// adds the deploy's OWN references — its substrate kind + the inline Op.Plugin words
+// in its FLATTENED bed plan (members hoisted into the root node.Plan). A plugin candy
+// none of whose providers is referenced is skipped (no wasted host build/connect); a
+// REFERENCED one always loads (the reference set is collected COMPLETE — over-load
+// safe, never under). The deployment's add_candy: candies + any caller-supplied extra
+// refs are ADDED to the scan via ExtraCandyRefs (so a REMOTE composed plugin not in
+// the local scan is fetched too, and its words are then collected from its plan). The
+// SAME scan + loadProjectPlugins the check runner uses (attachCheckRunnerContext) and
+// the bundle-add path uses — so bundle add / bundle del / charly update all connect a
+// deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
+// turns the pre-scanned placeholder word into a connected grpcProvider that
+// ResolveTarget can route to. Best-effort: a build/connect failure is a warning, then
+// the dispatch fails loudly at ResolveTarget / runPluginVerb rather than silently
+// mis-deploying.
+func loadDeployPlugins(dir, deployName string, extraAddCandy []string) {
+	cfg, cerr := LoadConfig(dir)
+	if cerr != nil {
+		return
+	}
+	addCandy, refWords := deployNodePluginContext(dir, deployName)
+	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
+	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: extra})
+	if scanErr != nil || candyMap == nil {
+		return
+	}
+	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
+	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
+		fmt.Fprintf(os.Stderr, "warning: plugin load: %v\n", perr)
+	}
+}
+
+// buildArtifactEnv composes the env used for candy-artifact path
+// substitution: the resolved secret env first, then the deploy node's
+// own env: lines overlaid (last-wins). nil node contributes nothing.
+//
+// Shared by the local deploy target.Add / the vm deploy's Add path — both feed it
+// to RetrieveCandyArtifacts so rewrite rules like ${K3S_KUBECONFIG_SERVER}
+// resolve to the declared value rather than a literal placeholder. The
+// node is the dispatch-merged BundleNode (never re-read from disk).
+func buildArtifactEnv(secretEnv map[string]string, node *BundleNode) map[string]string {
+	env := make(map[string]string, len(secretEnv))
+	maps.Copy(env, secretEnv)
+	if node != nil {
+		for _, line := range node.Env {
+			if idx := strings.Index(line, "="); idx > 0 {
+				env[line[:idx]] = line[idx+1:]
+			}
+		}
+	}
+	return env
+}
+
+// retrieveArtifactsAndK3s pulls back the candies' published artifacts via
+// the same executor the deploy used, then runs the k3s-server post-hook
+// (merge kubeconfig + register ClusterProfile) when the candy set includes
+// k3s-server. No-op under DryRun.
+//
+// Shared by the local deploy target.Add / the vm deploy's Add path.
+func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList []*Candy, name string, artifactEnv map[string]string, opts EmitOpts) error {
+	if opts.DryRun {
+		return nil
+	}
+	if err := RetrieveCandyArtifacts(ctx, exec, candyList, sanitizeDeployName(name), artifactEnv, opts); err != nil {
+		return err
+	}
+	if deployHasCandy(candyList, "k3s-server") {
+		if err := K3sPostProvision(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// registerEphemeralIfMarked runs the ephemeral lifecycle registration
+// (systemd transient timer + parent-detection) when the dispatch-merged
+// node is ephemeral. FIRST action in vm/pod/k8s Add (panic-safe TTL
+// ordering). Consumes the merged node — does NOT re-read charly.yml.
+// Registration failure is logged (not fatal), matching the prior run*
+// behavior; the returned error is always nil today but kept for symmetry.
+func registerEphemeralIfMarked(node *BundleNode, name string) {
+	if node == nil || !node.IsEphemeral() {
+		return
+	}
+	if _, regErr := RegisterEphemeralLifecycle(node, name); regErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: ephemeral lifecycle registration: %v\n", regErr)
+	}
+}

@@ -1,0 +1,58 @@
+[workspace]
+name = "jupyter"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+# JupyterLab core
+jupyterlab = ">=4.4.0"
+ipywidgets = ">=8.0"
+ipykernel = "*"
+nbconvert = "*"
+nbformat = "*"
+
+# Extensions
+jupyterlab-git = "*"
+jupyter-resource-usage = "*"
+
+# Data science essentials
+matplotlib = "*"
+seaborn = "*"
+pandas = "*"
+numpy = "*"
+scikit-learn = "*"
+scipy = "*"
+tqdm = "*"
+
+# Data processing
+polars = "*"
+pyarrow = "*"
+duckdb = "*"
+
+# NLP
+spacy = "*"
+spacy-model-en_core_web_sm = "*"
+
+# Utilities
+black = "*"
+pytest = "*"
+graphviz = "*"
+pyyaml = "*"
+
+[pypi-dependencies]
+jupyter-collaboration = ">=4.1.0"
+jupyterlab-quarto = "*"
+
+[tasks]
+start-jupyter = "bash -c 'if [ -n \"${JUPYTER_TOKEN_FILE:-}\" ] && [ -f \"${JUPYTER_TOKEN_FILE}\" ]; then TOKEN=$(cat \"${JUPYTER_TOKEN_FILE}\"); jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=$HOME/notebooks --IdentityProvider.token=\"$TOKEN\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; else jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=$HOME/notebooks --IdentityProvider.token=\"\" --ServerApp.password=\"\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; fi'"
+verify-jupyter = "python -c 'import jupyterlab; print(f\"JupyterLab: {jupyterlab.__version__}\")'"
+verify-collaboration = "python -c 'import jupyter_collaboration; print(f\"jupyter-collaboration: {jupyter_collaboration.__version__}\")'"
+verify-mcp = "python -c 'import jupyter_mcp; print(f\"MCP: {jupyter_mcp.__version__}\")'"
+verify-spacy = "python -c 'import spacy; nlp = spacy.load(\"en_core_web_sm\"); doc = nlp(\"Hello world\"); print(f\"spaCy: {spacy.__version__}; tokens: {[t.text for t in doc]}\")'"
+verify-mcp-endpoint = "curl -sf http://localhost:8888/mcp -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' && echo ' MCP OK' || echo 'MCP endpoint not responding'"
+
+[environments]
+default = { features = [], solve-group = "default" }

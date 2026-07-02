@@ -1,0 +1,98 @@
+kde-shell:
+    candy:
+        version: 2026.155.2119
+        description: |
+            Installs the shared SDDM-free KDE Plasma Wayland session package set — plasma-desktop, the core session components, a curated app set, and the kdotool KWin automation tool — used by both the bare-metal seat and the headless streamed pod.
+            The SDDM-free KDE Plasma Wayland SESSION package set — the shared subset
+            needed by BOTH the bare-metal KDE desktop (kde-desktop, which adds SDDM +
+            graphical.target on a real GPU output) AND the headless streamed KDE pod
+            (kde-selkies, which runs startplasma-wayland nested in pixelflux with no
+            seat). plasma-desktop is the dependency-pulling top package (drags
+            plasma-workspace + kwin_wayland + plasmashell + kf6 + qt6 + breeze as
+            deps). Only the core session components + a curated app set usable in
+            both venues live here; workstation-only extras (partition tools,
+            kdeconnect, bluetooth, firewall/thunderbolt, kwallet, kinfocenter, media
+            players) stay in kde-desktop so the streaming pod is not bloated. Factored
+            out of kde-desktop so the bare-metal seat and the headless pod share ONE
+            package list (R3). require: dbus (the Plasma session bus). Every package
+            lands a binary at a fixed /usr/bin path, so presence is directly verifiable.
+    kde-shell-require:
+        require:
+            - dbus
+    kde-shell-distro:
+        distro:
+            arch:
+                package:
+                    # Dependency-pulling top package: plasma-desktop pulls
+                    # plasma-workspace + kwin_wayland + plasmashell + kf6 + qt6 + breeze.
+                    - plasma-desktop
+                    - xorg-xwayland
+                    # Core Plasma session components (needed headless AND bare-metal).
+                    - plasma-pa
+                    - plasma-nm
+                    - powerdevil
+                    - kscreen
+                    - kde-gtk-config
+                    - breeze-gtk
+                    - kdialog
+                    - kio-admin
+                    # Curated KDE apps usable in both the seat and the stream.
+                    - ark
+                    - dolphin
+                    - konsole
+                    - kate
+                    - kcalc
+                    - gwenview
+                    - spectacle
+                aur:
+                    # kdotool — the KWin window-management automation tool driving
+                    # the `wl` check verb on KWin (the KWin analogue of wlroots' wlrctl). It
+                    # talks to KWin via the scripting D-Bus API: search /
+                    # windowactivate / windowminimize / windowclose / windowstate
+                    # (fullscreen) / getwindowgeometry. Pointer + keyboard injection
+                    # are NOT provided by kdotool (KWin scripting cannot synthesize
+                    # input) — keyboard uses wtype, pointer is a separate cutover.
+                    package:
+                        - kdotool
+    kde-shell-step-0:
+        check: plasmashell, the Plasma shell, is installed at /usr/bin/plasmashell
+        plugin: file
+        plugin_input:
+            file: /usr/bin/plasmashell
+            exists: true
+    kde-shell-step-1:
+        check: kwin_wayland, the Wayland compositor, is installed at /usr/bin/kwin_wayland
+        plugin: file
+        plugin_input:
+            file: /usr/bin/kwin_wayland
+            exists: true
+    kde-shell-step-2:
+        check: startplasma-wayland, the session entry point, is installed at /usr/bin/startplasma-wayland
+        plugin: file
+        plugin_input:
+            file: /usr/bin/startplasma-wayland
+            exists: true
+    kde-shell-step-3:
+        check: the dependency-pulling top package plasma-desktop is installed in the rpm/pacman database
+        plugin: package
+        plugin_input:
+            package: plasma-desktop
+            installed: true
+    kde-shell-step-4:
+        check: the Dolphin file manager is installed at /usr/bin/dolphin
+        plugin: file
+        plugin_input:
+            file: /usr/bin/dolphin
+            exists: true
+    kde-shell-step-5:
+        check: the Konsole terminal is installed at /usr/bin/konsole
+        plugin: file
+        plugin_input:
+            file: /usr/bin/konsole
+            exists: true
+    kde-shell-step-6:
+        check: kdotool, the KWin window-management automation tool that drives the wl check verb on KWin, is installed at /usr/bin/kdotool
+        plugin: file
+        plugin_input:
+            file: /usr/bin/kdotool
+            exists: true

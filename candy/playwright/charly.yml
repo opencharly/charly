@@ -1,0 +1,44 @@
+playwright:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the Playwright browser-automation CLI globally via npm so `playwright` is on PATH (OpenClaw AI snapshots).
+            The candy depends on nodejs and ships a package.json pinning the
+            `playwright` npm package, which the build installs globally under
+            NPM_CONFIG_PREFIX (~/.npm-global). The result is verifiable: the
+            playwright binary lands at ~/.npm-global/bin/playwright, the package
+            is unpacked under ~/.npm-global/lib/node_modules/playwright,
+            `playwright --version` exits cleanly and prints a semantic version,
+            and `playwright --help` lists the core automation commands (install,
+            codegen) that define the CLI surface.
+    playwright-require:
+        require:
+            - nodejs
+    playwright-step-0:
+        check: the playwright binary is installed into the npm global bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/playwright
+            exists: true
+    playwright-step-1:
+        check: the playwright package is unpacked under the npm global lib directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/lib/node_modules/playwright/package.json
+            exists: true
+    playwright-step-2:
+        check: running playwright --version exits cleanly and prints a semantic version
+        exit_status: 0
+        stdout:
+            - matches: "[0-9]+\\.[0-9]+"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/playwright --version 2>&1
+    playwright-step-3:
+        check: running playwright --help lists the install and codegen automation commands
+        stdout:
+            - contains: "install"
+            - contains: "codegen"
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/playwright --help 2>&1

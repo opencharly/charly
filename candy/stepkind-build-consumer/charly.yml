@@ -1,0 +1,34 @@
+stepkind-build-consumer:
+    candy:
+        version: 2026.182.0900
+        description: |-
+            Reference CONSUMER candy for the F-STEP-EMIT build leg — the STEP-class analogue of
+            candy/examplestep-consumer (which consumes the VERB-class examplestep at box build).
+            Its plan carries a BUILD-context `run:` step `plugin: examplestepkind` — a class:step
+            word whose provider (candy/plugin-example-stepkind) DECLARES Emits=true. Composed onto
+            a POD via add_candy, the overlay build lowers the run-step to an external step
+            ("external:examplestepkind") whose OCITarget open external-step arm Invokes the
+            plugin's OpEmit and splices the returned Containerfile RUN — baking
+            /etc/examplestepkind-build-baked (carrying the payload marker) into the overlay image.
+            Compose it WITH candy/plugin-example-stepkind (which provides the examplestepkind
+            step); the runtime check below proves the build-emit bake ran inside the deployed
+            container.
+    stepkind-build-bake:
+        run: at pod-overlay build the examplestepkind step's OpEmit emits a Containerfile RUN baking /etc/examplestepkind-build-baked into the overlay image (proves the OCITarget external-step build-emit arm)
+        id: stepkind-build-bake
+        context:
+            - build
+        plugin: examplestepkind
+        plugin_input:
+            marker: STEPKIND-BUILD-BAKED-OK
+    stepkind-build-baked-present:
+        check: the build-time examplestepkind bake ran — /etc/examplestepkind-build-baked is present in the built image carrying its token STEPKIND-BUILD-BAKED-OK
+        id: stepkind-build-baked-present
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: /etc/examplestepkind-build-baked
+            exists: true
+            contains:
+                - contains: "STEPKIND-BUILD-BAKED-OK"

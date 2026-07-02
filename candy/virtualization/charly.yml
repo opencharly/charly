@@ -1,0 +1,259 @@
+virtualization:
+    candy:
+        version: 2026.182.2007
+        description: |
+            QEMU/KVM/libvirt virtualization stack for both supervisord and systemd init systems
+            Installs the QEMU/KVM emulators, qemu-img, and the libvirt daemons.
+            The daemon set is DISTRO-DIVERGENT: Fedora and Arch ship the SPLIT
+            modular daemons (virtqemud + virtnetworkd), while Debian and Ubuntu
+            build libvirt WITHOUT the split and ship only the MONOLITHIC libvirtd
+            (which serves both the qemu and network drivers). This candy renders
+            virtqemud/virtnetworkd on Fedora/Arch and libvirtd on Debian/Ubuntu,
+            selected by a per-entry service distro: filter — one candy, no
+            virtualization-host sibling (CLAUDE.md R3). Each daemon ships as
+            MIXED service: entries — a use_packaged: socket form rendered on
+            systemd targets and a custom exec: form rendered on supervisord
+            targets — so one candy serves container/pod deploys AND
+            host/bootc/VM deploys (CLAUDE.md "Init-system polymorphism via mixed
+            service: entries"). Verifiable: the virsh, qemu-system-x86_64 and
+            qemu-img binaries land at fixed paths, the libvirt qemu driver
+            package is installed on every distro, and the rootless
+            qemu:///session daemon answers once deployed.
+    virtualization-distro:
+        distro:
+            arch:
+                package:
+                    - qemu-full
+                    - qemu-img
+                    - virtiofsd
+                    - libvirt
+                    - libguestfs
+                    - dnsmasq
+            debian:
+                package:
+                    - bindfs
+                    - dnsmasq
+                    - genisoimage
+                    - guestfs-tools
+                    - libguestfs-tools
+                    - libnss-libvirt
+                    - libvirt-clients
+                    - libvirt-daemon
+                    - libvirt-daemon-config-network
+                    # libvirt-daemon-driver-network is NOT listed: on Debian it is a
+                    # Depends of libvirt-daemon-system (pulled transitively); on Ubuntu
+                    # noble it is not a separate package (bundled in libvirt-daemon-system),
+                    # so listing it fails apt with "Unable to locate package".
+                    - libvirt-daemon-driver-qemu
+                    - libvirt-daemon-system
+                    - passt
+                    - qemu-guest-agent
+                    - qemu-system-x86
+                    - qemu-utils
+                    - virt-viewer
+                    - virtinst
+            fedora:
+                package:
+                    - bindfs
+                    - dnsmasq
+                    - genisoimage
+                    - guestfs-tools
+                    - libguestfs-tools
+                    - libvirt-client
+                    - libvirt-daemon
+                    - libvirt-daemon-config-network
+                    - libvirt-daemon-driver-network
+                    - libvirt-daemon-driver-qemu
+                    - libvirt-nss
+                    - passt
+                    - qemu-guest-agent
+                    - qemu-img
+                    - qemu-kvm
+                    - qemu-system-aarch64
+                    - qemu-system-arm
+                    - qemu-system-x86-core
+                    - tigervnc
+                    - virt-manager
+                    - virt-viewer
+                option:
+                    - --allowerasing
+            ubuntu:
+                package:
+                    - bindfs
+                    - dnsmasq
+                    - genisoimage
+                    - guestfs-tools
+                    - libguestfs-tools
+                    - libnss-libvirt
+                    - libvirt-clients
+                    - libvirt-daemon
+                    - libvirt-daemon-config-network
+                    # libvirt-daemon-driver-network is NOT listed: on Debian it is a
+                    # Depends of libvirt-daemon-system (pulled transitively); on Ubuntu
+                    # noble it is not a separate package (bundled in libvirt-daemon-system),
+                    # so listing it fails apt with "Unable to locate package".
+                    - libvirt-daemon-driver-qemu
+                    - libvirt-daemon-system
+                    - passt
+                    - qemu-guest-agent
+                    - qemu-system-x86
+                    - qemu-utils
+                    - virt-viewer
+                    - virtinst
+            ubuntu-24.04:
+                package:
+                    - bindfs
+                    - dnsmasq
+                    - genisoimage
+                    - guestfs-tools
+                    - libguestfs-tools
+                    - libnss-libvirt
+                    - libvirt-clients
+                    - libvirt-daemon
+                    - libvirt-daemon-config-network
+                    - libvirt-daemon-driver-qemu
+                    - libvirt-daemon-system
+                    - passt
+                    - qemu-guest-agent
+                    - qemu-system-x86
+                    - qemu-utils
+                    - virt-viewer
+                    - virtinst
+    virtualization-service:
+        # Mixed-entry `service:` pattern (CLAUDE.md "Init-system
+        # polymorphism via mixed `service:` entries") COMBINED with a
+        # per-entry `distro:` filter (CLAUDE.md R3 — no `<name>-host`
+        # sibling). Each daemon appears twice with the same `name:` — one
+        # entry rendered by systemd-init (use_packaged), the other by
+        # supervisord-init (custom exec); the init system picks at deploy
+        # time. The `distro:` list additionally scopes each entry to the
+        # distros whose libvirt build actually ships that daemon:
+        #   - Fedora + Arch ship the SPLIT modular daemons → virtqemud +
+        #     virtnetworkd (virtqemud.socket / virtnetworkd.socket).
+        #   - Debian + Ubuntu build libvirt WITHOUT the split (no
+        #     virtqemud/virtnetworkd binary, no *.socket units — RDD-proven
+        #     on debian:13 libvirt 11.3.0) and ship ONLY the monolithic
+        #     libvirtd → libvirtd (libvirtd.socket), which serves both the
+        #     qemu and network drivers.
+        # The canonical mixed-entry reference is `/charly-coder:sshd`.
+        service:
+            # ----- virtqemud (Fedora/Arch modular) -----
+            # systemd render: enables the packaged socket+service unit so
+            # virsh -c qemu:///system works on host targets.
+            - name: virtqemud
+              use_packaged: virtqemud.socket
+              distro: [fedora, arch]
+              enable: true
+              scope: system
+            # supervisord render: foreground daemon (--timeout 0 keeps it
+            # alive instead of self-exiting on idle). priority=5 places it
+            # ahead of every desktop service. No `user=` directive — the
+            # daemon inherits supervisord's uid (root on charly-fedora/charly-arch,
+            # user on openclaw-desktop); qemu:///session keys off
+            # $XDG_RUNTIME_DIR so both work.
+            - name: virtqemud
+              exec: "/usr/sbin/virtqemud --timeout 0"
+              distro: [fedora, arch]
+              restart: always
+              priority: 5
+              start_sec: 2
+              enable: true
+              scope: system
+            # ----- virtnetworkd (Fedora/Arch modular) -----
+            - name: virtnetworkd
+              use_packaged: virtnetworkd.socket
+              distro: [fedora, arch]
+              enable: true
+              scope: system
+            - name: virtnetworkd
+              exec: "/usr/sbin/virtnetworkd --timeout 0"
+              distro: [fedora, arch]
+              restart: always
+              priority: 6
+              start_sec: 2
+              enable: true
+              scope: system
+            # ----- libvirtd (Debian/Ubuntu monolithic) -----
+            # Debian/Ubuntu build libvirt without the modular daemons, so the
+            # single libvirtd serves the qemu + network drivers. Same mixed
+            # systemd/supervisord polymorphism, scoped to the deb family via
+            # distro:. libvirtd --timeout 0 = never self-exit (RDD-verified the
+            # flag on debian:13). priority=5 mirrors virtqemud (ahead of desktop).
+            - name: libvirtd
+              use_packaged: libvirtd.socket
+              distro: [debian, ubuntu]
+              enable: true
+              scope: system
+            - name: libvirtd
+              exec: "/usr/sbin/libvirtd --timeout 0"
+              distro: [debian, ubuntu]
+              restart: always
+              priority: 5
+              start_sec: 2
+              enable: true
+              scope: system
+    virtualization-step-0:
+        run: |
+            command=if getent group libvirt >/dev/null && id -u "${USER:-user}" >/dev/null 2>&1; then
+              usermod -aG libvirt "$(getent passwd 1000 | cut -d: -f1)"
+            fi
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                if getent group libvirt >/dev/null && id -u "${USER:-user}" >/dev/null 2>&1; then
+                  usermod -aG libvirt "$(getent passwd 1000 | cut -d: -f1)"
+                fi
+    virtualization-step-1:
+        check: the libvirt client virsh is installed at its fixed path
+        plugin: file
+        plugin_input:
+            file: /usr/bin/virsh
+            exists: true
+    virtualization-step-2:
+        check: the QEMU x86_64 system emulator binary is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/qemu-system-x86_64
+            exists: true
+    virtualization-step-3:
+        check: the qemu-img disk-image tool is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/qemu-img
+            exists: true
+    virtualization-step-4:
+        check: the libvirt qemu driver package is installed (cross-distro name resolution)
+        plugin: package
+        plugin_input:
+            package: libvirt-daemon-driver-qemu
+            package_map:
+                arch: libvirt
+                fedora: libvirt-daemon-driver-qemu
+                debian: libvirt-daemon-system
+                ubuntu: libvirt-daemon-system
+            installed: true
+    virtualization-step-5:
+        check: virsh reaches the rootless qemu:///session daemon and lists domains
+        exit_status: 0
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: virsh -c qemu:///session list --all
+            in_container: true
+    virtualization-step-6:
+        agent-check: the libvirt daemon set for the target distro comes up under whichever init system the target runs (supervisord in containers, systemd on host/bootc) — the modular virtqemud + virtnetworkd on Fedora/Arch, the monolithic libvirtd on Debian/Ubuntu — with no virtualization-host sibling candy
+    libvirt-qemu-driver-package:
+        check: package=libvirt-daemon-driver-qemu
+        id: libvirt-qemu-driver-package
+        plugin: package
+        plugin_input:
+            package: libvirt-daemon-driver-qemu
+            package_map:
+                arch: libvirt
+                fedora: libvirt-daemon-driver-qemu
+                fedora:43: libvirt-daemon-driver-qemu
+                debian: libvirt-daemon-system
+                ubuntu: libvirt-daemon-system
+            installed: true

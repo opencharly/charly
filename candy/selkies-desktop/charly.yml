@@ -1,0 +1,104 @@
+selkies-desktop:
+    candy:
+        version: 2026.152.2006
+        description: |
+            A browser-accessible labwc Selkies streaming desktop — the shared selkies-core spine plus the labwc compositor and its panel, notifier, and audio UI.
+            The labwc edition of the selkies streaming desktop (the original, proven
+            flavor — kept by name because openclaw-desktop composes this layer and
+            android-emulator chains through the same-named image). Composes the shared
+            selkies-core (pixelflux WebRTC transport + Chrome/CDP + wl-* tooling +
+            fonts + a11y + terminal-recording + sshd) with the labwc nested compositor
+            and its labwc-specific desktop UI: waybar-labwc (top panel), swaync
+            (notifications), and pavucontrol (the GTK audio control the waybar audio
+            module launches). The KDE sibling is selkies-kde-desktop; both share
+            selkies-core unchanged and differ ONLY in the nested compositor (R3).
+            This candy installs nothing of its own; its observable effect is that the
+            labwc-flavor binaries and configs from every composed candy coexist on the
+            built image, and the labwc desktop daemons reach a supervised RUNNING state
+            at deploy.
+    selkies-desktop-candy:
+        candy:
+            - selkies-core
+            - labwc
+            - waybar-labwc
+            - swaync
+            - pavucontrol
+    selkies-desktop-step-0:
+        check: the labwc nested Wayland compositor — this flavor's defining compositor — is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/labwc
+            exists: true
+    selkies-desktop-step-1:
+        check: the pavucontrol GTK audio mixer the waybar audio module launches is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pavucontrol
+            exists: true
+    selkies-desktop-step-2:
+        check: the waybar top-panel binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/waybar
+            exists: true
+    selkies-desktop-step-3:
+        check: the labwc-flavor waybar panel configuration is present
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/waybar/config
+            exists: true
+    selkies-desktop-step-4:
+        check: the SwayNotificationCenter notification daemon is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/swaync
+            exists: true
+    selkies-desktop-step-5:
+        check: the google-chrome-stable browser from the shared selkies-core spine is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/google-chrome-stable
+            exists: true
+    selkies-desktop-step-6:
+        check: the PipeWire audio server backing the desktop session is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pipewire
+            exists: true
+    selkies-desktop-step-7:
+        agent-check: once the pixelflux to labwc chain is healthy, the labwc compositor hosts the waybar panel, swaync notifier, and audio controls as one coherent, browser-streamable desktop session
+    selkies-desktop-swaync-package:
+        check: package=swaync
+        id: selkies-desktop-swaync-package
+        plugin: package
+        plugin_input:
+            package: swaync
+            package_map:
+                arch: swaync
+                fedora: SwayNotificationCenter
+            installed: true
+    selkies-desktop-pavucontrol-package:
+        check: package=pavucontrol
+        id: selkies-desktop-pavucontrol-package
+        plugin: package
+        plugin_input:
+            package: pavucontrol
+            installed: true
+    selkies-desktop-panel-running:
+        check: service=waybar
+        id: selkies-desktop-panel-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: waybar
+            running: true
+    selkies-desktop-notifier-running:
+        check: service=swaync
+        id: selkies-desktop-notifier-running
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: swaync
+            running: true

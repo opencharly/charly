@@ -1,0 +1,11 @@
+entryPoints:
+  websecure:
+    address: ":3000"
+
+providers:
+  file:
+    filename: /usr/local/share/selkies/traefik-dynamic.yml
+    watch: false
+
+log:
+  level: WARN

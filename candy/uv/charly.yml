@@ -1,0 +1,42 @@
+uv:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Provides the uv Python package manager (astral-sh/uv) as standalone uv + uvx binaries
+            Downloads the latest astral-sh/uv release tarball and extracts the
+            two standalone Rust binaries (uv, uvx) directly into /usr/local/bin.
+            The release nests them under an arch dir, so strip_components: 1
+            lands them flat. Verifiable because both binaries must be present
+            and `uv --version` must run cleanly once the candy is applied — a
+            no-op candy would leave /usr/local/bin/uv absent.
+    uv-step-0:
+        run: download=https://github.com/astral-sh/uv/releases/latest/download/uv-${BUILD_ARCH}-unknown-linux-gnu.tar.gz
+        download: "https://github.com/astral-sh/uv/releases/latest/download/uv-${BUILD_ARCH}-unknown-linux-gnu.tar.gz"
+        extract: tar.gz
+        strip_components: 1
+        to: /usr/local/bin
+        run_as: root
+        # Explicit uninstall list so `charly bundle del` removes just the
+        # binaries this archive drops in /usr/local/bin, not the whole
+        # shared dir (which would wipe every system-local binary).
+        uninstall:
+            - /usr/local/bin/uv
+            - /usr/local/bin/uvx
+    uv-step-1:
+        check: the uv binary is installed at /usr/local/bin/uv
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/uv
+            exists: true
+    uv-step-2:
+        check: uv reports its version and exits successfully
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/local/bin/uv --version
+    uv-step-3:
+        check: the uvx tool-runner is installed at /usr/local/bin/uvx
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/uvx
+            exists: true

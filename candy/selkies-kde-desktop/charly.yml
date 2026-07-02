@@ -1,0 +1,113 @@
+selkies-kde-desktop:
+    candy:
+        version: 2026.152.2006
+        description: |
+            The KDE Plasma flavor of the selkies streaming desktop — composes selkies-core with the kde-selkies nested-compositor primitive into a headless, WebRTC-streamed Plasma pod.
+            Full KDE Plasma edition of the selkies streaming desktop, ALWAYS run as a
+            headless pod (directly on a host, or nested inside a VM with GPU
+            passthrough). Composes the shared selkies-core (pixelflux WebRTC transport
+            + Chrome/CDP + wl-* tooling + fonts + a11y + terminal-recording + sshd)
+            with the kde-selkies flavor primitive (startplasma-wayland nested in
+            pixelflux's wayland-1, de-SDDM, started by a supervisord poll-for-wayland-1
+            service). The SDDM-free Plasma session packages (kde-shell) are pulled
+            transitively via kde-selkies's require. KDE Plasma ships its own audio
+            applet (plasma-pa), panel, and notifier, so there is NO waybar / swaync /
+            pavucontrol here — that UI belongs to the labwc flavor (selkies-desktop).
+            This is the KDE sibling of selkies-desktop; the two flavors differ ONLY in
+            the nested compositor, sharing selkies-core unchanged (R3).
+
+            This metalayer installs nothing of its own — its observable behaviour IS
+            the union of the two children it composes, so the scenarios below assert
+            the KEY ARTIFACTS each child contributes: the kde-selkies launcher + the
+            kde-shell Plasma session binaries (the KDE seam) AND the selkies-core
+            streaming spine (Chrome + pipewire), proven live by the streamed Plasma
+            desktop answering on the selkies HTTPS port.
+    selkies-kde-desktop-candy:
+        candy:
+            - selkies-core
+            - kde-selkies
+    selkies-kde-desktop-step-0:
+        check: the kde-selkies flavor primitive's nested-session launcher is installed and executable in the deploy user's PATH
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/kde-selkies-session
+            exists: true
+            mode: "0755"
+    selkies-kde-desktop-step-1:
+        check: the launcher execs startplasma-wayland — the KDE Plasma session entrypoint that distinguishes this flavor from labwc
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/kde-selkies-session
+            contains:
+                - contains: "startplasma-wayland"
+    selkies-kde-desktop-step-2:
+        check: the KWin Wayland compositor (pulled transitively via kde-shell) that renders the nested Plasma session into pixelflux is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/kwin_wayland
+            exists: true
+    selkies-kde-desktop-step-3:
+        check: the Plasma shell composed from kde-shell is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/plasmashell
+            exists: true
+    selkies-kde-desktop-step-4:
+        check: Google Chrome — the supervised browser the shared selkies-core spine streams — is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/google-chrome-stable
+            exists: true
+    selkies-kde-desktop-step-5:
+        check: the pipewire audio daemon shared by the streamed session is present
+        plugin: file
+        plugin_input:
+            file: /usr/bin/pipewire
+            exists: true
+    selkies-kde-desktop-step-6:
+        check: the composed nested KDE Plasma session reaches RUNNING under supervisord without crash-looping
+        stdout:
+            - matches: "RUNNING"
+        plugin: command
+        plugin_input:
+            command: |
+                sleep 20
+                supervisorctl status kde-selkies-session
+            in_container: true
+    selkies-kde-desktop-step-7:
+        check: the selkies web UI streams the live KDE Plasma desktop over HTTPS on port 3000
+        timeout: 10s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: https://127.0.0.1:${HOST_PORT:3000}/
+            status: 200
+            allow_insecure: true
+    selkies-kde-desktop-step-8:
+        agent-check: the streamed frames show a real KWin-composited KDE Plasma desktop (panel + wallpaper), not a black frame and not the labwc flavor's waybar UI
+    selkies-kde-desktop-plasma-session:
+        check: file=/usr/bin/startplasma-wayland
+        id: selkies-kde-desktop-plasma-session
+        plugin: file
+        plugin_input:
+            file: /usr/bin/startplasma-wayland
+            exists: true
+    selkies-kde-desktop-plasma-package:
+        check: package=plasma-desktop
+        id: selkies-kde-desktop-plasma-package
+        plugin: package
+        plugin_input:
+            package: plasma-desktop
+            installed: true
+    selkies-kde-desktop-stream-https:
+        check: http=https://127.0.0.1:${HOST_PORT:3000}/
+        id: selkies-kde-desktop-stream-https
+        timeout: 10s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: https://127.0.0.1:${HOST_PORT:3000}/
+            status: 200
+            allow_insecure: true

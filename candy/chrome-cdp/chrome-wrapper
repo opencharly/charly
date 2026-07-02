@@ -1,0 +1,101 @@
+#!/bin/sh
+SOCKET="${XDG_RUNTIME_DIR:-/tmp}/${WAYLAND_DISPLAY:-wayland-0}"
+TIMEOUT=30
+ELAPSED=0
+while [ ! -e "$SOCKET" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+if [ ! -e "$SOCKET" ]; then
+    echo "chrome-wrapper: Wayland socket $SOCKET not found after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+# Remove stale Chrome lock files from previous container instances.
+# The persistent volume retains Singleton* files that reference old container
+# hostnames, preventing Chrome from starting after a container restart.
+rm -f "$HOME/.chrome-debug/SingletonLock" \
+      "$HOME/.chrome-debug/SingletonSocket" \
+      "$HOME/.chrome-debug/SingletonCookie"
+
+# Clean GPU shader caches — corrupted caches from hard kills (pkill -9)
+# cause SIGILL on next start. Caches rebuild automatically.
+rm -rf "$HOME/.chrome-debug/ShaderCache" \
+       "$HOME/.chrome-debug/GpuCache" \
+       "$HOME/.chrome-debug/GPUCache"
+
+# GPU setup: detect compositor renderer and NVIDIA hardware.
+# On NVIDIA headless, sway uses pixman (software) because wayvnc cannot
+# capture GPU-rendered buffers. Chrome must not have NVIDIA EGL vars or VAAPI
+# flags — otherwise the renderer crashes with SIGILL. Do NOT use --disable-gpu
+# as it breaks CDP tab creation (PUT /json/new crashes Chrome).
+VAAPI_FLAGS="--enable-features=VaapiVideoDecodeLinuxGL,VaapiIgnoreDriverChecks"
+SWAY_PID=$(pgrep -x sway | head -1)
+COMPOSITOR_RENDERER=""
+if [ -n "$SWAY_PID" ]; then
+    COMPOSITOR_RENDERER=$(cat /proc/$SWAY_PID/environ 2>/dev/null | tr '\0' '\n' | grep ^WLR_RENDERER= | cut -d= -f2)
+fi
+
+if [ "$COMPOSITOR_RENDERER" = "pixman" ]; then
+    # Software compositor — strip NVIDIA EGL vars and VAAPI flags.
+    # Do NOT use --disable-gpu: it breaks CDP tab creation (PUT /json/new crashes Chrome).
+    # Without NVIDIA vars, Chrome falls back to software rendering gracefully.
+    # NOTE: shm_size: "1g" in candy.yml is critical — Chrome crashes with
+    # ContextResult::kTransientFailure on complex pages if /dev/shm is too small.
+    CHROME_FLAGS=$(echo "$CHROME_FLAGS" | sed 's/,VaapiVideoDecodeLinuxGL,VaapiIgnoreDriverChecks//g')
+    VAAPI_FLAGS=""
+elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    # GPU compositor with NVIDIA — set EGL/GBM vars for hardware acceleration.
+    export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+    export GBM_BACKEND=nvidia-drm
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+fi
+
+# Translate standard proxy env vars to Chrome CLI flags.
+# Chrome does NOT respect HTTP_PROXY/HTTPS_PROXY natively.
+PROXY_FLAGS=""
+_http_proxy="${HTTP_PROXY:-${http_proxy:-}}"
+_https_proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+_no_proxy="${NO_PROXY:-${no_proxy:-}}"
+
+if [ -n "$_http_proxy" ] && [ -n "$_https_proxy" ]; then
+    PROXY_FLAGS="--proxy-server=http=${_http_proxy};https=${_https_proxy}"
+elif [ -n "$_https_proxy" ]; then
+    PROXY_FLAGS="--proxy-server=${_https_proxy}"
+elif [ -n "$_http_proxy" ]; then
+    PROXY_FLAGS="--proxy-server=${_http_proxy}"
+fi
+
+if [ -n "$PROXY_FLAGS" ] && [ -n "$_no_proxy" ]; then
+    PROXY_FLAGS="$PROXY_FLAGS --proxy-bypass-list=${_no_proxy}"
+fi
+
+# Resolve the real Chrome binary — avoids recursion when google-chrome-stable
+# in ~/.local/bin is a symlink back to this wrapper.
+CHROME_BIN=/opt/google/chrome/chrome
+
+# Windows platform identity — overrides User-Agent header and navigator.userAgent
+CHROME_VER=$($CHROME_BIN --version | awk '{print $NF}')
+CHROME_MAJOR=${CHROME_VER%%.*}
+WIN_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_MAJOR}.0.0.0 Safari/537.36"
+WIN_EXT="$HOME/.local/share/chrome-windows"
+
+# Launch flags live HERE (single source). The supervised [program:chrome] service
+# (selkies-core) and chrome-restart call this wrapper with no flags; "$@" forwards any
+# caller flags. The exec previously lacked "$@", so the flags those callers passed were
+# silently DROPPED — Chrome showed its first-run welcome dialog and opened un-maximized.
+# --no-first-run + --no-default-browser-check suppress the welcome / "make default"
+# dialog; --start-maximized opens maximized. (--force-renderer-accessibility, which the
+# old callers passed but the dropped-flags bug made inert, is intentionally NOT restored —
+# CDP automation does not need forced renderer a11y.)
+exec $CHROME_BIN $CHROME_FLAGS \
+    $VAAPI_FLAGS \
+    $PROXY_FLAGS \
+    --remote-debugging-port=9223 --remote-debugging-address=127.0.0.1 \
+    --remote-allow-origins='*' \
+    --user-data-dir="$HOME/.chrome-debug" \
+    --user-agent="$WIN_UA" \
+    --load-extension="$WIN_EXT" \
+    --disable-session-crashed-bubble \
+    --no-first-run --no-default-browser-check --start-maximized \
+    "$@"

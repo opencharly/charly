@@ -1,0 +1,131 @@
+kubernetes:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Kubernetes client toolchain — kubectl, helm, and k3d — at stable /usr/bin paths
+            The kubernetes candy installs the three core Kubernetes client tools
+            uniformly across every distro: kubectl (the API client — from the
+            distro package on arch/fedora, or the official dl.k8s.io release
+            mirror as a fallback binary), helm (the chart package manager — from
+            the distro package or the upstream get-helm-3 script), and k3d (the
+            k3d-in-docker cluster manager, always a standalone release binary).
+            Each one lands at a predictable /usr/bin path and answers a version
+            query, so any box composing this candy can drive a cluster with no
+            further setup. The scenarios and check block assert exactly that —
+            they FAIL if any of the three binaries is missing or cannot report
+            its version.
+    kubernetes-distro:
+        distro:
+            arch:
+                package:
+                    - kubectl
+                    - helm
+            fedora:
+                package:
+                    - kubernetes-client
+                    - helm
+    kubernetes-var:
+        var:
+            K3D_VERSION: v5.8.3
+            KUBECTL_VERSION: v1.30.5
+    kubernetes-step-0:
+        run: download=https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-${ARCH}
+        download: "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-${ARCH}"
+        extract: none
+        to: /usr/bin/k3d
+        mode: "0755"
+        run_as: root
+    kubernetes-step-1:
+        run: |
+            command=if [ ! -x /usr/bin/kubectl ]; then
+              ARCH_TRIPLET="${ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+              curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH_TRIPLET}/kubectl" \
+                -o /usr/bin/kubectl
+              chmod 0755 /usr/bin/kubectl
+            fi
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                if [ ! -x /usr/bin/kubectl ]; then
+                  ARCH_TRIPLET="${ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+                  curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH_TRIPLET}/kubectl" \
+                    -o /usr/bin/kubectl
+                  chmod 0755 /usr/bin/kubectl
+                fi
+    kubernetes-step-2:
+        run: |
+            command=if [ ! -x /usr/bin/helm ]; then
+              curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 -o /tmp/get-helm-3.sh
+              chmod 0755 /tmp/get-helm-3.sh
+              /tmp/get-helm-3.sh
+              rm -f /tmp/get-helm-3.sh
+              [ -x /usr/local/bin/helm ] && ln -sf /usr/local/bin/helm /usr/bin/helm || true
+            fi
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                if [ ! -x /usr/bin/helm ]; then
+                  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 -o /tmp/get-helm-3.sh
+                  chmod 0755 /tmp/get-helm-3.sh
+                  /tmp/get-helm-3.sh
+                  rm -f /tmp/get-helm-3.sh
+                  [ -x /usr/local/bin/helm ] && ln -sf /usr/local/bin/helm /usr/bin/helm || true
+                fi
+    kubernetes-step-3:
+        check: the kubectl API client binary is installed at /usr/bin/kubectl
+        plugin: file
+        plugin_input:
+            file: /usr/bin/kubectl
+            exists: true
+    kubernetes-step-4:
+        check: kubectl reports its client version and exits cleanly
+        exit_status: 0
+        stdout:
+            - contains: "Client Version"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/kubectl version --client
+    kubernetes-step-5:
+        check: the helm chart package manager binary is installed at /usr/bin/helm
+        plugin: file
+        plugin_input:
+            file: /usr/bin/helm
+            exists: true
+    kubernetes-step-6:
+        check: helm reports its short version string and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/helm version --short
+    kubernetes-step-7:
+        check: the k3d cluster manager binary is installed at /usr/bin/k3d
+        plugin: file
+        plugin_input:
+            file: /usr/bin/k3d
+            exists: true
+    kubernetes-step-8:
+        check: k3d reports its release version and exits cleanly
+        exit_status: 0
+        stdout:
+            - contains: "k3d version"
+        plugin: command
+        plugin_input:
+            command: /usr/bin/k3d version
+    kubernetes-step-9:
+        agent-check: with a container runtime available, k3d can provision a local multi-node Kubernetes cluster for development and testing
+    kubectl-version:
+        check: command=/usr/bin/kubectl version --client
+        id: kubectl-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/kubectl version --client
+    k3d-version:
+        check: command=/usr/bin/k3d version
+        id: k3d-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/k3d version

@@ -1,0 +1,39 @@
+check-substrate-layer:
+    candy:
+        version: 2026.182.1200
+        description: |
+            Drop /etc/check-substrate-marker on the host filesystem.
+            The deployable member of the check-substrate R10 bed (C2-substrate — the externalized
+            pod/vm/k8s/local/android structural kinds): a kind:local layer whose write: step lands a
+            marker the member's hoisted check asserts. A DEDICATED marker path (not check-local's /
+            check-group's / check-structkind's) so the beds never collide when /verify-beds fans them
+            out concurrently.
+    check-substrate-layer-step-0:
+        run: write=/etc/check-substrate-marker
+        write: /etc/check-substrate-marker
+        run_as: root
+        mode: "0644"
+        content: |
+            check-substrate v1
+    check-substrate-layer-step-1:
+        check: the check-substrate marker file is present at /etc/check-substrate-marker
+        plugin: file
+        plugin_input:
+            file: /etc/check-substrate-marker
+            exists: true
+    check-substrate-layer-step-2:
+        check: the marker records the check-substrate version stamp "check-substrate v1"
+        plugin: file
+        plugin_input:
+            file: /etc/check-substrate-marker
+            contains:
+                - contains: "check-substrate v1"
+    check-substrate-marker-host:
+        check: command=test -f /etc/check-substrate-marker
+        id: check-substrate-marker-host
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: "test -f /etc/check-substrate-marker"
+            in_container: false

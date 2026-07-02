@@ -1,0 +1,109 @@
+[workspace]
+name = "nvidia-ml-environment"
+version = "0.1.0"
+description = "NVIDIA ML/AI Python environment - shared base for all ML pods"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+[pypi-dependencies]
+# === PyTorch with CUDA 13.0 (standard for all ML pods) ===
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === Memory Optimization ===
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === vLLM 0.19 runtime dependencies (wheel installed --no-deps in user.yml) ===
+blake3 = "*"
+cbor2 = "*"
+compressed-tensors = "*"
+depyf = "*"
+flashinfer-python = ">=0.6.7"
+ijson = "*"
+llguidance = "*"
+lm-format-enforcer = "*"
+mistral-common = ">=1.8.5"
+model-hosting-container-standards = ">=0.1.9, <1.0.0"
+numba = "*"
+openai-harmony = ">=0.0.3"
+opencv-python-headless = ">=4.11.0"
+outlines-core = "*"
+partial-json-parser = "*"
+pybase64 = "*"
+uvloop = "*"
+soundfile = "*"
+resampy = "*"
+prometheus-fastapi-instrumentator = "*"
+ray = ">=2.48.0"
+watchfiles = "*"
+xgrammar = ">=0.1.32"
+lark = ">=1.2.2"
+pydantic-extra-types = "*"
+pycountry = "*"
+interegular = "*"
+hf-transfer = "*"
+cut-cross-entropy = "*"
+torchao = "*"
+tyro = "*"
+loguru = "*"
+llvmlite = "*"
+apache-tvm-ffi = "*"
+nvidia-cudnn-frontend = "*"
+nvidia-cutlass-dsl = "*"
+# opentelemetry-*: installed alongside vLLM in user.yml
+# (pixi conda/PyPI resolver conflicts with conda-pinned importlib-metadata)
+
+# === HuggingFace Core ===
+transformers = ">=4.57.3" # Model loading (4.57.3 fixes tokenizer bug; 5.0.0rc1 in jupyter build)
+accelerate = "*"          # Model acceleration
+safetensors = ">=0.4.2"   # Safe tensor format
+
+# === Core Numerical ===
+numpy = "<2.3"     # Constrained for numba/flashinfer compatibility
+scipy = "*"        # Scientific computing
+einops = ">=0.7.0" # Tensor operations
+
+# === Image Processing ===
+pillow = ">=10.0.0" # PIL/Pillow
+
+# === Video Processing ===
+av = "*" # PyAV - FFmpeg bindings (required by ComfyUI for video)
+
+# === Async & Networking ===
+aiohttp = ">=3.9.0" # Async HTTP (useful for APIs)
+
+# === Computer Vision ===
+kornia = ">=0.7.1"   # Computer vision transforms
+spandrel = ">=0.3.4" # Model upscaling
+
+# === Diffusion/SDE ===
+torchsde = "*" # Stochastic DEs (diffusion models)
+
+# === Utilities ===
+tqdm = "*"   # Progress bars
+psutil = "*" # System monitoring
+pyyaml = "*" # YAML parsing
+
+# === Configuration & Validation ===
+pydantic = ">=2.0"          # Data validation (ComfyUI & custom nodes)
+pydantic-settings = ">=2.0" # Settings management (ComfyUI non-essential deps)
+python-dotenv = "*"         # Environment variable loading (.env files)
+
+# === GGUF Tools ===
+gguf = "*" # GGUF file format handling (for model conversion)
+
+[tasks]
+verify-cuda = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda}\") if torch.cuda.is_available() else print(\"No GPU access\")'"
+verify-env = "python -c 'import sys; import torch; print(f\"Python: {sys.version}\"); print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\")'"
+verify-transformers = "python -c 'import transformers; print(f\"Transformers: {transformers.__version__}\")'"
+verify-xformers = "python -c 'import xformers; print(f\"xformers: {xformers.__version__}\")'"
+verify-gguf = "bash -c '/opt/pixi/llama.cpp/llama-quantize --help >/dev/null 2>&1 && /opt/pixi/llama.cpp/llama-cli --version >/dev/null 2>&1 && echo \"GGUF toolchain OK\" || (echo \"GGUF toolchain FAILED\" && exit 1)'"
+verify-vllm = "python -c 'import vllm; print(f\"vLLM: {vllm.__version__}\")'"
+
+[environments]
+default = { features = [], solve-group = "default" }

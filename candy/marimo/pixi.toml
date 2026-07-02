@@ -1,0 +1,260 @@
+[workspace]
+name = "marimo-environment"
+version = "0.1.0"
+description = "marimo + Airflow + GPU-accelerated OSM analytics (Polars-GPU/cuDF, quackosm, geopandas) + vector-tile pipeline (tippecanoe → PMTiles → martin) + dual MCP (marimo-as-server, airflow-as-server, marimo-as-client)"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+# RAPIDS cu13 wheels (libcugraph-cu13, libcuml-cu13, …) ship as
+# manylinux_2_27_x86_64.manylinux_2_28_x86_64. pixi's default
+# manylinux floor on linux-64 is older — without an explicit glibc
+# system-requirement, uv rejects these wheels with "no usable wheels"
+# even though pip in the same container installs them happily. The
+# CachyOS / Arch base ships glibc 2.43; declaring 2.28 here unblocks
+# the resolver for every manylinux_2_28 wheel without overconstraining.
+# pixi's toml key is `libc` (CLI name `glibc` is the same thing; the
+# toml table omits the family because glibc is the default).
+[system-requirements]
+libc = "2.28"
+
+# Pixi resolves conda first, then PyPI against the conda-pinned versions
+# (https://pixi.prefix.dev/latest/concepts/conda_pypi/). Conda's resolver
+# picks the very-latest version of every transitive dep (e.g. starlette
+# 1.0.0 vs the 0.52.x airflow needs), then PyPI can't satisfy and falls
+# back to building ancient apache-airflow 1.10.2 from source — which uses
+# the removed `imp` module. `no-build = true` forbids source builds, and
+# moving every Python package to [pypi-dependencies] gives pip/uv ONE
+# resolver with full visibility — airflow's pins downgrade their own
+# transitive deps cleanly. Validated 2026-05 with 269 packages installing.
+#
+# extra-index-urls + index-strategy support the RAPIDS cu13 packages
+# (cugraph-cu13 / cuml-cu13 / cudf-polars-cu13 / nx-cugraph-cu13) and
+# their transitive deps (libcugraph-cu13, libcuml-cu13, treelite,
+# ucxx-cu13, …). The global `extra-index-urls` is mandatory — per-package
+# `index = "..."` covers only the named package, not its transitives,
+# so uv falls back to PyPI for transitives and finds stale or missing
+# versions (libcugraph-cu13's RAPIDS 26.4 releases live only at
+# pypi.nvidia.com). `unsafe-best-match` allows uv to consider versions
+# across all indexes (defaults to first-index-wins for dependency-
+# confusion-attack protection); we accept the wider lookup explicitly
+# because every URL we use is a known-good vendor distribution endpoint.
+# Without these two together, `pixi lock` fails with "libcugraph-cu13
+# has no usable wheels" + the "subsequent index" hint.
+[pypi-options]
+no-build = true
+extra-index-urls = ["https://pypi.nvidia.com"]
+index-strategy = "unsafe-best-match"
+
+[dependencies]
+# Conda owns ONLY the Python interpreter + non-Python tooling. Every
+# Python package lives in [pypi-dependencies] below to give pip/uv full
+# visibility (avoids the conda-first → pypi-second pinning trap).
+python = "<3.14"   # validated necessary: build #7 picked 3.14, no Python framework supports it yet
+pip = "*"
+uv = "*"
+ruff = "*"
+
+[pypi-dependencies]
+# === marimo notebook server ===
+marimo = "*"
+# Required by `marimo export ipynb --include-outputs` (verifies cell
+# outputs end-to-end via headless run + jupyter-format export). Without
+# it, the export errors with "nbformat is required to convert marimo
+# notebooks to ipynb" and falls back to the no-outputs path.
+nbformat = "*"
+
+# === Core data stack (marimo-team/learn: python, polars, sql, queueing, duckdb) ===
+numpy = "*"
+pandas = "*"
+pyarrow = "*"
+
+# === GPU-accelerated DataFrame engine ===
+# cudf-polars-cu13 is the CUDA-13 build of cuDF's Polars executor (RAPIDS
+# 26.4.0 series). Hard-deps: cuda-python<14.0,>=13.0.1 and pylibcudf-cu13
+# (the actual native CUDA-13 backend). It constrains polars to
+# >=1.30,<1.39 itself — uv's resolver picks a compatible polars version
+# automatically. We deliberately do NOT use `polars[gpu]` because that
+# extra pulls cudf-polars-cu12, which would conflict with our cu13 stack.
+# Direct alignment with the cu130 torch wheels below — no forward-compat
+# gamble, no fallback path needed.
+polars = "*"
+cudf-polars-cu13 = "*"
+
+# === Statistics / scientific (learn: probability, optimization, polars) ===
+scipy = "*"
+statsmodels = "*"
+scikit-learn = "*"
+
+# === Visualization (learn: altair, duckdb, queueing, probability, optimization) ===
+matplotlib = "*"
+altair = "*"
+plotly = "*"
+
+# === SQL / dataframe ecosystem (learn: sql, duckdb) ===
+duckdb = "*"
+sqlalchemy = "*"
+sqlglot = "*"
+
+# Postgres + Redis drivers were removed when airflow simplified to
+# SQLite + LocalExecutor (no external services). Add them back if you
+# compose candy/postgresql or candy/valkey alongside.
+
+# === PyTorch CUDA 13 stack (general GPU ML beyond the curriculum) ===
+# Pinned to ==2.11.* so the PyG native-extension wheels below (built at
+# https://data.pyg.org/whl/torch-2.11.0+cu130.html) stay ABI-compatible.
+# Drift to torch 2.12+ would silently break torch_scatter / torch_sparse /
+# torch_cluster (the build-tag in their wheels is `pt211cu130`). When
+# bumping this pin, also update the URL in candy/marimo/build.sh.
+torch = { version = "==2.11.*", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+transformers = "*"
+accelerate = "*"
+safetensors = "*"
+huggingface_hub = "*"
+
+# === RAPIDS GPU graph + ML stack ===
+# All cu13 to match the cudf-polars-cu13 26.4 already above. The global
+# extra-index-urls in [pypi-options] supplies the pypi.nvidia.com
+# endpoint (per-package `index = "..."` doesn't cover transitives like
+# libcugraph-cu13 / libcuml-cu13 / treelite / ucxx-cu13 — see the long
+# comment by the [pypi-options] block above).
+#
+# cuGraph 26.4 dropped the `cugraph.datasets` namespace — the demo
+# notebook uses the `nx-cugraph` backend pattern instead:
+# `nx.pagerank(G, backend="cugraph")` runs the cuGraph-accelerated
+# path on any NetworkX graph object. pylibcugraph is cuGraph's
+# low-level binding; RAPIDS' own resolver expects it as a separate
+# top-level dep.
+cugraph-cu13      = "*"
+nx-cugraph-cu13   = "*"
+pylibcugraph-cu13 = "*"
+cuml-cu13         = "*"
+
+# === pytest (involuntary transitive — cupy lazy-loader trap) ===
+# cugraph imports cupy; cupy ships `testing` as importlib.util.LazyLoader
+# (cupy/__init__.py); cupy/testing/__init__.py eagerly imports
+# cupy.testing._random which `import pytest` at module top. torch 2.11's
+# `library.custom_op` decorator runs `inspect.getmodule(frame) →
+# hasattr(module, "__file__")` during fake-op registration, which trips
+# the LazyLoader and forces the cupy.testing chain — pulling pytest into
+# the runtime path even though nothing in this env uses pytest as a test
+# framework. Without it, the joint `import cugraph; import torch_geometric`
+# sequence raises ModuleNotFoundError. Upstream cupy packaging defect (a
+# runtime helper module should not eagerly import a test framework);
+# downstream fix is supplying pytest. Pure-Python wheel — does not break
+# the `no-build = true` invariant the apache-airflow pin requires.
+pytest = "*"
+
+# === PyTorch Geometric (GNN library; native extensions in build.sh) ===
+# torch-geometric core is pure Python and lives here. The native
+# extensions (torch_scatter, torch_sparse, torch_cluster) ship as
+# Linux-cp313 wheels at a PyG-hosted HTML directory listing (NOT a
+# PEP 503 index), so pixi's `index =` syntax can't pull them — they
+# install via `pip --find-links` from candy/marimo/build.sh after
+# the pixi env settles. pyg-lib has only a Windows cp313 wheel
+# upstream, and torch-spline-conv has no cp313 wheel at all
+# (verified 2026-05). PyG works without them — they're optional
+# accelerators. Revisit when Linux cp313 wheels ship upstream.
+torch-geometric = "*"
+
+# === Graph visualization (NVIDIA-RAPIDS-accelerated end-to-end) ===
+# graphistry exposes a pandas/cuDF-friendly API for shipping graphs
+# to a Graphistry server (or rendering locally) with GPU acceleration
+# across extract / transform / display. Pure-Python wheel; deps are
+# all already in this env.
+graphistry = "*"
+
+# === marimo-team/learn helpers ===
+marimo-learn = "*"     # learn/sql/05_join.py
+wigglystuff = "*"      # learn/probability + learn/optimization interactive widgets
+drawdata = "*"         # learn/probability/21_logistic_regression.py
+
+# === Convex optimization (learn/optimization 1-7) ===
+cvxpy = "*"
+clarabel = "*"
+
+# === Distributed dataframes (learn/daft) ===
+daft = "*"
+
+# === Discrete event simulation (learn/queueing — `asimpy` per notebook header; simpy as fallback) ===
+asimpy = "*"
+simpy = "*"
+
+# === Apache Airflow with LocalExecutor + SQLite (no provider extras) ===
+# Latest airflow without celery/postgres/redis providers — the airflow
+# layer drops to SQLite metadata + in-process LocalExecutor for the
+# default marimo deployment. Add provider extras back if composing
+# with candy/postgresql + candy/valkey for multi-node.
+apache-airflow = "*"
+
+# === MCP framework for marimo's own server ===
+# fastmcp is the runtime backing `marimo edit --mcp` (marimo's MCP
+# server exposes 10 notebook-inspection tools). pixi's resolver
+# doesn't pick it up transitively from marimo, so it MUST be
+# explicit. NB: the upstream mcp-server-apache-airflow package
+# (which previously co-resided here) was removed in the 2026-05-12
+# cutover because no Airflow-3 / /api/v2 release of it exists.
+fastmcp = "*"
+
+# === Geospatial stack — OSM ingestion, vector-tile pipeline, mapping ===
+# QuackOSM converts PBF → GeoParquet via DuckDB Spatial (no GDAL needed for
+# the ingest path). geoparquet-io adds cloud-storage I/O ergonomics. The
+# rendering stack (folium, contextily) covers the marimo notebook viz.
+geopandas = "*"
+shapely = "*"
+fiona = "*"
+pyproj = "*"
+quackosm = "*"
+geoparquet-io = "*"
+pmtiles = "*"           # Python bindings for PMTiles inspection
+h3 = "*"                # Uber's hexagonal spatial index
+mercantile = "*"        # tile/zoom math
+folium = "*"            # Leaflet-style mapping for marimo notebooks
+contextily = "*"        # basemap fetching
+mapclassify = "*"       # choropleth classification
+gtfs-parquet = "*"      # GaspardMerten/gtfs-parquet — GTFS zip → polars Parquet
+
+# === Polars geospatial extensions ===
+# polars-st adds GEOS-backed spatial operations (st_intersects, st_buffer,
+# st_union, …) directly on Polars LazyFrames. PyPI-only — no conda-forge
+# package. Bundled GEOS in the wheel, so no new system dep on top of the
+# shapely already in this env.
+polars-st = "*"
+# geopolars is the early-alpha Rust-native polars-geo (v0.1.0a4 as of
+# 2026-05). Carries its own polars-version constraints; uv's resolver
+# negotiates against the cudf-polars-cu13 >=1.30,<1.39 pin. If the alpha
+# fails to resolve at build time, drop this line and re-run; the rest of
+# the stack is independent.
+geopolars = "*"
+
+# === GeoArrow + deck.gl rendering ===
+# geoarrow-python ships as two PyPI distributions: the pyarrow extension
+# types + the pandas accessor. Both are needed to round-trip geometry
+# columns between Polars, pandas, and Arrow IPC.
+geoarrow-pyarrow = "*"
+geoarrow-pandas = "*"
+# lonboard is developmentseed's deck.gl widget for GPU-rendered maps
+# directly from geoarrow-backed columns. Replaces the folium fallback
+# for >100k-row geospatial layers where Leaflet would choke.
+lonboard = "*"
+
+# === GeoParquet → PMTiles direct converter (Python-wheel half) ===
+# freestiler: in-process Rust tiling engine (walkerke/freestiler);
+# `freestile_query()` accepts a DuckDB SQL string directly and produces
+# a PMTiles archive without a Python per-tile loop. Ships manylinux
+# wheels for Python 3.9-3.14, including our 3.13 / linux x86_64 combo.
+#
+# gpq-tiles INTENTIONALLY NOT HERE: its PyPI wheels cover only
+# Python 3.8 on Linux x86_64 (v0.6.0; verified 2026-05). Our pixi env
+# is `python<3.14`, and `[pypi-options] no-build = true` (load-bearing
+# for the apache-airflow pin — without it uv downgrades airflow to
+# v1.10.2 which fails on the removed `imp` module) prevents the
+# resolver from building gpq-tiles from sdist. Instead, gpq-tiles
+# ships as a system-level CLI in the osm-tools layer (built from
+# crates.io via `cargo install --root /usr/local`). See
+# /charly-versa:osm-tools-layer.
+freestiler = "*"
+
+[environments]
+default = { features = [], solve-group = "default" }

@@ -1,0 +1,54 @@
+plugin-settings:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly settings`
+            CLI — the runtime-configuration get/set/list/path/reset surface, a standalone Go module
+            (go.mod + main.go) ported OUT of charly's core CLI registration, so the operator-facing
+            `charly settings` command tree no longer compiles into the core binary as a top-level
+            command.
+
+            One of cutover C15's four remaining WELDED-command externalizations (charly
+            clean/settings/candy/version), after candy/plugin-tmux, plugin-preempt, plugin-feature,
+            plugin-vm, and plugin-doctor. `charly settings` is WELDED to core — its SettingsCmd
+            subtree (get/set/list/path/reset, charly/main.go) reads and writes the runtime config
+            file ~/.config/charly/config.yml (GetConfigValue / SetConfigValue / ListConfigValues /
+            ResetConfigValue / RuntimeConfigPath) and resolves the credential-store backend + the
+            runtime engine — config machinery this out-of-process plugin cannot reach — so
+            SettingsCmd MUST STAY CORE (R3). The SOLUTION (the vm precedent — re-home the whole
+            subtree onto a hidden core command and raw-forward to it): core re-homes SettingsCmd onto
+            the hidden `charly __settings` command, and this plugin is a THIN FORWARDER that
+            syscall.Exec's `charly __settings <args…>`. `settings` is a command TREE, so the plugin
+            raw-forwards every subcommand token through kong passthrough — ONE forwarder covers the
+            whole tree. No core symbol crosses the boundary.
+
+            charly's loader fetches this candy's repo, go-builds the provider binary on the HOST,
+            and on `charly settings <args…>` syscall.Exec's it in CLI mode (sdk.Main → cliMain) — or
+            runs the host-installed /usr/lib/charly/plugins binary on a project-less host (the
+            pkg/arch bake). The plugin owns real terminal stdio, so the settings output reaches the
+            operator's terminal natively.
+
+            command:settings is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
+            registry — so it is declared in plugin.providers (for the CLI-grammar prescan + baked
+            `.providers` manifest) but advertises NO Describe capability. The R10 witness is the
+            disposable check-commands-local bed: `charly settings list` exits 0 and prints the
+            resolved runtime-config keys host-side, proving the externalized command tree + the
+            hidden-command raw-forward dispatch end-to-end.
+    plugin-settings-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-settings
+            providers:
+                - command:settings
+    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+    # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
+    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
+    # build + fork/exec the module. The full CLI end-to-end (`charly settings list` → exit 0 with
+    # the resolved config keys) is exercised by the live R10 bed (check-commands-local).
+    settings-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly settings` end-to-end is exercised by the live R10 (check-commands-local)
+        id: settings-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

@@ -1,0 +1,55 @@
+asciinema:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Record and replay terminal sessions as asciicast v2 .cast files
+            The asciinema candy installs the asciinema terminal recorder from the
+            distro package (named `asciinema` on RPM, DEB, and PAC alike). It
+            provides the /usr/bin/asciinema CLI whose `rec` subcommand captures a
+            terminal session -- timing, input, and output -- into a replayable
+            asciicast v2 .cast file; this is the engine behind the `record:` check
+            verb's terminal mode (`record: start` with `record_mode: terminal`,
+            served out-of-process by candy/plugin-record).
+    asciinema-require:
+        require:
+            # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
+            # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in
+            # charly's core check surface). asciinema PROVIDES the terminal recorder this verb
+            # drives, so requiring plugin-record puts it in every composing image's scanned
+            # candy set; the host's collectReferencedPluginWords then build-connects it before
+            # a baked `record:` check dispatches — otherwise it SKIPs with `unknown verb
+            # "record"`. (box/<distro> adopts the matching @github pin via reconcile later — the
+            # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
+            # override.)
+            - plugin-record
+    asciinema-package:
+        package:
+            - asciinema
+    asciinema-step-0:
+        check: the asciinema recorder binary is installed at /usr/bin/asciinema
+        plugin: file
+        plugin_input:
+            file: /usr/bin/asciinema
+            exists: true
+    asciinema-step-1:
+        check: the asciinema package is registered in the distro package database
+        plugin: package
+        plugin_input:
+            package: asciinema
+            installed: true
+    asciinema-step-2:
+        check: running asciinema --version prints the asciinema version banner and exits cleanly
+        exit_status: 0
+        stdout:
+            - contains: asciinema
+        plugin: command
+        plugin_input:
+            command: /usr/bin/asciinema --version
+    asciinema-step-3:
+        check: asciinema --help advertises the rec subcommand that captures terminal sessions
+        exit_status: 0
+        stdout:
+            - contains: rec
+        plugin: command
+        plugin_input:
+            command: /usr/bin/asciinema --help

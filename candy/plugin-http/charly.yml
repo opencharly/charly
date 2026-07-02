@@ -1,0 +1,25 @@
+plugin-http:
+    candy:
+        version: 2026.176.2200
+        description: |-
+            The `http` check verb relocated into a candy: an HTTP request matched
+            against status / body / headers — issued from the charly host's network
+            namespace under charly check live (cc.HTTPDo), or from inside the disposable
+            container via `curl` under charly check box (cc.Exec). A HOST-COUPLED verb —
+            its RunVerb runs against the live check engine (charly/plugin/kit.CheckContext),
+            served in EITHER placement: compiled-in, or OUT-OF-PROCESS via the
+            CheckContextService reverse channel (F2). A pure check verb; the matcher
+            evaluation reuses the shared sdk.MatchAll.
+    plugin-http-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-http
+            providers:
+                - verb:http
+    http-verb-dispatches:
+        check: the http verb dispatches through the provider registry and matches an HTTP response status
+        id: http-verb-dispatches
+        plugin: http
+        plugin_input:
+            http: http://localhost/
+            status: 200
+        context: [runtime]

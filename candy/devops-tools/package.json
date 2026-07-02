@@ -1,0 +1,7 @@
+{
+  "name": "devops-tools-npm",
+  "version": "1.0.0",
+  "dependencies": {
+    "wrangler": "*"
+  }
+}

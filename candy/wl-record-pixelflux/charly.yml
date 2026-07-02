@@ -1,0 +1,40 @@
+wl-record-pixelflux:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Desktop video recorder via the selkies pixelflux H.264 pipeline
+            Installs the pixelflux-record wrapper script under ~/.local/bin, which
+            drives the selkies pixelflux capture pipeline through ffmpeg to record
+            the desktop as H.264. Verifiable: the wrapper script is installed and
+            executable.
+    wl-record-pixelflux-require:
+        require:
+            - selkies
+            - ffmpeg
+            # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
+            # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in
+            # charly's core check surface). This candy PROVIDES the pixelflux desktop recorder
+            # this verb drives, so requiring plugin-record puts it in every composing image's
+            # scanned candy set; the host's collectReferencedPluginWords then build-connects it
+            # before a baked `record:` check dispatches — otherwise it SKIPs with `unknown verb
+            # "record"`. (box/<distro> adopts the matching @github pin via reconcile later — the
+            # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
+            # override.)
+            - plugin-record
+    wl-record-pixelflux-step-0:
+        run: mkdir=${HOME}/.local/bin
+        mkdir: "${HOME}/.local/bin"
+        run_as: "${USER}"
+    wl-record-pixelflux-step-1:
+        run: copy=pixelflux-record
+        copy: pixelflux-record
+        to: "${HOME}/.local/bin/pixelflux-record"
+        mode: "0755"
+        run_as: "${USER}"
+    wl-record-pixelflux-step-2:
+        check: the pixelflux-record wrapper is installed and executable
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.local/bin/pixelflux-record
+            exists: true
+            mode: "0755"

@@ -1,0 +1,30 @@
+plugin-appium:
+    candy:
+        version: 2026.174.0700
+        description: |-
+            OUT-OF-TREE charly plugin serving the `appium` W3C-WebDriver check verb —
+            a standalone Go module (go.mod + main.go) that drives a running Appium 3.x
+            server over go-plugin gRPC via the charly plugin SDK (charly/plugin/sdk).
+            charly's loader fetches this candy's repo, go-builds the provider binary on
+            the HOST, and serves it OUT-OF-PROCESS via LocalTransport — so the heavy
+            github.com/tebeka/selenium dependency (and ~80 transitive packages) lives
+            HERE, out of charly's core go.mod, while `appium:` authoring stays
+            unchanged: the verb keeps its `appium:` discriminator + every modifier on
+            charly's core #Op, and dispatches through the provider registry exactly like
+            a built-in (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full
+            #Op). Provides the full 48-method W3C surface (status/session/find/click/
+            send-keys/screenshot/gesture-*/app-*/key-*/device-*/execute/raw). The R10
+            consumer is the check-android-emulator-pod bed (via android-emulator-layer).
+    plugin-appium-decl:
+        plugin:
+            providers:
+                - verb:appium
+            source: github.com/opencharly/charly/candy/plugin-appium
+    appium-status-ready:
+        check: the running Appium server reports itself ready over the appium status verb (the out-of-process plugin verb dispatches through the registry and probes the live server)
+        id: appium-status-ready
+        appium: status
+        stdout:
+            - contains: '"ready":true'
+        context:
+            - runtime

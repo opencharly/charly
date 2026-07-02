@@ -1,0 +1,203 @@
+package main
+
+// plan_unify_test.go — the §J failing-first acceptance suite for the plan-unify
+// cutover: the unified flat `plan:` vocabulary (run/check/agent-*/include), the
+// runner modes, the per-step scorer, the include splice, and the
+// run-step → install-step lowering.
+
+import (
+	"context"
+	"strings"
+	"testing"
+)
+
+// §J.1 — a check: step runs and reports its verdict through RunPlan.
+func TestPlanUnify_CheckStepRuns(t *testing.T) {
+	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+		Origin: "candy:x",
+		Plan: []Step{{Check: "the marker resolves", Op: Op{
+			Plugin:      "matching",
+			PluginInput: map[string]any{"matching": "charly-marker", "contains": map[string]any{"contains": "charly-marker"}},
+		}}},
+	}}}
+	r := NewRunner(nil, nil, RunModeLive)
+	res := RunPlan(context.Background(), r, set, nil, false)
+	if len(res) != 1 {
+		t.Fatalf("want 1 step result, got %d", len(res))
+	}
+	if res[0].Keyword != string(KwCheck) {
+		t.Errorf("keyword = %q, want check", res[0].Keyword)
+	}
+	if res[0].Result.Status != TestPass {
+		t.Fatalf("check step should pass, got %v (%s)", res[0].Result.Status, res[0].Result.Message)
+	}
+}
+
+// §J.2 — VerifyOnly mode skips run: (mutating) steps and runs check: steps.
+func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
+	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+		Origin: "candy:x",
+		Plan: []Step{
+			{Run: "mutate the world", Op: cmdOp("echo should-not-run")},
+			{Check: "the marker resolves", Op: Op{
+				Plugin:      "matching",
+				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
+			}},
+		},
+	}}}
+	r := NewRunner(nil, nil, RunModeLive)
+	r.VerifyOnly = true
+	res := RunPlan(context.Background(), r, set, nil, false)
+	if len(res) != 2 {
+		t.Fatalf("want 2 step results, got %d", len(res))
+	}
+	// The run: step is skipped (not executed) under verify-only.
+	if res[0].Keyword != string(KwRun) || res[0].Result.Status != TestSkip {
+		t.Errorf("run: step should be skipped under VerifyOnly, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
+	}
+	if !strings.Contains(res[0].Result.Message, "verify-only") {
+		t.Errorf("skip reason should name verify-only, got %q", res[0].Result.Message)
+	}
+	// The check: step still runs and passes.
+	if res[1].Keyword != string(KwCheck) || res[1].Result.Status != TestPass {
+		t.Errorf("check: step should run under VerifyOnly, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
+	}
+}
+
+// §J.3 — feature-run's SkipDeterministicRun skips DETERMINISTIC run: install
+// steps (so build-context installs like `pip install /ctx/...` are not
+// re-executed at acceptance against a built/deployed target), while still
+// running check: and routing agent-run: to the grader path (NOT swept up as an
+// install step). Regression for #16: feature-run re-ran run: steps, so a
+// jupyter-mcp `pip install --no-deps /ctx/jupyter_mcp` step failed against the
+// live pod (/ctx exists only during image-build).
+func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
+	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+		Origin: "candy:x",
+		Plan: []Step{
+			{Run: "pip install /ctx/pkg", Op: cmdOp("false")}, // would FAIL if executed
+			{Check: "the marker resolves", Op: Op{
+				Plugin:      "matching",
+				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
+			}},
+			{AgentRun: "an agent drives the UI", Op: Op{}}, // agent step, NOT a deterministic install
+		},
+	}}}
+	r := NewRunner(nil, nil, RunModeLive)
+	r.SkipDeterministicRun = true // the `charly check feature run` (ADE acceptance) mode
+	res := RunPlan(context.Background(), r, set, nil, false)
+	if len(res) != 3 {
+		t.Fatalf("want 3 step results, got %d", len(res))
+	}
+	// The deterministic run: install step is skipped (would FAIL with `false` if executed).
+	if res[0].Keyword != string(KwRun) || res[0].Result.Status != TestSkip {
+		t.Errorf("run: install step should be skipped under SkipDeterministicRun, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
+	}
+	if !strings.Contains(res[0].Result.Message, "install-timeline") {
+		t.Errorf("skip reason should name the install-timeline, got %q", res[0].Result.Message)
+	}
+	// The check: step still runs and passes.
+	if res[1].Keyword != string(KwCheck) || res[1].Result.Status != TestPass {
+		t.Errorf("check: step should run, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
+	}
+	// agent-run: is NOT skipped as a deterministic install step — it reaches the
+	// agent path (no grader bound here → advisory skip with the agent reason, not
+	// the install-timeline reason).
+	if strings.Contains(res[2].Result.Message, "install-timeline") {
+		t.Errorf("agent-run: must NOT be skipped as a deterministic install step, got %q", res[2].Result.Message)
+	}
+}
+
+// §J.3 — validation rejects a candy whose plan has no check: step (ADE gate).
+func TestPlanUnify_ValidateRejectsNoCheckStep(t *testing.T) {
+	layers := map[string]*Candy{
+		"x": {
+			Name:        "x",
+			Version:     "2026.001.0001",
+			Description: "a candy with run: but no check:",
+			plan:        []Step{{Run: "install", Op: cmdOp("true")}}, // run only, no check
+		},
+	}
+	errs := &ValidationError{}
+	validateCandyContents(layers, errs)
+	got := strings.Join(errs.Errors, "\n")
+	if !strings.Contains(got, "at least one `check:` step") {
+		t.Fatalf("expected a no-check-step ADE rejection, got: %s", got)
+	}
+}
+
+// §J.6 — an `include: candy:X` step splices the referenced candy's plan steps
+// in place.
+func TestPlanUnify_IncludeSplicesCandyPlan(t *testing.T) {
+	layers := map[string]*Candy{
+		"redis": {Name: "redis", plan: []Step{
+			{Check: "redis answers ping", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}}},
+			{Check: "redis binary present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis-server"}}},
+		}},
+	}
+	plan := []Step{{Include: "candy:redis"}}
+	expanded, err := ExpandPlanIncludes(&UnifiedFile{}, layers, plan)
+	if err != nil {
+		t.Fatalf("ExpandPlanIncludes: %v", err)
+	}
+	if len(expanded) != 2 {
+		t.Fatalf("include should splice 2 steps, got %d", len(expanded))
+	}
+	if expanded[0].Check != "redis answers ping" || expanded[1].Check != "redis binary present" {
+		t.Errorf("spliced steps not in order: %+v", expanded)
+	}
+	// The spliced steps carry the include source origin for reporting.
+	if expanded[0].Origin != "candy:redis" {
+		t.Errorf("spliced step missing source origin, got %q", expanded[0].Origin)
+	}
+}
+
+// §J.7 — the per-step scorer reports N/M solved and identifies the failing step
+// by id (the scenario→step scoring change).
+func TestPlanUnify_PerStepScorerReportsSolvedAndFailingID(t *testing.T) {
+	verdicts := []StepVerdict{
+		{ID: "redis-ping", Verdict: VerdictSolved},
+		{ID: "redis-config", Verdict: VerdictUnchanged}, // still failing
+	}
+	s := computeSummary(verdicts, 2)
+	if s.Solved != 1 || s.Input != 2 {
+		t.Fatalf("want 1/2 solved, got %d/%d", s.Solved, s.Input)
+	}
+	if s.PercentSolved != 50.0 {
+		t.Errorf("PercentSolved = %v, want 50", s.PercentSolved)
+	}
+	// The failing step is identifiable by id (verdict != solved).
+	var failing []string
+	for _, v := range verdicts {
+		if v.Verdict != VerdictSolved {
+			failing = append(failing, v.ID)
+		}
+	}
+	if len(failing) != 1 || failing[0] != "redis-config" {
+		t.Errorf("failing step by id = %v, want [redis-config]", failing)
+	}
+}
+
+// §J.8 — a migrated task:→run: step lowers to an InstallStep AND reverses on
+// `charly bundle del` (the task:→plan: fold preserves the ledger/reversal).
+func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
+	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
+	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
+	// lowers the run-act into the same SystemPackagesStep.
+	layer := &Candy{Name: "x", plan: []Step{{Run: "install redis", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
+	steps := compileOpSteps(layer, testResolvedBox())
+
+	var sp *SystemPackagesStep
+	for _, s := range steps {
+		if v, ok := s.(*SystemPackagesStep); ok {
+			sp = v
+		}
+	}
+	if sp == nil {
+		t.Fatalf("run: package step did not lower to a SystemPackagesStep: %#v", steps)
+	}
+	rev := sp.Reverse()
+	if len(rev) != 1 || rev[0].Kind != ReverseOpPackageRemove {
+		t.Fatalf("lowered install step does not reverse to package-remove (charly bundle del): %+v", rev)
+	}
+}

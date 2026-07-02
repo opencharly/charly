@@ -1,0 +1,52 @@
+wacli:
+    candy:
+        version: 2026.144.1443
+        description: |
+            WhatsApp messaging and history sync from the command line — the `wacli` binary in the user's Go bin
+            Installs the wacli WhatsApp CLI by `go install`-ing
+            github.com/openclaw/wacli/cmd/wacli@latest with GOPATH=~/go, so the
+            `wacli` binary lands in the user's Go bin (~/go/bin, already appended
+            to $PATH). Verifiable end to end: the binary exists at ~/go/bin/wacli,
+            carries the executable bit, and the required Go toolchain that builds
+            and runs it is present at /usr/bin/go (the golang dependency).
+    wacli-require:
+        require:
+            - golang
+    wacli-env:
+        env:
+            GOPATH: "~/go"
+    wacli-path_append:
+        path_append:
+            - "~/go/bin"
+    wacli-step-0:
+        run: |
+            command=go install github.com/openclaw/wacli/cmd/wacli@latest
+            go clean -cache
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                go install github.com/openclaw/wacli/cmd/wacli@latest
+                go clean -cache
+    wacli-step-1:
+        check: the wacli WhatsApp CLI binary is installed in the user's Go bin directory
+        plugin: file
+        plugin_input:
+            file: ${HOME}/go/bin/wacli
+            exists: true
+    wacli-step-2:
+        check: the installed wacli binary carries the executable bit and can be invoked
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: test -x ${HOME}/go/bin/wacli
+            in_container: true
+    wacli-step-3:
+        agent-check: invoking wacli in the running deployment presents its WhatsApp command interface (login/pairing prompt) instead of crashing
+    wacli-go-toolchain:
+        check: file=/usr/bin/go
+        id: wacli-go-toolchain
+        plugin: file
+        plugin_input:
+            file: /usr/bin/go
+            exists: true

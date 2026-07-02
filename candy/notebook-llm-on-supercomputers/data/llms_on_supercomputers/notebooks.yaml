@@ -1,0 +1,28 @@
+title: "LLMs on Supercomputers"
+description: "Comprehensive course covering prompt engineering, RAG, and fine-tuning. Adapted from TU Wien's AI Factory Austria training materials for OpenCharly containers."
+order: 2
+
+subcategories:
+  - id: "d0"
+    title: "D0 - Setup"
+    description: "Environment setup and Ollama connectivity verification"
+    pattern: "D0_*.ipynb"
+    order: 0
+
+  - id: "d1"
+    title: "D1 - Prompt Engineering Essentials"
+    description: "LangChain basics, prompt templates, chaining, evaluation, and optimization"
+    pattern: "D1_*.ipynb"
+    order: 1
+
+  - id: "d2"
+    title: "D2 - Retrieval Augmented Generation"
+    description: "RAG fundamentals with basic tools and ChromaDB vector databases"
+    pattern: "D2_*.ipynb"
+    order: 2
+
+  - id: "d3"
+    title: "D3 - Fine-tuning on One GPU"
+    description: "Transformer architecture, PyTorch/HuggingFace fine-tuning, quantization, PEFT, and Unsloth"
+    pattern: "D3_*.ipynb"
+    order: 3

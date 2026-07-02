@@ -1,0 +1,7 @@
+{
+  "name": "forgecode-layer",
+  "version": "1.0.0",
+  "dependencies": {
+    "forgecode": "*"
+  }
+}

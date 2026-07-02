@@ -1,0 +1,24 @@
+plugin-init:
+    candy:
+        version: 2026.176.3100
+        description: |-
+            The `init` plugin KIND relocated into a candy: the init-system vocabulary
+            (supervisord/systemd fragment-assembly + entrypoint + service-management
+            templates). A KIND provider — dispatches via the pb Invoke(OpLoad) envelope
+            (decode the authored init: entity into spec.Init), so it serves itself in
+            BOTH placements (compiled-in OR out-of-process) like the matching/exampleprobe
+            verbs. The embedded build vocabulary's init: entities (supervisord/systemd)
+            flow through this same path at box build.
+    plugin-init-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-init
+            providers:
+                - kind:init
+    init-kind-module-present:
+        check: the init kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; the init vocabulary is exercised at every box build that renders an init system (e.g. check-pod supervisord)
+        id: init-kind-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

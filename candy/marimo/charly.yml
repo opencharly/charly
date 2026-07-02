@@ -1,0 +1,246 @@
+marimo:
+    candy:
+        version: 2026.146.1203
+        description: |
+            marimo reactive notebook + MCP server on port 2718 with GPU OSM analytics, Airflow deps, and the marimo-team skills bundle for AI agents
+            Installs marimo (a reactive notebook server that also runs as an MCP
+            server via `--mcp` on the same port 2718) plus its data stack into a
+            pixi env at ${HOME}/.pixi/envs/default: GPU-accelerated OSM analytics
+            deps (Polars-GPU/cuDF, geopandas, quackosm), Apache Airflow Python
+            deps (the airflow layer ships no pixi env of its own), and the
+            marimo-team/learn curriculum. The marimo-team/skills bundle is
+            unpacked read-only at /opt/marimo-skills (MARIMO_SKILLS_DIR) for AI
+            agents driving marimo over MCP, and a baked marimo.toml turns
+            auto_instantiate on so cells run the moment the notebook URL opens.
+            Every claim below is observable: the pixi-env binaries, the skills
+            directory, the config line, and — at deploy scope — the live notebook
+            UI plus the MCP endpoint on /mcp/server.
+    marimo-require:
+        require:
+            - cuda
+            - supervisord
+            # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
+            # (the github.com/modelcontextprotocol/go-sdk MCP CLIENT lives there, not in
+            # charly's core check surface). This candy AUTHORS `mcp:` checks, so requiring
+            # plugin-mcp puts it in every composing image's scanned candy set; the host's
+            # collectReferencedPluginWords then build-connects it before the baked `mcp:`
+            # checks dispatch — otherwise they SKIP with `unknown verb "mcp"`. (box/<distro>
+            # adopts the matching @github pin via reconcile later — the deliberate cross-repo
+            # lag; the R10 bed loads the LOCAL candy via the superproject override.)
+            - plugin-mcp
+    marimo-env:
+        env:
+            NVIDIA_PYTHON_PROJECT: "~/.pixi"
+            LD_LIBRARY_PATH: "/usr/lib64"
+            # Stable, well-known path for any AI agent (driving marimo via MCP) to
+            # discover the marimo-team/skills bundle. Mirrors the Anthropic-style
+            # SKILL.md discovery used by opencharly's own plugins/<plugin>/skills/.
+            MARIMO_SKILLS_DIR: "/opt/marimo-skills"
+    marimo-distro:
+        distro:
+            arch:
+                package:
+                    - git # required by the marimo-team/skills tarball extract validation step
+                    - gcc # Arch's gcc package includes both C and C++ frontends (no gcc-c++ split)
+            fedora:
+                package:
+                    - git # required by the marimo-team/skills tarball extract validation step
+                    - gcc
+                    - gcc-c++
+    marimo-port:
+        port:
+            - 2718
+    marimo-env_accept:
+        # The marimo notebook (osm-monaco-viz.py) reads these vars at cell
+        # evaluation time. Same-container provides (martin / airflow / versatiles
+        # / versatiles-frontend live in the same pod as marimo) flow through
+        # the podAwareEnvProvides rewriting in charly/provides.go — host-side URLs
+        # (PUBLIC_URL family) keep their 127.0.0.1:{{.HostPort N}} form because
+        # they're consumed BY THE BROWSER, which lives outside the pod and
+        # only sees the host-port mapping. The INTERNAL_URL (kernel-side Python
+        # requests) resolves to localhost:8080 in the same-pod case.
+        env_accept:
+            - name: MARTIN_PUBLIC_URL
+              description: "Public URL for the martin vector-tile server (browser-side)"
+            - name: AIRFLOW_PUBLIC_URL
+              description: "Public URL for the Airflow webserver UI (browser-side)"
+            - name: AIRFLOW_API_INTERNAL_URL
+              description: "Kernel-side Airflow REST API URL (Python requests from the marimo kernel)"
+            - name: AIRFLOW_DAGS_DIR
+              description: "Filesystem path the notebook drops self-authored DAG files into"
+            - name: VERSATILES_PUBLIC_URL
+              description: "Public URL for versatiles serve (browser-side; shortbread tile fetches)"
+            - name: VERSATILES_STYLE_PUBLIC_URL
+              description: "Public URL for the @versatiles/style style JSON (browser-side)"
+            - name: VERSATILES_ASSETS_PUBLIC_URL
+              description: "Public URL for the versatiles-frontend asset root (fonts + sprites)"
+            - name: PMTILES_VIEWER_PUBLIC_URL
+              description: "Public URL for the protomaps PMTiles Viewer SPA (browser-side)"
+    marimo-mcp_provide:
+        # marimo runs `--mcp --mcp-allow-remote` (see service exec below), which
+        # exposes its editor tools as an MCP HTTP server on the SAME port that
+        # serves the notebook UI. Marimo's docs put the endpoint at /mcp/server
+        # (NOT /mcp — that's the convention for charly-mcp / jupyter-mcp / chrome-
+        # devtools-mcp). The mcp_provide URL must reflect the actual path.
+        mcp_provide:
+            - name: marimo
+              url: "http://{{.ContainerName}}:2718/mcp/server"
+              transport: http
+    marimo-volume:
+        volume:
+            - name: workspace
+              path: "/workspace"
+    marimo-service:
+        service:
+            - name: marimo
+              # `--mcp` enables the MCP HTTP server on the same port as the editor.
+              # `--mcp-allow-remote` is mandatory because we bind 0.0.0.0 (the marimo
+              # docs explicitly call this out — without it the MCP endpoint refuses
+              # non-localhost requests, which means our host-port rewriter can't
+              # reach it from 127.0.0.1:HOST_PORT). `--no-token` keeps the editor
+              # itself token-free for the dev posture.
+              exec: "%(ENV_HOME)s/.pixi/envs/default/bin/marimo edit --host 0.0.0.0 --port 2718 --no-token --headless --mcp --mcp-allow-remote /workspace"
+              restart: always
+              working_directory: "%(ENV_HOME)s"
+              priority: 30
+              enable: true
+              scope: system
+    marimo-step-0:
+        run: mkdir=/workspace
+        mkdir: "/workspace"
+        mode: "0777"
+        run_as: root
+    marimo-step-1:
+        run: mkdir=/opt/marimo-skills
+        mkdir: /opt/marimo-skills
+        run_as: root
+    marimo-step-2:
+        run: download=https://github.com/marimo-team/skills/archive/refs/heads/main.tar.gz
+        download: "https://github.com/marimo-team/skills/archive/refs/heads/main.tar.gz"
+        extract: tar.gz
+        to: /opt/marimo-skills
+        strip_components: 1
+        run_as: root
+    marimo-step-3:
+        run: mkdir=${HOME}/.config/marimo
+        mkdir: "${HOME}/.config/marimo"
+        # NB: the sample marimo notebook (osm-monaco-viz.py) used to be
+        # written inline here via `write:` — that's the volume-shadow
+        # anti-pattern (in-image content shadowed by the workspace volume
+        # at runtime, plus root-owned files when DAGs need user write).
+        # Replaced 2026-05-09 with the notebook-osm data layer which seeds
+        # /workspace/notebooks/ via charly's data-layer machinery
+        # (--userns=keep-id ensures user-owned files). See
+        # /charly-build:layer "Data layer" pattern + candy/notebook-templates/
+        # for the canonical reference.
+        #
+        # Stub-out the rest of the prior inline content via a yaml comment-
+        # block so the line-anchored grep / regex targets above don't trip
+        # on stray fragments. The full notebook content lives at
+        # candy/notebook-osm/data/notebooks/osm-monaco-viz.py.
+        #
+        # The full notebook body now lives at
+        # candy/notebook-osm/data/notebooks/osm-monaco-viz.py and is seeded
+        # via the notebook-osm data-only layer.
+
+        run_as: "${USER}"
+    marimo-step-4:
+        run: write=${HOME}/.config/marimo/marimo.toml
+        write: "${HOME}/.config/marimo/marimo.toml"
+        mode: "0644"
+        run_as: "${USER}"
+        content: |
+            # charly-managed — set by candy/marimo/candy.yml at image-build time.
+            # `auto_instantiate = true` makes the reactive cascade fire on
+            # page open. Don't hand-edit; rebuild the image to change.
+            [runtime]
+            auto_instantiate = true
+    marimo-step-5:
+        check: the marimo notebook+MCP server binary is installed in the pixi env
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/marimo
+            exists: true
+    marimo-step-6:
+        check: the Apache Airflow CLI is installed in the same pixi env (the airflow layer ships none of its own)
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/airflow
+            exists: true
+    marimo-step-7:
+        check: the marimo-team/skills bundle is unpacked read-only under MARIMO_SKILLS_DIR
+        plugin: file
+        plugin_input:
+            file: /opt/marimo-skills/skills
+            exists: true
+            filetype: directory
+    marimo-step-8:
+        check: the baked marimo.toml enables auto_instantiate so cells run on page open
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.config/marimo/marimo.toml
+            exists: true
+            contains:
+                - "auto_instantiate = true"
+    marimo-step-9:
+        agent-check: a marimo deployment is running with `marimo edit --mcp --mcp-allow-remote` on port 2718
+    marimo-step-10:
+        agent-check: a client opens the published notebook port and an MCP client pings /mcp/server
+    marimo-step-11:
+        agent-check: the marimo editor UI is served and the MCP endpoint answers protocol requests on the same port
+    marimo-curriculum-imports:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import marimo, torch, transformers, polars, scipy, altair, plotly, statsmodels, duckdb, sqlalchemy, sqlglot, cvxpy, clarabel, daft, wigglystuff, drawdata, marimo_learn, simpy"
+        id: marimo-curriculum-imports
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import marimo, torch, transformers, polars, scipy, altair, plotly, statsmodels, duckdb, sqlalchemy, sqlglot, cvxpy, clarabel, daft, wigglystuff, drawdata, marimo_learn, simpy"
+    marimo-osm-mcp-imports:
+        check: command=${HOME}/.pixi/envs/default/bin/python -c "import geopandas, shapely, fiona, pyproj, quackosm, geoparquet_io, pmtiles, h3, mercantile, folium, contextily, mapclassify, fastmcp, cudf_polars, polars_st, geopolars, geoarrow.pyarrow, geoarrow.pandas, lonboard, freestiler"
+        id: marimo-osm-mcp-imports
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/python -c "import geopandas, shapely, fiona, pyproj, quackosm, geoparquet_io, pmtiles, h3, mercantile, folium, contextily, mapclassify, fastmcp, cudf_polars, polars_st, geopolars, geoarrow.pyarrow, geoarrow.pandas, lonboard, freestiler"
+    marimo-port-reachable:
+        check: addr=127.0.0.1:${HOST_PORT:2718}
+        id: marimo-port-reachable
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: "127.0.0.1:${HOST_PORT:2718}"
+            reachable: true
+    marimo-http-up:
+        check: http=http://127.0.0.1:${HOST_PORT:2718}/
+        id: marimo-http-up
+        timeout: 10s
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: "http://127.0.0.1:${HOST_PORT:2718}/"
+            status: 200
+    mcp-marimo-ping:
+        check: mcp=ping
+        id: mcp-marimo-ping
+        mcp: ping
+        mcp_name: marimo
+        timeout: 30s
+        eventually: 90s
+        retry_interval: 3s
+        context:
+            - runtime
+    mcp-marimo-list-tools:
+        check: mcp=list-tools
+        id: mcp-marimo-list-tools
+        mcp: list-tools
+        mcp_name: marimo
+        stdout:
+            # marimo's MCP tool catalog isn't fully documented; just assert
+            # that SOME marimo-flavored tool surfaces (the tool list contains
+            # at least one line, and one of the standard editor tools is present).
+            - matches: "."
+        context:
+            - runtime

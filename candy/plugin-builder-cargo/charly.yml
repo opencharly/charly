@@ -1,0 +1,26 @@
+plugin-builder-cargo:
+    candy:
+        version: 2026.182.0300
+        description: |-
+            OUT-OF-TREE charly plugin serving the `cargo` builder's BUILD-TIME step (OpResolve) + its
+            DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared charly/plugin/kit
+            logic (R3): OpResolve (→ kit.BuilderResolve — cargo is an INLINE builder, so the
+            InlineFragment `RUN cargo install --path /ctx`, C10, no longer the core embedded
+            vocabulary), OpCollectContext (cargo records no stage context — binaries are read from
+            Cargo.toml [[bin]] host-side at install time) and OpReverse (cargo → cargo-uninstall when
+            binaries are known). The deploy-time pair runs in the host build PRE-PASS, BEFORE the pure
+            BuildDeployPlan compile, so the compiler never dials a plugin. Selection stays DETECTION
+            (a candy's Cargo.toml), never an authored external_builder:.
+    plugin-builder-cargo-decl:
+        plugin:
+            providers:
+                - builder:cargo
+            source: github.com/opencharly/charly/candy/plugin-builder-cargo
+    cargo-builder-module-present:
+        check: the out-of-tree cargo builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
+        id: cargo-builder-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

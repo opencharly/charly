@@ -1,0 +1,7 @@
+{
+  "name": "xurl-layer",
+  "version": "1.0.0",
+  "dependencies": {
+    "@xdevplatform/xurl": "*"
+  }
+}

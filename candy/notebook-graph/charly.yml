@@ -1,0 +1,61 @@
+notebook-graph:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Standalone marimo notebook exercising the cuGraph + cuML + PyG + graphistry GPU libraries
+            Provisions a self-contained marimo notebook into
+            /workspace/notebooks/ at deploy time. The notebook
+            demonstrates the four new GPU library families added to
+            the versa env in the 2026-05 cutover:
+
+              * cuGraph (RAPIDS graph analytics) — PageRank via the
+                nx-cugraph backend pattern (cugraph.datasets was
+                removed in 26.4, so nx.pagerank(G, backend="cugraph")
+                is the idiomatic accelerator path).
+              * cuML (RAPIDS ML) — KMeans clustering on synthetic
+                blobs, end-to-end on GPU.
+              * PyTorch Geometric — GCNConv forward pass on cuda:0,
+                with torch_scatter / torch_sparse / torch_cluster
+                providing the accelerated scatter/gather kernels.
+              * graphistry — GPU-accelerated graph visualization
+                client; the notebook builds an edges DataFrame and
+                shows how to construct a plotter without requiring
+                a Graphistry server account.
+
+            Data-only layer — no packages, no services, no baked
+            DAGs. The notebook reads no env vars (every cell is
+            self-contained synthetic data) so it runs cleanly even
+            when the OSM DAG hasn't produced /workspace/tiles/work/
+            yet.
+    notebook-graph-data:
+        data:
+            - src: data/notebooks
+              volume: workspace
+              dest: notebooks
+    notebook-graph-step-0:
+        check: the notebooks subdirectory is provisioned in the workspace
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks
+            filetype: directory
+    notebook-graph-step-1:
+        check: the gpu-libraries-demo notebook is present
+        exit_status: 0
+        stdout:
+            - matches: "gpu-libraries-demo"
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: ls ${VOLUME_CONTAINER_PATH:workspace}/notebooks/
+    notebook-graph-demo-present:
+        check: file=${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
+        id: notebook-graph-demo-present
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
+            exists: true

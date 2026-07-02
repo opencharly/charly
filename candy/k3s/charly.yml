@@ -1,0 +1,161 @@
+k3s:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Installs the verified-checksum k3s multi-call binary plus its CNI runtime dependencies
+            Downloads the k3s binary (sha256-verified against the release
+            manifest) to /usr/local/bin/k3s, symlinks kubectl/crictl/ctr onto it
+            (k3s dispatches on argv[0]), and installs the iptables/conntrack/
+            socat/ethtool runtime dependencies via the distro package manager.
+            No service is started here — k3s-server and k3s-agent wrap this
+            binary with the right verb. Every installed artifact is
+            file/command/package-checkable at build scope.
+    k3s-package:
+        package:
+            - ca-certificates
+            - ethtool
+            - fuse-overlayfs
+            - socat
+    k3s-distro:
+        distro:
+            arch:
+                package:
+                    - conntrack-tools
+                    - iptables-nft
+            debian:
+                package:
+                    - conntrack
+                    - iptables
+            fedora:
+                package:
+                    - conntrack-tools
+                    - iptables
+            ubuntu:
+                package:
+                    - conntrack
+                    - iptables
+    k3s-step-0:
+        run: |
+            command=set -euo pipefail
+            # Pinned version — update when cutting over.
+            K3S_VERSION="v1.31.11+k3s1"
+            K3S_VERSION_URL="v1.31.11%2Bk3s1"
+            MACHINE="$(uname -m)"
+            case "${MACHINE}" in
+              x86_64) BIN_SUFFIX=""; SHA_SUFFIX="amd64";;
+              aarch64) BIN_SUFFIX="-arm64"; SHA_SUFFIX="arm64";;
+              *) echo "unsupported arch: ${MACHINE}" >&2; exit 1;;
+            esac
+            BASE="https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION_URL}"
+            TMPDIR="$(mktemp -d)"
+            trap 'rm -rf "${TMPDIR}"' EXIT
+            curl -fsSL --retry 3 "${BASE}/k3s${BIN_SUFFIX}" -o "${TMPDIR}/k3s"
+            curl -fsSL --retry 3 "${BASE}/sha256sum-${SHA_SUFFIX}.txt" -o "${TMPDIR}/sha256.txt"
+            EXPECTED_SHA="$(awk -v b="k3s${BIN_SUFFIX}" '$2==b{print $1}' "${TMPDIR}/sha256.txt")"
+            if [ -z "${EXPECTED_SHA}" ]; then
+              echo "could not find sha256 for k3s${BIN_SUFFIX} in release checksum file" >&2
+              exit 1
+            fi
+            ACTUAL_SHA="$(sha256sum "${TMPDIR}/k3s" | awk '{print $1}')"
+            if [ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]; then
+              echo "sha256 mismatch: got ${ACTUAL_SHA}, want ${EXPECTED_SHA}" >&2
+              exit 1
+            fi
+            install -D -m 0755 -o root -g root "${TMPDIR}/k3s" /usr/local/bin/k3s
+            # Symlinks for kubectl / crictl / ctr — k3s is multi-call and
+            # dispatches on argv[0].
+            ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+            ln -sf /usr/local/bin/k3s /usr/local/bin/crictl
+            ln -sf /usr/local/bin/k3s /usr/local/bin/ctr
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                set -euo pipefail
+                # Pinned version — update when cutting over.
+                K3S_VERSION="v1.31.11+k3s1"
+                K3S_VERSION_URL="v1.31.11%2Bk3s1"
+                MACHINE="$(uname -m)"
+                case "${MACHINE}" in
+                  x86_64) BIN_SUFFIX=""; SHA_SUFFIX="amd64";;
+                  aarch64) BIN_SUFFIX="-arm64"; SHA_SUFFIX="arm64";;
+                  *) echo "unsupported arch: ${MACHINE}" >&2; exit 1;;
+                esac
+                BASE="https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION_URL}"
+                TMPDIR="$(mktemp -d)"
+                trap 'rm -rf "${TMPDIR}"' EXIT
+                curl -fsSL --retry 3 "${BASE}/k3s${BIN_SUFFIX}" -o "${TMPDIR}/k3s"
+                curl -fsSL --retry 3 "${BASE}/sha256sum-${SHA_SUFFIX}.txt" -o "${TMPDIR}/sha256.txt"
+                EXPECTED_SHA="$(awk -v b="k3s${BIN_SUFFIX}" '$2==b{print $1}' "${TMPDIR}/sha256.txt")"
+                if [ -z "${EXPECTED_SHA}" ]; then
+                  echo "could not find sha256 for k3s${BIN_SUFFIX} in release checksum file" >&2
+                  exit 1
+                fi
+                ACTUAL_SHA="$(sha256sum "${TMPDIR}/k3s" | awk '{print $1}')"
+                if [ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]; then
+                  echo "sha256 mismatch: got ${ACTUAL_SHA}, want ${EXPECTED_SHA}" >&2
+                  exit 1
+                fi
+                install -D -m 0755 -o root -g root "${TMPDIR}/k3s" /usr/local/bin/k3s
+                # Symlinks for kubectl / crictl / ctr — k3s is multi-call and
+                # dispatches on argv[0].
+                ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+                ln -sf /usr/local/bin/k3s /usr/local/bin/crictl
+                ln -sf /usr/local/bin/k3s /usr/local/bin/ctr
+    k3s-step-1:
+        check: the verified k3s multi-call binary is installed at /usr/local/bin/k3s
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/k3s
+            exists: true
+    k3s-step-2:
+        check: the k3s binary is executable (mode 0755)
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/k3s
+            mode: "0755"
+    k3s-step-3:
+        check: the binary reports the pinned k3s version
+        exit_status: 0
+        stdout:
+            contains: "k3s version v1."
+        plugin: command
+        plugin_input:
+            command: /usr/local/bin/k3s --version
+    k3s-step-4:
+        check: kubectl dispatches through the k3s multi-call binary via a symlink
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/kubectl
+            exists: true
+            filetype: symlink
+    k3s-step-5:
+        check: crictl dispatches through the same multi-call binary
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/crictl
+            exists: true
+            filetype: symlink
+    k3s-step-6:
+        check: conntrack is installed for kube-proxy connection tracking
+        plugin: package
+        plugin_input:
+            package: conntrack-tools
+            package_map:
+                debian: conntrack
+                ubuntu: conntrack
+            installed: true
+    k3s-step-7:
+        check: socat is installed for the k3s apiserver tunnel proxy
+        plugin: package
+        plugin_input:
+            package: socat
+            installed: true
+    k3s-step-8:
+        check: iptables is installed for service and pod network routing
+        plugin: package
+        plugin_input:
+            package: iptables
+            package_map:
+                arch: iptables-nft
+            installed: true

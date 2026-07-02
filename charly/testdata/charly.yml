@@ -1,0 +1,9 @@
+version: 2026.174.1100
+import:
+    - build.yml
+    - images.yml
+discover:
+    - path: box
+      recursive: true
+    - path: candy
+      recursive: true

@@ -1,0 +1,78 @@
+[workspace]
+name = "comfyui-environment"
+version = "0.1.0"
+description = "ComfyUI + ComfyUI-Manager environment with NVIDIA ML stack"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+[pypi-dependencies]
+# === PyTorch with CUDA 13.0 ===
+torch = { version = ">=2.9.1", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === HuggingFace Core ===
+transformers = ">=4.57.3"
+accelerate = "*"
+safetensors = ">=0.4.2"
+
+# === ML Core ===
+numpy = "<2.3"
+scipy = "*"
+einops = ">=0.7.0"
+pillow = ">=10.0.0"
+av = "*"
+aiohttp = ">=3.9.0"
+kornia = ">=0.7.1"
+spandrel = ">=0.3.4"
+torchsde = "*"
+tqdm = "*"
+psutil = "*"
+pyyaml = "*"
+pydantic = ">=2.0"
+pydantic-settings = ">=2.0"
+python-dotenv = "*"
+gguf = "*"
+
+# === ComfyUI ===
+
+# ComfyUI core packages
+comfyui-frontend-package = "*"
+comfyui-workflow-templates = "*"
+comfyui-embedded-docs = "*"
+comfy-kitchen = ">=0.2.7"
+comfy-aimdo = ">=0.1.8"
+
+# NLP / Tokenization
+tokenizers = ">=0.13.3"
+sentencepiece = "*"
+
+# Networking
+yarl = ">=1.18.0"
+requests = "*"
+
+# Database (ComfyUI uses for workflow storage)
+alembic = "*"
+sqlalchemy = "*"
+
+# ============================================================
+# COMFYUI-MANAGER PACKAGES
+# ============================================================
+
+gitpython = "*"
+pygithub = "*"
+matrix-nio = "*"
+huggingface-hub = "*"
+typer = "*"
+rich = "*"
+typing-extensions = "*"
+toml = "*"
+chardet = "*"
+
+[environments]
+default = { features = [], solve-group = "default" }

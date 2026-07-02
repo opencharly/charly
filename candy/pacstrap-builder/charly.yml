@@ -1,0 +1,80 @@
+pacstrap-builder:
+    candy:
+        version: 2026.162.1200
+        description: |
+            Bootstrap a bootable Arch/CachyOS rootfs via pacstrap, partition the disk, and install grub.
+            Tools needed to bootstrap an Arch-family rootfs from scratch via
+            pacstrap, partition a VM disk, and install grub for a bootable
+            Arch/CachyOS system. Used as the layer composition for the
+            arch-pacstrap-builder / cachyos-pacstrap-builder images,
+            which run as privileged containers under `charly box build` and
+            `charly vm build` for kind:bootstrap source kinds.
+    pacstrap-builder-distro:
+        distro:
+            arch:
+                package:
+                    - arch-install-scripts
+                    - qemu-img
+                    - dosfstools
+                    - e2fsprogs
+                    - xfsprogs
+                    - btrfs-progs
+                    - parted
+                    - util-linux
+                    - grub
+                    - efibootmgr
+                    - mkinitcpio
+    pacstrap-builder-step-0:
+        check: pacstrap bootstraps a fresh Arch/CachyOS root filesystem
+        plugin: file
+        plugin_input:
+            file: /usr/sbin/pacstrap
+            exists: true
+    pacstrap-builder-step-1:
+        check: the arch-install-scripts package supplies genfstab and arch-chroot alongside pacstrap
+        plugin: package
+        plugin_input:
+            package: arch-install-scripts
+            installed: true
+    pacstrap-builder-step-2:
+        check: parted partitions the target VM disk
+        plugin: file
+        plugin_input:
+            file: /usr/sbin/parted
+            exists: true
+    pacstrap-builder-step-3:
+        check: a raw VM disk image can be created with qemu-img
+        plugin: file
+        plugin_input:
+            file: /usr/bin/qemu-img
+            exists: true
+    pacstrap-builder-step-4:
+        check: e2fsprogs provides the ext4 mkfs used for the root partition
+        plugin: package
+        plugin_input:
+            package: e2fsprogs
+            installed: true
+    pacstrap-builder-step-5:
+        check: dosfstools provides the FAT mkfs used for the EFI system partition
+        plugin: package
+        plugin_input:
+            package: dosfstools
+            installed: true
+    pacstrap-builder-step-6:
+        check: grub-install writes the bootloader to the disk
+        plugin: file
+        plugin_input:
+            file: /usr/sbin/grub-install
+            exists: true
+    pacstrap-builder-step-7:
+        check: efibootmgr registers the UEFI boot entry
+        plugin: package
+        plugin_input:
+            package: efibootmgr
+            installed: true
+    pacstrap-builder-step-8:
+        check: mkinitcpio regenerates the initramfs inside the new root
+        plugin: file
+        plugin_input:
+            file: /usr/bin/mkinitcpio
+            exists: true

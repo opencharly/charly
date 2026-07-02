@@ -1,0 +1,172 @@
+/* === SwayNC - Catppuccin Mocha === */
+
+* {
+    font-family: "JetBrains Mono", sans-serif;
+    font-weight: normal;
+}
+
+.control-center {
+    background: rgba(30, 30, 46, 0.95);
+    border: 1px solid #585b70;
+    border-radius: 12px;
+    padding: 8px;
+}
+
+.control-center .notification-row {
+    border-radius: 8px;
+    margin: 4px 0;
+}
+
+.control-center .notification-row:hover {
+    background: rgba(69, 71, 90, 0.4);
+}
+
+.notification {
+    background: rgba(49, 50, 68, 0.95);
+    border: 1px solid #585b70;
+    border-radius: 10px;
+    padding: 0;
+    margin: 6px;
+}
+
+.notification-content {
+    padding: 8px 12px;
+}
+
+.summary {
+    font-size: 14px;
+    font-weight: bold;
+    color: #cdd6f4;
+}
+
+.body {
+    font-size: 12px;
+    color: #bac2de;
+}
+
+.time {
+    font-size: 11px;
+    color: #6c7086;
+}
+
+.close-button {
+    background: rgba(243, 139, 168, 0.2);
+    color: #f38ba8;
+    border-radius: 50%;
+    padding: 2px;
+    margin: 4px;
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.close-button:hover {
+    background: rgba(243, 139, 168, 0.4);
+}
+
+.notification.low {
+    border-left: 3px solid #6c7086;
+}
+
+.notification.normal {
+    border-left: 3px solid #89b4fa;
+}
+
+.notification.critical {
+    border-left: 3px solid #f38ba8;
+    background: rgba(49, 50, 68, 0.98);
+}
+
+.notification-action {
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin: 4px 2px;
+    border: none;
+}
+
+.notification-action:hover {
+    background: rgba(137, 180, 250, 0.3);
+}
+
+.widget-title {
+    color: #cdd6f4;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 6px 12px;
+}
+
+.widget-title > button {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+    border-radius: 6px;
+    padding: 4px 16px;
+    border: none;
+    font-size: 12px;
+}
+
+.widget-title > button:hover {
+    background: rgba(243, 139, 168, 0.3);
+}
+
+.widget-dnd {
+    color: #cdd6f4;
+    padding: 6px 12px;
+}
+
+.widget-dnd > switch {
+    background: #45475a;
+    border-radius: 12px;
+}
+
+.widget-dnd > switch:checked {
+    background: #89b4fa;
+}
+
+.widget-dnd > switch slider {
+    background: #cdd6f4;
+    border-radius: 50%;
+}
+
+.widget-mpris {
+    background: rgba(49, 50, 68, 0.6);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 4px 0;
+}
+
+.widget-mpris-player {
+    padding: 4px 8px;
+}
+
+.widget-mpris-title {
+    font-weight: bold;
+    color: #cdd6f4;
+    font-size: 13px;
+}
+
+.widget-mpris-subtitle {
+    color: #a6adc8;
+    font-size: 11px;
+}
+
+.widget-inhibitors {
+    color: #cdd6f4;
+    padding: 6px 12px;
+}
+
+.widget-inhibitors > button {
+    background: rgba(250, 179, 135, 0.15);
+    color: #fab387;
+    border-radius: 6px;
+    padding: 4px 16px;
+    border: none;
+}
+
+.widget-inhibitors > button:hover {
+    background: rgba(250, 179, 135, 0.3);
+}
+
+.blank-window {
+    background: transparent;
+}

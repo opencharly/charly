@@ -1,0 +1,34 @@
+http:
+  routers:
+    selkies-websockets:
+      rule: "PathPrefix(`/websockets`)"
+      service: selkies-backend
+      entryPoints:
+        - websecure
+      tls: {}
+
+    selkies-web:
+      rule: "PathPrefix(`/`)"
+      service: selkies-fileserver
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+  services:
+    selkies-backend:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8081"
+
+    selkies-fileserver:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3001"
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /usr/local/share/selkies/certs/selkies.crt
+        keyFile: /usr/local/share/selkies/certs/selkies.key

@@ -1,0 +1,430 @@
+container-nesting:
+    candy:
+        version: 2026.167.2138
+        description: |
+            Rootless nested podman/buildah/skopeo inside a rootless outer container -- zero added capabilities, no --privileged.
+            Ports quay.io/podman/stable's canonical rootless-in-rootless configuration
+            into the candy system. Installs podman + crun + buildah + skopeo +
+            fuse-overlayfs, writes containers.conf with every namespace=host (the
+            userns=host line is what bypasses the kernel mount_too_revealing /proc
+            check), a two-range subuid layout that fits the keep-id window,
+            newuidmap/newgidmap file caps, policy.json and storage.conf -- so an inner
+            `podman run` of a fresh container succeeds with no cap_add and no
+            --privileged. Every artifact below is observable in the built image; the
+            end-to-end nested run is provable on a live deployment.
+    container-nesting-package:
+        package:
+            - buildah
+            - fuse-overlayfs
+            - skopeo
+    container-nesting-distro:
+        distro:
+            arch:
+                package:
+                    - crun
+                    - libsecret
+                    - podman
+                    - shadow
+                    - tailscale
+            debian:
+                package:
+                    - crun
+                    # libcap2-bin provides setcap(8): the candy's setcap step grants
+                    # cap_setuid=ep to newuidmap so a nested rootless userns can be
+                    # delegated. Fedora/Arch ship setcap transitively (libcap in base);
+                    # Debian/Ubuntu do NOT, so without this the setcap step exits 127
+                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    - libcap2-bin
+                    - libsecret-1-0
+                    - passwd
+                    - podman
+                    - uidmap
+            debian-13:
+                package:
+                    - crun
+                    # libcap2-bin provides setcap(8): the candy's setcap step grants
+                    # cap_setuid=ep to newuidmap so a nested rootless userns can be
+                    # delegated. Fedora/Arch ship setcap transitively (libcap in base);
+                    # Debian/Ubuntu do NOT, so without this the setcap step exits 127
+                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    - libcap2-bin
+                    - libsecret-1-0
+                    - passwd
+                    - podman
+                    - tailscale
+                    - uidmap
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/debian"
+                      key: "https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg"
+                      suite: trixie
+                      components: main
+            fedora:
+                package:
+                    - crun
+                    - libsecret
+                    - podman
+                    - shadow-utils
+                    - tailscale
+                repo:
+                    - name: tailscale-stable
+                      url: "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+            ubuntu:
+                package:
+                    - crun
+                    # libcap2-bin provides setcap(8): the candy's setcap step grants
+                    # cap_setuid=ep to newuidmap so a nested rootless userns can be
+                    # delegated. Fedora/Arch ship setcap transitively (libcap in base);
+                    # Debian/Ubuntu do NOT, so without this the setcap step exits 127
+                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    - libcap2-bin
+                    - libsecret-1-0
+                    - passwd
+                    - podman
+                    - uidmap
+            ubuntu-24.04:
+                package:
+                    - crun
+                    # libcap2-bin provides setcap(8): the candy's setcap step grants
+                    # cap_setuid=ep to newuidmap so a nested rootless userns can be
+                    # delegated. Fedora/Arch ship setcap transitively (libcap in base);
+                    # Debian/Ubuntu do NOT, so without this the setcap step exits 127
+                    # and the RUN hard-fails the build. RDD-confirmed 2026-06-15.
+                    - libcap2-bin
+                    - libsecret-1-0
+                    - passwd
+                    - podman
+                    - tailscale
+                    - uidmap
+                repo:
+                    - name: tailscale
+                      url: "https://pkgs.tailscale.com/stable/ubuntu"
+                      key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
+                      suite: noble
+                      components: main
+    container-nesting-volume:
+        volume:
+            - name: storage
+              path: /var/lib/containers/storage
+    container-nesting-security:
+        security:
+            # NO cap_add — rootless nested podman needs zero additive capabilities
+            # when the mount_too_revealing kernel check is bypassed at the mount
+            # level (via security_opt unmask=/proc/* below).
+            #
+            # Root cause empirically identified 2026-04-19: podman's default rootless
+            # container spec includes linux.maskedPaths covering /proc/kcore,
+            # /proc/keys, /proc/timer_list etc. When nested crun tries to mount /proc
+            # for an inner container, the kernel's fs/namespace.c:mount_too_revealing
+            # check rejects it because the new /proc would expose submounts the outer
+            # is masking. Removing those maskedPaths via unmask=/proc/* eliminates
+            # the mismatch — no caps or --privileged needed.
+            #
+            # Security trade-off: /proc/kcore (kernel memory) and /proc/keys (keyring)
+            # become visible inside the outer container. Within a rootless user
+            # namespace, reading these still requires CAP_SYS_ADMIN in the init
+            # userns (which we don't have), so the actual info leak is minimal.
+            #
+            # Images that genuinely want the old full-hammer posture (charly-fedora,
+            # charly-arch, githubrunner) assert `security: {cap_add: [ALL], security_opt:
+            # [...]}` at the image level; charly/security.go unions onto this layer.
+            security_opt:
+                - unmask=/proc/*
+            devices:
+                # /dev/fuse is needed by fuse-overlayfs (inner podman's storage driver
+                # of choice when the kernel overlay isn't usable from a rootless outer).
+                - /dev/fuse
+                # /dev/net/tun is probed by podman/pasta at startup even when
+                # containers.conf sets netns=host; absence causes an init-time warning
+                # that can mask later failures.
+                - /dev/net/tun
+    container-nesting-env:
+        env:
+            CHARLY_BUILD_ENGINE: "podman"
+            CHARLY_RUN_ENGINE: "podman"
+            # These two env vars are the hidden contract that makes rootless-in-rootless
+            # podman work without --privileged:
+            #
+            # _CONTAINERS_USERNS_CONFIGURED=""  (empty string — set, not unset): tells
+            #   the inner podman "you are already inside a rootless user namespace, do
+            #   not re-exec via newuidmap to create a new one". Without this, the
+            #   inner podman creates a DESCENDANT user namespace, and the kernel's
+            #   mount_too_revealing check refuses the /proc mount downstream.
+            #
+            # BUILDAH_ISOLATION=chroot: tells buildah RUN steps to use chroot
+            #   isolation instead of the OCI runtime. Without this, buildah falls
+            #   back to OCI runtime isolation which re-creates a descendant user
+            #   namespace and re-triggers the same kernel check during builds.
+            _CONTAINERS_USERNS_CONFIGURED: ""
+            BUILDAH_ISOLATION: "chroot"
+    container-nesting-step-0:
+        run: |
+            command=touch /etc/subuid /etc/subgid
+            sed -i "/^root:/d" /etc/subuid /etc/subgid
+            echo "root:1:65535" >> /etc/subuid
+            echo "root:1:65535" >> /etc/subgid
+            uid1000=$(getent passwd 1000 2>/dev/null | cut -d: -f1 || true)
+            if [ -n "${uid1000}" ] && [ "${uid1000}" != "root" ]; then
+              sed -i "/^${uid1000}:/d" /etc/subuid /etc/subgid
+              {
+                echo "${uid1000}:1:999"
+                echo "${uid1000}:1001:64535"
+              } >> /etc/subuid
+              {
+                echo "${uid1000}:1:999"
+                echo "${uid1000}:1001:64535"
+              } >> /etc/subgid
+            fi
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                touch /etc/subuid /etc/subgid
+                sed -i "/^root:/d" /etc/subuid /etc/subgid
+                echo "root:1:65535" >> /etc/subuid
+                echo "root:1:65535" >> /etc/subgid
+                uid1000=$(getent passwd 1000 2>/dev/null | cut -d: -f1 || true)
+                if [ -n "${uid1000}" ] && [ "${uid1000}" != "root" ]; then
+                  sed -i "/^${uid1000}:/d" /etc/subuid /etc/subgid
+                  {
+                    echo "${uid1000}:1:999"
+                    echo "${uid1000}:1001:64535"
+                  } >> /etc/subuid
+                  {
+                    echo "${uid1000}:1:999"
+                    echo "${uid1000}:1001:64535"
+                  } >> /etc/subgid
+                fi
+    container-nesting-step-1:
+        run: |
+            grant cap_setuid/cap_setgid to newuidmap/newgidmap AND strip the
+            setuid-root bit. Debian/Ubuntu's uidmap package ships these binaries
+            setuid-root (mode 4755); a newuidmap that is BOTH setuid-root AND
+            file-capability'd fails inside a nested rootless user namespace with
+            "newuidmap: open of uid_map failed: Permission denied". Fedora/Arch
+            ship them cap-only (no setuid bit), so `chmod u-s` makes every distro
+            match that working posture and is a no-op where the bit is already
+            absent. RDD-confirmed 2026-06-16.
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                if [ -f /usr/bin/newuidmap ]; then
+                  setcap cap_setuid=ep /usr/bin/newuidmap
+                  setcap cap_setgid=ep /usr/bin/newgidmap
+                  chmod u-s /usr/bin/newuidmap /usr/bin/newgidmap
+                fi
+    container-nesting-step-2:
+        run: mkdir=/etc/containers
+        mkdir: /etc/containers
+        run_as: root
+    container-nesting-step-3:
+        run: mkdir=${HOME}/.config/containers
+        mkdir: "${HOME}/.config/containers"
+        run_as: "${USER}"
+    container-nesting-step-4:
+        run: write=/etc/containers/containers.conf
+        write: /etc/containers/containers.conf
+        run_as: root
+        mode: "0644"
+        content: &containers_conf_content |
+            [containers]
+            cgroups = "disabled"
+            cgroupns = "host"
+            ipcns = "host"
+            netns = "host"
+            userns = "host"
+            utsns = "host"
+            log_driver = "k8s-file"
+
+            [engine]
+            cgroup_manager = "cgroupfs"
+            events_logger = "file"
+            runtime = "crun"
+    container-nesting-step-5:
+        run: write=${HOME}/.config/containers/containers.conf
+        write: "${HOME}/.config/containers/containers.conf"
+        run_as: "${USER}"
+        mode: "0644"
+        content: *containers_conf_content
+    container-nesting-step-6:
+        run: write=/etc/containers/policy.json
+        write: /etc/containers/policy.json
+        run_as: root
+        mode: "0644"
+        content: &policy_json_content |
+            {"default":[{"type":"insecureAcceptAnything"}]}
+    container-nesting-step-7:
+        run: write=${HOME}/.config/containers/policy.json
+        write: "${HOME}/.config/containers/policy.json"
+        run_as: "${USER}"
+        mode: "0644"
+        content: *policy_json_content
+    container-nesting-step-8:
+        run: write=/etc/containers/storage.conf
+        write: /etc/containers/storage.conf
+        run_as: root
+        mode: "0644"
+        content: |
+            [storage]
+            driver = "overlay"
+            runroot = "/run/containers/storage"
+            graphroot = "/var/lib/containers/storage"
+
+            [storage.options.overlay]
+            mount_program = "/usr/bin/fuse-overlayfs"
+            mountopt = "nodev,fsync=0"
+    container-nesting-step-9:
+        run: write=${HOME}/.config/containers/storage.conf
+        write: "${HOME}/.config/containers/storage.conf"
+        run_as: "${USER}"
+        mode: "0644"
+        content: |
+            [storage]
+            driver = "overlay"
+            runroot = "${HOME}/.local/share/containers/run"
+            graphroot = "${HOME}/.local/share/containers/storage"
+
+            [storage.options.overlay]
+            mount_program = "/usr/bin/fuse-overlayfs"
+            mountopt = "nodev,fsync=0"
+    container-nesting-step-10:
+        check: the podman container engine is installed for in-container use
+        plugin: file
+        plugin_input:
+            file: /usr/bin/podman
+            exists: true
+    container-nesting-step-11:
+        check: the buildah image-build tool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/buildah
+            exists: true
+    container-nesting-step-12:
+        check: the skopeo image-copy tool is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/skopeo
+            exists: true
+    container-nesting-step-13:
+        check: containers.conf pins userns=host so the inner /proc mount is not rejected by the kernel mount_too_revealing check
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: grep -E '^userns\s*=\s*"host"' /etc/containers/containers.conf
+    container-nesting-step-14:
+        check: policy.json is present so podman pull/run accepts an image signature policy
+        plugin: file
+        plugin_input:
+            file: /etc/containers/policy.json
+            exists: true
+    container-nesting-step-15:
+        check: newuidmap carries the cap_setuid file capability so a nested user namespace can be delegated
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: getcap /usr/bin/newuidmap | grep -c cap_setuid
+    newuidmap-not-setuid:
+        check: newuidmap is NOT setuid-root — only the cap_setuid file capability remains; a binary that is BOTH setuid-root (Debian/Ubuntu's uidmap default) AND cap-bearing fails to write uid_map inside a nested rootless user namespace
+        id: newuidmap-not-setuid
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: test ! -u /usr/bin/newuidmap
+    container-nesting-step-17:
+        check: /etc/subuid declares the username:start:count delegation ranges the inner podman maps from
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: grep -cE '^[a-z0-9_-]+:[0-9]+:[0-9]+$' /etc/subuid
+    container-nesting-step-18:
+        agent-check: a fresh rootless `podman run` of an inner container succeeds end-to-end with no added capabilities and no --privileged
+    podman-version:
+        check: command=/usr/bin/podman --version
+        id: podman-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/podman --version
+    buildah-version:
+        check: command=/usr/bin/buildah --version
+        id: buildah-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/buildah --version
+    skopeo-version:
+        check: command=/usr/bin/skopeo --version
+        id: skopeo-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/skopeo --version
+    newuidmap-binary:
+        check: file=/usr/bin/newuidmap
+        id: newuidmap-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/newuidmap
+            exists: true
+    newgidmap-binary:
+        check: file=/usr/bin/newgidmap
+        id: newgidmap-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/newgidmap
+            exists: true
+    tailscale-binary:
+        check: file=/usr/bin/tailscale
+        id: tailscale-binary
+        plugin: file
+        plugin_input:
+            file: /usr/bin/tailscale
+            exists: true
+    tailscale-version:
+        check: command=/usr/bin/tailscale version
+        id: tailscale-version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/tailscale version
+    subuid-user-two-ranges:
+        check: the uid-1000 user has exactly two subuid delegation ranges (cross-distro — the user is `user` on fedora/arch but `ubuntu`/`debian` under adopt user-policy, so resolve the name via getent rather than hardcoding `user:`)
+        id: subuid-user-two-ranges
+        exit_status: 0
+        stdout:
+            - matches: ^2
+        plugin: command
+        plugin_input:
+            command: 'u=$(getent passwd 1000 | cut -d: -f1); grep -cE "^${u}:[0-9]+:[0-9]+$" /etc/subuid'
+    user-containers-conf-userns-host:
+        check: command=grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
+        id: user-containers-conf-userns-host
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
+    env-containers-userns-configured:
+        check: command=sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
+        id: env-containers-userns-configured
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
+    env-buildah-isolation:
+        check: command=sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
+        id: env-buildah-isolation
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
+    nested-podman-run:
+        check: command=podman run --rm quay.io/libpod/alpine:latest /bin/true
+        id: nested-podman-run
+        timeout: 60s
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: podman run --rm quay.io/libpod/alpine:latest /bin/true
+            in_container: true

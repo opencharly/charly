@@ -1,0 +1,47 @@
+ordercli:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Foodora/Deliveroo/Glovo food-delivery order status from the command line via the ordercli binary.
+            Installs the steipete/ordercli Go binary into ${HOME}/go/bin with
+            `go install` (require: golang provides the toolchain). The candy is
+            verifiable because the installed binary lands at a fixed path, is an
+            executable file, and prints its delivery-provider subcommands when
+            run with --help; a live order-status query needs Foodora auth and is
+            genuinely free-form (agent-graded).
+    ordercli-require:
+        require:
+            - golang
+    ordercli-env:
+        env:
+            GOPATH: "~/go"
+    ordercli-path_append:
+        path_append:
+            - "~/go/bin"
+    ordercli-step-0:
+        run: |
+            command=go install github.com/steipete/ordercli/cmd/ordercli@latest
+            go clean -cache
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: |
+                go install github.com/steipete/ordercli/cmd/ordercli@latest
+                go clean -cache
+    ordercli-step-1:
+        check: the ordercli binary is installed at ${HOME}/go/bin/ordercli
+        plugin: file
+        plugin_input:
+            file: ${HOME}/go/bin/ordercli
+            exists: true
+            filetype: file
+    ordercli-step-2:
+        check: running ordercli --help prints its delivery-provider subcommands
+        stdout:
+            - equals: ran
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: '${HOME}/go/bin/ordercli --help 2>&1 | grep -qiE "foodora|deliveroo|glovo|usage" && echo ran'
+    ordercli-step-3:
+        agent-check: ordercli authenticates to Foodora and reports the current delivery order status

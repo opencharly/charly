@@ -1,0 +1,80 @@
+#!/usr/bin/env node
+// Opens a URL in the running Chrome instance via Chrome DevTools Protocol.
+// If Chrome is not running, launches it on demand via sway or direct exec.
+// Uses WebSocket CDP Page.navigate — handles all URL characters correctly.
+const url = process.argv[2];
+if (!url) { process.stderr.write('Usage: browser-open <url>\n'); process.exit(1); }
+
+const { execSync, spawn } = require('child_process');
+
+function isChromeProcess() {
+  try {
+    execSync('pgrep -f "chrome.*remote-debugging-port"', { stdio: 'ignore' });
+    return true;
+  } catch { return false; }
+}
+
+async function cdpReady() {
+  try {
+    await fetch('http://127.0.0.1:9222/json/version', { signal: AbortSignal.timeout(1000) });
+    return true;
+  } catch { return false; }
+}
+
+async function waitForCDP(maxWait) {
+  const deadline = Date.now() + maxWait;
+  while (Date.now() < deadline) {
+    if (await cdpReady()) return true;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return false;
+}
+
+async function ensureChrome() {
+  // Fast path: CDP already responding — reuse running Chrome
+  if (await cdpReady()) return;
+
+  // Chrome process exists but CDP not responding — wait, don't launch a second instance
+  if (isChromeProcess()) {
+    process.stderr.write('browser-open: Chrome running but CDP not ready, waiting...\n');
+    if (await waitForCDP(15000)) return;
+    process.stderr.write('browser-open: Chrome running but CDP unresponsive after 15s\n');
+    process.exit(1);
+  }
+
+  // Chrome not running at all — launch it
+  // Use the same SWAYSOCK discovery as ov sway (glob /tmp/sway-ipc.*.sock)
+  process.stderr.write('browser-open: Chrome not running, launching...\n');
+  try {
+    execSync(
+      'export SWAYSOCK=$(ls -t /tmp/sway-ipc.*.sock 2>/dev/null | head -1) && [ -n "$SWAYSOCK" ] && swaymsg exec chrome-wrapper',
+      { stdio: 'ignore', timeout: 5000 }
+    );
+  } catch {
+    // No sway or swaymsg failed — direct launch
+    spawn('chrome-wrapper', [], { detached: true, stdio: 'ignore' }).unref();
+  }
+
+  if (await waitForCDP(15000)) return;
+  process.stderr.write('browser-open: Chrome did not start within 15s\n');
+  process.exit(1);
+}
+
+(async () => {
+  await ensureChrome();
+  const res = await fetch('http://127.0.0.1:9222/json/new', { method: 'PUT' });
+  const tab = await res.json();
+  const ws = new WebSocket(tab.webSocketDebuggerUrl);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ id: 1, method: 'Page.navigate', params: { url } }));
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.id === 1) {
+      ws.close();
+      process.exit(msg.result && msg.result.frameId ? 0 : 1);
+    }
+  };
+  ws.onerror = () => process.exit(1);
+  setTimeout(() => process.exit(1), 5000);
+})();

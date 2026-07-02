@@ -1,0 +1,59 @@
+pre-commit:
+    candy:
+        version: 2026.166.1751
+        description: |
+            A pre-commit git-hooks toolchain — the pre-commit orchestrator plus the taplo TOML and markdownlint Markdown linters its hooks invoke.
+            Installs the pre-commit framework via pixi (conda-forge), the taplo TOML
+            linter/formatter via cargo, and the markdownlint-cli Markdown linter via npm.
+            Each tool lands as a real executable at a known path with a working --version,
+            so the hook toolchain is directly verifiable.
+    pre-commit-require:
+        require:
+            - nodejs
+            - rust # cargo install taplo-cli below requires cargo on PATH.
+            # (nodejs is retained for completeness; pre-commit itself needs node for some hooks.)
+    pre-commit-package:
+        package:
+            - pre-commit
+    pre-commit-step-0:
+        run: command=cargo install taplo-cli --locked
+        run_as: "${USER}"
+        plugin: command
+        plugin_input:
+            command: cargo install taplo-cli --locked
+    pre-commit-step-1:
+        check: the pre-commit orchestrator is installed in the pixi environment
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.pixi/envs/default/bin/pre-commit
+            exists: true
+    pre-commit-step-2:
+        check: pre-commit reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.pixi/envs/default/bin/pre-commit --version
+    pre-commit-step-3:
+        check: the taplo TOML linter/formatter binary is installed from cargo
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.cargo/bin/taplo
+            exists: true
+    pre-commit-step-4:
+        check: taplo reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.cargo/bin/taplo --version
+    pre-commit-step-5:
+        check: the markdownlint Markdown linter lands on the npm-global PATH
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/markdownlint
+            exists: true
+    pre-commit-step-6:
+        check: markdownlint reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: ${HOME}/.npm-global/bin/markdownlint --version

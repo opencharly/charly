@@ -1,0 +1,117 @@
+nodejs:
+    candy:
+        version: 2026.159.1324
+        description: |
+            A Node.js runtime with the npm and pnpm package managers on the default PATH.
+            Installs the distro nodejs package (NodeSource node 20.x on Ubuntu so the
+            in-box CLIs that require node >=20 work), the matching npm CLI, and a
+            self-contained pnpm standalone binary at /usr/local/bin/pnpm. Every artifact
+            is a real file at a known path with a working --version, so the runtime is
+            directly verifiable.
+    nodejs-env:
+        env:
+            NPM_CONFIG_PREFIX: "~/.npm-global"
+            npm_config_cache: "~/.cache/npm"
+    nodejs-path_append:
+        path_append:
+            - "~/.npm-global/bin"
+    nodejs-package:
+        package:
+            - nodejs
+    nodejs-distro:
+        distro:
+            arch:
+                package:
+                    - npm
+            debian:
+                package:
+                    - npm
+            fedora:
+                package:
+                    - npm
+            ubuntu:
+                # Ubuntu 24.04 (noble) apt freezes nodejs at 18.19.1 — too old for the
+                # box's own npm CLIs (firebase requires node >=20; gemini-cli's undici
+                # needs the node>=20 global `File`; oracle's string-width needs the
+                # node>=20 unicode-sets `v` regex flag). Install nodejs from NodeSource
+                # (node 20.x): apt prefers its higher version over noble's 18. The base
+                # `package: [nodejs]` (top-level) supplies the package name; this section
+                # only adds the repo. The apt `npm` package is INTENTIONALLY omitted —
+                # NodeSource's nodejs BUNDLES npm at /usr/bin/npm, and installing the
+                # separate apt `npm` alongside it pulls conflicting node-* deps (broken
+                # packages). debian/fedora/arch keep their apt/dnf/pacman npm (their base
+                # node is already >=20). This is the deliberate "NodeSource upgrade that
+                # DROPS the separate npm" the prior note described — now required because
+                # the in-box CLIs outgrew noble's frozen node 18.
+                repo:
+                    - name: nodesource
+                      url: "https://deb.nodesource.com/node_20.x"
+                      key: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+                      suite: nodistro
+                      components: main
+    nodejs-var:
+        var:
+            PNPM_VERSION: "10.33.4"
+    nodejs-step-0:
+        run: |
+            command=case "${BUILD_ARCH}" in
+              x86_64)  PNPM_ARCH="x64" ;;
+              aarch64) PNPM_ARCH="arm64" ;;
+              *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
+            esac
+            curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" -o /usr/local/bin/pnpm
+            chmod 0755 /usr/local/bin/pnpm
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                case "${BUILD_ARCH}" in
+                  x86_64)  PNPM_ARCH="x64" ;;
+                  aarch64) PNPM_ARCH="arm64" ;;
+                  *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
+                esac
+                curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" -o /usr/local/bin/pnpm
+                chmod 0755 /usr/local/bin/pnpm
+    nodejs-step-1:
+        check: the node interpreter is installed at /usr/bin/node
+        plugin: file
+        plugin_input:
+            file: /usr/bin/node
+            exists: true
+    nodejs-step-2:
+        check: node reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/node --version
+    nodejs-step-3:
+        check: the npm package manager is installed at /usr/bin/npm
+        plugin: file
+        plugin_input:
+            file: /usr/bin/npm
+            exists: true
+    nodejs-step-4:
+        check: npm reports its version and exits cleanly
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: /usr/bin/npm --version
+    nodejs-step-5:
+        check: the self-contained pnpm binary lands on the system PATH at /usr/local/bin/pnpm
+        plugin: file
+        plugin_input:
+            file: /usr/local/bin/pnpm
+            exists: true
+    nodejs-step-6:
+        check: pnpm runs and reports its version
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: pnpm --version
+    nodejs-package-2:
+        check: package=nodejs
+        id: nodejs-package
+        plugin: package
+        plugin_input:
+            package: nodejs
+            installed: true

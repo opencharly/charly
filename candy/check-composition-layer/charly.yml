@@ -1,0 +1,38 @@
+check-composition-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            bench-composition — marker for from-composition-selftest hand-written probe
+            Writes /etc/charly-composition-selftest, satisfying the
+            composition-handwritten-probe scenario in from-composition-selftest.
+    check-composition-layer-step-0:
+        run: mkdir=/etc
+        mkdir: /etc
+        run_as: root
+        mode: "0755"
+    check-composition-layer-step-1:
+        run: write=/etc/charly-composition-selftest
+        write: /etc/charly-composition-selftest
+        run_as: root
+        mode: "0644"
+        content: |
+            charly composition selftest marker
+    check-composition-layer-step-2:
+        check: the composition selftest marker file exists at /etc/charly-composition-selftest
+        plugin: file
+        plugin_input:
+            file: /etc/charly-composition-selftest
+            exists: true
+    check-composition-layer-step-3:
+        check: the marker file is written world-readable at mode 0644
+        plugin: file
+        plugin_input:
+            file: /etc/charly-composition-selftest
+            mode: "0644"
+    check-composition-layer-step-4:
+        check: the marker file carries the composition selftest marker string
+        plugin: file
+        plugin_input:
+            file: /etc/charly-composition-selftest
+            contains:
+                - charly composition selftest marker

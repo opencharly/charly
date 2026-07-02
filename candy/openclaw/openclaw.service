@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenClaw AI Gateway
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.npm-global/bin/openclaw gateway --port 18789
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

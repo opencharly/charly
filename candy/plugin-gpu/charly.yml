@@ -1,0 +1,59 @@
+plugin-gpu:
+    candy:
+        version: 2026.182.0001
+        description: |-
+            GPU/VFIO HOST-DETECTION plugin (cutover C11) — the sysfs/exec probing charly core
+            formerly held in charly/devices.go: NVIDIA-usable-via-CDI detection (nvidia-smi +
+            CDI-spec/nvidia-ctk reachability), AMD-GPU + GFX-version detection (amdgpu DRM +
+            KFD topology), VFIO passthrough readiness (IOMMU groups, per-function PCI scan,
+            display-class GPU + IOMMU-group members), host-device auto-detection (device_patterns
+            glob + real-GPU render-node pick), user-scope CDI-spec generation, and the
+            RLIMIT_MEMLOCK + /dev/vfio group-access passthrough-readiness probes.
+
+            Carved out of charly core behind thin in-core resolve+Invoke shims (DetectGPU /
+            DetectAMDGPU / DetectVFIO / DetectHostDevices / EnsureCDI / MemlockLimitBytes /
+            VfioGroupAccessible + detectAMDGFXVersion, in charly/gpu_shim.go); the detection
+            RESULT types (VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices) live in package spec
+            and are aliased in core so the ~10 consumers (config_image/start/shell CDI-env sites,
+            `charly doctor`, `charly vm gpu`, `charly vm create`) compile unchanged.
+
+            Compiled-in (an in-proc inprocProvider): the deploy/config hot paths call the shims
+            many times, and MemlockLimitBytes must read charly's OWN process RLIMIT_MEMLOCK — both
+            require in-process placement. The three static data tables (device_patterns /
+            gpu_vendors / pci_class_labels) stay in charly's embedded charly.yml (a must-stay core
+            consumer, `charly doctor`, reads device_patterns) and are threaded in via
+            spec.GpuProbeInput — ONE data source (R3).
+
+            The DRIVER-SWITCH (vfio<->nvidia rebind) now ALSO lives here (cutover C9, 1B):
+            switchGPUDriverMode / gpuSwitchModeTolerant / groupInMode / currentGPUMode /
+            gpuDisplayDriver / gpuWedgeDetected / ensureCDIRoot + the switch-plan DRY-RUN, served
+            over verb:gpu's OpRun DRIVER-SWITCH actions (spec.GpuSwitchInput/GpuSwitchReply) beside
+            the C11 detection actions. Core reaches them through the gpu_shim.go driver-switch shims
+            (used by `charly vm gpu` + the arbiter's switchMode/ensureCDI seams — the arbiter, now in
+            candy/plugin-preempt, routes its switchMode call here via the host, an F10-style
+            plugin->plugin edge). Auto-allocation (gpu_allocate.go) STAYS core: it is a host-side
+            VmSpec/LibvirtDomain orchestrator (like GenerateK8sKustomize) consuming the DetectVFIO
+            shim — no dep to shed.
+
+            The R10 witness: `charly vm gpu status`/`list`/`plan` exit 0 host-side on a GPU-less host
+            (DetectGPU/DetectVFIO + the switch-plan DRY-RUN dispatch through verb:gpu); the vfio<->nvidia
+            FLIP itself stays gated by the cachyos GPU beds (functionality, not externalization).
+    plugin-gpu-decl:
+        plugin:
+            providers:
+                - verb:gpu
+            source: github.com/opencharly/charly/candy/plugin-gpu
+    # ADE build-context check: a deterministic check that does NOT depend on a live
+    # deployment — it mirrors candy/plugin-k8sgen's k8sgen-module-present: a trivial
+    # build-context `plugin: command` (the built-in command CHECK verb) running `true`,
+    # proving the host can build + compile in the module. The full dispatch end-to-end
+    # (`charly vm gpu status`/`list` → DetectVFIO/DetectGPU through verb:gpu) is exercised by
+    # the live R10 bed (check-gpu-local).
+    gpu-module-present:
+        check: the gpu-detection plugin ships a buildable Go module the host compiles in
+        id: gpu-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

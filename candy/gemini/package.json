@@ -1,0 +1,7 @@
+{
+  "name": "gemini-layer",
+  "version": "1.0.0",
+  "dependencies": {
+    "@google/gemini-cli": "*"
+  }
+}

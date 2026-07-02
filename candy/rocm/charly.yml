@@ -1,0 +1,75 @@
+rocm:
+    candy:
+        version: 2026.144.1443
+        description: |
+            AMD ROCm HIP runtime, OpenCL ICD, and GPU management tooling on Fedora
+            Installs the AMD ROCm user-space stack from the Fedora system repos:
+            rocm-hip-runtime (the HIP runtime), rocm-opencl (the OpenCL ICD),
+            rocm-clinfo (the clinfo OpenCL diagnostic at /usr/bin/clinfo), and
+            rocm-smi (the GPU management tool at /usr/bin/rocm-smi). Exports
+            ROCM_PATH=/usr and keeps host video/render groups via keep-groups so
+            a passed-through AMD GPU (/dev/kfd + /dev/dri/renderD*) is usable.
+            The installed binaries, the packages, and the ROCM_PATH env are
+            verifiable at build scope; live GPU enumeration is verifiable only on
+            a host with a real AMD GPU passed through.
+    rocm-env:
+        env:
+            ROCM_PATH: "/usr"
+    rocm-security:
+        security:
+            group_add:
+                - keep-groups
+    rocm-distro:
+        distro:
+            fedora:
+                package:
+                    - rocm-hip-runtime
+                    - rocm-opencl
+                    - rocm-clinfo
+                    - rocm-smi
+    rocm-step-0:
+        check: the ROCm HIP runtime package is installed in the image
+        plugin: package
+        plugin_input:
+            package: rocm-hip-runtime
+            installed: true
+    rocm-step-1:
+        check: the clinfo OpenCL diagnostic tool is present at /usr/bin/clinfo
+        plugin: file
+        plugin_input:
+            file: /usr/bin/clinfo
+            exists: true
+    rocm-step-2:
+        check: the rocm-smi GPU management tool is present at /usr/bin/rocm-smi
+        plugin: file
+        plugin_input:
+            file: /usr/bin/rocm-smi
+            exists: true
+    rocm-step-3:
+        check: the rocm-smi package is installed in the image
+        plugin: package
+        plugin_input:
+            package: rocm-smi
+            installed: true
+    rocm-step-4:
+        check: ROCM_PATH is exported into the container environment as /usr
+        stdout: /usr
+        plugin: command
+        plugin_input:
+            command: printenv ROCM_PATH
+    rocm-step-5:
+        agent-check: on a host with an AMD GPU and /dev/kfd passed through, clinfo lists at least one ROCm OpenCL platform and rocm-smi reports the device temperature and utilization
+    rocm-opencl-package:
+        check: package=rocm-opencl
+        id: rocm-opencl-package
+        plugin: package
+        plugin_input:
+            package: rocm-opencl
+            installed: true
+    rocm-clinfo-package:
+        check: package=rocm-clinfo
+        id: rocm-clinfo-package
+        plugin: package
+        plugin_input:
+            package: rocm-clinfo
+            installed: true

@@ -1,0 +1,70 @@
+plugin-mcp:
+    candy:
+        version: 2026.178.1430
+        description: |-
+            OUT-OF-TREE charly plugin serving TWO MCP capabilities — a standalone Go
+            module (go.mod + main.go) that speaks the Model Context Protocol over
+            go-plugin gRPC via the charly plugin SDK (charly/plugin/sdk). charly's loader
+            fetches this candy's repo, go-builds the provider binary on the HOST, and
+            serves it OUT-OF-PROCESS via LocalTransport, so the
+            github.com/modelcontextprotocol/go-sdk library lives HERE, out of charly's
+            core:
+
+              - verb:mcp — the `mcp` MCP-protocol CHECK verb (the go-sdk CLIENT). `mcp:`
+                authoring is unchanged: the verb keeps its `mcp:` discriminator + every
+                modifier (mcp_name/tool/uri/input/timeout) + the #McpMethod enum on
+                charly's core #Op and dispatches through the provider registry exactly
+                like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider). The
+                host owns the podman / OCI-label / port-mapping resolution
+                (preresolveMcpEndpoint), pre-resolving the declared mcp_provides + the
+                picked, host-routable dial endpoint into the check env — so this plugin
+                needs no container inspection. Full 7-method surface
+                (ping/servers/list-tools/list-resources/list-prompts/call/read).
+
+              - command:mcp — `charly mcp …` (the go-sdk SERVER), the externalized MCP
+                bridge ported out of charly's core (the deleted charly/mcp_server.go;
+                the C1 dep-shed that removes go-sdk from the core binary entirely). It
+                builds the tool surface from the host CLI MODEL (`charly __cli-model` →
+                sdk.CLIModel) and fork/execs `charly <cmd>` per tool call — the host
+                stamps CHARLY_BIN with the spawning binary. charly DISPATCHES the command
+                by fork/exec'ing this binary in CLI mode (sdk.Main → cliMain), so it owns
+                real terminal stdio: `--stdio` serves the editor/LLM integration over
+                stdin/stdout, `--listen` serves Streamable HTTP (the in-container
+                supervised deployment).
+
+            verb:mcp is served over gRPC (the provider registry); command:mcp is served
+            via the CLI fork/exec path — so command:mcp is declared in plugin.providers
+            (for the CLI-grammar prescan + baked manifest) but NOT advertised in Describe.
+            The R10 consumer is an MCP-providing pod bed whose check composes this plugin
+            (e.g. jupyter / chrome-devtools-mcp) plus the charly-mcp candy that runs
+            `charly mcp serve`.
+    plugin-mcp-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-mcp
+            providers:
+                - verb:mcp
+                - command:mcp
+    mcp-verb-dispatches:
+        check: the mcp verb dispatches through the provider registry and pings the declared MCP servers on a live deployment (the out-of-process plugin verb dials the host-resolved MCP endpoint)
+        id: mcp-verb-dispatches
+        mcp: ping
+        timeout: 30s
+        eventually: 90s
+        retry_interval: 3s
+        context:
+            - runtime
+    # ADE build-context check: a deterministic check that does NOT depend on a live MCP
+    # deployment — it proves the candy ships a buildable Go module (go.mod + the provider
+    # main) the host can build, serve verb:mcp over gRPC, and fork/exec for command:mcp.
+    # Mirrors candy/plugin-example-command's pattern (a trivial build-context
+    # `plugin: command` running `true`). The full `charly mcp serve` end-to-end is
+    # exercised by the live R10 (the charly-mcp pod bed) — `charly mcp serve --listen`
+    # then `mcp: ping` against it — and the `--stdio` host smoke test.
+    mcp-command-advertised:
+        check: the out-of-tree plugin ships a buildable Go module providing command:mcp (the externalized `charly mcp` server) the host can build + fork/exec; the full `charly mcp serve` end-to-end is exercised by the live R10
+        id: mcp-command-advertised
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

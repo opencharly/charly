@@ -1,0 +1,20 @@
+# OpenCharly F3 build-channel witness package.
+#
+# A self-contained, dependency-free, source-free Arch package that installs ONE marker
+# file. It exists so the examplebuild-localpkg candy compiles a LocalPkgInstallStep that an
+# out-of-process deploy plugin drives over the RunHostStep host-engine reverse leg: the host builds
+# it with `makepkg` (buildLocalPkgOnHost) and installs it onto the venue with `pacman -U`
+# (transferAndInstallPkgs) — the EXISTING build machinery, exposed over the reverse channel.
+# It conflicts with nothing (owns only /opt/charly-f3-witness) and is removed cleanly by the
+# plugin's recorded `pacman -R` reverse op at `charly bundle del`.
+pkgname=charly-f3-witness
+pkgver=1
+pkgrel=1
+pkgdesc="OpenCharly F3 build-channel witness — a trivial localpkg built via makepkg + installed via pacman -U over the reverse channel"
+arch=('any')
+license=('MIT')
+
+package() {
+	install -dm755 "${pkgdir}/opt/charly-f3-witness"
+	printf 'EXAMPLEBUILD-LOCALPKG-OK\n' >"${pkgdir}/opt/charly-f3-witness/marker"
+}

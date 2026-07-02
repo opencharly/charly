@@ -1,0 +1,22 @@
+plugin-mount:
+    candy:
+        version: 2026.176.2400
+        description: |-
+            The `mount` MULTI-ROLE state-provision verb relocated into a candy.
+            CHECK: `findmnt` the mountpoint via the live check engine and match
+            source/filesystem/opts. ACT: render an idempotent `findmnt || mount`. A
+            HOST-COUPLED verb on the charly/plugin/kit contract (CheckVerbProvider +
+            ProvisionActor), so it is COMPILED-IN-ONLY; matchers reuse sdk.MatchAll.
+    plugin-mount-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-mount
+            providers:
+                - verb:mount
+    mount-verb-dispatches:
+        check: the mount verb dispatches through the provider registry and probes a mountpoint via findmnt
+        id: mount-verb-dispatches
+        plugin: mount
+        plugin_input:
+            mount: /proc
+            filesystem: proc
+        context: [runtime]

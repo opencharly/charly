@@ -1,0 +1,67 @@
+openclaw:
+    candy:
+        version: 2026.167.1310
+        description: |
+            Headless OpenClaw AI gateway service on port 18789
+            Installs the openclaw npm package globally (package.json ->
+            npm install -g) so the gateway binary lands at
+            ~/.npm-global/bin/openclaw, then runs it as the supervised
+            `openclaw` service (`openclaw gateway --port 18789
+            --allow-unconfigured --bind loopback` — loopback bind needs no
+            auth and matches the socat relay; unconfigured lets the headless
+            gateway start before any operator setup). socat
+            relays the loopback-bound gateway onto the container interface
+            and a `data` volume persists ~/.openclaw. Binary presence, the
+            supervised service, and the reachable port are all verifiable.
+    openclaw-require:
+        require:
+            - nodejs
+            - socat
+            - supervisord
+    openclaw-env:
+        env:
+            NODE_ENV: "production"
+    openclaw-port:
+        port:
+            - 18789
+    openclaw-port_relay:
+        port_relay:
+            - 18789
+    openclaw-volume:
+        volume:
+            - name: data
+              path: "~/.openclaw"
+    openclaw-alias:
+        alias:
+            - name: openclaw
+              command: openclaw
+    openclaw-service:
+        service:
+            - name: openclaw
+              exec: "%(ENV_HOME)s/.npm-global/bin/openclaw gateway --port 18789 --allow-unconfigured --bind loopback"
+              restart: always
+              enable: true
+              scope: system
+    openclaw-step-0:
+        check: the openclaw gateway binary is installed into the npm global bin
+        plugin: file
+        plugin_input:
+            file: ${HOME}/.npm-global/bin/openclaw
+            exists: true
+    openclaw-step-1:
+        check: the openclaw gateway runs as a supervised service
+        context:
+            - runtime
+        plugin: service
+        plugin_input:
+            service: openclaw
+            running: true
+    openclaw-step-2:
+        check: the running gateway accepts a TCP connection on its published port 18789
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:18789}
+            reachable: true

@@ -1,0 +1,58 @@
+[
+  {
+    "position": "bottom",
+    "height": 30,
+    "spacing": 4,
+    "layer": "top",
+    "gtk-layer-shell": true,
+    "reload_style_on_change": true,
+
+    "modules-left": [
+      "custom/chrome"
+    ],
+    "modules-center": [
+      "wlr/taskbar"
+    ],
+    "modules-right": [
+      "custom/notification"
+    ],
+
+    "custom/chrome": {
+      "format": " Chrome",
+      "tooltip": true,
+      "tooltip-format": "Restart Chrome with proxy & CDP",
+      "interval": "once",
+      "on-click": "chrome-restart"
+    },
+
+    "wlr/taskbar": {
+      "format": "{icon}",
+      "icon-size": 18,
+      "tooltip-format": "{title}",
+      "on-click": "activate",
+      "on-click-middle": "close",
+      "on-click-right": "minimize"
+    },
+
+    "custom/notification": {
+      "tooltip": true,
+      "format": "{icon} {}",
+      "format-icons": {
+        "notification": "󱅫",
+        "none": "󰂜",
+        "dnd-notification": "󰂠",
+        "dnd-none": "󰪓",
+        "inhibited-notification": "󰂛",
+        "inhibited-none": "󰪑",
+        "dnd-inhibited-notification": "󰂛",
+        "dnd-inhibited-none": "󰪑"
+      },
+      "return-type": "json",
+      "exec-if": "which swaync-client",
+      "exec": "swaync-client -swb",
+      "on-click": "sleep 0.1 && swaync-client -t -sw",
+      "on-click-right": "sleep 0.1 && swaync-client -d -sw",
+      "escape": true
+    }
+  }
+]

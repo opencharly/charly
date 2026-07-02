@@ -1,0 +1,95 @@
+notebook-openrouter:
+    candy:
+        version: 2026.144.1443
+        description: |
+            OpenRouter API integration notebook collection
+            Provisions OpenRouter (https://openrouter.ai) integration
+            notebooks into the workspace volume's `openrouter/` subdirectory
+            at deploy time. Producer 00_OpenRouter_Basics demonstrates the
+            API surface; consumers exercise specific use cases. Requires
+            OPENROUTER_API_KEY at runtime — declared via env_require so
+            `charly config` warns at deploy time when the env var is unset.
+            Data-only — no packages, no services.
+    notebook-openrouter-env_require:
+        env_require:
+            - name: OPENROUTER_API_KEY
+              description: "API key for OpenRouter LLM inference"
+    notebook-openrouter-data:
+        data:
+            - src: data/openrouter
+              volume: workspace
+              dest: openrouter
+    notebook-openrouter-step-0:
+        check: the openrouter subdirectory is provisioned in the workspace
+        context:
+            - runtime
+        plugin: file
+        plugin_input:
+            file: ${VOLUME_CONTAINER_PATH:workspace}/openrouter
+            filetype: directory
+    notebook-openrouter-step-1:
+        check: the OpenRouter_Basics producer notebook is present
+        exit_status: 0
+        stdout:
+            - matches: "OpenRouter_Basics"
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: ls ${VOLUME_CONTAINER_PATH:workspace}/openrouter/
+    notebook-openrouter-step-2:
+        check: the OpenRouter_Basics producer notebook is staged in the image data tree
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/00_OpenRouter_Basics.ipynb
+            exists: true
+    notebook-openrouter-step-3:
+        check: the notebooks.yaml manifest cataloguing the collection is staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/notebooks.yaml
+            exists: true
+    notebook-openrouter-step-4:
+        check: the basics notebook authenticates with the OPENROUTER_API_KEY declared via env_require
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/00_OpenRouter_Basics.ipynb
+            contains:
+                - contains: "OPENROUTER_API_KEY"
+    notebook-openrouter-step-5:
+        check: all three documented tutorial notebooks (basics, models, inference) are staged as runnable examples
+        exit_status: 0
+        stdout:
+            - matches: "[1-9]"
+        plugin: command
+        plugin_input:
+            command: find /data/workspace/openrouter -maxdepth 1 -name "*.ipynb" | wc -l
+    notebook-openrouter-staged-dir:
+        check: file=/data/workspace/openrouter
+        id: notebook-openrouter-staged-dir
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter
+            filetype: directory
+    notebook-openrouter-models-staged:
+        check: file=/data/workspace/openrouter/01_OpenRouter_Models.ipynb
+        id: notebook-openrouter-models-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/01_OpenRouter_Models.ipynb
+            exists: true
+    notebook-openrouter-inference-staged:
+        check: file=/data/workspace/openrouter/02_OpenRouter_Inference.ipynb
+        id: notebook-openrouter-inference-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/02_OpenRouter_Inference.ipynb
+            exists: true
+    notebook-openrouter-manifest-staged:
+        check: file=/data/workspace/openrouter/notebooks.yaml
+        id: notebook-openrouter-manifest-staged
+        plugin: file
+        plugin_input:
+            file: /data/workspace/openrouter/notebooks.yaml
+            contains:
+                - contains: "OpenRouter Integration"

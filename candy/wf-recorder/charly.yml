@@ -1,0 +1,37 @@
+wf-recorder:
+    candy:
+        version: 2026.144.1443
+        description: |
+            Wayland screen recorder for wlroots compositors
+            Installs wf-recorder, the wlroots screen-capture recorder. Verifiable:
+            the wf-recorder binary lands at /usr/bin/wf-recorder and the package
+            is registered.
+    wf-recorder-require:
+        require:
+            # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
+            # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in
+            # charly's core check surface). wf-recorder PROVIDES the desktop recorder this verb
+            # drives, so requiring plugin-record puts it in every composing image's scanned
+            # candy set; the host's collectReferencedPluginWords then build-connects it before
+            # a baked `record:` check dispatches — otherwise it SKIPs with `unknown verb
+            # "record"`. (box/<distro> adopts the matching @github pin via reconcile later — the
+            # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
+            # override.)
+            - plugin-record
+    wf-recorder-distro:
+        distro:
+            fedora:
+                package:
+                    - wf-recorder
+    wf-recorder-step-0:
+        check: the wf-recorder binary is installed at /usr/bin/wf-recorder
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wf-recorder
+            exists: true
+    wf-recorder-step-1:
+        check: the wf-recorder package is registered with the package manager
+        plugin: package
+        plugin_input:
+            package: wf-recorder
+            installed: true

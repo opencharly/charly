@@ -1,0 +1,7 @@
+{
+  "name": "openclaw-npm",
+  "version": "1.0.0",
+  "dependencies": {
+    "openclaw": "*"
+  }
+}

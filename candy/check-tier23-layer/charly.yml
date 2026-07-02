@@ -1,0 +1,100 @@
+check-tier23-layer:
+    candy:
+        version: 2026.144.1443
+        description: |
+            bench-tier23 — tier 2 + tier 3 in a shared pod
+            Tier 2: HTTP server on port 8080 returning a body containing "charly benchmark".
+            Tier 3: curl installed + persistent /srv/bench/version.txt.
+            Both tiers share the same pod (harness-tier23).
+    check-tier23-layer-require:
+        require: []
+    check-tier23-layer-distro:
+        distro:
+            fedora:
+                package:
+                    - curl
+                    - python3
+                    - iproute
+                    - procps-ng
+    check-tier23-layer-port:
+        port:
+            - 8080
+    check-tier23-layer-service:
+        service:
+            - name: bench-http
+              exec: "/usr/bin/python3 -m http.server --bind 0.0.0.0 --directory /srv/bench 8080"
+              restart: always
+              priority: 20
+              enable: true
+              scope: system
+    check-tier23-layer-step-0:
+        run: mkdir=/srv/bench
+        mkdir: /srv/bench
+        run_as: root
+        mode: "0755"
+    check-tier23-layer-step-1:
+        run: write=/srv/bench/version.txt
+        write: /srv/bench/version.txt
+        run_as: root
+        mode: "0644"
+        content: |
+            tier3-ok
+    check-tier23-layer-step-2:
+        run: write=/srv/bench/index.html
+        write: /srv/bench/index.html
+        run_as: root
+        mode: "0644"
+        content: |
+            <!doctype html>
+            <html><body>
+            <h1>charly benchmark</h1>
+            <p>tier2 + tier3 are happy.</p>
+            </body></html>
+    check-tier23-layer-step-3:
+        check: curl is installed so tier3 can fetch artifacts over HTTP
+        plugin: file
+        plugin_input:
+            file: /usr/bin/curl
+            exists: true
+    check-tier23-layer-step-4:
+        check: the persistent tier3 version marker is on disk and carries tier3-ok
+        plugin: file
+        plugin_input:
+            file: /srv/bench/version.txt
+            contains:
+                - tier3-ok
+    check-tier23-layer-step-5:
+        check: the tier2 HTTP server answers on port 8080 with a page containing "charly benchmark"
+        context:
+            - runtime
+        plugin: http
+        plugin_input:
+            http: http://127.0.0.1:${HOST_PORT:8080}/
+            status: 200
+            body:
+                - contains:
+                    - charly benchmark
+    tier23-version-file:
+        check: file=/srv/bench/version.txt
+        id: tier23-version-file
+        plugin: file
+        plugin_input:
+            file: /srv/bench/version.txt
+            exists: true
+            contains:
+                - tier3-ok
+    tier23-index-exists:
+        check: file=/srv/bench/index.html
+        id: tier23-index-exists
+        plugin: file
+        plugin_input:
+            file: /srv/bench/index.html
+            exists: true
+    tier23-port-open:
+        check: addr=127.0.0.1:${HOST_PORT:8080}
+        id: tier23-port-open
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:8080}

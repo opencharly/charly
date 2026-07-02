@@ -1,0 +1,147 @@
+sway-desktop-vnc:
+    candy:
+        version: 2026.162.1430
+        description: |
+            A headless sway Wayland desktop with Chrome, served over VNC on :5900
+            Composes sway-desktop (the sway compositor + Chrome browser + waybar +
+            the wl/desktop tooling) with wayvnc into ONE running browser-VNC desktop,
+            and forces WLR_RENDERER=pixman so the whole stack renders in software —
+            no GPU required. The composition is observable: all three desktop
+            binaries (sway, wayvnc, google-chrome-stable) land in the image, and at
+            deploy time sway + wayvnc run together under supervisord with the VNC
+            server reachable on display :5900.
+    sway-desktop-vnc-require:
+        require:
+            # plugin-cdp is the OUT-OF-TREE plugin that serves the `cdp:` check verb
+            # (the CDP WebSocket client lives there, not in charly's core check surface).
+            # This candy AUTHORS a `cdp:` check, so requiring plugin-cdp puts it in every
+            # composing image's scanned candy set; the host's collectReferencedPluginWords
+            # then build-connects it before the baked `cdp:` check dispatches — otherwise it
+            # SKIPs with `unknown verb "cdp"`. (box/<distro> adopts the matching @github pin
+            # via reconcile later — the deliberate cross-repo lag; the R10 bed loads the
+            # LOCAL candy via the superproject override.)
+            - plugin-cdp
+            # plugin-vnc is the OUT-OF-TREE plugin that serves the `vnc:` check verb (the
+            # RFB/VNC client lives there, not in charly's core check surface). This candy
+            # AUTHORS `vnc:` checks (status/screenshot), so requiring plugin-vnc puts it in
+            # every composing image's scanned candy set; collectReferencedPluginWords
+            # build-connects it before the baked `vnc:` checks dispatch — otherwise they
+            # SKIP with `unknown verb "vnc"`. (Same cross-repo reconcile lag as plugin-cdp.)
+            - plugin-vnc
+            # plugin-dbus is the OUT-OF-TREE plugin that serves the `dbus:` check verb (the
+            # D-Bus driver lives there, not in charly's core check surface — EXEC-based, driving
+            # the venue's session bus via gdbus over the executor reverse channel). This candy
+            # AUTHORS a `dbus:` check (list), so requiring plugin-dbus puts it in every composing
+            # image's scanned candy set; collectReferencedPluginWords build-connects it before the
+            # baked `dbus:` check dispatches — otherwise it SKIPs with `unknown verb "dbus"`.
+            # (Same cross-repo reconcile lag as plugin-cdp.)
+            - plugin-dbus
+            # plugin-wl is the OUT-OF-TREE plugin that serves the `wl:` check verb (the
+            # Wayland/sway desktop driver lives there, not in charly's core check surface —
+            # EXEC-based, driving the venue's compositor via wlrctl/grim/wtype/swaymsg over the
+            # executor reverse channel). This candy AUTHORS a `wl:` check (toplevel), so requiring
+            # plugin-wl puts it in every composing image's scanned candy set;
+            # collectReferencedPluginWords build-connects it before the baked `wl:` check
+            # dispatches — otherwise it SKIPs with `unknown verb "wl"`. (Same cross-repo reconcile
+            # lag as plugin-cdp.)
+            - plugin-wl
+    sway-desktop-vnc-candy:
+        candy:
+            - sway-desktop
+            - wayvnc
+    sway-desktop-vnc-env:
+        env:
+            WLR_RENDERER: "pixman"
+    sway-desktop-vnc-step-0:
+        check: the sway Wayland compositor binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/sway
+            exists: true
+    sway-desktop-vnc-step-1:
+        check: the wayvnc VNC server binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/wayvnc
+            exists: true
+    sway-desktop-vnc-step-2:
+        check: the Chrome browser binary is installed
+        plugin: file
+        plugin_input:
+            file: /usr/bin/google-chrome-stable
+            exists: true
+    sway-desktop-vnc-step-3:
+        check: the Wayland renderer is pinned to the pixman software backend so the desktop runs without a GPU
+        exit_status: 0
+        stdout:
+            - pixman
+        plugin: command
+        plugin_input:
+            command: printenv WLR_RENDERER
+    sway-desktop-vnc-step-4:
+        check: the sway compositor and wayvnc server both report RUNNING under supervisord
+        exit_status: 0
+        stdout:
+            - RUNNING
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: supervisorctl status sway wayvnc | awk '{print $2}' | sort -u
+            in_container: true
+    sway-desktop-vnc-step-5:
+        check: the VNC server accepts a TCP connection on the published display port
+        timeout: 5s
+        context:
+            - runtime
+        plugin: addr
+        plugin_input:
+            addr: 127.0.0.1:${HOST_PORT:5900}
+            reachable: true
+    sway-desktop-vnc-step-6:
+        agent-check: the VNC framebuffer shows the live Chrome desktop rendered, not a blank or single-color screen
+    sway-desktop-vnc-binaries:
+        check: command=test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
+        id: sway-desktop-vnc-binaries
+        exit_status: 0
+        plugin: command
+        plugin_input:
+            command: test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
+    sway-desktop-vnc-cdp-up:
+        check: cdp=status
+        id: sway-desktop-vnc-cdp-up
+        cdp: status
+        stdout:
+            - contains: ok
+        context:
+            - runtime
+    sway-desktop-vnc-vnc-up:
+        check: vnc=status
+        id: sway-desktop-vnc-vnc-up
+        vnc: status
+        stdout:
+            - contains: ok
+        context:
+            - runtime
+    sway-desktop-vnc-wl-has-windows:
+        check: wl=toplevel
+        id: sway-desktop-vnc-wl-has-windows
+        wl: toplevel
+        context:
+            - runtime
+    sway-desktop-vnc-dbus-notifications-registered:
+        check: dbus=list
+        id: sway-desktop-vnc-dbus-notifications-registered
+        dbus: list
+        stdout:
+            - contains: org.freedesktop.Notifications
+        context:
+            - runtime
+    sway-desktop-vnc-vnc-framebuffer:
+        check: vnc=screenshot
+        id: sway-desktop-vnc-vnc-framebuffer
+        vnc: screenshot
+        artifact: /tmp/sway-desktop-vnc-fb.png
+        artifact_min_bytes: 5000
+        context:
+            - runtime

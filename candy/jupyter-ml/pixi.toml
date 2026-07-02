@@ -1,0 +1,223 @@
+[workspace]
+name = "jupyter-ml-environment"
+version = "0.1.0"
+description = "Full CUDA ML stack + JupyterLab with real-time collaboration and MCP"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+# JupyterLab core
+jupyterlab = ">=4.4.0"
+ipywidgets = ">=8.0"
+ipykernel = "*"
+nbconvert = "*"
+nbformat = "*"
+
+# JupyterLab extensions
+jupyterlab-git = "*"
+jupyterlab-lsp = "*"
+python-lsp-server = "*"
+jupyterlab-spellchecker = "*"
+jupyter-resource-usage = "*"
+
+# NLP
+spacy = "*"
+spacy-model-en_core_web_sm = "*"
+
+# ML/AI extensions
+tensorboard = "*"
+wandb = "*"
+
+# Data science stack
+matplotlib = "*"
+seaborn = "*"
+pandas = "*"
+numpy = "<2.3"     # Constrained for numba/flashinfer compatibility
+scikit-learn = "*"
+tqdm = "*"
+scipy = "*"
+
+# Data processing
+polars = "*"
+pyarrow = "*"
+dask = "*"
+fsspec = "<=2025.9.0"
+duckdb = "*"
+sqlglot = "*"
+
+# Visualization
+altair = "*"
+vegafusion = "*"
+vl-convert-python = "*"
+
+# Notebook tools
+graphviz = "*"
+papermill = "*"
+marimo = "*"
+
+# Development tools
+black = "*"
+pytest = "*"
+mkdocs = "*"
+dill = "<0.4.1"
+pyyaml = "*"
+
+[pypi-dependencies]
+# === PyTorch with CUDA 13.0 ===
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === vLLM 0.19 runtime dependencies (wheel installed --no-deps in unsloth layer) ===
+blake3 = "*"
+cbor2 = "*"
+compressed-tensors = "*"
+depyf = "*"
+flashinfer-python = ">=0.6.7"
+ijson = "*"
+llguidance = "*"
+lm-format-enforcer = "*"
+mistral-common = ">=1.8.5"
+model-hosting-container-standards = ">=0.1.9, <1.0.0"
+numba = "*"
+openai-harmony = ">=0.0.3"
+opencv-python-headless = ">=4.11.0"
+outlines-core = "*"
+partial-json-parser = "*"
+pybase64 = "*"
+uvloop = "*"
+soundfile = "*"
+resampy = "*"
+prometheus-fastapi-instrumentator = "*"
+ray = ">=2.48.0"
+watchfiles = "*"
+xgrammar = ">=0.1.32"
+lark = ">=1.2.2"
+pydantic-extra-types = "*"
+pycountry = "*"
+interegular = "*"
+hf-transfer = "*"
+cut-cross-entropy = "*"
+torchao = "*"
+tyro = "*"
+loguru = "*"
+llvmlite = "*"
+apache-tvm-ffi = "*"
+nvidia-cudnn-frontend = "*"
+nvidia-cutlass-dsl = "*"
+# opentelemetry-* and flashinfer-cubin: installed alongside vLLM in unsloth/user.yml
+# (pixi conda/PyPI resolver conflicts with conda-pinned importlib-metadata)
+
+# === HuggingFace Core ===
+transformers = ">=5.0.0rc1"
+accelerate = "*"
+safetensors = ">=0.4.2"
+
+# === ML Core ===
+einops = ">=0.7.0"
+pillow = ">=10.0.0"
+av = "*"
+aiohttp = ">=3.9.0"
+kornia = ">=0.7.1"
+spandrel = ">=0.3.4"
+torchsde = "*"
+psutil = "*"
+pydantic = ">=2.0"
+pydantic-settings = ">=2.0"
+python-dotenv = "*"
+
+# === Jupyter collaboration ===
+jupyter-collaboration = ">=4.1.0"
+
+# === HuggingFace ecosystem ===
+datasets = ">=4.3.0"
+huggingface_hub = "*"
+tokenizers = "*"
+sentencepiece = "*"
+tiktoken = "*"
+
+# === Fine-tuning libraries ===
+peft = "*"
+trl = "*"
+bitsandbytes = "*"
+deepspeed = "*"
+boto3 = "*"
+botocore = "*"
+liger-kernel = "*"
+
+# === LangChain & RAG ===
+langchain = "*"
+langchain-core = "*"
+langchain-openai = "*"
+langchain-community = "*"
+langchain-classic = "*"
+langchain-anthropic = "*"
+langchain-huggingface = "*"
+langchain-ollama = "*"
+chromadb = "*"
+faiss-cpu = "*"
+
+# === Evaluation ===
+evidently = { version = "*", extras = ["llm"] }
+evaluate = "*"
+sacrebleu = "*"
+rouge-score = "*"
+nltk = "*"
+bertviz = "*"
+
+# === JupyterLab PyPI Extensions ===
+jupyterlab-nvdashboard = "*"
+jupyterlab-quarto = "*"
+# jupyterlab-tensorboard-pro removed: unmaintained, imports notebook.base which was
+# removed in Notebook 7.0, incompatible with JupyterLab 4.x. Use `tensorboard --logdir`
+# from a terminal instead (the `tensorboard` conda package is still installed above).
+
+# === Notebook tools ===
+nbparameterise = "*"
+scrapbook = "*"
+mkdocs-marimo = "*"
+jupyter-marimo-proxy = "*"
+
+# === APIs & Utilities ===
+openai = "*"
+anthropic = "*"
+gradio = "*"
+pydot = "*"
+nvidia-ml-py3 = "*"
+numexpr = "*"
+
+# === Local LLM Inference ===
+llama-cpp-python = "*"
+gguf = "*"
+ollama = "*"
+
+# === Multimodal ===
+protobuf = "*"
+timm = "*"
+opencv-python = "*"
+
+[tasks]
+verify-cuda = "cuda-test"
+verify-pytorch = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda}\") if torch.cuda.is_available() else print(\"No GPU access\")'"
+verify-env = "python -c 'import sys; import torch; print(f\"Python: {sys.version}\"); print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\")'"
+verify-jupyter = "python -c 'import jupyterlab; print(f\"JupyterLab: {jupyterlab.__version__}\")'"
+verify-collaboration = "python -c 'import jupyter_collaboration; print(f\"jupyter-collaboration: {jupyter_collaboration.__version__}\")'"
+verify-mcp = "python -c 'import jupyter_mcp; print(f\"MCP: {jupyter_mcp.__version__}\")'"
+verify-mcp-endpoint = "curl -sf http://localhost:8888/mcp -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"0.1.0\"}}}' && echo ' MCP OK' || echo 'MCP endpoint not responding'"
+verify-vllm = "python -c 'import vllm; print(f\"vLLM: {vllm.__version__}\")'"
+verify-unsloth = "python -c 'from unsloth import FastLanguageModel; print(\"Unsloth OK\")'"
+verify-llm = "bash -c 'pip show unsloth unsloth-zoo trl peft transformers | grep -E \"^(Name|Version):\" && echo \"LLM stack OK\"'"
+verify-multimodal = "python -c 'import timm; import cv2; print(\"Multimodal deps OK\")'"
+verify-langchain = "python -c 'from langchain_classic.chains import LLMChain; print(\"LangChain Classic OK\")'"
+verify-evidently = "python -c 'from evidently import Report, Dataset; from evidently.descriptors import LLMEval; print(\"Evidently LLM OK\")'"
+verify-ollama = "python -c 'import ollama; print(\"Ollama client OK\")'"
+
+# JupyterLab startup with optional token authentication
+start-jupyter = "bash -c 'if [ -n \"${JUPYTER_TOKEN_FILE:-}\" ] && [ -f \"${JUPYTER_TOKEN_FILE}\" ]; then TOKEN=$(cat \"${JUPYTER_TOKEN_FILE}\"); jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=$HOME/notebooks --IdentityProvider.token=\"$TOKEN\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; else jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=$HOME/notebooks --IdentityProvider.token=\"\" --ServerApp.password=\"\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; fi'"
+
+[environments]
+default = { features = [], solve-group = "default" }

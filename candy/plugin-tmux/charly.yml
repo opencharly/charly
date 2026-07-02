@@ -1,0 +1,52 @@
+plugin-tmux:
+    candy:
+        version: 2026.179.0000
+        description: |-
+            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly tmux …`
+            CLI — the persistent-tmux-session manager (shell / cmd / run / attach / list /
+            capture / send / kill), a standalone Go module (go.mod + main.go) ported OUT of
+            charly's core (the deleted charly/tmux.go + plugin_command_tmux.go), so the tmux
+            command no longer compiles into the core binary.
+
+            The FIRST WELDED-command externalization in the core-externalization program — the
+            precedent for preempt / feature / vm. Unlike udev (self-contained), `charly tmux`
+            was WELDED to the core venue/executor resolver (resolveCheckVenue + the
+            DeployExecutor venueRun/venueCapture path). That resolver STAYS core (12 callers);
+            this plugin RE-EXPRESSES each of the 8 leaves as a shell-back through SANCTIONED
+            `charly` CLI verbs (the CLI is the only operational interface, R4): non-interactive
+            leaves run `charly cmd <box> 'tmux …'` (the host→container exec delegation, the SAME
+            container + exec user + tmux socket the former core's `<engine> exec` reached);
+            interactive shell / attach run `charly shell <box> -c 'tmux …'` (a real container
+            TTY — the plugin IS the process, so the TTY flows natively). No core symbol crosses
+            the boundary; no ad-hoc podman.
+
+            charly's loader fetches this candy's repo, go-builds the provider binary on the
+            HOST, and on `charly tmux <args…>` syscall.Exec's it in CLI mode (sdk.Main →
+            cliMain) — or runs the host-installed /usr/lib/charly/plugins binary on a
+            project-less host (the pkg/arch bake).
+
+            command:tmux is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
+            registry — so it is declared in plugin.providers (for the CLI-grammar prescan +
+            baked `.providers` manifest) but advertises NO Describe capability. The R10 witness
+            is the disposable check-tmux-pod bed: a pod composing the tmux candy whose checks
+            drive `charly tmux run`/`list`/`capture`/`send`/`kill` host-side and assert a
+            session created via `run` shows in `list` and `capture` returns the expected text.
+    plugin-tmux-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-tmux
+            providers:
+                - command:tmux
+    # ADE build-context check: a deterministic check that does NOT depend on the project
+    # context the `charly tmux` CLI needs (the prescan finds this candy from the project dir).
+    # It mirrors candy/plugin-udev's pattern — a trivial build-context `plugin: command` (the
+    # built-in command CHECK verb) running `true`, proving the host can build + fork/exec the
+    # module. The full CLI end-to-end (`charly tmux run` → `list` → `capture` round-trip) is
+    # exercised by the Go e2e (TestExternalCommandExecPlan_Tmux) + the live R10 (check-tmux-pod).
+    tmux-module-present:
+        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly tmux` end-to-end is exercised by the Go e2e + the live R10 (check-tmux-pod)
+        id: tmux-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

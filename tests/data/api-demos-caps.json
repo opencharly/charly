@@ -1,0 +1,10 @@
+{
+  "platformName": "Android",
+  "appium:automationName": "UiAutomator2",
+  "appium:deviceName": "emulator-5554",
+  "appium:platformVersion": "14",
+  "appium:appPackage": "io.appium.android.apis",
+  "appium:appActivity": ".ApiDemos",
+  "appium:noReset": true,
+  "appium:newCommandTimeout": 120
+}

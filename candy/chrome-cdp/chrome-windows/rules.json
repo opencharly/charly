@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {"header": "Sec-CH-UA-Platform", "operation": "set", "value": "\"Windows\""},
+        {"header": "Sec-CH-UA-Platform-Version", "operation": "set", "value": "\"15.0.0\""}
+      ]
+    },
+    "condition": {
+      "resourceTypes": [
+        "main_frame", "sub_frame", "stylesheet", "script", "image",
+        "font", "object", "xmlhttprequest", "ping", "media",
+        "websocket", "webtransport", "other"
+      ]
+    }
+  }
+]

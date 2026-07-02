@@ -1,0 +1,25 @@
+plugin-example-lifecycle:
+    candy:
+        version: 2026.181.0001
+        description: |-
+            Reference OUT-OF-TREE charly deploy-substrate plugin (F6) that brings its OWN host-side
+            venue LIFECYCLE over the wire. Beyond the deploy walk (OpExecute) it serves the F6
+            substrate-lifecycle Ops on Provider.Invoke: OpPrepareVenue returns a self-contained
+            VenueDescriptor the HOST re-materializes into a real DeployExecutor (a host-local
+            ShellExecutor here) — the live executor never crosses the wire — plus Start/Stop/Status/
+            PostApply/PostTeardown/Rebuild and the generalized OpPreresolve. NOT in compiled_plugins
+            (out-of-process only); the host→plugin lifecycle channel M4 reuses to externalize the
+            pod/vm substrate lifecycles.
+    plugin-example-lifecycle-decl:
+        plugin:
+            providers:
+                - deploy:examplelifecycle
+            source: github.com/opencharly/charly/candy/plugin-example-lifecycle
+    examplelifecycle-module-present:
+        check: the out-of-tree lifecycle deploy-substrate plugin ships a buildable Go module the host can build + serve out-of-process
+        id: examplelifecycle-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"
