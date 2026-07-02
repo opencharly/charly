@@ -37,11 +37,6 @@ var (
 	scalarNode            = kit.ScalarNode
 	findMappingValue      = kit.FindMappingValue
 	opUnifyCandidateFiles = kit.OpUnifyCandidateFiles
-
-	// stripLegacyOverthinkBlocks is a LIVE shell-rc writer helper (shell_profile.go),
-	// not a migration concern — it strips a prior charly-managed block before
-	// rewriting the user's shell profile.
-	stripLegacyOverthinkBlocks = kit.StripLegacyOverthinkBlocks
 )
 
 // EnvdDir is exported (used across deploy code); alias the kit copy.

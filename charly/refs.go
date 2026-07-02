@@ -355,10 +355,9 @@ func markRepoAutoMigrating(path string) bool {
 // CalVer via the project-only chain (RunProjectMigrations) on EVERY access —
 // cache HIT and fresh clone alike. Re-migrating a cache hit is required (and
 // safe, the chain being idempotent): a cache populated by an OLDER binary — or
-// relocated from a prior cache directory across a schema bump (a pre-rebrand
-// cache carries the legacy overthink.yml filename and an older schema) — so the
-// current binary would otherwise fail to find charly.yml. An already-current
-// cache is a no-op.
+// relocated from a prior cache directory across a schema bump (an older-schema
+// cache) — so the current binary would otherwise fail to find charly.yml. An
+// already-current cache is a no-op.
 func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	// RDD local-override (CHARLY_REPO_OVERRIDE): resolve a remote repo ref to a local
 	// working tree instead of fetching, so an uncommitted candy/charly.yml change
@@ -384,7 +383,7 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 		return "", err
 	}
 	// Migrate a fresh clone ALWAYS; migrate a cache HIT only when it is actually
-	// behind HEAD (a pre-rebrand / older-schema cache). The chain is idempotent,
+	// behind HEAD (an older-schema cache). The chain is idempotent,
 	// but re-running it on every access of an already-current cache is costly
 	// (re-parses every cached repo) and re-emits benign "unknown field" warnings
 	// from very old transitive deps — so the already-current hit takes the fast,
@@ -401,13 +400,13 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 }
 
 // cacheBehindHead reports whether a cached repo still needs migration: its
-// current-name root config (charly.yml) is absent (a pre-rebrand cache that has
-// only overthink.yml) or carries a schema version older than HEAD. A cache
-// already at HEAD with charly.yml returns false — the fast, silent path.
+// root config (charly.yml) is absent or carries a schema version older than
+// HEAD. A cache already at HEAD with charly.yml returns false — the fast,
+// silent path.
 func cacheBehindHead(path string) bool {
 	data, err := os.ReadFile(filepath.Join(path, UnifiedFileName))
 	if err != nil {
-		return true // no charly.yml → pre-rebrand or never-migrated → migrate
+		return true // no charly.yml → never-migrated → migrate
 	}
 	cv, ok := ParseCalVer(firstYAMLVersionLine(data))
 	if !ok {

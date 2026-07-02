@@ -111,35 +111,9 @@ func MarkersForTag(marker string) (begin, end string) {
 		fmt.Sprintf("# opencharly:end %s", marker)
 }
 
-// StripLegacyOverthinkBlocks removes any pre-rebrand `# overthink:` managed block.
-func StripLegacyOverthinkBlocks(existing string) string {
-	const legacyBegin, legacyEnd = "# overthink:begin", "# overthink:end"
-	if !strings.Contains(existing, legacyBegin) {
-		return existing
-	}
-	var out strings.Builder
-	inBlock := false
-	for _, line := range strings.Split(existing, "\n") {
-		if strings.Contains(line, legacyBegin) {
-			inBlock = true
-			continue
-		}
-		if inBlock && strings.Contains(line, legacyEnd) {
-			inBlock = false
-			continue
-		}
-		if !inBlock {
-			out.WriteString(line + "\n")
-		}
-	}
-	return strings.Trim(out.String(), "\n") + "\n"
-}
-
 // ReplaceOrAppendManagedBlock replaces the begin/end fence pair's body (tagged with marker,
-// empty for the global block) in existing, appending a fresh block at EOF when absent. Any
-// pre-rebrand `# overthink:` block is stripped first.
+// empty for the global block) in existing, appending a fresh block at EOF when absent.
 func ReplaceOrAppendManagedBlock(existing, body, marker string) string {
-	existing = StripLegacyOverthinkBlocks(existing)
 	begin, end := MarkersForTag(marker)
 	if strings.Contains(existing, begin) {
 		var out strings.Builder

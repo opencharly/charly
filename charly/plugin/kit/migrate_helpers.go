@@ -192,5 +192,4 @@ func IsGitSubmoduleDir(p, root string) bool {
 	return err == nil
 }
 
-// NOTE: EnvdDir + StripLegacyOverthinkBlocks live in kit (profile.go) — core
-// aliases those copies (kit_aliases.go).
+// NOTE: EnvdDir lives in kit (profile.go) — core aliases that copy (kit_aliases.go).

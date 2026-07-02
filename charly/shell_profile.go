@@ -237,10 +237,8 @@ func markersForTag(marker string) (begin, end string) {
 // with `marker` — empty for the global block) in `existing` and replaces
 // its body; if the markers are absent, appends a fresh block at end-of-
 // file. Marker is required (use "" for the global block; non-empty for
-// per-candy blocks). Any pre-rebrand `# overthink:` block is stripped first
-// so charly self-heals carried-over hosts (R3 — one helper, every caller).
+// per-candy blocks).
 func replaceOrAppendManagedBlock(existing, body, marker string) string {
-	existing = stripLegacyOverthinkBlocks(existing)
 	begin, end := markersForTag(marker)
 	if strings.Contains(existing, begin) {
 		var out strings.Builder
@@ -280,10 +278,7 @@ func replaceOrAppendManagedBlock(existing, body, marker string) string {
 // Host block) — otherwise every Host stanza in the included file is
 // gated on matching whatever Host block was open at the Include point.
 // Replace-in-place semantics are preserved when the markers already exist.
-// Any pre-rebrand `# overthink:` block is stripped first (R3 — same helper
-// the append path uses).
 func replaceOrPrependManagedBlock(existing, body, marker string) string {
-	existing = stripLegacyOverthinkBlocks(existing)
 	begin, end := markersForTag(marker)
 	if strings.Contains(existing, begin) {
 		// Same in-place replacement as replaceOrAppendManagedBlock.
