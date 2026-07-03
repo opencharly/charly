@@ -82,3 +82,53 @@ func TestResolveNetworkExplicitNone(t *testing.T) {
 		t.Errorf("ResolveNetwork(\"none\", \"docker\") = %q, want \"none\"", got)
 	}
 }
+
+// TestReconcileDNSDiff proves ensureNetworkUpstreamDNS's core: reconcile the charly
+// network's dns_servers to EXACTLY the host-current upstreams — add missing AND DROP
+// STALE. The stale-drop is the fix for a host that changed LANs leaving a dead upstream
+// pinned (add-only kept it → aardvark forwarded to a dead server → external resolution
+// broke for every container). FAILS against the pre-fix add-only code (no drop).
+func TestReconcileDNSDiff(t *testing.T) {
+	set := func(ss ...string) map[string]bool {
+		m := map[string]bool{}
+		for _, s := range ss {
+			m[s] = true
+		}
+		return m
+	}
+	cases := []struct {
+		name     string
+		have     map[string]bool
+		desired  []string
+		wantAdd  []string
+		wantDrop []string
+	}{
+		{"host changed LAN — drop the stale dead upstream, keep current",
+			set("192.168.1.1", "192.168.0.1", "2a02::1"),
+			[]string{"192.168.0.1", "2a02::1"},
+			nil, []string{"192.168.1.1"}},
+		{"steady state — set already matches, no churn",
+			set("192.168.0.1", "2a02::1"),
+			[]string{"192.168.0.1", "2a02::1"},
+			nil, nil},
+		{"first add on an empty network",
+			set(),
+			[]string{"192.168.0.1"},
+			[]string{"192.168.0.1"}, nil},
+		{"full swap — every server changed",
+			set("10.0.0.1"),
+			[]string{"192.168.0.1", "192.168.0.2"},
+			[]string{"192.168.0.1", "192.168.0.2"}, []string{"10.0.0.1"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			add, drop := reconcileDNSDiff(c.have, c.desired)
+			if !reflect.DeepEqual(add, c.wantAdd) {
+				t.Errorf("add = %v, want %v", add, c.wantAdd)
+			}
+			if !reflect.DeepEqual(drop, c.wantDrop) {
+				t.Errorf("drop = %v, want %v", drop, c.wantDrop)
+			}
+		})
+	}
+}

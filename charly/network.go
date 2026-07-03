@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -125,35 +126,60 @@ func parseResolvNameservers(path string) []string {
 	return out
 }
 
-// ensureNetworkUpstreamDNS adds any missing upstream resolver to the EXISTING
-// charly network's dns_servers via `podman network update --dns-add` (podman 5+).
-// Idempotent: servers already present are skipped, so a steady-state deploy
-// performs no update (no aardvark churn). Best-effort — a failure (engine without
-// `network update`, etc.) is logged, never fatal: the network still works, just
-// without the external-DNS fix.
+// ensureNetworkUpstreamDNS RECONCILES the EXISTING charly network's dns_servers to
+// EXACTLY the host's current upstreams via `podman network update` (podman 5+):
+// `--dns-add` the missing AND `--dns-drop` the stale. Reconcile — not add-only —
+// because a host that changed LANs (laptop roaming, DHCP/VPN change) leaves the
+// network pinned to the OLD upstream, now UNREACHABLE; an add-only pass keeps that
+// dead server, and aardvark forwarding to it breaks EXTERNAL resolution for every
+// container on the network (internal container names still resolve). Pruning the
+// stale server lets a fresh deploy's aardvark restart forward correctly again.
+// Idempotent: when the set already matches, no update runs (no aardvark churn).
+// Best-effort — a failure (engine without `network update`, etc.) is logged, never
+// fatal: the network still works, just without the external-DNS reconcile.
 func ensureNetworkUpstreamDNS(binary string, upstreams []string) {
 	if len(upstreams) == 0 {
+		// No discoverable upstream (only loopback stubs). Leave the network's DNS
+		// as-is rather than dropping everything and stranding it with no resolver.
 		return
 	}
-	have := networkDNSServers(binary)
-	var add []string
-	for _, u := range upstreams {
-		if !have[u] {
-			add = append(add, u)
-		}
-	}
-	if len(add) == 0 {
+	add, drop := reconcileDNSDiff(networkDNSServers(binary), upstreams)
+	if len(add) == 0 && len(drop) == 0 {
 		return
 	}
 	args := []string{"network", "update", CharlyNetworkName}
 	for _, u := range add {
 		args = append(args, "--dns-add", u)
 	}
-	if out, err := exec.Command(binary, args...).CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "charly: could not add upstream DNS %v to the %s network (%v); "+
-			"external name resolution in containers may fail\n%s\n",
-			add, CharlyNetworkName, err, strings.TrimSpace(string(out)))
+	for _, u := range drop {
+		args = append(args, "--dns-drop", u)
 	}
+	if out, err := exec.Command(binary, args...).CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "charly: could not reconcile upstream DNS on the %s network "+
+			"(add %v, drop %v: %v); external name resolution in containers may fail\n%s\n",
+			CharlyNetworkName, add, drop, err, strings.TrimSpace(string(out)))
+	}
+}
+
+// reconcileDNSDiff computes the `--dns-add` / `--dns-drop` sets that bring a network's
+// CURRENT dns_servers (have) to EXACTLY the desired host-current upstreams: add every
+// desired server not present, drop every present server no longer desired (a stale
+// upstream from a prior host network). Pure + deterministic (drop sorted) for testing.
+func reconcileDNSDiff(have map[string]bool, desired []string) (add, drop []string) {
+	want := map[string]bool{}
+	for _, u := range desired {
+		want[u] = true
+		if !have[u] {
+			add = append(add, u)
+		}
+	}
+	for h := range have {
+		if !want[h] {
+			drop = append(drop, h)
+		}
+	}
+	sort.Strings(drop)
+	return add, drop
 }
 
 // networkDNSServers returns the set of dns_servers currently configured on the
@@ -161,7 +187,7 @@ func ensureNetworkUpstreamDNS(binary string, upstreams []string) {
 func networkDNSServers(binary string) map[string]bool {
 	have := map[string]bool{}
 	out, err := exec.Command(binary, "network", "inspect", CharlyNetworkName,
-		"--format", "{{range .DNSServers}}{{println .}}{{end}}").Output()
+		"--format", "{{range .NetworkDNSServers}}{{println .}}{{end}}").Output()
 	if err != nil {
 		return have
 	}
