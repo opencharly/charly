@@ -443,7 +443,7 @@ func LoadBuildConfigForBox(dir string) (*DistroConfig, *BuilderConfig, *InitConf
 		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
 	}
 	if !present {
-		return nil, nil, nil, fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one)", dir)
+		return nil, nil, nil, noCharlyYmlErr(dir)
 	}
 	return uf.ProjectDistroConfig(), uf.ProjectBuilderConfig(), uf.ProjectInitConfig(), nil
 }

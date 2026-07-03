@@ -1,11 +1,24 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"sort"
 )
+
+// ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
+// project dir" load error. Callers that treat an absent project as EMPTY rather
+// than a hard failure (the `charly box list …` read commands — an empty project
+// has zero boxes, like `ls` in an empty dir) match it with errors.Is.
+var ErrNoCharlyYml = errors.New("no charly.yml found in project directory")
+
+// noCharlyYmlErr is the ONE construction of the absent-project load error
+// (config.go + format_config.go), wrapping ErrNoCharlyYml for errors.Is.
+func noCharlyYmlErr(dir string) error {
+	return fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one): %w", dir, ErrNoCharlyYml)
+}
 
 // Config represents the charly.yml configuration projection
 type Config struct {
@@ -174,7 +187,7 @@ func LoadConfigRaw(dir string) (*Config, error) {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)
 	}
 	if !present {
-		return nil, fmt.Errorf("no charly.yml found in %s (run `charly box new project .` to scaffold one)", dir)
+		return nil, noCharlyYmlErr(dir)
 	}
 	cfg := uf.ProjectConfig()
 	return cfg, nil

@@ -469,6 +469,13 @@ func (c *ListBoxesCmd) Run() error {
 	}
 
 	cfg, err := LoadConfig(dir)
+	if errors.Is(err, ErrNoCharlyYml) {
+		// No project in this dir → zero boxes. An empty list is not an error (like
+		// `ls` in an empty dir), so `box list boxes` exits 0 with no output. This is
+		// the coder-pod / fresh-workspace case: the charly-mcp box.list.boxes tool
+		// runs in CHARLY_PROJECT_DIR (/workspace) before any charly.yml exists.
+		return nil
+	}
 	if err != nil {
 		return err
 	}
