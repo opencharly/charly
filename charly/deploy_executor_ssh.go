@@ -217,6 +217,7 @@ func (e *SSHExecutor) RunCapture(ctx context.Context, script string) (string, st
 	args = append(args, "bash", "-s")
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	cmd.Stdin = strings.NewReader(script)
+	bindProcessGroupKill(cmd)
 	return runCaptureCmd(cmd)
 }
 

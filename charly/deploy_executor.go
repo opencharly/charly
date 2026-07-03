@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/opencharly/charly/charly/plugin/kit"
 )
@@ -186,6 +188,7 @@ func (ShellExecutor) GetFile(ctx context.Context, remotePath string, asRoot bool
 // shape via the unified DeployExecutor interface.
 func (ShellExecutor) RunCapture(ctx context.Context, script string) (string, string, int, error) {
 	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	bindProcessGroupKill(cmd)
 	return runCaptureCmd(cmd)
 }
 
@@ -245,6 +248,48 @@ func parseGetentHome(line, user string) (string, error) {
 // probe that was KILLED before completing (infra interruption → re-attempt) from a probe
 // that RAN and returned a failure (authoritative → never retried). One shared literal (R3).
 const signalKillErrMarker = "terminated by signal"
+
+// runCaptureWaitDelay bounds how long Cmd.Wait() blocks draining the stdout/stderr
+// pipes AFTER the process has exited or its context deadline has fired. It is a hard
+// upper bound on the pathological lingering-pipe case ONLY (see runCaptureCmd) — a
+// normally-completing command never waits this long (WaitDelay is a MAXIMUM, not a
+// minimum: fast commands return the instant their pipes hit EOF). Named + documented,
+// not a tuned magic value: it is the OS-level guarantee that a check probe or deploy
+// command ALWAYS returns instead of wedging the whole pass. A var (not const) only so
+// tests can shrink it to exercise the double-fork-escape path without a 10s wall wait.
+var runCaptureWaitDelay = 10 * time.Second
+
+// bindProcessGroupKill hardens a CTX-BOUND command (exec.CommandContext ONLY) against
+// the canonical CommandContext lingering-grandchild hang: a check `command:` probe execs
+// `podman exec`, which forks conmon + the in-container process. At the per-probe deadline
+// the DEFAULT cancel SIGKILLs only the DIRECT child (bash); the podman-exec descendants
+// survive holding the stdout/stderr pipe open, and Cmd.Wait() then blocks FOREVER on the
+// copy goroutine that never sees EOF (goroutine dump: os.(*File).Read on the pipe → the
+// 40-min check-live wedge). Two-part fix: (1) run the child in its OWN process group and
+// cancel by killing the WHOLE group, so the podman-exec descendants die with it (no orphan
+// leak); (2) WaitDelay bounds the post-deadline pipe drain, so Wait ALWAYS returns even if
+// a descendant double-forked out of the group.
+//
+// MUST be called ONLY on a cmd built with exec.CommandContext — Go rejects a non-nil
+// cmd.Cancel on a plain exec.Command (`command with a non-nil Cancel was not created with
+// CommandContext`), so the shared runCaptureCmd (which some callers reach with a ctx-less
+// exec.Command) does NOT set these; each ctx-bound RunCapture calls this itself (R3).
+func bindProcessGroupKill(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		// Negative pid = the whole process group (requires Setpgid above).
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	if cmd.WaitDelay == 0 {
+		cmd.WaitDelay = runCaptureWaitDelay
+	}
+}
 
 func runCaptureCmd(cmd *exec.Cmd) (string, string, int, error) {
 	var stdout, stderr bytes.Buffer

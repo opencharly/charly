@@ -53,7 +53,11 @@ var killedProbeRetryInterval = 3 * time.Second
 // before completing (vs a probe that ran and failed). Keyed on the shared marker
 // runCaptureCmd stamps into the signal-kill error (deploy_executor.go, R3).
 func probeWasKilled(r CheckResult) bool {
-	return r.Status == TestFail && strings.Contains(r.Message, signalKillErrMarker)
+	// A probe killed by hitting its OWN per-attempt deadline (DeadlineExceeded, set in
+	// runOne's dispatch closure) is an authoritative "too slow" failure, NOT an infra
+	// interruption — re-running it just re-hangs to the same deadline. Only an EXTERNAL
+	// signal-kill (host OOM/load, ctx not deadline-exceeded) is a retryable interruption.
+	return r.Status == TestFail && strings.Contains(r.Message, signalKillErrMarker) && !r.DeadlineExceeded
 }
 
 func runWithEventually(ctx context.Context, check *Op, handler func() CheckResult) CheckResult {

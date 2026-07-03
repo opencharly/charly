@@ -49,6 +49,14 @@ type CheckResult struct {
 	Attempts     int           `json:"attempts,omitempty"`
 	TotalElapsed time.Duration `json:"total_elapsed,omitempty"`
 
+	// DeadlineExceeded marks a result whose probe was killed by hitting its OWN
+	// per-attempt deadline (probeNeverHang), NOT an external infra interruption. The
+	// group-kill in runCaptureCmd surfaces the deadline SIGKILL as a signal-kill, so
+	// without this flag the killed-probe retry (probeWasKilled) would futilely re-run a
+	// probe that will only re-hang and re-hit the same deadline. An authoritative
+	// "too slow" failure — never retried.
+	DeadlineExceeded bool `json:"-"`
+
 	// CapturedValue is the value stashed under `capture:` for consumption
 	// by downstream steps in the same plan run. Empty when Capture was
 	// unset or the check did not pass (captures are recorded only on
@@ -456,6 +464,14 @@ func (r *Runner) runOne(ctx context.Context, c *Op) CheckResult {
 			// external-charly-verb path. The verb's params stay authored in #Op (no
 			// migration); the plugin reads them from params_json.
 			dr = r.invokeVerbProvider(ctx, prov, kind, &expanded)
+		}
+		// If THIS attempt's per-attempt deadline (probeNeverHang) fired, the probe ran
+		// too long — an AUTHORITATIVE "too slow" failure, NOT an infra interruption.
+		// runCaptureCmd's group-kill surfaces the deadline SIGKILL as a signal-kill;
+		// flag it so the killed-probe retry (description_eventually.go) does NOT futilely
+		// re-run a probe that will only re-hang and re-hit the same deadline.
+		if ctx.Err() == context.DeadlineExceeded {
+			dr.DeadlineExceeded = true
 		}
 		return dr
 	}

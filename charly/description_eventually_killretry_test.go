@@ -51,6 +51,23 @@ func TestRunWithEventually_RetriesKilledProbe(t *testing.T) {
 		}
 	})
 
+	t.Run("deadline-killed is NOT retried (re-running re-hangs to the same deadline)", func(t *testing.T) {
+		calls := 0
+		h := func() CheckResult {
+			calls++
+			// The group-kill in runCaptureCmd surfaces a per-attempt-deadline SIGKILL as a
+			// signal-kill, but DeadlineExceeded marks it as the probe's OWN deadline.
+			return CheckResult{Status: TestFail, Message: "probe " + signalKillErrMarker + " (signal: killed)", DeadlineExceeded: true}
+		}
+		got := runWithEventuallyNoSleep(t, h)
+		if got.Status != TestFail {
+			t.Fatalf("deadline-killed: status = %v, want Fail", got.Status)
+		}
+		if calls != 1 {
+			t.Errorf("a probe killed by its OWN per-attempt deadline must NOT be retried (that re-hangs), got %d attempts", calls)
+		}
+	})
+
 	t.Run("killed on every attempt fails loudly after the cap", func(t *testing.T) {
 		calls := 0
 		h := func() CheckResult { calls++; return killed() }
