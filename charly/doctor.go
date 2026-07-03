@@ -181,6 +181,10 @@ func buildInfraChecks(distro Distro) []DoctorCheckResult {
 	if _, err := exec_LookPath("docker"); err == nil {
 		checks = append(checks, checkBuildxBuilder())
 	}
+	// transient_store lifts the podman store-lock ceiling for concurrent bed/build runs
+	if _, err := exec_LookPath("podman"); err == nil {
+		checks = append(checks, checkTransientStore())
+	}
 	return checks
 }
 
@@ -373,6 +377,33 @@ func checkBuildxBuilder() DoctorCheckResult {
 		Name:    "docker buildx",
 		Status:  CheckOK,
 		Version: version,
+	}
+}
+
+// checkTransientStore reports whether podman's container store runs in TRANSIENT mode
+// (container run-state in a per-boot tmpfs runroot DB). charly's disposable check beds
+// churn many CONCURRENT container ops (build stages, `podman run --rm` probes, pod
+// create, teardown `rm`); with the default persistent store that concurrency contends
+// on the single graphroot sqlite write lock past its busy-timeout and ops fail with
+// `Error: beginning transaction: database is locked` (measured ceiling ~14-20 concurrent
+// beds; transient_store lifts it — the same maxjobs-22 roster went from every-bed-locked
+// to 0 locks, 32/37 pass). A single serial `charly check run` never contends, so OFF is
+// a WARNING (not an error) with the exact fix. Images stay persistent in graphroot
+// either way; only container run-state is tmpfs (recreated from quadlets on reboot,
+// volume data persists).
+func checkTransientStore() DoctorCheckResult {
+	out, err := exec.Command("podman", "info", "--format", "{{.Store.TransientStore}}").Output()
+	if err != nil {
+		return DoctorCheckResult{Name: "transient_store", Status: CheckWarning, Detail: "could not query podman store"}
+	}
+	if strings.TrimSpace(string(out)) == "true" {
+		return DoctorCheckResult{Name: "transient_store", Status: CheckOK, Detail: "on -- concurrent check-run/build store-lock contention removed"}
+	}
+	return DoctorCheckResult{
+		Name:        "transient_store",
+		Status:      CheckWarning,
+		Detail:      "off -- concurrent `charly check run`/builds can hit `database is locked` (podman store-lock); harmless for serial runs",
+		InstallHint: `printf '[storage]\ntransient_store = true\n' >> ~/.config/containers/storage.conf  # container state -> tmpfs; recreates from quadlets on reboot, volume data persists`,
 	}
 }
 
