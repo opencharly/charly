@@ -403,12 +403,39 @@ func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
 //   - ServicePackagedStep.PriorEnabled: probed via `systemctl is-enabled` on the venue, so
 //     teardown re-enables a unit that was already enabled before the deploy.
 //
-// Idempotent + harmless for substrates whose plans carry no such steps (android/k8s):
-// ResolveHome is a no-op without {{.Home}} tokens and the switch matches nothing.
+// The venue exec (ResolveHome / systemctl is-enabled) runs ONLY when a plan actually
+// carries a step that consumes it — a home-token-bearing step (ShellHook/ShellSnippet/
+// File) needs the resolved venue home, and a ServicePackagedStep needs the is-enabled
+// probe. A plan carrying NEITHER (an android apk-only device plan; a k8s plan with no
+// such steps) is skipped entirely: calling ResolveHome unconditionally there was a live
+// `podman exec` / `ssh` that HARD-FAILS (exit 125 "no such container" / exit 255 ssh)
+// when the venue isn't reachable yet — never a "no-op", despite the old comment's claim.
 func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []*InstallPlan) error {
-	home, err := t.exec.ResolveHome(ctx, "")
-	if err != nil {
-		return fmt.Errorf("resolve venue home: %w", err)
+	needsHome := false
+	needsServiceProbe := false
+	for _, p := range plans {
+		if p == nil {
+			continue
+		}
+		for _, step := range p.Steps {
+			switch step.(type) {
+			case *ShellHookStep, *ShellSnippetStep, *FileStep:
+				needsHome = true
+			case *ServicePackagedStep:
+				needsServiceProbe = true
+			}
+		}
+	}
+	if !needsHome && !needsServiceProbe {
+		return nil
+	}
+	var home string
+	if needsHome {
+		h, err := t.exec.ResolveHome(ctx, "")
+		if err != nil {
+			return fmt.Errorf("resolve venue home: %w", err)
+		}
+		home = h
 	}
 	for _, p := range plans {
 		if p == nil {

@@ -117,6 +117,53 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 	}
 }
 
+// homeFailExec is a DeployExecutor whose ResolveHome ALWAYS fails — modeling a venue
+// (a not-yet-created nested emulator pod, a cluster VM whose SSH isn't up) that is not
+// reachable. resolveHomeCalls records whether prepareReverseState touched the venue.
+type homeFailExec struct {
+	recordingExec
+	resolveHomeCalls int
+}
+
+func (e *homeFailExec) ResolveHome(context.Context, string) (string, error) {
+	e.resolveHomeCalls++
+	return "", context.DeadlineExceeded
+}
+
+// A plan carrying only an ApkInstallStep (an android device deploy) or otherwise no
+// home-token / ServicePackaged step must NOT pay a live venue ResolveHome exec — that
+// unconditional exec hard-failed (exit 125 "no such container" / exit 255 ssh) when the
+// venue wasn't reachable yet. The guard skips it; a home-token plan still resolves.
+func TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan(t *testing.T) {
+	// apk-only plan → guard skips ResolveHome entirely → no error even though the
+	// venue exec would fail.
+	apkExec := &homeFailExec{}
+	tgt := &externalDeployTarget{name: "check-android-emulator-pod.device", exec: apkExec}
+	apkPlan := &InstallPlan{Steps: []InstallStep{
+		&ApkInstallStep{Packages: []ApkPackageSpec{{Package: "com.example"}}, CandyName: "app"},
+	}}
+	if err := tgt.prepareReverseState(context.Background(), []*InstallPlan{apkPlan}); err != nil {
+		t.Fatalf("apk-only plan: prepareReverseState should skip the venue exec, got err: %v", err)
+	}
+	if apkExec.resolveHomeCalls != 0 {
+		t.Errorf("apk-only plan called ResolveHome %d times, want 0 (guard must skip the unnecessary venue exec)", apkExec.resolveHomeCalls)
+	}
+
+	// A home-token plan (ShellHookStep) DOES need the home → ResolveHome is called, and
+	// its failure surfaces (proving the guard didn't over-skip).
+	homeExec := &homeFailExec{}
+	tgt2 := &externalDeployTarget{name: "some-local", exec: homeExec}
+	homePlan := &InstallPlan{Steps: []InstallStep{
+		&ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm"}, CandyName: "nodejs"},
+	}}
+	if err := tgt2.prepareReverseState(context.Background(), []*InstallPlan{homePlan}); err == nil {
+		t.Error("home-token plan: prepareReverseState should surface the ResolveHome failure, got nil")
+	}
+	if homeExec.resolveHomeCalls != 1 {
+		t.Errorf("home-token plan called ResolveHome %d times, want 1", homeExec.resolveHomeCalls)
+	}
+}
+
 // The env.d-sourcing managed block (written to the DESTINATION user's home) and the
 // guest login-shell detection moved into the out-of-process kit.WalkPlans finalizer
 // (kit.ensureVenueManagedBlock + kit.DetectShellFromPath) when target:vm externalized —

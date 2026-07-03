@@ -273,12 +273,12 @@ func (n *NestedExecutor) ResolveHome(ctx context.Context, user string) (string, 
 		quoted := strings.ReplaceAll(user, `'`, `'\''`)
 		script = "entry=$(getent passwd '" + quoted + "' 2>/dev/null) && printf %s \"$(printf %s \"$entry\" | cut -d: -f6)\""
 	}
-	stdout, _, exit, err := n.RunCapture(ctx, script)
+	stdout, stderr, exit, err := n.RunCapture(ctx, script)
 	if err != nil {
-		return "", fmt.Errorf("NestedExecutor.ResolveHome(%q): %w", user, err)
+		return "", fmt.Errorf("NestedExecutor.ResolveHome(%q): %w (stderr: %s)", user, err, strings.TrimSpace(stderr))
 	}
 	if exit != 0 {
-		return "", fmt.Errorf("NestedExecutor.ResolveHome(%q): exit %d", user, exit)
+		return "", fmt.Errorf("NestedExecutor.ResolveHome(%q): exit %d (stderr: %s)", user, exit, strings.TrimSpace(stderr))
 	}
 	home := strings.TrimSpace(stdout)
 	if home == "" {
