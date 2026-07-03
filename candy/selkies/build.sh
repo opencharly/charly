@@ -5,7 +5,7 @@ set -euo pipefail
 
 # 1. Install selkies Python package (C extensions: evdev, xkbcommon)
 cd /tmp
-curl -sL https://github.com/selkies-project/selkies/archive/af1a1c252563d2f136d641b81d6b1dd38a3a0d93.tar.gz | tar xzf -
+curl -fsSL --retry 3 --retry-delay 2 https://github.com/selkies-project/selkies/archive/af1a1c252563d2f136d641b81d6b1dd38a3a0d93.tar.gz | tar xzf -
 cd selkies-*
 sed -i '/"av>/d' pyproject.toml
 sed -i '/cryptography/d' pyproject.toml
@@ -176,7 +176,7 @@ print('Patched selkies.py: _shared_screen_captures cache prevents pixelflux Wayl
 # ---------------------------------------------------------------------------
 PFX_SHA=9650b0380f248364560ac872c6356d807e5de41b
 cd /tmp
-curl -sL "https://github.com/opencharly/pixelflux/archive/${PFX_SHA}.tar.gz" | tar xzf -
+curl -fsSL --retry 3 --retry-delay 2 "https://github.com/opencharly/pixelflux/archive/${PFX_SHA}.tar.gz" | tar xzf -
 cd "pixelflux-${PFX_SHA}"
 
 # NVENC (Patch 2a/2b) is stubbed UNLESS the builder ships CUDA + the NVENC

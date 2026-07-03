@@ -125,13 +125,13 @@ immich:
               scope: system
     immich-step-0:
         run: |
-            command=curl -L "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
+            command=curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
             mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
         run_as: root
         plugin: command
         plugin_input:
             command: |
-                curl -L "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
+                curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
                 mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
     immich-step-1:
         run: |
@@ -149,10 +149,10 @@ immich:
         run: |
             command=mkdir -p /build/geodata
             cd /build/geodata
-            curl -sL https://download.geonames.org/export/dump/admin1CodesASCII.txt -o admin1CodesASCII.txt
-            curl -sL https://download.geonames.org/export/dump/admin2Codes.txt -o admin2Codes.txt
-            curl -sL https://download.geonames.org/export/dump/cities500.zip -o cities500.zip && unzip -o cities500.zip && rm cities500.zip
-            curl -sL "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson" -o ne_10m_admin_0_countries.geojson
+            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin1CodesASCII.txt -o admin1CodesASCII.txt
+            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin2Codes.txt -o admin2Codes.txt
+            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/cities500.zip -o cities500.zip && unzip -o cities500.zip && rm cities500.zip
+            curl -fsSL --retry 3 --retry-delay 2 "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson" -o ne_10m_admin_0_countries.geojson
             date -I > geodata-date.txt
             echo '{}' > /build/build-lock.json
             mkdir -p /build/corePlugin
