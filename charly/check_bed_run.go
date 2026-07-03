@@ -306,6 +306,25 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		fmt.Fprintf(os.Stderr, "charly check run %s: testing LOCAL candies (%s += %s)\n", name, RepoOverrideEnv, pair)
 	}
 
+	// Isolate this bed's EPHEMERAL deploy state (resolved_port, quadlet entries) to a
+	// PER-BED config file so CONCURRENT beds never share — and corrupt — the operator's
+	// ~/.config/charly/charly.yml. A disposable bed's transient deploy state must not
+	// touch the operator's persistent config, and the shared read-modify-write of that
+	// one file across N concurrent bed processes is what produced the maxjobs-load
+	// corruption (`kind:group: #GroupInput.resolved_port: field not allowed`). The bed's
+	// definition still comes from the PROJECT charly.yml (via CHARLY_REPO_OVERRIDE); only
+	// the per-host deploy OVERLAY is isolated. Env-scoped so the config subprocesses this
+	// run spawns (charly config/start/update) inherit it; restored + cleaned on return.
+	if _, already := os.LookupEnv(DeployConfigEnv); !already {
+		if bedCfgDir, mkErr := os.MkdirTemp("", "charly-bed-cfg-"+name+"-"); mkErr == nil {
+			_ = os.Setenv(DeployConfigEnv, filepath.Join(bedCfgDir, "charly.yml"))
+			defer func() {
+				_ = os.Unsetenv(DeployConfigEnv)
+				_ = os.RemoveAll(bedCfgDir)
+			}()
+		}
+	}
+
 	// Resource arbitration (the "preemptible" axis): if this bed claims a host
 	// resource — EXCLUSIVE (requires_exclusive — sole use, e.g. a passthrough
 	// GPU VM) or SHARED (requires_shared — refcounted, e.g. a GPU shared across

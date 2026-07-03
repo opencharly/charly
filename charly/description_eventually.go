@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -36,9 +37,41 @@ import (
 // Context: runWithEventually honours ctx.Deadline / ctx.Done — a
 // canceled context short-circuits the loop with the last attempt's
 // result.
+// killedProbeRetries bounds automatic re-attempts of a probe KILLED before it could
+// produce a result (a per-attempt-deadline SIGKILL under a transient host-load spike,
+// OOM). Rides out a compile-burst spike that starves ONE probe; a SUSTAINED-saturation
+// host exhausts the retries and fails loudly (never an infinite retry). NOT retry-on-flake
+// (R4): only an infra INTERRUPTION (never-completed probe) is re-run — a probe that RAN and
+// returned a real exit is authoritative and never retried here.
+const killedProbeRetries = 3
+
+// killedProbeRetryInterval is a var (not const) so tests can shrink it; production value
+// rides out a transient compile-burst spike (a few seconds) without a long tail.
+var killedProbeRetryInterval = 3 * time.Second
+
+// probeWasKilled reports whether a CheckResult reflects a probe terminated by a signal
+// before completing (vs a probe that ran and failed). Keyed on the shared marker
+// runCaptureCmd stamps into the signal-kill error (deploy_executor.go, R3).
+func probeWasKilled(r CheckResult) bool {
+	return r.Status == TestFail && strings.Contains(r.Message, signalKillErrMarker)
+}
+
 func runWithEventually(ctx context.Context, check *Op, handler func() CheckResult) CheckResult {
 	if check == nil || check.Eventually == "" {
 		result := handler()
+		// A probe KILLED before completing produced NO real result — re-attempt it a
+		// bounded number of times so a transient load spike that starves one probe does
+		// not spuriously fail the check (the 2026-07 check-box "exit -1" under load). A
+		// probe that RAN and failed is NOT retried here (that is the author's `eventually:`).
+		for attempt := 1; attempt <= killedProbeRetries && probeWasKilled(result); attempt++ {
+			select {
+			case <-ctx.Done():
+				return result
+			case <-time.After(killedProbeRetryInterval):
+			}
+			result = handler()
+			result.Attempts = attempt + 1
+		}
 		if result.Attempts == 0 {
 			result.Attempts = 1
 		}

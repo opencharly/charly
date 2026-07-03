@@ -240,6 +240,12 @@ func parseGetentHome(line, user string) (string, error) {
 // deleted Executor interface): exit codes are NOT errors, only spawn
 // failures are. Lives here so SSHExecutor / NestedExecutor implementations
 // can share it without circular imports.
+// signalKillErrMarker is the stable substring every runCaptureCmd caller stamps into a
+// signal-kill error (see below). The check runner's probeWasKilled matches it to tell a
+// probe that was KILLED before completing (infra interruption → re-attempt) from a probe
+// that RAN and returned a failure (authoritative → never retried). One shared literal (R3).
+const signalKillErrMarker = "terminated by signal"
+
 func runCaptureCmd(cmd *exec.Cmd) (string, string, int, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -248,6 +254,18 @@ func runCaptureCmd(cmd *exec.Cmd) (string, string, int, error) {
 	if err != nil {
 		var ee *exec.ExitError
 		if asExitErrorDeploy(err, &ee) {
+			// A NEGATIVE exit code means the process was TERMINATED BY A SIGNAL
+			// (a ctx-deadline SIGKILL, the OOM-killer, an operator kill) — it never
+			// ran to a real exit, so it is an EXECUTION ERROR, not a probe "exit code".
+			// The old path returned (-1, nil), collapsing a KILL into a silent "exit -1"
+			// that a check verb reported as an ordinary failure — masking a probe that
+			// was starved/killed as a spurious check failure (the 2026-07 check-box
+			// "exit -1" mystery). Surface the signal + ProcessState so it is diagnosable
+			// AND so callers treat a killed probe as an error, never a completed result.
+			if ee.ExitCode() < 0 {
+				return stdout.String(), stderr.String(), ee.ExitCode(),
+					fmt.Errorf("process %s (%s): %w", signalKillErrMarker, ee.ProcessState.String(), err)
+			}
 			return stdout.String(), stderr.String(), ee.ExitCode(), nil
 		}
 		return stdout.String(), stderr.String(), -1, err

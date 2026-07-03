@@ -470,7 +470,18 @@ func isSameBaseBox(source, boxName string) bool {
 // Package-level var for testability (same pattern as RuntimeConfigPath).
 var DeployConfigPath = defaultDeployConfigPath
 
+// DeployConfigEnv overrides the per-host deploy-config PATH. A check bed sets it (via the
+// bed runner) to a PER-BED isolated file so CONCURRENT beds never share — and corrupt —
+// the operator's ~/.config/charly/charly.yml, and a disposable bed's transient
+// resolved_port/quadlet state never pollutes the operator's persistent config. The 2026-07
+// maxjobs-load corruption (`node "…": kind:group: #GroupInput.resolved_port: field not
+// allowed`) was concurrent beds racing the shared read-modify-write of this one file.
+const DeployConfigEnv = "CHARLY_DEPLOY_CONFIG"
+
 func defaultDeployConfigPath() (string, error) {
+	if p := os.Getenv(DeployConfigEnv); p != "" {
+		return p, nil
+	}
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("determining config directory: %w", err)
