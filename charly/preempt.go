@@ -320,10 +320,46 @@ func holderStop(addr holderAddr) error {
 }
 
 func holderStart(addr holderAddr) error {
+	// A DEPARTED holder — its container/quadlet or VM domain removed entirely (e.g. a
+	// torn-down check-bed member) — cannot be and need not be restored. Treating the
+	// missing runtime object as a hard start error would make restoreHolders fail and
+	// strand the lease FOREVER (no CLI could clear it — `charly preempt restore` would
+	// keep failing to restart a holder that no longer exists). A departed holder is a
+	// no-op success: nothing to restore, so its token frees.
+	if !holderExists(addr) {
+		fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no container/quadlet or VM domain) — nothing to restore, freeing its lease\n", addr.Name)
+		return nil
+	}
 	if addr.Target == "vm" {
 		return startVM(addr.Vm, addr.Instance)
 	}
 	return startPodService(addr.Base, addr.Instance)
+}
+
+// holderExists reports whether the holder's runtime object still exists — a
+// container/quadlet (running or stopped) for a pod holder, or a defined libvirt
+// domain for a vm holder. Distinguishes a stopped-but-present holder (restore it)
+// from a departed one (free its lease). See holderStart.
+func holderExists(addr holderAddr) bool {
+	if addr.Target == "vm" {
+		if _, ok := invokeVmPlugin("domain-state", vmName(addr.Vm, addr.Instance), ""); ok {
+			return true
+		}
+		if dir, err := vmDir(); err == nil {
+			if _, statErr := os.Stat(filepath.Join(dir, vmName(addr.Vm, addr.Instance))); statErr == nil {
+				return true
+			}
+		}
+		return false
+	}
+	if active, _ := quadletExistsInstance(addr.Base, addr.Instance); active {
+		return true
+	}
+	engine := "podman"
+	if rt, err := ResolveRuntime(); err == nil {
+		engine = EngineBinary(ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
+	}
+	return exec.Command(engine, "container", "exists", containerNameInstance(addr.Base, addr.Instance)).Run() == nil
 }
 
 // waitStoppedHost polls until the holder is no longer running (its resource is released), via
