@@ -1,6 +1,6 @@
 kde-selkies:
     candy:
-        version: 2026.170.1959
+        version: 2026.185.0030
         description: |
             A full KDE Plasma Wayland session nested inside pixelflux and streamed over selkies/WebRTC
             The KDE Plasma flavor PRIMITIVE for the selkies streaming desktop: runs a
@@ -30,14 +30,6 @@ kde-selkies:
             - kde-shell
             - pipewire
             - dbus
-            # plugin-wl is the OUT-OF-TREE plugin that serves the `wl:` check verb (the
-            # Wayland desktop driver lives there, not in charly's core check surface — EXEC-based,
-            # driving the venue's compositor over the executor reverse channel; KWin routes
-            # window mgmt via kdotool). This candy AUTHORS `wl:` checks (status/type/toplevel/
-            # clipboard), so requiring plugin-wl puts it in every composing image's scanned candy
-            # set; collectReferencedPluginWords build-connects it before the baked `wl:` checks
-            # dispatch — otherwise they SKIP with `unknown verb "wl"`.
-            - plugin-wl
     kde-selkies-env:
         env:
             SELKIES_FRAMERATE: "60"
@@ -67,6 +59,20 @@ kde-selkies:
         to: "${HOME}/.local/bin/kde-selkies-session"
         mode: "0755"
         run_as: "${USER}"
+    kde-selkies-strip-caps:
+        # Strip cap_sys_nice from kwin_wayland so the launcher can exec it DIRECTLY as a
+        # NESTED compositor: the pod's no-new-privileges rejects exec of a file-capability
+        # binary ("Operation not permitted"), and the DRM/seat scheduling cap is unneeded
+        # when nesting into pixelflux. RCA-proven: without this + the direct
+        # `--wayland-display` launch, kwin runs headless and the stream is a black frame.
+        run: strip cap_sys_nice from kwin_wayland so it execs directly as a nested compositor under the pod's no-new-privileges
+        run_as: root
+        plugin: command
+        plugin_input:
+            command: |
+                for kw in /usr/bin/kwin_wayland /usr/sbin/kwin_wayland; do
+                  [ -e "$kw" ] && setcap -r "$kw" 2>/dev/null || true
+                done
     kde-selkies-step-2:
         check: the kde-selkies-session launcher is installed and executable in the deploy user's PATH
         plugin: file
@@ -75,18 +81,20 @@ kde-selkies:
             exists: true
             mode: "0755"
     kde-selkies-step-3:
-        check: the launcher execs startplasma-wayland to bring up the nested KDE Plasma session
+        check: the launcher execs kwin_wayland DIRECTLY nested into pixelflux (--wayland-display wayland-1), not startplasma-wayland's headless fallback
         plugin: file
         plugin_input:
             file: ${HOME}/.local/bin/kde-selkies-session
             contains:
-                - contains: "startplasma-wayland"
+                - contains: "kwin_wayland --wayland-display wayland-1"
     kde-selkies-step-4:
-        check: the KDE Plasma session entrypoint the launcher execs is present (composed from kde-shell)
-        plugin: file
+        check: kwin_wayland has NO cap_sys_nice file capability, so the launcher can exec it directly under the pod's no-new-privileges (the nested-compositor caps-strip)
+        plugin: command
         plugin_input:
-            file: /usr/bin/startplasma-wayland
-            exists: true
+            command: |
+                caps=$(getcap /usr/bin/kwin_wayland 2>/dev/null)
+                if [ -n "$caps" ]; then echo "FAIL: kwin_wayland still has caps: $caps"; exit 1; fi
+                echo "kwin_wayland caps stripped (execs directly under no-new-privileges)"
     kde-selkies-step-5:
         check: the KWin Wayland compositor that renders the nested session into pixelflux is present
         plugin: file
@@ -169,44 +177,3 @@ kde-selkies:
             http: https://127.0.0.1:${HOST_PORT:3000}/
             status: 200
             allow_insecure: true
-    kde-wl-compositor-is-kwin:
-        check: wl=status
-        id: kde-wl-compositor-is-kwin
-        wl: status
-        stdout:
-            - matches: "compositor: +kwin"
-            - matches: "kdotool: +available"
-        context:
-            - runtime
-    kde-wl-keyboard-wtype:
-        check: wl=type
-        id: kde-wl-keyboard-wtype
-        wl: type
-        text: "ovkwin"
-        context:
-            - runtime
-    kde-wl-toplevel-via-kdotool:
-        check: wl=toplevel
-        id: kde-wl-toplevel-via-kdotool
-        wl: toplevel
-        stdout:
-            - matches: "."
-        context:
-            - runtime
-    kde-wl-clipboard-set:
-        check: wl=clipboard
-        id: kde-wl-clipboard-set
-        wl: clipboard
-        action: set
-        text: "ovclip-kwin"
-        context:
-            - runtime
-    kde-wl-clipboard-get:
-        check: wl=clipboard
-        id: kde-wl-clipboard-get
-        wl: clipboard
-        action: get
-        stdout:
-            - contains: "ovclip-kwin"
-        context:
-            - runtime

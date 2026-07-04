@@ -44,19 +44,23 @@ export XKB_DEFAULT_OPTIONS="${XKB_DEFAULT_OPTIONS:-}"
 # A private D-Bus session so this nested Plasma doesn't collide with the DRM
 # Plasma session's bus.
 #
-# startplasma-wayland brings up kwin_wayland (nested in pixelflux's wayland-1,
-# creating its own wayland-0 client socket) + kded6. In a full systemd-user login
-# session it would ALSO activate plasma-workspace.target -> plasma-plasmashell.service
-# (the panel + wallpaper shell). This supervisord pod has NO systemd-user instance
-# (PID 1 is supervisord, no /run/user/<uid>), so startplasma silently falls back to
-# the legacy plasma_session shim, which starts ONLY kwin+kded and NEVER the
-# X-systemd-skip=true autostart layer plasmashell lives in -> a black frame with no
-# panel/wallpaper. So we launch plasmashell ourselves on wayland-0 (kwin's client
-# socket, NOT pixelflux's wayland-1) once kwin has created it -- the KDE analogue of
-# how the labwc flavor launches its panel after the compositor comes up.
+# Launch kwin_wayland DIRECTLY as a NESTED compositor with the explicit
+# `--wayland-display wayland-1` flag -- NOT via startplasma-wayland. RCA (proven on
+# a live bed: blank 4046-byte frame -> real 45746-byte frame): in this systemd-less
+# pod startplasma-wayland falls back to the legacy plasma_session shim, which starts
+# kwin on the HEADLESS backend (kwin holds NO connection to pixelflux's wayland-1 and
+# opens NO /dev/dri -- it renders into an off-screen buffer nothing captures, so the
+# stream is a uniform black frame). The `--wayland-display wayland-1` flag is what
+# makes kwin NEST into pixelflux and present its composited output there -- the KDE
+# analogue of how labwc auto-nests from WAYLAND_DISPLAY (labwc is wlroots and nests
+# implicitly; kwin needs the flag). kwin creates its own wayland-0 client socket for
+# plasmashell + Chrome. (kwin_wayland is launched WITHOUT its cap_sys_nice file
+# capability -- stripped by the kde-selkies-kwin-strip-caps build step -- because the
+# pod's no-new-privileges rejects exec of a file-capability binary: `Operation not
+# permitted`. The DRM/seat cap is unneeded when nesting into pixelflux.)
 exec dbus-run-session sh -c '
-    startplasma-wayland &
-    startplasma_pid=$!
+    kwin_wayland --wayland-display wayland-1 --xwayland --width 1280 --height 720 &
+    kwin_pid=$!
     kwin_socket="${XDG_RUNTIME_DIR:-/tmp}/wayland-0"
     waited=0
     while [ ! -e "$kwin_socket" ] && [ "$waited" -lt 120 ]; do
@@ -69,5 +73,5 @@ exec dbus-run-session sh -c '
     else
         echo "kde-selkies-session: kwin wayland-0 socket never appeared in 60s; plasmashell not launched" >&2
     fi
-    wait "$startplasma_pid"
+    wait "$kwin_pid"
 '

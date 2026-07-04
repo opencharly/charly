@@ -101,6 +101,37 @@ with open(f, 'w') as fh:
 print('Patched input_handler.py: env-based layout, level 2 AltGr scanning, modifier checks')
 "
 
+# Patch input_handler.py: bound the wl-paste/wl-copy clipboard subprocesses with the
+# `timeout` command so a HUNG one is REAPED instead of leaked.
+#
+# Root cause: read_clipboard()/write_clipboard() run wl-paste/wl-copy under
+# `asyncio.wait_for(proc.communicate(), timeout=…)`, but when that asyncio timeout
+# fires it ABANDONS the coroutine WITHOUT killing the underlying process (a documented
+# asyncio gotcha — cancelling communicate() does not terminate the child). On KWin the
+# tool blocks past the timeout (KWin's nested/headless zwlr_data_control is
+# unresponsive), so the clipboard MONITOR loop (while self.clipboard_running:) leaks
+# ONE hung wl-paste per poll — hundreds of orphans accumulate, exhaust the pod, and
+# wedge the whole stream (labwc/wlroots returns fast → never times out → KWin-only).
+# Observed live: 118+ hung `wl-paste --list-types` in minutes on check-selkies-kde-pod.
+#
+# Fix: wrap each invocation in `timeout 3` so the OS reaps a hung process ~1s after the
+# asyncio timeout gives up — bounded concurrent procs, no leak. The clipboard still
+# works whenever the tool returns within the window; this only reaps the hangs.
+python3 -c "
+f = 'src/selkies/input_handler.py'
+with open(f) as fh:
+    code = fh.read()
+n_paste = code.count('\"wl-paste\",')
+n_copy = code.count('\"wl-copy\",')
+if n_paste == 0 or n_copy == 0:
+    raise SystemExit('FATAL: could not locate wl-paste/wl-copy invocations in input_handler.py — upstream changed?')
+code = code.replace('\"wl-paste\",', '\"timeout\", \"3\", \"wl-paste\",')
+code = code.replace('\"wl-copy\",', '\"timeout\", \"3\", \"wl-copy\",')
+with open(f, 'w') as fh:
+    fh.write(code)
+print(f'Patched input_handler.py: wrapped {n_paste} wl-paste + {n_copy} wl-copy in timeout (reap hung clipboard procs — KWin leak fix)')
+"
+
 # Patch selkies.py to reuse a single pixelflux ScreenCapture() per display_id
 # across reconfigure_displays cycles.
 #

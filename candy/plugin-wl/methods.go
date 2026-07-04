@@ -234,7 +234,10 @@ func wlStatus(ctx context.Context, ex *sdk.Executor) (string, error) {
 			gotResolution = true
 		}
 	}
-	if !gotResolution {
+	// wlr-randr needs the wlr-output-management protocol, which KWin does NOT
+	// implement — on KWin it HANGS forever (no reply), wedging check-live for the
+	// full deadline. Only probe it off KWin; on KWin report resolution unavailable.
+	if !gotResolution && detectCompositor(ctx, ex) != "kwin" {
 		if out, err := wlCapture(ctx, ex, "wlr-randr 2>/dev/null | head -3"); err == nil {
 			if line := strings.TrimSpace(out); line != "" {
 				fmt.Fprintf(&b, "%-12s %s\n", "output:", strings.Split(line, "\n")[0])
@@ -243,7 +246,7 @@ func wlStatus(ctx context.Context, ex *sdk.Executor) (string, error) {
 		}
 	}
 	if !gotResolution {
-		fmt.Fprintf(&b, "%-12s unavailable (no sway or wlr-randr)\n", "output:")
+		fmt.Fprintf(&b, "%-12s unavailable (no sway/wlr-output-management)\n", "output:")
 	}
 
 	if ex.VenueRunSilent(ctx, `pgrep -f Xwayland >/dev/null 2>&1`) == nil {
@@ -408,6 +411,12 @@ func wlScreenshot(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, e
 
 // wlClipboard reads or writes the Wayland clipboard via wl-clipboard.
 func wlClipboard(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+	// wl-clipboard (wl-copy/wl-paste) needs the wlr-data-control protocol, which
+	// KWin does NOT implement — on KWin these HANG forever (no reply), wedging
+	// check-live for the full deadline. Fail fast with a clear error instead.
+	if detectCompositor(ctx, ex) == "kwin" {
+		return "", fmt.Errorf("clipboard unsupported on KWin (needs wlr-data-control, which KWin does not implement)")
+	}
 	switch op.Action {
 	case "get":
 		return wlCapture(ctx, ex, "wl-paste 2>/dev/null")
@@ -547,6 +556,11 @@ func wlDrag(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) 
 }
 
 func wlType(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+	// wtype needs zwp_virtual_keyboard_manager_v1, which KWin does NOT implement —
+	// on KWin it HANGS forever (no reply), wedging check-live. Fail fast instead.
+	if detectCompositor(ctx, ex) == "kwin" {
+		return "", fmt.Errorf("keyboard typing unsupported on KWin (needs zwp_virtual_keyboard_manager_v1, which KWin does not implement)")
+	}
 	if _, err := wlCapture(ctx, ex, "wtype -- "+kit.ShellQuote(op.Text)); err != nil {
 		return "", fmt.Errorf("typing text: %w", err)
 	}
