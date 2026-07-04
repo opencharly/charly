@@ -1,6 +1,6 @@
 llama-cpp:
     candy:
-        version: 2026.144.1443
+        version: 2026.185.1930
         description: |
             llama.cpp prebuilt binaries and GGUF conversion tools
             The llama-cpp candy downloads the latest llama.cpp release into
@@ -16,61 +16,40 @@ llama-cpp:
         path_append:
             - "~/llama.cpp"
     llama-cpp-step-0:
-        run: |
-            command=LLAMA_CPP_DIR=~/llama.cpp
-            mkdir -p "$LLAMA_CPP_DIR"
-            LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
-            curl -fsSL -o /tmp/llama-bin.tar.gz \
-              "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/llama-${LLAMA_RELEASE}-bin-ubuntu-x64.tar.gz"
-            mkdir -p /tmp/llama_extract
-            tar --no-same-owner --no-same-permissions -xzf /tmp/llama-bin.tar.gz -C /tmp/llama_extract
-            EXTRACT_DIR="/tmp/llama_extract/llama-${LLAMA_RELEASE}"
-            cp "$EXTRACT_DIR/llama-quantize" "$EXTRACT_DIR/llama-cli" "$LLAMA_CPP_DIR/"
-            chmod +x "$LLAMA_CPP_DIR/llama-quantize" "$LLAMA_CPP_DIR/llama-cli"
-            cp "$EXTRACT_DIR"/lib*.so* "$EXTRACT_DIR/LICENSE" "$LLAMA_CPP_DIR/"
-            rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz
+        run: command=install llama.cpp prebuilt ubuntu-x64 binaries + matching source GGUF tools into ~/llama.cpp (newest release that actually ships a binary)
         run_as: "${USER}"
         plugin: command
         plugin_input:
             command: |
+                set -e
                 LLAMA_CPP_DIR=~/llama.cpp
                 mkdir -p "$LLAMA_CPP_DIR"
-                LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
-                curl -fsSL -o /tmp/llama-bin.tar.gz \
-                  "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_RELEASE}/llama-${LLAMA_RELEASE}-bin-ubuntu-x64.tar.gz"
+                # releases/latest can point at a just-tagged release whose CI has
+                # not yet uploaded binaries — the -bin-ubuntu-x64 asset then 404s.
+                # Walk releases newest-first and take the first that actually ships
+                # the ubuntu-x64 binary; the source tree uses the SAME release so
+                # the conversion tools match the binaries (ONE selection, no drift).
+                LLAMA_RELEASE=""
+                for tag in $(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30" | grep -oP '"tag_name": "\K[^"]+'); do
+                  if curl -fsSL -o /tmp/llama-bin.tar.gz "https://github.com/ggml-org/llama.cpp/releases/download/${tag}/llama-${tag}-bin-ubuntu-x64.tar.gz"; then
+                    LLAMA_RELEASE="$tag"; break
+                  fi
+                done
+                [ -n "$LLAMA_RELEASE" ] || { echo "no llama.cpp release with an ubuntu-x64 binary found in the last 30 releases" >&2; exit 1; }
                 mkdir -p /tmp/llama_extract
                 tar --no-same-owner --no-same-permissions -xzf /tmp/llama-bin.tar.gz -C /tmp/llama_extract
                 EXTRACT_DIR="/tmp/llama_extract/llama-${LLAMA_RELEASE}"
                 cp "$EXTRACT_DIR/llama-quantize" "$EXTRACT_DIR/llama-cli" "$LLAMA_CPP_DIR/"
                 chmod +x "$LLAMA_CPP_DIR/llama-quantize" "$LLAMA_CPP_DIR/llama-cli"
                 cp "$EXTRACT_DIR"/lib*.so* "$EXTRACT_DIR/LICENSE" "$LLAMA_CPP_DIR/"
-                rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz
-    llama-cpp-step-1:
-        run: |
-            command=LLAMA_CPP_DIR=~/llama.cpp
-            LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
-            curl -fsSL -o /tmp/llama-src.tar.gz \
-              "https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_RELEASE}.tar.gz"
-            mkdir -p /tmp/llama_src
-            tar --no-same-owner --no-same-permissions -xzf /tmp/llama-src.tar.gz -C /tmp/llama_src
-            SRC_DIR="/tmp/llama_src/llama.cpp-${LLAMA_RELEASE}"
-            cp "$SRC_DIR/convert_hf_to_gguf.py" "$LLAMA_CPP_DIR/"
-            cp -r "$SRC_DIR/gguf-py" "$LLAMA_CPP_DIR/"
-            rm -rf /tmp/llama_src /tmp/llama-src.tar.gz
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
-                LLAMA_CPP_DIR=~/llama.cpp
-                LLAMA_RELEASE=$(curl -fsSL "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
-                curl -fsSL -o /tmp/llama-src.tar.gz \
-                  "https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_RELEASE}.tar.gz"
+                # Source tree at the SAME release for the GGUF conversion tools.
+                curl -fsSL -o /tmp/llama-src.tar.gz "https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_RELEASE}.tar.gz"
                 mkdir -p /tmp/llama_src
                 tar --no-same-owner --no-same-permissions -xzf /tmp/llama-src.tar.gz -C /tmp/llama_src
                 SRC_DIR="/tmp/llama_src/llama.cpp-${LLAMA_RELEASE}"
                 cp "$SRC_DIR/convert_hf_to_gguf.py" "$LLAMA_CPP_DIR/"
                 cp -r "$SRC_DIR/gguf-py" "$LLAMA_CPP_DIR/"
-                rm -rf /tmp/llama_src /tmp/llama-src.tar.gz
+                rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz /tmp/llama_src /tmp/llama-src.tar.gz
     llama-cpp-step-2:
         check: the llama-quantize binary is present under ~/llama.cpp
         plugin: file
