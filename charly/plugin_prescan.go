@@ -183,7 +183,9 @@ func setKindConnectPass(v bool) {
 // (normalizeNodeInto), so the scan succeeds; this OUTER pass then has the providers registered.
 // Best-effort + idempotent: a project with no external kind plugins (or one whose kinds are
 // already connected — compiled-in / prior-loaded) does zero work; a connect FAILURE leaves the
-// kind unregistered, surfaced LOUDLY by normalizeNodeInto (never silently dropped).
+// kind unconnected, and normalizeNodeInto then WARN-SKIPS its nodes (a loud stderr warning + a
+// drop, never a silent drop nor a hard load error — so read-only commands still work in a
+// degraded environment; a command that USES the kind fails loudly at that point).
 func connectDeclaredKindPlugins(dir string) {
 	if inKindConnectPass() {
 		return // nested load inside an outer connect — the outer pass owns the connect
@@ -201,7 +203,7 @@ func connectDeclaredKindPlugins(dir string) {
 	defer setKindConnectPass(false)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
-		return // config load failure → kinds stay unconnected → normalizeNodeInto errors loudly
+		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
 	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
 	if err != nil {

@@ -13,6 +13,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )
@@ -44,13 +45,18 @@ func normalizeNodeInto(gn *genericNode, uf *UnifiedFile) error {
 		// (inKindConnectPass) the provider is not connected YET — DEFER (skip, no error) so the
 		// nested ScanCandy/LoadUnified succeeds; the OUTER load decodes it after
 		// connectDeclaredKindPlugins runs (depth-0, before this). OUTSIDE the pre-pass the
-		// connect already ran, so a still-missing provider means the plugin FAILED to connect —
-		// a hard error (a declared kind is never silently dropped).
+		// connect already ran, so a still-missing provider means the plugin FAILED to build or
+		// connect (e.g. a minimal container with no Go toolchain). GRACEFULLY SKIP the node with
+		// a loud warning — never a hard load error — so read-only commands (box list, validate)
+		// still work in a degraded environment. The kind is warned, not silently dropped; a
+		// deploy/build that actually USES this kind resolves the entity by name and fails loudly
+		// there (the node is absent), so the missing provider is never masked where it matters.
 		if recognizedKind(gn.disc) {
 			if inKindConnectPass() {
 				return nil
 			}
-			return fmt.Errorf("node %q: kind %q is declared by a plugin but its provider did not connect (build/connect failed)", gn.name, gn.disc)
+			fmt.Fprintf(os.Stderr, "Warning: node %q: kind %q is declared by a plugin whose provider did not connect (build/connect failed); skipping the node — any command that uses it will fail loudly at that point\n", gn.name, gn.disc)
+			return nil
 		}
 		return fmt.Errorf("node %q: unsupported discriminator %q", gn.name, gn.disc)
 	}
