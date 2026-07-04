@@ -9,6 +9,7 @@ import (
 
 	adb "github.com/zach-klippenstein/goadb"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -34,37 +35,6 @@ var requiredModifiers = map[string][]string{
 	"keyevent":    {"key"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "arg":
-		return len(op.Args) == 0
-	case "apk":
-		return op.Apk == ""
-	case "app_id":
-		return op.AppId == ""
-	case "property":
-		return op.Property == ""
-	case "artifact":
-		return op.Artifact == ""
-	case "key":
-		return op.KeyName == ""
-	}
-	return false
-}
-
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // parseTimeout parses op.Timeout (a Go duration string), falling back to def.
 func parseTimeout(s string, def time.Duration) time.Duration {
 	if s == "" {
@@ -83,7 +53,7 @@ func parseTimeout(s string, def time.Duration) time.Duration {
 //nolint:gocyclo // a flat method switch over the 12-method allowlist; splitting would scatter the contract.
 func dispatch(env *adbEnv, op *spec.Op) (string, error) {
 	method := string(op.Adb)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	switch method {

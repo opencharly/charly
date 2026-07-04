@@ -62,9 +62,9 @@ func TestRecordFps(t *testing.T) {
 	}
 }
 
-// TestCheckRequiredModifiers mirrors the in-tree recordMethods Required specs that moved
+// TestRequireModifiers mirrors the in-tree recordMethods Required specs that moved
 // here: `stop` needs an artifact, `cmd` needs the text line; list/start need nothing.
-func TestCheckRequiredModifiers(t *testing.T) {
+func TestRequireModifiers(t *testing.T) {
 	cases := []struct {
 		method  string
 		op      spec.Op
@@ -78,7 +78,7 @@ func TestCheckRequiredModifiers(t *testing.T) {
 		{"cmd", spec.Op{Record: "cmd", Text: "echo hi"}, ""},
 	}
 	for _, tc := range cases {
-		err := sdk.CheckRequiredModifiers(tc.method, &tc.op, requiredModifiers, modifierZero)
+		err := sdk.RequireModifiers(tc.method, &tc.op, requiredModifiers)
 		if tc.wantErr == "" {
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", tc.method, err)

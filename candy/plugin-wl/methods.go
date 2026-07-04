@@ -67,43 +67,13 @@ var requiredModifiers = map[string][]string{
 	"sway-workspace": {"target"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "x":
-		return op.X == 0
-	case "y":
-		return op.Y == 0
-	case "x2":
-		return op.X2 == 0
-	case "y2":
-		return op.Y2 == 0
-	case "direction":
-		return op.Direction == ""
-	case "target":
-		return op.Target == ""
-	case "text":
-		return op.Text == ""
-	case "key":
-		return op.KeyName == ""
-	case "combo":
-		return op.Combo == ""
-	case "command":
-		return op.Command == ""
-	case "action":
-		return op.Action == ""
-	case "artifact":
-		return op.Artifact == ""
-	}
-	return false
-}
-
 // dispatch runs one wl method against the venue (over the host executor reverse channel)
 // and returns its captured output. A returned error is the verb FAILING (the in-tree CLI
 // Run() returning an error → exit 1); provider.go maps it through the exit_status / stderr
 // matchers + the artifact validators (screenshot).
 func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
 	method := string(op.Wl)
-	if err := sdk.CheckRequiredModifiers(method, op, requiredModifiers, modifierZero); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	switch method {

@@ -34,27 +34,13 @@ var requiredModifiers = map[string][]string{
 	"notify":     {"text"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "dest":
-		return op.Dest == ""
-	case "path":
-		return op.Path == ""
-	case "method":
-		return op.Method == ""
-	case "text":
-		return op.Text == ""
-	}
-	return false
-}
-
 // dispatch runs one dbus method against the venue's session bus (over the host executor
 // reverse channel) and returns its captured output. A returned error is the verb FAILING
 // (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
 // exit_status / stderr matchers.
 func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
 	method := string(op.Dbus)
-	if err := sdk.CheckRequiredModifiers(method, op, requiredModifiers, modifierZero); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	if err := ensureGdbus(ctx, ex); err != nil {

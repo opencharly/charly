@@ -102,7 +102,7 @@ func TestCheckRequiredModifiers(t *testing.T) {
 		{"notify", spec.Op{Dbus: "notify", Text: "title"}, ""},
 	}
 	for _, tc := range cases {
-		err := sdk.CheckRequiredModifiers(tc.method, &tc.op, requiredModifiers, modifierZero)
+		err := sdk.RequireModifiers(tc.method, &tc.op, requiredModifiers)
 		if tc.wantErr == "" {
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", tc.method, err)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -40,44 +41,13 @@ var requiredModifiers = map[string][]string{
 	"rfb":        {"method"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "artifact":
-		return op.Artifact == ""
-	case "x":
-		return op.X == 0
-	case "y":
-		return op.Y == 0
-	case "text":
-		return op.Text == ""
-	case "key":
-		return op.KeyName == ""
-	case "method":
-		return op.Method == ""
-	}
-	return false
-}
-
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // dispatch checks required modifiers, dials the host-pre-resolved RFB endpoint, and runs
 // one vnc method, returning its captured output. A returned error is the verb FAILING (the
 // in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
 // exit_status / stderr matchers.
 func dispatch(ep *vncEndpoint, op *spec.Op) (string, error) {
 	method := string(op.Vnc)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	c, err := NewVNCClient(ep.Addr, ep.Password)

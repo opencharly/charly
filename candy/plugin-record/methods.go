@@ -34,23 +34,13 @@ var requiredModifiers = map[string][]string{
 	"cmd":  {"text"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "artifact":
-		return op.Artifact == ""
-	case "text":
-		return op.Text == ""
-	}
-	return false
-}
-
 // dispatch runs one record method against the venue (over the host executor reverse
 // channel) and returns its captured output. A returned error is the verb FAILING (the
 // in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
 // exit_status / stderr matchers.
 func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
 	method := string(op.Record)
-	if err := sdk.CheckRequiredModifiers(method, op, requiredModifiers, modifierZero); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	switch method {
@@ -119,7 +109,7 @@ func recordStart(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, er
 
 // recordStop stops a recording session, copies the produced recording off the venue, and
 // writes it to op.Artifact (the host path) so the provider's RunArtifactValidators can read
-// it. The artifact requirement is enforced by checkRequiredModifiers before dispatch.
+// it. The artifact requirement is enforced by sdk.RequireModifiers before dispatch.
 func recordStop(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
 	name := recordName(op)
 	session := recordSessionName(name)

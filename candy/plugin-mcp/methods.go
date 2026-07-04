@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -33,36 +34,13 @@ var requiredModifiers = map[string][]string{
 	"read": {"uri"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "tool":
-		return op.Tool == ""
-	case "uri":
-		return op.URI == ""
-	}
-	return false
-}
-
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // dispatch runs one mcp method against the host-resolved endpoint and returns its
 // captured output. A returned error is the verb FAILING (the in-tree CLI Run()
 // returning an error → exit 1); provider.go maps it through the exit_status / stderr
 // matchers. `servers` is metadata-only; every other method dials via the MCP client.
 func dispatch(ctx context.Context, ep *mcpEndpoint, op *spec.Op) (string, error) {
 	method := string(op.Mcp)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 

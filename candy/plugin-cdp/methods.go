@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -84,47 +85,6 @@ var requiredModifiers = map[string][]string{
 	"spa-mouse":     {"tab", "x", "y"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "tab":
-		return op.Tab == ""
-	case "url":
-		return op.URL == ""
-	case "expression":
-		return op.Expression == ""
-	case "selector":
-		return op.Selector == ""
-	case "method":
-		return op.Method == ""
-	case "artifact":
-		return op.Artifact == ""
-	case "text":
-		return op.Text == ""
-	case "key":
-		return op.KeyName == ""
-	case "combo":
-		return op.Combo == ""
-	case "x":
-		return op.X == 0
-	case "y":
-		return op.Y == 0
-	}
-	return false
-}
-
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // dispatch runs one cdp method against the host-resolved DevTools endpoint and returns
 // its captured output. A returned error is the verb FAILING (the in-tree CLI Run()
 // returning an error → exit 1); provider.go maps it through the exit_status / stderr
@@ -132,7 +92,7 @@ func checkRequiredModifiers(method string, op *spec.Op) error {
 // every other method opens a per-tab CDP WebSocket.
 func dispatch(ep *cdpEndpoint, op *spec.Op) (string, error) {
 	method := string(op.Cdp)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 

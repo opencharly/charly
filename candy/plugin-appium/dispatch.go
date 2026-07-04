@@ -14,6 +14,7 @@ import (
 
 	"github.com/tebeka/selenium"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -61,55 +62,6 @@ var requiredModifiers = map[string][]string{
 	"raw":                    {"method", "path"},
 }
 
-// modifierZero reports whether the named modifier is at its zero value on the Op.
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "caps":
-		return op.Caps == ""
-	case "apk":
-		return op.Apk == ""
-	case "selector":
-		return op.Selector == ""
-	case "text":
-		return op.Text == ""
-	case "attribute":
-		return op.Attribute == ""
-	case "artifact":
-		return op.Artifact == ""
-	case "direction":
-		return op.Direction == ""
-	case "activity":
-		return op.Activity == ""
-	case "app_id":
-		return op.AppId == ""
-	case "keycode":
-		return op.Keycode == 0
-	case "params":
-		return op.Params == ""
-	case "expression":
-		return op.Expression == ""
-	case "method":
-		return op.Method == ""
-	case "path":
-		return op.Path == ""
-	}
-	return false
-}
-
-// checkRequiredModifiers returns an error naming any required modifier left unset.
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // dispatch runs one appium method and returns its captured stdout-equivalent output. A
 // returned error is the verb FAILING (the in-tree CLI Run() returning an error → exit 1);
 // provider.go maps it through the exit_status / stderr matchers.
@@ -117,7 +69,7 @@ func checkRequiredModifiers(method string, op *spec.Op) error {
 //nolint:gocyclo // a flat method switch over the 48-method allowlist; splitting would scatter the contract.
 func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 	method := string(op.Appium)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	switch method {

@@ -19,6 +19,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -43,35 +44,6 @@ var requiredModifiers = map[string][]string{
 	"raw":            {"kube_resource"},
 }
 
-func modifierZero(op *spec.Op, name string) bool {
-	switch name {
-	case "kube_kind":
-		return op.KubeKind == ""
-	case "name":
-		return op.Name == ""
-	case "namespace":
-		return op.Namespace == ""
-	case "manifest":
-		return op.Manifest == ""
-	case "kube_resource":
-		return op.KubeResource == ""
-	}
-	return false
-}
-
-func checkRequiredModifiers(method string, op *spec.Op) error {
-	var missing []string
-	for _, f := range requiredModifiers[method] {
-		if modifierZero(op, f) {
-			missing = append(missing, f)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("missing required modifier(s): %s", strings.Join(missing, ", "))
-}
-
 // dispatch runs one kube method against the resolved cluster and returns its
 // captured output. A returned error is the verb FAILING (the in-tree CLI Run()
 // returning an error → exit 1); provider.go maps it through the exit_status /
@@ -80,7 +52,7 @@ func checkRequiredModifiers(method string, op *spec.Op) error {
 //nolint:gocyclo // a flat method switch over the 13-method allowlist; splitting would scatter the contract.
 func dispatch(conn *clusterConn, op *spec.Op) (string, error) {
 	method := string(op.Kube)
-	if err := checkRequiredModifiers(method, op); err != nil {
+	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
 	switch method {
