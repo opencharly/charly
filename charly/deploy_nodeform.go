@@ -56,7 +56,9 @@ func migrateDeployEntity(name string, body *yaml.Node) *yaml.Node {
 // whose `target:` key is about to be dropped. A same-kind cross-ref (box/vm/local/
 // k8s/android) uses `bundle:` (buildBundleNode infers the workload target from it);
 // the SAVE path marshals BundleNode.Target, so the disc is that target — an empty
-// target is a targetless deploy GROUP (`host` is the pre-rename spelling of `local`).
+// target with a POD-WORKLOAD indicator (image/resolved_port/port) is a POD (the
+// DEFAULT substrate), and an empty target with NO workload is a targetless deploy
+// GROUP (`host` is the pre-rename spelling of `local`).
 func bundleDiscForEntity(body *yaml.Node) string {
 	if body != nil {
 		for i := 0; i+1 < len(body.Content); i += 2 {
@@ -69,6 +71,17 @@ func bundleDiscForEntity(body *yaml.Node) string {
 	case "host":
 		return "local"
 	case "":
+		// An empty target with a POD-WORKLOAD indicator (an image: field, a resolved pod-port
+		// map, or an authored port:) is a POD — the DEFAULT substrate — NOT a targetless group.
+		// A `group:` deploy carries only MEMBERS and no own workload; misclassifying an
+		// image-backed pod as a group writes its pod-only resolved_port under `group:`, which
+		// #GroupInput rejects at the next load (the 2026-07 `charly config <image-ref>` config
+		// corruption). A truly targetless deploy (members only, no workload) stays a group.
+		if findMappingValue(body, "image") != nil ||
+			findMappingValue(body, "resolved_port") != nil ||
+			findMappingValue(body, "port") != nil {
+			return "pod"
+		}
 		return "group"
 	default:
 		return t // pod | vm | k8s | local | android
