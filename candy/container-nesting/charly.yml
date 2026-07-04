@@ -1,6 +1,6 @@
 container-nesting:
     candy:
-        version: 2026.167.2138
+        version: 2026.185.1940
         description: |
             Rootless nested podman/buildah/skopeo inside a rootless outer container -- zero added capabilities, no --privileged.
             Ports quay.io/podman/stable's canonical rootless-in-rootless configuration
@@ -120,6 +120,12 @@ container-nesting:
             # is masking. Removing those maskedPaths via unmask=/proc/* eliminates
             # the mismatch — no caps or --privileged needed.
             #
+            # unmask=/proc/* is necessary but NOT sufficient once a GPU CDI device
+            # (nvidia.com/gpu=all) is attached: the nvidia toolkit injects a REAL
+            # /proc/driver/nvidia/params submount that unmask cannot remove, so the
+            # containers.conf `mounts` line below binds the outer /proc into every
+            # nested container (avoiding the fresh mount) — the GPU-compatible fix.
+            #
             # Security trade-off: /proc/kcore (kernel memory) and /proc/keys (keyring)
             # become visible inside the outer container. Within a rootless user
             # namespace, reading these still requires CAP_SYS_ADMIN in the init
@@ -229,6 +235,15 @@ container-nesting:
         mode: "0644"
         content: &containers_conf_content |
             [containers]
+            # Bind the outer /proc into every nested container instead of letting
+            # crun mount a fresh procfs. Required when a GPU CDI device
+            # (nvidia.com/gpu=all) is passed to the outer container: the nvidia
+            # container toolkit injects a /proc/driver/nvidia/params tmpfs submount,
+            # and the kernel's mount_too_revealing check then refuses the inner
+            # fresh /proc mount EVEN WITH unmask=/proc/* (unmask removes masked
+            # paths, not real submounts). Binding the outer /proc avoids the fresh
+            # mount entirely, so nested podman works with or without a GPU.
+            mounts = ["type=bind,source=/proc,destination=/proc,bind-propagation=rslave"]
             cgroups = "disabled"
             cgroupns = "host"
             ipcns = "host"
