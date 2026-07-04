@@ -1,6 +1,6 @@
 notebook-osm:
     candy:
-        version: 2026.144.1443
+        version: 2026.185.2040
         description: |
             Standalone marimo notebook for the OSM analytics + vector tile pipeline
             Provisions a self-contained marimo notebook into

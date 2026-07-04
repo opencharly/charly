@@ -1034,16 +1034,17 @@ def __(Path, os, textwrap):
                 # Wait for the OSM DAG's pbf_to_geoparquet task to
                 # finish — its output monaco.parquet only exists AFTER
                 # download_pbf has atomically completed via
-                # tmp.replace(out). Waiting on the PBF directly raced
-                # download_pbf's rename: tilemaker would open the PBF
-                # mid-replace and fail to derive a bbox, exiting with
-                # "Can't read shapefiles unless a bounding box is
-                # provided". Waiting on the second-stage artifact is
-                # the canonical cross-DAG sync primitive used by
-                # gpqtiles_convert / encode_to_pmtiles /
-                # freestiler_convert — one shared pattern across all
-                # four PBF consumers (R3: no ad-hoc per-DAG variants
-                # of the same producer-consumer dep).
+                # tmp.replace(out), so waiting on the second-stage
+                # artifact guarantees the PBF is fully written before
+                # tilemaker opens it (waiting on the PBF directly would
+                # race download_pbf's rename). This is the canonical
+                # cross-DAG sync primitive used by gpqtiles_convert /
+                # encode_to_pmtiles / freestiler_convert — one shared
+                # pattern across all four PBF consumers (R3: no ad-hoc
+                # per-DAG variants of the same producer-consumer dep).
+                # (The "Can't read shapefiles" error is unrelated to this
+                # timing — it is the config's shapefile layers needing an
+                # explicit --bbox, handled on the tilemaker call below.)
                 _deadline = time.monotonic() + 600
                 while not (parquet.exists() and parquet.stat().st_size > 0):
                     if time.monotonic() > _deadline:
@@ -1055,12 +1056,31 @@ def __(Path, os, textwrap):
                 # feature classifier). Output extension `.pmtiles` is
                 # detected by tilemaker (>= v3.0) and produces a
                 # PMTiles archive directly — no .mbtiles intermediate.
+                #
+                # --bbox is REQUIRED here: the shortbread config.json has
+                # shapefile-backed layers (the ocean/land polygons), and
+                # tilemaker refuses to read shapefiles without an explicit
+                # bounding box ("Can't read shapefiles unless a bounding box
+                # is provided") — a PBF bbox header alone does not satisfy it.
+                # MONACO_BBOX covers the monaco extract (with a small buffer)
+                # so tilemaker clips the world ocean shapefile to this region.
+                #
+                # --skip-integrity is REQUIRED because the downloaded monaco
+                # extract is CLIPPED: boundary ways reference nodes just
+                # outside the cut, and without this flag tilemaker aborts with
+                # `std::out_of_range: Could not find node with id N`. Skipping
+                # integrity tolerates those dangling refs (the other four PBF
+                # consumers don't hit this because they don't reassemble ways
+                # the same way tilemaker does).
+                MONACO_BBOX = "7.20,43.60,7.70,43.90"
                 subprocess.run([
                     "tilemaker",
                     "--input", str(pbf),
                     "--output", str(out),
                     "--config", "/opt/shortbread-tilemaker/config.json",
                     "--process", "/opt/shortbread-tilemaker/process.lua",
+                    "--bbox", MONACO_BBOX,
+                    "--skip-integrity",
                 ], check=True)
                 return str(out)
 
