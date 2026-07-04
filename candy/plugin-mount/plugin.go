@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-mount/params"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 

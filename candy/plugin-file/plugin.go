@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-file/params"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 

@@ -16,8 +16,8 @@ import (
 	"os/exec"
 
 	"github.com/opencharly/charly/candy/plugin-command/params"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
