@@ -25,8 +25,18 @@ const calver = "2026.181.0001"
 // NewProvider returns the exampledispatch provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:exampledispatch (+ the OUT-OF-PROCESS InvokeProvider target
+// exampledispatchpeer) via sdk.NewMeta → BuildCapabilities. (The F10 reverse legs are
+// the SDK Executor's InvokeProvider/HostBuild — no extra capability surface; the verb is
+// driven WITH an executor.)
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{
+			{Class: "verb", Word: "exampledispatch", InputDef: "#ExampledispatchInput"},
+			{Class: "verb", Word: "exampledispatchpeer"}, // the OUT-OF-PROCESS InvokeProvider target (no plugin_input)
+		},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -87,19 +97,4 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: res}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises verb:exampledispatch. (The F10 reverse legs are the SDK Executor's
-// InvokeProvider/HostBuild — no extra capability surface; the verb is driven WITH an executor.)
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{
-			{Class: "verb", Word: "exampledispatch", InputDef: "#ExampledispatchInput"},
-			{Class: "verb", Word: "exampledispatchpeer"}, // the OUT-OF-PROCESS InvokeProvider target (no plugin_input)
-		},
-		schemaFS, "schema")
 }

@@ -55,8 +55,21 @@ const (
 // NewProvider returns the examplestepkind provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the step:examplestepkind capability WITH its DECLARED StepContract
+// (Scope user, Venue host-native (0), no gate, Emits=true) via sdk.NewMeta → BuildCapabilities
+// — the F3 plugin-declared install-step contract the host carries through the IR and applies
+// via the open default arm. Emits=true (the F-STEP-EMIT flag) tells the pod-overlay OCITarget
+// the step bakes a build-context fragment.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{
+			Class:        "step",
+			Word:         "examplestepkind",
+			InputDef:     "#ExamplestepkindInput",
+			StepContract: &sdk.StepContract{Scope: "user", Venue: 0, Gate: "", Emits: true},
+		}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -108,23 +121,4 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	default:
 		return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the step:examplestepkind capability WITH its DECLARED StepContract
-// (Scope user, Venue host-native (0), no gate, Emits=true) — the F3 plugin-declared install-step
-// contract the host carries through the IR and applies via the open default arm. Emits=true (the
-// F-STEP-EMIT flag) tells the pod-overlay OCITarget the step bakes a build-context fragment.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{
-			Class:        "step",
-			Word:         "examplestepkind",
-			InputDef:     "#ExamplestepkindInput",
-			StepContract: &sdk.StepContract{Scope: "user", Venue: 0, Gate: "", Emits: true},
-		}},
-		schemaFS, "schema")
 }

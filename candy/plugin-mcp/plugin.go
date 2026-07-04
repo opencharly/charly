@@ -27,7 +27,6 @@
 package mcp
 
 import (
-	"context"
 	"embed"
 
 	"github.com/opencharly/sdk"
@@ -40,34 +39,24 @@ var schemaFS embed.FS
 // NewProvider returns the mcp verb provider (the Invoke dispatch surface).
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
-
-// CliMain is the plugin's CLI entrypoint (command:mcp dispatch — `charly mcp …`).
-func CliMain(args []string) int { return cliMain(args) }
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the plugin's ONE gRPC-served capability — verb:mcp (the MCP check verb) —
-// plus the self-contained CUE schema, over the wire via sdk.BuildCapabilities. verb:mcp keeps
-// its entire authoring contract (the #McpMethod enum + every modifier) on charly's core #Op —
-// like cdp/vnc/spice it has NO plugin_input — so it advertises an EMPTY InputDef, and the
-// served schema (schema/mcp.cue) exists only to satisfy the host's non-empty-schema load gate.
+// NewMeta advertises verb:mcp (the MCP check verb) + the plugin's self-contained CUE schema
+// (via sdk.NewMeta → BuildCapabilities). verb:mcp keeps its entire authoring contract (the
+// #McpMethod enum + every modifier) on charly's core #Op — like cdp/vnc/spice it has NO
+// plugin_input — so it advertises an EMPTY InputDef, and the served schema (schema/mcp.cue)
+// exists only to satisfy the host's non-empty-schema load gate.
 //
 // command:mcp (`charly mcp …`, the externalized MCP-server CLI) is NOT advertised here: it is
 // dispatched by charly fork/exec'ing this binary in CLI mode (cliMain), not resolved through
-// the gRPC provider registry — so it carries no Describe capability and no plugin_input (its
-// args are plain CLI tokens parsed by kong). The candy's plugin.providers declaration still
-// lists command:mcp (that drives the CLI-grammar prescan + the baked `.providers` manifest).
-//
-// The SDK concatenates + compiles the embedded schema/*.cue standalone here, failing loudly
-// before serving if it is broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.178.1200",
+// the gRPC provider registry — so it carries no Describe capability (its args are plain CLI
+// tokens parsed by kong). The candy's plugin.providers declaration still lists command:mcp
+// (that drives the CLI-grammar prescan + the baked `.providers` manifest).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.178.1200",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "mcp", InputDef: ""},
 		},
-		schemaFS, "schema")
+		schemaFS)
 }
+
+// CliMain is the plugin's CLI entrypoint (command:mcp dispatch — `charly mcp …`).
+func CliMain(args []string) int { return cliMain(args) }

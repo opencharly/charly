@@ -44,8 +44,14 @@ const calver = "2026.180.0001"
 // NewProvider returns the deploypod provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the deploy:pod capability (empty InputDef — the substrate carries no
+// authored plugin_input) + its self-contained, load-gate-only CUE schema, via
+// sdk.NewMeta → BuildCapabilities.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "pod", InputDef: ""}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -72,16 +78,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	// No reverse ops: the overlay build is host-side and teardown is `charly remove` + drop
 	// overlay images (the host lifecycle hook's PostTeardown), not a replayed step walk.
 	return sdk.BuildDeployReply(nil, candy, calver)
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the deploy:pod capability (empty InputDef — the substrate carries no
-// authored plugin_input) + its self-contained, load-gate-only CUE schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "pod", InputDef: ""}},
-		schemaFS, "schema")
 }

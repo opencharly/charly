@@ -29,8 +29,8 @@ import (
 	"cuelang.org/go/encoding/xml/koala"
 	cueyaml "cuelang.org/go/encoding/yaml"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -64,8 +64,15 @@ func NewProvider() pb.ProviderServer {
 	return p
 }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:egress serving OpValidate, via sdk.NewMeta → BuildCapabilities.
+// The egress SCHEMAS are internal (compiled in newProvider) — Describe ships only the
+// trivial #EgressInput so the host's plugin-schema gate has a non-empty, base-spliceable
+// schema.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "egress"}},
+		describeSchemaFS)
+}
 
 type provider struct {
 	pb.UnimplementedProviderServer
@@ -203,17 +210,4 @@ func (p *provider) validate(in validateInput) string {
 		}
 	}
 	return ""
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises verb:egress serving OpValidate. The egress SCHEMAS are internal
-// (compiled in newProvider) — Describe ships only the trivial #EgressInput so the host's
-// plugin-schema gate has a non-empty, base-spliceable schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "egress"}},
-		describeSchemaFS, "schema")
 }

@@ -30,8 +30,8 @@ import (
 	"slices"
 	"strings"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
@@ -44,8 +44,16 @@ const calver = "2026.182.0001"
 // NewProvider builds the enc provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:enc + the plugin's self-contained CUE schema (via
+// sdk.NewMeta → BuildCapabilities). The verb is invoked with the structured
+// spec.EncExecInput over OpExecute, not an authored plugin_input, so it declares no
+// #*Input — only the trivial #EncInput ships so the host's plugin-schema gate has a
+// non-empty, base-spliceable schema.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "enc"}},
+		describeSchemaFS)
+}
 
 type provider struct {
 	pb.UnimplementedProviderServer
@@ -270,18 +278,4 @@ func passwdVolumes(in spec.EncExecInput) error {
 		fmt.Fprintf(os.Stderr, "Password changed for %s\n", m.Name)
 	}
 	return nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises verb:enc serving OpExecute. The verb is invoked with the
-// structured spec.EncExecInput over OpExecute, not an authored plugin_input, so it
-// declares no #*Input — Describe ships only the trivial #EncInput so the host's
-// plugin-schema gate has a non-empty, base-spliceable schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "enc"}},
-		describeSchemaFS, "schema")
 }

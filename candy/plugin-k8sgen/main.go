@@ -11,8 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,8 +24,15 @@ const calver = "2026.181.0001"
 // NewProvider builds the k8sgen provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:k8sgen serving OpEmit (via sdk.NewMeta → BuildCapabilities). The verb is
+// invoked with the structured spec.K8sGenInput, not an authored plugin_input, so it declares no
+// #*Input — the shipped schema ships only the trivial #K8sgenInput so the host's plugin-schema gate
+// has a non-empty, base-spliceable schema.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "k8sgen"}},
+		describeSchemaFS)
+}
 
 type provider struct {
 	pb.UnimplementedProviderServer
@@ -50,18 +57,4 @@ func (p *provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeR
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises verb:k8sgen serving OpEmit. The verb is invoked with the
-// structured spec.K8sGenInput, not an authored plugin_input, so it declares no
-// #*Input — Describe ships only the trivial #K8sgenInput so the host's
-// plugin-schema gate has a non-empty, base-spliceable schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "k8sgen"}},
-		describeSchemaFS, "schema")
 }

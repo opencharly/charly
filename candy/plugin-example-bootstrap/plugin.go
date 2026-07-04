@@ -14,8 +14,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -26,8 +26,15 @@ const calver = "2026.181.0001"
 // NewProvider returns the bootstrap provider for in-proc (compiled-in) registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the capability with Phase "bootstrap" (F9) via sdk.NewMeta →
+// BuildCapabilities — the host enumerates it in the bootstrap phase (providersInPhase)
+// and invokes OpBootstrap before config validation. No InputDef: a bootstrap plugin is
+// invoked with the raw config, not a structured plugin_input.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "examplebootstrap", Phase: sdk.PhaseBootstrap}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -51,17 +58,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("examplebootstrap: marshal reply: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the capability with Phase "bootstrap" (F9) — the host enumerates it in the
-// bootstrap phase (providersInPhase) and invokes OpBootstrap before config validation. No InputDef:
-// a bootstrap plugin is invoked with the raw config, not a structured plugin_input.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "examplebootstrap", Phase: sdk.PhaseBootstrap}},
-		schemaFS, "schema")
 }

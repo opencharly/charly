@@ -37,6 +37,7 @@ package settings
 import (
 	"embed"
 
+	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -46,8 +47,15 @@ var schemaFS embed.FS
 // NewProvider returns the settings provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises NO gRPC capability — command:settings is CLI-dispatched, not resolved
+// through the gRPC provider registry. It ships only the self-contained doc schema (via
+// sdk.NewMeta → BuildCapabilities) to satisfy the host's non-empty-schema load gate and the
+// params codegen loop.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.181.0001",
+		[]sdk.ProvidedCapability{},
+		schemaFS)
+}
 
 // CliMain is the plugin's CLI entrypoint (command:settings dispatch).
 func CliMain(args []string) int { return cliMain(args) }

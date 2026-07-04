@@ -39,8 +39,14 @@ const calver = "2026.182.0440"
 // NewProvider returns the examplestructkind provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the STRUCTURAL kind capability (Class "kind", word "examplestructkind",
+// Structural:true) via sdk.NewMeta → BuildCapabilities — the F5 flag that makes the host fold
+// its OpLoad reply into uf.Bundle.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "kind", Word: "examplestructkind", InputDef: "#ExamplestructkindInput", Structural: true}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -99,16 +105,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("examplestructkind: marshal deploy: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the STRUCTURAL kind capability (Class "kind", word "examplestructkind",
-// Structural:true) — the F5 flag that makes the host fold its OpLoad reply into uf.Bundle.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "kind", Word: "examplestructkind", InputDef: "#ExamplestructkindInput", Structural: true}},
-		schemaFS, "schema")
 }

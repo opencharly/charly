@@ -28,7 +28,6 @@
 package secrets
 
 import (
-	"context"
 	"embed"
 
 	"github.com/opencharly/sdk"
@@ -41,32 +40,25 @@ var schemaFS embed.FS
 // NewProvider returns the credential-store provider (the Invoke dispatch surface).
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
-
-// CliMain is the plugin's CLI entrypoint (command:secrets dispatch — `charly secrets …`).
-func CliMain(args []string) int { return cliMain(args) }
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the plugin's ONE gRPC-served capability — verb:credential (the
-// externalized credential store backend) — plus the self-contained CUE schema, over
-// the wire via sdk.BuildCapabilities. verb:credential carries no AUTHORED plugin_input
-// (its params are the internal CredentialInput RPC the core adapter sends, never a plan
-// step), so it advertises an EMPTY InputDef and the served schema (schema/credential.cue)
-// exists only to satisfy the host's non-empty-schema load gate (mirrors plugin-mcp).
+// NewMeta advertises verb:credential (the externalized credential store backend) + the
+// plugin's self-contained CUE schema (via sdk.NewMeta → BuildCapabilities). verb:credential
+// carries no AUTHORED plugin_input (its params are the internal CredentialInput RPC the core
+// adapter sends, never a plan step), so it advertises an EMPTY InputDef and the served schema
+// (schema/credential.cue) exists only to satisfy the host's non-empty-schema load gate
+// (mirrors plugin-mcp).
 //
-// command:secrets (`charly secrets …`, the externalized CLI) is NOT advertised here: it
-// is dispatched by charly syscall.Exec'ing this binary in CLI mode (cliMain), not resolved
+// command:secrets (`charly secrets …`, the externalized CLI) is NOT advertised here: it is
+// dispatched by charly syscall.Exec'ing this binary in CLI mode (cliMain), not resolved
 // through the gRPC provider registry — so it carries no Describe capability. The candy's
 // plugin.providers declaration still lists command:secrets (CLI-grammar prescan + baked
 // `.providers` manifest).
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.178.2100",
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.178.2100",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "credential", InputDef: ""},
 		},
-		schemaFS, "schema")
+		schemaFS)
 }
+
+// CliMain is the plugin's CLI entrypoint (command:secrets dispatch — `charly secrets …`).
+func CliMain(args []string) int { return cliMain(args) }

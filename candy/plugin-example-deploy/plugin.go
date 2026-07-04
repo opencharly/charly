@@ -44,8 +44,14 @@ const calver = "2026.180.0001"
 // NewProvider returns the exampledeploy provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the deploy:exampledeploy capability + its self-contained CUE
+// schema via sdk.NewMeta → BuildCapabilities (compiled standalone, failing loudly if
+// broken), over the same channel a builtin uses.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "exampledeploy", InputDef: "#ExampledeployInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -222,17 +228,4 @@ func parseMode(mode string, def uint32) uint32 {
 		return def
 	}
 	return uint32(v)
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the deploy:exampledeploy capability + its self-contained CUE
-// schema over the same channel a builtin uses; BuildCapabilities compiles the schema
-// standalone, failing loudly if broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "exampledeploy", InputDef: "#ExampledeployInput"}},
-		schemaFS, "schema")
 }

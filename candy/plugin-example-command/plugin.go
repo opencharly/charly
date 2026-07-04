@@ -16,8 +16,8 @@ import (
 	"fmt"
 	"strings"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -28,8 +28,16 @@ const calver = "2026.181.0001"
 // NewProvider returns the command provider for in-proc registration (compiled-in) or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises command:examplecommand via sdk.NewMeta → BuildCapabilities so the
+// COMPILED-IN path registers it as a command provider (buildUnitInProc → inprocProvider
+// Class=command; the host builds its dynamic Kong grammar + dispatches Invoke(OpRun)).
+// The served schema carries no #*Input def — a command's args are pass-through CLI
+// tokens, not a structured plugin_input — so the capability has no InputDef.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "command", Word: "examplecommand"}},
+		schemaFS)
+}
 
 // CliMain is the OUT-OF-PROCESS CLI-mode entry (charly fork/execs the binary with the pass-through
 // tokens after `charly examplecommand`). It runs the SAME effect as the in-proc Invoke(OpRun) path.
@@ -64,18 +72,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	}
 	runCommand(in.Args)
 	return &pb.InvokeReply{}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises command:examplecommand so the COMPILED-IN path registers it as a command
-// provider (buildUnitInProc → inprocProvider Class=command; the host builds its dynamic Kong
-// grammar + dispatches Invoke(OpRun)). The served schema carries no #*Input def — a command's args
-// are pass-through CLI tokens, not a structured plugin_input — so the capability has no InputDef.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "command", Word: "examplecommand"}},
-		schemaFS, "schema")
 }

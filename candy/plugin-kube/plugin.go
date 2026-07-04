@@ -20,7 +20,6 @@
 package kube
 
 import (
-	"context"
 	"embed"
 
 	"github.com/opencharly/sdk"
@@ -33,26 +32,17 @@ var schemaFS embed.FS
 // NewProvider returns the kube provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the plugin's capabilities (verb:kube AND deploy:k8s) plus its
-// self-contained CUE schema over the wire via sdk.BuildCapabilities. Both keep their
-// entire authoring contract on charly's core schema — the verb's #KubeMethod enum +
-// modifiers on #Op, the deploy substrate's fields on #Deploy / #K8s (the `k8s:`
-// substrate node + the `kubernetes:` block) — so neither carries plugin_input; the
-// advertised capabilities carry an EMPTY InputDef and the served schema (kube.cue)
-// exists only to satisfy the host's non-empty-schema load gate. The SDK compiles the
-// schema standalone here, failing loudly before serving if it is broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.174.1200",
+// NewMeta advertises verb:kube + deploy:k8s + the plugin's self-contained CUE schema
+// (via sdk.NewMeta → BuildCapabilities). Both keep their entire authoring contract on
+// charly's core schema — the verb's #KubeMethod enum + modifiers on #Op, the deploy
+// substrate's fields on #Deploy / #K8s (the `k8s:` node + the `kubernetes:` block) — so
+// neither carries plugin_input; the capabilities carry an EMPTY InputDef and the served
+// schema (kube.cue) exists only to satisfy the host's non-empty-schema load gate.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.174.1200",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "kube", InputDef: ""},
 			{Class: "deploy", Word: "k8s", InputDef: ""},
 		},
-		schemaFS, "schema")
+		schemaFS)
 }

@@ -25,7 +25,6 @@
 package vm
 
 import (
-	"context"
 	"embed"
 
 	"github.com/opencharly/sdk"
@@ -38,32 +37,25 @@ var schemaFS embed.FS
 // NewProvider returns the vm provider (verb:libvirt + the internal VmOp Invoke surface).
 func NewProvider() pb.ProviderServer { return &vmProvider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &vmMeta{} }
-
-// CliMain is the plugin's CLI entrypoint (command:vm dispatch — `charly vm …`).
-func CliMain(args []string) int { return cliMain(args) }
-
-type vmMeta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the ONE gRPC-served capability: the libvirt check verb (nested under
-// `charly check` at runtime like kube/adb/appium). The internal VM ops (resolution / lifecycle /
-// snapshot / create / qemu-shutdown) ride Invoke via special VmOp words and are NOT Describe
-// classes — the hidden `charly __vm` command tree + the display/status/preempt consumers RPC
-// them. libvirt keeps its modifiers on charly's core #Op (a schema-less verb, empty InputDef).
-// command:vm (`charly vm …`, the externalized CLI) is NOT advertised here: it is dispatched by
-// charly syscall.Exec'ing this binary in CLI mode (cliMain), not resolved through the gRPC
-// provider registry. The candy's plugin.providers declaration still lists command:vm (the
-// CLI-grammar prescan + baked `.providers` manifest).
-func (vmMeta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.177.0300",
+// NewMeta advertises the ONE gRPC-served capability: the libvirt check verb (nested under
+// `charly check` at runtime like kube/adb/appium), via sdk.NewMeta. The internal VM ops
+// (resolution / lifecycle / snapshot / create / qemu-shutdown) ride Invoke via special VmOp
+// words and are NOT Describe classes — the hidden `charly __vm` command tree + the display/
+// status/preempt consumers RPC them. libvirt keeps its modifiers on charly's core #Op (a
+// schema-less verb, empty InputDef). command:vm (`charly vm …`, the externalized CLI) is NOT
+// advertised here: it is dispatched by charly syscall.Exec'ing this binary in CLI mode
+// (cliMain), not resolved through the gRPC provider registry. The candy's plugin.providers
+// declaration still lists command:vm (the CLI-grammar prescan + baked `.providers` manifest).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.177.0300",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "libvirt", InputDef: ""},
 		},
-		schemaFS, "schema")
+		schemaFS)
 }
+
+// CliMain is the plugin's CLI entrypoint (command:vm dispatch — `charly vm …`).
+func CliMain(args []string) int { return cliMain(args) }
 
 // vmProvider is the out-of-process provider. Its Invoke dispatches the libvirt verb (the in-process
 // LibvirtCmd Kong tree) plus the internal VmOp-keyed ops (resolution / lifecycle / snapshot /

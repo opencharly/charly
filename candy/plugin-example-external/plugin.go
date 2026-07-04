@@ -14,8 +14,8 @@ import (
 	"encoding/json"
 
 	"github.com/opencharly/charly/candy/plugin-example-external/params"
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -24,8 +24,13 @@ var schemaFS embed.FS
 // NewProvider returns the verb provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta ships the plugin's capabilities AND its self-contained CUE schema via
+// sdk.NewMeta → BuildCapabilities — compiled standalone, failing loudly if broken/empty.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.172.0001",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "externalprobe", InputDef: "#ExternalprobeInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -49,16 +54,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the plugin's capabilities AND its self-contained CUE schema via
-// sdk.BuildCapabilities — compiled standalone here, failing loudly if broken/empty.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.172.0001",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "externalprobe", InputDef: "#ExternalprobeInput"}},
-		schemaFS, "schema")
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -21,18 +20,4 @@ type provider struct{ pb.UnimplementedProviderServer }
 // never a silent surprise.
 func (provider) Invoke(context.Context, *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	return nil, fmt.Errorf("plugin-tmux: command:tmux is dispatched via the CLI (charly fork/execs this binary), not gRPC Invoke")
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises NO gRPC capability — command:tmux is CLI-dispatched, not resolved
-// through the gRPC provider registry. It ships only the self-contained doc schema to satisfy
-// the host's non-empty-schema load gate and the params codegen loop. The SDK compiles the
-// embedded schema STANDALONE here, failing loudly before serving if it is broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.179.0000",
-		[]sdk.ProvidedCapability{},
-		schemaFS, "schema")
 }

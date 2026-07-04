@@ -22,7 +22,6 @@
 package spice
 
 import (
-	"context"
 	"embed"
 
 	"github.com/opencharly/sdk"
@@ -35,22 +34,13 @@ var schemaFS embed.FS
 // NewProvider returns the spice provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the plugin's capability (verb:spice) AND its self-contained CUE
-// schema over the wire via sdk.BuildCapabilities. spice keeps its entire authoring
-// contract (the #SpiceMethod enum + every modifier) on charly's core #Op — like
-// cdp/vnc, it has NO plugin_input — so the advertised capability carries an EMPTY
-// InputDef and the served schema (spice.cue) exists only to satisfy the host's
-// non-empty-schema load gate. The SDK compiles the schema standalone here, failing
-// loudly before serving if it is broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.174.1700",
+// NewMeta advertises verb:spice + the plugin's self-contained CUE schema (via
+// sdk.NewMeta → BuildCapabilities). spice keeps its entire authoring contract (the
+// #SpiceMethod enum + every modifier) on charly's core #Op — like cdp/vnc it has NO
+// plugin_input — so the capability carries an EMPTY InputDef and the served schema
+// (spice.cue) exists only to satisfy the host's non-empty-schema load gate.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.174.1700",
 		[]sdk.ProvidedCapability{{Class: "verb", Word: "spice", InputDef: ""}},
-		schemaFS, "schema")
+		schemaFS)
 }

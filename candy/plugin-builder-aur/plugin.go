@@ -36,8 +36,13 @@ const builderWord = "aur"
 // NewProvider returns the builderaur provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the builder:aur capability + the plugin's self-contained CUE schema
+// (via sdk.NewMeta → BuildCapabilities), compiled standalone and failing loudly if broken.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.182.0400",
+		[]sdk.ProvidedCapability{{Class: "builder", Word: builderWord, InputDef: "#AurBuilderInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -88,16 +93,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return &pb.InvokeReply{ResultJson: j}, nil
 	}
 	return nil, fmt.Errorf("builder %q: unsupported op %q (serves only %q, %q, %q)", builderWord, req.GetOp(), sdk.OpResolve, sdk.OpCollectContext, sdk.OpReverse)
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the builder:aur capability + its self-contained CUE schema over the same
-// channel a builtin uses; BuildCapabilities compiles the schema standalone, failing loudly if broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.182.0400",
-		[]sdk.ProvidedCapability{{Class: "builder", Word: builderWord, InputDef: "#AurBuilderInput"}},
-		schemaFS, "schema")
 }

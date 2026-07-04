@@ -23,8 +23,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -36,8 +36,14 @@ const calver = "2026.182.0440"
 // NewProvider returns the kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta ships the STRUCTURAL group kind capability (Class "kind", word "group", Structural:true —
+// the F5 flag that makes the host pre-decode + thread the authored members via op.Env and fold the
+// reply into uf.Bundle) + its self-contained #GroupInput schema (via sdk.NewMeta → BuildCapabilities).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "kind", Word: "group", InputDef: "#GroupInput", Structural: true}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -73,17 +79,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("group kind: marshal deploy: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the STRUCTURAL group kind capability (Class "kind", word "group", Structural:true —
-// the F5 flag that makes the host pre-decode + thread the authored members via op.Env and fold the
-// reply into uf.Bundle) + its self-contained #GroupInput schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "kind", Word: "group", InputDef: "#GroupInput", Structural: true}},
-		schemaFS, "schema")
 }

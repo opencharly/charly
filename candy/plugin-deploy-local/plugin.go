@@ -44,8 +44,14 @@ const calver = "2026.181.0001"
 // NewProvider returns the deploylocal provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the deploy:local capability (empty InputDef — the substrate carries
+// no authored plugin_input) + its self-contained, load-gate-only CUE schema, via
+// sdk.NewMeta → BuildCapabilities.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "local", InputDef: ""}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -82,16 +88,4 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		candy = "deploy-local"
 	}
 	return sdk.BuildDeployReply(reverseOps, candy, calver)
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the deploy:local capability (empty InputDef — the substrate carries
-// no authored plugin_input) + its self-contained, load-gate-only CUE schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "local", InputDef: ""}},
-		schemaFS, "schema")
 }

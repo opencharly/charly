@@ -23,8 +23,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/charly/candy/plugin-tunnel/params"
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -33,8 +33,15 @@ var schemaFS embed.FS
 // NewProvider returns the verb provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:tunnel + its self-contained CUE schema (via sdk.NewMeta →
+// BuildCapabilities). Unlike most externalized verbs, verb:tunnel DOES carry an authored
+// plugin_input (the `plan` dry-run step's {method,config,expect}), so it advertises the
+// #TunnelInput def.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.182.1200",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "tunnel", InputDef: "#TunnelInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -103,18 +110,4 @@ func replyJSON(v any) (*pb.InvokeReply, error) {
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships verb:tunnel + its self-contained CUE schema via sdk.BuildCapabilities.
-// Unlike most externalized verbs, verb:tunnel DOES carry an authored plugin_input (the
-// `plan` dry-run step's {method,config,expect}), so it advertises the #TunnelInput def;
-// the SDK compiles the schema standalone here, failing loudly before serving if broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.182.1200",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "tunnel", InputDef: "#TunnelInput"}},
-		schemaFS, "schema")
 }

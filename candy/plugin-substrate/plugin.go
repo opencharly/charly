@@ -31,8 +31,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -47,8 +47,19 @@ var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
 // NewProvider returns the substrate kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the 5 STRUCTURAL substrate kind capabilities (Class "kind",
+// Structural:true) + the self-contained CUE schema (via sdk.NewMeta → BuildCapabilities).
+// Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the
+// KEPT #<Kind>Value core def (runPluginKind → validateStandaloneKindValueCUE), NOT by this
+// served schema. The self-contained #SubstrateKindLoad def exists only to satisfy the
+// non-empty-schema load gate + document the seam.
+func NewMeta() pb.PluginMetaServer {
+	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords))
+	for _, w := range substrateWords {
+		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true})
+	}
+	return sdk.NewMeta(calver, caps, schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -92,21 +103,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	default:
 		return nil, fmt.Errorf("substrate kind %q: unknown load shape %q (want deploy|template)", req.GetReserved(), env.Standalone.Shape)
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the 5 STRUCTURAL substrate kind capabilities (Class "kind", Structural:true).
-// Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the KEPT
-// #<Kind>Value core def (runPluginKind → validateStandaloneKindValueCUE), NOT by this served
-// schema (which cannot carry the core-referencing value). The self-contained #SubstrateKindLoad
-// def exists only to satisfy the non-empty-schema load gate + document the seam.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords))
-	for _, w := range substrateWords {
-		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true})
-	}
-	return sdk.BuildCapabilities(calver, caps, schemaFS, "schema")
 }

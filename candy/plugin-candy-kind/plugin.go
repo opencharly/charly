@@ -33,8 +33,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -46,8 +46,17 @@ const calver = "2026.182.1600"
 // NewProvider returns the candy kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta ships the candy kind capability (Class "kind", word "candy", InputDef:"" — the rich
+// box⊻layer value is validated HOST-SIDE against the KEPT #CandyValue core def, NOT by this
+// served schema; the self-contained #CandyKindLoad def exists only to satisfy the
+// non-empty-schema load gate), via sdk.NewMeta → BuildCapabilities. Structural is deliberately
+// omitted (FALSE): `candy` nests NO deploy resource members and is routed to foldCandyKind by an
+// explicit `gn.disc=="candy"` host branch, NOT via the structural fold.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "kind", Word: "candy"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -93,23 +102,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	default:
 		return nil, fmt.Errorf("candy kind: unknown load shape %q (want candy-image|candy-layer)", env.Standalone.Shape)
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the candy kind capability (Class "kind", word "candy", InputDef:"" — the rich
-// box⊻layer value is validated HOST-SIDE against the KEPT #CandyValue core def, NOT by this served
-// schema). Structural is deliberately FALSE: `candy` nests NO deploy resource members (it is the
-// box⊻layer factory, not a targetless/workload deploy), so it must NOT set the F5 Structural flag
-// (that flag drives externalKindMayNestMembers/recognizedStructuralKind — a candy with a resource
-// sub-entity child is a hard "sub-entity child" load error, exactly as before). candy is routed to
-// foldCandyKind by an explicit `gn.disc=="candy"` host branch, NOT via the structural fold, so it
-// needs no Structural flag. The self-contained #CandyKindLoad def exists only to satisfy the
-// non-empty-schema load gate + document the seam.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "kind", Word: "candy"}},
-		schemaFS, "schema")
 }

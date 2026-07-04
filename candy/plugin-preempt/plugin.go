@@ -24,8 +24,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -37,8 +37,18 @@ const calver = "2026.183.0000"
 // NewProvider returns the arbiter+command provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:arbiter (dispatched host-side via the in-core proxy, no authored
+// plugin_input → no InputDef) + command:preempt (pass-through CLI args → no InputDef), plus
+// the self-contained #PreemptPlugin schema (via sdk.NewMeta → BuildCapabilities) that
+// satisfies the non-empty-schema load gate.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{
+			{Class: "verb", Word: "arbiter"},
+			{Class: "command", Word: "preempt"},
+		},
+		schemaFS)
+}
 
 // CliMain is the OUT-OF-PROCESS command-dispatch entry (charly fork/execs the binary with the
 // pass-through tokens after `charly preempt`). It runs the SAME shellback CLI as the in-proc
@@ -88,20 +98,4 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	default:
 		return nil, fmt.Errorf("preempt: unknown word %q (want arbiter|preempt)", req.GetReserved())
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises verb:arbiter (dispatched host-side via the in-core proxy, no authored
-// plugin_input → no InputDef) + command:preempt (pass-through CLI args → no InputDef). The
-// self-contained #PreemptPlugin schema satisfies the non-empty-schema load gate.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{
-			{Class: "verb", Word: "arbiter"},
-			{Class: "command", Word: "preempt"},
-		},
-		schemaFS, "schema")
 }

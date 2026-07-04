@@ -24,8 +24,8 @@ import (
 	"embed"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 //go:embed schema/*.cue
@@ -36,8 +36,20 @@ const calver = "2026.182.1600"
 // NewProvider returns the build-dispatch provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the two build-dispatch capabilities (Class "build", words "box" +
+// "generate", Phase "build") + the plugin's self-contained CUE schema (via sdk.NewMeta →
+// BuildCapabilities). InputDef is "" for both: the BuildRequest is HOST-constructed (by
+// BuildCmd / GenerateCmd), never user-authored in charly.yml, so there is no plugin_input
+// to validate against a served schema. The self-contained #BuildDispatch def exists only
+// to satisfy the non-empty-schema load gate + document the seam.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{
+			{Class: "build", Word: "box", Phase: sdk.PhaseBuild},
+			{Class: "build", Word: "generate", Phase: sdk.PhaseBuild},
+		},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -73,22 +85,4 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, fmt.Errorf("build dispatch %q: host build: %w", req.GetReserved(), err)
 	}
 	return &pb.InvokeReply{ResultJson: reply}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the two build-dispatch capabilities (Class "build", words "box" + "generate",
-// Phase "build"). InputDef is "" for both: the BuildRequest is HOST-constructed (by BuildCmd /
-// GenerateCmd), never user-authored in charly.yml, so there is no plugin_input to validate against
-// a served schema. The self-contained #BuildDispatch def exists only to satisfy the
-// non-empty-schema load gate + document the seam.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{
-			{Class: "build", Word: "box", Phase: sdk.PhaseBuild},
-			{Class: "build", Word: "generate", Phase: sdk.PhaseBuild},
-		},
-		schemaFS, "schema")
 }

@@ -25,6 +25,7 @@ package udev
 import (
 	"embed"
 
+	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -34,8 +35,14 @@ var schemaFS embed.FS
 // NewProvider returns the udev provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises NO gRPC capability — command:udev is CLI-dispatched, not resolved
+// through the gRPC provider registry — shipping only the self-contained doc schema to
+// satisfy the host's non-empty-schema load gate (via sdk.NewMeta → BuildCapabilities).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.179.0000",
+		[]sdk.ProvidedCapability{},
+		schemaFS)
+}
 
 // CliMain is the plugin's CLI entrypoint (command:udev dispatch).
 func CliMain(args []string) int { return cliMain(args) }

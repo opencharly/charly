@@ -29,8 +29,14 @@ var schemaFS embed.FS
 // NewProvider returns the examplebuilder provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the builder:examplebuilder capability + its self-contained CUE
+// schema via sdk.NewMeta → BuildCapabilities (compiled standalone, failing loudly if
+// broken), over the same channel a builtin uses.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.175.0716",
+		[]sdk.ProvidedCapability{{Class: "builder", Word: "examplebuilder", InputDef: "#ExamplebuilderInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -60,17 +66,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the builder:examplebuilder capability + its self-contained CUE
-// schema over the same channel a builtin uses; BuildCapabilities compiles the schema
-// standalone, failing loudly if broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.175.0716",
-		[]sdk.ProvidedCapability{{Class: "builder", Word: "examplebuilder", InputDef: "#ExamplebuilderInput"}},
-		schemaFS, "schema")
 }

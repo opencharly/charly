@@ -46,9 +46,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -101,8 +101,39 @@ var hostCoupledStepWords = map[string]bool{
 // NewProvider returns the step provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the class:step capabilities, each with its declared StepContract, via
+// sdk.NewMeta → BuildCapabilities. Only Emits is load-bearing here: the host's pod-overlay
+// OCITarget consults it to decide whether to Invoke OpEmit (true) or skip (false, apk-install /
+// reboot). Scope/Venue/Gate are nominal — these kinds' deploy leg is sdk/kit.WalkPlans, which
+// reads the per-instance view.Scope/Venue computed on the concrete step, so the static contract's
+// Scope/Venue/Gate are never consulted. The HOST-COUPLED system-packages (C1.2) + builder (C1.3) +
+// local-pkg-install (C1.4) + op (C1.5) Emits=true too — their OpEmit delegates to the host
+// "step-emit" host-builder.
+func NewMeta() pb.PluginMetaServer {
+	emit := func(word string, emits bool) sdk.ProvidedCapability {
+		return sdk.ProvidedCapability{
+			Class:        "step",
+			Word:         word,
+			StepContract: &sdk.StepContract{Scope: "system", Venue: 0, Gate: "", Emits: emits},
+		}
+	}
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{
+			emit(wordFile, true),
+			emit(wordShellHook, true),
+			emit(wordShellSnippet, true),
+			emit(wordServicePackaged, true),
+			emit(wordServiceCustom, true),
+			emit(wordRepoChange, true),
+			emit(wordApkInstall, false),
+			emit(wordReboot, false),
+			emit(wordSystemPackages, true),
+			emit(wordBuilder, true),
+			emit(wordLocalPkgInstall, true),
+			emit(wordOp, true),
+		},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -285,41 +316,4 @@ func renderServiceCustom(v spec.InstallStepView) string {
 func renderRepoChange(v spec.InstallStepView) string {
 	return fmt.Sprintf("RUN mkdir -p $(dirname %s) && cat > %s <<'CHARLY_REPO'\n%s\nCHARLY_REPO\n",
 		v.File, v.File, v.Content)
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the class:step capabilities, each with its declared StepContract. Only Emits
-// is load-bearing here: the host's pod-overlay OCITarget consults it to decide whether to Invoke
-// OpEmit (true) or skip (false, apk-install / reboot). Scope/Venue/Gate are nominal — these kinds' deploy leg
-// is sdk/kit.WalkPlans, which reads the per-instance view.Scope/Venue computed on the
-// concrete step, so the static contract's Scope/Venue/Gate are never consulted. The HOST-COUPLED
-// system-packages (C1.2) + builder (C1.3) + local-pkg-install (C1.4) + op (C1.5) Emits=true too —
-// their OpEmit delegates to the host "step-emit" host-builder.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	emit := func(word string, emits bool) sdk.ProvidedCapability {
-		return sdk.ProvidedCapability{
-			Class:        "step",
-			Word:         word,
-			StepContract: &sdk.StepContract{Scope: "system", Venue: 0, Gate: "", Emits: emits},
-		}
-	}
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{
-			emit(wordFile, true),
-			emit(wordShellHook, true),
-			emit(wordShellSnippet, true),
-			emit(wordServicePackaged, true),
-			emit(wordServiceCustom, true),
-			emit(wordRepoChange, true),
-			emit(wordApkInstall, false),
-			emit(wordReboot, false),
-			emit(wordSystemPackages, true),
-			emit(wordBuilder, true),
-			emit(wordLocalPkgInstall, true),
-			emit(wordOp, true),
-		},
-		schemaFS, "schema")
 }

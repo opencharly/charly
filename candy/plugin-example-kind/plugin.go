@@ -26,8 +26,14 @@ const calver = "2026.181.0001"
 // NewProvider returns the examplekind provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta ships the kind's capability (Class "kind", word "examplekind") + its
+// self-contained CUE schema via sdk.NewMeta → BuildCapabilities, over the SAME Describe
+// channel a compiled-in kind uses.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "kind", Word: "examplekind", InputDef: "#ExamplekindInput", Validates: true}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -69,16 +75,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	default:
 		return nil, fmt.Errorf("examplekind: unsupported op %q (only %q, %q)", req.GetOp(), sdk.OpLoad, sdk.OpValidate)
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the kind's capability (Class "kind", word "examplekind") + its self-contained
-// CUE schema over the SAME Describe channel a compiled-in kind uses.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "kind", Word: "examplekind", InputDef: "#ExamplekindInput", Validates: true}},
-		schemaFS, "schema")
 }

@@ -27,8 +27,15 @@ const calver = "2026.181.0001"
 // NewProvider returns the examplelifecycle provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises deploy:examplelifecycle + the plugin's self-contained CUE schema
+// (via sdk.NewMeta → BuildCapabilities). The F6 lifecycle Ops are dispatched on the SAME
+// Provider.Invoke — no separate capability surface; the host registers a wire-backed
+// substrateLifecycle for this substrate at plugin-load.
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta(calver,
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "examplelifecycle", InputDef: "#ExamplelifecycleInput", Lifecycle: true, Preresolve: true}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -69,17 +76,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	default:
 		return nil, fmt.Errorf("examplelifecycle: unsupported op %q", req.GetOp())
 	}
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the examplelifecycle deploy substrate. (The F6 lifecycle Ops are dispatched
-// on the SAME Provider.Invoke — no separate capability surface; the host registers a wire-backed
-// substrateLifecycle for this substrate at plugin-load.)
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "examplelifecycle", InputDef: "#ExamplelifecycleInput", Lifecycle: true, Preresolve: true}},
-		schemaFS, "schema")
 }

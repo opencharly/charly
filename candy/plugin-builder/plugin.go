@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -23,8 +23,13 @@ var schemaFS embed.FS
 // NewProvider returns the kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises the kind's capability (Class "kind", word "builder") + its
+// self-contained CUE schema (via sdk.NewMeta → BuildCapabilities).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.176.3202",
+		[]sdk.ProvidedCapability{{Class: "kind", Word: "builder", InputDef: "#BuilderInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -45,15 +50,4 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("builder kind: marshal entity: %w", err)
 	}
 	return &pb.InvokeReply{ResultJson: out}, nil
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe ships the kind's capability (Class "kind", word "builder") + its self-contained CUE schema.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.176.3202",
-		[]sdk.ProvidedCapability{{Class: "kind", Word: "builder", InputDef: "#BuilderInput"}},
-		schemaFS, "schema")
 }

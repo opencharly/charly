@@ -41,8 +41,14 @@ var schemaFS embed.FS
 // NewProvider returns the examplestep provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta returns the plugin's capability/schema describer.
-func NewMeta() pb.PluginMetaServer { return &meta{} }
+// NewMeta advertises verb:examplestep + the plugin's self-contained CUE schema (via
+// sdk.NewMeta → BuildCapabilities, which compiles the schema standalone, failing loudly
+// if broken).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.175.1200",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "examplestep", InputDef: "#ExamplestepInput"}},
+		schemaFS)
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
@@ -145,17 +151,4 @@ func (provider) execProvision(ctx context.Context, req *pb.InvokeRequest) (*pb.I
 	}
 	reverse := sdk.PluginScriptReverseOp(spec.ScopeUser, "rm -rf "+dir)
 	return sdk.BuildDeployReply([]spec.ReverseOp{reverse}, "plugin-example-step", "2026.175.1200")
-}
-
-type meta struct {
-	pb.UnimplementedPluginMetaServer
-}
-
-// Describe advertises the verb:examplestep capability + its self-contained CUE
-// schema over the same channel a builtin uses; BuildCapabilities compiles the schema
-// standalone, failing loudly if broken.
-func (meta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
-	return sdk.BuildCapabilities("2026.175.1200",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "examplestep", InputDef: "#ExamplestepInput"}},
-		schemaFS, "schema")
 }
