@@ -11,6 +11,7 @@ import (
 
 	"cuelang.org/go/cue"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/schemaconcat"
 )
 
@@ -214,6 +215,18 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// slashes; flatten it to ONE safe filename so `go build -o` lands a regular file
 	// in cacheDir (a slash would imply non-existent nested dirs).
 	bin := filepath.Join(cacheDir, safePluginBinName(name))
+	// Serialize concurrent builds of the SAME plugin binary. Multiple check beds
+	// (or a roster fan-out) can call buildPluginBinary for one plugin at once,
+	// racing the shared `go build -o <bin>` output file — the observed failure mode
+	// was a plugin whose provider "did not connect" mid-fan-out because its binary
+	// was momentarily half-written. A blocking per-binary file lock makes the second
+	// builder wait for the first (then rebuild against the same source), never
+	// collide (R4: a synchronization primitive, not a retry).
+	release, lockErr := kit.AcquireFileLock(bin+".lock", true)
+	if lockErr != nil {
+		return "", fmt.Errorf("plugin %q: acquire build lock: %w", name, lockErr)
+	}
+	defer func() { _ = release() }()
 	// An OUT-OF-PROCESS plugin binary builds STANDALONE in the candy's own module
 	// (its go.mod + `replace …/charly => ../../charly`), NEVER in the repo
 	// workspace: set GOWORK=off so a repo-root go.work — which lists only the
