@@ -290,10 +290,38 @@ func canonicalizeDeployArg(arg, instance string) (box, inst string) {
 	if before, _, ok := strings.Cut(arg, "/"); ok {
 		first = before
 	}
-	if strings.Contains(first, ".") || strings.Contains(arg, "@") || strings.Contains(arg[strings.LastIndex(arg, "/"):], ":") {
+	if strings.Contains(first, ".") || strings.Contains(arg, "@") || argHasImageTag(arg) {
 		return arg, ""
 	}
 	return parseDeployKey(arg)
+}
+
+// argHasImageTag reports whether arg's trailing path segment carries a ":tag" — the marker of a
+// registry IMAGE ref (ghcr.io/org/image:tag), as opposed to a github REPO ref (which pins with
+// @version) or a dotted-path deploy address. Shared by canonicalizeDeployArg + the
+// deploy-name guard (R3).
+func argHasImageTag(arg string) bool {
+	i := strings.LastIndex(arg, "/")
+	if i < 0 {
+		return false
+	}
+	return strings.Contains(arg[i:], ":")
+}
+
+// rejectImageRefAsDeployName fails a deploy-CREATION command (config setup / start) whose
+// positional is a tagged registry image ref used AS the deploy NAME. The ref's registry-host dots
+// make an invalid charly.yml deploy key (dots are reserved for dotted-path addressing), so the
+// deploy would save and the NEXT config load would hard-fail (the 2026-07
+// `charly config ghcr.io/…:tag` corruption). A registry image needs an explicit short deploy
+// name. Gated on BOTH a dot (invalid key) AND an image `:tag` (so a github repo ref, which pins
+// with @version, and a bare dotted-path address are untouched).
+func rejectImageRefAsDeployName(box string) error {
+	if strings.Contains(box, ".") && argHasImageTag(box) {
+		return fmt.Errorf(
+			"deploy name %q is a tagged registry image ref — a registry ref can't be a deploy name (its dots collide with dotted-path addressing). Give it a short name:\n    charly bundle add <name> %s",
+			box, box)
+	}
+	return nil
 }
 
 // parseDeployKey splits a charly.yml map key back into image name and instance.

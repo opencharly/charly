@@ -108,6 +108,9 @@ func (c *BoxConfigSetupCmd) Run() error {
 	// the (image, instance) split — without this, MergeDeployOntoMetadata
 	// looks up the wrong charly.yml key and drops port/env overlays.
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	if err := rejectImageRefAsDeployName(c.Box); err != nil {
+		return err
+	}
 
 	return c.runConfig(rt)
 }

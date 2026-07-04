@@ -27,6 +27,9 @@ func (c *StartCmd) Run() error {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	if err := rejectImageRefAsDeployName(c.Box); err != nil {
+		return err
+	}
 
 	// Resource arbitration: starting a pod deploy that claims requires_exclusive
 	// preempts the running holders of that resource (persistent lease —
