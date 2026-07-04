@@ -1,0 +1,29 @@
+version: '3'
+
+# Plugins.yml — maintenance sweeps over the per-module plugin-candy surface.
+#
+# Every plugin candy is its OWN Go module (the deliberate dependency-shed design:
+# a heavy plugin's deps never merge into the ~60 light plugins' graphs). That
+# 74-module surface is kept drift-free by two mechanisms: the canonical-go.mod
+# GATE (charly/plugin_gomod_canonical_test.go asserts each go.mod matches the
+# Shape-A template) and this `plugins:tidy` sweep (keeps each go.sum in step with
+# its imports). Run tidy after adding/removing a plugin dep; the gate then proves
+# the module line + sdk require/replace stayed canonical.
+
+tasks:
+  tidy:
+    desc: Run `GOWORK=off go mod tidy` in every candy/plugin-* module (keeps go.sum in step)
+    cmds:
+      - |
+        set -e
+        n=0; fail=0
+        for d in candy/plugin-*/; do
+          [ -f "$d/go.mod" ] || continue
+          if ( cd "$d" && GOWORK=off GOFLAGS=-mod=mod go mod tidy ); then
+            n=$((n+1))
+          else
+            echo "TIDY FAILED: $d" >&2; fail=1
+          fi
+        done
+        echo "tidied $n plugin modules"
+        exit $fail

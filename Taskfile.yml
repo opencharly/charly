@@ -12,6 +12,9 @@ includes:
   cue:
     taskfile: ./taskfiles/Cue.yml
     dir: "{{.ROOT_DIR}}"
+  plugins:
+    taskfile: ./taskfiles/Plugins.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:
