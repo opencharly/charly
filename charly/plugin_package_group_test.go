@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestLoadUnified_PackageGroupPluginKind proves the FIRST kind→plugin extraction

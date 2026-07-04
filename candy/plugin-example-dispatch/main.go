@@ -13,8 +13,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
 )
 
 //go:embed schema/*.cue

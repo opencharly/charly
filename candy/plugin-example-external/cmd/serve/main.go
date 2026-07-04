@@ -8,7 +8,7 @@ package main
 
 import (
 	externalprobe "github.com/opencharly/charly/candy/plugin-example-external"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(externalprobe.NewProvider(), externalprobe.NewMeta()) }

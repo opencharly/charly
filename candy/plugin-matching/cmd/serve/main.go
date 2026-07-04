@@ -7,7 +7,7 @@ package main
 
 import (
 	matching "github.com/opencharly/charly/candy/plugin-matching"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(matching.NewProvider(), matching.NewMeta()) }

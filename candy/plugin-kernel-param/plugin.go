@@ -3,7 +3,7 @@
 // /proc/sys/<key-as-slashes> via the live kit.CheckContext and match the value.
 // ACT (kit.ProvisionActor): render `sysctl -w key=value`. Relocated out of charly's
 // module (formerly charly/plugin/builtins/kernel_param + charly/plugin_kernel_param.go)
-// onto the charly/plugin/kit contract; COMPILED-IN-ONLY. The verb word stays
+// onto the sdk/kit contract; COMPILED-IN-ONLY. The verb word stays
 // `kernel-param`; the Go package is `kernelparam` (a hyphen is not a legal package name).
 // The matcher evaluation reuses the importable sdk.MatchAll + spec.MatcherList (R3).
 package kernelparam
@@ -16,9 +16,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-kernel-param/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

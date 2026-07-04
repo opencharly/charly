@@ -20,9 +20,9 @@ import (
 	"github.com/alecthomas/kong"
 	libvirt "github.com/digitalocean/go-libvirt"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // vmEnv is the plugin-side decode of the host's CheckEnv (for a `libvirt:` check — the run mode

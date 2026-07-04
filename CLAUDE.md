@@ -23,7 +23,7 @@ Consult this table BEFORE the first tool call of every task; when several rows m
 | **— Build & author boxes and candies —** | |
 | Editing a candy (`candy/<name>/charly.yml`), candy authoring, candy tasks/services | `/charly-image:layer` |
 | Editing a box (`box/<name>/charly.yml` — boxes live in the `box/<distro>` submodules; main owns none), box composition | `/charly-image:image` |
-| Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source → `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK / `charly/plugin/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module | `/charly-internals:plugin` |
+| Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source → `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the `sdk/` submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module | `/charly-internals:plugin` |
 | `charly box build` / `charly box generate` / Containerfile | `/charly-build:build` + `/charly-build:generate` + `/charly-internals:generate-source` |
 | `charly box validate` / schema error | `/charly-build:validate` |
 | `charly migrate` / schema migration / legacy → latest CalVer / CalVer schema version | `/charly-build:migrate` |
@@ -57,7 +57,7 @@ Consult this table BEFORE the first tool call of every task; when several rows m
 | Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:go-quality` + `/charly-internals:strict-policy` |
 | IR / InstallPlan / DeployTarget / OCITarget | `/charly-internals:install-plan` |
 | OCI labels / capabilities contract | `/charly-internals:capabilities` |
-| Egress config validation — validating/generating the config files charly WRITES to a system (`charly/egress.go`, `ValidateEgress`, vendored CUE schemas under `schema/vendor/`, the `task cue:vendor` pipeline, cloud-init/k8s/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
+| Egress config validation — validating/generating the config files charly WRITES to a system (`charly/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
 | VmSpec / libvirt / cloud-init / OVMF internals | `/charly-internals:vm-spec` (+ renderer skills as needed) |
 | **— Orientation: "what does candy X do?" / "what's in box X?" —** | |
 | Pod apps, language runtimes, infrastructure services, CLI utilities / the `charly` binary | `/charly-<family>:<name>` — families: `jupyter`, `coder`, `selkies`, `openclaw`, `versa`, `ollama`, `openwebui`, `comfyui`, `immich`, `hermes`, `filebrowser` (pod apps); `languages` (python, python-ml, pixi); `infrastructure` (postgresql, redis, k3s, traefik, supervisord, tailscale, gocryptfs, virtualization, dbus-layer, tmux-layer, …); `tools` (ripgrep, himalaya, whisper, charly, …) |

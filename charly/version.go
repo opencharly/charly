@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
@@ -93,7 +93,7 @@ func ComputeCalVerAt(t time.Time) string {
 }
 
 // CalVer is the parsed YYYY.DDD.HHMM calendar version. The
-// parsed type + its parser live in charly/plugin/kit so BOTH core (the loader
+// parsed type + its parser live in sdk/kit so BOTH core (the loader
 // version gate) and the candy (the migration chain) import the ONE copy; these
 // zero-churn aliases keep every core call site unchanged. (The struct is kept out
 // of spec because spec already binds `CalVer = string`, the CUE wire scalar.)

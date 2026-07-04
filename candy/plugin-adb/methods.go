@@ -9,7 +9,7 @@ import (
 
 	adb "github.com/zach-klippenstein/goadb"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // methods.go is the adb method dispatcher: the 12-method surface moved from

@@ -4,7 +4,7 @@
 // a candy and still dispatches in-process. The *Runner-keeping analogue of the
 // stateless candy/plugin-example exampleprobe. Relocated out of charly's module
 // (formerly charly/plugin/builtins/examplerunverb + charly/plugin_examplerunverb.go)
-// onto the charly/plugin/kit contract; COMPILED-IN-ONLY.
+// onto the sdk/kit contract; COMPILED-IN-ONLY.
 package examplerunverb
 
 import (
@@ -12,8 +12,8 @@ import (
 	"embed"
 
 	"github.com/opencharly/charly/candy/plugin-examplerunverb/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

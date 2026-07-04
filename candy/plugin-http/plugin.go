@@ -5,7 +5,7 @@
 // or from inside the disposable container via `curl` under charly check box (cc.Exec). It
 // implements kit.CheckVerbProvider and runs in EITHER placement (compiled-in OR
 // out-of-process, F2) with ZERO authoring change. Relocated out of charly's module
-// (formerly charly/plugin/builtins/http + charly/plugin_http.go) onto the charly/plugin/kit
+// (formerly charly/plugin/builtins/http + charly/plugin_http.go) onto the sdk/kit
 // contract. The matcher evaluation reuses the importable sdk.MatchAll + spec.MatcherList (R3).
 package httpverb
 
@@ -19,9 +19,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-http/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // deploy_preresolve.go — the GENERAL per-substrate deploy preresolver hook (F1).

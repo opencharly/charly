@@ -2,7 +2,7 @@
 // a `pgrep -x` exact-name match against the live deployment. It implements
 // kit.CheckVerbProvider — RunVerb runs the probe via the live kit.CheckContext.
 // Relocated out of charly's module (formerly charly/plugin/builtins/process +
-// charly/plugin_process.go) onto the charly/plugin/kit contract; COMPILED-IN-ONLY.
+// charly/plugin_process.go) onto the sdk/kit contract; COMPILED-IN-ONLY.
 package process
 
 import (
@@ -10,8 +10,8 @@ import (
 	"embed"
 
 	"github.com/opencharly/charly/candy/plugin-process/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

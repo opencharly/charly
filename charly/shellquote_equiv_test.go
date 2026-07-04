@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestShellSingleQuoters_CanonicalPOSIX asserts EVERY package-main POSIX single-quoter — plus the

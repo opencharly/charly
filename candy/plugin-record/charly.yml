@@ -5,7 +5,7 @@ plugin-record:
             OUT-OF-TREE charly plugin serving the `record` live-container check verb — a
             standalone Go module (go.mod + main.go) that manages recording sessions inside a
             running deployment (list, start, stop, cmd) over go-plugin gRPC via the charly
-            plugin SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            plugin SDK (github.com/opencharly/sdk). charly's loader fetches this candy's repo,
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS via
             LocalTransport — so the asciinema/wf-recorder/pixelflux recording driver lives
             HERE, out of charly's core check surface (the first live-verb dep-shed of the

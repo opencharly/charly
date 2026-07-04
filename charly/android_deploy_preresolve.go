@@ -29,7 +29,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // androidBootDeadline bounds the readiness gate for a freshly-started emulator

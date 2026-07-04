@@ -8,7 +8,7 @@ package main
 
 import (
 	port "github.com/opencharly/charly/candy/plugin-port"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() {

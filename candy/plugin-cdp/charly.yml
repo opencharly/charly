@@ -6,7 +6,7 @@ plugin-cdp:
             verb — a standalone Go module (go.mod + main.go) that speaks CDP over the
             DevTools HTTP (/json) + per-tab WebSocket surface via golang.org/x/net/websocket,
             served OUT-OF-PROCESS over go-plugin gRPC via the charly plugin SDK
-            (charly/plugin/sdk). charly's loader fetches this candy's repo, go-builds the
+            (github.com/opencharly/sdk). charly's loader fetches this candy's repo, go-builds the
             provider binary on the HOST, and serves it via LocalTransport — so the CDP
             WebSocket client lives HERE, out of charly's core check surface (the latest
             external dep-shed after candy/plugin-appium, -adb, -kube, -spice, -mcp, -record;

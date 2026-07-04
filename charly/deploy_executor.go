@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // DeployExecutor abstracts shell execution + file placement for deploy

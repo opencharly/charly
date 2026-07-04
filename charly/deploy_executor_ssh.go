@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // SSHExecutor implements DeployExecutor against an SSH-reachable guest.

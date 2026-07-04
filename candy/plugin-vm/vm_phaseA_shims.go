@@ -9,7 +9,7 @@ import (
 
 // vm_phaseA_shims.go — small host-side impl helpers the out-of-process plugin needs (it runs on the
 // host). unmarshalEmbeddedDefaults implements the vmshared.UnmarshalEmbeddedDefaults injection seam
-// (charly/vmshared/hooks.go, wired in vmshared_aliases.go). libvirtSessionURI / startLibvirtUserSession
+// (sdk/vmshared/hooks.go, wired in vmshared_aliases.go). libvirtSessionURI / startLibvirtUserSession
 // are a deliberate per-module copy of core's charly/vm.go host-detection helpers (a const + one tiny
 // var): the SUBSTANTIAL shared VM code — including qemuSystemBinary + vmDiskDir — now lives ONCE in
 // vmshared (vm_helpers.go, aliased in vmshared_aliases.go), and these two are below the bar for

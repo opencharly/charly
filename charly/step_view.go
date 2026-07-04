@@ -17,7 +17,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // stepToView projects one concrete InstallStep onto its serializable wire view.

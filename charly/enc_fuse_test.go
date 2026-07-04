@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // withFuseConf points fuseConfPath at a temp file containing body (or removes it when body ==

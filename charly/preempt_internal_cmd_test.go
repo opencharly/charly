@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRenderLeaseTable proves the hidden `charly __preempt-status` FORMATTER (renderLeaseTable)

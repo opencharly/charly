@@ -2,7 +2,7 @@ module github.com/opencharly/charly/candy/plugin-deploy-local
 
 go 1.26.0
 
-require github.com/opencharly/charly/charly v0.0.0
+require github.com/opencharly/sdk v0.0.0
 
 require (
 	cuelang.org/go v0.16.1 // indirect
@@ -30,7 +30,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// Local build: charly's git-repo plugin loader builds this on the host against the
-// in-tree charly (proto + sdk + kit). A published external plugin would require a tagged
-// charly version instead.
-replace github.com/opencharly/charly/charly => ../../charly
+replace github.com/opencharly/sdk => ../../sdk

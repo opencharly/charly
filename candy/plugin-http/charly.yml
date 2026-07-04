@@ -6,7 +6,7 @@ plugin-http:
             against status / body / headers — issued from the charly host's network
             namespace under charly check live (cc.HTTPDo), or from inside the disposable
             container via `curl` under charly check box (cc.Exec). A HOST-COUPLED verb —
-            its RunVerb runs against the live check engine (charly/plugin/kit.CheckContext),
+            its RunVerb runs against the live check engine (sdk/kit.CheckContext),
             served in EITHER placement: compiled-in, or OUT-OF-PROCESS via the
             CheckContextService reverse channel (F2). A pure check verb; the matcher
             evaluation reuses the shared sdk.MatchAll.

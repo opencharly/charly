@@ -4,7 +4,7 @@ plugin-process:
         description: |-
             The `process` check verb relocated into a candy: a `pgrep -x` exact-name
             match against the live deployment. A HOST-COUPLED verb — its RunVerb runs
-            against the live check engine (charly/plugin/kit.CheckContext), so it is
+            against the live check engine (sdk/kit.CheckContext), so it is
             COMPILED-IN-ONLY. A pure check verb (probe-only, no act/step role); the
             second relocation on the kit contract after candy/plugin-port.
     plugin-process-decl:

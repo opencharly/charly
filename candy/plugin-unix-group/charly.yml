@@ -5,7 +5,7 @@ plugin-unix-group:
             The `unix_group` MULTI-ROLE state-provision verb relocated into a candy.
             CHECK: `getent group` via the live check engine and compare gid. ACT:
             render an idempotent `groupadd`. A HOST-COUPLED verb on the
-            charly/plugin/kit contract (CheckVerbProvider + ProvisionActor), so it is
+            sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
     plugin-unix-group-decl:
         plugin:

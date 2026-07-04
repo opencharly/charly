@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestInstallWithRetry covers the PackageManager-init-race remedy (moved here from

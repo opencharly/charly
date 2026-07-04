@@ -4,7 +4,7 @@ plugin-example-deploy:
         description: |-
             Reference OUT-OF-TREE charly DEPLOY plugin — a standalone Go module
             (go.mod + main.go) serving the `exampledeploy` deploy TARGET over
-            go-plugin gRPC via the charly plugin SDK (charly/plugin/sdk). It proves
+            go-plugin gRPC via the charly plugin SDK (github.com/opencharly/sdk). It proves
             the E3b ExecutorService reverse channel end-to-end for the deploy class,
             including the F2 executable deploy channel: charly's loader host-builds
             this candy's provider binary and serves it OUT-OF-PROCESS via

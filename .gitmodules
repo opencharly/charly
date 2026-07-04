@@ -26,3 +26,6 @@
 [submodule "box/ubuntu"]
 	path = box/ubuntu
 	url = git@github.com:opencharly/distro-ubuntu.git
+[submodule "sdk"]
+	path = sdk
+	url = git@github.com:opencharly/sdk.git

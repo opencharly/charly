@@ -5,7 +5,7 @@ plugin-dbus:
             OUT-OF-TREE charly plugin serving the `dbus` live-container check verb — a
             standalone Go module (go.mod + main.go) that interacts with D-Bus services inside
             a running deployment (list, call, introspect, notify) over go-plugin gRPC via the
-            charly plugin SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            charly plugin SDK (github.com/opencharly/sdk). charly's loader fetches this candy's repo,
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS via
             LocalTransport — so the D-Bus driver lives HERE, out of charly's core check
             surface. STRUCTURAL externalization, NOT a dep-shed: godbus stays in charly's core

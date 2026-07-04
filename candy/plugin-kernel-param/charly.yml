@@ -5,7 +5,7 @@ plugin-kernel-param:
             The `kernel-param` MULTI-ROLE state-provision verb relocated into a candy.
             CHECK: read /proc/sys/<key-as-slashes> via the live check engine and match
             the value. ACT: render `sysctl -w key=value`. A HOST-COUPLED verb on the
-            charly/plugin/kit contract (CheckVerbProvider + ProvisionActor), so it is
+            sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. The first multi-role verb on the kit ProvisionActor
             extension; matchers reuse the shared sdk.MatchAll.
     plugin-kernel-param-decl:

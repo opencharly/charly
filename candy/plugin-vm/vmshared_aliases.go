@@ -1,12 +1,12 @@
 // vmshared_aliases.go — package-main bindings onto the shared VM/cloud-init
-// package github.com/opencharly/charly/charly/vmshared, imported via the go.work
+// package github.com/opencharly/sdk/vmshared, imported via the go.work
 // replace of the charly module. The 17 shared VM/libvirt/cloud-init files used to be
 // byte-for-byte duplicated here; they now live ONCE in vmshared. These bindings keep
 // the plugin's package-main references compiling; the init() wires the plugin-side
 // (in-process go-libvirt) implementations of the shared package's seams.
 package main
 
-import "github.com/opencharly/charly/charly/vmshared"
+import "github.com/opencharly/sdk/vmshared"
 
 type (
 	LibvirtAudio             = vmshared.LibvirtAudio

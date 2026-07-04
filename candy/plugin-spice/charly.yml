@@ -5,7 +5,7 @@ plugin-spice:
             OUT-OF-TREE charly plugin serving the `spice` SPICE-wire display/input
             check verb — a standalone Go module (go.mod + main.go) that speaks the
             SPICE remote-desktop protocol over go-plugin gRPC via the charly plugin
-            SDK (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            SDK (github.com/opencharly/sdk). charly's loader fetches this candy's repo,
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS
             via LocalTransport — so the github.com/Shells-com/spice library lives
             HERE (vendored under third_party/spice), out of charly's core go.mod, with

@@ -3,7 +3,7 @@
 // net.LookupIP under charly check live (with optional required-address matching). It
 // implements kit.CheckVerbProvider — RunVerb runs the probe via the live
 // kit.CheckContext. Relocated out of charly's module (formerly
-// charly/plugin/builtins/dns + charly/plugin_dns.go) onto the charly/plugin/kit
+// charly/plugin/builtins/dns + charly/plugin_dns.go) onto the sdk/kit
 // contract; COMPILED-IN-ONLY.
 package dns
 
@@ -14,8 +14,8 @@ import (
 	"net"
 
 	"github.com/opencharly/charly/candy/plugin-dns/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

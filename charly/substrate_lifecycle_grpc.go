@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // grpcSubstrateLifecycle implements the in-core substrateLifecycle interface by Invoking an

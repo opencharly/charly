@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // methods_test.go covers the PLUGIN-side helpers ported out-of-process from charly/dbus.go

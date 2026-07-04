@@ -56,7 +56,7 @@ var allStepKinds = []StepKind{
 // lowercase-hyphenated class:step plugin word that serves their pod-overlay OpEmit
 // (candy/plugin-installstep). These kinds have NO in-proc StepProvider — OCITarget.emitStep routes
 // them here, serializing the step VIEW as the OpEmit payload. Their DEPLOY leg is unchanged
-// (charly/plugin/kit.WalkPlans renders them from the same view; reboot's is the host-side guest
+// (sdk/kit.WalkPlans renders them from the same view; reboot's is the host-side guest
 // reboot over RunHostStep → rebootVenueAndWait). apk-install's and reboot's plugin declare
 // Emits=false (no build fragment); every other word Emits=true.
 //

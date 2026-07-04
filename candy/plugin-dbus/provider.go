@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // provider.go is the out-of-process dbus verb provider — charly's host dispatches a `dbus:`

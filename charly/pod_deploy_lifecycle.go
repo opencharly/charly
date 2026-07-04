@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // pod_deploy_lifecycle.go — the HOST-SIDE lifecycle hook for the EXTERNAL `pod` deploy

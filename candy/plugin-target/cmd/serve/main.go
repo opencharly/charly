@@ -5,7 +5,7 @@ package main
 
 import (
 	targetkind "github.com/opencharly/charly/candy/plugin-target"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(targetkind.NewProvider(), targetkind.NewMeta()) }

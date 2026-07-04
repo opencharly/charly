@@ -3,7 +3,7 @@
 // live kit.CheckContext and compare gid. ACT (kit.ProvisionActor): render an idempotent
 // `groupadd`. Relocated out of charly's module (formerly
 // charly/plugin/builtins/unix_group + charly/plugin_unix_group.go) onto the
-// charly/plugin/kit contract; COMPILED-IN-ONLY. The verb word stays `unix_group`.
+// sdk/kit contract; COMPILED-IN-ONLY. The verb word stays `unix_group`.
 package unixgroup
 
 import (
@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-unix-group/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

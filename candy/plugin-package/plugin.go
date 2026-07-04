@@ -1,6 +1,6 @@
 // Package pkgverb is the importable, COMPILED-IN host-coupled `package` verb: the
 // TYPED-STEP state-provision verb (Go package pkgverb — `package` is a keyword). Three
-// roles on the charly/plugin/kit contract:
+// roles on the sdk/kit contract:
 //   - CheckVerbProvider: rpm -q / dpkg -s / pacman -Q probe + optional version match.
 //   - ProvisionActor (runtime act): render the dnf/apt-get/pacman install shell.
 //   - StepProvider (build/deploy act): lower into a SystemPackagesStep (the host
@@ -18,8 +18,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-package/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

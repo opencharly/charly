@@ -10,7 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // command.go is the command:tmux leg of this plugin — the externalized `charly tmux …` CLI,

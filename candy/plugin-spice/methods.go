@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // methods.go is the spice method dispatcher: the 7-method surface moved from

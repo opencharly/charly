@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Generator holds state for generating build artifacts

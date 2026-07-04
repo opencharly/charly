@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // methods.go is the cdp method dispatcher + the CDP-protocol client layer, moved from

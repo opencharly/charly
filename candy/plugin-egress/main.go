@@ -2,7 +2,7 @@
 // charly WRITES to a system (cloud-init, k8s manifests, traefik routes, ledger JSON,
 // systemd/quadlet units, the Containerfile, libvirt domain XML) against a CUE schema
 // BEFORE the bytes hit disk — the egress counterpart to charly's ingress validation.
-// The validation logic + the CUE schemas (formerly charly/egress.go + charly/schema/
+// The validation logic + the CUE schemas (formerly charly/egress.go + sdk/schema/
 // egress_*.cue + the vendored cloud_config) live HERE; charly's in-core ValidateEgress*
 // functions are a thin shim that Invokes this plugin's OpValidate. Compiled-in (the
 // build/deploy hot paths call it many times; an in-proc inprocProvider pays only a JSON
@@ -29,8 +29,8 @@ import (
 	"cuelang.org/go/encoding/xml/koala"
 	cueyaml "cuelang.org/go/encoding/yaml"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
 )
 
 //go:embed schema/*.cue

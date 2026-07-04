@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // runBootstrapPhase invokes every PhaseBootstrap provider's OpBootstrap on the raw project config

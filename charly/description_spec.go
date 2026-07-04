@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // The keyword constant VALUES live in kit (the importable host-engine shared with

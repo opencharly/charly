@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // arbiter_test.go — the SEAM-FAKED arbiter unit suite, relocated with the arbiter from charly

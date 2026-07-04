@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // builder_preresolve.go — the host-side build PRE-PASS that keeps BuildDeployPlan PURE.

@@ -8,7 +8,7 @@ package main
 
 import (
 	httpverb "github.com/opencharly/charly/candy/plugin-http"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() {

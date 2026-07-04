@@ -125,8 +125,9 @@ func pluginKindKeys(uf *UnifiedFile) []string {
 }
 
 // copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's
-// `replace …/charly => ../../charly` to the ABSOLUTE charly dir so buildPluginBinary resolves it
-// from the temp project location.
+// `replace github.com/opencharly/sdk => ../../sdk` to the ABSOLUTE sdk dir (derived
+// from charlyDir's parent) so buildPluginBinary resolves it from the temp project
+// location.
 func copyCandyFixReplace(src, dst, charlyDir string) error {
 	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -142,10 +143,11 @@ func copyCandyFixReplace(src, dst, charlyDir string) error {
 			return err
 		}
 		if d.Name() == "go.mod" {
+			sdkDir := filepath.Join(filepath.Dir(charlyDir), "sdk")
 			var fixed []string
 			for _, line := range strings.Split(string(b), "\n") {
-				if strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/charly/charly") {
-					fixed = append(fixed, "replace github.com/opencharly/charly/charly => "+charlyDir)
+				if strings.HasPrefix(strings.TrimSpace(line), "replace github.com/opencharly/sdk") {
+					fixed = append(fixed, "replace github.com/opencharly/sdk => "+sdkDir)
 					continue
 				}
 				fixed = append(fixed, line)

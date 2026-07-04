@@ -1,16 +1,17 @@
 package main
 
-// CUE-validation Core. One compiled schema instance (all
-// schema/*.cue unified — shared #Step lives once in _common.cue, R3), a kind
-// registry populated by each cue_kind_<name>.go via init(), and a per-entity
-// validator. Per-entity validation extracts an entity (the `candy:` value of a
-// legacy kind-keyed file, or each value of a `pod:`/`k8s:`/… collection map)
-// and unifies it with #<Kind>; a unified node-form document is validated whole
-// against #NodeDoc — the sole load gate. The legacy shape-routing +
-// hand-written validators are deleted; CUE is the single schema source.
+// CUE-validation Core. One compiled schema instance (every schema *.cue file
+// from the SDK's schema package unified — shared #Step lives once in
+// _common.cue, R3), a kind registry populated by each cue_kind_<name>.go via
+// init(), and a per-entity validator. Per-entity validation extracts an entity
+// (the `candy:` value of a legacy kind-keyed file, or each value of a
+// `pod:`/`k8s:`/… collection map) and unifies it with #<Kind>; a unified
+// node-form document is validated whole against #NodeDoc — the sole load gate.
+// The legacy shape-routing + hand-written validators are deleted; CUE is the
+// single schema source, and it travels WITH the SDK (github.com/opencharly/sdk
+// owns schema + the generated spec types in one module).
 
 import (
-	"embed"
 	"fmt"
 
 	"cuelang.org/go/cue"
@@ -19,11 +20,13 @@ import (
 	cueyaml "cuelang.org/go/encoding/yaml"
 	"gopkg.in/yaml.v3"
 
-	"github.com/opencharly/charly/charly/internal/schemaconcat"
+	sdkschema "github.com/opencharly/sdk/schema"
+	"github.com/opencharly/sdk/schemaconcat"
 )
 
-//go:embed schema/*.cue
-var schemaFS embed.FS
+// schemaFS is the CUE schema source, exported by the SDK module (the contract
+// repo) — files sit at the FS root, so consumers concatenate with dir ".".
+var schemaFS = sdkschema.FS
 
 // cueSchemaCtx is the process-wide CUE context (schemas compile once, reuse).
 var cueSchemaCtx = cuecontext.New()
@@ -34,7 +37,7 @@ var cueSchemaCtx = cuecontext.New()
 // (schemaconcat.ConcatSchema — R3), so the compiled schema can never drift from the
 // generated Go types.
 var sharedCueSchema = func() cue.Value {
-	body, _, err := schemaconcat.ConcatSchema(schemaFS, "schema", nil)
+	body, _, err := schemaconcat.ConcatSchema(schemaFS, ".", nil)
 	if err != nil {
 		panic(fmt.Sprintf("read embedded schema: %v", err))
 	}

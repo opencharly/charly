@@ -29,8 +29,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // HomeToken is the deferred-home placeholder the compiler bakes into
@@ -50,7 +50,7 @@ const HomeToken = "{{.Home}}"
 // Scope — where the effect lands on the target filesystem.
 // ---------------------------------------------------------------------------
 
-// Scope is the spec-homed enum (charly/spec/deploy_wire.go) — aliased here so
+// Scope is the spec-homed enum (sdk/spec/deploy_wire.go) — aliased here so
 // the whole IR keeps spelling it `Scope`/`ScopeSystem`/… unchanged. It lives in
 // spec because an out-of-process deploy/step/builder plugin (through the SDK)
 // constructs it for a ReverseOp it returns across the process boundary; package
@@ -184,7 +184,7 @@ const (
 // ReverseOp — what the ledger records to un-do a step at teardown time.
 // ---------------------------------------------------------------------------
 
-// ReverseOpKind + ReverseOp are spec-homed (charly/spec/deploy_wire.go) and
+// ReverseOpKind + ReverseOp are spec-homed (sdk/spec/deploy_wire.go) and
 // aliased here. They live in spec because an out-of-process deploy/step/builder
 // plugin (through the SDK) RETURNS ReverseOps across the process boundary for
 // the host to record + replay; package main and the SDK share ONE type (R3).

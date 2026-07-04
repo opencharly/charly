@@ -4,7 +4,7 @@ plugin-example-command:
         description: |-
             Reference OUT-OF-TREE charly COMMAND-class plugin — a standalone Go module
             (go.mod + main.go) contributing the `examplecommand` command via the charly
-            plugin SDK (charly/plugin/sdk). On `charly examplecommand <args…>`, charly's
+            plugin SDK (github.com/opencharly/sdk). On `charly examplecommand <args…>`, charly's
             CLI dispatch (provider_command_external.go dispatchExternalCommand) RESOLVES
             this plugin's binary (host-built from source, or baked into a deployed image)
             and syscall.Exec's it with the pass-through tokens in CLI mode (sdk.Main →

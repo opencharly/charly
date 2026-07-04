@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,7 +68,7 @@ var builtinProviderInstances = []Provider{
 	// service-packaged/service-custom/repo-change/apk-install + C1.6 reboot — apk-install & reboot are
 	// no-op-emit, Emits=false) format their fragment directly from the step VIEW; the HOST-COUPLED
 	// SystemPackages (C1.2) + Builder (C1.3) + LocalPkgInstall (C1.4) + Op (C1.5) OpEmit calls back the
-	// host's "step-emit" host-builder. Their deploy leg stays charly/plugin/kit.WalkPlans (reboot's is
+	// host's "step-emit" host-builder. Their deploy leg stays sdk/kit.WalkPlans (reboot's is
 	// the host-side guest reboot over RunHostStep → rebootVenueAndWait).
 	// builders (ClassBuilder) — the four detection-builders (aur/pixi/cargo/npm) are EXTERNAL
 	// out-of-process plugin candies (candy/plugin-builder-<word>): their build-time multi-stage

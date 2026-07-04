@@ -9,7 +9,7 @@ plugin-kube:
             k3s-server / target:k8s deploy seam needs — a standalone Go module
             (go.mod + main.go) that speaks the Kubernetes API (client-go dynamic +
             clientcmd) over go-plugin gRPC via the charly plugin SDK
-            (charly/plugin/sdk). charly's loader fetches this candy's repo,
+            (github.com/opencharly/sdk). charly's loader fetches this candy's repo,
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS
             via LocalTransport — so the k8s.io/client-go + k8s.io/apimachinery
             dependency lives HERE, out of charly's core go.mod (the goadb-analog of

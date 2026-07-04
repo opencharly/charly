@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/spec"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalStepKind_EndToEnd proves the FULL F3 external-step-kind path END-TO-END on real

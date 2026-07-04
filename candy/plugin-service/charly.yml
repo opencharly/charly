@@ -7,7 +7,7 @@ plugin-service:
             check engine. ACT (runtime): render the enable shell. ACT (build/deploy):
             lower into a ServicePackagedStep (the host materializes the kit descriptor,
             keeping the load-bearing Reverse() in package main). A HOST-COUPLED verb on
-            the charly/plugin/kit contract (CheckVerbProvider + ProvisionActor +
+            the sdk/kit contract (CheckVerbProvider + ProvisionActor +
             StepProvider), so it is COMPILED-IN-ONLY.
     plugin-service-decl:
         plugin:

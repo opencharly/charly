@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // fakeExec is a kit.Executor returning canned RunCapture output (the ModeBox curl path).

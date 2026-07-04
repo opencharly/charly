@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // externalDeployTarget is the UnifiedDeployTarget adapter for an OUT-OF-PROCESS deploy

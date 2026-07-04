@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // ResolvedBindMount is ready for -v flags.

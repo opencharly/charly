@@ -14,7 +14,7 @@ import (
 
 	"github.com/tebeka/selenium"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // dispatch.go is the appium method dispatcher: the 48-method W3C surface moved from

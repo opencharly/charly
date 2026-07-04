@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestDoHTTPRequest exercises the host-side HTTP execution shared by the in-proc

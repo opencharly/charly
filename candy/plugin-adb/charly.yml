@@ -7,7 +7,7 @@ plugin-adb:
             `target: android` app-install deploy, F1), AND the goadb-backed device
             probe the `charly status` collector needs — a standalone Go module (go.mod
             + main.go) that speaks the ADB wire protocol over go-plugin gRPC via the
-            charly plugin SDK (charly/plugin/sdk). charly's loader fetches this candy's
+            charly plugin SDK (github.com/opencharly/sdk). charly's loader fetches this candy's
             repo, go-builds the provider binary on the HOST, and serves it
             OUT-OF-PROCESS via LocalTransport — so the github.com/zach-klippenstein/goadb
             dependency + the SINGLE apk install path (apkeep + adb, R3) live HERE, out

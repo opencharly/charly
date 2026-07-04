@@ -10,7 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // externalCommandDispatch pairs an OUT-OF-PROCESS command word with the dynamic Kong holder

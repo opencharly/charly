@@ -4,7 +4,7 @@ plugin-builder-npm:
         description: |-
             OUT-OF-TREE charly plugin serving the `npm` builder's BUILD-TIME multi-stage (OpResolve)
             + its DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared
-            charly/plugin/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder> AS
+            sdk/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder> AS
             npm-build` stage + COPY artifacts, C10, no longer the core embedded vocabulary),
             OpCollectContext (npm records no stage context — globals are read from package.json
             host-side at install time) and OpReverse (npm → npm-uninstall-g when globals are known).

@@ -34,7 +34,7 @@ package main
 import (
 	"embed"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 //go:embed schema/*.cue

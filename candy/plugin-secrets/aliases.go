@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/vmshared"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // aliases.go reuses (does NOT copy — R3) the two stdlib-light, plugin-importable charly

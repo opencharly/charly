@@ -3,7 +3,7 @@
 // deployment. It implements kit.CheckVerbProvider — RunVerb runs the probes via the
 // live kit.CheckContext. Relocated out of charly's module (formerly
 // charly/plugin/builtins/interface + charly/plugin_interface.go) onto the
-// charly/plugin/kit contract; COMPILED-IN-ONLY. (Package named iface, not interface —
+// sdk/kit contract; COMPILED-IN-ONLY. (Package named iface, not interface —
 // the latter is a Go keyword; the reserved verb word is still "interface".)
 package iface
 
@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-interface/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
-	"github.com/opencharly/charly/charly/vmshared"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // command.go is the command:secrets leg of this plugin — the externalized `charly

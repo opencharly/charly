@@ -7,7 +7,7 @@ package main
 
 import (
 	exampleprobe "github.com/opencharly/charly/candy/plugin-example"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(exampleprobe.NewProvider(), exampleprobe.NewMeta()) }

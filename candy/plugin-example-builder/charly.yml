@@ -5,7 +5,7 @@ plugin-example-builder:
             Reference OUT-OF-TREE charly plugin proving the BUILD-TIME plugin-execution
             BUILDER leg — a standalone Go module (go.mod + main.go) serving the
             `examplebuilder` builder over go-plugin gRPC via the charly plugin SDK
-            (charly/plugin/sdk). At image build, charly's build-path connect seam
+            (github.com/opencharly/sdk). At image build, charly's build-path connect seam
             host-builds + connects this plugin out-of-process and Invokes its OpResolve;
             the returned BuilderResolveReply (a multi-stage FROM…AS stage baking
             /built.txt + a COPY --from pulling it to /opt/examplebuilder-artifact) is

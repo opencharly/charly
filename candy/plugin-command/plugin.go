@@ -16,9 +16,9 @@ import (
 	"os/exec"
 
 	"github.com/opencharly/charly/candy/plugin-command/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

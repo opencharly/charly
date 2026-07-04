@@ -2,7 +2,7 @@
 // state-provision verb. CHECK (kit.CheckVerbProvider): `getent passwd` via the live
 // kit.CheckContext and compare uid/gid/home/shell. ACT (kit.ProvisionActor): render an
 // idempotent `useradd`. Relocated out of charly's module (formerly
-// charly/plugin/builtins/user + charly/plugin_user.go) onto the charly/plugin/kit
+// charly/plugin/builtins/user + charly/plugin_user.go) onto the sdk/kit
 // contract; COMPILED-IN-ONLY. No matchers — direct field comparison.
 package user
 
@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-user/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

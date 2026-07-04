@@ -9,7 +9,7 @@ import (
 
 	plugin "github.com/hashicorp/go-plugin"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // PluginTransport connects to a plugin and returns its self-contained unit (its

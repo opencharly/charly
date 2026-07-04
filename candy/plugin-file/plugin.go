@@ -3,7 +3,7 @@
 // kit.CheckContext and assert exists/mode/owner/group/filetype/contains/sha256. ACT
 // (kit.ProvisionActor): render an idempotent RUNTIME file-creation
 // (mkdir/touch/cat-heredoc + chmod). Relocated out of charly's module (formerly
-// charly/plugin/builtins/file + charly/plugin_verb_file.go) onto the charly/plugin/kit
+// charly/plugin/builtins/file + charly/plugin_verb_file.go) onto the sdk/kit
 // contract; COMPILED-IN-ONLY. The matcher evaluation reuses sdk.MatchAll + spec.Matcher.
 package file
 
@@ -15,9 +15,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-file/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // zzWireTestBootstrapProvider is a MARKER-GATED bootstrap provider for the F9-wiring test: it

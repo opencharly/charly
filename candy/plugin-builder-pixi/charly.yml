@@ -4,7 +4,7 @@ plugin-builder-pixi:
         description: |-
             OUT-OF-TREE charly plugin serving the `pixi` builder's BUILD-TIME multi-stage (OpResolve)
             + its DEPLOY-TIME IR shim. A standalone Go module (go.mod + main.go) that dispatches to the
-            shared charly/plugin/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder>
+            shared sdk/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder>
             AS pixi-build` stage + COPY artifacts, C10, no longer the core embedded vocabulary),
             OpCollectContext (the per-candy stage-context keys the host records on a BuilderStep —
             pixi → {env_name}) and OpReverse (that step's teardown ops — pixi → pixi-env-remove). The

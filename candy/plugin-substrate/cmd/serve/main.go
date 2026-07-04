@@ -5,7 +5,7 @@ package main
 
 import (
 	substratekind "github.com/opencharly/charly/candy/plugin-substrate"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(substratekind.NewProvider(), substratekind.NewMeta()) }

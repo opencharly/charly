@@ -14,8 +14,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // preempt.go — the HOST side of the resource arbiter after cutover C9.

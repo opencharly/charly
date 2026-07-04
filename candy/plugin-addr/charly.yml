@@ -5,7 +5,7 @@ plugin-addr:
             The `addr` check verb relocated into a candy: an outside-in TCP
             reachability probe of a host:port (in-container `nc` under charly check
             box, host-side dial under charly check live). A HOST-COUPLED verb — its
-            RunVerb runs against the live check engine (charly/plugin/kit.CheckContext),
+            RunVerb runs against the live check engine (sdk/kit.CheckContext),
             so it is COMPILED-IN-ONLY. A pure check verb; a port/process-template
             relocation on the kit contract.
     plugin-addr-decl:

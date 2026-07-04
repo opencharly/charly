@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestCollectReferencedPluginWords_Scoping gates the loadProjectPlugins perf-scoping:

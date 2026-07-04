@@ -11,7 +11,7 @@ import (
 
 	"cuelang.org/go/cue"
 
-	"github.com/opencharly/charly/charly/internal/schemaconcat"
+	"github.com/opencharly/sdk/schemaconcat"
 )
 
 // validatePluginCandy validates a candy's `plugin:` block. The CUE schema already
@@ -61,7 +61,7 @@ func validatePluginCandy(name string, p *CandyPluginDecl) []string {
 // embedded schema; for an external, the gRPC schema_cue) — NEVER read from a candy
 // schema/ dir. Same concatenation contract as the runtime sharedCueSchema (R3).
 func compileBasePlusServed(servedCUE string) (cue.Value, error) {
-	baseBody, _, err := schemaconcat.ConcatSchema(schemaFS, "schema", nil)
+	baseBody, _, err := schemaconcat.ConcatSchema(schemaFS, ".", nil)
 	if err != nil {
 		return cue.Value{}, fmt.Errorf("base schema: %w", err)
 	}

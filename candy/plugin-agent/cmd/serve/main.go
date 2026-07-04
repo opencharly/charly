@@ -5,7 +5,7 @@ package main
 
 import (
 	agentkind "github.com/opencharly/charly/candy/plugin-agent"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(agentkind.NewProvider(), agentkind.NewMeta()) }

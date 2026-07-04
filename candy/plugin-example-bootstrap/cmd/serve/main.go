@@ -6,7 +6,7 @@ package main
 
 import (
 	examplebootstrap "github.com/opencharly/charly/candy/plugin-example-bootstrap"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(examplebootstrap.NewProvider(), examplebootstrap.NewMeta()) }

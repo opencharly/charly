@@ -4,7 +4,7 @@ plugin-mcp:
         description: |-
             OUT-OF-TREE charly plugin serving TWO MCP capabilities — a standalone Go
             module (go.mod + main.go) that speaks the Model Context Protocol over
-            go-plugin gRPC via the charly plugin SDK (charly/plugin/sdk). charly's loader
+            go-plugin gRPC via the charly plugin SDK (github.com/opencharly/sdk). charly's loader
             fetches this candy's repo, go-builds the provider binary on the HOST, and
             serves it OUT-OF-PROCESS via LocalTransport, so the
             github.com/modelcontextprotocol/go-sdk library lives HERE, out of charly's

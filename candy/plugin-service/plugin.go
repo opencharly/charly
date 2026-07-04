@@ -1,5 +1,5 @@
 // Package service is the importable, COMPILED-IN host-coupled `service` verb: the
-// TYPED-STEP state-provision verb, THREE-natured on the charly/plugin/kit contract:
+// TYPED-STEP state-provision verb, THREE-natured on the sdk/kit contract:
 //   - CheckVerbProvider (do:assert): probe running/enabled via supervisorctl/systemctl
 //     through the live kit.CheckContext.
 //   - ProvisionActor (do:act runtime): render the systemctl/supervisorctl enable shell.
@@ -15,8 +15,8 @@ import (
 	"fmt"
 
 	"github.com/opencharly/charly/candy/plugin-service/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

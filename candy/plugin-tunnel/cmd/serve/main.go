@@ -9,7 +9,7 @@ package main
 
 import (
 	tunnelverb "github.com/opencharly/charly/candy/plugin-tunnel"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(tunnelverb.NewProvider(), tunnelverb.NewMeta()) }

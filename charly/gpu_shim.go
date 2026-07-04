@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // --- GPU driver-switch consts + pure helpers, aliased from spec (cutover C9) ---

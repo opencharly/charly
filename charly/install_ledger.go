@@ -31,7 +31,7 @@ import (
 
 	"context"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // LedgerPaths describes where ledger files live on disk. Extracted so

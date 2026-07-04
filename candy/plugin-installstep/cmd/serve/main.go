@@ -8,7 +8,7 @@ package main
 
 import (
 	installstep "github.com/opencharly/charly/candy/plugin-installstep"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(installstep.NewProvider(), installstep.NewMeta()) }

@@ -5,8 +5,8 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/opencharly/charly/charly/internal/schemaconcat"
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/schemaconcat"
+	"github.com/opencharly/sdk/kit"
 )
 
 // runnerCheckContext adapts the live *Runner to kit.CheckContext — the surface a
@@ -157,10 +157,10 @@ func kitStatusToCheck(s kit.Status) CheckStatus {
 // plugins_generated.go for a kit-shape candy named in charly.yml compiled_plugins.
 // Distinct from registerCompiledPlugin (the pb/dual-placement path) because a kit verb
 // is in-proc-only. The candy passes its RAW schema embed.FS + InputDefs; charly
-// concatenates here via schemaconcat over the conventional "schema" subdir (the candy
-// cannot import internal/schemaconcat) — the SAME concat contract a builtin/external
-// schema goes through (R3). A read/concat failure is a build-time invariant violation
-// (panic, like loadBuiltinPluginUnits).
+// concatenates here via the public sdk/schemaconcat over the conventional "schema"
+// subdir — the SAME concat contract a builtin/external schema goes through (R3). A
+// read/concat failure is a build-time invariant violation (panic, like
+// loadBuiltinPluginUnits).
 func registerCompiledCheckVerb(kv kit.CheckVerbProvider, schemaFS fs.FS, inputDefs map[string]string) {
 	cueSource, _, err := schemaconcat.ConcatSchema(schemaFS, "schema", nil)
 	if err != nil {

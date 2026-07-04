@@ -3,7 +3,7 @@
 // charly check box, a host-side dial under charly check live. It implements
 // kit.CheckVerbProvider — RunVerb runs the probe via the live kit.CheckContext.
 // Relocated out of charly's module (formerly charly/plugin/builtins/addr +
-// charly/plugin_addr.go) onto the charly/plugin/kit contract; COMPILED-IN-ONLY.
+// charly/plugin_addr.go) onto the sdk/kit contract; COMPILED-IN-ONLY.
 package addr
 
 import (
@@ -13,8 +13,8 @@ import (
 	"net"
 
 	"github.com/opencharly/charly/candy/plugin-addr/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

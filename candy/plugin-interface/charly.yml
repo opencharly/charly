@@ -5,7 +5,7 @@ plugin-interface:
             The `interface` check verb relocated into a candy: probes a network
             interface's presence / MTU / addresses via `ip` on the live deployment. A
             HOST-COUPLED verb — its RunVerb runs against the live check engine
-            (charly/plugin/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure check
+            (sdk/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure check
             verb (probe-only); a port/process-template relocation on the kit contract.
     plugin-interface-decl:
         plugin:

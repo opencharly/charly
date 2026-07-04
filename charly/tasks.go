@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Auto-exported variable names reserved for the generator.

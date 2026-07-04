@@ -3,9 +3,9 @@ package main
 // libvirt_methods.go is the libvirt verb's method allowlist — the op→(subcommand-path +
 // positional-args) dispatch data dispatchLibvirtVerb reads to drive the in-process LibvirtCmd
 // Kong tree. The
-// PosX builders + MethodSpec live in the shared charly/plugin/kit.
+// PosX builders + MethodSpec live in the shared sdk/kit.
 
-import "github.com/opencharly/charly/charly/plugin/kit"
+import "github.com/opencharly/sdk/kit"
 
 var libvirtMethods = map[string]kit.MethodSpec{
 	// Top-level verbs

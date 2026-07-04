@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // httpClientFor builds a per-request *http.Client honoring the kit.HTTPRequest policy

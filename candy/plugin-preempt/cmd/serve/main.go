@@ -7,7 +7,7 @@ package main
 
 import (
 	preempt "github.com/opencharly/charly/candy/plugin-preempt"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Main(preempt.NewProvider(), preempt.NewMeta(), preempt.CliMain) }

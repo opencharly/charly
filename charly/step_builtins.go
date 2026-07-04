@@ -16,7 +16,7 @@ package main
 // EVERY other builtin step kind's BUILD-emit is served by the compiled-in class:step plugin
 // candy/plugin-installstep (served over OpEmit) — NO in-proc StepProvider. OCITarget.emitStep
 // routes them by pluginEmitStepWords (provider_step.go); their DEPLOY leg is unchanged
-// (charly/plugin/kit.WalkPlans renders them from the step view). Two sub-categories:
+// (sdk/kit.WalkPlans renders them from the step view). Two sub-categories:
 //   - The PURE kinds (C1.1 + C1.6) — File, ShellHook, ShellSnippet, ServicePackaged, ServiceCustom,
 //     RepoChange, ApkInstall (C1.1) + Reboot (C1.6) — whose fragment the plugin formats directly from
 //     the step VIEW. ApkInstall and Reboot are the NO-OP-emit members: both declare Emits=false (no

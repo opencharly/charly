@@ -171,7 +171,7 @@ against one closed CUE schema (`#NodeDoc`) *before* it executes — the
 sole load gate — and a non-node-form document is rejected with a
 `charly migrate` hint pointing at the one-shot upgrade.
 
-**One schema, one source.** The schema lives in `charly/schema/*.cue`.
+**One schema, one source.** The schema lives in `sdk/schema/*.cue`.
 The Go param structs, the reserved-word kind/verb vocabulary, and the
 per-verb live-probe method allowlists are all
 **generated / derived** from those `.cue` files by `task cue:gen` —

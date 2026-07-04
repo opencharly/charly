@@ -6,7 +6,7 @@ plugin-vnc:
             Go module (go.mod + main.go) that drives a live deployment's VNC desktop over
             the RFB protocol (RFC 6143: the custom stdlib-only VNC client — VeNCrypt/TLS +
             ZRLE decode), served OUT-OF-PROCESS over go-plugin gRPC via the charly plugin
-            SDK (charly/plugin/sdk). charly's loader fetches this candy's repo, go-builds the
+            SDK (github.com/opencharly/sdk). charly's loader fetches this candy's repo, go-builds the
             provider binary on the HOST, and serves it via LocalTransport — so the RFB client
             lives HERE, out of charly's core check surface (the latest external dep-shed after
             candy/plugin-cdp; nothing VNC-specific remains in core — the former `charly check

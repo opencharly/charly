@@ -20,7 +20,7 @@
 //     in core (charly/step_emit_hostbuild.go: stepEmitSystemPackages / stepEmitBuilder /
 //     stepEmitLocalPkgInstall / stepEmitOp); the plugin only REQUESTS it.
 //
-// The DEPLOY leg for ALL these kinds STAYS in charly/plugin/kit.WalkPlans (walkFile / walkShellHook
+// The DEPLOY leg for ALL these kinds STAYS in sdk/kit.WalkPlans (walkFile / walkShellHook
 // / …; system-packages + builder are host-engine kinds driven via RunHostStep →
 // renderHostPackageCommand / runVenueBuilderStep; op is the act-OpStep resolveProvisionScript /
 // renderOpCommand path), which renders them over the executor reverse channel; this plugin serves
@@ -46,10 +46,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue
@@ -58,7 +58,7 @@ var schemaFS embed.FS
 const calver = "2026.182.1600"
 
 // opEmit mirrors charly's OpEmit selector ("emit"). This plugin serves ONLY the build-context
-// emit leg — every other op is a no-op acknowledgment (the deploy leg is charly/plugin/kit.WalkPlans,
+// emit leg — every other op is a no-op acknowledgment (the deploy leg is sdk/kit.WalkPlans,
 // never this plugin).
 const opEmit = "emit"
 
@@ -108,7 +108,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke serves the BUILD-context OpEmit leg: decode the compiler-produced spec.InstallStepView
 // (op.Params), render the word's Containerfile fragment, and return it as a spec.EmitReply. Any op
-// other than OpEmit is a no-op ack (the deploy leg lives in charly/plugin/kit.WalkPlans, not here).
+// other than OpEmit is a no-op ack (the deploy leg lives in sdk/kit.WalkPlans, not here).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != opEmit {
 		return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
@@ -294,7 +294,7 @@ type meta struct {
 // Describe advertises the class:step capabilities, each with its declared StepContract. Only Emits
 // is load-bearing here: the host's pod-overlay OCITarget consults it to decide whether to Invoke
 // OpEmit (true) or skip (false, apk-install / reboot). Scope/Venue/Gate are nominal — these kinds' deploy leg
-// is charly/plugin/kit.WalkPlans, which reads the per-instance view.Scope/Venue computed on the
+// is sdk/kit.WalkPlans, which reads the per-instance view.Scope/Venue computed on the
 // concrete step, so the static contract's Scope/Venue/Gate are never consulted. The HOST-COUPLED
 // system-packages (C1.2) + builder (C1.3) + local-pkg-install (C1.4) + op (C1.5) Emits=true too —
 // their OpEmit delegates to the host "step-emit" host-builder.

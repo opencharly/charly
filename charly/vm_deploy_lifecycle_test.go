@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/spec"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestVmSubstrateLifecycleRegistered proves the vm AND pod substrates register a lifecycle

@@ -5,7 +5,7 @@ plugin-example-step:
             Reference OUT-OF-TREE charly plugin proving BOTH legs of plugin execution for
             a VERB-as-step — a standalone Go module (go.mod + main.go) serving the
             `examplestep` verb over go-plugin gRPC via the charly plugin SDK
-            (charly/plugin/sdk). BUILD leg (OpEmit): at image build charly's build-path
+            (github.com/opencharly/sdk). BUILD leg (OpEmit): at image build charly's build-path
             connect seam host-builds + connects this plugin out-of-process and Invokes its
             OpEmit; the returned Containerfile FRAGMENT (a RUN baking /opt/examplestep-baked)
             is spliced verbatim into the generated Containerfile (consumed by

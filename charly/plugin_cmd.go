@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // PluginInternalCmd is the hidden `__plugin` command group — the plugin

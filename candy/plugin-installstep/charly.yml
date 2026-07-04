@@ -18,7 +18,7 @@ plugin-installstep:
             Generator.emitTasks, the full per-verb render pipeline with COPY staging + op coalescing)
             and so calls back the host's "step-emit" host-builder over the reverse channel
             (Executor.HostBuild) and echoes the returned fragment. The DEPLOY leg for ALL these kinds
-            STAYS unchanged in charly/plugin/kit.WalkPlans (system-packages + builder +
+            STAYS unchanged in sdk/kit.WalkPlans (system-packages + builder +
             local-pkg-install are host-engine kinds driven via RunHostStep → renderHostPackageCommand
             / runVenueBuilderStep / execLocalPkgInstall; op is the act-OpStep resolveProvisionScript /
             renderOpCommand path; reboot is the host-side guest reboot via RunHostStep →

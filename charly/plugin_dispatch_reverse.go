@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // plugin_dispatch_reverse.go — the F10 reverse legs on ExecutorService: PLUGIN↔PLUGIN dispatch

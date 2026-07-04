@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // OCITarget emits Containerfile directives for an InstallPlan. One
@@ -119,7 +119,7 @@ func (t *OCITarget) emitStep(step InstallStep, plan *InstallPlan) error {
 	// C1.1: the seven PURE builtin step kinds' BUILD-emit is served by the compiled-in class:step
 	// plugin candy/plugin-installstep (its OpEmit). Route them by kind→word, passing the compiler's
 	// step VIEW as the opaque payload — the SAME serialization the deploy walk consumes (R3). Their
-	// DEPLOY leg is unchanged: charly/plugin/kit.WalkPlans renders them from that same view. A
+	// DEPLOY leg is unchanged: sdk/kit.WalkPlans renders them from that same view. A
 	// legitimately-empty render (empty snippet / no-op service) is allowed (allowEmpty), matching
 	// what the former OCITarget.emit* returned for those instances.
 	if word, ok := pluginEmitStepWords[step.Kind()]; ok {

@@ -7,7 +7,7 @@ package main
 
 import (
 	enc "github.com/opencharly/charly/candy/plugin-enc"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(enc.NewProvider(), enc.NewMeta()) }

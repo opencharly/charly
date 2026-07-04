@@ -4,7 +4,7 @@ package main
 // migrate`). It replaced the retired 47-step hand-written chain (candy/plugin-
 // migrate) at the migration-baseline reset. There are two moving parts:
 //
-//   1. A CUE-owned schema version (charly/schema/version.cue → spec.SchemaVersion /
+//   1. A CUE-owned schema version (sdk/schema/version.cue → spec.SchemaVersion /
 //      spec.SchemaFloor, parsed by kit.LatestSchemaVersion() / kit.SchemaFloor()).
 //   2. A declarative migration TABLE (charly/migrations.cue), validated at process
 //      start against #Migration and interpreted by ONE generic op-walker. A future
@@ -33,11 +33,11 @@ import (
 	cueerrors "cuelang.org/go/cue/errors"
 	"gopkg.in/yaml.v3"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // migrationsCUE is the declarative migration table (charly/migrations.cue). It is
-// engine DATA, not ingress schema — it lives outside charly/schema/ so it never
+// engine DATA, not ingress schema — it lives outside sdk/schema/ so it never
 // enters the spec codegen / vocab concatenation.
 //
 //go:embed migrations.cue

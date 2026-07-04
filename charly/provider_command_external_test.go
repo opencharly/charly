@@ -7,7 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 // TestExternalCommandExecPlan_PassthroughArgs proves the external-command FORK/EXEC path: a

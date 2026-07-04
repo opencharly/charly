@@ -7,7 +7,7 @@ package main
 
 import (
 	examplecommand "github.com/opencharly/charly/candy/plugin-example-command"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Main(examplecommand.NewProvider(), examplecommand.NewMeta(), examplecommand.CliMain) }

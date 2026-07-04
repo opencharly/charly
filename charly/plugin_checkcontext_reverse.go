@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	pb "github.com/opencharly/charly/charly/plugin/proto"
+	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // checkContextReverseServer is the host-side CheckContextService (F2): the reverse channel

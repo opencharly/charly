@@ -6,7 +6,7 @@ plugin-dns:
             (in-container `getent hosts` under charly check box, host-side
             `net.LookupIP` under charly check live, with optional required-address
             matching). A HOST-COUPLED verb — its RunVerb runs against the live check
-            engine (charly/plugin/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure
+            engine (sdk/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure
             check verb; a port/process-template relocation on the kit contract.
     plugin-dns-decl:
         plugin:

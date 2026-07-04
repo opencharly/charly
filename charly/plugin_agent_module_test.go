@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestLoadUnified_AgentPluginKind proves the agent kind→plugin extraction end-to-end

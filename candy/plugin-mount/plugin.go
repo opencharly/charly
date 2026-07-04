@@ -2,7 +2,7 @@
 // state-provision verb. CHECK (kit.CheckVerbProvider): `findmnt` the mountpoint via the
 // live kit.CheckContext and match source/filesystem/opts. ACT (kit.ProvisionActor):
 // render an idempotent `findmnt || mount`. Relocated out of charly's module (formerly
-// charly/plugin/builtins/mount + charly/plugin_mount.go) onto the charly/plugin/kit
+// charly/plugin/builtins/mount + charly/plugin_mount.go) onto the sdk/kit
 // contract; COMPILED-IN-ONLY. The matcher evaluation reuses sdk.MatchAll + spec.MatcherList.
 package mount
 
@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-mount/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

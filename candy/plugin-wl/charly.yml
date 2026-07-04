@@ -6,7 +6,7 @@ plugin-wl:
             Go module (go.mod + main.go) that drives Wayland/sway desktop automation inside a
             running deployment (input, windows, screenshots, sway IPC, overlay, atspi,
             clipboard — ~40 methods) over go-plugin gRPC via the charly plugin SDK
-            (charly/plugin/sdk). charly's loader fetches this candy's repo, go-builds the
+            (github.com/opencharly/sdk). charly's loader fetches this candy's repo, go-builds the
             provider binary on the HOST, and serves it OUT-OF-PROCESS via LocalTransport — so
             the Wayland/sway driver lives HERE, out of charly's core check surface. wl is the
             LAST live-container verb to leave the core: after it, ZERO check verbs are

@@ -4,7 +4,7 @@
 // executor, run mode, and dial timeout) and runs in EITHER placement (compiled-in OR
 // out-of-process via the CheckContextService reverse channel, F2 + cmd/serve) with ZERO
 // authoring change. Relocated out of charly's module (formerly charly/plugin/builtins/port
-// + charly/plugin_port.go) onto the charly/plugin/kit contract.
+// + charly/plugin_port.go) onto the sdk/kit contract.
 package port
 
 import (
@@ -14,8 +14,8 @@ import (
 	"net"
 
 	"github.com/opencharly/charly/candy/plugin-port/params"
-	"github.com/opencharly/charly/charly/plugin/kit"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

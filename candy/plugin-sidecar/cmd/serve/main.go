@@ -5,7 +5,7 @@ package main
 
 import (
 	sidecarkind "github.com/opencharly/charly/candy/plugin-sidecar"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(sidecarkind.NewProvider(), sidecarkind.NewMeta()) }

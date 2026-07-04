@@ -1,5 +1,5 @@
 // vmshared_aliases.go — package-main bindings onto the shared VM/cloud-init
-// package github.com/opencharly/charly/charly/vmshared. The 17 self-contained
+// package github.com/opencharly/sdk/vmshared. The 17 self-contained
 // VM/libvirt/cloud-init source files moved into that importable package (they were
 // byte-for-byte duplicated with candy/plugin-vm before — an R3 violation across the
 // module boundary). These thin aliases/bindings keep every package-main reference
@@ -7,7 +7,7 @@
 // package's injection seams (see vmshared/hooks.go).
 package main
 
-import "github.com/opencharly/charly/charly/vmshared"
+import "github.com/opencharly/sdk/vmshared"
 
 type (
 	AgentConfig              = vmshared.AgentConfig

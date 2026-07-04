@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRunPluginVerb_Dispatch proves the generic `plugin:` verb dispatches through

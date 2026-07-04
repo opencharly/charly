@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/spec"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRunHostStep_Dispatch proves the host-engine reverse handler routes each step view to

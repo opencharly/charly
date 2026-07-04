@@ -7,7 +7,7 @@ plugin-package:
             live check engine. ACT (runtime): render the dnf/apt-get/pacman install.
             ACT (build/deploy): lower into a SystemPackagesStep (the host materializes
             the kit descriptor — format + cross-distro name via kit.ResolvePackageName).
-            A HOST-COUPLED verb on the charly/plugin/kit contract (CheckVerbProvider +
+            A HOST-COUPLED verb on the sdk/kit contract (CheckVerbProvider +
             ProvisionActor + StepProvider), so it is COMPILED-IN-ONLY.
     plugin-package-decl:
         plugin:

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 

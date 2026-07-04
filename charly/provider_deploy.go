@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/spec"
 )
 
 // DeployTargetProvider is the typed in-process form of a deploy-target Provider:

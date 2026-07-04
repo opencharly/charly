@@ -3,7 +3,6 @@ module github.com/opencharly/charly/candy/plugin-kube
 go 1.26.0
 
 require (
-	github.com/opencharly/charly/charly v0.0.0
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
 )
@@ -29,6 +28,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/run v1.1.0 // indirect
+	github.com/opencharly/sdk v0.0.0
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -55,7 +55,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-// Local build: charly's git-repo plugin loader builds this on the host against the
-// in-tree charly (proto + sdk + spec). A published external plugin would require a
-// tagged charly version instead.
-replace github.com/opencharly/charly/charly => ../../charly
+replace github.com/opencharly/sdk => ../../sdk

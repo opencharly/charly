@@ -8,7 +8,7 @@ import (
 )
 
 // readiness_config.go — charly core's readiness ENTRY. The config→resolved resolver AND the
-// CHARLY_READINESS_* field table live ONCE in charly/vmshared (ResolveReadiness + the PluginEnv
+// CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness + the PluginEnv
 // emitter, aliased here as readinessResolve via vmshared_aliases.go), shared with the
 // out-of-process plugins. loadedReadiness feeds the resolver the PROJECT's defaults.readiness —
 // which the plugins cannot LoadUnified to read; the host threads its resolved bounds to them via

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/spec"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // switch.go — the GPU driver-MODE switch primitive (cutover C9), the vfio-pci <-> nvidia

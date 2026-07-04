@@ -8,7 +8,7 @@
 //   - OpReverse → that step's teardown ops (npm → npm-uninstall-g when globals are known).
 //
 // The host invokes both in its build PRE-PASS (BEFORE the pure BuildDeployPlan compile), keeping the
-// compiler pure. The per-builder LOGIC is the shared charly/plugin/kit (R3); this module is only the
+// compiler pure. The per-builder LOGIC is the shared sdk/kit (R3); this module is only the
 // composable selection point + serve shim.
 package main
 
@@ -18,10 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
-	pb "github.com/opencharly/charly/charly/plugin/proto"
-	"github.com/opencharly/charly/charly/plugin/sdk"
-	"github.com/opencharly/charly/charly/spec"
+	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue

@@ -3,7 +3,7 @@ plugin-builder-cargo:
         version: 2026.182.0300
         description: |-
             OUT-OF-TREE charly plugin serving the `cargo` builder's BUILD-TIME step (OpResolve) + its
-            DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared charly/plugin/kit
+            DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared sdk/kit
             logic (R3): OpResolve (→ kit.BuilderResolve — cargo is an INLINE builder, so the
             InlineFragment `RUN cargo install --path /ctx`, C10, no longer the core embedded
             vocabulary), OpCollectContext (cargo records no stage context — binaries are read from

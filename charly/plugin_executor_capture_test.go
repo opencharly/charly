@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/opencharly/charly/charly/plugin/proto"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // TestExecutorReverse_CaptureAndGetFile proves the new CHECK-VERB reverse-channel legs:

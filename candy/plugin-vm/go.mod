@@ -6,7 +6,6 @@ require (
 	github.com/alecthomas/kong v1.14.0
 	github.com/digitalocean/go-libvirt v0.0.0-20260217163227-273eaa321819
 	github.com/kata-containers/govmm v0.0.0-20220119175834-88960a15dacd
-	github.com/opencharly/charly/charly v0.0.0
 	golang.org/x/crypto v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
 	libvirt.org/go/libvirtxml v1.12002.0
@@ -26,6 +25,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
+	github.com/opencharly/sdk v0.0.0
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
@@ -37,7 +37,4 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
 
-// Local build: charly's git-repo plugin loader builds this on the host against the in-tree
-// charly (proto + sdk + spec). The VM subsystem's go-libvirt + govmm + libvirtxml deps live
-// HERE, OUT of charly's core go.mod — the dep-shed this externalization achieves.
-replace github.com/opencharly/charly/charly => ../../charly
+replace github.com/opencharly/sdk => ../../sdk

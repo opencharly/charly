@@ -5,7 +5,7 @@ package main
 
 import (
 	resourcekind "github.com/opencharly/charly/candy/plugin-resource"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(resourcekind.NewProvider(), resourcekind.NewMeta()) }

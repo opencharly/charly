@@ -1,7 +1,7 @@
 package main
 
 // filelock.go — charly core's advisory-flock ENTRY. The primitive itself lives in
-// charly/plugin/kit (kit.AcquireFileLock) so it is shared, byte-identical, with the compiled-in
+// sdk/kit (kit.AcquireFileLock) so it is shared, byte-identical, with the compiled-in
 // candy/plugin-preempt (the resource arbiter's ledger lock) across the module boundary (R3).
 // This file keeps the core alias + the two charly-specific wrappers whose lock paths depend on
 // package-main config resolution the kit primitive cannot reach.
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/opencharly/charly/charly/plugin/kit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // errLockBusy is kit.ErrLockBusy — the non-blocking-contention sentinel core callers match with

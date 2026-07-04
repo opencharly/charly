@@ -5,7 +5,7 @@ plugin-user:
             The `user` MULTI-ROLE state-provision verb relocated into a candy. CHECK:
             `getent passwd` via the live check engine and compare uid/gid/home/shell.
             ACT: render an idempotent `useradd`. A HOST-COUPLED verb on the
-            charly/plugin/kit contract (CheckVerbProvider + ProvisionActor), so it is
+            sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
     plugin-user-decl:
         plugin:

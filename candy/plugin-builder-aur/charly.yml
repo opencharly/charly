@@ -4,7 +4,7 @@ plugin-builder-aur:
         description: |-
             OUT-OF-TREE charly plugin serving the `aur` builder's BUILD-TIME multi-stage (OpResolve)
             + its DEPLOY-TIME IR shim. A standalone Go module dispatching to the shared
-            charly/plugin/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder> AS
+            sdk/kit logic (R3): OpResolve (→ kit.BuilderResolve — the `FROM <builder> AS
             aur-build` yay/makepkg stage + the /tmp/aur-pkgs COPY artifact, C10, no longer the core
             embedded vocabulary), OpCollectContext (aur → {packages, replaces} from the candy's aur:
             section) and OpReverse (aur → package-remove, system scope, pac format — the host fills

@@ -6,7 +6,7 @@ plugin-command:
             in-container (via the live check engine), host-side (os/exec under charly
             check live), or backgrounded (fire-and-forget, PID registered with the plan
             for teardown), asserting exit/stdout/stderr. A HOST-COUPLED verb on the
-            charly/plugin/kit contract (CheckVerbProvider + the AddBackground context
+            sdk/kit contract (CheckVerbProvider + the AddBackground context
             extension), so it is COMPILED-IN-ONLY. Its run: ACT is the dedicated
             package-main install-task emitCmd branch, not a kit role. Matchers via sdk.MatchAll.
     plugin-command-decl:

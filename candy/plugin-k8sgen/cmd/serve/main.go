@@ -7,7 +7,7 @@ package main
 
 import (
 	k8sgen "github.com/opencharly/charly/candy/plugin-k8sgen"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(k8sgen.NewProvider(), k8sgen.NewMeta()) }

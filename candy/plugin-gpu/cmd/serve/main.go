@@ -6,7 +6,7 @@ package main
 
 import (
 	gpu "github.com/opencharly/charly/candy/plugin-gpu"
-	"github.com/opencharly/charly/charly/plugin/sdk"
+	"github.com/opencharly/sdk"
 )
 
 func main() { sdk.Serve(gpu.NewProvider(), gpu.NewMeta()) }

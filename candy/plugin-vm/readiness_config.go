@@ -5,7 +5,7 @@ import (
 )
 
 // readiness_config.go — the out-of-process plugin's readiness ENTRY. The config→resolved resolver
-// AND the CHARLY_READINESS_* field table live ONCE in charly/vmshared (ResolveReadiness, aliased
+// AND the CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness, aliased
 // here as readinessResolve via vmshared_aliases.go), shared with charly core.
 
 // loadedReadiness resolves this plugin process's readiness bounds ONCE. The out-of-process plugin
