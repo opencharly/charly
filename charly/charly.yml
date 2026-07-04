@@ -505,8 +505,16 @@ arch:
                     source_sentinel: PKGBUILD
                     build_template: |
                         cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm
+                    # Refresh the sync DB (+ reseed the keyring from the installed keyring
+                    # packages) BEFORE installing the local pkg — `pacman -U` resolves the
+                    # pkg's depends= from the sync DB, and a pinned base image's DB drifts
+                    # from the mirrors over time, so a dep at a rotated version 404s (e.g.
+                    # skopeo-1.23.0-1.1 gone from every cachyos mirror). The pacman analog
+                    # of the deb template's `apt-get update`; --populate is local-only,
+                    # sub-second, non-fatal for air-gapped builds. Kept a SINGLE shell
+                    # command (&&-chained) so the localpkg renderer wraps it in one RUN.
                     install_template: |
-                        pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
+                        (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
                     download_template: https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst
                     probe: command -v pacman
                     dep_builder: aur
