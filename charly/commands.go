@@ -232,6 +232,7 @@ func (c *RemoveCmd) Run() error {
 
 		if c.Purge {
 			removeVolumes(engine, boxName, c.Instance)
+			removeEncryptedVolumes(boxName, c.Instance)
 		}
 		if !c.KeepDeploy {
 			cleanDeployEntry(boxName, c.Instance)
@@ -252,6 +253,7 @@ func (c *RemoveCmd) Run() error {
 
 	if c.Purge {
 		removeVolumes(engine, boxName, c.Instance)
+		removeEncryptedVolumes(boxName, c.Instance)
 	}
 	if !c.KeepDeploy {
 		cleanDeployEntry(boxName, c.Instance)

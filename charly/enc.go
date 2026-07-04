@@ -444,6 +444,54 @@ func encUnmount(boxName, instance, volume string) error {
 	})
 }
 
+// removeEncryptedVolumes deletes the gocryptfs cipher/plain dirs for the deploy's
+// encrypted volumes at `charly remove --purge`. removeVolumes handles named podman
+// volumes, but an encrypted volume is a filesystem directory under the encrypted
+// storage path, NOT a podman volume — so without this a purged disposable enc bed
+// leaves an orphaned, credential-less cipher dir behind, and the next deploy fails
+// to mount it ("cipher: message authentication failed", the fresh passphrase no
+// longer matching the stale master key).
+//
+// It enumerates the on-disk dirs by the deploy's `charly-<storageDir>-` prefix
+// (the same per-deploy prefix removeVolumes filters podman volumes by) rather than
+// via loadEncryptedVolume, so it works even when the deploy config is already gone
+// (the orphaned-after-a-crash case is exactly when the dir persists). Each mount
+// is unmounted best-effort before removal; a purge never hard-fails on cleanup.
+func removeEncryptedVolumes(boxName, instance string) {
+	rt, err := ResolveRuntime()
+	if err != nil {
+		return
+	}
+	base := rt.EncryptedStoragePath
+	prefix := "charly-" + deployStorageDir(boxName, instance) + "-"
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return // no encrypted storage dir — nothing to purge
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		volName := strings.TrimPrefix(e.Name(), prefix)
+		volDir := filepath.Join(base, e.Name())
+		plainDir := filepath.Join(volDir, "plain")
+		// Unmount the FUSE plain dir first — a mounted gocryptfs cannot be cleanly
+		// deleted. fusermount3/fusermount is the OS FUSE-teardown tool (the same
+		// mechanism candy/plugin-enc uses internally); the plugin path needs live
+		// deploy state, which the orphan case lacks, so unmount directly here.
+		if isEncryptedMounted(plainDir) {
+			if fuErr := exec.Command("fusermount3", "-u", plainDir).Run(); fuErr != nil {
+				_ = exec.Command("fusermount", "-u", plainDir).Run()
+			}
+		}
+		if rmErr := os.RemoveAll(volDir); rmErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: removing encrypted volume dir %s: %v\n", volDir, rmErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "Removed encrypted volume %s\n", volName)
+		}
+	}
+}
+
 // encStatus prints the status of encrypted bind mounts for an image.
 func encStatus(boxName, instance string) error {
 	mounts, storagePath, err := loadEncryptedVolume(boxName, instance)
