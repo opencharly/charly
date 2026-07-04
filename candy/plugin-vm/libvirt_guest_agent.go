@@ -1,4 +1,4 @@
-package main
+package vm
 
 // Typed client for the qemu-guest-agent protocol via go-libvirt's
 // QEMUDomainAgentCommand. Each method sends a JSON command string to

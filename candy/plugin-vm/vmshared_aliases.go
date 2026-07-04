@@ -4,7 +4,7 @@
 // byte-for-byte duplicated here; they now live ONCE in vmshared. These bindings keep
 // the plugin's package-main references compiling; the init() wires the plugin-side
 // (in-process go-libvirt) implementations of the shared package's seams.
-package main
+package vm
 
 import "github.com/opencharly/sdk/vmshared"
 

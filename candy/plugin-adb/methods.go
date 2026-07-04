@@ -1,4 +1,4 @@
-package main
+package adb
 
 import (
 	"encoding/base64"

@@ -1,4 +1,4 @@
-package main
+package dbus
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 

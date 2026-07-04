@@ -1,4 +1,4 @@
-package main
+package vm
 
 // noVmDisplayDeviceErr is the substring the VM-target display resolvers (SpiceEndpoint/VncEndpoint)
 // embed in their "no <graphics> device" errors, and the host's preresolveSpiceEndpoint keys off to

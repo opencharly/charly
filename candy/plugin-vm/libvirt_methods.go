@@ -1,4 +1,4 @@
-package main
+package vm
 
 // libvirt_methods.go is the libvirt verb's method allowlist — the op→(subcommand-path +
 // positional-args) dispatch data dispatchLibvirtVerb reads to drive the in-process LibvirtCmd

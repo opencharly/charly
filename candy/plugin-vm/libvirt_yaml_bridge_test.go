@@ -1,4 +1,4 @@
-package main
+package vm
 
 // Bridge tests — verify that LibvirtDomain (vms.yml shape) converts
 // to libvirtxml.Domain and marshals to XML with the expected

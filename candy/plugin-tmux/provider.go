@@ -1,11 +1,11 @@
-package main
+package tmux
 
 import (
 	"context"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // provider.go is the (inert) gRPC half of this command-only plugin. command:tmux is

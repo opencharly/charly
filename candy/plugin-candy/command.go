@@ -1,4 +1,4 @@
-package main
+package candy
 
 import (
 	"fmt"

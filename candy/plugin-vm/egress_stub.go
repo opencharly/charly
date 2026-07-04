@@ -1,4 +1,4 @@
-package main
+package vm
 
 // egress_stub.go holds the plugin's intentional egress no-op. The out-of-process plugin must NOT
 // carry the egress subsystem (charly/egress.go, with vendored CUE schemas), so the HOST runs the

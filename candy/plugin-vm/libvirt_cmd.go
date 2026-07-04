@@ -1,4 +1,4 @@
-package main
+package vm
 
 // `charly check libvirt <vm-name> <verb>` — the Kong command tree.
 //

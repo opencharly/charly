@@ -1,4 +1,4 @@
-package main
+package vnc
 
 import (
 	"encoding/json"

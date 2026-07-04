@@ -1,4 +1,4 @@
-package main
+package spice
 
 // Thin wrapper over github.com/Shells-com/spice — ported verbatim from charly's
 // former in-tree charly/spice_session.go, MINUS the SSH-tunnel field. The host

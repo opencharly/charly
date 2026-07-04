@@ -1,4 +1,4 @@
-package main
+package kube
 
 import (
 	"encoding/json"
@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
-	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 

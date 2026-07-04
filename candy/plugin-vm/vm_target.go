@@ -1,4 +1,4 @@
-package main
+package vm
 
 // Shared VM target resolution for the `spice:` check verb's HOST-side endpoint
 // pre-resolution (preresolveSpiceEndpoint, spice_preresolve.go — the out-of-process

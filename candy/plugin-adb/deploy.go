@@ -1,12 +1,12 @@
-package main
+package adb
 
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 

@@ -745,7 +745,8 @@ debian:
                         # project-less on the installed deb.
                         while read -r p; do
                           case "$p" in ''|\#*) continue ;; esac
-                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" . )
+                          t="."; [ -d "$SUPER/candy/$p/cmd/serve" ] && t="./cmd/serve"
+                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" "$t" )
                           "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
                         done < "$SUPER/pkg/host-command-plugins.txt"
                         podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/debian:13 bash -lc '
@@ -986,7 +987,8 @@ fedora:
                         # project-less on the installed rpm. /ovbin/plugins = $SUPER/bin/plugins.
                         while read -r p; do
                           case "$p" in ''|\#*) continue ;; esac
-                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" . )
+                          t="."; [ -d "$SUPER/candy/$p/cmd/serve" ] && t="./cmd/serve"
+                          ( cd "$SUPER/candy/$p" && GOWORK=off go build -trimpath -o "$SUPER/bin/plugins/$p" "$t" )
                           "$SUPER/bin/charly" __plugin-providers "$SUPER/candy/$p" > "$SUPER/bin/plugins/$p.providers"
                         done < "$SUPER/pkg/host-command-plugins.txt"
                         podman run --rm -v {{.SrcDir}}:/src:ro -v "$SUPER/bin":/ovbin:ro -v {{.PkgDest}}:/out:Z docker.io/library/fedora:43 bash -lc '

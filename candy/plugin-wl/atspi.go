@@ -1,4 +1,4 @@
-package main
+package wl
 
 // atspiScript is the Python helper for AT-SPI2 introspection, embedded as a Go constant and
 // executed on the venue via `/usr/bin/python3 -c` (ported verbatim from charly/wl.go). The

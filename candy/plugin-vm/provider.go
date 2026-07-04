@@ -1,4 +1,4 @@
-package main
+package vm
 
 // provider.go is the OUT-OF-PROCESS vm-plugin provider's Invoke. The `libvirt`
 // check verb dispatches here (the verb keeps its `libvirt:` discriminator + every #LibvirtMethod
@@ -20,8 +20,8 @@ import (
 	"github.com/alecthomas/kong"
 	libvirt "github.com/digitalocean/go-libvirt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 

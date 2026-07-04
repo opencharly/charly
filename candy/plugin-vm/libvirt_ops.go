@@ -1,4 +1,4 @@
-package main
+package vm
 
 // go-libvirt wrappers used by LibvirtCmd: screenshot drain + PPM→PNG,
 // keyname → Linux keycode mapping for DomainSendKey.
