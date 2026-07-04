@@ -128,7 +128,16 @@ func externalKindMayNestMembers(word string) bool {
 	if recognizedStructuralKind(word) {
 		return true
 	}
-	return inKindConnectPass() && isDeclaredExternalKind(word)
+	// A DECLARED external kind may nest members whether or not its provider is connected
+	// yet — inside the connect pre-pass (provider not built), AND outside it when the
+	// provider FAILED to build/connect (a degraded environment: a fetched remote repo
+	// loaded in a minimal container with no Go toolchain). Both cases defer the
+	// member-nesting decision to normalizeNodeInto, which decodes via the connected
+	// provider or gracefully warn-skips when it never connected. Gating this on
+	// inKindConnectPass would hard-error the member-nesting parse (node_parse.go) before
+	// the normalizer's graceful skip could run — the box.list.boxes-on-a-fetched-repo
+	// failure (a structural `examplestructkind` bed with a `local` member, plugin unbuilt).
+	return isDeclaredExternalKind(word)
 }
 
 // registerDeclaredKind records one declared external kind word (F4).

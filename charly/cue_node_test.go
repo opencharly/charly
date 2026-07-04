@@ -141,6 +141,7 @@ shop:
 // #Node strictness on a whole document: the valid node-form passes, and every
 // strictness violation is a hard error.
 func TestValidateNodeDocCUE(t *testing.T) {
+	resetDeclaredPrescanRegistries() // isolate the wrong-kind-child gate from a prior test's LoadUnified
 	if err := validateNodeDocCUE("valid", []byte(nodeDocValid)); err != nil {
 		t.Fatalf("valid node-form document rejected: %v", err)
 	}

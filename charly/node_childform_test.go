@@ -67,7 +67,21 @@ func TestChildForm_ParseAssemble(t *testing.T) {
 // TestChildForm_WrongKindChild: a non-deployable kind (candy) may NOT nest a
 // sub-entity (a pod) — only deployable kinds do. The Go gate rejects it (the CUE
 // document gate accepts children as `_` for performance).
+// resetDeclaredPrescanRegistries clears the process-global prescan registries so a test that
+// READS them via the wrong-kind-child gate (externalKindMayNestMembers → isDeclaredExternalKind)
+// starts from a clean slate, isolated from a prior test's LoadUnified that left a kind declared.
+// Production never accumulates — each `charly` process (and each `charly mcp serve` tool-call
+// fork) loads exactly one project into a fresh process — so this isolation is a test-only concern.
+func resetDeclaredPrescanRegistries() {
+	declaredDeployMu.Lock()
+	declaredDeploySubstrate = map[string]bool{}
+	declaredExternalCommand = map[string]bool{}
+	declaredKind = map[string]bool{}
+	declaredDeployMu.Unlock()
+}
+
 func TestChildForm_WrongKindChild(t *testing.T) {
+	resetDeclaredPrescanRegistries()
 	doc := "redis:\n  candy: {version: \"2026.150.0000\"}\n  inner:\n    pod: {box: x}\n"
 	var n yaml.Node
 	if err := yaml.Unmarshal([]byte(doc), &n); err != nil {
