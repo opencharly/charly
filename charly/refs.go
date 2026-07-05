@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -327,14 +327,13 @@ func mergeRepoOverrides(existing, add string) string {
 }
 
 // autoMigratedRepos guards the remote-cache auto-migration against unbounded
-// re-entry. A project's migration chain calls LoadUnified (e.g. the target-local
-// step), which resolves @github refs and re-enters EnsureRepoDownloaded →
-// RunProjectMigrations. With a self- or mutual import (the main ↔ cachyos cycle),
-// and especially right after a LatestSchemaVersion bump (when EVERY cache reads
-// as behind-head), that recurses without bound. markRepoAutoMigrating returns
-// true exactly once per cache path per process, so each cache is auto-migrated at
-// most once and the cycle terminates — safe because the migration chain is
-// idempotent, so a single pass per process is sufficient.
+// re-entry. A migration that re-enters LoadUnified would resolve @github refs and
+// re-enter EnsureRepoDownloaded → the command:migrate Invoke. With a self- or mutual
+// import (the main ↔ cachyos cycle), and especially right after a LatestSchemaVersion
+// bump (when EVERY cache reads as behind-head), that could recurse without bound.
+// markRepoAutoMigrating returns true exactly once per cache path per process, so each
+// cache is auto-migrated at most once and the cycle terminates — safe because the
+// migration engine is idempotent, so a single pass per process is sufficient.
 var (
 	autoMigratedRepos   = map[string]bool{}
 	autoMigratedReposMu sync.Mutex
@@ -352,7 +351,7 @@ func markRepoAutoMigrating(path string) bool {
 
 // EnsureRepoDownloaded downloads the repo if not already cached.
 // Returns the cache path. The cache is auto-migrated to the latest schema
-// CalVer via the project-only chain (RunProjectMigrations) on EVERY access —
+// CalVer via the project-only command:migrate Invoke on EVERY access —
 // cache HIT and fresh clone alike. Re-migrating a cache hit is required (and
 // safe, the chain being idempotent): a cache populated by an OLDER binary — or
 // relocated from a prior cache directory across a schema bump (an older-schema
@@ -391,12 +390,30 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	// never mutates the user's per-host state — even the calver-schema stamp
 	// touches only the cache's project files.
 	if (!cached || cacheBehindHead(path)) && markRepoAutoMigrating(path) {
-		ctx := &MigrateContext{Dir: path, Out: io.Discard}
-		if _, err := RunProjectMigrations(ctx); err != nil {
+		if err := autoMigrateCacheProjectOnly(path); err != nil {
 			return path, fmt.Errorf("auto-migrating remote cache %s: %w", path, err)
 		}
 	}
 	return path, nil
+}
+
+// autoMigrateCacheProjectOnly brings a remote-repo cache's PROJECT files up to the head schema
+// via an in-proc Invoke of the compiled-in command:migrate plugin — the migration ENGINE lives
+// in candy/plugin-migrate now (M15), not core. The `--project-only` flag never touches the
+// per-host overlay (a remote fetch must not mutate the user's deploy state); `--quiet` discards
+// the progress output; `--dir <cache>` targets the cache tree. command:migrate is compiled-in,
+// so it resolves at init() — available here, deep in config loading, before LoadUnified completes.
+func autoMigrateCacheProjectOnly(path string) error {
+	prov, ok := providerRegistry.resolve(ClassCommand, "migrate")
+	if !ok {
+		return fmt.Errorf("migrate plugin (command:migrate) not registered — charly built without candy/plugin-migrate")
+	}
+	params, err := marshalJSON(map[string]any{"args": []string{"--project-only", "--quiet", "--dir", path}})
+	if err != nil {
+		return err
+	}
+	_, err = prov.Invoke(context.Background(), &Operation{Reserved: "migrate", Op: OpRun, Params: params})
+	return err
 }
 
 // cacheBehindHead reports whether a cached repo still needs migration: its

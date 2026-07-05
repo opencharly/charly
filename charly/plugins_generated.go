@@ -32,6 +32,7 @@ import (
 	cp_plugin_k8sgen "github.com/opencharly/charly/candy/plugin-k8sgen"
 	cp_plugin_kernel_param "github.com/opencharly/charly/candy/plugin-kernel-param"
 	cp_plugin_matching "github.com/opencharly/charly/candy/plugin-matching"
+	cp_plugin_migrate "github.com/opencharly/charly/candy/plugin-migrate"
 	cp_plugin_module "github.com/opencharly/charly/candy/plugin-module"
 	cp_plugin_mount "github.com/opencharly/charly/candy/plugin-mount"
 	cp_plugin_package "github.com/opencharly/charly/candy/plugin-package"
@@ -90,4 +91,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_build.NewProvider(), cp_plugin_build.NewMeta())
 	registerCompiledPlugin(cp_plugin_installstep.NewProvider(), cp_plugin_installstep.NewMeta())
 	registerCompiledPlugin(cp_plugin_tunnel.NewProvider(), cp_plugin_tunnel.NewMeta())
+	registerCompiledPlugin(cp_plugin_migrate.NewProvider(), cp_plugin_migrate.NewMeta())
 }

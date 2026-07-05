@@ -1,0 +1,47 @@
+plugin-migrate:
+    candy:
+        version: 2026.186.0100
+        description: |-
+            COMPILED-IN charly plugin owning the config-schema MIGRATION ENGINE (M15 — migrate
+            OUT of core). It serves ONE capability:
+
+              - command:migrate — the operator `charly migrate` command AND the in-proc engine
+                charly's remote-cache auto-migration (refs.go EnsureRepoDownloaded) invokes with
+                OpRun --project-only. The CUE-anchored declarative migration table + the generic
+                op-walker (rename_key / delete_key / remap_scalar / move_key) + the file-walk
+                drivers (engine.go) — the ~600 LOC formerly in charly/migrate_engine.go +
+                migrate.go + migrate_cmd.go — live HERE now. The migration DATA (migrations.cue) is
+                embedded here; #Migration is read from the SDK schema (sdk/schema — migration.cue +
+                version.cue, since #Migration.version pins to the SDK's single-source #CanonCalVer,
+                which never leaves sdk/schema). The below-floor/behind-head load-gate HINTS (the
+                "run charly migrate" messages) stay core — they only point at this command.
+
+            PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:).
+            Migrate is whole-project file-based and must run when the config is EXACTLY what cannot
+            load, so it can never be discovered out-of-process nor run on root bytes inside
+            LoadUnified. Compiled-in command placement gives command:migrate a registry word at
+            init() independent of any config, so the refs.go auto-migration resolves it in-proc deep
+            in config loading. The cmd/serve binary backs the out-of-process placement (a consumer
+            that does not compile migrate in).
+
+            R10: the disposable check-migrate-local bed (a kind:local deploy composing this candy)
+            proves the compiled-in command:migrate resolves + Invoke(OpRun) runs the engine
+            end-to-end: (a) at-HEAD no-op, (b) --dry-run flag plumbing, (c) below-floor refusal. The
+            declarative transform ops are covered by the plugin's engine_test.go unit tests.
+    plugin-migrate-decl:
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-migrate
+            providers:
+                - command:migrate
+    # ADE build-context check: a deterministic, deployment-free check (mirrors plugin-preempt's
+    # preempt-module-present) — a trivial build-context `plugin: command` running `true`, proving
+    # the host can build + compile in the module. The full `charly migrate` dispatch is exercised by
+    # the live R10 bed (check-migrate-local) + the engine unit tests.
+    migrate-module-present:
+        check: the migration-engine plugin ships a buildable Go module the host compiles in; the full charly migrate dispatch is exercised by the live R10 (check-migrate-local)
+        id: migrate-module-present
+        context:
+            - build
+        plugin: command
+        plugin_input:
+            command: "true"

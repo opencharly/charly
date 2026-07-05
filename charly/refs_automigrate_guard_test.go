@@ -3,13 +3,12 @@ package main
 import "testing"
 
 // TestMarkRepoAutoMigrating_GuardsReentry verifies the remote-cache
-// auto-migration cycle-guard. The migration chain's target-local step calls
-// LoadUnified, which resolves @github refs and re-enters EnsureRepoDownloaded →
-// RunProjectMigrations. With a self/mutual import (the main ↔ cachyos cycle) —
-// and especially right after a LatestSchemaVersion bump, when every cache reads
-// as behind-head — that recursed without bound (observed: 65 GB RSS before the
-// fix). markRepoAutoMigrating must admit each cache path for migration exactly
-// once per process so the cycle terminates.
+// auto-migration cycle-guard. A migration that re-enters LoadUnified resolves
+// @github refs and re-enters EnsureRepoDownloaded → the command:migrate Invoke.
+// With a self/mutual import (the main ↔ cachyos cycle) — and especially right
+// after a LatestSchemaVersion bump, when every cache reads as behind-head — that
+// recursed without bound (observed: 65 GB RSS before the fix). markRepoAutoMigrating
+// must admit each cache path for migration exactly once per process so the cycle terminates.
 func TestMarkRepoAutoMigrating_GuardsReentry(t *testing.T) {
 	const a, b = "/tmp/charly-test-repo-A", "/tmp/charly-test-repo-B"
 	autoMigratedReposMu.Lock()

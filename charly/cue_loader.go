@@ -61,16 +61,5 @@ func cloneYAMLNode(node *yaml.Node) (*yaml.Node, error) {
 	return &out, nil
 }
 
-// mappingRoot unwraps a document node to its top-level mapping node (or nil).
-func mappingRoot(n *yaml.Node) *yaml.Node {
-	if n == nil {
-		return nil
-	}
-	if n.Kind == yaml.DocumentNode && len(n.Content) > 0 {
-		n = n.Content[0]
-	}
-	if n.Kind != yaml.MappingNode {
-		return nil
-	}
-	return n
-}
+// mappingRoot moved to kit (kit.MappingRoot, aliased in kit_aliases.go) — shared with
+// candy/plugin-migrate's engine (R3).

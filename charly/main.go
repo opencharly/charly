@@ -128,17 +128,18 @@ type CLI struct {
 	SettingsInternal SettingsCmd `cmd:"" name:"__settings" hidden:"" help:"internal: runtime config get/set/list (the externalized charly settings plugin forwards here)"`
 	CandyInternal    CandyCmd    `cmd:"" name:"__candy" hidden:"" help:"internal: candy.yml authoring (the externalized charly candy plugin forwards here)"`
 
-	Migrate MigrateCmd `cmd:"" help:"Migrate any opencharly config up to the latest schema CalVer (single idempotent chain — no sub-verbs)"`
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
 	// ssh, start, stop, status, restart, update, remove, logs,
 	// shell, cmd, cp, volume, service, config, bundle, reap-orphans) PLUS check
 	// — is no longer a hardcoded field: each arrives via cli.Plugins as a builtin
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
-	// (mcp/secrets/udev/tmux/preempt/feature/vm/doctor AND clean/settings/candy are now
-	// EXTERNAL commands served out-of-process by candy/plugin-* , dispatched via syscall.Exec,
-	// not builtin CommandProviders; see collectExternalCommandPlugins. vm/doctor/clean/settings/
-	// candy forward to the hidden __vm / __doctor / __clean / __settings / __candy core commands
-	// above — their Run handlers stay core.)
+	// (mcp/secrets/udev/tmux/preempt/feature/vm/doctor AND clean/settings/candy AND migrate are now
+	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
+	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor/clean/
+	// settings/candy forward to the hidden __vm / __doctor / __clean / __settings / __candy core commands
+	// above — their Run handlers stay core. migrate (M15) is the exception that OWNS its engine in
+	// candy/plugin-migrate (no hidden __migrate), compiled-in so command:migrate resolves at init()
+	// independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.
 	// check is special-cased: its nested out-of-process command plugins (charly check

@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // BundleConfig represents per-machine deployment overrides (~/.config/charly/charly.yml).
@@ -494,9 +496,11 @@ func isSameBaseBox(source, boxName string) bool {
 	return source == boxName || strings.HasPrefix(source, boxName+"/")
 }
 
-// DeployConfigPath returns the path to the deploy overlay file.
-// Package-level var for testability (same pattern as RuntimeConfigPath).
-var DeployConfigPath = defaultDeployConfigPath
+// DeployConfigPath returns the path to the deploy overlay file. Package-level var for
+// testability (tests inject a temp path, same pattern as RuntimeConfigPath). The resolver
+// body lives in kit.DefaultDeployConfigPath — ONE definition shared with the out-of-module
+// candy/plugin-migrate (R3).
+var DeployConfigPath = kit.DefaultDeployConfigPath
 
 // DeployConfigEnv overrides the per-host deploy-config PATH. A check bed sets it (via the
 // bed runner) to a PER-BED isolated file so CONCURRENT beds never share — and corrupt —
@@ -504,18 +508,7 @@ var DeployConfigPath = defaultDeployConfigPath
 // resolved_port/quadlet state never pollutes the operator's persistent config. The 2026-07
 // maxjobs-load corruption (`node "…": kind:group: #GroupInput.resolved_port: field not
 // allowed`) was concurrent beds racing the shared read-modify-write of this one file.
-const DeployConfigEnv = "CHARLY_DEPLOY_CONFIG"
-
-func defaultDeployConfigPath() (string, error) {
-	if p := os.Getenv(DeployConfigEnv); p != "" {
-		return p, nil
-	}
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("determining config directory: %w", err)
-	}
-	return filepath.Join(configDir, "charly", "charly.yml"), nil
-}
+const DeployConfigEnv = kit.DeployConfigEnv
 
 // LoadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml)
 // through the unified loader — the SAME LoadUnified path as every project

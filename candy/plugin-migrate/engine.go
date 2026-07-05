@@ -1,6 +1,6 @@
-package main
+package migrate
 
-// migrate_engine.go — the CUE-anchored declarative migration engine (`charly
+// engine.go — the CUE-anchored declarative migration engine (`charly
 // migrate`). It replaced the retired 47-step hand-written chain (candy/plugin-
 // migrate) at the migration-baseline reset. There are two moving parts:
 //
@@ -30,11 +30,39 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	cueerrors "cuelang.org/go/cue/errors"
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk/kit"
+	sdkschema "github.com/opencharly/sdk/schema"
+	"github.com/opencharly/sdk/schemaconcat"
 )
+
+// migCtx is the plugin-local CUE context (this plugin owns the migration engine, so it
+// no longer shares charly's core cueSchemaCtx). migrationSchema is #Migration compiled
+// standalone from the SDK's schema — migration.cue (#Migration) + version.cue
+// (#CanonCalVer, which #Migration.version pins to) concatenated ALONE, so the plugin
+// validates the table WITHOUT pulling charly's full ingress schema and WITHOUT
+// duplicating #CanonCalVer (which must stay the SDK's single source of truth).
+var (
+	migCtx          = cuecontext.New()
+	migrationSchema = compileMigrationDefs()
+)
+
+func compileMigrationDefs() cue.Value {
+	body, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", func(name string) bool {
+		return name != "migration.cue" && name != "version.cue"
+	})
+	if err != nil {
+		panic(fmt.Sprintf("compileMigrationDefs: concat #Migration schema: %v", err))
+	}
+	v := migCtx.CompileString(body)
+	if v.Err() != nil {
+		panic(fmt.Sprintf("compileMigrationDefs: #Migration schema does not compile: %v", cueerrors.Details(v.Err(), nil)))
+	}
+	return v
+}
 
 // migrationsCUE is the declarative migration table (charly/migrations.cue). It is
 // engine DATA, not ingress schema — it lives outside sdk/schema/ so it never
@@ -77,7 +105,7 @@ var migrationTable = loadMigrationTable()
 // #Migration (from the shared compiled schema), enforces exactly-one ops/apply +
 // strictly-ascending canonical versions + a registered hook name, and decodes.
 func loadMigrationTable() []migration {
-	v := cueSchemaCtx.CompileString(string(migrationsCUE))
+	v := migCtx.CompileString(string(migrationsCUE))
 	if v.Err() != nil {
 		panic(fmt.Sprintf("migrations.cue failed to compile: %v", cueerrors.Details(v.Err(), nil)))
 	}
@@ -85,7 +113,7 @@ func loadMigrationTable() []migration {
 	if !list.Exists() {
 		panic("migrations.cue: missing top-level `migrations:` list")
 	}
-	migDef := sharedCueSchema.LookupPath(cue.ParsePath("#Migration"))
+	migDef := migrationSchema.LookupPath(cue.ParsePath("#Migration"))
 	if migDef.Err() != nil {
 		panic(fmt.Sprintf("#Migration schema not found: %v", migDef.Err()))
 	}
@@ -156,7 +184,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 		}
 		return false, fmt.Errorf("reading %s: %w", rootPath, err)
 	}
-	ver := firstYAMLVersionLine(data)
+	ver := kit.FirstYAMLVersionLine(data)
 	fileVer, ok := kit.ParseCalVer(ver)
 	switch {
 	case ok && head.Less(fileVer):
@@ -182,7 +210,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 		if terr != nil {
 			return len(applied) > 0, terr
 		}
-		files, ferr := runDocMigration(ctx.Dir, ctx.DryRun, opUnifyCandidateFiles, transform)
+		files, ferr := runDocMigration(ctx.Dir, ctx.DryRun, kit.OpUnifyCandidateFiles, transform)
 		if ferr != nil {
 			return len(applied) > 0, ferr
 		}
@@ -223,7 +251,7 @@ func buildTransform(m migration) (func(*yaml.Node) bool, error) {
 	}
 	ops := m.Ops
 	return func(doc *yaml.Node) bool {
-		root := mappingRoot(doc)
+		root := kit.MappingRoot(doc)
 		if root == nil {
 			return false
 		}

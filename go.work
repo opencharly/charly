@@ -47,3 +47,4 @@ use ./candy/plugin-candy-kind
 use ./candy/plugin-build
 use ./candy/plugin-installstep
 use ./candy/plugin-tunnel
+use ./candy/plugin-migrate

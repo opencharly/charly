@@ -34,9 +34,9 @@ var (
 	firstYAMLVersionLine = kit.FirstYAMLVersionLine
 	isGitSubmoduleDir    = kit.IsGitSubmoduleDir
 
-	scalarNode            = kit.ScalarNode
-	findMappingValue      = kit.FindMappingValue
-	opUnifyCandidateFiles = kit.OpUnifyCandidateFiles
+	scalarNode       = kit.ScalarNode
+	findMappingValue = kit.FindMappingValue
+	mappingRoot      = kit.MappingRoot
 )
 
 // EnvdDir is exported (used across deploy code); alias the kit copy.
