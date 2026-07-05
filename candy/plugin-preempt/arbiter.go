@@ -21,9 +21,9 @@ import (
 // ledger, GPU-resource poisoning, owner liveness, and the driver-mode arbitration math. Its host
 // DEPENDENCIES (project config, VM/pod lifecycle, the GPU driver flip) it CANNOT hold across the
 // module boundary — it reaches them mid-logic over the ExecutorService.HostArbiter reverse
-// channel (the 7 host seams: gather/resources/running/stop[+wait]/start/switchMode/ensureCDI).
+// channel (the 8 host seams: gather/resources/running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI).
 //
-// The 8 seam fields on ResourceArbiter are INJECTABLE so the unit suite fakes them (the
+// The 9 seam fields on ResourceArbiter are INJECTABLE so the unit suite fakes them (the
 // seam-faked tests relocated from charly/preempt_test.go); newArbiter wires the production seams
 // to the host over the reverse channel. Crash-safety is unchanged: the ledger is written BEFORE
 // any holder is stopped, and restore = "start every listed holder that isn't running".
@@ -40,6 +40,7 @@ type ResourceArbiter struct {
 	resources  func() map[string]string                // gpu-backed token -> PCI vendor (arbitration-only omitted)
 	switchMode func(vendor, mode string) (bool, error) // flip a gpu-backed token's driver mode; wedged bool for poisoning
 	ensureCDI  func()                                  // regenerate the nvidia CDI spec after a flip to nvidia
+	gpuCDI     func() []spec.HolderAddr                // running charly GPU-CDI pods (reclaim before a vfio flip)
 	nowUTC     func() string
 }
 
@@ -54,6 +55,7 @@ func newArbiter(ctx context.Context, exec *sdk.Executor) *ResourceArbiter {
 		resources:  func() map[string]string { return hostResources(ctx, exec) },
 		switchMode: func(v, m string) (bool, error) { return hostSwitchMode(ctx, exec, v, m) },
 		ensureCDI:  func() { hostEnsureCDI(ctx, exec) },
+		gpuCDI:     func() []spec.HolderAddr { return hostGpuCDIHolders(ctx, exec) },
 		nowUTC:     func() string { return time.Now().UTC().Format(time.RFC3339) },
 	}
 }
@@ -163,6 +165,17 @@ func hostEnsureCDI(ctx context.Context, exec *sdk.Executor) {
 	}
 }
 
+func hostGpuCDIHolders(ctx context.Context, exec *sdk.Executor) []spec.HolderAddr {
+	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamGpuCDI, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: gpuCDI seam: %v\n", err)
+		return nil
+	}
+	var r spec.ArbiterGpuCDIReply
+	_ = json.Unmarshal(out, &r)
+	return r.Holders
+}
+
 // --- acquire -----------------------------------------------------------------------------------
 
 // AcquireExclusive gives a claimant SOLE use of its tokens: it stops every running preemptible
@@ -247,6 +260,10 @@ func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, cla
 	if err := a.stopHolders(allStops, claimant); err != nil {
 		return false, err
 	}
+	// Reclaim any leaked/kept charly GPU pod still holding the card (a stray with no active lease) —
+	// otherwise its open nvidia handle wedges the nvidia->vfio flip below (ledger.Leases now holds
+	// this new exclusive lease + the kept non-overlapping ones, so a legit claimant is never touched).
+	a.reclaimStrayGPUHolders(ledger.Leases)
 	if err := a.applyMode(tokens, spec.GpuModeVfio); err != nil {
 		a.restoreHolders(lease.Preempted)
 		_ = a.removeLease(claimant)
@@ -387,6 +404,34 @@ func (a *ResourceArbiter) restoreHolders(holders []spec.PreemptedHolder) bool {
 	return allUp
 }
 
+// reclaimStrayGPUHolders stops every RUNNING charly GPU-CDI pod that is NOT covered by an active
+// lease in leases — a leaked/kept eval bed the ledger lost track of (its transient lease was
+// owner-PID-tied to a check-runner process that has since exited, while the container kept running
+// with an open nvidia_uvm handle). Called immediately before any nvidia->vfio flip so a stray handle
+// cannot wedge `modprobe -r nvidia` (the old "external GPU client (could not be identified)" refusal
+// that left a leaked bed holding the card indefinitely). Reclaimed pods are gracefully stopped
+// (freeing the module refcount) and deliberately NOT restored: a disposable bed left running past its
+// lease is leaked state, never a holder to bring back.
+func (a *ResourceArbiter) reclaimStrayGPUHolders(leases []spec.PreemptLease) {
+	holders := a.gpuCDI()
+	if len(holders) == 0 {
+		return
+	}
+	leased := map[string]bool{}
+	for _, lz := range leases {
+		leased[lz.Claim.Name] = true
+	}
+	for _, addr := range holders {
+		if leased[addr.Name] || !a.running(addr) {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "preempt: reclaiming stray GPU holder %q (a running charly GPU pod with no active lease) to free the card\n", addr.Name)
+		if err := a.stop(addr); err != nil {
+			fmt.Fprintf(os.Stderr, "preempt: could not reclaim stray GPU holder %q: %v\n", addr.Name, err)
+		}
+	}
+}
+
 // applyMode flips every gpu-backed token in tokens to the target driver MODE (+ regenerate CDI
 // after a flip to nvidia). Arbitration-only tokens (absent from the resources map) are skipped —
 // there is no device to flip (the selector-less-token path the C9 R10 exercises with ZERO GPU).
@@ -477,6 +522,12 @@ func (a *ResourceArbiter) releaseLeaseEffects(lease spec.PreemptLease, remaining
 	}
 	for _, tok := range lease.Tokens {
 		mode := desiredModeForToken(remaining, tok)
+		if mode == spec.GpuModeVfio {
+			// The last claim on tok is gone; reclaim any stray charly GPU pod still holding the card
+			// (a leaked bed whose lease died with its check-runner) so the nvidia->vfio flip-back
+			// can't wedge on its open handle. Idempotent; `remaining` has no live claim on tok.
+			a.reclaimStrayGPUHolders(remaining)
+		}
 		if _, err := a.switchModeForToken(tok, mode); err != nil {
 			fmt.Fprintf(os.Stderr, "preempt: could not set %q to %s mode after releasing %q: %v\n", tok, mode, lease.Claimant, err)
 		}

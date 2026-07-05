@@ -26,6 +26,7 @@ type fakeWorld struct {
 	modes     map[string]string // vendor -> last mode flipped to
 	cdiCalls  int               // ensureCDI invocations
 	wedge     bool              // when true, switchMode returns wedged=true + an error
+	gpuPods   []spec.HolderAddr // running charly GPU-CDI pods the gpuCDI seam reports (reclaim source)
 }
 
 // newTestArbiter builds an arbiter whose seams are backed by the fake world (a temp ledger dir).
@@ -63,6 +64,7 @@ func newTestArbiter(t *testing.T, holders []spec.HolderDescriptor, w *fakeWorld)
 			return false, nil
 		},
 		ensureCDI: func() { w.cdiCalls++ },
+		gpuCDI:    func() []spec.HolderAddr { return w.gpuPods },
 		nowUTC:    func() string { return "2026-01-01T00:00:00Z" },
 	}
 }
@@ -347,6 +349,7 @@ func TestArbiter_LedgerPersistsAcrossInstances(t *testing.T) {
 		resources:  a1.resources,
 		switchMode: a1.switchMode,
 		ensureCDI:  a1.ensureCDI,
+		gpuCDI:     a1.gpuCDI,
 		nowUTC:     a1.nowUTC,
 	}
 	led, _, _ := a2.Status()
@@ -591,5 +594,51 @@ func TestArbiter_PoisonedTokenRefusesAcquire(t *testing.T) {
 	}
 	if _, err := a.AcquireExclusive("gpu-vm", []string{"nvidia-gpu"}, claimAddr("gpu-vm"), true); err == nil || !strings.Contains(err.Error(), "reboot") {
 		t.Fatalf("AcquireExclusive on a poisoned token must refuse with a reboot-required error, got %v", err)
+	}
+}
+
+// reclaimStrayGPUHolders stops a stray charly GPU-CDI pod — a RUNNING pod with no active lease (a
+// leaked/kept eval bed whose owner-PID-tied lease died with its check-runner) — but SPARES one that
+// still holds a lease and SKIPS one already stopped. This is what stops a leaked bed from wedging the
+// nvidia->vfio flip.
+func TestReclaimStrayGPUHolders_StopsStraySparesLeased(t *testing.T) {
+	w := &fakeWorld{
+		running: map[string]bool{"stray": true, "leased": true, "already-stopped": false},
+		gpuPods: []spec.HolderAddr{
+			{Name: "stray", Target: "pod", Base: "stray"},
+			{Name: "leased", Target: "pod", Base: "leased"},
+			{Name: "already-stopped", Target: "pod", Base: "already-stopped"},
+		},
+	}
+	a := newTestArbiter(t, nil, w)
+	a.reclaimStrayGPUHolders([]spec.PreemptLease{{Claimant: "leased", Claim: spec.HolderAddr{Name: "leased"}}})
+	if got := strings.Join(w.ops, ","); got != "stop:stray" {
+		t.Fatalf("reclaim must stop ONLY the stray pod (not the leased one, not the already-stopped one), got ops=%q", got)
+	}
+	if !w.running["leased"] {
+		t.Fatal("a GPU pod with an active lease must be spared")
+	}
+}
+
+// AcquireExclusive reclaims a stray GPU pod BEFORE flipping the card to vfio, so a leaked bed's open
+// GPU handle can never wedge the flip.
+func TestArbiter_ExclusiveReclaimsStrayGPUBeforeVfio(t *testing.T) {
+	w := &fakeWorld{
+		running:   map[string]bool{"gpu-vm": true, "stray-gpu": true},
+		resources: gpuResources(),
+		gpuPods:   []spec.HolderAddr{{Name: "stray-gpu", Target: "pod", Base: "stray-gpu"}},
+	}
+	a := newTestArbiter(t, nil, w)
+	if _, err := a.AcquireExclusive("gpu-vm", []string{"nvidia-gpu"}, claimAddr("gpu-vm"), true); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	joined := strings.Join(w.ops, ",")
+	stopAt := strings.Index(joined, "stop:stray-gpu")
+	vfioAt := strings.Index(joined, "mode:vfio:")
+	if stopAt < 0 {
+		t.Fatalf("exclusive acquire must reclaim the stray GPU pod, got ops=%q", joined)
+	}
+	if vfioAt < 0 || stopAt > vfioAt {
+		t.Fatalf("the stray reclaim must PRECEDE the vfio flip, got ops=%q", joined)
 	}
 }
