@@ -97,6 +97,26 @@ func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
 	}
 }
 
+// I4b. A GROUP deploy root (no workload container, only sibling members) on a GPU
+// host must NOT imply the nvidia-gpu token — config_image emits no CDI device for a
+// group. Regression: check-preempt-live-pod's group root wrongly held an implied
+// nvidia-gpu lease, masking the members' authored test-lock preemption.
+func TestImpliedGPUShared_GroupRootNotImpliedOnGPUHost(t *testing.T) {
+	withDetectGPU(t, true) // host HAS a GPU
+	res := gpuResources()
+	group := BundleNode{Members: map[string]*BundleNode{"preempt-taker": {Target: "pod"}}} // Target "" + members → IsGroup()
+	if !group.IsGroup() {
+		t.Fatalf("test fixture must be a group (Target=='' && members>0)")
+	}
+	if tok := impliedGPUSharedToken(group, res); tok != "" {
+		t.Fatalf("a group root on a GPU host must NOT imply the nvidia-gpu token, got %q", tok)
+	}
+	// The pod path is unchanged: a pod on a GPU host still implies the token.
+	if tok := impliedGPUSharedToken(gpuPodNode(), res); tok != "nvidia-gpu" {
+		t.Fatalf("a pod on a GPU host must still imply the nvidia-gpu token, got %q", tok)
+	}
+}
+
 // I5. applyImpliedGPUShared unions the token onto a bare node, and NEVER
 // double-claims a token the node already lists.
 func TestApplyImpliedGPUShared_UnionAndNoDoubleClaim(t *testing.T) {

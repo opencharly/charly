@@ -66,6 +66,15 @@ func nodeSecurityListsNvidiaDevice(node BundleNode) bool {
 // acquire an implied nvidia-GPU-shared lease (which broke check-preempt-local's clean-ledger
 // `charly preempt status` assertion — the bed held its OWN implied lease).
 func nodeConsumesNvidiaGPU(node BundleNode) bool {
+	// A GROUP deploy root carries no workload container of its own (it only groups
+	// sibling members), so config_image emits NO `--device nvidia.com/gpu=all` for it
+	// — it never auto-consumes the GPU. Without this gate a group bed root on a GPU host
+	// wrongly acquires an implied nvidia-gpu-shared lease (isPodMember treats its empty
+	// Target as a pod), which broke check-preempt-live-pod: the bed root held an
+	// `nvidia-gpu` lease instead of surfacing the members' authored test-lock preemption.
+	if node.IsGroup() {
+		return false
+	}
 	if isPodMember(&node) {
 		return DetectGPU() || nodeSecurityListsNvidiaDevice(node)
 	}
