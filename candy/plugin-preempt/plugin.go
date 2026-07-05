@@ -7,10 +7,11 @@
 //     in-core proxy (charly/preempt.go newResourceArbiter → resolve(verb:arbiter)+Invoke); the
 //     arbiter reaches its host dependencies (config, VM/pod lifecycle, GPU flip) over the
 //     ExecutorService.HostArbiter reverse channel (arbiter.go).
-//   - command:preempt — the operator `charly preempt status`/`restore` CLI, unchanged: it shells
-//     back through the hidden in-core `charly __preempt-status`/`__preempt-restore` verbs (which
-//     now drive the arbiter via the proxy). COMPILED-IN → dispatched in-proc via Invoke(OpRun);
-//     the cmd/serve binary serves the out-of-process fork/exec placement (CliMain).
+//   - command:preempt — the operator `charly preempt status`/`restore` CLI. It OWNS the CLI grammar +
+//     the lease-table formatting and reaches its OWN peer capability verb:arbiter DIRECTLY via
+//     InvokeProvider over the reverse channel (no hidden `__preempt-*` forward, no in-core proxy hop —
+//     command:preempt → InvokeProvider → verb:arbiter). COMPILED-IN → dispatched in-proc via
+//     Invoke(OpRun); out-of-process CliMain errors (the reverse channel is unavailable there).
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:). The
 // arbiter is on the deploy/vm/check hot paths + needs the local lease ledger + config, so in-proc
@@ -23,6 +24,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
@@ -50,18 +52,25 @@ func NewMeta() pb.PluginMetaServer {
 		schemaFS)
 }
 
-// CliMain is the OUT-OF-PROCESS command-dispatch entry (charly fork/execs the binary with the
-// pass-through tokens after `charly preempt`). It runs the SAME shellback CLI as the in-proc
-// command Invoke path.
-func CliMain(args []string) int { return runPreemptCLI(args) }
+// CliMain is the OUT-OF-PROCESS command-dispatch entry (only reached when preempt is NOT compiled in).
+// preempt reaches verb:arbiter over the reverse channel, unavailable out-of-process, so runPreemptCLI
+// (with a nil executor) errors; the canonical placement is compiled-in (Invoke), where the reverse
+// channel is threaded.
+func CliMain(args []string) int {
+	if err := runPreemptCLI(context.Background(), nil, args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
 
 type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke serves BOTH words on OpRun, discriminated by req.Reserved:
 //   - "arbiter": decode the action-tagged spec.ArbiterInvokeInput, run the arbiter (wired to the
 //     host reverse channel via sdk.ExecutorForInvoke), and echo its spec.ArbiterInvokeReply.
-//   - "preempt": the COMPILED-IN command dispatch — decode the pass-through {args} and run the
-//     shellback CLI in charly's own process (stdio inherited).
+//   - "preempt": the COMPILED-IN command dispatch — decode the pass-through {args}, recover the
+//     reverse-channel executor, and run the CLI (which reaches verb:arbiter via InvokeProvider).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpRun {
 		return nil, fmt.Errorf("preempt: unsupported op %q (only %q)", req.GetOp(), sdk.OpRun)
@@ -85,6 +94,10 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		}
 		return &pb.InvokeReply{ResultJson: out}, nil
 	case "preempt":
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("preempt command: reach host reverse channel: %w", err)
+		}
 		var in struct {
 			Args []string `json:"args"`
 		}
@@ -93,7 +106,9 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 				return nil, fmt.Errorf("preempt command: decode args: %w", err)
 			}
 		}
-		runPreemptCLI(in.Args)
+		if rerr := runPreemptCLI(ctx, exec, in.Args); rerr != nil {
+			return nil, rerr
+		}
 		return &pb.InvokeReply{}, nil
 	default:
 		return nil, fmt.Errorf("preempt: unknown word %q (want arbiter|preempt)", req.GetReserved())

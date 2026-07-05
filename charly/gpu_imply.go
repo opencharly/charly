@@ -58,10 +58,18 @@ func nodeSecurityListsNvidiaDevice(node BundleNode) bool {
 }
 
 // nodeConsumesNvidiaGPU reports whether a deploy node WOULD receive the nvidia GPU device at
-// bring-up: either the host presents a usable nvidia GPU (DetectGPU — the same signal
-// config_image uses), or the node explicitly lists an nvidia device in security.devices.
+// bring-up. DetectGPU() (the host HAS a usable nvidia GPU) implies consumption ONLY for a POD
+// deploy — a pod auto-gets the nvidia GPU as a CDI device on a GPU host (config_image emits
+// `--device nvidia.com/gpu=all`). A local/host/vm command deploy gets NO container device, so on a
+// GPU workstation it consumes the GPU only when it EXPLICITLY lists an nvidia device in
+// security.devices. Without this pod gate, EVERY local command bed on a GPU host would wrongly
+// acquire an implied nvidia-GPU-shared lease (which broke check-preempt-local's clean-ledger
+// `charly preempt status` assertion — the bed held its OWN implied lease).
 func nodeConsumesNvidiaGPU(node BundleNode) bool {
-	return DetectGPU() || nodeSecurityListsNvidiaDevice(node)
+	if isPodMember(&node) {
+		return DetectGPU() || nodeSecurityListsNvidiaDevice(node)
+	}
+	return nodeSecurityListsNvidiaDevice(node)
 }
 
 // impliedGPUSharedToken returns the gpu-backed `resource:` token a node implicitly claims as

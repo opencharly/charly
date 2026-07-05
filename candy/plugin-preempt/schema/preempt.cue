@@ -12,10 +12,10 @@
 // (the SDK serve-side check) AND splices onto the base — the base ++ plugin splice exists to
 // detect a def-name collision with the base, not to resolve base references.
 
-// #PreemptPlugin documents the command the plugin serves. The command keeps its entire contract
-// in its own CLI grammar (parsed from os.Args in CLI mode), so there is no plugin_input to
-// validate here.
+// #PreemptPlugin documents the command the plugin serves. The plugin OWNS the status/restore grammar +
+// the lease-table formatting and reaches its peer verb:arbiter via InvokeProvider — there is no
+// plugin_input to validate here (args are plain CLI tokens).
 #PreemptPlugin: {
 	command:  "preempt"
-	contract: "preempt is CLI-dispatched (charly fork/execs the binary); args are plain CLI tokens (status | restore [claimant]) that shell back to the in-core arbiter via charly __preempt-status / __preempt-restore"
+	contract: "preempt is a compiled-in command dispatched in-proc via Invoke(OpRun); args are plain CLI tokens (status | restore [claimant]); the plugin owns the grammar + output and reaches its peer verb:arbiter over InvokeProvider"
 }

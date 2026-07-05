@@ -1797,19 +1797,17 @@ check-udev-local:
 
 # =================================================================
 # check-preempt-local — R10 witness for the externalized `charly preempt` COMMAND
-# (candy/plugin-preempt, command:preempt) — the SECOND welded-command externalization.
-# A disposable kind:local deploy on host: local that runs the GPU-less, deterministic
-# `charly preempt status` host-side:
-#   - `charly preempt status` → exits 0 and (on a fresh, lease-free bed host) prints
-#     "No active preemption leases." — proving the externalized command + the hidden-command
-#     shell-back dispatch end-to-end: the host charly resolves the `preempt` word via the
-#     discovered candy/plugin-preempt prescan, syscall.Exec's the plugin binary (host-built,
-#     or baked at /usr/lib/charly/plugins by pkg/arch), and the plugin shells back to the
-#     in-core arbiter via `charly __preempt-status` (newResourceArbiter().Status()).
-# `restore` needs a live GPU-preemption scenario (a running preemptible holder + an exclusive
-# claimant) — out of scope for this bed; its dispatch is covered by the Go e2e
-# (TestExternalCommandExecPlan_Preempt) + the hidden-command arbiter test
-# (TestPreemptStatusInternal_RendersArbiterLeases).
+# (candy/plugin-preempt, command:preempt) — COMPILED-IN, owns the CLI + the lease-table formatting,
+# and reaches its peer verb:arbiter DIRECTLY via InvokeProvider (no hidden core-command forward, no
+# in-core proxy hop). A disposable kind:local deploy on host: local runs the GPU-less, deterministic
+# preempt CLI host-side:
+#   - `charly preempt status` → exits 0 and (on a fresh, lease-free bed host) prints "No active
+#     preemption leases." — the compiled-in command's Invoke(OpRun) calls InvokeProvider(verb:arbiter,
+#     status) over the in-proc reverse channel + the plugin renders the lease table.
+#   - `charly preempt restore` → exits 0 and prints "reconciled stranded leases…" — exercising the
+#     ALWAYS-SERVED HostArbiter seam end-to-end (reconcile → the arbiter's gather/start host seams over
+#     the bare command-dispatch executor). Full acquire→preempt→release is covered by the Go e2e
+#     (TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed.
 # =================================================================
 check-preempt-app:
     local:
@@ -1828,14 +1826,13 @@ check-preempt-local:
         lifecycle: dev
         description: >-
             Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt,
-            command:preempt), the second welded-command externalization in the
-            core-externalization program. A disposable kind:local deploy on host: local runs
-            `charly preempt status` host-side: the host charly resolves the `preempt` word via
-            the discovered candy/plugin-preempt prescan and syscall.Exec's the plugin binary,
-            which shells back to the in-core resource arbiter via the hidden
-            `charly __preempt-status` verb (newResourceArbiter().Status()). On a fresh, GPU-less,
-            lease-free bed host the command exits 0 and reports no active preemption leases —
-            proving the externalized command + the hidden-command shell-back dispatch end-to-end.
+            command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable
+            kind:local deploy on host: local runs `charly preempt status` + `restore` host-side: the
+            compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via
+            InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over
+            the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop.
+            On a fresh, GPU-less, lease-free bed host both exit 0 (status → no active leases; restore →
+            reconciled) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end.
     preempt-status-runs:
         check: command=charly preempt status exits 0 and reports a clean arbiter (no active leases) on a fresh GPU-less host
         id: preempt-status-runs
@@ -1847,6 +1844,18 @@ check-preempt-local:
         plugin: command
         plugin_input:
             command: charly preempt status
+            in_container: false
+    preempt-restore-runs:
+        check: command=charly preempt restore exits 0 and reconciles stranded leases — exercising the ALWAYS-SERVED HostArbiter seam (reconcile → the arbiter's gather/start host seams) reached via InvokeProvider(verb:arbiter) over the bare command-dispatch executor
+        id: preempt-restore-runs
+        exit_status: 0
+        stderr:
+            - contains: 'reconciled stranded leases'
+        context:
+            - runtime
+        plugin: command
+        plugin_input:
+            command: charly preempt restore
             in_container: false
 
 # =================================================================

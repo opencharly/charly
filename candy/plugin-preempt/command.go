@@ -1,93 +1,127 @@
 package preempt
 
 import (
-	"errors"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
+	"strings"
+	"text/tabwriter"
 
-	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
-// command.go — the command:preempt leg. `charly preempt status`/`restore [claimant]` shells back
-// through the hidden in-core `charly __preempt-status`/`__preempt-restore` verbs (the SAME
-// internal-command pattern the command has always used); those hidden verbs run the arbiter via
-// the in-core PROXY (charly/preempt.go), which dispatches to this plugin's verb:arbiter. So the
-// operator CLI is byte-identical to before C9 — only the arbiter's HOME moved. No core symbol
-// crosses the boundary; no ad-hoc podman/virsh.
-//
-// The shellback runs `charly __preempt-*` as a CHILD (exec.Command, stdio inherited) rather than
-// syscall.Exec, so it works identically whether dispatched IN-PROC (compiled-in command Invoke)
-// or OUT-OF-PROCESS (the cmd/serve fork/exec'd binary, CliMain). status/restore are
-// non-interactive, so a child process is fine.
+// command.go — the externalized `charly preempt` command (status / restore). The plugin OWNS the CLI
+// grammar + the lease-table formatting; it reaches the arbiter — its OWN peer capability verb:arbiter
+// (compiled-in) — DIRECTLY via InvokeProvider over the in-proc reverse channel. No hidden `__preempt-*`
+// forward, no in-core proxy hop: command:preempt → InvokeProvider → verb:arbiter → (HostArbiter → core
+// host seams). preempt is the first compiled-in COMMAND that reaches a peer VERB plugin over
+// InvokeProvider (the HostBuild commands reach a terminal host builder; this reaches another plugin).
+// COMPILED-IN because Invoke(OpRun) needs the reverse channel; out-of-process CliMain errors.
 
-// runPreemptCLI parses the pass-through tokens against PreemptCmd and dispatches the selected
-// leaf. Returns the process exit code (propagating the shelled-back charly's exit code).
-func runPreemptCLI(args []string) int {
-	var grp PreemptCmd
-	parser, err := kong.New(&grp,
-		kong.Name("preempt"),
-		kong.Description("charly preempt — inspect and recover exclusive-resource preemption leases"),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "plugin-preempt: build kong parser: %v\n", err)
-		return 1
+const preemptUsage = `usage: charly preempt <status | restore [claimant]>`
+
+// runPreemptCLI dispatches the preempt subcommand, reaching verb:arbiter via InvokeProvider and owning
+// the output (the lease table + the restore messages).
+func runPreemptCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("%s", preemptUsage)
 	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "plugin-preempt: parse `charly preempt %v`: %v\n", args, err)
-		return 1
-	}
-	if err := kctx.Run(); err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return ee.ExitCode()
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "-h", "--help", "help":
+		fmt.Println(preemptUsage)
+		return nil
+	case "status":
+		reply, err := arbiterAction(ctx, exec, spec.ArbiterInvokeInput{Action: spec.ArbiterActionStatus})
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(os.Stderr, "charly preempt: %v\n", err)
-		return 1
+		ledger := reply.Ledger
+		if ledger == nil {
+			ledger = &spec.PreemptLedger{}
+		}
+		return renderLeaseTable(ledger, reply.Stranded, os.Stdout)
+	case "restore":
+		claimant := ""
+		if len(rest) == 1 {
+			claimant = rest[0]
+		} else if len(rest) > 1 {
+			return fmt.Errorf("usage: charly preempt restore [claimant]")
+		}
+		if claimant == "" {
+			if _, err := arbiterAction(ctx, exec, spec.ArbiterInvokeInput{Action: spec.ArbiterActionReconcile}); err != nil {
+				return err
+			}
+			fmt.Fprintln(os.Stderr, "preempt: reconciled stranded leases — holders for any departed claimant restored.")
+		} else {
+			if _, err := arbiterAction(ctx, exec, spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: claimant, Success: true}); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "preempt: released lease for %q and restored its holders.\n", claimant)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown preempt subcommand %q\n%s", sub, preemptUsage)
 	}
-	return 0
 }
 
-// charlyBin returns the host charly binary the dispatch seam stamped into CHARLY_BIN, falling
-// back to `charly` on PATH.
-func charlyBin() string {
-	if b := os.Getenv("CHARLY_BIN"); b != "" {
-		return b
+// arbiterAction invokes the peer verb:arbiter over the reverse channel with an action-tagged input.
+// exec is nil on the out-of-process cliMain path (no reverse channel) → a clear error.
+func arbiterAction(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) {
+	if exec == nil {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("charly preempt requires compiled-in placement (the arbiter reverse channel is unavailable out-of-process)")
 	}
-	return "charly"
-}
-
-// runCharly runs `charly <args…>` as a child with the operator's stdio inherited, so the hidden
-// arbiter verb's table/messages reach the terminal natively. Returns the child's error (an
-// *exec.ExitError carries its exit code).
-func runCharly(args ...string) error {
-	cmd := exec.Command(charlyBin(), args...) //nolint:gosec // charlyBin is CHARLY_BIN; args are fixed hidden-command tokens
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
-}
-
-// PreemptCmd is the operator-facing surface over the in-core resource arbiter: inspect active
-// exclusive-resource leases and recover holders left stopped by a crashed claim. The leaf
-// structs are byte-identical to the former core command so `charly preempt …` parses as before.
-type PreemptCmd struct {
-	Status  PreemptStatusCmd  `cmd:"" help:"Show active resource-arbitration leases (which preemptible holders are stopped for which claimant) and flag stranded ones"`
-	Restore PreemptRestoreCmd `cmd:"" help:"Restore preempted holders — no argument reconciles every stranded lease; a claimant argument force-releases that lease and restarts its holders"`
-}
-
-// PreemptStatusCmd prints the active leases via the `charly __preempt-status` shellback.
-type PreemptStatusCmd struct{}
-
-func (c *PreemptStatusCmd) Run() error { return runCharly("__preempt-status") }
-
-// PreemptRestoreCmd recovers preempted holders via the `charly __preempt-restore` shellback.
-type PreemptRestoreCmd struct {
-	Claimant string `arg:"" optional:"" help:"Claimant whose lease to force-restore; omit to reconcile ALL stranded leases"`
-}
-
-func (c *PreemptRestoreCmd) Run() error {
-	if c.Claimant == "" {
-		return runCharly("__preempt-restore")
+	params, err := json.Marshal(in)
+	if err != nil {
+		return spec.ArbiterInvokeReply{}, err
 	}
-	return runCharly("__preempt-restore", c.Claimant)
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil)
+	if err != nil {
+		return spec.ArbiterInvokeReply{}, err
+	}
+	var reply spec.ArbiterInvokeReply
+	if len(out) > 0 {
+		if uerr := json.Unmarshal(out, &reply); uerr != nil {
+			return spec.ArbiterInvokeReply{}, uerr
+		}
+	}
+	if reply.Error != "" {
+		return spec.ArbiterInvokeReply{}, fmt.Errorf("%s", reply.Error)
+	}
+	return reply, nil
+}
+
+// renderLeaseTable prints the arbiter's lease ledger + flags stranded leases (moved from charly core —
+// it reads only spec types, so it is pure plugin-side formatting).
+func renderLeaseTable(ledger *spec.PreemptLedger, stranded []string, out io.Writer) error {
+	if ledger == nil || len(ledger.Leases) == 0 {
+		fmt.Fprintln(out, "No active preemption leases.")
+		return nil
+	}
+	strandedSet := map[string]bool{}
+	for _, s := range stranded {
+		strandedSet[s] = true
+	}
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "CLAIMANT\tTOKENS\tTRANSIENT\tPREEMPTED HOLDERS\tCREATED\tSTATE")
+	for _, lz := range ledger.Leases {
+		holders := make([]string, 0, len(lz.Preempted))
+		for _, ph := range lz.Preempted {
+			holders = append(holders, ph.Addr.Name)
+		}
+		hs := strings.Join(holders, ",")
+		if hs == "" {
+			hs = "-"
+		}
+		state := "active"
+		if strandedSet[lz.Claimant] {
+			state = "STRANDED — run `charly preempt restore`"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%t\t%s\t%s\t%s\n",
+			lz.Claimant, strings.Join(lz.Tokens, ","), lz.Transient, hs, lz.Created, state)
+	}
+	return tw.Flush()
 }

@@ -145,53 +145,6 @@ func TestExternalCommandExecPlan_Tmux(t *testing.T) {
 	assertCommandEnv(t, env)
 }
 
-// TestExternalCommandExecPlan_Preempt proves the externalized `charly preempt` command — the
-// SECOND welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder
-// built for the `preempt` word parses `preempt status`, externalCommandExecPlan resolves the
-// (baked) plugin-preempt binary by word and builds the exec argv `<bin> status` + the CLI-mode
-// env (handshake cookie stripped, CHARLY_BIN stamped). This is the externalization gate —
-// `charly preempt` no longer resolves to a builtin CommandProvider; it resolves to
-// candy/plugin-preempt over this path, and the plugin re-expresses each leaf as a shell-back to
-// the in-core arbiter via `charly __preempt-status` / `charly __preempt-restore` (CHARLY_BIN is
-// the SAME charly that dispatched it).
-func TestExternalCommandExecPlan_Preempt(t *testing.T) {
-	const word = "preempt"
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/plugin-" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
-
-	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
-	var cli struct{ kong.Plugins }
-	cli.Plugins = kong.Plugins{holder}
-	parser, err := kong.New(&cli, kong.Name("charly"))
-	if err != nil {
-		t.Fatalf("kong.New with the preempt command holder: %v", err)
-	}
-	if _, err := parser.Parse([]string{word, "status"}); err != nil {
-		t.Fatalf("kong.Parse `charly preempt status`: %v", err)
-	}
-
-	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
-	if err != nil {
-		t.Fatalf("externalCommandExecPlan: %v", err)
-	}
-	if want := "/fake/plugins/plugin-" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
-	}
-	want := []string{bin, "status"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv = %v, want %v", argv, want)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
-		}
-	}
-	assertCommandEnv(t, env)
-}
-
 // TestExternalCommandExecPlan_Vm proves the externalized `charly vm` command — the FOURTH
 // welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder built
 // for the `vm` word parses `vm list` (a leaf of the VM lifecycle tree), externalCommandExecPlan

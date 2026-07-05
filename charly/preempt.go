@@ -24,11 +24,12 @@ import (
 // ReleaseClaimant/stopHolders/restoreHolders/reconcileStranded/the lease ledger/poison/
 // mode-math) MOVED into the COMPILED-IN candy/plugin-preempt (verb:arbiter). What stays here:
 //
-//   1. The in-core PROXY (arbiterProxy + Lease + the acquire*/release* shims) — the ~6
-//      consumers (check_bed_run.go, start.go, vm.go, commands.go, vm_gpu_cmd.go,
-//      preempt_internal_cmd.go) call the SAME symbol names and are invisible above the shim
-//      (R3). Each proxy method resolves verb:arbiter and Invokes it with an action-tagged
-//      spec.ArbiterInvokeInput (the gpu_shim resolve+Invoke pattern).
+//   1. The in-core PROXY (arbiterProxy + Lease + the acquire*/release* shims) — the core
+//      LEASE-LIFECYCLE consumers (check_bed_run.go, start.go, vm.go, commands.go, vm_gpu_cmd.go)
+//      call the SAME symbol names and are invisible above the shim (R3). Each proxy method
+//      resolves verb:arbiter and Invokes it with an action-tagged spec.ArbiterInvokeInput (the
+//      generic core→verb registry bridge — core is not a plugin, so it cannot call InvokeProvider;
+//      the externalized command:preempt CLI reaches the arbiter over InvokeProvider instead).
 //   2. The 7 arbiter HOST-SEAM helper impls (gatherPreemptibleHolders / holderRunning /
 //      holderStop / holderStart / gatherResources / holderAddrFor / lookupVMClaimant +
 //      waitStoppedHost) the arbiter calls back for mid-logic via ExecutorService.HostArbiter
@@ -58,10 +59,11 @@ type arbiterProxy struct{}
 func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
 
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
-// IN-PROC reverse channel (the arbiter host-seam server) onto the ctx so the plugin's Invoke
-// reaches its host seams over HostArbiter — the SAME dispatchBuild in-proc-executor pattern
-// (build.go), with an arbiter server instead of a build context. Infra failures (no plugin,
-// marshal, invoke) are returned as a Go error; a per-action OP failure rides reply.Error.
+// IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over HostArbiter
+// (now an always-served generic seam — plugin_executor_reverse.go) — the SAME dispatchBuild
+// in-proc-executor pattern (build.go). Infra failures (no plugin, marshal, invoke) are returned as a
+// Go error; a per-action OP failure rides reply.Error. This is the generic core→verb registry bridge
+// the core lease-lifecycle callers use (core is not a plugin, so it cannot call InvokeProvider).
 func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) {
 	prov, ok := providerRegistry.resolve(ClassVerb, "arbiter")
 	if !ok {
@@ -72,7 +74,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s marshal: %w", in.Action, err)
 	}
 	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{arbiter: newArbiterHostServer()}}))
+		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	res, err := prov.Invoke(ctx, &Operation{Reserved: "arbiter", Op: OpRun, Params: params})
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
@@ -86,37 +88,9 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	return reply, nil
 }
 
-// Status returns the current lease ledger + the stranded-claimant names (`charly preempt status`).
-func (a *arbiterProxy) Status() (*spec.PreemptLedger, []string, error) {
-	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionStatus})
-	if err != nil {
-		return nil, nil, err
-	}
-	if r.Error != "" {
-		return nil, nil, errors.New(r.Error)
-	}
-	ledger := r.Ledger
-	if ledger == nil {
-		ledger = &spec.PreemptLedger{}
-	}
-	return ledger, r.Stranded, nil
-}
-
 // ReleaseClaimant restores the holders a claimant's lease stopped + removes the lease.
 func (a *arbiterProxy) ReleaseClaimant(claimant string, success bool) error {
 	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionRelease, Claimant: claimant, Success: success})
-	if err != nil {
-		return err
-	}
-	if r.Error != "" {
-		return errors.New(r.Error)
-	}
-	return nil
-}
-
-// reconcileStranded restores holders for any lease whose owner is gone (`charly preempt restore`).
-func (a *arbiterProxy) reconcileStranded() error {
-	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionReconcile})
 	if err != nil {
 		return err
 	}

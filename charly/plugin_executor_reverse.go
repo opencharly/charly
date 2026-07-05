@@ -32,12 +32,6 @@ type executorReverseServer struct {
 	// RebootStep skip-and-note — a host venue (target:local, host:local or host:user@machine)
 	// is NEVER rebooted by a plugin walk (the prior in-proc LocalDeployTarget skipped+warned).
 	rebootable bool
-	// arbiter is the C9 resource-arbiter host-seam impl the HostArbiter reverse leg delegates
-	// to (config gather/resources, VM/pod lifecycle, the GPU driver flip). Non-nil ONLY on the
-	// executor the in-core arbiter proxy stands up when it Invokes the compiled-in verb:arbiter
-	// plugin (newArbiterHostServer); nil for every other (deploy/build/check) Invoke, whose
-	// HostArbiter call is a loud bug.
-	arbiter *arbiterHostServer
 	// live carries the LIVE (non-serializable) overlay-build inputs — the compiled InstallPlans +
 	// the nested-venue parent executor/node — a pod lifecycle plugin's HostBuild("overlay") needs
 	// but cannot receive across the []byte wire (M4). The host proxy attaches it (via the Invoke
@@ -48,15 +42,16 @@ type executorReverseServer struct {
 
 // HostArbiter is the C9 resource-arbiter reverse leg: the COMPILED-IN candy/plugin-preempt
 // (verb:arbiter) calls back mid-logic for its host dependencies. It decodes the action-tagged
-// request and delegates to the injected arbiterHostServer (the in-core default seam impls —
-// gather/resources/running/stop+wait/start/switchMode/ensureCDI). A seam OP failure rides the
-// seam's own reply (spec ArbiterErrReply / ArbiterSwitchReply), like RunReply; the RPC's own
-// error field is reserved for an infra failure (no arbiter server, bad action, marshal error).
+// request and delegates to the stateless arbiterHostServer (the in-core default seam impls —
+// gather/resources/running/stop+wait/start/switchMode/ensureCDI). ALWAYS served — like HostBuild /
+// InvokeProvider — because the arbiter is now reached over TWO reverse-channel topologies: the in-core
+// proxy's executor AND a compiled-in command:preempt calling InvokeProvider(verb:arbiter) over the
+// generic command dispatch's bare executor. The seam impls are stateless (touch no s.exec), so serving
+// it unconditionally is inert on every non-arbiter channel (only verb:arbiter ever sends this RPC) —
+// strictly cleaner than injecting arbiter-specific wiring into the generic command dispatch. A seam OP
+// failure rides the seam's own reply; the RPC error field is reserved for infra failure (bad action).
 func (s *executorReverseServer) HostArbiter(ctx context.Context, req *pb.HostArbiterRequest) (*pb.HostArbiterReply, error) {
-	if s.arbiter == nil {
-		return &pb.HostArbiterReply{Error: "HostArbiter called on a non-arbiter reverse channel (executor carries no arbiter host-seam server)"}, nil
-	}
-	out, err := s.arbiter.dispatch(req.GetAction(), req.GetParamsJson())
+	out, err := newArbiterHostServer().dispatch(req.GetAction(), req.GetParamsJson())
 	if err != nil {
 		return &pb.HostArbiterReply{Error: err.Error()}, nil
 	}

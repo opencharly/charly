@@ -59,17 +59,6 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// __preempt-status / __preempt-restore expose the resource arbiter to the externalized
-	// `charly preempt …` COMMAND plugin (candy/plugin-preempt). Since cutover C9 the arbiter LOGIC
-	// lives IN that plugin (verb:arbiter, compiled-in); these hidden verbs reach it through the
-	// in-core PROXY (preempt.go newResourceArbiter, which dispatches to verb:arbiter over the
-	// in-proc HostArbiter reverse channel). The plugin's `charly preempt` CLI shells back to these
-	// sanctioned hidden verbs (the SAME __cli-model / __plugin-providers internal-command pattern),
-	// so the operator-facing `charly preempt status`/`restore` CLI is byte-identical while the
-	// arbiter — the last core subsystem to externalize — now lives out of the core binary.
-	PreemptStatus  PreemptStatusInternalCmd  `cmd:"" name:"__preempt-status" hidden:"" help:"internal: print active resource-arbitration leases (the externalized charly preempt plugin shells back here)"`
-	PreemptRestore PreemptRestoreInternalCmd `cmd:"" name:"__preempt-restore" hidden:"" help:"internal: recover preempted holders (the externalized charly preempt plugin shells back here)"`
-
 	// __vm re-homes the WHOLE in-core VmCmd tree (vm.go / vm_snapshot_cmd.go — build/create/
 	// start/stop/destroy/console/ssh/snapshot/gpu/import/clone/cp-box/list) onto ONE hidden
 	// command, exposing it to the externalized `charly vm …` COMMAND plugin (candy/plugin-vm,
@@ -78,7 +67,7 @@ type CLI struct {
 	// serves — so they cannot move to the plugin (R3); the plugin is a THIN forwarder that
 	// syscall.Exec's `charly __vm <args…>` (command.go), inheriting charly's stdio/TTY so
 	// `charly vm console` / `charly vm ssh` keep their interactive terminal. This is the SAME
-	// internal-command pattern as __preempt-status, but re-homing the whole
+	// internal-command pattern as __cli-model / __plugin-providers, but re-homing the whole
 	// subtree onto one hidden command instead of one hidden command per leaf (the VmCmd grammar
 	// is large + nested, so the plugin forwards raw args rather than re-expressing each leaf).
 	VmInternal VmCmd `cmd:"" name:"__vm" hidden:"" help:"internal: the VM lifecycle command tree (the externalized charly vm plugin forwards here)"`
@@ -111,11 +100,12 @@ type CLI struct {
 	// (mcp/secrets/udev/tmux/preempt/feature/vm AND clean/settings/candy/doctor AND migrate are now
 	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
 	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm forwards
-	// to the hidden __vm core command above — its Run handlers stay core. migrate (M15) AND
-	// clean AND settings AND candy AND doctor OWN their engine/command in candy/plugin-migrate / candy/plugin-clean /
-	// candy/plugin-settings / candy/plugin-candy / candy/plugin-doctor (none uses a hidden core command), compiled-in so
-	// command:migrate / command:clean / command:settings / command:candy / command:doctor resolve at init()
-	// independent of any config — migrate must run when the config is exactly what cannot load.)
+	// to the hidden __vm core command above — its Run handlers stay core. migrate/clean/settings/candy/
+	// doctor/feature/preempt OWN their engine/command in candy/plugin-<name> (NONE uses a hidden core
+	// command): clean/settings/doctor/feature reach a shared core subsystem over a generic HostBuild seam
+	// (retention/settings/hostprobe/feature), preempt reaches its peer verb:arbiter over InvokeProvider,
+	// candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
+	// resolves at init() independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.
 	// check is special-cased: its nested out-of-process command plugins (charly check

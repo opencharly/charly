@@ -74,6 +74,29 @@ func TestImpliedGPUShared_ExclusiveClaimantNotImplied(t *testing.T) {
 	}
 }
 
+// I4b. The DetectGPU (host-has-a-GPU) implied-share applies ONLY to a POD deploy — a local/host
+// command deploy gets NO container device, so on a GPU host it is NOT an implied GPU consumer (only
+// an explicit nvidia device makes it one). Guards the fix that stopped every local command bed on a
+// GPU workstation from wrongly acquiring an implied nvidia-gpu-shared lease — which held the bed's
+// OWN lease and broke check-preempt-local's "No active preemption leases." status assertion.
+func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
+	withDetectGPU(t, true) // host HAS a GPU
+	res := gpuResources()
+	// A local command deploy with NO explicit nvidia device → NOT a GPU consumer (pod-gated).
+	if tok := impliedGPUSharedToken(BundleNode{Target: "local"}, res); tok != "" {
+		t.Fatalf("a local command deploy on a GPU host must NOT imply the nvidia-gpu token, got %q", tok)
+	}
+	// The explicit-device path survives for a local deploy that really lists the nvidia device.
+	explicit := BundleNode{Target: "local", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
+	if tok := impliedGPUSharedToken(explicit, res); tok != "nvidia-gpu" {
+		t.Fatalf("a local deploy explicitly listing the nvidia device MUST imply the token, got %q", tok)
+	}
+	// The pod path is unchanged: a pod on a GPU host still implies the token.
+	if tok := impliedGPUSharedToken(gpuPodNode(), res); tok != "nvidia-gpu" {
+		t.Fatalf("a pod on a GPU host must still imply the nvidia-gpu token, got %q", tok)
+	}
+}
+
 // I5. applyImpliedGPUShared unions the token onto a bare node, and NEVER
 // double-claims a token the node already lists.
 func TestApplyImpliedGPUShared_UnionAndNoDoubleClaim(t *testing.T) {

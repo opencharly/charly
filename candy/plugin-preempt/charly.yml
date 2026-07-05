@@ -16,14 +16,14 @@ plugin-preempt:
                 ExecutorService.HostArbiter reverse channel (the 7 host seams: gather / resources /
                 running / stop[+wait] / start / switchMode / ensureCDI, served in charly by
                 arbiter_host.go). The in-core PROXY (charly/preempt.go newResourceArbiter +
-                acquire*/release* shims) dispatches to it, so the ~6 consumers (check-bed runner,
-                start, vm, commands, vm_gpu_cmd, the hidden __preempt-* verbs) are invisible above
-                the shim (R3).
+                acquire*/release* shims) is the generic core→verb registry bridge the core
+                LEASE-LIFECYCLE consumers (check-bed runner, start, vm, commands, vm_gpu_cmd) compile
+                through, invisible above the shim (R3).
 
-              - command:preempt — the operator `charly preempt status`/`restore` CLI, UNCHANGED:
-                it shells back through the hidden in-core `charly __preempt-status` /
-                `charly __preempt-restore` verbs, which now drive the arbiter via the proxy. No core
-                symbol crosses the boundary; no ad-hoc podman/virsh (R4).
+              - command:preempt — the operator `charly preempt status`/`restore` CLI. It OWNS the CLI
+                grammar + the lease-table formatting and reaches its OWN peer capability verb:arbiter
+                DIRECTLY via InvokeProvider over the in-proc reverse channel (no hidden `__preempt-*`
+                forward, no in-core proxy hop). No ad-hoc podman/virsh (R4).
 
             PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:).
             The arbiter is on the deploy / vm-create / check-bed hot paths and needs the LOCAL
