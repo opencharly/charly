@@ -104,8 +104,9 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 // candy/plugin-deploy-pod out-of-process plugin (an externalizedDeploySubstrate, like
 // local/vm/android/k8s). ResolveTarget routes a `pod:` substrate to externalDeployTarget
 // over the E3b reverse channel. Unlike vm, pod's plugin WALKS NOTHING: pod bakes its install
-// steps INTO the image at build time, so its substrateLifecycle (pod_deploy_lifecycle.go)
-// builds the overlay container image HOST-SIDE in PrepareVenue (the SAME core
+// steps INTO the image at build time, so its substrateLifecycle (the external
+// candy/plugin-deploy-pod, M4) builds the overlay container image HOST-SIDE in PrepareVenue
+// via HostBuild("overlay") → the RETAINED core
 // OCITarget/Generator engine, in-process — like vm builds its disk host-side) and owns the
 // container lifecycle (config/start/remove + the `charly update` rebuild gate). PodDeployTarget
 // (deploy_target_pod.go) is RETAINED as that core overlay-build engine; only the adapter +

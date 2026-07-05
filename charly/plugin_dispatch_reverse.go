@@ -59,6 +59,11 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 	if !ok {
 		return &pb.HostBuildReply{Error: fmt.Sprintf("no host-builder registered for kind %q", req.GetKind())}, nil
 	}
+	// Re-thread the live overlay-build inputs (M4): a lifecycle Invoke attached them to this
+	// reverse server; the "overlay" builder reads them from the ctx (overlayBuildInputsFrom).
+	if s.live != nil {
+		ctx = withOverlayBuildInputs(ctx, s.live)
+	}
 	result, err := fn(ctx, req.GetSpecJson(), s.build)
 	if err != nil {
 		return &pb.HostBuildReply{Error: err.Error()}, nil

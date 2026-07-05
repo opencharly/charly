@@ -49,7 +49,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // sdk.NewMeta → BuildCapabilities.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "pod", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "pod", InputDef: "", Lifecycle: true}},
 		schemaFS)
 }
 
@@ -60,7 +60,12 @@ type provider struct{ pb.UnimplementedProviderServer }
 // in-process on the host, nothing crosses the process boundary), so there is nothing to
 // walk on a venue here — the plugin returns an EMPTY DeployReply (no reverse ops; pod
 // teardown is `charly remove` + drop overlay, owned by the host hook's PostTeardown).
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	// M4: the pod substrate lifecycle Ops (prepare-venue/start/stop/status/logs/shell/rebuild/
+	// post-teardown/…) — externalized out of core — reach the plugin here over the reverse channel.
+	if isLifecycleOp(req.GetOp()) {
+		return invokeLifecycle(ctx, req)
+	}
 	venue, err := sdk.DecodeDeployVenue(req.GetEnvJson())
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod: decode venue: %w", err)

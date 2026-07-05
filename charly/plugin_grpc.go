@@ -187,7 +187,10 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 			// supplies BOTH exec and cc (ExecutorService for the venue + CheckContextService
 			// for HTTPDo/AddBackground — F2).
 			if exec != nil {
-				pb.RegisterExecutorServiceServer(srv, &executorReverseServer{exec: exec, build: build, rebootable: rebootable})
+				// live overlay-build inputs (M4): a lifecycle Invoke attaches them to the ctx
+				// (withOverlayBuildInputs) so the reverse server can re-thread them onto a
+				// HostBuild("overlay") builder ctx; nil for every other Invoke.
+				pb.RegisterExecutorServiceServer(srv, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx)})
 			}
 			if cc != nil {
 				pb.RegisterCheckContextServiceServer(srv, cc)

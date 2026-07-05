@@ -45,8 +45,9 @@ type provider struct{ pb.UnimplementedProviderServer }
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpPrepareVenue:
-		// Host-local venue: the host re-materializes a ShellExecutor from this descriptor.
-		out, err := json.Marshal(spec.VenueDescriptor{Kind: "shell"})
+		// Host-local venue: the host re-materializes a ShellExecutor from this descriptor. M4's
+		// PrepareVenueReply wraps the venue (+ optional State patch / Notes; neither used here).
+		out, err := json.Marshal(spec.PrepareVenueReply{Venue: spec.VenueDescriptor{Kind: "shell"}})
 		if err != nil {
 			return nil, err
 		}

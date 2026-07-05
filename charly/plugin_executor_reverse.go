@@ -38,6 +38,12 @@ type executorReverseServer struct {
 	// plugin (newArbiterHostServer); nil for every other (deploy/build/check) Invoke, whose
 	// HostArbiter call is a loud bug.
 	arbiter *arbiterHostServer
+	// live carries the LIVE (non-serializable) overlay-build inputs — the compiled InstallPlans +
+	// the nested-venue parent executor/node — a pod lifecycle plugin's HostBuild("overlay") needs
+	// but cannot receive across the []byte wire (M4). The host proxy attaches it (via the Invoke
+	// ctx, read by InvokeWithExecutor); the HostBuild handler re-threads it onto the builder ctx.
+	// nil for every non-lifecycle Invoke.
+	live *overlayBuildInputs
 }
 
 // HostArbiter is the C9 resource-arbiter reverse leg: the COMPILED-IN candy/plugin-preempt

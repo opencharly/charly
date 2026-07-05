@@ -143,7 +143,7 @@ func (c *BuildCmd) Run() error {
 
 // runBoxBuild is the HOST-SIDE image-build engine behind the build:box plugin (F10 HostBuild
 // seam). It reconstructs everything from req.Dir — Config / ResolvedBox / Candy via NewGenerator,
-// exactly as pod_deploy_lifecycle re-runs NewGenerator(dir,…) — then generates Containerfiles,
+// exactly as build_overlay's runOverlayBuild re-runs NewGenerator(dir,…) — then generates Containerfiles,
 // builds every selected image (with inline merge), pushes (podman --push), and prunes old tags.
 // Returns the built image refs. The engine never crosses the plugin boundary; only the
 // BuildRequest in and the BuildReply out do. Also called DIRECTLY (not through the plugin
@@ -294,7 +294,7 @@ func runBoxGenerate(req spec.BuildRequest) ([]string, error) {
 // the engine HOST-SIDE in-proc, returning the opaque BuildReply. A build FAILURE rides
 // BuildReply.Error (the plugin echoes it; the RPC itself succeeds) so dispatchBuild surfaces it as
 // the command error. The buildEngineContext arg is unused: the engine reconstructs everything
-// from BuildRequest.Dir (like pod_deploy_lifecycle re-runs NewGenerator(dir,…)).
+// from BuildRequest.Dir (like build_overlay's runOverlayBuild re-runs NewGenerator(dir,…)).
 func hostBuildImage(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
 	var req spec.BuildRequest
 	if err := json.Unmarshal(specJSON, &req); err != nil {

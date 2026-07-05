@@ -9,20 +9,20 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// TestVmSubstrateLifecycleRegistered proves the vm AND pod substrates register a lifecycle
-// hook (vm: the host-side VM boot/destroy + guest SSH executor; pod: the host-side overlay
-// image build + container config/start/remove), and that the in-place externalized
-// substrates (local/android/k8s) do NOT (their venue has no charly-owned lifecycle —
-// externalDeployTarget errors on Start/Stop/Logs/Shell).
+// TestVmSubstrateLifecycleRegistered proves the vm substrate registers a COMPILED-IN lifecycle
+// hook at init (the host-side VM boot/destroy + guest SSH executor). pod's venue lifecycle is now
+// WIRE-BACKED (candy/plugin-deploy-pod, M4 — registered at plugin-load, absent in this in-proc unit
+// test), and the in-place externalized substrates (local/android/k8s) register none (their venue
+// has no charly-owned lifecycle — externalDeployTarget errors on Start/Stop/Logs/Shell).
 func TestVmSubstrateLifecycleRegistered(t *testing.T) {
-	for _, w := range []string{"vm", "pod"} {
+	for _, w := range []string{"vm"} {
 		if _, ok := substrateLifecycleFor(w); !ok {
-			t.Errorf("%s must register a substrateLifecycle", w)
+			t.Errorf("%s must register a compiled-in substrateLifecycle", w)
 		}
 	}
-	for _, w := range []string{"local", "android", "k8s"} {
+	for _, w := range []string{"local", "android", "k8s", "pod"} {
 		if _, ok := substrateLifecycleFor(w); ok {
-			t.Errorf("%s must NOT register a substrateLifecycle", w)
+			t.Errorf("%s must NOT register a compiled-in substrateLifecycle at init", w)
 		}
 	}
 }

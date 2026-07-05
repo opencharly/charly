@@ -33,7 +33,7 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 // listed here) consult it — so the two gates can never disagree. GENERAL for all
 // 5 — ALL FIVE substrates now externalize; the ONLY substrate-specific piece is each one's
 // registered preresolver body (android_deploy_preresolve.go / k8s_deploy_preresolve.go) OR
-// lifecycle hook (vm_deploy_lifecycle.go / pod_deploy_lifecycle.go), never a branch in the
+// lifecycle hook (vm_deploy_lifecycle.go compiled-in; pod via candy/plugin-deploy-pod), never a branch in the
 // generic dispatch. local needs NEITHER — its plan walk + executor selection are the generic
 // externalDeployTarget path (the executor is Shell for host:local, SSH for host:user@machine
 // — see ResolveTarget), so the plan VIEWS the host marshals already carry everything the
@@ -48,9 +48,9 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 // host-side (the host-owns-the-engine principle).
 //
 // pod is served by candy/plugin-deploy-pod, but unlike vm its plugin WALKS NOTHING: pod bakes
-// its install steps INTO the image at build time, so its substrateLifecycle hook
-// (pod_deploy_lifecycle.go) builds the overlay container image HOST-SIDE in PrepareVenue (the
-// SAME core OCITarget/Generator engine, in-process — like vm builds its disk host-side) and
+// its install steps INTO the image at build time, so its substrateLifecycle (the external
+// candy/plugin-deploy-pod, M4) builds the overlay container image HOST-SIDE in PrepareVenue via
+// HostBuild("overlay") → the RETAINED core OCITarget/Generator engine (build_overlay.go) and
 // owns the container lifecycle (config/start/remove + the `charly update` rebuild gate). The
 // plugin's Invoke is a thin acknowledgment; the build engine stays core.
 var externalizedDeploySubstrates = map[string]bool{
