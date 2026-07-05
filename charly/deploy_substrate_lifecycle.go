@@ -24,10 +24,11 @@ import (
 // This is the lifecycle counterpart of the deployPreresolver seam (deploy_preresolve.go):
 // a preresolver ships host-resolved DATA to the plugin (android device endpoint, k8s
 // kustomize tree); a substrateLifecycle owns host-side VENUE lifecycle the plugin cannot.
-// A substrate has at most ONE of each; vm registers a COMPILED-IN lifecycle hook (the domain
-// boot/destroy + guest SSH executor), while pod's lifecycle is WIRE-BACKED (candy/plugin-deploy-pod,
-// M4 — the host-side overlay image build via HostBuild("overlay") + the container config/start/
-// remove lifecycle via HostBuild("cli")). local/android/k8s register none.
+// A substrate has at most ONE of each; pod AND vm are now BOTH WIRE-BACKED (M4 —
+// candy/plugin-deploy-pod does the overlay build via HostBuild("overlay") + the container lifecycle
+// via HostBuild("cli"); candy/plugin-deploy-vm forwards its host-coupled venue lifecycle to the
+// hidden `charly __vm-lifecycle` over the same "cli" seam). NO substrate registers a compiled-in
+// lifecycle anymore; local/android/k8s own no venue lifecycle at all.
 type substrateLifecycle interface {
 	// PrepareVenue runs the host-side preflight for an Add/Update and returns the
 	// DeployExecutor the reverse channel serves — for vm the guest *SSHExecutor (after
@@ -101,10 +102,10 @@ func registerSubstrateLifecycle(word string, l substrateLifecycle) {
 
 // registerPluginSubstrateLifecycle records a WIRE-BACKED lifecycle for an external deploy substrate
 // at plugin-load (F6), idempotently: a plugin reconnect REPLACES the prior wire-backed hook (the new
-// grpcProvider carries the live conn), but it never SHADOWS a compiled-in lifecycle (vm today; pod
-// was moved to candy/plugin-deploy-pod by M4). A compiled-in lifecycle is DELETED, not shadowed,
-// when its substrate externalizes — so pod's wire-backed hook registers cleanly (no compiled-in pod
-// to shadow), while vm's compiled-in hook still owns its word. Unlike registerSubstrateLifecycle
+// grpcProvider carries the live conn). It never SHADOWS a compiled-in lifecycle, but after M4 there
+// are NONE — pod + vm both externalized (candy/plugin-deploy-{pod,vm}), their compiled-in
+// registrations DELETED — so both plugins' wire-backed hooks register cleanly (nothing to shadow).
+// The shadow guard remains for a future compiled-in singleton. Unlike registerSubstrateLifecycle
 // (the package-init, panic-on-dup path for compiled-in singletons), this runs at runtime.
 func registerPluginSubstrateLifecycle(word string, l substrateLifecycle) {
 	if word == "" || l == nil {

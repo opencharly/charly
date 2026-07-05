@@ -22,14 +22,14 @@ import (
 // It carries NO per-deploy mutable state (registered as a stateless singleton, like the
 // deploy preresolvers) — every method re-resolves what it needs from (name, dir, node).
 
-// vmSubstrateLifecycle implements substrateLifecycle for the `vm` word.
+// vmSubstrateLifecycle implements substrateLifecycle for the `vm` word. Its methods are host-coupled
+// (LoadUnified → spec.Vm, libvirt boot, ssh-config, EnsureCharlyInGuest, VmDeployState), so they stay
+// host-side; the externalized candy/plugin-deploy-vm (Lifecycle:true) reaches them over the generic
+// "cli" seam via the hidden `charly __vm-lifecycle <op> <name>` dispatch (vm_lifecycle_cmd.go), rather
+// than a compiled-in registration (M4b). Deleting the compiled-in registerSubstrateLifecycle("vm",…)
+// lets the plugin's wire-backed hook register cleanly (registerPluginSubstrateLifecycle — no
+// compiled-in vm to shadow).
 type vmSubstrateLifecycle struct{}
-
-// register at package-var init (before any init(), race-free with the rest of the F1 wiring).
-var _ = func() bool {
-	registerSubstrateLifecycle("vm", vmSubstrateLifecycle{})
-	return true
-}()
 
 // PrepareVenue runs the full host-side VM preflight and returns the guest *SSHExecutor the
 // reverse channel serves. It LIFTS the prior VmUnifiedTarget.Add preflight (resolve entity,

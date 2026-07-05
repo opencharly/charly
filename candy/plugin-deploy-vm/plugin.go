@@ -55,7 +55,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // sdk.NewMeta → BuildCapabilities.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
-		[]sdk.ProvidedCapability{{Class: "deploy", Word: "vm", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "deploy", Word: "vm", InputDef: "", Lifecycle: true}},
 		schemaFS)
 }
 
@@ -68,6 +68,11 @@ var _ kit.DeployExecutor = (*sdk.Executor)(nil)
 // Invoke applies the deployment INSIDE THE GUEST via the reverse channel + kit.WalkPlans,
 // then returns the combined teardown ops + ledger record.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	// M4b: the vm substrate venue lifecycle Ops (prepare-venue/post-apply/…/start/stop/…) — the
+	// host-coupled logic kept core — are forwarded to `charly __vm-lifecycle` over the cli seam.
+	if isLifecycleOp(req.GetOp()) {
+		return invokeLifecycle(ctx, req)
+	}
 	exec, err := sdk.ExecutorFromInvoke(req.GetExecutorBrokerId())
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-vm: %w", err)

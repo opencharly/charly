@@ -100,18 +100,13 @@ func TestReservedWordRegistry_DeployBijection(t *testing.T) {
 			t.Fatalf("%s must NOT have an in-proc DeployTargetProvider — it is externalized", w)
 		}
 	}
-	// vm owns a COMPILED-IN host-side venue lifecycle (boot/destroy/console/ssh), registered at
-	// init. pod's venue lifecycle is now WIRE-BACKED (candy/plugin-deploy-pod, M4 — registered at
-	// plugin-load, so absent from this in-proc unit test); the in-place substrates
-	// (local/android/k8s) own no venue lifecycle at all.
-	for _, w := range []string{"vm"} {
-		if _, ok := substrateLifecycleFor(w); !ok {
-			t.Errorf("%s must register a compiled-in substrateLifecycle (the host-side venue lifecycle hook)", w)
-		}
-	}
-	for _, w := range []string{"local", "android", "k8s", "pod"} {
+	// NO substrate registers a COMPILED-IN venue lifecycle at init anymore: pod's + vm's are both
+	// WIRE-BACKED (candy/plugin-deploy-{pod,vm}, M4 — registered at plugin-load via
+	// registerPluginSubstrateLifecycle, so absent from this in-proc unit test); local/android/k8s own
+	// no venue lifecycle at all. substrateLifecycleFor therefore returns false for EVERY substrate here.
+	for _, w := range []string{"local", "android", "k8s", "pod", "vm"} {
 		if _, ok := substrateLifecycleFor(w); ok {
-			t.Errorf("%s must NOT register a compiled-in substrateLifecycle at init (pod's is wire-backed; local/android/k8s have none)", w)
+			t.Errorf("%s must NOT register a compiled-in substrateLifecycle at init (pod+vm are wire-backed; local/android/k8s have none)", w)
 		}
 	}
 
