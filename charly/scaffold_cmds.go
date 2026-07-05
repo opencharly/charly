@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/opencharly/sdk/kit"
 )
 
 // scaffold_cmds.go — Kong command structs for the authoring + remote-repo
@@ -76,7 +76,7 @@ func (c *BoxSetCmd) Run() error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		return fmt.Errorf("charly.yml not found in %s; run `charly box new project .` to scaffold one", dir)
 	}
-	return SetByDotPath(target, c.Path, c.Value)
+	return kit.SetByDotPath(target, c.Path, c.Value)
 }
 
 // ---------------------------------------------------------------------------
@@ -247,167 +247,3 @@ func resolveProjectFile(projectDir, relPath string) (string, error) {
 	return abs, nil
 }
 
-// ---------------------------------------------------------------------------
-// `charly candy …` — top-level group for editing candy manifest files
-
-type CandyCmd struct {
-	Set    CandySetCmd    `cmd:"" help:"Set a value in a candy manifest by dot-path"`
-	AddRpm CandyAddPkgCmd `cmd:"add-rpm" help:"Append packages to a candy's distro.fedora.package list"`
-	AddDeb CandyAddPkgCmd `cmd:"add-deb" help:"Append packages to a candy's shared distro.'debian,ubuntu'.package list"`
-	AddPac CandyAddPkgCmd `cmd:"add-pac" help:"Append packages to a candy's distro.arch.package list"`
-	AddAur CandyAddPkgCmd `cmd:"add-aur" help:"Append packages to a candy's distro.arch.aur.package list"`
-}
-
-type CandySetCmd struct {
-	Name  string `arg:"" help:"Candy name (under candy/)"`
-	Path  string `arg:"" help:"Dot-path into the candy manifest (e.g. service.name, env.MY_VAR)"`
-	Value string `arg:"" help:"Value (parsed as YAML)"`
-}
-
-func (c *CandySetCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	candyYml := filepath.Join(dir, DefaultCandyDir, c.Name, UnifiedFileName)
-	if _, err := os.Stat(candyYml); err != nil {
-		return fmt.Errorf("candy %q not found at %s", c.Name, candyYml)
-	}
-	// Candy manifests are kind-keyed under `candy:` (the candy kind key), so a
-	// body-relative dot-path like `version` or `env.X` must descend into the
-	// `candy:` wrapper. Without this, SetByDotPath appends a stray top-level
-	// key (e.g. a second `version:`) and the loader then rejects the file as
-	// ambiguous.
-	path := c.Path
-	if path != "candy" && !strings.HasPrefix(path, "candy.") {
-		path = "candy." + path
-	}
-	return SetByDotPath(candyYml, path, c.Value)
-}
-
-// CandyAddPkgCmd is shared between add-rpm/add-deb/add-pac/add-aur. The
-// section name is derived from the Kong command name at runtime. Since
-// Kong dispatches to the *same* struct type for all four, we determine
-// "which section" via a back-channel: each command instance is its own
-// receiver, so we pass the section name as part of the command kong tag
-// string. To keep this simple we use the same struct and look at the
-// Kong context's selected command path.
-//
-// Implementation choice: instead of plumbing Kong context, we instantiate
-// four distinct concrete types so the section is hard-wired per type.
-type CandyAddPkgCmd struct {
-	Name     string   `arg:"" help:"Candy name (under candy/)"`
-	Packages []string `arg:"" help:"Package names to append"`
-}
-
-func (c *CandyAddPkgCmd) Run() error {
-	// Kong doesn't fill section based on which alias was used, so derive
-	// it from os.Args. This is a small runtime indirection but lets us
-	// share one struct across four nearly-identical commands.
-	section := detectPkgSection(os.Args)
-	return appendCandyPackages(c.Name, section, c.Packages)
-}
-
-// detectPkgSection looks at os.Args for "add-rpm" / "add-deb" / etc. and
-// returns the matching candy manifest section name. Defaults to "rpm" if none
-// is found (defensive — Kong should always have routed via one of them).
-func detectPkgSection(args []string) string {
-	for _, a := range args {
-		switch a {
-		case "add-rpm":
-			return "rpm"
-		case "add-deb":
-			return "deb"
-		case "add-pac":
-			return "pac"
-		case "add-aur":
-			return "aur"
-		}
-	}
-	return "rpm"
-}
-
-// sectionDistroPath maps an add-<fmt> section name to the `distro:` map path its
-// packages land under in the cascade schema. Packages live ONLY under the
-// `distro:` map now — `add-rpm`→fedora, `add-pac`→arch, `add-aur`→arch.aur, and
-// `add-deb`→the shared `debian,ubuntu` compound (the common case; per-distro or
-// per-version overrides are authored with `charly candy set distro.<tag>.package`).
-var sectionDistroPath = map[string][]string{
-	"rpm": {"distro", "fedora"},
-	"deb": {"distro", "debian,ubuntu"},
-	"pac": {"distro", "arch"},
-	"aur": {"distro", "arch", "aur"},
-}
-
-// appendCandyPackages reads the candy manifest, appends packages to the
-// `distro:` map section the add-<fmt> command targets (creating the parent
-// mappings as needed), and writes back — preserving comments via the yaml.Node API.
-func appendCandyPackages(name, section string, pkgs []string) error {
-	if len(pkgs) == 0 {
-		return fmt.Errorf("no packages specified")
-	}
-	path, ok := sectionDistroPath[section]
-	if !ok {
-		return fmt.Errorf("unknown package section %q", section)
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	candyYml := filepath.Join(dir, DefaultCandyDir, name, UnifiedFileName)
-	data, err := os.ReadFile(candyYml)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", candyYml, err)
-	}
-	var root yaml.Node
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parsing %s: %w", candyYml, err)
-	}
-	// Candy manifests are kind-keyed under `candy:`; package declarations live
-	// under the `distro:` map inside that wrapper (distro.<name>[.aur].package).
-	candy, err := candyBodyNode(&root)
-	if err != nil {
-		return fmt.Errorf("%s: %w", candyYml, err)
-	}
-	sectionNode := candy
-	for _, key := range path {
-		sectionNode = ensureMappingChild(sectionNode, key)
-	}
-	pkgsNode := mappingChild(sectionNode, "package")
-	if pkgsNode == nil {
-		pkgsNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-		sectionNode.Content = append(sectionNode.Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "package"},
-			pkgsNode,
-		)
-	} else if pkgsNode.Kind != yaml.SequenceNode {
-		// Upgrade scaffold's `packages:` null/scalar to a real sequence in
-		// place, so the existing key+comment association is preserved by
-		// yaml.Marshal.
-		pkgsNode.Kind = yaml.SequenceNode
-		pkgsNode.Tag = "!!seq"
-		pkgsNode.Value = ""
-		pkgsNode.Content = nil
-	}
-	// Idempotent append: skip packages already present.
-	existing := make(map[string]bool, len(pkgsNode.Content))
-	for _, n := range pkgsNode.Content {
-		if n.Kind == yaml.ScalarNode {
-			existing[n.Value] = true
-		}
-	}
-	for _, p := range pkgs {
-		if existing[p] {
-			continue
-		}
-		existing[p] = true // dedupe within this call too, not just vs pre-existing
-		pkgsNode.Content = append(pkgsNode.Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: p},
-		)
-	}
-	out, err := yaml.Marshal(&root)
-	if err != nil {
-		return fmt.Errorf("marshalling %s: %w", candyYml, err)
-	}
-	return os.WriteFile(candyYml, out, 0o644)
-}

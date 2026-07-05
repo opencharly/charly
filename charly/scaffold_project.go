@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // scaffold_project.go — project-level authoring helpers used by the
@@ -162,7 +164,7 @@ func AddCandyToBox(dir, image, layer string) error {
 	if err != nil {
 		return err
 	}
-	candiesNode := mappingChild(imgNode, "candy")
+	candiesNode := kit.MappingChild(imgNode, "candy")
 	if candiesNode == nil {
 		candiesNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 		imgNode.Content = append(imgNode.Content,
@@ -191,7 +193,7 @@ func RemoveCandyFromBox(dir, image, layer string) error {
 	if err != nil {
 		return err
 	}
-	candiesNode := mappingChild(imgNode, "candy")
+	candiesNode := kit.MappingChild(imgNode, "candy")
 	if candiesNode == nil {
 		return nil
 	}
@@ -235,19 +237,6 @@ func docContent(root *yaml.Node) *yaml.Node {
 	return root
 }
 
-// mappingChild looks up a key in a mapping node. Returns the value node or
-// nil if missing. yaml mapping nodes store [key, value, key, value, …].
-func mappingChild(m *yaml.Node, key string) *yaml.Node {
-	if m == nil || m.Kind != yaml.MappingNode {
-		return nil
-	}
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			return m.Content[i+1]
-		}
-	}
-	return nil
-}
 
 // imageBodyNode returns the IMAGE BODY node for box `name` in a parsed
 // node-form document — the value of the named entity's `candy:` discriminator.
@@ -256,11 +245,11 @@ func mappingChild(m *yaml.Node, key string) *yaml.Node {
 // disc (its value is the image body: base/from + the `candy:` composition list).
 // Returns nil if the named node is absent or carries no `candy:` mapping.
 func imageBodyNode(root *yaml.Node, name string) *yaml.Node {
-	entity := mappingChild(docContent(root), name)
+	entity := kit.MappingChild(docContent(root), name)
 	if entity == nil {
 		return nil
 	}
-	body := mappingChild(entity, "candy")
+	body := kit.MappingChild(entity, "candy")
 	if body == nil || body.Kind != yaml.MappingNode {
 		return nil
 	}
@@ -273,7 +262,7 @@ func imageBodyNode(root *yaml.Node, name string) *yaml.Node {
 // a box defined outside charly.yml itself.
 func flatLocalImports(root *yaml.Node) []string {
 	doc := docContent(root)
-	imp := mappingChild(doc, "import")
+	imp := kit.MappingChild(doc, "import")
 	if imp == nil || imp.Kind != yaml.SequenceNode {
 		return nil
 	}

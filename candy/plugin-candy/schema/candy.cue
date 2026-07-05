@@ -1,9 +1,9 @@
 // This out-of-tree COMMAND plugin's OWN CUE schema, served over the Describe channel.
 //
-// candy is a COMMAND-class plugin: charly dispatches it by fork/exec'ing this binary in CLI
-// mode (sdk.Main → cliMain), NOT through the gRPC provider registry — so the plugin advertises
-// NO gRPC capability and NO plugin_input (the command's args are plain CLI tokens parsed from
-// os.Args in CLI mode, not a structured plugin_input). This served schema therefore carries no
+// candy is a COMPILED-IN COMMAND-class plugin: charly dispatches it in-proc via
+// dispatchInProcCommand → Invoke(OpRun) (advertising command:candy over Describe), NOT with a
+// structured plugin_input (the command's args are plain CLI tokens). This served schema therefore
+// carries no
 // #*Input def; it exists ONLY to satisfy the host's "every plugin MUST ship a non-empty,
 // base-splicing CUE schema" load gate (registerPluginUnitSchema) and the params codegen loop
 // (task cue:gen).
@@ -13,10 +13,10 @@
 // detect a def-name collision with the base, not to resolve base references.
 
 // #CandyPlugin documents the command the plugin serves — the TOP-LEVEL `charly candy` authoring
-// tree, NOT `charly new candy`. The command keeps its entire contract in the in-core CandyCmd
-// grammar (the `charly __candy` set/add-{rpm,deb,pac,aur} tree it raw-forwards to), so there is
-// no plugin_input to validate here.
+// tree, NOT `charly new candy`. The plugin OWNS the entire logic (the set/add-{rpm,deb,pac,aur}
+// grammar + the comment-preserving yaml.Node mutation), sharing only the generic kit.SetByDotPath /
+// kit.MappingChild utilities — there is no plugin_input to validate here (args are plain CLI tokens).
 #CandyPlugin: {
 	command:  "candy"
-	contract: "candy is CLI-dispatched (charly fork/execs the binary); args are plain CLI tokens that raw-forward to the in-core candy-manifest authoring command tree (set / add-rpm / add-deb / add-pac / add-aur) via charly __candy"
+	contract: "candy is a compiled-in command dispatched in-proc via dispatchInProcCommand → Invoke(OpRun); args are plain CLI tokens; the plugin owns the set/add-{rpm,deb,pac,aur} grammar + the yaml.Node candy-manifest mutation itself, sharing only the generic kit.SetByDotPath / kit.MappingChild yaml utilities"
 }

@@ -312,12 +312,11 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	if paths["feature.list"] {
 		t.Error("feature.list unexpectedly present in the builtin CLI model — `feature` is now an external command (candy/plugin-feature, the third welded-command externalization), not a builtin CommandProvider")
 	}
-	// C15's remaining welded-command externalizations: candy is an EXTERNAL command
-	// (candy/plugin-candy) re-homed onto the hidden __candy core command; clean + settings are now
-	// COMPILED-IN and OWN their commands (candy/plugin-clean + candy/plugin-settings, reaching their
-	// shared core engine over a generic HostBuild seam — no hidden core command). All are absent from
-	// this builtin-only model — a compiled-in command is a DYNAMIC holder (collectExternalCommandPlugins),
-	// never a builtin CommandProvider, and the forwarder's hidden __* twin (candy) is marked hidden.
+	// clean + settings + candy are now COMPILED-IN and OWN their commands (candy/plugin-clean +
+	// candy/plugin-settings reach their shared core engine over a generic HostBuild seam; candy owns
+	// its yaml.Node logic itself, sharing only the generic kit.SetByDotPath / kit.MappingChild — no
+	// hidden core command for any). All are absent from this builtin-only model — a compiled-in command
+	// is a DYNAMIC holder (collectExternalCommandPlugins), never a builtin CommandProvider.
 	// NOTE: `version` is DELIBERATELY NOT here — it was excluded from C15 (pkg/arch's pkgver()
 	// stamps the package version via `bin/charly version`), so it stays a CORE command and IS
 	// present in the builtin model (asserted by TestCLIModel_CoversCommands).
@@ -328,6 +327,6 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 		t.Error("settings.list unexpectedly present in the builtin CLI model — `settings` is now a compiled-in command (candy/plugin-settings, command:settings), a dynamic holder not a builtin CommandProvider")
 	}
 	if paths["candy.set"] {
-		t.Error("candy.set unexpectedly present in the builtin CLI model — `candy` is now an external command (candy/plugin-candy, C15), forwarding to the hidden __candy core command tree")
+		t.Error("candy.set unexpectedly present in the builtin CLI model — `candy` is now a compiled-in command (candy/plugin-candy, command:candy), a dynamic holder not a builtin CommandProvider")
 	}
 }

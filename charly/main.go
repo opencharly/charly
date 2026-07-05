@@ -105,17 +105,16 @@ type CLI struct {
 	// the leaf onto one hidden command (doctor is a flags-only leaf, so the plugin raw-forwards).
 	DoctorInternal DoctorCmd `cmd:"" name:"__doctor" hidden:"" help:"internal: host dependency status (the externalized charly doctor command plugin forwards here)"`
 
-	// __candy re-homes the ONE remaining cutover C15 WELDED machinery command — CandyCmd + its
-	// set/add-{rpm,deb,pac,aur} subtree (scaffold_cmds.go) — onto a hidden core command, exposing it
-	// to its externalized `charly candy` COMMAND plugin (candy/plugin-candy). Its Run handler STAYS
-	// core — it mutates candy/<name>/charly.yml via the yaml.v3 Node API + the traversal guard, which
-	// an out-of-process plugin cannot reach (R3) — so the plugin is a THIN forwarder that syscall.Exec's
-	// `charly __candy <args…>` (the SAME __vm / __doctor internal-command pattern; the candy subtree
-	// raw-forwards every subcommand token through kong passthrough, so ONE forwarder covers the tree).
-	// clean + settings, by contrast, are now COMPILED-IN and OWN their commands (candy/plugin-clean +
-	// candy/plugin-settings): each Invoke(OpRun) reaches its shared core engine over a generic HostBuild
-	// seam (clean → "retention" over charly/retention.go; settings → "settings" over the config
-	// subsystem) — no hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
+	// vm + doctor are the last two WELDED machinery commands still re-homed onto hidden core commands
+	// (__vm / __doctor above): their Run handlers STAY core — VmCmd drives the libvirt/qemu backends +
+	// cloud-init + the VmOp RPCs; DoctorCmd calls the host-detection symbols (DetectGPU/DetectVFIO/
+	// credentialHealth) — machinery an out-of-process plugin cannot reach (R3) — so each is a THIN
+	// forwarder to `charly __<word>`. clean + settings + candy, by contrast, are now COMPILED-IN and OWN
+	// their commands: clean + settings reach a shared core engine over a generic HostBuild seam (clean →
+	// "retention" over charly/retention.go; settings → "settings" over the config subsystem); candy owns
+	// its ENTIRE logic — the yaml.Node candy-manifest mutation — itself, sharing only the generic
+	// kit.SetByDotPath / kit.MappingChild utilities (sdk/kit/yaml.go, also used by `charly box set` /
+	// `box scaffold`). None of the three uses a hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
 	// kept core (the Version field below) — NOT an "unfixable" one. RDD (2026-07-01) refuted the old
 	// chicken-and-egg claim: pkgver()'s `bin/charly version` is only a convenience (the CalVer is
 	// already Taskfile-computed via pkg/arch/calver.sh, and reading it from a sidecar / recomputing at
@@ -123,7 +122,6 @@ type CLI struct {
 	// excluded because it sheds ZERO deps, removes ~5 core lines, and would make R9's canonical identity
 	// command depend on the plugin-resolution subsystem across 3 package repos — worst-value, highest-
 	// blast-radius of any externalization. Operator-decided to keep core.
-	CandyInternal    CandyCmd    `cmd:"" name:"__candy" hidden:"" help:"internal: candy.yml authoring (the externalized charly candy plugin forwards here)"`
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
 	// ssh, start, stop, status, restart, update, remove, logs,
@@ -132,11 +130,11 @@ type CLI struct {
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
 	// (mcp/secrets/udev/tmux/preempt/feature/vm/doctor AND clean/settings/candy AND migrate are now
 	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
-	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor/candy
-	// forward to the hidden __vm / __doctor / __candy core commands above — their Run handlers stay
-	// core. migrate (M15) AND clean AND settings OWN their engine/command in candy/plugin-migrate /
-	// candy/plugin-clean / candy/plugin-settings (none uses a hidden core command), compiled-in so
-	// command:migrate / command:clean / command:settings resolve at init()
+	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor forward
+	// to the hidden __vm / __doctor core commands above — their Run handlers stay core. migrate (M15) AND
+	// clean AND settings AND candy OWN their engine/command in candy/plugin-migrate / candy/plugin-clean /
+	// candy/plugin-settings / candy/plugin-candy (none uses a hidden core command), compiled-in so
+	// command:migrate / command:clean / command:settings / command:candy resolve at init()
 	// independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.

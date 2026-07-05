@@ -2036,12 +2036,11 @@ check-doctor-local:
 #                                any candy manifest — the tree has no non-mutating read verb);
 #   - `charly clean --dry-run`→ exit 0 + stdout carries the "would remove" retention report (dry-run
 #                                touches nothing).
-# clean + settings are COMPILED-IN and OWN their commands: each Invoke(OpRun) is dispatched in-proc
-# (dispatchInProcCommand's threaded reverse channel) and reaches its shared core engine over a generic
-# HostBuild seam (clean → "retention", settings → "settings") — no forward. candy still resolves via the
-# discovered candy/plugin-* prescan (or the /usr/lib/charly/plugins bake) and syscall.Exec's the plugin
-# binary, which raw-forwards to the hidden in-core `charly __candy` command whose Run handler stays core
-# (pending its own externalization) — proving the externalized commands (compiled-in + forwarded) end-to-end.
+# clean + settings + candy are all COMPILED-IN and OWN their commands: each Invoke(OpRun) is dispatched
+# in-proc (dispatchInProcCommand). clean + settings reach a shared core engine over a generic HostBuild
+# seam (clean → "retention", settings → "settings"); candy owns its ENTIRE logic (the yaml.Node
+# candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities
+# (sdk/kit/yaml.go). None uses a hidden core command — proving the externalized commands end-to-end.
 # NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
 # refuted the chicken-and-egg claim (pkgver()'s `bin/charly version` is a convenience; the CalVer is already
 # Taskfile-computed via pkg/arch/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
@@ -2071,12 +2070,12 @@ check-commands-local:
             plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the
             sixth-through-eighth welded-command externalizations in the core-externalization program.
             A disposable kind:local deploy on host: local runs each command host-side with a safe
-            read-only / dry-run / --help invocation. clean + settings are COMPILED-IN and OWN their
-            commands (each Invoke(OpRun) reaches its shared core engine over a generic HostBuild seam —
-            clean → "retention", settings → "settings"; no forward); candy still resolves via the
-            discovered plugin prescan and syscall.Exec the plugin binary, which raw-forwards to the
-            hidden in-core `charly __candy` command whose Run handler stays core (pending its own
-            externalization). Every command exits 0 — proving the externalized commands end-to-end.
+            read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and
+            OWN their commands (each Invoke(OpRun) dispatched in-proc): clean + settings reach a shared
+            core engine over a generic HostBuild seam (clean → "retention", settings → "settings"); candy
+            owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic
+            kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command
+            exits 0 — proving the externalized commands end-to-end.
             (`charly version` is excluded — it stays a core command; pkgver() stamps the package
             version via it.)
     settings-list-runs:
@@ -2092,7 +2091,7 @@ check-commands-local:
             command: charly settings list
             in_container: false
     candy-help-runs:
-        check: command=charly candy --help exits 0 (proving the externalized command TREE resolves + raw-forwards to the in-core __candy handler without mutating any candy manifest)
+        check: command=charly candy --help exits 0 (proving the externalized candy command resolves + dispatches its own set/add-{rpm,deb,pac,aur} grammar without mutating any candy manifest)
         id: candy-help-runs
         exit_status: 0
         context:
