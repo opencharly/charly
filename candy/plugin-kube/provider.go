@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
@@ -25,20 +24,6 @@ import (
 // dispatch the method, then evaluate the stdout/stderr/exit_status matchers itself
 // (via the shared sdk implementation — R3), and return the wire {status,message}
 // the host decodes.
-
-// pluginResult is the wire form a verb provider returns (the host's pluginCheckResult).
-type pluginResult struct {
-	Status  string `json:"status"` // "pass" | "fail" | "skip"
-	Message string `json:"message"`
-}
-
-func resultJSON(status, msg string) (*pb.InvokeReply, error) {
-	j, err := json.Marshal(pluginResult{Status: status, Message: msg})
-	if err != nil {
-		return nil, err
-	}
-	return &pb.InvokeReply{ResultJson: j}, nil
-}
 
 // kubeEnv is the plugin-side decode of the CheckEnv the host ships as
 // Operation.Env for a `kube:` check step (provider_checkenv.go) — only Mode/Box
@@ -66,7 +51,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {
-			return resultJSON("fail", "kube: decode op: "+err.Error())
+			return sdk.ResultJSON("fail", "kube: decode op: "+err.Error())
 		}
 	}
 	var env kubeEnv
@@ -81,59 +66,20 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if method == "merge-kubeconfig" {
 		msg, err := mergeKubeconfig(op.Kubeconfig, op.KubeContext)
 		if err != nil {
-			return resultJSON("fail", "kube: merge-kubeconfig: "+err.Error())
+			return sdk.ResultJSON("fail", "kube: merge-kubeconfig: "+err.Error())
 		}
-		return resultJSON("pass", msg)
+		return sdk.ResultJSON("pass", msg)
 	}
 
 	// Cluster-probe verb: skip under `charly check box` — there is no cluster to
 	// reach on a disposable `podman run --rm` (mirrors the host's RunModeBox/box-mode skip).
 	if env.Mode == "box" {
-		return resultJSON("skip", fmt.Sprintf("kube: %s requires a running cluster (skip under charly check box)", method))
+		return sdk.ResultJSON("skip", fmt.Sprintf("kube: %s requires a running cluster (skip under charly check box)", method))
 	}
 
 	conn := connFromOp(&op)
 	out, runErr := dispatch(conn, &op)
 
-	// Exit semantics: the in-tree CLI mapped a Run() error → exit 1, success →
-	// exit 0; the host compared that against the authored exit_status (default 0).
-	exit := 0
-	stderr := ""
-	if runErr != nil {
-		exit = 1
-		stderr = runErr.Error()
-	}
-	wantExit := 0
-	if op.ExitStatus != nil {
-		wantExit = *op.ExitStatus
-	}
-	if exit != wantExit {
-		return resultJSON("fail", fmt.Sprintf("kube: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, preview(stderr)))
-	}
-
-	if err := sdk.MatchAll(out, op.Stdout); err != nil {
-		return resultJSON("fail", fmt.Sprintf("kube: %s: stdout: %v (got: %s)", method, err, preview(out)))
-	}
-	if err := sdk.MatchAll(stderr, op.Stderr); err != nil {
-		return resultJSON("fail", fmt.Sprintf("kube: %s: stderr: %v (got: %s)", method, err, preview(stderr)))
-	}
-
-	body := out
-	if strings.TrimSpace(body) == "" {
-		body = stderr
-	}
-	if strings.TrimSpace(body) == "" {
-		body = fmt.Sprintf("kube %s: exit=%d", method, exit)
-	}
-	return resultJSON("pass", body)
-}
-
-// preview trims long output for an error message (mirrors charly's trimPreview).
-func preview(s string) string {
-	s = strings.TrimSpace(s)
-	const max = 400
-	if len(s) > max {
-		return s[:max] + "…"
-	}
-	return s
+	// The shared exit/stdout/stderr verdict pipeline (R3). kube produces no artifact.
+	return sdk.VerbVerdict("kube", method, out, runErr, &op, false)
 }

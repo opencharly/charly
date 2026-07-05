@@ -21,20 +21,6 @@ import (
 // exit_status matchers + the artifact validators itself (via the shared sdk
 // implementation — R3), and return the wire {status,message} the host decodes.
 
-// pluginResult is the wire form a verb provider returns (the host's pluginCheckResult).
-type pluginResult struct {
-	Status  string `json:"status"` // "pass" | "fail" | "skip"
-	Message string `json:"message"`
-}
-
-func resultJSON(status, msg string) (*pb.InvokeReply, error) {
-	j, err := json.Marshal(pluginResult{Status: status, Message: msg})
-	if err != nil {
-		return nil, err
-	}
-	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
 // spiceEndpoint is the host-pre-resolved, DIALABLE SPICE endpoint. Exactly one of
 // Socket / Address is set (the host prefers the UNIX socket; for a remote qemu+ssh://
 // VM the host opens the side tunnel and hands back the forwarded LOCAL address). The
@@ -65,7 +51,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {
-			return resultJSON("fail", "spice: decode op: "+err.Error())
+			return sdk.ResultJSON("fail", "spice: decode op: "+err.Error())
 		}
 	}
 	var env spiceEnv
@@ -87,61 +73,26 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	// Live-VM verb: skip under `charly check box` (no running VM SPICE endpoint on a
 	// disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
 	if env.Mode == "box" {
-		return resultJSON("skip", fmt.Sprintf("spice: %s requires a running VM (skip under charly check box)", method))
+		return sdk.ResultJSON("skip", fmt.Sprintf("spice: %s requires a running VM (skip under charly check box)", method))
 	}
 	// No endpoint resolved → skip. The host already decided a SKIP for the "VM
 	// declares no SPICE device" case (returning the N/A result before dispatch), so a
 	// nil endpoint here means no VM context at all (the analogue of the host's
 	// empty-box skip).
 	if ep == nil {
-		return resultJSON("skip", fmt.Sprintf("spice: %s has no VM SPICE endpoint (box=%q)", method, env.Box))
+		return sdk.ResultJSON("skip", fmt.Sprintf("spice: %s has no VM SPICE endpoint (box=%q)", method, env.Box))
 	}
 
 	s, dialErr := dialEndpoint(ep)
 	if dialErr != nil {
-		return resultJSON("fail", fmt.Sprintf("spice: %s: %v", method, dialErr))
+		return sdk.ResultJSON("fail", fmt.Sprintf("spice: %s: %v", method, dialErr))
 	}
 
 	out, runErr := dispatch(s, &op)
 
-	// Exit semantics: the in-tree CLI mapped a Run() error → exit 1, success → exit 0;
-	// the host compared that against the authored exit_status (default 0).
-	exit := 0
-	stderr := ""
-	if runErr != nil {
-		exit = 1
-		stderr = runErr.Error()
-	}
-	wantExit := 0
-	if op.ExitStatus != nil {
-		wantExit = *op.ExitStatus
-	}
-	if exit != wantExit {
-		return resultJSON("fail", fmt.Sprintf("spice: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, preview(stderr)))
-	}
-
-	if err := sdk.MatchAll(out, op.Stdout); err != nil {
-		return resultJSON("fail", fmt.Sprintf("spice: %s: stdout: %v (got: %s)", method, err, preview(out)))
-	}
-	if err := sdk.MatchAll(stderr, op.Stderr); err != nil {
-		return resultJSON("fail", fmt.Sprintf("spice: %s: stderr: %v (got: %s)", method, err, preview(stderr)))
-	}
-
-	// Artifact validators run for the two artifact-producing methods.
-	if method == "screenshot" || method == "cursor" {
-		if err := sdk.RunArtifactValidators(&op); err != nil {
-			return resultJSON("fail", fmt.Sprintf("spice: %s: %v", method, err))
-		}
-	}
-
-	body := out
-	if strings.TrimSpace(body) == "" {
-		body = stderr
-	}
-	if strings.TrimSpace(body) == "" {
-		body = fmt.Sprintf("spice %s: exit=%d", method, exit)
-	}
-	return resultJSON("pass", body)
+	// The shared exit/stdout/stderr + artifact verdict pipeline (R3). screenshot and cursor are
+	// spice's two artifact-producing methods.
+	return sdk.VerbVerdict("spice", method, out, runErr, &op, method == "screenshot" || method == "cursor")
 }
 
 // dialEndpoint opens a SPICE session against the host-pre-resolved endpoint —
@@ -173,14 +124,4 @@ func splitHostPort(addr string) (string, int, error) {
 		return "", 0, fmt.Errorf("invalid port in address %q", addr)
 	}
 	return host, port, nil
-}
-
-// preview trims long output for an error message (mirrors charly's trimPreview).
-func preview(s string) string {
-	s = strings.TrimSpace(s)
-	const max = 400
-	if len(s) > max {
-		return s[:max] + "…"
-	}
-	return s
 }

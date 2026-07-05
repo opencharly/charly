@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -73,35 +71,6 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 
 	out, runErr := dispatch(ctx, exec, &op)
 
-	// Exit semantics: the in-tree CLI mapped a Run() error → exit 1, success → exit 0; the
-	// host compared that against the authored exit_status (default 0).
-	exit := 0
-	stderr := ""
-	if runErr != nil {
-		exit = 1
-		stderr = runErr.Error()
-	}
-	wantExit := 0
-	if op.ExitStatus != nil {
-		wantExit = *op.ExitStatus
-	}
-	if exit != wantExit {
-		return sdk.ResultJSON("fail", fmt.Sprintf("dbus: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, kit.TrimPreview(stderr)))
-	}
-
-	if err := sdk.MatchAll(out, op.Stdout); err != nil {
-		return sdk.ResultJSON("fail", fmt.Sprintf("dbus: %s: stdout: %v (got: %s)", method, err, kit.TrimPreview(out)))
-	}
-	if err := sdk.MatchAll(stderr, op.Stderr); err != nil {
-		return sdk.ResultJSON("fail", fmt.Sprintf("dbus: %s: stderr: %v (got: %s)", method, err, kit.TrimPreview(stderr)))
-	}
-
-	body := out
-	if strings.TrimSpace(body) == "" {
-		body = stderr
-	}
-	if strings.TrimSpace(body) == "" {
-		body = fmt.Sprintf("dbus %s: exit=%d", method, exit)
-	}
-	return sdk.ResultJSON("pass", body)
+	// The shared exit/stdout/stderr verdict pipeline (R3). dbus produces no artifact.
+	return sdk.VerbVerdict("dbus", method, out, runErr, &op, false)
 }

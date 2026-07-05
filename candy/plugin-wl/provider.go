@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -73,45 +71,8 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 
 	out, runErr := dispatch(ctx, exec, &op)
 
-	// Exit semantics: the in-tree CLI mapped a Run() error → exit 1, success → exit 0; the
-	// host compared that against the authored exit_status (default 0).
-	exit := 0
-	stderr := ""
-	if runErr != nil {
-		exit = 1
-		stderr = runErr.Error()
-	}
-	wantExit := 0
-	if op.ExitStatus != nil {
-		wantExit = *op.ExitStatus
-	}
-	if exit != wantExit {
-		return sdk.ResultJSON("fail", fmt.Sprintf("wl: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, kit.TrimPreview(stderr)))
-	}
-
-	if err := sdk.MatchAll(out, op.Stdout); err != nil {
-		return sdk.ResultJSON("fail", fmt.Sprintf("wl: %s: stdout: %v (got: %s)", method, err, kit.TrimPreview(out)))
-	}
-	if err := sdk.MatchAll(stderr, op.Stderr); err != nil {
-		return sdk.ResultJSON("fail", fmt.Sprintf("wl: %s: stderr: %v (got: %s)", method, err, kit.TrimPreview(stderr)))
-	}
-
-	// Artifact-producing method (`screenshot`): the PNG was already GetFile-pulled to
-	// op.Artifact (the host path) inside dispatch, BEFORE this point, so the validators
-	// (min_bytes / min_dimensions / not_uniform) read a real file. A no-op for every other
-	// method (op.Artifact empty), mirroring the host's post-run pipeline.
-	if op.Artifact != "" {
-		if err := sdk.RunArtifactValidators(&op); err != nil {
-			return sdk.ResultJSON("fail", fmt.Sprintf("wl: %s: artifact: %v", method, err))
-		}
-	}
-
-	body := out
-	if strings.TrimSpace(body) == "" {
-		body = stderr
-	}
-	if strings.TrimSpace(body) == "" {
-		body = fmt.Sprintf("wl %s: exit=%d", method, exit)
-	}
-	return sdk.ResultJSON("pass", body)
+	// The shared exit/stdout/stderr + artifact verdict pipeline (R3). The artifact-producing
+	// method (`screenshot`) already GetFile-pulled the PNG to op.Artifact inside dispatch, so
+	// the validators read a real file; op.Artifact != "" gates them (a no-op otherwise).
+	return sdk.VerbVerdict("wl", method, out, runErr, &op, op.Artifact != "")
 }

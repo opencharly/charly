@@ -76,26 +76,13 @@ type vmCreateReq struct {
 	ValidateOnly bool `json:"validate_only,omitempty"`
 }
 
-type pluginResult struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
-func resultJSON(status, msg string) (*pb.InvokeReply, error) {
-	j, err := json.Marshal(pluginResult{Status: status, Message: msg})
-	if err != nil {
-		return nil, err
-	}
-	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
 // Invoke runs one `libvirt:` verb method against the in-process libvirt impl and self-evaluates
 // the authored matchers (mirrors the former host-side matcher pipeline).
 func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {
-			return resultJSON("fail", "libvirt: decode op: "+err.Error())
+			return sdk.ResultJSON("fail", "libvirt: decode op: "+err.Error())
 		}
 	}
 	var env vmEnv
@@ -114,7 +101,7 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	// libvirt probes a running VM — skip under `charly check box` (no live domain on a
 	// disposable build container), mirroring the host's RunModeBox/box-mode skip.
 	if env.Mode == "box" {
-		return resultJSON("skip", fmt.Sprintf("libvirt: %s requires a running VM (skip under charly check box)", method))
+		return sdk.ResultJSON("skip", fmt.Sprintf("libvirt: %s requires a running VM (skip under charly check box)", method))
 	}
 
 	out, capturedStderr, runErr := dispatchLibvirtVerb(&op, env.Box)
@@ -133,13 +120,13 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		wantExit = *op.ExitStatus
 	}
 	if exit != wantExit {
-		return resultJSON("fail", fmt.Sprintf("libvirt: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, preview(stderr)))
+		return sdk.ResultJSON("fail", fmt.Sprintf("libvirt: %s: exit=%d, want %d (stderr: %s)", method, exit, wantExit, sdk.Preview(stderr)))
 	}
 	if err := sdk.MatchAll(out, op.Stdout); err != nil {
-		return resultJSON("fail", fmt.Sprintf("libvirt: %s: stdout: %v (got: %s)", method, err, preview(out)))
+		return sdk.ResultJSON("fail", fmt.Sprintf("libvirt: %s: stdout: %v (got: %s)", method, err, sdk.Preview(out)))
 	}
 	if err := sdk.MatchAll(stderr, op.Stderr); err != nil {
-		return resultJSON("fail", fmt.Sprintf("libvirt: %s: stderr: %v (got: %s)", method, err, preview(stderr)))
+		return sdk.ResultJSON("fail", fmt.Sprintf("libvirt: %s: stderr: %v (got: %s)", method, err, sdk.Preview(stderr)))
 	}
 
 	body := out
@@ -149,7 +136,7 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if strings.TrimSpace(body) == "" {
 		body = fmt.Sprintf("libvirt %s: exit=%d", method, exit)
 	}
-	return resultJSON("pass", body)
+	return sdk.ResultJSON("pass", body)
 }
 
 // dispatchLibvirtVerb runs one libvirt method through the in-process LibvirtCmd Kong tree,
@@ -439,13 +426,4 @@ func internalJSON(v any) (*pb.InvokeReply, error) {
 		return nil, err
 	}
 	return &pb.InvokeReply{ResultJson: j}, nil
-}
-
-func preview(s string) string {
-	const max = 400
-	s = strings.TrimSpace(s)
-	if len(s) > max {
-		return s[:max] + "…"
-	}
-	return s
 }
