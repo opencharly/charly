@@ -145,7 +145,9 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 // Errors:
 //   - "no deployment X" — node absent / nil
 //   - "X: missing required `target:`" — schema violation
-//   - "X: unknown target Y" — value not in local|vm|pod|k8s|android
+//   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
+//   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
+//     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
 func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("no deployment %q; run `charly bundle list`", name)
@@ -160,8 +162,7 @@ func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
 	// Target dispatch is the provider registry (the switch is gone — C3).
 	prov, ok := providerRegistry.ResolveDeploy(node.Target)
 	if !ok {
-		return nil, fmt.Errorf("deployment %q: unknown target %q "+
-			"(want local|vm|pod|k8s|android)", name, node.Target)
+		return nil, unresolvedDeployTargetError(name, node.Target)
 	}
 	if dp, ok := prov.(DeployTargetProvider); ok {
 		return dp.ResolveTarget(node, name)
@@ -189,6 +190,22 @@ func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
 		return &externalDeployTarget{name: name, prov: gp, exec: exec, node: node}, nil
 	}
 	return nil, fmt.Errorf("deployment %q: target %q has no in-process resolver and is not an out-of-proc plugin provider", name, node.Target)
+}
+
+// unresolvedDeployTargetError distinguishes the two ways ResolveDeploy(target) can fail: a
+// genuinely UNKNOWN target word (a typo — not one of the canonical substrates), versus a KNOWN
+// substrate word whose deploy provider is merely NOT CONNECTED (the deploy-substrate plugins are
+// out-of-process and connected on demand via loadDeployPlugins — a target with no charly.yml entry,
+// or a plugin that failed to load, leaves the registry entry absent). The former is a user error;
+// the latter is a load/connect gap. Conflating them (the former "unknown target" text for both)
+// misdirected the operator during the check-k3s-vm RCA.
+func unresolvedDeployTargetError(name, target string) error {
+	if externalizedDeploySubstrates[target] {
+		return fmt.Errorf("deployment %q: target %q is a known substrate but its deploy provider "+
+			"is not connected (the %s plugin candy is not compiled-in or failed to load)",
+			name, target, externalDeploySubstratePlugins[target])
+	}
+	return fmt.Errorf("deployment %q: unknown target %q (want local|vm|pod|k8s|android)", name, target)
 }
 
 // compile-time assertion: the external-deploy adapter satisfies the interfaces it

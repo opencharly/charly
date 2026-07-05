@@ -36,6 +36,14 @@ func defaultContainerRunning(engine, name string) bool {
 	return strings.TrimSpace(string(out)) == "true"
 }
 
+// containerExists reports whether a container with the given name is present in the engine's
+// storage, RUNNING OR STOPPED (unlike containerRunning, which is false for a stopped container). A
+// bare `container inspect` succeeds for any existing container, so its exit status is the signal.
+var containerExists = func(engine, name string) bool {
+	binary := EngineBinary(engine)
+	return exec.Command(binary, "container", "inspect", name).Run() == nil
+}
+
 // forceTTY overrides isTerminal() when set to true (e.g., by --tty flag).
 // Allows automation tools like Claude Code to force TTY allocation.
 var forceTTY bool

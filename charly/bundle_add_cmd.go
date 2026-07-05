@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -584,7 +585,10 @@ func (c *BundleDelCmd) Run() error {
 	}
 	defer lock.Release() //nolint:errcheck
 
-	node, kind := c.resolveDelNode()
+	node, kind, err := c.resolveDelNode()
+	if err != nil {
+		return err
+	}
 
 	// Connect the deployment's OUT-OF-TREE plugins before ResolveTarget, so an
 	// external deploy SUBSTRATE (the E3-deploy externalDeployTarget) resolves its
@@ -635,28 +639,53 @@ func (c *BundleDelCmd) Run() error {
 //   - literal "host" name → synthetic local node (legacy)
 //   - "vm:<name>" prefix  → synthetic vm node (legacy ref-based del)
 //   - charly.yml entry    → the merged node (canonical target)
-//   - no entry            → synthetic pod node (the default)
+//   - no entry, pod artifact present → synthetic pod node (ref-based pod del)
+//   - no entry, nothing present      → "no such deployment" error
 //
-// The returned node always carries a non-empty Target so ResolveTarget
-// can dispatch — for ref-based deploys with no charly.yml entry the node
-// is synthesized, preserving `charly bundle del host` / `charly bundle del
-// vm:<name>` without a stored entry.
-func (c *BundleDelCmd) resolveDelNode() (*BundleNode, string) {
+// The returned node always carries a non-empty Target so ResolveTarget can
+// dispatch. For a ref-based pod deploy with no charly.yml entry (e.g. the entry
+// was removed while the deploy is still up) the node is synthesized — but ONLY
+// when a real pod artifact exists (a quadlet unit, or a live container for a
+// direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
+// loudly, instead of being silently synthesized into a pod del that tears down
+// nothing and then fails with a misleading "unknown target pod".
+func (c *BundleDelCmd) resolveDelNode() (*BundleNode, string, error) {
 	if c.Name == "host" {
-		return &BundleNode{Target: "local"}, "local"
+		return &BundleNode{Target: "local"}, "local", nil
 	}
 	if strings.HasPrefix(c.Name, "vm:") {
-		return &BundleNode{Target: "vm"}, "vm"
+		return &BundleNode{Target: "vm"}, "vm", nil
 	}
 	if cwd, _ := os.Getwd(); cwd != "" {
 		if tree, _ := resolveTreeRoot(cwd); tree != nil {
 			if node, ok := tree[c.Name]; ok && node.Target != "" {
 				n := node
-				return &n, n.Target
+				return &n, n.Target, nil
 			}
 		}
 	}
-	return &BundleNode{Target: "pod"}, "pod"
+	if podDeploymentArtifactExists(c.Name) {
+		return &BundleNode{Target: "pod"}, "pod", nil
+	}
+	return nil, "", fmt.Errorf("no such deployment %q — run `charly bundle list` to see "+
+		"deployments (a VM deploy is torn down as `charly bundle del vm:%s`)", c.Name, c.Name)
+}
+
+// podDeploymentArtifactExists reports whether a pod deploy named `name` has a persisted artifact on
+// this host: a quadlet unit (`.container`/`.pod`, written by `charly config`/`charly start`) OR a
+// live container (a direct-mode `engine.run=direct` deploy has no quadlet). It is the discriminator
+// that lets a ref-based `charly bundle del <name>` with no charly.yml entry still tear a real pod
+// down, while a mistyped name (no artifact) is rejected.
+func podDeploymentArtifactExists(name string) bool {
+	cn := NestedContainerName(name)
+	if dir, err := quadletDir(); err == nil {
+		for _, suffix := range []string{".container", ".pod"} {
+			if _, err := os.Stat(filepath.Join(dir, "charly-"+cn+suffix)); err == nil {
+				return true
+			}
+		}
+	}
+	return containerExists("", "charly-"+cn)
 }
 
 // ---------------------------------------------------------------------------
