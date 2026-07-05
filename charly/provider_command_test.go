@@ -312,15 +312,18 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	if paths["feature.list"] {
 		t.Error("feature.list unexpectedly present in the builtin CLI model — `feature` is now an external command (candy/plugin-feature, the third welded-command externalization), not a builtin CommandProvider")
 	}
-	// C15's three remaining welded-command externalizations: clean/settings/candy are now
-	// EXTERNAL commands (candy/plugin-{clean,settings,candy}) re-homed onto the hidden
-	// __clean/__settings/__candy core commands — so their user-facing leaves are absent
-	// from this builtin-only model (their hidden __* twins stay, but are marked hidden).
+	// C15's remaining welded-command externalizations: settings/candy are EXTERNAL commands
+	// (candy/plugin-{settings,candy}) re-homed onto the hidden __settings/__candy core commands;
+	// clean is now COMPILED-IN and OWNS its command (candy/plugin-clean, command:clean, reaching
+	// the shared retention engine over the HostBuild("retention") seam — no hidden core command). All
+	// are absent from this builtin-only model — a compiled-in command is a DYNAMIC holder
+	// (collectExternalCommandPlugins), never a builtin CommandProvider, and the forwarders'
+	// hidden __* twins (settings/candy) are marked hidden.
 	// NOTE: `version` is DELIBERATELY NOT here — it was excluded from C15 (pkg/arch's pkgver()
 	// stamps the package version via `bin/charly version`), so it stays a CORE command and IS
 	// present in the builtin model (asserted by TestCLIModel_CoversCommands).
 	if paths["clean"] {
-		t.Error("clean unexpectedly present in the builtin CLI model — `clean` is now an external command (candy/plugin-clean, C15), forwarding to the hidden __clean core command")
+		t.Error("clean unexpectedly present in the builtin CLI model — `clean` is now a compiled-in command (candy/plugin-clean, command:clean), a dynamic holder not a builtin CommandProvider")
 	}
 	if paths["settings.list"] {
 		t.Error("settings.list unexpectedly present in the builtin CLI model — `settings` is now an external command (candy/plugin-settings, C15), forwarding to the hidden __settings core command tree")

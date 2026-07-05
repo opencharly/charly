@@ -2069,12 +2069,14 @@ check-commands-local:
             plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the
             sixth-through-eighth welded-command externalizations in the core-externalization program.
             A disposable kind:local deploy on host: local runs each command host-side with a safe
-            read-only / dry-run / --help invocation: the host charly resolves each command word via
-            the discovered plugin prescan and syscall.Exec's the plugin binary, which raw-forwards to
-            the hidden in-core `charly __clean`/`__settings`/`__candy` command whose Run handler stays
-            core. Every command exits 0 — proving the externalized command + the hidden-command
-            raw-forward dispatch (leaf AND command-tree) end-to-end. (`charly version` is excluded
-            from C15 — it stays a core command; pkgver() stamps the package version via it.)
+            read-only / dry-run / --help invocation. clean is COMPILED-IN and OWNS its command
+            (Invoke(OpRun) reaches the shared retention engine over the HostBuild("retention") seam —
+            no forward); settings/candy still resolve via the discovered plugin prescan and
+            syscall.Exec the plugin binary, which raw-forwards to the hidden in-core
+            `charly __settings`/`__candy` command whose Run handler stays core (pending their own
+            externalizations). Every command exits 0 — proving the externalized commands end-to-end.
+            (`charly version` is excluded — it stays a core command; pkgver() stamps the package
+            version via it.)
     settings-list-runs:
         check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized command TREE raw-forwards to the in-core __settings handler)
         id: settings-list-runs
@@ -2098,7 +2100,7 @@ check-commands-local:
             command: charly candy --help
             in_container: false
     clean-dry-run-runs:
-        check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized command raw-forwards to the in-core __clean handler, touching nothing)
+        check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized clean command owns the report + reaches the shared retention engine over the "retention" HostBuild seam, touching nothing)
         id: clean-dry-run-runs
         exit_status: 0
         stdout:

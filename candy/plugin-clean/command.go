@@ -1,64 +1,149 @@
 package clean
 
 import (
+	"context"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
+	"path/filepath"
+
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
-// command.go is the command:clean leg of this plugin — the externalized `charly clean` CLI.
-// Unlike the secrets/mcp/preempt/feature plugins (which port their command grammar INTO the
-// plugin), the CleanCmd handler (charly/clean.go) STAYS in charly's core: its Run handler reads
-// the project charly.yml `defaults:` (keep_images / keep_check_runs), resolves the build engine
-// (ResolveRuntime), and prunes .build/ / .check/ artifacts + charly-labeled podman image tags —
-// none of which this out-of-process plugin can reach. Core re-homes CleanCmd onto a hidden
-// `charly __clean` command, and this plugin is a THIN FORWARDER: it raw-forwards the pass-through
-// tokens to `charly __clean <args…>`. Keeping the handler in ONE place (core) avoids duplicating
-// the prune/retention logic in the plugin (R3).
+// command.go — the externalized `charly clean` command. The plugin OWNS the flag grammar, the
+// category orchestration, and the output; the SHARED retention engine (image-tag / build-candy /
+// check-run pruning, also called by `charly box build` / `charly check run` / `charly box list tags`)
+// stays in core and is reached via the generic "retention" HostBuild seam. The pkg/arch makepkg sweep
+// is a single-caller pure file op done locally here. No hidden core-command forward.
 //
-// Dispatch contract (charly/provider_command_external.go dispatchExternalCommand): on
-// `charly clean <args…>`, charly RESOLVES this plugin's binary (host-built from source, or baked
-// into /usr/lib/charly/plugins via pkg/arch) and syscall.Exec's it with the pass-through tokens
-// after the `clean` word, in CLI mode (the go-plugin handshake cookie is stripped, so sdk.Main runs
-// cliMain instead of serving gRPC) with CHARLY_BIN stamped to charly's own executable. cliMain
-// then syscall.Exec's `charly __clean <args…>`, so the in-core CleanCmd runs in the re-entered
-// charly process and inherits charly's stdin/stdout/stderr/TTY natively.
+// clean is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
+// gets the in-proc reverse channel (provider_command_external.go dispatchInProcCommand threads it), so
+// HostBuild("retention") reaches the host engine. The out-of-process cliMain path has NO reverse
+// channel, so it errors — clean cannot run out-of-process (it needs the retention host seam).
 
-// cliMain is the CLI-mode entry point (sdk.Main calls it when charly syscall.Exec'd this plugin
-// as a command passthrough). It RAW-FORWARDS every pass-through token to the hidden in-core
-// `charly __clean <args…>` command via execCharly (no local kong parse — the core CleanCmd grammar
-// owns the contract, so flags pass straight through). On success this never returns (syscall.Exec
-// replaces the process image); only a PRE-exec failure returns a non-zero code.
-func cliMain(args []string) int {
-	if err := execCharly(append([]string{"__clean"}, args...)...); err != nil {
-		fmt.Fprintf(os.Stderr, "charly clean: %v\n", err)
-		return 1
+// runCleanCLI parses the clean flags and drives the categories: --invalidate (targeted image-tag
+// invalidation), images (+ build-candy staging), check runs, and the local makepkg sweep.
+func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
+	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
+	dryRun := fs.Bool("dry-run", false, "Print everything that would be removed; touch nothing")
+	images := fs.Bool("images", false, "Only image-tag retention")
+	check := fs.Bool("check", false, "Only check-run retention")
+	keep := fs.Int("keep", 0, "Override the retention count for this run (0 = use defaults:)")
+	invalidate := fs.String("invalidate", "", "Remove every charly-labeled image tag matching this glob (full ref or last path segment); runs ONLY the invalidation")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	return 0 // unreachable: execCharly's syscall.Exec replaced the process image
-}
-
-// charlyBin returns the host charly binary the dispatch seam stamped into CHARLY_BIN, falling
-// back to `charly` on PATH (e.g. if the plugin binary is run directly, off the dispatch path).
-func charlyBin() string {
-	if b := os.Getenv("CHARLY_BIN"); b != "" {
-		return b
-	}
-	return "charly"
-}
-
-// execCharly REPLACES this process with `charly <args…>` via syscall.Exec, so the re-entered
-// charly runs the hidden in-core CleanCmd (`__clean …`) and its stdout/stderr/exit-code/TTY flow
-// back through this plugin (which IS the operator's `charly clean` process) natively. On success
-// this never returns; only a PRE-exec failure (binary missing) returns an error.
-func execCharly(args ...string) error {
-	bin, err := exec.LookPath(charlyBin())
+	dir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("resolving charly binary %q: %w", charlyBin(), err)
+		return err
 	}
-	argv := append([]string{"charly"}, args...)
-	if err := syscall.Exec(bin, argv, os.Environ()); err != nil { //nolint:gosec // bin is CHARLY_BIN, args are the __clean hidden command + operator clean tokens
-		return fmt.Errorf("exec %s: %w", bin, err)
+	tag := "removed"
+	if *dryRun {
+		tag = "would remove"
 	}
-	return nil // unreachable: syscall.Exec replaced the process image
+
+	// --invalidate: targeted image-tag invalidation ONLY.
+	if *invalidate != "" {
+		reply, herr := hostRetention(ctx, exec, spec.RetentionRequest{Dir: dir, DryRun: *dryRun, Invalidate: *invalidate})
+		if herr != nil {
+			return herr
+		}
+		fmt.Printf("invalidate: %s %d tag(s) matching %q\n", tag, len(reply.ImageRefs), *invalidate)
+		for _, r := range reply.ImageRefs {
+			fmt.Printf("  %s\n", r)
+		}
+		return nil
+	}
+
+	// Default (neither flag) = all categories.
+	doImages := *images || (!*images && !*check)
+	doCheck := *check || (!*images && !*check)
+	doMakepkg := !*images && !*check
+
+	if doImages || doCheck {
+		reply, herr := hostRetention(ctx, exec, spec.RetentionRequest{Dir: dir, DryRun: *dryRun, Images: doImages, Check: doCheck, Keep: *keep})
+		if herr != nil {
+			return herr
+		}
+		if doImages {
+			fmt.Printf("images: %s %d tag(s) (keep_images=%d)\n", tag, len(reply.ImageRefs), reply.KeepImages)
+			for _, r := range reply.ImageRefs {
+				fmt.Printf("  %s\n", r)
+			}
+			fmt.Printf("build: %s %d staging dir(s) under .build/_candy (keep_images=%d)\n", tag, len(reply.BuildDirs), reply.KeepImages)
+			for _, p := range reply.BuildDirs {
+				fmt.Printf("  %s\n", p)
+			}
+		}
+		if doCheck {
+			fmt.Printf("check: %s %d run artifact(s) (keep_check_runs=%d, NOTES.md preserved)\n", tag, len(reply.CheckPaths), reply.KeepCheckRuns)
+			for _, p := range reply.CheckPaths {
+				fmt.Printf("  %s\n", p)
+			}
+		}
+	}
+
+	if doMakepkg {
+		paths := cleanMakepkgArtifacts(dir, *dryRun)
+		fmt.Printf("makepkg: %s %d leftover(s) under pkg/arch\n", tag, len(paths))
+		for _, p := range paths {
+			fmt.Printf("  %s\n", p)
+		}
+	}
+	return nil
+}
+
+// hostRetention asks the host to run the shared retention engine via the generic "retention" HostBuild
+// kind. exec is nil on the out-of-process cliMain path (no reverse channel) → a clear error.
+func hostRetention(ctx context.Context, exec *sdk.Executor, req spec.RetentionRequest) (spec.RetentionReply, error) {
+	if exec == nil {
+		return spec.RetentionReply{}, fmt.Errorf("charly clean requires compiled-in placement (the retention host seam is unavailable out-of-process)")
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	resJSON, err := exec.HostBuild(ctx, "retention", reqJSON)
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	var reply spec.RetentionReply
+	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+		return spec.RetentionReply{}, uerr
+	}
+	if reply.Error != "" {
+		return spec.RetentionReply{}, fmt.Errorf("%s", reply.Error)
+	}
+	return reply, nil
+}
+
+// cleanMakepkgArtifacts removes the one-time makepkg build leftovers under pkg/arch (src/, pkg/,
+// *.pkg.tar.zst, *.log) — pure transient waste (the package is already installed via pacman). Moved
+// from charly core (its sole caller). Returns the paths removed.
+func cleanMakepkgArtifacts(projectDir string, dryRun bool) []string {
+	base := filepath.Join(projectDir, "pkg", "arch")
+	var targets []string
+	for _, sub := range []string{"src", "pkg"} {
+		p := filepath.Join(base, sub)
+		if _, err := os.Stat(p); err == nil {
+			targets = append(targets, p)
+		}
+	}
+	for _, pat := range []string{"*.pkg.tar.zst", "*.log"} {
+		matches, _ := filepath.Glob(filepath.Join(base, pat))
+		targets = append(targets, matches...)
+	}
+	var removed []string
+	for _, p := range targets {
+		if dryRun {
+			removed = append(removed, p)
+			continue
+		}
+		if err := os.RemoveAll(p); err == nil {
+			removed = append(removed, p)
+		}
+	}
+	return removed
 }

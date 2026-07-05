@@ -48,3 +48,4 @@ use ./candy/plugin-build
 use ./candy/plugin-installstep
 use ./candy/plugin-tunnel
 use ./candy/plugin-migrate
+use ./candy/plugin-clean
