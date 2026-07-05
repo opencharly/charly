@@ -1976,14 +1976,14 @@ check-feature-local:
 # (candy/plugin-doctor, command:doctor) — the FIFTH welded-command externalization.
 # A disposable kind:local deploy on host: local that runs the deterministic `charly doctor`
 # host-side:
-#   - `charly doctor` → exits 0 and prints the host-dependency report; the externalized command
-#     resolves the `doctor` word via the discovered candy/plugin-doctor prescan, syscall.Exec's
-#     the plugin binary (host-built, or baked at /usr/lib/charly/plugins by pkg/arch), and the
-#     plugin raw-forwards to the hidden in-core `charly __doctor` command, whose DoctorCmd.Run
-#     handler drives the package-main host-detection symbols (credentialHealth / DetectGPU /
-#     DetectVFIO …) that cannot cross the process boundary. The output is asserted to contain the
-#     stable "Container Engine" group header (always printed), proving the externalized command +
-#     the hidden-command raw-forward dispatch end-to-end. `charly doctor` exits 0 whenever a
+#   - `charly doctor` → exits 0 and prints the host-dependency report; doctor is COMPILED-IN and OWNS
+#     the WHOLE report (check list, verdicts, human/JSON formatting, the binary/file probes it runs
+#     itself). Its Invoke(OpRun) is dispatched in-proc (dispatchInProcCommand) and reaches the genuine
+#     host-hardware facts it can't hold — the GPU/VFIO/device detection primitives + credentialHealth +
+#     the core install-hint/device tables — over the generic "hostprobe" HostBuild seam, which returns
+#     RAW FACTS ONLY (no report logic in core). The output is asserted to contain the stable
+#     "Container Engine" group header (always printed), proving the externalized command +
+#     the hostprobe seam end-to-end. `charly doctor` exits 0 whenever a
 #     container engine (podman/docker) is present — the sole required group — which holds on any
 #     charly host, so the bed's exit-0 assertion is deterministic.
 # =================================================================
@@ -2006,14 +2006,14 @@ check-doctor-local:
             Sole proof of the externalized `charly doctor` COMMAND (candy/plugin-doctor,
             command:doctor), the fifth welded-command externalization in the core-externalization
             program. A disposable kind:local deploy on host: local runs `charly doctor` host-side:
-            the host charly resolves the `doctor` word via the discovered candy/plugin-doctor
-            prescan and syscall.Exec's the plugin binary, which raw-forwards to the hidden in-core
-            `charly __doctor` command (DoctorCmd.Run drives the package-main host-detection symbols
-            credentialHealth / DetectGPU / DetectVFIO that stay core). The command exits 0 and
-            prints the host-dependency report — including the "Container Engine" group header —
-            proving the externalized command + the hidden-command raw-forward dispatch end-to-end.
+            doctor is COMPILED-IN and OWNS the whole report; its Invoke(OpRun) dispatches in-proc and
+            reaches the genuine host-hardware facts it can't hold (the GPU/VFIO/device detection
+            primitives + credentialHealth + the core install-hint/device tables) over the generic
+            "hostprobe" HostBuild seam, which returns RAW FACTS ONLY. The command exits 0 and prints
+            the host-dependency report — including the "Container Engine" group header — proving the
+            externalized command + the hostprobe seam end-to-end.
     doctor-runs:
-        check: command=charly doctor exits 0 and prints the host-dependency report (proving the externalized command raw-forwards to the in-core __doctor handler)
+        check: command=charly doctor exits 0 and prints the host-dependency report (proving the externalized doctor command owns the report + reaches the genuine host facts over the "hostprobe" HostBuild seam)
         id: doctor-runs
         exit_status: 0
         stdout:

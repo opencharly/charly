@@ -2,48 +2,56 @@ plugin-doctor:
     candy:
         version: 2026.181.0001
         description: |-
-            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly doctor`
-            CLI — the host-dependency-status surface, a standalone Go module (go.mod + main.go)
-            ported OUT of charly's core CLI registration, so the operator-facing `charly doctor`
-            command no longer compiles into the core binary as a top-level command.
+            COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly doctor`
+            CLI — the host-dependency-status surface. The plugin owns the command end to end: the
+            flag grammar (--json), the ENTIRE check list + group orchestration (container engine /
+            build infra / service management / VMs / VFIO / encrypted storage / secret storage /
+            tunnels / merge & registry / shell & TTY / podman machine), the pass/warn/fail verdicts,
+            the human + JSON report formatting, the exit code, AND the pure host ops it runs itself
+            (binary probes via exec.LookPath / exec.Command, file reads via os.Stat / os.ReadFile).
+            No plugin-specific report LOGIC is left in core.
 
-            The FIFTH WELDED-command externalization in the core-externalization program (after
-            candy/plugin-tmux, candy/plugin-preempt, candy/plugin-feature, and candy/plugin-vm).
-            `charly doctor` is WELDED to core — its DoctorCmd.Run handler (charly/doctor.go) calls
-            package-main host-detection symbols (credentialHealth; DetectGPU / DetectAMDGPU /
-            GPURunArgs / DetectHostDevices; DetectVFIO / VfioGroupAccessible / MemlockLimitBytes)
-            that this out-of-process plugin cannot reach — so doctor.go MUST STAY CORE (R3). The
-            SOLUTION (the vm precedent — re-home the whole leaf onto a hidden core command and
-            raw-forward to it): core re-homes DoctorCmd onto the hidden `charly __doctor` command,
-            and this plugin is a THIN FORWARDER that syscall.Exec's `charly __doctor <args…>`.
-            `doctor` is a flags-only LEAF (no subcommands), so the plugin raw-forwards the
-            pass-through args rather than re-expressing a grammar — the simplest welded-command
-            shape. No core symbol crosses the boundary; no ad-hoc podman/virsh.
+            The ONE thing the plugin cannot compute itself is the genuine host-HARDWARE subsystem +
+            core-owned data: the GPU/VFIO/device detection primitives (DetectGPU / DetectAMDGPU /
+            detectAMDGFXVersion / GPURunArgs / DetectVFIO / MemlockLimitBytes / VfioGroupAccessible /
+            vfioPciAvailable / the devicePatterns glob), the credential-store health (credentialHealth
+            → verb:credential, which lazy-connects host-side), and the core install-hint / distro-family
+            / device-description tables. Those STAY core (charly/host_build_hostprobe.go) because they
+            are the genuine host-hardware subsystem the plugin cannot hold + are MULTI-CALLER (the
+            GPU/VFIO shims serve vm/deploy too) — so duplicating them into the plugin would violate R3.
+            The plugin reaches them via the generic "hostprobe" HostBuild seam (spec.HostProbeRequest →
+            spec.HostProbeReply), which runs the detection primitives host-side ONCE and returns RAW
+            FACTS ONLY — zero formatting or verdict logic crosses into core. "hostprobe" is a
+            class-generic action noun, not a provider word (F11). This is the same "plugin owns the
+            report + a generic seam for the genuine host-coupled facts" doctrine the clean + settings
+            command plugins established.
 
-            charly's loader fetches this candy's repo, go-builds the provider binary on the HOST,
-            and on `charly doctor <args…>` syscall.Exec's it in CLI mode (sdk.Main → cliMain) — or
-            runs the host-installed /usr/lib/charly/plugins binary on a project-less host (the
-            pkg/arch bake). The plugin owns real terminal stdio, so the dependency-status report
-            reaches the operator's terminal natively.
+            doctor is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
+            Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
+            ("Seam A") — to call HostBuild("hostprobe"). The out-of-process CliMain path has no reverse
+            channel, so it errors: doctor cannot run out-of-process, it needs the hostprobe host seam.
+            There is NO hidden core-command forward — the plugin does the report directly, calling back
+            only for the raw host-hardware facts; no core symbol crosses the boundary, no ad-hoc podman.
 
-            command:doctor is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
-            registry — so it is declared in plugin.providers (for the CLI-grammar prescan + baked
-            `.providers` manifest) but advertises NO Describe capability. The R10 witness is the
-            disposable check-doctor-local bed: `charly doctor` exits 0 and prints the
-            host-dependency report host-side, proving the externalized command + the hidden-command
-            raw-forward dispatch end-to-end.
+            command:doctor dispatches through the COMPILED-IN registry path (registerCompiledPlugin →
+            resolve(ClassCommand,"doctor") → dispatchInProcCommand → Invoke(OpRun) with the threaded
+            in-proc reverse channel), so NewMeta advertises command:doctor while the served CUE schema
+            carries no plugin_input (the args are plain CLI tokens). The R10 witness is the disposable
+            check-doctor-local bed: `charly doctor` exits 0 and prints the host-dependency report,
+            proving the externalized command + the in-proc HostBuild hostprobe dispatch end-to-end.
     plugin-doctor-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-doctor
             providers:
                 - command:doctor
     # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # it mirrors candy/plugin-feature's feature-module-present: a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
-    # build + fork/exec the module. The full CLI end-to-end (`charly doctor` → exit 0 with the
-    # host-dependency report) is exercised by the live R10 bed (check-doctor-local).
+    # it mirrors candy/plugin-clean's clean-module-present: a trivial build-context
+    # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+    # deterministic check every candy ships. The full `charly doctor` end-to-end — the compiled-in
+    # in-proc HostBuild("hostprobe") dispatch: `charly doctor` → exit 0 with the host-dependency
+    # report — is exercised by the live R10 bed (check-doctor-local).
     doctor-module-present:
-        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly doctor` end-to-end is exercised by the live R10 (check-doctor-local)
+        check: the doctor command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly doctor` end-to-end (the in-proc HostBuild hostprobe dispatch) is exercised by the live R10 (check-doctor-local)
         id: doctor-module-present
         context:
             - build

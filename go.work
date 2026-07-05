@@ -51,3 +51,4 @@ use ./candy/plugin-migrate
 use ./candy/plugin-clean
 use ./candy/plugin-settings
 use ./candy/plugin-candy
+use ./candy/plugin-doctor

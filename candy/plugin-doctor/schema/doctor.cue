@@ -1,10 +1,9 @@
 // This out-of-tree COMMAND plugin's OWN CUE schema, served over the Describe channel.
 //
-// doctor is a COMMAND-class plugin: charly dispatches it by fork/exec'ing this binary in CLI
-// mode (sdk.Main → cliMain), NOT through the gRPC provider registry — so the plugin advertises
-// NO gRPC capability and NO plugin_input (the command's args are plain CLI tokens parsed from
-// os.Args in CLI mode, not a structured plugin_input). This served schema therefore carries no
-// #*Input def; it exists ONLY to satisfy the host's "every plugin MUST ship a non-empty,
+// doctor is a COMPILED-IN COMMAND-class plugin: charly dispatches it in-proc via
+// dispatchInProcCommand → Invoke(OpRun) (advertising command:doctor over Describe), NOT with a
+// structured plugin_input (the command's args are plain CLI tokens). This served schema therefore
+// carries no #*Input def; it exists ONLY to satisfy the host's "every plugin MUST ship a non-empty,
 // base-splicing CUE schema" load gate (registerPluginUnitSchema) and the params codegen loop
 // (task cue:gen).
 //
@@ -12,10 +11,11 @@
 // (the SDK serve-side check) AND splices onto the base — the base ++ plugin splice exists to
 // detect a def-name collision with the base, not to resolve base references.
 
-// #DoctorPlugin documents the command the plugin serves. The command keeps its entire contract
-// in the in-core DoctorCmd grammar (the `charly __doctor` leaf it raw-forwards to), so there is
-// no plugin_input to validate here.
+// #DoctorPlugin documents the command the plugin serves. The plugin OWNS the command (flag grammar +
+// the entire host-dependency report + output); the genuine host-hardware subsystem (GPU/VFIO/device
+// detection + credentialHealth + the core install-hint/device tables) stays in core, reached over the
+// HostBuild("hostprobe") seam — there is no plugin_input to validate here (args are plain CLI tokens).
 #DoctorPlugin: {
 	command:  "doctor"
-	contract: "doctor is CLI-dispatched (charly fork/execs the binary); args are plain CLI tokens that raw-forward to the in-core host-dependency-status command via charly __doctor"
+	contract: "doctor is a compiled-in command dispatched in-proc via dispatchInProcCommand → Invoke(OpRun); args are plain CLI tokens; the plugin owns the flags + the whole host-dependency report + output and reaches the genuine host-hardware detection primitives through the HostBuild(\"hostprobe\") seam"
 }

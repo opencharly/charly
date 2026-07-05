@@ -62,14 +62,3 @@ func TestEncExecViaPlugin_AllowOtherPreflight(t *testing.T) {
 		}
 	}
 }
-
-func TestCheckFuseAllowOther(t *testing.T) {
-	withFuseConf(t, "user_allow_other\n")
-	if r := checkFuseAllowOther(); r.Status != CheckOK {
-		t.Fatalf("enabled: status = %v, want CheckOK", r.Status)
-	}
-	withFuseConf(t, "#user_allow_other\n")
-	if r := checkFuseAllowOther(); r.Status != CheckWarning || r.InstallHint == "" {
-		t.Fatalf("missing: status = %v hint = %q, want CheckWarning + a fix hint", r.Status, r.InstallHint)
-	}
-}

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // credential_plugin.go is the CORE adapter for the externalized credential subsystem.
@@ -44,7 +46,8 @@ type credentialResolver interface {
 }
 
 // credentialHealther is the doctor seam: a store that can report keyring / secret-storage
-// health implements it (doctor.go renders DoctorCheckResults from CredentialHealth).
+// health implements it (candy/plugin-doctor renders its checks from CredentialHealth,
+// fetched host-side via the hostprobe host-build seam).
 type credentialHealther interface {
 	health() (*CredentialHealth, error)
 }
@@ -82,21 +85,9 @@ type credentialReply struct {
 	Health *CredentialHealth `json:"health,omitempty"`
 }
 
-// CredentialHealth is the keyring/secret-storage diagnostic verb:credential `health`
-// returns; doctor.go renders it. Byte-compatible with the plugin's credentialHealth.
-type CredentialHealth struct {
-	BackendName       string   `json:"backend_name"`
-	ConfiguredBackend string   `json:"configured_backend"`
-	KeyringAvailable  bool     `json:"keyring_available"`
-	KeyringLocked     bool     `json:"keyring_locked"`
-	PlaintextCount    int      `json:"plaintext_count"`
-	NoSession         bool     `json:"no_session"`
-	CollErr           string   `json:"coll_err,omitempty"`
-	HealthyColls      []string `json:"healthy_colls,omitempty"`
-	BrokenColls       []string `json:"broken_colls,omitempty"`
-	IndexTotal        int      `json:"index_total"`
-	IndexMissing      []string `json:"index_missing,omitempty"`
-}
+// CredentialHealth is the keyring/secret-storage diagnostic verb:credential `health` returns; the
+// externalized candy/plugin-doctor renders it. Now homed in sdk/spec (core + plugin-doctor consumers, R3).
+type CredentialHealth = spec.CredentialHealth
 
 // pluginCredentialStore dispatches every credential operation to verb:credential.
 type pluginCredentialStore struct{}

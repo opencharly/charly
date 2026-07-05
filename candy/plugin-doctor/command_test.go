@@ -1,16 +1,20 @@
-package main
+package doctor
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCheckBinaryFound(t *testing.T) {
-	orig := exec_LookPath
-	defer func() { exec_LookPath = orig }()
+	orig := execLookPath
+	defer func() { execLookPath = orig }()
 
-	exec_LookPath = func(name string) (string, error) {
+	execLookPath = func(name string) (string, error) {
 		if name == "git" {
 			return "/usr/bin/git", nil
 		}
@@ -28,10 +32,10 @@ func TestCheckBinaryFound(t *testing.T) {
 }
 
 func TestCheckBinaryMissing(t *testing.T) {
-	orig := exec_LookPath
-	defer func() { exec_LookPath = orig }()
+	orig := execLookPath
+	defer func() { execLookPath = orig }()
 
-	exec_LookPath = func(name string) (string, error) {
+	execLookPath = func(name string) (string, error) {
 		return "", fmt.Errorf("not found: %s", name)
 	}
 
@@ -175,36 +179,59 @@ func TestDoctorOutputJSON(t *testing.T) {
 	}
 }
 
+// TestRunHardwareChecks proves the hardware report is rendered from the hostprobe seam's raw facts:
+// GPU/AMDGPU reflect the reply, and each device carries its seam-supplied description; a present device
+// contributes its --device container flag.
 func TestRunHardwareChecks(t *testing.T) {
-	origGPU := DetectGPU
-	origAMDGPU := DetectAMDGPU
-	defer func() {
-		DetectGPU = origGPU
-		DetectAMDGPU = origAMDGPU
-	}()
-
-	DetectGPU = func() bool { return false }
-	DetectAMDGPU = func() bool { return false }
-
-	distro := Distro{ID: "arch", Name: "Arch Linux", Manager: "pacman -S"}
-	hw := runHardwareChecks(distro)
+	reply := spec.HostProbeReply{
+		GPU:    false,
+		AMDGPU: false,
+		Devices: []spec.HostProbeDevice{
+			{Pattern: "/dev/kvm", Path: "/dev/kvm", Present: true, Description: "KVM virtualization"},
+			{Pattern: "/dev/dri/renderD*", Path: "/dev/dri/renderD*", Present: false, Description: "GPU render node"},
+		},
+	}
+	hw := runHardwareChecks(reply)
 
 	if hw.GPU {
-		t.Error("expected GPU=false with mocked DetectGPU")
+		t.Error("expected GPU=false from the reply")
 	}
 	if hw.AMDGPU {
-		t.Error("expected AMDGPU=false with mocked DetectAMDGPU")
+		t.Error("expected AMDGPU=false from the reply")
 	}
-
-	// Should have entries for all device patterns
-	if len(hw.Devices) == 0 {
-		t.Error("expected at least some device entries")
+	if len(hw.Devices) != 2 {
+		t.Fatalf("expected 2 device entries, got %d", len(hw.Devices))
 	}
-
-	// Each device should have a description
 	for _, d := range hw.Devices {
 		if d.Description == "" {
 			t.Errorf("device %q has no description", d.Path)
 		}
+	}
+	// The present /dev/kvm contributes --device /dev/kvm; the absent renderD* does not.
+	if len(hw.ContainerFlags) != 2 || hw.ContainerFlags[0] != "--device" || hw.ContainerFlags[1] != "/dev/kvm" {
+		t.Errorf("ContainerFlags = %v, want [--device /dev/kvm]", hw.ContainerFlags)
+	}
+}
+
+// TestCheckFuseAllowOther proves the encrypted-storage user_allow_other check (a pure host op the
+// plugin runs itself) reports OK when set and a WARNING + fix hint when missing.
+func TestCheckFuseAllowOther(t *testing.T) {
+	withFuseConf := func(body string) {
+		orig := fuseConfPath
+		t.Cleanup(func() { fuseConfPath = orig })
+		p := filepath.Join(t.TempDir(), "fuse.conf")
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		fuseConfPath = p
+	}
+
+	withFuseConf("user_allow_other\n")
+	if r := checkFuseAllowOther(); r.Status != CheckOK {
+		t.Fatalf("enabled: status = %v, want CheckOK", r.Status)
+	}
+	withFuseConf("#user_allow_other\n")
+	if r := checkFuseAllowOther(); r.Status != CheckWarning || r.InstallHint == "" {
+		t.Fatalf("missing: status = %v hint = %q, want CheckWarning + a fix hint", r.Status, r.InstallHint)
 	}
 }

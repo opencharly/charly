@@ -1,39 +1,37 @@
-// Package doctor is the charly plugin serving the externalized `charly doctor` command — the
-// host-dependency-status surface. It is an importable dual-placement command plugin: the SAME
-// NewProvider()/NewMeta()/CliMain compile INTO charly in-process when listed in compiled_plugins,
-// or cmd/serve serves them OUT-OF-PROCESS (charly fork/execs the binary for command:doctor
-// dispatch) when they are not — placement is invisible above the registry.
+// Package doctor is the charly plugin OWNING the externalized `charly doctor` command — the
+// host-dependency-status surface. The plugin owns the command end to end: the flag grammar (--json),
+// the entire check list + group orchestration, the pass/warn/fail verdicts, the human + JSON report
+// formatting, the exit code, AND the pure host ops it runs itself (binary probes via exec.LookPath /
+// exec.Command, file reads via os.Stat / os.ReadFile). No plugin-specific report LOGIC is left in core;
+// there is no hidden core-command forward — the plugin does the work, calling back only for the one
+// thing it cannot compute (the genuine host-hardware facts), the doctrine the clean + settings command
+// plugins established.
 //
-// The FIFTH WELDED-command externalization in the core-externalization program (after
-// candy/plugin-tmux, candy/plugin-preempt, candy/plugin-feature, and candy/plugin-vm). `charly
-// doctor` is WELDED to core — its DoctorCmd.Run handler (charly/doctor.go) calls package-main
-// host-detection symbols: credentialHealth; DetectGPU / DetectAMDGPU / GPURunArgs /
-// DetectHostDevices (devices.go); DetectVFIO / VfioGroupAccessible / MemlockLimitBytes (gpu/vfio).
-// None of those can cross the process boundary, so doctor.go MUST STAY CORE (R3). The SOLUTION
-// (the vm precedent — re-home the whole leaf onto a hidden core command and raw-forward to it): core
-// re-homes DoctorCmd onto the hidden `charly __doctor` command, and this plugin is a THIN FORWARDER
-// that raw-forwards the pass-through tokens to `charly __doctor <args…>` (command.go). `doctor` is a
-// flags-only LEAF (no subcommands), so the plugin forwards raw args rather than re-expressing a
-// grammar — the simplest welded-command shape. No core symbol crosses the boundary; no ad-hoc
-// podman/virsh.
+// The ONE thing the plugin cannot compute itself is the genuine host-HARDWARE subsystem + core-owned
+// data: the GPU/VFIO/device detection primitives (the C11 shims, multi-caller with the vm/deploy
+// paths), the credential-store health (verb:credential, which lazy-connects host-side), and the core
+// install-hint / device-description tables. Those STAY core (duplicating them into the plugin would
+// violate R3) and are reached via the generic "hostprobe" HostBuild seam
+// (charly/host_build_hostprobe.go, spec.HostProbeRequest → spec.HostProbeReply), which runs the
+// detection primitives host-side and returns RAW FACTS ONLY — zero formatting or verdict logic crosses
+// into core. "hostprobe" is a class-generic action noun, not a provider word (F11).
 //
-// CLI dispatch contract (charly/provider_command_external.go dispatchExternalCommand): on
-// `charly doctor <args…>`, charly RESOLVES this plugin's binary (host-built from source, or baked
-// into /usr/lib/charly/plugins via pkg/arch) and syscall.Exec's it with the pass-through tokens
-// after the `doctor` word, in CLI mode (the go-plugin handshake cookie is stripped, so sdk.Main
-// runs cliMain instead of serving gRPC) with CHARLY_BIN stamped to charly's own executable. cliMain
-// then syscall.Exec's `charly __doctor <args…>`, so the in-core DoctorCmd runs in the re-entered
-// charly process and inherits charly's stdin/stdout/stderr/TTY natively.
-//
-// A command is NOT a gRPC-registry capability (charly fork/execs the binary; it never connects over
-// gRPC for a command), so this plugin advertises NO Describe capability — its serve half (sdk.Serve,
-// never reached for a command-only plugin) exists only to satisfy the dual-mode sdk.Main signature.
-// The candy's plugin.providers declaration still lists command:doctor (that drives the CLI-grammar
-// prescan + the baked `.providers` manifest).
+// doctor is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its Invoke(OpRun)
+// (provider.go) needs the in-proc reverse channel — threaded by dispatchInProcCommand ("Seam A") — to
+// call HostBuild("hostprobe"). The out-of-process CliMain path has no reverse channel, so it errors:
+// doctor cannot run out-of-process, it needs the hostprobe host seam. command:doctor dispatches through
+// the COMPILED-IN registry path (registerCompiledPlugin → resolve(ClassCommand,"doctor") →
+// dispatchInProcCommand → Invoke(OpRun) with the threaded in-proc reverse channel), so NewMeta
+// advertises command:doctor while the served CUE schema carries no plugin_input (the args are plain CLI
+// tokens). NewProvider()/NewMeta()/CliMain are the standard dual-mode command shape (mirror
+// candy/plugin-clean).
 package doctor
 
 import (
+	"context"
 	"embed"
+	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
@@ -45,14 +43,23 @@ var schemaFS embed.FS
 // NewProvider returns the doctor provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises NO gRPC capability — command:doctor is CLI-dispatched, not resolved
-// through the gRPC provider registry — shipping only the self-contained doc schema to satisfy
-// the host's non-empty-schema load gate + params codegen loop, via sdk.NewMeta → BuildCapabilities.
+// NewMeta advertises command:doctor — the COMPILED-IN registry path resolves it (registerCompiledPlugin
+// → providerRegistry.resolve(ClassCommand,"doctor") → dispatchInProcCommand → Invoke(OpRun) with the
+// threaded in-proc reverse channel) — plus the self-contained doc schema, via sdk.NewMeta.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.181.0001",
-		[]sdk.ProvidedCapability{},
+		[]sdk.ProvidedCapability{{Class: "command", Word: "doctor"}},
 		schemaFS)
 }
 
-// CliMain is the plugin's CLI entrypoint (command:doctor dispatch).
-func CliMain(args []string) int { return cliMain(args) }
+// CliMain is the out-of-process CLI entrypoint (only reached when doctor is NOT compiled in). doctor
+// reaches the "hostprobe" host seam via the HostBuild reverse channel, which is unavailable
+// out-of-process, so runDoctorCLI (with a nil executor) errors clearly; the canonical placement is
+// compiled-in (Invoke → provider.go), where the reverse channel is threaded.
+func CliMain(args []string) int {
+	if err := runDoctorCLI(context.Background(), nil, args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}

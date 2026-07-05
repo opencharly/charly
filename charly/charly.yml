@@ -74,6 +74,7 @@ compiled_plugins:
     - plugin-clean
     - plugin-settings
     - plugin-candy
+    - plugin-doctor
 
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by

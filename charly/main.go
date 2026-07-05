@@ -94,27 +94,18 @@ type CLI struct {
 	// is large + nested, so the plugin forwards raw args rather than re-expressing each leaf).
 	VmInternal VmCmd `cmd:"" name:"__vm" hidden:"" help:"internal: the VM lifecycle command tree (the externalized charly vm plugin forwards here)"`
 
-	// __doctor re-homes the in-core DoctorCmd (doctor.go — host dependency status) onto ONE
-	// hidden command, exposing it to the externalized `charly doctor` COMMAND plugin
-	// (candy/plugin-doctor, command:doctor). DoctorCmd's Run handler STAYS core — it calls
-	// package-main host-detection symbols (credentialHealth; DetectGPU / DetectAMDGPU /
-	// GPURunArgs / DetectHostDevices in devices.go; DetectVFIO / VfioGroupAccessible /
-	// MemlockLimitBytes in gpu/vfio) that this out-of-process plugin cannot reach (R3) — so the
-	// plugin is a THIN forwarder that syscall.Exec's `charly __doctor <args…>` (command.go). This
-	// is the SAME internal-command pattern as __vm / __feature-list / __preempt-status, re-homing
-	// the leaf onto one hidden command (doctor is a flags-only leaf, so the plugin raw-forwards).
-	DoctorInternal DoctorCmd `cmd:"" name:"__doctor" hidden:"" help:"internal: host dependency status (the externalized charly doctor command plugin forwards here)"`
-
-	// vm + doctor are the last two WELDED machinery commands still re-homed onto hidden core commands
-	// (__vm / __doctor above): their Run handlers STAY core — VmCmd drives the libvirt/qemu backends +
-	// cloud-init + the VmOp RPCs; DoctorCmd calls the host-detection symbols (DetectGPU/DetectVFIO/
-	// credentialHealth) — machinery an out-of-process plugin cannot reach (R3) — so each is a THIN
-	// forwarder to `charly __<word>`. clean + settings + candy, by contrast, are now COMPILED-IN and OWN
-	// their commands: clean + settings reach a shared core engine over a generic HostBuild seam (clean →
-	// "retention" over charly/retention.go; settings → "settings" over the config subsystem); candy owns
-	// its ENTIRE logic — the yaml.Node candy-manifest mutation — itself, sharing only the generic
+	// vm is the LAST WELDED machinery command still re-homed onto a hidden core command
+	// (__vm above): its Run handlers STAY core — VmCmd drives the libvirt/qemu backends +
+	// cloud-init + the VmOp RPCs — machinery an out-of-process plugin cannot reach (R3) — so it is a
+	// THIN forwarder to `charly __vm`. clean + settings + candy + doctor, by contrast, are COMPILED-IN
+	// and OWN their commands: clean + settings + doctor reach the genuine core-coupled subsystem over a
+	// generic HostBuild seam (clean → "retention" over charly/retention.go; settings → "settings" over
+	// the config subsystem; doctor → "hostprobe" over the GPU/VFIO/device detection primitives +
+	// credentialHealth + the core install-hint/device tables — candy/plugin-doctor OWNS the WHOLE
+	// host-dependency report, only the RAW host facts cross the seam); candy owns its ENTIRE logic — the
+	// yaml.Node candy-manifest mutation — itself, sharing only the generic
 	// kit.SetByDotPath / kit.MappingChild utilities (sdk/kit/yaml.go, also used by `charly box set` /
-	// `box scaffold`). None of the three uses a hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
+	// `box scaffold`). None of those four uses a hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
 	// kept core (the Version field below) — NOT an "unfixable" one. RDD (2026-07-01) refuted the old
 	// chicken-and-egg claim: pkgver()'s `bin/charly version` is only a convenience (the CalVer is
 	// already Taskfile-computed via pkg/arch/calver.sh, and reading it from a sidecar / recomputing at
@@ -128,13 +119,13 @@ type CLI struct {
 	// shell, cmd, cp, volume, service, config, bundle, reap-orphans) PLUS check
 	// — is no longer a hardcoded field: each arrives via cli.Plugins as a builtin
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
-	// (mcp/secrets/udev/tmux/preempt/feature/vm/doctor AND clean/settings/candy AND migrate are now
+	// (mcp/secrets/udev/tmux/preempt/feature/vm AND clean/settings/candy/doctor AND migrate are now
 	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
-	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor forward
-	// to the hidden __vm / __doctor core commands above — their Run handlers stay core. migrate (M15) AND
-	// clean AND settings AND candy OWN their engine/command in candy/plugin-migrate / candy/plugin-clean /
-	// candy/plugin-settings / candy/plugin-candy (none uses a hidden core command), compiled-in so
-	// command:migrate / command:clean / command:settings / command:candy resolve at init()
+	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm forwards
+	// to the hidden __vm core command above — its Run handlers stay core. migrate (M15) AND
+	// clean AND settings AND candy AND doctor OWN their engine/command in candy/plugin-migrate / candy/plugin-clean /
+	// candy/plugin-settings / candy/plugin-candy / candy/plugin-doctor (none uses a hidden core command), compiled-in so
+	// command:migrate / command:clean / command:settings / command:candy / command:doctor resolve at init()
 	// independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.
