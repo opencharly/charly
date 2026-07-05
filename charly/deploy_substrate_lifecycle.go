@@ -21,14 +21,16 @@ import (
 // not. The generic externalDeployTarget consults it — never branching on the substrate
 // word, only on whether a hook is registered.
 //
-// This is the lifecycle counterpart of the deployPreresolver seam (deploy_preresolve.go):
-// a preresolver ships host-resolved DATA to the plugin (android device endpoint, k8s
-// kustomize tree); a substrateLifecycle owns host-side VENUE lifecycle the plugin cannot.
-// A substrate has at most ONE of each; pod AND vm are now BOTH WIRE-BACKED (M4 —
-// candy/plugin-deploy-pod does the overlay build via HostBuild("overlay") + the container lifecycle
-// via HostBuild("cli"); candy/plugin-deploy-vm forwards its host-coupled venue lifecycle to the
-// hidden `charly __vm-lifecycle` over the same "cli" seam). NO substrate registers a compiled-in
-// lifecycle anymore; local/android/k8s own no venue lifecycle at all.
+// pod AND vm are now BOTH WIRE-BACKED (M4) and IMPLEMENT their lifecycle Ops in the plugin over
+// GENERIC seams: candy/plugin-deploy-pod builds the overlay via HostBuild("overlay") + drives the
+// container lifecycle via HostBuild("cli"); candy/plugin-deploy-vm publishes the ssh-config stanza +
+// guest waits + charly delivery via sdk/kit, boots/consoles the domain via HostBuild("cli"), and
+// deploys nested pods over the reverse channel — consuming ONLY the host-resolved DATA a substrate
+// prepare hook ships (lifecyclePrepareHook: vm ships spec.LifecyclePrepareInput — the same DATA-seam
+// shape as the deployPreresolvers below; pod registers none). NO substrate registers a compiled-in
+// lifecycle anymore, and NO vm lifecycle logic remains in core; local/android/k8s own no venue
+// lifecycle at all. A residual host cleanup a plugin cannot do (vm's ephemeral-lifecycle teardown)
+// stays behind a registered lifecyclePostTeardownHook the proxy consults GENERICALLY.
 type substrateLifecycle interface {
 	// PrepareVenue runs the host-side preflight for an Add/Update and returns the
 	// DeployExecutor the reverse channel serves — for vm the guest *SSHExecutor (after
@@ -50,7 +52,7 @@ type substrateLifecycle interface {
 	ArtifactKey(name string, node *BundleNode) string
 
 	// PostApply runs host orchestration AFTER the plan walk (vm: nested target:pod children
-	// as persistent in-guest quadlets via deployNestedPodsInGuest). Add only — Update is a
+	// as persistent in-guest quadlets via plugin-deploy-vm's PostApply). Add only — Update is a
 	// walk-only idempotent re-apply (matching the prior in-proc VmUnifiedTarget.Update).
 	PostApply(ctx context.Context, name, dir string, node *BundleNode, exec DeployExecutor, opts EmitOpts) error
 

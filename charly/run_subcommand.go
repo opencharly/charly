@@ -28,7 +28,7 @@ import (
 //
 // A package var (not a plain func) so tests can stub the child-process
 // boundary — e.g. deploy_nested_pod_test.go records the image-build /
-// vm-cp-box calls deployNestedPodsInGuest makes without spawning charly.
+// vm-cp-box calls plugin-deploy-vm's PostApply makes without spawning charly.
 var runCharlySubcommand = func(args ...string) error {
 	exe := os.Args[0]
 	cmd := exec.Command(exe, args...)

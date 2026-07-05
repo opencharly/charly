@@ -294,81 +294,30 @@ func (e *SSHExecutor) WaitForSSH(ctx context.Context) error {
 	// under heavy parallel load. ConnectTimeout=2 bounds each connect attempt;
 	// ServerAliveInterval/CountMax bound a connected-then-blackholed session; the
 	// per-attempt context (poll.go PerAttempt) is the final never-hang bound.
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("ssh-ready %s:%d", e.Host, e.Port), PollRemote, 0)
-	if err := pollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
-		args := e.sshBaseArgs()
-		args = append(args, "-o", "BatchMode=yes", "-o", "ConnectTimeout=2",
-			"-o", "ServerAliveInterval=2", "-o", "ServerAliveCountMax=2", "true")
-		cmd := exec.CommandContext(actx, "ssh", args...)
-		cmd.Stdout = nil
-		cmd.Stderr = nil
-		return cmd.Run() == nil, 0, nil
-	}); err != nil {
-		return fmt.Errorf("waiting for sshd on %s:%d: %w", e.Host, e.Port, err)
+	return kit.WaitForSSH(ctx, e.kitSSHArgs(), e.remotePoll("ssh-ready"))
+}
+
+// kitSSHArgs projects this SSHExecutor onto the kit.SSHArgs host-surface coordinates (the WaitFor*
+// helpers moved to sdk/kit so the externalized vm deploy plugin drives them itself; core delegates).
+func (e *SSHExecutor) kitSSHArgs() kit.SSHArgs {
+	return kit.SSHArgs{User: e.User, Host: e.Host, Port: e.Port, Args: e.Args, ConnectTimeout: e.ConnectTimeout}
+}
+
+// remotePoll builds the kit.PollFunc kit's WaitFor* drive: it wraps the host's readiness-configured
+// pollUntil at the remote cap (kit is stdlib-only and cannot own the readiness/poll subsystem, so the
+// poll policy is injected). kit supplies the ssh probe as the PollCond; core owns the bounds.
+func (e *SSHExecutor) remotePoll(label string) kit.PollFunc {
+	return func(ctx context.Context, cond kit.PollCond) error {
+		cfg := loadedReadiness().WaitCapped(fmt.Sprintf("%s %s:%d", label, e.Host, e.Port), PollRemote, 0)
+		return pollUntil(ctx, cfg, PollCondition(cond))
 	}
-	return nil
 }
 
 // WaitForCloudInit polls `sudo cloud-init status` on the guest until cloud-init
 // settles (status done/error/disabled). Only meaningful for cloud-image VMs;
 // callers should skip this for bootc sources with no cidata ISO attached.
 func (e *SSHExecutor) WaitForCloudInit(ctx context.Context) error {
-	// On first boot cloud-init regenerates the SSH host keys and restarts
-	// sshd AFTER the initial sshd start (i.e. after WaitForSSH already
-	// passed). That restart drops in-flight connections and resets the next
-	// one mid-key-exchange ("kex_exchange_identification: Connection reset by
-	// peer"), which otherwise fails the scp in EnsureCharlyInGuest. Retry until an
-	// ssh connection SURVIVES a `cloud-init status` poll — that is the
-	// deterministic signal that cloud-init has settled and sshd is stable
-	// (not a sleep-and-pray). `|| true` tolerates a non-zero cloud-init result
-	// (error/degraded): we wait for cloud-init to be DONE, not necessarily OK,
-	// and a non-zero status delivered over a live connection still proves sshd
-	// is stable.
-	//
-	// POLLED status, run as ROOT via sudo (charly-managed guests have passwordless
-	// sudo): each tick runs the quick `sudo cloud-init status` and is ready when the
-	// ssh connection SURVIVES (sshd stable after first-boot key regen) AND cloud-init
-	// is no longer "running". Cap-only at the GENEROUS config cap (poll.go), replacing
-	// the fixed 5m that was too short for a heavy first boot under parallel load. A
-	// non-cloud-init guest reports "done" immediately. (Was a blocking `cloud-init
-	// status --wait`, which could not honor a per-attempt bound; then a non-wait
-	// NON-ROOT `cloud-init status`, which — on cloud-init 25.2 / Fedora 43 — crashes
-	// with PermissionError reading the root-only /run/cloud-init/cloud.cfg, emitting
-	// blank stdout that the poll mistook for "keep polling" → a 30-min silent hang of
-	// every VM check-live. sudo restores a real terminal status token.)
-	script := `if command -v cloud-init >/dev/null 2>&1; then sudo cloud-init status 2>/dev/null || true; else echo "status: done"; fi`
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("cloud-init %s:%d", e.Host, e.Port), PollRemote, 0)
-	if err := pollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
-		var buf bytes.Buffer
-		args := e.sshBaseArgs()
-		args = append(args, "-o", "ServerAliveInterval=2", "-o", "ServerAliveCountMax=2", "bash", "-s")
-		cmd := exec.CommandContext(actx, "ssh", args...)
-		cmd.Stdin = strings.NewReader(script)
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		if cmd.Run() != nil {
-			return false, 0, nil // ssh dropped (key regen in progress) — keep polling
-		}
-		out := buf.String()
-		if strings.Contains(out, "status: running") {
-			return false, 0, nil // cloud-init still working
-		}
-		// Ready ONLY on an EXPLICIT terminal status. A blank / "not started" /
-		// transient read (e.g. `cloud-init status` momentarily errors under load)
-		// also lacks "running", so the former bare `return true` cleared the gate
-		// WHILE cloud-final.service was still installing the seed packages — holding
-		// the distro package lock — and the deploy's first `pacman -Sy` then raced
-		// it ("unable to lock database"). Gate on a real terminal state so the wait
-		// spans the whole package phase.
-		if strings.Contains(out, "status: done") || strings.Contains(out, "status: error") ||
-			strings.Contains(out, "status: disabled") {
-			return true, 0, nil // cloud-init settled (sshd stable, package phase complete)
-		}
-		return false, 0, nil // blank / not-started / transient — keep polling
-	}); err != nil {
-		return fmt.Errorf("cloud-init wait on %s:%d: %w", e.Host, e.Port, err)
-	}
-	return nil
+	return kit.WaitForCloudInit(ctx, e.kitSSHArgs(), e.remotePoll("cloud-init"))
 }
 
 // WaitForPackageLock makes the guest package manager READY for a deploy plan's own
@@ -383,37 +332,7 @@ func (e *SSHExecutor) WaitForCloudInit(ctx context.Context) error {
 // command so it never races a live transaction. Process-based (not lock-file-based)
 // for the WAIT so a stale lock can't hang the gate forever.
 func (e *SSHExecutor) WaitForPackageLock(ctx context.Context) error {
-	noProc := `! pgrep -x pacman >/dev/null 2>&1 && ! pgrep -x pacman-key >/dev/null 2>&1 && ` +
-		`! pgrep -x apt >/dev/null 2>&1 && ! pgrep -x apt-get >/dev/null 2>&1 && ` +
-		`! pgrep -x dpkg >/dev/null 2>&1 && ! pgrep -x dnf >/dev/null 2>&1`
-	cfg := loadedReadiness().WaitCapped(fmt.Sprintf("pkg-lock %s:%d", e.Host, e.Port), PollRemote, 0)
-	if err := pollUntil(ctx, cfg, func(actx context.Context) (bool, float64, error) {
-		var buf bytes.Buffer
-		args := e.sshBaseArgs()
-		args = append(args, "bash", "-s")
-		cmd := exec.CommandContext(actx, "ssh", args...)
-		cmd.Stdin = strings.NewReader(`if ` + noProc + `; then echo FREE; else echo BUSY; fi`)
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		if cmd.Run() != nil {
-			return false, 0, nil // ssh hiccup — keep polling
-		}
-		return strings.Contains(buf.String(), "FREE"), 0, nil
-	}); err != nil {
-		return fmt.Errorf("package-lock wait on %s:%d: %w", e.Host, e.Port, err)
-	}
-	// No package process is running now — clear any STALE lock file the reaped
-	// boot-time install left behind (re-checking no-process inside the command keeps
-	// the removal safe). Best-effort: the deploy's own pacman/apt/dnf surfaces any
-	// genuine package failure.
-	clear := `if ` + noProc + `; then sudo -n rm -f /var/lib/pacman/db.lck ` +
-		`/var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null; fi; true`
-	cargs := e.sshBaseArgs()
-	cargs = append(cargs, "bash", "-s")
-	ccmd := exec.CommandContext(ctx, "ssh", cargs...)
-	ccmd.Stdin = strings.NewReader(clear)
-	_ = ccmd.Run() // best-effort stale-lock clear
-	return nil
+	return kit.WaitForPackageLock(ctx, e.kitSSHArgs(), e.remotePoll("pkg-lock"))
 }
 
 // sshBaseArgs builds the common ssh invocation prefix. ssh(1) reads

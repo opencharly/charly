@@ -81,6 +81,7 @@ type (
 	PreemptibleConfig        = vmshared.PreemptibleConfig
 	ReadinessConfig          = vmshared.ReadinessConfig
 	ResolvedReadiness        = vmshared.ResolvedReadiness
+	PollCondition            = vmshared.PollCondition
 	ResourceDef              = vmshared.ResourceDef
 	SecretYAML               = vmshared.SecretYAML
 	SecurityConfig           = vmshared.SecurityConfig

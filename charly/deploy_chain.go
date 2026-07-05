@@ -112,7 +112,7 @@ func appendHopForNode(chain DeployExecutor, node *BundleNode, name string) (Depl
 // hop INTO a VM guest over SSH — either a plain SSHExecutor (the VM is the
 // chain root) or a NestedExecutor whose last jump is JumpSSH (a VM nested in a
 // parent). A pod hop stacked on such a chain lands inside the guest, where the
-// pod was deployed standalone as "charly-<childKey>" (deployNestedPodsInGuest), not
+// pod was deployed standalone as "charly-<childKey>" (plugin-deploy-vm's PostApply), not
 // under the host-side flatPath name.
 func chainEntersVMGuest(chain DeployExecutor) bool {
 	switch c := chain.(type) {
@@ -144,7 +144,7 @@ func appendHopForFlatPath(chain DeployExecutor, node *BundleNode, flatPath, leaf
 		// emission, which deploys a HOST-side nested pod as "charly-<seg1>_<seg2>".
 		// EXCEPTION — a pod nested inside a VM guest: it is deployed by the
 		// guest's OWN `charly bundle from-box <ref> <childKey>`
-		// (deployNestedPodsInGuest), so the in-guest container is "charly-<childKey>"
+		// (plugin-deploy-vm's PostApply), so the in-guest container is "charly-<childKey>"
 		// (the leaf). The guest never sees the host-side bed/VM-entity prefix, so
 		// once the chain has crossed into a VM guest the podman-exec hop must
 		// target the leaf name — otherwise it exec's a container that doesn't

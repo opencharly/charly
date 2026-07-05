@@ -128,7 +128,6 @@ type CLI struct {
 	SettingsInternal SettingsCmd `cmd:"" name:"__settings" hidden:"" help:"internal: runtime config get/set/list (the externalized charly settings plugin forwards here)"`
 	CandyInternal    CandyCmd    `cmd:"" name:"__candy" hidden:"" help:"internal: candy.yml authoring (the externalized charly candy plugin forwards here)"`
 	DropOverlayInternal DropOverlayCmd `cmd:"" name:"__drop-overlay" hidden:"" help:"internal: drop a pod deploy's <name>-overlay images (the externalized plugin-deploy-pod PostTeardown forwards here)"`
-	VmLifecycleInternal VmLifecycleCmd `cmd:"" name:"__vm-lifecycle" hidden:"" help:"internal: the host-coupled vm venue lifecycle op (the externalized plugin-deploy-vm forwards here over the cli seam)"`
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
 	// ssh, start, stop, status, restart, update, remove, logs,

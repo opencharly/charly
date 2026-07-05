@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/opencharly/sdk/kit"
@@ -33,33 +32,6 @@ func CharlyVersion() string {
 		return BuildCalVer
 	}
 	return "unknown"
-}
-
-// hostCharlyIsNewer reports whether the host charly (identified by hostVer, normally
-// CharlyVersion()) is STRICTLY newer than a venue's charly, where venueVerOut is the raw
-// stdout of `charly version` run inside that venue (pod/VM). It is the single
-// CalVer-comparison arbiter shared by EnsureCharlyInGuest (boot-time install) and
-// the host→nested delegation path (R3), so both agree on "is the venue's charly
-// stale?".
-//
-// Semantics:
-//   - venue version unparseable / absent (empty, "unknown", junk) → host wins
-//     (true): a venue charly that can't state a CalVer is treated as older.
-//   - both parse → strict CalVer compare. host newer → true; venue equal-or-newer
-//     → false. Equal-or-newer is deliberately NOT overwritten: never downgrade a
-//     venue charly that is ahead of (or matches) the host.
-//   - host version unparseable → false: we cannot prove the host is newer, so we
-//     do NOT clobber a venue charly on an unprovable claim.
-func hostCharlyIsNewer(hostVer, venueVerOut string) bool {
-	host, hostOK := ParseCalVer(strings.TrimSpace(hostVer))
-	if !hostOK {
-		return false
-	}
-	venue, venueOK := ParseCalVer(strings.TrimSpace(venueVerOut))
-	if !venueOK {
-		return true
-	}
-	return venue.Less(host)
 }
 
 // ComputeCalVer computes a CalVer version in the format YYYY.DDD.HHMM

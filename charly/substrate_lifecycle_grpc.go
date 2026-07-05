@@ -48,7 +48,7 @@ func venueFromDescriptor(d spec.VenueDescriptor) (DeployExecutor, error) {
 // (os.Args[0], the CHARLY process's own path — NOT the plugin's) + the host home.
 func hostEnvJSON() json.RawMessage {
 	home, _ := os.UserHomeDir()
-	env, _ := marshalJSON(spec.HostEnv{CharlyBin: os.Args[0], Home: home})
+	env, _ := marshalJSON(spec.HostEnv{CharlyBin: os.Args[0], Home: home, Version: CharlyVersion()})
 	return env
 }
 
@@ -111,6 +111,16 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 	if node != nil {
 		extra["image"] = node.Image
 		extra["version"] = node.Version
+	}
+	// Consult the substrate's host-side prepare hook GENERICALLY (never a "vm" branch): vm ships the
+	// resolved spec.LifecyclePrepareInput (entity + ssh coords + prior state) under "prepare"; pod
+	// registers no hook. The plugin does the actual venue lifecycle — this is only the DATA it needs.
+	if hook, ok := lifecyclePrepareHookFor(l.prov.word); ok {
+		prep, herr := hook(name, dir, node)
+		if herr != nil {
+			return nil, fmt.Errorf("substrate %q prepare-venue: resolve prepare data: %w", l.prov.word, herr)
+		}
+		extra["prepare"] = prep
 	}
 	res, err := l.lifecycleInvoke(ctx, sdk.OpPrepareVenue, name, dir, node, extra, ShellExecutor{})
 	if err != nil {
@@ -176,6 +186,13 @@ func (l grpcSubstrateLifecycle) TeardownExecutor(name string, node *BundleNode) 
 }
 
 func (l grpcSubstrateLifecycle) PostTeardown(name string, node *BundleNode, keepImage bool) error {
+	// Host-side substrate cleanup the plugin cannot do (vm: ephemeral-lifecycle teardown — systemd
+	// timers + libvirt snapshot refcounts). Consulted GENERICALLY by word (pod registers none).
+	if hook, ok := lifecyclePostTeardownHookFor(l.prov.word); ok {
+		if herr := hook(name, node); herr != nil {
+			fmt.Fprintf(os.Stderr, "warning: substrate %q post-teardown host hook: %v\n", l.prov.word, herr)
+		}
+	}
 	res, err := l.lifecycleInvoke(context.Background(), sdk.OpPostTeardown, name, "", node, map[string]any{"keep_image": keepImage}, ShellExecutor{})
 	if err != nil {
 		return err

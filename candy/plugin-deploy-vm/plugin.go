@@ -68,8 +68,10 @@ var _ kit.DeployExecutor = (*sdk.Executor)(nil)
 // Invoke applies the deployment INSIDE THE GUEST via the reverse channel + kit.WalkPlans,
 // then returns the combined teardown ops + ledger record.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	// M4b: the vm substrate venue lifecycle Ops (prepare-venue/post-apply/…/start/stop/…) — the
-	// host-coupled logic kept core — are forwarded to `charly __vm-lifecycle` over the cli seam.
+	// The vm substrate venue lifecycle Ops (prepare-venue/post-apply/start/stop/status/logs/shell/
+	// rebuild/teardown) are IMPLEMENTED here (lifecycle.go) over GENERIC seams — sdk/kit for the
+	// ssh-config stanza + guest waits + charly delivery, HostBuild("cli") for `charly vm …`, the
+	// reverse channel for guest ops — consuming only the host-resolved spec.LifecyclePrepareInput.
 	if isLifecycleOp(req.GetOp()) {
 		return invokeLifecycle(ctx, req)
 	}

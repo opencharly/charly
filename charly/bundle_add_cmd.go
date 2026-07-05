@@ -191,7 +191,7 @@ func (c *BundleAddCmd) Run() error {
 	// A VM root is ALSO dispatched node-only: its nested target:pod children
 	// deploy IN the guest (the host can't tree-walk a pod-in-VM), so the VM
 	// target's Add deploys them itself after the VM is up
-	// (deployNestedPodsInGuest). A host tree walk would wrongly try to deploy
+	// (plugin-deploy-vm's PostApply). A host tree walk would wrongly try to deploy
 	// them locally / double-deploy.
 	if c.NodeOnly || (rootNode != nil && (rootNode.Target == "vm" || strings.HasPrefix(resolvedPath, "vm:"))) {
 		return c.dispatchNode(resolvedPath, rootNode, parentExec, dir)

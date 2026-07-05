@@ -11,7 +11,7 @@ import (
 // VmCpBoxCmd loads a locally-built container image into a running VM guest's
 // podman storage via `podman save | scp | podman load`. This is the host→guest
 // delivery path for images that are NOT on a registry — the case the
-// nested-pod-in-VM capability hits: deployNestedPodsInGuest host-builds a nested
+// nested-pod-in-VM capability hits: plugin-deploy-vm's PostApply host-builds a nested
 // pod's image (e.g. `cachyos.selkies-kde-nvidia`), cp-boxes it in as
 // `localhost/charly-<child>:latest`, then the guest's own `charly bundle from-box`
 // brings it up as a persistent quadlet — all offline, no registry.
@@ -54,7 +54,7 @@ func hostImageExists(engine, ref string) bool {
 //   - rootless == false → ROOT storage (`sudo podman`). For a `sudo podman run
 //     --device nvidia.com/gpu=all` consumer that needs /dev/nvidia* via root.
 //   - rootless == true  → the SSH user's ROOTLESS storage (`podman`, no sudo).
-//     This is what the nested-pod-in-VM deploy needs: deployNestedPodsInGuest
+//     This is what the nested-pod-in-VM deploy needs: plugin-deploy-vm's PostApply
 //     brings the pod up with the guest user's own `charly bundle from-box` (a
 //     --user quadlet), which reads the USER's podman storage — so the image must
 //     land there, not in root's. Rootless GPU works via CDI (/dev/nvidia* are

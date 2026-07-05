@@ -476,7 +476,7 @@ func (c *CheckLiveCmd) runVm() error {
 
 	// Nested-in-VM POD leaf: delegate the pod's check to the guest `charly`. FROM
 	// THE GUEST the nested pod is a DIRECT pod — guest-local podman, ports on
-	// guest localhost, the guest `charly` binary (installed by EnsureCharlyInGuest
+	// guest localhost, the guest `charly` binary (installed by kit.EnsureCharlyInGuest
 	// at deploy time) — so the already-working direct-pod path runs the protocol
 	// verbs (cdp/wl/dbus/vnc/mcp) AND resolves ${HOST_PORT} addr/http natively.
 	// Those are exactly the checks the HOST chain cannot reach across the VM

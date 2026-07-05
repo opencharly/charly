@@ -27,36 +27,6 @@ func TestCharlyVersion(t *testing.T) {
 	}
 }
 
-func TestHostCharlyIsNewer(t *testing.T) {
-	// hostCharlyIsNewer is the CalVer arbiter EnsureCharlyInVenue uses to decide whether
-	// the EnsureCharlyInGuest auto/scp strategy adopts the guest's system charly or scp's
-	// a host copy. Strictly newer → true; equal-or-newer venue → false (never
-	// downgrade); unparseable venue → true; unparseable host → false.
-	tests := []struct {
-		name     string
-		host     string
-		venue    string
-		expected bool
-	}{
-		{"host strictly newer", "2026.154.1027", "2026.154.0943", true},
-		{"venue strictly newer (pod ahead of host — DO NOT downgrade)", "2026.154.0943", "2026.155.0010", false},
-		{"equal — not newer (no downgrade, no needless push)", "2026.154.0943", "2026.154.0943", false},
-		{"venue absent → host wins", "2026.154.0943", "", true},
-		{"venue 'unknown' (unstamped) → host wins", "2026.154.0943", "unknown", true},
-		{"venue junk → host wins", "2026.154.0943", "not-a-calver", true},
-		{"host unparseable → cannot prove newer → false", "unknown", "2026.154.0943", false},
-		{"host newer across day boundary", "2026.155.0001", "2026.154.2359", true},
-		{"venue whitespace padded, equal → false", "2026.154.0943", "  2026.154.0943\n", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := hostCharlyIsNewer(tt.host, tt.venue); got != tt.expected {
-				t.Errorf("hostCharlyIsNewer(%q, %q) = %v, want %v", tt.host, tt.venue, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestComputeCalVerAt(t *testing.T) {
 	tests := []struct {
 		name     string

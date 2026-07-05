@@ -584,7 +584,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		// Deploy the VM node's own candies AND its nested target:pod children.
 		// The VM target's Add applies the candies over SSH (incl. any kernel-driver
 		// reboot), then deploys each nested pod as a PERSISTENT in-guest quadlet via
-		// deployNestedPodsInGuest (build + cp-box into the guest + the guest's
+		// plugin-deploy-vm's PostApply (build + cp-box into the guest + the guest's
 		// own project-free `charly bundle from-box`). The dispatch routes a VM root
 		// node-only (its pod children deploy in-guest, never via a host tree
 		// walk), so no --node-only flag is needed and no separate image-transfer
@@ -592,7 +592,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		if err := step("deploy-add", []string{"bundle", "add", name, vmTemplate}); err != nil {
 			return fail("bundle add %s: %w", name, err)
 		}
-		// deployNestedPodsInGuest (inside the VM deploy-add above) brings up
+		// plugin-deploy-vm's PostApply (inside the VM deploy-add above) brings up
 		// nested target:pod children as in-guest quadlets, but it SKIPS
 		// target:local children (they carry no image — they apply candies in
 		// place). Deploy each nested local child via the dotted-path dispatch,
@@ -602,7 +602,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		for _, childKey := range sortedNestedKeys(node.Children) {
 			child := node.Children[childKey]
 			if child == nil || (child.Target != "local" && child.Target != "host") {
-				continue // pod children handled in-guest by deployNestedPodsInGuest
+				continue // pod children handled in-guest by plugin-deploy-vm's PostApply
 			}
 			if err := step("deploy-"+childKey, []string{"bundle", "add", name + "." + childKey}); err != nil {
 				return fail("deploy nested local child %s.%s: %w", name, childKey, err)

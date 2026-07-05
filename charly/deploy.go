@@ -1403,6 +1403,14 @@ type SaveDeployStateInput struct {
 	// never clobber a persisted overlay ref.
 	ResolvedImage string
 
+	// VmState + VmCrossRef — the vm substrate's persisted runtime state (instance-id, ssh_port, disk
+	// path) + the kind:vm cross-ref, shipped by the externalized vm plugin's PrepareVenue reply as
+	// the generic State patch (the host owns charly.yml, the plugin cannot). VmState is written
+	// whenever non-nil (the latest prepare wins); VmCrossRef seeds entry.From only when unset (never
+	// clobber an operator-authored cross-ref). saveVmDeployState is a thin wrapper over this path (R3).
+	VmState    *VmDeployState
+	VmCrossRef string
+
 	// Resource-arbitration axis (the fourth classification, see
 	// classification.go + charly/preempt.go): the holder-side Preemptible
 	// block and the claimant-side RequiresExclusive / RequiresShared token
@@ -1457,6 +1465,14 @@ func saveDeployState(boxName, instance string, input SaveDeployStateInput) {
 	// sets it (non-empty); charly config/start pass "" and never clobber it.
 	if input.ResolvedImage != "" {
 		entry.ResolvedImage = input.ResolvedImage
+	}
+	// Vm runtime state (from the externalized vm plugin's PrepareVenue State patch): write whenever
+	// non-nil; seed the kind:vm cross-ref only when entry.From is unset (non-clobber).
+	if input.VmState != nil {
+		entry.VmState = input.VmState
+	}
+	if input.VmCrossRef != "" && entry.From == "" {
+		entry.From = input.VmCrossRef
 	}
 	if input.Volume != nil {
 		entry.Volume = input.Volume
