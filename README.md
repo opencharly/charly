@@ -17,10 +17,6 @@ Arch, and CachyOS. One CLI: `charly` (29 top-level verbs). Every candy,
 box, VM, and command has a dedicated recipe card (skill) — ~290 skills
 across 25 plugins. See `plugins/README.md` for the full index.
 
-*The name comes from the German "überdenken" — to think something
-through carefully. Not quite the same as the English "opencharly,"
-but let's be honest: `charly` really is trying its best to opencharly
-absolutely everything.*
 
 > **New here?** [VISION.md](VISION.md) is the one-page thesis — why OpenCharly
 > secures the box and fills it with the whole candy store, and where the
