@@ -2,38 +2,38 @@ plugin-settings:
     candy:
         version: 2026.181.0001
         description: |-
-            OUT-OF-TREE charly COMMAND-class plugin serving the externalized `charly settings`
-            CLI — the runtime-configuration get/set/list/path/reset surface, a standalone Go module
-            (go.mod + main.go) ported OUT of charly's core CLI registration, so the operator-facing
-            `charly settings` command tree no longer compiles into the core binary as a top-level
-            command.
+            COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly settings`
+            CLI — the runtime-configuration surface. The plugin owns the command end to end: the
+            get/set/list/reset/path subcommand grammar (command.go runSettingsCLI) and the output
+            formatting. No plugin-specific command LOGIC is left in core.
 
-            One of cutover C15's four remaining WELDED-command externalizations (charly
-            clean/settings/candy/version), after candy/plugin-tmux, plugin-preempt, plugin-feature,
-            plugin-vm, and plugin-doctor. `charly settings` is WELDED to core — its SettingsCmd
-            subtree (get/set/list/path/reset, charly/main.go) reads and writes the runtime config
-            file ~/.config/charly/config.yml (GetConfigValue / SetConfigValue / ListConfigValues /
-            ResetConfigValue / RuntimeConfigPath) and resolves the credential-store backend + the
-            runtime engine — config machinery this out-of-process plugin cannot reach — so
-            SettingsCmd MUST STAY CORE (R3). The SOLUTION (the vm precedent — re-home the whole
-            subtree onto a hidden core command and raw-forward to it): core re-homes SettingsCmd onto
-            the hidden `charly __settings` command, and this plugin is a THIN FORWARDER that
-            syscall.Exec's `charly __settings <args…>`. `settings` is a command TREE, so the plugin
-            raw-forwards every subcommand token through kong passthrough — ONE forwarder covers the
-            whole tree. No core symbol crosses the boundary.
+            The ONE thing the plugin cannot do itself is the config subsystem — read/write the
+            runtime config file ~/.config/charly/config.yml (GetConfigValue / SetConfigValue /
+            ListConfigValues / ResetConfigValue / RuntimeConfigPath), the credential-store backend,
+            and the runtime-engine resolution (ResolveRuntime, DefaultCredentialStore). That
+            subsystem STAYS core (charly/runtime_config.go) and is reached via the generic "settings"
+            HostBuild seam (charly/host_build_settings.go, spec.SettingsRequest{Op,Key,Value} →
+            spec.SettingsReply{Value,Entries,Error}; Op ∈ get/set/list/reset/path, with the get
+            special-cases — engine.* resolved via ResolveRuntime, secret_backend via the resolved
+            credential store — in resolveSettingsGet). "settings" is a class-generic action noun, not
+            a provider word (F11). This is the same "plugin owns the command + a generic seam for the
+            core-coupled bits" doctrine command:clean and the vm + pod deploy plugins established.
 
-            charly's loader fetches this candy's repo, go-builds the provider binary on the HOST,
-            and on `charly settings <args…>` syscall.Exec's it in CLI mode (sdk.Main → cliMain) — or
-            runs the host-installed /usr/lib/charly/plugins binary on a project-less host (the
-            pkg/arch bake). The plugin owns real terminal stdio, so the settings output reaches the
-            operator's terminal natively.
+            settings is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
+            Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
+            ("Seam A") — to call HostBuild("settings"). The out-of-process CliMain path has no
+            reverse channel, so it errors: settings cannot run out-of-process, it needs the settings
+            host seam. There is NO hidden core-command forward — the plugin does the work directly,
+            calling back only for the config ops it can't perform; no core symbol crosses the
+            boundary, no ad-hoc podman.
 
-            command:settings is dispatched via the CLI syscall.Exec path, NOT the gRPC provider
-            registry — so it is declared in plugin.providers (for the CLI-grammar prescan + baked
-            `.providers` manifest) but advertises NO Describe capability. The R10 witness is the
-            disposable check-commands-local bed: `charly settings list` exits 0 and prints the
-            resolved runtime-config keys host-side, proving the externalized command tree + the
-            hidden-command raw-forward dispatch end-to-end.
+            command:settings dispatches through the COMPILED-IN registry path (registerCompiledPlugin
+            → resolve(ClassCommand,"settings") → dispatchInProcCommand → Invoke(OpRun) with the
+            threaded in-proc reverse channel), so NewMeta advertises command:settings while the
+            served CUE schema carries no plugin_input (the args are plain CLI tokens). The R10 witness
+            is the disposable check-commands-local bed: `charly settings list` exits 0 and lists the
+            resolved runtime-config keys, proving the externalized command + the in-proc
+            HostBuild("settings") dispatch end-to-end.
     plugin-settings-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-settings
@@ -41,11 +41,12 @@ plugin-settings:
                 - command:settings
     # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
     # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
-    # build + fork/exec the module. The full CLI end-to-end (`charly settings list` → exit 0 with
-    # the resolved config keys) is exercised by the live R10 bed (check-commands-local).
+    # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+    # deterministic check every candy ships. The full `charly settings` end-to-end — the compiled-in
+    # in-proc HostBuild("settings") dispatch: `charly settings list` → exit 0 with the resolved
+    # runtime-config keys — is exercised by the live R10 bed (check-commands-local).
     settings-module-present:
-        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly settings` end-to-end is exercised by the live R10 (check-commands-local)
+        check: the settings command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly settings` end-to-end (the in-proc HostBuild settings dispatch) is exercised by the live R10 (check-commands-local)
         id: settings-module-present
         context:
             - build

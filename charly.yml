@@ -2036,10 +2036,12 @@ check-doctor-local:
 #                                any candy manifest — the tree has no non-mutating read verb);
 #   - `charly clean --dry-run`→ exit 0 + stdout carries the "would remove" retention report (dry-run
 #                                touches nothing).
-# For each the host charly resolves the command word via the discovered candy/plugin-* prescan (or
-# the /usr/lib/charly/plugins bake) and syscall.Exec's the plugin binary, which raw-forwards to the
-# hidden in-core `charly __<word>` command whose Run handler stays core — proving the externalized
-# command + the hidden-command raw-forward dispatch (leaf AND tree) end-to-end.
+# clean + settings are COMPILED-IN and OWN their commands: each Invoke(OpRun) is dispatched in-proc
+# (dispatchInProcCommand's threaded reverse channel) and reaches its shared core engine over a generic
+# HostBuild seam (clean → "retention", settings → "settings") — no forward. candy still resolves via the
+# discovered candy/plugin-* prescan (or the /usr/lib/charly/plugins bake) and syscall.Exec's the plugin
+# binary, which raw-forwards to the hidden in-core `charly __candy` command whose Run handler stays core
+# (pending its own externalization) — proving the externalized commands (compiled-in + forwarded) end-to-end.
 # NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
 # refuted the chicken-and-egg claim (pkgver()'s `bin/charly version` is a convenience; the CalVer is already
 # Taskfile-computed via pkg/arch/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
@@ -2069,16 +2071,16 @@ check-commands-local:
             plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the
             sixth-through-eighth welded-command externalizations in the core-externalization program.
             A disposable kind:local deploy on host: local runs each command host-side with a safe
-            read-only / dry-run / --help invocation. clean is COMPILED-IN and OWNS its command
-            (Invoke(OpRun) reaches the shared retention engine over the HostBuild("retention") seam —
-            no forward); settings/candy still resolve via the discovered plugin prescan and
-            syscall.Exec the plugin binary, which raw-forwards to the hidden in-core
-            `charly __settings`/`__candy` command whose Run handler stays core (pending their own
-            externalizations). Every command exits 0 — proving the externalized commands end-to-end.
+            read-only / dry-run / --help invocation. clean + settings are COMPILED-IN and OWN their
+            commands (each Invoke(OpRun) reaches its shared core engine over a generic HostBuild seam —
+            clean → "retention", settings → "settings"; no forward); candy still resolves via the
+            discovered plugin prescan and syscall.Exec the plugin binary, which raw-forwards to the
+            hidden in-core `charly __candy` command whose Run handler stays core (pending its own
+            externalization). Every command exits 0 — proving the externalized commands end-to-end.
             (`charly version` is excluded — it stays a core command; pkgver() stamps the package
             version via it.)
     settings-list-runs:
-        check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized command TREE raw-forwards to the in-core __settings handler)
+        check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized settings command owns the get/set/list/reset/path grammar + reaches the core config subsystem over the "settings" HostBuild seam)
         id: settings-list-runs
         exit_status: 0
         stdout:

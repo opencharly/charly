@@ -72,6 +72,7 @@ compiled_plugins:
     - plugin-tunnel
     - plugin-migrate
     - plugin-clean
+    - plugin-settings
 
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by

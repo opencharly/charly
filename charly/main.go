@@ -105,19 +105,17 @@ type CLI struct {
 	// the leaf onto one hidden command (doctor is a flags-only leaf, so the plugin raw-forwards).
 	DoctorInternal DoctorCmd `cmd:"" name:"__doctor" hidden:"" help:"internal: host dependency status (the externalized charly doctor command plugin forwards here)"`
 
-	// __settings / __candy re-home two of cutover C15's remaining WELDED machinery commands —
-	// SettingsCmd + its get/set/list/path/reset subtree (main.go), and CandyCmd + its
-	// set/add-{rpm,deb,pac,aur} subtree (scaffold_cmds.go) — onto hidden core commands, exposing
-	// each to its externalized `charly <word>` COMMAND plugin (candy/plugin-{settings,candy}). Their
-	// Run handlers STAY core — they read/write ~/.config/charly/config.yml + the credential store
-	// (settings); mutate candy/<name>/charly.yml via the yaml.v3 Node API + the traversal guard
-	// (candy) — none of which an out-of-process plugin can reach (R3) — so each plugin is a THIN
-	// forwarder that syscall.Exec's `charly __<word> <args…>` (the SAME __vm / __doctor
-	// internal-command pattern; the settings/candy subtrees raw-forward every subcommand token
-	// through kong passthrough, so ONE forwarder covers a leaf AND a tree). clean, by contrast, is
-	// now COMPILED-IN and OWNS its command (candy/plugin-clean, command:clean): its Invoke(OpRun)
-	// reaches the shared retention engine (charly/retention.go, multi-caller) over the generic
-	// HostBuild("retention") seam — no hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
+	// __candy re-homes the ONE remaining cutover C15 WELDED machinery command — CandyCmd + its
+	// set/add-{rpm,deb,pac,aur} subtree (scaffold_cmds.go) — onto a hidden core command, exposing it
+	// to its externalized `charly candy` COMMAND plugin (candy/plugin-candy). Its Run handler STAYS
+	// core — it mutates candy/<name>/charly.yml via the yaml.v3 Node API + the traversal guard, which
+	// an out-of-process plugin cannot reach (R3) — so the plugin is a THIN forwarder that syscall.Exec's
+	// `charly __candy <args…>` (the SAME __vm / __doctor internal-command pattern; the candy subtree
+	// raw-forwards every subcommand token through kong passthrough, so ONE forwarder covers the tree).
+	// clean + settings, by contrast, are now COMPILED-IN and OWN their commands (candy/plugin-clean +
+	// candy/plugin-settings): each Invoke(OpRun) reaches its shared core engine over a generic HostBuild
+	// seam (clean → "retention" over charly/retention.go; settings → "settings" over the config
+	// subsystem) — no hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
 	// kept core (the Version field below) — NOT an "unfixable" one. RDD (2026-07-01) refuted the old
 	// chicken-and-egg claim: pkgver()'s `bin/charly version` is only a convenience (the CalVer is
 	// already Taskfile-computed via pkg/arch/calver.sh, and reading it from a sidecar / recomputing at
@@ -125,7 +123,6 @@ type CLI struct {
 	// excluded because it sheds ZERO deps, removes ~5 core lines, and would make R9's canonical identity
 	// command depend on the plugin-resolution subsystem across 3 package repos — worst-value, highest-
 	// blast-radius of any externalization. Operator-decided to keep core.
-	SettingsInternal SettingsCmd `cmd:"" name:"__settings" hidden:"" help:"internal: runtime config get/set/list (the externalized charly settings plugin forwards here)"`
 	CandyInternal    CandyCmd    `cmd:"" name:"__candy" hidden:"" help:"internal: candy.yml authoring (the externalized charly candy plugin forwards here)"`
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
@@ -135,11 +132,11 @@ type CLI struct {
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
 	// (mcp/secrets/udev/tmux/preempt/feature/vm/doctor AND clean/settings/candy AND migrate are now
 	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
-	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor/
-	// settings/candy forward to the hidden __vm / __doctor / __settings / __candy core commands
-	// above — their Run handlers stay core. migrate (M15) AND clean OWN their engine/command in
-	// candy/plugin-migrate / candy/plugin-clean (neither uses a hidden core command), compiled-in so
-	// command:migrate / command:clean resolve at init()
+	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm/doctor/candy
+	// forward to the hidden __vm / __doctor / __candy core commands above — their Run handlers stay
+	// core. migrate (M15) AND clean AND settings OWN their engine/command in candy/plugin-migrate /
+	// candy/plugin-clean / candy/plugin-settings (none uses a hidden core command), compiled-in so
+	// command:migrate / command:clean / command:settings resolve at init()
 	// independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.
@@ -699,136 +696,6 @@ func (c *NewCandyCmd) Run() error {
 		return err
 	}
 	return ScaffoldCandy(dir, c.Name)
-}
-
-// SettingsCmd groups settings subcommands (renamed from ConfigCmd to free `charly config` for image configuration).
-type SettingsCmd struct {
-	Get   SettingsGetCmd   `cmd:"" help:"Print resolved value for a config key"`
-	List  SettingsListCmd  `cmd:"" help:"Show all settings with source"`
-	Path  SettingsPathCmd  `cmd:"" help:"Print config file path"`
-	Reset SettingsResetCmd `cmd:"" help:"Remove a key from config (revert to default)"`
-	Set   SettingsSetCmd   `cmd:"" help:"Set a config value"`
-}
-
-// SettingsGetCmd prints the resolved value for a key
-type SettingsGetCmd struct {
-	Key string `arg:"" help:"Config key"`
-}
-
-func (c *SettingsGetCmd) Run() error {
-	// vnc.password.* keys use their own resolution path
-	if strings.HasPrefix(c.Key, "vnc.password.") {
-		val, err := GetConfigValue(c.Key)
-		if err != nil {
-			return err
-		}
-		fmt.Println(val)
-		return nil
-	}
-
-	// For engine keys, try to resolve the actual engine (shows "podman" instead of "auto")
-	switch c.Key {
-	case "engine.build", "engine.run", "engine.rootful":
-		rt, err := ResolveRuntime()
-		if err == nil {
-			switch c.Key {
-			case "engine.build":
-				fmt.Println(rt.BuildEngine)
-			case "engine.run":
-				fmt.Println(rt.RunEngine)
-			case "engine.rootful":
-				fmt.Println(rt.Rootful)
-			}
-			return nil
-		}
-		// Fall through to ListConfigValues if engine detection fails
-	case "secret_backend":
-		// Show the resolved backend, not just the config value
-		store := DefaultCredentialStore()
-		fmt.Println(store.Name())
-		return nil
-	}
-
-	// All keys: use ListConfigValues (no engine detection needed)
-	vals, err := ListConfigValues()
-	if err != nil {
-		return err
-	}
-	for _, v := range vals {
-		if v.Key == c.Key {
-			fmt.Println(v.Value)
-			return nil
-		}
-	}
-	// Fall back to GetConfigValue for dynamic keys (hosts.<alias>,
-	// vnc.password.<image>) that don't appear in ListConfigValues
-	// unless they're set.
-	if strings.HasPrefix(c.Key, "hosts.") || strings.HasPrefix(c.Key, "vnc.password.") {
-		v, err := GetConfigValue(c.Key)
-		if err != nil {
-			return err
-		}
-		fmt.Println(v)
-		return nil
-	}
-	return fmt.Errorf("unknown config key %q (run 'charly settings list' to see valid keys)", c.Key)
-}
-
-// SettingsSetCmd sets a config value
-type SettingsSetCmd struct {
-	Key   string `arg:"" help:"Config key"`
-	Value string `arg:"" help:"Config value"`
-}
-
-func (c *SettingsSetCmd) Run() error {
-	if err := SetConfigValue(c.Key, c.Value); err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "Set %s = %s\n", c.Key, c.Value)
-	return nil
-}
-
-// SettingsListCmd shows all settings
-type SettingsListCmd struct{}
-
-func (c *SettingsListCmd) Run() error {
-	vals, err := ListConfigValues()
-	if err != nil {
-		return err
-	}
-	for _, v := range vals {
-		fmt.Printf("%-15s %-10s (%s)\n", v.Key, v.Value, v.Source)
-	}
-	return nil
-}
-
-// SettingsResetCmd removes a key from config
-type SettingsResetCmd struct {
-	Key string `arg:"" optional:"" help:"Config key to reset (omit to reset all)"`
-}
-
-func (c *SettingsResetCmd) Run() error {
-	if err := ResetConfigValue(c.Key); err != nil {
-		return err
-	}
-	if c.Key == "" {
-		fmt.Fprintln(os.Stderr, "Reset all config to defaults")
-	} else {
-		fmt.Fprintf(os.Stderr, "Reset %s to default\n", c.Key)
-	}
-	return nil
-}
-
-// SettingsPathCmd prints the config file path
-type SettingsPathCmd struct{}
-
-func (c *SettingsPathCmd) Run() error {
-	path, err := RuntimeConfigPath()
-	if err != nil {
-		return err
-	}
-	fmt.Println(path)
-	return nil
 }
 
 // VersionCmd prints the computed CalVer tag
