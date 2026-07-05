@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,7 @@ import (
 // writeFeatureFixtureProject writes a minimal unified project (charly.yml + one discovered
 // candy) into a temp dir and returns the dir. The candy carries a non-empty description plus a
 // single deterministic check: step — exactly what the in-core loader (LoadConfig / ScanCandy) +
-// Step plan model parse, so the hidden `__feature-*` render helpers have a real entity to walk.
+// Step plan model parse, so enumerateFeatures (the "feature" HostBuild seam) has a real entity to walk.
 func writeFeatureFixtureProject(t *testing.T, desc string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -46,51 +45,64 @@ func writeFeatureFixtureProject(t *testing.T, desc string) string {
 	return dir
 }
 
-// TestRenderFeatureList_InvokesInCoreLoader proves the hidden `charly __feature-list` path
-// (FeatureListInternalCmd.Run → renderFeatureList) actually invokes the in-core unified loader
-// (LoadConfig / ScanCandy) and the Step plan model — the seam the externalized
-// candy/plugin-feature shells back to. The fixture candy's name, its one-line description
-// summary, and its single check step must all surface in the rendered output, proving the
-// loader parsed the entity and the plan model counted its step/check.
-func TestRenderFeatureList_InvokesInCoreLoader(t *testing.T) {
+// TestEnumerateFeatures_InvokesInCoreLoader proves the "feature" HostBuild seam's core half
+// (enumerateFeatures, host_build_feature.go) actually invokes the in-core unified loader
+// (LoadConfig / ScanCandy) and the Step plan model — the data the externalized candy/plugin-feature
+// formats. The fixture candy's name, its one-line description summary, and its single check step must
+// all surface as enumerated data, proving the loader parsed the entity and the plan model flattened
+// its step/check.
+func TestEnumerateFeatures_InvokesInCoreLoader(t *testing.T) {
 	dir := writeFeatureFixtureProject(t, "A fixture candy proving the in-core loader runs")
 
-	var buf bytes.Buffer
-	if err := renderFeatureList(dir, "candy", &buf); err != nil {
-		t.Fatalf("renderFeatureList: %v", err)
+	ents, err := enumerateFeatures(dir, "candy")
+	if err != nil {
+		t.Fatalf("enumerateFeatures: %v", err)
 	}
-	out := buf.String()
-	for _, want := range []string{
-		"candy feat-fixture:",
-		"A fixture candy proving the in-core loader runs",
-		"1 step",
-		"1 check",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("renderFeatureList output missing %q:\n%s", want, out)
+	var e *struct {
+		kind, name, desc, summary string
+		steps, checks             int
+	}
+	for i := range ents {
+		if ents[i].Name == "feat-fixture" {
+			nChecks := 0
+			for _, s := range ents[i].Steps {
+				if s.IsCheck {
+					nChecks++
+				}
+			}
+			e = &struct {
+				kind, name, desc, summary string
+				steps, checks             int
+			}{ents[i].Kind, ents[i].Name, ents[i].Description, ents[i].Summary, len(ents[i].Steps), nChecks}
+		}
+	}
+	if e == nil {
+		t.Fatalf("feat-fixture not enumerated: %+v", ents)
+	}
+	if e.kind != "candy" || !strings.Contains(e.desc, "A fixture candy proving the in-core loader runs") || e.steps != 1 || e.checks != 1 {
+		t.Fatalf("enumerated entity wrong: kind=%s desc=%q steps=%d checks=%d", e.kind, e.desc, e.steps, e.checks)
+	}
+}
+
+// TestEnumerateFeatures_RunsValidatePlanSteps proves the seam runs the SHARED validatePlanSteps over
+// the parsed plan model end-to-end: a candy with a non-empty description + a well-formed check: step
+// enumerates with ZERO ValidationErrors — proving the loader + plan model + validatePlanSteps chain
+// actually ran (not a no-op).
+func TestEnumerateFeatures_RunsValidatePlanSteps(t *testing.T) {
+	dir := writeFeatureFixtureProject(t, "A fixture candy with a valid plan")
+	ents, err := enumerateFeatures(dir, "")
+	if err != nil {
+		t.Fatalf("enumerateFeatures: %v", err)
+	}
+	for _, e := range ents {
+		if e.Name == "feat-fixture" && len(e.ValidationErrors) != 0 {
+			t.Fatalf("clean candy has validation errors: %v", e.ValidationErrors)
 		}
 	}
 }
 
-// TestRenderFeatureValidate_InvokesValidatePlanSteps proves the hidden `charly __feature-validate`
-// path (FeatureValidateInternalCmd.Run → renderFeatureValidate) loads the real project (LoadConfig
-// / ScanCandy) and runs the SHARED validatePlanSteps over the parsed plan model end-to-end: a
-// candy with a non-empty description + a well-formed check: step validates clean — the success
-// line is printed ONLY after the validate loop walks every loaded entity, so its presence proves
-// the loader + plan model + validatePlanSteps chain actually ran (not a no-op).
-func TestRenderFeatureValidate_InvokesValidatePlanSteps(t *testing.T) {
-	dir := writeFeatureFixtureProject(t, "A fixture candy with a valid plan")
-	var out, errOut bytes.Buffer
-	if err := renderFeatureValidate(dir, "", &out, &errOut); err != nil {
-		t.Fatalf("renderFeatureValidate (clean): unexpected error %v (stderr: %s)", err, errOut.String())
-	}
-	if got := out.String(); !strings.Contains(got, "All plan blocks validated successfully.") {
-		t.Fatalf("clean validate = %q, want the success line", got)
-	}
-}
-
 // TestValidatePlanSteps_Diagnostics unit-tests the SHARED core validator that both
-// `charly box validate` (validate.go) AND the hidden `charly __feature-validate` command invoke
+// `charly box validate` (validate.go) AND the externalized `charly feature validate` (via the "feature" HostBuild seam) invoke
 // — the function that STAYS core (R3). It flags an empty description and an agent step that
 // illegally carries an Op verb; a clean (empty) plan with a real description yields no errors.
 func TestValidatePlanSteps_Diagnostics(t *testing.T) {

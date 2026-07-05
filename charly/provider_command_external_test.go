@@ -192,54 +192,6 @@ func TestExternalCommandExecPlan_Preempt(t *testing.T) {
 	assertCommandEnv(t, env)
 }
 
-// TestExternalCommandExecPlan_Feature proves the externalized `charly feature` command — the
-// THIRD welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder
-// built for the `feature` word parses `feature validate candy:redis` (a leaf + entity arg),
-// externalCommandExecPlan resolves the (baked) plugin-feature binary by word and builds the
-// exec argv `<bin> validate candy:redis` + the CLI-mode env (handshake cookie stripped,
-// CHARLY_BIN stamped). This is the externalization gate — `charly feature` no longer resolves
-// to a builtin CommandProvider; it resolves to candy/plugin-feature over this path, and the
-// plugin re-expresses each leaf as a shell-back to the in-core loader + plan model via
-// `charly __feature-list` / `__feature-pending` / `__feature-validate` (CHARLY_BIN is the SAME
-// charly that dispatched it).
-func TestExternalCommandExecPlan_Feature(t *testing.T) {
-	const word = "feature"
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/plugin-" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
-
-	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
-	var cli struct{ kong.Plugins }
-	cli.Plugins = kong.Plugins{holder}
-	parser, err := kong.New(&cli, kong.Name("charly"))
-	if err != nil {
-		t.Fatalf("kong.New with the feature command holder: %v", err)
-	}
-	if _, err := parser.Parse([]string{word, "validate", "candy:redis"}); err != nil {
-		t.Fatalf("kong.Parse `charly feature validate candy:redis`: %v", err)
-	}
-
-	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
-	if err != nil {
-		t.Fatalf("externalCommandExecPlan: %v", err)
-	}
-	if want := "/fake/plugins/plugin-" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
-	}
-	want := []string{bin, "validate", "candy:redis"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv = %v, want %v", argv, want)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
-		}
-	}
-	assertCommandEnv(t, env)
-}
-
 // TestExternalCommandExecPlan_Vm proves the externalized `charly vm` command — the FOURTH
 // welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder built
 // for the `vm` word parses `vm list` (a leaf of the VM lifecycle tree), externalCommandExecPlan

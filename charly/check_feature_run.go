@@ -6,9 +6,9 @@ package main
 // These run an entity's OWN baked plan steps (the `plan:` list, shipped in
 // the ai.opencharly.description OCI label) as acceptance tests — the RUN
 // half of the `charly feature {list,pending,validate}` family (the inspection
-// half is the externalized command plugin candy/plugin-feature, which shells
-// back to the hidden `charly __feature-{list,pending,validate}` core commands
-// in feature_internal_cmd.go). Both reuse the shared plan engine
+// half is the externalized command plugin candy/plugin-feature, which reaches
+// the in-core loader over the "feature" HostBuild seam (host_build_feature.go)).
+// Both reuse the shared plan engine
 // (RunPlan, description_run.go) and the same target/var resolution as
 // `charly check box` / `charly check live` (R3); the only new behaviour is surfacing
 // step results as a first-class pass/fail run and, for the live verb,

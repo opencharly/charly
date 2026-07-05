@@ -25,6 +25,7 @@ import (
 	cp_plugin_example_command "github.com/opencharly/charly/candy/plugin-example-command"
 	cp_plugin_example_external "github.com/opencharly/charly/candy/plugin-example-external"
 	cp_plugin_examplerunverb "github.com/opencharly/charly/candy/plugin-examplerunverb"
+	cp_plugin_feature "github.com/opencharly/charly/candy/plugin-feature"
 	cp_plugin_file "github.com/opencharly/charly/candy/plugin-file"
 	cp_plugin_gpu "github.com/opencharly/charly/candy/plugin-gpu"
 	cp_plugin_group "github.com/opencharly/charly/candy/plugin-group"
@@ -100,4 +101,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_settings.NewProvider(), cp_plugin_settings.NewMeta())
 	registerCompiledPlugin(cp_plugin_candy.NewProvider(), cp_plugin_candy.NewMeta())
 	registerCompiledPlugin(cp_plugin_doctor.NewProvider(), cp_plugin_doctor.NewMeta())
+	registerCompiledPlugin(cp_plugin_feature.NewProvider(), cp_plugin_feature.NewMeta())
 }

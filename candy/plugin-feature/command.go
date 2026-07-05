@@ -1,146 +1,122 @@
 package feature
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
 
-	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
-// command.go is the command:feature leg of this plugin — the externalized `charly feature …`
-// CLI, ported OUT of charly's core (the deleted charly/description_cmd.go's FeatureCmd +
-// charly/plugin_command_feature.go) so the operator-facing feature command no longer links
-// into the core binary. It owns the ENTIRE `charly feature` grammar verbatim from the former
-// core command (list / pending / validate) — the leaf structs parse exactly as before; only
-// each leaf's RUN body changed: it no longer calls the in-core loader + plan model directly
-// (the unified loader LoadConfig/ScanCandy, the Step plan model, and validatePlanSteps — which
-// is SHARED with `charly box validate` — all STAY core, R3). Instead it SHELLS BACK through
-// three NEW HIDDEN core commands that do the loading + inspection in-core (the SAME
-// `charly __cli-model` / `charly __plugin-providers` / `charly __preempt-status`
-// internal-command pattern, the CLI being the only operational interface, R4):
+// command.go — the externalized `charly feature` command (list / pending / validate — inspect
+// plan-shaped descriptions). The plugin OWNS the subcommand grammar + the output formatting; the
+// genuine core subsystem it can't hold — the unified LOADER (LoadConfig / ScanCandy — the kernel), the
+// Step plan model, and validatePlanSteps (shared with `charly box validate`, R3) — stays core and is
+// reached via the generic "feature" HostBuild seam, which enumerates every entity's plan into plain
+// DATA (charly/host_build_feature.go). No hidden `__feature-*` forward.
 //
-//   - `charly feature list [kind]`        → `charly __feature-list [kind]`
-//     (LoadConfig/ScanCandy + per-entity description summary + plan-step counts)
-//   - `charly feature pending [entity]`   → `charly __feature-pending [entity]`
-//     (the agent-graded plan steps — agent-run:/agent-check:)
-//   - `charly feature validate [entity]`  → `charly __feature-validate [entity]`
-//     (validatePlanSteps over every plan: block; the success line + non-zero exit on errors)
+// (The Feature RUN verbs — `charly box feature run` / `charly check feature run` — stay children of
+// box/check in the core binary, NOT part of this plugin.)
 //
-// Each shell-back syscall.Exec's the SAME charly binary that dispatched this plugin (CHARLY_BIN,
-// stamped by the dispatch seam), so the in-core loader runs in the re-entered charly process
-// and its stdout/stderr/exit-code flow back through this plugin (which IS the operator's
-// `charly feature` process) natively. No core symbol crosses the process boundary.
-//
-// (The Feature RUN verbs are NOT part of this plugin — `charly box feature run` (image.go) and
-// `charly check feature run` (check_cmd.go) stay children of box/check in the core binary.)
-//
-// Dispatch contract (charly/provider_command_external.go dispatchExternalCommand): on
-// `charly feature <args…>`, charly RESOLVES this plugin's binary (host-built from source, or
-// baked into /usr/lib/charly/plugins via pkg/arch) and syscall.Exec's it with the pass-through
-// tokens after the `feature` word, in CLI mode (the go-plugin handshake cookie is stripped, so
-// sdk.Main runs cliMain instead of serving gRPC) with CHARLY_BIN stamped to charly's own
-// executable.
+// feature is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
+// gets the in-proc reverse channel (dispatchInProcCommand threads it), so HostBuild("feature") reaches
+// the host loader. The out-of-process CliMain path has no reverse channel, so it errors.
 
-// cliMain is the CLI-mode entry point (sdk.Main calls it when charly fork/exec'd this plugin as
-// a command passthrough). It parses the pass-through tokens against FeatureCmd and dispatches
-// the selected subcommand via kctx.Run() (each leaf carries its own Run handler). Returns the
-// process exit code.
-func cliMain(args []string) int {
-	var grp FeatureCmd
-	parser, err := kong.New(&grp,
-		kong.Name("feature"),
-		kong.Description("charly feature — inspect plan-shaped descriptions: list/pending/validate"),
-	)
+const featureUsage = `usage: charly feature <list [kind] | pending [entity] | validate [entity]>`
+
+// runFeatureCLI dispatches the feature subcommand and formats the enumerated plan data the "feature"
+// HostBuild seam returns (the plugin owns list/pending/validate output; the loader stays core).
+func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("%s", featureUsage)
+	}
+	sub, rest := args[0], args[1:]
+	filter := ""
+	if len(rest) > 0 {
+		filter = rest[0]
+	}
+	switch sub {
+	case "-h", "--help", "help":
+		fmt.Println(featureUsage)
+		return nil
+	case "list", "pending", "validate":
+		reply, err := hostFeature(ctx, exec, spec.FeatureRequest{Filter: filter})
+		if err != nil {
+			return err
+		}
+		switch sub {
+		case "list":
+			for _, e := range reply.Entities {
+				if e.Description == "" && len(e.Steps) == 0 {
+					fmt.Printf("%s %s: (no description)\n", e.Kind, e.Name)
+					continue
+				}
+				nChecks := 0
+				for _, s := range e.Steps {
+					if s.IsCheck {
+						nChecks++
+					}
+				}
+				fmt.Printf("%s %s: %q (%d step%s, %d check%s)\n",
+					e.Kind, e.Name, e.Summary, len(e.Steps), plural(len(e.Steps)), nChecks, plural(nChecks))
+			}
+		case "pending":
+			for _, e := range reply.Entities {
+				for _, s := range e.Steps {
+					if s.IsAgent {
+						fmt.Printf("%s:%s — step %d: %s %q (agent-graded)\n", e.Kind, e.Name, s.Index, s.Keyword, s.Text)
+					}
+				}
+			}
+		case "validate":
+			var errs []string
+			for _, e := range reply.Entities {
+				errs = append(errs, e.ValidationErrors...)
+			}
+			if len(errs) > 0 {
+				for _, er := range errs {
+					fmt.Fprintln(os.Stderr, er)
+				}
+				return fmt.Errorf("%d validation error(s)", len(errs))
+			}
+			fmt.Println("All plan blocks validated successfully.")
+		}
+	default:
+		return fmt.Errorf("unknown feature subcommand %q\n%s", sub, featureUsage)
+	}
+	return nil
+}
+
+// plural returns the plural suffix for a count (matches the former in-core summarizeDesc).
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// hostFeature enumerates the project's plans over the generic "feature" HostBuild kind. exec is nil on
+// the out-of-process cliMain path (no reverse channel) → a clear error.
+func hostFeature(ctx context.Context, exec *sdk.Executor, req spec.FeatureRequest) (spec.FeatureReply, error) {
+	if exec == nil {
+		return spec.FeatureReply{}, fmt.Errorf("charly feature requires compiled-in placement (the feature host seam is unavailable out-of-process)")
+	}
+	reqJSON, err := json.Marshal(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "plugin-feature: build kong parser: %v\n", err)
-		return 1
+		return spec.FeatureReply{}, err
 	}
-	kctx, err := parser.Parse(args)
+	resJSON, err := exec.HostBuild(ctx, "feature", reqJSON)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "plugin-feature: parse `charly feature %v`: %v\n", args, err)
-		return 1
+		return spec.FeatureReply{}, err
 	}
-	if err := kctx.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "charly feature: %v\n", err)
-		return 1
+	var reply spec.FeatureReply
+	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+		return spec.FeatureReply{}, uerr
 	}
-	return 0
-}
-
-// charlyBin returns the host charly binary the dispatch seam stamped into CHARLY_BIN, falling
-// back to `charly` on PATH (e.g. if the plugin binary is run directly, off the dispatch path).
-func charlyBin() string {
-	if b := os.Getenv("CHARLY_BIN"); b != "" {
-		return b
+	if reply.Error != "" {
+		return spec.FeatureReply{}, fmt.Errorf("%s", reply.Error)
 	}
-	return "charly"
-}
-
-// execCharly REPLACES this process with `charly <hiddenCmd> [args…]` via syscall.Exec, so the
-// re-entered charly runs the in-core loader + plan model and its stdout/stderr/exit-code flow
-// back through this plugin (which IS the operator's `charly feature` process) natively. On
-// success this never returns; only a PRE-exec failure (binary missing) returns an error.
-func execCharly(args ...string) error {
-	bin, err := exec.LookPath(charlyBin())
-	if err != nil {
-		return fmt.Errorf("resolving charly binary %q: %w", charlyBin(), err)
-	}
-	argv := append([]string{"charly"}, args...)
-	if err := syscall.Exec(bin, argv, os.Environ()); err != nil { //nolint:gosec // bin is CHARLY_BIN, args are fixed hidden-command tokens
-		return fmt.Errorf("exec %s: %w", bin, err)
-	}
-	return nil // unreachable: syscall.Exec replaced the process image
-}
-
-// FeatureCmd groups the `charly feature` authoring + inspection verbs. The leaf structs are
-// byte-identical to the former core command (charly/description_cmd.go's FeatureCmd) so
-// `charly feature …` parses exactly as before; the implementation moved to the hidden core
-// shell-backs. (The Feature RUN verbs — `charly box feature run` / `charly check feature run` —
-// stay children of box/check in the core binary, so they are NOT part of this grammar.)
-type FeatureCmd struct {
-	List     FeatureListCmd     `cmd:"list"     help:"Enumerate every kind: entity and its plan: steps"`
-	Pending  FeaturePendingCmd  `cmd:"pending"  help:"List agent-graded plan steps (agent-run:/agent-check:)"`
-	Validate FeatureValidateCmd `cmd:"validate" help:"Parse + binding consistency check for plan: blocks (called by charly box validate)"`
-}
-
-// FeatureListCmd: `charly feature list [<kind>]`. Shells back to `charly __feature-list`, which
-// walks the resolved project config in-core and prints each entity's description summary.
-type FeatureListCmd struct {
-	Kind string `arg:"" optional:"" help:"Restrict to one kind (candy|box). Default: all."`
-}
-
-func (c *FeatureListCmd) Run() error {
-	if c.Kind == "" {
-		return execCharly("__feature-list")
-	}
-	return execCharly("__feature-list", c.Kind)
-}
-
-// FeaturePendingCmd: `charly feature pending [<entity>]`. Shells back to
-// `charly __feature-pending`, which lists the agent-graded plan steps in-core.
-type FeaturePendingCmd struct {
-	Entity string `arg:"" optional:"" help:"Entity identifier (e.g. candy:redis); default: all"`
-}
-
-func (c *FeaturePendingCmd) Run() error {
-	if c.Entity == "" {
-		return execCharly("__feature-pending")
-	}
-	return execCharly("__feature-pending", c.Entity)
-}
-
-// FeatureValidateCmd: `charly feature validate [<entity>]`. Shells back to
-// `charly __feature-validate`, which parses every plan: block in-core (via the shared
-// validatePlanSteps) and exits non-zero on any validation error.
-type FeatureValidateCmd struct {
-	Entity string `arg:"" optional:"" help:"Entity identifier (e.g. candy:redis); default: all"`
-}
-
-func (c *FeatureValidateCmd) Run() error {
-	if c.Entity == "" {
-		return execCharly("__feature-validate")
-	}
-	return execCharly("__feature-validate", c.Entity)
+	return reply, nil
 }

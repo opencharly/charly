@@ -1918,19 +1918,22 @@ check-migrate-local:
 
 # =================================================================
 # check-feature-local — R10 witness for the externalized `charly feature` COMMAND
-# (candy/plugin-feature, command:feature) — the THIRD welded-command externalization.
-# A disposable kind:local deploy on host: local that runs the deterministic, GPU-less
-# `charly feature list candy` host-side against THIS project:
-#   - `charly feature list candy` → exits 0 and lists every candy + its plan summary; the
-#     externalized command resolves the `feature` word via the discovered candy/plugin-feature
-#     prescan, syscall.Exec's the plugin binary (host-built, or baked at /usr/lib/charly/plugins
-#     by pkg/arch), and the plugin shells back to the in-core unified loader + plan model via
-#     `charly __feature-list` (LoadConfig / ScanCandy). The output is asserted to contain the
-#     `plugin-feature` candy itself (always present in this project), proving the externalized
-#     command + the hidden-command shell-back + the in-core loader dispatch end-to-end.
-# `pending`/`validate` ride the SAME hidden-command seam (their dispatch is covered by the Go
-# e2e TestExternalCommandExecPlan_Feature + the in-core loader test
-# TestRenderFeatureList_InvokesInCoreLoader / TestRenderFeatureValidate_InvokesValidatePlanSteps).
+# (candy/plugin-feature, command:feature). A disposable kind:local deploy on host: local that
+# runs the deterministic, GPU-less `charly feature list candy` host-side against THIS project:
+#   - `charly feature list candy` → exits 0 and lists every candy + its plan summary. feature is
+#     COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) is dispatched in-proc
+#     (registerCompiledPlugin → dispatchInProcCommand, "Seam A"), which threads the in-proc reverse
+#     channel so the plugin reaches the genuine core subsystem it can't hold — the unified loader
+#     (LoadConfig / ScanCandy), the Step plan model, and validatePlanSteps — over the generic
+#     "feature" HostBuild seam (charly/host_build_feature.go: enumerateFeatures). The plugin owns
+#     the list/pending/validate grammar + output; the seam returns plain enumerated plan DATA. The
+#     output is asserted to contain the `plugin-feature` candy itself (always present in this
+#     project), proving the compiled-in command + the "feature" HostBuild seam (loader + plan model)
+#     end-to-end.
+# `pending`/`validate` ride the SAME "feature" HostBuild seam; the seam's loader + validation is
+# covered by charly/host_build_feature_test.go
+# (TestEnumerateFeatures_InvokesInCoreLoader / TestEnumerateFeatures_RunsValidatePlanSteps /
+# TestValidatePlanSteps_Diagnostics).
 # =================================================================
 check-feature-app:
     local:
@@ -1949,17 +1952,15 @@ check-feature-local:
         lifecycle: dev
         description: >-
             Sole proof of the externalized `charly feature` COMMAND (candy/plugin-feature,
-            command:feature), the third welded-command externalization in the
-            core-externalization program. A disposable kind:local deploy on host: local runs
-            `charly feature list candy` host-side: the host charly resolves the `feature` word
-            via the discovered candy/plugin-feature prescan and syscall.Exec's the plugin binary,
-            which shells back to the in-core unified loader + plan model via the hidden
-            `charly __feature-list` verb (LoadConfig / ScanCandy). The command exits 0 and lists
-            the project's candies — including the `plugin-feature` candy itself — proving the
-            externalized command + the hidden-command shell-back + the in-core loader dispatch
-            end-to-end.
+            command:feature). A disposable kind:local deploy on host: local runs
+            `charly feature list candy` host-side: feature is COMPILED-IN, so its Invoke(OpRun) is
+            dispatched in-proc ("Seam A", dispatchInProcCommand), which threads the in-proc reverse
+            channel; the plugin owns the list output and reaches the in-core unified loader + plan
+            model (LoadConfig / ScanCandy) over the generic "feature" HostBuild seam. The command
+            exits 0 and lists the project's candies — including the `plugin-feature` candy itself —
+            proving the compiled-in command + the "feature" HostBuild seam end-to-end.
     feature-list-runs:
-        check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the in-core loader ran via the externalized command)
+        check: command=charly feature list candy exits 0 and lists the plugin-feature candy (proving the compiled-in command reached the in-core loader via the "feature" HostBuild seam)
         id: feature-list-runs
         exit_status: 0
         stdout:

@@ -70,17 +70,6 @@ type CLI struct {
 	PreemptStatus  PreemptStatusInternalCmd  `cmd:"" name:"__preempt-status" hidden:"" help:"internal: print active resource-arbitration leases (the externalized charly preempt plugin shells back here)"`
 	PreemptRestore PreemptRestoreInternalCmd `cmd:"" name:"__preempt-restore" hidden:"" help:"internal: recover preempted holders (the externalized charly preempt plugin shells back here)"`
 
-	// __feature-list / __feature-pending / __feature-validate expose the in-core plan-description
-	// machinery (LoadConfig / ScanCandy — the deepest loader — the Step plan model, and
-	// validatePlanSteps, which STAYS core: it is SHARED with `charly box validate`, R3) to the
-	// externalized `charly feature …` COMMAND plugin (candy/plugin-feature). The plugin shells
-	// back to these sanctioned hidden verbs (the SAME __cli-model / __plugin-providers /
-	// __preempt-status internal-command pattern) so the operator-facing `charly feature
-	// list`/`pending`/`validate` CLI is unchanged while its implementation moved out of core.
-	FeatureList     FeatureListInternalCmd     `cmd:"" name:"__feature-list" hidden:"" help:"internal: enumerate every kind: entity + its plan (the externalized charly feature plugin shells back here)"`
-	FeaturePending  FeaturePendingInternalCmd  `cmd:"" name:"__feature-pending" hidden:"" help:"internal: list agent-graded plan steps (the externalized charly feature plugin shells back here)"`
-	FeatureValidate FeatureValidateInternalCmd `cmd:"" name:"__feature-validate" hidden:"" help:"internal: parse + binding-consistency check for plan: blocks (the externalized charly feature plugin shells back here)"`
-
 	// __vm re-homes the WHOLE in-core VmCmd tree (vm.go / vm_snapshot_cmd.go — build/create/
 	// start/stop/destroy/console/ssh/snapshot/gpu/import/clone/cp-box/list) onto ONE hidden
 	// command, exposing it to the externalized `charly vm …` COMMAND plugin (candy/plugin-vm,
@@ -89,7 +78,7 @@ type CLI struct {
 	// serves — so they cannot move to the plugin (R3); the plugin is a THIN forwarder that
 	// syscall.Exec's `charly __vm <args…>` (command.go), inheriting charly's stdio/TTY so
 	// `charly vm console` / `charly vm ssh` keep their interactive terminal. This is the SAME
-	// internal-command pattern as __preempt-status / __feature-list, but re-homing the whole
+	// internal-command pattern as __preempt-status, but re-homing the whole
 	// subtree onto one hidden command instead of one hidden command per leaf (the VmCmd grammar
 	// is large + nested, so the plugin forwards raw args rather than re-expressing each leaf).
 	VmInternal VmCmd `cmd:"" name:"__vm" hidden:"" help:"internal: the VM lifecycle command tree (the externalized charly vm plugin forwards here)"`
