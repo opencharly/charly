@@ -11,6 +11,4 @@ import (
 	"github.com/opencharly/sdk"
 )
 
-func main() {
-	sdk.ServeCheckVerb(unixgroup.NewCheckVerb(), "2026.176.2600", unixgroup.SchemaFS, unixgroup.SchemaDir, unixgroup.InputDefs)
-}
+func main() { sdk.ServeCheckVerb(unixgroup.NewCheckVerb(), unixgroup.NewMeta()) }

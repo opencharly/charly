@@ -117,10 +117,10 @@ func generate(root, cfg string) (genGo, genWork []byte, err error) {
 		for _, e := range entries {
 			switch e.shape {
 			case "kit":
-				// kit-shape: host-coupled check verb, compiled-in-only — register through
-				// the kit adapter (charly concatenates the candy's raw schema FS).
-				fmt.Fprintf(&g, "\tregisterCompiledCheckVerb(%s.NewCheckVerb(), %s.SchemaFS, %s.InputDefs)\n",
-					e.alias, e.alias, e.alias)
+				// kit-shape: host-coupled check verb, compiled-in-only — register through the
+				// kit adapter, reading schema + input-defs from the candy's shared NewMeta
+				// (the SAME Describe the pb shape below uses; no exported SchemaFS/InputDefs trio).
+				fmt.Fprintf(&g, "\tregisterCompiledCheckVerb(%s.NewCheckVerb(), %s.NewMeta())\n", e.alias, e.alias)
 			default:
 				// pb-shape: dual-placement plugin — in-proc via the served Describe channel.
 				fmt.Fprintf(&g, "\tregisterCompiledPlugin(%s.NewProvider(), %s.NewMeta())\n", e.alias, e.alias)

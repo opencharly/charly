@@ -18,23 +18,29 @@ import (
 	"strings"
 
 	"github.com/opencharly/charly/candy/plugin-package/params"
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue
-var SchemaFS embed.FS
-
-// SchemaDir is the embedded schema directory; charly concatenates SchemaFS/SchemaDir.
-const SchemaDir = "schema"
-
-// InputDefs maps the provided capability to its CUE def for plugin_input validation.
-var InputDefs = map[string]string{"verb:package": "#PackageInput"}
+var schemaFS embed.FS
 
 // NewCheckVerb returns the package verb as a kit.CheckVerbProvider for compiled-in
 // registration. Because verb also implements kit.ProvisionActor + kit.StepProvider, charly
 // registers the three-role (check + act + typed-step) adapter.
 func NewCheckVerb() kit.CheckVerbProvider { return verb{} }
+
+// NewMeta advertises verb:package (plugin_input #PackageInput) + the embedded CUE schema, via
+// sdk.NewMeta — the ONE meta both placements use (compiled-in registerCompiledCheckVerb reads
+// it via Describe; cmd/serve serves it out-of-process), so a kit candy has the SAME
+// NewCheckVerb()+NewMeta() shape as every pb-provider plugin (R3).
+func NewMeta() pb.PluginMetaServer {
+	return sdk.NewMeta("2026.176.3000",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "package", InputDef: "#PackageInput"}},
+		schemaFS)
+}
 
 type verb struct{}
 

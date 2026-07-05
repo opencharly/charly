@@ -11,6 +11,4 @@ import (
 	"github.com/opencharly/sdk"
 )
 
-func main() {
-	sdk.ServeCheckVerb(iface.NewCheckVerb(), "2026.176.1700", iface.SchemaFS, iface.SchemaDir, iface.InputDefs)
-}
+func main() { sdk.ServeCheckVerb(iface.NewCheckVerb(), iface.NewMeta()) }

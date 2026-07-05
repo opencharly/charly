@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
-	"io/fs"
 	"time"
 
-	"github.com/opencharly/sdk/schemaconcat"
 	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // runnerCheckContext adapts the live *Runner to kit.CheckContext — the surface a
@@ -161,10 +160,21 @@ func kitStatusToCheck(s kit.Status) CheckStatus {
 // subdir — the SAME concat contract a builtin/external schema goes through (R3). A
 // read/concat failure is a build-time invariant violation (panic, like
 // loadBuiltinPluginUnits).
-func registerCompiledCheckVerb(kv kit.CheckVerbProvider, schemaFS fs.FS, inputDefs map[string]string) {
-	cueSource, _, err := schemaconcat.ConcatSchema(schemaFS, "schema", nil)
+func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServer) {
+	// Read the concatenated CUE schema + the input-def map from the candy's shared NewMeta
+	// (the SAME Describe → BuildCapabilities the out-of-process placement serves), so a kit
+	// candy provides ONE NewMeta for both placements — no exported SchemaFS/SchemaDir/InputDefs
+	// trio (R3, mirrors registerCompiledPlugin's meta-driven in-proc lift).
+	caps, err := meta.Describe(context.Background(), &pb.Empty{})
 	if err != nil {
-		panic("registerCompiledCheckVerb " + kv.Reserved() + ": concat schema: " + err.Error())
+		panic("registerCompiledCheckVerb " + kv.Reserved() + ": describe: " + err.Error())
+	}
+	cueSource := caps.GetSchemaCue()
+	inputDefs := map[string]string{}
+	for _, c := range caps.GetProvided() {
+		if c.GetInputDef() != "" {
+			inputDefs[c.GetClass()+":"+c.GetWord()] = c.GetInputDef()
+		}
 	}
 	base := kitVerbAdapter{kv: kv}
 	var prov Provider = base
