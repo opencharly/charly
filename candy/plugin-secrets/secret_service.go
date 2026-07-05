@@ -295,27 +295,12 @@ func (c *ssClient) deleteItem(item dbus.ObjectPath) error {
 	return nil
 }
 
-// findItemAnyCollection searches for a credential by iterating Secret Service
-// collections in priority order. Legacy {service, username} signature kept for
-// existing credential-keyring callers — internally builds the attrs map and
-// delegates to findItemByAttrsAcrossCollections.
-func (c *ssClient) findItemAnyCollection(service, username, preferLabel string) (dbus.ObjectPath, string, error) {
-	return findItemAcrossCollections(c, service, username, preferLabel)
-}
-
-// findItemByAttrsAnyCollection is the attribute-map-based read path. Used by
-// the GPG keystore code which searches by xdg:schema + keyid (or keygrip).
+// findItemByAttrsAnyCollection is the attribute-map-based read path — the SINGLE
+// credential-lookup entry point (callers build the attrs map, e.g. {service, username}
+// for a credential or {xdg:schema, keyid} for a GPG key). Delegates to the testable
+// findItemByAttrsAcrossCollections.
 func (c *ssClient) findItemByAttrsAnyCollection(attrs map[string]string, preferLabel string) (dbus.ObjectPath, string, error) {
 	return findItemByAttrsAcrossCollections(c, attrs, preferLabel)
-}
-
-// findItemAcrossCollections is the legacy {service, username} wrapper preserved
-// so existing credential-keyring tests and call sites do not need to change.
-func findItemAcrossCollections(c ssOps, service, username, preferLabel string) (dbus.ObjectPath, string, error) {
-	return findItemByAttrsAcrossCollections(c, map[string]string{
-		"service":  service,
-		"username": username,
-	}, preferLabel)
 }
 
 // findItemByAttrsAcrossCollections is the testable body of the credential

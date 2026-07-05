@@ -146,7 +146,7 @@ func probeCredentialHealth() credentialHealth {
 			if service == "" || key == "" {
 				continue
 			}
-			if _, _, ferr := c.findItemAnyCollection(service, key, cfg.KeyringCollectionLabel); ferr != nil && errors.Is(ferr, ErrSSNotFound) {
+			if _, _, ferr := c.findItemByAttrsAnyCollection(map[string]string{"service": service, "username": key}, cfg.KeyringCollectionLabel); ferr != nil && errors.Is(ferr, ErrSSNotFound) {
 				h.IndexMissing = append(h.IndexMissing, entry)
 			}
 		}

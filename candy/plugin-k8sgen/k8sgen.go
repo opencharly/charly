@@ -37,7 +37,8 @@ import (
 //   - Ingress (when deployment.Expose.Host is set)
 //   - kustomization.yaml wiring
 //
-// Deferred (will show up as TODOs in output or skipped silently):
+// Out of scope — NOT emitted by this generator (a deployment needing any of these
+// authors it as an extra overlay manifest alongside the generated base):
 //   - ConfigMap / Secret / ExternalSecret
 //   - HorizontalPodAutoscaler / PodDisruptionBudget
 //   - NetworkPolicy

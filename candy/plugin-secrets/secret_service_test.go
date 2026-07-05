@@ -245,7 +245,7 @@ func TestFindItem_DefaultAliasHealthy(t *testing.T) {
 	f.labels[defaultPath] = "Login"
 	f.addItem(defaultPath, "/items/pw1")
 
-	item, label, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	item, label, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestFindItem_DefaultAliasBroken_FallbackToIteration(t *testing.T) {
 	f.healthErrs[stub] = errors.New("Input/output error") // broken stub
 	f.addItem(real, "/items/real-pw")
 
-	item, label, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	item, label, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestFindItem_PreferLabel_SelectsByLabel(t *testing.T) {
 	// Item only in the label collection, not in the default.
 	f.addItem(labelTarget, "/items/in-opencharly")
 
-	item, label, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "opencharly")
+	item, label, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "opencharly")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestFindItem_AllCollectionsBroken_ReturnsAllBroken(t *testing.T) {
 	f.healthErrs[c1] = errors.New("I/O error")
 	f.healthErrs[c2] = errors.New("I/O error")
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSAllBroken) {
 		t.Errorf("err = %v, want ErrSSAllBroken", err)
 	}
@@ -340,7 +340,7 @@ func TestFindItem_NotFoundAnywhere_ReturnsNotFound(t *testing.T) {
 	f.labels[c1] = "Login"
 	f.labels[c2] = "Work"
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSNotFound) {
 		t.Errorf("err = %v, want ErrSSNotFound", err)
 	}
@@ -361,14 +361,14 @@ func TestFindItem_SearchErrorCountsAsBroken(t *testing.T) {
 	f.searchErrs[c1] = fmt.Errorf("I/O error")
 	// c2 is healthy but has no matching item
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSNotFound) {
 		t.Errorf("err = %v, want ErrSSNotFound (at least one search succeeded)", err)
 	}
 
 	// Now make c2 also error
 	f.searchErrs[c2] = fmt.Errorf("I/O error")
-	_, _, err = findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err = findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSAllBroken) {
 		t.Errorf("err = %v, want ErrSSAllBroken (every search errored)", err)
 	}
@@ -385,7 +385,7 @@ func TestFindItem_UnlockFailureCountsAsBroken(t *testing.T) {
 	f.labels[c1] = "Login"
 	f.unlockErrs[c1] = errors.New("prompt required")
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSAllBroken) {
 		t.Errorf("err = %v, want ErrSSAllBroken (unlock failed on only candidate)", err)
 	}
@@ -403,7 +403,7 @@ func TestFindItem_DefaultAliasUnsetButIterationFinds(t *testing.T) {
 	f.labels[c1] = "Only"
 	f.addItem(c1, "/items/found")
 
-	item, label, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	item, label, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestFindItem_DefaultAliasDeduped(t *testing.T) {
 	var unlockCount int
 	wrap := &countingOps{fakeSSOps: f, unlockCount: &unlockCount}
 
-	item, _, err := findItemAcrossCollections(wrap, "charly/enc", "immich-ml", "")
+	item, _, err := findItemByAttrsAcrossCollections(wrap, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestFindItem_LockedCollection_ReturnsInteractiveUnlock(t *testing.T) {
 	f.labels[c1] = "user"
 	f.unlockErrs[c1] = fmt.Errorf("%w: %s", ErrSSInteractiveUnlockRequired, c1)
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSInteractiveUnlockRequired) {
 		t.Errorf("err = %v, want ErrSSInteractiveUnlockRequired", err)
 	}
@@ -479,7 +479,7 @@ func TestFindItem_MixLockedAndBroken_ReturnsAllBroken(t *testing.T) {
 	f.unlockErrs[c1] = fmt.Errorf("%w: %s", ErrSSInteractiveUnlockRequired, c1)
 	f.unlockErrs[c2] = errors.New("I/O error")
 
-	_, _, err := findItemAcrossCollections(f, "charly/enc", "immich-ml", "")
+	_, _, err := findItemByAttrsAcrossCollections(f, map[string]string{"service": "charly/enc", "username": "immich-ml"}, "")
 	if !errors.Is(err, ErrSSAllBroken) {
 		t.Errorf("err = %v, want ErrSSAllBroken (mix of locked + broken)", err)
 	}

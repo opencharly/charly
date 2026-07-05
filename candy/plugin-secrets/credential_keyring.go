@@ -190,7 +190,7 @@ func keyringGetViaSSClient(service, key string) (string, error) {
 		preferLabel = cfg.KeyringCollectionLabel
 	}
 
-	item, _, err := c.findItemAnyCollection(service, key, preferLabel)
+	item, _, err := c.findItemByAttrsAnyCollection(map[string]string{"service": service, "username": key}, preferLabel)
 	if err != nil {
 		return "", err
 	}
