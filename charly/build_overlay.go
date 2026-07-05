@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/opencharly/sdk/spec"
@@ -182,17 +181,3 @@ func podDeployEngine(node *BundleNode) string {
 	return "podman"
 }
 
-// removeDeployOverlayImages best-effort removes the synthesized <deployName>-overlay images (all
-// tags) for a pod deploy. Record-free: it queries the engine for images whose repository is
-// "<deployName>-overlay" (the OverlayImageRef naming convention), so only the deploy-specific
-// overlays are removed.
-func removeDeployOverlayImages(engine, deployName string) {
-	out, err := exec.Command(EngineBinary(engine), "images",
-		"--filter", "reference="+deployName+"-overlay", "--format", "{{.Repository}}:{{.Tag}}").Output()
-	if err != nil {
-		return
-	}
-	for _, ref := range strings.Fields(string(out)) {
-		_ = exec.Command(EngineBinary(engine), "rmi", ref).Run()
-	}
-}

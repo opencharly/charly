@@ -127,7 +127,6 @@ type CLI struct {
 	CleanInternal    CleanCmd    `cmd:"" name:"__clean" hidden:"" help:"internal: prune build artifacts (the externalized charly clean plugin forwards here)"`
 	SettingsInternal SettingsCmd `cmd:"" name:"__settings" hidden:"" help:"internal: runtime config get/set/list (the externalized charly settings plugin forwards here)"`
 	CandyInternal    CandyCmd    `cmd:"" name:"__candy" hidden:"" help:"internal: candy.yml authoring (the externalized charly candy plugin forwards here)"`
-	DropOverlayInternal DropOverlayCmd `cmd:"" name:"__drop-overlay" hidden:"" help:"internal: drop a pod deploy's <name>-overlay images (the externalized plugin-deploy-pod PostTeardown forwards here)"`
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
 	// ssh, start, stop, status, restart, update, remove, logs,

@@ -105,7 +105,7 @@ func summaryStatus(ok bool) string {
 //
 // pod is the ONE externalized substrate that is NOT in-place: it builds + runs a container
 // image and keeps the FULL pod lifecycle (image build → config → start → check-live →
-// `charly remove` + overlay drop), so the bed runner must drive it through the DEFAULT pod
+// `charly remove`), so the bed runner must drive it through the DEFAULT pod
 // path exactly as the in-proc pod — only the `charly bundle add` overlay build internally
 // routes through pod's external deploy target + lifecycle hook now (invisible to the bed
 // runner). Excluding pod here is consistent with the bed runner's other substrate-identity

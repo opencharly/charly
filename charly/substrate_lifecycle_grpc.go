@@ -193,7 +193,11 @@ func (l grpcSubstrateLifecycle) PostTeardown(name string, node *BundleNode, keep
 			fmt.Fprintf(os.Stderr, "warning: substrate %q post-teardown host hook: %v\n", l.prov.word, herr)
 		}
 	}
-	res, err := l.lifecycleInvoke(context.Background(), sdk.OpPostTeardown, name, "", node, map[string]any{"keep_image": keepImage}, ShellExecutor{})
+	// Ship the resolved engine binary (host resolves podman/docker/auto) so a plugin dropping its
+	// deploy's images (pod: the <name>-overlay drop) needs no in-plugin engine detection. Generic —
+	// vm ignores it.
+	res, err := l.lifecycleInvoke(context.Background(), sdk.OpPostTeardown, name, "", node,
+		map[string]any{"keep_image": keepImage, "engine_bin": EngineBinary(podDeployEngine(node))}, ShellExecutor{})
 	if err != nil {
 		return err
 	}

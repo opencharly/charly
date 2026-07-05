@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -28,6 +29,7 @@ type lifecycleParams struct {
 	Version   string          `json:"version"`
 	Opts      json.RawMessage `json:"opts"`
 	KeepImage bool            `json:"keep_image"`
+	EngineBin string          `json:"engine_bin"` // host-resolved container engine binary (PostTeardown)
 	Cmd       []string        `json:"cmd"`
 }
 
@@ -215,15 +217,16 @@ func podRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb
 	return marshalReply(struct{}{})
 }
 
-// podPostTeardown = `charly remove` + drop the synthesized <name>-overlay images (keep-image-gated,
-// via the hidden `charly __drop-overlay`). pod ships no charly.yml RemoveEntries (host `charly
-// remove` already cleaned the entry).
+// podPostTeardown = `charly remove` (the container teardown, via the cli seam) + drop the synthesized
+// <name>-overlay images itself via kit.RemoveImagesByReference (keep-image-gated; the host ships the
+// resolved engine binary in EngineBin). pod ships no charly.yml RemoveEntries (host `charly remove`
+// already cleaned the entry).
 func podPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
 	if _, err := podCli(ctx, exec, false, false, "remove", p.Name); err != nil {
 		return nil, err
 	}
 	if !p.KeepImage {
-		_, _ = podCli(ctx, exec, false, true, "__drop-overlay", p.Name) // best-effort image drop
+		kit.RemoveImagesByReference(p.EngineBin, p.Name+"-overlay") // best-effort overlay-image drop
 	}
 	return marshalReply(spec.PostTeardownReply{})
 }
