@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // StatusCmd is defined in status.go
@@ -231,8 +233,7 @@ func (c *RemoveCmd) Run() error {
 		}
 
 		if c.Purge {
-			removeVolumes(engine, boxName, c.Instance)
-			removeEncryptedVolumes(boxName, c.Instance)
+			purgeDeployArtifacts(engine, boxName, c.Instance)
 		}
 		if !c.KeepDeploy {
 			cleanDeployEntry(boxName, c.Instance)
@@ -252,14 +253,32 @@ func (c *RemoveCmd) Run() error {
 	fmt.Fprintf(os.Stderr, "Removed container %s\n", name)
 
 	if c.Purge {
-		removeVolumes(engine, boxName, c.Instance)
-		removeEncryptedVolumes(boxName, c.Instance)
+		purgeDeployArtifacts(engine, boxName, c.Instance)
 	}
 	if !c.KeepDeploy {
 		cleanDeployEntry(boxName, c.Instance)
 	}
 	return nil
 }
+
+// purgeDeployArtifacts removes everything `charly remove --purge` owns for a deploy: its named
+// podman volumes, its encrypted (gocryptfs) volumes, AND the synthesized <name>-overlay images an
+// add_candy: overlay build produced. The overlay drop was previously reached ONLY via the pod
+// substrate's PostTeardown (i.e. `charly bundle del`), so `charly remove --purge` — the teardown
+// path EVERY disposable pod check bed uses (check_bed_run.go's default cleanup) — leaked its overlay
+// image (dozens accumulated). Reuses kit.RemoveImagesByReference: the SAME exact-repo-matched drop
+// the pod plugin's podPostTeardown uses (R3), safe against a shared-image-ID over-match.
+func purgeDeployArtifacts(engine, boxName, instance string) {
+	removeVolumes(engine, boxName, instance)
+	removeEncryptedVolumes(boxName, instance)
+	dropOverlayImagesByRef(engine, deployKey(boxName, instance)+"-overlay")
+}
+
+// dropOverlayImagesByRef drops the <deploy-key>-overlay images an add_candy: overlay build
+// synthesized. A package var (defaulting to kit.RemoveImagesByReference) so a test can observe the
+// purge WIRING — that `charly remove --purge` targets the correct `<name>-overlay` reference —
+// without a live container engine.
+var dropOverlayImagesByRef = kit.RemoveImagesByReference
 
 // runPreRemoveHook runs pre_remove hooks (best-effort). Reads hooks from
 // the running container's OCI labels.
