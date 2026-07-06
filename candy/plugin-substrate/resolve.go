@@ -27,6 +27,20 @@ func resolveSubstrateTemplate(in spec.SubstrateTemplateResolveRequest) ([]byte, 
 			Raw:         in.Local.Local,
 		}}
 		return json.Marshal(reply)
+	case in.Pod != nil:
+		var p spec.Pod
+		if err := json.Unmarshal(in.Pod.Pod, &p); err != nil {
+			return nil, fmt.Errorf("pod resolve: decode: %w", err)
+		}
+		reply := spec.PodResolveReply{Resolved: &spec.ResolvedPod{
+			Box:         p.Box,
+			Sidecar:     p.Sidecar,
+			Secret:      p.Secret,
+			EnvDefaults: p.EnvDefaults,
+			Plan:        p.Plan,
+			Raw:         in.Pod.Pod,
+		}}
+		return json.Marshal(reply)
 	case in.Android != nil:
 		var a spec.Android
 		if err := json.Unmarshal(in.Android.Android, &a); err != nil {

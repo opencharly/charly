@@ -114,9 +114,13 @@ func collectIncludeSteps(uf *UnifiedFile, layers map[string]*Candy, kind, name s
 		return out, nil
 
 	case "pod":
-		pod, ok := uf.Pod[name]
+		body, ok := uf.Pod[name]
 		if !ok {
 			return nil, fmt.Errorf("pod %q not found (available: %s)", name, sortedPodKeys(uf))
+		}
+		pod, perr := resolvePodViaPlugin(body)
+		if perr != nil || pod == nil {
+			return nil, fmt.Errorf("pod %q resolve: %w", name, perr)
 		}
 		return append([]Step(nil), pod.Plan...), nil
 

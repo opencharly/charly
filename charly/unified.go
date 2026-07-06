@@ -108,8 +108,11 @@ type UnifiedFile struct {
 	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
-	Pod map[string]*PodSpec `yaml:"pod,omitempty" json:"pod,omitempty"`
-	K8s map[string]*K8sSpec `yaml:"k8s,omitempty" json:"k8s,omitempty"`
+	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
+	// Cutover J) — resolved via resolvePodViaPlugin; the kernel never reads spec.Pod
+	// fields off the map.
+	Pod map[string]json.RawMessage `yaml:"pod,omitempty" json:"pod,omitempty"`
+	K8s map[string]*K8sSpec        `yaml:"k8s,omitempty" json:"k8s,omitempty"`
 	// Local (kind:local) templates are stored OPAQUELY (the substrate-template
 	// de-type, Cutover I) — candy/plugin-substrate's OpResolve owns spec.Local;
 	// the kernel resolves via uf.resolveLocals(), never reading fields off the map.
@@ -961,7 +964,7 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	mergeBoxMap(&dst.Box, src.Box)
 	mergeCandyMap(&dst.Candy, src.Candy)
 	mergeVmMap(&dst.VM, src.VM)
-	mergePodMap(&dst.Pod, src.Pod)
+	mergeRawTemplateMap(&dst.Pod, src.Pod)
 	mergeK8sMap(&dst.K8s, src.K8s)
 	mergeRawTemplateMap(&dst.Local, src.Local)
 	mergeRawTemplateMap(&dst.Android, src.Android)
@@ -1041,19 +1044,6 @@ func mergeVmMap(dst *map[string]*VmSpec, src map[string]*VmSpec) {
 
 // Schema v4 target-template merge helpers. Same root-wins semantics as
 // mergeVmMap: existing entries survive; included-file entries fill gaps.
-func mergePodMap(dst *map[string]*PodSpec, src map[string]*PodSpec) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]*PodSpec)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
 
 func mergeK8sMap(dst *map[string]*K8sSpec, src map[string]*K8sSpec) {
 	if len(src) == 0 {
