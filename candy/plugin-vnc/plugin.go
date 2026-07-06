@@ -12,9 +12,9 @@
 // of charly's core check surface (nothing remains in-core — the VM-VNC CLI subsumed
 // into the declarative `vnc:` verb against a vm target).
 //
-// The plugin owns NO podman / venue / libvirt / port-mapping machinery — the host
-// pre-resolves the deployment's VNC endpoint (preresolveVncEndpoint, charly/
-// vnc_preresolve.go): a container's published port 5900, OR a VM's libvirt-discovered
+// The plugin owns NO podman / venue / libvirt / port-mapping machinery — it resolves the
+// deployment's VNC endpoint via the generic cc.ResolveGraphicsEndpoint reverse-leg (the host
+// owns that machinery): a container's published port 5900, OR a VM's libvirt-discovered
 // <graphics type='vnc'> listener bridged/tunneled to a host-reachable TCP address —
 // and hands it over (plus the resolved password) via the check env, so this module
 // just dials a plain "host:port" and needs no venue resolution at all.

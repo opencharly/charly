@@ -12,10 +12,10 @@
 // serves them OUT-OF-PROCESS over go-plugin gRPC when they are not — placement is
 // invisible above the registry.
 //
-// The plugin owns NO podman / venue / port-mapping machinery — the host pre-resolves the
-// deployment's CDP port 9222 to a host-reachable DevTools base URL (preresolveCdpEndpoint,
-// charly/cdp_preresolve.go) and hands it over via the check env, so this module dials a
-// plain URL and needs no container inspection at all.
+// The plugin owns NO podman / venue / port-mapping machinery — it resolves the deployment's
+// CDP port 9222 to a host-reachable DevTools base URL via the generic cc.ResolveEndpoint
+// reverse-leg (the host owns that machinery), so this module dials a plain URL and needs no
+// container inspection at all.
 package cdp
 
 import (

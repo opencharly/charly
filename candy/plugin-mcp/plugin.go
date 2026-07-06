@@ -22,10 +22,10 @@
 //     `--stdio` serves the editor/LLM integration over stdin/stdout, `--listen` serves
 //     Streamable HTTP (the in-container supervised deployment).
 //
-// The plugin owns NO podman / OCI-label / port-mapping machinery — the host pre-resolves the
-// deployment's declared mcp_provides + the single picked, host-routable dial endpoint
-// (preresolveMcpEndpoint, charly/mcp_preresolve.go) and hands them over via the check env, so
-// this module needs no container inspection at all.
+// The plugin owns NO podman / OCI-label / port-mapping machinery — it resolves the deployment's
+// declared mcp_provides via the generic cc.ResolveImageLabel reverse-leg + the host-routable dial
+// endpoint via cc.ResolveEndpoint (the host owns that machinery), so this module needs no
+// container inspection at all.
 package mcp
 
 import (

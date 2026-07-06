@@ -9,9 +9,8 @@ import (
 
 // TestSpiceEndpoint_NoDevice_MatchesSkipSentinel proves the host-side no-SPICE-device SKIP is wired
 // correctly: when a resolved VM declares no <graphics type='spice'>, SpiceEndpoint must return an
-// error whose text contains noVmDisplayDeviceErr — the SAME substring the host's
-// preresolveSpiceEndpoint keys off to return a SKIP (the SPICE-less cachyos-gpu operator) rather
-// than a FAIL. Relocated from charly/vm_display_gate_test.go with the VmTarget/SpiceEndpoint
+// error whose text contains noVmDisplayDeviceErr — the SAME substring the host's graphics-endpoint
+// resolution keys off to return a SKIP (the SPICE-less cachyos-gpu operator) rather than a FAIL. Relocated from charly/vm_display_gate_test.go with the VmTarget/SpiceEndpoint
 // resolver (the go-libvirt + libvirtxml shed).
 func TestSpiceEndpoint_NoDevice_MatchesSkipSentinel(t *testing.T) {
 	// A domain with a VNC head but NO spice device.
@@ -26,6 +25,6 @@ func TestSpiceEndpoint_NoDevice_MatchesSkipSentinel(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), noVmDisplayDeviceErr) {
 		t.Errorf("SpiceEndpoint no-device error %q does not contain the skip sentinel %q — "+
-			"preresolveSpiceEndpoint would FAIL instead of SKIP", err, noVmDisplayDeviceErr)
+			"the host graphics-endpoint resolution would FAIL instead of SKIP", err, noVmDisplayDeviceErr)
 	}
 }

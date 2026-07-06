@@ -1,8 +1,8 @@
 package vm
 
-// Shared VM target resolution for the `spice:` check verb's HOST-side endpoint
-// pre-resolution (preresolveSpiceEndpoint, spice_preresolve.go — the out-of-process
-// candy/plugin-spice provider owns no go-libvirt) and for `charly check libvirt`.
+// Shared VM target resolution for the `spice:` check verb's HOST-side graphics-endpoint
+// resolution (resolveVerbGraphics — the out-of-process candy/plugin-spice provider owns no
+// go-libvirt) and for `charly check libvirt`.
 //
 // ResolveVmTarget opens a session-scoped libvirt connection, finds
 // the running domain whose name matches the vm.yml entity, and

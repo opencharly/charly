@@ -13,7 +13,7 @@ import (
 )
 
 // resolve.go builds the mcp check endpoint from the GENERIC reverse-legs, replacing the former
-// host-side preresolveMcpEndpoint: the plugin reads the deployment's ai.opencharly.mcp_provide
+// host-side mcp preresolver: the plugin reads the deployment's ai.opencharly.mcp_provide
 // OCI label (cc.ResolveImageLabel) + maps its published port to a host-routable address
 // (cc.ResolveEndpoint). The host owns the podman engine / OCI metadata / port-mapping machinery;
 // the plugin decides WHAT to resolve and does the pure template / pod-aware / pick logic.
