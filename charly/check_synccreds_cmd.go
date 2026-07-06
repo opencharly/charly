@@ -51,9 +51,9 @@ func (c *CheckSyncCredCmd) RunActual() error {
 		return fmt.Errorf("harness sync-credential: score %q has no agents configured", c.Score)
 	}
 
-	agents := uf.Agents()
+	bodies := uf.PluginKinds["agent"]
 	for _, aiName := range aiNames {
-		ai, _, err := ResolveAgent(agents, aiName)
+		ai, _, err := resolveAgentViaPlugin(bodies, aiName)
 		if err != nil {
 			return err
 		}

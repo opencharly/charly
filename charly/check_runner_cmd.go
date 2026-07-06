@@ -44,7 +44,7 @@ func (c *CheckListAgentCmd) Run() error {
 		fmt.Fprintln(os.Stdout, "No charly.yml found in current directory.")
 		return nil
 	}
-	PrintAgents(os.Stdout, uf.Agents())
+	PrintAgents(os.Stdout, uf.PluginKinds["agent"])
 	return nil
 }
 

@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // GraderDefaultTimeout bounds a single grader invocation when neither the
@@ -57,7 +59,7 @@ type StepGrader interface {
 // AgentGrader is the production StepGrader: it drives the configured
 // `kind: agent` CLI against a live deployment.
 type AgentGrader struct {
-	Agent    *AgentConfig // the resolved kind:agent entry (how to launch the CLI)
+	Agent    *spec.AgentExecSpec // the resolved kind:agent exec spec (how to launch the CLI)
 	Target   string       // the deployment name the agent probes (e.g. "check-pod")
 	Instance string       // optional deploy instance
 	Timeout  string       // optional Go-duration override (from --timeout)
@@ -157,7 +159,7 @@ func buildGraderPrompt(req GraderRequest, target, instance string) string {
 // LocalCaptureVersion (agent_config.go) — same host-exec shape, no iteration
 // directories, no plateau state. ${PROMPT} in the AI's command argv (and a
 // PromptVia: file temp file) is substituted with the prompt text.
-func RunAgentOnce(ctx context.Context, ai *AgentConfig, prompt string, timeout time.Duration) (string, string, error) {
+func RunAgentOnce(ctx context.Context, ai *spec.AgentExecSpec, prompt string, timeout time.Duration) (string, string, error) {
 	if ai == nil || len(ai.Command) == 0 {
 		return "", "", fmt.Errorf("ai entry has no command")
 	}

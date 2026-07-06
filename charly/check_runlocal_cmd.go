@@ -164,7 +164,7 @@ func (c *CheckRunLocalCmd) Run() error {
 			return fmt.Errorf("iterate entity %q has multiple eligible agents (%v); pass --agent NAME", c.Score, iterate.Agent)
 		}
 	}
-	ai, _, err := ResolveAgent(uf.Agents(), aiName)
+	ai, _, err := resolveAgentViaPlugin(uf.PluginKinds["agent"], aiName)
 	if err != nil {
 		return err
 	}

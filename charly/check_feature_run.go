@@ -29,6 +29,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // ---------------------------------------------------------------------------
@@ -65,16 +67,16 @@ func reportSteps(w io.Writer, results []StepResult, format string) int {
 // resolveGraderAgent loads the project's `agent:` catalog and resolves the named
 // AI (or the sole entry when name is empty). Errors clearly when no AI is
 // configured so the operator knows to add one or pass --no-agent.
-func resolveGraderAgent(dir, name string) (*AgentConfig, error) {
+func resolveGraderAgent(dir, name string) (*spec.AgentExecSpec, error) {
 	uf, ok, err := LoadUnified(dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading project for the ai: catalog: %w", err)
 	}
-	agents := uf.Agents()
-	if !ok || uf == nil || len(agents) == 0 {
+	bodies := uf.PluginKinds["agent"]
+	if !ok || uf == nil || len(bodies) == 0 {
 		return nil, fmt.Errorf("agent grader needs a kind:agent entry (an `agent:` map in check.yml); add one or pass --no-agent for deterministic-only")
 	}
-	ai, _, err := ResolveAgent(agents, name)
+	ai, _, err := resolveAgentViaPlugin(bodies, name)
 	if err != nil {
 		return nil, err
 	}

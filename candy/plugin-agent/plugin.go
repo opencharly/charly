@@ -33,21 +33,43 @@ func NewMeta() pb.PluginMetaServer {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke handles OpLoad: decode the authored `agent:` entity into spec.Agent and return it
-// re-marshalled as canonical JSON (the host validated the body against #AgentInput first).
+// Invoke handles two ops:
+//   - OpLoad: decode the authored `agent:` entity into spec.Agent and return it
+//     re-marshalled as canonical JSON (the host validated it against #AgentInput).
+//   - OpResolve: the agent de-type (Cutover E) — the host hands the opaque agent
+//     catalog + a selected name; this plugin applies name-selection + defaults and
+//     returns a generic AgentExecSpec the kernel's harness runs (resolve.go).
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("agent kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
-	}
-	var in spec.Agent
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("agent kind: decode entity: %w", err)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		var in spec.Agent
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("agent kind: decode entity: %w", err)
+			}
 		}
+		out, err := json.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("agent kind: marshal entity: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpResolve:
+		var in spec.AgentResolveInput
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("agent resolve: decode input: %w", err)
+			}
+		}
+		reply, err := resolveAgent(in)
+		if err != nil {
+			return nil, err
+		}
+		out, err := json.Marshal(reply)
+		if err != nil {
+			return nil, fmt.Errorf("agent resolve: marshal reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("agent kind: unsupported op %q", req.GetOp())
 	}
-	out, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("agent kind: marshal entity: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: out}, nil
 }

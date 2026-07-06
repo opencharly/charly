@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -57,7 +58,7 @@ type HarnessOpts struct {
 	// Phase / PhaseTotal carry progressive-scoping context (0/0 = single-pass).
 	Phase            int
 	PhaseTotal       int
-	Agent            *AgentConfig
+	Agent            *spec.AgentExecSpec
 	Prompt           string // template; per-iter substitution at render time
 	TargetImage      string
 	Tag              string

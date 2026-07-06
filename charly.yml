@@ -1767,6 +1767,38 @@ check-feature-local:
                 command: charly feature list candy
                 in_container: false
 # =================================================================
+# check-agent-local — R10 witness for the agent de-type (Cutover E). The AI-CLI
+# grader catalog (kind:agent) is a plugin kind stored OPAQUELY; candy/plugin-agent's
+# OpResolve resolves it into a generic AgentExecSpec the check/iterate harness
+# consumes. A disposable kind:local deploy on host: local whose plan carries a
+# deterministic check: (proving the deploy) PLUS an agent-check: step: `charly check
+# run` resolves the project's `agent:` catalog via resolveGraderAgent →
+# resolveAgentViaPlugin (ResolveKind → Invoke(OpResolve)) and drives the claude
+# grader (RunAgentOnce with the resolved AgentExecSpec) to assess the live host —
+# proving the resolved exec spec launches the CLI end-to-end.
+# =================================================================
+check-agent-local:
+    local:
+        from: check-feature-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for the agent de-type (Cutover E) — candy/plugin-agent's OpResolve resolves the opaque AI-CLI catalog into a generic AgentExecSpec the harness consumes. A disposable kind:local deploy whose plan pairs a deterministic check: with an agent-check: step, so `charly check run` resolves the `agent:` catalog via resolveAgentViaPlugin and drives the claude grader (RunAgentOnce) against the live host — proving the resolved exec spec launches the CLI end-to-end.
+        plan:
+            - check: command=true — the disposable host deploy is up
+              id: agent-host-up
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: "true"
+                in_container: false
+            - agent-check: a POSIX shell runs on the deployment host — run `sh -c 'echo AGENT-PROBE-OK'` and confirm the output is exactly AGENT-PROBE-OK
+              id: agent-grader-resolves-and-runs
+              context:
+                - runtime
+# =================================================================
 # check-doctor-local — R10 witness for the externalized `charly doctor` COMMAND
 # (candy/plugin-doctor, command:doctor) — the FIFTH welded-command externalization.
 # A disposable kind:local deploy on host: local that runs the deterministic `charly doctor`

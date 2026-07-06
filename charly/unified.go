@@ -118,12 +118,11 @@ type UnifiedFile struct {
 	// substrate; the apps ride in on the deploy's candies). See android_spec.go.
 	Android map[string]*AndroidSpec `yaml:"android,omitempty" json:"android,omitempty"`
 
-	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is no
-	// longer a typed core map: it was extracted into a dedicated plugin kind
-	// (candy/plugin-agent), so an `agent:` entity lands in PluginKinds["agent"]. The
-	// name-keyed map[string]*AgentConfig the harness consumes is reconstructed on
-	// demand by the Agents() accessor (decodes the canonical bodies back into
-	// AgentConfig = spec.Agent). See agent_config.go + Agents().
+	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
+	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
+	// PluginKinds["agent"] as an OPAQUE body. The kernel never types it: the harness
+	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve
+	// (resolveAgentViaPlugin) — the agent de-type, Cutover E. See agent_config.go.
 
 	// PluginKinds holds entities of KINDS contributed by plugins (a kind the core
 	// has no typed map for). Decoded via the plugin's Invoke envelope
@@ -1278,7 +1277,7 @@ func validateAndroidDevices(uf *UnifiedFile) error {
 //     pure include: steps without a single direct check: is rejected here).
 func validateIterateBed(uf *UnifiedFile, name string, node *BundleNode) error {
 	it := node.Iterate
-	agents := uf.Agents() // agent is a plugin kind now; reconstruct the name-keyed catalog
+	agents := uf.PluginKinds["agent"] // agent is a plugin kind; opaque name-keyed catalog
 	for _, a := range it.Agent {
 		if _, ok := agents[a]; !ok {
 			return fmt.Errorf("iterate bed %q: agent %q is not defined in the agent: catalog", name, a)

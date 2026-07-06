@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // --- parseVerdict --------------------------------------------------------
@@ -51,7 +53,7 @@ func TestParseVerdict_LastWins(t *testing.T) {
 // --- RunAgentOnce -----------------------------------------------------------
 
 func TestRunAIOnce_CapturesStdout(t *testing.T) {
-	ai := &AgentConfig{Command: []string{"sh", "-c", `echo '{"verdict":"pass","evidence":"ok"}'`}}
+	ai := &spec.AgentExecSpec{Command: []string{"sh", "-c", `echo '{"verdict":"pass","evidence":"ok"}'`}}
 	out, _, err := RunAgentOnce(context.Background(), ai, "ignored", 10*time.Second)
 	if err != nil {
 		t.Fatalf("RunAgentOnce: %v", err)
@@ -62,7 +64,7 @@ func TestRunAIOnce_CapturesStdout(t *testing.T) {
 }
 
 func TestRunAIOnce_SubstitutesPrompt(t *testing.T) {
-	ai := &AgentConfig{Command: []string{"printf", "%s", "${PROMPT}"}}
+	ai := &spec.AgentExecSpec{Command: []string{"printf", "%s", "${PROMPT}"}}
 	out, _, err := RunAgentOnce(context.Background(), ai, "HELLO-PROMPT-TOKEN", 10*time.Second)
 	if err != nil {
 		t.Fatalf("RunAgentOnce: %v", err)
@@ -73,7 +75,7 @@ func TestRunAIOnce_SubstitutesPrompt(t *testing.T) {
 }
 
 func TestRunAIOnce_Timeout(t *testing.T) {
-	ai := &AgentConfig{Command: []string{"sleep", "10"}}
+	ai := &spec.AgentExecSpec{Command: []string{"sleep", "10"}}
 	_, _, err := RunAgentOnce(context.Background(), ai, "x", 150*time.Millisecond)
 	if err == nil {
 		t.Fatal("expected a timeout error")
@@ -81,7 +83,7 @@ func TestRunAIOnce_Timeout(t *testing.T) {
 }
 
 func TestRunAIOnce_NoCommand(t *testing.T) {
-	if _, _, err := RunAgentOnce(context.Background(), &AgentConfig{}, "x", time.Second); err == nil {
+	if _, _, err := RunAgentOnce(context.Background(), &spec.AgentExecSpec{}, "x", time.Second); err == nil {
 		t.Fatal("expected error for an ai entry with no command")
 	}
 }
@@ -89,7 +91,7 @@ func TestRunAIOnce_NoCommand(t *testing.T) {
 // --- AgentGrader ---------------------------------------------------------
 
 func TestAgentGrader_GradeFail(t *testing.T) {
-	ai := &AgentConfig{Command: []string{"sh", "-c", `echo '{"verdict":"fail","evidence":"port closed"}'`}}
+	ai := &spec.AgentExecSpec{Command: []string{"sh", "-c", `echo '{"verdict":"fail","evidence":"port closed"}'`}}
 	g := &AgentGrader{Agent: ai, Target: "check-pod"}
 	res := g.Grade(context.Background(), GraderRequest{Keyword: "Then", Text: "the port answers"})
 	if res.Status != TestFail {
@@ -101,7 +103,7 @@ func TestAgentGrader_GradeFail(t *testing.T) {
 }
 
 func TestAgentGrader_UnparseableIsFail(t *testing.T) {
-	ai := &AgentConfig{Command: []string{"sh", "-c", `echo "I have no idea"`}}
+	ai := &spec.AgentExecSpec{Command: []string{"sh", "-c", `echo "I have no idea"`}}
 	g := &AgentGrader{Agent: ai, Target: "check-pod"}
 	res := g.Grade(context.Background(), GraderRequest{Keyword: "Then", Text: "x"})
 	if res.Status != TestFail {

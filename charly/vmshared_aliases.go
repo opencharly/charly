@@ -10,7 +10,6 @@ package main
 import "github.com/opencharly/sdk/vmshared"
 
 type (
-	AgentConfig              = vmshared.AgentConfig
 	AliasConfig              = vmshared.AliasConfig
 	AliasYAML                = vmshared.AliasYAML
 	AlpineBootstrapDef       = vmshared.AlpineBootstrapDef

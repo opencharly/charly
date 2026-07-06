@@ -48,15 +48,14 @@ codex:
 		t.Fatalf("agent entity not keyed by node name 'claude'; keys %v", raw)
 	}
 
-	// (2) The Agents() accessor reconstructs the name-keyed *AgentConfig catalog with
-	// the authored fields round-tripped.
-	agents := uf.Agents()
-	if len(agents) != 2 {
-		t.Fatalf("uf.Agents() returned %d agents, want 2", len(agents))
+	// (2) The opaque body carries the authored fields (peek without typing — the
+	// kernel does not decode agent bodies).
+	var claude struct {
+		Command      []string `json:"command"`
+		OutputFormat string   `json:"output_format"`
 	}
-	claude := agents["claude"]
-	if claude == nil {
-		t.Fatal("uf.Agents() missing 'claude'")
+	if err := json.Unmarshal(raw["claude"], &claude); err != nil {
+		t.Fatalf("decode claude body: %v", err)
 	}
 	if len(claude.Command) == 0 || claude.Command[0] != "claude" {
 		t.Errorf("claude.Command = %v, want it to start with 'claude'", claude.Command)
@@ -65,13 +64,15 @@ codex:
 		t.Errorf("claude.OutputFormat = %q, want %q", claude.OutputFormat, "stream-json")
 	}
 
-	// (3) ResolveAgent finds a known name through the accessor (the consumer path).
-	got, name, err := ResolveAgent(uf.Agents(), "claude")
+	// (3) resolveAgentViaPlugin resolves a known name through the REAL compiled-in
+	// provider (ResolveKind → Invoke(OpResolve)) — the live-dispatch seam the harness
+	// uses, with the plugin applying defaults (prompt_via → argv).
+	execSpec, name, err := resolveAgentViaPlugin(uf.PluginKinds["agent"], "claude")
 	if err != nil {
-		t.Fatalf("ResolveAgent(claude): %v", err)
+		t.Fatalf("resolveAgentViaPlugin(claude): %v", err)
 	}
-	if name != "claude" || got == nil {
-		t.Fatalf("ResolveAgent returned name=%q entry=%v, want claude", name, got)
+	if name != "claude" || execSpec == nil || execSpec.PromptVia != "argv" {
+		t.Fatalf("resolveAgentViaPlugin returned name=%q spec=%v, want claude with default prompt_via", name, execSpec)
 	}
 }
 
