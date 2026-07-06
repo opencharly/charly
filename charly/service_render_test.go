@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -48,8 +49,16 @@ command={{.Exec}}
 autorestart={{supervisordRestart .Restart}}
 `
 
-func testSystemdInitDef() *InitDef {
-	return &InitDef{
+// withRaw sets .Raw to the fixture's own marshalled JSON — since ResolvedInit's
+// tags match spec.Init, the plugin render decodes .Raw back into a spec.Init with
+// the ServiceSchema, exactly as production does.
+func withRaw(ri *ResolvedInit) *ResolvedInit {
+	ri.Raw, _ = json.Marshal(ri)
+	return ri
+}
+
+func testSystemdInitDef() *ResolvedInit {
+	return withRaw(&ResolvedInit{
 		ManagementTool: "systemctl",
 		ServiceSchema: &ServiceSchemaDef{
 			ServiceTemplate:    testSystemdServiceTemplate,
@@ -58,18 +67,18 @@ func testSystemdInitDef() *InitDef {
 			DropinPathTemplate: testSystemdDropinPathTemplate,
 			SupportsPackaged:   true,
 		},
-	}
+	})
 }
 
-func testSupervisordInitDef() *InitDef {
-	return &InitDef{
+func testSupervisordInitDef() *ResolvedInit {
+	return withRaw(&ResolvedInit{
 		ManagementTool: "supervisorctl",
 		ServiceSchema: &ServiceSchemaDef{
 			ServiceTemplate:  testSupervisordServiceTemplate,
 			UnitPathTemplate: `/etc/supervisord.d/{{.Candy}}-{{.Name}}.conf`,
 			SupportsPackaged: false,
 		},
-	}
+	})
 }
 
 func TestRenderServiceCustomSystemd(t *testing.T) {
@@ -279,34 +288,6 @@ func TestRenderServiceUserScope(t *testing.T) {
 	}
 }
 
-func TestRestartMappingFuncs(t *testing.T) {
-	funcs := serviceRenderFuncs()
-
-	systemdRestart := funcs["systemdRestart"].(func(string) string)
-	if got := systemdRestart("always"); got != "always" {
-		t.Errorf("systemdRestart(always) = %q", got)
-	}
-	if got := systemdRestart("on-failure"); got != "on-failure" {
-		t.Errorf("systemdRestart(on-failure) = %q", got)
-	}
-	if got := systemdRestart("unless-stopped"); got != "always" {
-		t.Errorf("systemdRestart(unless-stopped) = %q (want always)", got)
-	}
-	if got := systemdRestart(""); got != "no" {
-		t.Errorf("systemdRestart(empty) = %q (want no)", got)
-	}
-
-	supRestart := funcs["supervisordRestart"].(func(string) string)
-	if got := supRestart("always"); got != "true" {
-		t.Errorf("supervisordRestart(always) = %q", got)
-	}
-	if got := supRestart("on-failure"); got != "unexpected" {
-		t.Errorf("supervisordRestart(on-failure) = %q", got)
-	}
-	if got := supRestart("no"); got != "false" {
-		t.Errorf("supervisordRestart(no) = %q", got)
-	}
-}
 
 func TestServiceEntryIsPackaged(t *testing.T) {
 	packaged := &ServiceEntry{UsePackaged: "foo.service"}

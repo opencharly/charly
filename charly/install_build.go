@@ -1050,7 +1050,7 @@ func compileServiceSteps(layer *Candy, img *ResolvedBox, hostCtx HostContext) []
 
 	// Lazy-loaded systemd InitDef + render context — only loaded if the
 	// target is systemd AND at least one custom entry needs rendering.
-	var systemdDef *InitDef
+	var systemdDef *ResolvedInit
 	var renderCtx ServiceRenderContext
 	loadedSystemd := false
 	loadSystemd := func() bool {

@@ -483,7 +483,7 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	}
 
 	// Detect active init systems from candies (driven by the embedded init: vocabulary config)
-	activeInits := make(map[string]*InitDef)
+	activeInits := make(map[string]*ResolvedInit)
 	if img.InitConfig != nil {
 		activeInits = img.InitConfig.ActiveInit(g.Candies, candyOrder)
 	}
@@ -1069,7 +1069,7 @@ func (g *Generator) emitExtractedFiles(b *strings.Builder, img *ResolvedBox, can
 // emitInitAssembly assembles init system configs (driven by the embedded init:
 // vocabulary templates): the assembly template, system-level service enablement,
 // and any post-assembly step, per active init system.
-func (g *Generator) emitInitAssembly(b *strings.Builder, img *ResolvedBox, candyOrder []string, activeInits map[string]*InitDef, initHasFragments map[string]bool) error {
+func (g *Generator) emitInitAssembly(b *strings.Builder, img *ResolvedBox, candyOrder []string, activeInits map[string]*ResolvedInit, initHasFragments map[string]bool) error {
 	for initName, def := range activeInits {
 		// assembly_template bind-mounts from the scratch stage emitted above;
 		// skip it when no fragments were contributed (stage was not emitted).
@@ -1168,7 +1168,7 @@ func (g *Generator) emitTraefikRouteStage(b *strings.Builder, boxName string, im
 // `system_services:` (plain unit names) COPYs no fragment files, so emitting an
 // empty `FROM scratch AS <stage>` plus the `assembly_template` RUN that
 // bind-mounts from it would fail at build time with "no such file or directory".
-func (g *Generator) emitInitFragmentStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string, activeInits map[string]*InitDef) (map[string]bool, error) {
+func (g *Generator) emitInitFragmentStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string, activeInits map[string]*ResolvedInit) (map[string]bool, error) {
 	initHasFragments := map[string]bool{}
 	for initName, def := range activeInits {
 		initCandyOrder := candyOrder
@@ -1680,7 +1680,7 @@ func (g *Generator) generateTraefikRoutes(boxName string, candyOrder []string, _
 // service: list and renders every entry that binds to this init via
 // per-entry routing (use_packaged → systemd; custom exec → any init with
 // a service_template). No legacy raw-INI path.
-func (g *Generator) generateInitFragments(boxName, initName string, def *InitDef, candyOrder []string) error {
+func (g *Generator) generateInitFragments(boxName, initName string, def *ResolvedInit, candyOrder []string) error {
 	fragDir := filepath.Join(g.BuildDir, boxName, def.FragmentDir)
 	if err := os.MkdirAll(fragDir, 0755); err != nil {
 		return err

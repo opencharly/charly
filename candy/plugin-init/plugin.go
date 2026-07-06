@@ -42,18 +42,53 @@ type provider struct{ pb.UnimplementedProviderServer }
 // against #InitInput first; re-marshalling through spec.Init canonicalises it so
 // UnifiedFile.Inits() reads uf.PluginKinds["init"] back into InitDef = spec.Init).
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("init kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
-	}
-	var in spec.Init
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("init kind: decode entity: %w", err)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		var in spec.Init
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("init kind: decode entity: %w", err)
+			}
 		}
+		out, err := json.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("init kind: marshal entity: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpResolve:
+		// The init de-type (Cutover F): Render (leg 1 — one service unit) or Config
+		// (legs 2–4 — the resolved init envelope of build/label/entrypoint values).
+		var reqIn spec.InitResolveRequest
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &reqIn); err != nil {
+				return nil, fmt.Errorf("init resolve: decode input: %w", err)
+			}
+		}
+		var (
+			out []byte
+			err error
+		)
+		switch {
+		case reqIn.Render != nil:
+			reply, rerr := renderServiceUnit(*reqIn.Render)
+			if rerr != nil {
+				return nil, rerr
+			}
+			out, err = json.Marshal(reply)
+		case reqIn.Config != nil:
+			reply, rerr := resolveInitConfig(*reqIn.Config)
+			if rerr != nil {
+				return nil, rerr
+			}
+			out, err = json.Marshal(reply)
+		default:
+			return nil, fmt.Errorf("init resolve: empty request (neither render nor config)")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("init resolve: marshal reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("init kind: unsupported op %q", req.GetOp())
 	}
-	out, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("init kind: marshal entity: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: out}, nil
 }

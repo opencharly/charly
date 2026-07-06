@@ -142,7 +142,7 @@ type ResolvedBox struct {
 	BuilderConfig *BuilderConfig `json:"-"` // builder section of the embedded vocabulary (charly/charly.yml)
 	InitConfig    *InitConfig    `json:"-"` // init section of the embedded vocabulary (charly/charly.yml)
 	InitSystem    string         `json:"-"` // resolved init system name ("supervisord", "systemd", "")
-	InitDef       *InitDef       `json:"-"` // resolved init definition (cached)
+	InitDef       *ResolvedInit  `json:"-"` // resolved init definition (cached)
 
 	// Data image (scratch-based, data-only)
 	DataImage bool // true = FROM scratch, no runtime, no init, no services

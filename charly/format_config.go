@@ -425,7 +425,7 @@ func (bc *BuilderConfig) BuilderNames() []string {
 type BuildFile struct {
 	Distro  map[string]*DistroDef  `yaml:"distro" json:"distro"`
 	Builder map[string]*BuilderDef `yaml:"builder" json:"builder"`
-	Init    map[string]*InitDef    `yaml:"init" json:"init"`
+	Init    map[string]*ResolvedInit `yaml:"init" json:"init"`
 }
 
 // LoadBuildConfigForBox loads distro, builder, and init configs for the

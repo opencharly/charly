@@ -50,7 +50,6 @@ type (
 	GpuSelector              = vmshared.GpuSelector
 	HooksConfig              = vmshared.HooksConfig
 	HostDistro               = vmshared.HostDistro
-	InitDef                  = vmshared.InitDef
 	InstallOptsConfig        = vmshared.InstallOptsConfig
 	IterateConfig            = vmshared.IterateConfig
 	K8sDeployConfig          = vmshared.K8sDeployConfig

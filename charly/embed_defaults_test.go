@@ -191,7 +191,7 @@ amd-gpu:
 	}
 
 	// builder/init/resource are plugin kinds now; read each vocab back via its accessor.
-	builders, inits, resources := uf.Builders(), uf.Inits(), uf.Resources()
+	builders, inits, resources := uf.Builders(), uf.resolveInits(), uf.Resources()
 
 	// builder: override wins WHOLESALE (gap-fill replaces, never deep-merges), a
 	// new entry coexists, an untouched embedded entry survives.

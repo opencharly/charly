@@ -85,7 +85,7 @@ func (c *ServiceRestartCmd) Run() error {
 }
 
 // resolveServiceInit resolves the container, engine, and init system for service management.
-func resolveServiceInit(box, instance string) (engine, containerName string, initDef *InitDef, err error) {
+func resolveServiceInit(box, instance string) (engine, containerName string, initDef *ResolvedInit, err error) {
 	rt, err := ResolveRuntime()
 	if err != nil {
 		return "", "", nil, err
@@ -131,7 +131,7 @@ func resolveServiceInit(box, instance string) (engine, containerName string, ini
 // runtime too — they no longer need an entry here. This table is frozen at
 // the two init systems that predate the label; do NOT add new ones (declare
 // them in the vocabulary instead, where they bake into the label).
-var wellKnownInitDefs = map[string]*InitDef{
+var wellKnownInitDefs = map[string]*ResolvedInit{
 	"supervisord": {
 		Entrypoint:     []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"},
 		ManagementTool: "supervisorctl",
@@ -161,9 +161,9 @@ var wellKnownInitDefs = map[string]*InitDef{
 // system — including custom ones — resolves at runtime. Falls back to
 // wellKnownInitDefs only for pre-init_def-label images (built before the
 // label existed).
-func resolveInitDefFromMeta(meta *BoxMetadata) (*InitDef, error) {
+func resolveInitDefFromMeta(meta *BoxMetadata) (*ResolvedInit, error) {
 	if meta.InitDef != nil {
-		return &InitDef{
+		return &ResolvedInit{
 			Entrypoint:         meta.InitDef.Entrypoint,
 			FallbackEntrypoint: meta.InitDef.FallbackEntrypoint,
 			ManagementTool:     meta.InitDef.ManagementTool,
@@ -177,7 +177,7 @@ func resolveInitDefFromMeta(meta *BoxMetadata) (*InitDef, error) {
 }
 
 // execInitCommand executes a service management command inside a container.
-func execInitCommand(engine, containerName string, initDef *InitDef, operation string, args ...string) error {
+func execInitCommand(engine, containerName string, initDef *ResolvedInit, operation string, args ...string) error {
 	serviceName := ""
 	if len(args) > 0 {
 		serviceName = args[0]

@@ -289,14 +289,14 @@ func TestGenerateInitFragments(t *testing.T) {
 	}
 
 	// Minimal supervisord-like template that renders a [program:NAME] block.
-	supervisordDef := &InitDef{
+	supervisordDef := withRaw(&ResolvedInit{
 		Model:       "fragment_assembly",
 		FragmentDir: "supervisor",
 		ServiceSchema: &ServiceSchemaDef{
 			SupportsPackaged: false,
 			ServiceTemplate:  "[program:{{.Name}}]\ncommand={{.Exec}}\n",
 		},
-	}
+	})
 
 	err := g.generateInitFragments("test-image", "supervisord", supervisordDef, []string{"python", "svc", "other"})
 	if err != nil {
@@ -354,7 +354,7 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 		},
 	}
 
-	supervisordDef := &InitDef{
+	supervisordDef := withRaw(&ResolvedInit{
 		Model:       "fragment_assembly",
 		FragmentDir: "supervisor",
 		ServiceSchema: &ServiceSchemaDef{
@@ -362,7 +362,7 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 			ServiceTemplate:  "[program:{{.Name}}]\ncommand={{.Exec}}\n",
 		},
 		RelayTemplate: relayTmpl,
-	}
+	})
 
 	err := g.generateInitFragments("test-image", "supervisord", supervisordDef, []string{"socat", "chrome"})
 	if err != nil {
@@ -406,7 +406,7 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 
 func TestRenderRelayTemplate(t *testing.T) {
 	relayTmpl := "[program:relay-{{.Port}}]\ncommand=/usr/local/bin/relay-wrapper {{.Port}}\nautostart=true\nautorestart=true\npriority=1\nstartsecs=0\nstdout_logfile=/dev/fd/1\nstdout_logfile_maxbytes=0\nredirect_stderr=true\n"
-	def := &InitDef{
+	def := &ResolvedInit{
 		RelayTemplate: relayTmpl,
 	}
 

@@ -12,7 +12,7 @@ import (
 // InitConfig represents the `init:` section of the embedded vocabulary (charly/charly.yml).
 // Each init system defines how to detect, build, assemble, and manage services.
 type InitConfig struct {
-	Init map[string]*InitDef `yaml:"init" json:"init"`
+	Init map[string]*ResolvedInit `yaml:"init" json:"init"`
 }
 
 // FragmentContext is the template context for fragment_template rendering.
@@ -65,7 +65,7 @@ func (ic *InitConfig) DetectCandyInit(ly *CandyYAML, candyPath string) []string 
 // detectsInit checks if a candy matches an init system's detection criteria.
 // Schema-driven: iterates the unified service: list + per-entry init routing
 // (IsPackaged → ServiceSchema.SupportsPackaged; custom exec → ServiceSchema.ServiceTemplate).
-func detectsInit(def *InitDef, ly *CandyYAML, candyPath string) bool {
+func detectsInit(def *ResolvedInit, ly *CandyYAML, candyPath string) bool {
 	if ly == nil {
 		return false
 	}
@@ -107,7 +107,7 @@ func detectsInit(def *InitDef, ly *CandyYAML, candyPath string) bool {
 // are also consulted for the bootc-prefer-systemd heuristic via
 // PreserveUser (the canonical signal that this is a bootc-flavored
 // composition).
-func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []string, explicit string) (string, *InitDef) {
+func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []string, explicit string) (string, *ResolvedInit) {
 	if ic == nil {
 		return "", nil
 	}
@@ -173,7 +173,7 @@ func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []s
 // ActiveInit returns all init systems that are active for the given image.
 // An image can have multiple active inits (e.g., supervisord + systemd on
 // bootc-flavored compositions).
-func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) map[string]*InitDef {
+func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) map[string]*ResolvedInit {
 	if ic == nil {
 		return nil
 	}
@@ -183,7 +183,7 @@ func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) 
 		caps = &AggregatedCandyCaps{Provided: map[string]bool{}}
 	}
 
-	result := make(map[string]*InitDef)
+	result := make(map[string]*ResolvedInit)
 	for _, candyName := range candyOrder {
 		layer, ok := layers[candyName]
 		if !ok {
@@ -212,7 +212,7 @@ func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) 
 
 // initDefRequirementsMet reports whether the init definition's
 // RequiresCapabilities are all present in the aggregated caps.
-func initDefRequirementsMet(def *InitDef, caps *AggregatedCandyCaps) bool {
+func initDefRequirementsMet(def *ResolvedInit, caps *AggregatedCandyCaps) bool {
 	if def == nil || len(def.RequiresCapability) == 0 {
 		return true
 	}
@@ -228,12 +228,12 @@ func initDefRequirementsMet(def *InitDef, caps *AggregatedCandyCaps) bool {
 }
 
 // HasRelayTemplate returns true if this init definition has a relay template.
-func initHasRelayTemplate(def *InitDef) bool {
+func initHasRelayTemplate(def *ResolvedInit) bool {
 	return def.RelayTemplate != ""
 }
 
 // RenderManagementCommand renders a management command template with the given service name.
-func initRenderManagementCommand(def *InitDef, operation, serviceName string) (string, error) {
+func initRenderManagementCommand(def *ResolvedInit, operation, serviceName string) (string, error) {
 	tmplStr, ok := def.ManagementCommands[operation]
 	if !ok {
 		return "", fmt.Errorf("init system %q has no management command for %q", def.ManagementTool, operation)
@@ -260,7 +260,7 @@ func (ic *InitConfig) InitNames() []string {
 }
 
 // RenderStageFragmentCopy renders the stage_fragment_copy template.
-func initRenderStageFragmentCopy(def *InitDef, boxName, fileName string) (string, error) {
+func initRenderStageFragmentCopy(def *ResolvedInit, boxName, fileName string) (string, error) {
 	if def.StageFragmentCopy == "" {
 		return "", nil
 	}
@@ -279,7 +279,7 @@ func initRenderStageFragmentCopy(def *InitDef, boxName, fileName string) (string
 // Function deleted; fragment_template field removed from InitDef.
 
 // RenderRelayTemplate renders the relay_template for a port relay.
-func initRenderRelayTemplate(def *InitDef, port int, candyName string, index int) (string, error) {
+func initRenderRelayTemplate(def *ResolvedInit, port int, candyName string, index int) (string, error) {
 	if def.RelayTemplate == "" {
 		return "", fmt.Errorf("init system has no relay_template")
 	}
@@ -299,7 +299,7 @@ func initRenderRelayTemplate(def *InitDef, port int, candyName string, index int
 }
 
 // RenderAssemblyTemplate renders the assembly_template.
-func initRenderAssemblyTemplate(def *InitDef) (string, error) {
+func initRenderAssemblyTemplate(def *ResolvedInit) (string, error) {
 	if def.AssemblyTemplate == "" {
 		return "", nil
 	}
@@ -307,7 +307,7 @@ func initRenderAssemblyTemplate(def *InitDef) (string, error) {
 }
 
 // RenderSystemEnableTemplate renders the system_enable_template.
-func initRenderSystemEnableTemplate(def *InitDef, units []string) (string, error) {
+func initRenderSystemEnableTemplate(def *ResolvedInit, units []string) (string, error) {
 	if def.SystemEnableTemplate == "" || len(units) == 0 {
 		return "", nil
 	}
@@ -316,7 +316,7 @@ func initRenderSystemEnableTemplate(def *InitDef, units []string) (string, error
 }
 
 // RenderPostAssemblyTemplate renders the post_assembly_template.
-func initRenderPostAssemblyTemplate(def *InitDef) (string, error) {
+func initRenderPostAssemblyTemplate(def *ResolvedInit) (string, error) {
 	if def.PostAssemblyTemplate == "" {
 		return "", nil
 	}

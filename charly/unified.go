@@ -1620,11 +1620,28 @@ func (uf *UnifiedFile) Builders() map[string]*BuilderDef {
 	return decodePluginKindMap[BuilderDef](uf, "builder")
 }
 
-// Inits reconstructs the name-keyed init-system vocabulary from uf.PluginKinds["init"]
-// (the `init` plugin kind, candy/plugin-init) into the map[string]*InitDef shape the
-// generator consumed when init was a typed core map.
-func (uf *UnifiedFile) Inits() map[string]*InitDef {
-	return decodePluginKindMap[InitDef](uf, "init")
+// resolveInits projects the name-keyed init-system vocabulary from
+// uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via
+// candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
+// kernel never types the bodies. A bad entry is skipped rather than poisoning the
+// vocabulary (cf. decodePluginKindMap).
+func (uf *UnifiedFile) resolveInits() map[string]*ResolvedInit {
+	if uf == nil {
+		return nil
+	}
+	bodies := uf.PluginKinds["init"]
+	if len(bodies) == 0 {
+		return nil
+	}
+	out := make(map[string]*ResolvedInit, len(bodies))
+	for name, body := range bodies {
+		ri, err := resolveInitConfigViaPlugin(body)
+		if err != nil || ri == nil {
+			continue
+		}
+		out[name] = ri
+	}
+	return out
 }
 
 // Resources reconstructs the name-keyed exclusive-host-resource vocabulary from
@@ -1683,7 +1700,7 @@ func (uf *UnifiedFile) ProjectBuilderConfig() *BuilderConfig {
 // ProjectInitConfig returns the *InitConfig equivalent (inits: section), decoding the
 // build vocabulary from the init plugin kind (uf.PluginKinds via Inits()).
 func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
-	inits := uf.Inits()
+	inits := uf.resolveInits()
 	if len(inits) == 0 {
 		return nil
 	}

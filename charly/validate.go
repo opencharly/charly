@@ -541,7 +541,7 @@ func validateInitDependencies(cfg *Config, initCfg *InitConfig, layers map[strin
 // init system should be skipped: for bootc-flavored compositions with dual-init
 // candies (service: + system_services:), the supervisord depends_candy check is
 // skipped when systemd is also triggered by a resolved candy.
-func checkInitSystemRequirements(def *InitDef, isBootcFlavored bool, resolved []string, layers map[string]*Candy) bool {
+func checkInitSystemRequirements(def *ResolvedInit, isBootcFlavored bool, resolved []string, layers map[string]*Candy) bool {
 	if len(def.RequiresCapability) == 0 && isBootcFlavored {
 		for _, candyName := range resolved {
 			if layer, ok := layers[candyName]; ok && layer.HasInit("systemd") {
@@ -555,7 +555,7 @@ func checkInitSystemRequirements(def *InitDef, isBootcFlavored bool, resolved []
 // collectInitSystemNeeds returns the human-readable list of resolved candies
 // that require the given init system (directly via HasInit, or via port_relay
 // when the init def carries a relay template).
-func collectInitSystemNeeds(initName string, def *InitDef, resolved []string, layers map[string]*Candy) []string {
+func collectInitSystemNeeds(initName string, def *ResolvedInit, resolved []string, layers map[string]*Candy) []string {
 	var needsInit []string
 	for _, candyName := range resolved {
 		layer, ok := layers[candyName]
