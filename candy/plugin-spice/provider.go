@@ -23,10 +23,10 @@ import (
 // exit_status matchers + the artifact validators itself (via the shared sdk
 // implementation — R3), and return the wire {status,message} the host decodes.
 
-// spiceEndpoint is the host-pre-resolved, DIALABLE SPICE endpoint. Exactly one of
-// Socket / Address is set (the host prefers the UNIX socket; for a remote qemu+ssh://
-// VM the host opens the side tunnel and hands back the forwarded LOCAL address). The
-// plugin needs no libvirt / SSH machinery — it just dials this.
+// spiceEndpoint is the DIALABLE SPICE endpoint the plugin builds from the addr/socket the
+// generic VM-graphics reverse-leg (cc.ResolveGraphicsEndpoint) returns. Exactly one of Socket
+// / Address is set (the host prefers the UNIX socket; for a remote qemu+ssh:// VM the host
+// opens the side tunnel and returns the forwarded LOCAL address). The plugin just dials it.
 type spiceEndpoint struct {
 	Address  string `json:"address"`  // "host:port" for a TCP listener (or forwarded-local TCP)
 	Socket   string `json:"socket"`   // UNIX socket path (or forwarded-local socket)
@@ -34,13 +34,11 @@ type spiceEndpoint struct {
 }
 
 // spiceEnv is the plugin-side decode of the CheckEnv the host ships as Operation.Env
-// for a `spice:` check step (provider_checkenv.go). Box/Mode mirror the shared
-// CheckEnv; Spice carries the host-resolved endpoint (nil when the host could not
-// resolve one — e.g. no spice op, no VM context).
+// for a `spice:` check step (provider_checkenv.go). Box/Mode mirror the shared CheckEnv; the
+// endpoint is no longer pre-shipped — the plugin resolves it via cc.ResolveGraphicsEndpoint.
 type spiceEnv struct {
-	Box       string          `json:"box"`
-	Mode      string          `json:"mode"` // "live" | "box"
-	Substrate json.RawMessage `json:"substrate"`
+	Box  string `json:"box"`
+	Mode string `json:"mode"` // "live" | "box"
 }
 
 type provider struct{ pb.UnimplementedProviderServer }
@@ -51,7 +49,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // mode (no live VM SPICE endpoint on a disposable `charly check box`), dials the
 // pre-resolved endpoint, dispatches the method, and self-evaluates the matchers +
 // artifact validators.
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {
@@ -64,16 +62,6 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	// The host's verb preresolver ships the dialable SPICE endpoint in the opaque
-	// CheckEnv.Substrate (the generic per-verb channel that replaced the typed
-	// CheckEnv.Spice field); decode it into the plugin's own endpoint type.
-	var ep *spiceEndpoint
-	if len(env.Substrate) > 0 {
-		var e spiceEndpoint
-		if err := json.Unmarshal(env.Substrate, &e); err == nil {
-			ep = &e
-		}
-	}
 	method := in.Method
 
 	// Live-VM verb: skip under `charly check box` (no running VM SPICE endpoint on a
@@ -81,13 +69,26 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if env.Mode == "box" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("spice: %s requires a running VM (skip under charly check box)", method))
 	}
-	// No endpoint resolved → skip. The host already decided a SKIP for the "VM
-	// declares no SPICE device" case (returning the N/A result before dispatch), so a
-	// nil endpoint here means no VM context at all (the analogue of the host's
-	// empty-box skip).
-	if ep == nil {
+	// Resolve the dialable SPICE endpoint via the GENERIC VM-graphics reverse-leg
+	// (cc.ResolveGraphicsEndpoint) — the host owns the go-libvirt resolution + any qemu+ssh://
+	// tunnel this out-of-process plugin cannot reach. Replaces the former host-side spice preresolver.
+	cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("spice: %s: %v", method, err))
+	}
+	ge, err := cc.ResolveGraphicsEndpoint(ctx, "spice")
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("spice: %s: %v", method, err))
+	}
+	// N/A: the VM declares no SPICE graphics device (the SPICE-less GPU desktop bed).
+	if ge.Skip {
+		return sdk.ResultJSON("skip", fmt.Sprintf("spice %s — N/A: %s", method, ge.SkipMessage))
+	}
+	// No live VM context (no-box) → skip, the analogue of the host's empty-box skip.
+	if ge.Addr == "" && ge.Socket == "" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("spice: %s has no VM SPICE endpoint (box=%q)", method, env.Box))
 	}
+	ep := &spiceEndpoint{Address: ge.Addr, Socket: ge.Socket, Password: ge.Password}
 
 	s, dialErr := dialEndpoint(ep)
 	if dialErr != nil {

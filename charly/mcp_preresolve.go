@@ -15,8 +15,7 @@ import (
 // and the container-network → host-routable URL rewrite (InspectContainer +
 // rewriteMCPURLForHost), handing the plugin a plain DIALABLE endpoint (plus the
 // metadata-only entry list the `servers` method needs) via the CheckEnv. This is the
-// mcp analogue of preresolveSpiceEndpoint (spice_preresolve.go) and
-// preresolveKubeCluster (k8s_config.go): the out-of-process plugin cannot reach
+// mcp analogue of preresolveKubeCluster (k8s_config.go): the out-of-process plugin cannot reach
 // core's podman engine / project loader, so the host pre-resolves before marshaling.
 
 // McpEnv is the host-resolved MCP check context shipped to the out-of-process
@@ -43,7 +42,7 @@ type McpEnv struct {
 //     errors); nil to proceed to dispatch.
 //
 // For `mcp: servers` only the Entries are needed (no dial); every other method also
-// fills the picked URL/Transport/Name. Mirrors preresolveSpiceEndpoint, minus the
+// fills the picked URL/Transport/Name. Resolves a single dialable endpoint, minus the
 // SSH tunnel (mcp has no remote-hypervisor side channel — the rewrite to a published
 // host port is the whole host-routability story).
 func (r *Runner) preresolveMcpEndpoint(c *Op) (env *McpEnv, early *CheckResult) {

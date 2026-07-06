@@ -62,7 +62,7 @@ func vmCreateRenderedXML(raw json.RawMessage) string {
 
 // displayEndpointWire decodes the vm plugin's resolve-spice/resolve-vnc result's `endpoint` (the
 // plugin's DisplayEndpoint, marshaled by field name — no json tags; json.Unmarshal matches
-// case-insensitively). The host builds the SpiceEnv/VNC dialing + any ssh tunnel from it.
+// case-insensitively). The host builds the SPICE/VNC dialing + any ssh tunnel from it.
 type displayEndpointWire struct {
 	IsSocket     bool
 	SocketPath   string

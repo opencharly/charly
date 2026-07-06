@@ -40,19 +40,8 @@ func init() {
 		}
 		return sub, c, nil, nil
 	})
-	registerVerbPreresolver("spice", func(r *Runner, c *Op) (json.RawMessage, *Op, func(), *CheckResult) {
-		env, cleanup, early := r.preresolveSpiceEndpoint(c)
-		if early != nil {
-			return nil, c, cleanup, early
-		}
-		var sub json.RawMessage
-		if env != nil {
-			if b, err := json.Marshal(env); err == nil {
-				sub = b
-			}
-		}
-		return sub, c, cleanup, nil
-	})
+	// spice resolves its own endpoint via the generic cc.ResolveGraphicsEndpoint reverse-leg
+	// (H part 2) — no host preresolver.
 	registerVerbPreresolver("kube", func(_ *Runner, c *Op) (json.RawMessage, *Op, func(), *CheckResult) {
 		// kube ships no Substrate — it rewrites the op's KubeContext host-side (an
 		// out-of-process kube verb cannot reach core's findK8sSpec project loader).

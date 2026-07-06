@@ -51,9 +51,9 @@ import "context"
 // cgo opus/portaudio audio transitives left charly's core go.mod). It keeps its `spice:`
 // discriminator + modifiers on core #Op (authoring unchanged) but is NOT a
 // CheckVerbProvider, so it dispatches via invokeVerbProvider (the else-branch in runOne)
-// once the loader registers its grpcProvider — never through this in-proc set. The host
-// pre-resolves the VM's live SPICE endpoint to a dialable address (preresolveSpiceEndpoint)
-// before marshaling, so the plugin needs no go-libvirt.
+// once the loader registers its grpcProvider — never through this in-proc set. The plugin
+// resolves the VM's live SPICE endpoint to a dialable address via the cc.ResolveGraphicsEndpoint
+// reverse-leg, so it needs no go-libvirt.
 
 // pluginVerb — the generic `plugin:` discriminator. Its RunVerb resolves the
 // authored plugin word (op.Plugin) to its registered Provider and Invokes it

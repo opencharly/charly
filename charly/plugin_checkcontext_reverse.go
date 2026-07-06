@@ -20,7 +20,8 @@ type checkContextReverseServer struct {
 	pb.UnimplementedCheckContextServiceServer
 	httpBase  *http.Client                   // the engine's base HTTP client (default timeout); per-request policy applied per call
 	addBg     func(pid int)                  // r.Scenario.AddBackground, nil when there is no scenario context
-	resolveEp func(port int) (string, error) // r.resolveVerbEndpoint — venue→addr, forwards tracked on the Runner for post-Invoke teardown
+	resolveEp  func(port int) (string, error)         // r.resolveVerbEndpoint — venue→addr, forwards tracked on the Runner for post-Invoke teardown
+	resolveGfx func(kind string) (graphicsEndpoint, error) // r.resolveVerbGraphics — VM graphics (vnc/spice) endpoint, tunnel tracked on the Runner
 }
 
 // HTTPDo issues the request from the host's network namespace via the SHARED host HTTP-do
@@ -58,6 +59,24 @@ func (s *checkContextReverseServer) ResolveEndpoint(_ context.Context, req *pb.R
 		return &pb.ResolveEndpointReply{Error: err.Error()}, nil
 	}
 	return &pb.ResolveEndpointReply{Addr: addr}, nil
+}
+
+// ResolveGraphicsEndpoint resolves a VM's <graphics type='<kind>'> listener to a dialable
+// endpoint via the host's resolveVerbGraphics (the SAME machinery the in-process
+// runnerCheckContext.ResolveGraphicsEndpoint uses, R3). Any ssh -L forward it opens is tracked
+// on the Runner and closed after the calling verb's Invoke. A resolution failure rides the
+// reply error field; Skip signals an N/A (no graphics device of that kind).
+func (s *checkContextReverseServer) ResolveGraphicsEndpoint(_ context.Context, req *pb.ResolveGraphicsEndpointRequest) (*pb.ResolveGraphicsEndpointReply, error) {
+	if s.resolveGfx == nil {
+		return &pb.ResolveGraphicsEndpointReply{Error: "graphics endpoint resolution unavailable (no runner context)"}, nil
+	}
+	ge, err := s.resolveGfx(req.GetKind())
+	if err != nil {
+		return &pb.ResolveGraphicsEndpointReply{Error: err.Error()}, nil
+	}
+	return &pb.ResolveGraphicsEndpointReply{
+		Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage,
+	}, nil
 }
 
 // AddBackground registers a host-side background PID with the active plan run for teardown

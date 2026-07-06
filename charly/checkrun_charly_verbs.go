@@ -53,6 +53,7 @@ func (r *Runner) resolveCheckApk(apk, origin string) (string, error) {
 // no SPICE/VNC graphics device declared in vm.yml") — the signal for a legitimate N/A
 // SKIP, not a check failure. Both VM-display verbs are EXTERNAL-CHARLY-VERBS
 // (candy/plugin-spice, candy/plugin-vnc); the skip is enforced HOST-side by their
-// endpoint pre-resolvers (preresolveSpiceEndpoint / preresolveVncEndpoint) and the
+// endpoint resolution (spice via the cc.ResolveGraphicsEndpoint reverse-leg's Skip, vnc via
+// preresolveVncEndpoint) and the
 // skip wording stays anchored to ONE string (R3).
 const noVmDisplayDeviceErr = "graphics device declared in vm.yml"

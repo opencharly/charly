@@ -17,8 +17,7 @@ import (
 // stdlib-only RFC 6143 VNC client) but owns NONE of charly's venue / podman / libvirt /
 // port-mapping machinery — so the host does the deployment → venue → host-reachable-RFB
 // resolution and hands the plugin a plain DIALABLE "host:port" (+ the resolved VNC
-// password) via the CheckEnv. This is the vnc analogue of preresolveSpiceEndpoint
-// (spice_preresolve.go): the plugin
+// password) via the CheckEnv. The plugin
 // cannot reach core's podman engine / project loader / go-libvirt, so the host
 // pre-resolves before marshaling.
 //
@@ -51,8 +50,7 @@ type VncEnv struct {
 //     subprocess-stderr no-display-device skip) or a FAIL when the endpoint cannot
 //     be resolved; nil to proceed to dispatch.
 //
-// Mirrors preresolveSpiceEndpoint's early-FAIL-on-resolution-error + no-display-device
-// SKIP; it also returns a cleanup because the
+// Early-FAILs on a resolution error, SKIPs on no-display-device; it also returns a cleanup because the
 // container leg opens a CheckEndpoint (an ssh -L forward for a host/ssh venue) and the VM
 // leg opens a bridge listener / SSH tunnel the host must release after Invoke.
 func (r *Runner) preresolveVncEndpoint(c *Op) (env *VncEnv, cleanup func(), early *CheckResult) {
