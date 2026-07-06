@@ -9,7 +9,6 @@ jupyter:
             the /workspace volume under supervisord. A bundled MCP server (composed
             from jupyter-mcp) exposes notebook_*/cell_* tools at /mcp so an agent
             can create and edit notebooks over the Model Context Protocol.
-    jupyter-require:
         require:
             - supervisord
             # plugin-mcp is the OUT-OF-TREE plugin that serves the `mcp:` check verb
@@ -21,30 +20,23 @@ jupyter:
             # adopts the matching @github pin via reconcile later — the deliberate cross-repo
             # lag; the R10 bed loads the LOCAL candy via the superproject override.)
             - plugin-mcp
-    jupyter-candy:
         candy:
             - jupyter-mcp
-    jupyter-env:
         env:
             MCP_SERVER_NAME: "jupyter"
-    jupyter-distro:
         distro:
             fedora:
                 package:
                     - git
-    jupyter-port:
         port:
             - 8888
-    jupyter-mcp_provide:
         mcp_provide:
             - name: jupyter
               url: "http://{{.ContainerName}}:8888/mcp"
               transport: http
-    jupyter-volume:
         volume:
             - name: workspace
               path: /workspace
-    jupyter-service:
         service:
             - name: jupyter
               exec: "bash -c 'if [ -n \"${JUPYTER_TOKEN_FILE:-}\" ] && [ -f \"${JUPYTER_TOKEN_FILE}\" ]; then TOKEN=$(cat \"${JUPYTER_TOKEN_FILE}\"); exec jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"$TOKEN\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; else exec jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"\" --ServerApp.password=\"\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; fi'"
@@ -52,155 +44,102 @@ jupyter:
               working_directory: "%(ENV_HOME)s"
               enable: true
               scope: system
-    jupyter-step-0:
-        check: JupyterLab is installed as a pixi-managed binary in the default env
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/jupyter-lab
-            exists: true
-    jupyter-step-1:
-        check: the spaCy en_core_web_sm model loads for NLP notebooks
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-    jupyter-step-2:
-        check: the workspace volume is mounted for notebooks
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: /workspace
-            filetype: directory
-    jupyter-step-3:
-        check: the JupyterLab service is running under supervisord
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: jupyter
-            running: true
-    jupyter-step-4:
-        check: the JupyterLab REST API answers on the published port with a server version
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8888}/api
-            status: 200
-            body:
-                - contains: version
-    jupyter-step-5:
-        check: the Jupyter MCP server responds to a protocol ping
-        mcp: ping
-        timeout: 30s
-        eventually: 90s
-        retry_interval: 3s
-        context:
-            - runtime
-    jupyter-step-6:
-        check: the MCP tool catalog exposes the notebook and cell manipulation tools
-        mcp: list-tools
-        stdout:
-            - contains: notebook_create
-            - contains: cell_execute
-        context:
-            - runtime
-    jupyter-step-7:
-        agent-check: an agent can create a notebook and edit its cells through the MCP server end to end
-    spacy-import:
-        check: command=${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-        id: spacy-import
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-    jupyterlab-quarto-enabled:
-        check: command=${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
-        id: jupyterlab-quarto-enabled
-        exit_status: 0
-        stdout:
-            # Regex (not literal contains) because `jupyter labextension list`
-            # emits ANSI color codes inline between "enabled" and "OK" even on
-            # a non-TTY pipe (e.g. \x1b[32menabled\x1b[0m \x1b[32mOK\x1b[0m).
-            # The .* spans them.
-            - matches: "jupyterlab-quarto.*enabled.*OK"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
-    jupyter-port-2:
-        check: addr=127.0.0.1:${HOST_PORT:8888}
-        id: jupyter-port
-        timeout: 5s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:8888}
-            reachable: true
-    mcp-jupyter-list-tools:
-        check: mcp=list-tools
-        id: mcp-jupyter-list-tools
-        mcp: list-tools
-        stdout:
-            - contains: notebook_list
-            - contains: notebook_create
-            - contains: notebook_get
-            - contains: notebook_watch
-            - contains: notebook_list_users
-            - contains: cell_get
-            - contains: cell_update
-            - contains: cell_insert
-            - contains: cell_delete
-            - contains: cell_execute
-            - contains: room_list
-            - not_contains: room_open
-            - not_contains: room_close
-            - not_contains: room_pick
-        context:
-            - runtime
-    mcp-jupyter-list-notebooks:
-        check: mcp=call
-        id: mcp-jupyter-list-notebooks
-        mcp: call
-        tool: notebook_list
-        input: "{}"
-        exit_status: 0
-        context:
-            - runtime
-    mcp-jupyter-cell-update-preserves-id:
-        check: |
-            command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
-            import asyncio, json, sys, uuid
-            from fastmcp import Client
-            async def main():
-                async with Client("http://localhost:8888/mcp") as c:
-                    async def call(t, a=None):
-                        r = await c.call_tool(t, a or {})
-                        return r.data if r.data is not None else json.loads(
-                            "".join(b.text for b in r.content if hasattr(b, "text"))
-                        )
-                    p = f"_check_id_{uuid.uuid4().hex[:8]}.ipynb"
-                    await call("notebook_create", {"path": p})
-                    await call("cell_insert", {"path": p, "index": 0,
-                                                "source": "alpha", "cell_type": "markdown"})
-                    before = (await call("cell_get", {"path": p, "index": 0}))["id"]
-                    await call("cell_update", {"path": p, "index": 0, "source": "beta"})
-                    after = (await call("cell_get", {"path": p, "index": 0}))["id"]
-                    assert before == after, f"id drift {before!r} -> {after!r}"
-                    print("OK")
-            asyncio.run(main())
-            PYEOF
-        id: mcp-jupyter-cell-update-preserves-id
-        exit_status: 0
-        stdout:
-            - contains: "OK"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+        plan:
+            - check: JupyterLab is installed as a pixi-managed binary in the default env
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/jupyter-lab
+                exists: true
+            - check: the spaCy en_core_web_sm model loads for NLP notebooks
+              exit_status: 0
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+            - check: the workspace volume is mounted for notebooks
+              context:
+                - runtime
+              file:
+                file: /workspace
+                filetype: directory
+            - check: the JupyterLab service is running under supervisord
+              context:
+                - runtime
+              service:
+                service: jupyter
+                running: true
+            - check: the JupyterLab REST API answers on the published port with a server version
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8888}/api
+                status: 200
+                body:
+                    - contains: version
+            - check: the Jupyter MCP server responds to a protocol ping
+              mcp: ping
+              timeout: 30s
+              eventually: 90s
+              retry_interval: 3s
+              context:
+                - runtime
+            - check: the MCP tool catalog exposes the notebook and cell manipulation tools
+              mcp: list-tools
+              stdout:
+                - contains: notebook_create
+                - contains: cell_execute
+              context:
+                - runtime
+            - agent-check: an agent can create a notebook and edit its cells through the MCP server end to end
+            - check: command=${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+              id: spacy-import
+              exit_status: 0
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+            - check: command=${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
+              id: jupyterlab-quarto-enabled
+              exit_status: 0
+              stdout:
+                # Regex (not literal contains) because `jupyter labextension list`
+                # emits ANSI color codes inline between "enabled" and "OK" even on
+                # a non-TTY pipe (e.g. \x1b[32menabled\x1b[0m \x1b[32mOK\x1b[0m).
+                # The .* spans them.
+                - matches: "jupyterlab-quarto.*enabled.*OK"
+              command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
+            - check: addr=127.0.0.1:${HOST_PORT:8888}
+              id: jupyter-port
+              timeout: 5s
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:8888}
+                reachable: true
+            - check: mcp=list-tools
+              id: mcp-jupyter-list-tools
+              mcp: list-tools
+              stdout:
+                - contains: notebook_list
+                - contains: notebook_create
+                - contains: notebook_get
+                - contains: notebook_watch
+                - contains: notebook_list_users
+                - contains: cell_get
+                - contains: cell_update
+                - contains: cell_insert
+                - contains: cell_delete
+                - contains: cell_execute
+                - contains: room_list
+                - not_contains: room_open
+                - not_contains: room_close
+                - not_contains: room_pick
+              context:
+                - runtime
+            - check: mcp=call
+              id: mcp-jupyter-list-notebooks
+              mcp:
+                method: call
+                tool: notebook_list
+                input: "{}"
+              exit_status: 0
+              context:
+                - runtime
+            - check: |
+                command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
                 import asyncio, json, sys, uuid
                 from fastmcp import Client
                 async def main():
@@ -221,45 +160,38 @@ jupyter:
                         print("OK")
                 asyncio.run(main())
                 PYEOF
-            in_container: true
-    mcp-jupyter-cell-update-preserves-count:
-        check: |
-            command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
-            import asyncio, json, uuid
-            from fastmcp import Client
-            async def main():
-                async with Client("http://localhost:8888/mcp") as c:
-                    async def call(t, a=None):
-                        r = await c.call_tool(t, a or {})
-                        return r.data if r.data is not None else json.loads(
-                            "".join(b.text for b in r.content if hasattr(b, "text"))
-                        )
-                    p = f"_check_count_{uuid.uuid4().hex[:8]}.ipynb"
-                    await call("notebook_create", {"path": p})
-                    for i, src in enumerate(["a","b","c","d","e"]):
-                        await call("cell_insert", {"path": p, "index": i,
-                                                    "source": src, "cell_type": "markdown"})
-                    # Upstream YNotebook auto-injects a default empty code cell
-                    # on first room init, so baseline = N_inserts + 1. The
-                    # invariant we care about: cell_update preserves count.
-                    before = len((await call("notebook_get", {"path": p}))["cells"])
-                    for idx, src in [(0,"A"),(2,"C"),(4,"E"),(0,"AA"),(2,"CC")]:
-                        await call("cell_update", {"path": p, "index": idx, "source": src})
-                    after = len((await call("notebook_get", {"path": p}))["cells"])
-                    assert before == after, f"count drift {before} -> {after}"
-                    print("OK")
-            asyncio.run(main())
-            PYEOF
-        id: mcp-jupyter-cell-update-preserves-count
-        exit_status: 0
-        stdout:
-            - contains: "OK"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+              id: mcp-jupyter-cell-update-preserves-id
+              exit_status: 0
+              stdout:
+                - contains: "OK"
+              context:
+                - runtime
+              command:
+                command: |
+                    ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    import asyncio, json, sys, uuid
+                    from fastmcp import Client
+                    async def main():
+                        async with Client("http://localhost:8888/mcp") as c:
+                            async def call(t, a=None):
+                                r = await c.call_tool(t, a or {})
+                                return r.data if r.data is not None else json.loads(
+                                    "".join(b.text for b in r.content if hasattr(b, "text"))
+                                )
+                            p = f"_check_id_{uuid.uuid4().hex[:8]}.ipynb"
+                            await call("notebook_create", {"path": p})
+                            await call("cell_insert", {"path": p, "index": 0,
+                                                        "source": "alpha", "cell_type": "markdown"})
+                            before = (await call("cell_get", {"path": p, "index": 0}))["id"]
+                            await call("cell_update", {"path": p, "index": 0, "source": "beta"})
+                            after = (await call("cell_get", {"path": p, "index": 0}))["id"]
+                            assert before == after, f"id drift {before!r} -> {after!r}"
+                            print("OK")
+                    asyncio.run(main())
+                    PYEOF
+                in_container: true
+            - check: |
+                command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
                 import asyncio, json, uuid
                 from fastmcp import Client
                 async def main():
@@ -285,48 +217,43 @@ jupyter:
                         print("OK")
                 asyncio.run(main())
                 PYEOF
-            in_container: true
-    mcp-jupyter-single-room-canonical-paths:
-        check: |
-            command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
-            import asyncio, json, uuid
-            from fastmcp import Client
-            async def main():
-                async with Client("http://localhost:8888/mcp") as c:
-                    async def call(t, a=None):
-                        r = await c.call_tool(t, a or {})
-                        return r.data if r.data is not None else json.loads(
-                            "".join(b.text for b in r.content if hasattr(b, "text"))
-                        )
-                    stem = f"_check_canon_{uuid.uuid4().hex[:8]}"
-                    p = f"{stem}.ipynb"
-                    await call("notebook_create", {"path": p})
-                    # Three different path forms — all must converge on ONE room.
-                    await call("cell_insert", {"path": p, "index": 0, "source": "x"})
-                    await call("cell_insert", {"path": f"./{p}", "index": 1, "source": "y"})
-                    await call("cell_insert", {"path": f"/workspace/{p}",
-                                                "index": 2, "source": "z"})
-                    rl = await call("room_list")
-                    matching = [r for r in rl if stem in r.get("path","")]
-                    assert len(matching) == 1, f"expected 1 room, got {len(matching)}: {matching}"
-                    # All three inserts landed in the SAME notebook. Upstream
-                    # YNotebook auto-injects a default empty code cell on first
-                    # room init, so 3 inserts + 1 default = 4.
-                    cells = (await call("notebook_get", {"path": p}))["cells"]
-                    assert len(cells) == 4, f"expected 4 cells (3 inserts + 1 default), got {len(cells)}"
-                    print("OK")
-            asyncio.run(main())
-            PYEOF
-        id: mcp-jupyter-single-room-canonical-paths
-        exit_status: 0
-        stdout:
-            - contains: "OK"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+              id: mcp-jupyter-cell-update-preserves-count
+              exit_status: 0
+              stdout:
+                - contains: "OK"
+              context:
+                - runtime
+              command:
+                command: |
+                    ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    import asyncio, json, uuid
+                    from fastmcp import Client
+                    async def main():
+                        async with Client("http://localhost:8888/mcp") as c:
+                            async def call(t, a=None):
+                                r = await c.call_tool(t, a or {})
+                                return r.data if r.data is not None else json.loads(
+                                    "".join(b.text for b in r.content if hasattr(b, "text"))
+                                )
+                            p = f"_check_count_{uuid.uuid4().hex[:8]}.ipynb"
+                            await call("notebook_create", {"path": p})
+                            for i, src in enumerate(["a","b","c","d","e"]):
+                                await call("cell_insert", {"path": p, "index": i,
+                                                            "source": src, "cell_type": "markdown"})
+                            # Upstream YNotebook auto-injects a default empty code cell
+                            # on first room init, so baseline = N_inserts + 1. The
+                            # invariant we care about: cell_update preserves count.
+                            before = len((await call("notebook_get", {"path": p}))["cells"])
+                            for idx, src in [(0,"A"),(2,"C"),(4,"E"),(0,"AA"),(2,"CC")]:
+                                await call("cell_update", {"path": p, "index": idx, "source": src})
+                            after = len((await call("notebook_get", {"path": p}))["cells"])
+                            assert before == after, f"count drift {before} -> {after}"
+                            print("OK")
+                    asyncio.run(main())
+                    PYEOF
+                in_container: true
+            - check: |
+                command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
                 import asyncio, json, uuid
                 from fastmcp import Client
                 async def main():
@@ -355,45 +282,46 @@ jupyter:
                         print("OK")
                 asyncio.run(main())
                 PYEOF
-            in_container: true
-    mcp-jupyter-host-path-rejected:
-        check: |
-            command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
-            import asyncio, json
-            from fastmcp import Client
-            async def main():
-                async with Client("http://localhost:8888/mcp") as c:
-                    # Host path (outside container's /workspace) MUST be rejected.
-                    try:
-                        r = await c.call_tool("cell_get", {
-                            "path": "/home/user/workspace/anything.ipynb",
-                            "index": 0,
-                        })
-                        text = "".join(b.text for b in r.content if hasattr(b, "text"))
-                        is_error = bool(getattr(r, "is_error", False))
-                        if not is_error and "outside" not in text and "ValueError" not in text:
-                            raise SystemExit(f"host path accepted: {text!r}")
-                    except Exception as e:
-                        if "outside" in str(e) or "resolves outside" in str(e):
+              id: mcp-jupyter-single-room-canonical-paths
+              exit_status: 0
+              stdout:
+                - contains: "OK"
+              context:
+                - runtime
+              command:
+                command: |
+                    ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    import asyncio, json, uuid
+                    from fastmcp import Client
+                    async def main():
+                        async with Client("http://localhost:8888/mcp") as c:
+                            async def call(t, a=None):
+                                r = await c.call_tool(t, a or {})
+                                return r.data if r.data is not None else json.loads(
+                                    "".join(b.text for b in r.content if hasattr(b, "text"))
+                                )
+                            stem = f"_check_canon_{uuid.uuid4().hex[:8]}"
+                            p = f"{stem}.ipynb"
+                            await call("notebook_create", {"path": p})
+                            # Three different path forms — all must converge on ONE room.
+                            await call("cell_insert", {"path": p, "index": 0, "source": "x"})
+                            await call("cell_insert", {"path": f"./{p}", "index": 1, "source": "y"})
+                            await call("cell_insert", {"path": f"/workspace/{p}",
+                                                        "index": 2, "source": "z"})
+                            rl = await call("room_list")
+                            matching = [r for r in rl if stem in r.get("path","")]
+                            assert len(matching) == 1, f"expected 1 room, got {len(matching)}: {matching}"
+                            # All three inserts landed in the SAME notebook. Upstream
+                            # YNotebook auto-injects a default empty code cell on first
+                            # room init, so 3 inserts + 1 default = 4.
+                            cells = (await call("notebook_get", {"path": p}))["cells"]
+                            assert len(cells) == 4, f"expected 4 cells (3 inserts + 1 default), got {len(cells)}"
                             print("OK")
-                            return
-                        if "ValueError" in str(e):
-                            print("OK")
-                            return
-                        raise
-                    print("OK")
-            asyncio.run(main())
-            PYEOF
-        id: mcp-jupyter-host-path-rejected
-        exit_status: 0
-        stdout:
-            - contains: "OK"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    asyncio.run(main())
+                    PYEOF
+                in_container: true
+            - check: |
+                command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
                 import asyncio, json
                 from fastmcp import Client
                 async def main():
@@ -419,45 +347,43 @@ jupyter:
                         print("OK")
                 asyncio.run(main())
                 PYEOF
-            in_container: true
-    mcp-jupyter-auto-attach-from-cold:
-        check: |
-            command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
-            import asyncio, json, uuid
-            from fastmcp import Client
-            async def main():
-                async with Client("http://localhost:8888/mcp") as c:
-                    async def call(t, a=None):
-                        r = await c.call_tool(t, a or {})
-                        return r.data if r.data is not None else json.loads(
-                            "".join(b.text for b in r.content if hasattr(b, "text"))
-                        )
-                    p = f"_check_cold_{uuid.uuid4().hex[:8]}.ipynb"
-                    # No prior tool to "open" the room — cell_insert auto-attaches.
-                    # Upstream YNotebook auto-injects a default empty code cell, so
-                    # baseline = 1, after 1 insert = 2.
-                    await call("notebook_create", {"path": p})
-                    await call("cell_insert", {"path": p, "index": 0, "source": "auto"})
-                    cells = (await call("notebook_get", {"path": p}))["cells"]
-                    sources = [c.get("source") for c in cells]
-                    assert any("auto" in str(s) for s in sources), \
-                        f"inserted cell missing: {cells}"
-                    rl = await call("room_list")
-                    assert any(p in r.get("path","") for r in rl), \
-                        f"room not auto-created for {p}"
-                    print("OK")
-            asyncio.run(main())
-            PYEOF
-        id: mcp-jupyter-auto-attach-from-cold
-        exit_status: 0
-        stdout:
-            - contains: "OK"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+              id: mcp-jupyter-host-path-rejected
+              exit_status: 0
+              stdout:
+                - contains: "OK"
+              context:
+                - runtime
+              command:
+                command: |
+                    ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    import asyncio, json
+                    from fastmcp import Client
+                    async def main():
+                        async with Client("http://localhost:8888/mcp") as c:
+                            # Host path (outside container's /workspace) MUST be rejected.
+                            try:
+                                r = await c.call_tool("cell_get", {
+                                    "path": "/home/user/workspace/anything.ipynb",
+                                    "index": 0,
+                                })
+                                text = "".join(b.text for b in r.content if hasattr(b, "text"))
+                                is_error = bool(getattr(r, "is_error", False))
+                                if not is_error and "outside" not in text and "ValueError" not in text:
+                                    raise SystemExit(f"host path accepted: {text!r}")
+                            except Exception as e:
+                                if "outside" in str(e) or "resolves outside" in str(e):
+                                    print("OK")
+                                    return
+                                if "ValueError" in str(e):
+                                    print("OK")
+                                    return
+                                raise
+                            print("OK")
+                    asyncio.run(main())
+                    PYEOF
+                in_container: true
+            - check: |
+                command=${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
                 import asyncio, json, uuid
                 from fastmcp import Client
                 async def main():
@@ -483,4 +409,38 @@ jupyter:
                         print("OK")
                 asyncio.run(main())
                 PYEOF
-            in_container: true
+              id: mcp-jupyter-auto-attach-from-cold
+              exit_status: 0
+              stdout:
+                - contains: "OK"
+              context:
+                - runtime
+              command:
+                command: |
+                    ${HOME}/.pixi/envs/default/bin/python - <<'PYEOF'
+                    import asyncio, json, uuid
+                    from fastmcp import Client
+                    async def main():
+                        async with Client("http://localhost:8888/mcp") as c:
+                            async def call(t, a=None):
+                                r = await c.call_tool(t, a or {})
+                                return r.data if r.data is not None else json.loads(
+                                    "".join(b.text for b in r.content if hasattr(b, "text"))
+                                )
+                            p = f"_check_cold_{uuid.uuid4().hex[:8]}.ipynb"
+                            # No prior tool to "open" the room — cell_insert auto-attaches.
+                            # Upstream YNotebook auto-injects a default empty code cell, so
+                            # baseline = 1, after 1 insert = 2.
+                            await call("notebook_create", {"path": p})
+                            await call("cell_insert", {"path": p, "index": 0, "source": "auto"})
+                            cells = (await call("notebook_get", {"path": p}))["cells"]
+                            sources = [c.get("source") for c in cells]
+                            assert any("auto" in str(s) for s in sources), \
+                                f"inserted cell missing: {cells}"
+                            rl = await call("room_list")
+                            assert any(p in r.get("path","") for r in rl), \
+                                f"room not auto-created for {p}"
+                            print("OK")
+                    asyncio.run(main())
+                    PYEOF
+                in_container: true

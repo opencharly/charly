@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-cdp/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -40,10 +42,12 @@ type cdpEnv struct {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs one `cdp:` operation. It decodes the full #Op + the env, skips in box mode
-// (no live Chrome DevTools endpoint on a disposable `charly check box`), skips a nil
-// endpoint, dispatches the method, and self-evaluates the matchers + screenshot artifact
-// validators.
+// Invoke runs one `cdp:` operation. It decodes the full #Op, the typed plugin
+// input (params.CdpInput — the per-verb fields live in the desugared
+// plugin_input since the schema-compaction cutover), and the env, skips in box
+// mode (no live Chrome DevTools endpoint on a disposable `charly check box`),
+// skips a nil endpoint, dispatches the method, and self-evaluates the matchers +
+// screenshot artifact validators.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -51,6 +55,8 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			return sdk.ResultJSON("fail", "cdp: decode op: "+err.Error())
 		}
 	}
+	var in params.CdpInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env cdpEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
@@ -65,7 +71,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			ep = &e
 		}
 	}
-	method := string(op.Cdp)
+	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running Chrome DevTools
 	// endpoint on a disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -79,7 +85,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return sdk.ResultJSON("skip", fmt.Sprintf("cdp: %s has no resolved DevTools endpoint (box=%q)", method, env.Box))
 	}
 
-	out, runErr := dispatch(ep, &op)
+	out, runErr := dispatch(ep, &op, &in)
 
 	// The shared exit/stdout/stderr + screenshot-artifact verdict pipeline (R3). screenshot is
 	// cdp's one artifact-producing method.

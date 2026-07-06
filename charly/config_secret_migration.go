@@ -125,12 +125,11 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 		depName string
 		value   string
 	}
-	var staying []string
+	staying := map[string]string{}
 	var toMigrate []pending
-	for _, kv := range entry.Env {
-		name, val, found := strings.Cut(kv, "=")
-		if !found || !declared[name] {
-			staying = append(staying, kv)
+	for name, val := range entry.Env {
+		if !declared[name] {
+			staying[name] = val
 			continue
 		}
 		toMigrate = append(toMigrate, pending{depName: name, value: val})
@@ -166,7 +165,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 			fmt.Fprintf(os.Stderr, "Warning: could not migrate %s to credential store (%s/%s): %v\n", p.depName, service, credKey, err)
 			// Keep the plaintext entry so the user isn't left without a
 			// value; they can retry after fixing the backend.
-			staying = append(staying, p.depName+"="+p.value)
+			staying[p.depName] = p.value
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "Migrated plaintext %s from charly.yml to credential store (%s/%s)\n", p.depName, service, credKey)

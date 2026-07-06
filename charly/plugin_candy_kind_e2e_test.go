@@ -49,8 +49,7 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
     candy:
         base: fedora
         version: "2026.150.0000"
-    my-image-require:
-        require:
+        candy:
             - redis
 `
 	imgGn := candyNodeFromYAML(t, imgDoc)
@@ -78,16 +77,14 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
     candy:
         version: "2026.150.0000"
         description: a layer
-    my-layer-package:
         package:
             - git
-    my-layer-step:
-        run: install a marker
-        command: "true"
-        run_as: root
-    my-layer-check:
-        check: the marker exists
-        command: "true"
+        plan:
+            - run: install a marker
+              command: "true"
+              run_as: root
+            - check: the marker exists
+              command: "true"
 `
 	layerGn := candyNodeFromYAML(t, layerDoc)
 	var ufLayer UnifiedFile

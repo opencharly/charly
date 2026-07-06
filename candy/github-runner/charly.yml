@@ -9,7 +9,6 @@ github-runner:
             container stack (podman/buildah/skopeo via container-nesting). The .NET runtime
             deps (icu/krb5/openssl/libunwind/lttng-ust) are declared explicitly because the
             runner's installdependencies.sh has no Arch branch — so config.sh actually runs.
-    github-runner-require:
         require:
             - supervisord
             # Rootless nested podman/buildah/skopeo + subuid/subgid layout +
@@ -17,7 +16,6 @@ github-runner:
             # come from container-nesting. This layer carries only the
             # runner-specific pieces (R3 — no duplication).
             - container-nesting
-    github-runner-distro:
         distro:
             arch:
                 package:
@@ -50,26 +48,20 @@ github-runner:
                     - libisoburn # xorriso — VM NoCloud seed-ISO builder
                     - cdrtools # genisoimage/mkisofs seed-ISO fallback
                     - swtpm # software TPM 2.0 for VM guests
-    github-runner-volume:
         volume:
             - name: state
               path: ~/actions-runner
-    github-runner-env:
         env:
             RUNNER_WORK_DIR: "${HOME}/actions-runner/_work"
             RUNNER_GROUP: "Default"
-    github-runner-env_accept:
         env_accept:
             - name: RUNNER_ORG
               description: "GitHub org/user to register the runner with (e.g. opencharly). Pass via: charly config githubrunner -e RUNNER_ORG=<org>"
-    github-runner-secret_accept:
         secret_accept:
             - name: RUNNER_TOKEN
               description: "Short-lived GitHub Actions runner registration token (gh api -X POST /orgs/<org>/actions/runners/registration-token). Credential-store backed; never written to deploy.yml or the quadlet."
-    github-runner-var:
         var:
             RUNNER_VERSION: "2.334.0"
-    github-runner-hook:
         hook:
             # Registration only runs when a token is supplied — so a disposable bed
             # (no token) deploys the image without registering, and a stale token is
@@ -88,7 +80,6 @@ github-runner:
                 [ -z "${RUNNER_TOKEN:-}" ] && { echo "RUNNER_TOKEN empty — skipping deregistration"; exit 0; }
                 "${HOME}/actions-runner/config.sh" remove \
                   --token "${RUNNER_TOKEN}"
-    github-runner-service:
         service:
             - name: github-runner
               exec: "%(ENV_HOME)s/actions-runner/run.sh"
@@ -96,182 +87,126 @@ github-runner:
               working_directory: "%(ENV_HOME)s/actions-runner"
               enable: true
               scope: system
-    github-runner-step-0:
-        run: mkdir=${HOME}/actions-runner
-        mkdir: "${HOME}/actions-runner"
-        run_as: "${USER}"
-    github-runner-step-1:
-        run: download=https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
-        download: "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
-        extract: tar.gz
-        to: "${HOME}/actions-runner"
-        run_as: root
-    github-runner-step-2:
-        run: |
-            command=rh=$(getent passwd 1000 | cut -d: -f6)
-            chown -R 1000:1000 "${rh}/actions-runner"
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: mkdir=${HOME}/actions-runner
+              mkdir: "${HOME}/actions-runner"
+              run_as: "${USER}"
+            - run: download=https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
+              download: "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
+              extract: tar.gz
+              to: "${HOME}/actions-runner"
+              run_as: root
+            - run: |
+                command=rh=$(getent passwd 1000 | cut -d: -f6)
+                chown -R 1000:1000 "${rh}/actions-runner"
+              run_as: root
+              command: |
                 rh=$(getent passwd 1000 | cut -d: -f6)
                 chown -R 1000:1000 "${rh}/actions-runner"
-    github-runner-step-3:
-        run: mkdir=${HOME}/.config/containers/registries.conf.d
-        mkdir: "${HOME}/.config/containers/registries.conf.d"
-        run_as: "${USER}"
-    github-runner-step-4:
-        run: write=${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf
-        write: "${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf"
-        run_as: "${USER}"
-        mode: "0644"
-        content: |
-            [[registry]]
-            prefix = "ghcr.io"
-            location = "ghcr.io"
-            [[registry.mirror]]
-            location = "127.0.0.1:5000"
-            insecure = true
-    github-runner-step-5:
-        check: the GitHub Actions runner is extracted under the home directory with its config.sh present
-        plugin: file
-        plugin_input:
-            file: "${HOME}/actions-runner/config.sh"
-            exists: true
-    github-runner-step-6:
-        check: the runner's run.sh service launcher is present
-        plugin: file
-        plugin_input:
-            file: "${HOME}/actions-runner/run.sh"
-            exists: true
-    github-runner-step-7:
-        check: config.sh executes, proving the .NET native deps (icu/krb5/openssl/libunwind/lttng-ust) resolved on this distro
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: "${HOME}/actions-runner/config.sh --version"
-    github-runner-step-8:
-        check: skopeo (rootless image copy) reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: skopeo --version
-    github-runner-step-9:
-        check: buildah (rootless image build) reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: buildah --version
-    github-runner-step-10:
-        check: cosign (image signing) reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: cosign version
-    github-runner-step-11:
-        check: the go toolchain used by CI jobs reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: go version
-    github-runner-step-12:
-        check: the aarch64 qemu interpreter is installed so jobs can cross-build for arm64 via binfmt
-        plugin: file
-        plugin_input:
-            file: /usr/bin/qemu-aarch64-static
-            exists: true
-    github-runner-step-13:
-        check: the runner service process runs as the unprivileged uid 1000, never root
-        stdout:
-            - contains: "uid=1000"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: id
-    github-runner-step-14:
-        check: rootless nested podman works inside the box (no mount_too_revealing EPERM)
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: podman info
-    github-runner-step-15:
-        check: a CI job can actually pull and run a container image rootless
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "podman run --rm quay.io/libpod/alpine:latest true"
-    gr-git:
-        check: command=git --version
-        id: gr-git
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: git --version
-    gr-go-pkg:
-        check: package=golang
-        id: gr-go-pkg
-        plugin: package
-        plugin_input:
-            package: golang
-            package_map:
-                arch: go
-            installed: true
-    gr-icu-pkg:
-        check: package=icu
-        id: gr-icu-pkg
-        plugin: package
-        plugin_input:
-            package: icu
-            installed: true
-    gr-pkgbuild-dep-slirp4netns:
-        check: package=slirp4netns
-        id: gr-pkgbuild-dep-slirp4netns
-        plugin: package
-        plugin_input:
-            package: slirp4netns
-            installed: true
-    gr-pkgbuild-dep-libisoburn:
-        check: package=libisoburn
-        id: gr-pkgbuild-dep-libisoburn
-        plugin: package
-        plugin_input:
-            package: libisoburn
-            installed: true
-    gr-pkgbuild-dep-cdrtools:
-        check: package=cdrtools
-        id: gr-pkgbuild-dep-cdrtools
-        plugin: package
-        plugin_input:
-            package: cdrtools
-            installed: true
-    gr-pkgbuild-dep-swtpm:
-        check: package=swtpm
-        id: gr-pkgbuild-dep-swtpm
-        plugin: package
-        plugin_input:
-            package: swtpm
-            installed: true
-    gr-ghcr-mirror:
-        check: file=${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf
-        id: gr-ghcr-mirror
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: "${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf"
-            exists: true
-    gr-newuidmap-cap:
-        check: command=getcap /usr/bin/newuidmap
-        id: gr-newuidmap-cap
-        stdout:
-            - contains: cap_setuid
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: getcap /usr/bin/newuidmap
+            - run: mkdir=${HOME}/.config/containers/registries.conf.d
+              mkdir: "${HOME}/.config/containers/registries.conf.d"
+              run_as: "${USER}"
+            - run: write=${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf
+              write: "${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf"
+              run_as: "${USER}"
+              mode: "0644"
+              content: |
+                [[registry]]
+                prefix = "ghcr.io"
+                location = "ghcr.io"
+                [[registry.mirror]]
+                location = "127.0.0.1:5000"
+                insecure = true
+            - check: the GitHub Actions runner is extracted under the home directory with its config.sh present
+              file:
+                file: "${HOME}/actions-runner/config.sh"
+                exists: true
+            - check: the runner's run.sh service launcher is present
+              file:
+                file: "${HOME}/actions-runner/run.sh"
+                exists: true
+            - check: config.sh executes, proving the .NET native deps (icu/krb5/openssl/libunwind/lttng-ust) resolved on this distro
+              exit_status: 0
+              command: "${HOME}/actions-runner/config.sh --version"
+            - check: skopeo (rootless image copy) reports its version
+              exit_status: 0
+              command: skopeo --version
+            - check: buildah (rootless image build) reports its version
+              exit_status: 0
+              command: buildah --version
+            - check: cosign (image signing) reports its version
+              exit_status: 0
+              command: cosign version
+            - check: the go toolchain used by CI jobs reports its version
+              exit_status: 0
+              command: go version
+            - check: the aarch64 qemu interpreter is installed so jobs can cross-build for arm64 via binfmt
+              file:
+                file: /usr/bin/qemu-aarch64-static
+                exists: true
+            - check: the runner service process runs as the unprivileged uid 1000, never root
+              stdout:
+                - contains: "uid=1000"
+              context:
+                - runtime
+              command: id
+            - check: rootless nested podman works inside the box (no mount_too_revealing EPERM)
+              exit_status: 0
+              context:
+                - runtime
+              command: podman info
+            - check: a CI job can actually pull and run a container image rootless
+              exit_status: 0
+              context:
+                - runtime
+              command: "podman run --rm quay.io/libpod/alpine:latest true"
+            - check: command=git --version
+              id: gr-git
+              exit_status: 0
+              command: git --version
+            - check: package=golang
+              id: gr-go-pkg
+              package:
+                package: golang
+                package_map:
+                    arch: go
+                installed: true
+            - check: package=icu
+              id: gr-icu-pkg
+              package:
+                package: icu
+                installed: true
+            - check: package=slirp4netns
+              id: gr-pkgbuild-dep-slirp4netns
+              package:
+                package: slirp4netns
+                installed: true
+            - check: package=libisoburn
+              id: gr-pkgbuild-dep-libisoburn
+              package:
+                package: libisoburn
+                installed: true
+            - check: package=cdrtools
+              id: gr-pkgbuild-dep-cdrtools
+              package:
+                package: cdrtools
+                installed: true
+            - check: package=swtpm
+              id: gr-pkgbuild-dep-swtpm
+              package:
+                package: swtpm
+                installed: true
+            - check: file=${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf
+              id: gr-ghcr-mirror
+              context:
+                - runtime
+              file:
+                file: "${HOME}/.config/containers/registries.conf.d/ghcr-mirror.conf"
+                exists: true
+            - check: command=getcap /usr/bin/newuidmap
+              id: gr-newuidmap-cap
+              stdout:
+                - contains: cap_setuid
+              context:
+                - runtime
+              command: getcap /usr/bin/newuidmap

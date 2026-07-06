@@ -10,7 +10,6 @@ defaults:
 base:
     candy:
         base: quay.io/fedora/fedora:43
-    base-candy:
         candy:
             - pixi
 bazzite:
@@ -19,7 +18,6 @@ bazzite:
         bootc: true
         platform:
             - linux/amd64
-    bazzite-candy:
         candy:
             - custom-packages
 cuda:
@@ -27,7 +25,6 @@ cuda:
         base: quay.io/fedora/fedora:43
         platform:
             - linux/amd64
-    cuda-candy:
         candy:
             - pixi
             - cuda
@@ -35,21 +32,18 @@ disabled-image:
     candy:
         base: quay.io/fedora/fedora:43
         enabled: false
-    disabled-image-candy:
         candy:
             - nonexistent-layer
 inference:
     candy:
         base: ml-cuda
         tag: nightly
-    inference-candy:
         candy:
             - supervisord
             - ollama
 ml-cuda:
     candy:
         base: cuda
-    ml-cuda-candy:
         candy:
             - python
             - ml-libs
@@ -58,7 +52,6 @@ ubuntu-dev:
         base: ubuntu:24.04
         build:
             - deb
-    ubuntu-dev-candy:
         candy:
             - pixi
             - nodejs

@@ -9,10 +9,12 @@ plugin-record:
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS via
             LocalTransport — so the asciinema/wf-recorder/pixelflux recording driver lives
             HERE, out of charly's core check surface (the first live-verb dep-shed of the
-            EXEC-based kind, after the PORT-based candy/plugin-mcp/spice/kube). `record:`
-            authoring stays unchanged: the verb keeps its `record:` discriminator + every
-            modifier (record_name/record_mode/record_fps/record_audio) + the #RecordMethod
-            enum on charly's core #Op, and dispatches through the provider registry exactly
+            EXEC-based kind, after the PORT-based candy/plugin-mcp/spice/kube). Since the
+            schema-compaction cutover an authored `record:` step desugars to the internal
+            plugin/plugin_input envelope, and every record-exclusive modifier
+            (method/record_name/record_mode/record_fps/record_audio/text/artifact) lives
+            in the plugin's OWN #RecordInput (schema/record.cue); the verb dispatches
+            through the provider registry exactly
             like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider hands it the
             full #Op). FIRST consumer of the executor reverse channel: record is EXEC-based,
             so the host attaches its live DeployExecutor over the E3b reverse channel and
@@ -21,14 +23,13 @@ plugin-record:
             .cast/.mp4 artifact back to the host — it owns no podman / SSH machinery. The R10
             consumer is a desktop pod bed whose check composes this plugin (the
             sway-browser-vnc bed's `record: start`).
-    plugin-record-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-record
             providers:
                 - verb:record
-    record-verb-dispatches:
-        check: the record verb dispatches through the provider registry and lists the active recording sessions on a live deployment (the out-of-process plugin verb drives the venue over the executor reverse channel)
-        id: record-verb-dispatches
-        record: list
-        context:
-            - runtime
+        plan:
+            - check: the record verb dispatches through the provider registry and lists the active recording sessions on a live deployment (the out-of-process plugin verb drives the venue over the executor reverse channel)
+              id: record-verb-dispatches
+              record: list
+              context:
+                - runtime

@@ -10,7 +10,6 @@ chrome-devtools-mcp:
             Both binaries are on disk at build time; once Chrome is reachable the
             live endpoint answers MCP pings and advertises the browser-automation
             tool catalog (navigate_page, take_screenshot, ...).
-    chrome-devtools-mcp-require:
         require:
             - nodejs
             - supervisord
@@ -23,72 +22,59 @@ chrome-devtools-mcp:
             # adopts the matching @github pin via reconcile later — the deliberate cross-repo
             # lag; the R10 bed loads the LOCAL candy via the superproject override.)
             - plugin-mcp
-    chrome-devtools-mcp-port:
         port:
             - 9224
-    chrome-devtools-mcp-mcp_provide:
         mcp_provide:
             - name: chrome-devtools
               url: "http://{{.ContainerName}}:9224/mcp"
               transport: http
-    chrome-devtools-mcp-service:
         service:
             - name: chrome-devtools-mcp
               exec: "%(ENV_HOME)s/.pixi/envs/default/bin/mcp-proxy --host 0.0.0.0 --port 9224 -- %(ENV_HOME)s/.npm-global/bin/chrome-devtools-mcp --browser-url http://127.0.0.1:9222 --no-usage-statistics"
               restart: always
               enable: true
               scope: system
-    chrome-devtools-mcp-step-0:
-        check: the chrome-devtools-mcp server binary is installed under the npm global prefix
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/chrome-devtools-mcp
-            exists: true
-    chrome-devtools-mcp-step-1:
-        check: the mcp-proxy stdio-to-HTTP bridge binary is installed in the pixi env
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/mcp-proxy
-            exists: true
-    chrome-devtools-mcp-step-2:
-        check: the MCP endpoint answers a protocol ping on port 9224
-        mcp: ping
-        timeout: 30s
-        eventually: 90s
-        retry_interval: 3s
-        context:
-            - runtime
-    chrome-devtools-mcp-step-3:
-        check: the advertised tool catalog includes the core browser-automation tools
-        mcp: list-tools
-        eventually: 90s
-        retry_interval: 3s
-        stdout:
-            - contains: navigate_page
-            - contains: take_screenshot
-        context:
-            - runtime
-    chrome-devtools-mcp-step-4:
-        agent-check: navigation and screenshot calls drive a live Chrome session via the DevTools Protocol
-    chrome-devtools-mcp-service-2:
-        check: service=chrome-devtools-mcp
-        id: chrome-devtools-mcp-service
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: chrome-devtools-mcp
-            running: true
-    chrome-devtools-mcp-port-2:
-        check: addr=127.0.0.1:${HOST_PORT:9224}
-        id: chrome-devtools-mcp-port
-        timeout: 5s
-        # Readiness wait: the mcp-proxy binds 9224 shortly after start.
-        eventually: 60s
-        retry_interval: 2s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:9224}
-            reachable: true
+        plan:
+            - check: the chrome-devtools-mcp server binary is installed under the npm global prefix
+              file:
+                file: ${HOME}/.npm-global/bin/chrome-devtools-mcp
+                exists: true
+            - check: the mcp-proxy stdio-to-HTTP bridge binary is installed in the pixi env
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/mcp-proxy
+                exists: true
+            - check: the MCP endpoint answers a protocol ping on port 9224
+              mcp: ping
+              timeout: 30s
+              eventually: 90s
+              retry_interval: 3s
+              context:
+                - runtime
+            - check: the advertised tool catalog includes the core browser-automation tools
+              mcp: list-tools
+              eventually: 90s
+              retry_interval: 3s
+              stdout:
+                - contains: navigate_page
+                - contains: take_screenshot
+              context:
+                - runtime
+            - agent-check: navigation and screenshot calls drive a live Chrome session via the DevTools Protocol
+            - check: service=chrome-devtools-mcp
+              id: chrome-devtools-mcp-service
+              context:
+                - runtime
+              service:
+                service: chrome-devtools-mcp
+                running: true
+            - check: addr=127.0.0.1:${HOST_PORT:9224}
+              id: chrome-devtools-mcp-port
+              timeout: 5s
+              # Readiness wait: the mcp-proxy binds 9224 shortly after start.
+              eventually: 60s
+              retry_interval: 2s
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:9224}
+                reachable: true

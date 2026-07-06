@@ -6,18 +6,13 @@ xurl:
             Installs the @xdevplatform/xurl npm package globally (npm -g into
             ~/.npm-global/bin, placed on PATH by the nodejs candy). Verifiable:
             the xurl binary lands at ~/.npm-global/bin/xurl and runs `--help`.
-    xurl-require:
         require:
             - nodejs
-    xurl-step-0:
-        check: the xurl CLI is installed in the npm global bin
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/xurl
-            exists: true
-    xurl-step-1:
-        check: the xurl CLI runs and prints its usage
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/xurl --help
+        plan:
+            - check: the xurl CLI is installed in the npm global bin
+              file:
+                file: ${HOME}/.npm-global/bin/xurl
+                exists: true
+            - check: the xurl CLI runs and prints its usage
+              exit_status: 0
+              command: ${HOME}/.npm-global/bin/xurl --help

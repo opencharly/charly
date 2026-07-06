@@ -11,16 +11,13 @@ plugin-builder-cargo:
             binaries are known). The deploy-time pair runs in the host build PRE-PASS, BEFORE the pure
             BuildDeployPlan compile, so the compiler never dials a plugin. Selection stays DETECTION
             (a candy's Cargo.toml), never an authored external_builder:.
-    plugin-builder-cargo-decl:
         plugin:
             providers:
                 - builder:cargo
             source: github.com/opencharly/charly/candy/plugin-builder-cargo
-    cargo-builder-module-present:
-        check: the out-of-tree cargo builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
-        id: cargo-builder-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree cargo builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
+              id: cargo-builder-module-present
+              context:
+                - build
+              command: "true"

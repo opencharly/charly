@@ -25,11 +25,18 @@ func TestEngine_CueOwnedVersion(t *testing.T) {
 	}
 }
 
-// TestMigrationTable_EmptyAtReset: the declarative table starts empty at the
-// migration-baseline reset (a future migration appends one entry).
-func TestMigrationTable_EmptyAtReset(t *testing.T) {
-	if len(migrationTable) != 0 {
-		t.Errorf("reset migration table should be empty, got %d entries", len(migrationTable))
+// TestMigrationTable_CompactNodeForm: the table carries exactly the
+// schema-compaction migration — an apply: goHook entry that touches host state.
+func TestMigrationTable_CompactNodeForm(t *testing.T) {
+	if len(migrationTable) != 1 {
+		t.Fatalf("migration table should carry exactly the compact-node-form entry, got %d", len(migrationTable))
+	}
+	m := migrationTable[0]
+	if m.Name != "compact-node-form" || m.Apply != "compactNodeForm" || !m.TouchesHost {
+		t.Errorf("unexpected table entry: %+v", m)
+	}
+	if _, ok := goHooks[m.Apply]; !ok {
+		t.Errorf("hook %q not registered in goHooks", m.Apply)
 	}
 }
 

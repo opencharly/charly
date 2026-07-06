@@ -2,11 +2,46 @@
 
 package params
 
-// #McpPlugin documents the verb the plugin serves. mcp keeps its entire authoring
-// contract (the #McpMethod enum + modifiers) on charly's core #Op, so there is no
-// plugin_input to validate here.
-type McpPlugin struct {
-	Verb string `yaml:"verb,omitempty" json:"verb"`
+// The `mcp` plugin's OWN CUE schema — the typed plugin_input for the `mcp`
+// Model-Context-Protocol check verb. It is the SINGLE SOURCE for this plugin's
+// params, used two ways (the same contract core `spec` and the http plugin use):
+//
+//  1. GENERATE the Go param struct — `cue exp gengotypes` (driven by the cue:gen
+//     pipeline, which wraps this with `package params` + `@go(params)`) emits
+//     ../params/cue_types_gen.go, so the provider decodes plugin_input into a
+//     TYPED struct, never a hand-parsed map.
+//  2. VALIDATE authored input AT RUNTIME — the plugin serves this source over the
+//     Describe channel; the host splices it onto the base (base ++ plugin) and
+//     validates every authored `mcp:` step's plugin_input against #McpInput.
+//
+// Since the schema-compaction cutover the per-verb fields LEFT core #Op: an
+// authored `mcp: <method>` step (scalar sugar) or `mcp: {method: …, tool: …}`
+// (map form) desugars to the INTERNAL plugin/plugin_input envelope, and every
+// mcp-exclusive modifier lives HERE — the former core #McpMethod enum is this
+// def's `method` field. `mcp_name` is read HOST-side (the mcp endpoint
+// preresolver picks the declared mcp_provides entry it names) but is an authored
+// mcp-step field, so it lives in this def for the closed input validation. The
+// shared assertion matchers (exit_status/stdout/stderr) and the general
+// `timeout` stay on core #Op, read off the step Op by the provider.
+//
+// SELF-CONTAINED: it references NO base def, so it compiles standalone
+// (gengotypes + the load-gate compile) AND splices onto the base (base ++ plugin
+// is a def-name collision check, not a base-reference resolver).
+type McpInput struct {
+	// method — the mcp method to dispatch (the former core #McpMethod enum; also
+	// the scalar-sugar primary: `mcp: <method>`).
+	Method string `yaml:"method,omitempty" json:"method"`
 
-	Contract string `yaml:"contract,omitempty" json:"contract"`
+	// mcp_name — which declared mcp_provide server to dial when the image
+	// declares several (host-side disambiguation; auto-picked when single).
+	McpName string `yaml:"mcp_name,omitempty" json:"mcp_name,omitempty"`
+
+	// tool — the tool name `call` invokes.
+	Tool string `yaml:"tool,omitempty" json:"tool,omitempty"`
+
+	// uri — the resource URI `read` reads.
+	URI string `yaml:"uri,omitempty" json:"uri,omitempty"`
+
+	// input — the optional JSON argument blob `call` passes to the tool.
+	Input string `yaml:"input,omitempty" json:"input,omitempty"`
 }

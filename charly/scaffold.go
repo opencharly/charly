@@ -20,10 +20,22 @@ func ScaffoldCandy(dir string, name string) error {
 		return fmt.Errorf("creating candy directory: %w", err)
 	}
 
-	// Create a placeholder candy manifest in the canonical kind-keyed form,
-	// named via the single configurable default (UnifiedFileName).
+	// Create a placeholder candy manifest in the compact name-first node form,
+	// named via the single configurable default (UnifiedFileName). ADE mandates a
+	// description + at least one deterministic check: step, so the scaffold ships
+	// a minimal passing pair the author replaces.
 	candyYml := filepath.Join(candyDir, UnifiedFileName)
-	candyContent := fmt.Sprintf("# %s candy config\ncandy:\n  name: %s\n  version: %s\n  # Add packages:  charly candy add-rpm %s <pkg>   (also add-deb / add-pac / add-aur)\n  # Or add task:/env:/service:/require: — see the candy authoring guide.\n", name, name, ComputeCalVer(), name)
+	candyContent := fmt.Sprintf(`# %s candy config
+%s:
+    candy:
+        version: %s
+        description: |
+            TODO: one-line purpose of the %s candy
+        # Add packages:  charly candy add-rpm %s <pkg>   (also add-deb / add-pac / add-aur)
+        plan:
+            - check: the /etc/os-release marker exists (replace with a real check)
+              file: /etc/os-release
+`, name, name, ComputeCalVer(), name, name)
 	if err := os.WriteFile(candyYml, []byte(candyContent), 0644); err != nil {
 		return fmt.Errorf("creating %s: %w", UnifiedFileName, err)
 	}

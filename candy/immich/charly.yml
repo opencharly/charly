@@ -11,14 +11,12 @@ immich:
             ~/.immich. The behaviour is verifiable as the built server bundle, the
             installed wrappers, the image-codec toolchain, the seeded init SQL, and a
             live /api/server/ping response.
-    immich-require:
         require:
             - supervisord
             - nodejs
             - postgresql
             - redis
             - ffmpeg
-    immich-env:
         env:
             IMMICH_VERSION: "v2.7.5"
             IMMICH_HOST: "0.0.0.0"
@@ -35,7 +33,6 @@ immich:
             REDIS_HOSTNAME: "127.0.0.1"
             REDIS_PORT: "6379"
             NODE_ENV: "production"
-    immich-distro:
         distro:
             arch:
                 # Arch image-lib names differ from Fedora: libvips (bundles headers — no
@@ -58,10 +55,8 @@ immich:
                     - gcc-c++
                     - make
                     - unzip
-    immich-port:
         port:
             - 2283
-    immich-env_provide:
         # Expose the Immich HTTP API URL to every other container that opts in via
         # env_accept: [IMMICH_API_URL]. Plan §4.3. The templated value resolves to
         # e.g. "http://charly-immich-ml:2283/api" at charly config time for the base instance,
@@ -70,11 +65,9 @@ immich:
         # openwebui and hermes already declare this env var in their env_accept.
         env_provide:
             IMMICH_API_URL: "http://{{.ContainerName}}:2283/api"
-    immich-env_accept:
         env_accept:
             - name: IMMICH_API_URL
               description: "Self-accept so the immich container itself sees its own API URL (used by entrypoint/health scripts)"
-    immich-secret_accept:
         # Immich API key for programmatic access. Generated in the Immich web UI
         # after first-run setup, then stored once in the credential backend via:
         #
@@ -86,7 +79,6 @@ immich:
             - name: IMMICH_API_KEY
               description: "Immich API key for programmatic access (generated in the Immich admin UI after first-run)"
               key: charly/api-key/immich
-    immich-volume:
         volume:
             - name: library
               path: "~/.immich/library"
@@ -96,17 +88,14 @@ immich:
               path: "~/.immich/import"
             - name: external
               path: "~/.immich/external"
-    immich-secret:
         secret:
             - name: db-password
               env: DB_PASSWORD
             - name: db-password
               env: POSTGRES_PASSWORD
-    immich-route:
         route:
             host: "immich.localhost"
             port: 2283
-    immich-service:
         service:
             - name: immich-db-init
               exec: /usr/local/bin/immich-db-migrate.sh
@@ -123,44 +112,36 @@ immich:
               priority: 30
               enable: true
               scope: system
-    immich-step-0:
-        run: |
-            command=curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
-            mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
+                mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
+              run_as: root
+              command: |
                 curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
                 mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
-    immich-step-1:
-        run: |
-            command=cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm install --frozen-lockfile
-            cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich build
-            cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich deploy --prod /opt/immich/server
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm install --frozen-lockfile
+                cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich build
+                cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich deploy --prod /opt/immich/server
+              run_as: root
+              command: |
                 cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm install --frozen-lockfile
                 cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich build
                 cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter immich deploy --prod /opt/immich/server
-    immich-step-2:
-        run: |
-            command=mkdir -p /build/geodata
-            cd /build/geodata
-            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin1CodesASCII.txt -o admin1CodesASCII.txt
-            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin2Codes.txt -o admin2Codes.txt
-            curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/cities500.zip -o cities500.zip && unzip -o cities500.zip && rm cities500.zip
-            curl -fsSL --retry 3 --retry-delay 2 "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson" -o ne_10m_admin_0_countries.geojson
-            date -I > geodata-date.txt
-            echo '{}' > /build/build-lock.json
-            mkdir -p /build/corePlugin
-            cp /tmp/immich/plugins/manifest.json /build/corePlugin/manifest.json
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=mkdir -p /build/geodata
+                cd /build/geodata
+                curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin1CodesASCII.txt -o admin1CodesASCII.txt
+                curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/admin2Codes.txt -o admin2Codes.txt
+                curl -fsSL --retry 3 --retry-delay 2 https://download.geonames.org/export/dump/cities500.zip -o cities500.zip && unzip -o cities500.zip && rm cities500.zip
+                curl -fsSL --retry 3 --retry-delay 2 "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson" -o ne_10m_admin_0_countries.geojson
+                date -I > geodata-date.txt
+                echo '{}' > /build/build-lock.json
+                mkdir -p /build/corePlugin
+                cp /tmp/immich/plugins/manifest.json /build/corePlugin/manifest.json
+              run_as: root
+              command: |
                 mkdir -p /build/geodata
                 cd /build/geodata
                 curl -sL https://download.geonames.org/export/dump/admin1CodesASCII.txt -o admin1CodesASCII.txt
@@ -171,41 +152,35 @@ immich:
                 echo '{}' > /build/build-lock.json
                 mkdir -p /build/corePlugin
                 cp /tmp/immich/plugins/manifest.json /build/corePlugin/manifest.json
-    immich-step-3:
-        run: |
-            command=cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter @immich/sdk --filter immich-web build
-            cp -r /tmp/immich/web/build /build/www
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter @immich/sdk --filter immich-web build
+                cp -r /tmp/immich/web/build /build/www
+              run_as: root
+              command: |
                 cd /tmp/immich && npm_config_cache=/tmp/npm-root-cache pnpm --filter @immich/sdk --filter immich-web build
                 cp -r /tmp/immich/web/build /build/www
-    immich-step-4:
-        run: |
-            command=EXTISM_JS_VERSION=1.6.0
-            BINARYEN_VERSION=124
-            ARCH=$(uname -m)
+            - run: |
+                command=EXTISM_JS_VERSION=1.6.0
+                BINARYEN_VERSION=124
+                ARCH=$(uname -m)
 
-            curl -sL "https://github.com/extism/js-pdk/releases/download/v${EXTISM_JS_VERSION}/extism-js-${ARCH}-linux-v${EXTISM_JS_VERSION}.gz" | gunzip > /usr/local/bin/extism-js
-            chmod +x /usr/local/bin/extism-js
+                curl -sL "https://github.com/extism/js-pdk/releases/download/v${EXTISM_JS_VERSION}/extism-js-${ARCH}-linux-v${EXTISM_JS_VERSION}.gz" | gunzip > /usr/local/bin/extism-js
+                chmod +x /usr/local/bin/extism-js
 
-            curl -sL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${ARCH}-linux.tar.gz" | tar xz -C /tmp
-            cp /tmp/binaryen-version_${BINARYEN_VERSION}/bin/* /usr/local/bin/
-            rm -rf /tmp/binaryen-version_${BINARYEN_VERSION}
+                curl -sL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${ARCH}-linux.tar.gz" | tar xz -C /tmp
+                cp /tmp/binaryen-version_${BINARYEN_VERSION}/bin/* /usr/local/bin/
+                rm -rf /tmp/binaryen-version_${BINARYEN_VERSION}
 
-            cd /tmp/immich/plugins
-            npm_config_cache=/tmp/npm-root-cache pnpm install --frozen-lockfile
-            npm_config_cache=/tmp/npm-root-cache pnpm run build
+                cd /tmp/immich/plugins
+                npm_config_cache=/tmp/npm-root-cache pnpm install --frozen-lockfile
+                npm_config_cache=/tmp/npm-root-cache pnpm run build
 
-            mkdir -p /build/corePlugin/dist
-            cp -r dist/* /build/corePlugin/dist/
+                mkdir -p /build/corePlugin/dist
+                cp -r dist/* /build/corePlugin/dist/
 
-            rm -f /usr/local/bin/extism-js /usr/local/bin/wasm-opt /usr/local/bin/wasm-merge /usr/local/bin/wasm-as /usr/local/bin/wasm-dis /usr/local/bin/wasm-ctor-check /usr/local/bin/wasm-emscripten-finalize /usr/local/bin/wasm-metadce /usr/local/bin/wasm-reduce /usr/local/bin/wasm-shell /usr/local/bin/wasm-split /usr/local/bin/wasm2js
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+                rm -f /usr/local/bin/extism-js /usr/local/bin/wasm-opt /usr/local/bin/wasm-merge /usr/local/bin/wasm-as /usr/local/bin/wasm-dis /usr/local/bin/wasm-ctor-check /usr/local/bin/wasm-emscripten-finalize /usr/local/bin/wasm-metadce /usr/local/bin/wasm-reduce /usr/local/bin/wasm-shell /usr/local/bin/wasm-split /usr/local/bin/wasm2js
+              run_as: root
+              command: |
                 EXTISM_JS_VERSION=1.6.0
                 BINARYEN_VERSION=124
                 ARCH=$(uname -m)
@@ -225,175 +200,142 @@ immich:
                 cp -r dist/* /build/corePlugin/dist/
 
                 rm -f /usr/local/bin/extism-js /usr/local/bin/wasm-opt /usr/local/bin/wasm-merge /usr/local/bin/wasm-as /usr/local/bin/wasm-dis /usr/local/bin/wasm-ctor-check /usr/local/bin/wasm-emscripten-finalize /usr/local/bin/wasm-metadce /usr/local/bin/wasm-reduce /usr/local/bin/wasm-shell /usr/local/bin/wasm-split /usr/local/bin/wasm2js
-    immich-step-5:
-        run: command=rm -rf /tmp/immich
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: rm -rf /tmp/immich
-    immich-step-6:
-        run: write=/docker-entrypoint-initdb.d/01-immich-extensions.sql
-        write: /docker-entrypoint-initdb.d/01-immich-extensions.sql
-        run_as: root
-        mode: "0644"
-        content: |
-            CREATE EXTENSION IF NOT EXISTS vector;
-            CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
-            CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;
-    immich-step-7:
-        run: write=/usr/local/bin/immich-db-migrate.sh
-        write: /usr/local/bin/immich-db-migrate.sh
-        run_as: root
-        mode: "0755"
-        content: |
-            #!/bin/bash
-            set -euo pipefail
-            HOME=${HOME:-/home/user}
-            SOCKET_DIR="$HOME/.postgresql"
-            POSTGRES_USER=${POSTGRES_USER:-immich}
-            POSTGRES_DB=${POSTGRES_DB:-immich}
+            - run: command=rm -rf /tmp/immich
+              run_as: root
+              command: rm -rf /tmp/immich
+            - run: write=/docker-entrypoint-initdb.d/01-immich-extensions.sql
+              write: /docker-entrypoint-initdb.d/01-immich-extensions.sql
+              run_as: root
+              mode: "0644"
+              content: |
+                CREATE EXTENSION IF NOT EXISTS vector;
+                CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
+                CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;
+            - run: write=/usr/local/bin/immich-db-migrate.sh
+              write: /usr/local/bin/immich-db-migrate.sh
+              run_as: root
+              mode: "0755"
+              content: |
+                #!/bin/bash
+                set -euo pipefail
+                HOME=${HOME:-/home/user}
+                SOCKET_DIR="$HOME/.postgresql"
+                POSTGRES_USER=${POSTGRES_USER:-immich}
+                POSTGRES_DB=${POSTGRES_DB:-immich}
 
-            # Wait for PostgreSQL (up to 600s — WAL recovery after heavy ops can take minutes)
-            for i in $(seq 1 600); do
-                pg_isready -h "$SOCKET_DIR" -U "$POSTGRES_USER" >/dev/null 2>&1 && break
-                sleep 1
-            done
-            if ! pg_isready -h "$SOCKET_DIR" -U "$POSTGRES_USER" >/dev/null 2>&1; then
-                echo "PostgreSQL timed out after 600s" >&2
-                exit 1
-            fi
+                # Wait for PostgreSQL (up to 600s — WAL recovery after heavy ops can take minutes)
+                for i in $(seq 1 600); do
+                    pg_isready -h "$SOCKET_DIR" -U "$POSTGRES_USER" >/dev/null 2>&1 && break
+                    sleep 1
+                done
+                if ! pg_isready -h "$SOCKET_DIR" -U "$POSTGRES_USER" >/dev/null 2>&1; then
+                    echo "PostgreSQL timed out after 600s" >&2
+                    exit 1
+                fi
 
-            # Ensure core extensions (idempotent — safe on every startup)
-            psql -h "$SOCKET_DIR" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-                -c "CREATE EXTENSION IF NOT EXISTS vector;" \
-                -c "CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;"
-
-            # VectorChord if available (conditional — works with or without vectorchord layer)
-            if psql -h "$SOCKET_DIR" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
-                "SELECT 1 FROM pg_available_extensions WHERE name = 'vchord'" | grep -q 1; then
+                # Ensure core extensions (idempotent — safe on every startup)
                 psql -h "$SOCKET_DIR" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-                    -c "CREATE EXTENSION IF NOT EXISTS vchord CASCADE;"
-                echo "VectorChord extension ensured"
-            else
-                echo "VectorChord not available — skipping"
-            fi
-    immich-step-8:
-        run: write=/usr/local/bin/immich-server-start.sh
-        write: /usr/local/bin/immich-server-start.sh
-        run_as: root
-        mode: "0755"
-        content: |
-            #!/bin/bash
-            until pg_isready -h "$HOME/.postgresql" -U "${POSTGRES_USER:-immich}" >/dev/null 2>&1; do
-                sleep 1
-            done
-            exec node /opt/immich/server/dist/main
-    immich-step-9:
-        run: mkdir=${HOME}/.immich/library
-        mkdir: "${HOME}/.immich/library"
-        run_as: "${USER}"
-    immich-step-10:
-        run: mkdir=${HOME}/.immich/cache
-        mkdir: "${HOME}/.immich/cache"
-        run_as: "${USER}"
-    immich-step-11:
-        run: mkdir=${HOME}/.immich/import
-        mkdir: "${HOME}/.immich/import"
-        run_as: "${USER}"
-    immich-step-12:
-        run: mkdir=${HOME}/.immich/external
-        mkdir: "${HOME}/.immich/external"
-        run_as: "${USER}"
-    immich-step-13:
-        check: the Immich Node server bundle is built into /opt/immich/server
-        plugin: file
-        plugin_input:
-            file: /opt/immich/server/dist/main.js
-            exists: true
-    immich-step-14:
-        check: the PostgreSQL-aware server startup wrapper is installed and executable
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/immich-server-start.sh
-            exists: true
-            mode: "0755"
-    immich-step-15:
-        check: the idempotent DB-migration wrapper is installed and executable
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/immich-db-migrate.sh
-            exists: true
-            mode: "0755"
-    immich-step-16:
-        check: the libvips image-processing library is installed for thumbnailing and transcoding
-        plugin: package
-        plugin_input:
-            package: vips
-            package_map:
-                arch: libvips
-                fedora: vips
-            installed: true
-    immich-step-17:
-        check: the Postgres init script seeds the pgvector extension Immich requires
-        plugin: file
-        plugin_input:
-            file: /docker-entrypoint-initdb.d/01-immich-extensions.sql
-            exists: true
-            contains: "CREATE EXTENSION IF NOT EXISTS vector"
-    immich-step-18:
-        check: the running Immich API answers its health ping on port 2283
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
-            status: 200
-            body:
-                - contains: "pong"
-    immich-step-19:
-        agent-check: the web UI presents a usable first-run / login experience
-    immich-initdb-sql:
-        check: file=/docker-entrypoint-initdb.d/01-immich-extensions.sql
-        id: immich-initdb-sql
-        plugin: file
-        plugin_input:
-            file: /docker-entrypoint-initdb.d/01-immich-extensions.sql
-            exists: true
-    immich-library-dir:
-        check: file=${HOME}/.immich/library
-        id: immich-library-dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.immich/library
-            filetype: directory
-    immich-server-running:
-        check: service=immich-server
-        id: immich-server-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: immich-server
-            running: true
-    immich-port-reachable:
-        check: addr=127.0.0.1:${HOST_PORT:2283}
-        id: immich-port-reachable
-        timeout: 5s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:2283}
-            reachable: true
-    immich-http-ping:
-        check: http=http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
-        id: immich-http-ping
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
-            status: 200
-            body:
-                - contains: "pong"
+                    -c "CREATE EXTENSION IF NOT EXISTS vector;" \
+                    -c "CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;"
+
+                # VectorChord if available (conditional — works with or without vectorchord layer)
+                if psql -h "$SOCKET_DIR" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+                    "SELECT 1 FROM pg_available_extensions WHERE name = 'vchord'" | grep -q 1; then
+                    psql -h "$SOCKET_DIR" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+                        -c "CREATE EXTENSION IF NOT EXISTS vchord CASCADE;"
+                    echo "VectorChord extension ensured"
+                else
+                    echo "VectorChord not available — skipping"
+                fi
+            - run: write=/usr/local/bin/immich-server-start.sh
+              write: /usr/local/bin/immich-server-start.sh
+              run_as: root
+              mode: "0755"
+              content: |
+                #!/bin/bash
+                until pg_isready -h "$HOME/.postgresql" -U "${POSTGRES_USER:-immich}" >/dev/null 2>&1; do
+                    sleep 1
+                done
+                exec node /opt/immich/server/dist/main
+            - run: mkdir=${HOME}/.immich/library
+              mkdir: "${HOME}/.immich/library"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.immich/cache
+              mkdir: "${HOME}/.immich/cache"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.immich/import
+              mkdir: "${HOME}/.immich/import"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.immich/external
+              mkdir: "${HOME}/.immich/external"
+              run_as: "${USER}"
+            - check: the Immich Node server bundle is built into /opt/immich/server
+              file:
+                file: /opt/immich/server/dist/main.js
+                exists: true
+            - check: the PostgreSQL-aware server startup wrapper is installed and executable
+              file:
+                file: /usr/local/bin/immich-server-start.sh
+                exists: true
+                mode: "0755"
+            - check: the idempotent DB-migration wrapper is installed and executable
+              file:
+                file: /usr/local/bin/immich-db-migrate.sh
+                exists: true
+                mode: "0755"
+            - check: the libvips image-processing library is installed for thumbnailing and transcoding
+              package:
+                package: vips
+                package_map:
+                    arch: libvips
+                    fedora: vips
+                installed: true
+            - check: the Postgres init script seeds the pgvector extension Immich requires
+              file:
+                file: /docker-entrypoint-initdb.d/01-immich-extensions.sql
+                exists: true
+                contains: "CREATE EXTENSION IF NOT EXISTS vector"
+            - check: the running Immich API answers its health ping on port 2283
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
+                status: 200
+                body:
+                    - contains: "pong"
+            - agent-check: the web UI presents a usable first-run / login experience
+            - check: file=/docker-entrypoint-initdb.d/01-immich-extensions.sql
+              id: immich-initdb-sql
+              file:
+                file: /docker-entrypoint-initdb.d/01-immich-extensions.sql
+                exists: true
+            - check: file=${HOME}/.immich/library
+              id: immich-library-dir
+              file:
+                file: ${HOME}/.immich/library
+                filetype: directory
+            - check: service=immich-server
+              id: immich-server-running
+              context:
+                - runtime
+              service:
+                service: immich-server
+                running: true
+            - check: addr=127.0.0.1:${HOST_PORT:2283}
+              id: immich-port-reachable
+              timeout: 5s
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:2283}
+                reachable: true
+            - check: http=http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
+              id: immich-http-ping
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:2283}/api/server/ping
+                status: 200
+                body:
+                    - contains: "pong"

@@ -19,18 +19,16 @@ examplebuild-localpkg:
             records a `pacman -R` reverse op so `charly bundle del` removes the package
             (zero residue). The runtime check below is the candy's ADE acceptance test —
             the same assertion the bed runs.
-    examplebuild-localpkg-localpkg:
         localpkg:
             pac: pkgbuild
-    examplebuild-localpkg-present:
-        check: the F3 build channel built + installed the charly-f3-witness localpkg — its marker file is present on the venue
-        id: examplebuild-localpkg-present
-        description: F3 — an external deploy plugin drove RunHostStep; the host ran makepkg + pacman -U and the package's marker landed on the venue
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "cat /opt/charly-f3-witness/marker"
-            in_container: false
-        stdout:
-            - contains: EXAMPLEBUILD-LOCALPKG-OK
+        plan:
+            - check: the F3 build channel built + installed the charly-f3-witness localpkg — its marker file is present on the venue
+              id: examplebuild-localpkg-present
+              description: F3 — an external deploy plugin drove RunHostStep; the host ran makepkg + pacman -U and the package's marker landed on the venue
+              context:
+                - runtime
+              command:
+                command: "cat /opt/charly-f3-witness/marker"
+                in_container: false
+              stdout:
+                - contains: EXAMPLEBUILD-LOCALPKG-OK

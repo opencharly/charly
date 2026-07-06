@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/kit"
 	"net/url"
 	"strings"
 )
@@ -48,10 +49,10 @@ type McpEnv struct {
 func (r *Runner) preresolveMcpEndpoint(c *Op) (env *McpEnv, early *CheckResult) {
 	// Non-mcp op, or no live container context (box-mode / empty box) → nothing to
 	// resolve; the plugin's own box-mode / no-endpoint skip handles the degenerate cases.
-	if c.Mcp == "" || r.Mode == RunModeBox || r.Box == "" {
+	if c.Plugin != "mcp" || r.Mode == RunModeBox || r.Box == "" {
 		return nil, nil
 	}
-	method := c.Mcp
+	method := kit.InputStr(c, "method")
 
 	engine, containerName, err := resolveContainer(r.Box, r.Instance)
 	if err != nil {
@@ -93,7 +94,7 @@ func (r *Runner) preresolveMcpEndpoint(c *Op) (env *McpEnv, early *CheckResult) 
 
 	// Every other method dials a single picked server: resolve it, inspect the
 	// container, and rewrite its container-network URL to a host-routable one.
-	entry, err := resolveMCPEntry(meta, r.Box, containerName, c.McpName)
+	entry, err := resolveMCPEntry(meta, r.Box, containerName, kit.InputStr(c, "mcp_name"))
 	if err != nil {
 		res := failf(c, "mcp: %s: %v", method, err)
 		return nil, &res

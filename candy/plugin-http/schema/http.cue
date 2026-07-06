@@ -18,16 +18,20 @@
 // #MatchOpMap when base ++ plugin compiles), so it compiles standalone (gengotypes +
 // the load-gate compile) AND splices onto the base.
 //
-// Only the http-EXCLUSIVE fields live here. `method`/`request_body` are SHARED #Op
-// modifiers (the live-container verbs cdp/dbus/libvirt read them too) and `timeout` is
-// a GENERAL per-step modifier (the runner's probeNeverHang floor reads it for every
-// verb), so all three STAY in #Op and are read off the step Op by the runner — they are
-// NOT reproduced here and NOT carried in plugin_input. The provider is a
+// Every http request field lives here (`method`/`request_body` moved in from #Op in
+// the schema-compaction cutover — per-verb fields left core #Op); `timeout` is a
+// GENERAL per-step modifier (the runner's probeNeverHang floor reads it for every
+// verb) and stays in #Op, read off the step Op by the runner. The provider is a
 // CheckVerbProvider — it dispatches IN-PROCESS via RunVerb and so keeps the live
 // *Runner (r.HTTPClient / r.Mode / r.Exec) the request needs (mirrors examplerunverb).
 #HttpInput: {
-	// http — the request URL (the verb discriminator).
+	// http — the request URL (the verb discriminator; also the scalar-sugar
+	// primary: `http: <url>`).
 	http: string @go(HTTP)
+	// method — optional HTTP request method (default GET).
+	method?: string
+	// request_body — optional request body bytes.
+	request_body?: string @go(RequestBody)
 	// status — optional expected HTTP status code (0 = unchecked).
 	status?: int & >=100 & <600 @go(,type=int)
 	// body — optional goss-style matchers the response body must satisfy. Reproduces

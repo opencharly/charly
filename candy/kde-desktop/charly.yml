@@ -19,16 +19,13 @@ kde-desktop:
             guest with GPU). On supervisord-init containers the sddm use_packaged
             entry is skipped (warn) by design. For the headless streamed KDE pod use
             selkies-kde-desktop, which composes kde-shell directly without SDDM.
-    kde-desktop-require:
         require:
             - dbus
             - pipewire
-    kde-desktop-candy:
         candy:
             # The SDDM-free Plasma session packages (kwin_wayland + plasmashell + the
             # curated app set) are shared with the headless kde-selkies pod (R3).
             - kde-shell
-    kde-desktop-distro:
         distro:
             # Authored under `arch:`; CachyOS inherits arch's package sections
             # (the embedded `distro:` vocabulary sets cachyos
@@ -57,71 +54,51 @@ kde-desktop:
                     - ffmpegthumbs
                     - phonon-qt6-vlc
                     - haruna
-    kde-desktop-service:
         service:
             - name: sddm
               use_packaged: sddm.service
               enable: true
               scope: system
-    kde-desktop-step-0:
-        run: |
-            command=systemctl set-default graphical.target || true
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=systemctl set-default graphical.target || true
+              run_as: root
+              command: |
                 systemctl set-default graphical.target || true
-    kde-desktop-step-1:
-        check: the SDDM display-manager binary is installed for the graphical seat
-        plugin: file
-        plugin_input:
-            file: /usr/bin/sddm
-            exists: true
-    kde-desktop-step-2:
-        check: the sddm package is present in the image
-        plugin: package
-        plugin_input:
-            package: sddm
-            installed: true
-    kde-desktop-step-3:
-        check: the workstation system monitor is available
-        plugin: file
-        plugin_input:
-            file: /usr/bin/plasma-systemmonitor
-            exists: true
-    kde-desktop-step-4:
-        check: the filelight disk-usage visualiser is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/filelight
-            exists: true
-    kde-desktop-step-5:
-        check: the KDE partition manager is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/partitionmanager
-            exists: true
-    kde-desktop-step-6:
-        check: the haruna media player package is present
-        plugin: package
-        plugin_input:
-            package: haruna
-            installed: true
-    kde-desktop-step-7:
-        check: the systemd default target is graphical so SDDM starts a KDE login on the real GPU output
-        exit_status: 0
-        stdout:
-            - matches: "graphical.target"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: systemctl get-default
-    kde-desktop-step-8:
-        check: the packaged sddm.service is enabled to start at boot
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: sddm
-            enabled: true
+            - check: the SDDM display-manager binary is installed for the graphical seat
+              file:
+                file: /usr/bin/sddm
+                exists: true
+            - check: the sddm package is present in the image
+              package:
+                package: sddm
+                installed: true
+            - check: the workstation system monitor is available
+              file:
+                file: /usr/bin/plasma-systemmonitor
+                exists: true
+            - check: the filelight disk-usage visualiser is installed
+              file:
+                file: /usr/bin/filelight
+                exists: true
+            - check: the KDE partition manager is installed
+              file:
+                file: /usr/bin/partitionmanager
+                exists: true
+            - check: the haruna media player package is present
+              package:
+                package: haruna
+                installed: true
+            - check: the systemd default target is graphical so SDDM starts a KDE login on the real GPU output
+              exit_status: 0
+              stdout:
+                - matches: "graphical.target"
+              context:
+                - runtime
+              command: systemctl get-default
+            - check: the packaged sddm.service is enabled to start at boot
+              context:
+                - runtime
+              service:
+                service: sddm
+                enabled: true

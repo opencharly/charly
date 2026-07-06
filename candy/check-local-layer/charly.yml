@@ -9,59 +9,46 @@ check-local-layer:
             run-step (run: plugin: file) lands a second marker via the host's RunHostStep
             act-OpStep arm. Deploy-scope check probes run on the host (not in a container)
             to verify both markers are present after `charly bundle add`.
-    check-local-layer-step-0:
-        run: write=/etc/check-local-marker
-        write: /etc/check-local-marker
-        run_as: root
-        mode: "0644"
-        content: |
-            check-local v1
-    check-local-layer-act:
-        run: at local deploy charly lowers this run-step to an act-verb OpStep (run_as user → user scope); the externalized plugin walk routes it over the RunHostStep host-engine channel, where the host resolves the file verb's ProvisionActor (the in-proc registry the leaf plugin cannot reach) and runs the rendered create-script on the venue — proving the act-OpStep RunHostStep arm
-        id: check-local-layer-act
-        context:
-            - deploy
-        run_as: ${USER}
-        plugin: file
-        plugin_input:
-            file: /tmp/charly-check-local-act/marker
-        content: |
-            check-local-act v1
-    check-local-layer-step-1:
-        check: the check-local marker file is present at /etc/check-local-marker
-        plugin: file
-        plugin_input:
-            file: /etc/check-local-marker
-            exists: true
-    check-local-layer-step-2:
-        check: the marker records the check-local version stamp "check-local v1"
-        plugin: file
-        plugin_input:
-            file: /etc/check-local-marker
-            contains:
-                - contains: "check-local v1"
-    check-local-layer-step-3:
-        check: after the check-local kind:local apply, the marker resolves on the host filesystem outside any container
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f /etc/check-local-marker"
-            in_container: false
-    check-local-marker-host-content:
-        check: command=grep -q 'check-local v1' /etc/check-local-marker
-        id: check-local-marker-host-content
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "grep -q 'check-local v1' /etc/check-local-marker"
-            in_container: false
-    check-local-marker-build:
-        check: file=/etc/check-local-marker
-        id: check-local-marker-build
-        plugin: file
-        plugin_input:
-            file: /etc/check-local-marker
-            exists: true
-            mode: "0644"
+        plan:
+            - run: write=/etc/check-local-marker
+              write: /etc/check-local-marker
+              run_as: root
+              mode: "0644"
+              content: |
+                check-local v1
+            - run: at local deploy charly lowers this run-step to an act-verb OpStep (run_as user → user scope); the externalized plugin walk routes it over the RunHostStep host-engine channel, where the host resolves the file verb's ProvisionActor (the in-proc registry the leaf plugin cannot reach) and runs the rendered create-script on the venue — proving the act-OpStep RunHostStep arm
+              id: check-local-layer-act
+              context:
+                - deploy
+              run_as: ${USER}
+              file: /tmp/charly-check-local-act/marker
+              content: |
+                check-local-act v1
+            - check: the check-local marker file is present at /etc/check-local-marker
+              file:
+                file: /etc/check-local-marker
+                exists: true
+            - check: the marker records the check-local version stamp "check-local v1"
+              file:
+                file: /etc/check-local-marker
+                contains:
+                    - contains: "check-local v1"
+            - check: after the check-local kind:local apply, the marker resolves on the host filesystem outside any container
+              context:
+                - runtime
+              command:
+                command: "test -f /etc/check-local-marker"
+                in_container: false
+            - check: command=grep -q 'check-local v1' /etc/check-local-marker
+              id: check-local-marker-host-content
+              context:
+                - runtime
+              command:
+                command: "grep -q 'check-local v1' /etc/check-local-marker"
+                in_container: false
+            - check: file=/etc/check-local-marker
+              id: check-local-marker-build
+              file:
+                file: /etc/check-local-marker
+                exists: true
+                mode: "0644"

@@ -12,13 +12,11 @@ appium-server:
             /wd/hub. Every claim below is a file/binary on disk or an HTTP/status
             response from the running server, so each step is independently
             verifiable.
-    appium-server-require:
         require:
             - nodejs
             - java-openjdk
             - android-sdk
             - supervisord
-    appium-server-var:
         var:
             # Tracks the API-36 google_apis_playstore System WebView Chrome version
             # (live-probed 133.0.6943.137). Pinned to the nearest Chrome-for-Testing
@@ -28,13 +26,11 @@ appium-server:
             # literal /opt/chromedriver/133 in the check below + the emulator-layer cap.
             WEBVIEW_CHROMEDRIVER_VERSION: "133.0.6943.141"
             WEBVIEW_CHROMEDRIVER_MAJOR: "133"
-    appium-server-distro:
         distro:
             arch:
                 aur:
                     package:
                         - appium
-    appium-server-service:
         service:
             - name: appium
               exec: "/usr/bin/appium --address 0.0.0.0 --port 4723 --base-path /wd/hub --log-level info"
@@ -48,22 +44,19 @@ appium-server:
               start_sec: 3
               enable: true
               scope: system
-    appium-server-port:
         port:
             - 4723
-    appium-server-step-0:
-        run: |
-            command=set -euo pipefail
-            # Driver installs per-user (writes ~/.appium/node_modules). JAVA_HOME
-            # + ANDROID_HOME come from upstream layer ENV baked into the image.
-            export JAVA_HOME=/usr/lib/jvm/charly-jdk21
-            export ANDROID_HOME=/opt/android-sdk
-            export PATH="$JAVA_HOME/bin:$PATH"
-            /usr/bin/appium driver install uiautomator2
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=set -euo pipefail
+                # Driver installs per-user (writes ~/.appium/node_modules). JAVA_HOME
+                # + ANDROID_HOME come from upstream layer ENV baked into the image.
+                export JAVA_HOME=/usr/lib/jvm/charly-jdk21
+                export ANDROID_HOME=/opt/android-sdk
+                export PATH="$JAVA_HOME/bin:$PATH"
+                /usr/bin/appium driver install uiautomator2
+              run_as: "${USER}"
+              command: |
                 set -euo pipefail
                 # Driver installs per-user (writes ~/.appium/node_modules). JAVA_HOME
                 # + ANDROID_HOME come from upstream layer ENV baked into the image.
@@ -71,81 +64,61 @@ appium-server:
                 export ANDROID_HOME=/opt/android-sdk
                 export PATH="$JAVA_HOME/bin:$PATH"
                 /usr/bin/appium driver install uiautomator2
-    appium-server-step-1:
-        run: mkdir=/opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
-        mkdir: /opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
-        run_as: root
-        mode: "0755"
-    appium-server-step-2:
-        run: download=https://storage.googleapis.com/chrome-for-testing-public/${WEBVIEW_CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip
-        download: "https://storage.googleapis.com/chrome-for-testing-public/${WEBVIEW_CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
-        extract: zip
-        to: /opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
-        run_as: root
-    appium-server-step-3:
-        run: |
-            command=set -euo pipefail
-            D="/opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}"
-            install -m 0755 "${D}/chromedriver-linux64/chromedriver" "${D}/chromedriver"
-            rm -rf "${D}/chromedriver-linux64"
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: mkdir=/opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
+              mkdir: /opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
+              run_as: root
+              mode: "0755"
+            - run: download=https://storage.googleapis.com/chrome-for-testing-public/${WEBVIEW_CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip
+              download: "https://storage.googleapis.com/chrome-for-testing-public/${WEBVIEW_CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+              extract: zip
+              to: /opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}
+              run_as: root
+            - run: |
+                command=set -euo pipefail
+                D="/opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}"
+                install -m 0755 "${D}/chromedriver-linux64/chromedriver" "${D}/chromedriver"
+                rm -rf "${D}/chromedriver-linux64"
+              run_as: root
+              command: |
                 set -euo pipefail
                 D="/opt/chromedriver/${WEBVIEW_CHROMEDRIVER_MAJOR}"
                 install -m 0755 "${D}/chromedriver-linux64/chromedriver" "${D}/chromedriver"
                 rm -rf "${D}/chromedriver-linux64"
-    appium-server-step-4:
-        check: the Appium WebDriver server binary is installed at /usr/bin/appium
-        plugin: file
-        plugin_input:
-            file: /usr/bin/appium
-            exists: true
-    appium-server-step-5:
-        check: the installed Appium server reports a numeric version
-        exit_status: 0
-        stdout:
-            - matches: "^[0-9]+\\."
-        plugin: command
-        plugin_input:
-            command: /usr/bin/appium --version
-    appium-server-step-6:
-        check: the uiautomator2 Android driver is installed per-user under ~/.appium
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.appium/node_modules/appium-uiautomator2-driver
-            exists: true
-            filetype: directory
-    appium-server-step-7:
-        check: a chromedriver binary is baked at /opt/chromedriver/133/chromedriver
-        plugin: file
-        plugin_input:
-            file: /opt/chromedriver/133/chromedriver
-            exists: true
-    appium-server-step-8:
-        check: the baked chromedriver reports major version 133 matching the API-36 System WebView
-        exit_status: 0
-        stdout:
-            - matches: "ChromeDriver 133\\."
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: /opt/chromedriver/133/chromedriver --version
-    appium-server-step-9:
-        check: the running Appium server answers a WebDriver status request with HTTP 200
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:4723}/wd/hub/status
-            status: 200
-    appium-server-step-10:
-        check: the running server reports itself ready over the Appium status verb
-        appium: status
-        stdout:
-            - contains: '"ready":true'
-        context:
-            - runtime
+            - check: the Appium WebDriver server binary is installed at /usr/bin/appium
+              file:
+                file: /usr/bin/appium
+                exists: true
+            - check: the installed Appium server reports a numeric version
+              exit_status: 0
+              stdout:
+                - matches: "^[0-9]+\\."
+              command: /usr/bin/appium --version
+            - check: the uiautomator2 Android driver is installed per-user under ~/.appium
+              file:
+                file: ${HOME}/.appium/node_modules/appium-uiautomator2-driver
+                exists: true
+                filetype: directory
+            - check: a chromedriver binary is baked at /opt/chromedriver/133/chromedriver
+              file:
+                file: /opt/chromedriver/133/chromedriver
+                exists: true
+            - check: the baked chromedriver reports major version 133 matching the API-36 System WebView
+              exit_status: 0
+              stdout:
+                - matches: "ChromeDriver 133\\."
+              context:
+                - runtime
+              command: /opt/chromedriver/133/chromedriver --version
+            - check: the running Appium server answers a WebDriver status request with HTTP 200
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:4723}/wd/hub/status
+                status: 200
+            - check: the running server reports itself ready over the Appium status verb
+              appium: status
+              stdout:
+                - contains: '"ready":true'
+              context:
+                - runtime

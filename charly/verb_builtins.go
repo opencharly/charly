@@ -2,8 +2,8 @@ package main
 
 import "context"
 
-// The remaining IN-CHARLY-MODULE built-in check verbs as CheckVerbProviders (summarize,
-// kill, plugin — defined below). These are internal/dispatch verbs, NOT user-authored
+// The remaining IN-CHARLY-MODULE built-in check verb as a CheckVerbProvider (the
+// generic plugin dispatcher below). An internal/dispatch verb, NOT a user-authored
 // plugin: blocks; each wraps its r.runX handler, and runOne resolves them via
 // providerRegistry.ResolveVerb.
 //
@@ -54,20 +54,6 @@ import "context"
 // once the loader registers its grpcProvider — never through this in-proc set. The host
 // pre-resolves the VM's live SPICE endpoint to a dialable address (preresolveSpiceEndpoint)
 // before marshaling, so the plugin needs no go-libvirt.
-
-type summarizeVerb struct{ builtinVerbBase }
-
-func (summarizeVerb) Reserved() string { return "summarize" }
-func (summarizeVerb) RunVerb(ctx context.Context, r *Runner, op *Op) CheckResult {
-	return r.runSummarize(ctx, op)
-}
-
-type killVerb struct{ builtinVerbBase }
-
-func (killVerb) Reserved() string { return "kill" }
-func (killVerb) RunVerb(ctx context.Context, r *Runner, op *Op) CheckResult {
-	return r.runKill(ctx, op)
-}
 
 // pluginVerb — the generic `plugin:` discriminator. Its RunVerb resolves the
 // authored plugin word (op.Plugin) to its registered Provider and Invokes it

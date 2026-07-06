@@ -11,35 +11,28 @@ notebook-osm:
             map via martin's PMTiles (URL sourced from MARTIN_PUBLIC_URL so
             the user's browser can reach the host port). Data-only layer —
             no packages, no services, no baked DAGs.
-    notebook-osm-data:
         data:
             - src: data/notebooks
               volume: workspace
               dest: notebooks
-    notebook-osm-step-0:
-        check: the notebooks subdirectory is provisioned in the workspace
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks
-            filetype: directory
-    notebook-osm-step-1:
-        check: the osm-monaco-viz notebook is present
-        exit_status: 0
-        stdout:
-            - matches: "osm-monaco-viz"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/notebooks/
-    notebook-osm-viz-present:
-        check: file=${VOLUME_CONTAINER_PATH:workspace}/notebooks/osm-monaco-viz.py
-        id: notebook-osm-viz-present
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks/osm-monaco-viz.py
-            exists: true
+        plan:
+            - check: the notebooks subdirectory is provisioned in the workspace
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks
+                filetype: directory
+            - check: the osm-monaco-viz notebook is present
+              exit_status: 0
+              stdout:
+                - matches: "osm-monaco-viz"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/notebooks/
+            - check: file=${VOLUME_CONTAINER_PATH:workspace}/notebooks/osm-monaco-viz.py
+              id: notebook-osm-viz-present
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks/osm-monaco-viz.py
+                exists: true

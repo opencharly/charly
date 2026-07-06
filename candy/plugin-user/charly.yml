@@ -7,16 +7,16 @@ plugin-user:
             ACT: render an idempotent `useradd`. A HOST-COUPLED verb on the
             sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
-    plugin-user-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-user
             providers:
                 - verb:user
-    user-verb-dispatches:
-        check: the user verb dispatches through the provider registry and probes an account via getent passwd
-        id: user-verb-dispatches
-        plugin: user
-        plugin_input:
-            user: root
-            uid: 0
-        context: [runtime]
+            primary:
+                user: user
+        plan:
+            - check: the user verb dispatches through the provider registry and probes an account via getent passwd
+              id: user-verb-dispatches
+              user:
+                user: root
+                uid: 0
+              context: [runtime]

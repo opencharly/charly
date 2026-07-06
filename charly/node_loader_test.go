@@ -19,22 +19,21 @@ redis:
     version: "2026.150.0000"
     description: in-memory store
     status: working
-  redis-step-0:
-    check: the binary exists
-    file: /usr/bin/redis-server
+    plan:
+      - check: the binary exists
+        file: /usr/bin/redis-server
 coder:
   candy:
     base: fedora
-  coder-candy:
     candy: [redis]
 shop:
   group: {}
   web:
     pod:
       image: coder
-    web-step-0:
-      check: web reaches the cache
-      command: "redis-cli -h ${HOST:cache} ping"
+      plan:
+        - check: web reaches the cache
+          command: "redis-cli -h ${HOST:cache} ping"
   cache:
     pod:
       image: coder
@@ -112,8 +111,11 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 			}
 			// A legacy shape stamped at HEAD is hard-rejected by the node-form parser
 			// (a real, below-HEAD legacy config is caught by the version gate first).
-			if !strings.Contains(err.Error(), "no discriminator") {
+			if !strings.Contains(err.Error(), "no kind discriminator") {
 				t.Errorf("legacy shape must be hard-rejected, got: %v", err)
+			}
+			if !strings.Contains(err.Error(), "charly migrate") {
+				t.Errorf("legacy-shape rejection must hint at `charly migrate`, got: %v", err)
 			}
 		})
 	}

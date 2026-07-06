@@ -10,12 +10,11 @@ check-builder-npm:
             the venue. is-number is zero-dependency so the install is small + deterministic. No box
             composes it — it exists solely as the builder-deploy fixture that closes the "no dedicated
             bed deploys a pixi/npm/cargo/aur builder candy to a local:/vm: venue" gap.
-    check-builder-npm-artifact-present:
-        check: the npm builder installed is-number into the venue's ~/.npm-global node_modules tree
-        id: check-builder-npm-artifact-present
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
-            in_container: false
+        plan:
+            - check: the npm builder installed is-number into the venue's ~/.npm-global node_modules tree
+              id: check-builder-npm-artifact-present
+              context:
+                - runtime
+              command:
+                command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
+                in_container: false

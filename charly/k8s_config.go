@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/sdk/kit"
+
 import "os"
 
 // -----------------------------------------------------------------------------
@@ -57,15 +59,19 @@ func findK8sSpec(dir, name string) *K8sSpec {
 // the cluster name, the context stays empty and the plugin falls back to the
 // kubeconfig current-context (the same behavior the in-tree restConfig had).
 func preresolveKubeCluster(c *Op) *Op {
-	if c.Kube == "" || c.Cluster == "" || c.KubeContext != "" {
+	if c.Plugin != "kube" || kit.InputStr(c, "cluster") == "" || kit.InputStr(c, "kube_context") != "" {
 		return c
 	}
 	cwd, _ := os.Getwd()
-	spec := findK8sSpec(cwd, c.Cluster)
+	spec := findK8sSpec(cwd, kit.InputStr(c, "cluster"))
 	if spec == nil || spec.KubeconfigContext == "" {
 		return c
 	}
 	cc := *c
-	cc.KubeContext = spec.KubeconfigContext
+	cc.PluginInput = make(map[string]any, len(c.PluginInput)+1)
+	for k, v := range c.PluginInput {
+		cc.PluginInput[k] = v
+	}
+	cc.PluginInput["kube_context"] = spec.KubeconfigContext
 	return &cc
 }

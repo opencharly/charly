@@ -8,14 +8,14 @@ plugin-port:
             (sdk/kit.CheckContext), served in EITHER placement: compiled-in,
             or OUT-OF-PROCESS via the CheckContextService reverse channel (F2). The
             relocation template for the other host-coupled check verbs/kinds.
-    plugin-port-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-port
             providers:
                 - verb:port
-    port-verb-dispatches:
-        check: the port verb dispatches through the provider registry and probes a listening port on a live deployment
-        id: port-verb-dispatches
-        plugin: port
-        plugin_input: {port: 22, listening: true}
-        context: [runtime]
+            primary:
+                port: port
+        plan:
+            - check: the port verb dispatches through the provider registry and probes a listening port on a live deployment
+              id: port-verb-dispatches
+              port: {port: 22, listening: true}
+              context: [runtime]

@@ -220,6 +220,17 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 	if err := providerRegistry.register(stubAdbExternalVerb{}, "test:stub-adb"); err != nil {
 		t.Fatalf("register stub adb provider: %v", err)
 	}
+	// Post schema-compaction, dispatch validates plugin_input against the verb's
+	// registered input def BEFORE invoking (validateAuthoredPluginInput) — serve a
+	// permissive stub def for verb:adb the way the real plugin's Describe would
+	// (it must declare the frozen `method` primary; the trailing `...` admits the
+	// per-method modifiers like apk).
+	if err := registerPluginUnitSchema("test:stub-adb", PluginSchema{
+		CueSource: "#StubAdbInput: {method: string, ...}\n",
+		InputDefs: map[string]string{"verb:adb": "#StubAdbInput"},
+	}); err != nil {
+		t.Fatalf("register stub adb schema: %v", err)
+	}
 	t.Cleanup(func() {
 		k := provKey(ClassVerb, "adb")
 		providerRegistry.mu.Lock()
@@ -236,7 +247,7 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",
 			Description: "android apps install",
 			Plan: []Step{{
-				Op: Op{ID: "adb-install-apidemos", Adb: "install", Apk: "./tests/data/ApiDemos-debug.apk", Context: []string{"runtime"}},
+				Op: Op{ID: "adb-install-apidemos", Plugin: "adb", PluginInput: map[string]any{"method": "install", "apk": "./tests/data/ApiDemos-debug.apk"}, Context: []string{"runtime"}},
 			}},
 		}},
 	}

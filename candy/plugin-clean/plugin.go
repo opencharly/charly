@@ -17,16 +17,12 @@ package clean
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 // NewProvider returns the clean provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
@@ -37,7 +33,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.181.0001",
 		[]sdk.ProvidedCapability{{Class: "command", Word: "clean"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the out-of-process CLI entrypoint (only reached when clean is NOT compiled in). clean

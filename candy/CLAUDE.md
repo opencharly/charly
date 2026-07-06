@@ -1,15 +1,17 @@
 # candy/ — signpost (not the rule-set)
 
-You are in the **candy** definitions (`candy/<name>/candy.yml` + supporting
+You are in the **candy** definitions (`candy/<name>/charly.yml` + supporting
 config files: `pixi.toml`, `package.json`, `Cargo.toml`, service files, …).
 
 **Load these skills FIRST (R0):**
 
-- `/charly-image:layer` — the authoritative `candy.yml` schema: the `task:` verb
-  catalog, `vars:` substitution, the unified `service:` schema, package
-  sections, `check:` checks, and the mandatory `version:` field.
+- `/charly-image:layer` — the authoritative candy schema: the compact node form
+  (`<name>: {candy: <full body>}` with the ordered `plan:` step list), the
+  step verb sugar, `env:`/`var:` maps, the unified `service:` schema, package
+  sections, and the mandatory `version:` + `description:` + `plan:` fields.
 - `/charly-image:image` — when composing candies into a box.
-- `/charly-check:check` — authoring the `check:` declarative checks a candy ships.
+- `/charly-check:check` — authoring the `plan:` steps a candy ships (ADE).
+- `/charly-internals:plugin` — when the candy carries a `plugin:` block.
 
 The `layer-validator` agent is a fast pre-edit sanity gate; `charly box validate`
 is the authoritative checker. Use the `charly candy …` editor verbs (comment-

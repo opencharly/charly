@@ -8,7 +8,6 @@ golang:
             the `go` driver binary at /usr/bin/go. Verifiable end to end: the
             binary exists, `go version` reports a Go toolchain version, and the
             toolchain actually compiles and runs a standalone Go program.
-    golang-distro:
         distro:
             arch:
                 package:
@@ -22,28 +21,21 @@ golang:
             ubuntu:
                 package:
                     - golang-go
-    golang-step-0:
-        check: the go compiler binary is installed at /usr/bin/go
-        plugin: file
-        plugin_input:
-            file: /usr/bin/go
-            exists: true
-    golang-step-1:
-        check: running `go version` succeeds and prints a Go toolchain version
-        exit_status: 0
-        stdout:
-            - matches: "go version go[0-9]"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/go version
-    golang-step-2:
-        check: the toolchain compiles and runs a standalone Go program and prints its output
-        exit_status: 0
-        stdout:
-            - contains: charly-go-build-ok
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - check: the go compiler binary is installed at /usr/bin/go
+              file:
+                file: /usr/bin/go
+                exists: true
+            - check: running `go version` succeeds and prints a Go toolchain version
+              exit_status: 0
+              stdout:
+                - matches: "go version go[0-9]"
+              command: /usr/bin/go version
+            - check: the toolchain compiles and runs a standalone Go program and prints its output
+              exit_status: 0
+              stdout:
+                - contains: charly-go-build-ok
+              command: |
                 set -e
                 d=$(mktemp -d)
                 printf 'package main\nimport "fmt"\nfunc main() { fmt.Println("charly-go-build-ok") }\n' > "$d/main.go"
@@ -51,15 +43,13 @@ golang:
                 export HOME="$d" GOCACHE="$d/.gocache" GOPATH="$d/.gopath" GOFLAGS=-mod=mod
                 /usr/bin/go mod init charlygotest >/dev/null 2>&1 || true
                 /usr/bin/go run main.go
-    go-package:
-        check: package=go
-        id: go-package
-        plugin: package
-        plugin_input:
-            package: go
-            package_map:
-                arch: go
-                debian: golang-go
-                ubuntu: golang-go
-                fedora: golang-bin
-            installed: true
+            - check: package=go
+              id: go-package
+              package:
+                package: go
+                package_map:
+                    arch: go
+                    debian: golang-go
+                    ubuntu: golang-go
+                    fedora: golang-bin
+                installed: true

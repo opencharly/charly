@@ -1,6 +1,6 @@
 plugin-wl:
     candy:
-        version: 2026.182.1805
+        version: 2026.187.1200
         description: |-
             OUT-OF-TREE charly plugin serving the `wl` live-container check verb — a standalone
             Go module (go.mod + main.go) that drives Wayland/sway desktop automation inside a
@@ -10,27 +10,30 @@ plugin-wl:
             provider binary on the HOST, and serves it OUT-OF-PROCESS via LocalTransport — so
             the Wayland/sway driver lives HERE, out of charly's core check surface. wl is the
             LAST live-container verb to leave the core: after it, ZERO check verbs are
-            compiled-in. `wl:` authoring stays unchanged: the verb keeps its `wl:`
-            discriminator + every modifier
-            (x/y/x2/y2/direction/amount/target/text/key/combo/command/action/query/artifact) +
-            the #WlMethod enum on charly's core #Op, and dispatches through the provider
-            registry exactly like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider
-            hands it the full #Op). EXEC-based (the third, after record + dbus): the host
-            attaches its live DeployExecutor over the E3b reverse channel and this plugin dials
-            back through the SDK (sdk.ExecutorFromInvoke) to RunCapture the venue's compositor
-            tools (screenshot pulls the PNG via GetFile) — it owns no podman / SSH machinery
-            and no CDP client (the CLI-only --from-cdp/--from-sway/--from-x11 coordinate
-            translation was dropped; the declarative `wl: click` uses X/Y directly). The R10
-            consumer is a desktop pod bed whose check composes this plugin (the sway-browser-vnc
-            bed's `wl: sway-tree` + `wl: screenshot`).
-    plugin-wl-decl:
+            compiled-in. The wl-exclusive fields live in the plugin's OWN #WlInput
+            (schema/wl.cue): the verb `method` enum (the former core #WlMethod, incl. the
+            overlay-*/sway-* nested methods) plus
+            x/y/x2/y2/button/direction/amount/target/text/key/combo/command/action/query and
+            the artifact validators — `command` (the exec / sway-msg argv) absorbed from the
+            former shared #Op command modifier; the plugin decodes them from the step's
+            desugared plugin_input, and only the genuinely shared step matchers still ride
+            core #Op. It dispatches through the provider registry exactly like a built-in
+            (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full #Op).
+            EXEC-based (the third, after record + dbus): the host attaches its live
+            DeployExecutor over the E3b reverse channel and this plugin dials back through the
+            SDK (sdk.ExecutorFromInvoke) to RunCapture the venue's compositor tools
+            (screenshot pulls the PNG via GetFile) — it owns no podman / SSH machinery and no
+            CDP client (the CLI-only --from-cdp/--from-sway/--from-x11 coordinate translation
+            was dropped; the declarative click method uses X/Y directly). The R10 consumer is
+            a desktop pod bed whose check composes this plugin (the sway-browser-vnc bed's wl
+            sway-tree + screenshot probes).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-wl
             providers:
                 - verb:wl
-    wl-verb-dispatches:
-        check: the wl verb dispatches through the provider registry and reports the Wayland/sway compositor status on a live desktop deployment (the out-of-process plugin verb drives the venue's compositor over the executor reverse channel)
-        id: wl-verb-dispatches
-        wl: status
-        context:
-            - runtime
+        plan:
+            - check: the wl verb dispatches through the provider registry and reports the Wayland/sway compositor status on a live desktop deployment (the out-of-process plugin verb drives the venue's compositor over the executor reverse channel)
+              id: wl-verb-dispatches
+              wl: status
+              context:
+                - runtime

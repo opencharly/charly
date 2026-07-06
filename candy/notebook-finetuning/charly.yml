@@ -9,69 +9,50 @@ notebook-finetuning:
             RLOO, and QLoRA variants. Data-only — no packages, no
             services. Consumed by jupyter-ml-notebook for an Unsloth-ready
             JupyterLab image.
-    notebook-finetuning-data:
         data:
             - src: data/finetuning
               volume: workspace
               dest: finetuning
-    notebook-finetuning-step-0:
-        check: the finetuning subdirectory is provisioned in the workspace
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/finetuning
-            filetype: directory
-    notebook-finetuning-step-1:
-        check: the Unsloth_Setup producer notebook is present
-        exit_status: 0
-        stdout:
-            - matches: "Unsloth_Setup"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/finetuning/
-    notebook-finetuning-step-2:
-        check: the Unsloth_Setup producer notebook is staged in the image data tree
-        plugin: file
-        plugin_input:
-            file: /data/workspace/finetuning/00_Unsloth_Setup.ipynb
-            exists: true
-    notebook-finetuning-step-3:
-        check: the notebooks.yaml manifest cataloguing the collection is staged
-        plugin: file
-        plugin_input:
-            file: /data/workspace/finetuning/notebooks.yaml
-            exists: true
-    notebook-finetuning-step-4:
-        check: a substantial collection of training notebooks is staged, not just the setup notebook
-        exit_status: 0
-        stdout:
-            - matches: "[1-9][0-9]"
-        plugin: command
-        plugin_input:
-            command: find /data/workspace/finetuning -maxdepth 1 -name "*.ipynb" | wc -l
-    notebook-finetuning-step-5:
-        agent-check: the notebooks span the documented Unsloth training methods (SFT, GRPO, DPO, Reward, RLOO, QLoRA) as runnable examples
-    notebook-finetuning-staged-dir:
-        check: file=/data/workspace/finetuning
-        id: notebook-finetuning-staged-dir
-        plugin: file
-        plugin_input:
-            file: /data/workspace/finetuning
-            filetype: directory
-    notebook-finetuning-sft-staged:
-        check: file=/data/workspace/finetuning/03_SFT_Training_Qwen.ipynb
-        id: notebook-finetuning-sft-staged
-        plugin: file
-        plugin_input:
-            file: /data/workspace/finetuning/03_SFT_Training_Qwen.ipynb
-            exists: true
-    notebook-finetuning-qlora-staged:
-        check: file=/data/workspace/finetuning/08_QLoRA_Multi_Adapter_Qwen_Think.ipynb
-        id: notebook-finetuning-qlora-staged
-        plugin: file
-        plugin_input:
-            file: /data/workspace/finetuning/08_QLoRA_Multi_Adapter_Qwen_Think.ipynb
-            exists: true
+        plan:
+            - check: the finetuning subdirectory is provisioned in the workspace
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/finetuning
+                filetype: directory
+            - check: the Unsloth_Setup producer notebook is present
+              exit_status: 0
+              stdout:
+                - matches: "Unsloth_Setup"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/finetuning/
+            - check: the Unsloth_Setup producer notebook is staged in the image data tree
+              file:
+                file: /data/workspace/finetuning/00_Unsloth_Setup.ipynb
+                exists: true
+            - check: the notebooks.yaml manifest cataloguing the collection is staged
+              file:
+                file: /data/workspace/finetuning/notebooks.yaml
+                exists: true
+            - check: a substantial collection of training notebooks is staged, not just the setup notebook
+              exit_status: 0
+              stdout:
+                - matches: "[1-9][0-9]"
+              command: find /data/workspace/finetuning -maxdepth 1 -name "*.ipynb" | wc -l
+            - agent-check: the notebooks span the documented Unsloth training methods (SFT, GRPO, DPO, Reward, RLOO, QLoRA) as runnable examples
+            - check: file=/data/workspace/finetuning
+              id: notebook-finetuning-staged-dir
+              file:
+                file: /data/workspace/finetuning
+                filetype: directory
+            - check: file=/data/workspace/finetuning/03_SFT_Training_Qwen.ipynb
+              id: notebook-finetuning-sft-staged
+              file:
+                file: /data/workspace/finetuning/03_SFT_Training_Qwen.ipynb
+                exists: true
+            - check: file=/data/workspace/finetuning/08_QLoRA_Multi_Adapter_Qwen_Think.ipynb
+              id: notebook-finetuning-qlora-staged
+              file:
+                file: /data/workspace/finetuning/08_QLoRA_Multi_Adapter_Qwen_Think.ipynb
+                exists: true

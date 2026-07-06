@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-mcp/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -60,10 +62,12 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	return p.invokeVerb(ctx, req)
 }
 
-// invokeVerb runs one `mcp:` check operation. It decodes the full #Op + the env, skips in
-// box mode (no live MCP server on a disposable `charly check box`), dispatches the method
-// (metadata for `servers`, dial + MCP protocol otherwise), and self-evaluates the
-// matchers.
+// invokeVerb runs one `mcp:` check operation. It decodes the full #Op, the typed
+// plugin input (params.McpInput — the per-verb fields live in the desugared
+// plugin_input since the schema-compaction cutover), and the env, skips in box
+// mode (no live MCP server on a disposable `charly check box`), dispatches the
+// method (metadata for `servers`, dial + MCP protocol otherwise), and
+// self-evaluates the matchers.
 func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -71,6 +75,8 @@ func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 			return sdk.ResultJSON("fail", "mcp: decode op: "+err.Error())
 		}
 	}
+	var in params.McpInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env mcpEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
@@ -85,7 +91,7 @@ func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 			ep = &e
 		}
 	}
-	method := string(op.Mcp)
+	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running MCP server on a
 	// disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -99,7 +105,7 @@ func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 		return sdk.ResultJSON("skip", fmt.Sprintf("mcp: %s has no resolved MCP endpoint (box=%q)", method, env.Box))
 	}
 
-	out, runErr := dispatch(ctx, ep, &op)
+	out, runErr := dispatch(ctx, ep, &op, &in)
 
 	// The shared exit/stdout/stderr verdict pipeline (R3). mcp produces no artifact.
 	return sdk.VerbVerdict("mcp", method, out, runErr, &op, false)

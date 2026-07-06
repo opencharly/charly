@@ -52,13 +52,14 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	if len(unit.Providers) != 1 || unit.Providers[0].Class() != ClassVerb || unit.Providers[0].Reserved() != "appium" {
 		t.Fatalf("providers = %+v, want exactly one verb:appium", unit.Providers)
 	}
-	// appium keeps its contract on core #Op, so it serves a non-empty schema with NO
-	// input def (no plugin_input) — the def map is empty.
+	// Post schema-compaction, appium's per-verb modifiers live in the plugin's OWN
+	// served input def (#AppiumInput) — the plugin serves a non-empty schema AND
+	// declares the input def its plugin_input validates against.
 	if unit.Schema.CueSource == "" {
 		t.Fatalf("unit schema CueSource empty — the plugin must ship a non-empty served schema")
 	}
-	if d, ok := unit.Schema.InputDefs["verb:appium"]; ok {
-		t.Fatalf("verb:appium should have NO input def (modifiers live on core #Op), got %q", d)
+	if d := unit.Schema.InputDefs["verb:appium"]; d != "#AppiumInput" {
+		t.Fatalf("verb:appium input def = %q, want #AppiumInput (per-verb modifiers moved into the plugin's served schema)", d)
 	}
 
 	// 3. Register the served schema through the SAME gate a builtin runs (proves it
@@ -84,7 +85,7 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	// 4. Invoke across the process boundary in BOX mode: the full #Op marshals over the
 	//    wire and the verb skips (no running container) — proving load + dispatch
 	//    round-trip end to end without a live emulator.
-	params, err := json.Marshal(&Op{Appium: "status"})
+	params, err := json.Marshal(&Op{Plugin: "appium", PluginInput: map[string]any{"method": "status"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,11 +103,10 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	if pr.Status != "skip" {
 		t.Fatalf("box-mode appium status result = %+v, want skip (live-container verb skips under check box)", pr)
 	}
-	// The skip message names the method, proving op.Appium (the discriminator) crossed
-	// the wire intact — the plugin read it from the marshaled #Op, not from a separate
-	// argument.
+	// The skip message names the method, proving the desugared input crossed the
+	// wire intact — the plugin read it from the marshaled Op's PluginInput.
 	if !strings.Contains(pr.Message, "status") {
-		t.Fatalf("skip message %q does not name the method — op.Appium did not cross the wire", pr.Message)
+		t.Fatalf("skip message %q does not name the method — the plugin input did not cross the wire", pr.Message)
 	}
 }
 
@@ -118,8 +118,9 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 // them; this round-trip is exactly that wire path (the Op type is identical on both ends).
 func TestAppiumOpCrossesWireWithMatchers(t *testing.T) {
 	op := &Op{
-		Appium: "status",
-		Stdout: MatcherList{{Op: "contains", Value: `"ready":true`}},
+		Plugin:      "appium",
+		PluginInput: map[string]any{"method": "status"},
+		Stdout:      MatcherList{{Op: "contains", Value: `"ready":true`}},
 	}
 	params, err := json.Marshal(op) // the host's marshalJSON(c)
 	if err != nil {
@@ -129,8 +130,8 @@ func TestAppiumOpCrossesWireWithMatchers(t *testing.T) {
 	if err := json.Unmarshal(params, &got); err != nil {
 		t.Fatalf("unmarshal op: %v", err)
 	}
-	if got.Appium != "status" {
-		t.Fatalf("Appium did not survive: %q", got.Appium)
+	if got.PluginInput["method"] != "status" {
+		t.Fatalf("the plugin input method did not survive: %v", got.PluginInput)
 	}
 	if len(got.Stdout) != 1 || got.Stdout[0].Op != "contains" {
 		t.Fatalf("stdout MatcherList did not survive the wire: %+v", got.Stdout)

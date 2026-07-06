@@ -46,6 +46,9 @@ func (c runnerCheckContext) Mode() kit.RunMode {
 type kitVerbAdapter struct {
 	builtinVerbBase
 	kv kit.CheckVerbProvider
+	// primary is the capability's declared scalar-sugar primary input field
+	// (ProvidedCapability.Primary), lifted from Describe at registration.
+	primary string
 }
 
 func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
@@ -53,11 +56,10 @@ func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
 func (a kitVerbAdapter) RunVerb(ctx context.Context, r *Runner, op *Op) CheckResult {
 	res := a.kv.RunVerb(ctx, runnerCheckContext{r: r}, op)
 	return CheckResult{
-		Op:            op,
-		Verb:          a.kv.Reserved(),
-		Status:        kitStatusToCheck(res.Status),
-		Message:       res.Message,
-		CapturedValue: res.CapturedValue,
+		Op:      op,
+		Verb:    a.kv.Reserved(),
+		Status:  kitStatusToCheck(res.Status),
+		Message: res.Message,
 	}
 }
 
@@ -177,6 +179,14 @@ func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServe
 		}
 	}
 	base := kitVerbAdapter{kv: kv}
+	// Thread the capability's declared scalar-sugar primary (mirrors
+	// buildUnitInProc's lift on the pb path, R3) so register()'s primaryCarrier
+	// hook registers it into the parse-time desugar.
+	for _, c := range caps.GetProvided() {
+		if ProviderClass(c.GetClass()) == ClassVerb && c.GetWord() == kv.Reserved() {
+			base.primary = c.GetPrimary()
+		}
+	}
 	var prov Provider = base
 	// A multi-role state-provision verb's kit verb also implements kit.ProvisionActor —
 	// register the act-aware variant so the act dispatch (resolveProvisionScript) resolves
@@ -195,3 +205,8 @@ func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServe
 		Schema:    PluginSchema{CueSource: cueSource, InputDefs: inputDefs},
 	})
 }
+
+// primaryInput implements primaryCarrier (the scalar-sugar primary) for the
+// kit-verb adapter family — the value receiver makes every embedding wrapper
+// (act / act-step) carry it too.
+func (a kitVerbAdapter) primaryInput() string { return a.primary }

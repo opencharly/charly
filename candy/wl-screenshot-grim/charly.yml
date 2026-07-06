@@ -7,20 +7,16 @@ wl-screenshot-grim:
             sessions. Verifiable: the grim binary lands at /usr/bin/grim and the
             grim package is registered — both fail on an image that installed
             nothing.
-    wl-screenshot-grim-distro:
         distro:
             fedora:
                 package:
                     - grim
-    wl-screenshot-grim-step-0:
-        check: the grim screenshot binary is installed at /usr/bin/grim
-        plugin: file
-        plugin_input:
-            file: /usr/bin/grim
-            exists: true
-    wl-screenshot-grim-step-1:
-        check: the grim package is registered with the package manager
-        plugin: package
-        plugin_input:
-            package: grim
-            installed: true
+        plan:
+            - check: the grim screenshot binary is installed at /usr/bin/grim
+              file:
+                file: /usr/bin/grim
+                exists: true
+            - check: the grim package is registered with the package manager
+              package:
+                package: grim
+                installed: true

@@ -13,18 +13,21 @@ plugin-vm:
             core — they own the loader + libvirt/qemu backends + the deploy target). All of it is
             backed by go-libvirt + kata-containers/govmm + libvirt.org/go/libvirtxml, which this
             plugin keeps OUT of charly's core go.mod — the dep-shed. The `libvirt:` verb dispatches
-            through the provider registry exactly like a built-in (the verb keeps its #LibvirtMethod
-            modifiers on the closed #Op — authoring unchanged), running the extracted LibvirtCmd Kong
+            through the provider registry exactly like a built-in (the `libvirt: <method>` sugar
+            desugars to plugin/plugin_input — the method + every libvirt-exclusive modifier ride the
+            input map, validated against this plugin's own #LibvirtInput; authoring unchanged),
+            running the extracted LibvirtCmd Kong
             tree IN this plugin's process. command:vm is declared in plugin.providers (CLI-grammar
             prescan + baked manifest) but NOT advertised in Describe (mirrors plugin-secrets).
-    plugin-vm-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-vm
             providers:
                 - verb:libvirt
                 - command:vm
-    vm-libvirt-verb-dispatches:
-        check: the libvirt verb dispatches through the external vm plugin and lists the libvirt domains for a live VM deployment
-        id: vm-libvirt-verb-dispatches
-        libvirt: list
-        context: [runtime]
+            primary:
+                libvirt: method
+        plan:
+            - check: the libvirt verb dispatches through the external vm plugin and lists the libvirt domains for a live VM deployment
+              id: vm-libvirt-verb-dispatches
+              libvirt: list
+              context: [runtime]

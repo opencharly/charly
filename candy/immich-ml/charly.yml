@@ -10,10 +10,8 @@ immich-ml:
             inference API on port 3003 (its /ping endpoint answers "pong") so the
             Immich server can offload face detection and CLIP smart-search
             embedding to this backend.
-    immich-ml-require:
         require:
             - immich
-    immich-ml-env:
         env:
             IMMICH_MACHINE_LEARNING_ENABLED: "true"
             IMMICH_MACHINE_LEARNING_URL: "http://127.0.0.1:3003"
@@ -22,17 +20,13 @@ immich-ml:
             MACHINE_LEARNING_WORKERS: "1"
             MACHINE_LEARNING_WORKER_TIMEOUT: "120"
             TRANSFORMERS_CACHE: "~/.immich/models"
-    immich-ml-port:
         port:
             - 3003
-    immich-ml-volume:
         volume:
             - name: models
               path: "~/.immich/models"
-    immich-ml-var:
         var:
             IMMICH_VERSION: v2.7.5
-    immich-ml-service:
         service:
             - name: immich-ml
               exec: "bash -c 'export PATH=/opt/immich/machine-learning/.venv/bin:$PATH VIRTUAL_ENV=/opt/immich/machine-learning/.venv && python -m immich_ml'"
@@ -44,106 +38,82 @@ immich-ml:
               priority: 40
               enable: true
               scope: system
-    immich-ml-step-0:
-        run: download=https://astral.sh/uv/install.sh
-        download: "https://astral.sh/uv/install.sh"
-        extract: sh
-        env:
-            UV_INSTALL_DIR: /usr/local/bin
-        run_as: root
-    immich-ml-step-1:
-        run: |
-            command=curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
-            mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: download=https://astral.sh/uv/install.sh
+              download: "https://astral.sh/uv/install.sh"
+              extract: sh
+              env:
+                UV_INSTALL_DIR: /usr/local/bin
+              run_as: root
+            - run: |
+                command=curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
+                mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
+              run_as: root
+              command: |
                 curl -fL --retry 3 --retry-delay 2 "https://github.com/immich-app/immich/archive/refs/tags/${IMMICH_VERSION}.tar.gz" | tar xz -C /tmp
                 mv /tmp/immich-$(echo ${IMMICH_VERSION} | sed 's/^v//') /tmp/immich
-    immich-ml-step-2:
-        run: |
-            command=uv venv /opt/immich/machine-learning/.venv
-            cd /tmp/immich/machine-learning && VIRTUAL_ENV=/opt/immich/machine-learning/.venv uv pip install ".[cpu]"
-            cp -r /tmp/immich/machine-learning/immich_ml /opt/immich/machine-learning/
-            rm -rf /tmp/immich
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=uv venv /opt/immich/machine-learning/.venv
+                cd /tmp/immich/machine-learning && VIRTUAL_ENV=/opt/immich/machine-learning/.venv uv pip install ".[cpu]"
+                cp -r /tmp/immich/machine-learning/immich_ml /opt/immich/machine-learning/
+                rm -rf /tmp/immich
+              run_as: root
+              command: |
                 uv venv /opt/immich/machine-learning/.venv
                 cd /tmp/immich/machine-learning && VIRTUAL_ENV=/opt/immich/machine-learning/.venv uv pip install ".[cpu]"
                 cp -r /tmp/immich/machine-learning/immich_ml /opt/immich/machine-learning/
                 rm -rf /tmp/immich
-    immich-ml-step-3:
-        run: mkdir=${HOME}/.immich/models
-        mkdir: "${HOME}/.immich/models"
-        run_as: "${USER}"
-    immich-ml-step-4:
-        run: mkdir=${HOME}/.cache/immich_ml
-        mkdir: "${HOME}/.cache/immich_ml"
-        run_as: "${USER}"
-    immich-ml-step-5:
-        check: the dedicated machine-learning virtualenv ships a python interpreter
-        plugin: file
-        plugin_input:
-            file: /opt/immich/machine-learning/.venv/bin/python
-            exists: true
-    immich-ml-step-6:
-        check: the immich_ml inference module is installed into the machine-learning tree
-        plugin: file
-        plugin_input:
-            file: /opt/immich/machine-learning/immich_ml
-            filetype: directory
-    immich-ml-step-7:
-        check: the uv package manager that built the venv is on the system PATH
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/uv
-            exists: true
-    immich-ml-step-8:
-        check: the per-user model cache directory is provisioned under the home tree
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.immich/models
-            filetype: directory
-    immich-ml-step-9:
-        check: the supervised immich-ml service is running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: immich-ml
-            running: true
-    immich-ml-step-10:
-        check: the ML inference API answers its health probe on port 3003 with pong
-        exit_status: 0
-        stdout:
-            - contains: pong
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: curl -fsS http://127.0.0.1:3003/ping
-            in_container: true
-    immich-ml-service-running:
-        check: service=immich-ml
-        id: immich-ml-service-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: immich-ml
-            running: true
-    immich-ml-internal-port:
-        check: command=curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/ping
-        id: immich-ml-internal-port
-        exit_status: 0
-        stdout:
-            - equals: "200"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/ping
-            in_container: true
+            - run: mkdir=${HOME}/.immich/models
+              mkdir: "${HOME}/.immich/models"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.cache/immich_ml
+              mkdir: "${HOME}/.cache/immich_ml"
+              run_as: "${USER}"
+            - check: the dedicated machine-learning virtualenv ships a python interpreter
+              file:
+                file: /opt/immich/machine-learning/.venv/bin/python
+                exists: true
+            - check: the immich_ml inference module is installed into the machine-learning tree
+              file:
+                file: /opt/immich/machine-learning/immich_ml
+                filetype: directory
+            - check: the uv package manager that built the venv is on the system PATH
+              file:
+                file: /usr/local/bin/uv
+                exists: true
+            - check: the per-user model cache directory is provisioned under the home tree
+              file:
+                file: ${HOME}/.immich/models
+                filetype: directory
+            - check: the supervised immich-ml service is running
+              context:
+                - runtime
+              service:
+                service: immich-ml
+                running: true
+            - check: the ML inference API answers its health probe on port 3003 with pong
+              exit_status: 0
+              stdout:
+                - contains: pong
+              context:
+                - runtime
+              command:
+                command: curl -fsS http://127.0.0.1:3003/ping
+                in_container: true
+            - check: service=immich-ml
+              id: immich-ml-service-running
+              context:
+                - runtime
+              service:
+                service: immich-ml
+                running: true
+            - check: command=curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/ping
+              id: immich-ml-internal-port
+              exit_status: 0
+              stdout:
+                - equals: "200"
+              context:
+                - runtime
+              command:
+                command: curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/ping
+                in_container: true

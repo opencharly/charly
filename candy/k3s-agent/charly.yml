@@ -8,10 +8,8 @@ k3s-agent:
             k3s-agent.service systemd unit that runs `k3s agent`. On a deployed node the
             agent registers with the control plane and the node reaches the Ready state —
             no join-token handoff, only the server URL plus the credential-store token.
-    k3s-agent-require:
         require:
             - k3s
-    k3s-agent-secret_require:
         # Same pre-shared token as k3s-server consumes. Both layers declare
         # secret_require with the same name, so whichever resolves first
         # auto-generates a 32-byte hex token via the credential store
@@ -22,32 +20,29 @@ k3s-agent:
         secret_require:
             - name: K3S_CLUSTER_TOKEN
               description: Pre-shared token matching the cluster server's token. Auto-generated on first deploy; shared via the credential store.
-    k3s-agent-env_require:
         # K3S_SERVER_URL is declarative (the operator knows the server's URL
         # when authoring deploy.yml). Typical value: https://k3s-srv.lan:6443.
         env_require:
             - name: K3S_SERVER_URL
               description: URL of the k3s server's API (e.g., https://k3s-srv.lan:6443). Required.
-    k3s-agent-step-0:
-        run: |
-            command=set -euo pipefail
-            if [ -z "${K3S_SERVER_URL}" ]; then
-              echo "K3S_SERVER_URL is required — set it in deploy.yml env for this agent." >&2
-              exit 1
-            fi
-            mkdir -p /etc/rancher/k3s
-            cat >/etc/rancher/k3s/config.yaml <<YAML
-            server: "${K3S_SERVER_URL}"
-            token: "${K3S_CLUSTER_TOKEN}"
-            YAML
-            chmod 0600 /etc/rancher/k3s/config.yaml
-        run_as: root
-        # K3S_CLUSTER_TOKEN comes from the secrets injector;
-        # K3S_SERVER_URL from deploy.yml env. Do not re-declare here.
+        plan:
+            - run: |
+                command=set -euo pipefail
+                if [ -z "${K3S_SERVER_URL}" ]; then
+                  echo "K3S_SERVER_URL is required — set it in deploy.yml env for this agent." >&2
+                  exit 1
+                fi
+                mkdir -p /etc/rancher/k3s
+                cat >/etc/rancher/k3s/config.yaml <<YAML
+                server: "${K3S_SERVER_URL}"
+                token: "${K3S_CLUSTER_TOKEN}"
+                YAML
+                chmod 0600 /etc/rancher/k3s/config.yaml
+              run_as: root
+              # K3S_CLUSTER_TOKEN comes from the secrets injector;
+              # K3S_SERVER_URL from deploy.yml env. Do not re-declare here.
 
-        plugin: command
-        plugin_input:
-            command: |
+              command: |
                 set -euo pipefail
                 if [ -z "${K3S_SERVER_URL}" ]; then
                   echo "K3S_SERVER_URL is required — set it in deploy.yml env for this agent." >&2
@@ -59,38 +54,35 @@ k3s-agent:
                 token: "${K3S_CLUSTER_TOKEN}"
                 YAML
                 chmod 0600 /etc/rancher/k3s/config.yaml
-    k3s-agent-step-1:
-        run: |
-            command=set -euo pipefail
-            cat >/etc/systemd/system/k3s-agent.service <<'UNIT'
-            [Unit]
-            Description=Lightweight Kubernetes (agent)
-            Documentation=https://k3s.io
-            Wants=network-online.target
-            After=network-online.target
+            - run: |
+                command=set -euo pipefail
+                cat >/etc/systemd/system/k3s-agent.service <<'UNIT'
+                [Unit]
+                Description=Lightweight Kubernetes (agent)
+                Documentation=https://k3s.io
+                Wants=network-online.target
+                After=network-online.target
 
-            [Service]
-            Type=notify
-            ExecStart=/usr/local/bin/k3s agent
-            KillMode=process
-            Delegate=yes
-            LimitNOFILE=1048576
-            LimitNPROC=infinity
-            LimitCORE=infinity
-            TasksMax=infinity
-            TimeoutStartSec=0
-            Restart=always
-            RestartSec=5s
+                [Service]
+                Type=notify
+                ExecStart=/usr/local/bin/k3s agent
+                KillMode=process
+                Delegate=yes
+                LimitNOFILE=1048576
+                LimitNPROC=infinity
+                LimitCORE=infinity
+                TasksMax=infinity
+                TimeoutStartSec=0
+                Restart=always
+                RestartSec=5s
 
-            [Install]
-            WantedBy=multi-user.target
-            UNIT
-            systemctl daemon-reload
-            systemctl enable --now k3s-agent.service
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+                [Install]
+                WantedBy=multi-user.target
+                UNIT
+                systemctl daemon-reload
+                systemctl enable --now k3s-agent.service
+              run_as: root
+              command: |
                 set -euo pipefail
                 cat >/etc/systemd/system/k3s-agent.service <<'UNIT'
                 [Unit]
@@ -117,59 +109,46 @@ k3s-agent:
                 UNIT
                 systemctl daemon-reload
                 systemctl enable --now k3s-agent.service
-    k3s-agent-step-2:
-        check: the rendered agent config exists with owner-only permissions
-        plugin: file
-        plugin_input:
-            file: /etc/rancher/k3s/config.yaml
-            exists: true
-            mode: "0600"
-    k3s-agent-step-3:
-        check: the config points the agent at the cluster server URL
-        plugin: file
-        plugin_input:
-            file: /etc/rancher/k3s/config.yaml
-            contains: "server:"
-    k3s-agent-step-4:
-        check: the k3s-agent systemd unit is installed
-        plugin: file
-        plugin_input:
-            file: /etc/systemd/system/k3s-agent.service
-            exists: true
-    k3s-agent-step-5:
-        check: the unit starts the node in agent (worker) mode
-        plugin: file
-        plugin_input:
-            file: /etc/systemd/system/k3s-agent.service
-            contains: "k3s agent"
-    k3s-agent-step-6:
-        check: the worker node registers with the server and reaches Ready
-        kube: wait-nodes
-        cluster: "${K3S_CLUSTER}"
-        name: "${HOSTNAME}"
-        timeout: 180s
-        stdout:
-            contains: "Ready"
-        context:
-            - runtime
-    k3s-agent-step-7:
-        agent-check: the joined worker becomes schedulable so cluster workloads can land on it
-    k3s-agent-config-file:
-        check: file=/etc/rancher/k3s/config.yaml
-        id: k3s-agent-config-file
-        context:
-            - build
-        plugin: file
-        plugin_input:
-            file: /etc/rancher/k3s/config.yaml
-            exists: true
-            mode: "0600"
-    k3s-agent-service-unit:
-        check: file=/etc/systemd/system/k3s-agent.service
-        id: k3s-agent-service-unit
-        context:
-            - build
-        plugin: file
-        plugin_input:
-            file: /etc/systemd/system/k3s-agent.service
-            exists: true
+            - check: the rendered agent config exists with owner-only permissions
+              file:
+                file: /etc/rancher/k3s/config.yaml
+                exists: true
+                mode: "0600"
+            - check: the config points the agent at the cluster server URL
+              file:
+                file: /etc/rancher/k3s/config.yaml
+                contains: "server:"
+            - check: the k3s-agent systemd unit is installed
+              file:
+                file: /etc/systemd/system/k3s-agent.service
+                exists: true
+            - check: the unit starts the node in agent (worker) mode
+              file:
+                file: /etc/systemd/system/k3s-agent.service
+                contains: "k3s agent"
+            - check: the worker node registers with the server and reaches Ready
+              kube:
+                method: wait-nodes
+                cluster: "${K3S_CLUSTER}"
+                name: "${HOSTNAME}"
+              timeout: 180s
+              stdout:
+                contains: "Ready"
+              context:
+                - runtime
+            - agent-check: the joined worker becomes schedulable so cluster workloads can land on it
+            - check: file=/etc/rancher/k3s/config.yaml
+              id: k3s-agent-config-file
+              context:
+                - build
+              file:
+                file: /etc/rancher/k3s/config.yaml
+                exists: true
+                mode: "0600"
+            - check: file=/etc/systemd/system/k3s-agent.service
+              id: k3s-agent-service-unit
+              context:
+                - build
+              file:
+                file: /etc/systemd/system/k3s-agent.service
+                exists: true

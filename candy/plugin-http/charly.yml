@@ -10,16 +10,16 @@ plugin-http:
             served in EITHER placement: compiled-in, or OUT-OF-PROCESS via the
             CheckContextService reverse channel (F2). A pure check verb; the matcher
             evaluation reuses the shared sdk.MatchAll.
-    plugin-http-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-http
             providers:
                 - verb:http
-    http-verb-dispatches:
-        check: the http verb dispatches through the provider registry and matches an HTTP response status
-        id: http-verb-dispatches
-        plugin: http
-        plugin_input:
-            http: http://localhost/
-            status: 200
-        context: [runtime]
+            primary:
+                http: http
+        plan:
+            - check: the http verb dispatches through the provider registry and matches an HTTP response status
+              id: http-verb-dispatches
+              http:
+                http: http://localhost/
+                status: 200
+              context: [runtime]

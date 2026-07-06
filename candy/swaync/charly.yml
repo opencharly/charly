@@ -10,10 +10,8 @@ swaync:
             removes the D-Bus auto-activation service files so a single
             supervisord-managed instance owns the notification bus name (no
             competing daemon spawned via D-Bus activation).
-    swaync-require:
         require:
             - dbus
-    swaync-distro:
         distro:
             arch:
                 package:
@@ -21,7 +19,6 @@ swaync:
             fedora:
                 package:
                     - SwayNotificationCenter
-    swaync-service:
         service:
             - name: swaync
               exec: "%(ENV_HOME)s/.local/bin/swaync-wrapper"
@@ -33,91 +30,68 @@ swaync:
               start_sec: 2
               enable: true
               scope: system
-    swaync-step-0:
-        run: |
-            command=rm -f /usr/share/dbus-1/services/org.erikreider.swaync.service
-            rm -f /usr/share/dbus-1/services/org.erikreider.swaync.cc.service
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=rm -f /usr/share/dbus-1/services/org.erikreider.swaync.service
+                rm -f /usr/share/dbus-1/services/org.erikreider.swaync.cc.service
+              run_as: root
+              command: |
                 rm -f /usr/share/dbus-1/services/org.erikreider.swaync.service
                 rm -f /usr/share/dbus-1/services/org.erikreider.swaync.cc.service
-    swaync-step-1:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    swaync-step-2:
-        run: mkdir=${HOME}/.config/swaync
-        mkdir: "${HOME}/.config/swaync"
-        run_as: "${USER}"
-    swaync-step-3:
-        run: copy=swaync-wrapper
-        copy: swaync-wrapper
-        to: "${HOME}/.local/bin/swaync-wrapper"
-        mode: "0755"
-        run_as: "${USER}"
-    swaync-step-4:
-        run: copy=config.json
-        copy: config.json
-        to: "${HOME}/.config/swaync/config.json"
-        mode: "0644"
-        run_as: "${USER}"
-    swaync-step-5:
-        run: copy=style.css
-        copy: style.css
-        to: "${HOME}/.config/swaync/style.css"
-        mode: "0644"
-        run_as: "${USER}"
-    swaync-step-6:
-        check: the swaync notification daemon binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/swaync
-            exists: true
-    swaync-step-7:
-        check: the swaync-client control CLI is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/swaync-client
-            exists: true
-    swaync-step-8:
-        check: the swaync config.json is staged in the user config dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/swaync/config.json
-            exists: true
-    swaync-step-9:
-        check: the Catppuccin style.css is staged alongside it
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/swaync/style.css
-            exists: true
-    swaync-step-10:
-        check: the wayland-aware wrapper script is installed
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/swaync-wrapper
-            exists: true
-    swaync-step-11:
-        check: the daemon D-Bus auto-activation unit is removed so it cannot spawn a competing instance
-        plugin: file
-        plugin_input:
-            file: /usr/share/dbus-1/services/org.erikreider.swaync.service
-            exists: false
-    swaync-step-12:
-        check: the control-center D-Bus auto-activation unit is also removed
-        plugin: file
-        plugin_input:
-            file: /usr/share/dbus-1/services/org.erikreider.swaync.cc.service
-            exists: false
-    swaync-package:
-        check: package=SwayNotificationCenter
-        id: swaync-package
-        plugin: package
-        plugin_input:
-            package: SwayNotificationCenter
-            package_map:
-                arch: swaync
-                fedora: SwayNotificationCenter
-            installed: true
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.config/swaync
+              mkdir: "${HOME}/.config/swaync"
+              run_as: "${USER}"
+            - run: copy=swaync-wrapper
+              copy: swaync-wrapper
+              to: "${HOME}/.local/bin/swaync-wrapper"
+              mode: "0755"
+              run_as: "${USER}"
+            - run: copy=config.json
+              copy: config.json
+              to: "${HOME}/.config/swaync/config.json"
+              mode: "0644"
+              run_as: "${USER}"
+            - run: copy=style.css
+              copy: style.css
+              to: "${HOME}/.config/swaync/style.css"
+              mode: "0644"
+              run_as: "${USER}"
+            - check: the swaync notification daemon binary is installed
+              file:
+                file: /usr/bin/swaync
+                exists: true
+            - check: the swaync-client control CLI is installed
+              file:
+                file: /usr/bin/swaync-client
+                exists: true
+            - check: the swaync config.json is staged in the user config dir
+              file:
+                file: ${HOME}/.config/swaync/config.json
+                exists: true
+            - check: the Catppuccin style.css is staged alongside it
+              file:
+                file: ${HOME}/.config/swaync/style.css
+                exists: true
+            - check: the wayland-aware wrapper script is installed
+              file:
+                file: ${HOME}/.local/bin/swaync-wrapper
+                exists: true
+            - check: the daemon D-Bus auto-activation unit is removed so it cannot spawn a competing instance
+              file:
+                file: /usr/share/dbus-1/services/org.erikreider.swaync.service
+                exists: false
+            - check: the control-center D-Bus auto-activation unit is also removed
+              file:
+                file: /usr/share/dbus-1/services/org.erikreider.swaync.cc.service
+                exists: false
+            - check: package=SwayNotificationCenter
+              id: swaync-package
+              package:
+                package: SwayNotificationCenter
+                package_map:
+                    arch: swaync
+                    fedora: SwayNotificationCenter
+                installed: true

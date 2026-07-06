@@ -21,16 +21,13 @@ plugin-deploy-pod:
             owns the container lifecycle (overlay build + config/start/remove + the
             `charly update` rebuild gate), this plugin only serves the substrate word
             out-of-process.
-    plugin-deploy-pod-decl:
         plugin:
             providers:
                 - deploy:pod
             source: github.com/opencharly/charly/candy/plugin-deploy-pod
-    deploy-pod-module-present:
-        check: the out-of-tree deploy:pod plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
-        id: deploy-pod-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree deploy:pod plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+              id: deploy-pod-module-present
+              context:
+                - build
+              command: "true"

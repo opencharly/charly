@@ -8,42 +8,29 @@ rpmfusion:
             its RPM Fusion repo definitions under /etc/yum.repos.d/ and imports
             the signing keys. Verifiable because both release packages land in
             the rpm database and their .repo files appear on disk.
-    rpmfusion-require:
         require: []
-    rpmfusion-step-0:
-        run: command=dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-    rpmfusion-step-1:
-        check: the RPM Fusion free repo definition file is present on disk
-        plugin: file
-        plugin_input:
-            file: /etc/yum.repos.d/rpmfusion-free.repo
-            exists: true
-    rpmfusion-step-2:
-        check: the rpmfusion-free-release package is recorded in the rpm database
-        plugin: package
-        plugin_input:
-            package: rpmfusion-free-release
-            installed: true
-    rpmfusion-step-3:
-        check: the RPM Fusion nonfree repo definition file is present on disk
-        plugin: file
-        plugin_input:
-            file: /etc/yum.repos.d/rpmfusion-nonfree.repo
-            exists: true
-    rpmfusion-step-4:
-        check: the rpmfusion-nonfree-release package is recorded in the rpm database
-        plugin: package
-        plugin_input:
-            package: rpmfusion-nonfree-release
-            installed: true
-    rpmfusion-step-5:
-        check: the free repo file declares the rpmfusion-free repository section header
-        plugin: file
-        plugin_input:
-            file: /etc/yum.repos.d/rpmfusion-free.repo
-            contains:
-                - contains: "[rpmfusion-free]"
+        plan:
+            - run: command=dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+              run_as: root
+              command: dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+            - check: the RPM Fusion free repo definition file is present on disk
+              file:
+                file: /etc/yum.repos.d/rpmfusion-free.repo
+                exists: true
+            - check: the rpmfusion-free-release package is recorded in the rpm database
+              package:
+                package: rpmfusion-free-release
+                installed: true
+            - check: the RPM Fusion nonfree repo definition file is present on disk
+              file:
+                file: /etc/yum.repos.d/rpmfusion-nonfree.repo
+                exists: true
+            - check: the rpmfusion-nonfree-release package is recorded in the rpm database
+              package:
+                package: rpmfusion-nonfree-release
+                installed: true
+            - check: the free repo file declares the rpmfusion-free repository section header
+              file:
+                file: /etc/yum.repos.d/rpmfusion-free.repo
+                contains:
+                    - contains: "[rpmfusion-free]"

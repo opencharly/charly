@@ -10,16 +10,13 @@ plugin-group:
             folds into uf.Bundle — byte-equivalent to the former builtin groupKind. COMPILED-IN (in the
             embedded compiled_plugins:), like the tier-1 kinds, because `group` is a core deploy
             primitive every box/submodule must always resolve; also serves out-of-process via cmd/serve.
-    plugin-group-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-group
             providers:
                 - kind:group
-    group-kind-module-present:
-        check: the group structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its structural entity decode is exercised by any deploy composing a `group:` node (check-group / check-k8s-deploy / box-fedora / box-cachyos)
-        id: group-kind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the group structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its structural entity decode is exercised by any deploy composing a `group:` node (check-group / check-k8s-deploy / box-fedora / box-cachyos)
+              id: group-kind-module-present
+              context:
+                - build
+              command: "true"

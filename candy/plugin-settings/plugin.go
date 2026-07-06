@@ -19,16 +19,12 @@ package settings
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 // NewProvider returns the settings provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
@@ -39,7 +35,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.181.0001",
 		[]sdk.ProvidedCapability{{Class: "command", Word: "settings"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the out-of-process CLI entrypoint (only reached when settings is NOT compiled in). settings

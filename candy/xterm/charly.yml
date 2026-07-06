@@ -6,7 +6,6 @@ xterm:
             Installs xterm, the reference X terminal emulator (usable under
             XWayland). Verifiable: the xterm binary lands at /usr/bin/xterm and
             the xterm package is installed.
-    xterm-distro:
         distro:
             arch:
                 package:
@@ -14,15 +13,12 @@ xterm:
             fedora:
                 package:
                     - xterm
-    xterm-step-0:
-        check: the xterm binary is installed at /usr/bin/xterm
-        plugin: file
-        plugin_input:
-            file: /usr/bin/xterm
-            exists: true
-    xterm-step-1:
-        check: the xterm package is registered with the package manager
-        plugin: package
-        plugin_input:
-            package: xterm
-            installed: true
+        plan:
+            - check: the xterm binary is installed at /usr/bin/xterm
+              file:
+                file: /usr/bin/xterm
+                exists: true
+            - check: the xterm package is registered with the package manager
+              package:
+                package: xterm
+                installed: true

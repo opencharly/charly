@@ -17,7 +17,7 @@ func writeFeatureFixtureProject(t *testing.T, desc string) string {
 	// The top-level version: is the SCHEMA CalVer (must be <= LatestSchemaVersion); the candy's
 	// own candy.version: below is its independent candy identity.
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(
-		"version: 2026.174.1100\n"+
+		"version: 2026.186.2323\n"+
 			"discover:\n"+
 			"    - path: candy\n"+
 			"      recursive: true\n"), 0o644); err != nil {
@@ -31,14 +31,12 @@ func writeFeatureFixtureProject(t *testing.T, desc string) string {
 		"    candy:\n" +
 		"        version: 2026.179.0000\n" +
 		"        description: " + desc + "\n" +
-		"    feat-fixture-true:\n" +
-		"        check: the true command runs\n" +
-		"        id: feat-fixture-true\n" +
-		"        context:\n" +
-		"            - build\n" +
-		"        plugin: command\n" +
-		"        plugin_input:\n" +
-		"            command: \"true\"\n"
+		"        plan:\n" +
+		"            - check: the true command runs\n" +
+		"              id: feat-fixture-true\n" +
+		"              context:\n" +
+		"                  - build\n" +
+		"              command: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(candyDir, "charly.yml"), []byte(candy), 0o644); err != nil {
 		t.Fatalf("write candy charly.yml: %v", err)
 	}

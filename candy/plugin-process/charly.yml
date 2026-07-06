@@ -7,14 +7,14 @@ plugin-process:
             against the live check engine (sdk/kit.CheckContext), so it is
             COMPILED-IN-ONLY. A pure check verb (probe-only, no act/step role); the
             second relocation on the kit contract after candy/plugin-port.
-    plugin-process-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-process
             providers:
                 - verb:process
-    process-verb-dispatches:
-        check: the process verb dispatches through the provider registry and probes a process on a live deployment
-        id: process-verb-dispatches
-        plugin: process
-        plugin_input: {process: charly-absent-probe, running: false}
-        context: [runtime]
+            primary:
+                process: process
+        plan:
+            - check: the process verb dispatches through the provider registry and probes a process on a live deployment
+              id: process-verb-dispatches
+              process: {process: charly-absent-probe, running: false}
+              context: [runtime]

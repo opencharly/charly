@@ -16,106 +16,87 @@ chrome-headless:
             and its headless/CDP flags, the real chrome binary it execs, the
             running service, and the HTTP 200 that Chrome's /json/version endpoint
             returns through the proxy. Container-only.
-    chrome-headless-require:
         require:
             - chrome
             - supervisord
-    chrome-headless-candy:
         candy:
             - chrome-cdp
-    chrome-headless-service:
         service:
             - name: chrome-headless
               exec: "%(ENV_HOME)s/.local/bin/chrome-headless-launch"
               restart: always
               enable: true
               scope: system
-    chrome-headless-step-0:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    chrome-headless-step-1:
-        run: mkdir=${HOME}/.chrome-headless
-        mkdir: "${HOME}/.chrome-headless"
-        run_as: "${USER}"
-    chrome-headless-step-2:
-        run: write=${HOME}/.local/bin/chrome-headless-launch
-        write: "${HOME}/.local/bin/chrome-headless-launch"
-        mode: "0755"
-        run_as: "${USER}"
-        content: |
-            #!/usr/bin/env bash
-            # Headless Chrome for cross-deployment CDP driving. CDP serves on
-            # 127.0.0.1:9223; the cdp-proxy (chrome-cdp) republishes it on
-            # 0.0.0.0:9222 with Host rewriting for the host-side `cdp:` check verb.
-            # --remote-allow-origins='*' is REQUIRED: Chrome 146+ rejects the CDP
-            # WebSocket upgrade (text/check/screenshot/click) when the Origin
-            # doesn't match, even though the HTTP /json endpoints (open/list) work
-            # without it. The chrome-cdp wrapper sets it; this launcher bypasses
-            # the wrapper, so it must set it itself.
-            exec /usr/bin/google-chrome-stable \
-              --headless=new \
-              --no-sandbox \
-              --disable-gpu \
-              --disable-dev-shm-usage \
-              --remote-allow-origins='*' \
-              --remote-debugging-address=127.0.0.1 \
-              --remote-debugging-port=9223 \
-              --user-data-dir="${HOME}/.chrome-headless" \
-              about:blank
-    chrome-headless-step-3:
-        check: the chrome-headless launcher is installed and executable in the user's local bin
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/chrome-headless-launch
-            exists: true
-            mode: "0755"
-    chrome-headless-step-4:
-        check: the launcher execs the real google-chrome binary in new-headless mode, not the wayland wrapper
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/chrome-headless-launch
-            contains:
-                - contains: "google-chrome-stable"
-                - contains: "--headless=new"
-    chrome-headless-step-5:
-        check: the launcher sets --remote-allow-origins so Chrome 146+ accepts the CDP websocket upgrade
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/chrome-headless-launch
-            contains:
-                - contains: "remote-allow-origins"
-    chrome-headless-step-6:
-        check: the launcher binds Chrome's CDP on the internal debugging port 9223
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/chrome-headless-launch
-            contains:
-                - contains: "remote-debugging-port=9223"
-    chrome-headless-step-7:
-        check: the real google-chrome binary the launcher execs is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/google-chrome-stable
-            exists: true
-    chrome-headless-step-8:
-        check: the chrome-headless service is running under the init system
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: chrome-headless
-            running: true
-    chrome-headless-step-9:
-        check: Chrome's CDP /json/version endpoint answers HTTP 200 with a websocket debugger URL through the proxy
-        timeout: 5s
-        eventually: 90s
-        retry_interval: 3s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:9222}/json/version
-            status: 200
-            body:
-                - contains: "webSocketDebuggerUrl"
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.chrome-headless
+              mkdir: "${HOME}/.chrome-headless"
+              run_as: "${USER}"
+            - run: write=${HOME}/.local/bin/chrome-headless-launch
+              write: "${HOME}/.local/bin/chrome-headless-launch"
+              mode: "0755"
+              run_as: "${USER}"
+              content: |
+                #!/usr/bin/env bash
+                # Headless Chrome for cross-deployment CDP driving. CDP serves on
+                # 127.0.0.1:9223; the cdp-proxy (chrome-cdp) republishes it on
+                # 0.0.0.0:9222 with Host rewriting for the host-side `cdp:` check verb.
+                # --remote-allow-origins='*' is REQUIRED: Chrome 146+ rejects the CDP
+                # WebSocket upgrade (text/check/screenshot/click) when the Origin
+                # doesn't match, even though the HTTP /json endpoints (open/list) work
+                # without it. The chrome-cdp wrapper sets it; this launcher bypasses
+                # the wrapper, so it must set it itself.
+                exec /usr/bin/google-chrome-stable \
+                  --headless=new \
+                  --no-sandbox \
+                  --disable-gpu \
+                  --disable-dev-shm-usage \
+                  --remote-allow-origins='*' \
+                  --remote-debugging-address=127.0.0.1 \
+                  --remote-debugging-port=9223 \
+                  --user-data-dir="${HOME}/.chrome-headless" \
+                  about:blank
+            - check: the chrome-headless launcher is installed and executable in the user's local bin
+              file:
+                file: ${HOME}/.local/bin/chrome-headless-launch
+                exists: true
+                mode: "0755"
+            - check: the launcher execs the real google-chrome binary in new-headless mode, not the wayland wrapper
+              file:
+                file: ${HOME}/.local/bin/chrome-headless-launch
+                contains:
+                    - contains: "google-chrome-stable"
+                    - contains: "--headless=new"
+            - check: the launcher sets --remote-allow-origins so Chrome 146+ accepts the CDP websocket upgrade
+              file:
+                file: ${HOME}/.local/bin/chrome-headless-launch
+                contains:
+                    - contains: "remote-allow-origins"
+            - check: the launcher binds Chrome's CDP on the internal debugging port 9223
+              file:
+                file: ${HOME}/.local/bin/chrome-headless-launch
+                contains:
+                    - contains: "remote-debugging-port=9223"
+            - check: the real google-chrome binary the launcher execs is installed
+              file:
+                file: /usr/bin/google-chrome-stable
+                exists: true
+            - check: the chrome-headless service is running under the init system
+              context:
+                - runtime
+              service:
+                service: chrome-headless
+                running: true
+            - check: Chrome's CDP /json/version endpoint answers HTTP 200 with a websocket debugger URL through the proxy
+              timeout: 5s
+              eventually: 90s
+              retry_interval: 3s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:9222}/json/version
+                status: 200
+                body:
+                    - contains: "webSocketDebuggerUrl"

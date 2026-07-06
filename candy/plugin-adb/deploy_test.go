@@ -44,15 +44,17 @@ func TestInstallWithRetry(t *testing.T) {
 
 // TestInstallOp verifies the install-spec → adb #Op mapping: a committed-APK entry
 // becomes an `install` op carrying the host path; a package id becomes an
-// `install-app` op carrying the apkeep coordinates.
+// `install-app` op carrying the apkeep coordinates — both riding the desugared
+// plugin input map (the per-verb fields left core #Op in the schema compaction).
 func TestInstallOp(t *testing.T) {
 	apk := installOp(spec.ApkPackageSpec{Apk: "/abs/MyApp.apk"})
-	if string(apk.Adb) != "install" || apk.Apk != "/abs/MyApp.apk" {
-		t.Errorf("committed-APK → %+v, want adb=install apk=/abs/MyApp.apk", apk)
+	if apk.Plugin != "adb" || apk.PluginInput["method"] != "install" || apk.PluginInput["apk"] != "/abs/MyApp.apk" {
+		t.Errorf("committed-APK → %+v, want plugin=adb method=install apk=/abs/MyApp.apk", apk)
 	}
 	pkg := installOp(spec.ApkPackageSpec{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"})
-	if string(pkg.Adb) != "install-app" || pkg.AppId != "org.fdroid.fdroid" || pkg.Source != "apk-pure" || pkg.Arch != "x86_64" {
-		t.Errorf("package id → %+v, want adb=install-app app_id=org.fdroid.fdroid", pkg)
+	if pkg.Plugin != "adb" || pkg.PluginInput["method"] != "install-app" || pkg.PluginInput["app_id"] != "org.fdroid.fdroid" ||
+		pkg.PluginInput["source"] != "apk-pure" || pkg.PluginInput["arch"] != "x86_64" {
+		t.Errorf("package id → %+v, want plugin=adb method=install-app app_id=org.fdroid.fdroid", pkg)
 	}
 }
 

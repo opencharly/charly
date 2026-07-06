@@ -640,7 +640,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	saveDeployState(c.Box, c.Instance, SaveDeployStateInput{
 		Ports:       ports,
 		SetPorts:    len(c.Port) > 0,
-		Env:         c.Env,
+		Env:         envPairsToMap(c.Env),
 		CleanEnv:    c.Clean,
 		EnvFile:     quadletEnvFile,
 		Network:     resolvedNetwork,

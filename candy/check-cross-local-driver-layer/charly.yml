@@ -8,47 +8,38 @@ check-cross-local-driver-layer:
             the host against a SEPARATE pod SUBJECT (cross-kind — local driver,
             pod subject). USER-level only (a marker under $HOME, no root/sudo/gates)
             so bringUpMembers applies it unattended via `charly bundle add`.
-    check-cross-local-driver-layer-step-0:
-        run: mkdir=${HOME}/.cache
-        mkdir: "${HOME}/.cache"
-        run_as: "${USER}"
-    check-cross-local-driver-layer-step-1:
-        run: write=${HOME}/.cache/charly-cross-local-driver-marker
-        write: "${HOME}/.cache/charly-cross-local-driver-marker"
-        run_as: "${USER}"
-        mode: "0644"
-        content: |
-            charly-cross-local-driver v1
-    check-cross-local-driver-layer-step-2:
-        check: applying the layer leaves the cross-local-driver marker file under the host cache dir
-        plugin: file
-        plugin_input:
-            file: "${HOME}/.cache/charly-cross-local-driver-marker"
-            exists: true
-    check-cross-local-driver-layer-step-3:
-        check: the marker records the driver version stamp the cross-local-http bed reads back to confirm the host-driver member applied
-        plugin: file
-        plugin_input:
-            file: "${HOME}/.cache/charly-cross-local-driver-marker"
-            contains:
-                - charly-cross-local-driver v1
-    cross-local-driver-marker:
-        check: command=test -f ${HOME}/.cache/charly-cross-local-driver-marker
-        id: cross-local-driver-marker
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f ${HOME}/.cache/charly-cross-local-driver-marker"
-            in_container: false
-    cross-local-driver-marker-content:
-        check: command=cat ${HOME}/.cache/charly-cross-local-driver-marker
-        id: cross-local-driver-marker-content
-        stdout:
-            - contains: charly-cross-local-driver v1
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "cat ${HOME}/.cache/charly-cross-local-driver-marker"
-            in_container: false
+        plan:
+            - run: mkdir=${HOME}/.cache
+              mkdir: "${HOME}/.cache"
+              run_as: "${USER}"
+            - run: write=${HOME}/.cache/charly-cross-local-driver-marker
+              write: "${HOME}/.cache/charly-cross-local-driver-marker"
+              run_as: "${USER}"
+              mode: "0644"
+              content: |
+                charly-cross-local-driver v1
+            - check: applying the layer leaves the cross-local-driver marker file under the host cache dir
+              file:
+                file: "${HOME}/.cache/charly-cross-local-driver-marker"
+                exists: true
+            - check: the marker records the driver version stamp the cross-local-http bed reads back to confirm the host-driver member applied
+              file:
+                file: "${HOME}/.cache/charly-cross-local-driver-marker"
+                contains:
+                    - charly-cross-local-driver v1
+            - check: command=test -f ${HOME}/.cache/charly-cross-local-driver-marker
+              id: cross-local-driver-marker
+              context:
+                - runtime
+              command:
+                command: "test -f ${HOME}/.cache/charly-cross-local-driver-marker"
+                in_container: false
+            - check: command=cat ${HOME}/.cache/charly-cross-local-driver-marker
+              id: cross-local-driver-marker-content
+              stdout:
+                - contains: charly-cross-local-driver v1
+              context:
+                - runtime
+              command:
+                command: "cat ${HOME}/.cache/charly-cross-local-driver-marker"
+                in_container: false

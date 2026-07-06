@@ -28,7 +28,7 @@ func TestSplitHostKey(t *testing.T) {
 // returns exactly those (not other parameterized vars like ${HOST_PORT}).
 func TestCollectHostRefs(t *testing.T) {
 	checks := []Op{
-		{Cdp: "open", URL: "http://${HOST:web}:8080"},
+		{Plugin: "cdp", PluginInput: map[string]any{"method": "open", "url": "http://${HOST:web}:8080"}},
 		{Plugin: "command", PluginInput: map[string]any{"command": "curl http://${HOST:web:8080}/health"}},
 		// addr/http are plugin verbs now — their refs live in plugin_input (collectHostRefs
 		// scans it via collectAnyStrings). The addr HOST_PORT is NOT a cross-member ref; the

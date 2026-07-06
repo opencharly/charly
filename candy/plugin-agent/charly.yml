@@ -7,16 +7,13 @@ plugin-agent:
             its core spec type, re-marshal as canonical JSON). Serves itself in BOTH
             placements (compiled-in OR out-of-process) like the matching/exampleprobe
             verbs + the init kind — no kit contract needed (kinds are pb-shape).
-    plugin-agent-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-agent
             providers:
                 - kind:agent
-    agent-kind-module-present:
-        check: the agent kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its entity decode is exercised by any box/deploy composing a `agent:` node
-        id: agent-kind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the agent kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its entity decode is exercised by any box/deploy composing a `agent:` node
+              id: agent-kind-module-present
+              context:
+                - build
+              command: "true"

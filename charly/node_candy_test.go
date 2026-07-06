@@ -22,8 +22,10 @@ func decodeCandyKindFirst(t *testing.T, body string) CandyYAML {
 	return c
 }
 
-// candyKindFirst is the candy VALUE in the legacy kind-first shape (scalars +
-// composition refs + env map + package list + service + plan as candy FIELDS).
+// candyKindFirst is the candy BODY in the internal (desugared, wire) shape —
+// scalars + composition refs + env map + package list + service + plan as candy
+// FIELDS, with the plan step carrying the internal plugin/plugin_input envelope
+// (the form the parse-time desugar produces and #Op validates).
 const candyKindFirst = `
 version: "2026.150.0000"
 description: in-memory store
@@ -41,45 +43,42 @@ service:
     exec: /usr/bin/redis-server
 plan:
   - check: the binary exists
-    file: /usr/bin/redis-server
+    plugin: file
+    plugin_input:
+      file: /usr/bin/redis-server
 `
 
-// candyNodeForm is the SAME candy in the unified node-form: ONLY scalars
-// (version/description/status) stay in the `candy:` discriminator value; every
-// non-scalar — the composition refs, env map, package list, service, and the
-// check step — becomes a name-first CHILD node (`<name>-<datakey>` for data,
-// `<name>-step-N` for a plan step).
+// candyNodeForm is the SAME candy in the COMPACT authored node-form: the FULL
+// body lives inline in the `candy:` discriminator value, and the plan step
+// authors the `file:` plugin sugar the parse-time desugar rewrites into the
+// internal envelope above.
 const candyNodeForm = `
 redis:
   candy:
     version: "2026.150.0000"
     description: in-memory store
     status: working
-  redis-candy:
     candy: [supervisord]
-  redis-require:
     require: [python]
-  redis-env:
     env:
       REDIS_DATA: /var/lib/redis
       REDIS_PORT: "6379"
-  redis-package:
     package:
       - redis
       - redis-cli
-  redis-service:
     service:
       - name: redis
         exec: /usr/bin/redis-server
-  redis-step-0:
-    check: the binary exists
-    file: /usr/bin/redis-server
+    plan:
+      - check: the binary exists
+        file: /usr/bin/redis-server
 `
 
-// TestBuildCandy_RoundTrip proves the clean node-form constructor produces EXACTLY
-// the CandyYAML the legacy kind-first decode produces — the non-brittleness proof
-// (RDD-1c) for the richest kind. Equal structs ⇒ every downstream consumer
-// (generate / check / install-plan) sees identical input from node-form.
+// TestBuildCandy_RoundTrip proves the compact node-form constructor (parse +
+// desugar + decode) produces EXACTLY the CandyYAML the direct body decode of the
+// internal wire shape produces — the non-brittleness proof (RDD-1c) for the
+// richest kind. Equal structs ⇒ every downstream consumer (generate / check /
+// install-plan) sees identical input from the authored compact form.
 func TestBuildCandy_RoundTrip(t *testing.T) {
 	want := decodeCandyKindFirst(t, candyKindFirst)
 

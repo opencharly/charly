@@ -13,16 +13,13 @@ plugin-enc:
             self-contained per-volume plan + resolved passphrase into this plugin's
             OpExecute. Compiled-in (charly config mount/unmount/passwd + charly start call
             the shim, which Invokes verb:enc in-proc so the passphrase never crosses a socket).
-    plugin-enc-decl:
         plugin:
             providers:
                 - verb:enc
             source: github.com/opencharly/charly/candy/plugin-enc
-    enc-module-present:
-        check: the encrypted-volume mechanics plugin ships a buildable Go module the host compiles in
-        id: enc-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the encrypted-volume mechanics plugin ships a buildable Go module the host compiles in
+              id: enc-module-present
+              context:
+                - build
+              command: "true"

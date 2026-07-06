@@ -11,7 +11,6 @@ hermes-full:
             and the developer/DevOps binaries — and the hermes agent comes up as a
             supervised service when the box is deployed. Dropping any candy from the
             candy: list makes the matching check below fail.
-    hermes-full-candy:
         candy:
             - hermes
             - claude-code
@@ -21,123 +20,84 @@ hermes-full:
             - dev-tools
             - devops-tools
             - tmux
-    hermes-full-step-0:
-        check: the hermes agent binary is installed in the pixi default env
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/hermes
-            exists: true
-    hermes-full-step-1:
-        check: the hermes entrypoint wrapper is installed and executable
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/hermes-entrypoint
-            exists: true
-            mode: "0755"
-    hermes-full-step-2:
-        check: the Claude Code CLI binary is on PATH in the npm global bin dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/claude
-            exists: true
-    hermes-full-step-3:
-        check: the OpenAI Codex CLI binary is on PATH in the npm global bin dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/codex
-            exists: true
-    hermes-full-step-4:
-        check: the Google Gemini CLI binary is on PATH in the npm global bin dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/gemini
-            exists: true
-    hermes-full-step-5:
-        check: the Forge CLI binary is on PATH in the npm global bin dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/forge
-            exists: true
-    hermes-full-step-6:
-        check: the ripgrep fast-search binary from dev-tools is on PATH
-        plugin: file
-        plugin_input:
-            file: /usr/bin/rg
-            exists: true
-    hermes-full-step-7:
-        check: the neovim editor binary from dev-tools is on PATH
-        plugin: file
-        plugin_input:
-            file: /usr/bin/nvim
-            exists: true
-    hermes-full-step-8:
-        check: the tmux multiplexer binary is on PATH and reports its version
-        exit_status: 0
-        stdout:
-            - matches: "^tmux"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/tmux -V
-    hermes-full-step-9:
-        check: the AWS CLI v2 binary from devops-tools is installed under /usr/local/bin
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/aws
-            exists: true
-    hermes-full-step-10:
-        check: OpenTofu from devops-tools runs and reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/tofu version
-    hermes-full-step-11:
-        check: jq from devops-tools runs and reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/jq --version
-    hermes-full-step-12:
-        check: the supervised hermes agent service is running on the live deployment
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: hermes
-            running: true
-    hermes-full-step-13:
-        agent-check: an operator can open a shell in the deployed box and launch the hermes agent together with any bundled AI CLI (claude/codex/gemini/forge) and developer tool from that one session
-    hermes-full-neovim-package:
-        check: package=neovim
-        id: hermes-full-neovim-package
-        plugin: package
-        plugin_input:
-            package: neovim
-            installed: true
-    hermes-full-tofu-binary:
-        check: file=/usr/local/bin/tofu
-        id: hermes-full-tofu-binary
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/tofu
-            exists: true
-    hermes-full-jq-binary:
-        check: file=/usr/bin/jq
-        id: hermes-full-jq-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/jq
-            exists: true
-    hermes-full-tmux-binary:
-        check: file=/usr/bin/tmux
-        id: hermes-full-tmux-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/tmux
-            exists: true
-    hermes-full-tmux-package:
-        check: package=tmux
-        id: hermes-full-tmux-package
-        plugin: package
-        plugin_input:
-            package: tmux
-            installed: true
+        plan:
+            - check: the hermes agent binary is installed in the pixi default env
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/hermes
+                exists: true
+            - check: the hermes entrypoint wrapper is installed and executable
+              file:
+                file: ${HOME}/.local/bin/hermes-entrypoint
+                exists: true
+                mode: "0755"
+            - check: the Claude Code CLI binary is on PATH in the npm global bin dir
+              file:
+                file: ${HOME}/.npm-global/bin/claude
+                exists: true
+            - check: the OpenAI Codex CLI binary is on PATH in the npm global bin dir
+              file:
+                file: ${HOME}/.npm-global/bin/codex
+                exists: true
+            - check: the Google Gemini CLI binary is on PATH in the npm global bin dir
+              file:
+                file: ${HOME}/.npm-global/bin/gemini
+                exists: true
+            - check: the Forge CLI binary is on PATH in the npm global bin dir
+              file:
+                file: ${HOME}/.npm-global/bin/forge
+                exists: true
+            - check: the ripgrep fast-search binary from dev-tools is on PATH
+              file:
+                file: /usr/bin/rg
+                exists: true
+            - check: the neovim editor binary from dev-tools is on PATH
+              file:
+                file: /usr/bin/nvim
+                exists: true
+            - check: the tmux multiplexer binary is on PATH and reports its version
+              exit_status: 0
+              stdout:
+                - matches: "^tmux"
+              command: /usr/bin/tmux -V
+            - check: the AWS CLI v2 binary from devops-tools is installed under /usr/local/bin
+              file:
+                file: /usr/local/bin/aws
+                exists: true
+            - check: OpenTofu from devops-tools runs and reports its version
+              exit_status: 0
+              command: /usr/local/bin/tofu version
+            - check: jq from devops-tools runs and reports its version
+              exit_status: 0
+              command: /usr/bin/jq --version
+            - check: the supervised hermes agent service is running on the live deployment
+              context:
+                - runtime
+              service:
+                service: hermes
+                running: true
+            - agent-check: an operator can open a shell in the deployed box and launch the hermes agent together with any bundled AI CLI (claude/codex/gemini/forge) and developer tool from that one session
+            - check: package=neovim
+              id: hermes-full-neovim-package
+              package:
+                package: neovim
+                installed: true
+            - check: file=/usr/local/bin/tofu
+              id: hermes-full-tofu-binary
+              file:
+                file: /usr/local/bin/tofu
+                exists: true
+            - check: file=/usr/bin/jq
+              id: hermes-full-jq-binary
+              file:
+                file: /usr/bin/jq
+                exists: true
+            - check: file=/usr/bin/tmux
+              id: hermes-full-tmux-binary
+              file:
+                file: /usr/bin/tmux
+                exists: true
+            - check: package=tmux
+              id: hermes-full-tmux-package
+              package:
+                package: tmux
+                installed: true

@@ -8,7 +8,6 @@ gnupg:
             fedora. The binaries land in /usr/bin and gpg reports its GnuPG
             version string, so the install and the agent-forwarding tooling are
             directly verifiable inside the built image.
-    gnupg-distro:
         distro:
             arch:
                 package:
@@ -22,38 +21,28 @@ gnupg:
             ubuntu:
                 package:
                     - gnupg
-    gnupg-step-0:
-        check: the gpg encryption/signing binary is present at /usr/bin/gpg
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gpg
-            exists: true
-    gnupg-step-1:
-        check: invoking gpg --version exits cleanly and identifies itself as GnuPG
-        exit_status: 0
-        stdout:
-            - contains: "gpg (GnuPG)"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gpg --version
-    gnupg-step-2:
-        check: the gpg-agent daemon ships so a forwarded host agent can answer key operations
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gpg-agent
-            exists: true
-    gnupg-step-3:
-        check: the gpgconf helper ships so the agent socket path can be resolved
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gpgconf
-            exists: true
-    gnupg-package:
-        check: package=gnupg
-        id: gnupg-package
-        plugin: package
-        plugin_input:
-            package: gnupg
-            package_map:
-                fedora: gnupg2
-            installed: true
+        plan:
+            - check: the gpg encryption/signing binary is present at /usr/bin/gpg
+              file:
+                file: /usr/bin/gpg
+                exists: true
+            - check: invoking gpg --version exits cleanly and identifies itself as GnuPG
+              exit_status: 0
+              stdout:
+                - contains: "gpg (GnuPG)"
+              command: /usr/bin/gpg --version
+            - check: the gpg-agent daemon ships so a forwarded host agent can answer key operations
+              file:
+                file: /usr/bin/gpg-agent
+                exists: true
+            - check: the gpgconf helper ships so the agent socket path can be resolved
+              file:
+                file: /usr/bin/gpgconf
+                exists: true
+            - check: package=gnupg
+              id: gnupg-package
+              package:
+                package: gnupg
+                package_map:
+                    fedora: gnupg2
+                installed: true

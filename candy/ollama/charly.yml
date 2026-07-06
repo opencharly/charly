@@ -10,7 +10,6 @@ ollama:
             Pulled models persist under the ~/.ollama models volume. The running
             service exposes the Ollama HTTP API (e.g. /api/tags) so any composing box
             can serve and query local models.
-    ollama-require:
         require:
             # GPU-agnostic: the ollama binary auto-detects the GPU at runtime (CPU
             # fallback when none present), so CUDA is an IMAGE-level composition choice
@@ -18,59 +17,45 @@ ollama:
             # This lets CPU consumers (e.g. `openclaw-desktop` on cachyos) compose the
             # layer without dragging the Fedora/NVIDIA `cuda` layer onto a pac base.
             - supervisord
-    ollama-env:
         env:
             OLLAMA_HOST: "0.0.0.0"
             OLLAMA_MODELS: "~/.ollama/models"
-    ollama-env_provide:
         env_provide:
             OLLAMA_HOST: "http://{{.ContainerName}}:11434"
-    ollama-port:
         port:
             - 11434
-    ollama-volume:
         volume:
             - name: models
               path: "~/.ollama"
-    ollama-alias:
         alias:
             - name: ollama
               command: ollama
-    ollama-service:
         service:
             - name: ollama
               exec: "ollama serve"
               restart: always
               enable: true
               scope: system
-    ollama-step-0:
-        run: download=https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst
-        download: "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
-        extract: tar.zst
-        to: /usr
-        run_as: root
-    ollama-step-1:
-        check: the ollama binary is installed at /usr/bin/ollama
-        plugin: file
-        plugin_input:
-            file: /usr/bin/ollama
-            exists: true
-    ollama-step-2:
-        check: the running ollama service answers the model-tags API with HTTP 200 on port 11434
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:11434}/api/tags
-            status: 200
-    ollama-step-3:
-        check: the ollama CLI reports an "ollama version" string
-        stdout:
-            - matches: "^ollama version"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ollama --version
-    ollama-step-4:
-        agent-check: models pulled via `ollama pull` are stored under the ~/.ollama models volume and survive a service restart
+        plan:
+            - run: download=https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst
+              download: "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
+              extract: tar.zst
+              to: /usr
+              run_as: root
+            - check: the ollama binary is installed at /usr/bin/ollama
+              file:
+                file: /usr/bin/ollama
+                exists: true
+            - check: the running ollama service answers the model-tags API with HTTP 200 on port 11434
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:11434}/api/tags
+                status: 200
+            - check: the ollama CLI reports an "ollama version" string
+              stdout:
+                - matches: "^ollama version"
+              context:
+                - runtime
+              command: ollama --version
+            - agent-check: models pulled via `ollama pull` are stored under the ~/.ollama models volume and survive a service restart

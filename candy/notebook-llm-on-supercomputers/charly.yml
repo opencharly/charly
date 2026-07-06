@@ -11,54 +11,41 @@ notebook-llm-on-supercomputers:
             setup, distributed training fundamentals, scaling patterns,
             and HPC-specific tooling. Data-only — no packages, no
             services.
-    notebook-llm-on-supercomputers-data:
         data:
             - src: data/llms_on_supercomputers
               volume: workspace
               dest: llms_on_supercomputers
-    notebook-llm-on-supercomputers-step-0:
-        check: the llms_on_supercomputers subdirectory is provisioned in the workspace
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers
-            filetype: directory
-    notebook-llm-on-supercomputers-step-1:
-        check: at least one course notebook (D0_* prefix) is present
-        exit_status: 0
-        stdout:
-            - matches: "D0_"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/
-    notebook-llm-on-supercomputers-step-2:
-        check: a D3 fine-tuning-day notebook is present, proving the curriculum spans more than the setup day
-        exit_status: 0
-        stdout:
-            - matches: "D3_"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/
-    notebook-llm-on-supercomputers-step-3:
-        check: the supporting datasets subdirectory ships alongside the notebooks
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/datasets
-            filetype: directory
-    notebook-llm-on-supercomputers-step-4:
-        check: the booking-queries classification CSV is present for the RAG and evaluation notebooks
-        exit_status: 0
-        stdout:
-            - matches: "booking_queries_dataset.csv"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/datasets/
+        plan:
+            - check: the llms_on_supercomputers subdirectory is provisioned in the workspace
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers
+                filetype: directory
+            - check: at least one course notebook (D0_* prefix) is present
+              exit_status: 0
+              stdout:
+                - matches: "D0_"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/
+            - check: a D3 fine-tuning-day notebook is present, proving the curriculum spans more than the setup day
+              exit_status: 0
+              stdout:
+                - matches: "D3_"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/
+            - check: the supporting datasets subdirectory ships alongside the notebooks
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/datasets
+                filetype: directory
+            - check: the booking-queries classification CSV is present for the RAG and evaluation notebooks
+              exit_status: 0
+              stdout:
+                - matches: "booking_queries_dataset.csv"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/llms_on_supercomputers/datasets/

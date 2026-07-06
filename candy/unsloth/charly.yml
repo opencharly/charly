@@ -11,62 +11,42 @@ unsloth:
             UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1 and HF_HOME (the HuggingFace cache,
             backed by the models volume), so the wheel install, the env, and the
             patch are each observable in the built image.
-    unsloth-env:
         env:
             UNSLOTH_SKIP_LLAMA_CPP_INSTALL: "1"
             HF_HOME: "~/.cache/huggingface"
-    unsloth-volume:
         volume:
             - name: models
               path: "~/.cache/huggingface"
-    unsloth-alias:
         alias:
             - name: unsloth
               command: unsloth
-    unsloth-step-0:
-        run: |
-            command=~/.pixi/envs/default/bin/python -m pip install --no-deps \
-              'https://wheels.vllm.ai/f53fa26e05c476a43f6db048a9e3b43bcb2b72fb/vllm-0.19.1rc1.dev39%2Bgf53fa26e0.cu130-cp38-abi3-manylinux_2_35_x86_64.whl'
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=~/.pixi/envs/default/bin/python -m pip install --no-deps \
+                  'https://wheels.vllm.ai/f53fa26e05c476a43f6db048a9e3b43bcb2b72fb/vllm-0.19.1rc1.dev39%2Bgf53fa26e0.cu130-cp38-abi3-manylinux_2_35_x86_64.whl'
+              run_as: "${USER}"
+              command: |
                 ~/.pixi/envs/default/bin/python -m pip install --no-deps \
                   'https://wheels.vllm.ai/f53fa26e05c476a43f6db048a9e3b43bcb2b72fb/vllm-0.19.1rc1.dev39%2Bgf53fa26e0.cu130-cp38-abi3-manylinux_2_35_x86_64.whl'
-    unsloth-step-1:
-        run: command=~/.pixi/envs/default/bin/python /ctx/patch_vllm_size_nodes.py
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: ~/.pixi/envs/default/bin/python /ctx/patch_vllm_size_nodes.py
-    unsloth-step-2:
-        check: the vLLM 0.19.x cu130 nightly wheel is installed in the pixi default environment
-        exit_status: 0
-        stdout:
-            - contains: "0.19.1"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -m pip show vllm
-    unsloth-step-3:
-        check: the candy exports UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1 so the bundled llama.cpp build is skipped
-        stdout:
-            - equals: "1"
-        plugin: command
-        plugin_input:
-            command: printenv UNSLOTH_SKIP_LLAMA_CPP_INSTALL
-    unsloth-step-4:
-        check: the candy exports HF_HOME at the HuggingFace cache that backs the models volume
-        stdout:
-            - contains: ".cache/huggingface"
-        plugin: command
-        plugin_input:
-            command: printenv HF_HOME
-    unsloth-step-5:
-        agent-check: vLLM's compilation backend carries the _decompose_size_nodes fix (the x.size(dim) scalar guard) rather than the unpatched upstream code
-    unsloth-pixi-python:
-        check: file=${HOME}/.pixi/envs/default/bin/python
-        id: unsloth-pixi-python
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/python
-            exists: true
+            - run: command=~/.pixi/envs/default/bin/python /ctx/patch_vllm_size_nodes.py
+              run_as: "${USER}"
+              command: ~/.pixi/envs/default/bin/python /ctx/patch_vllm_size_nodes.py
+            - check: the vLLM 0.19.x cu130 nightly wheel is installed in the pixi default environment
+              exit_status: 0
+              stdout:
+                - contains: "0.19.1"
+              command: ${HOME}/.pixi/envs/default/bin/python -m pip show vllm
+            - check: the candy exports UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1 so the bundled llama.cpp build is skipped
+              stdout:
+                - equals: "1"
+              command: printenv UNSLOTH_SKIP_LLAMA_CPP_INSTALL
+            - check: the candy exports HF_HOME at the HuggingFace cache that backs the models volume
+              stdout:
+                - contains: ".cache/huggingface"
+              command: printenv HF_HOME
+            - agent-check: vLLM's compilation backend carries the _decompose_size_nodes fix (the x.size(dim) scalar guard) rather than the unpatched upstream code
+            - check: file=${HOME}/.pixi/envs/default/bin/python
+              id: unsloth-pixi-python
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/python
+                exists: true

@@ -16,7 +16,6 @@ plugin-substrate:
             to the former in-proc standaloneKind decode. COMPILED-IN (in the embedded compiled_plugins:),
             like the tier-1 kinds and group, because these 5 are core deploy primitives every box/submodule
             must always resolve; also serves out-of-process via cmd/serve.
-    plugin-substrate-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-substrate
             providers:
@@ -25,11 +24,9 @@ plugin-substrate:
                 - kind:k8s
                 - kind:local
                 - kind:android
-    substrate-kind-module-present:
-        check: the substrate structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its pod/vm/k8s/local/android structural decode (both the deploy fold to uf.Bundle and the standalone-template fold to uf.Pod/uf.VM/…) is exercised by every check bed / box composing a substrate node (check-substrate-* / box-fedora / box-cachyos / box-arch / box-debian)
-        id: substrate-kind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the substrate structural kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its pod/vm/k8s/local/android structural decode (both the deploy fold to uf.Bundle and the standalone-template fold to uf.Pod/uf.VM/…) is exercised by every check bed / box composing a substrate node (check-substrate-* / box-fedora / box-cachyos / box-arch / box-debian)
+              id: substrate-kind-module-present
+              context:
+                - build
+              command: "true"

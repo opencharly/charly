@@ -13,10 +13,8 @@ maplibre-versatiles-styler:
             versatiles-frontend layer re-exports the directory at /styler/).
             Observable by the install directory and at least one non-empty
             JavaScript bundle landing there, plus the node/npm bundling toolchain.
-    maplibre-versatiles-styler-require:
         require:
             - supervisord
-    maplibre-versatiles-styler-distro:
         distro:
             arch:
                 package:
@@ -30,52 +28,49 @@ maplibre-versatiles-styler:
                     - npm
                     - curl
                     - jq
-    maplibre-versatiles-styler-step-0:
-        run: mkdir=/opt/maplibre-versatiles-styler
-        mkdir: /opt/maplibre-versatiles-styler
-        run_as: root
-    maplibre-versatiles-styler-step-1:
-        run: |
-            command=set -euo pipefail
-            TMPDIR=$(mktemp -d)
-            cd "$TMPDIR"
+        plan:
+            - run: mkdir=/opt/maplibre-versatiles-styler
+              mkdir: /opt/maplibre-versatiles-styler
+              run_as: root
+            - run: |
+                command=set -euo pipefail
+                TMPDIR=$(mktemp -d)
+                cd "$TMPDIR"
 
-            # Tier 1: try a GitHub release asset
-            if curl -fsSL "https://api.github.com/repos/versatiles-org/maplibre-versatiles-styler/releases/latest" \
-                 | jq -r '.assets[].browser_download_url' \
-                 | grep -E '\.tar\.gz$' \
-                 | head -1 > tarball_url \
-               && [ -s tarball_url ]; then
-              ASSET=$(cat tarball_url)
-              echo "Installing maplibre-versatiles-styler from GitHub release: $ASSET"
-              curl -fsSL "$ASSET" -o styler.tar.gz
-              tar -xzf styler.tar.gz -C /opt/maplibre-versatiles-styler || \
-                tar -xzf styler.tar.gz -C /opt/maplibre-versatiles-styler --strip-components=1
-            else
-              # Tier 2: npm install + copy dist/
-              echo "Falling back to npm install maplibre-versatiles-styler"
-              npm install --prefix "$TMPDIR" maplibre-versatiles-styler --no-audit --no-fund
-              PKG="$TMPDIR/node_modules/maplibre-versatiles-styler"
-              # The package's prebuilt UMD bundle typically lives in dist/.
-              # Copy the whole package directory so all entry points
-              # (ESM, UMD, type-defs) are available regardless of which
-              # files the iframe references.
-              cp -r "$PKG/." /opt/maplibre-versatiles-styler/
-            fi
+                # Tier 1: try a GitHub release asset
+                if curl -fsSL "https://api.github.com/repos/versatiles-org/maplibre-versatiles-styler/releases/latest" \
+                     | jq -r '.assets[].browser_download_url' \
+                     | grep -E '\.tar\.gz$' \
+                     | head -1 > tarball_url \
+                   && [ -s tarball_url ]; then
+                  ASSET=$(cat tarball_url)
+                  echo "Installing maplibre-versatiles-styler from GitHub release: $ASSET"
+                  curl -fsSL "$ASSET" -o styler.tar.gz
+                  tar -xzf styler.tar.gz -C /opt/maplibre-versatiles-styler || \
+                    tar -xzf styler.tar.gz -C /opt/maplibre-versatiles-styler --strip-components=1
+                else
+                  # Tier 2: npm install + copy dist/
+                  echo "Falling back to npm install maplibre-versatiles-styler"
+                  npm install --prefix "$TMPDIR" maplibre-versatiles-styler --no-audit --no-fund
+                  PKG="$TMPDIR/node_modules/maplibre-versatiles-styler"
+                  # The package's prebuilt UMD bundle typically lives in dist/.
+                  # Copy the whole package directory so all entry points
+                  # (ESM, UMD, type-defs) are available regardless of which
+                  # files the iframe references.
+                  cp -r "$PKG/." /opt/maplibre-versatiles-styler/
+                fi
 
-            # Sanity: at least one bundled JS file present.
-            if ! find /opt/maplibre-versatiles-styler -maxdepth 4 -name '*.js' -size +1c | head -1 | grep -q .; then
-              echo "ERROR: no JS bundle found under /opt/maplibre-versatiles-styler after install" >&2
-              ls -la /opt/maplibre-versatiles-styler/
-              exit 1
-            fi
+                # Sanity: at least one bundled JS file present.
+                if ! find /opt/maplibre-versatiles-styler -maxdepth 4 -name '*.js' -size +1c | head -1 | grep -q .; then
+                  echo "ERROR: no JS bundle found under /opt/maplibre-versatiles-styler after install" >&2
+                  ls -la /opt/maplibre-versatiles-styler/
+                  exit 1
+                fi
 
-            cd /
-            rm -rf "$TMPDIR" /root/.npm
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+                cd /
+                rm -rf "$TMPDIR" /root/.npm
+              run_as: root
+              command: |
                 set -euo pipefail
                 TMPDIR=$(mktemp -d)
                 cd "$TMPDIR"
@@ -112,29 +107,20 @@ maplibre-versatiles-styler:
 
                 cd /
                 rm -rf "$TMPDIR" /root/.npm
-    maplibre-versatiles-styler-step-2:
-        check: the styler install directory exists in the built image
-        plugin: file
-        plugin_input:
-            file: /opt/maplibre-versatiles-styler
-            exists: true
-            filetype: directory
-    maplibre-versatiles-styler-step-3:
-        check: at least one non-empty JavaScript bundle is present for consumers to load
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: |
+            - check: the styler install directory exists in the built image
+              file:
+                file: /opt/maplibre-versatiles-styler
+                exists: true
+                filetype: directory
+            - check: at least one non-empty JavaScript bundle is present for consumers to load
+              exit_status: 0
+              command: |
                 find /opt/maplibre-versatiles-styler -maxdepth 4 -name '*.js' -size +1c | head -1 | grep -q .
-    maplibre-versatiles-styler-step-4:
-        check: the node runtime used to fetch and bundle the package is installed
-        plugin: package
-        plugin_input:
-            package: nodejs
-            installed: true
-    maplibre-versatiles-styler-step-5:
-        check: the npm client used by the install fallback is available
-        plugin: package
-        plugin_input:
-            package: npm
-            installed: true
+            - check: the node runtime used to fetch and bundle the package is installed
+              package:
+                package: nodejs
+                installed: true
+            - check: the npm client used by the install fallback is available
+              package:
+                package: npm
+                installed: true

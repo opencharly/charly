@@ -15,17 +15,14 @@ plugin-build:
             `charly box generate` dispatch it IN-PROCESS, the host threading the reverse channel onto
             the Invoke context so HostBuild is reachable without a go-plugin broker. Also serves
             out-of-process via cmd/serve for module-shape parity (one provider, two placements).
-    plugin-build-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-build
             providers:
                 - build:box
                 - build:generate
-    build-dispatch-module-present:
-        check: the build-engine dispatch plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its build:box / build:generate words route `charly box build` and `charly box generate` through the F10 HostBuild seam, exercised by EVERY box build across the whole ecosystem (every `charly box build` / `charly box generate` invocation)
-        id: build-dispatch-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the build-engine dispatch plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its build:box / build:generate words route `charly box build` and `charly box generate` through the F10 HostBuild seam, exercised by EVERY box build across the whole ecosystem (every `charly box build` / `charly box generate` invocation)
+              id: build-dispatch-module-present
+              context:
+                - build
+              command: "true"

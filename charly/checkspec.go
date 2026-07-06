@@ -91,9 +91,8 @@ var runtimeOnlyVarPrefixes = []string{
 	"CONTAINER_NAME",
 	"INSTANCE",
 	"ENV_",
-	// Capture store + step id are populated only at plan-run
-	// execution time, so they're effectively runtime-only.
-	"CAPTURED",
+	// The step id is populated only at plan-run execution time, so it is
+	// effectively runtime-only.
 	"STEP_ID",
 	// VM live-check intent: how many <hostdev> the VM's spec declares. Resolved
 	// only against a live VM deployment (check_cmd.go VM path), so a build-scope
@@ -389,8 +388,6 @@ var VerbCatalog = map[string]VerbSpec{
 	// authored `context:` + the plugin's own box-mode skip, not this table.
 
 	// meta.
-	"summarize": {ctxRuntimeOnly, DoAssert, false},
-	"kill":      {ctxRuntimeOnly, DoAct, false},
 
 	// plugin — the generic plugin-verb discriminator. Its VALUE (Op.Plugin) is the
 	// reserved word served by a registered Provider (built-in or out-of-tree). The

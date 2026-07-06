@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/charly/candy/plugin-dbus/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -17,7 +18,9 @@ import (
 // so provider.go can feed the output through the shared sdk matcher pipeline (a host-side
 // matcher step does not run for an out-of-process verb). The plugin speaks gdbus
 // to the venue's bus directly — no godbus, no in-container self-delegation; gdbus is the
-// session-bus client every desktop carries. A bed authored against the verb passes unchanged.
+// session-bus client every desktop carries. The per-verb fields arrive in the step's
+// desugared plugin_input, decoded into the CUE-generated params.DbusInput (#DbusInput);
+// only the genuinely shared step modifiers (matchers, description) still ride the Op.
 
 // sessionBusExport prefixes every gdbus invocation so the venue's session bus is reachable.
 // The dbus layer exports DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session; the `:-` default
@@ -26,10 +29,12 @@ const sessionBusExport = `export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_AD
 
 // requiredModifiers mirrors the in-tree dbusMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc live-verb seam,
-// which an external verb is not — so the check moves HERE, at dispatch). call needs a
-// dest/path/method; introspect needs a dest/path; notify needs the text (the title).
+// which an external verb is not — so the check moves HERE, at dispatch). The names are
+// plugin INPUT keys (sdk.OpModifierZero is map-first over op.PluginInput): call needs a
+// dest/path/member (the D-Bus member — the input's `method` key is the VERB method);
+// introspect needs a dest/path; notify needs the text (the title).
 var requiredModifiers = map[string][]string{
-	"call":       {"dest", "path", "method"},
+	"call":       {"dest", "path", "member"},
 	"introspect": {"dest", "path"},
 	"notify":     {"text"},
 }
@@ -37,9 +42,11 @@ var requiredModifiers = map[string][]string{
 // dispatch runs one dbus method against the venue's session bus (over the host executor
 // reverse channel) and returns its captured output. A returned error is the verb FAILING
 // (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
-// exit_status / stderr matchers.
-func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	method := string(op.Dbus)
+// exit_status / stderr matchers. op carries the shared step modifiers (the required-modifier
+// check reads the input map through it; notify reads the shared description); the dbus-
+// exclusive fields ride the decoded params.DbusInput.
+func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op, in *params.DbusInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -50,11 +57,11 @@ func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 	case "list":
 		return dbusList(ctx, ex)
 	case "call":
-		return dbusCall(ctx, ex, op)
+		return dbusCall(ctx, ex, in)
 	case "introspect":
-		return dbusIntrospect(ctx, ex, op)
+		return dbusIntrospect(ctx, ex, in)
 	case "notify":
-		return dbusNotify(ctx, ex, op)
+		return dbusNotify(ctx, ex, op, in)
 	}
 	return "", fmt.Errorf("unknown dbus method %q", method)
 }
@@ -75,18 +82,19 @@ func dbusList(ctx context.Context, ex *sdk.Executor) (string, error) {
 		"--method org.freedesktop.DBus.ListNames")
 }
 
-// dbusCall makes a generic D-Bus method call (dest/path/method + typed args). The in-tree
+// dbusCall makes a generic D-Bus method call (dest/path/member + typed args). The in-tree
 // `type:value` arg vocabulary (string/uint32/int32/int64/uint64/boolean/double) is preserved,
-// converted to explicit GVariant text for gdbus.
-func dbusCall(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	args, err := gvariantArgs(op.Args)
+// converted to explicit GVariant text for gdbus. `member` is the fully-qualified D-Bus
+// interface.Method (gdbus --method) — the input's `method` key is the verb method.
+func dbusCall(ctx context.Context, ex *sdk.Executor, in *params.DbusInput) (string, error) {
+	args, err := gvariantArgs(in.Args)
 	if err != nil {
 		return "", err
 	}
 	cmd := sessionBusExport + "gdbus call --session " +
-		"--dest " + kit.ShellQuote(op.Dest) + " " +
-		"--object-path " + kit.ShellQuote(op.Path) + " " +
-		"--method " + kit.ShellQuote(op.Method)
+		"--dest " + kit.ShellQuote(in.Dest) + " " +
+		"--object-path " + kit.ShellQuote(in.Path) + " " +
+		"--method " + kit.ShellQuote(in.Member)
 	for _, a := range args {
 		cmd += " " + a
 	}
@@ -95,23 +103,23 @@ func dbusCall(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 
 // dbusIntrospect introspects a service object, returning the introspection XML
 // (org.freedesktop.DBus.Introspectable.Introspect, surfaced by `gdbus introspect --xml`).
-func dbusIntrospect(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func dbusIntrospect(ctx context.Context, ex *sdk.Executor, in *params.DbusInput) (string, error) {
 	return ex.VenueCapture(ctx, sessionBusExport+
 		"gdbus introspect --session "+
-		"--dest "+kit.ShellQuote(op.Dest)+" "+
-		"--object-path "+kit.ShellQuote(op.Path)+" --xml")
+		"--dest "+kit.ShellQuote(in.Dest)+" "+
+		"--object-path "+kit.ShellQuote(in.Path)+" --xml")
 }
 
 // dbusNotify sends a desktop notification via org.freedesktop.Notifications.Notify. text is
-// the title (required), description the body — the in-tree gdbus-fallback argv, promoted to
-// the sole path.
-func dbusNotify(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+// the title (required, from the plugin input); the SHARED step description (still an #Op
+// modifier) is the body — the in-tree gdbus-fallback argv, promoted to the sole path.
+func dbusNotify(ctx context.Context, ex *sdk.Executor, op *spec.Op, in *params.DbusInput) (string, error) {
 	return ex.VenueCapture(ctx, sessionBusExport+
 		"gdbus call --session "+
 		"--dest=org.freedesktop.Notifications "+
 		"--object-path=/org/freedesktop/Notifications "+
 		"--method=org.freedesktop.Notifications.Notify "+
-		`"charly" 0 "" `+kit.ShellQuote(op.Text)+" "+kit.ShellQuote(op.Description)+` "[]" "{}" -- -1`)
+		`"charly" 0 "" `+kit.ShellQuote(in.Text)+" "+kit.ShellQuote(op.Description)+` "[]" "{}" -- -1`)
 }
 
 // ---------------------------------------------------------------------------

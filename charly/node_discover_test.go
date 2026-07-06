@@ -28,14 +28,13 @@ discover:
   candy:
     version: "2026.150.0000"
     description: in-memory store
-  redis-step-0:
-    check: the binary exists
-    file: /usr/bin/redis-server
+    plan:
+      - check: the binary exists
+        file: /usr/bin/redis-server
 `)
 	must(filepath.Join(dir, "box", "coder", "charly.yml"), `coder:
   candy:
     base: fedora
-  coder-candy:
     candy: [redis]
 `)
 	uf, _, err := LoadUnified(dir)

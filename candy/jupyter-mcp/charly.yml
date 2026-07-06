@@ -10,63 +10,44 @@ jupyter-mcp:
             Server extension. The observable effects — fastmcp importable, jupyter_mcp
             importable, the enabling JSON present, and (once a jupyter box is deployed)
             the Streamable HTTP MCP server routing /mcp — are all verifiable.
-    jupyter-mcp-step-0:
-        run: command=~/.pixi/envs/default/bin/pip install "fastmcp>=3.2.0"
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: ~/.pixi/envs/default/bin/pip install "fastmcp>=3.2.0"
-    jupyter-mcp-step-1:
-        run: command=~/.pixi/envs/default/bin/pip install --no-deps /ctx/jupyter_mcp
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: ~/.pixi/envs/default/bin/pip install --no-deps /ctx/jupyter_mcp
-    jupyter-mcp-step-2:
-        run: |
-            command=JUPYTER_CONFIG_DIR=~/.pixi/envs/default/etc/jupyter/jupyter_server_config.d
-            mkdir -p "$JUPYTER_CONFIG_DIR"
-            echo '{"ServerApp": {"jpserver_extensions": {"jupyter_mcp": true}}}' > \
-              "$JUPYTER_CONFIG_DIR/jupyter_mcp.json"
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: command=~/.pixi/envs/default/bin/pip install "fastmcp>=3.2.0"
+              run_as: "${USER}"
+              command: ~/.pixi/envs/default/bin/pip install "fastmcp>=3.2.0"
+            - run: command=~/.pixi/envs/default/bin/pip install --no-deps /ctx/jupyter_mcp
+              run_as: "${USER}"
+              command: ~/.pixi/envs/default/bin/pip install --no-deps /ctx/jupyter_mcp
+            - run: |
+                command=JUPYTER_CONFIG_DIR=~/.pixi/envs/default/etc/jupyter/jupyter_server_config.d
+                mkdir -p "$JUPYTER_CONFIG_DIR"
+                echo '{"ServerApp": {"jpserver_extensions": {"jupyter_mcp": true}}}' > \
+                  "$JUPYTER_CONFIG_DIR/jupyter_mcp.json"
+              run_as: "${USER}"
+              command: |
                 JUPYTER_CONFIG_DIR=~/.pixi/envs/default/etc/jupyter/jupyter_server_config.d
                 mkdir -p "$JUPYTER_CONFIG_DIR"
                 echo '{"ServerApp": {"jpserver_extensions": {"jupyter_mcp": true}}}' > \
                   "$JUPYTER_CONFIG_DIR/jupyter_mcp.json"
-    jupyter-mcp-step-3:
-        check: fastmcp is installed in the parent pixi default environment
-        exit_status: 0
-        stdout:
-            - contains: "Name: fastmcp"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/pip show fastmcp
-    jupyter-mcp-step-4:
-        check: the in-tree jupyter_mcp extension package imports from the pixi env
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import jupyter_mcp"
-    jupyter-mcp-step-5:
-        check: the Jupyter Server config drop-in enables the jupyter_mcp extension
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/etc/jupyter/jupyter_server_config.d/jupyter_mcp.json
-            exists: true
-            contains:
-                - contains: "jupyter_mcp"
-    jupyter-mcp-step-6:
-        check: the deployed JupyterLab routes /mcp to the MCP handler (an empty POST returns 400, not a 404)
-        method: POST
-        timeout: 5s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8888}/mcp
-            status: 400
-    jupyter-mcp-step-7:
-        agent-check: an agent can list the notebook_*/cell_*/room_list MCP tools and round-trip a cell edit through the live server
+            - check: fastmcp is installed in the parent pixi default environment
+              exit_status: 0
+              stdout:
+                - contains: "Name: fastmcp"
+              command: ${HOME}/.pixi/envs/default/bin/pip show fastmcp
+            - check: the in-tree jupyter_mcp extension package imports from the pixi env
+              exit_status: 0
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import jupyter_mcp"
+            - check: the Jupyter Server config drop-in enables the jupyter_mcp extension
+              file:
+                file: ${HOME}/.pixi/envs/default/etc/jupyter/jupyter_server_config.d/jupyter_mcp.json
+                exists: true
+                contains:
+                    - contains: "jupyter_mcp"
+            - check: the deployed JupyterLab routes /mcp to the MCP handler (an empty POST returns 400, not a 404)
+              timeout: 5s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8888}/mcp
+                status: 400
+                method: POST
+            - agent-check: an agent can list the notebook_*/cell_*/room_list MCP tools and round-trip a cell edit through the live server

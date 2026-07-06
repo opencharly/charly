@@ -9,35 +9,26 @@ goplaces:
             binary at ${HOME}/go/bin/goplaces. If the install step were skipped
             the binary would be absent, so its presence and executable bit are
             the verifiable proof the candy did its job.
-    goplaces-require:
         require:
             - golang
-    goplaces-env:
         env:
             GOPATH: "~/go"
-    goplaces-path_append:
         path_append:
             - "~/go/bin"
-    goplaces-step-0:
-        run: |
-            command=go install github.com/steipete/goplaces/cmd/goplaces@latest
-            go clean -cache
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=go install github.com/steipete/goplaces/cmd/goplaces@latest
+                go clean -cache
+              run_as: "${USER}"
+              command: |
                 go install github.com/steipete/goplaces/cmd/goplaces@latest
                 go clean -cache
-    goplaces-step-1:
-        check: the goplaces binary is go-installed into the user's GOPATH bin
-        plugin: file
-        plugin_input:
-            file: ${HOME}/go/bin/goplaces
-            exists: true
-    goplaces-step-2:
-        check: the installed goplaces binary carries the executable bit
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test -x ${HOME}/go/bin/goplaces
-            in_container: true
+            - check: the goplaces binary is go-installed into the user's GOPATH bin
+              file:
+                file: ${HOME}/go/bin/goplaces
+                exists: true
+            - check: the installed goplaces binary carries the executable bit
+              exit_status: 0
+              command:
+                command: test -x ${HOME}/go/bin/goplaces
+                in_container: true

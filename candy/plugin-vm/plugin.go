@@ -41,15 +41,17 @@ func NewProvider() pb.ProviderServer { return &vmProvider{} }
 // `charly check` at runtime like kube/adb/appium), via sdk.NewMeta. The internal VM ops
 // (resolution / lifecycle / snapshot / create / qemu-shutdown) ride Invoke via special VmOp
 // words and are NOT Describe classes — the hidden `charly __vm` command tree + the display/
-// status/preempt consumers RPC them. libvirt keeps its modifiers on charly's core #Op (a
-// schema-less verb, empty InputDef). command:vm (`charly vm …`, the externalized CLI) is NOT
-// advertised here: it is dispatched by charly syscall.Exec'ing this binary in CLI mode
-// (cliMain), not resolved through the gRPC provider registry. The candy's plugin.providers
-// declaration still lists command:vm (the CLI-grammar prescan + baked `.providers` manifest).
+// status/preempt consumers RPC them. The verb's plugin_input validates against the served
+// #LibvirtVerbInput (the method enum + every libvirt-exclusive modifier moved here from core
+// #Op in the schema-compaction cutover). command:vm (`charly vm …`, the externalized CLI)
+// is NOT advertised here: it is dispatched by charly syscall.Exec'ing this binary in CLI
+// mode (cliMain), not resolved through the gRPC provider registry. The candy's
+// plugin.providers declaration still lists command:vm (the CLI-grammar prescan + baked
+// `.providers` manifest).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.177.0300",
 		[]sdk.ProvidedCapability{
-			{Class: "verb", Word: "libvirt", InputDef: ""},
+			{Class: "verb", Word: "libvirt", InputDef: "#LibvirtVerbInput", Primary: "method"},
 		},
 		schemaFS)
 }

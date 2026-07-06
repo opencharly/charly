@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -48,7 +49,9 @@ func (provider) invokeVerb(_ context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	method := string(op.Adb)
+	// The verb's method + per-verb fields ride the desugared plugin input since
+	// the schema-compaction cutover; dispatch decodes the full typed params.AdbInput.
+	method := kit.InputStr(&op, "method")
 
 	// Live-container verb: skip under `charly check box` (no host-mapped adb port
 	// on a disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.

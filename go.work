@@ -36,11 +36,8 @@ use ./candy/plugin-init
 use ./candy/plugin-agent
 use ./candy/plugin-builder
 use ./candy/plugin-distro
-use ./candy/plugin-module
-use ./candy/plugin-package-group
 use ./candy/plugin-resource
 use ./candy/plugin-sidecar
-use ./candy/plugin-target
 use ./candy/plugin-group
 use ./candy/plugin-substrate
 use ./candy/plugin-candy-kind

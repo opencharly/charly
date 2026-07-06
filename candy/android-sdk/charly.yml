@@ -14,19 +14,15 @@ android-sdk:
             alongside the AUR-installed tools. Every artifact is a fixed path
             under /opt/android-sdk, so the SDK is verifiable by probing those
             paths and running adb.
-    android-sdk-require:
         require:
             - java-openjdk
-    android-sdk-env:
         env:
             ANDROID_HOME: "/opt/android-sdk"
             ANDROID_SDK_ROOT: "/opt/android-sdk"
-    android-sdk-path_append:
         path_append:
             - "/opt/android-sdk/cmdline-tools/latest/bin"
             - "/opt/android-sdk/platform-tools"
             - "/opt/android-sdk/emulator"
-    android-sdk-var:
         var:
             EMULATOR_API_LEVEL: "36"
             EMULATOR_SYS_IMG: "x86_64"
@@ -36,7 +32,6 @@ android-sdk:
             # objects under Arch's default lld --gc-sections. Same precompiled-binary
             # pattern this repo uses for uv/traefik/etc. apkeep ships x86_64-only.
             APKEEP_VERSION: "0.18.0"
-    android-sdk-distro:
         distro:
             arch:
                 # Emulator runtime libs (Qt/GL/audio): the AUR packages provide the
@@ -75,35 +70,32 @@ android-sdk:
                         - android-sdk-build-tools-36
                         - android-platform-36
                         - android-emulator
-    android-sdk-step-0:
-        run: download=https://github.com/EFForg/apkeep/releases/download/${APKEEP_VERSION}/apkeep-x86_64-unknown-linux-gnu
-        download: "https://github.com/EFForg/apkeep/releases/download/${APKEEP_VERSION}/apkeep-x86_64-unknown-linux-gnu"
-        to: /usr/local/bin/apkeep
-        mode: "0755"
-        run_as: root
-    android-sdk-step-1:
-        run: |
-            command=set -euo pipefail
-            export JAVA_HOME=/usr/lib/jvm/charly-jdk21
-            export PATH="$JAVA_HOME/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
-            SDK_CACHE=/var/cache/charly-android-sysimg
-            SYSIMG="system-images;android-${EMULATOR_API_LEVEL};${EMULATOR_IMG_TYPE};${EMULATOR_SYS_IMG}"
-            SENTINEL="${SDK_CACHE}/.charly-sysimg-complete-${EMULATOR_API_LEVEL}-${EMULATOR_IMG_TYPE}"
-            if [ ! -f "${SENTINEL}" ]; then
-              # Bounded for-loop emits enough y's for the license prompts without
-              # the SIGPIPE that `yes | sdkmanager` triggers under pipefail.
-              for _ in $(seq 1 100); do echo y; done | sdkmanager --sdk_root="${SDK_CACHE}" --licenses >/dev/null
-              sdkmanager --sdk_root="${SDK_CACHE}" "${SYSIMG}"
-              touch "${SENTINEL}"
-            fi
-            mkdir -p /opt/android-sdk/system-images
-            cp -a "${SDK_CACHE}/system-images/." /opt/android-sdk/system-images/
-        run_as: root
-        cache:
-            - /var/cache/charly-android-sysimg
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: download=https://github.com/EFForg/apkeep/releases/download/${APKEEP_VERSION}/apkeep-x86_64-unknown-linux-gnu
+              download: "https://github.com/EFForg/apkeep/releases/download/${APKEEP_VERSION}/apkeep-x86_64-unknown-linux-gnu"
+              to: /usr/local/bin/apkeep
+              mode: "0755"
+              run_as: root
+            - run: |
+                command=set -euo pipefail
+                export JAVA_HOME=/usr/lib/jvm/charly-jdk21
+                export PATH="$JAVA_HOME/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+                SDK_CACHE=/var/cache/charly-android-sysimg
+                SYSIMG="system-images;android-${EMULATOR_API_LEVEL};${EMULATOR_IMG_TYPE};${EMULATOR_SYS_IMG}"
+                SENTINEL="${SDK_CACHE}/.charly-sysimg-complete-${EMULATOR_API_LEVEL}-${EMULATOR_IMG_TYPE}"
+                if [ ! -f "${SENTINEL}" ]; then
+                  # Bounded for-loop emits enough y's for the license prompts without
+                  # the SIGPIPE that `yes | sdkmanager` triggers under pipefail.
+                  for _ in $(seq 1 100); do echo y; done | sdkmanager --sdk_root="${SDK_CACHE}" --licenses >/dev/null
+                  sdkmanager --sdk_root="${SDK_CACHE}" "${SYSIMG}"
+                  touch "${SENTINEL}"
+                fi
+                mkdir -p /opt/android-sdk/system-images
+                cp -a "${SDK_CACHE}/system-images/." /opt/android-sdk/system-images/
+              run_as: root
+              cache:
+                - /var/cache/charly-android-sysimg
+              command: |
                 set -euo pipefail
                 export JAVA_HOME=/usr/lib/jvm/charly-jdk21
                 export PATH="$JAVA_HOME/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
@@ -119,62 +111,42 @@ android-sdk:
                 fi
                 mkdir -p /opt/android-sdk/system-images
                 cp -a "${SDK_CACHE}/system-images/." /opt/android-sdk/system-images/
-    android-sdk-step-2:
-        check: the cmdline-tools sdkmanager lands under /opt/android-sdk
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager
-            exists: true
-    android-sdk-step-3:
-        check: platform-tools provides adb
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/platform-tools/adb
-            exists: true
-    android-sdk-step-4:
-        check: build-tools 36 provides aapt2 (Appium's ADB badging probe needs it)
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/build-tools/36/aapt2
-            exists: true
-    android-sdk-step-5:
-        check: the emulator binary is installed
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/emulator/emulator
-            exists: true
-    android-sdk-step-6:
-        check: adb runs and reports the Android Debug Bridge banner
-        exit_status: 0
-        stdout:
-            - contains: "Android Debug Bridge"
-        plugin: command
-        plugin_input:
-            command: /opt/android-sdk/platform-tools/adb version
-    android-sdk-step-7:
-        check: apkeep (the by-package-name app downloader) is installed and on PATH
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: which apkeep
-    android-sdk-step-8:
-        check: the android-36 platform is installed
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/platforms/android-36
-            exists: true
-            filetype: directory
-    android-sdk-step-9:
-        check: the sdkmanager-fetched google_apis_playstore x86_64 system image is present
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/system-images/android-36/google_apis_playstore/x86_64
-            exists: true
-            filetype: directory
-    avdmanager-binary:
-        check: file=/opt/android-sdk/cmdline-tools/latest/bin/avdmanager
-        id: avdmanager-binary
-        plugin: file
-        plugin_input:
-            file: /opt/android-sdk/cmdline-tools/latest/bin/avdmanager
-            exists: true
+            - check: the cmdline-tools sdkmanager lands under /opt/android-sdk
+              file:
+                file: /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager
+                exists: true
+            - check: platform-tools provides adb
+              file:
+                file: /opt/android-sdk/platform-tools/adb
+                exists: true
+            - check: build-tools 36 provides aapt2 (Appium's ADB badging probe needs it)
+              file:
+                file: /opt/android-sdk/build-tools/36/aapt2
+                exists: true
+            - check: the emulator binary is installed
+              file:
+                file: /opt/android-sdk/emulator/emulator
+                exists: true
+            - check: adb runs and reports the Android Debug Bridge banner
+              exit_status: 0
+              stdout:
+                - contains: "Android Debug Bridge"
+              command: /opt/android-sdk/platform-tools/adb version
+            - check: apkeep (the by-package-name app downloader) is installed and on PATH
+              exit_status: 0
+              command: which apkeep
+            - check: the android-36 platform is installed
+              file:
+                file: /opt/android-sdk/platforms/android-36
+                exists: true
+                filetype: directory
+            - check: the sdkmanager-fetched google_apis_playstore x86_64 system image is present
+              file:
+                file: /opt/android-sdk/system-images/android-36/google_apis_playstore/x86_64
+                exists: true
+                filetype: directory
+            - check: file=/opt/android-sdk/cmdline-tools/latest/bin/avdmanager
+              id: avdmanager-binary
+              file:
+                file: /opt/android-sdk/cmdline-tools/latest/bin/avdmanager
+                exists: true

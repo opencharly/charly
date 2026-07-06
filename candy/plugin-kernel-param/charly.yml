@@ -8,17 +8,17 @@ plugin-kernel-param:
             sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. The first multi-role verb on the kit ProvisionActor
             extension; matchers reuse the shared sdk.MatchAll.
-    plugin-kernel-param-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-kernel-param
             providers:
                 - verb:kernel-param
-    kernel-param-verb-dispatches:
-        check: the kernel-param verb dispatches through the provider registry and reads a sysctl value from /proc/sys
-        id: kernel-param-verb-dispatches
-        plugin: kernel-param
-        plugin_input:
-            kernel-param: kernel.ostype
-            value:
-                - Linux
-        context: [runtime]
+            primary:
+                kernel-param: kernel-param
+        plan:
+            - check: the kernel-param verb dispatches through the provider registry and reads a sysctl value from /proc/sys
+              id: kernel-param-verb-dispatches
+              kernel-param:
+                kernel-param: kernel.ostype
+                value:
+                    - Linux
+              context: [runtime]

@@ -7,16 +7,16 @@ plugin-mount:
             source/filesystem/opts. ACT: render an idempotent `findmnt || mount`. A
             HOST-COUPLED verb on the sdk/kit contract (CheckVerbProvider +
             ProvisionActor), so it is COMPILED-IN-ONLY; matchers reuse sdk.MatchAll.
-    plugin-mount-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-mount
             providers:
                 - verb:mount
-    mount-verb-dispatches:
-        check: the mount verb dispatches through the provider registry and probes a mountpoint via findmnt
-        id: mount-verb-dispatches
-        plugin: mount
-        plugin_input:
-            mount: /proc
-            filesystem: proc
-        context: [runtime]
+            primary:
+                mount: mount
+        plan:
+            - check: the mount verb dispatches through the provider registry and probes a mountpoint via findmnt
+              id: mount-verb-dispatches
+              mount:
+                mount: /proc
+                filesystem: proc
+              context: [runtime]

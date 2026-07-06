@@ -36,7 +36,7 @@ func NewCheckVerb() kit.CheckVerbProvider { return verb{} }
 // NewCheckVerb()+NewMeta() shape as every pb-provider plugin (R3).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.176.2300",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "kernel-param", InputDef: "#KernelParamInput"}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "kernel-param", InputDef: "#KernelParamInput", Primary: "kernel-param"}},
 		schemaFS)
 }
 

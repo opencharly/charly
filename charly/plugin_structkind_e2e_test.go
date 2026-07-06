@@ -16,18 +16,18 @@ import (
 const authoredMemberTree = `    web:
         pod:
             image: coder
-        web-step-0:
-            check: web reaches the cache
-            command: "redis-cli -h ${HOST:cache} ping"
+            plan:
+                - check: web reaches the cache
+                  command: "redis-cli -h ${HOST:cache} ping"
     cache:
         pod:
             image: coder
         migrate:
             pod:
                 image: migrator
-            migrate-step-0:
-                check: migration ran
-                command: "test -f /done"
+                plan:
+                    - check: migration ran
+                      command: "test -f /done"
 `
 
 // TestExternalStructKind_StructuralDecode proves F5 authored-member INPUT-threading END-TO-END: a

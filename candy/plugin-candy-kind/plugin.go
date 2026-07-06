@@ -29,7 +29,6 @@ package candykind
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 
@@ -37,9 +36,6 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.182.1600"
 
@@ -55,7 +51,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "kind", Word: "candy"}},
-		schemaFS)
+		nil)
 }
 
 type provider struct{ pb.UnimplementedProviderServer }

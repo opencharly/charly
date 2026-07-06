@@ -4,8 +4,10 @@
 // github.com/hraban/opus + github.com/gordonklaus/portaudio — OUT of charly's core
 // go.mod: the host go-builds this binary and serves it OUT-OF-PROCESS over go-plugin
 // gRPC via the charly plugin SDK, so the `spice:` verb dispatches through the
-// provider registry exactly like a built-in — with the verb keeping its `spice:`
-// discriminator + every modifier on charly's core #Op (authoring unchanged). The
+// provider registry exactly like a built-in. Since the schema-compaction cutover an
+// authored `spice:` step desugars to the internal plugin/plugin_input envelope, and
+// every spice-exclusive modifier (method/x/y/text/key/artifact/…) lives in the
+// plugin's OWN #SpiceInput (schema/spice.cue → the generated params.SpiceInput). The
 // fourth external dep-shed (after candy/plugin-appium, candy/plugin-adb,
 // candy/plugin-kube); the Shells-com/spice library lives HERE (vendored under
 // third_party/spice), with its cgo opus/portaudio audio channels removed entirely so
@@ -35,12 +37,12 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:spice + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). spice keeps its entire authoring contract (the
-// #SpiceMethod enum + every modifier) on charly's core #Op — like cdp/vnc it has NO
-// plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (spice.cue) exists only to satisfy the host's non-empty-schema load gate.
+// sdk.NewMeta → BuildCapabilities). The verb's entire authoring contract — the
+// method enum + every spice-exclusive modifier — lives in the served #SpiceInput
+// (schema/spice.cue), which the host splices onto the base and validates every
+// authored `spice:` step's plugin_input against.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.174.1700",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "spice", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "spice", InputDef: "#SpiceInput"}},
 		schemaFS)
 }

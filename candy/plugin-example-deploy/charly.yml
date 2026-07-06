@@ -22,25 +22,21 @@ plugin-example-deploy:
             over the channel). It returns plugin-script reverse ops the host records in
             the install ledger and replays at `charly bundle del`. The deploy-class
             companion of the verb-class candy/plugin-example-external.
-    plugin-example-deploy-decl:
         plugin:
             providers:
                 - deploy:exampledeploy
             source: github.com/opencharly/charly/candy/plugin-example-deploy
-    plugin-example-deploy-step-write:
-        run: place a marker file on the venue — a file-write step the external deploy plugin EXECUTES from the round-tripped per-step InstallPlan IR (proves InstallPlan.Steps travel author -> host -> wire -> plugin AND the dest is honored)
-        run_as: ${USER}
-        write: /tmp/charly-exampledeploy-steps/written
-        content: |-
-            EXAMPLEDEPLOY-STEP-WRITE-OK
-    plugin-example-deploy-env:
         env:
             EXAMPLEDEPLOY_STEP_ENV: present
-    exampledeploy-module-present:
-        check: the out-of-tree deploy plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
-        id: exampledeploy-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - run: place a marker file on the venue — a file-write step the external deploy plugin EXECUTES from the round-tripped per-step InstallPlan IR (proves InstallPlan.Steps travel author -> host -> wire -> plugin AND the dest is honored)
+              run_as: ${USER}
+              write: /tmp/charly-exampledeploy-steps/written
+              content: |-
+                EXAMPLEDEPLOY-STEP-WRITE-OK
+              id: plugin-example-deploy-step-write
+            - check: the out-of-tree deploy plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+              id: exampledeploy-module-present
+              context:
+                - build
+              command: "true"

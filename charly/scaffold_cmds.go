@@ -63,7 +63,7 @@ func (c *NewBoxCmd) Run() error {
 // `charly box set <dotpath> <value>`
 
 type BoxSetCmd struct {
-	Path  string `arg:"" help:"Dot-path into charly.yml (e.g. defaults.tag, box.foo.candy)"`
+	Path  string `arg:"" help:"Dot-path into charly.yml (e.g. defaults.tag, <name>.candy.candy — the entity node, then its kind body)"`
 	Value string `arg:"" help:"Value (parsed as YAML; use [a,b] for lists, {x: y} for maps)"`
 }
 

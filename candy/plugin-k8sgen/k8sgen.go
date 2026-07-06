@@ -511,16 +511,20 @@ func generateService(opts spec.K8sGenInput, _ string) map[string]any {
 // Env.
 // -----------------------------------------------------------------------------
 
-func generateEnv(env []string) []map[string]any {
-	var out []map[string]any
-	for _, kv := range env {
-		before, after, ok := strings.Cut(kv, "=")
-		if !ok {
-			continue
-		}
+func generateEnv(env map[string]string) []map[string]any {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]map[string]any, 0, len(keys))
+	for _, k := range keys {
 		out = append(out, map[string]any{
-			"name":  before,
-			"value": after,
+			"name":  k,
+			"value": env[k],
 		})
 	}
 	return out

@@ -16,89 +16,66 @@ selkies-desktop:
             labwc-flavor binaries and configs from every composed candy coexist on the
             built image, and the labwc desktop daemons reach a supervised RUNNING state
             at deploy.
-    selkies-desktop-candy:
         candy:
             - selkies-core
             - labwc
             - waybar-labwc
             - swaync
             - pavucontrol
-    selkies-desktop-step-0:
-        check: the labwc nested Wayland compositor — this flavor's defining compositor — is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/labwc
-            exists: true
-    selkies-desktop-step-1:
-        check: the pavucontrol GTK audio mixer the waybar audio module launches is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/pavucontrol
-            exists: true
-    selkies-desktop-step-2:
-        check: the waybar top-panel binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/waybar
-            exists: true
-    selkies-desktop-step-3:
-        check: the labwc-flavor waybar panel configuration is present
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/waybar/config
-            exists: true
-    selkies-desktop-step-4:
-        check: the SwayNotificationCenter notification daemon is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/swaync
-            exists: true
-    selkies-desktop-step-5:
-        check: the google-chrome-stable browser from the shared selkies-core spine is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/google-chrome-stable
-            exists: true
-    selkies-desktop-step-6:
-        check: the PipeWire audio server backing the desktop session is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/pipewire
-            exists: true
-    selkies-desktop-step-7:
-        agent-check: once the pixelflux to labwc chain is healthy, the labwc compositor hosts the waybar panel, swaync notifier, and audio controls as one coherent, browser-streamable desktop session
-    selkies-desktop-swaync-package:
-        check: package=swaync
-        id: selkies-desktop-swaync-package
-        plugin: package
-        plugin_input:
-            package: swaync
-            package_map:
-                arch: swaync
-                fedora: SwayNotificationCenter
-            installed: true
-    selkies-desktop-pavucontrol-package:
-        check: package=pavucontrol
-        id: selkies-desktop-pavucontrol-package
-        plugin: package
-        plugin_input:
-            package: pavucontrol
-            installed: true
-    selkies-desktop-panel-running:
-        check: service=waybar
-        id: selkies-desktop-panel-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: waybar
-            running: true
-    selkies-desktop-notifier-running:
-        check: service=swaync
-        id: selkies-desktop-notifier-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: swaync
-            running: true
+        plan:
+            - check: the labwc nested Wayland compositor — this flavor's defining compositor — is installed
+              file:
+                file: /usr/bin/labwc
+                exists: true
+            - check: the pavucontrol GTK audio mixer the waybar audio module launches is installed
+              file:
+                file: /usr/bin/pavucontrol
+                exists: true
+            - check: the waybar top-panel binary is installed
+              file:
+                file: /usr/bin/waybar
+                exists: true
+            - check: the labwc-flavor waybar panel configuration is present
+              file:
+                file: ${HOME}/.config/waybar/config
+                exists: true
+            - check: the SwayNotificationCenter notification daemon is installed
+              file:
+                file: /usr/bin/swaync
+                exists: true
+            - check: the google-chrome-stable browser from the shared selkies-core spine is installed
+              file:
+                file: /usr/bin/google-chrome-stable
+                exists: true
+            - check: the PipeWire audio server backing the desktop session is installed
+              file:
+                file: /usr/bin/pipewire
+                exists: true
+            - agent-check: once the pixelflux to labwc chain is healthy, the labwc compositor hosts the waybar panel, swaync notifier, and audio controls as one coherent, browser-streamable desktop session
+            - check: package=swaync
+              id: selkies-desktop-swaync-package
+              package:
+                package: swaync
+                package_map:
+                    arch: swaync
+                    fedora: SwayNotificationCenter
+                installed: true
+            - check: package=pavucontrol
+              id: selkies-desktop-pavucontrol-package
+              package:
+                package: pavucontrol
+                installed: true
+            - check: service=waybar
+              id: selkies-desktop-panel-running
+              context:
+                - runtime
+              service:
+                service: waybar
+                running: true
+            - check: service=swaync
+              id: selkies-desktop-notifier-running
+              context:
+                - runtime
+              service:
+                service: swaync
+                running: true

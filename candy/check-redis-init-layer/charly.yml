@@ -6,16 +6,13 @@ check-redis-init-layer:
             Companion to the redis layer. Sets the key `bench:hello` to `world`
             after redis-server is up so the tier4-redis recipe's
             `redis-cli get bench:hello` probe returns the expected value.
-    check-redis-init-layer-require:
         require:
             - redis
-    check-redis-init-layer-distro:
         distro:
             fedora:
                 package:
                     - iproute
                     - procps-ng
-    check-redis-init-layer-service:
         service:
             - name: bench-redis-init
               exec: "/usr/local/bin/bench-redis-init.sh"
@@ -23,43 +20,38 @@ check-redis-init-layer:
               priority: 30
               enable: true
               scope: system
-    check-redis-init-layer-step-0:
-        run: write=/usr/local/bin/bench-redis-init.sh
-        write: /usr/local/bin/bench-redis-init.sh
-        run_as: root
-        mode: "0755"
-        content: |
-            #!/bin/bash
-            set -euo pipefail
-            # Wait for redis-server to accept connections, then set the key
-            # used by the tier4-redis harness recipe.
-            for _ in $(seq 1 60); do
-              if /usr/bin/redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
-                break
-              fi
-              sleep 1
-            done
-            /usr/bin/redis-cli -h 127.0.0.1 -p 6379 set bench:hello world
-            # Stay up so supervisord doesn't restart-loop us; the key is
-            # already set, but keeping the process alive is the contract.
-            exec sleep infinity
-    check-redis-init-layer-step-1:
-        check: the bench-redis-init seed script is installed and executable at /usr/local/bin/bench-redis-init.sh and issues the redis-cli set for bench:hello
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/bench-redis-init.sh
-            exists: true
-            mode: "0755"
-            contains:
-                - contains: "set bench:hello world"
-    check-redis-init-layer-step-2:
-        check: after the service runs, redis serves the pre-populated key bench:hello = world
-        stdout: world
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: redis-cli -h 127.0.0.1 -p 6379 get bench:hello
-            in_container: true
-    check-redis-init-layer-step-3:
-        agent-check: the bench-redis-init service stays running after seeding the key (exec sleep infinity, restart=always) so supervisord does not restart-loop it
+        plan:
+            - run: write=/usr/local/bin/bench-redis-init.sh
+              write: /usr/local/bin/bench-redis-init.sh
+              run_as: root
+              mode: "0755"
+              content: |
+                #!/bin/bash
+                set -euo pipefail
+                # Wait for redis-server to accept connections, then set the key
+                # used by the tier4-redis harness recipe.
+                for _ in $(seq 1 60); do
+                  if /usr/bin/redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
+                    break
+                  fi
+                  sleep 1
+                done
+                /usr/bin/redis-cli -h 127.0.0.1 -p 6379 set bench:hello world
+                # Stay up so supervisord doesn't restart-loop us; the key is
+                # already set, but keeping the process alive is the contract.
+                exec sleep infinity
+            - check: the bench-redis-init seed script is installed and executable at /usr/local/bin/bench-redis-init.sh and issues the redis-cli set for bench:hello
+              file:
+                file: /usr/local/bin/bench-redis-init.sh
+                exists: true
+                mode: "0755"
+                contains:
+                    - contains: "set bench:hello world"
+            - check: after the service runs, redis serves the pre-populated key bench:hello = world
+              stdout: world
+              context:
+                - runtime
+              command:
+                command: redis-cli -h 127.0.0.1 -p 6379 get bench:hello
+                in_container: true
+            - agent-check: the bench-redis-init service stays running after seeding the key (exec sleep infinity, restart=always) so supervisord does not restart-loop it

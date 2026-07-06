@@ -8,10 +8,8 @@ web-layer:
             on 8080 and serves /srv/fixture/, plus curl for the self-curl
             probe. Combined with a fedora base + supervisord this satisfies
             every scenario in the network-and-http recipe.
-    web-layer-require:
         require:
             - supervisord
-    web-layer-distro:
         distro:
             fedora:
                 package:
@@ -19,10 +17,8 @@ web-layer:
                     - curl
                     - iproute
                     - procps-ng
-    web-layer-port:
         port:
             - 8080
-    web-layer-service:
         service:
             - name: fixture-web-nginx
               exec: "/usr/sbin/nginx -g 'daemon off;'"
@@ -30,103 +26,93 @@ web-layer:
               priority: 50
               enable: true
               scope: system
-    web-layer-step-0:
-        run: mkdir=/srv/fixture
-        mkdir: /srv/fixture
-        run_as: root
-        mode: "0755"
-    web-layer-step-1:
-        run: write=/srv/fixture/index.html
-        write: /srv/fixture/index.html
-        run_as: root
-        mode: "0644"
-        content: |
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <title>fixture-web</title>
-            <style>
-            body { margin: 0; padding: 0; min-height: 100vh; background: linear-gradient(135deg, #2a4d8f 0%, #c93a4a 50%, #f0b94b 100%); font-family: monospace; color: #fff; }
-            .box { padding: 60px; }
-            h1 { font-size: 56px; color: #ffeb3b; text-shadow: 4px 4px 0 #000; }
-            p { font-size: 28px; line-height: 1.6; background: rgba(0,0,0,0.7); padding: 20px; border: 4px solid #00e5ff; border-radius: 10px; }
-            .swatch { display: inline-block; width: 100px; height: 100px; margin: 10px; border: 3px solid #fff; }
-            </style>
-            </head>
-            <body>
-            <div class="box">
-            <h1>charly-fixture-web</h1>
-            <p>charly-fixture-web-content-marker</p>
-            <div>
-            <span class="swatch" style="background:#e91e63"></span>
-            <span class="swatch" style="background:#4caf50"></span>
-            <span class="swatch" style="background:#2196f3"></span>
-            <span class="swatch" style="background:#ffc107"></span>
-            <span class="swatch" style="background:#9c27b0"></span>
-            <span class="swatch" style="background:#ff5722"></span>
-            </div>
-            </div>
-            </body>
-            </html>
-    web-layer-step-2:
-        run: write=/etc/nginx/nginx.conf
-        write: /etc/nginx/nginx.conf
-        run_as: root
-        mode: "0644"
-        content: |
-            worker_processes 1;
-            error_log /tmp/nginx-error.log;
-            pid /tmp/nginx.pid;
+        plan:
+            - run: mkdir=/srv/fixture
+              mkdir: /srv/fixture
+              run_as: root
+              mode: "0755"
+            - run: write=/srv/fixture/index.html
+              write: /srv/fixture/index.html
+              run_as: root
+              mode: "0644"
+              content: |
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <title>fixture-web</title>
+                <style>
+                body { margin: 0; padding: 0; min-height: 100vh; background: linear-gradient(135deg, #2a4d8f 0%, #c93a4a 50%, #f0b94b 100%); font-family: monospace; color: #fff; }
+                .box { padding: 60px; }
+                h1 { font-size: 56px; color: #ffeb3b; text-shadow: 4px 4px 0 #000; }
+                p { font-size: 28px; line-height: 1.6; background: rgba(0,0,0,0.7); padding: 20px; border: 4px solid #00e5ff; border-radius: 10px; }
+                .swatch { display: inline-block; width: 100px; height: 100px; margin: 10px; border: 3px solid #fff; }
+                </style>
+                </head>
+                <body>
+                <div class="box">
+                <h1>charly-fixture-web</h1>
+                <p>charly-fixture-web-content-marker</p>
+                <div>
+                <span class="swatch" style="background:#e91e63"></span>
+                <span class="swatch" style="background:#4caf50"></span>
+                <span class="swatch" style="background:#2196f3"></span>
+                <span class="swatch" style="background:#ffc107"></span>
+                <span class="swatch" style="background:#9c27b0"></span>
+                <span class="swatch" style="background:#ff5722"></span>
+                </div>
+                </div>
+                </body>
+                </html>
+            - run: write=/etc/nginx/nginx.conf
+              write: /etc/nginx/nginx.conf
+              run_as: root
+              mode: "0644"
+              content: |
+                worker_processes 1;
+                error_log /tmp/nginx-error.log;
+                pid /tmp/nginx.pid;
 
-            events {
-                worker_connections 1024;
-            }
+                events {
+                    worker_connections 1024;
+                }
 
-            http {
-                access_log /tmp/nginx-access.log;
-                client_body_temp_path /tmp/nginx-client-body;
-                proxy_temp_path /tmp/nginx-proxy;
-                fastcgi_temp_path /tmp/nginx-fastcgi;
-                uwsgi_temp_path /tmp/nginx-uwsgi;
-                scgi_temp_path /tmp/nginx-scgi;
-                server {
-                    listen 8080 default_server;
-                    server_name _;
-                    root /srv/fixture;
-                    index index.html;
-                    location / {
-                        try_files $uri $uri/ =404;
+                http {
+                    access_log /tmp/nginx-access.log;
+                    client_body_temp_path /tmp/nginx-client-body;
+                    proxy_temp_path /tmp/nginx-proxy;
+                    fastcgi_temp_path /tmp/nginx-fastcgi;
+                    uwsgi_temp_path /tmp/nginx-uwsgi;
+                    scgi_temp_path /tmp/nginx-scgi;
+                    server {
+                        listen 8080 default_server;
+                        server_name _;
+                        root /srv/fixture;
+                        index index.html;
+                        location / {
+                            try_files $uri $uri/ =404;
+                        }
                     }
                 }
-            }
-    web-layer-step-3:
-        check: nginx is installed
-        plugin: package
-        plugin_input:
-            package: nginx
-            installed: true
-    web-layer-step-4:
-        check: the fixture index.html carries the predetermined content marker
-        plugin: file
-        plugin_input:
-            file: /srv/fixture/index.html
-            exists: true
-            contains:
-                - charly-fixture-web-content-marker
-    web-layer-step-5:
-        check: the fixture web server answers HTTP 200 with the marker on its published port
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8080}/
-            status: 200
-            body:
-                - contains: charly-fixture-web-content-marker
-    fixture-web-curl-installed:
-        check: package=curl
-        id: fixture-web-curl-installed
-        plugin: package
-        plugin_input:
-            package: curl
-            installed: true
+            - check: nginx is installed
+              package:
+                package: nginx
+                installed: true
+            - check: the fixture index.html carries the predetermined content marker
+              file:
+                file: /srv/fixture/index.html
+                exists: true
+                contains:
+                    - charly-fixture-web-content-marker
+            - check: the fixture web server answers HTTP 200 with the marker on its published port
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8080}/
+                status: 200
+                body:
+                    - contains: charly-fixture-web-content-marker
+            - check: package=curl
+              id: fixture-web-curl-installed
+              package:
+                package: curl
+                installed: true

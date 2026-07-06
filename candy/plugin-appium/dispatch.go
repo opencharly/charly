@@ -14,7 +14,9 @@ import (
 
 	"github.com/tebeka/selenium"
 
+	"github.com/opencharly/charly/candy/plugin-appium/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -33,7 +35,9 @@ const appiumBasePath = "/wd/hub"
 // requiredModifiers mirrors the in-tree appiumMethods required-field specs. The host's
 // former validate-time + runtime required-modifier check keyed off the in-proc live-verb
 // seam, which an external verb is not — so the check moves HERE, at dispatch, preserving
-// the "missing required modifier(s): X" failure.
+// the "missing required modifier(s): X" failure. The names are plugin-INPUT keys
+// (#AppiumInput wire names) since the schema-compaction cutover — raw's W3C HTTP verb is
+// `http_method` (the input's `method` key is the VERB method).
 var requiredModifiers = map[string][]string{
 	"session-create":         {"caps"},
 	"install-app":            {"apk"},
@@ -59,16 +63,20 @@ var requiredModifiers = map[string][]string{
 	"device-set-orientation": {"params"},
 	"device-set-clipboard":   {"params"},
 	"execute":                {"expression"},
-	"raw":                    {"method", "path"},
+	"raw":                    {"http_method", "path"},
 }
 
-// dispatch runs one appium method and returns its captured stdout-equivalent output. A
-// returned error is the verb FAILING (the in-tree CLI Run() returning an error → exit 1);
-// provider.go maps it through the exit_status / stderr matchers.
+// dispatch runs one appium method and returns its captured stdout-equivalent output. It
+// decodes the step's typed plugin_input (params.AppiumInput — the per-verb fields left
+// core #Op in the schema-compaction cutover). A returned error is the verb FAILING (the
+// in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
+// exit_status / stderr matchers.
 //
 //nolint:gocyclo // a flat method switch over the 48-method allowlist; splitting would scatter the contract.
 func dispatch(env *checkEnv, op *spec.Op) (string, error) {
-	method := string(op.Appium)
+	var in params.AppiumInput
+	kit.DecodeInput(op.PluginInput, &in)
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -76,41 +84,41 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 	case "status":
 		return runStatus(env)
 	case "session-create":
-		return runSessionCreate(env, op)
+		return runSessionCreate(env, &in)
 	case "session-delete":
 		return runSessionDelete(env)
 	case "install-app":
-		return runInstallApp(env, op)
+		return runInstallApp(env, &in)
 	}
 
 	// Every remaining method operates against the persisted session.
-	s, err := resolveW3CSession(env.Box, env.Instance, op.Session)
+	s, err := resolveW3CSession(env.Box, env.Instance, in.Session)
 	if err != nil {
 		return "", err
 	}
 	switch method {
 	case "find":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
 		return id, nil
 	case "click":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
 		if err := s.click(id); err != nil {
-			return "", fmt.Errorf("click %s=%q: %w", op.Strategy, op.Selector, err)
+			return "", fmt.Errorf("click %s=%q: %w", in.Strategy, in.Selector, err)
 		}
 		return "clicked", nil
 	case "send-keys":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
-		if err := s.sendKeys(id, op.Text); err != nil {
-			return "", fmt.Errorf("send-keys %s=%q: %w", op.Strategy, op.Selector, err)
+		if err := s.sendKeys(id, in.Text); err != nil {
+			return "", fmt.Errorf("send-keys %s=%q: %w", in.Strategy, in.Selector, err)
 		}
 		return "sent", nil
 	case "screenshot":
@@ -118,41 +126,41 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("screenshot: %w", err)
 		}
-		if err := os.WriteFile(op.Artifact, pngBytes, 0644); err != nil {
-			return "", fmt.Errorf("write %s: %w", op.Artifact, err)
+		if err := os.WriteFile(in.Artifact, pngBytes, 0644); err != nil {
+			return "", fmt.Errorf("write %s: %w", in.Artifact, err)
 		}
-		return fmt.Sprintf("wrote %d bytes to %s", len(pngBytes), op.Artifact), nil
+		return fmt.Sprintf("wrote %d bytes to %s", len(pngBytes), in.Artifact), nil
 	case "get-text":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
 		text, err := s.elementText(id)
 		if err != nil {
-			return "", fmt.Errorf("get-text %s=%q: %w", op.Strategy, op.Selector, err)
+			return "", fmt.Errorf("get-text %s=%q: %w", in.Strategy, in.Selector, err)
 		}
 		return text, nil
 	case "get-attribute":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
-		v, err := s.elementAttribute(id, op.Attribute)
+		v, err := s.elementAttribute(id, in.Attribute)
 		if err != nil {
-			return "", fmt.Errorf("get-attribute %s on %s=%q: %w", op.Attribute, op.Strategy, op.Selector, err)
+			return "", fmt.Errorf("get-attribute %s on %s=%q: %w", in.Attribute, in.Strategy, in.Selector, err)
 		}
 		return v, nil
 	case "clear":
-		id, err := s.findElement(op.Strategy, op.Selector)
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
 		if err := s.clearElement(id); err != nil {
-			return "", fmt.Errorf("clear %s=%q: %w", op.Strategy, op.Selector, err)
+			return "", fmt.Errorf("clear %s=%q: %w", in.Strategy, in.Selector, err)
 		}
 		return "cleared", nil
 	case "find-all":
-		ids, err := s.findElements(op.Strategy, op.Selector)
+		ids, err := s.findElements(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
@@ -172,25 +180,25 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 
 	// Tier 2 — gesture group.
 	if past, ok := gesturePastTense[method]; ok {
-		return runGesture(s, gestureMobileName[method], past, op)
+		return runGesture(s, gestureMobileName[method], past, &in)
 	}
 
 	switch method {
 	// Tier 2 — app lifecycle + activity.
 	case "app-start-activity":
-		return runStartActivity(s, op)
+		return runStartActivity(s, &in)
 	case "app-activate":
-		return appIDMobile(s, "activateApp", "activated", op.AppId)
+		return appIDMobile(s, "activateApp", "activated", in.AppId)
 	case "app-terminate":
-		return appIDMobile(s, "terminateApp", "terminated", op.AppId)
+		return appIDMobile(s, "terminateApp", "terminated", in.AppId)
 	case "app-remove":
-		return appIDMobile(s, "removeApp", "removed", op.AppId)
+		return appIDMobile(s, "removeApp", "removed", in.AppId)
 	case "app-clear":
-		return appIDMobile(s, "clearApp", "cleared", op.AppId)
+		return appIDMobile(s, "clearApp", "cleared", in.AppId)
 	case "app-is-installed":
-		return appIDMobile(s, "isAppInstalled", "", op.AppId)
+		return appIDMobile(s, "isAppInstalled", "", in.AppId)
 	case "app-state":
-		return appIDMobile(s, "queryAppState", "", op.AppId)
+		return appIDMobile(s, "queryAppState", "", in.AppId)
 	case "app-current-activity":
 		return deviceMobile(s, "getCurrentActivity")
 	case "app-current-package":
@@ -198,7 +206,7 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 
 	// Tier 2 — keys + keyboard.
 	case "key-press":
-		return runKeyPress(s, op)
+		return runKeyPress(s, &in)
 	case "key-hide":
 		return deviceMobile(s, "hideKeyboard")
 	case "key-shown":
@@ -223,14 +231,14 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 		}
 		return o, nil
 	case "device-set-orientation":
-		if err := s.setOrientation(strings.ToUpper(strings.TrimSpace(op.Params))); err != nil {
-			return "", fmt.Errorf("set orientation %q: %w", op.Params, err)
+		if err := s.setOrientation(strings.ToUpper(strings.TrimSpace(in.Params))); err != nil {
+			return "", fmt.Errorf("set orientation %q: %w", in.Params, err)
 		}
 		return "oriented", nil
 	case "device-get-clipboard":
 		return runGetClipboard(s)
 	case "device-set-clipboard":
-		return runSetClipboard(s, op)
+		return runSetClipboard(s, &in)
 	case "device-contexts":
 		ctxs, err := s.contexts()
 		if err != nil {
@@ -238,13 +246,13 @@ func dispatch(env *checkEnv, op *spec.Op) (string, error) {
 		}
 		return strings.Join(ctxs, "\n"), nil
 	case "device-context":
-		return runContext(s, op)
+		return runContext(s, &in)
 
 	// Tier 3 — generic escape hatch.
 	case "execute":
-		return runExecute(s, op)
+		return runExecute(s, &in)
 	case "raw":
-		return runRaw(s, op)
+		return runRaw(s, &in)
 	}
 	return "", fmt.Errorf("unknown appium method %q", method)
 }
@@ -270,8 +278,11 @@ func runStatus(env *checkEnv) (string, error) {
 	return body, nil
 }
 
-func runSessionCreate(env *checkEnv, op *spec.Op) (string, error) {
-	capsRaw := op.Caps
+// runSessionCreate reads the W3C caps from the plugin input (in.Caps — appium's
+// caps moved INTO #AppiumInput in the schema compaction; the core #Op caps field
+// is setcap's modifier only now).
+func runSessionCreate(env *checkEnv, in *params.AppiumInput) (string, error) {
+	capsRaw := in.Caps
 	if strings.HasPrefix(capsRaw, "@") {
 		data, err := os.ReadFile(capsRaw[1:])
 		if err != nil {
@@ -338,10 +349,10 @@ func runSessionDelete(env *checkEnv) (string, error) {
 	return "deleted", nil
 }
 
-func runInstallApp(env *checkEnv, op *spec.Op) (string, error) {
-	// op.Apk is a HOST path, already resolved to an absolute candy-anchored path by the
+func runInstallApp(env *checkEnv, in *params.AppiumInput) (string, error) {
+	// in.Apk is a HOST path, already resolved to an absolute candy-anchored path by the
 	// host (invokeVerbProvider) before marshaling — the plugin has no CandyDirs.
-	if _, statErr := os.Stat(op.Apk); statErr != nil {
+	if _, statErr := os.Stat(in.Apk); statErr != nil {
 		return "", fmt.Errorf("appium install-app: APK not found on host: %w", statErr)
 	}
 	sess, err := loadActiveSession(env.Box, env.Instance)
@@ -351,7 +362,7 @@ func runInstallApp(env *checkEnv, op *spec.Op) (string, error) {
 	if env.ContainerName == "" {
 		return "", fmt.Errorf("appium install-app: no container name in check env (box=%q)", env.Box)
 	}
-	remote, cleanup, err := stageAPKIntoContainer(env.ContainerName, op.Apk)
+	remote, cleanup, err := stageAPKIntoContainer(env.ContainerName, in.Apk)
 	if err != nil {
 		return "", err
 	}
@@ -360,7 +371,7 @@ func runInstallApp(env *checkEnv, op *spec.Op) (string, error) {
 	s := newW3CSession(sess.BaseURL, sess.SessionID)
 	result, err := s.executeScript("mobile: installApp", []any{map[string]any{"appPath": remote}})
 	if err != nil {
-		return "", fmt.Errorf("mobile: installApp %s (host %s): %w", remote, op.Apk, err)
+		return "", fmt.Errorf("mobile: installApp %s (host %s): %w", remote, in.Apk, err)
 	}
 	if len(result) > 0 && string(result) != "null" {
 		return string(result), nil
@@ -397,30 +408,30 @@ var gesturePastTense = map[string]string{
 // runGesture resolves the target (elementId from selector, else x/y unless params
 // already carries the area form), merges direction/percent and extra params, and
 // invokes the named mobile: gesture.
-func runGesture(s *w3cSession, gesture, pastTense string, op *spec.Op) (string, error) {
+func runGesture(s *w3cSession, gesture, pastTense string, in *params.AppiumInput) (string, error) {
 	args := map[string]any{}
-	if op.Params != "" {
-		if err := json.Unmarshal([]byte(op.Params), &args); err != nil {
+	if in.Params != "" {
+		if err := json.Unmarshal([]byte(in.Params), &args); err != nil {
 			return "", fmt.Errorf("invalid params JSON: %w", err)
 		}
 	}
-	if op.Selector != "" {
-		id, err := s.findElement(op.Strategy, op.Selector)
+	if in.Selector != "" {
+		id, err := s.findElement(in.Strategy, in.Selector)
 		if err != nil {
 			return "", err
 		}
 		args["elementId"] = id
 	} else if _, hasArea := args["left"]; !hasArea {
-		args["x"] = op.X
-		args["y"] = op.Y
+		args["x"] = in.X
+		args["y"] = in.Y
 	}
-	if op.Direction != "" {
-		args["direction"] = op.Direction
+	if in.Direction != "" {
+		args["direction"] = in.Direction
 	}
-	if op.Percent != "" {
-		p, perr := strconv.ParseFloat(op.Percent, 64)
+	if in.Percent != "" {
+		p, perr := strconv.ParseFloat(in.Percent, 64)
 		if perr != nil {
-			return "", fmt.Errorf("invalid percent %q: %w", op.Percent, perr)
+			return "", fmt.Errorf("invalid percent %q: %w", in.Percent, perr)
 		}
 		args["percent"] = p
 	}
@@ -430,19 +441,19 @@ func runGesture(s *w3cSession, gesture, pastTense string, op *spec.Op) (string, 
 	return pastTense, nil
 }
 
-func runStartActivity(s *w3cSession, op *spec.Op) (string, error) {
-	args := map[string]any{"intent": op.Activity}
-	if op.Params != "" {
+func runStartActivity(s *w3cSession, in *params.AppiumInput) (string, error) {
+	args := map[string]any{"intent": in.Activity}
+	if in.Params != "" {
 		var extra map[string]any
-		if err := json.Unmarshal([]byte(op.Params), &extra); err != nil {
+		if err := json.Unmarshal([]byte(in.Params), &extra); err != nil {
 			return "", fmt.Errorf("invalid params JSON: %w", err)
 		}
 		maps.Copy(args, extra)
 	}
 	if _, err := s.executeScript("mobile: startActivity", []any{args}); err != nil {
-		return "", fmt.Errorf("mobile: startActivity %s: %w", op.Activity, err)
+		return "", fmt.Errorf("mobile: startActivity %s: %w", in.Activity, err)
 	}
-	return "started " + op.Activity, nil
+	return "started " + in.Activity, nil
 }
 
 // appIDMobile invokes mobile: <method> with {appId} and returns the W3C value.
@@ -463,19 +474,19 @@ func deviceMobile(s *w3cSession, method string) (string, error) {
 	return formatW3CValue(result, ""), nil
 }
 
-func runKeyPress(s *w3cSession, op *spec.Op) (string, error) {
-	args := map[string]any{"keycode": op.Keycode}
-	if op.Params != "" {
+func runKeyPress(s *w3cSession, in *params.AppiumInput) (string, error) {
+	args := map[string]any{"keycode": in.Keycode}
+	if in.Params != "" {
 		var extra map[string]any
-		if err := json.Unmarshal([]byte(op.Params), &extra); err != nil {
+		if err := json.Unmarshal([]byte(in.Params), &extra); err != nil {
 			return "", fmt.Errorf("invalid params JSON: %w", err)
 		}
 		maps.Copy(args, extra)
 	}
 	if _, err := s.executeScript("mobile: pressKey", []any{args}); err != nil {
-		return "", fmt.Errorf("mobile: pressKey %d: %w", op.Keycode, err)
+		return "", fmt.Errorf("mobile: pressKey %d: %w", in.Keycode, err)
 	}
-	return fmt.Sprintf("pressed %d", op.Keycode), nil
+	return fmt.Sprintf("pressed %d", in.Keycode), nil
 }
 
 func runGetClipboard(s *w3cSession) (string, error) {
@@ -493,8 +504,8 @@ func runGetClipboard(s *w3cSession) (string, error) {
 	return formatW3CValue(result, ""), nil
 }
 
-func runSetClipboard(s *w3cSession, op *spec.Op) (string, error) {
-	content := base64.StdEncoding.EncodeToString([]byte(op.Params))
+func runSetClipboard(s *w3cSession, in *params.AppiumInput) (string, error) {
+	content := base64.StdEncoding.EncodeToString([]byte(in.Params))
 	arg := map[string]any{"content": content, "contentType": "plaintext"}
 	if _, err := s.executeScript("mobile: setClipboard", []any{arg}); err != nil {
 		return "", fmt.Errorf("mobile: setClipboard: %w", err)
@@ -502,24 +513,24 @@ func runSetClipboard(s *w3cSession, op *spec.Op) (string, error) {
 	return "set", nil
 }
 
-func runContext(s *w3cSession, op *spec.Op) (string, error) {
-	if op.Params == "" {
+func runContext(s *w3cSession, in *params.AppiumInput) (string, error) {
+	if in.Params == "" {
 		cur, err := s.currentContext()
 		if err != nil {
 			return "", err
 		}
 		return cur, nil
 	}
-	if err := s.setContext(op.Params); err != nil {
-		return "", fmt.Errorf("set context %q: %w", op.Params, err)
+	if err := s.setContext(in.Params); err != nil {
+		return "", fmt.Errorf("set context %q: %w", in.Params, err)
 	}
-	return op.Params, nil
+	return in.Params, nil
 }
 
-func runExecute(s *w3cSession, op *spec.Op) (string, error) {
-	body := op.RequestBody
-	if op.Selector != "" {
-		id, ferr := s.findElement(op.Strategy, op.Selector)
+func runExecute(s *w3cSession, in *params.AppiumInput) (string, error) {
+	body := in.RequestBody
+	if in.Selector != "" {
+		id, ferr := s.findElement(in.Strategy, in.Selector)
 		if ferr != nil {
 			return "", ferr
 		}
@@ -537,18 +548,21 @@ func runExecute(s *w3cSession, op *spec.Op) (string, error) {
 			args = []any{v}
 		}
 	}
-	result, err := s.executeScript(op.Expression, args)
+	result, err := s.executeScript(in.Expression, args)
 	if err != nil {
-		return "", fmt.Errorf("execute %q: %w", op.Expression, err)
+		return "", fmt.Errorf("execute %q: %w", in.Expression, err)
 	}
 	return formatW3CValue(result, ""), nil
 }
 
-func runRaw(s *w3cSession, op *spec.Op) (string, error) {
-	path := op.Path
-	body := op.RequestBody
-	if op.Selector != "" {
-		id, ferr := s.findElement(op.Strategy, op.Selector)
+// runRaw issues an arbitrary W3C call. The HTTP verb is the input's http_method
+// (renamed from the former shared #Op `method` request modifier — the input's
+// `method` key is the VERB method).
+func runRaw(s *w3cSession, in *params.AppiumInput) (string, error) {
+	path := in.Path
+	body := in.RequestBody
+	if in.Selector != "" {
+		id, ferr := s.findElement(in.Strategy, in.Selector)
 		if ferr != nil {
 			return "", ferr
 		}
@@ -561,7 +575,7 @@ func runRaw(s *w3cSession, op *spec.Op) (string, error) {
 			return "", fmt.Errorf("invalid request_body JSON: %w", err)
 		}
 	}
-	result, err := s.rawCall(strings.ToUpper(op.Method), path, reqBody)
+	result, err := s.rawCall(strings.ToUpper(in.HTTPMethod), path, reqBody)
 	if err != nil {
 		return "", err
 	}

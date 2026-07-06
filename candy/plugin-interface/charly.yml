@@ -7,14 +7,14 @@ plugin-interface:
             HOST-COUPLED verb — its RunVerb runs against the live check engine
             (sdk/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure check
             verb (probe-only); a port/process-template relocation on the kit contract.
-    plugin-interface-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-interface
             providers:
                 - verb:interface
-    interface-verb-dispatches:
-        check: the interface verb dispatches through the provider registry and probes a network interface on a live deployment
-        id: interface-verb-dispatches
-        plugin: interface
-        plugin_input: {interface: lo}
-        context: [runtime]
+            primary:
+                interface: interface
+        plan:
+            - check: the interface verb dispatches through the provider registry and probes a network interface on a live deployment
+              id: interface-verb-dispatches
+              interface: lo
+              context: [runtime]

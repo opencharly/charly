@@ -27,7 +27,6 @@ package substratekind
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 
@@ -35,9 +34,6 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.182.1200"
 
@@ -58,7 +54,8 @@ func NewMeta() pb.PluginMetaServer {
 	for _, w := range substrateWords {
 		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true})
 	}
-	return sdk.NewMeta(calver, caps, schemaFS)
+	return sdk.NewMeta(calver, caps,
+		nil)
 }
 
 type provider struct{ pb.UnimplementedProviderServer }

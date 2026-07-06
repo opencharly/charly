@@ -15,16 +15,13 @@ plugin-example-stepkind:
             OCITarget open external-step arm splices it — baking /etc/examplestepkind-build-baked
             into the overlay image. The step-class companion of the verb-class
             candy/plugin-example-external and the deploy-class candy/plugin-example-deploy.
-    plugin-example-stepkind-decl:
         plugin:
             providers:
                 - step:examplestepkind
             source: github.com/opencharly/charly/candy/plugin-example-stepkind
-    examplestepkind-module-present:
-        check: the out-of-tree class:step plugin ships a buildable Go module the host can build + serve out-of-process (both legs — OpExecute at deploy, OpEmit at build)
-        id: examplestepkind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree class:step plugin ships a buildable Go module the host can build + serve out-of-process (both legs — OpExecute at deploy, OpEmit at build)
+              id: examplestepkind-module-present
+              context:
+                - build
+              command: "true"

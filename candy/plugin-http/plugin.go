@@ -37,7 +37,7 @@ func NewCheckVerb() kit.CheckVerbProvider { return verb{} }
 // NewCheckVerb()+NewMeta() shape as every pb-provider plugin (R3).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.176.2200",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "http", InputDef: "#HttpInput"}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "http", InputDef: "#HttpInput", Primary: "http"}},
 		schemaFS)
 }
 
@@ -48,13 +48,15 @@ func (verb) Reserved() string { return "http" }
 // RunVerb decodes the typed plugin_input (params.HttpInput) and runs the request via the
 // live CheckContext. gengotypes degrades the body/header matcher disjunction to `any`, so
 // each is re-decoded through the shared matcher codec (spec.MatcherList.UnmarshalJSON) into
-// the typed list sdk.MatchAll consumes. The SHARED method/request_body modifiers + the
-// general timeout stay base #Op fields, read off op directly (mirrors the former r.runHTTP).
+// the typed list sdk.MatchAll consumes. The general timeout stays a base #Op field, read
+// off op directly; method/request_body live in #HttpInput since the schema compaction.
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.HttpInput
 	kit.DecodeInput(op.PluginInput, &in)
 	h := httpCheck{
 		URL:           in.HTTP,
+		Method:        in.Method,
+		RequestBody:   in.RequestBody,
 		Status:        in.Status,
 		Body:          decodeMatcherList(in.Body),
 		Headers:       decodeMatcherList(in.Headers),
@@ -68,10 +70,12 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	return runHTTPFromHost(ctx, cc, op, h)
 }
 
-// httpCheck carries the http verb's plugin_input-decoded fields. The SHARED
-// method/request_body modifiers and the general timeout stay base #Op fields, read off op.
+// httpCheck carries the http verb's plugin_input-decoded fields. The general
+// timeout stays a base #Op field, read off op.
 type httpCheck struct {
 	URL           string
+	Method        string
+	RequestBody   string
 	Status        int
 	Body          spec.MatcherList
 	Headers       spec.MatcherList
@@ -86,14 +90,14 @@ func runHTTPFromHost(ctx context.Context, cc kit.CheckContext, op *spec.Op, h ht
 	// reverse channel and the host dials (an *http.Client cannot cross the wire). The candy
 	// resolves its authored ca_file to PEM bytes host-side so the request is self-contained.
 	req := kit.HTTPRequest{
-		Method:            op.Method,
+		Method:            h.Method,
 		URL:               h.URL,
 		AllowInsecure:     h.AllowInsecure,
 		NoFollowRedirects: h.NoFollowRedir,
 		Timeout:           op.Timeout,
 	}
-	if op.RequestBody != "" {
-		req.Body = []byte(op.RequestBody)
+	if h.RequestBody != "" {
+		req.Body = []byte(h.RequestBody)
 	}
 	if h.CAFile != "" {
 		pem, err := os.ReadFile(h.CAFile)

@@ -10,47 +10,33 @@ google-cloud-npm:
             ~/.npm-global/bin, both packages are unpacked under
             ~/.npm-global/lib/node_modules, and each CLI's --version exits cleanly
             and prints a semantic version.
-    google-cloud-npm-require:
         require:
             - google-cloud
             - nodejs
-    google-cloud-npm-step-0:
-        check: the firebase binary is installed into the npm global bin directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/firebase
-            exists: true
-    google-cloud-npm-step-1:
-        check: the firebase-tools package is unpacked under the npm global lib directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/lib/node_modules/firebase-tools/package.json
-            exists: true
-    google-cloud-npm-step-2:
-        check: running firebase --version exits cleanly and prints a semantic version
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/firebase --version
-    google-cloud-npm-step-3:
-        check: the gemini binary is installed into the npm global bin directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/gemini
-            exists: true
-    google-cloud-npm-step-4:
-        check: the @google/gemini-cli scoped package is unpacked under the npm global lib directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/lib/node_modules/@google/gemini-cli/package.json
-            exists: true
-    google-cloud-npm-step-5:
-        check: running gemini --version exits cleanly and prints a semantic version
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/gemini --version
+        plan:
+            - check: the firebase binary is installed into the npm global bin directory
+              file:
+                file: ${HOME}/.npm-global/bin/firebase
+                exists: true
+            - check: the firebase-tools package is unpacked under the npm global lib directory
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/firebase-tools/package.json
+                exists: true
+            - check: running firebase --version exits cleanly and prints a semantic version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/firebase --version
+            - check: the gemini binary is installed into the npm global bin directory
+              file:
+                file: ${HOME}/.npm-global/bin/gemini
+                exists: true
+            - check: the @google/gemini-cli scoped package is unpacked under the npm global lib directory
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/@google/gemini-cli/package.json
+                exists: true
+            - check: running gemini --version exits cleanly and prints a semantic version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/gemini --version

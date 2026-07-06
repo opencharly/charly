@@ -8,17 +8,13 @@ testapi:
             working directory. supervisord runs `uvicorn app:app` on 0.0.0.0:9090,
             so the running container answers HTTP 200 on / ({"status":"ok"}) and
             /health ({"healthy":true}). Every claim below is independently checked.
-    testapi-require:
         require:
             - supervisord
-    testapi-port:
         port:
             - 9090
-    testapi-route:
         route:
             host: testapi.localhost
             port: 9090
-    testapi-service:
         service:
             - name: testapi
               exec: "/home/user/.pixi/envs/default/bin/uvicorn app:app --host 0.0.0.0 --port 9090"
@@ -26,92 +22,72 @@ testapi:
               working_directory: /home/user/testapi
               enable: true
               scope: system
-    testapi-step-0:
-        run: mkdir=${HOME}/testapi
-        mkdir: "${HOME}/testapi"
-        run_as: "${USER}"
-    testapi-step-1:
-        run: copy=app.py
-        copy: app.py
-        to: "${HOME}/testapi/app.py"
-        mode: "0644"
-        run_as: "${USER}"
-    testapi-step-2:
-        check: the FastAPI application module is installed in the service working directory
-        plugin: file
-        plugin_input:
-            file: /home/user/testapi/app.py
-            exists: true
-    testapi-step-3:
-        check: the pixi environment can import the fastapi and uvicorn modules
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: '/home/user/.pixi/envs/default/bin/python -c "import fastapi, uvicorn"'
-    testapi-step-4:
-        check: a GET request to /health on the running service returns HTTP 200
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:9090}/health
-            status: 200
-            body:
-                - contains: healthy
-    testapi-step-5:
-        check: a GET request to / reports a JSON status of ok
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:9090}/
-            status: 200
-            body:
-                - contains: ok
-    testapi-uvicorn-binary:
-        check: file=/home/user/.pixi/envs/default/bin/uvicorn
-        id: testapi-uvicorn-binary
-        plugin: file
-        plugin_input:
-            file: /home/user/.pixi/envs/default/bin/uvicorn
-            exists: true
-    testapi-service-running:
-        check: service=testapi
-        id: testapi-service-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: testapi
-            running: true
-    testapi-port-reachable:
-        check: addr=127.0.0.1:${HOST_PORT:9090}
-        id: testapi-port-reachable
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:9090}
-            reachable: true
-    testapi-root-responds:
-        check: http=http://127.0.0.1:${HOST_PORT:9090}/
-        id: testapi-root-responds
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:9090}/
-            status: 200
-            body:
-                - contains: ok
-    testapi-health-responds:
-        check: http=http://127.0.0.1:${HOST_PORT:9090}/health
-        id: testapi-health-responds
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:9090}/health
-            status: 200
-            body:
-                - contains: healthy
+        plan:
+            - run: mkdir=${HOME}/testapi
+              mkdir: "${HOME}/testapi"
+              run_as: "${USER}"
+            - run: copy=app.py
+              copy: app.py
+              to: "${HOME}/testapi/app.py"
+              mode: "0644"
+              run_as: "${USER}"
+            - check: the FastAPI application module is installed in the service working directory
+              file:
+                file: /home/user/testapi/app.py
+                exists: true
+            - check: the pixi environment can import the fastapi and uvicorn modules
+              exit_status: 0
+              command: '/home/user/.pixi/envs/default/bin/python -c "import fastapi, uvicorn"'
+            - check: a GET request to /health on the running service returns HTTP 200
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:9090}/health
+                status: 200
+                body:
+                    - contains: healthy
+            - check: a GET request to / reports a JSON status of ok
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:9090}/
+                status: 200
+                body:
+                    - contains: ok
+            - check: file=/home/user/.pixi/envs/default/bin/uvicorn
+              id: testapi-uvicorn-binary
+              file:
+                file: /home/user/.pixi/envs/default/bin/uvicorn
+                exists: true
+            - check: service=testapi
+              id: testapi-service-running
+              context:
+                - runtime
+              service:
+                service: testapi
+                running: true
+            - check: addr=127.0.0.1:${HOST_PORT:9090}
+              id: testapi-port-reachable
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:9090}
+                reachable: true
+            - check: http=http://127.0.0.1:${HOST_PORT:9090}/
+              id: testapi-root-responds
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:9090}/
+                status: 200
+                body:
+                    - contains: ok
+            - check: http=http://127.0.0.1:${HOST_PORT:9090}/health
+              id: testapi-health-responds
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:9090}/health
+                status: 200
+                body:
+                    - contains: healthy

@@ -9,7 +9,6 @@ vscode:
             on Fedora the `code` RPM from Microsoft's yum repo. Either path lands
             an executable at /usr/bin/code that prints its semantic version, so
             both are verifiable the same cross-distro way.
-    vscode-var:
         var:
             # VS Code is installed direct from Microsoft's VERSIONED URL with a sha256
             # WE control (computed against the real tarball; a future bump is a
@@ -19,7 +18,6 @@ vscode:
             # makepkg's validity check for every consumer). See CHANGELOG/.
             VSCODE_VERSION: "1.123.0"
             VSCODE_SHA256: "2fdef947717befd2e06854cbe01e99b4898f7752f25e12269c38023e63b93c8f"
-    vscode-distro:
         distro:
             arch:
                 # VS Code (electron) runtime libraries — the set the AUR
@@ -47,28 +45,26 @@ vscode:
                     - name: code
                       url: "https://packages.microsoft.com/yumrepos/vscode"
                       gpgkey: "https://packages.microsoft.com/keys/microsoft.asc"
-    vscode-step-0:
-        run: |
-            command=command -v pacman >/dev/null 2>&1 || exit 0
-            set -eu
-            cache=/var/cache/charly-vscode
-            tarball="${cache}/code-${VSCODE_VERSION}.tar.gz"
-            mkdir -p "$cache"
-            if [ ! -f "$tarball" ] || ! printf '%s  %s\n' "$VSCODE_SHA256" "$tarball" | sha256sum -c - >/dev/null 2>&1; then
-              curl -fsSL "https://update.code.visualstudio.com/${VSCODE_VERSION}/linux-x64/stable" -o "${tarball}.part"
-              printf '%s  %s\n' "$VSCODE_SHA256" "${tarball}.part" | sha256sum -c -
-              mv -f "${tarball}.part" "$tarball"
-            fi
-            rm -rf /opt/vscode
-            mkdir -p /opt/vscode
-            tar -xzf "$tarball" -C /opt/vscode --strip-components=1
-            ln -sf /opt/vscode/bin/code /usr/bin/code
-        run_as: root
-        cache:
-            - /var/cache/charly-vscode
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=command -v pacman >/dev/null 2>&1 || exit 0
+                set -eu
+                cache=/var/cache/charly-vscode
+                tarball="${cache}/code-${VSCODE_VERSION}.tar.gz"
+                mkdir -p "$cache"
+                if [ ! -f "$tarball" ] || ! printf '%s  %s\n' "$VSCODE_SHA256" "$tarball" | sha256sum -c - >/dev/null 2>&1; then
+                  curl -fsSL "https://update.code.visualstudio.com/${VSCODE_VERSION}/linux-x64/stable" -o "${tarball}.part"
+                  printf '%s  %s\n' "$VSCODE_SHA256" "${tarball}.part" | sha256sum -c -
+                  mv -f "${tarball}.part" "$tarball"
+                fi
+                rm -rf /opt/vscode
+                mkdir -p /opt/vscode
+                tar -xzf "$tarball" -C /opt/vscode --strip-components=1
+                ln -sf /opt/vscode/bin/code /usr/bin/code
+              run_as: root
+              cache:
+                - /var/cache/charly-vscode
+              command: |
                 command -v pacman >/dev/null 2>&1 || exit 0
                 set -eu
                 cache=/var/cache/charly-vscode
@@ -83,37 +79,27 @@ vscode:
                 mkdir -p /opt/vscode
                 tar -xzf "$tarball" -C /opt/vscode --strip-components=1
                 ln -sf /opt/vscode/bin/code /usr/bin/code
-    vscode-step-1:
-        check: the code launcher is present at /usr/bin/code
-        plugin: file
-        plugin_input:
-            file: /usr/bin/code
-            exists: true
-    vscode-step-2:
-        check: running code --version exits 0 and prints a semantic version
-        exit_status: 0
-        stdout:
-            matches: "^[0-9]+\\.[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/code --version
-    code-binary:
-        check: file=/usr/bin/code
-        id: code-binary
-        context:
-            - build
-        plugin: file
-        plugin_input:
-            file: /usr/bin/code
-            exists: true
-    code-version:
-        check: command=/usr/bin/code --version
-        id: code-version
-        exit_status: 0
-        stdout:
-            matches: "^[0-9]+\\.[0-9]+\\.[0-9]+"
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: /usr/bin/code --version
+            - check: the code launcher is present at /usr/bin/code
+              file:
+                file: /usr/bin/code
+                exists: true
+            - check: running code --version exits 0 and prints a semantic version
+              exit_status: 0
+              stdout:
+                matches: "^[0-9]+\\.[0-9]+\\.[0-9]+"
+              command: /usr/bin/code --version
+            - check: file=/usr/bin/code
+              id: code-binary
+              context:
+                - build
+              file:
+                file: /usr/bin/code
+                exists: true
+            - check: command=/usr/bin/code --version
+              id: code-version
+              exit_status: 0
+              stdout:
+                matches: "^[0-9]+\\.[0-9]+\\.[0-9]+"
+              context:
+                - build
+              command: /usr/bin/code --version

@@ -1004,7 +1004,7 @@ func (c *CheckLiveCmd) runLocalCheck() error {
 func checkLocalDeployScope(dir string, node *BundleNode, image, instance, _ string, _ []string, exec DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
 	var plan []Step
 	if node != nil && strings.TrimSpace(node.From) != "" {
-		if spec := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
+		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
 			plan = append(plan, spec.Plan...)
 		}
 	}

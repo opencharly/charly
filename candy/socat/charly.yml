@@ -11,10 +11,8 @@ socat:
             below is checkable in a disposable build-scope container: the socat binary
             runs, the package is installed, and the wrapper is present, executable, and
             rejects a missing-port invocation.
-    socat-package:
         package:
             - socat
-    socat-distro:
         distro:
             arch:
                 package:
@@ -28,54 +26,40 @@ socat:
             ubuntu:
                 package:
                     - iproute2
-    socat-step-0:
-        run: copy=relay-wrapper
-        copy: relay-wrapper
-        to: /usr/local/bin/relay-wrapper
-        mode: "0755"
-        run_as: root
-    socat-step-1:
-        check: the socat binary is installed at /usr/bin/socat
-        plugin: file
-        plugin_input:
-            file: /usr/bin/socat
-            exists: true
-    socat-step-2:
-        check: socat reports its version and exits zero
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/socat -V
-    socat-step-3:
-        check: the relay-wrapper script is installed executable at /usr/local/bin/relay-wrapper
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/relay-wrapper
-            exists: true
-            mode: "0755"
-    socat-step-4:
-        check: invoking relay-wrapper with no port argument prints a usage error and exits non-zero
-        exit_status: 1
-        stderr:
-            - contains: "Usage"
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/relay-wrapper
-    socat-step-5:
-        check: the iproute package providing the ip command the relay uses is installed
-        plugin: package
-        plugin_input:
-            package: iproute
-            package_map:
-                arch: iproute2
-                debian: iproute2
-                ubuntu: iproute2
-                fedora: iproute
-            installed: true
-    socat-package-2:
-        check: package=socat
-        id: socat-package
-        plugin: package
-        plugin_input:
-            package: socat
-            installed: true
+        plan:
+            - run: copy=relay-wrapper
+              copy: relay-wrapper
+              to: /usr/local/bin/relay-wrapper
+              mode: "0755"
+              run_as: root
+            - check: the socat binary is installed at /usr/bin/socat
+              file:
+                file: /usr/bin/socat
+                exists: true
+            - check: socat reports its version and exits zero
+              exit_status: 0
+              command: /usr/bin/socat -V
+            - check: the relay-wrapper script is installed executable at /usr/local/bin/relay-wrapper
+              file:
+                file: /usr/local/bin/relay-wrapper
+                exists: true
+                mode: "0755"
+            - check: invoking relay-wrapper with no port argument prints a usage error and exits non-zero
+              exit_status: 1
+              stderr:
+                - contains: "Usage"
+              command: /usr/local/bin/relay-wrapper
+            - check: the iproute package providing the ip command the relay uses is installed
+              package:
+                package: iproute
+                package_map:
+                    arch: iproute2
+                    debian: iproute2
+                    ubuntu: iproute2
+                    fedora: iproute
+                installed: true
+            - check: package=socat
+              id: socat-package
+              package:
+                package: socat
+                installed: true

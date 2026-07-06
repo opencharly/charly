@@ -3,9 +3,11 @@
 // D-Bus services inside a running deployment — list / call / introspect / notify — driving
 // the venue's session bus through gdbus. The host go-builds this binary and serves it
 // OUT-OF-PROCESS over go-plugin gRPC via the charly plugin SDK, so the `dbus:` verb
-// dispatches through the provider registry exactly like a built-in — with the verb keeping
-// its `dbus:` discriminator + every modifier (dest/path/method/args/text/description) on
-// charly's core #Op (authoring unchanged: `dbus: list`, not `plugin: dbus`).
+// dispatches through the provider registry exactly like a built-in. The dbus-exclusive
+// fields (the verb method enum + dest/path/member/arg/text) live in the plugin's OWN
+// #DbusInput (schema/dbus.cue), decoded from the step's desugared plugin_input; only the
+// genuinely shared step modifiers (exit_status/stdout/stderr matchers, description) still
+// ride charly's core #Op.
 //
 // EXEC-based external verb (the second, after record): unlike the PORT-based external verbs
 // (mcp/spice/kube/cdp/vnc — the host pre-resolves a dial endpoint), dbus drives the venue's
@@ -38,13 +40,13 @@ var schemaFS embed.FS
 // NewProvider returns the dbus provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises verb:dbus + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). dbus keeps its entire authoring contract (the
-// #DbusMethod enum + every modifier) on charly's core #Op — like cdp/vnc/mcp/record it has
-// NO plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (dbus.cue) exists only to satisfy the host's non-empty-schema load gate.
+// NewMeta advertises verb:dbus (plugin_input #DbusInput) + the plugin's self-contained
+// CUE schema (via sdk.NewMeta → BuildCapabilities). The host splices the served schema
+// onto its base and validates every authored `dbus` step's plugin_input against
+// #DbusInput (the verb method enum + dest/path/member/arg/text — the dbus-exclusive
+// fields that left core #Op in the schema-compaction cutover).
 func NewMeta() pb.PluginMetaServer {
-	return sdk.NewMeta("2026.182.1805",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "dbus", InputDef: ""}},
+	return sdk.NewMeta("2026.187.1200",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "dbus", InputDef: "#DbusInput"}},
 		schemaFS)
 }

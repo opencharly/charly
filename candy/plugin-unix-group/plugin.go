@@ -34,7 +34,7 @@ func NewCheckVerb() kit.CheckVerbProvider { return verb{} }
 // kit candy has the SAME NewCheckVerb()+NewMeta() shape as every pb-provider plugin (R3).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.176.2600",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "unix_group", InputDef: "#UnixGroupInput"}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "unix_group", InputDef: "#UnixGroupInput", Primary: "unix_group"}},
 		schemaFS)
 }
 

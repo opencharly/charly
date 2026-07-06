@@ -10,39 +10,28 @@ clawhub:
             skills from the ClawHub registry; `clawhub --cli-version` reports its
             version offline, so the install + bin wiring is verifiable without
             network access.
-    clawhub-require:
         require:
             - nodejs
-    clawhub-step-0:
-        check: the clawhub CLI binary is installed on the npm global bin path
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/clawhub
-            exists: true
-    clawhub-step-1:
-        check: running clawhub --cli-version prints a semantic version and exits zero
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/clawhub --cli-version
-    clawhub-step-2:
-        agent-check: clawhub search <term> queries the ClawHub registry and returns matching OpenClaw skills
-    clawdhub-alias-binary:
-        check: file=${HOME}/.npm-global/bin/clawdhub
-        id: clawdhub-alias-binary
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/clawdhub
-            exists: true
-    clawhub-help-subcommands:
-        check: command=${HOME}/.npm-global/bin/clawhub --help
-        id: clawhub-help-subcommands
-        exit_status: 0
-        stdout:
-            - contains: search
-            - contains: install
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/clawhub --help
+        plan:
+            - check: the clawhub CLI binary is installed on the npm global bin path
+              file:
+                file: ${HOME}/.npm-global/bin/clawhub
+                exists: true
+            - check: running clawhub --cli-version prints a semantic version and exits zero
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/clawhub --cli-version
+            - agent-check: clawhub search <term> queries the ClawHub registry and returns matching OpenClaw skills
+            - check: file=${HOME}/.npm-global/bin/clawdhub
+              id: clawdhub-alias-binary
+              file:
+                file: ${HOME}/.npm-global/bin/clawdhub
+                exists: true
+            - check: command=${HOME}/.npm-global/bin/clawhub --help
+              id: clawhub-help-subcommands
+              exit_status: 0
+              stdout:
+                - contains: search
+                - contains: install
+              command: ${HOME}/.npm-global/bin/clawhub --help

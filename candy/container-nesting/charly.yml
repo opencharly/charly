@@ -12,12 +12,10 @@ container-nesting:
             `podman run` of a fresh container succeeds with no cap_add and no
             --privileged. Every artifact below is observable in the built image; the
             end-to-end nested run is provable on a live deployment.
-    container-nesting-package:
         package:
             - buildah
             - fuse-overlayfs
             - skopeo
-    container-nesting-distro:
         distro:
             arch:
                 package:
@@ -102,11 +100,9 @@ container-nesting:
                       key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
                       suite: noble
                       components: main
-    container-nesting-volume:
         volume:
             - name: storage
               path: /var/lib/containers/storage
-    container-nesting-security:
         security:
             # NO cap_add — rootless nested podman needs zero additive capabilities
             # when the mount_too_revealing kernel check is bypassed at the mount
@@ -144,7 +140,6 @@ container-nesting:
                 # containers.conf sets netns=host; absence causes an init-time warning
                 # that can mask later failures.
                 - /dev/net/tun
-    container-nesting-env:
         env:
             CHARLY_BUILD_ENGINE: "podman"
             CHARLY_RUN_ENGINE: "podman"
@@ -163,28 +158,26 @@ container-nesting:
             #   namespace and re-triggers the same kernel check during builds.
             _CONTAINERS_USERNS_CONFIGURED: ""
             BUILDAH_ISOLATION: "chroot"
-    container-nesting-step-0:
-        run: |
-            command=touch /etc/subuid /etc/subgid
-            sed -i "/^root:/d" /etc/subuid /etc/subgid
-            echo "root:1:65535" >> /etc/subuid
-            echo "root:1:65535" >> /etc/subgid
-            uid1000=$(getent passwd 1000 2>/dev/null | cut -d: -f1 || true)
-            if [ -n "${uid1000}" ] && [ "${uid1000}" != "root" ]; then
-              sed -i "/^${uid1000}:/d" /etc/subuid /etc/subgid
-              {
-                echo "${uid1000}:1:999"
-                echo "${uid1000}:1001:64535"
-              } >> /etc/subuid
-              {
-                echo "${uid1000}:1:999"
-                echo "${uid1000}:1001:64535"
-              } >> /etc/subgid
-            fi
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=touch /etc/subuid /etc/subgid
+                sed -i "/^root:/d" /etc/subuid /etc/subgid
+                echo "root:1:65535" >> /etc/subuid
+                echo "root:1:65535" >> /etc/subgid
+                uid1000=$(getent passwd 1000 2>/dev/null | cut -d: -f1 || true)
+                if [ -n "${uid1000}" ] && [ "${uid1000}" != "root" ]; then
+                  sed -i "/^${uid1000}:/d" /etc/subuid /etc/subgid
+                  {
+                    echo "${uid1000}:1:999"
+                    echo "${uid1000}:1001:64535"
+                  } >> /etc/subuid
+                  {
+                    echo "${uid1000}:1:999"
+                    echo "${uid1000}:1001:64535"
+                  } >> /etc/subgid
+                fi
+              run_as: root
+              command: |
                 touch /etc/subuid /etc/subgid
                 sed -i "/^root:/d" /etc/subuid /etc/subgid
                 echo "root:1:65535" >> /etc/subuid
@@ -201,245 +194,181 @@ container-nesting:
                     echo "${uid1000}:1001:64535"
                   } >> /etc/subgid
                 fi
-    container-nesting-step-1:
-        run: |
-            grant cap_setuid/cap_setgid to newuidmap/newgidmap AND strip the
-            setuid-root bit. Debian/Ubuntu's uidmap package ships these binaries
-            setuid-root (mode 4755); a newuidmap that is BOTH setuid-root AND
-            file-capability'd fails inside a nested rootless user namespace with
-            "newuidmap: open of uid_map failed: Permission denied". Fedora/Arch
-            ship them cap-only (no setuid bit), so `chmod u-s` makes every distro
-            match that working posture and is a no-op where the bit is already
-            absent. RDD-confirmed 2026-06-16.
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                grant cap_setuid/cap_setgid to newuidmap/newgidmap AND strip the
+                setuid-root bit. Debian/Ubuntu's uidmap package ships these binaries
+                setuid-root (mode 4755); a newuidmap that is BOTH setuid-root AND
+                file-capability'd fails inside a nested rootless user namespace with
+                "newuidmap: open of uid_map failed: Permission denied". Fedora/Arch
+                ship them cap-only (no setuid bit), so `chmod u-s` makes every distro
+                match that working posture and is a no-op where the bit is already
+                absent. RDD-confirmed 2026-06-16.
+              run_as: root
+              command: |
                 if [ -f /usr/bin/newuidmap ]; then
                   setcap cap_setuid=ep /usr/bin/newuidmap
                   setcap cap_setgid=ep /usr/bin/newgidmap
                   chmod u-s /usr/bin/newuidmap /usr/bin/newgidmap
                 fi
-    container-nesting-step-2:
-        run: mkdir=/etc/containers
-        mkdir: /etc/containers
-        run_as: root
-    container-nesting-step-3:
-        run: mkdir=${HOME}/.config/containers
-        mkdir: "${HOME}/.config/containers"
-        run_as: "${USER}"
-    container-nesting-step-4:
-        run: write=/etc/containers/containers.conf
-        write: /etc/containers/containers.conf
-        run_as: root
-        mode: "0644"
-        content: &containers_conf_content |
-            [containers]
-            # Bind the outer /proc into every nested container instead of letting
-            # crun mount a fresh procfs. Required when a GPU CDI device
-            # (nvidia.com/gpu=all) is passed to the outer container: the nvidia
-            # container toolkit injects a /proc/driver/nvidia/params tmpfs submount,
-            # and the kernel's mount_too_revealing check then refuses the inner
-            # fresh /proc mount EVEN WITH unmask=/proc/* (unmask removes masked
-            # paths, not real submounts). Binding the outer /proc avoids the fresh
-            # mount entirely, so nested podman works with or without a GPU.
-            mounts = ["type=bind,source=/proc,destination=/proc,bind-propagation=rslave"]
-            cgroups = "disabled"
-            cgroupns = "host"
-            ipcns = "host"
-            netns = "host"
-            userns = "host"
-            utsns = "host"
-            log_driver = "k8s-file"
+            - run: mkdir=/etc/containers
+              mkdir: /etc/containers
+              run_as: root
+            - run: mkdir=${HOME}/.config/containers
+              mkdir: "${HOME}/.config/containers"
+              run_as: "${USER}"
+            - run: write=/etc/containers/containers.conf
+              write: /etc/containers/containers.conf
+              run_as: root
+              mode: "0644"
+              content: &containers_conf_content |
+                [containers]
+                # Bind the outer /proc into every nested container instead of letting
+                # crun mount a fresh procfs. Required when a GPU CDI device
+                # (nvidia.com/gpu=all) is passed to the outer container: the nvidia
+                # container toolkit injects a /proc/driver/nvidia/params tmpfs submount,
+                # and the kernel's mount_too_revealing check then refuses the inner
+                # fresh /proc mount EVEN WITH unmask=/proc/* (unmask removes masked
+                # paths, not real submounts). Binding the outer /proc avoids the fresh
+                # mount entirely, so nested podman works with or without a GPU.
+                mounts = ["type=bind,source=/proc,destination=/proc,bind-propagation=rslave"]
+                cgroups = "disabled"
+                cgroupns = "host"
+                ipcns = "host"
+                netns = "host"
+                userns = "host"
+                utsns = "host"
+                log_driver = "k8s-file"
 
-            [engine]
-            cgroup_manager = "cgroupfs"
-            events_logger = "file"
-            runtime = "crun"
-    container-nesting-step-5:
-        run: write=${HOME}/.config/containers/containers.conf
-        write: "${HOME}/.config/containers/containers.conf"
-        run_as: "${USER}"
-        mode: "0644"
-        content: *containers_conf_content
-    container-nesting-step-6:
-        run: write=/etc/containers/policy.json
-        write: /etc/containers/policy.json
-        run_as: root
-        mode: "0644"
-        content: &policy_json_content |
-            {"default":[{"type":"insecureAcceptAnything"}]}
-    container-nesting-step-7:
-        run: write=${HOME}/.config/containers/policy.json
-        write: "${HOME}/.config/containers/policy.json"
-        run_as: "${USER}"
-        mode: "0644"
-        content: *policy_json_content
-    container-nesting-step-8:
-        run: write=/etc/containers/storage.conf
-        write: /etc/containers/storage.conf
-        run_as: root
-        mode: "0644"
-        content: |
-            [storage]
-            driver = "overlay"
-            runroot = "/run/containers/storage"
-            graphroot = "/var/lib/containers/storage"
+                [engine]
+                cgroup_manager = "cgroupfs"
+                events_logger = "file"
+                runtime = "crun"
+            - run: write=${HOME}/.config/containers/containers.conf
+              write: "${HOME}/.config/containers/containers.conf"
+              run_as: "${USER}"
+              mode: "0644"
+              content: *containers_conf_content
+            - run: write=/etc/containers/policy.json
+              write: /etc/containers/policy.json
+              run_as: root
+              mode: "0644"
+              content: &policy_json_content |
+                {"default":[{"type":"insecureAcceptAnything"}]}
+            - run: write=${HOME}/.config/containers/policy.json
+              write: "${HOME}/.config/containers/policy.json"
+              run_as: "${USER}"
+              mode: "0644"
+              content: *policy_json_content
+            - run: write=/etc/containers/storage.conf
+              write: /etc/containers/storage.conf
+              run_as: root
+              mode: "0644"
+              content: |
+                [storage]
+                driver = "overlay"
+                runroot = "/run/containers/storage"
+                graphroot = "/var/lib/containers/storage"
 
-            [storage.options.overlay]
-            mount_program = "/usr/bin/fuse-overlayfs"
-            mountopt = "nodev,fsync=0"
-    container-nesting-step-9:
-        run: write=${HOME}/.config/containers/storage.conf
-        write: "${HOME}/.config/containers/storage.conf"
-        run_as: "${USER}"
-        mode: "0644"
-        content: |
-            [storage]
-            driver = "overlay"
-            runroot = "${HOME}/.local/share/containers/run"
-            graphroot = "${HOME}/.local/share/containers/storage"
+                [storage.options.overlay]
+                mount_program = "/usr/bin/fuse-overlayfs"
+                mountopt = "nodev,fsync=0"
+            - run: write=${HOME}/.config/containers/storage.conf
+              write: "${HOME}/.config/containers/storage.conf"
+              run_as: "${USER}"
+              mode: "0644"
+              content: |
+                [storage]
+                driver = "overlay"
+                runroot = "${HOME}/.local/share/containers/run"
+                graphroot = "${HOME}/.local/share/containers/storage"
 
-            [storage.options.overlay]
-            mount_program = "/usr/bin/fuse-overlayfs"
-            mountopt = "nodev,fsync=0"
-    container-nesting-step-10:
-        check: the podman container engine is installed for in-container use
-        plugin: file
-        plugin_input:
-            file: /usr/bin/podman
-            exists: true
-    container-nesting-step-11:
-        check: the buildah image-build tool is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/buildah
-            exists: true
-    container-nesting-step-12:
-        check: the skopeo image-copy tool is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/skopeo
-            exists: true
-    container-nesting-step-13:
-        check: containers.conf pins userns=host so the inner /proc mount is not rejected by the kernel mount_too_revealing check
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: grep -E '^userns\s*=\s*"host"' /etc/containers/containers.conf
-    container-nesting-step-14:
-        check: policy.json is present so podman pull/run accepts an image signature policy
-        plugin: file
-        plugin_input:
-            file: /etc/containers/policy.json
-            exists: true
-    container-nesting-step-15:
-        check: newuidmap carries the cap_setuid file capability so a nested user namespace can be delegated
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: getcap /usr/bin/newuidmap | grep -c cap_setuid
-    newuidmap-not-setuid:
-        check: newuidmap is NOT setuid-root — only the cap_setuid file capability remains; a binary that is BOTH setuid-root (Debian/Ubuntu's uidmap default) AND cap-bearing fails to write uid_map inside a nested rootless user namespace
-        id: newuidmap-not-setuid
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test ! -u /usr/bin/newuidmap
-    container-nesting-step-17:
-        check: /etc/subuid declares the username:start:count delegation ranges the inner podman maps from
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: grep -cE '^[a-z0-9_-]+:[0-9]+:[0-9]+$' /etc/subuid
-    container-nesting-step-18:
-        agent-check: a fresh rootless `podman run` of an inner container succeeds end-to-end with no added capabilities and no --privileged
-    podman-version:
-        check: command=/usr/bin/podman --version
-        id: podman-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/podman --version
-    buildah-version:
-        check: command=/usr/bin/buildah --version
-        id: buildah-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/buildah --version
-    skopeo-version:
-        check: command=/usr/bin/skopeo --version
-        id: skopeo-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/skopeo --version
-    newuidmap-binary:
-        check: file=/usr/bin/newuidmap
-        id: newuidmap-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/newuidmap
-            exists: true
-    newgidmap-binary:
-        check: file=/usr/bin/newgidmap
-        id: newgidmap-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/newgidmap
-            exists: true
-    tailscale-binary:
-        check: file=/usr/bin/tailscale
-        id: tailscale-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/tailscale
-            exists: true
-    tailscale-version:
-        check: command=/usr/bin/tailscale version
-        id: tailscale-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/tailscale version
-    subuid-user-two-ranges:
-        check: the uid-1000 user has exactly two subuid delegation ranges (cross-distro — the user is `user` on fedora/arch but `ubuntu`/`debian` under adopt user-policy, so resolve the name via getent rather than hardcoding `user:`)
-        id: subuid-user-two-ranges
-        exit_status: 0
-        stdout:
-            - matches: ^2
-        plugin: command
-        plugin_input:
-            command: 'u=$(getent passwd 1000 | cut -d: -f1); grep -cE "^${u}:[0-9]+:[0-9]+$" /etc/subuid'
-    user-containers-conf-userns-host:
-        check: command=grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
-        id: user-containers-conf-userns-host
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
-    env-containers-userns-configured:
-        check: command=sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
-        id: env-containers-userns-configured
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
-    env-buildah-isolation:
-        check: command=sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
-        id: env-buildah-isolation
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
-    nested-podman-run:
-        check: command=podman run --rm quay.io/libpod/alpine:latest /bin/true
-        id: nested-podman-run
-        timeout: 60s
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: podman run --rm quay.io/libpod/alpine:latest /bin/true
-            in_container: true
+                [storage.options.overlay]
+                mount_program = "/usr/bin/fuse-overlayfs"
+                mountopt = "nodev,fsync=0"
+            - check: the podman container engine is installed for in-container use
+              file:
+                file: /usr/bin/podman
+                exists: true
+            - check: the buildah image-build tool is installed
+              file:
+                file: /usr/bin/buildah
+                exists: true
+            - check: the skopeo image-copy tool is installed
+              file:
+                file: /usr/bin/skopeo
+                exists: true
+            - check: containers.conf pins userns=host so the inner /proc mount is not rejected by the kernel mount_too_revealing check
+              exit_status: 0
+              command: grep -E '^userns\s*=\s*"host"' /etc/containers/containers.conf
+            - check: policy.json is present so podman pull/run accepts an image signature policy
+              file:
+                file: /etc/containers/policy.json
+                exists: true
+            - check: newuidmap carries the cap_setuid file capability so a nested user namespace can be delegated
+              exit_status: 0
+              command: getcap /usr/bin/newuidmap | grep -c cap_setuid
+            - check: newuidmap is NOT setuid-root — only the cap_setuid file capability remains; a binary that is BOTH setuid-root (Debian/Ubuntu's uidmap default) AND cap-bearing fails to write uid_map inside a nested rootless user namespace
+              id: newuidmap-not-setuid
+              exit_status: 0
+              command: test ! -u /usr/bin/newuidmap
+            - check: /etc/subuid declares the username:start:count delegation ranges the inner podman maps from
+              exit_status: 0
+              command: grep -cE '^[a-z0-9_-]+:[0-9]+:[0-9]+$' /etc/subuid
+            - agent-check: a fresh rootless `podman run` of an inner container succeeds end-to-end with no added capabilities and no --privileged
+            - check: command=/usr/bin/podman --version
+              id: podman-version
+              exit_status: 0
+              command: /usr/bin/podman --version
+            - check: command=/usr/bin/buildah --version
+              id: buildah-version
+              exit_status: 0
+              command: /usr/bin/buildah --version
+            - check: command=/usr/bin/skopeo --version
+              id: skopeo-version
+              exit_status: 0
+              command: /usr/bin/skopeo --version
+            - check: file=/usr/bin/newuidmap
+              id: newuidmap-binary
+              file:
+                file: /usr/bin/newuidmap
+                exists: true
+            - check: file=/usr/bin/newgidmap
+              id: newgidmap-binary
+              file:
+                file: /usr/bin/newgidmap
+                exists: true
+            - check: file=/usr/bin/tailscale
+              id: tailscale-binary
+              file:
+                file: /usr/bin/tailscale
+                exists: true
+            - check: command=/usr/bin/tailscale version
+              id: tailscale-version
+              exit_status: 0
+              command: /usr/bin/tailscale version
+            - check: the uid-1000 user has exactly two subuid delegation ranges (cross-distro — the user is `user` on fedora/arch but `ubuntu`/`debian` under adopt user-policy, so resolve the name via getent rather than hardcoding `user:`)
+              id: subuid-user-two-ranges
+              exit_status: 0
+              stdout:
+                - matches: ^2
+              command: 'u=$(getent passwd 1000 | cut -d: -f1); grep -cE "^${u}:[0-9]+:[0-9]+$" /etc/subuid'
+            - check: command=grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
+              id: user-containers-conf-userns-host
+              exit_status: 0
+              command: grep -E '^userns\s*=\s*"host"' ${HOME}/.config/containers/containers.conf
+            - check: command=sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
+              id: env-containers-userns-configured
+              exit_status: 0
+              command: sh -c 'env | grep -q "^_CONTAINERS_USERNS_CONFIGURED="'
+            - check: command=sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
+              id: env-buildah-isolation
+              exit_status: 0
+              command: sh -c 'env | grep -qx "BUILDAH_ISOLATION=chroot"'
+            - check: command=podman run --rm quay.io/libpod/alpine:latest /bin/true
+              id: nested-podman-run
+              timeout: 60s
+              context:
+                - runtime
+              command:
+                command: podman run --rm quay.io/libpod/alpine:latest /bin/true
+                in_container: true

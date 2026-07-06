@@ -9,16 +9,13 @@ plugin-example-kind:
             the plugin is connected before decode, and runPluginKind dispatches Invoke(OpLoad)
             so the authored body lands in uf.PluginKinds. The kind-class companion of the
             verb/deploy/step example plugins; NOT in compiled_plugins (out-of-process only).
-    plugin-example-kind-decl:
         plugin:
             providers:
                 - kind:examplekind
             source: github.com/opencharly/charly/candy/plugin-example-kind
-    examplekind-module-present:
-        check: the out-of-tree class:kind plugin ships a buildable Go module the host can build + serve out-of-process
-        id: examplekind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree class:kind plugin ships a buildable Go module the host can build + serve out-of-process
+              id: examplekind-module-present
+              context:
+                - build
+              command: "true"

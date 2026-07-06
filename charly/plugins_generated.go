@@ -37,10 +37,8 @@ import (
 	cp_plugin_kernel_param "github.com/opencharly/charly/candy/plugin-kernel-param"
 	cp_plugin_matching "github.com/opencharly/charly/candy/plugin-matching"
 	cp_plugin_migrate "github.com/opencharly/charly/candy/plugin-migrate"
-	cp_plugin_module "github.com/opencharly/charly/candy/plugin-module"
 	cp_plugin_mount "github.com/opencharly/charly/candy/plugin-mount"
 	cp_plugin_package "github.com/opencharly/charly/candy/plugin-package"
-	cp_plugin_package_group "github.com/opencharly/charly/candy/plugin-package-group"
 	cp_plugin_port "github.com/opencharly/charly/candy/plugin-port"
 	cp_plugin_preempt "github.com/opencharly/charly/candy/plugin-preempt"
 	cp_plugin_process "github.com/opencharly/charly/candy/plugin-process"
@@ -49,7 +47,6 @@ import (
 	cp_plugin_settings "github.com/opencharly/charly/candy/plugin-settings"
 	cp_plugin_sidecar "github.com/opencharly/charly/candy/plugin-sidecar"
 	cp_plugin_substrate "github.com/opencharly/charly/candy/plugin-substrate"
-	cp_plugin_target "github.com/opencharly/charly/candy/plugin-target"
 	cp_plugin_tunnel "github.com/opencharly/charly/candy/plugin-tunnel"
 	cp_plugin_unix_group "github.com/opencharly/charly/candy/plugin-unix-group"
 	cp_plugin_user "github.com/opencharly/charly/candy/plugin-user"
@@ -85,11 +82,8 @@ func init() {
 	registerCompiledPlugin(cp_plugin_agent.NewProvider(), cp_plugin_agent.NewMeta())
 	registerCompiledPlugin(cp_plugin_builder.NewProvider(), cp_plugin_builder.NewMeta())
 	registerCompiledPlugin(cp_plugin_distro.NewProvider(), cp_plugin_distro.NewMeta())
-	registerCompiledPlugin(cp_plugin_module.NewProvider(), cp_plugin_module.NewMeta())
-	registerCompiledPlugin(cp_plugin_package_group.NewProvider(), cp_plugin_package_group.NewMeta())
 	registerCompiledPlugin(cp_plugin_resource.NewProvider(), cp_plugin_resource.NewMeta())
 	registerCompiledPlugin(cp_plugin_sidecar.NewProvider(), cp_plugin_sidecar.NewMeta())
-	registerCompiledPlugin(cp_plugin_target.NewProvider(), cp_plugin_target.NewMeta())
 	registerCompiledPlugin(cp_plugin_group.NewProvider(), cp_plugin_group.NewMeta())
 	registerCompiledPlugin(cp_plugin_substrate.NewProvider(), cp_plugin_substrate.NewMeta())
 	registerCompiledPlugin(cp_plugin_candy_kind.NewProvider(), cp_plugin_candy_kind.NewMeta())

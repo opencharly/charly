@@ -7,7 +7,6 @@ sqlite:
             sqlite3 CLI at /usr/bin/sqlite3. The binary runs SQL against an
             in-memory or on-disk SQLite database, so its behaviour is verifiable
             by executing a real query and asserting the returned row.
-    sqlite-distro:
         distro:
             arch:
                 package:
@@ -15,30 +14,21 @@ sqlite:
             fedora:
                 package:
                     - sqlite
-    sqlite-step-0:
-        check: the sqlite3 binary is installed at /usr/bin/sqlite3
-        plugin: file
-        plugin_input:
-            file: /usr/bin/sqlite3
-            exists: true
-    sqlite-step-1:
-        check: the sqlite package is present in the image
-        plugin: package
-        plugin_input:
-            package: sqlite
-            installed: true
-    sqlite-step-2:
-        check: sqlite3 reports a 3.x version string
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: sqlite3 --version
-    sqlite-step-3:
-        check: sqlite3 runs SQL against an in-memory database and returns the stored row
-        stdout:
-            - equals: "42"
-        plugin: command
-        plugin_input:
-            command: 'sqlite3 :memory: "CREATE TABLE t(x INTEGER); INSERT INTO t VALUES(42); SELECT x FROM t;"'
+        plan:
+            - check: the sqlite3 binary is installed at /usr/bin/sqlite3
+              file:
+                file: /usr/bin/sqlite3
+                exists: true
+            - check: the sqlite package is present in the image
+              package:
+                package: sqlite
+                installed: true
+            - check: sqlite3 reports a 3.x version string
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+\\.[0-9]+"
+              command: sqlite3 --version
+            - check: sqlite3 runs SQL against an in-memory database and returns the stored row
+              stdout:
+                - equals: "42"
+              command: 'sqlite3 :memory: "CREATE TABLE t(x INTEGER); INSERT INTO t VALUES(42); SELECT x FROM t;"'

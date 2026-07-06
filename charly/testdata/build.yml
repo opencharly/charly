@@ -231,7 +231,6 @@ pixi:
         copy_binary:
             src: /usr/local/bin/pixi
             dst: /usr/local/bin/pixi
-    pixi-env:
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache

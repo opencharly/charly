@@ -14,20 +14,17 @@ examplestep-deploy-consumer:
             bundle del`. The deploy-time counterpart of candy/examplestep-consumer (build
             context). Compose it WITH candy/plugin-example-step (which provides the
             examplestep verb); the deploy-context check below proves the marker landed.
-    examplestep-deploy-apply:
-        run: at LOCAL/VM deploy charly lowers this run-step to an ExternalPluginStep, Invoking the examplestep plugin's OpExecute over the E3b reverse channel to write /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the target venue
-        id: examplestep-deploy-apply
-        context:
-            - deploy
-        plugin: examplestep
-        plugin_input:
-            marker: examplestep-deploy
-    examplestep-deploy-applied:
-        check: the deploy-time examplestep OpExecute ran over the reverse channel — the probe marker is present on the target venue
-        id: examplestep-deploy-applied
-        context:
-            - deploy
-        plugin: command
-        plugin_input:
-            command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe"
-            in_container: false
+        plan:
+            - run: at LOCAL/VM deploy charly lowers this run-step to an ExternalPluginStep, Invoking the examplestep plugin's OpExecute over the E3b reverse channel to write /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the target venue
+              id: examplestep-deploy-apply
+              context:
+                - deploy
+              examplestep:
+                marker: examplestep-deploy
+            - check: the deploy-time examplestep OpExecute ran over the reverse channel — the probe marker is present on the target venue
+              id: examplestep-deploy-applied
+              context:
+                - deploy
+              command:
+                command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe"
+                in_container: false

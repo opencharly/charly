@@ -8,15 +8,12 @@ xdg-portal:
             screencasting through PipeWire on a sway session. Verifiable: the
             portal packages and slurp are installed and the portal/sway config
             files land at their expected paths.
-    xdg-portal-require:
         require:
             - dbus
             - sway
             - pipewire
-    xdg-portal-env:
         env:
             XDG_CURRENT_DESKTOP: "sway"
-    xdg-portal-distro:
         distro:
             fedora:
                 package:
@@ -24,54 +21,41 @@ xdg-portal:
                     - xdg-desktop-portal-wlr
                     - xdg-desktop-portal-gtk
                     - slurp
-    xdg-portal-step-0:
-        run: mkdir=${HOME}/.config/sway/config.d
-        mkdir: "${HOME}/.config/sway/config.d"
-        run_as: "${USER}"
-    xdg-portal-step-1:
-        run: copy=portal.conf
-        copy: portal.conf
-        to: "${HOME}/.config/sway/config.d/portal.conf"
-        mode: "0644"
-        run_as: "${USER}"
-    xdg-portal-step-2:
-        run: mkdir=${HOME}/.config/xdg-desktop-portal-wlr
-        mkdir: "${HOME}/.config/xdg-desktop-portal-wlr"
-        run_as: "${USER}"
-    xdg-portal-step-3:
-        run: copy=xdg-desktop-portal-wlr-config
-        copy: xdg-desktop-portal-wlr-config
-        to: "${HOME}/.config/xdg-desktop-portal-wlr/config"
-        mode: "0644"
-        run_as: "${USER}"
-    xdg-portal-step-4:
-        check: the xdg-desktop-portal package is installed
-        plugin: package
-        plugin_input:
-            package: xdg-desktop-portal
-            installed: true
-    xdg-portal-step-5:
-        check: the wlroots portal backend package is installed
-        plugin: package
-        plugin_input:
-            package: xdg-desktop-portal-wlr
-            installed: true
-    xdg-portal-step-6:
-        check: the slurp region selector binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/slurp
-            exists: true
-    xdg-portal-step-7:
-        check: the wlroots portal config file is installed in the user config
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/xdg-desktop-portal-wlr/config
-            exists: true
-    xdg-portal-sway-conf:
-        check: file=${HOME}/.config/sway/config.d/portal.conf
-        id: xdg-portal-sway-conf
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/sway/config.d/portal.conf
-            exists: true
+        plan:
+            - run: mkdir=${HOME}/.config/sway/config.d
+              mkdir: "${HOME}/.config/sway/config.d"
+              run_as: "${USER}"
+            - run: copy=portal.conf
+              copy: portal.conf
+              to: "${HOME}/.config/sway/config.d/portal.conf"
+              mode: "0644"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.config/xdg-desktop-portal-wlr
+              mkdir: "${HOME}/.config/xdg-desktop-portal-wlr"
+              run_as: "${USER}"
+            - run: copy=xdg-desktop-portal-wlr-config
+              copy: xdg-desktop-portal-wlr-config
+              to: "${HOME}/.config/xdg-desktop-portal-wlr/config"
+              mode: "0644"
+              run_as: "${USER}"
+            - check: the xdg-desktop-portal package is installed
+              package:
+                package: xdg-desktop-portal
+                installed: true
+            - check: the wlroots portal backend package is installed
+              package:
+                package: xdg-desktop-portal-wlr
+                installed: true
+            - check: the slurp region selector binary is installed
+              file:
+                file: /usr/bin/slurp
+                exists: true
+            - check: the wlroots portal config file is installed in the user config
+              file:
+                file: ${HOME}/.config/xdg-desktop-portal-wlr/config
+                exists: true
+            - check: file=${HOME}/.config/sway/config.d/portal.conf
+              id: xdg-portal-sway-conf
+              file:
+                file: ${HOME}/.config/sway/config.d/portal.conf
+                exists: true

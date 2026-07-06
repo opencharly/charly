@@ -1,25 +1,67 @@
-// This out-of-tree plugin's OWN CUE schema, served over the Describe channel.
+// This plugin's OWN CUE schema — the typed plugin_input for the `wl`
+// live-container check verb, served over the Describe channel. It is the SINGLE
+// SOURCE for this plugin's params, used two ways (the same contract core `spec`
+// and the reference plugin-http use):
 //
-// wl is an EXTERNAL-CHARLY-VERB plugin: like the built-in cdp/vnc/mcp/record/dbus verbs, it
-// KEEPS its `wl:` discriminator + every modifier
-// (x/y/x2/y2/direction/amount/target/text/key/combo/command/action/query/artifact) on
-// charly's core closed #Op — authoring is UNCHANGED (`wl: screenshot`, not `plugin: wl`). The
-// method-name vocabulary (#WlMethod) and the modifiers therefore live on core #Op, NOT here,
-// so this plugin advertises a verb with NO plugin_input and NO input def. The host dispatches
-// it through the registry exactly like a built-in (ResolveVerb("wl") → the out-of-process
-// grpcProvider → invokeVerbProvider hands it the FULL #Op as params_json, plus the host's
-// live DeployExecutor over the E3b reverse channel — wl is EXEC-based, so the plugin drives
-// the venue's compositor with RunCapture/GetFile rather than a pre-resolved endpoint).
+//  1. GENERATE the Go param struct — `cue exp gengotypes` (driven by task cue:gen,
+//     which wraps this with `package params` + `@go(params)`) emits
+//     ../params/cue_types_gen.go, so the provider decodes plugin_input into a TYPED
+//     struct, never a hand-parsed map.
+//  2. VALIDATE authored input AT RUNTIME — the host splices this source onto the
+//     base (base ++ plugin) and validates every authored `wl` step's plugin_input
+//     against #WlInput.
 //
-// This served schema therefore carries no #*Input def. It exists ONLY to satisfy the host's
-// "every plugin MUST ship a non-empty, base-splicing CUE schema" load gate
-// (registerPluginUnitSchema). SELF-CONTAINED (package-less, references NO base def) so it
-// compiles standalone (the SDK's serve-side check) AND splices onto the base (base ++ plugin
-// is a def-name collision check, not a base-reference resolver).
-
-// #WlPlugin documents the verb the plugin serves. wl keeps its entire authoring contract (the
-// #WlMethod enum + modifiers) on charly's core #Op, so there is no plugin_input to validate here.
-#WlPlugin: {
-	verb:     "wl"
-	contract: "wl keeps its discriminator + modifiers (x/y/x2/y2/direction/amount/target/text/key/combo/command/action/query/artifact) on core #Op (no plugin_input)"
+// Every wl-EXCLUSIVE field lives here (they left core #Op in the schema-compaction
+// cutover): the verb `method` enum (the former core #WlMethod, 38 methods incl. the
+// overlay-*/sway-* nested ones) plus the input/window/artifact modifiers
+// (x/y/x2/y2/button/direction/amount/target/text/key/combo/action/query/command +
+// artifact/artifact_min_bytes/artifact_min_dimensions/artifact_not_uniform).
+// `command` — the argv for `exec` / `sway-msg` — is ABSORBED from the former shared
+// #Op command modifier (the residual #Op `command` field is the command plugin's
+// internal rehydration target, never wl's). The step's shared modifiers stay on
+// #Op, read off the marshalled step Op: the exit_status/stdout/stderr matchers
+// (sdk.VerbVerdict).
+//
+// SELF-CONTAINED: it references NO base def, so it compiles standalone (gengotypes +
+// the SDK's serve-side check) AND splices onto the base (base ++ plugin is a
+// def-name collision check, not a base-reference resolver).
+#WlInput: {
+	// method — the wl verb method (the former core #WlMethod enum).
+	method: "status" | "toplevel" | "windows" | "geometry" | "xprop" | "atspi" | "screenshot" | "clipboard" | "click" | "double-click" | "mouse" | "scroll" | "drag" | "type" | "key" | "key-combo" | "focus" | "close" | "fullscreen" | "minimize" | "exec" | "resolution" | "overlay-list" | "overlay-status" | "overlay-show" | "overlay-hide" | "sway-tree" | "sway-workspaces" | "sway-outputs" | "sway-msg" | "sway-focus" | "sway-move" | "sway-resize" | "sway-layout" | "sway-workspace" | "sway-kill" | "sway-floating" | "sway-reload"
+	// x/y — desktop-absolute pointer coordinates (click/double-click/mouse/scroll/drag).
+	x?: int @go(,type=int)
+	y?: int @go(,type=int)
+	// x2/y2 — the drag end coordinates.
+	x2?: int @go(,type=int)
+	y2?: int @go(,type=int)
+	// button — pointer button (left/right/middle; empty defaults to left).
+	button?: string
+	// text — text to type / the clipboard payload / the overlay text / the exec-adjacent text.
+	text?: string
+	// key — a named XKB key for `key` (wtype -k).
+	key?: string @go(KeyName)
+	// combo — a key combination for `key-combo` (e.g. ctrl+shift+t).
+	combo?: string
+	// direction — scroll direction (up/down/left/right).
+	direction?: string
+	// amount — scroll step count (0 defaults to 3).
+	amount?: int @go(,type=int)
+	// target — the window/output/workspace target (focus/close/fullscreen/minimize/
+	// geometry/xprop/overlay name/resolution WxH/sway-* argument).
+	target?: string
+	// action — the sub-action selector (atspi tree/find/click; clipboard get/set/clear).
+	action?: string
+	// query — the atspi find/click element query (name / role / "name:role").
+	query?: string
+	// command — the argv for `exec` / `sway-msg` (absorbed from the former shared
+	// #Op command modifier).
+	command?: string
+	// artifact — the host path a `screenshot` writes its PNG to.
+	artifact?: string
+	// artifact_min_bytes — assert the artifact is at least N bytes.
+	artifact_min_bytes?: int & >=0 @go(ArtifactMinBytes,type=int)
+	// artifact_min_dimensions — assert the decoded image is at least WxH.
+	artifact_min_dimensions?: string & =~"^[0-9]+x[0-9]+$" @go(ArtifactMinDimensions)
+	// artifact_not_uniform — assert the image is not uniformly one color.
+	artifact_not_uniform?: bool @go(ArtifactNotUniform)
 }

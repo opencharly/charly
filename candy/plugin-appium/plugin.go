@@ -3,9 +3,10 @@
 // github.com/tebeka/selenium (and its ~80 transitive packages) OUT of charly's core
 // go.mod: the host go-builds this binary and serves it OUT-OF-PROCESS over go-plugin
 // gRPC via the charly plugin SDK, so the `appium:` verb dispatches through the provider
-// registry exactly like a built-in — with the verb keeping its `appium:` discriminator
-// + every modifier on charly's core #Op (authoring unchanged). The first external
-// dep-shed; establishes the external-plugin loading pattern.
+// registry exactly like a built-in — the authored `appium: <method>` sugar desugars to
+// plugin/plugin_input; the method + per-verb fields ride the input map, validated
+// against this plugin's own #AppiumInput. The first external dep-shed; establishes the
+// external-plugin loading pattern.
 //
 // Dual-placement by construction: the SAME NewProvider()/NewMeta() compile INTO charly
 // in-process when listed in compiled_plugins, or cmd/serve serves them OUT-OF-PROCESS
@@ -26,12 +27,11 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:appium + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). appium keeps its entire authoring contract (the
-// #AppiumMethod enum + every modifier) on charly's core #Op — like cdp/vnc it has NO
-// plugin_input — so the advertised capability carries an EMPTY InputDef and the served
-// schema (appium.cue) exists only to satisfy the host's non-empty-schema load gate.
+// sdk.NewMeta → BuildCapabilities). The verb's plugin_input validates against the
+// served #AppiumInput (the method enum + every appium-exclusive modifier moved here
+// from core #Op in the schema-compaction cutover).
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.174.0700",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "appium", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "appium", InputDef: "#AppiumInput", Primary: "method"}},
 		schemaFS)
 }

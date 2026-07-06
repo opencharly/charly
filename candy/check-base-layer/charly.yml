@@ -8,23 +8,19 @@ check-base-layer:
             (`charly check run check-pod`). It writes /etc/check-base-marker; the
             check-stack-layer that composes on top asserts this marker is still
             present, proving layer-composition order survives the build pipeline.
-    check-base-layer-step-0:
-        run: write=/etc/check-base-marker
-        write: /etc/check-base-marker
-        run_as: root
-        mode: "0644"
-        content: |
-            check-base v1
-    check-base-layer-step-1:
-        check: the check-base marker file is present at /etc/check-base-marker
-        plugin: file
-        plugin_input:
-            file: /etc/check-base-marker
-            exists: true
-    check-base-layer-step-2:
-        check: the marker records the check-base version string "check-base v1"
-        plugin: file
-        plugin_input:
-            file: /etc/check-base-marker
-            contains:
-                - contains: "check-base v1"
+        plan:
+            - run: write=/etc/check-base-marker
+              write: /etc/check-base-marker
+              run_as: root
+              mode: "0644"
+              content: |
+                check-base v1
+            - check: the check-base marker file is present at /etc/check-base-marker
+              file:
+                file: /etc/check-base-marker
+                exists: true
+            - check: the marker records the check-base version string "check-base v1"
+              file:
+                file: /etc/check-base-marker
+                contains:
+                    - contains: "check-base v1"

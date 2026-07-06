@@ -9,7 +9,6 @@ supervisord:
             XDG_RUNTIME_DIR at it, so older podman/buildah and wayland/pipewire both
             accept it. Every claim below is observable either in the built image or
             in the running deployment.
-    supervisord-env:
         # XDG_RUNTIME_DIR for the CONTAINER. A container has no logind /run/user/<uid>,
         # so we provide a per-user runtime dir; supervisord (PID 1) + every program it
         # starts inherit this image ENV. It MUST be a per-user directory OWNED BY the
@@ -26,56 +25,37 @@ supervisord:
         # pipewire/selkies/the nested compositor reach the user session bus.
         env:
             XDG_RUNTIME_DIR: "/tmp/xdg-runtime"
-    supervisord-package:
         package:
             - supervisor
-    supervisord-step-0:
-        run: mkdir=/tmp/xdg-runtime
-        mkdir: /tmp/xdg-runtime
-        run_as: "${USER}"
-        mode: "0700"
-    supervisord-step-1:
-        check: the supervisord process manager binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/supervisord
-            exists: true
-    supervisord-step-2:
-        check: the supervisorctl control client is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/supervisorctl
-            exists: true
-    supervisord-step-3:
-        check: the supervisor package is recorded in the package database
-        plugin: package
-        plugin_input:
-            package: supervisor
-            installed: true
-    supervisord-step-4:
-        check: a per-user XDG_RUNTIME_DIR directory exists in the image
-        plugin: file
-        plugin_input:
-            file: /tmp/xdg-runtime
-            filetype: directory
-    supervisord-step-5:
-        check: XDG_RUNTIME_DIR is exported and points at a /tmp-based per-user runtime dir
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            # supervisord defaults XDG_RUNTIME_DIR to /tmp/xdg-runtime (podman/buildah
-            # compat); wayland/pipewire desktop candies (sway, labwc, dbus, …)
-            # legitimately override it to bare /tmp. Accept either — and test the env
-            # var by EXIT STATUS rather than stdout-matching, which trips on the
-            # trailing newline printenv emits vs a `$`-anchored regex (check Gotcha #6).
-            command: |
+        plan:
+            - run: mkdir=/tmp/xdg-runtime
+              mkdir: /tmp/xdg-runtime
+              run_as: "${USER}"
+              mode: "0700"
+            - check: the supervisord process manager binary is installed
+              file:
+                file: /usr/bin/supervisord
+                exists: true
+            - check: the supervisorctl control client is installed
+              file:
+                file: /usr/bin/supervisorctl
+                exists: true
+            - check: the supervisor package is recorded in the package database
+              package:
+                package: supervisor
+                installed: true
+            - check: a per-user XDG_RUNTIME_DIR directory exists in the image
+              file:
+                file: /tmp/xdg-runtime
+                filetype: directory
+            - check: XDG_RUNTIME_DIR is exported and points at a /tmp-based per-user runtime dir
+              exit_status: 0
+              command: |
                 [ "$XDG_RUNTIME_DIR" = /tmp/xdg-runtime ] || [ "$XDG_RUNTIME_DIR" = /tmp ]
-    supervisord-step-6:
-        check: supervisord runs as container init and its control socket answers supervisorctl pid
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: supervisorctl pid
-            in_container: true
+            - check: supervisord runs as container init and its control socket answers supervisorctl pid
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: supervisorctl pid
+                in_container: true

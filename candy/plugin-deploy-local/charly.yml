@@ -21,16 +21,13 @@ plugin-deploy-local:
             ledger and replays at `charly bundle del`. The local-substrate production
             sibling of candy/plugin-example-deploy (the F2/F3 witness) and candy/plugin-kube
             (deploy:k8s); it replaces the former in-proc LocalDeployTarget.
-    plugin-deploy-local-decl:
         plugin:
             providers:
                 - deploy:local
             source: github.com/opencharly/charly/candy/plugin-deploy-local
-    deploy-local-module-present:
-        check: the out-of-tree deploy:local plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
-        id: deploy-local-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree deploy:local plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+              id: deploy-local-module-present
+              context:
+                - build
+              command: "true"

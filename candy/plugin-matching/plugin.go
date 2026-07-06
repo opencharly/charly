@@ -31,7 +31,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // sdk.NewMeta → BuildCapabilities), compiled standalone and failing loudly if broken/empty.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.176.2100",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "matching", InputDef: "#MatchingInput"}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "matching", InputDef: "#MatchingInput", Primary: "matching"}},
 		schemaFS)
 }
 

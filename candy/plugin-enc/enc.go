@@ -22,7 +22,6 @@ package enc
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,9 +34,6 @@ import (
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
-
-//go:embed schema/*.cue
-var describeSchemaFS embed.FS
 
 const calver = "2026.182.0001"
 
@@ -52,7 +48,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "verb", Word: "enc"}},
-		describeSchemaFS)
+		nil)
 }
 
 type provider struct {

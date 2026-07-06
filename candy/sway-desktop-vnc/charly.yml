@@ -10,7 +10,6 @@ sway-desktop-vnc:
             binaries (sway, wayvnc, google-chrome-stable) land in the image, and at
             deploy time sway + wayvnc run together under supervisord with the VNC
             server reachable on display :5900.
-    sway-desktop-vnc-require:
         require:
             # plugin-cdp is the OUT-OF-TREE plugin that serves the `cdp:` check verb
             # (the CDP WebSocket client lives there, not in charly's core check surface).
@@ -45,103 +44,81 @@ sway-desktop-vnc:
             # dispatches — otherwise it SKIPs with `unknown verb "wl"`. (Same cross-repo reconcile
             # lag as plugin-cdp.)
             - plugin-wl
-    sway-desktop-vnc-candy:
         candy:
             - sway-desktop
             - wayvnc
-    sway-desktop-vnc-env:
         env:
             WLR_RENDERER: "pixman"
-    sway-desktop-vnc-step-0:
-        check: the sway Wayland compositor binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/sway
-            exists: true
-    sway-desktop-vnc-step-1:
-        check: the wayvnc VNC server binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/wayvnc
-            exists: true
-    sway-desktop-vnc-step-2:
-        check: the Chrome browser binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/google-chrome-stable
-            exists: true
-    sway-desktop-vnc-step-3:
-        check: the Wayland renderer is pinned to the pixman software backend so the desktop runs without a GPU
-        exit_status: 0
-        stdout:
-            - pixman
-        plugin: command
-        plugin_input:
-            command: printenv WLR_RENDERER
-    sway-desktop-vnc-step-4:
-        check: the sway compositor and wayvnc server both report RUNNING under supervisord
-        exit_status: 0
-        stdout:
-            - RUNNING
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: supervisorctl status sway wayvnc | awk '{print $2}' | sort -u
-            in_container: true
-    sway-desktop-vnc-step-5:
-        check: the VNC server accepts a TCP connection on the published display port
-        timeout: 5s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:5900}
-            reachable: true
-    sway-desktop-vnc-step-6:
-        agent-check: the VNC framebuffer shows the live Chrome desktop rendered, not a blank or single-color screen
-    sway-desktop-vnc-binaries:
-        check: command=test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
-        id: sway-desktop-vnc-binaries
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
-    sway-desktop-vnc-cdp-up:
-        check: cdp=status
-        id: sway-desktop-vnc-cdp-up
-        cdp: status
-        stdout:
-            - contains: ok
-        context:
-            - runtime
-    sway-desktop-vnc-vnc-up:
-        check: vnc=status
-        id: sway-desktop-vnc-vnc-up
-        vnc: status
-        stdout:
-            - contains: ok
-        context:
-            - runtime
-    sway-desktop-vnc-wl-has-windows:
-        check: wl=toplevel
-        id: sway-desktop-vnc-wl-has-windows
-        wl: toplevel
-        context:
-            - runtime
-    sway-desktop-vnc-dbus-notifications-registered:
-        check: dbus=list
-        id: sway-desktop-vnc-dbus-notifications-registered
-        dbus: list
-        stdout:
-            - contains: org.freedesktop.Notifications
-        context:
-            - runtime
-    sway-desktop-vnc-vnc-framebuffer:
-        check: vnc=screenshot
-        id: sway-desktop-vnc-vnc-framebuffer
-        vnc: screenshot
-        artifact: /tmp/sway-desktop-vnc-fb.png
-        artifact_min_bytes: 5000
-        context:
-            - runtime
+        plan:
+            - check: the sway Wayland compositor binary is installed
+              file:
+                file: /usr/bin/sway
+                exists: true
+            - check: the wayvnc VNC server binary is installed
+              file:
+                file: /usr/bin/wayvnc
+                exists: true
+            - check: the Chrome browser binary is installed
+              file:
+                file: /usr/bin/google-chrome-stable
+                exists: true
+            - check: the Wayland renderer is pinned to the pixman software backend so the desktop runs without a GPU
+              exit_status: 0
+              stdout:
+                - pixman
+              command: printenv WLR_RENDERER
+            - check: the sway compositor and wayvnc server both report RUNNING under supervisord
+              exit_status: 0
+              stdout:
+                - RUNNING
+              context:
+                - runtime
+              command:
+                command: supervisorctl status sway wayvnc | awk '{print $2}' | sort -u
+                in_container: true
+            - check: the VNC server accepts a TCP connection on the published display port
+              timeout: 5s
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:5900}
+                reachable: true
+            - agent-check: the VNC framebuffer shows the live Chrome desktop rendered, not a blank or single-color screen
+            - check: command=test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
+              id: sway-desktop-vnc-binaries
+              exit_status: 0
+              command: test -x /usr/bin/sway && test -x /usr/bin/wayvnc && test -x /usr/bin/google-chrome-stable
+            - check: cdp=status
+              id: sway-desktop-vnc-cdp-up
+              cdp: status
+              stdout:
+                - contains: ok
+              context:
+                - runtime
+            - check: vnc=status
+              id: sway-desktop-vnc-vnc-up
+              vnc: status
+              stdout:
+                - contains: ok
+              context:
+                - runtime
+            - check: wl=toplevel
+              id: sway-desktop-vnc-wl-has-windows
+              wl: toplevel
+              context:
+                - runtime
+            - check: dbus=list
+              id: sway-desktop-vnc-dbus-notifications-registered
+              dbus: list
+              stdout:
+                - contains: org.freedesktop.Notifications
+              context:
+                - runtime
+            - check: vnc=screenshot
+              id: sway-desktop-vnc-vnc-framebuffer
+              vnc:
+                method: screenshot
+                artifact: /tmp/sway-desktop-vnc-fb.png
+                artifact_min_bytes: 5000
+              context:
+                - runtime

@@ -1,8 +1,9 @@
 package vm
 
 // provider.go is the OUT-OF-PROCESS vm-plugin provider's Invoke. The `libvirt`
-// check verb dispatches here (the verb keeps its `libvirt:` discriminator + every #LibvirtMethod
-// modifier on charly's core #Op, authoring unchanged), and Invoke OWNS the verdict — it runs the
+// check verb dispatches here (the `libvirt: <method>` sugar desugars to plugin/plugin_input —
+// the method + every libvirt-exclusive modifier ride the input map, decoded into
+// params.LibvirtVerbInput; authoring unchanged), and Invoke OWNS the verdict — it runs the
 // in-process LibvirtCmd Kong tree (which carries the go-libvirt impl this plugin extracted) and
 // self-evaluates the matchers, exactly like candy/plugin-kube. The internal VM-resolution + the
 // lifecycle ops (resolve-target / domain-state / list-domains / create / start / stop …) are
@@ -20,7 +21,9 @@ import (
 	"github.com/alecthomas/kong"
 	libvirt "github.com/digitalocean/go-libvirt"
 
+	"github.com/opencharly/charly/candy/plugin-vm/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -96,7 +99,11 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return dispatchInternalOp(env)
 	}
 
-	method := op.Libvirt
+	// The verb's method + libvirt-exclusive fields ride the desugared plugin input
+	// since the schema-compaction cutover (params.LibvirtVerbInput).
+	var in params.LibvirtVerbInput
+	kit.DecodeInput(op.PluginInput, &in)
+	method := in.Method
 
 	// libvirt probes a running VM — skip under `charly check box` (no live domain on a
 	// disposable build container), mirroring the host's RunModeBox/box-mode skip.
@@ -104,7 +111,7 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return sdk.ResultJSON("skip", fmt.Sprintf("libvirt: %s requires a running VM (skip under charly check box)", method))
 	}
 
-	out, capturedStderr, runErr := dispatchLibvirtVerb(&op, env.Box)
+	out, capturedStderr, runErr := dispatchLibvirtVerb(&op, &in, env.Box)
 
 	exit := 0
 	stderr := capturedStderr // the verb's real os.Stderr (e.g. guest/ping's "agent responsive")
@@ -140,12 +147,14 @@ func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 }
 
 // dispatchLibvirtVerb runs one libvirt method through the in-process LibvirtCmd Kong tree,
-// reusing the libvirtMethods allowlist (op→subcommand-path + positional args) so the nested
-// guest/* + snapshot/* subgroups dispatch without a per-method switch. Returns captured stdout + stderr.
-func dispatchLibvirtVerb(op *spec.Op, box string) (stdout, stderr string, err error) {
-	ms, ok := libvirtMethods[op.Libvirt]
+// reusing the libvirtMethods allowlist (method→subcommand-path + positional args) so the nested
+// guest/* + snapshot/* subgroups dispatch without a per-method switch. The kit.Pos* builders
+// read the plugin-input map off the op; the snapshot methods read the SHARED step-level
+// op.Target. Returns captured stdout + stderr.
+func dispatchLibvirtVerb(op *spec.Op, in *params.LibvirtVerbInput, box string) (stdout, stderr string, err error) {
+	ms, ok := libvirtMethods[in.Method]
 	if !ok {
-		return "", "", fmt.Errorf("unknown libvirt method %q", op.Libvirt)
+		return "", "", fmt.Errorf("unknown libvirt method %q", in.Method)
 	}
 	args := append([]string{}, ms.Path[1:]...) // drop the leading "libvirt"
 	if !ms.SkipBox {
@@ -154,8 +163,8 @@ func dispatchLibvirtVerb(op *spec.Op, box string) (stdout, stderr string, err er
 	if ms.PosArgs != nil {
 		args = append(args, ms.PosArgs(op)...)
 	}
-	if op.URI != "" {
-		args = append(args, "--uri", op.URI)
+	if in.URI != "" {
+		args = append(args, "--uri", in.URI)
 	}
 	return captureOutput(func() error {
 		var cli LibvirtCmd

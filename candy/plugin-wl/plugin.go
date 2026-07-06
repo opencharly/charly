@@ -5,10 +5,11 @@
 // venue's compositor tools (wlrctl/grim/wtype/wl-clipboard/swaymsg/kdotool/python3-pyatspi/
 // charly-overlay). The host go-builds this binary and serves it OUT-OF-PROCESS over go-plugin
 // gRPC via the charly plugin SDK, so the `wl:` verb dispatches through the provider registry
-// exactly like a built-in — with the verb keeping its `wl:` discriminator + every modifier
-// (x/y/x2/y2/direction/amount/target/text/key/combo/command/action/query/artifact) + the
-// #WlMethod enum on charly's core #Op (authoring unchanged: `wl: screenshot`, not
-// `plugin: wl`).
+// exactly like a built-in. The wl-exclusive fields (the verb method enum +
+// x/y/x2/y2/button/direction/amount/target/text/key/combo/command/action/query + the
+// artifact validators) live in the plugin's OWN #WlInput (schema/wl.cue), decoded from the
+// step's desugared plugin_input; only the genuinely shared step matchers
+// (exit_status/stdout/stderr) still ride charly's core #Op.
 //
 // EXEC-based external verb (the third, after record + dbus): unlike the PORT-based external
 // verbs (mcp/spice/kube/cdp/vnc — the host pre-resolves a dial endpoint), wl drives the
@@ -39,13 +40,13 @@ var schemaFS embed.FS
 // NewProvider returns the wl provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises verb:wl + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). wl keeps its entire authoring contract (the #WlMethod
-// enum + every modifier) on charly's core #Op — like cdp/vnc/mcp/record/dbus it has NO
-// plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (wl.cue) exists only to satisfy the host's non-empty-schema load gate.
+// NewMeta advertises verb:wl (plugin_input #WlInput) + the plugin's self-contained CUE
+// schema (via sdk.NewMeta → BuildCapabilities). The host splices the served schema onto
+// its base and validates every authored `wl` step's plugin_input against #WlInput (the
+// verb method enum + the input/window/artifact modifiers — the wl-exclusive fields that
+// left core #Op in the schema-compaction cutover).
 func NewMeta() pb.PluginMetaServer {
-	return sdk.NewMeta("2026.182.1805",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "wl", InputDef: ""}},
+	return sdk.NewMeta("2026.187.1200",
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "wl", InputDef: "#WlInput"}},
 		schemaFS)
 }

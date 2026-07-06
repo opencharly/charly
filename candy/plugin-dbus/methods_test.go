@@ -86,20 +86,22 @@ func TestGvariantArgsEmpty(t *testing.T) {
 }
 
 // TestCheckRequiredModifiers mirrors the in-tree dbusMethods Required specs that moved here:
-// call needs dest/path/method, introspect needs dest/path, notify needs text; list needs nothing.
+// call needs dest/path/member, introspect needs dest/path, notify needs text; list needs
+// nothing. The required names are plugin INPUT keys (the per-verb fields ride the desugared
+// plugin_input map since the schema-compaction cutover; sdk.OpModifierZero is map-first).
 func TestCheckRequiredModifiers(t *testing.T) {
 	cases := []struct {
 		method  string
 		op      spec.Op
 		wantErr string // substring; "" means no error
 	}{
-		{"list", spec.Op{Dbus: "list"}, ""},
-		{"call", spec.Op{Dbus: "call"}, "dest"},
-		{"call", spec.Op{Dbus: "call", Dest: "d", Path: "/p", Method: "m"}, ""},
-		{"introspect", spec.Op{Dbus: "introspect"}, "dest"},
-		{"introspect", spec.Op{Dbus: "introspect", Dest: "d", Path: "/p"}, ""},
-		{"notify", spec.Op{Dbus: "notify"}, "text"},
-		{"notify", spec.Op{Dbus: "notify", Text: "title"}, ""},
+		{"list", spec.Op{PluginInput: map[string]any{"method": "list"}}, ""},
+		{"call", spec.Op{PluginInput: map[string]any{"method": "call"}}, "dest"},
+		{"call", spec.Op{PluginInput: map[string]any{"method": "call", "dest": "d", "path": "/p", "member": "m"}}, ""},
+		{"introspect", spec.Op{PluginInput: map[string]any{"method": "introspect"}}, "dest"},
+		{"introspect", spec.Op{PluginInput: map[string]any{"method": "introspect", "dest": "d", "path": "/p"}}, ""},
+		{"notify", spec.Op{PluginInput: map[string]any{"method": "notify"}}, "text"},
+		{"notify", spec.Op{PluginInput: map[string]any{"method": "notify", "text": "title"}}, ""},
 	}
 	for _, tc := range cases {
 		err := sdk.RequireModifiers(tc.method, &tc.op, requiredModifiers)

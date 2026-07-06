@@ -21,7 +21,6 @@ package preempt
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,9 +29,6 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.183.0000"
 
@@ -49,7 +45,7 @@ func NewMeta() pb.PluginMetaServer {
 			{Class: "verb", Word: "arbiter"},
 			{Class: "command", Word: "preempt"},
 		},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the OUT-OF-PROCESS command-dispatch entry (only reached when preempt is NOT compiled in).

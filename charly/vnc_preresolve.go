@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/kit"
 	"io"
 	"net"
 	"os"
@@ -58,12 +59,12 @@ func (r *Runner) preresolveVncEndpoint(c *Op) (env *VncEnv, cleanup func(), earl
 	noop := func() {}
 	// Non-vnc op, or no live container context (box-mode / empty box) → nothing to
 	// resolve; the plugin's own box-mode / no-endpoint skip handles the degenerate cases.
-	if c.Vnc == "" || r.Mode == RunModeBox || r.Box == "" {
+	if c.Plugin != "vnc" || r.Mode == RunModeBox || r.Box == "" {
 		return nil, noop, nil
 	}
 	venue, err := resolveCheckVenue(r.Box, r.Instance)
 	if err != nil {
-		res := failf(c, "vnc: %s: %v", c.Vnc, err)
+		res := failf(c, "vnc: %s: %v", kit.InputStr(c, "method"), err)
 		return nil, noop, &res
 	}
 	if venue.Kind == "vm" {
@@ -73,7 +74,7 @@ func (r *Runner) preresolveVncEndpoint(c *Op) (env *VncEnv, cleanup func(), earl
 	// credential-store-resolved password.
 	ep, err := resolveCheckEndpoint(venue, 5900)
 	if err != nil {
-		res := failf(c, "vnc: %s: VNC server not reachable (port 5900): %v", c.Vnc, err)
+		res := failf(c, "vnc: %s: VNC server not reachable (port 5900): %v", kit.InputStr(c, "method"), err)
 		return nil, noop, &res
 	}
 	password := resolveVNCPassword(resolveBoxName(r.Box), r.Instance)
@@ -91,12 +92,12 @@ func (r *Runner) preresolveVncVmEndpoint(c *Op) (env *VncEnv, cleanup func(), ea
 	uri := os.Getenv("CHARLY_LIBVIRT_URI")
 	raw, ok := invokeVmPlugin("resolve-vnc", r.vmTargetName(), uri)
 	if !ok {
-		res := failf(c, "vnc: %s: vm plugin unavailable (go-libvirt resolution is out-of-process)", c.Vnc)
+		res := failf(c, "vnc: %s: vm plugin unavailable (go-libvirt resolution is out-of-process)", kit.InputStr(c, "method"))
 		return nil, noop, &res
 	}
 	var rr vmResolveResult
 	if err := json.Unmarshal(raw, &rr); err != nil {
-		res := failf(c, "vnc: %s: decode resolve: %v", c.Vnc, err)
+		res := failf(c, "vnc: %s: decode resolve: %v", kit.InputStr(c, "method"), err)
 		return nil, noop, &res
 	}
 	if rr.Error != "" {
@@ -104,10 +105,10 @@ func (r *Runner) preresolveVncVmEndpoint(c *Op) (env *VncEnv, cleanup func(), ea
 		// VNC-less GPU-passthrough operator vs the VNC-having check bed); any other
 		// resolver error is a real FAIL.
 		if strings.Contains(rr.Error, noVmDisplayDeviceErr) {
-			res := skipf(c, fmt.Sprintf("vnc %s — N/A: deployment has no VNC graphics device", c.Vnc))
+			res := skipf(c, fmt.Sprintf("vnc %s — N/A: deployment has no VNC graphics device", kit.InputStr(c, "method")))
 			return nil, noop, &res
 		}
-		res := failf(c, "vnc: %s: %s", c.Vnc, rr.Error)
+		res := failf(c, "vnc: %s: %s", kit.InputStr(c, "method"), rr.Error)
 		return nil, noop, &res
 	}
 	ep := rr.Endpoint
@@ -122,7 +123,7 @@ func (r *Runner) preresolveVncVmEndpoint(c *Op) (env *VncEnv, cleanup func(), ea
 		// Local UNIX socket — bridge it to a TCP listener the RFB client (TCP-only) dials.
 		bridge, berr := unixToTcpBridge(ep.SocketPath)
 		if berr != nil {
-			res := failf(c, "vnc: %s: %v", c.Vnc, berr)
+			res := failf(c, "vnc: %s: %v", kit.InputStr(c, "method"), berr)
 			return nil, noop, &res
 		}
 		return &VncEnv{Addr: bridge.Addr().String(), Password: ep.Password}, func() { _ = bridge.Close() }, nil
@@ -131,24 +132,24 @@ func (r *Runner) preresolveVncVmEndpoint(c *Op) (env *VncEnv, cleanup func(), ea
 		// Remote UNIX socket — SSH-forward it to a local socket, then bridge to TCP.
 		parsed, perr := ParseLibvirtURI(tunnelTarget)
 		if perr != nil {
-			res := failf(c, "vnc: %s: %v", c.Vnc, perr)
+			res := failf(c, "vnc: %s: %v", kit.InputStr(c, "method"), perr)
 			return nil, noop, &res
 		}
 		tun, terr := NewSSHTunnel(parsed.Remote)
 		if terr != nil {
-			res := failf(c, "vnc: %s: ssh tunnel to %s: %v", c.Vnc, parsed.Remote, terr)
+			res := failf(c, "vnc: %s: ssh tunnel to %s: %v", kit.InputStr(c, "method"), parsed.Remote, terr)
 			return nil, noop, &res
 		}
 		localSock, _, ferr := tun.ForwardUnix(context.Background(), ep.SocketPath)
 		if ferr != nil {
 			_ = tun.Close()
-			res := failf(c, "vnc: %s: forwarding remote socket %s: %v", c.Vnc, ep.SocketPath, ferr)
+			res := failf(c, "vnc: %s: forwarding remote socket %s: %v", kit.InputStr(c, "method"), ep.SocketPath, ferr)
 			return nil, noop, &res
 		}
 		bridge, berr := unixToTcpBridge(localSock)
 		if berr != nil {
 			_ = tun.Close()
-			res := failf(c, "vnc: %s: %v", c.Vnc, berr)
+			res := failf(c, "vnc: %s: %v", kit.InputStr(c, "method"), berr)
 			return nil, noop, &res
 		}
 		return &VncEnv{Addr: bridge.Addr().String(), Password: ep.Password}, func() { _ = bridge.Close(); _ = tun.Close() }, nil
@@ -157,23 +158,23 @@ func (r *Runner) preresolveVncVmEndpoint(c *Op) (env *VncEnv, cleanup func(), ea
 		// Remote TCP — SSH-forward it to a local TCP port, dial that.
 		parsed, perr := ParseLibvirtURI(tunnelTarget)
 		if perr != nil {
-			res := failf(c, "vnc: %s: %v", c.Vnc, perr)
+			res := failf(c, "vnc: %s: %v", kit.InputStr(c, "method"), perr)
 			return nil, noop, &res
 		}
 		tun, terr := NewSSHTunnel(parsed.Remote)
 		if terr != nil {
-			res := failf(c, "vnc: %s: ssh tunnel to %s: %v", c.Vnc, parsed.Remote, terr)
+			res := failf(c, "vnc: %s: ssh tunnel to %s: %v", kit.InputStr(c, "method"), parsed.Remote, terr)
 			return nil, noop, &res
 		}
 		localAddr, _, ferr := tun.ForwardTCP(context.Background(), ep.Host, ep.Port)
 		if ferr != nil {
 			_ = tun.Close()
-			res := failf(c, "vnc: %s: forwarding remote TCP %s:%d: %v", c.Vnc, ep.Host, ep.Port, ferr)
+			res := failf(c, "vnc: %s: forwarding remote TCP %s:%d: %v", kit.InputStr(c, "method"), ep.Host, ep.Port, ferr)
 			return nil, noop, &res
 		}
 		return &VncEnv{Addr: localAddr, Password: ep.Password}, func() { _ = tun.Close() }, nil
 	}
-	res := failf(c, "vnc: %s: VNC endpoint resolution produced no dial target", c.Vnc)
+	res := failf(c, "vnc: %s: VNC endpoint resolution produced no dial target", kit.InputStr(c, "method"))
 	return nil, noop, &res
 }
 

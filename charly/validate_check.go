@@ -118,14 +118,19 @@ func validateCheck(c *Op, loc string, errs *ValidationError) {
 	// passed to `charly check kube` — never a shell body (cmd:) or JS (cdp expression:),
 	// where a lowercase ${var} is legitimate. Did you mean an UPPERCASE check var
 	// (e.g. ${DEPLOY_NAME})?
-	for _, f := range []struct{ label, val string }{
-		{"cluster", c.Cluster}, {"name", c.Name}, {"namespace", c.Namespace},
-		{"label", c.Label}, {"kubeconfig", c.Kubeconfig}, {"kube_context", c.KubeContext},
-		{"kube_resource", c.KubeResource}, {"kube_group", c.KubeGroup},
-		{"kube_version", c.KubeVersion}, {"manifest", c.Manifest},
-	} {
-		if m := lowercaseCheckVarPattern.FindString(f.val); m != "" {
-			errs.Add("%s: %s contains %s — check variables are UPPERCASE (e.g. ${DEPLOY_NAME}); a lowercase ${...} never resolves and is passed through literally", loc, f.label, m)
+	// The identifier-like fields moved into the kube plugin's input map; scan its
+	// string input values generically (a shell body / JS expression legitimately
+	// carries lowercase ${...}, so the scan stays scoped to the kube word — the
+	// CLI-arg identifier class this check was built for).
+	if c.Plugin == "kube" {
+		for k, v := range c.PluginInput {
+			s, ok := v.(string)
+			if !ok {
+				continue
+			}
+			if m := lowercaseCheckVarPattern.FindString(s); m != "" {
+				errs.Add("%s: %s contains %s — check variables are UPPERCASE (e.g. ${DEPLOY_NAME}); a lowercase ${...} never resolves and is passed through literally", loc, k, m)
+			}
 		}
 	}
 

@@ -4,8 +4,10 @@
 // speaking RFC 6143 (the custom stdlib-only VNC client: VeNCrypt/TLS + ZRLE decode).
 // The host go-builds this binary and serves it OUT-OF-PROCESS over go-plugin gRPC via
 // the charly plugin SDK, so the `vnc:` verb dispatches through the provider registry
-// exactly like a built-in — with the verb keeping its `vnc:` discriminator + every
-// modifier (x/y/text/key/artifact/…) on charly's core #Op (authoring unchanged). The
+// exactly like a built-in. Since the schema-compaction cutover an authored `vnc:` step
+// desugars to the internal plugin/plugin_input envelope, and every vnc-exclusive
+// modifier (method/x/y/text/key/artifact/…) lives in the plugin's OWN #VncInput
+// (schema/vnc.cue → the generated params.VncInput). The
 // latest external dep-shed after candy/plugin-cdp; the RFB client lives HERE now, out
 // of charly's core check surface (nothing remains in-core — the VM-VNC CLI subsumed
 // into the declarative `vnc:` verb against a vm target).
@@ -36,12 +38,12 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:vnc + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). vnc keeps its entire authoring contract (the
-// #VncMethod enum + every modifier) on charly's core #Op — like cdp/mcp/spice it has
-// NO plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (vnc.cue) exists only to satisfy the host's non-empty-schema load gate.
+// sdk.NewMeta → BuildCapabilities). The verb's entire authoring contract — the
+// method enum + every vnc-exclusive modifier — lives in the served #VncInput
+// (schema/vnc.cue), which the host splices onto the base and validates every
+// authored `vnc:` step's plugin_input against.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.178.1200",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "vnc", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "vnc", InputDef: "#VncInput"}},
 		schemaFS)
 }

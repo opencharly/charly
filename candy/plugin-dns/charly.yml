@@ -8,14 +8,14 @@ plugin-dns:
             matching). A HOST-COUPLED verb — its RunVerb runs against the live check
             engine (sdk/kit.CheckContext), so it is COMPILED-IN-ONLY. A pure
             check verb; a port/process-template relocation on the kit contract.
-    plugin-dns-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-dns
             providers:
                 - verb:dns
-    dns-verb-dispatches:
-        check: the dns verb dispatches through the provider registry and probes name resolution on a live deployment
-        id: dns-verb-dispatches
-        plugin: dns
-        plugin_input: {dns: localhost, resolvable: true}
-        context: [runtime]
+            primary:
+                dns: dns
+        plan:
+            - check: the dns verb dispatches through the provider registry and probes name resolution on a live deployment
+              id: dns-verb-dispatches
+              dns: {dns: localhost, resolvable: true}
+              context: [runtime]

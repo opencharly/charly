@@ -41,23 +41,20 @@ plugin-preempt:
             stopHolders+wait -> lease persisted -> applyMode SKIPS (no gpu selector) -> claim, then
             teardown -> ReleaseClaimant -> restoreHolders, all THROUGH the externalized dispatch +
             the HostArbiter reverse channel.
-    plugin-preempt-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-preempt
             providers:
                 - verb:arbiter
                 - command:preempt
-    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # it mirrors candy/plugin-gpu's gpu-module-present: a trivial build-context `plugin: command`
-    # (the built-in command CHECK verb) running `true`, proving the host can build + compile in the
-    # module. The full arbiter dispatch (acquire/preempt/release through verb:arbiter + the
-    # HostArbiter reverse channel) is exercised by the live R10 bed (check-preempt-arbiter-pod);
-    # the `charly preempt status` CLI end-to-end by the Go e2e + the live R10.
-    preempt-module-present:
-        check: the resource-arbiter plugin ships a buildable Go module the host compiles in; the full arbiter acquire/preempt/release dispatch + the `charly preempt` CLI are exercised by the live R10 (check-preempt-arbiter-pod) + the Go e2e
-        id: preempt-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-gpu's gpu-module-present: a trivial build-context `plugin: command`
+              # (the built-in command CHECK verb) running `true`, proving the host can build + compile in the
+              # module. The full arbiter dispatch (acquire/preempt/release through verb:arbiter + the
+              # HostArbiter reverse channel) is exercised by the live R10 bed (check-preempt-arbiter-pod);
+              # the `charly preempt status` CLI end-to-end by the Go e2e + the live R10.
+              check: the resource-arbiter plugin ships a buildable Go module the host compiles in; the full arbiter acquire/preempt/release dispatch + the `charly preempt` CLI are exercised by the live R10 (check-preempt-arbiter-pod) + the Go e2e
+              id: preempt-module-present
+              context:
+                - build
+              command: "true"

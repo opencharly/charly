@@ -7,32 +7,26 @@ check-group-layer:
             structural kind): a kind:local layer whose write: step lands a marker the member's
             hoisted check asserts. A DEDICATED marker path (not check-local's / check-structkind's)
             so the beds never collide when /verify-beds fans them out concurrently.
-    check-group-layer-step-0:
-        run: write=/etc/check-group-marker
-        write: /etc/check-group-marker
-        run_as: root
-        mode: "0644"
-        content: |
-            check-group v1
-    check-group-layer-step-1:
-        check: the check-group marker file is present at /etc/check-group-marker
-        plugin: file
-        plugin_input:
-            file: /etc/check-group-marker
-            exists: true
-    check-group-layer-step-2:
-        check: the marker records the check-group version stamp "check-group v1"
-        plugin: file
-        plugin_input:
-            file: /etc/check-group-marker
-            contains:
-                - contains: "check-group v1"
-    check-group-marker-host:
-        check: command=test -f /etc/check-group-marker
-        id: check-group-marker-host
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f /etc/check-group-marker"
-            in_container: false
+        plan:
+            - run: write=/etc/check-group-marker
+              write: /etc/check-group-marker
+              run_as: root
+              mode: "0644"
+              content: |
+                check-group v1
+            - check: the check-group marker file is present at /etc/check-group-marker
+              file:
+                file: /etc/check-group-marker
+                exists: true
+            - check: the marker records the check-group version stamp "check-group v1"
+              file:
+                file: /etc/check-group-marker
+                contains:
+                    - contains: "check-group v1"
+            - check: command=test -f /etc/check-group-marker
+              id: check-group-marker-host
+              context:
+                - runtime
+              command:
+                command: "test -f /etc/check-group-marker"
+                in_container: false

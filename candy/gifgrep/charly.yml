@@ -9,43 +9,30 @@ gifgrep:
             verifiable without the network: the binary is present and
             executable, and `gifgrep --help` runs (exit 0) and prints its Kong
             usage banner listing the search/tui/still/sheet subcommands.
-    gifgrep-require:
         require:
             - golang
-    gifgrep-env:
         env:
             GOPATH: "~/go"
-    gifgrep-path_append:
         path_append:
             - "~/go/bin"
-    gifgrep-step-0:
-        run: |
-            command=go install github.com/steipete/gifgrep/cmd/gifgrep@latest
-            go clean -cache
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=go install github.com/steipete/gifgrep/cmd/gifgrep@latest
+                go clean -cache
+              run_as: "${USER}"
+              command: |
                 go install github.com/steipete/gifgrep/cmd/gifgrep@latest
                 go clean -cache
-    gifgrep-step-1:
-        check: the gifgrep binary is installed at ~/go/bin/gifgrep
-        plugin: file
-        plugin_input:
-            file: ${HOME}/go/bin/gifgrep
-            exists: true
-    gifgrep-step-2:
-        check: running gifgrep --help exits 0 and prints the Kong usage banner
-        exit_status: 0
-        stdout:
-            - contains: "Usage:"
-        plugin: command
-        plugin_input:
-            command: "${HOME}/go/bin/gifgrep --help 2>&1"
-    gifgrep-binary-executable:
-        check: command=test -x ${HOME}/go/bin/gifgrep
-        id: gifgrep-binary-executable
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: "test -x ${HOME}/go/bin/gifgrep"
+            - check: the gifgrep binary is installed at ~/go/bin/gifgrep
+              file:
+                file: ${HOME}/go/bin/gifgrep
+                exists: true
+            - check: running gifgrep --help exits 0 and prints the Kong usage banner
+              exit_status: 0
+              stdout:
+                - contains: "Usage:"
+              command: "${HOME}/go/bin/gifgrep --help 2>&1"
+            - check: command=test -x ${HOME}/go/bin/gifgrep
+              id: gifgrep-binary-executable
+              exit_status: 0
+              command: "test -x ${HOME}/go/bin/gifgrep"

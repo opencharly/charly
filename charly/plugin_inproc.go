@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // inprocProvider is a Provider backed by a COMPILED-IN plugin candy's
@@ -22,6 +22,7 @@ type inprocProvider struct {
 	structural bool          // set ONLY for a compiled-in class:kind capability that decodes a STRUCTURAL entity (F5)
 	validates  bool          // set ONLY for a compiled-in class:kind capability serving a deep OpValidate check (F7/C8)
 	phase      string        // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary    string        // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
 }
 
 func (p *inprocProvider) Reserved() string     { return p.word }
@@ -100,6 +101,9 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 		}
 		// ...and its lifecycle PHASE (F9, R3 parity; normalized, default runtime).
 		ip.phase = sdk.NormalizePhase(c.GetPhase())
+		if class == ClassVerb {
+			ip.primary = c.GetPrimary()
+		}
 		providers = append(providers, ip)
 		if c.GetInputDef() != "" {
 			inputDefs[provKey(class, c.GetWord())] = c.GetInputDef()
@@ -127,3 +131,6 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	}
 	RegisterBuiltinPluginUnit(*unit)
 }
+
+// primaryInput implements primaryCarrier (the scalar-sugar primary, F/verb).
+func (p *inprocProvider) primaryInput() string { return p.primary }

@@ -27,35 +27,28 @@ notebook-graph:
             self-contained synthetic data) so it runs cleanly even
             when the OSM DAG hasn't produced /workspace/tiles/work/
             yet.
-    notebook-graph-data:
         data:
             - src: data/notebooks
               volume: workspace
               dest: notebooks
-    notebook-graph-step-0:
-        check: the notebooks subdirectory is provisioned in the workspace
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks
-            filetype: directory
-    notebook-graph-step-1:
-        check: the gpu-libraries-demo notebook is present
-        exit_status: 0
-        stdout:
-            - matches: "gpu-libraries-demo"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: ls ${VOLUME_CONTAINER_PATH:workspace}/notebooks/
-    notebook-graph-demo-present:
-        check: file=${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
-        id: notebook-graph-demo-present
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
-            exists: true
+        plan:
+            - check: the notebooks subdirectory is provisioned in the workspace
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks
+                filetype: directory
+            - check: the gpu-libraries-demo notebook is present
+              exit_status: 0
+              stdout:
+                - matches: "gpu-libraries-demo"
+              context:
+                - runtime
+              command: ls ${VOLUME_CONTAINER_PATH:workspace}/notebooks/
+            - check: file=${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
+              id: notebook-graph-demo-present
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}/notebooks/gpu-libraries-demo.py
+                exists: true

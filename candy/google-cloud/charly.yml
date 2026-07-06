@@ -8,21 +8,19 @@ google-cloud:
             install.sh, and symlinks gcloud, gsutil and bq into /usr/bin so
             every shell finds them. Each CLI answers its own version
             subcommand, which is what these scenarios assert.
-    google-cloud-step-0:
-        run: |
-            command=curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz" \
-              -o /tmp/google-cloud-sdk.tar.gz
-            mkdir -p /var/opt
-            tar -xzf /tmp/google-cloud-sdk.tar.gz -C /var/opt/
-            rm -f /tmp/google-cloud-sdk.tar.gz
-            /var/opt/google-cloud-sdk/install.sh --quiet --usage-reporting false --command-completion false --path-update false
-            for cmd in gcloud gsutil bq; do
-              ln -sf /var/opt/google-cloud-sdk/bin/$cmd /usr/bin/$cmd
-            done
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz" \
+                  -o /tmp/google-cloud-sdk.tar.gz
+                mkdir -p /var/opt
+                tar -xzf /tmp/google-cloud-sdk.tar.gz -C /var/opt/
+                rm -f /tmp/google-cloud-sdk.tar.gz
+                /var/opt/google-cloud-sdk/install.sh --quiet --usage-reporting false --command-completion false --path-update false
+                for cmd in gcloud gsutil bq; do
+                  ln -sf /var/opt/google-cloud-sdk/bin/$cmd /usr/bin/$cmd
+                done
+              run_as: root
+              command: |
                 curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz" \
                   -o /tmp/google-cloud-sdk.tar.gz
                 mkdir -p /var/opt
@@ -32,46 +30,29 @@ google-cloud:
                 for cmd in gcloud gsutil bq; do
                   ln -sf /var/opt/google-cloud-sdk/bin/$cmd /usr/bin/$cmd
                 done
-    google-cloud-step-1:
-        check: the gcloud CLI is symlinked onto PATH
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gcloud
-            exists: true
-    google-cloud-step-2:
-        check: gcloud reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gcloud --version
-    google-cloud-step-3:
-        check: the gsutil storage CLI is on PATH
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gsutil
-            exists: true
-    google-cloud-step-4:
-        check: the bq BigQuery CLI is on PATH
-        plugin: file
-        plugin_input:
-            file: /usr/bin/bq
-            exists: true
-    google-cloud-step-5:
-        check: bq reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/bq version
-    google-cloud-step-6:
-        check: the SDK tree is unpacked at its /var/opt install prefix
-        plugin: file
-        plugin_input:
-            file: /var/opt/google-cloud-sdk/bin/gcloud
-            exists: true
-    gsutil-version:
-        check: command=/usr/bin/gsutil version
-        id: gsutil-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gsutil version
+            - check: the gcloud CLI is symlinked onto PATH
+              file:
+                file: /usr/bin/gcloud
+                exists: true
+            - check: gcloud reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/gcloud --version
+            - check: the gsutil storage CLI is on PATH
+              file:
+                file: /usr/bin/gsutil
+                exists: true
+            - check: the bq BigQuery CLI is on PATH
+              file:
+                file: /usr/bin/bq
+                exists: true
+            - check: bq reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/bq version
+            - check: the SDK tree is unpacked at its /var/opt install prefix
+              file:
+                file: /var/opt/google-cloud-sdk/bin/gcloud
+                exists: true
+            - check: command=/usr/bin/gsutil version
+              id: gsutil-version
+              exit_status: 0
+              command: /usr/bin/gsutil version

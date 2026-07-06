@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/sdk/kit"
+
 // cdp_preresolve.go is the HOST-side residue of the externalized `cdp` verb. The
 // out-of-process candy/plugin-cdp provider speaks the Chrome DevTools Protocol on the
 // wire (HTTP /json + the CDP WebSocket) but owns NONE of charly's venue / port-mapping
@@ -45,12 +47,12 @@ func (r *Runner) preresolveCdpEndpoint(c *Op) (env *CdpEnv, cleanup func(), earl
 	noop := func() {}
 	// Non-cdp op, or no live container context (box-mode / empty box) → nothing to
 	// resolve; the plugin's own box-mode / no-endpoint skip handles the degenerate cases.
-	if c.Cdp == "" || r.Mode == RunModeBox || r.Box == "" {
+	if c.Plugin != "cdp" || r.Mode == RunModeBox || r.Box == "" {
 		return nil, noop, nil
 	}
 	devtoolsURL, ep, err := cdpDevTools(r.Box, r.Instance)
 	if err != nil {
-		res := failf(c, "cdp: %s: %v", c.Cdp, err)
+		res := failf(c, "cdp: %s: %v", kit.InputStr(c, "method"), err)
 		return nil, noop, &res
 	}
 	return &CdpEnv{URL: devtoolsURL}, ep.Close, nil

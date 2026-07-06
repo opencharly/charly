@@ -88,18 +88,22 @@ func invokeDeployAndroid(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 
 // installOp builds the synthetic adb #Op for one apk install spec, dispatched through
 // the SAME method handlers the `adb:` verb uses (methods.go): a committed-APK entry →
-// `install` (push the host path); a package id → `install-app` (apkeep download).
+// `install` (push the host path); a package id → `install-app` (apkeep download). The
+// per-verb fields ride the plugin input map (params.AdbInput's wire keys) since the
+// schema-compaction cutover.
 func installOp(ap spec.ApkPackageSpec) *spec.Op {
 	if ap.Apk != "" {
-		return &spec.Op{Adb: "install", Apk: ap.Apk}
+		return &spec.Op{Plugin: "adb", PluginInput: map[string]any{
+			"method": "install", "apk": ap.Apk,
+		}}
 	}
-	return &spec.Op{
-		Adb:        "install-app",
-		AppId:      ap.Package,
-		Source:     ap.Source,
-		Arch:       ap.Arch,
-		AppVersion: ap.AppVersion,
-	}
+	return &spec.Op{Plugin: "adb", PluginInput: map[string]any{
+		"method":      "install-app",
+		"app_id":      ap.Package,
+		"source":      ap.Source,
+		"arch":        ap.Arch,
+		"app_version": ap.AppVersion,
+	}}
 }
 
 // installLabel names an install spec for an error message.

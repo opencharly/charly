@@ -12,26 +12,26 @@ android-apidemos:
             verbs use). The candy installs nothing into a container image — the
             apk: step runs ONLY on a `target: android` deploy, so the observable
             effect is the package present on the booted device (deploy-scope adb).
-    android-apidemos-apk:
         apk:
             # Committed local APK (project-root-relative) → goadb push + pm install.
             # No source: — committed files don't use apkeep.
             - apk: tests/data/ApiDemos-debug.apk
-    android-apidemos-step-0:
-        check: the ApiDemos package is installed on the device after the target:android deploy
-        adb: shell
-        arg: [pm, list, packages, io.appium.android.apis]
-        stdout:
-            - contains: "io.appium.android.apis"
-        eventually: 120s
-        retry_interval: 5s
-        context:
-            - runtime
-    android-apidemos-step-1:
-        check: the installed ApiDemos package resolves a launchable activity (a real APK manifest, not a stub)
-        adb: shell
-        arg: [cmd, package, resolve-activity, --brief, io.appium.android.apis]
-        stdout:
-            - contains: "io.appium.android.apis/"
-        context:
-            - runtime
+        plan:
+            - check: the ApiDemos package is installed on the device after the target:android deploy
+              adb:
+                method: shell
+                arg: [pm, list, packages, io.appium.android.apis]
+              stdout:
+                - contains: "io.appium.android.apis"
+              eventually: 120s
+              retry_interval: 5s
+              context:
+                - runtime
+            - check: the installed ApiDemos package resolves a launchable activity (a real APK manifest, not a stub)
+              adb:
+                method: shell
+                arg: [cmd, package, resolve-activity, --brief, io.appium.android.apis]
+              stdout:
+                - contains: "io.appium.android.apis/"
+              context:
+                - runtime

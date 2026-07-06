@@ -1,11 +1,10 @@
 pixi:
     candy:
         version: 2026.144.1443
-    pixi-step-0:
-        run: command=echo "installing pixi"
-        command: echo "installing pixi"
-        run_as: root
-    pixi-step-1:
-        run: command=echo "init pixi project"
-        command: echo "init pixi project"
-        run_as: "${USER}"
+        plan:
+            - run: command=echo "installing pixi"
+              command: echo "installing pixi"
+              run_as: root
+            - run: command=echo "init pixi project"
+              command: echo "init pixi project"
+              run_as: "${USER}"

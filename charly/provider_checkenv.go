@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/kit"
 )
 
 // CheckEnv is the SERIALIZABLE subset of a *Runner that crosses the wire to an
@@ -150,16 +151,20 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 	// out-of-process verb has no Runner.CandyDirs, so it cannot anchor the fixture itself.
 	// Same candy-anchored walk-up the host APK resolver uses (R3); the plugin then sees
 	// an absolute, candy-anchored path.
-	if c.Apk != "" {
-		resolved, err := r.resolveCheckApk(c.Apk, c.Origin)
+	if apk := kit.InputStr(c, "apk"); apk != "" {
+		resolved, err := r.resolveCheckApk(apk, c.Origin)
 		if err != nil {
 			res.Status = TestFail
 			res.Message = fmt.Sprintf("verb %q: %v", word, err)
 			return res
 		}
-		if resolved != c.Apk {
+		if resolved != apk {
 			cc := *c
-			cc.Apk = resolved
+			cc.PluginInput = make(map[string]any, len(c.PluginInput))
+			for k, v := range c.PluginInput {
+				cc.PluginInput[k] = v
+			}
+			cc.PluginInput["apk"] = resolved
 			c = &cc
 		}
 	}

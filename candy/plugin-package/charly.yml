@@ -9,16 +9,16 @@ plugin-package:
             the kit descriptor — format + cross-distro name via kit.ResolvePackageName).
             A HOST-COUPLED verb on the sdk/kit contract (CheckVerbProvider +
             ProvisionActor + StepProvider), so it is COMPILED-IN-ONLY.
-    plugin-package-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-package
             providers:
                 - verb:package
-    package-verb-dispatches:
-        check: the package verb dispatches through the provider registry and probes that a package is installed
-        id: package-verb-dispatches
-        plugin: package
-        plugin_input:
-            package: bash
-            installed: true
-        context: [runtime]
+            primary:
+                package: package
+        plan:
+            - check: the package verb dispatches through the provider registry and probes that a package is installed
+              id: package-verb-dispatches
+              package:
+                package: bash
+                installed: true
+              context: [runtime]

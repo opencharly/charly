@@ -10,10 +10,8 @@ cachyos-extras:
             service is here because SDDM/Plasma user management needs it. Every entry
             lands as a real pacman repo or AUR package, so each tool's binary and
             package identity is independently verifiable on the built image.
-    cachyos-extras-require:
         require:
             - yay
-    cachyos-extras-distro:
         distro:
             arch:
                 package:
@@ -52,40 +50,28 @@ cachyos-extras:
                     package:
                         - cloudflared-bin
                         - gvisor-tap-vsock
-    cachyos-extras-step-0:
-        check: the btop resource monitor binary is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/btop
-            exists: true
-    cachyos-extras-step-1:
-        check: the duf disk-usage viewer binary is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/duf
-            exists: true
-    cachyos-extras-step-2:
-        check: the paru AUR helper binary is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/paru
-            exists: true
-    cachyos-extras-step-3:
-        check: the cloudflared-bin AUR tunnel client resolves on PATH
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: command -v cloudflared
-    cachyos-extras-step-4:
-        check: the syncthing file-synchronisation daemon binary is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/syncthing
-            exists: true
-    accountsservice-installed:
-        check: package=accountsservice
-        id: accountsservice-installed
-        plugin: package
-        plugin_input:
-            package: accountsservice
-            installed: true
+        plan:
+            - check: the btop resource monitor binary is present
+              file:
+                file: /usr/bin/btop
+                exists: true
+            - check: the duf disk-usage viewer binary is present
+              file:
+                file: /usr/bin/duf
+                exists: true
+            - check: the paru AUR helper binary is present
+              file:
+                file: /usr/bin/paru
+                exists: true
+            - check: the cloudflared-bin AUR tunnel client resolves on PATH
+              exit_status: 0
+              command: command -v cloudflared
+            - check: the syncthing file-synchronisation daemon binary is present
+              file:
+                file: /usr/bin/syncthing
+                exists: true
+            - check: package=accountsservice
+              id: accountsservice-installed
+              package:
+                package: accountsservice
+                installed: true

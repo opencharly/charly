@@ -7,7 +7,6 @@ package k8sgen
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 
@@ -15,9 +14,6 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
-
-//go:embed schema/*.cue
-var describeSchemaFS embed.FS
 
 const calver = "2026.181.0001"
 
@@ -31,7 +27,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "verb", Word: "k8sgen"}},
-		describeSchemaFS)
+		nil)
 }
 
 type provider struct {

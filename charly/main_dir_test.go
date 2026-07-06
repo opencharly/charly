@@ -105,11 +105,10 @@ func buildCharlyBinary(t *testing.T) string {
 // boxes` has something to parse. Mirrors the scaffold of a real project.
 func writeMinProject(t *testing.T, dir string) {
 	t.Helper()
-	// Post-node-form-cutover: write charly.yml in the unified node-form —
-	// every entity flattens to a top-level `<name>: {<kind>: <scalars>}`
-	// node, with non-scalar fields (here `distro:`) moved to a
-	// `<name>-<datakey>` child node. LoadConfig reads charly.yml exclusively.
-	charlyYAML := `version: 2026.174.1100
+	// Compact node-form: every entity flattens to a top-level
+	// `<name>: {<kind>: <FULL BODY>}` node with its collections (here `distro:`)
+	// INLINE in the kind value. LoadConfig reads charly.yml exclusively.
+	charlyYAML := `version: 2026.186.2323
 defaults:
   registry: ghcr.io/test
   tag: latest
@@ -120,7 +119,6 @@ defaults:
 testimage:
   candy:
     base: "quay.io/fedora/fedora:43"
-  testimage-distro:
     distro: ["fedora:43", fedora]
 `
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(charlyYAML), 0644); err != nil {

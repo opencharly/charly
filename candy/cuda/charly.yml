@@ -10,11 +10,9 @@ cuda:
             into the same /usr-rooted paths, so every downstream GPU consumer
             compiles against one layout regardless of distro. Each artifact is a
             real file or library on disk, so its presence is directly verifiable.
-    cuda-require:
         require:
             - nvidia
             - ffmpeg
-    cuda-env:
         env:
             # /usr is correct on Fedora (where CUDA RPMs land in /usr/bin, /usr/lib64,
             # /usr/include). On Arch, extra/cuda installs to /opt/cuda — a
@@ -23,7 +21,6 @@ cuda:
             # so consumer layers (llama-cpp, vllm, comfyui, jupyter-ml) compile
             # against the same paths regardless of distro.
             CUDA_HOME: "/usr"
-    cuda-distro:
         distro:
             arch:
                 package:
@@ -70,32 +67,30 @@ cuda:
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"
                       gpgkey: "https://negativo17.org/repos/RPM-GPG-KEY-slaanesh"
-    cuda-step-0:
-        run: |
-            command=if [ ! -f /etc/fedora-release ]; then
-              exit 0
-            fi
-            CUDNN_DIR=$(mktemp -d)
-            cd "$CUDNN_DIR"
-            if dnf5 download --enable-repo="fedora-multimedia" cuda-cudnn-devel 2>/dev/null; then
-              rpm2cpio cuda-cudnn-devel*.rpm | cpio -idm 2>/dev/null
-              [ -d ./usr/include ] && cp -v ./usr/include/cudnn*.h /usr/include/
-              while IFS= read -r -d '' link; do
-                name=$(basename "$link")
-                versioned=""
-                for v in /usr/lib64/"${name}".*; do
-                  if [ -f "$v" ] && ! echo "$v" | grep -q '\.so$'; then
-                    versioned="$v"; break
-                  fi
-                done
-                [ -n "$versioned" ] && [ ! -e /usr/lib64/"$name" ] && ln -sv "$(basename "$versioned")" /usr/lib64/"$name"
-              done < <(find ./usr/lib64 -maxdepth 1 -name '*.so' -type l -print0 2>/dev/null)
-            fi
-            cd / && rm -rf "$CUDNN_DIR"
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=if [ ! -f /etc/fedora-release ]; then
+                  exit 0
+                fi
+                CUDNN_DIR=$(mktemp -d)
+                cd "$CUDNN_DIR"
+                if dnf5 download --enable-repo="fedora-multimedia" cuda-cudnn-devel 2>/dev/null; then
+                  rpm2cpio cuda-cudnn-devel*.rpm | cpio -idm 2>/dev/null
+                  [ -d ./usr/include ] && cp -v ./usr/include/cudnn*.h /usr/include/
+                  while IFS= read -r -d '' link; do
+                    name=$(basename "$link")
+                    versioned=""
+                    for v in /usr/lib64/"${name}".*; do
+                      if [ -f "$v" ] && ! echo "$v" | grep -q '\.so$'; then
+                        versioned="$v"; break
+                      fi
+                    done
+                    [ -n "$versioned" ] && [ ! -e /usr/lib64/"$name" ] && ln -sv "$(basename "$versioned")" /usr/lib64/"$name"
+                  done < <(find ./usr/lib64 -maxdepth 1 -name '*.so' -type l -print0 2>/dev/null)
+                fi
+                cd / && rm -rf "$CUDNN_DIR"
+              run_as: root
+              command: |
                 if [ ! -f /etc/fedora-release ]; then
                   exit 0
                 fi
@@ -116,30 +111,27 @@ cuda:
                   done < <(find ./usr/lib64 -maxdepth 1 -name '*.so' -type l -print0 2>/dev/null)
                 fi
                 cd / && rm -rf "$CUDNN_DIR"
-    cuda-step-1:
-        run: |
-            command=if [ ! -f /etc/arch-release ]; then
-              exit 0
-            fi
-            # nvcc + cuobjdump + ptxas + nvprof — every binary in /opt/cuda/bin
-            for bin in /opt/cuda/bin/*; do
-              [ -e "$bin" ] && ln -sf "$bin" /usr/bin/$(basename "$bin")
-            done
-            # Headers — cudnn*.h live in /opt/cuda/targets/x86_64-linux/include
-            # on the cudnn package, while CUDA's own headers live in
-            # /opt/cuda/include. Symlink both into /usr/include.
-            for inc in /opt/cuda/include/*.h /opt/cuda/targets/x86_64-linux/include/*.h; do
-              [ -e "$inc" ] && ln -sf "$inc" /usr/include/$(basename "$inc")
-            done
-            # Libraries: libcudart, libcudnn, libcurand, etc.
-            mkdir -p /usr/lib64
-            for so in /opt/cuda/targets/x86_64-linux/lib/*.so* /opt/cuda/lib64/*.so*; do
-              [ -e "$so" ] && ln -sf "$so" /usr/lib64/$(basename "$so")
-            done
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=if [ ! -f /etc/arch-release ]; then
+                  exit 0
+                fi
+                # nvcc + cuobjdump + ptxas + nvprof — every binary in /opt/cuda/bin
+                for bin in /opt/cuda/bin/*; do
+                  [ -e "$bin" ] && ln -sf "$bin" /usr/bin/$(basename "$bin")
+                done
+                # Headers — cudnn*.h live in /opt/cuda/targets/x86_64-linux/include
+                # on the cudnn package, while CUDA's own headers live in
+                # /opt/cuda/include. Symlink both into /usr/include.
+                for inc in /opt/cuda/include/*.h /opt/cuda/targets/x86_64-linux/include/*.h; do
+                  [ -e "$inc" ] && ln -sf "$inc" /usr/include/$(basename "$inc")
+                done
+                # Libraries: libcudart, libcudnn, libcurand, etc.
+                mkdir -p /usr/lib64
+                for so in /opt/cuda/targets/x86_64-linux/lib/*.so* /opt/cuda/lib64/*.so*; do
+                  [ -e "$so" ] && ln -sf "$so" /usr/lib64/$(basename "$so")
+                done
+              run_as: root
+              command: |
                 if [ ! -f /etc/arch-release ]; then
                   exit 0
                 fi
@@ -158,58 +150,40 @@ cuda:
                 for so in /opt/cuda/targets/x86_64-linux/lib/*.so* /opt/cuda/lib64/*.so*; do
                   [ -e "$so" ] && ln -sf "$so" /usr/lib64/$(basename "$so")
                 done
-    cuda-step-2:
-        check: the nvcc CUDA compiler driver is on the canonical /usr path
-        plugin: file
-        plugin_input:
-            file: /usr/bin/nvcc
-            exists: true
-    cuda-step-3:
-        check: nvcc reports its CUDA compilation-tools release
-        exit_status: 0
-        stdout:
-            - contains: release
-        plugin: command
-        plugin_input:
-            command: nvcc --version
-    cuda-step-4:
-        check: the cuDNN header is available at /usr/include regardless of distro
-        plugin: file
-        plugin_input:
-            file: /usr/include/cudnn.h
-            exists: true
-    cuda-step-5:
-        check: the CUDA runtime library is linkable from the canonical /usr/lib64 path
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ls /usr/lib64/libcudart.so*
-    cuda-step-6:
-        agent-check: downstream GPU layers (llama-cpp, vllm, comfyui, jupyter-ml) compile against the same /usr-rooted CUDA layout on both Fedora and Arch
-    cuda-cudart-package:
-        check: package=cuda-cudart-devel
-        id: cuda-cudart-package
-        plugin: package
-        plugin_input:
-            package: cuda-cudart-devel
-            package_map:
-                arch: cuda
-                fedora: cuda-cudart-devel
-            installed: true
-    cudnn-header:
-        check: command=ls /usr/include/cudnn.h
-        id: cudnn-header
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ls /usr/include/cudnn.h
-    onnxruntime-package:
-        check: package=onnxruntime
-        id: onnxruntime-package
-        plugin: package
-        plugin_input:
-            package: onnxruntime
-            package_map:
-                arch: python-onnxruntime-cpu
-                fedora: onnxruntime
-            installed: true
+            - check: the nvcc CUDA compiler driver is on the canonical /usr path
+              file:
+                file: /usr/bin/nvcc
+                exists: true
+            - check: nvcc reports its CUDA compilation-tools release
+              exit_status: 0
+              stdout:
+                - contains: release
+              command: nvcc --version
+            - check: the cuDNN header is available at /usr/include regardless of distro
+              file:
+                file: /usr/include/cudnn.h
+                exists: true
+            - check: the CUDA runtime library is linkable from the canonical /usr/lib64 path
+              exit_status: 0
+              command: ls /usr/lib64/libcudart.so*
+            - agent-check: downstream GPU layers (llama-cpp, vllm, comfyui, jupyter-ml) compile against the same /usr-rooted CUDA layout on both Fedora and Arch
+            - check: package=cuda-cudart-devel
+              id: cuda-cudart-package
+              package:
+                package: cuda-cudart-devel
+                package_map:
+                    arch: cuda
+                    fedora: cuda-cudart-devel
+                installed: true
+            - check: command=ls /usr/include/cudnn.h
+              id: cudnn-header
+              exit_status: 0
+              command: ls /usr/include/cudnn.h
+            - check: package=onnxruntime
+              id: onnxruntime-package
+              package:
+                package: onnxruntime
+                package_map:
+                    arch: python-onnxruntime-cpu
+                    fedora: onnxruntime
+                installed: true

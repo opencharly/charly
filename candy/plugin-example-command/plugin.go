@@ -11,7 +11,6 @@ package examplecommand
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -19,9 +18,6 @@ import (
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.181.0001"
 
@@ -36,7 +32,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "command", Word: "examplecommand"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the OUT-OF-PROCESS CLI-mode entry (charly fork/execs the binary with the pass-through

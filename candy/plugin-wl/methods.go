@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/charly/candy/plugin-wl/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -26,18 +27,21 @@ import (
 // (screenshot). Every in-venue action (wlrctl/grim/wtype/wl-clipboard/swaymsg/kdotool/
 // python3-pyatspi/charly-overlay) runs over the host executor reverse channel
 // (sdk.Executor.RunCapture; screenshot pulls the PNG via GetFile) instead of the in-proc
-// DeployExecutor the host-side WlCmd used, so a bed authored against the in-tree verb passes
-// unchanged. The CLI-only `--from-cdp`/`--from-sway`/`--from-x11` coordinate translation is
-// DROPPED (the declarative `wl: click` uses X/Y directly), exactly as cdp/vnc dropped their
-// From* flags — so this module carries NO CDP client and NO X11 geometry helper.
+// DeployExecutor the host-side WlCmd used. The per-verb fields arrive in the step's
+// desugared plugin_input, decoded into the CUE-generated params.WlInput (#WlInput); only
+// the genuinely shared step matchers still ride the Op. The CLI-only
+// `--from-cdp`/`--from-sway`/`--from-x11` coordinate translation is DROPPED (the
+// declarative click method uses X/Y directly), exactly as cdp/vnc dropped their From*
+// flags — so this module carries NO CDP client and NO X11 geometry helper.
 
 const screenshotVenuePath = "/tmp/charly-wl-screenshot.png"
 
 // requiredModifiers mirrors the in-tree wlMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc live-verb seam,
-// which an external verb is not — so the check moves HERE, at dispatch). The field
-// names match spec.Op (and the zero-value required-field semantics — an int coordinate
-// field is "missing" when zero, exactly as the host checked it).
+// which an external verb is not — so the check moves HERE, at dispatch). The names are
+// plugin INPUT keys (sdk.OpModifierZero is map-first over op.PluginInput), keeping the
+// zero-value required-field semantics — an int coordinate field is "missing" when zero,
+// exactly as the host checked it.
 var requiredModifiers = map[string][]string{
 	"geometry":       {"target"},
 	"atspi":          {"action"},
@@ -70,9 +74,11 @@ var requiredModifiers = map[string][]string{
 // dispatch runs one wl method against the venue (over the host executor reverse channel)
 // and returns its captured output. A returned error is the verb FAILING (the in-tree CLI
 // Run() returning an error → exit 1); provider.go maps it through the exit_status / stderr
-// matchers + the artifact validators (screenshot).
-func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	method := string(op.Wl)
+// matchers + the artifact validators (screenshot). op carries the shared step modifiers
+// (the required-modifier check reads the input map through it); the wl-exclusive fields
+// ride the decoded params.WlInput.
+func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op, in *params.WlInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -85,53 +91,53 @@ func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 	case "windows":
 		return wlWindows(ctx, ex)
 	case "geometry":
-		return wlGeometry(ctx, ex, op)
+		return wlGeometry(ctx, ex, in)
 	case "xprop":
-		return wlXprop(ctx, ex, op)
+		return wlXprop(ctx, ex, in)
 	case "atspi":
-		return wlAtspi(ctx, ex, op)
+		return wlAtspi(ctx, ex, in)
 	case "screenshot":
-		return wlScreenshot(ctx, ex, op)
+		return wlScreenshot(ctx, ex, in)
 	case "clipboard":
-		return wlClipboard(ctx, ex, op)
+		return wlClipboard(ctx, ex, in)
 	// side-effect actions
 	case "click":
-		return wlClick(ctx, ex, op)
+		return wlClick(ctx, ex, in)
 	case "double-click":
-		return wlDoubleClick(ctx, ex, op)
+		return wlDoubleClick(ctx, ex, in)
 	case "mouse":
-		return wlMouse(ctx, ex, op)
+		return wlMouse(ctx, ex, in)
 	case "scroll":
-		return wlScroll(ctx, ex, op)
+		return wlScroll(ctx, ex, in)
 	case "drag":
-		return wlDrag(ctx, ex, op)
+		return wlDrag(ctx, ex, in)
 	case "type":
-		return wlType(ctx, ex, op)
+		return wlType(ctx, ex, in)
 	case "key":
-		return wlKey(ctx, ex, op)
+		return wlKey(ctx, ex, in)
 	case "key-combo":
-		return wlKeyCombo(ctx, ex, op)
+		return wlKeyCombo(ctx, ex, in)
 	case "focus":
-		return wlFocus(ctx, ex, op)
+		return wlFocus(ctx, ex, in)
 	case "close":
-		return wlClose(ctx, ex, op)
+		return wlClose(ctx, ex, in)
 	case "fullscreen":
-		return wlFullscreen(ctx, ex, op)
+		return wlFullscreen(ctx, ex, in)
 	case "minimize":
-		return wlMinimize(ctx, ex, op)
+		return wlMinimize(ctx, ex, in)
 	case "exec":
-		return wlExec(ctx, ex, op)
+		return wlExec(ctx, ex, in)
 	case "resolution":
-		return wlResolution(ctx, ex, op)
+		return wlResolution(ctx, ex, in)
 	// overlay nested
 	case "overlay-list":
 		return wlCapture(ctx, ex, "charly-overlay list")
 	case "overlay-status":
 		return wlCapture(ctx, ex, "charly-overlay status")
 	case "overlay-show":
-		return wlOverlayShow(ctx, ex, op)
+		return wlOverlayShow(ctx, ex, in)
 	case "overlay-hide":
-		return wlOverlayHide(ctx, ex, op)
+		return wlOverlayHide(ctx, ex, in)
 	// sway nested
 	case "sway-tree":
 		return swaymsgCapture(ctx, ex, "-t", "get_tree")
@@ -140,17 +146,17 @@ func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 	case "sway-outputs":
 		return swaymsgCapture(ctx, ex, "-t", "get_outputs")
 	case "sway-msg":
-		return swaymsgCapture(ctx, ex, op.Command)
+		return swaymsgCapture(ctx, ex, in.Command)
 	case "sway-focus":
-		return swayFocus(ctx, ex, op)
+		return swayFocus(ctx, ex, in)
 	case "sway-move":
-		return swayMove(ctx, ex, op)
+		return swayMove(ctx, ex, in)
 	case "sway-resize":
-		return swaymsgCapture(ctx, ex, append([]string{"resize"}, strings.Fields(op.Target)...)...)
+		return swaymsgCapture(ctx, ex, append([]string{"resize"}, strings.Fields(in.Target)...)...)
 	case "sway-layout":
-		return swaymsgCapture(ctx, ex, "layout", op.Target)
+		return swaymsgCapture(ctx, ex, "layout", in.Target)
 	case "sway-workspace":
-		return swaymsgCapture(ctx, ex, "workspace", "number", op.Target)
+		return swaymsgCapture(ctx, ex, "workspace", "number", in.Target)
 	case "sway-kill":
 		return swaymsgCapture(ctx, ex, "kill")
 	case "sway-floating":
@@ -263,19 +269,19 @@ func wlWindows(ctx context.Context, ex *sdk.Executor) (string, error) {
 
 // wlGeometry gets window geometry compositor-agnostically: kdotool (KWin), the sway tree,
 // xdotool (XWayland), then wlr-randr (Wayland-native maximized fallback).
-func wlGeometry(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlGeometry(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
-		return kdotoolSearchAction(ctx, ex, op.Target, "getwindowgeometry")
+		return kdotoolSearchAction(ctx, ex, in.Target, "getwindowgeometry")
 	}
 
-	if rect, err := FindWindowRect(ctx, ex, op.Target); err == nil {
+	if rect, err := FindWindowRect(ctx, ex, in.Target); err == nil {
 		out, _ := json.Marshal(map[string]int{"x": rect.X, "y": rect.Y, "width": rect.Width, "height": rect.Height})
 		return string(out), nil
 	}
 
 	shellCmd := fmt.Sprintf(
 		`export DISPLAY=:0 && WID=$(xdotool search --class %s 2>/dev/null | head -1 || xdotool search --name %s 2>/dev/null | head -1) && [ -n "$WID" ] && xdotool getwindowgeometry "$WID" 2>/dev/null`,
-		kit.ShellQuote(op.Target), kit.ShellQuote(op.Target),
+		kit.ShellQuote(in.Target), kit.ShellQuote(in.Target),
 	)
 	if data, err := wlCapture(ctx, ex, shellCmd); err == nil {
 		var x, y, w, h int
@@ -313,21 +319,21 @@ func wlGeometry(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, err
 			}
 		}
 	}
-	return "", fmt.Errorf("querying geometry for %q: not found via sway, xdotool, or wlr-randr", op.Target)
+	return "", fmt.Errorf("querying geometry for %q: not found via sway, xdotool, or wlr-randr", in.Target)
 }
 
 // wlXprop queries X11 window properties via xprop (XWayland windows only).
-func wlXprop(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlXprop(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if ex.VenueRunSilent(ctx, `pgrep -f Xwayland >/dev/null 2>&1`) != nil {
 		return "XWayland is not running (no X11 clients have been launched)", nil
 	}
 	var shellCmd string
-	if op.Target == "" {
+	if in.Target == "" {
 		shellCmd = `export DISPLAY=:0 && WID=$(xdotool getactivewindow 2>/dev/null) && [ -n "$WID" ] && xprop -id "$WID" WM_CLASS _NET_WM_NAME _NET_WM_WINDOW_TYPE _NET_WM_PID 2>/dev/null && xdotool getwindowgeometry "$WID" 2>/dev/null || echo "No active X11 window"`
 	} else {
 		shellCmd = fmt.Sprintf(
 			`export DISPLAY=:0 && WID=$(xdotool search --class %s 2>/dev/null | head -1 || xdotool search --name %s 2>/dev/null | head -1) && [ -n "$WID" ] && xprop -id "$WID" WM_CLASS _NET_WM_NAME _NET_WM_WINDOW_TYPE _NET_WM_PID 2>/dev/null && xdotool getwindowgeometry "$WID" 2>/dev/null || echo "No X11 window matching %s"`,
-			kit.ShellQuote(op.Target), kit.ShellQuote(op.Target), op.Target,
+			kit.ShellQuote(in.Target), kit.ShellQuote(in.Target), in.Target,
 		)
 	}
 	return wlCapture(ctx, ex, shellCmd)
@@ -336,26 +342,26 @@ func wlXprop(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error)
 // wlAtspi queries the accessibility tree via AT-SPI2 (python3-pyatspi). Uses /usr/bin/python3
 // explicitly so the system RPM packages (python3-pyatspi, python3-gobject) resolve, not a
 // pixi python first on PATH.
-func wlAtspi(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	switch op.Action {
+func wlAtspi(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	switch in.Action {
 	case "tree", "find", "click":
 	default:
-		return "", fmt.Errorf("unknown atspi action %q (valid: tree, find, click)", op.Action)
+		return "", fmt.Errorf("unknown atspi action %q (valid: tree, find, click)", in.Action)
 	}
 	var shellCmd string
-	if op.Query != "" {
-		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s %s", kit.ShellQuote(atspiScript), kit.ShellQuote(op.Action), kit.ShellQuote(op.Query))
+	if in.Query != "" {
+		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s %s", kit.ShellQuote(atspiScript), kit.ShellQuote(in.Action), kit.ShellQuote(in.Query))
 	} else {
-		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s", kit.ShellQuote(atspiScript), kit.ShellQuote(op.Action))
+		shellCmd = fmt.Sprintf("/usr/bin/python3 -c %s %s", kit.ShellQuote(atspiScript), kit.ShellQuote(in.Action))
 	}
 	wrapped := fmt.Sprintf(`export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/tmp/dbus-session}" && %s`, shellCmd)
 	return wlCapture(ctx, ex, wrapped)
 }
 
 // wlScreenshot captures the desktop to a venue file (pixelflux-screenshot / grim), pulls it
-// off the venue over the reverse channel (GetFile), and writes it to op.Artifact (the host
+// off the venue over the reverse channel (GetFile), and writes it to in.Artifact (the host
 // path) BEFORE the provider's RunArtifactValidators reads it.
-func wlScreenshot(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlScreenshot(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	var captureCmd string
 	switch {
 	case ex.VenueHasTool(ctx, "pixelflux-screenshot"):
@@ -372,39 +378,39 @@ func wlScreenshot(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, e
 	if err != nil {
 		return "", fmt.Errorf("pulling screenshot: %w (file: %s)", err, screenshotVenuePath)
 	}
-	if err := os.WriteFile(op.Artifact, data, 0o644); err != nil {
-		return "", fmt.Errorf("writing screenshot to %s: %w", op.Artifact, err)
+	if err := os.WriteFile(in.Artifact, data, 0o644); err != nil {
+		return "", fmt.Errorf("writing screenshot to %s: %w", in.Artifact, err)
 	}
 	_ = ex.VenueRunSilent(ctx, "rm -f "+kit.ShellQuote(screenshotVenuePath))
-	return fmt.Sprintf("Screenshot saved to %s (%d bytes)", op.Artifact, len(data)), nil
+	return fmt.Sprintf("Screenshot saved to %s (%d bytes)", in.Artifact, len(data)), nil
 }
 
 // wlClipboard reads or writes the Wayland clipboard via wl-clipboard.
-func wlClipboard(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlClipboard(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	// wl-clipboard (wl-copy/wl-paste) needs the wlr-data-control protocol, which
 	// KWin does NOT implement — on KWin these HANG forever (no reply), wedging
 	// check-live for the full deadline. Fail fast with a clear error instead.
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", fmt.Errorf("clipboard unsupported on KWin (needs wlr-data-control, which KWin does not implement)")
 	}
-	switch op.Action {
+	switch in.Action {
 	case "get":
 		return wlCapture(ctx, ex, "wl-paste 2>/dev/null")
 	case "set":
-		if op.Text == "" {
+		if in.Text == "" {
 			return "", fmt.Errorf("text argument required for 'set' action")
 		}
-		if _, err := wlCapture(ctx, ex, fmt.Sprintf("printf '%%s' %s | wl-copy", kit.ShellQuote(op.Text))); err != nil {
+		if _, err := wlCapture(ctx, ex, fmt.Sprintf("printf '%%s' %s | wl-copy", kit.ShellQuote(in.Text))); err != nil {
 			return "", fmt.Errorf("setting clipboard: %w", err)
 		}
-		return fmt.Sprintf("Clipboard set (%d chars)", len(op.Text)), nil
+		return fmt.Sprintf("Clipboard set (%d chars)", len(in.Text)), nil
 	case "clear":
 		if _, err := wlCapture(ctx, ex, "wl-copy --clear"); err != nil {
 			return "", fmt.Errorf("clearing clipboard: %w", err)
 		}
 		return "Clipboard cleared", nil
 	default:
-		return "", fmt.Errorf("unknown action %q (valid: get, set, clear)", op.Action)
+		return "", fmt.Errorf("unknown action %q (valid: get, set, clear)", in.Action)
 	}
 }
 
@@ -413,68 +419,68 @@ func wlClipboard(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, er
 // the CLI-only --from-cdp/--from-sway/--from-x11 translation is dropped.
 // ---------------------------------------------------------------------------
 
-func wlClick(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlClick(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", errKWinPointerUnsupported("click")
 	}
-	btn := wlButton(op.Button)
+	btn := wlButton(in.Button)
 	if btn == "" {
-		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", op.Button)
+		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", in.Button)
 	}
 	cmd := fmt.Sprintf(
 		"wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d && sleep 0.05 && wlrctl pointer click %s",
-		op.X, op.Y, btn,
+		in.X, in.Y, btn,
 	)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("clicking at (%d, %d): %w", op.X, op.Y, err)
+		return "", fmt.Errorf("clicking at (%d, %d): %w", in.X, in.Y, err)
 	}
-	return fmt.Sprintf("Clicked %s at (%d, %d)", btnName(op.Button), op.X, op.Y), nil
+	return fmt.Sprintf("Clicked %s at (%d, %d)", btnName(in.Button), in.X, in.Y), nil
 }
 
-func wlDoubleClick(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlDoubleClick(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", errKWinPointerUnsupported("double-click")
 	}
-	btn := wlButton(op.Button)
+	btn := wlButton(in.Button)
 	if btn == "" {
-		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", op.Button)
+		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", in.Button)
 	}
 	cmd := fmt.Sprintf(
 		"wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d && sleep 0.05 && wlrctl pointer click %s && sleep 0.050 && wlrctl pointer click %s",
-		op.X, op.Y, btn, btn,
+		in.X, in.Y, btn, btn,
 	)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("double-clicking at (%d, %d): %w", op.X, op.Y, err)
+		return "", fmt.Errorf("double-clicking at (%d, %d): %w", in.X, in.Y, err)
 	}
-	return fmt.Sprintf("Double-clicked %s at (%d, %d)", btnName(op.Button), op.X, op.Y), nil
+	return fmt.Sprintf("Double-clicked %s at (%d, %d)", btnName(in.Button), in.X, in.Y), nil
 }
 
-func wlMouse(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlMouse(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", errKWinPointerUnsupported("mouse")
 	}
-	cmd := fmt.Sprintf("wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d", op.X, op.Y)
+	cmd := fmt.Sprintf("wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d", in.X, in.Y)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("moving mouse to (%d, %d): %w", op.X, op.Y, err)
+		return "", fmt.Errorf("moving mouse to (%d, %d): %w", in.X, in.Y, err)
 	}
-	return fmt.Sprintf("Moved mouse to (%d, %d)", op.X, op.Y), nil
+	return fmt.Sprintf("Moved mouse to (%d, %d)", in.X, in.Y), nil
 }
 
-func wlScroll(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	btn, err := wlScrollButton(op.Direction)
+func wlScroll(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	btn, err := wlScrollButton(in.Direction)
 	if err != nil {
 		return "", err
 	}
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", errKWinPointerUnsupported("scroll")
 	}
-	amount := op.Amount
+	amount := in.Amount
 	if amount == 0 {
 		amount = 3
 	}
-	moveCmd := fmt.Sprintf("wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d", op.X, op.Y)
+	moveCmd := fmt.Sprintf("wlrctl pointer move -10000 -10000 && wlrctl pointer move %d %d", in.X, in.Y)
 	if err := wlSilent(ctx, ex, moveCmd); err != nil {
-		return "", fmt.Errorf("moving pointer to (%d, %d): %w", op.X, op.Y, err)
+		return "", fmt.Errorf("moving pointer to (%d, %d): %w", in.X, in.Y, err)
 	}
 	var clickCmds []string
 	for range amount {
@@ -482,30 +488,30 @@ func wlScroll(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 	}
 	if _, err := wlCapture(ctx, ex, strings.Join(clickCmds, " && sleep 0.02 && ")); err != nil {
 		var keyName string
-		switch op.Direction {
+		switch in.Direction {
 		case "up":
 			keyName = "Page_Up"
 		case "down":
 			keyName = "Page_Down"
 		default:
-			return "", fmt.Errorf("scrolling %s at (%d, %d): xdotool failed and no wtype fallback for %s: %w", op.Direction, op.X, op.Y, op.Direction, err)
+			return "", fmt.Errorf("scrolling %s at (%d, %d): xdotool failed and no wtype fallback for %s: %w", in.Direction, in.X, in.Y, in.Direction, err)
 		}
 		for range amount {
 			if _, err := wlCapture(ctx, ex, "wtype -k "+keyName); err != nil {
 				return "", fmt.Errorf("scroll fallback via wtype: %w", err)
 			}
 		}
-		return fmt.Sprintf("Scrolled %s %d steps at (%d, %d) via wtype fallback", op.Direction, amount, op.X, op.Y), nil
+		return fmt.Sprintf("Scrolled %s %d steps at (%d, %d) via wtype fallback", in.Direction, amount, in.X, in.Y), nil
 	}
-	return fmt.Sprintf("Scrolled %s %d steps at (%d, %d)", op.Direction, amount, op.X, op.Y), nil
+	return fmt.Sprintf("Scrolled %s %d steps at (%d, %d)", in.Direction, amount, in.X, in.Y), nil
 }
 
-func wlDrag(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlDrag(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", errKWinPointerUnsupported("drag")
 	}
 	var btnNum int
-	switch op.Button {
+	switch in.Button {
 	case "", "left":
 		btnNum = 1
 	case "middle":
@@ -513,42 +519,42 @@ func wlDrag(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) 
 	case "right":
 		btnNum = 3
 	default:
-		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", op.Button)
+		return "", fmt.Errorf("unknown button %q (valid: left, right, middle)", in.Button)
 	}
 	cmd := fmt.Sprintf(
 		"export DISPLAY=:0 && xdotool mousemove %d %d mousedown %d && sleep 0.200 && xdotool mousemove %d %d mouseup %d",
-		op.X, op.Y, btnNum, op.X2, op.Y2, btnNum,
+		in.X, in.Y, btnNum, in.X2, in.Y2, btnNum,
 	)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("dragging from (%d,%d) to (%d,%d): %w (requires XWayland)", op.X, op.Y, op.X2, op.Y2, err)
+		return "", fmt.Errorf("dragging from (%d,%d) to (%d,%d): %w (requires XWayland)", in.X, in.Y, in.X2, in.Y2, err)
 	}
-	return fmt.Sprintf("Dragged from (%d, %d) to (%d, %d)", op.X, op.Y, op.X2, op.Y2), nil
+	return fmt.Sprintf("Dragged from (%d, %d) to (%d, %d)", in.X, in.Y, in.X2, in.Y2), nil
 }
 
-func wlType(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlType(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	// wtype needs zwp_virtual_keyboard_manager_v1, which KWin does NOT implement —
 	// on KWin it HANGS forever (no reply), wedging check-live. Fail fast instead.
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", fmt.Errorf("keyboard typing unsupported on KWin (needs zwp_virtual_keyboard_manager_v1, which KWin does not implement)")
 	}
-	if _, err := wlCapture(ctx, ex, "wtype -- "+kit.ShellQuote(op.Text)); err != nil {
+	if _, err := wlCapture(ctx, ex, "wtype -- "+kit.ShellQuote(in.Text)); err != nil {
 		return "", fmt.Errorf("typing text: %w", err)
 	}
-	return fmt.Sprintf("Typed %d characters", len(op.Text)), nil
+	return fmt.Sprintf("Typed %d characters", len(in.Text)), nil
 }
 
-func wlKey(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	if !wlValidKey(op.KeyName) {
-		return "", fmt.Errorf("unknown key %q (valid: %s)", op.KeyName, wlKeyNames())
+func wlKey(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	if !wlValidKey(in.KeyName) {
+		return "", fmt.Errorf("unknown key %q (valid: %s)", in.KeyName, wlKeyNames())
 	}
-	if _, err := wlCapture(ctx, ex, "wtype -k "+kit.ShellQuote(op.KeyName)); err != nil {
-		return "", fmt.Errorf("pressing key %s: %w", op.KeyName, err)
+	if _, err := wlCapture(ctx, ex, "wtype -k "+kit.ShellQuote(in.KeyName)); err != nil {
+		return "", fmt.Errorf("pressing key %s: %w", in.KeyName, err)
 	}
-	return fmt.Sprintf("Pressed key %s", op.KeyName), nil
+	return fmt.Sprintf("Pressed key %s", in.KeyName), nil
 }
 
-func wlKeyCombo(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	modifiers, key, err := parseKeyCombo(op.Combo)
+func wlKeyCombo(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	modifiers, key, err := parseKeyCombo(in.Combo)
 	if err != nil {
 		return "", err
 	}
@@ -562,88 +568,88 @@ func wlKeyCombo(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, err
 		args = append(args, "-k", key)
 	}
 	if _, err := wlCapture(ctx, ex, "wtype "+strings.Join(args, " ")); err != nil {
-		return "", fmt.Errorf("sending key combo %s: %w", op.Combo, err)
+		return "", fmt.Errorf("sending key combo %s: %w", in.Combo, err)
 	}
-	return fmt.Sprintf("Sent key combo %s", op.Combo), nil
+	return fmt.Sprintf("Sent key combo %s", in.Combo), nil
 }
 
-func wlFocus(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlFocus(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
-		if _, err := kdotoolSearchAction(ctx, ex, op.Target, "windowactivate"); err != nil {
-			return "", fmt.Errorf("focusing window %q via kdotool: %w", op.Target, err)
+		if _, err := kdotoolSearchAction(ctx, ex, in.Target, "windowactivate"); err != nil {
+			return "", fmt.Errorf("focusing window %q via kdotool: %w", in.Target, err)
 		}
-		return fmt.Sprintf("Focused window matching %q via kdotool", op.Target), nil
+		return fmt.Sprintf("Focused window matching %q via kdotool", in.Target), nil
 	}
 	if ex.VenueRunSilent(ctx, "command -v wlrctl >/dev/null 2>&1") == nil {
-		if wlSilent(ctx, ex, "wlrctl toplevel focus "+kit.ShellQuote(op.Target)) == nil {
-			return fmt.Sprintf("Focused window matching %q via wlrctl", op.Target), nil
+		if wlSilent(ctx, ex, "wlrctl toplevel focus "+kit.ShellQuote(in.Target)) == nil {
+			return fmt.Sprintf("Focused window matching %q via wlrctl", in.Target), nil
 		}
 	}
 	cmd := fmt.Sprintf(
 		`export DISPLAY=:0 && xdotool search --name %s windowactivate 2>/dev/null || export DISPLAY=:0 && xdotool search --class %s windowactivate`,
-		kit.ShellQuote(op.Target), kit.ShellQuote(op.Target),
+		kit.ShellQuote(in.Target), kit.ShellQuote(in.Target),
 	)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("focusing window %q: %w", op.Target, err)
+		return "", fmt.Errorf("focusing window %q: %w", in.Target, err)
 	}
-	return fmt.Sprintf("Focused window matching %q via xdotool", op.Target), nil
+	return fmt.Sprintf("Focused window matching %q via xdotool", in.Target), nil
 }
 
-func wlClose(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlClose(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
-		if _, err := kdotoolSearchAction(ctx, ex, op.Target, "windowclose"); err != nil {
-			return "", fmt.Errorf("closing window %q via kdotool: %w", op.Target, err)
+		if _, err := kdotoolSearchAction(ctx, ex, in.Target, "windowclose"); err != nil {
+			return "", fmt.Errorf("closing window %q via kdotool: %w", in.Target, err)
 		}
-		return fmt.Sprintf("Closed window matching %q", op.Target), nil
+		return fmt.Sprintf("Closed window matching %q", in.Target), nil
 	}
-	if err := wlrctlToplevel(ctx, ex, "close", op.Target); err != nil {
-		return "", fmt.Errorf("closing window %q: %w", op.Target, err)
+	if err := wlrctlToplevel(ctx, ex, "close", in.Target); err != nil {
+		return "", fmt.Errorf("closing window %q: %w", in.Target, err)
 	}
-	return fmt.Sprintf("Closed window matching %q", op.Target), nil
+	return fmt.Sprintf("Closed window matching %q", in.Target), nil
 }
 
-func wlFullscreen(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlFullscreen(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
-		if _, err := kdotoolSearchAction(ctx, ex, op.Target, "windowstate", "--toggle", "FULLSCREEN"); err != nil {
-			return "", fmt.Errorf("toggling fullscreen on %q via kdotool: %w", op.Target, err)
+		if _, err := kdotoolSearchAction(ctx, ex, in.Target, "windowstate", "--toggle", "FULLSCREEN"); err != nil {
+			return "", fmt.Errorf("toggling fullscreen on %q via kdotool: %w", in.Target, err)
 		}
-		return fmt.Sprintf("Toggled fullscreen on window matching %q", op.Target), nil
+		return fmt.Sprintf("Toggled fullscreen on window matching %q", in.Target), nil
 	}
-	if err := wlrctlToplevel(ctx, ex, "fullscreen", op.Target); err != nil {
-		return "", fmt.Errorf("toggling fullscreen on %q: %w", op.Target, err)
+	if err := wlrctlToplevel(ctx, ex, "fullscreen", in.Target); err != nil {
+		return "", fmt.Errorf("toggling fullscreen on %q: %w", in.Target, err)
 	}
-	return fmt.Sprintf("Toggled fullscreen on window matching %q", op.Target), nil
+	return fmt.Sprintf("Toggled fullscreen on window matching %q", in.Target), nil
 }
 
-func wlMinimize(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlMinimize(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
-		if _, err := kdotoolSearchAction(ctx, ex, op.Target, "windowminimize"); err != nil {
-			return "", fmt.Errorf("toggling minimize on %q via kdotool: %w", op.Target, err)
+		if _, err := kdotoolSearchAction(ctx, ex, in.Target, "windowminimize"); err != nil {
+			return "", fmt.Errorf("toggling minimize on %q via kdotool: %w", in.Target, err)
 		}
-		return fmt.Sprintf("Toggled minimize on window matching %q", op.Target), nil
+		return fmt.Sprintf("Toggled minimize on window matching %q", in.Target), nil
 	}
-	if err := wlrctlToplevel(ctx, ex, "minimize", op.Target); err != nil {
-		return "", fmt.Errorf("toggling minimize on %q: %w", op.Target, err)
+	if err := wlrctlToplevel(ctx, ex, "minimize", in.Target); err != nil {
+		return "", fmt.Errorf("toggling minimize on %q: %w", in.Target, err)
 	}
-	return fmt.Sprintf("Toggled minimize on window matching %q", op.Target), nil
+	return fmt.Sprintf("Toggled minimize on window matching %q", in.Target), nil
 }
 
-func wlExec(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlExec(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	// Background the process so it doesn't block. DISPLAY=:0 for XWayland apps.
 	// Don't shellQuote — the command may contain args (e.g. "xterm -hold").
-	cmd := fmt.Sprintf("export DISPLAY=:0; %s &", op.Command)
+	cmd := fmt.Sprintf("export DISPLAY=:0; %s &", in.Command)
 	if _, err := wlCapture(ctx, ex, cmd); err != nil {
-		return "", fmt.Errorf("launching %q: %w", op.Command, err)
+		return "", fmt.Errorf("launching %q: %w", in.Command, err)
 	}
-	return fmt.Sprintf("Launched %q", op.Command), nil
+	return fmt.Sprintf("Launched %q", in.Command), nil
 }
 
-func wlResolution(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlResolution(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if detectCompositor(ctx, ex) == "kwin" {
 		return "", fmt.Errorf("wl resolution: not supported on KWin (kscreen-doctor has no working backend on the headless Plasma session — it hangs; tracked as its own cutover). The selkies stream resolution is set at session start, not at runtime")
 	}
-	// op.Target carries the WxH resolution (the in-tree resolution positional).
-	res := op.Target
+	// in.Target carries the WxH resolution (the in-tree resolution positional).
+	res := in.Target
 	parts := strings.SplitN(res, "x", 2)
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid resolution %q (expected WxH, e.g. 1920x1080)", res)
@@ -677,7 +683,7 @@ func wlResolution(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, e
 // overlayDaemonSession is the tmux session name for the overlay daemon.
 const overlayDaemonSession = "charly-overlay-daemon"
 
-func wlOverlayShow(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func wlOverlayShow(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
 	if err := checkOverlayAvailable(ctx, ex); err != nil {
 		return "", err
 	}
@@ -685,19 +691,19 @@ func wlOverlayShow(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, 
 		return "", err
 	}
 	// The declarative overlay-show is the text-overlay positional form: the text is
-	// required; op.Target, when set, names the overlay.
-	args := "charly-overlay show --type text --text " + kit.ShellQuote(op.Text)
-	if op.Target != "" {
-		args += " --name " + kit.ShellQuote(op.Target)
+	// required; in.Target, when set, names the overlay.
+	args := "charly-overlay show --type text --text " + kit.ShellQuote(in.Text)
+	if in.Target != "" {
+		args += " --name " + kit.ShellQuote(in.Target)
 	}
 	return wlCapture(ctx, ex, args)
 }
 
-func wlOverlayHide(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	if op.Target == "all" {
+func wlOverlayHide(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	if in.Target == "all" {
 		return wlCapture(ctx, ex, "charly-overlay hide --all")
 	}
-	return wlCapture(ctx, ex, "charly-overlay hide --name "+kit.ShellQuote(op.Target))
+	return wlCapture(ctx, ex, "charly-overlay hide --name "+kit.ShellQuote(in.Target))
 }
 
 // checkOverlayAvailable verifies charly-overlay is installed on the venue.
@@ -739,19 +745,19 @@ func ensureOverlayDaemon(ctx context.Context, ex *sdk.Executor) error {
 // Sway IPC methods (ported from charly/wl.go)
 // ---------------------------------------------------------------------------
 
-func swayFocus(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	if strings.Contains(op.Target, "=") || strings.HasPrefix(op.Target, "[") {
-		criteria := op.Target
+func swayFocus(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	if strings.Contains(in.Target, "=") || strings.HasPrefix(in.Target, "[") {
+		criteria := in.Target
 		if !strings.HasPrefix(criteria, "[") {
 			criteria = "[" + criteria + "]"
 		}
 		return swaymsgCapture(ctx, ex, criteria+" focus")
 	}
-	return swaymsgCapture(ctx, ex, "focus", op.Target)
+	return swaymsgCapture(ctx, ex, "focus", in.Target)
 }
 
-func swayMove(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	target := op.Target
+func swayMove(ctx context.Context, ex *sdk.Executor, in *params.WlInput) (string, error) {
+	target := in.Target
 	if strings.HasPrefix(target, "workspace") {
 		ws := strings.TrimPrefix(target, "workspace ")
 		return swaymsgCapture(ctx, ex, "move", "container", "to", "workspace", "number", ws)

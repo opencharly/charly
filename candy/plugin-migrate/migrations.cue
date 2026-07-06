@@ -17,4 +17,11 @@
 //
 // A structural reshape the ops can't express sets `apply: "<hook>"` and registers
 // one Go hook in goHooks. See /charly-build:migrate.
-migrations: []
+migrations: [
+	{
+		version:      "2026.186.2323"
+		name:         "compact-node-form"
+		touches_host: true
+		apply:        "compactNodeForm"
+	},
+]

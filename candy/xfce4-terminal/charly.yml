@@ -6,33 +6,26 @@ xfce4-terminal:
             Installs xfce4-terminal and a sway config.d snippet so the terminal
             is available in the desktop. Verifiable: the xfce4-terminal binary is
             installed and the sway config snippet lands at its expected path.
-    xfce4-terminal-require:
         require:
             - sway
-    xfce4-terminal-distro:
         distro:
             fedora:
                 package:
                     - xfce4-terminal
-    xfce4-terminal-step-0:
-        run: mkdir=${HOME}/.config/sway/config.d
-        mkdir: "${HOME}/.config/sway/config.d"
-        run_as: "${USER}"
-    xfce4-terminal-step-1:
-        run: copy=xfce4-terminal.conf
-        copy: xfce4-terminal.conf
-        to: "${HOME}/.config/sway/config.d/xfce4-terminal.conf"
-        mode: "0644"
-        run_as: "${USER}"
-    xfce4-terminal-step-2:
-        check: the xfce4-terminal binary is installed at /usr/bin/xfce4-terminal
-        plugin: file
-        plugin_input:
-            file: /usr/bin/xfce4-terminal
-            exists: true
-    xfce4-terminal-step-3:
-        check: the sway config snippet for the terminal is installed
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/sway/config.d/xfce4-terminal.conf
-            exists: true
+        plan:
+            - run: mkdir=${HOME}/.config/sway/config.d
+              mkdir: "${HOME}/.config/sway/config.d"
+              run_as: "${USER}"
+            - run: copy=xfce4-terminal.conf
+              copy: xfce4-terminal.conf
+              to: "${HOME}/.config/sway/config.d/xfce4-terminal.conf"
+              mode: "0644"
+              run_as: "${USER}"
+            - check: the xfce4-terminal binary is installed at /usr/bin/xfce4-terminal
+              file:
+                file: /usr/bin/xfce4-terminal
+                exists: true
+            - check: the sway config snippet for the terminal is installed
+              file:
+                file: ${HOME}/.config/sway/config.d/xfce4-terminal.conf
+                exists: true

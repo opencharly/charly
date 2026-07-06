@@ -27,15 +27,14 @@ func (f *fakeExternalVerb) Invoke(_ context.Context, op *Operation) (*Result, er
 // TestInvokeVerbProvider_ExternalCharlyVerb proves the external-charly-verb dispatch
 // (the `else` branch in checkrun.go routes here): a live verb word whose provider is
 // OUT-OF-PROCESS (not a CheckVerbProvider) is dispatched via invokeVerbProvider, which
-// hands the plugin the FULL Op as params_json. So a verb's params stay authored in #Op
-// (`kube: apply`, `namespace: demo`) with NO migration when the verb's implementation
-// moves out-of-tree — the plugin reads them from the Op it is handed, exactly as the
-// former in-proc dispatcher did. This is the additive enabler for Phase-1 verb extraction.
+// hands the plugin the FULL Op as params_json: the desugared internal envelope
+// (Plugin + PluginInput) reaches the provider verbatim, so the plugin decodes its
+// own input def from PluginInput.
 func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 	r := &Runner{Mode: RunModeBox}
 	fake := &fakeExternalVerb{reply: `{"status":"pass","message":"saw-op"}`}
 
-	op := &Op{Kube: "apply", Namespace: "demo"}
+	op := &Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}
 	res := r.invokeVerbProvider(context.Background(), fake, "kube", op)
 	if res.Status != TestPass {
 		t.Fatalf("status=%v msg=%q, want pass", res.Status, res.Message)
@@ -53,8 +52,8 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 	if err := json.Unmarshal(fake.gotParams, &seen); err != nil {
 		t.Fatalf("params_json is not the Op: %v", err)
 	}
-	if string(seen.Kube) != "apply" || seen.Namespace != "demo" {
-		t.Fatalf("plugin saw Op{Kube:%q,Namespace:%q}, want apply/demo — the full #Op did not reach it",
-			seen.Kube, seen.Namespace)
+	if seen.PluginInput["method"] != "apply" || seen.PluginInput["namespace"] != "demo" {
+		t.Fatalf("plugin saw PluginInput %v, want method=apply namespace=demo — the full Op did not reach it",
+			seen.PluginInput)
 	}
 }

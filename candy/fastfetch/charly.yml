@@ -8,7 +8,6 @@ fastfetch:
             report (OS, kernel, host, CPU, GPU, memory) beside an ASCII distro
             logo and exposes a --version flag, so both its presence and its
             runtime behaviour are verifiable inside a disposable container.
-    fastfetch-distro:
         distro:
             arch:
                 package:
@@ -16,32 +15,22 @@ fastfetch:
             fedora:
                 package:
                     - fastfetch
-    fastfetch-step-0:
-        check: the fastfetch binary is installed at /usr/bin/fastfetch
-        plugin: file
-        plugin_input:
-            file: /usr/bin/fastfetch
-            exists: true
-    fastfetch-step-1:
-        check: fastfetch --version prints a version banner and exits 0
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/fastfetch --version 2>&1
-    fastfetch-step-2:
-        check: running fastfetch in pipe mode prints a system-information report and exits 0
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/fastfetch --pipe --logo none 2>&1
-    fastfetch-step-3:
-        agent-check: the report is human-readable, grouping system facts (OS, kernel, CPU, memory) into labelled lines
-    fastfetch-package:
-        check: package=fastfetch
-        id: fastfetch-package
-        plugin: package
-        plugin_input:
-            package: fastfetch
-            installed: true
+        plan:
+            - check: the fastfetch binary is installed at /usr/bin/fastfetch
+              file:
+                file: /usr/bin/fastfetch
+                exists: true
+            - check: fastfetch --version prints a version banner and exits 0
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: /usr/bin/fastfetch --version 2>&1
+            - check: running fastfetch in pipe mode prints a system-information report and exits 0
+              exit_status: 0
+              command: /usr/bin/fastfetch --pipe --logo none 2>&1
+            - agent-check: the report is human-readable, grouping system facts (OS, kernel, CPU, memory) into labelled lines
+            - check: package=fastfetch
+              id: fastfetch-package
+              package:
+                package: fastfetch
+                installed: true

@@ -9,16 +9,13 @@ plugin-egress:
             validation logic + the egress CUE schemas (incl. the vendored cloud-config) live
             here; charly's in-core ValidateEgress* functions are a thin shim that Invokes this
             plugin's OpValidate. Compiled-in (the build/deploy hot paths call it many times).
-    plugin-egress-decl:
         plugin:
             providers:
                 - verb:egress
             source: github.com/opencharly/charly/candy/plugin-egress
-    egress-module-present:
-        check: the egress validation plugin ships a buildable Go module the host compiles in
-        id: egress-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the egress validation plugin ships a buildable Go module the host compiles in
+              id: egress-module-present
+              context:
+                - build
+              command: "true"

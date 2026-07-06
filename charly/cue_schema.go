@@ -147,17 +147,15 @@ func assembleAndValidateEntitySteps(gn *genericNode, label string) error {
 }
 
 // validateCandyManifestCUE validates a candy manifest. A legacy kind-keyed
-// manifest (`candy: {…}`) validates its entity against #Candy; a unified node-form
-// manifest (`<name>: {candy: …, <children>}`) validates the WHOLE document against
-// #NodeDoc (the structural gate) PLUS each candy node's value against #CandyValue
-// concretely.
+// manifest validates the WHOLE document against #NodeDoc (the structural gate),
+// then walks the parsed + DESUGARED node tree: each candy node's assembled body
+// validates against #CandyValue concretely and every entity's plan steps type
+// against the closed #Step (validateNodeFormSteps → validateEntityNodeRec) —
+// the desugared tree is the validation subject, never the raw sugar bytes.
 func validateCandyManifestCUE(path string, data []byte) error {
 	doc, err := cueDocFromYAML(path, data)
 	if err != nil {
 		return err
-	}
-	if c := doc.LookupPath(cue.ParsePath("candy")); c.Exists() {
-		return validateEntityCUE("candy", path, c)
 	}
 	def := sharedCueSchema.LookupPath(cue.ParsePath("#NodeDoc"))
 	if def.Err() != nil {
@@ -166,36 +164,10 @@ func validateCandyManifestCUE(path string, data []byte) error {
 	if verr := doc.Unify(def).Validate(cue.Concrete(true)); verr != nil {
 		return fmt.Errorf("%s: %s", path, errors.Details(verr, nil))
 	}
-	// C2-candy: #Node is now an OPEN struct (candy externalized to candy/plugin-candy-kind), so
-	// the #NodeDoc gate above is STRUCTURAL only — it no longer validates the candy VALUE (the
-	// former #CandyArm did). Restore the CONCRETE candy-value gate here (version+description
-	// required, unknown inline fields rejected) by validating each candy node's inline `candy`
-	// value against the KEPT #CandyValue def — the box-validate counterpart of the load-time
-	// host-side validateKindValueCUE (which is closedness-only).
-	cdef := sharedCueSchema.LookupPath(cue.ParsePath("#CandyValue"))
-	if cdef.Err() != nil {
-		return fmt.Errorf("%s: #CandyValue schema not found: %w", path, cdef.Err())
-	}
-	it, ierr := doc.Fields()
-	if ierr != nil {
-		return fmt.Errorf("%s: %w", path, ierr)
-	}
-	for it.Next() {
-		name := it.Selector().Unquoted()
-		if docDirectiveSet[name] {
-			continue
-		}
-		cv := it.Value().LookupPath(cue.ParsePath("candy"))
-		if !cv.Exists() {
-			continue // not a candy node (e.g. a check bed) — validated by its own path
-		}
-		if verr := cv.Unify(cdef).Validate(cue.Concrete(true)); verr != nil {
-			return fmt.Errorf("%s: candy %q: %s", path, name, errors.Details(verr, nil))
-		}
-	}
-	// #NodeDoc gates the node-form STRUCTURE but accepts each entity's step/data
-	// children as `_`; validateNodeFormSteps types every entity's ASSEMBLED plan
-	// steps against the closed #Step/#Op (the step-typo gate).
+	// #NodeDoc gates the node-form STRUCTURE but accepts each entity's body as
+	// `_`; validateNodeFormSteps parses (and thereby DESUGARS) the tree, types
+	// every entity's plan steps against the closed #Step/#Op, and concretely
+	// validates each candy node's body against #CandyValue.
 	return validateNodeFormSteps(path, data)
 }
 
@@ -222,10 +194,45 @@ func validateNodeFormSteps(path string, data []byte) error {
 
 // validateEntityNodeRec assemble-validates one entity node (when its kind is
 // CUE-registered) and recurses into its sub-entity children (bundle members,
-// nested deploys), which carry their own steps.
+// nested deploys), which carry their own steps. A candy node's DESUGARED body is
+// additionally validated concretely against #CandyValue (version+description
+// required, unknown inline fields rejected) — the box-validate counterpart of
+// the load-time host-side validateKindValueCUE (which is closedness-only).
 func validateEntityNodeRec(gn *genericNode, path string) error {
 	if err := assembleAndValidateEntitySteps(gn, fmt.Sprintf("%s: %s", path, gn.name)); err != nil {
 		return err
+	}
+	if gn.disc == "candy" {
+		body, err := assembleEntityBody(gn)
+		if err != nil {
+			return fmt.Errorf("%s: %s: assemble: %w", path, gn.name, err)
+		}
+		// The concrete gate covers LAYER manifests only (the pre-cutover
+		// validateCandyManifestCUE scope): an IMAGE entity (base:/from:) mixes
+		// build fields that stay non-concrete until merge and is gated by the
+		// #NodeDoc structural pass + decode validation instead.
+		if m := mappingRoot(body); m != nil {
+			for i := 0; i+1 < len(m.Content); i += 2 {
+				if k := m.Content[i].Value; k == "base" || k == "from" {
+					return nil
+				}
+			}
+		}
+		b, err := yaml.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("%s: %s: marshal: %w", path, gn.name, err)
+		}
+		cv, err := cueDocFromYAML(fmt.Sprintf("%s: %s", path, gn.name), b)
+		if err != nil {
+			return err
+		}
+		cdef := sharedCueSchema.LookupPath(cue.ParsePath("#CandyValue"))
+		if cdef.Err() != nil {
+			return fmt.Errorf("%s: #CandyValue schema not found: %w", path, cdef.Err())
+		}
+		if verr := cv.Unify(cdef).Validate(cue.Concrete(true)); verr != nil {
+			return fmt.Errorf("%s: candy %q: %s", path, gn.name, errors.Details(verr, nil))
+		}
 	}
 	for _, ch := range gn.children {
 		if ch.discClass == "entity" {

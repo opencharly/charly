@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/charly/candy/plugin-spice/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -43,8 +45,10 @@ type spiceEnv struct {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs one `spice:` operation. It decodes the full #Op + the env, skips in
-// box mode (no live VM SPICE endpoint on a disposable `charly check box`), dials the
+// Invoke runs one `spice:` operation. It decodes the full #Op, the typed plugin
+// input (params.SpiceInput — the per-verb fields live in the desugared
+// plugin_input since the schema-compaction cutover), and the env, skips in box
+// mode (no live VM SPICE endpoint on a disposable `charly check box`), dials the
 // pre-resolved endpoint, dispatches the method, and self-evaluates the matchers +
 // artifact validators.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
@@ -54,6 +58,8 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			return sdk.ResultJSON("fail", "spice: decode op: "+err.Error())
 		}
 	}
+	var in params.SpiceInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env spiceEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
@@ -68,7 +74,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			ep = &e
 		}
 	}
-	method := string(op.Spice)
+	method := in.Method
 
 	// Live-VM verb: skip under `charly check box` (no running VM SPICE endpoint on a
 	// disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -88,7 +94,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return sdk.ResultJSON("fail", fmt.Sprintf("spice: %s: %v", method, dialErr))
 	}
 
-	out, runErr := dispatch(s, &op)
+	out, runErr := dispatch(s, &op, &in)
 
 	// The shared exit/stdout/stderr + artifact verdict pipeline (R3). screenshot and cursor are
 	// spice's two artifact-producing methods.

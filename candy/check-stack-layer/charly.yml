@@ -15,13 +15,11 @@ check-stack-layer:
             Installs ncat + iproute (port listener) + coreutils (sleep) + supervisor.
             Both services are custom exec entries — fedora-minimal ships no systemd
             units for nc/sleep, so the layer is supervisord-only on container targets.
-    check-stack-layer-port:
         # The check listener's container port. Boxes composing this candy inherit it
         # (CollectBoxPorts) and auto-publish it on a free 127.0.0.1 host port — the
         # check-pod box no longer declares `port: 18794:18794` itself.
         port:
             - 18794
-    check-stack-layer-distro:
         distro:
             fedora:
                 package:
@@ -29,7 +27,6 @@ check-stack-layer:
                     - ncat
                     - coreutils
                     - supervisor
-    check-stack-layer-service:
         service:
             - name: check-listener
               exec: "/usr/bin/nc -lk 18794"
@@ -45,69 +42,56 @@ check-stack-layer:
               auto_start: true
               enable: true
               scope: system
-    check-stack-layer-step-0:
-        run: write=/etc/check-stack-marker
-        write: /etc/check-stack-marker
-        run_as: root
-        mode: "0644"
-        content: |
-            check-stack v1
-    check-stack-layer-unix-group-act:
-        # Exercises the ACT-EMIT ENABLER end-to-end at IMAGE BUILD: a run: step whose verb
-        # is the extracted state-provision `unix_group` plugin renders groupadd into the
-        # check-pod Containerfile (plugin: unix_group + plugin_input → RenderProvisionScript).
-        # The check half rides on the check-pod box (check-unix-group-present). Runs on the
-        # LAYER (not the box) because a box's own run: steps are not part of the build
-        # timeline — only its composed candies' run: steps compile.
-        run: create the checkgrp group at image build via the unix_group plugin verb (act-emit enabler)
-        id: check-stack-layer-unix-group-act
-        context:
-            - build
-        run_as: root
-        plugin: unix_group
-        plugin_input:
-            unix_group: checkgrp
-            gid: 4242
-    check-stack-layer-step-1:
-        check: the check-stack marker file is present at /etc/check-stack-marker
-        plugin: file
-        plugin_input:
-            file: /etc/check-stack-marker
-            exists: true
-    check-stack-layer-step-2:
-        agent-check: the check listener accepts a TCP connection on port 18794 from inside the deployment
-    check-compose-order:
-        check: file=/etc/check-base-marker
-        id: check-compose-order
-        plugin: file
-        plugin_input:
-            file: /etc/check-base-marker
-            exists: true
-    check-port-listening:
-        check: port=18794
-        id: check-port-listening
-        context:
-            - runtime
-        plugin: port
-        plugin_input:
-            port: 18794
-            listening: true
-    check-ss-listening:
-        check: command=ss -tlnp 2>/dev/null | grep ':18794'
-        id: check-ss-listening
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "ss -tlnp 2>/dev/null | grep ':18794'"
-            in_container: true
-    check-service-running:
-        check: service=check-sleep
-        id: check-service-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: check-sleep
-            running: true
+        plan:
+            - run: write=/etc/check-stack-marker
+              write: /etc/check-stack-marker
+              run_as: root
+              mode: "0644"
+              content: |
+                check-stack v1
+            - # Exercises the ACT-EMIT ENABLER end-to-end at IMAGE BUILD: a run: step whose verb
+              # is the extracted state-provision `unix_group` plugin renders groupadd into the
+              # check-pod Containerfile (plugin: unix_group + plugin_input → RenderProvisionScript).
+              # The check half rides on the check-pod box (check-unix-group-present). Runs on the
+              # LAYER (not the box) because a box's own run: steps are not part of the build
+              # timeline — only its composed candies' run: steps compile.
+              run: create the checkgrp group at image build via the unix_group plugin verb (act-emit enabler)
+              id: check-stack-layer-unix-group-act
+              context:
+                - build
+              run_as: root
+              unix_group:
+                unix_group: checkgrp
+                gid: 4242
+            - check: the check-stack marker file is present at /etc/check-stack-marker
+              file:
+                file: /etc/check-stack-marker
+                exists: true
+            - agent-check: the check listener accepts a TCP connection on port 18794 from inside the deployment
+            - check: file=/etc/check-base-marker
+              id: check-compose-order
+              file:
+                file: /etc/check-base-marker
+                exists: true
+            - check: port=18794
+              id: check-port-listening
+              context:
+                - runtime
+              port:
+                port: 18794
+                listening: true
+            - check: command=ss -tlnp 2>/dev/null | grep ':18794'
+              id: check-ss-listening
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: "ss -tlnp 2>/dev/null | grep ':18794'"
+                in_container: true
+            - check: service=check-sleep
+              id: check-service-running
+              context:
+                - runtime
+              service:
+                service: check-sleep
+                running: true

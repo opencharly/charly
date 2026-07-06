@@ -8,17 +8,13 @@ nodejs:
             self-contained pnpm standalone binary at /usr/local/bin/pnpm. Every artifact
             is a real file at a known path with a working --version, so the runtime is
             directly verifiable.
-    nodejs-env:
         env:
             NPM_CONFIG_PREFIX: "~/.npm-global"
             npm_config_cache: "~/.cache/npm"
-    nodejs-path_append:
         path_append:
             - "~/.npm-global/bin"
-    nodejs-package:
         package:
             - nodejs
-    nodejs-distro:
         distro:
             arch:
                 package:
@@ -49,22 +45,19 @@ nodejs:
                       key: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
                       suite: nodistro
                       components: main
-    nodejs-var:
         var:
             PNPM_VERSION: "10.33.4"
-    nodejs-step-0:
-        run: |
-            command=case "${BUILD_ARCH}" in
-              x86_64)  PNPM_ARCH="x64" ;;
-              aarch64) PNPM_ARCH="arm64" ;;
-              *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
-            esac
-            curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" -o /usr/local/bin/pnpm
-            chmod 0755 /usr/local/bin/pnpm
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=case "${BUILD_ARCH}" in
+                  x86_64)  PNPM_ARCH="x64" ;;
+                  aarch64) PNPM_ARCH="arm64" ;;
+                  *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
+                esac
+                curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" -o /usr/local/bin/pnpm
+                chmod 0755 /usr/local/bin/pnpm
+              run_as: root
+              command: |
                 case "${BUILD_ARCH}" in
                   x86_64)  PNPM_ARCH="x64" ;;
                   aarch64) PNPM_ARCH="arm64" ;;
@@ -72,46 +65,29 @@ nodejs:
                 esac
                 curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" -o /usr/local/bin/pnpm
                 chmod 0755 /usr/local/bin/pnpm
-    nodejs-step-1:
-        check: the node interpreter is installed at /usr/bin/node
-        plugin: file
-        plugin_input:
-            file: /usr/bin/node
-            exists: true
-    nodejs-step-2:
-        check: node reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/node --version
-    nodejs-step-3:
-        check: the npm package manager is installed at /usr/bin/npm
-        plugin: file
-        plugin_input:
-            file: /usr/bin/npm
-            exists: true
-    nodejs-step-4:
-        check: npm reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/npm --version
-    nodejs-step-5:
-        check: the self-contained pnpm binary lands on the system PATH at /usr/local/bin/pnpm
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/pnpm
-            exists: true
-    nodejs-step-6:
-        check: pnpm runs and reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: pnpm --version
-    nodejs-package-2:
-        check: package=nodejs
-        id: nodejs-package
-        plugin: package
-        plugin_input:
-            package: nodejs
-            installed: true
+            - check: the node interpreter is installed at /usr/bin/node
+              file:
+                file: /usr/bin/node
+                exists: true
+            - check: node reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/node --version
+            - check: the npm package manager is installed at /usr/bin/npm
+              file:
+                file: /usr/bin/npm
+                exists: true
+            - check: npm reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/npm --version
+            - check: the self-contained pnpm binary lands on the system PATH at /usr/local/bin/pnpm
+              file:
+                file: /usr/local/bin/pnpm
+                exists: true
+            - check: pnpm runs and reports its version
+              exit_status: 0
+              command: pnpm --version
+            - check: package=nodejs
+              id: nodejs-package
+              package:
+                package: nodejs
+                installed: true

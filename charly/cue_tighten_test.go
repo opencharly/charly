@@ -6,7 +6,10 @@ package main
 // schema (open `...` / blanket `{...}`) — so this file is the regression guard
 // against re-loosening. Each ACCEPT case guards against over-tightening.
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // validateKindBody validates a YAML body AS an entity of `kind` (the body is the
 // entity's own fields, e.g. a single value of the `vm:`/`deploy:` map — the
@@ -21,12 +24,24 @@ func validateKindBody(t *testing.T, kind, yamlBody string) error {
 }
 
 func TestCueTightening_RejectsAndAccepts(t *testing.T) {
-	// candy cases go through the kind-keyed manifest validator.
+	// candy cases go through the node-form manifest validator: the body is
+	// wrapped as a compact node-form entity `x: {candy: <body>}` (the FULL body
+	// inline in the kind value; plan steps author the plugin-verb sugar the
+	// parse-time desugar rewrites — the authored plugin:/plugin_input: envelope
+	// is a hard load error).
 	candy := func(body string) string {
-		return "candy:\n" + body
+		var b strings.Builder
+		b.WriteString("x:\n  candy:\n")
+		for _, ln := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
+			if strings.TrimSpace(ln) == "" {
+				continue
+			}
+			b.WriteString("  " + ln + "\n")
+		}
+		return b.String()
 	}
 	const candyHead = "  version: 2026.144.1443\n  name: x\n  description: d\n"
-	const candyPlan = "  plan:\n  - check: c\n    plugin: file\n    plugin_input:\n      file: /x\n"
+	const candyPlan = "  plan:\n  - check: c\n    file: /x\n"
 
 	cases := []struct {
 		name   string
@@ -55,14 +70,12 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			candy(candyHead + candyPlan + "  env:\n    PATH: /x\n"), true},
 		// --- live-verb method enum (cdp): eval is valid, the phantom check is gone ---
 		{"candy cdp eval method accepted", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    cdp: eval\n    tab: \"1\"\n    expression: \"1+1\"\n"), false},
-		{"candy cdp bogus method rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    cdp: bogus-method\n"), true},
-		// --- http is now a builtin plugin verb: the base #Op accepts the generic
-		//     plugin:/plugin_input envelope (the http-exclusive status/body/… are
-		//     validated at runtime against the http plugin's spliced #HttpInput, not here) ---
+			candy(candyHead + "  plan:\n  - check: c\n    cdp:\n      method: eval\n      tab: \"1\"\n      expression: \"1+1\"\n"), false},
+		// --- http is a builtin plugin verb authored via the `http:` sugar (the
+		//     http-exclusive status/body/… ride the verb's input map, validated at
+		//     runtime against the http plugin's spliced #HttpInput, not here) ---
 		{"candy http plugin verb accepted", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    plugin: http\n    plugin_input:\n      http: http://x/\n      status: 200\n    context: [runtime]\n"), false},
+			candy(candyHead + "  plan:\n  - check: c\n    http:\n      http: http://x/\n      status: 200\n    context: [runtime]\n"), false},
 
 		// --- vm: the libvirt blanket {...} is now a CLOSED model ---
 		{"vm libvirt unknown field rejected", "vm",
@@ -156,19 +169,17 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			candy(candyHead + "  plan:\n  - run: mk\n    mkdir: /a\n    mode: \"9999\"\n"), true},
 		// --- cutover #9: Op-level checks (replaces validateOps/validateCheck declarative checks) ---
 		{"candy check bad timeout rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    http: http://x/\n    status: 200\n    context: [runtime]\n    timeout: notaduration\n"), true},
+			candy(candyHead + "  plan:\n  - check: c\n    http:\n      http: http://x/\n      status: 200\n    context: [runtime]\n    timeout: notaduration\n"), true},
 		{"candy check bad context rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    plugin: file\n    plugin_input:\n      file: /x\n    context: [weird]\n"), true},
+			candy(candyHead + "  plan:\n  - check: c\n    file: /x\n    context: [weird]\n"), true},
 		{"candy check bad matcher op rejected", "candy",
 			candy(candyHead + "  plan:\n  - check: c\n    command: x\n    context: [runtime]\n    stdout:\n    - mystery: \"?\"\n"), true},
-		{"candy check mcp bogus method rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    mcp: bogus\n    context: [deploy]\n"), true},
-		{"candy check spice bogus method rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    spice: bogus\n    context: [deploy]\n"), true},
-		{"candy check libvirt bogus method rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    libvirt: bogus\n    context: [deploy]\n"), true},
-		{"candy check port out-of-range rejected", "candy",
-			candy(candyHead + "  plan:\n  - check: c\n    port: 70000\n    listening: true\n    context: [deploy]\n"), true},
+		// The former mcp/spice/libvirt bogus-method and port out-of-range REJECT
+		// cases were DELETED with the live-verb/state-verb extraction: the per-verb
+		// method enums and verb-exclusive field constraints left core #Op — each
+		// lives in its plugin's served input def (#McpInput/#SpiceInput/#LibvirtInput/
+		// #PortInput), validated at dispatch (validateAuthoredPluginInput), not by
+		// the core manifest gate this test exercises.
 		// --- cutover #9: candy route (replaces deleted validateRoutes) ---
 		{"candy route valid accepted", "candy",
 			candy(candyHead + candyPlan + "  route:\n    host: svc.localhost\n    port: 8080\n"), false},

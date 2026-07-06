@@ -11,9 +11,11 @@ plugin-adb:
             repo, go-builds the provider binary on the HOST, and serves it
             OUT-OF-PROCESS via LocalTransport — so the github.com/zach-klippenstein/goadb
             dependency + the SINGLE apk install path (apkeep + adb, R3) live HERE, out
-            of charly's core go.mod. Authoring is unchanged: the verb keeps its `adb:`
-            discriminator + every modifier on charly's core #Op (ResolveVerb →
-            grpcProvider → invokeVerbProvider hands it the full #Op), and `target:
+            of charly's core go.mod. Authoring is unchanged: the `adb: <method>` sugar
+            desugars to plugin/plugin_input — the method + every adb-exclusive modifier
+            ride the input map, validated against this plugin's own #AdbInput
+            (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full
+            desugared #Op) — and `target:
             android` resolves to this plugin's deploy:android provider over the E3b
             reverse channel — the host preresolves the device endpoint + the apk specs
             (android_deploy_preresolve.go) and ships them in DeployVenue.Substrate;
@@ -22,17 +24,18 @@ plugin-adb:
             logcat-tail/wait-for-device/wait-ui-settled/current-focus/keyevent) plus
             the deploy substrate. The R10 consumer is the check-android-emulator-pod
             bed (via android-emulator-layer).
-    plugin-adb-decl:
         plugin:
             providers:
                 - verb:adb
                 - deploy:android
             source: github.com/opencharly/charly/candy/plugin-adb
-    adb-devices-online:
-        check: the running emulator is attached to the adb server (the out-of-process plugin verb dispatches through the registry and probes the live device)
-        id: adb-devices-online
-        adb: devices
-        stdout:
-            - contains: emulator-5554
-        context:
-            - runtime
+            primary:
+                adb: method
+        plan:
+            - check: the running emulator is attached to the adb server (the out-of-process plugin verb dispatches through the registry and probes the live device)
+              id: adb-devices-online
+              adb: devices
+              stdout:
+                - contains: emulator-5554
+              context:
+                - runtime

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -42,10 +44,12 @@ type vncEnv struct {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs one `vnc:` operation. It decodes the full #Op + the env, skips in box mode
-// (no live VNC endpoint on a disposable `charly check box`), skips a nil endpoint, dials
-// the pre-resolved RFB endpoint, dispatches the method, and self-evaluates the matchers +
-// screenshot artifact validators.
+// Invoke runs one `vnc:` operation. It decodes the full #Op, the typed plugin
+// input (params.VncInput — the per-verb fields live in the desugared
+// plugin_input since the schema-compaction cutover), and the env, skips in box
+// mode (no live VNC endpoint on a disposable `charly check box`), skips a nil
+// endpoint, dials the pre-resolved RFB endpoint, dispatches the method, and
+// self-evaluates the matchers + screenshot artifact validators.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -53,6 +57,8 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			return sdk.ResultJSON("fail", "vnc: decode op: "+err.Error())
 		}
 	}
+	var in params.VncInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env vncEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
@@ -67,7 +73,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			ep = &e
 		}
 	}
-	method := string(op.Vnc)
+	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running VNC server on a
 	// disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -82,7 +88,7 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return sdk.ResultJSON("skip", fmt.Sprintf("vnc: %s has no resolved VNC endpoint (box=%q)", method, env.Box))
 	}
 
-	out, runErr := dispatch(ep, &op)
+	out, runErr := dispatch(ep, &op, &in)
 
 	// The shared exit/stdout/stderr + screenshot-artifact verdict pipeline (R3). screenshot is
 	// vnc's one artifact-producing method.

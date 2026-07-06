@@ -19,6 +19,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/opencharly/charly/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -35,7 +36,8 @@ import (
 // Kong `required:""` tags on the K8s*Cmd structs). The host's validate-time +
 // runtime required-modifier check keyed off the former in-proc live-verb seam, which an
 // external verb is not — so the check moves HERE, at dispatch, preserving the
-// "missing required modifier(s): X" failure.
+// "missing required modifier(s): X" failure. The names are plugin-INPUT keys
+// (#KubeInput wire names) since the schema-compaction cutover.
 var requiredModifiers = map[string][]string{
 	"wait-ready":     {"kube_kind", "name"},
 	"lb-external-ip": {"namespace", "name"},
@@ -45,13 +47,15 @@ var requiredModifiers = map[string][]string{
 }
 
 // dispatch runs one kube method against the resolved cluster and returns its
-// captured output. A returned error is the verb FAILING (the in-tree CLI Run()
-// returning an error → exit 1); provider.go maps it through the exit_status /
-// stderr matchers.
+// captured output. The kube-exclusive fields ride the decoded plugin input
+// (params.KubeInput — the per-verb fields left core #Op in the schema-compaction
+// cutover); only the SHARED timeout is still read off the step Op. A returned
+// error is the verb FAILING (the in-tree CLI Run() returning an error → exit 1);
+// provider.go maps it through the exit_status / stderr matchers.
 //
 //nolint:gocyclo // a flat method switch over the 13-method allowlist; splitting would scatter the contract.
-func dispatch(conn *clusterConn, op *spec.Op) (string, error) {
-	method := string(op.Kube)
+func dispatch(conn *clusterConn, op *spec.Op, in *params.KubeInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -59,29 +63,29 @@ func dispatch(conn *clusterConn, op *spec.Op) (string, error) {
 	case "nodes":
 		return runNodes(conn)
 	case "wait-nodes":
-		return runWaitNodes(conn, op)
+		return runWaitNodes(conn, op, in)
 	case "pods":
-		return runPods(conn, op)
+		return runPods(conn, in)
 	case "wait-ready":
-		return runWaitReady(conn, op)
+		return runWaitReady(conn, op, in)
 	case "ingress":
-		return runIngress(conn, op)
+		return runIngress(conn, in)
 	case "ingressclass":
 		return runIngressClass(conn)
 	case "storageclass":
 		return runStorageClass(conn)
 	case "service":
-		return runService(conn, op)
+		return runService(conn, in)
 	case "lb-external-ip":
-		return runLbExternalIP(conn, op)
+		return runLbExternalIP(conn, op, in)
 	case "addons":
-		return runAddons(conn, op)
+		return runAddons(conn, op, in)
 	case "apply":
-		return runApply(conn, op)
+		return runApply(conn, in)
 	case "delete":
-		return runDelete(conn, op)
+		return runDelete(conn, in)
 	case "raw":
-		return runRaw(conn, op)
+		return runRaw(conn, in)
 	}
 	return "", fmt.Errorf("unknown kube method %q", method)
 }
@@ -114,12 +118,12 @@ func runNodes(conn *clusterConn) (string, error) {
 // wait-nodes
 // ---------------------------------------------------------------------------
 
-func runWaitNodes(conn *clusterConn, op *spec.Op) (string, error) {
+func runWaitNodes(conn *clusterConn, op *spec.Op, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	count := op.KubeCount
+	count := in.KubeCount
 	if count <= 0 {
 		count = 1
 	}
@@ -130,10 +134,10 @@ func runWaitNodes(conn *clusterConn, op *spec.Op) (string, error) {
 			return "", fmt.Errorf("listing nodes: %w", err)
 		}
 		var b strings.Builder
-		if op.Name != "" {
+		if in.Name != "" {
 			for _, n := range list.Items {
-				if n.GetName() == op.Name && nodeReady(&n) {
-					fmt.Fprintf(&b, "%s Ready\n", op.Name)
+				if n.GetName() == in.Name && nodeReady(&n) {
+					fmt.Fprintf(&b, "%s Ready\n", in.Name)
 					return b.String(), nil
 				}
 			}
@@ -154,7 +158,7 @@ func runWaitNodes(conn *clusterConn, op *spec.Op) (string, error) {
 			}
 		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("timeout waiting for nodes Ready (want count=%d name=%q)", count, op.Name)
+			return "", fmt.Errorf("timeout waiting for nodes Ready (want count=%d name=%q)", count, in.Name)
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -164,17 +168,17 @@ func runWaitNodes(conn *clusterConn, op *spec.Op) (string, error) {
 // pods
 // ---------------------------------------------------------------------------
 
-func runPods(conn *clusterConn, op *spec.Op) (string, error) {
+func runPods(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	opts := metav1.ListOptions{LabelSelector: op.Label}
+	opts := metav1.ListOptions{LabelSelector: in.Label}
 	var list *unstructured.UnstructuredList
-	if op.Namespace == "" {
+	if in.Namespace == "" {
 		list, err = client.Resource(gvrPods).List(context.TODO(), opts)
 	} else {
-		list, err = client.Resource(gvrPods).Namespace(op.Namespace).List(context.TODO(), opts)
+		list, err = client.Resource(gvrPods).Namespace(in.Namespace).List(context.TODO(), opts)
 	}
 	if err != nil {
 		return "", fmt.Errorf("listing pods: %w", err)
@@ -191,30 +195,30 @@ func runPods(conn *clusterConn, op *spec.Op) (string, error) {
 // wait-ready
 // ---------------------------------------------------------------------------
 
-func runWaitReady(conn *clusterConn, op *spec.Op) (string, error) {
+func runWaitReady(conn *clusterConn, op *spec.Op, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	gvr, ok := kindToGVR(op.KubeKind)
+	gvr, ok := kindToGVR(in.KubeKind)
 	if !ok {
-		return "", fmt.Errorf("unsupported kind %q (want Deployment, DaemonSet, StatefulSet, or Pod)", op.KubeKind)
+		return "", fmt.Errorf("unsupported kind %q (want Deployment, DaemonSet, StatefulSet, or Pod)", in.KubeKind)
 	}
-	ns := op.Namespace
+	ns := in.Namespace
 	if ns == "" {
 		ns = "default"
 	}
 	deadline := time.Now().Add(parseTimeout(op.Timeout, 120*time.Second))
 	for {
-		u, err := client.Resource(gvr).Namespace(ns).Get(context.TODO(), op.Name, metav1.GetOptions{})
+		u, err := client.Resource(gvr).Namespace(ns).Get(context.TODO(), in.Name, metav1.GetOptions{})
 		if err == nil && workloadReady(u) {
-			return fmt.Sprintf("%s/%s Ready\n", ns, op.Name), nil
+			return fmt.Sprintf("%s/%s Ready\n", ns, in.Name), nil
 		}
 		if err != nil && !apierrors.IsNotFound(err) {
-			return "", fmt.Errorf("getting %s/%s: %w", ns, op.Name, err)
+			return "", fmt.Errorf("getting %s/%s: %w", ns, in.Name, err)
 		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("timeout waiting for %s/%s/%s Ready", op.KubeKind, ns, op.Name)
+			return "", fmt.Errorf("timeout waiting for %s/%s/%s Ready", in.KubeKind, ns, in.Name)
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -224,17 +228,17 @@ func runWaitReady(conn *clusterConn, op *spec.Op) (string, error) {
 // ingress
 // ---------------------------------------------------------------------------
 
-func runIngress(conn *clusterConn, op *spec.Op) (string, error) {
+func runIngress(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
 	var list *unstructured.UnstructuredList
 	opts := metav1.ListOptions{}
-	if op.Namespace == "" {
+	if in.Namespace == "" {
 		list, err = client.Resource(gvrIngresses).List(context.TODO(), opts)
 	} else {
-		list, err = client.Resource(gvrIngresses).Namespace(op.Namespace).List(context.TODO(), opts)
+		list, err = client.Resource(gvrIngresses).Namespace(in.Namespace).List(context.TODO(), opts)
 	}
 	if err != nil {
 		return "", fmt.Errorf("listing ingresses: %w", err)
@@ -331,17 +335,17 @@ func runStorageClass(conn *clusterConn) (string, error) {
 // service
 // ---------------------------------------------------------------------------
 
-func runService(conn *clusterConn, op *spec.Op) (string, error) {
+func runService(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
 	var list *unstructured.UnstructuredList
 	opts := metav1.ListOptions{}
-	if op.Namespace == "" {
+	if in.Namespace == "" {
 		list, err = client.Resource(gvrServices).List(context.TODO(), opts)
 	} else {
-		list, err = client.Resource(gvrServices).Namespace(op.Namespace).List(context.TODO(), opts)
+		list, err = client.Resource(gvrServices).Namespace(in.Namespace).List(context.TODO(), opts)
 	}
 	if err != nil {
 		return "", fmt.Errorf("listing services: %w", err)
@@ -382,14 +386,14 @@ func serviceExternalIP(u *unstructured.Unstructured) string {
 // lb-external-ip
 // ---------------------------------------------------------------------------
 
-func runLbExternalIP(conn *clusterConn, op *spec.Op) (string, error) {
+func runLbExternalIP(conn *clusterConn, op *spec.Op, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
 	deadline := time.Now().Add(parseTimeout(op.Timeout, 60*time.Second))
 	for {
-		svc, err := client.Resource(gvrServices).Namespace(op.Namespace).Get(context.TODO(), op.Name, metav1.GetOptions{})
+		svc, err := client.Resource(gvrServices).Namespace(in.Namespace).Get(context.TODO(), in.Name, metav1.GetOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return "", fmt.Errorf("getting service: %w", err)
 		}
@@ -400,7 +404,7 @@ func runLbExternalIP(conn *clusterConn, op *spec.Op) (string, error) {
 			}
 		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("timeout: no external IP assigned to %s/%s", op.Namespace, op.Name)
+			return "", fmt.Errorf("timeout: no external IP assigned to %s/%s", in.Namespace, in.Name)
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -423,12 +427,12 @@ var k3sAddons = []struct {
 	{"DaemonSet", "svclb-traefik"},
 }
 
-func runAddons(conn *clusterConn, op *spec.Op) (string, error) {
+func runAddons(conn *clusterConn, op *spec.Op, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	ns := op.Namespace
+	ns := in.Namespace
 	if ns == "" {
 		ns = "kube-system"
 	}
@@ -475,21 +479,21 @@ func waitWorkloadReady(client dynamic.Interface, gvr schema.GroupVersionResource
 // apply
 // ---------------------------------------------------------------------------
 
-func runApply(conn *clusterConn, op *spec.Op) (string, error) {
+func runApply(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	docs, err := readYamlDocs(op.Manifest)
+	docs, err := readYamlDocs(in.Manifest)
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
 	for _, u := range docs {
 		ns := u.GetNamespace()
-		if ns == "" && op.Namespace != "" {
-			u.SetNamespace(op.Namespace)
-			ns = op.Namespace
+		if ns == "" && in.Namespace != "" {
+			u.SetNamespace(in.Namespace)
+			ns = in.Namespace
 		}
 		gvr, err := gvrForObject(u)
 		if err != nil {
@@ -520,20 +524,20 @@ func runApply(conn *clusterConn, op *spec.Op) (string, error) {
 // delete
 // ---------------------------------------------------------------------------
 
-func runDelete(conn *clusterConn, op *spec.Op) (string, error) {
+func runDelete(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	docs, err := readYamlDocs(op.Manifest)
+	docs, err := readYamlDocs(in.Manifest)
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
 	for _, u := range docs {
 		ns := u.GetNamespace()
-		if ns == "" && op.Namespace != "" {
-			ns = op.Namespace
+		if ns == "" && in.Namespace != "" {
+			ns = in.Namespace
 		}
 		gvr, err := gvrForObject(u)
 		if err != nil {
@@ -560,30 +564,30 @@ func runDelete(conn *clusterConn, op *spec.Op) (string, error) {
 // raw
 // ---------------------------------------------------------------------------
 
-func runRaw(conn *clusterConn, op *spec.Op) (string, error) {
+func runRaw(conn *clusterConn, in *params.KubeInput) (string, error) {
 	client, err := conn.dynamicClient()
 	if err != nil {
 		return "", err
 	}
-	version := op.KubeVersion
+	version := in.KubeVersion
 	if version == "" {
 		version = "v1"
 	}
-	gvr := schema.GroupVersionResource{Group: op.KubeGroup, Version: version, Resource: op.KubeResource}
+	gvr := schema.GroupVersionResource{Group: in.KubeGroup, Version: version, Resource: in.KubeResource}
 	var iface dynamic.ResourceInterface = client.Resource(gvr)
-	if op.Namespace != "" {
-		iface = client.Resource(gvr).Namespace(op.Namespace)
+	if in.Namespace != "" {
+		iface = client.Resource(gvr).Namespace(in.Namespace)
 	}
-	if op.Name != "" {
-		u, err := iface.Get(context.TODO(), op.Name, metav1.GetOptions{})
+	if in.Name != "" {
+		u, err := iface.Get(context.TODO(), in.Name, metav1.GetOptions{})
 		if err != nil {
-			return "", fmt.Errorf("get %s/%s: %w", op.KubeResource, op.Name, err)
+			return "", fmt.Errorf("get %s/%s: %w", in.KubeResource, in.Name, err)
 		}
 		return marshalJSON(u.Object)
 	}
 	list, err := iface.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return "", fmt.Errorf("list %s: %w", op.KubeResource, err)
+		return "", fmt.Errorf("list %s: %w", in.KubeResource, err)
 	}
 	sort.Slice(list.Items, func(i, j int) bool {
 		if list.Items[i].GetNamespace() != list.Items[j].GetNamespace() {
@@ -591,7 +595,7 @@ func runRaw(conn *clusterConn, op *spec.Op) (string, error) {
 		}
 		return list.Items[i].GetName() < list.Items[j].GetName()
 	})
-	if op.JSON {
+	if in.JSON {
 		// Emit the full Kubernetes List object so check authors who match on JSON
 		// document text get the structured form (List `.kind` e.g. "NodeList",
 		// `.items[]` each Unstructured).

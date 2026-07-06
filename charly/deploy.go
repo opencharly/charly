@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -644,7 +645,7 @@ func MergeDeployOntoMetadata(meta *BoxMetadata, dc *BundleConfig, deployName, in
 		meta.Port = overlay.ResolvedPort
 	}
 	if overlay.Env != nil {
-		meta.Env = overlay.Env
+		meta.Env = envMapToPairs(overlay.Env)
 	}
 	if overlay.Security != nil {
 		// Field-level merge: overlay fields override, unset fields fall
@@ -1356,8 +1357,8 @@ type SaveDeployStateInput struct {
 	// explicitly opts in to writing only when the operator passed
 	// `--port` flags. Same idiom as SetDisposable/SetLifecycle below.
 	SetPorts bool
-	Env      []string
-	CleanEnv bool // true = replace env list; false = merge (upsert by key)
+	Env      map[string]string
+	CleanEnv bool // true = replace env map; false = merge (upsert by key)
 	EnvFile  string
 	Network  string
 	Security *SecurityConfig
@@ -1559,57 +1560,26 @@ func saveDeployState(boxName, instance string, input SaveDeployStateInput) {
 
 // stripSecretEnvNames removes any KEY=VAL entries from env whose KEY is in
 // the blocked list. The blocked list is expected to be short (one entry per
-// secret_* declaration on the image), so a linear contains check per entry
-// is fine. Preserves the order of surviving entries.
-func stripSecretEnvNames(env []string, blocked []string) []string {
+// secret_* declaration on the image), so a per-entry delete is fine.
+func stripSecretEnvNames(env map[string]string, blocked []string) map[string]string {
 	if len(env) == 0 || len(blocked) == 0 {
 		return env
 	}
-	blockedSet := make(map[string]bool, len(blocked))
+	out := make(map[string]string, len(env))
+	maps.Copy(out, env)
 	for _, name := range blocked {
-		blockedSet[name] = true
-	}
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		key := kv
-		if before, _, ok := strings.Cut(kv, "="); ok {
-			key = before
-		}
-		if blockedSet[key] {
-			continue
-		}
-		out = append(out, kv)
+		delete(out, name)
 	}
 	return out
 }
 
 // mergeEnvVars merges new env vars into existing ones (upsert by key).
-// New vars override existing vars with the same key; existing vars with
-// unmatched keys are preserved in their original order.
-func mergeEnvVars(existing, newVars []string) []string {
-	newByKey := make(map[string]string, len(newVars))
-	for _, kv := range newVars {
-		key, _, _ := strings.Cut(kv, "=")
-		newByKey[key] = kv
-	}
-	result := make([]string, 0, len(existing)+len(newVars))
-	seen := make(map[string]bool)
-	for _, kv := range existing {
-		key, _, _ := strings.Cut(kv, "=")
-		if newKV, ok := newByKey[key]; ok {
-			result = append(result, newKV)
-			seen[key] = true
-		} else {
-			result = append(result, kv)
-		}
-	}
-	for _, kv := range newVars {
-		key, _, _ := strings.Cut(kv, "=")
-		if !seen[key] {
-			result = append(result, kv)
-		}
-	}
-	return result
+// New vars override existing vars with the same key.
+func mergeEnvVars(existing, newVars map[string]string) map[string]string {
+	out := make(map[string]string, len(existing)+len(newVars))
+	maps.Copy(out, existing)
+	maps.Copy(out, newVars)
+	return out
 }
 
 // ExportAllBox exports all runtime-relevant fields for all enabled images in a Config.

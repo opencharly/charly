@@ -11,9 +11,7 @@ redis:
             PONG and accepts TCP on its published host port. Every claim below is
             verifiable: binaries on disk, the providing package installed, and a
             live PING/PONG + reachable-port probe against the running deployment.
-    redis-require:
         require: []
-    redis-distro:
         distro:
             arch:
                 # No `redis` package on Arch/CachyOS — valkey provides /usr/bin/redis-server
@@ -23,13 +21,10 @@ redis:
             fedora:
                 package:
                     - redis
-    redis-env:
         env:
             REDIS_URL: "redis://127.0.0.1:6379"
-    redis-port:
         port:
             - 6379
-    redis-service:
         service:
             - name: redis
               exec: "/usr/bin/redis-server --bind 127.0.0.1 --port 6379 --dir %(ENV_HOME)s/.redis --save 60 1"
@@ -37,63 +32,46 @@ redis:
               priority: 20
               enable: true
               scope: system
-    redis-step-0:
-        run: mkdir=${HOME}/.redis
-        mkdir: "${HOME}/.redis"
-        run_as: "${USER}"
-    redis-step-1:
-        check: the redis-server daemon binary is installed at /usr/bin/redis-server
-        plugin: file
-        plugin_input:
-            file: /usr/bin/redis-server
-            exists: true
-    redis-step-2:
-        check: the redis-cli client binary is installed at /usr/bin/redis-cli
-        plugin: file
-        plugin_input:
-            file: /usr/bin/redis-cli
-            exists: true
-    redis-step-3:
-        check: the providing package is installed (redis on Fedora, valkey on Arch/CachyOS)
-        plugin: package
-        plugin_input:
-            package: valkey-compat-redis
-            package_map:
-                arch: valkey
-            installed: true
-    redis-step-4:
-        check: redis-cli ping returns PONG against the supervised redis-server
-        stdout: PONG
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: redis-cli -h 127.0.0.1 -p 6379 ping
-    redis-step-5:
-        check: the redis port accepts a TCP connection from the host
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:6379}
-            reachable: true
-    redis-step-6:
-        agent-check: the supervised redis service is running and keeps answering clients, restarting automatically (restart=always) if the redis-server process exits
-    redis-responds:
-        check: redis answers PONG to redis-cli inside the container (host-independent probe)
-        id: redis-responds
-        stdout: PONG
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: redis-cli -h 127.0.0.1 -p 6379 ping
-            in_container: true
-    redis-port-open:
-        check: addr=127.0.0.1:${HOST_PORT:6379}
-        id: redis-port-open
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:6379}
+        plan:
+            - run: mkdir=${HOME}/.redis
+              mkdir: "${HOME}/.redis"
+              run_as: "${USER}"
+            - check: the redis-server daemon binary is installed at /usr/bin/redis-server
+              file:
+                file: /usr/bin/redis-server
+                exists: true
+            - check: the redis-cli client binary is installed at /usr/bin/redis-cli
+              file:
+                file: /usr/bin/redis-cli
+                exists: true
+            - check: the providing package is installed (redis on Fedora, valkey on Arch/CachyOS)
+              package:
+                package: valkey-compat-redis
+                package_map:
+                    arch: valkey
+                installed: true
+            - check: redis-cli ping returns PONG against the supervised redis-server
+              stdout: PONG
+              context:
+                - runtime
+              command: redis-cli -h 127.0.0.1 -p 6379 ping
+            - check: the redis port accepts a TCP connection from the host
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:6379}
+                reachable: true
+            - agent-check: the supervised redis service is running and keeps answering clients, restarting automatically (restart=always) if the redis-server process exits
+            - check: redis answers PONG to redis-cli inside the container (host-independent probe)
+              id: redis-responds
+              stdout: PONG
+              context:
+                - runtime
+              command:
+                command: redis-cli -h 127.0.0.1 -p 6379 ping
+                in_container: true
+            - check: addr=127.0.0.1:${HOST_PORT:6379}
+              id: redis-port-open
+              context:
+                - runtime
+              addr: 127.0.0.1:${HOST_PORT:6379}

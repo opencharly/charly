@@ -10,10 +10,8 @@ build-toolchain:
             builder stage (fedora-builder, arch-builder) depends on these
             binaries being on PATH, so each is directly file- and
             version-checkable inside the built image.
-    build-toolchain-env:
         env:
             CCACHE_DISABLE: "1"
-    build-toolchain-package:
         package:
             - autoconf
             - automake
@@ -27,7 +25,6 @@ build-toolchain:
             - libtool
             - nasm
             - patch
-    build-toolchain-distro:
         distro:
             arch:
                 package:
@@ -138,76 +135,49 @@ build-toolchain:
                     - pkg-config
                     - portaudio19-dev
                     - rustc
-    build-toolchain-step-0:
-        check: the GNU C compiler binary is installed at /usr/bin/gcc
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gcc
-            exists: true
-    build-toolchain-step-1:
-        check: gcc reports its version and exits successfully
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gcc --version
-    build-toolchain-step-2:
-        check: GNU make is available to drive Makefile builds
-        plugin: file
-        plugin_input:
-            file: /usr/bin/make
-            exists: true
-    build-toolchain-step-3:
-        check: the CMake build-system generator is available
-        plugin: file
-        plugin_input:
-            file: /usr/bin/cmake
-            exists: true
-    build-toolchain-step-4:
-        check: cmake reports its version and exits successfully
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/cmake --version
-    build-toolchain-step-5:
-        check: the cargo Rust package manager is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/cargo
-            exists: true
-    build-toolchain-step-6:
-        check: the nasm assembler (needed by SIMD native crates) is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/nasm
-            exists: true
-    build-toolchain-step-7:
-        check: cargo reports its version and exits successfully
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/cargo --version
-    build-toolchain-step-8:
-        check: the GNU debugger is available for native debugging
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gdb
-            exists: true
-    build-toolchain-step-9:
-        check: ccache is available to accelerate repeat compilations
-        plugin: file
-        plugin_input:
-            file: /usr/bin/ccache
-            exists: true
-    build-toolchain-step-10:
-        check: git is available so builder stages can clone pinned sources
-        plugin: file
-        plugin_input:
-            file: /usr/bin/git
-            exists: true
-    make-version:
-        check: command=/usr/bin/make --version
-        id: make-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/make --version
+        plan:
+            - check: the GNU C compiler binary is installed at /usr/bin/gcc
+              file:
+                file: /usr/bin/gcc
+                exists: true
+            - check: gcc reports its version and exits successfully
+              exit_status: 0
+              command: /usr/bin/gcc --version
+            - check: GNU make is available to drive Makefile builds
+              file:
+                file: /usr/bin/make
+                exists: true
+            - check: the CMake build-system generator is available
+              file:
+                file: /usr/bin/cmake
+                exists: true
+            - check: cmake reports its version and exits successfully
+              exit_status: 0
+              command: /usr/bin/cmake --version
+            - check: the cargo Rust package manager is installed
+              file:
+                file: /usr/bin/cargo
+                exists: true
+            - check: the nasm assembler (needed by SIMD native crates) is installed
+              file:
+                file: /usr/bin/nasm
+                exists: true
+            - check: cargo reports its version and exits successfully
+              exit_status: 0
+              command: /usr/bin/cargo --version
+            - check: the GNU debugger is available for native debugging
+              file:
+                file: /usr/bin/gdb
+                exists: true
+            - check: ccache is available to accelerate repeat compilations
+              file:
+                file: /usr/bin/ccache
+                exists: true
+            - check: git is available so builder stages can clone pinned sources
+              file:
+                file: /usr/bin/git
+                exists: true
+            - check: command=/usr/bin/make --version
+              id: make-version
+              exit_status: 0
+              command: /usr/bin/make --version

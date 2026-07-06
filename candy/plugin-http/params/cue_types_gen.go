@@ -22,16 +22,22 @@ package params
 // #MatchOpMap when base ++ plugin compiles), so it compiles standalone (gengotypes +
 // the load-gate compile) AND splices onto the base.
 //
-// Only the http-EXCLUSIVE fields live here. `method`/`request_body` are SHARED #Op
-// modifiers (the live-container verbs cdp/dbus/libvirt read them too) and `timeout` is
-// a GENERAL per-step modifier (the runner's probeNeverHang floor reads it for every
-// verb), so all three STAY in #Op and are read off the step Op by the runner — they are
-// NOT reproduced here and NOT carried in plugin_input. The provider is a
+// Every http request field lives here (`method`/`request_body` moved in from #Op in
+// the schema-compaction cutover — per-verb fields left core #Op); `timeout` is a
+// GENERAL per-step modifier (the runner's probeNeverHang floor reads it for every
+// verb) and stays in #Op, read off the step Op by the runner. The provider is a
 // CheckVerbProvider — it dispatches IN-PROCESS via RunVerb and so keeps the live
 // *Runner (r.HTTPClient / r.Mode / r.Exec) the request needs (mirrors examplerunverb).
 type HttpInput struct {
-	// http — the request URL (the verb discriminator).
+	// http — the request URL (the verb discriminator; also the scalar-sugar
+	// primary: `http: <url>`).
 	HTTP string `yaml:"http,omitempty" json:"http"`
+
+	// method — optional HTTP request method (default GET).
+	Method string `yaml:"method,omitempty" json:"method,omitempty"`
+
+	// request_body — optional request body bytes.
+	RequestBody string `yaml:"request_body,omitempty" json:"request_body,omitempty"`
 
 	// status — optional expected HTTP status code (0 = unchecked).
 	Status int `yaml:"status,omitempty" json:"status,omitempty"`

@@ -28,20 +28,17 @@ plugin-migrate:
             proves the compiled-in command:migrate resolves + Invoke(OpRun) runs the engine
             end-to-end: (a) at-HEAD no-op, (b) --dry-run flag plumbing, (c) below-floor refusal. The
             declarative transform ops are covered by the plugin's engine_test.go unit tests.
-    plugin-migrate-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-migrate
             providers:
                 - command:migrate
-    # ADE build-context check: a deterministic, deployment-free check (mirrors plugin-preempt's
-    # preempt-module-present) — a trivial build-context `plugin: command` running `true`, proving
-    # the host can build + compile in the module. The full `charly migrate` dispatch is exercised by
-    # the live R10 bed (check-migrate-local) + the engine unit tests.
-    migrate-module-present:
-        check: the migration-engine plugin ships a buildable Go module the host compiles in; the full charly migrate dispatch is exercised by the live R10 (check-migrate-local)
-        id: migrate-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic, deployment-free check (mirrors plugin-preempt's
+              # preempt-module-present) — a trivial build-context `plugin: command` running `true`, proving
+              # the host can build + compile in the module. The full `charly migrate` dispatch is exercised by
+              # the live R10 bed (check-migrate-local) + the engine unit tests.
+              check: the migration-engine plugin ships a buildable Go module the host compiles in; the full charly migrate dispatch is exercised by the live R10 (check-migrate-local)
+              id: migrate-module-present
+              context:
+                - build
+              command: "true"

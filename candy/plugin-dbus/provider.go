@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-dbus/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -37,10 +39,12 @@ type dbusEnv struct {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs one `dbus:` operation. It decodes the full #Op + the env, skips in box mode
-// (no running deployment to probe on a disposable `charly check box`), dials back the host's
-// live executor over the reverse channel (a missing broker is a HARD FAIL — dbus needs the
-// venue), dispatches the method, and self-evaluates the matchers.
+// Invoke runs one `dbus:` operation. It decodes the full #Op, the typed plugin_input
+// (params.DbusInput — the dbus-exclusive fields left core #Op in the schema-compaction
+// cutover) + the env, skips in box mode (no running deployment to probe on a disposable
+// `charly check box`), dials back the host's live executor over the reverse channel (a
+// missing broker is a HARD FAIL — dbus needs the venue), dispatches the method, and
+// self-evaluates the matchers.
 func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -48,11 +52,13 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 			return sdk.ResultJSON("fail", "dbus: decode op: "+err.Error())
 		}
 	}
+	var in params.DbusInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env dbusEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	method := string(op.Dbus)
+	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running deployment with a
 	// session bus in a disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -69,7 +75,7 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return sdk.ResultJSON("fail", fmt.Sprintf("dbus: %s has no host executor attached — dbus needs the live venue (%v)", method, err))
 	}
 
-	out, runErr := dispatch(ctx, exec, &op)
+	out, runErr := dispatch(ctx, exec, &op, &in)
 
 	// The shared exit/stdout/stderr verdict pipeline (R3). dbus produces no artifact.
 	return sdk.VerbVerdict("dbus", method, out, runErr, &op, false)

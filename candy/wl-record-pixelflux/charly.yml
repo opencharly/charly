@@ -7,7 +7,6 @@ wl-record-pixelflux:
             drives the selkies pixelflux capture pipeline through ffmpeg to record
             the desktop as H.264. Verifiable: the wrapper script is installed and
             executable.
-    wl-record-pixelflux-require:
         require:
             - selkies
             - ffmpeg
@@ -21,20 +20,17 @@ wl-record-pixelflux:
             # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
             # override.)
             - plugin-record
-    wl-record-pixelflux-step-0:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    wl-record-pixelflux-step-1:
-        run: copy=pixelflux-record
-        copy: pixelflux-record
-        to: "${HOME}/.local/bin/pixelflux-record"
-        mode: "0755"
-        run_as: "${USER}"
-    wl-record-pixelflux-step-2:
-        check: the pixelflux-record wrapper is installed and executable
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/pixelflux-record
-            exists: true
-            mode: "0755"
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: copy=pixelflux-record
+              copy: pixelflux-record
+              to: "${HOME}/.local/bin/pixelflux-record"
+              mode: "0755"
+              run_as: "${USER}"
+            - check: the pixelflux-record wrapper is installed and executable
+              file:
+                file: ${HOME}/.local/bin/pixelflux-record
+                exists: true
+                mode: "0755"

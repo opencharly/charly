@@ -12,13 +12,12 @@ examplebuilder-consumer:
             candy/plugin-example-builder (which provides the examplebuilder builder); the
             runtime check below proves the build-resolve ran.
         external_builder: examplebuilder
-    examplebuilder-artifact-present:
-        check: the build-time examplebuilder resolve ran — /opt/examplebuilder-artifact is present in the built image
-        id: examplebuilder-artifact-present
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f /opt/examplebuilder-artifact"
-            in_container: true
+        plan:
+            - check: the build-time examplebuilder resolve ran — /opt/examplebuilder-artifact is present in the built image
+              id: examplebuilder-artifact-present
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: "test -f /opt/examplebuilder-artifact"
+                in_container: true

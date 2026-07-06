@@ -7,10 +7,8 @@ wl-overlay:
             helper script under ~/.local/bin that draws layer-shell overlay
             windows (e.g. recording indicators). Verifiable: the helper script is
             installed and executable and the gtk4-layer-shell package is present.
-    wl-overlay-require:
         require:
             - dbus
-    wl-overlay-distro:
         distro:
             arch:
                 package:
@@ -22,26 +20,21 @@ wl-overlay:
                     - gtk4
                     - gtk4-layer-shell
                     - python3-gobject
-    wl-overlay-step-0:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    wl-overlay-step-1:
-        run: copy=charly-overlay
-        copy: charly-overlay
-        to: "${HOME}/.local/bin/charly-overlay"
-        mode: "0755"
-        run_as: "${USER}"
-    wl-overlay-step-2:
-        check: the charly-overlay helper script is installed and executable
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/charly-overlay
-            exists: true
-            mode: "0755"
-    wl-overlay-step-3:
-        check: the gtk4-layer-shell library package is installed
-        plugin: package
-        plugin_input:
-            package: gtk4-layer-shell
-            installed: true
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: copy=charly-overlay
+              copy: charly-overlay
+              to: "${HOME}/.local/bin/charly-overlay"
+              mode: "0755"
+              run_as: "${USER}"
+            - check: the charly-overlay helper script is installed and executable
+              file:
+                file: ${HOME}/.local/bin/charly-overlay
+                exists: true
+                mode: "0755"
+            - check: the gtk4-layer-shell library package is installed
+              package:
+                package: gtk4-layer-shell
+                installed: true

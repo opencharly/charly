@@ -66,7 +66,10 @@ func K3sPostProvision(deployName string) error {
 // deploy-add is the single source of truth for clusters it manages, so a rebuild
 // cleanly picks up a fresh admin cert without stale entries.
 func mergeKubeconfig(retrievedPath, contextName string) error {
-	if _, err := invokeKubePlugin(&Op{Kube: "merge-kubeconfig", Kubeconfig: retrievedPath, KubeContext: contextName}); err != nil {
+	op := &Op{Plugin: "kube", PluginInput: map[string]any{
+		"method": "merge-kubeconfig", "kubeconfig": retrievedPath, "kube_context": contextName,
+	}}
+	if _, err := invokeKubePlugin(op); err != nil {
 		return err
 	}
 	return nil

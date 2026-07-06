@@ -3,9 +3,11 @@
 // deployment's Chrome over CDP — open/list/close/text/html/url/eval/axtree/coords/
 // raw/wait/screenshot/click/type plus the SPA remote-desktop input group —
 // speaking the DevTools HTTP (/json) + per-tab CDP WebSocket surface via
-// golang.org/x/net/websocket. The verb keeps its `cdp:` discriminator + every
-// modifier (tab/url/expression/selector/…) on charly's core #Op (authoring
-// unchanged). Dual-placement by construction: the SAME NewProvider()/NewMeta()
+// golang.org/x/net/websocket. Since the schema-compaction cutover an authored
+// `cdp:` step desugars to the internal plugin/plugin_input envelope, and every
+// cdp-exclusive modifier (method/tab/url/expression/selector/…) lives in the
+// plugin's OWN #CdpInput (schema/cdp.cue → the generated params.CdpInput).
+// Dual-placement by construction: the SAME NewProvider()/NewMeta()
 // compile INTO charly in-process when listed in compiled_plugins, or cmd/serve
 // serves them OUT-OF-PROCESS over go-plugin gRPC when they are not — placement is
 // invisible above the registry.
@@ -30,12 +32,12 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:cdp + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). cdp keeps its entire authoring contract (the
-// #CdpMethod enum + every modifier) on charly's core #Op — like mcp/vnc/spice it has
-// NO plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (cdp.cue) exists only to satisfy the host's non-empty-schema load gate.
+// sdk.NewMeta → BuildCapabilities). The verb's entire authoring contract — the
+// method enum + every cdp-exclusive modifier — lives in the served #CdpInput
+// (schema/cdp.cue), which the host splices onto the base and validates every
+// authored `cdp:` step's plugin_input against.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.178.0900",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "cdp", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "cdp", InputDef: "#CdpInput"}},
 		schemaFS)
 }

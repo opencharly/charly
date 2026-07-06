@@ -37,22 +37,19 @@ plugin-clean:
             witness is the disposable check-commands-local bed: `charly clean --dry-run` exits 0
             and prints the would-remove retention report, proving the externalized command + the
             in-proc HostBuild retention dispatch end-to-end.
-    plugin-clean-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-clean
             providers:
                 - command:clean
-    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-    # deterministic check every candy ships. The full `charly clean` end-to-end — the compiled-in
-    # in-proc HostBuild("retention") dispatch: `charly clean --dry-run` → exit 0 with the
-    # would-remove report — is exercised by the live R10 bed (check-commands-local).
-    clean-module-present:
-        check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end (the in-proc HostBuild retention dispatch) is exercised by the live R10 (check-commands-local)
-        id: clean-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
+              # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+              # deterministic check every candy ships. The full `charly clean` end-to-end — the compiled-in
+              # in-proc HostBuild("retention") dispatch: `charly clean --dry-run` → exit 0 with the
+              # would-remove report — is exercised by the live R10 bed (check-commands-local).
+              check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end (the in-proc HostBuild retention dispatch) is exercised by the live R10 (check-commands-local)
+              id: clean-module-present
+              context:
+                - build
+              command: "true"

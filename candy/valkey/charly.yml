@@ -13,9 +13,7 @@ valkey:
             verifiable: the binaries on disk, the `valkey` package installed,
             and a live PING/PONG + SET/GET round-trip + reachable-port probe
             against the running deployment.
-    valkey-require:
         require: []
-    valkey-distro:
         distro:
             fedora:
                 package:
@@ -25,17 +23,13 @@ valkey:
                 repo:
                     - name: remi-modular
                       rpm: "https://rpms.remirepo.net/fedora/remi-release-$(rpm -E %fedora).rpm"
-    valkey-env:
         env:
             VALKEY_URL: "redis://127.0.0.1:6379"
-    valkey-port:
         port:
             - 6379
-    valkey-volume:
         volume:
             - name: valkey-data
               path: "~/.valkey"
-    valkey-service:
         service:
             - name: valkey
               exec: "/usr/bin/valkey-server --bind 0.0.0.0 --port 6379 --protected-mode no --dir %(ENV_HOME)s/.valkey --save 60 1 --loglevel notice"
@@ -43,73 +37,54 @@ valkey:
               priority: 20
               enable: true
               scope: system
-    valkey-step-0:
-        run: mkdir=${HOME}/.valkey
-        mkdir: "${HOME}/.valkey"
-        run_as: "${USER}"
-    valkey-step-1:
-        check: the valkey-server daemon binary is installed at /usr/bin/valkey-server
-        plugin: file
-        plugin_input:
-            file: /usr/bin/valkey-server
-            exists: true
-    valkey-step-2:
-        check: the valkey-cli client binary is installed at /usr/bin/valkey-cli
-        plugin: file
-        plugin_input:
-            file: /usr/bin/valkey-cli
-            exists: true
-    valkey-step-3:
-        check: the valkey package is installed
-        plugin: package
-        plugin_input:
-            package: valkey
-            installed: true
-    valkey-step-4:
-        check: valkey-cli ping returns PONG against the supervised valkey-server
-        stdout: PONG
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: valkey-cli -h 127.0.0.1 -p 6379 ping
-    valkey-step-5:
-        check: the valkey port accepts a TCP connection from the host
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:6379}
-            reachable: true
-    valkey-step-6:
-        check: a value written with SET can be read back with GET, proving the store really persists key-value pairs
-        stdout:
-            - contains: charly-check-val
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: valkey-cli -h 127.0.0.1 -p 6379 set charly-check-key charly-check-val && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-key
-    valkey-step-7:
-        agent-check: the supervised valkey service is running and keeps answering clients, restarting automatically (restart=always) if the valkey-server process exits
-    valkey-responds:
-        check: command=valkey-cli -h 127.0.0.1 -p 6379 ping
-        id: valkey-responds
-        stdout: PONG
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: valkey-cli -h 127.0.0.1 -p 6379 ping
-            in_container: true
-    valkey-set-get:
-        check: command=valkey-cli -h 127.0.0.1 -p 6379 set charly-check-probe charly-check-ok && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-probe
-        id: valkey-set-get
-        stdout:
-            - contains: charly-check-ok
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: valkey-cli -h 127.0.0.1 -p 6379 set charly-check-probe charly-check-ok && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-probe
-            in_container: true
+        plan:
+            - run: mkdir=${HOME}/.valkey
+              mkdir: "${HOME}/.valkey"
+              run_as: "${USER}"
+            - check: the valkey-server daemon binary is installed at /usr/bin/valkey-server
+              file:
+                file: /usr/bin/valkey-server
+                exists: true
+            - check: the valkey-cli client binary is installed at /usr/bin/valkey-cli
+              file:
+                file: /usr/bin/valkey-cli
+                exists: true
+            - check: the valkey package is installed
+              package:
+                package: valkey
+                installed: true
+            - check: valkey-cli ping returns PONG against the supervised valkey-server
+              stdout: PONG
+              context:
+                - runtime
+              command: valkey-cli -h 127.0.0.1 -p 6379 ping
+            - check: the valkey port accepts a TCP connection from the host
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:6379}
+                reachable: true
+            - check: a value written with SET can be read back with GET, proving the store really persists key-value pairs
+              stdout:
+                - contains: charly-check-val
+              context:
+                - runtime
+              command: valkey-cli -h 127.0.0.1 -p 6379 set charly-check-key charly-check-val && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-key
+            - agent-check: the supervised valkey service is running and keeps answering clients, restarting automatically (restart=always) if the valkey-server process exits
+            - check: command=valkey-cli -h 127.0.0.1 -p 6379 ping
+              id: valkey-responds
+              stdout: PONG
+              context:
+                - runtime
+              command:
+                command: valkey-cli -h 127.0.0.1 -p 6379 ping
+                in_container: true
+            - check: command=valkey-cli -h 127.0.0.1 -p 6379 set charly-check-probe charly-check-ok && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-probe
+              id: valkey-set-get
+              stdout:
+                - contains: charly-check-ok
+              context:
+                - runtime
+              command:
+                command: valkey-cli -h 127.0.0.1 -p 6379 set charly-check-probe charly-check-ok && valkey-cli -h 127.0.0.1 -p 6379 get charly-check-probe
+                in_container: true

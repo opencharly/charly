@@ -48,7 +48,7 @@ var builtinProviderInstances = []Provider{
 	// candy/plugin-spice, source github.com/…) served out-of-process — NOT a compiled-in
 	// instance, absent from this slice AND the providers: manifest; its grpcProvider
 	// registers at loadProjectPlugins time. NO dep-shedder remains here.
-	summarizeVerb{}, killVerb{}, pluginVerb{},
+	pluginVerb{},
 	// kinds (ClassKind) — NONE remain here, and NONE are dedicated-builtin KindProviders anymore:
 	// EVERY authoring kind is an externalized plugin candy routed through runPluginKind. The tier-1
 	// kinds (agent/module/sidecar/package-group/distro/builder/init/resource/target) + group

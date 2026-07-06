@@ -9,7 +9,9 @@ import (
 
 	adb "github.com/zach-klippenstein/goadb"
 
+	"github.com/opencharly/charly/candy/plugin-adb/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,7 +26,8 @@ import (
 // requiredModifiers mirrors the in-tree adbMethods required-field specs. The
 // host's validate-time + runtime required-modifier check keyed off the former
 // in-proc live-verb seam, which an external verb is not — so the check moves HERE,
-// at dispatch, preserving the "missing required modifier(s): X" failure.
+// at dispatch, preserving the "missing required modifier(s): X" failure. The names
+// are plugin-INPUT keys (#AdbInput wire names) since the schema-compaction cutover.
 var requiredModifiers = map[string][]string{
 	"shell":       {"arg"},
 	"install":     {"apk"},
@@ -46,13 +49,17 @@ func parseTimeout(s string, def time.Duration) time.Duration {
 	return def
 }
 
-// dispatch runs one adb method and returns its captured output. A returned error
-// is the verb FAILING (the in-tree CLI Run() returning an error → exit 1);
-// provider.go maps it through the exit_status / stderr matchers.
+// dispatch runs one adb method and returns its captured output. It decodes the
+// step's typed plugin_input (params.AdbInput — the per-verb fields left core #Op
+// in the schema-compaction cutover). A returned error is the verb FAILING (the
+// in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
+// exit_status / stderr matchers.
 //
 //nolint:gocyclo // a flat method switch over the 12-method allowlist; splitting would scatter the contract.
 func dispatch(env *adbEnv, op *spec.Op) (string, error) {
-	method := string(op.Adb)
+	var in params.AdbInput
+	kit.DecodeInput(op.PluginInput, &in)
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -60,18 +67,18 @@ func dispatch(env *adbEnv, op *spec.Op) (string, error) {
 	case "devices":
 		return runDevices(env)
 	case "install":
-		// op.Apk is a HOST path, already resolved to an absolute candy-anchored
+		// in.Apk is a HOST path, already resolved to an absolute candy-anchored
 		// path by the host (invokeVerbProvider) before marshaling.
-		return installFromHostApk(env, op.Apk)
+		return installFromHostApk(env, in.Apk)
 	case "install-app":
 		return installByPackage(env, spec.ApkPackageSpec{
-			Package:    op.AppId,
-			Source:     op.Source,
-			Arch:       op.Arch,
-			AppVersion: op.AppVersion,
+			Package:    in.AppId,
+			Source:     in.Source,
+			Arch:       in.Arch,
+			AppVersion: in.AppVersion,
 		})
 	case "uninstall":
-		return uninstall(env, op.Args[0])
+		return uninstall(env, in.Args[0])
 	}
 
 	// Every remaining method operates against a single goadb device handle.
@@ -81,21 +88,21 @@ func dispatch(env *adbEnv, op *spec.Op) (string, error) {
 	}
 	switch method {
 	case "shell":
-		out, err := dev.RunCommand(op.Args[0], op.Args[1:]...)
+		out, err := dev.RunCommand(in.Args[0], in.Args[1:]...)
 		if err != nil {
-			return "", fmt.Errorf("adb shell %v: %w", op.Args, err)
+			return "", fmt.Errorf("adb shell %v: %w", in.Args, err)
 		}
 		return out, nil
 	case "getprop":
-		out, err := dev.RunCommand("getprop", op.Property)
+		out, err := dev.RunCommand("getprop", in.Property)
 		if err != nil {
-			return "", fmt.Errorf("getprop %s: %w", op.Property, err)
+			return "", fmt.Errorf("getprop %s: %w", in.Property, err)
 		}
 		return strings.TrimSpace(out), nil
 	case "screencap":
-		return runScreencap(dev, op.Artifact)
+		return runScreencap(dev, in.Artifact)
 	case "logcat-tail":
-		return runLogcatTail(dev, op)
+		return runLogcatTail(dev, &in)
 	case "wait-for-device":
 		return runWaitForDevice(dev, parseTimeout(op.Timeout, 60*time.Second))
 	case "wait-ui-settled":
@@ -103,10 +110,10 @@ func dispatch(env *adbEnv, op *spec.Op) (string, error) {
 	case "current-focus":
 		return adbCurrentFocus(dev)
 	case "keyevent":
-		if _, err := dev.RunCommand("input", "keyevent", op.KeyName); err != nil {
-			return "", fmt.Errorf("input keyevent %s: %w", op.KeyName, err)
+		if _, err := dev.RunCommand("input", "keyevent", in.KeyName); err != nil {
+			return "", fmt.Errorf("input keyevent %s: %w", in.KeyName, err)
 		}
-		return fmt.Sprintf("sent keyevent %s", op.KeyName), nil
+		return fmt.Sprintf("sent keyevent %s", in.KeyName), nil
 	}
 	return "", fmt.Errorf("unknown adb method %q", method)
 }
@@ -159,20 +166,20 @@ func runScreencap(dev *adb.Device, artifact string) (string, error) {
 }
 
 // runLogcatTail dumps recent logcat lines (`logcat -d`), trimmed to the last
-// op.Amount lines and filtered by op.Query.
-func runLogcatTail(dev *adb.Device, op *spec.Op) (string, error) {
+// in.Amount lines and filtered by in.Query.
+func runLogcatTail(dev *adb.Device, in *params.AdbInput) (string, error) {
 	args := []string{"-d"}
-	if op.Query != "" {
-		args = append(args, strings.Fields(op.Query)...)
+	if in.Query != "" {
+		args = append(args, strings.Fields(in.Query)...)
 	}
 	out, err := dev.RunCommand("logcat", args...)
 	if err != nil {
 		return "", fmt.Errorf("logcat: %w", err)
 	}
-	if op.Amount > 0 {
+	if in.Amount > 0 {
 		lines := strings.Split(out, "\n")
-		if len(lines) > op.Amount {
-			lines = lines[len(lines)-op.Amount:]
+		if len(lines) > in.Amount {
+			lines = lines[len(lines)-in.Amount:]
 		}
 		out = strings.Join(lines, "\n")
 	}

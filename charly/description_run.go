@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"syscall"
 )
 
@@ -59,19 +57,9 @@ func RunPlan(ctx context.Context, r *Runner, set *LabelDescriptionSet, _ *TagExp
 	defer func() { r.Scenario = orig }()
 
 	var out []StepResult
-	i := 0
-	for i < len(flat) {
-		// Parallel group: consecutive steps sharing a non-empty Op.Parallel id.
-		groupID := flat[i].step.Parallel
-		end := i + 1
-		if groupID != "" {
-			for end < len(flat) && flat[end].step.Parallel == groupID && flat[end].origin == flat[i].origin {
-				end++
-			}
-		}
-		isParallel := groupID != "" && end-i > 1
-		out = append(out, runFlatGroup(ctx, r, flat[i:end], planCtx, strict, isParallel)...)
-		i = end
+	for _, fs := range flat {
+		stepID := EffectiveStepID(&fs.step, fs.origin, fs.idx)
+		out = append(out, runUnit(ctx, r, fs, planCtx, stepID, strict))
 	}
 
 	// Reap host-side background processes spawned by command: steps.
@@ -81,56 +69,8 @@ func RunPlan(ctx context.Context, r *Runner, set *LabelDescriptionSet, _ *TagExp
 	return out
 }
 
-// runFlatGroup runs one or more sibling flat steps, optionally in parallel,
-// honoring Op.Count expansion.
-func runFlatGroup(ctx context.Context, r *Runner, group []flatStep, stepCtx *ScenarioContext, strict, parallel bool) []StepResult {
-	type unit struct {
-		fs     flatStep
-		subIdx int // -1 if no count expansion
-		stepID string
-	}
-	var units []unit
-	for _, fs := range group {
-		count := fs.step.Count
-		baseID := EffectiveStepID(&fs.step, fs.origin, fs.idx)
-		if count <= 0 {
-			units = append(units, unit{fs: fs, subIdx: -1, stepID: baseID})
-			continue
-		}
-		for j := range count {
-			cp := fs
-			cp.step.ID = appendIndex(cp.step.ID, j)
-			cp.step.Capture = appendIndex(cp.step.Capture, j)
-			units = append(units, unit{fs: cp, subIdx: j, stepID: fmt.Sprintf("%s-%d", baseID, j)})
-		}
-	}
-
-	results := make([]StepResult, len(units))
-	run := func(u unit, slot int) {
-		results[slot] = runUnit(ctx, r, u.fs, stepCtx, u.stepID, u.subIdx, strict)
-	}
-
-	if parallel && len(units) > 1 {
-		var wg sync.WaitGroup
-		for i, u := range units {
-			wg.Add(1)
-			i, u := i, u
-			go func() {
-				defer wg.Done()
-				run(u, i)
-			}()
-		}
-		wg.Wait()
-	} else {
-		for i, u := range units {
-			run(u, i)
-		}
-	}
-	return results
-}
-
 // runUnit executes one plan step and returns its result.
-func runUnit(ctx context.Context, r *Runner, fs flatStep, stepCtx *ScenarioContext, stepID string, subIdx int, strict bool) StepResult {
+func runUnit(ctx context.Context, r *Runner, fs flatStep, stepCtx *ScenarioContext, stepID string, strict bool) StepResult {
 	step := fs.step
 	sr := StepResult{
 		Keyword: string(keywordOf(&step)),
@@ -194,55 +134,10 @@ func runUnit(ctx context.Context, r *Runner, fs flatStep, stepCtx *ScenarioConte
 	op := step.Op
 	op.Origin = fs.origin
 	op.IntentDo = string(stepDoMode(&step))
-	if subIdx >= 0 {
-		indexVar := op.IndexVar
-		if indexVar == "" {
-			indexVar = "INDEX"
-		}
-		op = *substituteIndex(&op, indexVar, subIdx)
-	}
 	stepCtx.CurrentStepID = stepID
 	checkRes := r.runOne(ctx, &op)
-	stepCtx.RecordResult(stepID, checkRes)
 	sr.Result = checkRes
 	return sr
-}
-
-// appendIndex appends "-<idx>" to the input if non-empty.
-func appendIndex(s string, idx int) string {
-	if s == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s-%d", s, idx)
-}
-
-// substituteIndex returns a copy of op with ${<indexVar>} replaced by idx in
-// every string field the runner subsequently expands.
-func substituteIndex(c *Op, indexVar string, idx int) *Op {
-	out := *c
-	idxStr := fmt.Sprintf("%d", idx)
-	tok := "${" + indexVar + "}"
-	replace := func(s string) string {
-		if !strings.Contains(s, tok) {
-			return s
-		}
-		return strings.ReplaceAll(s, tok, idxStr)
-	}
-	out.ID = replace(out.ID)
-	out.Capture = replace(out.Capture)
-	out.Command = replace(out.Command)
-	out.Tab = replace(out.Tab)
-	out.Selector = replace(out.Selector)
-	out.Text = replace(out.Text)
-	out.URL = replace(out.URL)
-	out.Expression = replace(out.Expression)
-	out.Input = replace(out.Input)
-	// http/addr/interface left #Op; their discriminator + modifiers ride plugin_input
-	// (a map, not a string field). Index-var (${<indexVar>}) replication of plugin_input
-	// is not performed — matching the already-extracted process/port/dns verbs, whose
-	// params are likewise not index-replicated. The common runtime ${HOST_PORT:N} /
-	// ${VAR} substitution in plugin_input IS handled, generically, by opExpandVars.
-	return &out
 }
 
 // keywordOf returns the populated step keyword, or "" when none is set.
@@ -263,25 +158,6 @@ func sendSIGTERM(pid int) error {
 		return nil
 	}
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		if strings.Contains(err.Error(), "process already finished") ||
-			strings.Contains(err.Error(), "no such process") {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
-// sendSIGKILL is the SIGKILL sibling of sendSIGTERM. Used by the kill: verb.
-func sendSIGKILL(pid int) error {
-	if pid <= 0 {
-		return nil
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return nil
-	}
-	if err := proc.Signal(syscall.SIGKILL); err != nil {
 		if strings.Contains(err.Error(), "process already finished") ||
 			strings.Contains(err.Error(), "no such process") {
 			return nil

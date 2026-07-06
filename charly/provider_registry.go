@@ -50,6 +50,23 @@ func (r *Registry) register(p Provider, origin string) error {
 	if word == "" {
 		return fmt.Errorf("provider (class %q): empty reserved word", class)
 	}
+	if class == ClassVerb {
+		// The schema-compaction collision gate: a plugin verb word that equals an
+		// authored #Op field could never be reached by the parse-time sugar rule
+		// (the key would classify as a builtin modifier), so registering one is a
+		// hard error at the source.
+		if authoredOpFieldSet[word] {
+			return fmt.Errorf("provider verb word %q collides with an authored #Op field — the `<word>: <input>` sugar could never dispatch it; pick a non-colliding word", word)
+		}
+		// A declared scalar-sugar primary registers into the parse-time desugar.
+		if pc, ok := p.(primaryCarrier); ok {
+			if prim := pc.primaryInput(); prim != "" {
+				if err := registerPluginPrimary(word, prim); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	k := provKey(class, word)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -240,3 +257,8 @@ func (r *Registry) Close() error {
 	}
 	return firstErr
 }
+
+// primaryCarrier exposes a class:verb capability's declared scalar-sugar
+// primary input field (ProvidedCapability.Primary), carried by both provider
+// placements (in-proc + grpc) for placement parity.
+type primaryCarrier interface{ primaryInput() string }

@@ -9,15 +9,14 @@ plugin-command:
             sdk/kit contract (CheckVerbProvider + the AddBackground context
             extension), so it is COMPILED-IN-ONLY. Its run: ACT is the dedicated
             package-main install-task emitCmd branch, not a kit role. Matchers via sdk.MatchAll.
-    plugin-command-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-command
             providers:
                 - verb:command
-    command-verb-dispatches:
-        check: the command verb dispatches through the provider registry and runs a shell command asserting its exit status
-        id: command-verb-dispatches
-        plugin: command
-        plugin_input:
-            command: "true"
-        context: [runtime]
+            primary:
+                command: command
+        plan:
+            - check: the command verb dispatches through the provider registry and runs a shell command asserting its exit status
+              id: command-verb-dispatches
+              command: "true"
+              context: [runtime]

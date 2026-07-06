@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/charly/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -44,38 +45,40 @@ func TestRecordingFilePath(t *testing.T) {
 
 // TestRecordName covers the CLI `-n` default (empty record_name → "default").
 func TestRecordName(t *testing.T) {
-	if got := recordName(&spec.Op{}); got != "default" {
+	if got := recordName(&params.RecordInput{}); got != "default" {
 		t.Errorf("recordName(empty) = %q, want default", got)
 	}
-	if got := recordName(&spec.Op{RecordName: "demo"}); got != "demo" {
+	if got := recordName(&params.RecordInput{RecordName: "demo"}); got != "demo" {
 		t.Errorf("recordName(demo) = %q, want demo", got)
 	}
 }
 
 // TestRecordFps covers the CLI Fps default (0/unset → 30).
 func TestRecordFps(t *testing.T) {
-	if got := recordFps(&spec.Op{}); got != 30 {
+	if got := recordFps(&params.RecordInput{}); got != 30 {
 		t.Errorf("recordFps(unset) = %d, want 30", got)
 	}
-	if got := recordFps(&spec.Op{RecordFps: 60}); got != 60 {
+	if got := recordFps(&params.RecordInput{RecordFps: 60}); got != 60 {
 		t.Errorf("recordFps(60) = %d, want 60", got)
 	}
 }
 
 // TestRequireModifiers mirrors the in-tree recordMethods Required specs that moved
 // here: `stop` needs an artifact, `cmd` needs the text line; list/start need nothing.
+// The modifiers ride the desugared plugin_input map (op.PluginInput) since the
+// schema-compaction cutover, so the fixtures set input maps, not Op fields.
 func TestRequireModifiers(t *testing.T) {
 	cases := []struct {
 		method  string
 		op      spec.Op
 		wantErr string // substring; "" means no error
 	}{
-		{"list", spec.Op{Record: "list"}, ""},
-		{"start", spec.Op{Record: "start"}, ""},
-		{"stop", spec.Op{Record: "stop"}, "artifact"},
-		{"stop", spec.Op{Record: "stop", Artifact: "/tmp/x.cast"}, ""},
-		{"cmd", spec.Op{Record: "cmd"}, "text"},
-		{"cmd", spec.Op{Record: "cmd", Text: "echo hi"}, ""},
+		{"list", spec.Op{PluginInput: map[string]any{"method": "list"}}, ""},
+		{"start", spec.Op{PluginInput: map[string]any{"method": "start"}}, ""},
+		{"stop", spec.Op{PluginInput: map[string]any{"method": "stop"}}, "artifact"},
+		{"stop", spec.Op{PluginInput: map[string]any{"method": "stop", "artifact": "/tmp/x.cast"}}, ""},
+		{"cmd", spec.Op{PluginInput: map[string]any{"method": "cmd"}}, "text"},
+		{"cmd", spec.Op{PluginInput: map[string]any{"method": "cmd", "text": "echo hi"}}, ""},
 	}
 	for _, tc := range cases {
 		err := sdk.RequireModifiers(tc.method, &tc.op, requiredModifiers)

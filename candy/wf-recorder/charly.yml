@@ -6,7 +6,6 @@ wf-recorder:
             Installs wf-recorder, the wlroots screen-capture recorder. Verifiable:
             the wf-recorder binary lands at /usr/bin/wf-recorder and the package
             is registered.
-    wf-recorder-require:
         require:
             # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
             # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in
@@ -18,20 +17,16 @@ wf-recorder:
             # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
             # override.)
             - plugin-record
-    wf-recorder-distro:
         distro:
             fedora:
                 package:
                     - wf-recorder
-    wf-recorder-step-0:
-        check: the wf-recorder binary is installed at /usr/bin/wf-recorder
-        plugin: file
-        plugin_input:
-            file: /usr/bin/wf-recorder
-            exists: true
-    wf-recorder-step-1:
-        check: the wf-recorder package is registered with the package manager
-        plugin: package
-        plugin_input:
-            package: wf-recorder
-            installed: true
+        plan:
+            - check: the wf-recorder binary is installed at /usr/bin/wf-recorder
+              file:
+                file: /usr/bin/wf-recorder
+                exists: true
+            - check: the wf-recorder package is registered with the package manager
+              package:
+                package: wf-recorder
+                installed: true

@@ -9,18 +9,14 @@ llama-cpp:
             gguf-py package for converting HuggingFace models to GGUF. Every
             artifact lands at a fixed path under ~/llama.cpp, so its presence
             and executability are directly checkable.
-    llama-cpp-env:
         env:
             LLAMA_CPP_PATH: "~/llama.cpp"
-    llama-cpp-path_append:
         path_append:
             - "~/llama.cpp"
-    llama-cpp-step-0:
-        run: command=install llama.cpp prebuilt ubuntu-x64 binaries + matching source GGUF tools into ~/llama.cpp (newest release that actually ships a binary)
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: command=install llama.cpp prebuilt ubuntu-x64 binaries + matching source GGUF tools into ~/llama.cpp (newest release that actually ships a binary)
+              run_as: "${USER}"
+              command: |
                 set -e
                 LLAMA_CPP_DIR=~/llama.cpp
                 mkdir -p "$LLAMA_CPP_DIR"
@@ -50,50 +46,32 @@ llama-cpp:
                 cp "$SRC_DIR/convert_hf_to_gguf.py" "$LLAMA_CPP_DIR/"
                 cp -r "$SRC_DIR/gguf-py" "$LLAMA_CPP_DIR/"
                 rm -rf /tmp/llama_extract /tmp/llama-bin.tar.gz /tmp/llama_src /tmp/llama-src.tar.gz
-    llama-cpp-step-2:
-        check: the llama-quantize binary is present under ~/llama.cpp
-        plugin: file
-        plugin_input:
-            file: ${HOME}/llama.cpp/llama-quantize
-            exists: true
-    llama-cpp-step-3:
-        check: the llama-cli binary is present and executable
-        stdout: ok
-        plugin: command
-        plugin_input:
-            command: test -x ${HOME}/llama.cpp/llama-cli && echo ok
-    llama-cpp-step-4:
-        check: the HuggingFace-to-GGUF conversion script is present
-        plugin: file
-        plugin_input:
-            file: ${HOME}/llama.cpp/convert_hf_to_gguf.py
-            exists: true
-    llama-cpp-step-5:
-        check: the gguf-py conversion package directory is present
-        plugin: file
-        plugin_input:
-            file: ${HOME}/llama.cpp/gguf-py
-            filetype: directory
-    llama-cpp-step-6:
-        agent-check: running "llama-cli --version" prints a llama.cpp version string, confirming the prebuilt ubuntu-x64 binary executes on this host
-    llama-cpp-cli-binary:
-        check: file=${HOME}/llama.cpp/llama-cli
-        id: llama-cpp-cli-binary
-        plugin: file
-        plugin_input:
-            file: ${HOME}/llama.cpp/llama-cli
-            exists: true
-    llama-cpp-binaries-executable:
-        check: command=test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
-        id: llama-cpp-binaries-executable
-        stdout: ok
-        plugin: command
-        plugin_input:
-            command: test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
-    llama-cpp-shared-libs:
-        check: command=ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok
-        id: llama-cpp-shared-libs
-        stdout: ok
-        plugin: command
-        plugin_input:
-            command: ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok
+            - check: the llama-quantize binary is present under ~/llama.cpp
+              file:
+                file: ${HOME}/llama.cpp/llama-quantize
+                exists: true
+            - check: the llama-cli binary is present and executable
+              stdout: ok
+              command: test -x ${HOME}/llama.cpp/llama-cli && echo ok
+            - check: the HuggingFace-to-GGUF conversion script is present
+              file:
+                file: ${HOME}/llama.cpp/convert_hf_to_gguf.py
+                exists: true
+            - check: the gguf-py conversion package directory is present
+              file:
+                file: ${HOME}/llama.cpp/gguf-py
+                filetype: directory
+            - agent-check: running "llama-cli --version" prints a llama.cpp version string, confirming the prebuilt ubuntu-x64 binary executes on this host
+            - check: file=${HOME}/llama.cpp/llama-cli
+              id: llama-cpp-cli-binary
+              file:
+                file: ${HOME}/llama.cpp/llama-cli
+                exists: true
+            - check: command=test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
+              id: llama-cpp-binaries-executable
+              stdout: ok
+              command: test -x ${HOME}/llama.cpp/llama-cli && test -x ${HOME}/llama.cpp/llama-quantize && echo ok
+            - check: command=ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok
+              id: llama-cpp-shared-libs
+              stdout: ok
+              command: ls ${HOME}/llama.cpp/lib*.so* >/dev/null 2>&1 && echo ok

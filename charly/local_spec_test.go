@@ -12,16 +12,14 @@ import (
 // expected fields.
 func TestLoadUnified_LocalMap_Inline(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: 2026.174.1100
+	src := `version: 2026.186.2323
 dev-workstation:
   local:
     description: Dev workstation
-  dev-workstation-candy:
     candy: [ripgrep, direnv]
-  dev-workstation-install_opts:
-    install_opts: {with_services: false, allow_repo_changes: true}
-  dev-workstation-env:
-    env: [EDITOR=vim]
+    install_opts: {with_service: false, allow_repo_changes: true}
+    env:
+      EDITOR: vim
 `
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(src), 0o644); err != nil {
 		t.Fatalf("write charly.yml: %v", err)
@@ -43,7 +41,7 @@ dev-workstation:
 	if spec.InstallOpts == nil || spec.InstallOpts.WithServices || !spec.InstallOpts.AllowRepoChanges {
 		t.Errorf("install_opts merge failed: %+v", spec.InstallOpts)
 	}
-	if len(spec.Env) != 1 || spec.Env[0] != "EDITOR=vim" {
+	if len(spec.Env) != 1 || spec.Env["EDITOR"] != "vim" {
 		t.Errorf("unexpected env: %v", spec.Env)
 	}
 	if spec.Description != "Dev workstation" {
@@ -55,7 +53,7 @@ dev-workstation:
 // on a deployment that still uses the legacy target:host spelling.
 func TestLoadUnified_RejectLegacyTargetHost(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: 2026.174.1100
+	src := `version: 2026.186.2323
 deploy:
   my-laptop:
     target: host
@@ -68,7 +66,7 @@ deploy:
 	if err == nil {
 		t.Fatal("expected hard load error for target: host")
 	}
-	if msg := err.Error(); !containsStr(msg, "no discriminator") {
+	if msg := err.Error(); !containsStr(msg, "no kind discriminator") {
 		t.Errorf("legacy `deploy:` kind-keyed shape should be hard-rejected, got: %v", err)
 	}
 }

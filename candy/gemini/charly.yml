@@ -9,26 +9,19 @@ gemini:
             gemini binary lands at ~/.npm-global/bin/gemini, the scoped package
             is unpacked under ~/.npm-global/lib/node_modules/@google/gemini-cli,
             and `gemini --version` exits cleanly and prints a semantic version.
-    gemini-require:
         require:
             - nodejs
-    gemini-step-0:
-        check: the gemini binary is installed into the npm global bin directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/gemini
-            exists: true
-    gemini-step-1:
-        check: the @google/gemini-cli scoped package is unpacked under the npm global lib directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/lib/node_modules/@google/gemini-cli/package.json
-            exists: true
-    gemini-step-2:
-        check: running gemini --version exits cleanly and prints a semantic version
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/gemini --version
+        plan:
+            - check: the gemini binary is installed into the npm global bin directory
+              file:
+                file: ${HOME}/.npm-global/bin/gemini
+                exists: true
+            - check: the @google/gemini-cli scoped package is unpacked under the npm global lib directory
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/@google/gemini-cli/package.json
+                exists: true
+            - check: running gemini --version exits cleanly and prints a semantic version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/gemini --version

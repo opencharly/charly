@@ -1437,9 +1437,28 @@ func findEntityDirs(path, filename string, recursive bool) ([]string, error) {
 	}
 	err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			// A per-entry error must NOT abort the whole discover walk: a
+			// discoverable manifest can never live in an unreadable directory,
+			// and under concurrency a SIBLING build's transient artifact (a
+			// makepkg fakeroot-owned `pkg/` under a candy's pkgbuild/) yields a
+			// passing EACCES that would otherwise fail EVERY concurrent
+			// LoadUnified. Skip the offending entry/subtree and continue; only the
+			// scan root itself (info == nil) is a real, propagated error.
+			if info == nil {
+				return err
+			}
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if info.IsDir() {
+			// VCS + build-artifact dirs never hold a discoverable manifest;
+			// skipping them avoids both the wasted traversal AND the
+			// concurrent-build race for the common cases.
+			if discoverSkipDir(info.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if info.Name() == filename {
@@ -1452,6 +1471,18 @@ func findEntityDirs(path, filename string, recursive bool) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// discoverSkipDir reports whether a directory name is a VCS or build-artifact
+// dir that never contains a discoverable charly.yml manifest — skipped by the
+// discover walk both for speed and to avoid traversing concurrently-mutated
+// build outputs (e.g. a candy's pkgbuild/{pkg,src} under a live makepkg).
+func discoverSkipDir(name string) bool {
+	switch name {
+	case ".git", ".build", "output", "node_modules":
+		return true
+	}
+	return false
 }
 
 // applyDiscoveredManifest loads one discovered manifest and routes every

@@ -47,7 +47,6 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
     pod:
         image: coder
         disposable: true
-    substrate-dep-tunnel:
         tunnel: tailscale
     web:
         pod:

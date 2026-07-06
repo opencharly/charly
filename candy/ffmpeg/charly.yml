@@ -8,7 +8,6 @@ ffmpeg:
             ffprobe media inspector under /usr/bin, both of which print a version
             banner to stdout — so their presence and basic operability are directly
             verifiable.
-    ffmpeg-distro:
         distro:
             arch:
                 package:
@@ -20,38 +19,27 @@ ffmpeg:
                     - name: fedora-multimedia
                       url: "https://negativo17.org/repos/fedora-multimedia.repo"
                       gpgkey: "https://negativo17.org/repos/RPM-GPG-KEY-slaanesh"
-    ffmpeg-step-0:
-        check: the ffmpeg transcoder binary is installed at /usr/bin/ffmpeg
-        plugin: file
-        plugin_input:
-            file: /usr/bin/ffmpeg
-            exists: true
-    ffmpeg-step-1:
-        check: ffmpeg prints its version banner to stdout
-        exit_status: 0
-        stdout:
-            - contains: ffmpeg version
-        plugin: command
-        plugin_input:
-            command: ffmpeg -version
-    ffmpeg-step-2:
-        check: the ffprobe media inspector binary is installed at /usr/bin/ffprobe
-        plugin: file
-        plugin_input:
-            file: /usr/bin/ffprobe
-            exists: true
-    ffmpeg-step-3:
-        check: ffprobe prints its version banner to stdout
-        exit_status: 0
-        stdout:
-            - contains: ffprobe version
-        plugin: command
-        plugin_input:
-            command: ffprobe -version
-    ffmpeg-package:
-        check: package=ffmpeg
-        id: ffmpeg-package
-        plugin: package
-        plugin_input:
-            package: ffmpeg
-            installed: true
+        plan:
+            - check: the ffmpeg transcoder binary is installed at /usr/bin/ffmpeg
+              file:
+                file: /usr/bin/ffmpeg
+                exists: true
+            - check: ffmpeg prints its version banner to stdout
+              exit_status: 0
+              stdout:
+                - contains: ffmpeg version
+              command: ffmpeg -version
+            - check: the ffprobe media inspector binary is installed at /usr/bin/ffprobe
+              file:
+                file: /usr/bin/ffprobe
+                exists: true
+            - check: ffprobe prints its version banner to stdout
+              exit_status: 0
+              stdout:
+                - contains: ffprobe version
+              command: ffprobe -version
+            - check: package=ffmpeg
+              id: ffmpeg-package
+              package:
+                package: ffmpeg
+                installed: true

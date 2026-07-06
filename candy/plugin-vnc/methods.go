@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/charly/candy/plugin-vnc/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -29,24 +30,28 @@ import (
 
 // requiredModifiers mirrors the in-tree vncMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc live-verb seam,
-// which an external verb is not — so the check moves HERE, at dispatch).
-// click/mouse need x+y, type needs text, key needs the key name, screenshot needs the
-// artifact output path, rfb needs the RFB sub-method.
+// which an external verb is not — so the check moves HERE, at dispatch). The strings name
+// INPUT keys (the desugared plugin_input map): click/mouse need x+y, type needs text, key
+// needs the key name, screenshot needs the artifact output path, rfb needs the RFB
+// sub-method — `http_method`, the renamed former shared `method` modifier (the input's
+// `method` key is the VERB method).
 var requiredModifiers = map[string][]string{
 	"screenshot": {"artifact"},
 	"click":      {"x", "y"},
 	"mouse":      {"x", "y"},
 	"type":       {"text"},
 	"key":        {"key"},
-	"rfb":        {"method"},
+	"rfb":        {"http_method"},
 }
 
 // dispatch checks required modifiers, dials the host-pre-resolved RFB endpoint, and runs
-// one vnc method, returning its captured output. A returned error is the verb FAILING (the
-// in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
+// one vnc method, returning its captured output. The per-verb fields ride the typed plugin
+// input (params.VncInput, decoded once by provider.go); op stays for the SHARED #Op fields
+// (the required-modifier check off op.PluginInput). A returned error is the verb FAILING
+// (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
 // exit_status / stderr matchers.
-func dispatch(ep *vncEndpoint, op *spec.Op) (string, error) {
-	method := string(op.Vnc)
+func dispatch(ep *vncEndpoint, op *spec.Op, in *params.VncInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -60,17 +65,17 @@ func dispatch(ep *vncEndpoint, op *spec.Op) (string, error) {
 	case "status":
 		return runStatus(c)
 	case "screenshot":
-		return runScreenshot(c, op.Artifact)
+		return runScreenshot(c, in.Artifact)
 	case "click":
-		return runClick(c, op)
+		return runClick(c, in)
 	case "mouse":
-		return runMouse(c, op)
+		return runMouse(c, in)
 	case "type":
-		return runType(c, op.Text)
+		return runType(c, in.Text)
 	case "key":
-		return runKey(c, op.KeyName)
+		return runKey(c, in.KeyName)
 	case "rfb":
-		return runRfb(c, op)
+		return runRfb(c, in)
 	}
 	return "", fmt.Errorf("unknown vnc method %q", method)
 }
@@ -109,21 +114,21 @@ func runScreenshot(c *VNCClient, artifact string) (string, error) {
 }
 
 // runClick sends a pointer click at the (desktop-absolute) coordinates.
-func runClick(c *VNCClient, op *spec.Op) (string, error) {
-	if err := c.PointerClick(uint16(op.X), uint16(op.Y), vncButton(op.Button)); err != nil {
-		return "", fmt.Errorf("clicking at (%d, %d): %w", op.X, op.Y, err)
+func runClick(c *VNCClient, in *params.VncInput) (string, error) {
+	if err := c.PointerClick(uint16(in.X), uint16(in.Y), vncButton(in.Button)); err != nil {
+		return "", fmt.Errorf("clicking at (%d, %d): %w", in.X, in.Y, err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	return fmt.Sprintf("Clicked %s at (%d, %d)", buttonName(op.Button), op.X, op.Y), nil
+	return fmt.Sprintf("Clicked %s at (%d, %d)", buttonName(in.Button), in.X, in.Y), nil
 }
 
 // runMouse moves the pointer without clicking.
-func runMouse(c *VNCClient, op *spec.Op) (string, error) {
-	if err := c.PointerMove(uint16(op.X), uint16(op.Y)); err != nil {
-		return "", fmt.Errorf("moving mouse to (%d, %d): %w", op.X, op.Y, err)
+func runMouse(c *VNCClient, in *params.VncInput) (string, error) {
+	if err := c.PointerMove(uint16(in.X), uint16(in.Y)); err != nil {
+		return "", fmt.Errorf("moving mouse to (%d, %d): %w", in.X, in.Y, err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	return fmt.Sprintf("Moved mouse to (%d, %d)", op.X, op.Y), nil
+	return fmt.Sprintf("Moved mouse to (%d, %d)", in.X, in.Y), nil
 }
 
 // runType types text as a sequence of key events.
@@ -150,54 +155,55 @@ func runKey(c *VNCClient, keyName string) (string, error) {
 	return fmt.Sprintf("Pressed key %s", keyName), nil
 }
 
-// runRfb sends a raw RFB message. The RFB sub-method rides on op.Method (key/pointer/
-// cut-text/fbupdate-request); its JSON params ride on op.Params.
-func runRfb(c *VNCClient, op *spec.Op) (string, error) {
-	switch op.Method {
+// runRfb sends a raw RFB message. The RFB sub-method rides on the input's
+// http_method key (key/pointer/cut-text/fbupdate-request — the renamed former
+// shared `method` modifier); its JSON params ride on the input's params key.
+func runRfb(c *VNCClient, in *params.VncInput) (string, error) {
+	switch in.HttpMethod {
 	case "key":
-		var params struct {
+		var args struct {
 			Key  uint32 `json:"key"`
 			Down bool   `json:"down"`
 		}
-		if err := json.Unmarshal([]byte(op.Params), &params); err != nil {
+		if err := json.Unmarshal([]byte(in.Params), &args); err != nil {
 			return "", fmt.Errorf("invalid JSON params: %w (expected: {\"key\": 65293, \"down\": true})", err)
 		}
-		if err := c.KeyEvent(params.Key, params.Down); err != nil {
+		if err := c.KeyEvent(args.Key, args.Down); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Sent key event key=%d down=%v", params.Key, params.Down), nil
+		return fmt.Sprintf("Sent key event key=%d down=%v", args.Key, args.Down), nil
 
 	case "pointer":
-		var params struct {
+		var args struct {
 			X      uint16 `json:"x"`
 			Y      uint16 `json:"y"`
 			Button uint8  `json:"button"`
 		}
-		if err := json.Unmarshal([]byte(op.Params), &params); err != nil {
+		if err := json.Unmarshal([]byte(in.Params), &args); err != nil {
 			return "", fmt.Errorf("invalid JSON params: %w (expected: {\"x\": 100, \"y\": 200, \"button\": 1})", err)
 		}
-		if err := c.PointerEvent(params.Button, params.X, params.Y); err != nil {
+		if err := c.PointerEvent(args.Button, args.X, args.Y); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Sent pointer event button=%d at (%d, %d)", params.Button, params.X, params.Y), nil
+		return fmt.Sprintf("Sent pointer event button=%d at (%d, %d)", args.Button, args.X, args.Y), nil
 
 	case "cut-text":
-		var params struct {
+		var args struct {
 			Text string `json:"text"`
 		}
-		if err := json.Unmarshal([]byte(op.Params), &params); err != nil {
+		if err := json.Unmarshal([]byte(in.Params), &args); err != nil {
 			return "", fmt.Errorf("invalid JSON params: %w (expected: {\"text\": \"clipboard content\"})", err)
 		}
-		if err := c.ClientCutText(params.Text); err != nil {
+		if err := c.ClientCutText(args.Text); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Sent cut-text (%d bytes)", len(params.Text)), nil
+		return fmt.Sprintf("Sent cut-text (%d bytes)", len(args.Text)), nil
 
 	case "fbupdate-request":
 		return fmt.Sprintf(`{"width":%d,"height":%d}`, c.Width(), c.Height()), nil
 
 	default:
-		return "", fmt.Errorf("unknown RFB method %q (valid: key, pointer, cut-text, fbupdate-request)", op.Method)
+		return "", fmt.Errorf("unknown RFB method %q (valid: key, pointer, cut-text, fbupdate-request)", in.HttpMethod)
 	}
 }
 

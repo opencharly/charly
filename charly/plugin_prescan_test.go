@@ -28,19 +28,16 @@ func TestPrescanExternalDeploySubstrate(t *testing.T) {
     candy:
         version: 2026.175.0001
         description: a pre-scan test plugin candy declaring an external deploy word.
-    prescan-plugin-decl:
         plugin:
             providers:
                 - deploy:` + word + `
             source: github.com/example/repo/candy/prescan-plugin
-    prescan-check:
-        check: command=true
-        id: prescan-check
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: command=true
+              id: prescan-check
+              context:
+                  - build
+              command: "true"
 `
 	if err := os.WriteFile(filepath.Join(candyDir, "charly.yml"), []byte(candyYAML), 0o644); err != nil {
 		t.Fatal(err)
@@ -54,17 +51,14 @@ check-prescan:
     ` + word + `:
         disposable: true
         description: external deploy substrate recognized via the pre-scan only.
-    check-prescan-add_candy:
         add_candy:
             - candy/prescan-plugin
-    prescan-bed-check:
-        check: command=true
-        id: prescan-bed-check
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: command=true
+              id: prescan-bed-check
+              context:
+                  - runtime
+              command: "true"
 `
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)

@@ -16,16 +16,13 @@ plugin-example-step:
             target VENUE and returns a plugin-script reverse op the host records + replays at
             teardown (consumed by candy/examplestep-deploy-consumer). The verb-as-step
             analogue of the deploy-TARGET candy/plugin-example-deploy.
-    plugin-example-step-decl:
         plugin:
             providers:
                 - verb:examplestep
             source: github.com/opencharly/charly/candy/plugin-example-step
-    examplestep-module-present:
-        check: the out-of-tree build-emit plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
-        id: examplestep-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree build-emit plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process at image build
+              id: examplestep-module-present
+              context:
+                - build
+              command: "true"

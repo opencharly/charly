@@ -11,16 +11,13 @@ plugin-builder-npm:
             The deploy-time pair runs in the host build PRE-PASS, BEFORE the pure BuildDeployPlan
             compile, so the compiler never dials a plugin. Selection stays DETECTION (a candy's
             package.json), never an authored external_builder:.
-    plugin-builder-npm-decl:
         plugin:
             providers:
                 - builder:npm
             source: github.com/opencharly/charly/candy/plugin-builder-npm
-    npm-builder-module-present:
-        check: the out-of-tree npm builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
-        id: npm-builder-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree npm builder plugin ships a buildable Go module (go.mod + the provider main) the host builds + serves out-of-process for the build-time OpResolve + deploy-time OpCollectContext/OpReverse legs
+              id: npm-builder-module-present
+              context:
+                - build
+              command: "true"

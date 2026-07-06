@@ -9,25 +9,20 @@ notebook-templates:
             data: block copies candy/notebook-templates/data/notebooks/
             into the volume's root; consumers (jupyter, jupyter-ml) compose
             this layer to ship the templates.
-    notebook-templates-data:
         data:
             - src: data/notebooks
               volume: workspace
-    notebook-templates-step-0:
-        check: workspace volume is mounted as a directory at the canonical path
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:workspace}
-            filetype: directory
-    notebook-templates-step-1:
-        check: at least one .ipynb starter template is present in that workspace
-        exit_status: 0
-        stdout:
-            - matches: "\\.ipynb"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: find ${VOLUME_CONTAINER_PATH:workspace} -maxdepth 3 -name "*.ipynb" -print -quit
+        plan:
+            - check: workspace volume is mounted as a directory at the canonical path
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:workspace}
+                filetype: directory
+            - check: at least one .ipynb starter template is present in that workspace
+              exit_status: 0
+              stdout:
+                - matches: "\\.ipynb"
+              context:
+                - runtime
+              command: find ${VOLUME_CONTAINER_PATH:workspace} -maxdepth 3 -name "*.ipynb" -print -quit

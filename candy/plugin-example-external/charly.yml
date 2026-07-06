@@ -14,16 +14,14 @@ plugin-example-external:
             authoring change. The companion of the built-in candy/plugin-example; the
             out-of-process build/deploy legs are demonstrated by
             candy/plugin-example-step / -builder / -deploy / -command.
-    plugin-example-external-decl:
         plugin:
             providers:
                 - verb:externalprobe
             source: github.com/opencharly/charly/candy/plugin-example-external
-    externalprobe-dispatches:
-        check: the externalprobe verb dispatches through the provider registry and passes — transport-invisible (compiled-in in the default build, out-of-process when not selected); the plugin_input marker round-trips author -> provider -> result
-        id: externalprobe-dispatches
-        plugin: externalprobe
-        plugin_input:
-            marker: external-plugin-ok
-        context:
-            - runtime
+        plan:
+            - check: the externalprobe verb dispatches through the provider registry and passes — transport-invisible (compiled-in in the default build, out-of-process when not selected); the plugin_input marker round-trips author -> provider -> result
+              id: externalprobe-dispatches
+              externalprobe:
+                marker: external-plugin-ok
+              context:
+                - runtime

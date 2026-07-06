@@ -11,45 +11,31 @@ gogcli:
             `gog --help` run locally with no OAuth or network, so the install
             is verifiable at build scope; live Workspace access additionally
             needs OAuth credentials provisioned at deploy time.
-    gogcli-require:
         require:
             - golang
-    gogcli-env:
         env:
             GOPATH: "~/go"
-    gogcli-path_append:
         path_append:
             - "~/go/bin"
-    gogcli-step-0:
-        run: |
-            command=go install github.com/steipete/gogcli/cmd/gog@latest
-            go clean -cache
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=go install github.com/steipete/gogcli/cmd/gog@latest
+                go clean -cache
+              run_as: "${USER}"
+              command: |
                 go install github.com/steipete/gogcli/cmd/gog@latest
                 go clean -cache
-    gogcli-step-1:
-        check: the gog binary is installed at ~/go/bin/gog
-        plugin: file
-        plugin_input:
-            file: ${HOME}/go/bin/gog
-            exists: true
-    gogcli-step-2:
-        check: running `gog --version` exits 0, proving the built binary actually runs
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/go/bin/gog --version
-    gogcli-step-3:
-        check: '`gog --help` lists the Google Workspace subcommands (gmail, calendar)'
-        exit_status: 0
-        stdout:
-            - contains: gmail
-            - contains: calendar
-        plugin: command
-        plugin_input:
-            command: ${HOME}/go/bin/gog --help 2>&1
-    gogcli-step-4:
-        agent-check: once OAuth credentials are provisioned, gog authenticates and lists the user's Gmail messages
+            - check: the gog binary is installed at ~/go/bin/gog
+              file:
+                file: ${HOME}/go/bin/gog
+                exists: true
+            - check: running `gog --version` exits 0, proving the built binary actually runs
+              exit_status: 0
+              command: ${HOME}/go/bin/gog --version
+            - check: '`gog --help` lists the Google Workspace subcommands (gmail, calendar)'
+              exit_status: 0
+              stdout:
+                - contains: gmail
+                - contains: calendar
+              command: ${HOME}/go/bin/gog --help 2>&1
+            - agent-check: once OAuth credentials are provisioned, gog authenticates and lists the user's Gmail messages

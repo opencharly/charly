@@ -14,10 +14,8 @@ versatiles-style:
             /style/versatiles-style.js. The install is verifiable: a non-empty
             versatiles-style*.js must land under the install path, and the node
             toolchain that built and serves it must be present.
-    versatiles-style-require:
         require:
             - supervisord
-    versatiles-style-distro:
         distro:
             arch:
                 package:
@@ -27,63 +25,60 @@ versatiles-style:
                 package:
                     - nodejs
                     - npm
-    versatiles-style-step-0:
-        run: mkdir=/opt/versatiles-style
-        mkdir: /opt/versatiles-style
-        run_as: root
-    versatiles-style-step-1:
-        run: |
-            command=set -euo pipefail
-            TMPDIR=$(mktemp -d)
-            cd "$TMPDIR"
+        plan:
+            - run: mkdir=/opt/versatiles-style
+              mkdir: /opt/versatiles-style
+              run_as: root
+            - run: |
+                command=set -euo pipefail
+                TMPDIR=$(mktemp -d)
+                cd "$TMPDIR"
 
-            # Tier 1: GitHub release tarball. The release ships THREE
-            # tarballs — `versatiles-style.tar.gz`, `sprites.tar.gz`,
-            # `styles.tar.gz`. We need the `versatiles-style.tar.gz` one
-            # specifically (the JS bundle), so anchor the regex to the
-            # exact filename rather than a prefix match (which would
-            # alphabetically pick sprites.tar.gz first).
-            if curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-style/releases/latest" \
-                 | jq -r '.assets[].browser_download_url' \
-                 | grep -E '/versatiles-style\.tar\.gz$' \
-                 | head -1 > tarball_url \
-               && [ -s tarball_url ]; then
-              ASSET=$(cat tarball_url)
-              echo "Installing versatiles-style from GitHub release: $ASSET"
-              curl -fsSL "$ASSET" -o style.tar.gz
-              tar -xzf style.tar.gz -C /opt/versatiles-style --strip-components=0 || \
-                tar -xzf style.tar.gz -C /opt/versatiles-style
-            else
-              # Tier 2: npm install
-              echo "Falling back to npm install @versatiles/style"
-              npm install --prefix "$TMPDIR" @versatiles/style --no-audit --no-fund
-              # Look for the prebuilt browser bundle the package ships in
-              # release/. If the package layout changed and release/
-              # doesn't exist, copy the whole package so versatiles-style.js
-              # is still findable via subsequent path-resolution.
-              PKG="$TMPDIR/node_modules/@versatiles/style"
-              if [ -d "$PKG/release" ]; then
-                cp -r "$PKG/release/." /opt/versatiles-style/
-              else
-                cp -r "$PKG/." /opt/versatiles-style/
-              fi
-            fi
+                # Tier 1: GitHub release tarball. The release ships THREE
+                # tarballs — `versatiles-style.tar.gz`, `sprites.tar.gz`,
+                # `styles.tar.gz`. We need the `versatiles-style.tar.gz` one
+                # specifically (the JS bundle), so anchor the regex to the
+                # exact filename rather than a prefix match (which would
+                # alphabetically pick sprites.tar.gz first).
+                if curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-style/releases/latest" \
+                     | jq -r '.assets[].browser_download_url' \
+                     | grep -E '/versatiles-style\.tar\.gz$' \
+                     | head -1 > tarball_url \
+                   && [ -s tarball_url ]; then
+                  ASSET=$(cat tarball_url)
+                  echo "Installing versatiles-style from GitHub release: $ASSET"
+                  curl -fsSL "$ASSET" -o style.tar.gz
+                  tar -xzf style.tar.gz -C /opt/versatiles-style --strip-components=0 || \
+                    tar -xzf style.tar.gz -C /opt/versatiles-style
+                else
+                  # Tier 2: npm install
+                  echo "Falling back to npm install @versatiles/style"
+                  npm install --prefix "$TMPDIR" @versatiles/style --no-audit --no-fund
+                  # Look for the prebuilt browser bundle the package ships in
+                  # release/. If the package layout changed and release/
+                  # doesn't exist, copy the whole package so versatiles-style.js
+                  # is still findable via subsequent path-resolution.
+                  PKG="$TMPDIR/node_modules/@versatiles/style"
+                  if [ -d "$PKG/release" ]; then
+                    cp -r "$PKG/release/." /opt/versatiles-style/
+                  else
+                    cp -r "$PKG/." /opt/versatiles-style/
+                  fi
+                fi
 
-            # Sanity: the bundle must end up findable. The check probe
-            # below asserts this, but fail loudly here too so the build
-            # log surfaces the issue.
-            if ! find /opt/versatiles-style -maxdepth 3 -name 'versatiles-style*.js' -size +1c | head -1 | grep -q .; then
-              echo "ERROR: no versatiles-style*.js found under /opt/versatiles-style after install" >&2
-              ls -la /opt/versatiles-style/
-              exit 1
-            fi
+                # Sanity: the bundle must end up findable. The check probe
+                # below asserts this, but fail loudly here too so the build
+                # log surfaces the issue.
+                if ! find /opt/versatiles-style -maxdepth 3 -name 'versatiles-style*.js' -size +1c | head -1 | grep -q .; then
+                  echo "ERROR: no versatiles-style*.js found under /opt/versatiles-style after install" >&2
+                  ls -la /opt/versatiles-style/
+                  exit 1
+                fi
 
-            cd /
-            rm -rf "$TMPDIR" /root/.npm
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+                cd /
+                rm -rf "$TMPDIR" /root/.npm
+              run_as: root
+              command: |
                 set -euo pipefail
                 TMPDIR=$(mktemp -d)
                 cd "$TMPDIR"
@@ -131,31 +126,21 @@ versatiles-style:
 
                 cd /
                 rm -rf "$TMPDIR" /root/.npm
-    versatiles-style-step-2:
-        check: a non-empty versatiles-style*.js browser bundle is present under /opt/versatiles-style
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: |
+            - check: a non-empty versatiles-style*.js browser bundle is present under /opt/versatiles-style
+              exit_status: 0
+              command: |
                 find /opt/versatiles-style -maxdepth 3 -name 'versatiles-style*.js' -size +1c | head -1 | grep -q .
-    versatiles-style-step-3:
-        check: nodejs is installed so the @versatiles/style bundle can be built and served
-        plugin: package
-        plugin_input:
-            package: nodejs
-            installed: true
-    versatiles-style-step-4:
-        check: the node runtime reports its version
-        exit_status: 0
-        stdout:
-            - matches: "v[0-9]+"
-        plugin: command
-        plugin_input:
-            command: node --version
-    versatiles-style-install-dir:
-        check: file=/opt/versatiles-style
-        id: versatiles-style-install-dir
-        plugin: file
-        plugin_input:
-            file: /opt/versatiles-style
-            filetype: directory
+            - check: nodejs is installed so the @versatiles/style bundle can be built and served
+              package:
+                package: nodejs
+                installed: true
+            - check: the node runtime reports its version
+              exit_status: 0
+              stdout:
+                - matches: "v[0-9]+"
+              command: node --version
+            - check: file=/opt/versatiles-style
+              id: versatiles-style-install-dir
+              file:
+                file: /opt/versatiles-style
+                filetype: directory

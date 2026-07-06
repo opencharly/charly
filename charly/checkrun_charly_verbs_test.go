@@ -128,11 +128,15 @@ func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
 func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeBox)
 	r.Box = "jupyter"
-	res := r.Run(context.Background(), []Op{{Wl: "status"}})
+	// A live verb's runtime-context legality rides the AUTHORED `context:` since
+	// the live-verb externalization (the generic `plugin` verb itself is
+	// context-permissive) — a wl step authors context: [runtime], exactly as the
+	// real candies do.
+	res := r.Run(context.Background(), []Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
 	if len(res) != 1 || res[0].Status != TestSkip {
 		t.Fatalf("expected skip under RunModeBox, got %+v", res[0])
 	}
-	// A runtime-context verb (wl) is skipped in box mode by the context-vs-mode
+	// A runtime-context step is skipped in box mode by the context-vs-mode
 	// gate (the unified-Op replacement for the per-verb "needs a running
 	// container" skip).
 	if !strings.Contains(res[0].Message, "not active in box mode") {
@@ -151,7 +155,7 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 // TestCheckRequiredModifiers). The box-mode skip stays covered by
 // TestLiveVerb_SkipsUnderBoxMode above.
 
-// --- Check.Kind() recognizes the new verbs ---
+// --- Check.Kind() classifies every live verb via the generic plugin envelope ---
 
 func TestCheckKind_NewVerbsDispatched(t *testing.T) {
 	cases := []struct {
@@ -159,13 +163,13 @@ func TestCheckKind_NewVerbsDispatched(t *testing.T) {
 		c    Op
 		verb string
 	}{
-		{"cdp", Op{Cdp: "status"}, "cdp"},
-		{"wl", Op{Wl: "screenshot", Artifact: "/tmp/x"}, "wl"},
-		{"dbus", Op{Dbus: "list"}, "dbus"},
-		{"vnc", Op{Vnc: "status"}, "vnc"},
-		{"record", Op{Record: "list"}, "record"},
-		{"spice", Op{Spice: "status"}, "spice"},
-		{"libvirt", Op{Libvirt: "info"}, "libvirt"},
+		{"cdp", Op{Plugin: "cdp", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"wl", Op{Plugin: "wl", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x"}}, "plugin"},
+		{"dbus", Op{Plugin: "dbus", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"vnc", Op{Plugin: "vnc", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"record", Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"spice", Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"libvirt", Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}}, "plugin"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

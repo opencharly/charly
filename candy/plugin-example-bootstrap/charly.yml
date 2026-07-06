@@ -10,16 +10,13 @@ plugin-example-bootstrap:
             plugins are compiled-in only (no validated config exists yet to discover an
             out-of-process source). This candy is the phase machinery's only consumer today: neither
             migrate nor egress became a bootstrap plugin (both are verb plugins).
-    plugin-example-bootstrap-decl:
         plugin:
             providers:
                 - verb:examplebootstrap
             source: github.com/opencharly/charly/candy/plugin-example-bootstrap
-    examplebootstrap-module-present:
-        check: the bootstrap-phase plugin ships a buildable Go module the host can compile in
-        id: examplebootstrap-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the bootstrap-phase plugin ships a buildable Go module the host can compile in
+              id: examplebootstrap-module-present
+              context:
+                - build
+              command: "true"

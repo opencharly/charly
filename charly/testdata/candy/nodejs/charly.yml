@@ -1,7 +1,6 @@
 nodejs:
     candy:
         version: 2026.144.1443
-    nodejs-package:
         package:
             - nodejs
             - npm

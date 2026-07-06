@@ -12,14 +12,11 @@ rocm:
             The installed binaries, the packages, and the ROCM_PATH env are
             verifiable at build scope; live GPU enumeration is verifiable only on
             a host with a real AMD GPU passed through.
-    rocm-env:
         env:
             ROCM_PATH: "/usr"
-    rocm-security:
         security:
             group_add:
                 - keep-groups
-    rocm-distro:
         distro:
             fedora:
                 package:
@@ -27,49 +24,34 @@ rocm:
                     - rocm-opencl
                     - rocm-clinfo
                     - rocm-smi
-    rocm-step-0:
-        check: the ROCm HIP runtime package is installed in the image
-        plugin: package
-        plugin_input:
-            package: rocm-hip-runtime
-            installed: true
-    rocm-step-1:
-        check: the clinfo OpenCL diagnostic tool is present at /usr/bin/clinfo
-        plugin: file
-        plugin_input:
-            file: /usr/bin/clinfo
-            exists: true
-    rocm-step-2:
-        check: the rocm-smi GPU management tool is present at /usr/bin/rocm-smi
-        plugin: file
-        plugin_input:
-            file: /usr/bin/rocm-smi
-            exists: true
-    rocm-step-3:
-        check: the rocm-smi package is installed in the image
-        plugin: package
-        plugin_input:
-            package: rocm-smi
-            installed: true
-    rocm-step-4:
-        check: ROCM_PATH is exported into the container environment as /usr
-        stdout: /usr
-        plugin: command
-        plugin_input:
-            command: printenv ROCM_PATH
-    rocm-step-5:
-        agent-check: on a host with an AMD GPU and /dev/kfd passed through, clinfo lists at least one ROCm OpenCL platform and rocm-smi reports the device temperature and utilization
-    rocm-opencl-package:
-        check: package=rocm-opencl
-        id: rocm-opencl-package
-        plugin: package
-        plugin_input:
-            package: rocm-opencl
-            installed: true
-    rocm-clinfo-package:
-        check: package=rocm-clinfo
-        id: rocm-clinfo-package
-        plugin: package
-        plugin_input:
-            package: rocm-clinfo
-            installed: true
+        plan:
+            - check: the ROCm HIP runtime package is installed in the image
+              package:
+                package: rocm-hip-runtime
+                installed: true
+            - check: the clinfo OpenCL diagnostic tool is present at /usr/bin/clinfo
+              file:
+                file: /usr/bin/clinfo
+                exists: true
+            - check: the rocm-smi GPU management tool is present at /usr/bin/rocm-smi
+              file:
+                file: /usr/bin/rocm-smi
+                exists: true
+            - check: the rocm-smi package is installed in the image
+              package:
+                package: rocm-smi
+                installed: true
+            - check: ROCM_PATH is exported into the container environment as /usr
+              stdout: /usr
+              command: printenv ROCM_PATH
+            - agent-check: on a host with an AMD GPU and /dev/kfd passed through, clinfo lists at least one ROCm OpenCL platform and rocm-smi reports the device temperature and utilization
+            - check: package=rocm-opencl
+              id: rocm-opencl-package
+              package:
+                package: rocm-opencl
+                installed: true
+            - check: package=rocm-clinfo
+              id: rocm-clinfo-package
+              package:
+                package: rocm-clinfo
+                installed: true

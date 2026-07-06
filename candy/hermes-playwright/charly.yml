@@ -8,13 +8,10 @@ hermes-playwright:
             Fedora system libraries (nss, gtk3, alsa-lib, ...) Chromium needs to
             launch. Verifiable: the browser build dir + chrome executable land
             under the cache path, and the runtime libraries are in the rpm db.
-    hermes-playwright-require:
         require:
             - hermes
-    hermes-playwright-env:
         env:
             PLAYWRIGHT_BROWSERS_PATH: "/tmp/.cache/ms-playwright"
-    hermes-playwright-distro:
         distro:
             fedora:
                 package:
@@ -32,55 +29,37 @@ hermes-playwright:
                     - libXrandr
                     - pango
                     - cairo
-    hermes-playwright-security:
         security:
             shm_size: "1g"
-    hermes-playwright-step-0:
-        run: command=HOME=/tmp npx playwright install chromium
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: HOME=/tmp npx playwright install chromium
-    hermes-playwright-step-1:
-        check: the Playwright browsers cache directory is baked into the image
-        plugin: file
-        plugin_input:
-            file: /tmp/.cache/ms-playwright
-            exists: true
-    hermes-playwright-step-2:
-        check: a Chromium build directory is present under the cache path
-        stdout:
-            - contains: chromium
-        plugin: command
-        plugin_input:
-            command: ls /tmp/.cache/ms-playwright
-    hermes-playwright-step-3:
-        check: the installed Chromium browser binary is executable
-        stdout:
-            - contains: EXEC_OK
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: command=HOME=/tmp npx playwright install chromium
+              run_as: "${USER}"
+              command: HOME=/tmp npx playwright install chromium
+            - check: the Playwright browsers cache directory is baked into the image
+              file:
+                file: /tmp/.cache/ms-playwright
+                exists: true
+            - check: a Chromium build directory is present under the cache path
+              stdout:
+                - contains: chromium
+              command: ls /tmp/.cache/ms-playwright
+            - check: the installed Chromium browser binary is executable
+              stdout:
+                - contains: EXEC_OK
+              command: |
                 bin=$(ls /tmp/.cache/ms-playwright/chromium-*/chrome-linux/chrome /tmp/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell 2>/dev/null | head -1)
                 test -x "$bin" && echo "EXEC_OK:$bin"
-    hermes-playwright-step-4:
-        check: the NSS library Chromium links against is installed
-        plugin: package
-        plugin_input:
-            package: nss
-            installed: true
-    hermes-playwright-step-5:
-        check: the GTK3 runtime Chromium needs to launch is installed
-        plugin: package
-        plugin_input:
-            package: gtk3
-            installed: true
-    hermes-playwright-step-6:
-        agent-check: Playwright can launch the installed Chromium headlessly to drive a browser automation session
-    hermes-playwright-alsa-lib-package:
-        check: package=alsa-lib
-        id: hermes-playwright-alsa-lib-package
-        plugin: package
-        plugin_input:
-            package: alsa-lib
-            installed: true
+            - check: the NSS library Chromium links against is installed
+              package:
+                package: nss
+                installed: true
+            - check: the GTK3 runtime Chromium needs to launch is installed
+              package:
+                package: gtk3
+                installed: true
+            - agent-check: Playwright can launch the installed Chromium headlessly to drive a browser automation session
+            - check: package=alsa-lib
+              id: hermes-playwright-alsa-lib-package
+              package:
+                package: alsa-lib
+                installed: true

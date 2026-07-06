@@ -11,9 +11,11 @@ plugin-vnc:
             lives HERE, out of charly's core check surface (the latest external dep-shed after
             candy/plugin-cdp; nothing VNC-specific remains in core — the former `charly check
             vnc vm` CLI is subsumed into the declarative `vnc:` verb against a vm target).
-            `vnc:` authoring stays unchanged: the verb keeps its `vnc:` discriminator + every
-            modifier (x/y/text/key/artifact/method/params) + the #VncMethod enum on charly's
-            core #Op, and dispatches through the provider registry exactly like a built-in
+            Since the schema-compaction cutover an authored `vnc:` step desugars to the
+            internal plugin/plugin_input envelope, and every vnc-exclusive modifier
+            (method/x/y/text/key/artifact/http_method/params) lives in the plugin's OWN
+            #VncInput (schema/vnc.cue); the verb dispatches through the provider registry
+            exactly like a built-in
             (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full #Op). The host
             owns the podman / venue / libvirt / port-mapping resolution (preresolveVncEndpoint),
             pre-resolving the deployment's VNC endpoint — a container's published port 5900, or
@@ -22,18 +24,17 @@ plugin-vnc:
             plugin needs no container inspection at all. Provides status/screenshot/click/mouse/
             type/key/rfb. The R10 consumer is a wayvnc-bearing pod bed whose check composes this
             plugin (e.g. sway-browser-vnc via sway-desktop-vnc).
-    plugin-vnc-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-vnc
             providers:
                 - verb:vnc
-    vnc-verb-dispatches:
-        check: the vnc verb dispatches through the provider registry and reports the VNC server status on a live desktop deployment with a wayvnc endpoint (the out-of-process plugin verb dials the host-resolved RFB address)
-        id: vnc-verb-dispatches
-        vnc: status
-        stdout:
-            - contains: ok
-        eventually: 60s
-        retry_interval: 5s
-        context:
-            - runtime
+        plan:
+            - check: the vnc verb dispatches through the provider registry and reports the VNC server status on a live desktop deployment with a wayvnc endpoint (the out-of-process plugin verb dials the host-resolved RFB address)
+              id: vnc-verb-dispatches
+              vnc: status
+              stdout:
+                - contains: ok
+              eventually: 60s
+              retry_interval: 5s
+              context:
+                - runtime

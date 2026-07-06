@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/opencharly/charly/candy/plugin-mcp/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -28,18 +29,22 @@ const defaultMcpTimeout = 30 * time.Second
 // requiredModifiers mirrors the in-tree mcpMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc
 // live-verb seam, which an external verb is not — so the check moves HERE, at
-// dispatch). call needs a tool name; read needs a resource URI.
+// dispatch). The strings name INPUT keys (the desugared plugin_input map): call needs
+// a tool name; read needs a resource URI.
 var requiredModifiers = map[string][]string{
 	"call": {"tool"},
 	"read": {"uri"},
 }
 
 // dispatch runs one mcp method against the host-resolved endpoint and returns its
-// captured output. A returned error is the verb FAILING (the in-tree CLI Run()
-// returning an error → exit 1); provider.go maps it through the exit_status / stderr
-// matchers. `servers` is metadata-only; every other method dials via the MCP client.
-func dispatch(ctx context.Context, ep *mcpEndpoint, op *spec.Op) (string, error) {
-	method := string(op.Mcp)
+// captured output. The per-verb fields ride the typed plugin input (params.McpInput,
+// decoded once by provider.go); op stays for the SHARED #Op fields (the
+// required-modifier check off op.PluginInput, the general timeout). A returned error
+// is the verb FAILING (the in-tree CLI Run() returning an error → exit 1);
+// provider.go maps it through the exit_status / stderr matchers. `servers` is
+// metadata-only; every other method dials via the MCP client.
+func dispatch(ctx context.Context, ep *mcpEndpoint, op *spec.Op, in *params.McpInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -74,9 +79,9 @@ func dispatch(ctx context.Context, ep *mcpEndpoint, op *spec.Op) (string, error)
 	case "list-prompts":
 		return runListPrompts(cctx, sess)
 	case "call":
-		return runCall(cctx, sess, op)
+		return runCall(cctx, sess, in)
 	case "read":
-		return runRead(cctx, sess, op)
+		return runRead(cctx, sess, in)
 	}
 	return "", fmt.Errorf("unknown mcp method %q", method)
 }
@@ -172,32 +177,32 @@ func runListPrompts(ctx context.Context, sess *mcp.ClientSession) (string, error
 // runCall invokes a tool. It returns the concatenated TextContent, and an error when
 // the tool reports IsError — so the host's exit_status: 1 assertion can target the
 // intentional-error path (the in-tree CLI returned exit 1 on IsError).
-func runCall(ctx context.Context, sess *mcp.ClientSession, op *spec.Op) (string, error) {
+func runCall(ctx context.Context, sess *mcp.ClientSession, in *params.McpInput) (string, error) {
 	var args any
-	if strings.TrimSpace(op.Input) != "" {
-		if err := json.Unmarshal([]byte(op.Input), &args); err != nil {
+	if strings.TrimSpace(in.Input) != "" {
+		if err := json.Unmarshal([]byte(in.Input), &args); err != nil {
 			return "", fmt.Errorf("parsing tool arguments as JSON: %w", err)
 		}
 	}
-	res, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: op.Tool, Arguments: args})
+	res, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: in.Tool, Arguments: args})
 	if err != nil {
-		return "", fmt.Errorf("mcp call %s: %w", op.Tool, err)
+		return "", fmt.Errorf("mcp call %s: %w", in.Tool, err)
 	}
 	text := extractToolText(res)
 	if res.IsError {
 		// Side-effect failures surface as a non-zero exit so declarative tests can
 		// assert `exit_status: 1` on intentional-error paths.
-		return text, fmt.Errorf("tool %s reported an error", op.Tool)
+		return text, fmt.Errorf("tool %s reported an error", in.Tool)
 	}
 	return text, nil
 }
 
 // runRead reads a resource and returns its text bodies (one per content), with a
 // bracketed placeholder for binary blobs so the author sees they happened.
-func runRead(ctx context.Context, sess *mcp.ClientSession, op *spec.Op) (string, error) {
-	res, err := sess.ReadResource(ctx, &mcp.ReadResourceParams{URI: op.URI})
+func runRead(ctx context.Context, sess *mcp.ClientSession, in *params.McpInput) (string, error) {
+	res, err := sess.ReadResource(ctx, &mcp.ReadResourceParams{URI: in.URI})
 	if err != nil {
-		return "", fmt.Errorf("mcp read %s: %w", op.URI, err)
+		return "", fmt.Errorf("mcp read %s: %w", in.URI, err)
 	}
 	var lines []string
 	for _, cnt := range res.Contents {

@@ -23,14 +23,9 @@
 package udev
 
 import (
-	"embed"
-
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 // NewProvider returns the udev provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
@@ -41,7 +36,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.179.0000",
 		[]sdk.ProvidedCapability{},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the plugin's CLI entrypoint (command:udev dispatch).

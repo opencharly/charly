@@ -29,49 +29,44 @@ plugin-tunnel:
             the moved command-building logic with ZERO tailscale/cloudflare credentials. The
             R10 consumer is box/fedora's check-tunnel-pod bed (a `plugin: tunnel`
             method:plan step asserting the built argv).
-    plugin-tunnel-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-tunnel
             providers:
                 - verb:tunnel
-    # ADE build-context check — the deterministic module-present check: a `plugin: command`
-    # running `true`, mirror plugin-secrets' secrets-plugin-builds. It proves the candy
-    # ships a buildable Go module (go.mod + the provider main) the host can build and serve
-    # verb:tunnel; the full dispatch + argv round-trip is exercised by tunnel-plan-argv (and
-    # by check-tunnel-pod). Deterministic, keyring/creds-free.
-    tunnel-plugin-builds:
-        check: the out-of-tree plugin ships a buildable Go module providing verb:tunnel (the externalized tailscale/cloudflare execution leg) the host can build, compile in, and serve over gRPC; the full dispatch + argv round-trip is exercised by tunnel-plan-argv + the check-tunnel-pod bed
-        id: tunnel-plugin-builds
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
-    # ADE plan-dispatch check — the creds-free dry-run. Dispatches verb:tunnel with
-    # method:plan and asserts the built tailscale argv, proving the registry dispatch + the
-    # TunnelConfig wire round-trip + the moved command-building logic without any tailscale
-    # daemon or credentials. context: runtime (the plugin-verb ADE pattern, mirror
-    # plugin-example-external's externalprobe-dispatches).
-    tunnel-plan-argv:
-        check: verb:tunnel plan builds the exact tailscale serve/funnel argv from a wire TunnelConfig (registry dispatch + config round-trip + moved argv logic), creds-free
-        id: tunnel-plan-argv
-        context:
-            - runtime
-        plugin: tunnel
-        plugin_input:
-            method: plan
-            config:
-                provider: tailscale
-                box_name: plugin-tunnel
-                ports:
-                    - port: 8888
-                      backend_port: 8888
-                      protocol: http
-                      public: false
-                    - port: 443
-                      backend_port: 443
-                      protocol: https+insecure
-                      public: true
-            expect:
-                - tailscale serve --bg --https=8888 http://127.0.0.1:8888
-                - tailscale funnel --bg --https=443 https+insecure://127.0.0.1:443
+        plan:
+            - # ADE build-context check — the deterministic module-present check: a `plugin: command`
+              # running `true`, mirror plugin-secrets' secrets-plugin-builds. It proves the candy
+              # ships a buildable Go module (go.mod + the provider main) the host can build and serve
+              # verb:tunnel; the full dispatch + argv round-trip is exercised by tunnel-plan-argv (and
+              # by check-tunnel-pod). Deterministic, keyring/creds-free.
+              check: the out-of-tree plugin ships a buildable Go module providing verb:tunnel (the externalized tailscale/cloudflare execution leg) the host can build, compile in, and serve over gRPC; the full dispatch + argv round-trip is exercised by tunnel-plan-argv + the check-tunnel-pod bed
+              id: tunnel-plugin-builds
+              context:
+                - build
+              command: "true"
+            - # ADE plan-dispatch check — the creds-free dry-run. Dispatches verb:tunnel with
+              # method:plan and asserts the built tailscale argv, proving the registry dispatch + the
+              # TunnelConfig wire round-trip + the moved command-building logic without any tailscale
+              # daemon or credentials. context: runtime (the plugin-verb ADE pattern, mirror
+              # plugin-example-external's externalprobe-dispatches).
+              check: verb:tunnel plan builds the exact tailscale serve/funnel argv from a wire TunnelConfig (registry dispatch + config round-trip + moved argv logic), creds-free
+              id: tunnel-plan-argv
+              context:
+                - runtime
+              tunnel:
+                method: plan
+                config:
+                    provider: tailscale
+                    box_name: plugin-tunnel
+                    ports:
+                        - port: 8888
+                          backend_port: 8888
+                          protocol: http
+                          public: false
+                        - port: 443
+                          backend_port: 443
+                          protocol: https+insecure
+                          public: true
+                expect:
+                    - tailscale serve --bg --https=8888 http://127.0.0.1:8888
+                    - tailscale funnel --bg --https=443 https+insecure://127.0.0.1:443

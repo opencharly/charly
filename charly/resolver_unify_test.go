@@ -16,26 +16,22 @@ import "testing"
 func fixtureNamespacedProject(t *testing.T) (string, *Config) {
 	t.Helper()
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import:
   - sub: ./sub.yml
 app:
   candy:
     base: quay.io/fedora/fedora:43
     build: [rpm]
-  app-distro:
     distro: [fedora]
-  app-candy:
     candy: []
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.174.1100
+	writeFixture(t, root, "sub.yml", `version: 2026.186.2323
 widget:
   candy:
     base: quay.io/fedora/fedora:43
     build: [rpm]
-  widget-distro:
     distro: [fedora]
-  widget-candy:
     candy: []
 `)
 	uf, _, err := LoadUnified(root)
@@ -127,42 +123,34 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 // name-resolution concern, not a per-image collection concern.
 func TestWalkBaseChain_RootInternalOnly(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import:
   - sub: ./sub.yml
 parent:
   candy:
     base: quay.io/fedora/fedora:43
     build: [rpm]
-  parent-distro:
     distro: [fedora]
-  parent-candy:
     candy: []
 child:
   candy:
     base: parent
     build: [rpm]
-  child-distro:
     distro: [fedora]
-  child-candy:
     candy: []
 nschild:
   candy:
     base: sub.widget
     build: [rpm]
-  nschild-distro:
     distro: [fedora]
-  nschild-candy:
     candy: []
 `)
-	writeFixture(t, root, "sub.yml", `version: 2026.174.1100
+	writeFixture(t, root, "sub.yml", `version: 2026.186.2323
 widget:
   candy:
     base: quay.io/fedora/fedora:43
     build: [rpm]
-  widget-distro:
     distro: [fedora]
-  widget-candy:
     candy: []
 `)
 	uf, _, err := LoadUnified(root)

@@ -29,7 +29,6 @@ plugin-installstep:
             (12 via this candy; ExternalPlugin via its own class:step plugin dispatch). Its Go lives
             in this candy's own module (NewProvider/NewMeta + a cmd/serve out-of-process shim),
             compiled INTO charly via charly.yml compiled_plugins:.
-    plugin-installstep-decl:
         plugin:
             providers:
                 - step:file
@@ -45,11 +44,9 @@ plugin-installstep:
                 - step:local-pkg-install
                 - step:op
             source: github.com/opencharly/charly/candy/plugin-installstep
-    installstep-module-present:
-        check: the compiled-in class:step build-emit plugin ships a buildable Go module the host can build + serve (in-proc in the default binary, out-of-process via cmd/serve when not compiled in)
-        id: installstep-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the compiled-in class:step build-emit plugin ships a buildable Go module the host can build + serve (in-proc in the default binary, out-of-process via cmd/serve when not compiled in)
+              id: installstep-module-present
+              context:
+                - build
+              command: "true"

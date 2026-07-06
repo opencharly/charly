@@ -9,16 +9,16 @@ plugin-service:
             keeping the load-bearing Reverse() in package main). A HOST-COUPLED verb on
             the sdk/kit contract (CheckVerbProvider + ProvisionActor +
             StepProvider), so it is COMPILED-IN-ONLY.
-    plugin-service-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-service
             providers:
                 - verb:service
-    service-verb-dispatches:
-        check: the service verb dispatches through the provider registry and probes that a service is running
-        id: service-verb-dispatches
-        plugin: service
-        plugin_input:
-            service: supervisord
-            running: true
-        context: [runtime]
+            primary:
+                service: service
+        plan:
+            - check: the service verb dispatches through the provider registry and probes that a service is running
+              id: service-verb-dispatches
+              service:
+                service: supervisord
+                running: true
+              context: [runtime]

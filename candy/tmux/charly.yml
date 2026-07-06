@@ -9,32 +9,22 @@ tmux:
             controlling TTY and lets sessions outlive disconnects. It is verifiable by
             asserting the binary exists, the package is registered, the version banner
             prints, and a real detached session can be created, confirmed live, and killed.
-    tmux-package:
         package:
             - tmux
-    tmux-step-0:
-        check: the tmux multiplexer binary is installed at /usr/bin/tmux
-        plugin: file
-        plugin_input:
-            file: /usr/bin/tmux
-            exists: true
-    tmux-step-1:
-        check: the tmux package is registered with the system package manager
-        plugin: package
-        plugin_input:
-            package: tmux
-            installed: true
-    tmux-step-2:
-        check: invoking tmux -V exits cleanly and prints a tmux version banner
-        exit_status: 0
-        stdout:
-            - matches: "^tmux"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/tmux -V
-    tmux-step-3:
-        check: tmux starts a detached session with no TTY, confirms it is live, then tears it down
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: tmux new-session -d -s charly-ade-probe && tmux has-session -t charly-ade-probe && tmux kill-session -t charly-ade-probe
+        plan:
+            - check: the tmux multiplexer binary is installed at /usr/bin/tmux
+              file:
+                file: /usr/bin/tmux
+                exists: true
+            - check: the tmux package is registered with the system package manager
+              package:
+                package: tmux
+                installed: true
+            - check: invoking tmux -V exits cleanly and prints a tmux version banner
+              exit_status: 0
+              stdout:
+                - matches: "^tmux"
+              command: /usr/bin/tmux -V
+            - check: tmux starts a detached session with no TTY, confirms it is live, then tears it down
+              exit_status: 0
+              command: tmux new-session -d -s charly-ade-probe && tmux has-session -t charly-ade-probe && tmux kill-session -t charly-ade-probe

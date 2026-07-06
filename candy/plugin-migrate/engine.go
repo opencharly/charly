@@ -94,8 +94,12 @@ type migrationOp struct {
 }
 
 // goHooks holds the structural-reshape escape hatches a declarative step names via
-// `apply:`. Empty at the reset — a Go hook is the visible exception, not the norm.
-var goHooks = map[string]func(*yaml.Node) bool{}
+// `apply:`. Registered HERE in the literal (never via init() — the migrationTable
+// var below validates hook names during var initialization, which precedes every
+// init() but follows this literal in dependency order).
+var goHooks = map[string]func(*yaml.Node) bool{
+	"compactNodeForm": compactNodeForm, // the schema-compaction reshaper (reshape_compact.go)
+}
 
 // migrationTable is the validated, ascending-ordered step list, loaded once at
 // process start. A malformed table panics here (fail-fast, like registerCueKind).

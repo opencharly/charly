@@ -39,7 +39,7 @@ func TestCrossKindNameReuse_LoaderAcceptsAllKinds(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: 2026.174.1100
+	must(filepath.Join(dir, "charly.yml"), `version: 2026.186.2323
 defaults:
   registry: ghcr.io/example
 discover:
@@ -53,19 +53,18 @@ discover:
   candy:
     base: fedora
 `)
-	// A candy ALSO named `redis` in a SEPARATE discovered document. Node-form:
-	// only SCALARS live in the `candy:` value — its package collection and each
-	// plan step are CHILD nodes (`redis-package:` / `redis-step-N:`).
+	// A candy ALSO named `redis` in a SEPARATE discovered document. Compact
+	// node-form: the FULL body — package collection and plan steps included —
+	// lives INLINE in the `candy:` value.
 	must(filepath.Join(dir, "candy", "redis", "charly.yml"), `redis:
   candy:
     version: "2026.150.0000"
     description: in-memory store
-  redis-package:
     package:
       - redis
-  redis-step-0:
-    check: the binary exists
-    file: /usr/bin/redis-server
+    plan:
+      - check: the binary exists
+        file: /usr/bin/redis-server
 `)
 
 	uf, ok, err := LoadUnified(dir)
@@ -89,7 +88,7 @@ discover:
 
 	// --- Within ONE document: duplicate top-level name rejected. ---
 	dir2 := t.TempDir()
-	dupDoc := `version: 2026.174.1100
+	dupDoc := `version: 2026.186.2323
 redis:
   candy:
     base: fedora

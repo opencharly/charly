@@ -9,10 +9,8 @@ waybar-labwc:
             A supervisord service runs the wrapper, which waits for labwc's
             wayland-0 socket before exec'ing waybar so the bar attaches to the
             labwc compositor, not the pixelflux capture display.
-    waybar-labwc-require:
         require:
             - labwc
-    waybar-labwc-distro:
         distro:
             arch:
                 package:
@@ -20,7 +18,6 @@ waybar-labwc:
             fedora:
                 package:
                     - waybar
-    waybar-labwc-service:
         service:
             - name: waybar
               exec: "%(ENV_HOME)s/.local/bin/waybar-labwc-wrapper"
@@ -32,75 +29,56 @@ waybar-labwc:
               start_sec: 0
               enable: true
               scope: system
-    waybar-labwc-step-0:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    waybar-labwc-step-1:
-        run: mkdir=${HOME}/.config/waybar
-        mkdir: "${HOME}/.config/waybar"
-        run_as: "${USER}"
-    waybar-labwc-step-2:
-        run: copy=waybar-labwc-wrapper
-        copy: waybar-labwc-wrapper
-        to: "${HOME}/.local/bin/waybar-labwc-wrapper"
-        mode: "0755"
-        run_as: "${USER}"
-    waybar-labwc-step-3:
-        run: copy=config.json
-        copy: config.json
-        to: "${HOME}/.config/waybar/config"
-        mode: "0644"
-        run_as: "${USER}"
-    waybar-labwc-step-4:
-        run: copy=style.css
-        copy: style.css
-        to: "${HOME}/.config/waybar/style.css"
-        mode: "0644"
-        run_as: "${USER}"
-    waybar-labwc-step-5:
-        check: the waybar status bar binary is installed at /usr/bin/waybar
-        plugin: file
-        plugin_input:
-            file: /usr/bin/waybar
-            exists: true
-    waybar-labwc-step-6:
-        check: the labwc launch wrapper is installed and executable
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/waybar-labwc-wrapper
-            exists: true
-            mode: "0755"
-    waybar-labwc-step-7:
-        check: the wrapper attaches waybar to labwc's wayland-0 socket, not the pixelflux capture compositor
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/waybar-labwc-wrapper
-            contains: ["wayland-0"]
-    waybar-labwc-step-8:
-        check: the bottom-bar waybar config is installed in the user's config dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/waybar/config
-            exists: true
-    waybar-labwc-step-9:
-        check: the config wires the wlr foreign-toplevel taskbar module
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/waybar/config
-            contains: ["wlr/taskbar"]
-    waybar-labwc-step-10:
-        check: the matching style sheet is installed alongside the config
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.config/waybar/style.css
-            exists: true
-    waybar-labwc-step-11:
-        agent-check: the waybar bar is visible along the bottom of the running labwc desktop session, showing the taskbar and the Chrome launcher
-    waybar-package:
-        check: package=waybar
-        id: waybar-package
-        plugin: package
-        plugin_input:
-            package: waybar
-            installed: true
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.config/waybar
+              mkdir: "${HOME}/.config/waybar"
+              run_as: "${USER}"
+            - run: copy=waybar-labwc-wrapper
+              copy: waybar-labwc-wrapper
+              to: "${HOME}/.local/bin/waybar-labwc-wrapper"
+              mode: "0755"
+              run_as: "${USER}"
+            - run: copy=config.json
+              copy: config.json
+              to: "${HOME}/.config/waybar/config"
+              mode: "0644"
+              run_as: "${USER}"
+            - run: copy=style.css
+              copy: style.css
+              to: "${HOME}/.config/waybar/style.css"
+              mode: "0644"
+              run_as: "${USER}"
+            - check: the waybar status bar binary is installed at /usr/bin/waybar
+              file:
+                file: /usr/bin/waybar
+                exists: true
+            - check: the labwc launch wrapper is installed and executable
+              file:
+                file: ${HOME}/.local/bin/waybar-labwc-wrapper
+                exists: true
+                mode: "0755"
+            - check: the wrapper attaches waybar to labwc's wayland-0 socket, not the pixelflux capture compositor
+              file:
+                file: ${HOME}/.local/bin/waybar-labwc-wrapper
+                contains: ["wayland-0"]
+            - check: the bottom-bar waybar config is installed in the user's config dir
+              file:
+                file: ${HOME}/.config/waybar/config
+                exists: true
+            - check: the config wires the wlr foreign-toplevel taskbar module
+              file:
+                file: ${HOME}/.config/waybar/config
+                contains: ["wlr/taskbar"]
+            - check: the matching style sheet is installed alongside the config
+              file:
+                file: ${HOME}/.config/waybar/style.css
+                exists: true
+            - agent-check: the waybar bar is visible along the bottom of the running labwc desktop session, showing the taskbar and the Chrome launcher
+            - check: package=waybar
+              id: waybar-package
+              package:
+                package: waybar
+                installed: true

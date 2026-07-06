@@ -16,16 +16,13 @@ plugin-candy-kind:
             compiled-in plugin registers at init, before any load, so it has NO fetch/build cycle. It
             is the candy-KIND plugin; the sibling candy/plugin-candy is the DISTINCT `command:candy`
             CLI authoring plugin. Also serves out-of-process via cmd/serve.
-    plugin-candy-kind-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-candy-kind
             providers:
                 - kind:candy
-    candy-kind-module-present:
-        check: the candy box⊻layer factory kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its box⊻layer decode (candyIsImage + buildCandy → uf.Box / uf.Candy) is exercised by EVERY box and layer decode across the whole ecosystem (check-candy-kind / box-fedora / box-arch / box-cachyos / box-debian / box-ubuntu — every image and composed layer)
-        id: candy-kind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the candy box⊻layer factory kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its box⊻layer decode (candyIsImage + buildCandy → uf.Box / uf.Candy) is exercised by EVERY box and layer decode across the whole ecosystem (check-candy-kind / box-fedora / box-arch / box-cachyos / box-debian / box-ubuntu — every image and composed layer)
+              id: candy-kind-module-present
+              context:
+                - build
+              command: "true"

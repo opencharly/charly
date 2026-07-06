@@ -39,22 +39,19 @@ plugin-doctor:
             carries no plugin_input (the args are plain CLI tokens). The R10 witness is the disposable
             check-doctor-local bed: `charly doctor` exits 0 and prints the host-dependency report,
             proving the externalized command + the in-proc HostBuild hostprobe dispatch end-to-end.
-    plugin-doctor-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-doctor
             providers:
                 - command:doctor
-    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # it mirrors candy/plugin-clean's clean-module-present: a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-    # deterministic check every candy ships. The full `charly doctor` end-to-end — the compiled-in
-    # in-proc HostBuild("hostprobe") dispatch: `charly doctor` → exit 0 with the host-dependency
-    # report — is exercised by the live R10 bed (check-doctor-local).
-    doctor-module-present:
-        check: the doctor command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly doctor` end-to-end (the in-proc HostBuild hostprobe dispatch) is exercised by the live R10 (check-doctor-local)
-        id: doctor-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-clean's clean-module-present: a trivial build-context
+              # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+              # deterministic check every candy ships. The full `charly doctor` end-to-end — the compiled-in
+              # in-proc HostBuild("hostprobe") dispatch: `charly doctor` → exit 0 with the host-dependency
+              # report — is exercised by the live R10 bed (check-doctor-local).
+              check: the doctor command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly doctor` end-to-end (the in-proc HostBuild hostprobe dispatch) is exercised by the live R10 (check-doctor-local)
+              id: doctor-module-present
+              context:
+                - build
+              command: "true"

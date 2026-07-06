@@ -10,9 +10,9 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// TestAppendCandyPackages_UnderCandyWrapper guards that add-<fmt> writes packages INSIDE `candy:` under
-// the canonical `distro:` map (add-rpm → distro.fedora.package), never as a stray top-level key the
-// loader would reject — and dedupes. Moved from charly core with the logic.
+// TestAppendCandyPackages_UnderCandyWrapper guards that add-<fmt> writes packages INSIDE the
+// entity's `candy:` body under the canonical `distro:` map (add-rpm → distro.fedora.package),
+// never as a stray top-level key the loader would reject — and dedupes.
 func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 	dir := t.TempDir()
 	candyDir := filepath.Join(dir, kit.DefaultCandyDir, "foo")
@@ -20,7 +20,7 @@ func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(candyDir, kit.UnifiedFileName),
-		[]byte("candy:\n  name: foo\n  version: 2026.001.0001\n"), 0o644); err != nil {
+		[]byte("foo:\n    candy:\n        version: 2026.001.0001\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
@@ -37,9 +37,9 @@ func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 		t.Fatalf("stray top-level rpm: introduced\n%s", data)
 	}
 	if _, stray := root["distro"]; stray {
-		t.Fatalf("stray top-level distro: introduced (must be under candy:)\n%s", data)
+		t.Fatalf("stray top-level distro: introduced (must be under the candy body)\n%s", data)
 	}
-	candy := root["candy"].(map[string]any)
+	candy := root["foo"].(map[string]any)["candy"].(map[string]any)
 	distro, ok := candy["distro"].(map[string]any)
 	if !ok {
 		t.Fatalf("candy.distro missing\n%s", data)
@@ -54,8 +54,8 @@ func TestAppendCandyPackages_UnderCandyWrapper(t *testing.T) {
 	}
 }
 
-// TestCandySet_DescendsIntoCandyBody guards that `candy set version X` writes candy.version, never a
-// stray top-level version: (the kind-keyed manifest would otherwise be ambiguous).
+// TestCandySet_DescendsIntoCandyBody guards that `candy set version X` writes the entity's
+// candy.version, never a stray top-level version:.
 func TestCandySet_DescendsIntoCandyBody(t *testing.T) {
 	dir := t.TempDir()
 	candyDir := filepath.Join(dir, kit.DefaultCandyDir, "bar")
@@ -63,7 +63,7 @@ func TestCandySet_DescendsIntoCandyBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(candyDir, kit.UnifiedFileName),
-		[]byte("candy:\n  name: bar\n  version: 2026.001.0001\n"), 0o644); err != nil {
+		[]byte("bar:\n    candy:\n        version: 2026.001.0001\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
@@ -79,7 +79,7 @@ func TestCandySet_DescendsIntoCandyBody(t *testing.T) {
 	if _, stray := root["version"]; stray {
 		t.Fatalf("stray top-level version: introduced (must be under candy:)\n%s", data)
 	}
-	if got := root["candy"].(map[string]any)["version"]; got != "2026.186.0000" {
-		t.Fatalf("candy.version not set, got %v\n%s", got, data)
+	if got := root["bar"].(map[string]any)["candy"].(map[string]any)["version"]; got != "2026.186.0000" {
+		t.Fatalf("bar.candy.version not set, got %v\n%s", got, data)
 	}
 }

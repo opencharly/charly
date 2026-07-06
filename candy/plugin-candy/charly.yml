@@ -25,21 +25,18 @@ plugin-candy:
 
             The R10 witness is the disposable check-commands-local bed: `charly candy --help` exits
             0, proving the command tree resolves and dispatches end-to-end.
-    plugin-candy-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-candy
             providers:
                 - command:candy
-    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # a trivial build-context `plugin: command` (the built-in command CHECK verb) running `true`,
-    # proving the host can build the module. candy is compiled-in and self-contained (it owns its
-    # yaml.Node candy-manifest mutation, no reverse channel), so the full CLI end-to-end
-    # (`charly candy --help` → exit 0) is exercised by the live R10 bed (check-commands-local).
-    candy-module-present:
-        check: the command plugin ships a buildable Go module (go.mod + the provider) the host can build; the full `charly candy` end-to-end is exercised by the live R10 (check-commands-local)
-        id: candy-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # a trivial build-context `plugin: command` (the built-in command CHECK verb) running `true`,
+              # proving the host can build the module. candy is compiled-in and self-contained (it owns its
+              # yaml.Node candy-manifest mutation, no reverse channel), so the full CLI end-to-end
+              # (`charly candy --help` → exit 0) is exercised by the live R10 bed (check-commands-local).
+              check: the command plugin ships a buildable Go module (go.mod + the provider) the host can build; the full `charly candy` end-to-end is exercised by the live R10 (check-commands-local)
+              id: candy-module-present
+              context:
+                - build
+              command: "true"

@@ -6,11 +6,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// bundleNodeForm is the UNIFIED node-form (the only authoring surface): every
-// non-scalar of a `bundle` node is a CHILD node, never a field in the bundle
-// value. So each inline check is a STEP child node (keyed `<name>-step-<i>` —
-// the form `charly migrate` emits), and the deeply-nested pod-in-pod is a
-// sub-ENTITY child. `box: coder` is a scalar cross-ref and stays in the value.
+// bundleNodeForm is the COMPACT node-form (the only authoring surface): each
+// member's inline checks live in the member's own `plan:` list INSIDE the kind
+// value, and the deeply-nested pod-in-pod is a sub-ENTITY child. `image: coder`
+// is a scalar cross-ref and stays in the value.
 const bundleNodeForm = `
 shop:
   group:
@@ -18,18 +17,18 @@ shop:
   web:
     pod:
       image: coder
-    web-step-0:
-      check: web reaches the cache
-      command: "redis-cli -h ${HOST:cache} ping"
+      plan:
+        - check: web reaches the cache
+          command: "redis-cli -h ${HOST:cache} ping"
   cache:
     pod:
       image: coder
     migrate:
       pod:
         image: migrator
-      migrate-step-0:
-        check: migration ran
-        command: "test -f /done"
+        plan:
+          - check: migration ran
+            command: "test -f /done"
 `
 
 // TestBuildBundleNode_Structure proves the bundle builder turns the unified

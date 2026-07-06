@@ -8,24 +8,16 @@ oracle:
             Requires the nodejs runtime. The binary's presence and its --version
             entrypoint are deterministically verifiable in the built image with no
             network access or API credentials.
-    oracle-require:
         require:
             - nodejs
-    oracle-step-0:
-        check: the oracle executable is installed at ${HOME}/.npm-global/bin/oracle
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.npm-global/bin/oracle
-            exists: true
-    oracle-step-1:
-        check: running oracle --version exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.npm-global/bin/oracle --version
-    oracle-step-2:
-        agent-check: the oracle CLI and its nodejs runtime are installed in the image
-    oracle-step-3:
-        agent-check: a user runs oracle with a bundled prompt against its configured AI engines
-    oracle-step-4:
-        agent-check: oracle dispatches the prompt to each configured engine and returns their answers
+        plan:
+            - check: the oracle executable is installed at ${HOME}/.npm-global/bin/oracle
+              file:
+                file: ${HOME}/.npm-global/bin/oracle
+                exists: true
+            - check: running oracle --version exits cleanly
+              exit_status: 0
+              command: ${HOME}/.npm-global/bin/oracle --version
+            - agent-check: the oracle CLI and its nodejs runtime are installed in the image
+            - agent-check: a user runs oracle with a bundled prompt against its configured AI engines
+            - agent-check: oracle dispatches the prompt to each configured engine and returns their answers

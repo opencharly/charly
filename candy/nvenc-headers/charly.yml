@@ -11,34 +11,26 @@ nvenc-headers:
             images (comfyui, jupyter-ml, immich-ml, …) don't cascade-rebuild for a
             build-only header. Verifiable: the headers and the pkg-config descriptor
             must land in the built image.
-    nvenc-headers-distro:
         distro:
             arch:
                 package:
                     - ffnvcodec-headers
-    nvenc-headers-step-0:
-        check: the NVENC encode API header is installed for nvenc-sys to compile against
-        plugin: file
-        plugin_input:
-            file: /usr/include/ffnvcodec/nvEncodeAPI.h
-            exists: true
-    nvenc-headers-step-1:
-        check: the ffnvcodec pkg-config descriptor is installed so downstream builds can link against ffnvcodec
-        plugin: file
-        plugin_input:
-            file: /usr/lib/pkgconfig/ffnvcodec.pc
-            exists: true
-    nvenc-headers-step-2:
-        check: the header declares the NvEncodeAPICreateInstance entry point the nvenc-sys crate binds to
-        plugin: file
-        plugin_input:
-            file: /usr/include/ffnvcodec/nvEncodeAPI.h
-            contains:
-                - NvEncodeAPICreateInstance
-    nvenc-headers-package:
-        check: package=ffnvcodec-headers
-        id: nvenc-headers-package
-        plugin: package
-        plugin_input:
-            package: ffnvcodec-headers
-            installed: true
+        plan:
+            - check: the NVENC encode API header is installed for nvenc-sys to compile against
+              file:
+                file: /usr/include/ffnvcodec/nvEncodeAPI.h
+                exists: true
+            - check: the ffnvcodec pkg-config descriptor is installed so downstream builds can link against ffnvcodec
+              file:
+                file: /usr/lib/pkgconfig/ffnvcodec.pc
+                exists: true
+            - check: the header declares the NvEncodeAPICreateInstance entry point the nvenc-sys crate binds to
+              file:
+                file: /usr/include/ffnvcodec/nvEncodeAPI.h
+                contains:
+                    - NvEncodeAPICreateInstance
+            - check: package=ffnvcodec-headers
+              id: nvenc-headers-package
+              package:
+                package: ffnvcodec-headers
+                installed: true

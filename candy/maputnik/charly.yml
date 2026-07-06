@@ -14,10 +14,8 @@ maputnik:
             observable: the built SPA dist + index.html, the node build
             toolchain, the running service, the HTTP 200 the editor returns, and
             the absence of the /maputnik/ asset prefix in the served HTML.
-    maputnik-require:
         require:
             - supervisord
-    maputnik-distro:
         distro:
             arch:
                 package:
@@ -38,10 +36,8 @@ maputnik:
                     - npm
                     # git is needed to clone the maputnik source at build time.
                     - git
-    maputnik-port:
         port:
             - 8000 # maputnik static-dist HTTP server
-    maputnik-service:
         service:
             - name: maputnik
               # System python3 (from the supervisor RPM's own dependency) — keeps
@@ -53,49 +49,46 @@ maputnik:
               priority: 34
               enable: true
               scope: system
-    maputnik-step-0:
-        run: mkdir=/opt/maputnik
-        mkdir: /opt/maputnik
-        run_as: root
-    maputnik-step-1:
-        run: |
-            command=set -euo pipefail
-            # Clone shallow + most recent tag's tip. The maputnik repo has no
-            # binary releases on GitHub — source build is the canonical install.
-            git clone --depth 1 https://github.com/maplibre/maputnik /tmp/maputnik
-            cd /tmp/maputnik
-            # `npm ci` over `npm install` because lockfile is upstream-provided
-            # and we want deterministic resolution. --no-audit + --no-fund cut
-            # ~5 sec of network chatter that only spams stderr.
-            npm ci --no-audit --no-fund
-            # Maputnik's package.json `"build": "tsc && vite build"` runs
-            # vite with its default `--base=/maputnik/`, which bakes
-            # /maputnik/assets/* references into the emitted HTML. We
-            # serve the static dist at `/` via python -m http.server, so
-            # those baked paths 404 in the browser. Override base to `/`
-            # so asset URLs are root-relative and resolve against our
-            # serve path. The `--` forwards the flag through npm to vite.
-            npm run build -- --base=/
-            # Maputnik uses Vite (`tsc && vite build --mode=production`); Vite
-            # default output is `dist/`, NOT `build/` (the source-tree `build/`
-            # is just release scripts). Copy the actual SPA artifact and
-            # error loudly if the layout changes upstream.
-            if [ -d dist ]; then
-              mkdir -p /opt/maputnik
-              cp -r dist /opt/maputnik/build
-            else
-              echo "maputnik build did not produce ./dist directory" >&2
-              ls -la
-              exit 1
-            fi
-            cd /
-            rm -rf /tmp/maputnik
-            # Drop npm cache to shrink image (~150-300 MB delta).
-            rm -rf /root/.npm
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: mkdir=/opt/maputnik
+              mkdir: /opt/maputnik
+              run_as: root
+            - run: |
+                command=set -euo pipefail
+                # Clone shallow + most recent tag's tip. The maputnik repo has no
+                # binary releases on GitHub — source build is the canonical install.
+                git clone --depth 1 https://github.com/maplibre/maputnik /tmp/maputnik
+                cd /tmp/maputnik
+                # `npm ci` over `npm install` because lockfile is upstream-provided
+                # and we want deterministic resolution. --no-audit + --no-fund cut
+                # ~5 sec of network chatter that only spams stderr.
+                npm ci --no-audit --no-fund
+                # Maputnik's package.json `"build": "tsc && vite build"` runs
+                # vite with its default `--base=/maputnik/`, which bakes
+                # /maputnik/assets/* references into the emitted HTML. We
+                # serve the static dist at `/` via python -m http.server, so
+                # those baked paths 404 in the browser. Override base to `/`
+                # so asset URLs are root-relative and resolve against our
+                # serve path. The `--` forwards the flag through npm to vite.
+                npm run build -- --base=/
+                # Maputnik uses Vite (`tsc && vite build --mode=production`); Vite
+                # default output is `dist/`, NOT `build/` (the source-tree `build/`
+                # is just release scripts). Copy the actual SPA artifact and
+                # error loudly if the layout changes upstream.
+                if [ -d dist ]; then
+                  mkdir -p /opt/maputnik
+                  cp -r dist /opt/maputnik/build
+                else
+                  echo "maputnik build did not produce ./dist directory" >&2
+                  ls -la
+                  exit 1
+                fi
+                cd /
+                rm -rf /tmp/maputnik
+                # Drop npm cache to shrink image (~150-300 MB delta).
+                rm -rf /root/.npm
+              run_as: root
+              command: |
                 set -euo pipefail
                 # Clone shallow + most recent tag's tip. The maputnik repo has no
                 # binary releases on GitHub — source build is the canonical install.
@@ -129,61 +122,45 @@ maputnik:
                 rm -rf /tmp/maputnik
                 # Drop npm cache to shrink image (~150-300 MB delta).
                 rm -rf /root/.npm
-    maputnik-step-2:
-        check: the maputnik static dist directory was built from upstream source
-        plugin: file
-        plugin_input:
-            file: /opt/maputnik/build
-            exists: true
-            filetype: directory
-    maputnik-step-3:
-        check: the SPA entrypoint index.html is present in the served dist
-        plugin: file
-        plugin_input:
-            file: /opt/maputnik/build/index.html
-            exists: true
-    maputnik-step-4:
-        check: the node runtime used to build the SPA is installed and runnable
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: node --version
-    maputnik-step-5:
-        check: the maputnik service is running under the init system
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: maputnik
-            running: true
-    maputnik-step-6:
-        check: the static SPA answers HTTP 200 at the container root on the published port
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8000}/
-            status: 200
-    maputnik-step-7:
-        check: the served HTML carries no /maputnik/ asset prefix, so asset URLs resolve at the serve root
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                ! curl -fsS http://localhost:8000/ | grep -q '"/maputnik/'
-            in_container: true
-    maputnik-step-8:
-        agent-check: the loaded SPA presents the Maputnik visual style editor interface (layer list and map canvas), not a blank page
-    maputnik-port-reachable:
-        check: addr=127.0.0.1:${HOST_PORT:8000}
-        id: maputnik-port-reachable
-        timeout: 10s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: "127.0.0.1:${HOST_PORT:8000}"
-            reachable: true
+            - check: the maputnik static dist directory was built from upstream source
+              file:
+                file: /opt/maputnik/build
+                exists: true
+                filetype: directory
+            - check: the SPA entrypoint index.html is present in the served dist
+              file:
+                file: /opt/maputnik/build/index.html
+                exists: true
+            - check: the node runtime used to build the SPA is installed and runnable
+              exit_status: 0
+              command: node --version
+            - check: the maputnik service is running under the init system
+              context:
+                - runtime
+              service:
+                service: maputnik
+                running: true
+            - check: the static SPA answers HTTP 200 at the container root on the published port
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8000}/
+                status: 200
+            - check: the served HTML carries no /maputnik/ asset prefix, so asset URLs resolve at the serve root
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                    ! curl -fsS http://localhost:8000/ | grep -q '"/maputnik/'
+                in_container: true
+            - agent-check: the loaded SPA presents the Maputnik visual style editor interface (layer list and map canvas), not a blank page
+            - check: addr=127.0.0.1:${HOST_PORT:8000}
+              id: maputnik-port-reachable
+              timeout: 10s
+              context:
+                - runtime
+              addr:
+                addr: "127.0.0.1:${HOST_PORT:8000}"
+                reachable: true

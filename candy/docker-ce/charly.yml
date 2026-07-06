@@ -9,7 +9,6 @@ docker-ce:
             Arch). It also queues the iptable_nat kernel module for load at boot so the
             docker bridge network can NAT. Every artifact is a fixed on-disk path or a
             CLI that reports its version, so the install is directly verifiable.
-    docker-ce-distro:
         distro:
             arch:
                 package:
@@ -53,65 +52,44 @@ docker-ce:
                       key: "https://download.docker.com/linux/ubuntu/gpg"
                       suite: noble
                       components: stable
-    docker-ce-step-0:
-        run: command=mkdir -p /etc/modules-load.d && echo "iptable_nat" >> /etc/modules-load.d/ip_tables.conf
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: mkdir -p /etc/modules-load.d && echo "iptable_nat" >> /etc/modules-load.d/ip_tables.conf
-    docker-ce-step-1:
-        check: the docker CLI binary is installed at /usr/bin/docker
-        plugin: file
-        plugin_input:
-            file: /usr/bin/docker
-            exists: true
-    docker-ce-step-2:
-        check: the docker CLI reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/docker --version
-    docker-ce-step-3:
-        check: the containerd runtime binary is installed at /usr/bin/containerd
-        plugin: file
-        plugin_input:
-            file: /usr/bin/containerd
-            exists: true
-    docker-ce-step-4:
-        check: the containerd runtime reports its version and exits cleanly
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/containerd --version
-    docker-ce-step-5:
-        check: the docker compose plugin is wired into the docker CLI
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/docker compose version
-    docker-ce-step-6:
-        check: the iptable_nat module is queued for load at boot so the docker bridge can NAT
-        plugin: file
-        plugin_input:
-            file: /etc/modules-load.d/ip_tables.conf
-            contains: iptable_nat
-    docker-ce-package:
-        check: package=docker-ce
-        id: docker-ce-package
-        plugin: package
-        plugin_input:
-            package: docker-ce
-            package_map:
-                arch: docker
-                fedora: docker-ce
-            installed: true
-    containerd-package:
-        check: package=containerd.io
-        id: containerd-package
-        plugin: package
-        plugin_input:
-            package: containerd.io
-            package_map:
-                arch: containerd
-                fedora: containerd.io
-            installed: true
+        plan:
+            - run: command=mkdir -p /etc/modules-load.d && echo "iptable_nat" >> /etc/modules-load.d/ip_tables.conf
+              run_as: root
+              command: mkdir -p /etc/modules-load.d && echo "iptable_nat" >> /etc/modules-load.d/ip_tables.conf
+            - check: the docker CLI binary is installed at /usr/bin/docker
+              file:
+                file: /usr/bin/docker
+                exists: true
+            - check: the docker CLI reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/docker --version
+            - check: the containerd runtime binary is installed at /usr/bin/containerd
+              file:
+                file: /usr/bin/containerd
+                exists: true
+            - check: the containerd runtime reports its version and exits cleanly
+              exit_status: 0
+              command: /usr/bin/containerd --version
+            - check: the docker compose plugin is wired into the docker CLI
+              exit_status: 0
+              command: /usr/bin/docker compose version
+            - check: the iptable_nat module is queued for load at boot so the docker bridge can NAT
+              file:
+                file: /etc/modules-load.d/ip_tables.conf
+                contains: iptable_nat
+            - check: package=docker-ce
+              id: docker-ce-package
+              package:
+                package: docker-ce
+                package_map:
+                    arch: docker
+                    fedora: docker-ce
+                installed: true
+            - check: package=containerd.io
+              id: containerd-package
+              package:
+                package: containerd.io
+                package_map:
+                    arch: containerd
+                    fedora: containerd.io
+                installed: true

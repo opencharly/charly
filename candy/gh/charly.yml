@@ -14,11 +14,9 @@ gh:
             and runnable in any box that composes this candy — that is what the
             scenarios and check block assert; they FAIL if any of the three tools
             is missing.
-    gh-package:
         package:
             - git
             - git-lfs
-    gh-distro:
         distro:
             arch:
                 package:
@@ -40,97 +38,64 @@ gh:
                     - gh
                 option:
                     - "--setopt=tsflags=noscripts"
-    gh-step-0:
-        run: command=/usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: /usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
-    gh-step-1:
-        check: the GitHub CLI binary is installed at /usr/bin/gh for driving GitHub (PRs, issues, releases) from the shell
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gh
-            exists: true
-    gh-step-2:
-        check: gh reports its version without error
-        exit_status: 0
-        stdout:
-            - contains: "gh version"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gh --version
-    gh-step-3:
-        check: the git binary is installed at /usr/bin/git
-        plugin: file
-        plugin_input:
-            file: /usr/bin/git
-            exists: true
-    gh-step-4:
-        check: git reports its version without error
-        exit_status: 0
-        stdout:
-            - contains: "git version"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/git --version
-    gh-step-5:
-        check: the git-lfs binary is installed at /usr/bin/git-lfs for transparent large-file storage
-        plugin: file
-        plugin_input:
-            file: /usr/bin/git-lfs
-            exists: true
-    gh-step-6:
-        check: git-lfs reports its version without error
-        exit_status: 0
-        stdout:
-            - contains: "git-lfs"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/git-lfs --version
-    gh-step-7:
-        agent-check: with the system hooks configured by the post-install task, git-lfs is registered as a git filter so large files are smudged and cleaned transparently on checkout and commit
-    gh-version:
-        check: command=/usr/bin/gh --version
-        id: gh-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/gh --version
-    git-version:
-        check: command=/usr/bin/git --version
-        id: git-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/git --version
-    git-lfs-version:
-        check: command=/usr/bin/git-lfs --version
-        id: git-lfs-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/git-lfs --version
-    gh-package-2:
-        check: package=gh
-        id: gh-package
-        plugin: package
-        plugin_input:
-            package: gh
-            package_map:
-                arch: github-cli
-            installed: true
-    git-package:
-        check: package=git
-        id: git-package
-        plugin: package
-        plugin_input:
-            package: git
-            installed: true
-    git-lfs-package:
-        check: package=git-lfs
-        id: git-lfs-package
-        plugin: package
-        plugin_input:
-            package: git-lfs
-            installed: true
+        plan:
+            - run: command=/usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
+              run_as: root
+              command: /usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true
+            - check: the GitHub CLI binary is installed at /usr/bin/gh for driving GitHub (PRs, issues, releases) from the shell
+              file:
+                file: /usr/bin/gh
+                exists: true
+            - check: gh reports its version without error
+              exit_status: 0
+              stdout:
+                - contains: "gh version"
+              command: /usr/bin/gh --version
+            - check: the git binary is installed at /usr/bin/git
+              file:
+                file: /usr/bin/git
+                exists: true
+            - check: git reports its version without error
+              exit_status: 0
+              stdout:
+                - contains: "git version"
+              command: /usr/bin/git --version
+            - check: the git-lfs binary is installed at /usr/bin/git-lfs for transparent large-file storage
+              file:
+                file: /usr/bin/git-lfs
+                exists: true
+            - check: git-lfs reports its version without error
+              exit_status: 0
+              stdout:
+                - contains: "git-lfs"
+              command: /usr/bin/git-lfs --version
+            - agent-check: with the system hooks configured by the post-install task, git-lfs is registered as a git filter so large files are smudged and cleaned transparently on checkout and commit
+            - check: command=/usr/bin/gh --version
+              id: gh-version
+              exit_status: 0
+              command: /usr/bin/gh --version
+            - check: command=/usr/bin/git --version
+              id: git-version
+              exit_status: 0
+              command: /usr/bin/git --version
+            - check: command=/usr/bin/git-lfs --version
+              id: git-lfs-version
+              exit_status: 0
+              command: /usr/bin/git-lfs --version
+            - check: package=gh
+              id: gh-package
+              package:
+                package: gh
+                package_map:
+                    arch: github-cli
+                installed: true
+            - check: package=git
+              id: git-package
+              package:
+                package: git
+                installed: true
+            - check: package=git-lfs
+              id: git-lfs-package
+              package:
+                package: git-lfs
+                installed: true

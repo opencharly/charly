@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -37,11 +39,13 @@ type recordEnv struct {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs one `record:` operation. It decodes the full #Op + the env, skips in box
-// mode (no running deployment to record on a disposable `charly check box`), dials back
-// the host's live executor over the reverse channel (a missing broker is a HARD FAIL —
-// record needs the venue), dispatches the method, and self-evaluates the matchers + the
-// artifact validators (`stop`).
+// Invoke runs one `record:` operation. It decodes the full #Op, the typed plugin input
+// (params.RecordInput — the per-verb fields live in the desugared plugin_input since the
+// schema-compaction cutover), and the env, skips in box mode (no running deployment to
+// record on a disposable `charly check box`), dials back the host's live executor over
+// the reverse channel (a missing broker is a HARD FAIL — record needs the venue),
+// dispatches the method, and self-evaluates the matchers + the artifact validators
+// (`stop`).
 func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
@@ -49,11 +53,13 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 			return sdk.ResultJSON("fail", "record: decode op: "+err.Error())
 		}
 	}
+	var in params.RecordInput
+	kit.DecodeInput(op.PluginInput, &in)
 	var env recordEnv
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	method := string(op.Record)
+	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running deployment to record
 	// in a disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.
@@ -70,10 +76,10 @@ func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return sdk.ResultJSON("fail", fmt.Sprintf("record: %s has no host executor attached — record needs the live venue (%v)", method, err))
 	}
 
-	out, runErr := dispatch(ctx, exec, &op)
+	out, runErr := dispatch(ctx, exec, &op, &in)
 
 	// The shared exit/stdout/stderr + artifact verdict pipeline (R3). The artifact-producing
-	// method (`stop`) already GetFile-pulled the recording to op.Artifact inside dispatch, so a
-	// non-empty op.Artifact is the artifact gate (a no-op for list/start/cmd).
-	return sdk.VerbVerdict("record", method, out, runErr, &op, op.Artifact != "")
+	// method (`stop`) already GetFile-pulled the recording to the input's artifact path inside
+	// dispatch, so a non-empty in.Artifact is the artifact gate (a no-op for list/start/cmd).
+	return sdk.VerbVerdict("record", method, out, runErr, &op, in.Artifact != "")
 }

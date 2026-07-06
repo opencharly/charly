@@ -140,7 +140,7 @@ func TestGenerateTree_Shape(t *testing.T) {
 		Cluster:        cluster,
 		Deploy: spec.Deploy{
 			Replica:    3,
-			Env:        []string{"FOO=bar"},
+			Env:        map[string]string{"FOO": "bar"},
 			Kubernetes: &spec.K8sDeploy{Workload: "Deployment"}, // force Deployment despite storage
 			Storage:    []spec.DeployStorage{{Name: "data", Size: "5Gi", Path: "/data"}},
 			Expose:     &spec.DeployExpose{Host: "web.example.com", Port: "8080"},

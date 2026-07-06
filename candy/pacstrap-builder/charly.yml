@@ -9,7 +9,6 @@ pacstrap-builder:
             arch-pacstrap-builder / cachyos-pacstrap-builder images,
             which run as privileged containers under `charly box build` and
             `charly vm build` for kind:bootstrap source kinds.
-    pacstrap-builder-distro:
         distro:
             arch:
                 package:
@@ -24,57 +23,40 @@ pacstrap-builder:
                     - grub
                     - efibootmgr
                     - mkinitcpio
-    pacstrap-builder-step-0:
-        check: pacstrap bootstraps a fresh Arch/CachyOS root filesystem
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/pacstrap
-            exists: true
-    pacstrap-builder-step-1:
-        check: the arch-install-scripts package supplies genfstab and arch-chroot alongside pacstrap
-        plugin: package
-        plugin_input:
-            package: arch-install-scripts
-            installed: true
-    pacstrap-builder-step-2:
-        check: parted partitions the target VM disk
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/parted
-            exists: true
-    pacstrap-builder-step-3:
-        check: a raw VM disk image can be created with qemu-img
-        plugin: file
-        plugin_input:
-            file: /usr/bin/qemu-img
-            exists: true
-    pacstrap-builder-step-4:
-        check: e2fsprogs provides the ext4 mkfs used for the root partition
-        plugin: package
-        plugin_input:
-            package: e2fsprogs
-            installed: true
-    pacstrap-builder-step-5:
-        check: dosfstools provides the FAT mkfs used for the EFI system partition
-        plugin: package
-        plugin_input:
-            package: dosfstools
-            installed: true
-    pacstrap-builder-step-6:
-        check: grub-install writes the bootloader to the disk
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/grub-install
-            exists: true
-    pacstrap-builder-step-7:
-        check: efibootmgr registers the UEFI boot entry
-        plugin: package
-        plugin_input:
-            package: efibootmgr
-            installed: true
-    pacstrap-builder-step-8:
-        check: mkinitcpio regenerates the initramfs inside the new root
-        plugin: file
-        plugin_input:
-            file: /usr/bin/mkinitcpio
-            exists: true
+        plan:
+            - check: pacstrap bootstraps a fresh Arch/CachyOS root filesystem
+              file:
+                file: /usr/sbin/pacstrap
+                exists: true
+            - check: the arch-install-scripts package supplies genfstab and arch-chroot alongside pacstrap
+              package:
+                package: arch-install-scripts
+                installed: true
+            - check: parted partitions the target VM disk
+              file:
+                file: /usr/sbin/parted
+                exists: true
+            - check: a raw VM disk image can be created with qemu-img
+              file:
+                file: /usr/bin/qemu-img
+                exists: true
+            - check: e2fsprogs provides the ext4 mkfs used for the root partition
+              package:
+                package: e2fsprogs
+                installed: true
+            - check: dosfstools provides the FAT mkfs used for the EFI system partition
+              package:
+                package: dosfstools
+                installed: true
+            - check: grub-install writes the bootloader to the disk
+              file:
+                file: /usr/sbin/grub-install
+                exists: true
+            - check: efibootmgr registers the UEFI boot entry
+              package:
+                package: efibootmgr
+                installed: true
+            - check: mkinitcpio regenerates the initramfs inside the new root
+              file:
+                file: /usr/bin/mkinitcpio
+                exists: true

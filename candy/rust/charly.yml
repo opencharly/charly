@@ -8,10 +8,8 @@ rust:
             rustc + cargo on Debian and Ubuntu, with ~/.cargo/bin appended to PATH.
             Both binaries land at /usr/bin and report a version string, so a
             developer can compile and build Rust crates inside the image.
-    rust-path_append:
         path_append:
             - "~/.cargo/bin"
-    rust-distro:
         distro:
             arch:
                 package:
@@ -28,57 +26,40 @@ rust:
                 package:
                     - rustc
                     - cargo
-    rust-step-0:
-        check: the rustc compiler binary is installed at /usr/bin/rustc
-        plugin: file
-        plugin_input:
-            file: /usr/bin/rustc
-            exists: true
-    rust-step-1:
-        check: rustc reports a version string and exits cleanly
-        exit_status: 0
-        stdout:
-            - matches: "rustc [0-9]"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/rustc --version
-    rust-step-2:
-        check: the cargo package manager binary is installed at /usr/bin/cargo
-        plugin: file
-        plugin_input:
-            file: /usr/bin/cargo
-            exists: true
-    rust-step-3:
-        check: cargo reports a version string and exits cleanly
-        exit_status: 0
-        stdout:
-            - matches: "cargo [0-9]"
-        plugin: command
-        plugin_input:
-            command: /usr/bin/cargo --version
-    rustc-version:
-        check: command=/usr/bin/rustc --version
-        id: rustc-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/rustc --version
-    cargo-version:
-        check: command=/usr/bin/cargo --version
-        id: cargo-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/cargo --version
-    rust-compiler-package:
-        check: package=rust
-        id: rust-compiler-package
-        plugin: package
-        plugin_input:
-            package: rust
-            package_map:
-                arch: rust
-                fedora: rust
-                debian: rustc
-                ubuntu: rustc
-            installed: true
+        plan:
+            - check: the rustc compiler binary is installed at /usr/bin/rustc
+              file:
+                file: /usr/bin/rustc
+                exists: true
+            - check: rustc reports a version string and exits cleanly
+              exit_status: 0
+              stdout:
+                - matches: "rustc [0-9]"
+              command: /usr/bin/rustc --version
+            - check: the cargo package manager binary is installed at /usr/bin/cargo
+              file:
+                file: /usr/bin/cargo
+                exists: true
+            - check: cargo reports a version string and exits cleanly
+              exit_status: 0
+              stdout:
+                - matches: "cargo [0-9]"
+              command: /usr/bin/cargo --version
+            - check: command=/usr/bin/rustc --version
+              id: rustc-version
+              exit_status: 0
+              command: /usr/bin/rustc --version
+            - check: command=/usr/bin/cargo --version
+              id: cargo-version
+              exit_status: 0
+              command: /usr/bin/cargo --version
+            - check: package=rust
+              id: rust-compiler-package
+              package:
+                package: rust
+                package_map:
+                    arch: rust
+                    fedora: rust
+                    debian: rustc
+                    ubuntu: rustc
+                installed: true

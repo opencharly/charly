@@ -23,16 +23,13 @@ plugin-deploy-vm:
             `charly bundle del`. The vm-substrate sibling of candy/plugin-deploy-local; the
             host's vm lifecycle hook (vm_deploy_lifecycle.go) owns the VM lifecycle
             (boot/destroy/console/ssh + nested pod-in-guest), this plugin owns the plan WALK.
-    plugin-deploy-vm-decl:
         plugin:
             providers:
                 - deploy:vm
             source: github.com/opencharly/charly/candy/plugin-deploy-vm
-    deploy-vm-module-present:
-        check: the out-of-tree deploy:vm plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
-        id: deploy-vm-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree deploy:vm plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process
+              id: deploy-vm-module-present
+              context:
+                - build
+              command: "true"

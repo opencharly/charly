@@ -13,12 +13,10 @@ charly:
             Images that only need transient in-container `charly` (the dbus delegation
             path) need NOT bake it — the host copies `charly` in on demand
             (`EnsureCharlyInVenue`; see `/charly-tools:charly`).
-    charly-candy:
         candy:
             - virtualization
             - gocryptfs
             - socat
-    charly-distro:
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the
@@ -42,7 +40,6 @@ charly:
                       key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
                       suite: noble
                       components: main
-    charly-localpkg:
         # On a DEPLOY target charly is installed as the proper OS-tracked package for the
         # target distro's format (LocalPkgInstallStep): pac → opencharly-git built from
         # pkg/arch via makepkg + pacman -U; rpm → opencharly built from pkg/fedora via
@@ -58,62 +55,43 @@ charly:
             pac: pkg/arch
             rpm: pkg/fedora
             deb: pkg/debian
-    charly-step-0:
-        check: the charly binary resolves on the deployment's PATH
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: command -v charly
-    charly-step-1:
-        check: charly version prints a CalVer build stamp on stdout
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]{4}\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: charly version
-    charly-step-2:
-        check: the gocryptfs encrypted-storage binary (gocryptfs candy) is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gocryptfs
-            exists: true
-    charly-step-3:
-        check: the socat console-relay binary (socat candy) is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/socat
-            exists: true
-    charly-step-4:
-        check: the libvirt virsh client (virtualization candy) is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/virsh
-            exists: true
-    charly-step-5:
-        check: the qemu system emulator (virtualization candy) is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/qemu-system-x86_64
-            exists: true
-    charly-step-6:
-        check: charly doctor runs and emits its Summary line
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: charly doctor 2>&1 | grep -q "Summary:"
-    charly-binary:
-        check: command=command -v charly
-        id: charly-binary
-        exit_status: 0
-        stdout:
-            # Path-agnostic: the package installs to /usr/bin/charly, but on a
-            # usr-merged distro (Arch/CachyOS: /usr/sbin -> bin, /usr/sbin ahead
-            # of /usr/bin in PATH) `command -v` reports it via /usr/sbin — the
-            # SAME inode. Accept any /usr[/local]/{bin,sbin}/charly so the probe
-            # passes regardless of which PATH alias resolved it (RE2: no $ anchor,
-            # which wouldn't match the trailing newline).
-            - matches: "/usr/(local/)?s?bin/charly"
-        plugin: command
-        plugin_input:
-            command: command -v charly
+        plan:
+            - check: the charly binary resolves on the deployment's PATH
+              exit_status: 0
+              command: command -v charly
+            - check: charly version prints a CalVer build stamp on stdout
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]{4}\\.[0-9]+"
+              command: charly version
+            - check: the gocryptfs encrypted-storage binary (gocryptfs candy) is installed
+              file:
+                file: /usr/bin/gocryptfs
+                exists: true
+            - check: the socat console-relay binary (socat candy) is installed
+              file:
+                file: /usr/bin/socat
+                exists: true
+            - check: the libvirt virsh client (virtualization candy) is installed
+              file:
+                file: /usr/bin/virsh
+                exists: true
+            - check: the qemu system emulator (virtualization candy) is installed
+              file:
+                file: /usr/bin/qemu-system-x86_64
+                exists: true
+            - check: charly doctor runs and emits its Summary line
+              exit_status: 0
+              command: charly doctor 2>&1 | grep -q "Summary:"
+            - check: command=command -v charly
+              id: charly-binary
+              exit_status: 0
+              stdout:
+                # Path-agnostic: the package installs to /usr/bin/charly, but on a
+                # usr-merged distro (Arch/CachyOS: /usr/sbin -> bin, /usr/sbin ahead
+                # of /usr/bin in PATH) `command -v` reports it via /usr/sbin — the
+                # SAME inode. Accept any /usr[/local]/{bin,sbin}/charly so the probe
+                # passes regardless of which PATH alias resolved it (RE2: no $ anchor,
+                # which wouldn't match the trailing newline).
+                - matches: "/usr/(local/)?s?bin/charly"
+              command: command -v charly

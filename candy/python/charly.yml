@@ -8,28 +8,20 @@ python:
             ~/.pixi/envs/default, so the CPython interpreter lands at a fixed,
             PATH-contributed path. It is verifiable by file existence, the version
             it reports, and by running real standard-library code through it.
-    python-require:
         require:
             - pixi
-    python-step-0:
-        check: the pixi-managed CPython interpreter exists at the default environment bin path
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/python
-            exists: true
-    python-step-1:
-        check: the interpreter reports a CPython 3.13 version
-        exit_status: 0
-        stdout:
-            - contains: "3.13"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python --version
-    python-step-2:
-        check: the interpreter executes a standard-library snippet (incl. the sqlite3 C extension) and reports major.minor 3 13
-        exit_status: 0
-        stdout:
-            - contains: "3 13"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import sys, json, sqlite3; print(sys.version_info.major, sys.version_info.minor)"
+        plan:
+            - check: the pixi-managed CPython interpreter exists at the default environment bin path
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/python
+                exists: true
+            - check: the interpreter reports a CPython 3.13 version
+              exit_status: 0
+              stdout:
+                - contains: "3.13"
+              command: ${HOME}/.pixi/envs/default/bin/python --version
+            - check: the interpreter executes a standard-library snippet (incl. the sqlite3 C extension) and reports major.minor 3 13
+              exit_status: 0
+              stdout:
+                - contains: "3 13"
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import sys, json, sqlite3; print(sys.version_info.major, sys.version_info.minor)"

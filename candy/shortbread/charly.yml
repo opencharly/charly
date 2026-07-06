@@ -12,10 +12,8 @@ shortbread:
             under the versatiles-watched /workspace/tiles/shortbread directory. The
             Shortbread schema is the de-facto general-purpose OSM vector-tile schema
             documented at https://shortbread-tiles.org.
-    shortbread-require:
         require:
             - supervisord
-    shortbread-distro:
         distro:
             arch:
                 package:
@@ -49,28 +47,26 @@ shortbread:
                     - protobuf-devel
                     - shapelib-devel
                     - rapidjson-devel
-    shortbread-step-0:
-        run: |
-            command=set -euo pipefail
-            git clone --depth 1 https://github.com/systemed/tilemaker /tmp/tilemaker
-            cd /tmp/tilemaker
-            # Boost 1.91+ (CachyOS / Arch as of 2026-Q1) made
-            # boost::system a HEADER-ONLY library: `libboost_system.so`
-            # no longer exists. tilemaker's Makefile still ships
-            # `-lboost_system` in its link line, which fails with
-            # `cannot find -lboost_system`. Strip the flag — the
-            # boost::system functionality lives in headers, no link
-            # step needed. boost_filesystem + boost_program_options
-            # still ship as .so libraries, so we keep those.
-            sed -i 's/-lboost_system//g' Makefile
-            make -j"$(nproc)"
-            make install PREFIX=/usr/local
-            cd /
-            rm -rf /tmp/tilemaker
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=set -euo pipefail
+                git clone --depth 1 https://github.com/systemed/tilemaker /tmp/tilemaker
+                cd /tmp/tilemaker
+                # Boost 1.91+ (CachyOS / Arch as of 2026-Q1) made
+                # boost::system a HEADER-ONLY library: `libboost_system.so`
+                # no longer exists. tilemaker's Makefile still ships
+                # `-lboost_system` in its link line, which fails with
+                # `cannot find -lboost_system`. Strip the flag — the
+                # boost::system functionality lives in headers, no link
+                # step needed. boost_filesystem + boost_program_options
+                # still ship as .so libraries, so we keep those.
+                sed -i 's/-lboost_system//g' Makefile
+                make -j"$(nproc)"
+                make install PREFIX=/usr/local
+                cd /
+                rm -rf /tmp/tilemaker
+              run_as: root
+              command: |
                 set -euo pipefail
                 git clone --depth 1 https://github.com/systemed/tilemaker /tmp/tilemaker
                 cd /tmp/tilemaker
@@ -87,77 +83,55 @@ shortbread:
                 make install PREFIX=/usr/local
                 cd /
                 rm -rf /tmp/tilemaker
-    shortbread-step-1:
-        run: |
-            command=set -euo pipefail
-            git clone --depth 1 https://github.com/shortbread-tiles/shortbread-tilemaker /opt/shortbread-tilemaker
-            rm -rf /opt/shortbread-tilemaker/.git
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=set -euo pipefail
+                git clone --depth 1 https://github.com/shortbread-tiles/shortbread-tilemaker /opt/shortbread-tilemaker
+                rm -rf /opt/shortbread-tilemaker/.git
+              run_as: root
+              command: |
                 set -euo pipefail
                 git clone --depth 1 https://github.com/shortbread-tiles/shortbread-tilemaker /opt/shortbread-tilemaker
                 rm -rf /opt/shortbread-tilemaker/.git
-    shortbread-step-2:
-        run: mkdir=/workspace/tiles/shortbread
-        mkdir: /workspace/tiles/shortbread
-        run_as: root
-        mode: "0755"
-    shortbread-step-3:
-        check: the tilemaker binary built from systemed/tilemaker source is installed under /usr/local/bin
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/tilemaker
-            exists: true
-    shortbread-step-4:
-        check: tilemaker resolves on PATH so the notebook DAG can invoke it (tilemaker ships no --version flag, so resolve by name)
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: command -v tilemaker
-    shortbread-step-5:
-        check: the shortbread per-feature Lua classifier is bundled for tilemaker --process
-        plugin: file
-        plugin_input:
-            file: /opt/shortbread-tilemaker/process.lua
-            exists: true
-    shortbread-step-6:
-        check: the shortbread layer and zoom schema definition is bundled for tilemaker --config
-        plugin: file
-        plugin_input:
-            file: /opt/shortbread-tilemaker/config.json
-            exists: true
-    shortbread-step-7:
-        check: the cloned bundle has its .git history stripped to keep the image small
-        plugin: file
-        plugin_input:
-            file: /opt/shortbread-tilemaker/.git
-            exists: false
-    shortbread-step-8:
-        check: the versatiles-watched output directory is pre-created at build time so versatiles serve starts cleanly on a fresh deploy
-        plugin: file
-        plugin_input:
-            file: /workspace/tiles/shortbread
-            exists: true
-    shortbread-step-9:
-        agent-check: a tilemaker run converts an OSM PBF into a monaco-shortbread.pmtiles archive in that directory using the bundled config.json and process.lua
-    shortbread-lua-runtime:
-        check: package=lua
-        id: shortbread-lua-runtime
-        plugin: package
-        plugin_input:
-            package: lua
-            package_map:
-                fedora: lua-devel
-            installed: true
-    shortbread-tiles-dir-runtime:
-        check: command=test -d /workspace/tiles/shortbread
-        id: shortbread-tiles-dir-runtime
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: test -d /workspace/tiles/shortbread
-            in_container: true
+            - run: mkdir=/workspace/tiles/shortbread
+              mkdir: /workspace/tiles/shortbread
+              run_as: root
+              mode: "0755"
+            - check: the tilemaker binary built from systemed/tilemaker source is installed under /usr/local/bin
+              file:
+                file: /usr/local/bin/tilemaker
+                exists: true
+            - check: tilemaker resolves on PATH so the notebook DAG can invoke it (tilemaker ships no --version flag, so resolve by name)
+              exit_status: 0
+              command: command -v tilemaker
+            - check: the shortbread per-feature Lua classifier is bundled for tilemaker --process
+              file:
+                file: /opt/shortbread-tilemaker/process.lua
+                exists: true
+            - check: the shortbread layer and zoom schema definition is bundled for tilemaker --config
+              file:
+                file: /opt/shortbread-tilemaker/config.json
+                exists: true
+            - check: the cloned bundle has its .git history stripped to keep the image small
+              file:
+                file: /opt/shortbread-tilemaker/.git
+                exists: false
+            - check: the versatiles-watched output directory is pre-created at build time so versatiles serve starts cleanly on a fresh deploy
+              file:
+                file: /workspace/tiles/shortbread
+                exists: true
+            - agent-check: a tilemaker run converts an OSM PBF into a monaco-shortbread.pmtiles archive in that directory using the bundled config.json and process.lua
+            - check: package=lua
+              id: shortbread-lua-runtime
+              package:
+                package: lua
+                package_map:
+                    fedora: lua-devel
+                installed: true
+            - check: command=test -d /workspace/tiles/shortbread
+              id: shortbread-tiles-dir-runtime
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: test -d /workspace/tiles/shortbread
+                in_container: true

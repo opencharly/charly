@@ -8,7 +8,6 @@ import (
 	"maps"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -487,30 +486,6 @@ func (r *Runner) runOne(ctx context.Context, c *Op) CheckResult {
 		result.TotalElapsed = result.Elapsed
 	}
 
-	// Record capture on PASS only — retry loops handled by
-	// runWithEventually already enforce "final pass wins", so a single
-	// check with capture: + eventually: captures the right value.
-	if result.Status == TestPass && c.Capture != "" && r.Scenario != nil {
-		// Prefer Check-type-specific capture extraction where we have it;
-		// fall back to result.Message which verb handlers populate with
-		// their primary output on PASS.
-		raw := CaptureFromResult("", result.Message)
-		if c.CaptureExtract != "" {
-			extracted, err := ApplyCaptureExtract(raw, c.CaptureExtract)
-			if err != nil {
-				// A capture_extract miss is a real failure — better to
-				// surface it loudly than store an empty/noisy value
-				// that downstream ${CAPTURED:<name>} refs would then
-				// misuse.
-				result.Status = TestFail
-				result.Message = fmt.Sprintf("%s (capture_extract on Message=%q)", err, raw)
-				return result
-			}
-			raw = extracted
-		}
-		r.Scenario.Capture(c.Capture, raw)
-		result.CapturedValue = r.Scenario.Captures[c.Capture]
-	}
 	return result
 }
 
@@ -530,11 +505,7 @@ func (r *Runner) effectiveEnv() map[string]string {
 	// plan runs. Cross-deployment ${HOST:<member>} addresses overlay first (they are
 	// per-run, target-independent), then plan-run captures (which win on the
 	// rare key collision).
-	capN := 0
-	if r.Scenario != nil {
-		capN = len(r.Scenario.Captures)
-	}
-	env := make(map[string]string, len(base)+len(r.HostVars)+capN+2)
+	env := make(map[string]string, len(base)+len(r.HostVars)+2)
 	maps.Copy(env, base)
 	maps.Copy(env, r.HostVars)
 	if r.Scenario != nil {
@@ -546,49 +517,6 @@ func (r *Runner) effectiveEnv() map[string]string {
 // ---------------------------------------------------------------------------
 // command verb
 // ---------------------------------------------------------------------------
-
-// runKill resolves the PID in c.Kill (typically expanded from
-// ${CAPTURED:<name>} carrying a prior `command:` step's
-// "backgrounded pid=N" message via capture_extract), and sends a
-// signal — SIGTERM by default, SIGKILL when c.Signal == "KILL". The
-// counterpart to `command: ... background: true`: a plan can
-// spawn a writer, capture its PID, kill it mid-stream, and assert
-// post-state consistency.
-//
-// Host-side only. Like Background, in-container PID kill is the
-// user's responsibility (drop into command: with kill -<sig>).
-func (r *Runner) runKill(_ context.Context, c *Op) CheckResult {
-	if r.Mode == RunModeBox {
-		return skipf(c, "kill: not meaningful under charly check box")
-	}
-	pidStr := strings.TrimSpace(c.Kill)
-	if pidStr == "" {
-		return failf(c, "kill: empty PID (resolved value is blank — check capture/${CAPTURED:...} chain)")
-	}
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		return failf(c, "kill: cannot parse PID %q: %v", pidStr, err)
-	}
-	if pid <= 0 {
-		return failf(c, "kill: invalid PID %d", pid)
-	}
-
-	sig := strings.ToUpper(strings.TrimSpace(c.Signal))
-	switch sig {
-	case "", "TERM", "SIGTERM":
-		if err := sendSIGTERM(pid); err != nil {
-			return failf(c, "kill -TERM %d: %v", pid, err)
-		}
-		return passf(c, fmt.Sprintf("sent SIGTERM to pid=%d", pid))
-	case "KILL", "SIGKILL":
-		if err := sendSIGKILL(pid); err != nil {
-			return failf(c, "kill -KILL %d: %v", pid, err)
-		}
-		return passf(c, fmt.Sprintf("sent SIGKILL to pid=%d", pid))
-	default:
-		return failf(c, "kill: unsupported signal %q (valid: TERM, KILL)", c.Signal)
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Result helpers

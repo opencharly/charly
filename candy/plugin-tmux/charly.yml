@@ -31,22 +31,19 @@ plugin-tmux:
             is the disposable check-tmux-pod bed: a pod composing the tmux candy whose checks
             drive `charly tmux run`/`list`/`capture`/`send`/`kill` host-side and assert a
             session created via `run` shows in `list` and `capture` returns the expected text.
-    plugin-tmux-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-tmux
             providers:
                 - command:tmux
-    # ADE build-context check: a deterministic check that does NOT depend on the project
-    # context the `charly tmux` CLI needs (the prescan finds this candy from the project dir).
-    # It mirrors candy/plugin-udev's pattern — a trivial build-context `plugin: command` (the
-    # built-in command CHECK verb) running `true`, proving the host can build + fork/exec the
-    # module. The full CLI end-to-end (`charly tmux run` → `list` → `capture` round-trip) is
-    # exercised by the Go e2e (TestExternalCommandExecPlan_Tmux) + the live R10 (check-tmux-pod).
-    tmux-module-present:
-        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly tmux` end-to-end is exercised by the Go e2e + the live R10 (check-tmux-pod)
-        id: tmux-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on the project
+              # context the `charly tmux` CLI needs (the prescan finds this candy from the project dir).
+              # It mirrors candy/plugin-udev's pattern — a trivial build-context `plugin: command` (the
+              # built-in command CHECK verb) running `true`, proving the host can build + fork/exec the
+              # module. The full CLI end-to-end (`charly tmux run` → `list` → `capture` round-trip) is
+              # exercised by the Go e2e (TestExternalCommandExecPlan_Tmux) + the live R10 (check-tmux-pod).
+              check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly tmux` end-to-end is exercised by the Go e2e + the live R10 (check-tmux-pod)
+              id: tmux-module-present
+              context:
+                - build
+              command: "true"

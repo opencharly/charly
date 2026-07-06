@@ -23,23 +23,20 @@ plugin-udev:
             baked `.providers` manifest) but advertises NO Describe capability. The R10 witness
             is the disposable check-udev-local bed: `charly udev generate` asserting the exact
             rule-file content + `charly udev status` exit 0, run host-side (GPU-less).
-    plugin-udev-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-udev
             providers:
                 - command:udev
-    # ADE build-context check: a deterministic check that does NOT depend on the project
-    # context the `charly udev` CLI needs (the prescan finds this candy from the project dir).
-    # It mirrors candy/plugin-example-command's pattern — a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
-    # build + fork/exec the module. The full CLI end-to-end (`charly udev generate` → the exact
-    # rule content; `charly udev status` → exit 0) is exercised by the Go e2e
-    # (TestExternalCommandExecPlan_Udev) + the live R10 (check-udev-local).
-    udev-module-present:
-        check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly udev` end-to-end is exercised by the Go e2e + the live R10 (check-udev-local)
-        id: udev-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on the project
+              # context the `charly udev` CLI needs (the prescan finds this candy from the project dir).
+              # It mirrors candy/plugin-example-command's pattern — a trivial build-context
+              # `plugin: command` (the built-in command CHECK verb) running `true`, proving the host can
+              # build + fork/exec the module. The full CLI end-to-end (`charly udev generate` → the exact
+              # rule content; `charly udev status` → exit 0) is exercised by the Go e2e
+              # (TestExternalCommandExecPlan_Udev) + the live R10 (check-udev-local).
+              check: the out-of-tree command plugin ships a buildable Go module (go.mod + the provider main) the host can build + fork/exec; the full `charly udev` end-to-end is exercised by the Go e2e + the live R10 (check-udev-local)
+              id: udev-module-present
+              context:
+                - build
+              command: "true"

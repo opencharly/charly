@@ -35,18 +35,16 @@ func TestLoadUnified_AbsentFileReturnsNotPresent(t *testing.T) {
 
 func TestLoadUnified_BasicRoot(t *testing.T) {
 	root := t.TempDir()
-	// Node-form: a box entity is `<name>: {box: <scalars>}` with each
-	// non-scalar field (distro/candy) carried by a CHILD node.
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	// Compact node-form: an image entity is `<name>: {candy: <FULL BODY>}` with
+	// every collection (distro/candy) INLINE in the kind value.
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 defaults:
   registry: quay.io/example
   build: [rpm]
 fedora:
   candy:
     base: quay.io/fedora/fedora:43
-  fedora-distro:
     distro: [fedora:43, fedora]
-  fedora-candy:
     candy: [base]
 `)
 	uf, present, err := LoadUnified(root)
@@ -98,7 +96,7 @@ box:
 
 func TestLoadUnified_IncludesMerge(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import:
   - build.yml
   - images.yml
@@ -140,7 +138,7 @@ fedora:
 
 func TestLoadUnified_IncludeCycleDetected(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import: [a.yml]
 `)
 	writeFixture(t, root, "a.yml", `import: [b.yml]
@@ -158,29 +156,26 @@ import: [a.yml]
 
 // TestLoadUnified_MultiDocumentNodeForm — the loader parses a flat-imported file
 // as a YAML multi-document stream of NODE-FORM docs (`---`-separated). Each doc is
-// an arbitrary-name entity node (`<name>: {<kind>: …}`) with its non-scalar fields
-// (package/candy) as CHILD nodes; all merge into the root maps. Legacy multi-document
-// KIND-KEYED loading (`candy: {name: …}` per doc) is removed — that shape is now a
-// hard-reject (see TestLoadUnified_LegacyKindKeyedRejected).
+// an arbitrary-name entity node (`<name>: {<kind>: <FULL BODY>}`) with its
+// collections (package/candy) INLINE in the kind value; all merge into the root
+// maps. Legacy multi-document KIND-KEYED loading (`candy: {name: …}` per doc) is
+// removed — that shape is now a hard-reject (see TestLoadUnified_LegacyKindKeyedRejected).
 func TestLoadUnified_MultiDocumentNodeForm(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import: [bundle.yml]
 `)
 	writeFixture(t, root, "bundle.yml", `chrome:
-  candy: {}
-  chrome-package:
+  candy:
     package: [chromium]
 ---
 firefox:
-  candy: {}
-  firefox-package:
+  candy:
     package: [firefox]
 ---
 browsers:
   candy:
     base: quay.io/fedora/fedora:43
-  browsers-candy:
     candy: [chrome, firefox]
 `)
 	uf, _, err := LoadUnified(root)
@@ -207,7 +202,7 @@ browsers:
 // routes through this one rejection.
 func TestLoadUnified_LegacyKindKeyedRejected(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 import: [bundle.yml]
 `)
 	writeFixture(t, root, "bundle.yml", `candy:
@@ -221,8 +216,11 @@ box:
 	}
 	// A legacy kind-keyed doc stamped at HEAD is hard-rejected by the node-form
 	// parser (a real, below-HEAD legacy config is caught by the version gate first).
-	if !strings.Contains(err.Error(), "no discriminator") {
-		t.Errorf("error = %v, want a node-form 'no discriminator' rejection", err)
+	if !strings.Contains(err.Error(), "no kind discriminator") {
+		t.Errorf("error = %v, want a node-form 'no kind discriminator' rejection", err)
+	}
+	if !strings.Contains(err.Error(), "charly migrate") {
+		t.Errorf("error = %v, want a `charly migrate` hint", err)
 	}
 }
 
@@ -238,7 +236,7 @@ func TestLoadUnified_DiscoverCandies(t *testing.T) {
   candy:
     version: 2026.001.0001
 `)
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 discover:
   - candy
 `)
@@ -266,7 +264,7 @@ func TestLoadUnified_DiscoverExplicitWinsOverDiscovered(t *testing.T) {
 	// Node-form: an explicit inline candy entry (`chrome: {candy: {…}}`) is
 	// defined directly in charly.yml. It must win over the discovered
 	// candy/chrome dir — discovery skips a name already present.
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 discover:
   - candy
 chrome:
@@ -298,7 +296,7 @@ chrome:
 
 func TestLoadUnified_ScanSpecStringShorthand(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 discover:
   - layers
   - { path: vendor, recursive: false }
@@ -341,7 +339,7 @@ func TestLoadUnified_DiscoverConfigurableManifest(t *testing.T) {
   candy:
     version: 2026.001.0001
 `)
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 discover:
   - { path: stuff, recursive: true, manifest: thing.yml }
 `)
@@ -366,7 +364,7 @@ func TestLoadUnified_DiscoverRoutesNonCandyByShape(t *testing.T) {
   candy:
     base: quay.io/fedora/fedora:43
 `)
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 discover:
   - { path: entities, recursive: true, manifest: entity.yml }
 `)
@@ -389,7 +387,7 @@ discover:
 // (no stale references).
 func TestLoadUnified_DeploymentsSection(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 deployments:
   openclaw:
     port: ["8080:80"]
@@ -399,7 +397,7 @@ deployments:
 	if err == nil {
 		t.Fatal("expected hard-error for legacy v3 plural deployments:, got nil")
 	}
-	if !strings.Contains(err.Error(), "no discriminator") {
+	if !strings.Contains(err.Error(), "no kind discriminator") {
 		t.Errorf("legacy `deployments:` must be hard-rejected by the node-form parser, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "deployments") {
@@ -409,7 +407,7 @@ deployments:
 
 func TestLoadUnified_ProjectConfig(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 defaults: { registry: r.example.com }
 foo:
   candy:

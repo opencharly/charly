@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/charly/candy/plugin-spice/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -23,8 +24,9 @@ import (
 // requiredModifiers mirrors the in-tree spiceMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc
 // live-verb seam, which an external verb is not — so the check moves HERE, at
-// dispatch). click/mouse need x+y, type needs text, key needs the key name,
-// screenshot/cursor need the artifact output path.
+// dispatch). The strings name INPUT keys (the desugared plugin_input map): click/mouse
+// need x+y, type needs text, key needs the key name, screenshot/cursor need the
+// artifact output path.
 var requiredModifiers = map[string][]string{
 	"screenshot": {"artifact"},
 	"cursor":     {"artifact"},
@@ -35,11 +37,13 @@ var requiredModifiers = map[string][]string{
 }
 
 // dispatch runs one spice method against the pre-dialed session and returns its
-// captured output. A returned error is the verb FAILING (the in-tree CLI Run()
-// returning an error → exit 1); provider.go maps it through the exit_status / stderr
-// matchers.
-func dispatch(s *SpiceSession, op *spec.Op) (string, error) {
-	method := string(op.Spice)
+// captured output. The per-verb fields ride the typed plugin input (params.SpiceInput,
+// decoded once by provider.go); op stays for the SHARED #Op fields (the
+// required-modifier check off op.PluginInput). A returned error is the verb FAILING
+// (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
+// exit_status / stderr matchers.
+func dispatch(s *SpiceSession, op *spec.Op, in *params.SpiceInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -47,17 +51,17 @@ func dispatch(s *SpiceSession, op *spec.Op) (string, error) {
 	case "status":
 		return runStatus(s)
 	case "screenshot":
-		return runScreenshot(s, op.Artifact)
+		return runScreenshot(s, in.Artifact)
 	case "cursor":
-		return runCursor(s, op.Artifact)
+		return runCursor(s, in.Artifact)
 	case "click":
-		return runClick(s, op)
+		return runClick(s, in)
 	case "mouse":
-		return runMouse(s, op)
+		return runMouse(s, in)
 	case "type":
-		return runType(s, op.Text)
+		return runType(s, in.Text)
 	case "key":
-		return runKey(s, op.KeyName)
+		return runKey(s, in.KeyName)
 	}
 	return "", fmt.Errorf("unknown spice method %q", method)
 }
@@ -140,29 +144,29 @@ func runCursor(s *SpiceSession, artifact string) (string, error) {
 }
 
 // runClick presses + releases a mouse button at (x,y).
-func runClick(s *SpiceSession, op *spec.Op) (string, error) {
+func runClick(s *SpiceSession, in *params.SpiceInput) (string, error) {
 	if err := s.WaitForInputs(5 * time.Second); err != nil {
 		return "", err
 	}
-	btn, err := spiceButtonCode(op.Button)
+	btn, err := spiceButtonCode(in.Button)
 	if err != nil {
 		return "", err
 	}
-	in := s.Inputs()
-	in.MousePosition(uint32(op.X), uint32(op.Y))
-	in.MouseDown(btn, uint32(op.X), uint32(op.Y))
+	inputs := s.Inputs()
+	inputs.MousePosition(uint32(in.X), uint32(in.Y))
+	inputs.MouseDown(btn, uint32(in.X), uint32(in.Y))
 	time.Sleep(50 * time.Millisecond)
-	in.MouseUp(btn, uint32(op.X), uint32(op.Y))
-	return fmt.Sprintf("clicked %s at (%d,%d)", buttonName(op.Button), op.X, op.Y), nil
+	inputs.MouseUp(btn, uint32(in.X), uint32(in.Y))
+	return fmt.Sprintf("clicked %s at (%d,%d)", buttonName(in.Button), in.X, in.Y), nil
 }
 
 // runMouse moves the pointer to (x,y) without clicking.
-func runMouse(s *SpiceSession, op *spec.Op) (string, error) {
+func runMouse(s *SpiceSession, in *params.SpiceInput) (string, error) {
 	if err := s.WaitForInputs(5 * time.Second); err != nil {
 		return "", err
 	}
-	s.Inputs().MousePosition(uint32(op.X), uint32(op.Y))
-	return fmt.Sprintf("moved pointer to (%d,%d)", op.X, op.Y), nil
+	s.Inputs().MousePosition(uint32(in.X), uint32(in.Y))
+	return fmt.Sprintf("moved pointer to (%d,%d)", in.X, in.Y), nil
 }
 
 // runType types text as a sequence of PC-AT scancodes.

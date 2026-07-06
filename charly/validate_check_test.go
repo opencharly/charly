@@ -75,17 +75,17 @@ func TestValidateOps_RuntimeVarInDeployContext(t *testing.T) {
 // VerbCatalog, so the host validateOps no longer enforces its runtime-only context
 // (legality now rides the authored `context:` + the plugin's own box-mode skip) and its
 // required-modifier checks (`mcp: call` needs tool, `mcp: read` needs uri) moved into the
-// plugin at dispatch (methods.go's checkRequiredModifiers). The method-name enum is still
-// enforced declaratively by CUE (#McpMethod).
+// plugin at dispatch (methods.go's checkRequiredModifiers). The method-name enum is
+// enforced by the plugin's own served input def (#McpInput).
 
 // Valid mcp checks (default runtime context) produce no errors.
 func TestValidateOps_McpClean(t *testing.T) {
 	layers := map[string]*Candy{
 		"jupyter": opsCandy("jupyter",
-			Op{Mcp: "ping"},
-			Op{Mcp: "list-tools"},
-			Op{Mcp: "call", Tool: "list_notebooks", Input: "{}"},
-			Op{Mcp: "read", URI: "file:///x"},
+			Op{Plugin: "mcp", PluginInput: map[string]any{"method": "ping"}},
+			Op{Plugin: "mcp", PluginInput: map[string]any{"method": "list-tools"}},
+			Op{Plugin: "mcp", PluginInput: map[string]any{"method": "call", "tool": "list_notebooks", "input": "{}"}},
+			Op{Plugin: "mcp", PluginInput: map[string]any{"method": "read", "uri": "file:///x"}},
 		),
 	}
 	cfg := &Config{Box: map[string]BoxConfig{}}
@@ -101,16 +101,16 @@ func TestValidateOps_McpClean(t *testing.T) {
 // VerbCatalog, so the host validateOps no longer enforces its runtime-only context (legality
 // now rides the authored `context:` + the plugin's own box-mode skip) and its
 // required-modifier checks (`record: stop` needs artifact, `record: cmd` needs text) moved
-// into the plugin at dispatch (methods.go's checkRequiredModifiers). The method-name enum is
-// still enforced declaratively by CUE (#RecordMethod).
+// into the plugin at dispatch (methods.go's checkRequiredModifiers). The method-name enum
+// is enforced by the plugin's own served input def (#RecordInput).
 
 func TestValidateOps_RecordClean(t *testing.T) {
 	layers := map[string]*Candy{
 		"asciinema": opsCandy("asciinema",
-			Op{Record: "list"},
-			Op{Record: "start", RecordMode: "terminal"},
-			Op{Record: "cmd", Text: "echo hi"},
-			Op{Record: "stop", Artifact: "/tmp/demo.cast", ArtifactMinBytes: 100},
+			Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}},
+			Op{Plugin: "record", PluginInput: map[string]any{"method": "start", "record_mode": "terminal"}},
+			Op{Plugin: "record", PluginInput: map[string]any{"method": "cmd", "text": "echo hi"}},
+			Op{Plugin: "record", PluginInput: map[string]any{"method": "stop", "artifact": "/tmp/demo.cast", "artifact_min_bytes": 100}},
 		),
 	}
 	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
@@ -132,10 +132,10 @@ func TestValidateOps_RecordClean(t *testing.T) {
 func TestValidateOps_SpiceClean(t *testing.T) {
 	layers := map[string]*Candy{
 		"vm": opsCandy("vm",
-			Op{Spice: "status"},
-			Op{Spice: "screenshot", Artifact: "/tmp/s.png"},
-			Op{Spice: "type", Text: "hi"},
-			Op{Spice: "key", KeyName: "Return"},
+			Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}},
+			Op{Plugin: "spice", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/s.png"}},
+			Op{Plugin: "spice", PluginInput: map[string]any{"method": "type", "text": "hi"}},
+			Op{Plugin: "spice", PluginInput: map[string]any{"method": "key", "key": "Return"}},
 		),
 	}
 	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
@@ -159,14 +159,14 @@ func TestValidateOps_SpiceClean(t *testing.T) {
 func TestValidateOps_LibvirtClean(t *testing.T) {
 	layers := map[string]*Candy{
 		"vm": opsCandy("vm",
-			Op{Libvirt: "list"},
-			Op{Libvirt: "info"},
-			Op{Libvirt: "screenshot", Artifact: "/tmp/v.png"},
-			Op{Libvirt: "guest/ping"},
-			Op{Libvirt: "guest/exec", Command: "uname -r"},
-			Op{Libvirt: "snapshot/create", Target: "pre-upgrade"},
-			Op{Libvirt: "qmp", Text: "query-status"},
-			Op{Libvirt: "send-key", KeyName: "ctrl alt F2"},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "list"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/v.png"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "guest/ping"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "guest/exec", "command": "uname -r"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "snapshot/create", "target": "pre-upgrade"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "qmp", "text": "query-status"}},
+			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "send-key", "key": "ctrl alt F2"}},
 		),
 	}
 	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
@@ -208,14 +208,14 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
 	cfg := &Config{Box: map[string]BoxConfig{}}
 
 	bad := map[string]*Candy{
-		"lyr": opsCandy("lyr", Op{Kube: "addons", Cluster: "${deploy_name}", Context: []string{"deploy"}}),
+		"lyr": opsCandy("lyr", Op{Plugin: "kube", PluginInput: map[string]any{"method": "addons", "cluster": "${deploy_name}"}, Context: []string{"deploy"}}),
 	}
 	if got := runValidateOps(t, cfg, bad); !strings.Contains(got, "UPPERCASE") || !strings.Contains(got, "${deploy_name}") {
 		t.Errorf("expected lowercase-check-var rejection: %s", got)
 	}
 
 	ok := map[string]*Candy{
-		"lyr": opsCandy("lyr", Op{Kube: "addons", Cluster: "${DEPLOY_NAME}", Context: []string{"deploy"}}),
+		"lyr": opsCandy("lyr", Op{Plugin: "kube", PluginInput: map[string]any{"method": "addons", "cluster": "${DEPLOY_NAME}"}, Context: []string{"deploy"}}),
 	}
 	if got := runValidateOps(t, cfg, ok); strings.Contains(got, "UPPERCASE") {
 		t.Errorf("uppercase check var should pass: %s", got)

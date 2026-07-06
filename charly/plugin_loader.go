@@ -91,7 +91,14 @@ var pluginSchemas = &pluginSchemaSet{inputDefs: map[string]string{}}
 // base ++ Σ. (directive: a proper schema is evaluated every time a plugin loads.)
 func registerPluginUnitSchema(name string, s PluginSchema) error {
 	if strings.TrimSpace(s.CueSource) == "" {
-		return fmt.Errorf("plugin %q served an EMPTY CUE schema (every plugin MUST ship its own schema)", name)
+		// Stub-gate relaxation (schema-compaction cutover): a plugin declaring NO
+		// authored input (no InputDef on any capability) needs no schema — the
+		// former requirement forced ~46 near-identical stub files. A plugin that
+		// DOES declare an input def must still serve the schema defining it.
+		if len(s.InputDefs) > 0 {
+			return fmt.Errorf("plugin %q declares input defs but served an EMPTY CUE schema", name)
+		}
+		return nil
 	}
 	pluginSchemas.mu.Lock()
 	defer pluginSchemas.mu.Unlock()
@@ -101,8 +108,19 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 		return fmt.Errorf("plugin %q: schema does not splice onto the base (base ++ plugin): %w", name, err)
 	}
 	for key, def := range s.InputDefs {
-		if d := v.LookupPath(cue.ParsePath(def)); d.Err() != nil {
+		d := v.LookupPath(cue.ParsePath(def))
+		if d.Err() != nil {
 			return fmt.Errorf("plugin %q: provides %s but its schema defines no %s: %w", name, key, def, d.Err())
+		}
+		// primary cross-check: a verb declaring a scalar-sugar primary must
+		// define that field in its served input def, or the shorthand would
+		// desugar to a key the closed def rejects.
+		if word, ok := strings.CutPrefix(key, string(ClassVerb)+":"); ok {
+			if prim, has := pluginPrimaryFor(word); has {
+				if !cueDefHasField(d, prim) {
+					return fmt.Errorf("plugin %q: verb %q declares primary %q but %s defines no such field", name, word, prim, def)
+				}
+			}
 		}
 	}
 	pluginSchemas.sources = merged
@@ -661,4 +679,19 @@ func pluginAlreadyConnected(name string, p *CandyPluginDecl) (bool, error) {
 		connected = true
 	}
 	return connected, nil
+}
+
+// cueDefHasField reports whether the def value declares a (possibly optional)
+// field with the given label.
+func cueDefHasField(d cue.Value, field string) bool {
+	it, err := d.Fields(cue.Optional(true), cue.Definitions(false))
+	if err != nil {
+		return false
+	}
+	for it.Next() {
+		if it.Selector().Unquoted() == field {
+			return true
+		}
+	}
+	return false
 }

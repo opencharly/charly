@@ -421,6 +421,7 @@ func prescanPluginManifest(path string) {
 	}
 	var providers []string
 	collectPluginProviders(root, &providers)
+	collectPluginPrimaries(root)
 	for _, p := range providers {
 		class, word, ok := splitCapability(p)
 		if !ok {
@@ -433,6 +434,34 @@ func prescanPluginManifest(path string) {
 			registerDeclaredExternalCommand(word)
 		case ClassKind:
 			registerDeclaredKind(word)
+		}
+	}
+}
+
+// collectPluginPrimaries recursively registers every `plugin: { primary: {word:
+// field} }` scalar-sugar declaration in a decoded manifest — the byte-gated
+// prescan twin of the served ProvidedCapability.Primary, needed BEFORE the
+// out-of-process provider connects (the parse-time desugar runs pre-connect).
+func collectPluginPrimaries(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		if pv, ok := t["plugin"].(map[string]any); ok {
+			if prim, ok := pv["primary"].(map[string]any); ok {
+				for word, field := range prim {
+					if f, ok := field.(string); ok && f != "" {
+						// best-effort: a collision registers nothing (the provider
+						// registration gate reports it loudly later)
+						_ = registerPluginPrimary(word, f)
+					}
+				}
+			}
+		}
+		for _, cv := range t {
+			collectPluginPrimaries(cv)
+		}
+	case []any:
+		for _, cv := range t {
+			collectPluginPrimaries(cv)
 		}
 	}
 }

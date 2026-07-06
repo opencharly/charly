@@ -14,16 +14,13 @@ plugin-example-structkind:
             (peer/nested + cross-member checks), not a synthesized stand-in. NOT in compiled_plugins
             (out-of-process only); the channel the group/pod/vm/k8s/local/android/candy
             externalizations reuse.
-    plugin-example-structkind-decl:
         plugin:
             providers:
                 - kind:examplestructkind
             source: github.com/opencharly/charly/candy/plugin-example-structkind
-    examplestructkind-module-present:
-        check: the out-of-tree structural class:kind plugin ships a buildable Go module the host can build + serve out-of-process
-        id: examplestructkind-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree structural class:kind plugin ships a buildable Go module the host can build + serve out-of-process
+              id: examplestructkind-module-present
+              context:
+                - build
+              command: "true"

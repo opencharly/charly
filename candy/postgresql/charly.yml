@@ -14,9 +14,7 @@ postgresql:
             cluster was initialized and that answers pg_isready. Deploy-scope steps
             stay auth-independent so the scenario holds for every box composing this
             candy (consumers such as immich override POSTGRES_USER/POSTGRES_DB).
-    postgresql-require:
         require: []
-    postgresql-distro:
         distro:
             arch:
                 # Arch `postgresql` ships the server (postgres, initdb, pg_ctl); psql,
@@ -33,18 +31,14 @@ postgresql:
                     - postgresql-server
                     - postgresql-contrib
                     - pgvector
-    postgresql-env:
         env:
             PGDATA: "~/.postgresql/data"
             POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
-    postgresql-port:
         port:
             - 5432
-    postgresql-volume:
         volume:
             - name: pgdata
               path: "~/.postgresql/data"
-    postgresql-service:
         service:
             - name: postgresql
               exec: /usr/local/bin/postgresql-entrypoint.sh
@@ -52,175 +46,152 @@ postgresql:
               priority: 10
               enable: true
               scope: system
-    postgresql-step-0:
-        run: |
-            command=mkdir -p /home/user/.postgresql
-            chown 1000:1000 /home/user/.postgresql
-            mkdir -p /docker-entrypoint-initdb.d
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=mkdir -p /home/user/.postgresql
+                chown 1000:1000 /home/user/.postgresql
+                mkdir -p /docker-entrypoint-initdb.d
+              run_as: root
+              command: |
                 mkdir -p /home/user/.postgresql
                 chown 1000:1000 /home/user/.postgresql
                 mkdir -p /docker-entrypoint-initdb.d
-    postgresql-step-1:
-        run: write=/usr/local/bin/postgresql-entrypoint.sh
-        write: /usr/local/bin/postgresql-entrypoint.sh
-        run_as: root
-        mode: "0755"
-        content: |
-            #!/bin/bash
-            set -euo pipefail
+            - run: write=/usr/local/bin/postgresql-entrypoint.sh
+              write: /usr/local/bin/postgresql-entrypoint.sh
+              run_as: root
+              mode: "0755"
+              content: |
+                #!/bin/bash
+                set -euo pipefail
 
-            HOME=${HOME:-/home/user}
-            POSTGRES_USER=${POSTGRES_USER:-postgres}
-            POSTGRES_DB=${POSTGRES_DB:-$POSTGRES_USER}
-            POSTGRES_HOST_AUTH_METHOD=${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
-            PGDATA=${PGDATA:-$HOME/.postgresql/data}
-            PGDATA="${PGDATA/#~/$HOME}"
-            SOCKET_DIR="$HOME/.postgresql"
+                HOME=${HOME:-/home/user}
+                POSTGRES_USER=${POSTGRES_USER:-postgres}
+                POSTGRES_DB=${POSTGRES_DB:-$POSTGRES_USER}
+                POSTGRES_HOST_AUTH_METHOD=${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+                PGDATA=${PGDATA:-$HOME/.postgresql/data}
+                PGDATA="${PGDATA/#~/$HOME}"
+                SOCKET_DIR="$HOME/.postgresql"
 
-            # Docker-compatible: read password from file
-            if [ -n "${POSTGRES_PASSWORD_FILE:-}" ] && [ -f "$POSTGRES_PASSWORD_FILE" ]; then
-                POSTGRES_PASSWORD=$(cat "$POSTGRES_PASSWORD_FILE")
-                export POSTGRES_PASSWORD
-            fi
-
-            # Password required unless trust auth
-            if [ "${POSTGRES_HOST_AUTH_METHOD}" != "trust" ] && [ -z "${POSTGRES_PASSWORD:-}" ]; then
-                echo "Error: POSTGRES_PASSWORD is required (or set POSTGRES_HOST_AUTH_METHOD=trust)" >&2
-                exit 1
-            fi
-
-            # Initialize cluster only on first run
-            if [ ! -f "$PGDATA/PG_VERSION" ]; then
-                echo "Initializing PostgreSQL cluster in $PGDATA..."
-                mkdir -p "$PGDATA" "$SOCKET_DIR"
-
-                INITDB_ARGS=(-D "$PGDATA" --username="$POSTGRES_USER"
-                             --encoding=UTF8 --locale=C
-                             --auth-host="$POSTGRES_HOST_AUTH_METHOD"
-                             --auth-local=trust)
-
-                [ -n "${POSTGRES_INITDB_ARGS:-}" ]   && INITDB_ARGS+=($POSTGRES_INITDB_ARGS)
-                [ -n "${POSTGRES_INITDB_WALDIR:-}" ] && INITDB_ARGS+=(--waldir="$POSTGRES_INITDB_WALDIR")
-
-                if [ "${POSTGRES_HOST_AUTH_METHOD}" != "trust" ] && [ -n "${POSTGRES_PASSWORD:-}" ]; then
-                    PWFILE=$(mktemp)
-                    chmod 600 "$PWFILE"
-                    echo "$POSTGRES_PASSWORD" > "$PWFILE"
-                    INITDB_ARGS+=(--pwfile="$PWFILE")
-                    trap 'rm -f "$PWFILE"' EXIT
+                # Docker-compatible: read password from file
+                if [ -n "${POSTGRES_PASSWORD_FILE:-}" ] && [ -f "$POSTGRES_PASSWORD_FILE" ]; then
+                    POSTGRES_PASSWORD=$(cat "$POSTGRES_PASSWORD_FILE")
+                    export POSTGRES_PASSWORD
                 fi
 
-                initdb "${INITDB_ARGS[@]}"
+                # Password required unless trust auth
+                if [ "${POSTGRES_HOST_AUTH_METHOD}" != "trust" ] && [ -z "${POSTGRES_PASSWORD:-}" ]; then
+                    echo "Error: POSTGRES_PASSWORD is required (or set POSTGRES_HOST_AUTH_METHOD=trust)" >&2
+                    exit 1
+                fi
 
-                SPL_OPTS=""
+                # Initialize cluster only on first run
+                if [ ! -f "$PGDATA/PG_VERSION" ]; then
+                    echo "Initializing PostgreSQL cluster in $PGDATA..."
+                    mkdir -p "$PGDATA" "$SOCKET_DIR"
+
+                    INITDB_ARGS=(-D "$PGDATA" --username="$POSTGRES_USER"
+                                 --encoding=UTF8 --locale=C
+                                 --auth-host="$POSTGRES_HOST_AUTH_METHOD"
+                                 --auth-local=trust)
+
+                    [ -n "${POSTGRES_INITDB_ARGS:-}" ]   && INITDB_ARGS+=($POSTGRES_INITDB_ARGS)
+                    [ -n "${POSTGRES_INITDB_WALDIR:-}" ] && INITDB_ARGS+=(--waldir="$POSTGRES_INITDB_WALDIR")
+
+                    if [ "${POSTGRES_HOST_AUTH_METHOD}" != "trust" ] && [ -n "${POSTGRES_PASSWORD:-}" ]; then
+                        PWFILE=$(mktemp)
+                        chmod 600 "$PWFILE"
+                        echo "$POSTGRES_PASSWORD" > "$PWFILE"
+                        INITDB_ARGS+=(--pwfile="$PWFILE")
+                        trap 'rm -f "$PWFILE"' EXIT
+                    fi
+
+                    initdb "${INITDB_ARGS[@]}"
+
+                    SPL_OPTS=""
+                    if [ -n "${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}" ]; then
+                        SPL_OPTS="-c shared_preload_libraries=$POSTGRES_SHARED_PRELOAD_LIBRARIES"
+                    fi
+
+                    pg_ctl -D "$PGDATA" -o "-c unix_socket_directories=$SOCKET_DIR -c listen_addresses='' $SPL_OPTS" -w start
+
+                    if [ "$POSTGRES_DB" != "postgres" ]; then
+                        psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" postgres \
+                            -c "CREATE DATABASE \"$POSTGRES_DB\"" \
+                            -c "GRANT ALL PRIVILEGES ON DATABASE \"$POSTGRES_DB\" TO \"$POSTGRES_USER\"" \
+                            -c "ALTER DATABASE \"$POSTGRES_DB\" OWNER TO \"$POSTGRES_USER\""
+                    fi
+
+                    for f in /docker-entrypoint-initdb.d/*; do
+                        [ -e "$f" ] || continue
+                        echo "Running init script: $f"
+                        case "$f" in
+                            *.sh)     bash "$f" ;;
+                            *.sql)    psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" --dbname="$POSTGRES_DB" < "$f" ;;
+                            *.sql.gz) gunzip -c "$f" | psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" --dbname="$POSTGRES_DB" ;;
+                            *)        echo "Ignoring: $f" ;;
+                        esac
+                    done
+
+                    pg_ctl -D "$PGDATA" -m fast -w stop
+                    echo "PostgreSQL initialization complete."
+                fi
+
+                mkdir -p "$SOCKET_DIR"
+                POSTGRES_ARGS=(-D "$PGDATA" -c "unix_socket_directories=$SOCKET_DIR" -c "listen_addresses=127.0.0.1")
                 if [ -n "${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}" ]; then
-                    SPL_OPTS="-c shared_preload_libraries=$POSTGRES_SHARED_PRELOAD_LIBRARIES"
+                    POSTGRES_ARGS+=(-c "shared_preload_libraries=$POSTGRES_SHARED_PRELOAD_LIBRARIES")
                 fi
-
-                pg_ctl -D "$PGDATA" -o "-c unix_socket_directories=$SOCKET_DIR -c listen_addresses='' $SPL_OPTS" -w start
-
-                if [ "$POSTGRES_DB" != "postgres" ]; then
-                    psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" postgres \
-                        -c "CREATE DATABASE \"$POSTGRES_DB\"" \
-                        -c "GRANT ALL PRIVILEGES ON DATABASE \"$POSTGRES_DB\" TO \"$POSTGRES_USER\"" \
-                        -c "ALTER DATABASE \"$POSTGRES_DB\" OWNER TO \"$POSTGRES_USER\""
-                fi
-
-                for f in /docker-entrypoint-initdb.d/*; do
-                    [ -e "$f" ] || continue
-                    echo "Running init script: $f"
-                    case "$f" in
-                        *.sh)     bash "$f" ;;
-                        *.sql)    psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" --dbname="$POSTGRES_DB" < "$f" ;;
-                        *.sql.gz) gunzip -c "$f" | psql -v ON_ERROR_STOP=1 --username="$POSTGRES_USER" --host="$SOCKET_DIR" --dbname="$POSTGRES_DB" ;;
-                        *)        echo "Ignoring: $f" ;;
-                    esac
-                done
-
-                pg_ctl -D "$PGDATA" -m fast -w stop
-                echo "PostgreSQL initialization complete."
-            fi
-
-            mkdir -p "$SOCKET_DIR"
-            POSTGRES_ARGS=(-D "$PGDATA" -c "unix_socket_directories=$SOCKET_DIR" -c "listen_addresses=127.0.0.1")
-            if [ -n "${POSTGRES_SHARED_PRELOAD_LIBRARIES:-}" ]; then
-                POSTGRES_ARGS+=(-c "shared_preload_libraries=$POSTGRES_SHARED_PRELOAD_LIBRARIES")
-            fi
-            exec /usr/bin/postgres "${POSTGRES_ARGS[@]}"
-    postgresql-step-2:
-        check: the PostgreSQL server binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/postgres
-            exists: true
-    postgresql-step-3:
-        check: the psql client binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/psql
-            exists: true
-    postgresql-step-4:
-        check: the initdb cluster-bootstrap tool is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/initdb
-            exists: true
-    postgresql-step-5:
-        check: the pg_isready readiness probe is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/pg_isready
-            exists: true
-    postgresql-step-6:
-        check: the Docker-compatible entrypoint wrapper is present and executable
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/postgresql-entrypoint.sh
-            exists: true
-            mode: "0755"
-    postgresql-step-7:
-        check: the pgvector similarity-search extension package is installed
-        plugin: package
-        plugin_input:
-            package: pgvector
-            installed: true
-    postgresql-step-8:
-        check: the entrypoint initialized the cluster data directory on first run
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: test -f ${HOME}/.postgresql/data/PG_VERSION
-            in_container: true
-    postgresql-step-9:
-        check: the running server reports ready on its unix socket
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: pg_isready -h ${HOME}/.postgresql
-            in_container: true
-    postgresql-package:
-        check: package=postgresql-server
-        id: postgresql-package
-        plugin: package
-        plugin_input:
-            package: postgresql-server
-            package_map:
-                arch: postgresql
-            installed: true
-    postgresql-service-running:
-        check: service=postgresql
-        id: postgresql-service-running
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: postgresql
-            running: true
+                exec /usr/bin/postgres "${POSTGRES_ARGS[@]}"
+            - check: the PostgreSQL server binary is installed
+              file:
+                file: /usr/bin/postgres
+                exists: true
+            - check: the psql client binary is installed
+              file:
+                file: /usr/bin/psql
+                exists: true
+            - check: the initdb cluster-bootstrap tool is installed
+              file:
+                file: /usr/bin/initdb
+                exists: true
+            - check: the pg_isready readiness probe is installed
+              file:
+                file: /usr/bin/pg_isready
+                exists: true
+            - check: the Docker-compatible entrypoint wrapper is present and executable
+              file:
+                file: /usr/local/bin/postgresql-entrypoint.sh
+                exists: true
+                mode: "0755"
+            - check: the pgvector similarity-search extension package is installed
+              package:
+                package: pgvector
+                installed: true
+            - check: the entrypoint initialized the cluster data directory on first run
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: test -f ${HOME}/.postgresql/data/PG_VERSION
+                in_container: true
+            - check: the running server reports ready on its unix socket
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: pg_isready -h ${HOME}/.postgresql
+                in_container: true
+            - check: package=postgresql-server
+              id: postgresql-package
+              package:
+                package: postgresql-server
+                package_map:
+                    arch: postgresql
+                installed: true
+            - check: service=postgresql
+              id: postgresql-service-running
+              context:
+                - runtime
+              service:
+                service: postgresql
+                running: true

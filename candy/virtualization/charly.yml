@@ -19,7 +19,6 @@ virtualization:
             qemu-img binaries land at fixed paths, the libvirt qemu driver
             package is installed on every distro, and the rootless
             qemu:///session daemon answers once deployed.
-    virtualization-distro:
         distro:
             arch:
                 package:
@@ -119,7 +118,6 @@ virtualization:
                     - qemu-utils
                     - virt-viewer
                     - virtinst
-    virtualization-service:
         # Mixed-entry `service:` pattern (CLAUDE.md "Init-system
         # polymorphism via mixed `service:` entries") COMBINED with a
         # per-entry `distro:` filter (CLAUDE.md R3 — no `<name>-host`
@@ -192,68 +190,53 @@ virtualization:
               start_sec: 2
               enable: true
               scope: system
-    virtualization-step-0:
-        run: |
-            command=if getent group libvirt >/dev/null && id -u "${USER:-user}" >/dev/null 2>&1; then
-              usermod -aG libvirt "$(getent passwd 1000 | cut -d: -f1)"
-            fi
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=if getent group libvirt >/dev/null && id -u "${USER:-user}" >/dev/null 2>&1; then
+                  usermod -aG libvirt "$(getent passwd 1000 | cut -d: -f1)"
+                fi
+              run_as: root
+              command: |
                 if getent group libvirt >/dev/null && id -u "${USER:-user}" >/dev/null 2>&1; then
                   usermod -aG libvirt "$(getent passwd 1000 | cut -d: -f1)"
                 fi
-    virtualization-step-1:
-        check: the libvirt client virsh is installed at its fixed path
-        plugin: file
-        plugin_input:
-            file: /usr/bin/virsh
-            exists: true
-    virtualization-step-2:
-        check: the QEMU x86_64 system emulator binary is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/qemu-system-x86_64
-            exists: true
-    virtualization-step-3:
-        check: the qemu-img disk-image tool is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/qemu-img
-            exists: true
-    virtualization-step-4:
-        check: the libvirt qemu driver package is installed (cross-distro name resolution)
-        plugin: package
-        plugin_input:
-            package: libvirt-daemon-driver-qemu
-            package_map:
-                arch: libvirt
-                fedora: libvirt-daemon-driver-qemu
-                debian: libvirt-daemon-system
-                ubuntu: libvirt-daemon-system
-            installed: true
-    virtualization-step-5:
-        check: virsh reaches the rootless qemu:///session daemon and lists domains
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: virsh -c qemu:///session list --all
-            in_container: true
-    virtualization-step-6:
-        agent-check: the libvirt daemon set for the target distro comes up under whichever init system the target runs (supervisord in containers, systemd on host/bootc) — the modular virtqemud + virtnetworkd on Fedora/Arch, the monolithic libvirtd on Debian/Ubuntu — with no virtualization-host sibling candy
-    libvirt-qemu-driver-package:
-        check: package=libvirt-daemon-driver-qemu
-        id: libvirt-qemu-driver-package
-        plugin: package
-        plugin_input:
-            package: libvirt-daemon-driver-qemu
-            package_map:
-                arch: libvirt
-                fedora: libvirt-daemon-driver-qemu
-                fedora:43: libvirt-daemon-driver-qemu
-                debian: libvirt-daemon-system
-                ubuntu: libvirt-daemon-system
-            installed: true
+            - check: the libvirt client virsh is installed at its fixed path
+              file:
+                file: /usr/bin/virsh
+                exists: true
+            - check: the QEMU x86_64 system emulator binary is present
+              file:
+                file: /usr/bin/qemu-system-x86_64
+                exists: true
+            - check: the qemu-img disk-image tool is present
+              file:
+                file: /usr/bin/qemu-img
+                exists: true
+            - check: the libvirt qemu driver package is installed (cross-distro name resolution)
+              package:
+                package: libvirt-daemon-driver-qemu
+                package_map:
+                    arch: libvirt
+                    fedora: libvirt-daemon-driver-qemu
+                    debian: libvirt-daemon-system
+                    ubuntu: libvirt-daemon-system
+                installed: true
+            - check: virsh reaches the rootless qemu:///session daemon and lists domains
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: virsh -c qemu:///session list --all
+                in_container: true
+            - agent-check: the libvirt daemon set for the target distro comes up under whichever init system the target runs (supervisord in containers, systemd on host/bootc) — the modular virtqemud + virtnetworkd on Fedora/Arch, the monolithic libvirtd on Debian/Ubuntu — with no virtualization-host sibling candy
+            - check: package=libvirt-daemon-driver-qemu
+              id: libvirt-qemu-driver-package
+              package:
+                package: libvirt-daemon-driver-qemu
+                package_map:
+                    arch: libvirt
+                    fedora: libvirt-daemon-driver-qemu
+                    fedora:43: libvirt-daemon-driver-qemu
+                    debian: libvirt-daemon-system
+                    ubuntu: libvirt-daemon-system
+                installed: true

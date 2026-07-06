@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -46,7 +47,9 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	method := string(op.Appium)
+	// The verb's method + per-verb fields ride the desugared plugin input since the
+	// schema-compaction cutover; dispatch decodes the full typed params.AppiumInput.
+	method := kit.InputStr(&op, "method")
 
 	// Live-container verb: skip under `charly check box` (no port mappings on a
 	// disposable `podman run --rm`) — mirrors the host's RunModeBox/box-mode skip.

@@ -1,6 +1,5 @@
 pixi-locked:
     candy:
         version: 2026.144.1443
-    pixi-locked-require:
         require:
             - pixi

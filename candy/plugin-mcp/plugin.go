@@ -10,8 +10,10 @@
 //     deployment (ping, servers, list-tools/resources/prompts, call, read). The host
 //     go-builds this binary and serves it OUT-OF-PROCESS over go-plugin gRPC via the charly
 //     plugin SDK, so the `mcp:` verb dispatches through the provider registry exactly like a
-//     built-in — keeping its `mcp:` discriminator + every modifier (mcp_name/tool/uri/input)
-//     on charly's core #Op (authoring unchanged). The fifth external dep-shed (after
+//     built-in. Since the schema-compaction cutover an authored `mcp:` step desugars to the
+//     internal plugin/plugin_input envelope, and every mcp-exclusive modifier
+//     (method/mcp_name/tool/uri/input) lives in the plugin's OWN #McpInput (schema/mcp.cue →
+//     the generated params.McpInput). The fifth external dep-shed (after
 //     candy/plugin-appium, candy/plugin-adb, candy/plugin-kube, candy/plugin-spice).
 //
 //   - command:mcp — `charly mcp serve`, the externalized MCP SERVER (the go-sdk bridge that
@@ -40,10 +42,10 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:mcp (the MCP check verb) + the plugin's self-contained CUE schema
-// (via sdk.NewMeta → BuildCapabilities). verb:mcp keeps its entire authoring contract (the
-// #McpMethod enum + every modifier) on charly's core #Op — like cdp/vnc/spice it has NO
-// plugin_input — so it advertises an EMPTY InputDef, and the served schema (schema/mcp.cue)
-// exists only to satisfy the host's non-empty-schema load gate.
+// (via sdk.NewMeta → BuildCapabilities). The verb's entire authoring contract — the method
+// enum + every mcp-exclusive modifier — lives in the served #McpInput (schema/mcp.cue),
+// which the host splices onto the base and validates every authored `mcp:` step's
+// plugin_input against.
 //
 // command:mcp (`charly mcp …`, the externalized MCP-server CLI) is NOT advertised here: it is
 // dispatched by charly fork/exec'ing this binary in CLI mode (cliMain), not resolved through
@@ -53,7 +55,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.178.1200",
 		[]sdk.ProvidedCapability{
-			{Class: "verb", Word: "mcp", InputDef: ""},
+			{Class: "verb", Word: "mcp", InputDef: "#McpInput"},
 		},
 		schemaFS)
 }

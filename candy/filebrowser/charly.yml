@@ -11,29 +11,22 @@ filebrowser:
             and files volumes persist the database and the user-browsable tree.
             Every fact below is observable: the installed binary, the config
             contents, the running service, and the HTTP 200 the web UI returns.
-    filebrowser-require:
         require:
             - supervisord
-    filebrowser-env:
         env:
             FILEBROWSER_CONFIG: "/etc/filebrowser/config.yaml"
-    filebrowser-port:
         port:
             - 8080
-    filebrowser-volume:
         volume:
             - name: data
               path: "~/.filebrowser/data"
             - name: files
               path: "~/.filebrowser/files"
-    filebrowser-alias:
         alias:
             - name: filebrowser
               command: filebrowser
-    filebrowser-var:
         var:
             FILEBROWSER_VERSION: v1.2.4-stable
-    filebrowser-service:
         service:
             - name: filebrowser
               exec: /usr/local/bin/filebrowser
@@ -42,76 +35,60 @@ filebrowser:
               restart: always
               enable: true
               scope: system
-    filebrowser-step-0:
-        run: download=https://github.com/gtsteffaniak/filebrowser/releases/download/${FILEBROWSER_VERSION}/linux-${ARCH}-filebrowser
-        download: "https://github.com/gtsteffaniak/filebrowser/releases/download/${FILEBROWSER_VERSION}/linux-${ARCH}-filebrowser"
-        extract: none
-        to: /usr/local/bin/filebrowser
-        mode: "0755"
-        run_as: root
-    filebrowser-step-1:
-        run: mkdir=/etc/filebrowser
-        mkdir: /etc/filebrowser
-        run_as: root
-    filebrowser-step-2:
-        run: copy=config.yaml
-        copy: config.yaml
-        to: /etc/filebrowser/config.yaml
-        mode: "0644"
-        run_as: root
-    filebrowser-step-3:
-        check: the filebrowser binary is installed and executable at /usr/local/bin/filebrowser
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/filebrowser
-            exists: true
-            mode: "0755"
-    filebrowser-step-4:
-        check: the server config is present at /etc/filebrowser/config.yaml
-        plugin: file
-        plugin_input:
-            file: /etc/filebrowser/config.yaml
-            exists: true
-    filebrowser-step-5:
-        check: the config declares the listen port 8080
-        plugin: file
-        plugin_input:
-            file: /etc/filebrowser/config.yaml
-            contains:
-                - matches: "port: 8080"
-    filebrowser-step-6:
-        check: the filebrowser service is running under the init system
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: filebrowser
-            running: true
-    filebrowser-step-7:
-        check: the web UI answers HTTP 200 on the published port
-        timeout: 5s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8080}/
-            status: 200
-    filebrowser-port-2:
-        check: addr=127.0.0.1:${HOST_PORT:8080}
-        id: filebrowser-port
-        timeout: 5s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: 127.0.0.1:${HOST_PORT:8080}
-            reachable: true
-    filebrowser-volumes-exist:
-        check: file=${VOLUME_CONTAINER_PATH:data}
-        id: filebrowser-volumes-exist
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: ${VOLUME_CONTAINER_PATH:data}
-            filetype: directory
+        plan:
+            - run: download=https://github.com/gtsteffaniak/filebrowser/releases/download/${FILEBROWSER_VERSION}/linux-${ARCH}-filebrowser
+              download: "https://github.com/gtsteffaniak/filebrowser/releases/download/${FILEBROWSER_VERSION}/linux-${ARCH}-filebrowser"
+              extract: none
+              to: /usr/local/bin/filebrowser
+              mode: "0755"
+              run_as: root
+            - run: mkdir=/etc/filebrowser
+              mkdir: /etc/filebrowser
+              run_as: root
+            - run: copy=config.yaml
+              copy: config.yaml
+              to: /etc/filebrowser/config.yaml
+              mode: "0644"
+              run_as: root
+            - check: the filebrowser binary is installed and executable at /usr/local/bin/filebrowser
+              file:
+                file: /usr/local/bin/filebrowser
+                exists: true
+                mode: "0755"
+            - check: the server config is present at /etc/filebrowser/config.yaml
+              file:
+                file: /etc/filebrowser/config.yaml
+                exists: true
+            - check: the config declares the listen port 8080
+              file:
+                file: /etc/filebrowser/config.yaml
+                contains:
+                    - matches: "port: 8080"
+            - check: the filebrowser service is running under the init system
+              context:
+                - runtime
+              service:
+                service: filebrowser
+                running: true
+            - check: the web UI answers HTTP 200 on the published port
+              timeout: 5s
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8080}/
+                status: 200
+            - check: addr=127.0.0.1:${HOST_PORT:8080}
+              id: filebrowser-port
+              timeout: 5s
+              context:
+                - runtime
+              addr:
+                addr: 127.0.0.1:${HOST_PORT:8080}
+                reachable: true
+            - check: file=${VOLUME_CONTAINER_PATH:data}
+              id: filebrowser-volumes-exist
+              context:
+                - runtime
+              file:
+                file: ${VOLUME_CONTAINER_PATH:data}
+                filetype: directory

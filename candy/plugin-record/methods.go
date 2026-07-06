@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/charly/candy/plugin-record/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -27,19 +28,22 @@ const recordingDir = "/tmp/charly-recordings"
 
 // requiredModifiers mirrors the in-tree recordMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc live-verb seam,
-// which an external verb is not — so the check moves HERE, at dispatch). stop needs
-// an artifact path (where the recording is copied); cmd needs the text line to send.
+// which an external verb is not — so the check moves HERE, at dispatch). The strings name
+// INPUT keys (the desugared plugin_input map): stop needs an artifact path (where the
+// recording is copied); cmd needs the text line to send.
 var requiredModifiers = map[string][]string{
 	"stop": {"artifact"},
 	"cmd":  {"text"},
 }
 
 // dispatch runs one record method against the venue (over the host executor reverse
-// channel) and returns its captured output. A returned error is the verb FAILING (the
-// in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
-// exit_status / stderr matchers.
-func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	method := string(op.Record)
+// channel) and returns its captured output. The per-verb fields ride the typed plugin
+// input (params.RecordInput, decoded once by provider.go); op stays for the SHARED #Op
+// fields (the required-modifier check off op.PluginInput). A returned error is the verb
+// FAILING (the in-tree CLI Run() returning an error → exit 1); provider.go maps it
+// through the exit_status / stderr matchers.
+func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op, in *params.RecordInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -47,11 +51,11 @@ func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 	case "list":
 		return recordList(ctx, ex)
 	case "start":
-		return recordStart(ctx, ex, op)
+		return recordStart(ctx, ex, in)
 	case "stop":
-		return recordStop(ctx, ex, op)
+		return recordStop(ctx, ex, in)
 	case "cmd":
-		return recordCmd(ctx, ex, op)
+		return recordCmd(ctx, ex, in)
 	}
 	return "", fmt.Errorf("unknown record method %q", method)
 }
@@ -63,16 +67,16 @@ func dispatch(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error
 // recordStart starts a recording session on the venue. Detects the recorder tool +
 // mode (asciinema terminal / pixelflux-record|wf-recorder desktop), creates the output
 // directory, and launches the recorder in a detached tmux session.
-func recordStart(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
+func recordStart(ctx context.Context, ex *sdk.Executor, in *params.RecordInput) (string, error) {
 	if err := checkTmuxInstalled(ctx, ex); err != nil {
 		return "", err
 	}
-	name := recordName(op)
+	name := recordName(in)
 	session := recordSessionName(name)
 	if tmuxHasSession(ctx, ex, session) {
 		return "", fmt.Errorf("recording %q already active (session %s); stop it first", name, session)
 	}
-	tool, mode, err := resolveMode(ctx, ex, op.RecordMode)
+	tool, mode, err := resolveMode(ctx, ex, in.RecordMode)
 	if err != nil {
 		return "", err
 	}
@@ -85,18 +89,18 @@ func recordStart(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, er
 	case "asciinema":
 		recorderCmd = fmt.Sprintf("asciinema rec %s", kit.ShellQuote(outFile))
 	case "pixelflux-record":
-		recorderCmd = fmt.Sprintf("pixelflux-record %s --fps %d", kit.ShellQuote(outFile), recordFps(op))
-		if op.RecordAudio {
+		recorderCmd = fmt.Sprintf("pixelflux-record %s --fps %d", kit.ShellQuote(outFile), recordFps(in))
+		if in.RecordAudio {
 			recorderCmd += " --audio"
 		}
 	case "wf-recorder":
 		recorderCmd = fmt.Sprintf(
 			"env XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0} wf-recorder -f %s",
 			kit.ShellQuote(outFile))
-		if op.RecordAudio {
+		if in.RecordAudio {
 			recorderCmd += " --audio"
 		}
-		recorderCmd += fmt.Sprintf(" -r %d", recordFps(op))
+		recorderCmd += fmt.Sprintf(" -r %d", recordFps(in))
 	}
 	if err := execTmux(ctx, ex, "new-session", "-d", "-s", session, recorderCmd); err != nil {
 		return "", fmt.Errorf("starting recording session: %w", err)
@@ -108,10 +112,11 @@ func recordStart(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, er
 }
 
 // recordStop stops a recording session, copies the produced recording off the venue, and
-// writes it to op.Artifact (the host path) so the provider's RunArtifactValidators can read
-// it. The artifact requirement is enforced by sdk.RequireModifiers before dispatch.
-func recordStop(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	name := recordName(op)
+// writes it to the input's artifact path (the host path) so the provider's
+// RunArtifactValidators can read it. The artifact requirement is enforced by
+// sdk.RequireModifiers before dispatch.
+func recordStop(ctx context.Context, ex *sdk.Executor, in *params.RecordInput) (string, error) {
+	name := recordName(in)
 	session := recordSessionName(name)
 	if !tmuxHasSession(ctx, ex, session) {
 		return "", fmt.Errorf("no active recording %q (session %s not found)", name, session)
@@ -146,10 +151,10 @@ func recordStop(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, err
 	if err != nil {
 		return "", fmt.Errorf("copying recording: %w (file: %s)", err, outFile)
 	}
-	if err := os.WriteFile(op.Artifact, data, 0o644); err != nil {
-		return "", fmt.Errorf("writing recording to %s: %w", op.Artifact, err)
+	if err := os.WriteFile(in.Artifact, data, 0o644); err != nil {
+		return "", fmt.Errorf("writing recording to %s: %w", in.Artifact, err)
 	}
-	return fmt.Sprintf("Recording stopped (mode: %s); saved %d bytes to %s", mode, len(data), op.Artifact), nil
+	return fmt.Sprintf("Recording stopped (mode: %s); saved %d bytes to %s", mode, len(data), in.Artifact), nil
 }
 
 // recordList lists active recording sessions on the venue as a tab-aligned table. A missing
@@ -184,16 +189,16 @@ func recordList(ctx context.Context, ex *sdk.Executor) (string, error) {
 // recordCmd sends a text line into the recording's tmux session (it and its output become
 // part of a terminal recording). The notification the in-tree RecordCmdCmd sent is dropped —
 // it was a best-effort cosmetic side-effect with no bearing on the check verdict.
-func recordCmd(ctx context.Context, ex *sdk.Executor, op *spec.Op) (string, error) {
-	name := recordName(op)
+func recordCmd(ctx context.Context, ex *sdk.Executor, in *params.RecordInput) (string, error) {
+	name := recordName(in)
 	session := recordSessionName(name)
 	if !tmuxHasSession(ctx, ex, session) {
 		return "", fmt.Errorf("no active recording %q (session %s not found)", name, session)
 	}
-	if err := sendTmuxCommand(ctx, ex, session, op.Text); err != nil {
+	if err := sendTmuxCommand(ctx, ex, session, in.Text); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Sent to %s: %s", session, op.Text), nil
+	return fmt.Sprintf("Sent to %s: %s", session, in.Text), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -251,16 +256,16 @@ func detectRecordTool(ctx context.Context, ex *sdk.Executor) (tool, mode string,
 // sdk.Executor reverse channel)
 // ---------------------------------------------------------------------------
 
-func recordName(op *spec.Op) string {
-	if op.RecordName != "" {
-		return op.RecordName
+func recordName(in *params.RecordInput) string {
+	if in.RecordName != "" {
+		return in.RecordName
 	}
 	return "default"
 }
 
-func recordFps(op *spec.Op) int {
-	if op.RecordFps > 0 {
-		return op.RecordFps
+func recordFps(in *params.RecordInput) int {
+	if in.RecordFps > 0 {
+		return in.RecordFps
 	}
 	return 30 // the in-tree RecordStartCmd.Fps default
 }

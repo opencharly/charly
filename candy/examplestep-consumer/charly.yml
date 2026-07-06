@@ -10,21 +10,18 @@ examplestep-consumer:
             spliced into the generated Containerfile — baking /opt/examplestep-baked into
             the image. Compose it WITH candy/plugin-example-step (which provides the
             examplestep verb); the runtime check below proves the bake ran.
-    examplestep-bake:
-        run: at image build the examplestep plugin's OpEmit emits a Containerfile RUN that bakes /opt/examplestep-baked into the image
-        id: examplestep-bake
-        context:
-            - build
-        plugin: examplestep
-        plugin_input:
-            marker: examplestep-consumer
-    examplestep-baked-present:
-        check: the build-time examplestep bake ran — /opt/examplestep-baked is present in the built image
-        id: examplestep-baked-present
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f /opt/examplestep-baked"
-            in_container: true
+        plan:
+            - run: at image build the examplestep plugin's OpEmit emits a Containerfile RUN that bakes /opt/examplestep-baked into the image
+              id: examplestep-bake
+              context:
+                - build
+              examplestep:
+                marker: examplestep-consumer
+            - check: the build-time examplestep bake ran — /opt/examplestep-baked is present in the built image
+              id: examplestep-baked-present
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: "test -f /opt/examplestep-baked"
+                in_container: true

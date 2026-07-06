@@ -3,10 +3,11 @@
 // recording sessions — terminal (asciinema) or desktop video (pixelflux/wf-recorder) —
 // inside a running deployment: list / start / stop / cmd. The host go-builds this binary
 // and serves it OUT-OF-PROCESS over go-plugin gRPC via the charly plugin SDK, so the
-// `record:` verb dispatches through the provider registry exactly like a built-in — with
-// the verb keeping its `record:` discriminator + every modifier
-// (record_name/record_mode/record_fps/record_audio) on charly's core #Op (authoring
-// unchanged: `record: start`, not `plugin: record`).
+// `record:` verb dispatches through the provider registry exactly like a built-in. Since
+// the schema-compaction cutover an authored `record:` step desugars to the internal
+// plugin/plugin_input envelope, and every record-exclusive modifier
+// (method/record_name/record_mode/record_fps/record_audio/text/artifact) lives in the
+// plugin's OWN #RecordInput (schema/record.cue → the generated params.RecordInput).
 //
 // FIRST consumer of the executor reverse channel: unlike the PORT-based external verbs
 // (mcp/spice/kube — the host pre-resolves a dial endpoint), record is EXEC-based. The host
@@ -36,12 +37,12 @@ var schemaFS embed.FS
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises verb:record + the plugin's self-contained CUE schema (via
-// sdk.NewMeta → BuildCapabilities). record keeps its entire authoring contract (the
-// #RecordMethod enum + every modifier) on charly's core #Op — like cdp/vnc/mcp/spice it
-// has NO plugin_input — so the capability carries an EMPTY InputDef and the served schema
-// (record.cue) exists only to satisfy the host's non-empty-schema load gate.
+// sdk.NewMeta → BuildCapabilities). The verb's entire authoring contract — the
+// method enum + every record-exclusive modifier — lives in the served #RecordInput
+// (schema/record.cue), which the host splices onto the base and validates every
+// authored `record:` step's plugin_input against.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.182.1805",
-		[]sdk.ProvidedCapability{{Class: "verb", Word: "record", InputDef: ""}},
+		[]sdk.ProvidedCapability{{Class: "verb", Word: "record", InputDef: "#RecordInput"}},
 		schemaFS)
 }

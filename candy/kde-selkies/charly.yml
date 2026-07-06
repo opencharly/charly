@@ -24,16 +24,13 @@ kde-selkies:
             This streamed Plasma is the pixelflux virtual-framebuffer session —
             intentionally distinct from any SDDM/Plasma DRM session a physical monitor
             shows on a real GPU output (that is kde-desktop's job).
-    kde-selkies-require:
         require:
             - selkies
             - kde-shell
             - pipewire
             - dbus
-    kde-selkies-env:
         env:
             SELKIES_FRAMERATE: "60"
-    kde-selkies-service:
         service:
             # Nested KDE Plasma session, started after pixelflux (selkies, priority 8)
             # has created wayland-1. The wrapper polls for the socket — so NO
@@ -49,131 +46,104 @@ kde-selkies:
               # session (session bus + XDG_RUNTIME_DIR from the user manager), so it
               # finds pixelflux's wayland-1 at the same per-user runtime dir.
               scope: user
-    kde-selkies-step-0:
-        run: mkdir=${HOME}/.local/bin
-        mkdir: "${HOME}/.local/bin"
-        run_as: "${USER}"
-    kde-selkies-step-1:
-        run: copy=kde-selkies-session
-        copy: kde-selkies-session
-        to: "${HOME}/.local/bin/kde-selkies-session"
-        mode: "0755"
-        run_as: "${USER}"
-    kde-selkies-strip-caps:
-        # Strip cap_sys_nice from kwin_wayland so the launcher can exec it DIRECTLY as a
-        # NESTED compositor: the pod's no-new-privileges rejects exec of a file-capability
-        # binary ("Operation not permitted"), and the DRM/seat scheduling cap is unneeded
-        # when nesting into pixelflux. RCA-proven: without this + the direct
-        # `--wayland-display` launch, kwin runs headless and the stream is a black frame.
-        run: strip cap_sys_nice from kwin_wayland so it execs directly as a nested compositor under the pod's no-new-privileges
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: mkdir=${HOME}/.local/bin
+              mkdir: "${HOME}/.local/bin"
+              run_as: "${USER}"
+            - run: copy=kde-selkies-session
+              copy: kde-selkies-session
+              to: "${HOME}/.local/bin/kde-selkies-session"
+              mode: "0755"
+              run_as: "${USER}"
+            - # Strip cap_sys_nice from kwin_wayland so the launcher can exec it DIRECTLY as a
+              # NESTED compositor: the pod's no-new-privileges rejects exec of a file-capability
+              # binary ("Operation not permitted"), and the DRM/seat scheduling cap is unneeded
+              # when nesting into pixelflux. RCA-proven: without this + the direct
+              # `--wayland-display` launch, kwin runs headless and the stream is a black frame.
+              run: strip cap_sys_nice from kwin_wayland so it execs directly as a nested compositor under the pod's no-new-privileges
+              run_as: root
+              command: |
                 for kw in /usr/bin/kwin_wayland /usr/sbin/kwin_wayland; do
                   [ -e "$kw" ] && setcap -r "$kw" 2>/dev/null || true
                 done
-    kde-selkies-step-2:
-        check: the kde-selkies-session launcher is installed and executable in the deploy user's PATH
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/kde-selkies-session
-            exists: true
-            mode: "0755"
-    kde-selkies-step-3:
-        check: the launcher execs kwin_wayland DIRECTLY nested into pixelflux (--wayland-display wayland-1), not startplasma-wayland's headless fallback
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/bin/kde-selkies-session
-            contains:
-                - contains: "kwin_wayland --wayland-display wayland-1"
-    kde-selkies-step-4:
-        check: kwin_wayland has NO cap_sys_nice file capability, so the launcher can exec it directly under the pod's no-new-privileges (the nested-compositor caps-strip)
-        plugin: command
-        plugin_input:
-            command: |
+              id: kde-selkies-strip-caps
+            - check: the kde-selkies-session launcher is installed and executable in the deploy user's PATH
+              file:
+                file: ${HOME}/.local/bin/kde-selkies-session
+                exists: true
+                mode: "0755"
+            - check: the launcher execs kwin_wayland DIRECTLY nested into pixelflux (--wayland-display wayland-1), not startplasma-wayland's headless fallback
+              file:
+                file: ${HOME}/.local/bin/kde-selkies-session
+                contains:
+                    - contains: "kwin_wayland --wayland-display wayland-1"
+            - check: kwin_wayland has NO cap_sys_nice file capability, so the launcher can exec it directly under the pod's no-new-privileges (the nested-compositor caps-strip)
+              command: |
                 caps=$(getcap /usr/bin/kwin_wayland 2>/dev/null)
                 if [ -n "$caps" ]; then echo "FAIL: kwin_wayland still has caps: $caps"; exit 1; fi
                 echo "kwin_wayland caps stripped (execs directly under no-new-privileges)"
-    kde-selkies-step-5:
-        check: the KWin Wayland compositor that renders the nested session into pixelflux is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/kwin_wayland
-            exists: true
-    kde-selkies-step-6:
-        check: kdotool — the KWin window-automation tool that drives the `wl` check verb on this session — is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/kdotool
-            exists: true
-    kde-selkies-step-7:
-        check: the pipewire audio daemon composed for the streamed session is present
-        plugin: file
-        plugin_input:
-            file: /usr/bin/pipewire
-            exists: true
-    kde-selkies-step-8:
-        check: the nested KDE Plasma session reaches RUNNING under supervisord without crash-looping
-        stdout:
-            - matches: "RUNNING"
-        # supervisord + the Plasma session only run in a live deployment, not a
-        # disposable `podman run --rm` box (no init, no compositor) — runtime-only.
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                sleep 20
+            - check: the KWin Wayland compositor that renders the nested session into pixelflux is present
+              file:
+                file: /usr/bin/kwin_wayland
+                exists: true
+            - check: kdotool — the KWin window-automation tool that drives the `wl` check verb on this session — is present
+              file:
+                file: /usr/bin/kdotool
+                exists: true
+            - check: the pipewire audio daemon composed for the streamed session is present
+              file:
+                file: /usr/bin/pipewire
+                exists: true
+            - check: the nested KDE Plasma session reaches RUNNING under supervisord without crash-looping
+              stdout:
+                - matches: "RUNNING"
+              # supervisord + the Plasma session only run in a live deployment, not a
+              # disposable `podman run --rm` box (no init, no compositor) — runtime-only.
+              context:
+                - runtime
+              command:
+                command: |
+                    sleep 20
+                    supervisorctl status kde-selkies-session
+                in_container: true
+            - check: the selkies web UI streams the live Plasma desktop over HTTPS on port 3000
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: https://127.0.0.1:${HOST_PORT:3000}/
+                status: 200
+                allow_insecure: true
+            - agent-check: the streamed frames show a real KWin-composited KDE Plasma desktop (panel + wallpaper), not a black frame or a wlroots session
+            - check: |
+                command=sleep 20
                 supervisorctl status kde-selkies-session
-            in_container: true
-    kde-selkies-step-9:
-        check: the selkies web UI streams the live Plasma desktop over HTTPS on port 3000
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: https://127.0.0.1:${HOST_PORT:3000}/
-            status: 200
-            allow_insecure: true
-    kde-selkies-step-10:
-        agent-check: the streamed frames show a real KWin-composited KDE Plasma desktop (panel + wallpaper), not a black frame or a wlroots session
-    kde-selkies-stable:
-        check: |
-            command=sleep 20
-            supervisorctl status kde-selkies-session
-        id: kde-selkies-stable
-        stdout:
-            - matches: "RUNNING"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                sleep 20
-                supervisorctl status kde-selkies-session
-            in_container: true
-    kde-selkies-plasmashell-running:
-        check: the Plasma shell (plasmashell — panel + wallpaper) is launched on kwin's wayland-0 and running in the streamed session
-        id: kde-selkies-plasmashell-running
-        exit_status: 0
-        eventually: 60s
-        retry_interval: 3s
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: pgrep -x plasmashell
-            in_container: true
-    kde-selkies-stream-https:
-        check: http=https://127.0.0.1:${HOST_PORT:3000}/
-        id: kde-selkies-stream-https
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: https://127.0.0.1:${HOST_PORT:3000}/
-            status: 200
-            allow_insecure: true
+              id: kde-selkies-stable
+              stdout:
+                - matches: "RUNNING"
+              context:
+                - runtime
+              command:
+                command: |
+                    sleep 20
+                    supervisorctl status kde-selkies-session
+                in_container: true
+            - check: the Plasma shell (plasmashell — panel + wallpaper) is launched on kwin's wayland-0 and running in the streamed session
+              id: kde-selkies-plasmashell-running
+              exit_status: 0
+              eventually: 60s
+              retry_interval: 3s
+              context:
+                - runtime
+              command:
+                command: pgrep -x plasmashell
+                in_container: true
+            - check: http=https://127.0.0.1:${HOST_PORT:3000}/
+              id: kde-selkies-stream-https
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: https://127.0.0.1:${HOST_PORT:3000}/
+                status: 200
+                allow_insecure: true

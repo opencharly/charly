@@ -2,9 +2,9 @@
 
 package params
 
-// #PreemptPlugin documents the command the plugin serves. The command keeps its entire contract
-// in its own CLI grammar (parsed from os.Args in CLI mode), so there is no plugin_input to
-// validate here.
+// #PreemptPlugin documents the command the plugin serves. The plugin OWNS the status/restore grammar +
+// the lease-table formatting and reaches its peer verb:arbiter via InvokeProvider — there is no
+// plugin_input to validate here (args are plain CLI tokens).
 type PreemptPlugin struct {
 	Command string `yaml:"command,omitempty" json:"command"`
 

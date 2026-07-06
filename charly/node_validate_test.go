@@ -10,13 +10,10 @@ func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
   candy:
     version: "2026.150.0000"
     description: in-memory store
-  redis-pkg:
     package: [redis]
-  redis-check:
-    check: the binary exists
-    plugin: file
-    plugin_input:
-      file: /usr/bin/redis-server
+    plan:
+      - check: the binary exists
+        file: /usr/bin/redis-server
 `
 	if err := validateCandyManifestCUE("ok", []byte(ok)); err != nil {
 		t.Fatalf("valid node-form candy rejected: %v", err)
@@ -25,7 +22,6 @@ func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
 	bad := `redis:
   candy:
     version: "2026.150.0000"
-  redis-pkg:
     package: [redis]
 `
 	if err := validateCandyManifestCUE("bad", []byte(bad)); err == nil {

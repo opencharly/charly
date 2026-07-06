@@ -29,15 +29,11 @@ package deploypod
 
 import (
 	"context"
-	"embed"
 	"fmt"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.180.0001"
 
@@ -50,7 +46,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "deploy", Word: "pod", InputDef: "", Lifecycle: true}},
-		schemaFS)
+		nil)
 }
 
 type provider struct{ pb.UnimplementedProviderServer }

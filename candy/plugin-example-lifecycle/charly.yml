@@ -10,16 +10,13 @@ plugin-example-lifecycle:
             PostApply/PostTeardown/Rebuild and the generalized OpPreresolve. NOT in compiled_plugins
             (out-of-process only); the host→plugin lifecycle channel M4 reuses to externalize the
             pod/vm substrate lifecycles.
-    plugin-example-lifecycle-decl:
         plugin:
             providers:
                 - deploy:examplelifecycle
             source: github.com/opencharly/charly/candy/plugin-example-lifecycle
-    examplelifecycle-module-present:
-        check: the out-of-tree lifecycle deploy-substrate plugin ships a buildable Go module the host can build + serve out-of-process
-        id: examplelifecycle-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the out-of-tree lifecycle deploy-substrate plugin ships a buildable Go module the host can build + serve out-of-process
+              id: examplelifecycle-module-present
+              context:
+                - build
+              command: "true"

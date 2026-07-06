@@ -10,34 +10,28 @@ sherpa-onnx:
             engine binary is present and executable, its shared libraries are in
             place, and the VITS voice model + tokens ship in the image so
             synthesis runs fully offline with no network fetch.
-    sherpa-onnx-env:
         env:
             SHERPA_ONNX_RUNTIME_DIR: "~/.local/share/sherpa-onnx/runtime"
             SHERPA_ONNX_MODEL_DIR: "~/.local/share/sherpa-onnx/models"
-    sherpa-onnx-var:
         var:
             SHERPA_VERSION: v1.12.23
-    sherpa-onnx-step-0:
-        run: mkdir=${HOME}/.local/share/sherpa-onnx/runtime
-        mkdir: "${HOME}/.local/share/sherpa-onnx/runtime"
-        run_as: "${USER}"
-    sherpa-onnx-step-1:
-        run: mkdir=${HOME}/.local/share/sherpa-onnx/models
-        mkdir: "${HOME}/.local/share/sherpa-onnx/models"
-        run_as: "${USER}"
-    sherpa-onnx-step-2:
-        run: |
-            command=case "${BUILD_ARCH}" in
-              x86_64) SUFFIX="linux-x64" ;;
-              aarch64) SUFFIX="linux-aarch64" ;;
-              *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
-            esac
-            curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_VERSION}/sherpa-onnx-${SHERPA_VERSION}-${SUFFIX}-shared.tar.bz2" \
-              | tar -xjf - --strip-components=1 -C ~/.local/share/sherpa-onnx/runtime
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: mkdir=${HOME}/.local/share/sherpa-onnx/runtime
+              mkdir: "${HOME}/.local/share/sherpa-onnx/runtime"
+              run_as: "${USER}"
+            - run: mkdir=${HOME}/.local/share/sherpa-onnx/models
+              mkdir: "${HOME}/.local/share/sherpa-onnx/models"
+              run_as: "${USER}"
+            - run: |
+                command=case "${BUILD_ARCH}" in
+                  x86_64) SUFFIX="linux-x64" ;;
+                  aarch64) SUFFIX="linux-aarch64" ;;
+                  *) echo "Unsupported arch: ${BUILD_ARCH}"; exit 1 ;;
+                esac
+                curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_VERSION}/sherpa-onnx-${SHERPA_VERSION}-${SUFFIX}-shared.tar.bz2" \
+                  | tar -xjf - --strip-components=1 -C ~/.local/share/sherpa-onnx/runtime
+              run_as: "${USER}"
+              command: |
                 case "${BUILD_ARCH}" in
                   x86_64) SUFFIX="linux-x64" ;;
                   aarch64) SUFFIX="linux-aarch64" ;;
@@ -45,56 +39,38 @@ sherpa-onnx:
                 esac
                 curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_VERSION}/sherpa-onnx-${SHERPA_VERSION}-${SUFFIX}-shared.tar.bz2" \
                   | tar -xjf - --strip-components=1 -C ~/.local/share/sherpa-onnx/runtime
-    sherpa-onnx-step-3:
-        run: |
-            command=curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-high.tar.bz2" \
-              | tar -xjf - -C ~/.local/share/sherpa-onnx/models
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+            - run: |
+                command=curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-high.tar.bz2" \
+                  | tar -xjf - -C ~/.local/share/sherpa-onnx/models
+              run_as: "${USER}"
+              command: |
                 curl -fsSL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-high.tar.bz2" \
                   | tar -xjf - -C ~/.local/share/sherpa-onnx/models
-    sherpa-onnx-step-4:
-        check: the sherpa-onnx offline-tts engine binary is installed under the runtime bin dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx-offline-tts
-            exists: true
-    sherpa-onnx-step-5:
-        check: the offline-tts engine binary is executable
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test -x ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx-offline-tts
-    sherpa-onnx-step-6:
-        check: the sherpa-onnx C-API shared library ships under the runtime lib dir
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libsherpa-onnx-c-api.so
-            exists: true
-    sherpa-onnx-step-7:
-        check: the bundled ONNX Runtime shared library ships alongside it so the engine can link
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libonnxruntime.so
-            exists: true
-    sherpa-onnx-step-8:
-        check: the en_US-lessac-high VITS voice model is baked into the image for offline synthesis
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high/en_US-lessac-high.onnx
-            exists: true
-    sherpa-onnx-step-9:
-        check: the voice model tokens file ships next to the model
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high/tokens.txt
-            exists: true
-    sherpa-onnx-cli-binary:
-        check: file=${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx
-        id: sherpa-onnx-cli-binary
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx
-            exists: true
+            - check: the sherpa-onnx offline-tts engine binary is installed under the runtime bin dir
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx-offline-tts
+                exists: true
+            - check: the offline-tts engine binary is executable
+              exit_status: 0
+              command: test -x ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx-offline-tts
+            - check: the sherpa-onnx C-API shared library ships under the runtime lib dir
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libsherpa-onnx-c-api.so
+                exists: true
+            - check: the bundled ONNX Runtime shared library ships alongside it so the engine can link
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/runtime/lib/libonnxruntime.so
+                exists: true
+            - check: the en_US-lessac-high VITS voice model is baked into the image for offline synthesis
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high/en_US-lessac-high.onnx
+                exists: true
+            - check: the voice model tokens file ships next to the model
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/models/vits-piper-en_US-lessac-high/tokens.txt
+                exists: true
+            - check: file=${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx
+              id: sherpa-onnx-cli-binary
+              file:
+                file: ${HOME}/.local/share/sherpa-onnx/runtime/bin/sherpa-onnx
+                exists: true

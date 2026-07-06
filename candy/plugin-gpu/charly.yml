@@ -38,22 +38,19 @@ plugin-gpu:
             The R10 witness: `charly vm gpu status`/`list`/`plan` exit 0 host-side on a GPU-less host
             (DetectGPU/DetectVFIO + the switch-plan DRY-RUN dispatch through verb:gpu); the vfio<->nvidia
             FLIP itself stays gated by the cachyos GPU beds (functionality, not externalization).
-    plugin-gpu-decl:
         plugin:
             providers:
                 - verb:gpu
             source: github.com/opencharly/charly/candy/plugin-gpu
-    # ADE build-context check: a deterministic check that does NOT depend on a live
-    # deployment — it mirrors candy/plugin-k8sgen's k8sgen-module-present: a trivial
-    # build-context `plugin: command` (the built-in command CHECK verb) running `true`,
-    # proving the host can build + compile in the module. The full dispatch end-to-end
-    # (`charly vm gpu status`/`list` → DetectVFIO/DetectGPU through verb:gpu) is exercised by
-    # the live R10 bed (check-gpu-local).
-    gpu-module-present:
-        check: the gpu-detection plugin ships a buildable Go module the host compiles in
-        id: gpu-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live
+              # deployment — it mirrors candy/plugin-k8sgen's k8sgen-module-present: a trivial
+              # build-context `plugin: command` (the built-in command CHECK verb) running `true`,
+              # proving the host can build + compile in the module. The full dispatch end-to-end
+              # (`charly vm gpu status`/`list` → DetectVFIO/DetectGPU through verb:gpu) is exercised by
+              # the live R10 bed (check-gpu-local).
+              check: the gpu-detection plugin ships a buildable Go module the host compiles in
+              id: gpu-module-present
+              context:
+                - build
+              command: "true"

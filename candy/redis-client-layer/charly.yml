@@ -6,14 +6,12 @@ redis-client-layer:
             Provides /usr/bin/redis-cli so the harness can run
             `redis-cli -h charly-redis SET ...` and verify cross-pod connectivity.
             No redis service is started in this image — it acts purely as a client.
-    redis-client-layer-distro:
         distro:
             fedora:
                 package:
                     - redis
                     - iproute
                     - procps-ng
-    redis-client-layer-service:
         service:
             - name: keep-alive
               exec: "/usr/bin/sleep infinity"
@@ -21,45 +19,32 @@ redis-client-layer:
               priority: 10
               enable: true
               scope: system
-    redis-client-layer-step-0:
-        check: the redis-cli client binary is installed at /usr/bin/redis-cli
-        plugin: file
-        plugin_input:
-            file: /usr/bin/redis-cli
-            exists: true
-    redis-client-layer-step-1:
-        check: the redis package that provides redis-cli is installed (valkey-compat-redis on Fedora 43)
-        plugin: package
-        plugin_input:
-            package: valkey-compat-redis
-            installed: true
-    redis-client-layer-step-2:
-        check: redis-cli actually runs and reports a version
-        exit_status: 0
-        stdout:
-            - matches: "[0-9]+\\.[0-9]+"
-        plugin: command
-        plugin_input:
-            command: redis-cli --version
-    redis-client-layer-step-3:
-        check: the ss socket-inspection tool from iproute is installed at /usr/sbin/ss
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/ss
-            exists: true
-    redis-client-layer-step-4:
-        check: the pgrep process tool from procps-ng is installed at /usr/bin/pgrep
-        plugin: file
-        plugin_input:
-            file: /usr/bin/pgrep
-            exists: true
-    redis-client-layer-step-5:
-        check: the keep-alive supervised service is running in the deployed pod
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: keep-alive
-            running: true
-    redis-client-layer-step-6:
-        agent-check: the keep-alive service keeps the client pod alive, auto-restarting (restart=always) if it exits, so the harness can keep issuing cross-pod redis-cli probes against a separate redis pod
+        plan:
+            - check: the redis-cli client binary is installed at /usr/bin/redis-cli
+              file:
+                file: /usr/bin/redis-cli
+                exists: true
+            - check: the redis package that provides redis-cli is installed (valkey-compat-redis on Fedora 43)
+              package:
+                package: valkey-compat-redis
+                installed: true
+            - check: redis-cli actually runs and reports a version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: redis-cli --version
+            - check: the ss socket-inspection tool from iproute is installed at /usr/sbin/ss
+              file:
+                file: /usr/sbin/ss
+                exists: true
+            - check: the pgrep process tool from procps-ng is installed at /usr/bin/pgrep
+              file:
+                file: /usr/bin/pgrep
+                exists: true
+            - check: the keep-alive supervised service is running in the deployed pod
+              context:
+                - runtime
+              service:
+                service: keep-alive
+                running: true
+            - agent-check: the keep-alive service keeps the client pod alive, auto-restarting (restart=always) if it exits, so the harness can keep issuing cross-pod redis-cli probes against a separate redis pod

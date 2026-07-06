@@ -11,10 +11,11 @@ plugin-cdp:
             WebSocket client lives HERE, out of charly's core check surface (the latest
             external dep-shed after candy/plugin-appium, -adb, -kube, -spice, -mcp, -record;
             charly's core no longer keeps a CDP client of its own — the former in-core copy
-            was deleted when wl externalized). `cdp:` authoring
-            stays unchanged: the verb keeps its `cdp:` discriminator + every modifier
-            (tab/url/expression/selector/x/y/…) + the #CdpMethod enum on charly's core #Op,
-            and dispatches through the provider registry exactly like a built-in (ResolveVerb
+            was deleted when wl externalized). Since the schema-compaction cutover an
+            authored `cdp:` step desugars to the internal plugin/plugin_input envelope,
+            and every cdp-exclusive modifier (method/tab/url/expression/selector/x/y/…)
+            lives in the plugin's OWN #CdpInput (schema/cdp.cue); the verb dispatches
+            through the provider registry exactly like a built-in (ResolveVerb
             → grpcProvider → invokeVerbProvider hands it the full #Op). The host owns the
             podman / venue / port-mapping resolution (preresolveCdpEndpoint), pre-resolving
             the deployment's CDP port 9222 to a host-reachable DevTools base URL into the
@@ -23,18 +24,17 @@ plugin-cdp:
             screenshot/open/close/click/type) plus the SPA remote-desktop input group
             (spa-status/click/mouse/type/key/key-combo). The R10 consumer is a Chrome-bearing
             pod bed whose check composes this plugin (e.g. sway-browser-vnc).
-    plugin-cdp-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-cdp
             providers:
                 - verb:cdp
-    cdp-verb-dispatches:
-        check: the cdp verb dispatches through the provider registry and reports the Chrome DevTools Protocol connection status on a live deployment with a CDP endpoint (the out-of-process plugin verb dials the host-resolved DevTools base URL)
-        id: cdp-verb-dispatches
-        cdp: status
-        stdout:
-            - contains: ok
-        eventually: 60s
-        retry_interval: 5s
-        context:
-            - runtime
+        plan:
+            - check: the cdp verb dispatches through the provider registry and reports the Chrome DevTools Protocol connection status on a live deployment with a CDP endpoint (the out-of-process plugin verb dials the host-resolved DevTools base URL)
+              id: cdp-verb-dispatches
+              cdp: status
+              stdout:
+                - contains: ok
+              eventually: 60s
+              retry_interval: 5s
+              context:
+                - runtime

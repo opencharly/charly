@@ -1,5 +1,4 @@
-version: 2026.174.1100
-
+version: 2026.186.2323
 # providers — the registry membership manifest (provider class -> the words it
 # contributes). Read at init (registry_bootstrap.go) to drive built-in provider
 # registration from THIS embedded default config instead of a hardcoded Go list. A
@@ -16,11 +15,10 @@ version: 2026.174.1100
 # list is empty by design too.
 providers:
     kind: []
-    verb: [kill, plugin, summarize]
+    verb: [plugin]
     deploy: []
     step: []
     builder: []
-
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
 # `task build:charly` before `go build`) to emit charly/plugins_generated.go (one
@@ -59,11 +57,8 @@ compiled_plugins:
     - plugin-agent
     - plugin-builder
     - plugin-distro
-    - plugin-module
-    - plugin-package-group
     - plugin-resource
     - plugin-sidecar
-    - plugin-target
     - plugin-group
     - plugin-substrate
     - plugin-candy-kind
@@ -76,7 +71,6 @@ compiled_plugins:
     - plugin-candy
     - plugin-doctor
     - plugin-feature
-
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by
 # generate.go to emit .containerignore / .dockerignore; a project's
@@ -98,7 +92,6 @@ context_ignore_baseline:
     - "**/*.swo"
     - "**/.pytest_cache"
     - "**/.mypy_cache"
-
 # install_hints — binary name -> (distro ID -> package name) for `charly doctor` host
 # dependency install suggestions, formerly the Go var installHints (distro.go). An
 # "AUR: <cmd>" value carries its own install line.
@@ -122,7 +115,6 @@ install_hints:
     cloudflared: {arch: "AUR: yay -S cloudflared-bin", fedora: cloudflared, debian: cloudflared}
     nvidia-smi: {arch: nvidia-utils, fedora: nvidia-driver, debian: nvidia-utils}
     gvproxy: {arch: "AUR: yay -S gvisor-tap-vsock", fedora: gvisor-tap-vsock, debian: golang-github-containers-gvisor-tap-vsock}
-
 # ovmf_paths — distro family -> secure/nonsecure ordered OVMF firmware candidate path
 # pairs, formerly inline literals in ovmf_paths.go. The alias->family resolution, secure
 # selection, and unknown-distro union stay Go logic; only the path data is here.
@@ -148,7 +140,6 @@ ovmf_paths:
         nonsecure:
             - {code: /usr/share/OVMF/OVMF_CODE_4M.fd, vars: /usr/share/OVMF/OVMF_VARS_4M.fd}
             - {code: /usr/share/OVMF/OVMF_CODE.fd, vars: /usr/share/OVMF/OVMF_VARS.fd}
-
 # device_descriptions — host device path -> human description for `charly doctor`'s
 # hardware section, formerly the Go var deviceDescriptions (doctor.go).
 device_descriptions:
@@ -160,7 +151,6 @@ device_descriptions:
     /dev/fuse: FUSE filesystem
     /dev/net/tun: TUN/TAP network device
     /dev/hwrng: hardware random number generator
-
 # device_patterns — host device glob patterns probed for auto-detection
 # (DetectHostDevices in devices.go) AND `charly doctor`'s hardware section (doctor.go),
 # formerly the Go var devicePatterns. NVIDIA GPUs are handled separately via CDI/--gpus;
@@ -174,7 +164,6 @@ device_patterns:
     - /dev/fuse
     - /dev/net/tun
     - /dev/hwrng
-
 # gpu_vendors — PCI vendor ID -> name for the render nodes that count as a real,
 # encode-capable GPU (vs the paravirtual virtio-gpu 0x1af4), formerly the inline switch in
 # pickRenderNode (devices.go). Key membership picks the DRINODE/DRI_NODE render node on a
@@ -183,7 +172,6 @@ gpu_vendors:
     "0x10de": NVIDIA
     "0x1002": AMD
     "0x8086": Intel
-
 # pci_class_labels — PCI class code (high 16 bits) -> human label for VFIO passthrough
 # device reporting, formerly the inline switch in pciClassLabel (devices.go). An unknown
 # class falls back to the raw class string (logic in pciClassLabel, not data).
@@ -195,7 +183,6 @@ pci_class_labels:
     "0x0604": PCI bridge
     "0x0c03": USB controller
     "0x0c0330": USB controller
-
 # distro_package_managers — host distro ID -> install command prefix for `charly doctor`
 # install hints, formerly the inline switch in parseOsRelease (distro.go). An unlisted
 # distro yields an empty manager (no install hint).
@@ -212,7 +199,6 @@ distro_package_managers:
     linuxmint: sudo apt-get install
     opensuse-tumbleweed: sudo zypper install
     opensuse-leap: sudo zypper install
-
 # distro_family_map — host distro ID -> base family for install-hint package-name lookup,
 # formerly the inline switch in distroFamily (distro.go). An unlisted distro maps to itself
 # (logic in distroFamily, not data).
@@ -226,7 +212,6 @@ distro_family_map:
     almalinux: fedora
     opensuse-tumbleweed: fedora
     opensuse-leap: fedora
-
 # ovmf_distro_aliases — host distro ID -> OVMF firmware family (fedora|arch|debian),
 # formerly the inline switches in ovmfCandidatesForDistro + ovmfNotFoundError
 # (ovmf_paths.go). An unlisted distro has no entry; ovmfCandidatesForDistro then tries the
@@ -242,7 +227,6 @@ ovmf_distro_aliases:
     endeavouros: arch
     debian: debian
     ubuntu: debian
-
 nvidia-gpu:
     resource:
         gpu:
@@ -463,7 +447,6 @@ pixi:
         manylinux_fix: |
             RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
         build_script: build.sh
-    pixi-env:
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache
@@ -1278,7 +1261,6 @@ systemd:
                 {{- else}}
                 WantedBy=multi-user.target
                 {{- end}}
-    systemd-requires_capability:
         requires_capability:
             - preserve_user
 tailscale:
@@ -1287,7 +1269,6 @@ tailscale:
         image: ghcr.io/tailscale/tailscale:latest
         parameter:
             tailnet: ""
-    tailscale-env:
         env:
             TS_STATE_DIR: /var/lib/tailscale
             TS_AUTH_ONCE: "true"
@@ -1296,18 +1277,15 @@ tailscale:
             TS_ACCEPT_DNS: "false"
             TS_ENABLE_HEALTH_CHECK: "true"
             TS_LOCAL_ADDR_PORT: '[::]:9002'
-    tailscale-volume:
         volume:
             - name: state
               path: /var/lib/tailscale
-    tailscale-security:
         security:
             cap_add:
                 - NET_ADMIN
                 - SYS_MODULE
             devices:
                 - /dev/net/tun:/dev/net/tun
-    tailscale-secret:
         secret:
             - name: ts-authkey
               env: TS_AUTHKEY

@@ -400,7 +400,10 @@ func (c *BundleAddCmd) resolveNodeOverlays(path string, node *BundleNode, parent
 // the deployment's values intact and only fills the gaps.
 func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies []string, opts EmitOpts) ([]string, EmitOpts, error) {
 	if target == "local" && node != nil && node.From != "" {
-		tmpl := findLocalSpec(dir, node.From)
+		tmpl, ferr := findLocalSpec(dir, node.From)
+		if ferr != nil {
+			return addCandies, opts, fmt.Errorf("deployment %q: resolving kind:local template %q: %w", path, node.From, ferr)
+		}
 		if tmpl == nil {
 			return addCandies, opts, fmt.Errorf("deployment %q: unknown kind:local template %q", path, node.From)
 		}

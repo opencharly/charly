@@ -13,12 +13,14 @@ plugin-kube:
             go-builds the provider binary on the HOST, and serves it OUT-OF-PROCESS
             via LocalTransport — so the k8s.io/client-go + k8s.io/apimachinery
             dependency lives HERE, out of charly's core go.mod (the goadb-analog of
-            candy/plugin-adb), while `kube:` authoring stays unchanged: the verb
-            keeps its `kube:` discriminator + every modifier + the #KubeMethod enum
-            on charly's core #Op, and dispatches through the provider registry
-            exactly like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider
-            hands it the full #Op, after the host pre-resolves any --cluster profile
-            to a concrete kubeconfig context); `target: k8s` resolves to this
+            candy/plugin-adb), while `kube:` authoring stays unchanged: the
+            `kube: <method>` sugar desugars to plugin/plugin_input — the method +
+            every kube-exclusive modifier ride the input map, validated against
+            this plugin's own #KubeInput — and dispatches through the provider
+            registry exactly like a built-in (ResolveVerb → grpcProvider →
+            invokeVerbProvider hands it the full desugared #Op, after the host
+            pre-resolves any `cluster:` profile to a concrete kube_context in the
+            input map); `target: k8s` resolves to this
             plugin's deploy:k8s provider over the E3b reverse channel — the host
             preresolves the cluster template + image Capabilities into the
             egress-validated Kustomize tree (k8s_deploy_preresolve.go) and this
@@ -29,18 +31,20 @@ plugin-kube:
             kubeconfig merge into ~/.kube/config). The R10 consumers are the
             check-k3s bed (the `kube:` verb, via the k3s-server candy) and the
             check-k8s-deploy bed (the deploy:k8s substrate).
-    plugin-kube-decl:
         plugin:
             providers:
                 - verb:kube
                 - deploy:k8s
             source: github.com/opencharly/charly/candy/plugin-kube
-    kube-nodes-ready:
-        check: the cluster reports at least one Ready node (the out-of-process plugin verb dispatches through the registry and probes the live cluster)
-        id: kube-nodes-ready
-        kube: nodes
-        cluster: "${DEPLOY_NAME}"
-        stdout:
-            - contains: Ready
-        context:
-            - deploy
+            primary:
+                kube: method
+        plan:
+            - check: the cluster reports at least one Ready node (the out-of-process plugin verb dispatches through the registry and probes the live cluster)
+              id: kube-nodes-ready
+              kube:
+                method: nodes
+                cluster: "${DEPLOY_NAME}"
+              stdout:
+                - contains: Ready
+              context:
+                - deploy

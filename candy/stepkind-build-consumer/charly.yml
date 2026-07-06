@@ -13,22 +13,19 @@ stepkind-build-consumer:
             Compose it WITH candy/plugin-example-stepkind (which provides the examplestepkind
             step); the runtime check below proves the build-emit bake ran inside the deployed
             container.
-    stepkind-build-bake:
-        run: at pod-overlay build the examplestepkind step's OpEmit emits a Containerfile RUN baking /etc/examplestepkind-build-baked into the overlay image (proves the OCITarget external-step build-emit arm)
-        id: stepkind-build-bake
-        context:
-            - build
-        plugin: examplestepkind
-        plugin_input:
-            marker: STEPKIND-BUILD-BAKED-OK
-    stepkind-build-baked-present:
-        check: the build-time examplestepkind bake ran — /etc/examplestepkind-build-baked is present in the built image carrying its token STEPKIND-BUILD-BAKED-OK
-        id: stepkind-build-baked-present
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: /etc/examplestepkind-build-baked
-            exists: true
-            contains:
-                - contains: "STEPKIND-BUILD-BAKED-OK"
+        plan:
+            - run: at pod-overlay build the examplestepkind step's OpEmit emits a Containerfile RUN baking /etc/examplestepkind-build-baked into the overlay image (proves the OCITarget external-step build-emit arm)
+              id: stepkind-build-bake
+              context:
+                - build
+              examplestepkind:
+                marker: STEPKIND-BUILD-BAKED-OK
+            - check: the build-time examplestepkind bake ran — /etc/examplestepkind-build-baked is present in the built image carrying its token STEPKIND-BUILD-BAKED-OK
+              id: stepkind-build-baked-present
+              context:
+                - runtime
+              file:
+                file: /etc/examplestepkind-build-baked
+                exists: true
+                contains:
+                    - contains: "STEPKIND-BUILD-BAKED-OK"

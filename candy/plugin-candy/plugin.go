@@ -21,14 +21,9 @@ import (
 	"fmt"
 	"os"
 
-	"embed"
-
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 // NewProvider returns the candy provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
@@ -39,7 +34,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.181.0001",
 		[]sdk.ProvidedCapability{{Class: "command", Word: "candy"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the CLI entrypoint (the out-of-process placement + the shared entry). candy is

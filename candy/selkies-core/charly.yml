@@ -22,7 +22,6 @@ selkies-core:
             that baked supervisor entry (build scope) and that the supervised
             browser stays up with a responsive CDP endpoint after the
             nested-compositor startup-race settles (deploy scope).
-    selkies-core-require:
         require:
             # plugin-cdp is the OUT-OF-TREE plugin that serves the `cdp:` check verb
             # (the CDP WebSocket client lives there, not in charly's core check surface).
@@ -42,7 +41,6 @@ selkies-core:
             # the baked `wl:` check dispatches — otherwise it SKIPs with `unknown verb "wl"`.
             # (Same cross-repo reconcile lag as plugin-cdp.)
             - plugin-wl
-    selkies-core-candy:
         candy:
             - selkies
             - pipewire
@@ -59,7 +57,6 @@ selkies-core:
             - asciinema
             - fastfetch
             - sshd
-    selkies-core-service:
         service:
             # Chrome is launched + SUPERVISED here for BOTH selkies flavors (labwc +
             # KDE), instead of the former fire-once launch from each per-flavor
@@ -88,94 +85,83 @@ selkies-core:
               stdout: file:/tmp/chrome.log
               enable: true
               scope: system
-    selkies-core-step-0:
-        check: the assembled supervisord config carries selkies-core's own [program:chrome] launcher entry
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            exists: true
-            contains:
-                - contains: "[program:chrome]"
-    selkies-core-step-1:
-        check: that supervised entry execs the chrome-wrapper launcher (self-synchronizing — it polls for the nested compositor's wayland-0 socket)
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            contains:
-                - contains: "chrome-wrapper"
-    selkies-core-step-2:
-        check: the init system reports selkies-core's supervised chrome program as RUNNING
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: chrome
-            running: true
-    selkies-core-step-3:
-        check: 25s after deploy Chrome is still alive and its internal CDP endpoint on 9223 answers in-container, proving supervisord relaunched the browser past the nested-compositor self-exit instead of the bed merely racing its brief alive window
-        exit_status: 0
-        stdout:
-            - contains: "ok: chrome supervised"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                sleep 25
-                pgrep -f "/opt/google/chrome/chrome" >/dev/null 2>&1 || { echo "FAIL: chrome not running 25s after deploy"; exit 1; }
-                curl -sf --max-time 5 http://127.0.0.1:9223/json/version >/dev/null 2>&1 || { echo "FAIL: chrome CDP not responding"; exit 1; }
-                echo "ok: chrome supervised + alive + CDP responsive"
-            in_container: true
-    selkies-chrome-supervisor-baked:
-        check: file=/etc/supervisord.conf
-        id: selkies-chrome-supervisor-baked
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            contains:
-                - contains: "[program:chrome]"
-                - contains: "chrome-wrapper"
-    selkies-core-chrome-launch-flags:
-        check: the supervised Chrome browser launched with --no-first-run (the first-run "welcome / make Chrome default" dialog is suppressed) and --start-maximized
-        id: selkies-core-chrome-launch-flags
-        exit_status: 0
-        eventually: 45s
-        retry_interval: 3s
-        stdout:
-            - contains: "ok: browser"
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
-                for pid in $(pgrep -x chrome); do
-                  cmd=$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null)
-                  case "$cmd" in *--type=*) continue ;; esac
-                  case "$cmd" in *--no-first-run*) ;; *) continue ;; esac
-                  case "$cmd" in *--start-maximized*) echo "ok: browser pid $pid carries --no-first-run + --start-maximized"; exit 0 ;; esac
-                done
-                echo "FAIL: no Chrome browser process carrying --no-first-run + --start-maximized"; exit 1
-            in_container: true
-    selkies-core-chrome-maximized:
-        check: the supervised Chrome window actually fills the streamed virtual screen (maximize took effect, not merely the flag)
-        id: selkies-core-chrome-maximized
-        cdp: eval
-        tab: "1"
-        expression: "(window.outerWidth >= screen.availWidth - 60 && window.outerHeight >= screen.availHeight - 60) ? 'MAXOK' : ('MAXBAD win ' + window.outerWidth + 'x' + window.outerHeight + ' avail ' + screen.availWidth + 'x' + screen.availHeight)"
-        eventually: 60s
-        retry_interval: 5s
-        stdout:
-            - contains: "MAXOK"
-        context:
-            - runtime
-    selkies-core-frame-not-uniform:
-        check: the streamed desktop frame is real composited content, not an all-black / uniform frame — a deterministic frame-content guard so the bed cannot false-green on a blank stream
-        id: selkies-core-frame-not-uniform
-        wl: screenshot
-        artifact: /tmp/selkies-core-frame.png
-        artifact_min_bytes: 5000
-        artifact_not_uniform: true
-        eventually: 45s
-        retry_interval: 5s
-        context:
-            - runtime
+        plan:
+            - check: the assembled supervisord config carries selkies-core's own [program:chrome] launcher entry
+              file:
+                file: /etc/supervisord.conf
+                exists: true
+                contains:
+                    - contains: "[program:chrome]"
+            - check: that supervised entry execs the chrome-wrapper launcher (self-synchronizing — it polls for the nested compositor's wayland-0 socket)
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - contains: "chrome-wrapper"
+            - check: the init system reports selkies-core's supervised chrome program as RUNNING
+              context:
+                - runtime
+              service:
+                service: chrome
+                running: true
+            - check: 25s after deploy Chrome is still alive and its internal CDP endpoint on 9223 answers in-container, proving supervisord relaunched the browser past the nested-compositor self-exit instead of the bed merely racing its brief alive window
+              exit_status: 0
+              stdout:
+                - contains: "ok: chrome supervised"
+              context:
+                - runtime
+              command:
+                command: |
+                    sleep 25
+                    pgrep -f "/opt/google/chrome/chrome" >/dev/null 2>&1 || { echo "FAIL: chrome not running 25s after deploy"; exit 1; }
+                    curl -sf --max-time 5 http://127.0.0.1:9223/json/version >/dev/null 2>&1 || { echo "FAIL: chrome CDP not responding"; exit 1; }
+                    echo "ok: chrome supervised + alive + CDP responsive"
+                in_container: true
+            - check: file=/etc/supervisord.conf
+              id: selkies-chrome-supervisor-baked
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - contains: "[program:chrome]"
+                    - contains: "chrome-wrapper"
+            - check: the supervised Chrome browser launched with --no-first-run (the first-run "welcome / make Chrome default" dialog is suppressed) and --start-maximized
+              id: selkies-core-chrome-launch-flags
+              exit_status: 0
+              eventually: 45s
+              retry_interval: 3s
+              stdout:
+                - contains: "ok: browser"
+              context:
+                - runtime
+              command:
+                command: |
+                    for pid in $(pgrep -x chrome); do
+                      cmd=$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null)
+                      case "$cmd" in *--type=*) continue ;; esac
+                      case "$cmd" in *--no-first-run*) ;; *) continue ;; esac
+                      case "$cmd" in *--start-maximized*) echo "ok: browser pid $pid carries --no-first-run + --start-maximized"; exit 0 ;; esac
+                    done
+                    echo "FAIL: no Chrome browser process carrying --no-first-run + --start-maximized"; exit 1
+                in_container: true
+            - check: the supervised Chrome window actually fills the streamed virtual screen (maximize took effect, not merely the flag)
+              id: selkies-core-chrome-maximized
+              cdp:
+                method: eval
+                tab: "1"
+                expression: "(window.outerWidth >= screen.availWidth - 60 && window.outerHeight >= screen.availHeight - 60) ? 'MAXOK' : ('MAXBAD win ' + window.outerWidth + 'x' + window.outerHeight + ' avail ' + screen.availWidth + 'x' + screen.availHeight)"
+              eventually: 60s
+              retry_interval: 5s
+              stdout:
+                - contains: "MAXOK"
+              context:
+                - runtime
+            - check: the streamed desktop frame is real composited content, not an all-black / uniform frame — a deterministic frame-content guard so the bed cannot false-green on a blank stream
+              id: selkies-core-frame-not-uniform
+              wl:
+                method: screenshot
+                artifact: /tmp/selkies-core-frame.png
+                artifact_min_bytes: 5000
+                artifact_not_uniform: true
+              eventually: 45s
+              retry_interval: 5s
+              context:
+                - runtime

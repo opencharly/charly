@@ -8,32 +8,26 @@ check-substrate-layer:
             marker the member's hoisted check asserts. A DEDICATED marker path (not check-local's /
             check-group's / check-structkind's) so the beds never collide when /verify-beds fans them
             out concurrently.
-    check-substrate-layer-step-0:
-        run: write=/etc/check-substrate-marker
-        write: /etc/check-substrate-marker
-        run_as: root
-        mode: "0644"
-        content: |
-            check-substrate v1
-    check-substrate-layer-step-1:
-        check: the check-substrate marker file is present at /etc/check-substrate-marker
-        plugin: file
-        plugin_input:
-            file: /etc/check-substrate-marker
-            exists: true
-    check-substrate-layer-step-2:
-        check: the marker records the check-substrate version stamp "check-substrate v1"
-        plugin: file
-        plugin_input:
-            file: /etc/check-substrate-marker
-            contains:
-                - contains: "check-substrate v1"
-    check-substrate-marker-host:
-        check: command=test -f /etc/check-substrate-marker
-        id: check-substrate-marker-host
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: "test -f /etc/check-substrate-marker"
-            in_container: false
+        plan:
+            - run: write=/etc/check-substrate-marker
+              write: /etc/check-substrate-marker
+              run_as: root
+              mode: "0644"
+              content: |
+                check-substrate v1
+            - check: the check-substrate marker file is present at /etc/check-substrate-marker
+              file:
+                file: /etc/check-substrate-marker
+                exists: true
+            - check: the marker records the check-substrate version stamp "check-substrate v1"
+              file:
+                file: /etc/check-substrate-marker
+                contains:
+                    - contains: "check-substrate v1"
+            - check: command=test -f /etc/check-substrate-marker
+              id: check-substrate-marker-host
+              context:
+                - runtime
+              command:
+                command: "test -f /etc/check-substrate-marker"
+                in_container: false

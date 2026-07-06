@@ -48,9 +48,12 @@ var (
 	// stepKeywordSet — the plan-step intent keywords (#Step). Replaces the hand
 	// nodeStepVerbs.
 	stepKeywordSet = setFromSlice(spec.StepKeywords)
-	// dataKeySet — the DATA discriminator keywords (non-scalar #Candy/#Deploy
-	// fields folded as child nodes). Replaces the hand nodeDataKeys.
-	dataKeySet = setFromSlice(spec.DataKeys)
+	// authoredOpFieldSet — the AUTHORED #Op field vocabulary (builtin verbs +
+	// shared step modifiers, minus the never-authored internal fields). The
+	// parse-time desugar (node_desugar.go) classifies a step key against it:
+	// anything outside this set (and the intent keywords) is a plugin-verb
+	// sugar key.
+	authoredOpFieldSet = setFromSlice(spec.AuthoringVerbs)
 	// docDirectiveSet — the reserved DOCUMENT directives (#NodeDoc). Replaces the
 	// hand docDirectiveKeys (unified.go) + nodeDocDirectives (node_parse.go).
 	docDirectiveSet = setFromSlice(spec.DocDirectives)
@@ -66,9 +69,16 @@ var (
 // checkKindProviderBijection runs in registry_bootstrap.go's init() (the ONE built-in
 // registration site), after all provider registration.
 
+// internalOnlyVerbs are #OpVerb members that are NEVER authored: the generic
+// `plugin` dispatcher is the desugar's rewrite TARGET (every `<word>: <input>`
+// sugar key becomes plugin/plugin_input internally), so it is deliberately
+// excluded from spec.AuthoringVerbs while remaining a real dispatch verb.
+var internalOnlyVerbs = map[string]bool{"plugin": true}
+
 // checkVerbBijection verifies the package-main VerbCatalog dispatch table and the
-// CUE verb vocabulary (spec.OpVerbs) are in exact bijection, and that every verb is
-// also a member of the broader authorable Op vocabulary (spec.AuthoringVerbs).
+// CUE verb vocabulary (spec.OpVerbs) are in exact bijection, and that every
+// AUTHORED verb is also a member of the authorable Op vocabulary
+// (spec.AuthoringVerbs) — the internal-only verbs are exempt by design.
 func checkVerbBijection(catalog map[string]VerbSpec, verbs, authoring []string) error {
 	want := setFromSlice(verbs)
 	auth := setFromSlice(authoring)
@@ -77,7 +87,7 @@ func checkVerbBijection(catalog map[string]VerbSpec, verbs, authoring []string) 
 		if _, ok := catalog[v]; !ok {
 			missing = append(missing, v)
 		}
-		if !auth[v] {
+		if !auth[v] && !internalOnlyVerbs[v] {
 			notAuthorable = append(notAuthorable, v)
 		}
 	}

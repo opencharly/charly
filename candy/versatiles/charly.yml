@@ -14,10 +14,8 @@ versatiles:
             ↔ MBTiles round-trip). Every fact below is observable: the installed binary,
             the linked convert subcommand, the serve wrapper, the running service, the
             reachable port, and the HTTP 200 a known OSM tile endpoint returns.
-    versatiles-require:
         require:
             - supervisord
-    versatiles-distro:
         distro:
             arch:
                 package:
@@ -33,16 +31,13 @@ versatiles:
                 package:
                     - curl
                     - jq
-    versatiles-port:
         port:
             - 8090 # versatiles serve HTTP (host-mapped 28090)
-    versatiles-env_provide:
         # VERSATILES_PUBLIC_URL is browser-side — embedded into MapLibre HTML
         # for the shortbread map cell (which fetches /tiles/<source>/{z}/{x}/{y}
         # directly from versatiles serve, bypassing the martin path).
         env_provide:
             VERSATILES_PUBLIC_URL: "http://127.0.0.1:{{.HostPort 8090}}"
-    versatiles-service:
         service:
             - name: versatiles
               exec: /usr/local/bin/versatiles-wrapper.sh
@@ -50,39 +45,37 @@ versatiles:
               priority: 37
               enable: true
               scope: system
-    versatiles-step-0:
-        run: |
-            command=set -euo pipefail
-            # The release asset name follows the pattern
-            # `versatiles-linux-gnu-x86_64.tar.gz` (gnu BEFORE x86_64,
-            # verified against v4.0.0). musl variants also ship; we
-            # pick gnu since the versa image's other Rust binaries
-            # (martin) also use the gnu glibc variant.
-            ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-rs/releases/latest" \
-              | jq -r '.assets[].browser_download_url' \
-              | grep -E 'versatiles-linux-gnu-x86_64\.tar\.gz$' \
-              | head -1)
-            if [ -z "$ASSET" ]; then
-              echo "ERROR: could not find versatiles-rs linux-x86_64-gnu tarball" >&2
-              curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-rs/releases/latest" \
-                | jq -r '.assets[].name' >&2
-              exit 1
-            fi
-            TMPDIR=$(mktemp -d)
-            cd "$TMPDIR"
-            curl -fsSL "$ASSET" -o vt.tar.gz
-            tar -xzf vt.tar.gz
-            # The tarball lays out `versatiles` directly at the archive
-            # root (no inner directory). Find it generically so a future
-            # layout change doesn't silently break.
-            BIN=$(find . -name versatiles -type f -executable | head -1)
-            install -m 0755 "$BIN" /usr/local/bin/versatiles
-            cd /
-            rm -rf "$TMPDIR"
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=set -euo pipefail
+                # The release asset name follows the pattern
+                # `versatiles-linux-gnu-x86_64.tar.gz` (gnu BEFORE x86_64,
+                # verified against v4.0.0). musl variants also ship; we
+                # pick gnu since the versa image's other Rust binaries
+                # (martin) also use the gnu glibc variant.
+                ASSET=$(curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-rs/releases/latest" \
+                  | jq -r '.assets[].browser_download_url' \
+                  | grep -E 'versatiles-linux-gnu-x86_64\.tar\.gz$' \
+                  | head -1)
+                if [ -z "$ASSET" ]; then
+                  echo "ERROR: could not find versatiles-rs linux-x86_64-gnu tarball" >&2
+                  curl -fsSL "https://api.github.com/repos/versatiles-org/versatiles-rs/releases/latest" \
+                    | jq -r '.assets[].name' >&2
+                  exit 1
+                fi
+                TMPDIR=$(mktemp -d)
+                cd "$TMPDIR"
+                curl -fsSL "$ASSET" -o vt.tar.gz
+                tar -xzf vt.tar.gz
+                # The tarball lays out `versatiles` directly at the archive
+                # root (no inner directory). Find it generically so a future
+                # layout change doesn't silently break.
+                BIN=$(find . -name versatiles -type f -executable | head -1)
+                install -m 0755 "$BIN" /usr/local/bin/versatiles
+                cd /
+                rm -rf "$TMPDIR"
+              run_as: root
+              command: |
                 set -euo pipefail
                 # The release asset name follows the pattern
                 # `versatiles-linux-gnu-x86_64.tar.gz` (gnu BEFORE x86_64,
@@ -110,115 +103,71 @@ versatiles:
                 install -m 0755 "$BIN" /usr/local/bin/versatiles
                 cd /
                 rm -rf "$TMPDIR"
-    versatiles-step-1:
-        run: write=/usr/local/bin/versatiles-wrapper.sh
-        write: /usr/local/bin/versatiles-wrapper.sh
-        mode: "0755"
-        run_as: root
-        content: |
-            #!/usr/bin/env bash
-            set -euo pipefail
-            DIR="/workspace/tiles/shortbread"
-            mkdir -p "$DIR"
-            # versatiles serve refuses to start when given an empty directory
-            # ("no tiles found" error). To guarantee at least one valid
-            # source on every startup (including fresh deploys before the
-            # shortbread DAG has run), always include the public
-            # download.versatiles.org/osm.versatiles container as the FIRST
-            # source. After the shortbread DAG produces local files and
-            # calls supervisorctl restart, this wrapper re-runs and APPENDS
-            # the local tile containers to the arg list — they appear as
-            # /tiles/monaco-shortbread/ etc., parallel to the remote /tiles/osm/.
-            ARGS=("https://download.versatiles.org/osm.versatiles")
-            # Append local tile containers individually. shopt -s nullglob
-            # so the loop doesn't run with literal '*.pmtiles' when empty.
-            shopt -s nullglob
-            for f in "$DIR"/*.pmtiles "$DIR"/*.versatiles "$DIR"/*.mbtiles; do
-              ARGS+=("$f")
-            done
-            echo "versatiles-wrapper: starting versatiles serve with ${#ARGS[@]} source(s)" >&2
-            exec /usr/local/bin/versatiles serve --port 8090 "${ARGS[@]}"
-    versatiles-step-2:
-        check: the versatiles binary is installed and executable at /usr/local/bin/versatiles
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/versatiles
-            exists: true
-            mode: "0755"
-    versatiles-step-3:
-        check: the installed binary reports its version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: versatiles --version
-    versatiles-step-4:
-        check: the convert subcommand is compiled into the binary (not a stripped-down build)
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: versatiles convert --help
-    versatiles-step-5:
-        check: the supervisord serve wrapper is installed and executable at /usr/local/bin/versatiles-wrapper.sh
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/versatiles-wrapper.sh
-            exists: true
-            mode: "0755"
-    versatiles-step-6:
-        check: the versatiles service is running under the init system
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: versatiles
-            running: true
-    versatiles-step-7:
-        check: the serve port is reachable on the host loopback
-        timeout: 10s
-        context:
-            - runtime
-        plugin: addr
-        plugin_input:
-            addr: "127.0.0.1:${HOST_PORT:8090}"
-            reachable: true
-    versatiles-step-8:
-        check: a known OSM tile endpoint returns HTTP 200
-        timeout: 10s
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: "http://127.0.0.1:${HOST_PORT:8090}/tiles/osm/0/0/0.pbf"
-            status: 200
-    versatiles-convert-roundtrip:
-        check: |
-            command=set -euo pipefail
-            SRC=/workspace/tiles/pmtiles/monaco.pmtiles
-            # If the OSM DAG hasn't run yet on this deploy, skip the
-            # check cleanly — the notebook's R10 end-to-end covers the
-            # post-DAG state. The check here covers the static binary
-            # surface; the DAG path is exercised by the notebook test.
-            if [ ! -f "$SRC" ]; then
-              echo "SKIP: $SRC not present yet (OSM DAG has not run on this deploy)"
-              exit 0
-            fi
-            TMP=$(mktemp -d)
-            trap "rm -rf $TMP" EXIT
-            versatiles convert "$SRC" "$TMP/monaco.versatiles"
-            versatiles convert "$TMP/monaco.versatiles" "$TMP/monaco-roundtrip.pmtiles"
-            test -s "$TMP/monaco.versatiles"
-            test -s "$TMP/monaco-roundtrip.pmtiles"
-            # Probe both ends to verify they're readable + parseable.
-            versatiles probe "$SRC" >/dev/null
-            versatiles probe "$TMP/monaco-roundtrip.pmtiles" >/dev/null
-        id: versatiles-convert-roundtrip
-        exit_status: 0
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: |
+            - run: write=/usr/local/bin/versatiles-wrapper.sh
+              write: /usr/local/bin/versatiles-wrapper.sh
+              mode: "0755"
+              run_as: root
+              content: |
+                #!/usr/bin/env bash
                 set -euo pipefail
+                DIR="/workspace/tiles/shortbread"
+                mkdir -p "$DIR"
+                # versatiles serve refuses to start when given an empty directory
+                # ("no tiles found" error). To guarantee at least one valid
+                # source on every startup (including fresh deploys before the
+                # shortbread DAG has run), always include the public
+                # download.versatiles.org/osm.versatiles container as the FIRST
+                # source. After the shortbread DAG produces local files and
+                # calls supervisorctl restart, this wrapper re-runs and APPENDS
+                # the local tile containers to the arg list — they appear as
+                # /tiles/monaco-shortbread/ etc., parallel to the remote /tiles/osm/.
+                ARGS=("https://download.versatiles.org/osm.versatiles")
+                # Append local tile containers individually. shopt -s nullglob
+                # so the loop doesn't run with literal '*.pmtiles' when empty.
+                shopt -s nullglob
+                for f in "$DIR"/*.pmtiles "$DIR"/*.versatiles "$DIR"/*.mbtiles; do
+                  ARGS+=("$f")
+                done
+                echo "versatiles-wrapper: starting versatiles serve with ${#ARGS[@]} source(s)" >&2
+                exec /usr/local/bin/versatiles serve --port 8090 "${ARGS[@]}"
+            - check: the versatiles binary is installed and executable at /usr/local/bin/versatiles
+              file:
+                file: /usr/local/bin/versatiles
+                exists: true
+                mode: "0755"
+            - check: the installed binary reports its version
+              exit_status: 0
+              command: versatiles --version
+            - check: the convert subcommand is compiled into the binary (not a stripped-down build)
+              exit_status: 0
+              command: versatiles convert --help
+            - check: the supervisord serve wrapper is installed and executable at /usr/local/bin/versatiles-wrapper.sh
+              file:
+                file: /usr/local/bin/versatiles-wrapper.sh
+                exists: true
+                mode: "0755"
+            - check: the versatiles service is running under the init system
+              context:
+                - runtime
+              service:
+                service: versatiles
+                running: true
+            - check: the serve port is reachable on the host loopback
+              timeout: 10s
+              context:
+                - runtime
+              addr:
+                addr: "127.0.0.1:${HOST_PORT:8090}"
+                reachable: true
+            - check: a known OSM tile endpoint returns HTTP 200
+              timeout: 10s
+              context:
+                - runtime
+              http:
+                http: "http://127.0.0.1:${HOST_PORT:8090}/tiles/osm/0/0/0.pbf"
+                status: 200
+            - check: |
+                command=set -euo pipefail
                 SRC=/workspace/tiles/pmtiles/monaco.pmtiles
                 # If the OSM DAG hasn't run yet on this deploy, skip the
                 # check cleanly — the notebook's R10 end-to-end covers the
@@ -237,4 +186,29 @@ versatiles:
                 # Probe both ends to verify they're readable + parseable.
                 versatiles probe "$SRC" >/dev/null
                 versatiles probe "$TMP/monaco-roundtrip.pmtiles" >/dev/null
-            in_container: true
+              id: versatiles-convert-roundtrip
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                    set -euo pipefail
+                    SRC=/workspace/tiles/pmtiles/monaco.pmtiles
+                    # If the OSM DAG hasn't run yet on this deploy, skip the
+                    # check cleanly — the notebook's R10 end-to-end covers the
+                    # post-DAG state. The check here covers the static binary
+                    # surface; the DAG path is exercised by the notebook test.
+                    if [ ! -f "$SRC" ]; then
+                      echo "SKIP: $SRC not present yet (OSM DAG has not run on this deploy)"
+                      exit 0
+                    fi
+                    TMP=$(mktemp -d)
+                    trap "rm -rf $TMP" EXIT
+                    versatiles convert "$SRC" "$TMP/monaco.versatiles"
+                    versatiles convert "$TMP/monaco.versatiles" "$TMP/monaco-roundtrip.pmtiles"
+                    test -s "$TMP/monaco.versatiles"
+                    test -s "$TMP/monaco-roundtrip.pmtiles"
+                    # Probe both ends to verify they're readable + parseable.
+                    versatiles probe "$SRC" >/dev/null
+                    versatiles probe "$TMP/monaco-roundtrip.pmtiles" >/dev/null
+                in_container: true

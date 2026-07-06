@@ -11,7 +11,6 @@ debug-tools:
             system stats (iotop/iftop/sysstat), and session helpers (tmux/rsync).
             Every headline binary lands at a fixed path, so its presence is
             directly verifiable. rpm/deb/pac sections cover Fedora/Debian/Ubuntu/Arch.
-    debug-tools-distro:
         # Distro-specific package lists. Tool names diverge across distros
         # (e.g. nmap-ncat vs ncat vs gnu-netcat) so per-distro lists are the
         # honest authoring path — no synthetic "common" package list that
@@ -129,153 +128,108 @@ debug-tools:
                     - nano
                     - tmux
                     - rsync
-    debug-tools-step-0:
-        check: the DNS lookup tool dig is present for probing service discovery
-        plugin: file
-        plugin_input:
-            file: /usr/bin/dig
-            exists: true
-    debug-tools-step-1:
-        check: the socket-statistics tool ss is present for inspecting listening ports
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/ss
-            exists: true
-    debug-tools-step-2:
-        check: tcpdump is present for capturing traffic between services
-        plugin: file
-        plugin_input:
-            file: /usr/sbin/tcpdump
-            exists: true
-    debug-tools-step-3:
-        check: the process-table tool ps is available to list running processes
-        plugin: file
-        plugin_input:
-            file: /usr/bin/ps
-            exists: true
-    debug-tools-step-4:
-        check: the interactive process monitor htop is available
-        plugin: file
-        plugin_input:
-            file: /usr/bin/htop
-            exists: true
-    debug-tools-step-5:
-        check: the syscall tracer strace is available to debug a stuck process
-        plugin: file
-        plugin_input:
-            file: /usr/bin/strace
-            exists: true
-    debug-tools-step-6:
-        check: an editor (vim) is present so config files can be inspected in place
-        plugin: file
-        plugin_input:
-            file: /usr/bin/vim
-            exists: true
-    debug-tools-step-7:
-        check: tmux is present so a long-running probe survives a dropped exec session
-        plugin: file
-        plugin_input:
-            file: /usr/bin/tmux
-            exists: true
-    debug-tools-step-8:
-        check: lsof is present to report which process holds an open file or socket
-        plugin: file
-        plugin_input:
-            file: /usr/bin/lsof
-            exists: true
-    ping-binary:
-        check: command=command -v ping
-        id: ping-binary
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: command -v ping
-    nc-binary:
-        check: command=command -v nc
-        id: nc-binary
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: command -v nc
-    nano-binary:
-        check: file=/usr/bin/nano
-        id: nano-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/nano
-            exists: true
-    tree-binary:
-        check: file=/usr/bin/tree
-        id: tree-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/tree
-            exists: true
-    wget-binary:
-        check: file=/usr/bin/wget
-        id: wget-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/wget
-            exists: true
-    file-binary:
-        check: file=/usr/bin/file
-        id: file-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/file
-            exists: true
-    rsync-binary:
-        check: file=/usr/bin/rsync
-        id: rsync-binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/rsync
-            exists: true
-    procps-package:
-        check: package=procps-ng
-        id: procps-package
-        plugin: package
-        plugin_input:
-            package: procps-ng
-            package_map:
-                fedora: procps-ng
-                arch: procps-ng
-                debian: procps
-                ubuntu: procps
-            installed: true
-    htop-package:
-        check: package=htop
-        id: htop-package
-        plugin: package
-        plugin_input:
-            package: htop
-            installed: true
-    strace-package:
-        check: package=strace
-        id: strace-package
-        plugin: package
-        plugin_input:
-            package: strace
-            installed: true
-    tcpdump-package:
-        check: package=tcpdump
-        id: tcpdump-package
-        plugin: package
-        plugin_input:
-            package: tcpdump
-            installed: true
-    tmux-package:
-        check: package=tmux
-        id: tmux-package
-        plugin: package
-        plugin_input:
-            package: tmux
-            installed: true
-    lsof-package:
-        check: package=lsof
-        id: lsof-package
-        plugin: package
-        plugin_input:
-            package: lsof
-            installed: true
+        plan:
+            - check: the DNS lookup tool dig is present for probing service discovery
+              file:
+                file: /usr/bin/dig
+                exists: true
+            - check: the socket-statistics tool ss is present for inspecting listening ports
+              file:
+                file: /usr/sbin/ss
+                exists: true
+            - check: tcpdump is present for capturing traffic between services
+              file:
+                file: /usr/sbin/tcpdump
+                exists: true
+            - check: the process-table tool ps is available to list running processes
+              file:
+                file: /usr/bin/ps
+                exists: true
+            - check: the interactive process monitor htop is available
+              file:
+                file: /usr/bin/htop
+                exists: true
+            - check: the syscall tracer strace is available to debug a stuck process
+              file:
+                file: /usr/bin/strace
+                exists: true
+            - check: an editor (vim) is present so config files can be inspected in place
+              file:
+                file: /usr/bin/vim
+                exists: true
+            - check: tmux is present so a long-running probe survives a dropped exec session
+              file:
+                file: /usr/bin/tmux
+                exists: true
+            - check: lsof is present to report which process holds an open file or socket
+              file:
+                file: /usr/bin/lsof
+                exists: true
+            - check: command=command -v ping
+              id: ping-binary
+              exit_status: 0
+              command: command -v ping
+            - check: command=command -v nc
+              id: nc-binary
+              exit_status: 0
+              command: command -v nc
+            - check: file=/usr/bin/nano
+              id: nano-binary
+              file:
+                file: /usr/bin/nano
+                exists: true
+            - check: file=/usr/bin/tree
+              id: tree-binary
+              file:
+                file: /usr/bin/tree
+                exists: true
+            - check: file=/usr/bin/wget
+              id: wget-binary
+              file:
+                file: /usr/bin/wget
+                exists: true
+            - check: file=/usr/bin/file
+              id: file-binary
+              file:
+                file: /usr/bin/file
+                exists: true
+            - check: file=/usr/bin/rsync
+              id: rsync-binary
+              file:
+                file: /usr/bin/rsync
+                exists: true
+            - check: package=procps-ng
+              id: procps-package
+              package:
+                package: procps-ng
+                package_map:
+                    fedora: procps-ng
+                    arch: procps-ng
+                    debian: procps
+                    ubuntu: procps
+                installed: true
+            - check: package=htop
+              id: htop-package
+              package:
+                package: htop
+                installed: true
+            - check: package=strace
+              id: strace-package
+              package:
+                package: strace
+                installed: true
+            - check: package=tcpdump
+              id: tcpdump-package
+              package:
+                package: tcpdump
+                installed: true
+            - check: package=tmux
+              id: tmux-package
+              package:
+                package: tmux
+                installed: true
+            - check: package=lsof
+              id: lsof-package
+              package:
+                package: lsof
+                installed: true

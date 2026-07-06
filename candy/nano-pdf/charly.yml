@@ -9,28 +9,20 @@ nano-pdf:
             script lands at ~/.pixi/envs/default/bin/nano-pdf and the distribution is
             importable, so it is verifiable by the script's existence, the installed
             distribution version it reports, and the CLI's own --help usage banner.
-    nano-pdf-require:
         require:
             - python
-    nano-pdf-step-0:
-        check: the nano-pdf console script exists in the default pixi environment
-        plugin: file
-        plugin_input:
-            file: ${HOME}/.pixi/envs/default/bin/nano-pdf
-            exists: true
-    nano-pdf-step-1:
-        check: the nano-pdf distribution is installed at version 0.2.1
-        exit_status: 0
-        stdout:
-            - contains: "0.2.1"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import importlib.metadata as m; print(m.version('nano-pdf'))"
-    nano-pdf-step-2:
-        check: the Typer CLI runs and prints its usage banner without error
-        exit_status: 0
-        stdout:
-            - contains: "Usage"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/nano-pdf --help
+        plan:
+            - check: the nano-pdf console script exists in the default pixi environment
+              file:
+                file: ${HOME}/.pixi/envs/default/bin/nano-pdf
+                exists: true
+            - check: the nano-pdf distribution is installed at version 0.2.1
+              exit_status: 0
+              stdout:
+                - contains: "0.2.1"
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import importlib.metadata as m; print(m.version('nano-pdf'))"
+            - check: the Typer CLI runs and prints its usage banner without error
+              exit_status: 0
+              stdout:
+                - contains: "Usage"
+              command: ${HOME}/.pixi/envs/default/bin/nano-pdf --help

@@ -30,23 +30,20 @@ plugin-feature:
             exits 0 and lists this project's candies — including the plugin-feature candy itself —
             proving the compiled-in command + the "feature" HostBuild seam (loader + plan model)
             end-to-end.
-    plugin-feature-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-feature
             providers:
                 - command:feature
-    # ADE build-context check: a deterministic check that does NOT depend on the project context
-    # (nor the "feature" HostBuild seam) the `charly feature` CLI needs at runtime. It is a trivial
-    # build-context `plugin: command` (the built-in command CHECK verb) running `true` — the
-    # mandatory ADE deterministic gate — mirroring the other compiled-in command candies
-    # (plugin-clean / plugin-settings / plugin-doctor). The full compiled-in `charly feature`
-    # end-to-end (list/pending/validate over the "feature" HostBuild seam) is exercised by the Go
-    # coverage (charly/host_build_feature_test.go) + the live R10 (check-feature-local).
-    feature-module-present:
-        check: a trivial deterministic build-context gate (the built-in command check verb running `true`); the full compiled-in `charly feature` end-to-end is exercised by the Go coverage (charly/host_build_feature_test.go) + the live R10 (check-feature-local)
-        id: feature-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on the project context
+              # (nor the "feature" HostBuild seam) the `charly feature` CLI needs at runtime. It is a trivial
+              # build-context `plugin: command` (the built-in command CHECK verb) running `true` — the
+              # mandatory ADE deterministic gate — mirroring the other compiled-in command candies
+              # (plugin-clean / plugin-settings / plugin-doctor). The full compiled-in `charly feature`
+              # end-to-end (list/pending/validate over the "feature" HostBuild seam) is exercised by the Go
+              # coverage (charly/host_build_feature_test.go) + the live R10 (check-feature-local).
+              check: a trivial deterministic build-context gate (the built-in command check verb running `true`); the full compiled-in `charly feature` end-to-end is exercised by the Go coverage (charly/host_build_feature_test.go) + the live R10 (check-feature-local)
+              id: feature-module-present
+              context:
+                - build
+              command: "true"

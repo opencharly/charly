@@ -9,52 +9,39 @@ sag:
             container user. On Fedora the alsa-lib-devel headers are pulled in
             for the cgo audio backend. The install is verifiable by the binary's
             presence and its resolution on PATH.
-    sag-require:
         require:
             - golang
-    sag-distro:
         distro:
             fedora:
                 package:
                     - alsa-lib-devel
-    sag-env:
         env:
             GOPATH: "~/go"
-    sag-path_append:
         path_append:
             - "~/go/bin"
-    sag-step-0:
-        run: |
-            command=go install github.com/steipete/sag/cmd/sag@latest
-            go clean -cache
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=go install github.com/steipete/sag/cmd/sag@latest
+                go clean -cache
+              run_as: "${USER}"
+              command: |
                 go install github.com/steipete/sag/cmd/sag@latest
                 go clean -cache
-    sag-step-1:
-        check: the sag binary is present in the user's Go bin directory
-        plugin: file
-        plugin_input:
-            file: ${HOME}/go/bin/sag
-            exists: true
-    sag-step-2:
-        check: the sag command resolves on PATH from the Go bin directory
-        exit_status: 0
-        stdout:
-            - contains: go/bin/sag
-        plugin: command
-        plugin_input:
-            command: command -v sag
-    sag-step-3:
-        check: the Fedora alsa development headers for sag's cgo audio backend are installed
-        exclude_distro:
-            - arch
-            - cachyos
-            - debian
-            - ubuntu
-        plugin: package
-        plugin_input:
-            package: alsa-lib-devel
-            installed: true
+            - check: the sag binary is present in the user's Go bin directory
+              file:
+                file: ${HOME}/go/bin/sag
+                exists: true
+            - check: the sag command resolves on PATH from the Go bin directory
+              exit_status: 0
+              stdout:
+                - contains: go/bin/sag
+              command: command -v sag
+            - check: the Fedora alsa development headers for sag's cgo audio backend are installed
+              exclude_distro:
+                - arch
+                - cachyos
+                - debian
+                - ubuntu
+              package:
+                package: alsa-lib-devel
+                installed: true

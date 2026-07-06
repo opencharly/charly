@@ -6,14 +6,44 @@ package main
 // whole real corpus.
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
-	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/errors"
+	"gopkg.in/yaml.v3"
 )
+
+// parseCorpusDocs decodes a corpus file's YAML multi-document stream and runs
+// each document through the SAME parseNodeTree the loader uses — which desugars
+// every plan step's `<word>: <input>` plugin sugar IN PLACE, so the CUE value
+// gates below see the internal plugin/plugin_input form exactly as the loader's
+// validate-before-execute gate does.
+func parseCorpusDocs(t *testing.T, f string, data []byte) []*genericNode {
+	t.Helper()
+	var all []*genericNode
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	for {
+		var doc yaml.Node
+		if err := dec.Decode(&doc); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			t.Errorf("%s: yaml: %v", f, err)
+			break
+		}
+		_, nodes, err := parseNodeTree(&doc)
+		if err != nil {
+			t.Errorf("FAIL %s: parse: %v", f, err)
+			continue
+		}
+		all = append(all, nodes...)
+	}
+	return all
+}
 
 // TestCueBox_Corpus validates every discovered box entity (node-form
 // box/<distro>/box/<name>/charly.yml) against #Box.
@@ -28,31 +58,29 @@ func TestCueBox_Corpus(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		doc, err := cueDocFromYAML(f, data)
-		if err != nil {
-			t.Errorf("%s: ingest: %v", f, err)
-			continue
-		}
 		// Unified node-form after EDGE-INHERIT cutover D: the `box:` kind merged
 		// INTO `candy:`. A discovered box/<distro>/box/<name>/charly.yml entity is a
-		// `<name>: {candy: {base|from: …}}` IMAGE (the former box:) — iterate the
-		// top-level nodes and validate each node's `candy` discriminator value
-		// against #Box (still the image def; `box`→#Box is registered as an internal
-		// validation key). A candy carrying neither base: nor from: is a LAYER
-		// fragment, not an image, so it is not validated here.
-		it, ferr := doc.Fields()
-		if ferr != nil {
-			continue
-		}
-		for it.Next() {
-			candy := it.Value().LookupPath(cue.ParsePath("candy"))
-			if !candy.Exists() {
+		// `<name>: {candy: {base|from: …}}` IMAGE (the former box:) — parse (which
+		// desugars the inline plan) and validate each node's `candy` discriminator
+		// value against #Box (still the image def; `box`→#Box is registered as an
+		// internal validation key). A candy carrying neither base: nor from: is a
+		// LAYER fragment, not an image, so it is not validated here.
+		for _, gn := range parseCorpusDocs(t, f, data) {
+			if gn.disc != "candy" || gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
 				continue
 			}
-			base := candy.LookupPath(cue.ParsePath("base"))
-			from := candy.LookupPath(cue.ParsePath("from"))
-			if !base.Exists() && !from.Exists() {
+			if mapValue(gn.discValue, "base") == nil && mapValue(gn.discValue, "from") == nil {
 				continue // a layer fragment, not an image — validated as #Candy elsewhere
+			}
+			b, merr := yaml.Marshal(gn.discValue)
+			if merr != nil {
+				t.Errorf("%s: marshal %q: %v", f, gn.name, merr)
+				continue
+			}
+			candy, cerr := cueDocFromYAML(f, b)
+			if cerr != nil {
+				t.Errorf("%s: ingest %q: %v", f, gn.name, cerr)
+				continue
 			}
 			if verr := validateEntityCUE("box", f, candy); verr != nil {
 				t.Errorf("FAIL %s", verr)
@@ -112,60 +140,28 @@ func TestCueKinds_Corpus(t *testing.T) {
 		}
 		// Register external deploy substrate words declared by this file's
 		// discovered candies, so a deploy/bed using such a word (e.g.
-		// check-exampledeploy -> exampledeploy) is recognized + skipped below — it
-		// is validated via the loader/bed path, not the core #NodeDoc grammar this
+		// check-exampledeploy -> exampledeploy) parses as an entity below — it
+		// is validated via the loader/bed path, not the kept core value defs this
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))
-		doc, err := cueDocFromYAML(f, data)
-		if err != nil {
-			t.Errorf("%s: ingest: %v", f, err)
-			continue
-		}
-		it, ierr := doc.Fields()
-		if ierr != nil {
-			t.Errorf("%s: fields: %v", f, ierr)
-			continue
-		}
-		for it.Next() {
-			name := it.Selector().Unquoted()
-			if docDirectiveSet[name] {
-				continue // version/repo/import/discover/defaults/provides — not entities
-			}
-			node := it.Value()
-			// A node's kind = the single reserved ENTITY discriminator it carries.
-			kind := ""
-			for _, k := range kinds {
-				if node.LookupPath(cue.ParsePath(k)).Exists() {
-					kind = k
-					break
-				}
-			}
-			if kind == "" {
-				// Not a CORE kind. It may be a PLUGIN kind (agent/module/package-group)
-				// — validated by the plugin's served #<Kind>Input schema at
-				// runPluginKind, NOT by #NodeDoc — so skip it here (this test covers the
-				// core #NodeDoc grammar only; the plugin path is exercised by
-				// LoadUnified + the per-plugin loader tests).
-				if nodeHasPluginKindDisc(node) {
-					continue
-				}
-				t.Errorf("FAIL %s:%s: no entity discriminator found in node-form node", f, name)
+		for _, gn := range parseCorpusDocs(t, f, data) {
+			if _, hasDef := kindValueDef[gn.disc]; !hasDef {
+				// A PLUGIN kind (agent/module/package-group/group/…) or an external
+				// deploy substrate — validated by the plugin's served schema at
+				// runPluginKind / the loader path, not by a kept core value def, so
+				// skip it here (parseNodeTree already hard-rejected any node with NO
+				// recognized discriminator).
 				continue
 			}
-			// Validate the node's inline discriminator value against its KEPT value def
-			// (#CandyValue / #<Kind>Value) non-concrete — the host-side closedness gate
-			// (validateKindValueCUE) over the real corpus.
-			cv := node.LookupPath(cue.ParsePath(kind))
-			vdef := sharedCueSchema.LookupPath(cue.ParsePath(kindValueDef[kind]))
-			if vdef.Err() != nil {
-				t.Errorf("FAIL %s: value def %s for kind %q not found: %v", f, kindValueDef[kind], kind, vdef.Err())
+			// Validate the node's (desugared) inline discriminator value against its
+			// KEPT value def (#CandyValue / #<Kind>Value) — the SAME host-side
+			// closedness gate the loader runs (validateKindValueCUE) over the real
+			// corpus.
+			if verr := validateKindValueCUE(gn); verr != nil {
+				t.Errorf("FAIL %s:%s.%s: %v", f, gn.disc, gn.name, verr)
 				continue
 			}
-			if verr := cv.Unify(vdef).Validate(); verr != nil {
-				t.Errorf("FAIL %s:%s.%s: %s", f, kind, name, errors.Details(verr, nil))
-				continue
-			}
-			counts[kind]++
+			counts[gn.disc]++
 			total++
 		}
 	}
@@ -175,28 +171,4 @@ func TestCueKinds_Corpus(t *testing.T) {
 	if total == 0 {
 		t.Fatal("no real entities validated (node-form discovery wrong?)")
 	}
-}
-
-// nodeHasPluginKindDisc reports whether a node's discriminator is a registered PLUGIN
-// kind (a ClassKind provider that is NOT a core kindWordSet entry — agent / module /
-// package-group). Such entities are validated by the plugin's served schema at
-// runPluginKind, not by #NodeDoc, so the core-grammar corpus test skips them.
-func nodeHasPluginKindDisc(node cue.Value) bool {
-	it, err := node.Fields()
-	if err != nil {
-		return false
-	}
-	for it.Next() {
-		k := it.Selector().Unquoted()
-		if kindWordSet[k] {
-			continue // a core kind — already handled by the kinds loop
-		}
-		if recognizedKind(k) {
-			return true // a registered OR pre-scan-declared plugin kind (incl. external structural kinds) — validated via the loader/bed path, not core #NodeDoc here
-		}
-		if isExternalDeploySubstrate(k) {
-			return true // an external (out-of-process) deploy substrate — validated via the loader/bed path, not core #NodeDoc here
-		}
-	}
-	return false
 }

@@ -22,20 +22,17 @@ func TestCharlyUpdatePreservesPerHostDeployFields(t *testing.T) {
 	}
 	// Per-host overlay keyed as `charly vm destroy`/`charly vm create` key it (vm:<name>):
 	// preemptible + env + tunnel — operator-authored local state.
-	yml := `version: 2026.174.1100
+	yml := `version: 2026.186.2323
 vm:cachyos-gpu:
     vm:
         from: cachyos-gpu
         vm_state:
             instance_id: original-uuid
             ssh_port: 2222
-    vm:cachyos-gpu-preemptible:
         preemptible:
             holds: [nvidia-gpu]
-    vm:cachyos-gpu-env:
         env:
-            - EDITOR=nvim
-    vm:cachyos-gpu-tunnel:
+            EDITOR: nvim
         tunnel:
             provider: tailscale
             private: all
@@ -65,7 +62,7 @@ vm:cachyos-gpu:
 	if node.Preemptible == nil || len(node.Preemptible.Holds) != 1 || node.Preemptible.Holds[0] != "nvidia-gpu" {
 		t.Errorf("charly update DROPPED preemptible: got %+v", node.Preemptible)
 	}
-	if len(node.Env) != 1 || node.Env[0] != "EDITOR=nvim" {
+	if len(node.Env) != 1 || node.Env["EDITOR"] != "nvim" {
 		t.Errorf("charly update DROPPED env: got %+v", node.Env)
 	}
 	if node.Tunnel == nil {
@@ -88,7 +85,7 @@ func TestVmDestroyRemovesPureAutoEntry(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	yml := `version: 2026.174.1100
+	yml := `version: 2026.186.2323
 vm:check-cachyos-gpu-vm:
     vm:
         from: check-cachyos-gpu-vm
@@ -119,7 +116,7 @@ vm:check-cachyos-gpu-vm:
 func TestGatherDeployNodesPerHostWins(t *testing.T) {
 	proj := t.TempDir()
 	// Committed project: cachyos-gpu, NO preemptible.
-	projYml := `version: 2026.174.1100
+	projYml := `version: 2026.186.2323
 cachyos-gpu:
     vm:
         from: cachyos-gpu
@@ -133,11 +130,10 @@ cachyos-gpu:
 	if err := os.MkdirAll(filepath.Join(cfg, "charly"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	hostYml := `version: 2026.174.1100
+	hostYml := `version: 2026.186.2323
 cachyos-gpu:
     vm:
         from: cachyos-gpu
-    cachyos-gpu-preemptible:
         preemptible:
             holds: [nvidia-gpu]
 `

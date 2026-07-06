@@ -9,13 +9,10 @@ steam:
             runtime instead of host libraries. The launcher binary, the gamescope
             binary, both RPM packages, and the runtime env pin are all directly
             verifiable inside the built image.
-    steam-require:
         require:
             - sway
-    steam-env:
         env:
             STEAM_RUNTIME_PREFER_HOST_LIBRARIES: "0"
-    steam-distro:
         distro:
             fedora:
                 package:
@@ -23,40 +20,28 @@ steam:
                     - gamescope
                 option:
                     - --allowerasing
-    steam-security:
         security:
             shm_size: "1g"
-    steam-volume:
         volume:
             - name: steam-data
               path: "~/.local/share/Steam"
-    steam-step-0:
-        check: the Steam client launcher is installed at /usr/bin/steam
-        plugin: file
-        plugin_input:
-            file: /usr/bin/steam
-            exists: true
-    steam-step-1:
-        check: the steam RPM is present in the package database
-        plugin: package
-        plugin_input:
-            package: steam
-            installed: true
-    steam-step-2:
-        check: the gamescope nested Wayland compositor binary is installed
-        plugin: file
-        plugin_input:
-            file: /usr/bin/gamescope
-            exists: true
-    steam-step-3:
-        check: the gamescope RPM is present in the package database
-        plugin: package
-        plugin_input:
-            package: gamescope
-            installed: true
-    steam-step-4:
-        check: STEAM_RUNTIME_PREFER_HOST_LIBRARIES is pinned to 0 so Steam uses its bundled runtime
-        stdout: "0"
-        plugin: command
-        plugin_input:
-            command: printenv STEAM_RUNTIME_PREFER_HOST_LIBRARIES
+        plan:
+            - check: the Steam client launcher is installed at /usr/bin/steam
+              file:
+                file: /usr/bin/steam
+                exists: true
+            - check: the steam RPM is present in the package database
+              package:
+                package: steam
+                installed: true
+            - check: the gamescope nested Wayland compositor binary is installed
+              file:
+                file: /usr/bin/gamescope
+                exists: true
+            - check: the gamescope RPM is present in the package database
+              package:
+                package: gamescope
+                installed: true
+            - check: STEAM_RUNTIME_PREFER_HOST_LIBRARIES is pinned to 0 so Steam uses its bundled runtime
+              stdout: "0"
+              command: printenv STEAM_RUNTIME_PREFER_HOST_LIBRARIES

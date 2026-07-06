@@ -12,7 +12,6 @@ jupyter-ml:
             probeable artifact: the llama-cli binary, the vLLM wheel in the pixi
             env, the spaCy model, the quarto labextension, and the live notebook +
             MCP API — so being wrong is observable, not silent.
-    jupyter-ml-require:
         require:
             - cuda
             - supervisord
@@ -25,16 +24,13 @@ jupyter-ml:
             # adopts the matching @github pin via reconcile later — the deliberate cross-repo
             # lag; the R10 bed loads the LOCAL candy via the superproject override.)
             - plugin-mcp
-    jupyter-ml-candy:
         candy:
             - llama-cpp
             - unsloth
             - jupyter-mcp
-    jupyter-ml-env:
         env:
             NVIDIA_PYTHON_PROJECT: "~/.pixi"
             LD_LIBRARY_PATH: "/usr/lib64:$HOME/llama.cpp"
-    jupyter-ml-distro:
         distro:
             arch:
                 package:
@@ -45,19 +41,15 @@ jupyter-ml:
                     - git
                     - gcc
                     - gcc-c++
-    jupyter-ml-port:
         port:
             - 8888
-    jupyter-ml-mcp_provide:
         mcp_provide:
             - name: jupyter
               url: "http://{{.ContainerName}}:8888/mcp"
               transport: http
-    jupyter-ml-volume:
         volume:
             - name: workspace
               path: /workspace
-    jupyter-ml-service:
         service:
             - name: jupyter-ml
               exec: "bash -c 'if [ -n \"${JUPYTER_TOKEN_FILE:-}\" ] && [ -f \"${JUPYTER_TOKEN_FILE}\" ]; then TOKEN=$(cat \"${JUPYTER_TOKEN_FILE}\"); exec jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"$TOKEN\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; else exec jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"\" --ServerApp.password=\"\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True; fi'"
@@ -65,104 +57,79 @@ jupyter-ml:
               working_directory: "%(ENV_HOME)s"
               enable: true
               scope: system
-    jupyter-ml-step-0:
-        check: the spaCy en_core_web_sm model loads inside the pixi default environment
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-    jupyter-ml-step-1:
-        check: the jupyterlab-quarto extension is enabled in the labextension registry
-        exit_status: 0
-        stdout:
-            - matches: "jupyterlab-quarto.*enabled.*OK"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
-    jupyter-ml-step-2:
-        check: the llama.cpp CLI binary is present from the composed llama-cpp candy
-        plugin: file
-        plugin_input:
-            file: ${HOME}/llama.cpp/llama-cli
-            exists: true
-    jupyter-ml-step-3:
-        check: the vLLM inference engine wheel is installed in the pixi env from the composed unsloth candy
-        exit_status: 0
-        stdout:
-            - contains: "Name: vllm"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/pip show vllm
-    jupyter-ml-step-4:
-        check: the workspace volume is mounted for notebooks
-        context:
-            - runtime
-        plugin: file
-        plugin_input:
-            file: /workspace
-            filetype: directory
-    jupyter-ml-step-5:
-        check: the JupyterLab service is running under supervisord
-        context:
-            - runtime
-        plugin: service
-        plugin_input:
-            service: jupyter-ml
-            running: true
-    jupyter-ml-step-6:
-        check: the JupyterLab REST API answers on the published port with a server version
-        context:
-            - runtime
-        plugin: http
-        plugin_input:
-            http: http://127.0.0.1:${HOST_PORT:8888}/api
-            status: 200
-            body:
-                - contains: version
-    jupyter-ml-step-7:
-        check: the Jupyter CRDT MCP server responds to a protocol ping
-        mcp: ping
-        timeout: 30s
-        eventually: 90s
-        retry_interval: 3s
-        context:
-            - runtime
-    jupyter-ml-step-8:
-        check: the MCP tool catalog exposes the cell manipulation tools
-        mcp: list-tools
-        stdout:
-            - contains: cell_insert
-            - contains: cell_execute
-        context:
-            - runtime
-    jupyter-ml-step-9:
-        agent-check: an agent can create a notebook and drive its cells through the MCP server end to end
-    spacy-import:
-        check: command=${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-        id: spacy-import
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
-    jupyterlab-quarto-enabled:
-        check: command=${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
-        id: jupyterlab-quarto-enabled
-        exit_status: 0
-        stdout:
-            # Regex (not literal contains) because `jupyter labextension list`
-            # emits ANSI color codes inline between "enabled" and "OK" even on
-            # a non-TTY pipe (e.g. \x1b[32menabled\x1b[0m \x1b[32mOK\x1b[0m).
-            # The .* spans them.
-            - matches: "jupyterlab-quarto.*enabled.*OK"
-        plugin: command
-        plugin_input:
-            command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
-    mcp-jupyter-ml-list-notebooks:
-        check: mcp=call
-        id: mcp-jupyter-ml-list-notebooks
-        mcp: call
-        tool: notebook_list
-        input: "{}"
-        exit_status: 0
-        context:
-            - runtime
+        plan:
+            - check: the spaCy en_core_web_sm model loads inside the pixi default environment
+              exit_status: 0
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+            - check: the jupyterlab-quarto extension is enabled in the labextension registry
+              exit_status: 0
+              stdout:
+                - matches: "jupyterlab-quarto.*enabled.*OK"
+              command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
+            - check: the llama.cpp CLI binary is present from the composed llama-cpp candy
+              file:
+                file: ${HOME}/llama.cpp/llama-cli
+                exists: true
+            - check: the vLLM inference engine wheel is installed in the pixi env from the composed unsloth candy
+              exit_status: 0
+              stdout:
+                - contains: "Name: vllm"
+              command: ${HOME}/.pixi/envs/default/bin/pip show vllm
+            - check: the workspace volume is mounted for notebooks
+              context:
+                - runtime
+              file:
+                file: /workspace
+                filetype: directory
+            - check: the JupyterLab service is running under supervisord
+              context:
+                - runtime
+              service:
+                service: jupyter-ml
+                running: true
+            - check: the JupyterLab REST API answers on the published port with a server version
+              context:
+                - runtime
+              http:
+                http: http://127.0.0.1:${HOST_PORT:8888}/api
+                status: 200
+                body:
+                    - contains: version
+            - check: the Jupyter CRDT MCP server responds to a protocol ping
+              mcp: ping
+              timeout: 30s
+              eventually: 90s
+              retry_interval: 3s
+              context:
+                - runtime
+            - check: the MCP tool catalog exposes the cell manipulation tools
+              mcp: list-tools
+              stdout:
+                - contains: cell_insert
+                - contains: cell_execute
+              context:
+                - runtime
+            - agent-check: an agent can create a notebook and drive its cells through the MCP server end to end
+            - check: command=${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+              id: spacy-import
+              exit_status: 0
+              command: ${HOME}/.pixi/envs/default/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
+            - check: command=${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
+              id: jupyterlab-quarto-enabled
+              exit_status: 0
+              stdout:
+                # Regex (not literal contains) because `jupyter labextension list`
+                # emits ANSI color codes inline between "enabled" and "OK" even on
+                # a non-TTY pipe (e.g. \x1b[32menabled\x1b[0m \x1b[32mOK\x1b[0m).
+                # The .* spans them.
+                - matches: "jupyterlab-quarto.*enabled.*OK"
+              command: ${HOME}/.pixi/envs/default/bin/jupyter labextension list 2>&1
+            - check: mcp=call
+              id: mcp-jupyter-ml-list-notebooks
+              mcp:
+                method: call
+                tool: notebook_list
+                input: "{}"
+              exit_status: 0
+              context:
+                - runtime

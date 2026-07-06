@@ -13,49 +13,37 @@ check-keepalive:
             `vscode-test` that back a `kind: check` pod bed. The candy installs nothing
             of its own; its observable effects are the composed supervisord binary and
             the assembled config carrying the keepalive program.
-    check-keepalive-candy:
         candy:
             - supervisord
-    check-keepalive-service:
         service:
             - name: keepalive
               exec: /usr/bin/sleep infinity
               restart: always
-    check-keepalive-step-0:
-        check: the assembled supervisord config registers a keepalive program
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            contains:
-                - "[program:keepalive]"
-    check-keepalive-step-1:
-        check: the keepalive program runs /usr/bin/sleep infinity
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            contains:
-                - "command=/usr/bin/sleep infinity"
-    check-keepalive-step-2:
-        check: composing check-keepalive pulls in the supervisord init binary
-        plugin: file
-        plugin_input:
-            file: /usr/bin/supervisord
-            exists: true
-    check-keepalive-step-3:
-        check: supervisord reports the keepalive program RUNNING on the live pod
-        stdout:
-            contains: RUNNING
-        context:
-            - runtime
-        plugin: command
-        plugin_input:
-            command: supervisorctl status keepalive
-    keepalive-program-registered:
-        check: file=/etc/supervisord.conf
-        id: keepalive-program-registered
-        plugin: file
-        plugin_input:
-            file: /etc/supervisord.conf
-            contains:
-                - "[program:keepalive]"
-                - "command=/usr/bin/sleep infinity"
+        plan:
+            - check: the assembled supervisord config registers a keepalive program
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - "[program:keepalive]"
+            - check: the keepalive program runs /usr/bin/sleep infinity
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - "command=/usr/bin/sleep infinity"
+            - check: composing check-keepalive pulls in the supervisord init binary
+              file:
+                file: /usr/bin/supervisord
+                exists: true
+            - check: supervisord reports the keepalive program RUNNING on the live pod
+              stdout:
+                contains: RUNNING
+              context:
+                - runtime
+              command: supervisorctl status keepalive
+            - check: file=/etc/supervisord.conf
+              id: keepalive-program-registered
+              file:
+                file: /etc/supervisord.conf
+                contains:
+                    - "[program:keepalive]"
+                    - "command=/usr/bin/sleep infinity"

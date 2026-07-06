@@ -19,7 +19,6 @@ android-test-apps:
             therefore on the running device: after the deploy, `pm list packages`
             reports org.fdroid.fdroid and the app launches, so the install is
             verifiable end to end over goadb (adb).
-    android-test-apps-apk:
         # apk: is the Android app-install package format (parallel to package:/aur:
         # but device-scoped). Each entry is either a `package:` (apkeep download by
         # id) or an `apk:` (committed local file). F-Droid is the canonical
@@ -29,21 +28,22 @@ android-test-apps:
             - package: org.fdroid.fdroid
               source: apk-pure
               arch: x86_64
-    android-test-apps-step-0:
-        check: F-Droid (org.fdroid.fdroid) is installed on the device after a target:android deploy
-        adb: shell
-        arg: [pm, list, packages, org.fdroid.fdroid]
-        stdout:
-            - contains: "org.fdroid.fdroid"
-        eventually: 120s
-        retry_interval: 5s
-        context:
-            - runtime
-    android-test-apps-step-1:
-        check: the installed F-Droid launches and its process is running
-        adb: shell
-        arg: [sh, -c, "monkey -p org.fdroid.fdroid -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3; pidof org.fdroid.fdroid"]
-        stdout:
-            - matches: "[0-9]"
-        context:
-            - runtime
+        plan:
+            - check: F-Droid (org.fdroid.fdroid) is installed on the device after a target:android deploy
+              adb:
+                method: shell
+                arg: [pm, list, packages, org.fdroid.fdroid]
+              stdout:
+                - contains: "org.fdroid.fdroid"
+              eventually: 120s
+              retry_interval: 5s
+              context:
+                - runtime
+            - check: the installed F-Droid launches and its process is running
+              adb:
+                method: shell
+                arg: [sh, -c, "monkey -p org.fdroid.fdroid -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 3; pidof org.fdroid.fdroid"]
+              stdout:
+                - matches: "[0-9]"
+              context:
+                - runtime

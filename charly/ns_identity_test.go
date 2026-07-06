@@ -86,18 +86,17 @@ func TestImportNamespace_DivergentVersionMutualCycle(t *testing.T) {
 	}
 
 	// child@vA imports the root back at a DIVERGENT version (vB).
-	seed("github.com/o/child@vA", `version: 2026.174.1100
+	seed("github.com/o/child@vA", `version: 2026.186.2323
 import:
   - up: '@github.com/o/root:vB'
 widget:
   candy:
     base: quay.io/fedora/fedora:43
     build: [rpm]
-  widget-distro:
     distro: [fedora]
 `)
 	// root@vB pins a DIVERGENT child (vC) — must never be loaded under the fix.
-	seed("github.com/o/root@vB", `version: 2026.174.1100
+	seed("github.com/o/root@vB", `version: 2026.186.2323
 import:
   - child: '@github.com/o/child:vC'
 `)
@@ -111,7 +110,7 @@ discover:
 
 	// Local root declares its identity explicitly and imports child@vA.
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.174.1100
+	writeFixture(t, root, "charly.yml", `version: 2026.186.2323
 repo: github.com/o/root
 import:
   - child: '@github.com/o/child:vA'
@@ -119,7 +118,6 @@ app:
   candy:
     base: child.widget
     build: [rpm]
-  app-distro:
     distro: [fedora]
 `)
 

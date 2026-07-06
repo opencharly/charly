@@ -34,22 +34,19 @@ plugin-settings:
             is the disposable check-commands-local bed: `charly settings list` exits 0 and lists the
             resolved runtime-config keys, proving the externalized command + the in-proc
             HostBuild("settings") dispatch end-to-end.
-    plugin-settings-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-settings
             providers:
                 - command:settings
-    # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
-    # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
-    # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-    # deterministic check every candy ships. The full `charly settings` end-to-end — the compiled-in
-    # in-proc HostBuild("settings") dispatch: `charly settings list` → exit 0 with the resolved
-    # runtime-config keys — is exercised by the live R10 bed (check-commands-local).
-    settings-module-present:
-        check: the settings command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly settings` end-to-end (the in-proc HostBuild settings dispatch) is exercised by the live R10 (check-commands-local)
-        id: settings-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
+              # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+              # deterministic check every candy ships. The full `charly settings` end-to-end — the compiled-in
+              # in-proc HostBuild("settings") dispatch: `charly settings list` → exit 0 with the resolved
+              # runtime-config keys — is exercised by the live R10 bed (check-commands-local).
+              check: the settings command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly settings` end-to-end (the in-proc HostBuild settings dispatch) is exercised by the live R10 (check-commands-local)
+              id: settings-module-present
+              context:
+                - build
+              command: "true"

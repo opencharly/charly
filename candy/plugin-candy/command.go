@@ -55,15 +55,17 @@ func runCandyCLI(args []string) error {
 	}
 }
 
-// candySet sets a dot-path value on candy/<name>/charly.yml, descending into the `candy:` body (candy
-// manifests are kind-keyed under `candy:`), via the generic kit.SetByDotPath.
+// candySet sets a dot-path value on candy/<name>/charly.yml, descending into the
+// entity's `candy:` body (compact node form: `<name>: {candy: {...}}`), via the
+// generic kit.SetByDotPath.
 func candySet(name, path, value string) error {
 	candyYml, err := candyManifestPath(name)
 	if err != nil {
 		return err
 	}
-	if path != "candy" && !strings.HasPrefix(path, "candy.") {
-		path = "candy." + path
+	prefix := name + ".candy"
+	if path != prefix && !strings.HasPrefix(path, prefix+".") {
+		path = prefix + "." + path
 	}
 	return kit.SetByDotPath(candyYml, path, value)
 }
@@ -91,8 +93,9 @@ func appendCandyPackages(name, section string, pkgs []string) error {
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("parsing %s: %w", candyYml, err)
 	}
-	// Candy manifests are kind-keyed under `candy:`; packages live under the `distro:` map inside it.
-	candy, err := candyBodyNode(&root)
+	// Compact node form: packages live under the `distro:` map inside the
+	// entity's `candy:` body.
+	candy, err := candyBodyNode(&root, name)
 	if err != nil {
 		return fmt.Errorf("%s: %w", candyYml, err)
 	}
@@ -151,9 +154,11 @@ func candyManifestPath(name string) (string, error) {
 	return candyYml, nil
 }
 
-// candyBodyNode returns the `candy:` body mapping of a kind-keyed candy manifest, synthesising the
-// wrapper for an empty/scalar root.
-func candyBodyNode(root *yaml.Node) (*yaml.Node, error) {
+// candyBodyNode returns the `candy:` body mapping of a compact node-form candy
+// manifest (`<name>: {candy: {...}}`): the named entity node when present (else
+// the single non-directive top-level entity), then its `candy:` child —
+// synthesising both for an empty root.
+func candyBodyNode(root *yaml.Node, name string) (*yaml.Node, error) {
 	doc := root
 	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
 		doc = doc.Content[0]
@@ -163,9 +168,22 @@ func candyBodyNode(root *yaml.Node) (*yaml.Node, error) {
 		doc.Tag = "!!map"
 		doc.Content = nil
 	}
-	candy := kit.MappingChild(doc, "candy")
+	entity := kit.MappingChild(doc, name)
+	if entity == nil {
+		// fall back to the single top-level entity (a renamed manifest)
+		for i := 0; i+1 < len(doc.Content); i += 2 {
+			if kit.MappingChild(doc.Content[i+1], "candy") != nil {
+				entity = doc.Content[i+1]
+				break
+			}
+		}
+	}
+	if entity == nil {
+		entity = ensureMappingChild(doc, name)
+	}
+	candy := kit.MappingChild(entity, "candy")
 	if candy == nil {
-		return nil, fmt.Errorf("not a kind-keyed candy manifest (no `candy:`)")
+		candy = ensureMappingChild(entity, "candy")
 	}
 	return candy, nil
 }

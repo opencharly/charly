@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // This file is charly's side of the plugin wire: the server wrappers that expose
@@ -129,6 +129,7 @@ type grpcProvider struct {
 	preresolve bool          // set ONLY for a class:deploy capability declaring a host-side preresolve step (F6)
 	validates  bool          // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
 	phase      string        // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary    string        // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
 }
 
 func (g *grpcProvider) Reserved() string     { return g.word }
@@ -255,6 +256,9 @@ func buildUnit(conn *sdk.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
 		}
 		// Every capability declares a lifecycle PHASE (F9; normalized, default runtime).
 		gp.phase = sdk.NormalizePhase(c.GetPhase())
+		if class == ClassVerb {
+			gp.primary = c.GetPrimary()
+		}
 		// A class:deploy capability may declare it brings its OWN venue lifecycle (F6): the host
 		// registers a wire-backed substrateLifecycle for it at plugin-load.
 		if class == ClassDeployTarget && c.GetLifecycle() {
@@ -274,3 +278,6 @@ func buildUnit(conn *sdk.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
 		Schema:    PluginSchema{CueSource: caps.GetSchemaCue(), InputDefs: inputDefs},
 	}, nil
 }
+
+// primaryInput implements primaryCarrier (the scalar-sugar primary, F/verb).
+func (g *grpcProvider) primaryInput() string { return g.primary }

@@ -195,6 +195,13 @@ func newestGoFile(dir string) (string, time.Time) {
 		if !strings.HasSuffix(p, ".go") {
 			return nil
 		}
+		// _test.go files never enter the built binary (go build excludes
+		// them), so an edited test cannot make the installed charly stale —
+		// counting them produced false-positive staleness during test-only
+		// work.
+		if strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
 		info, err := d.Info()
 		if err != nil {
 			return nil

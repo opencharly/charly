@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/kit"
 	"os"
 	"strings"
 )
@@ -44,7 +45,7 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 	noop := func() {}
 	// Non-spice op, or no VM context (r.Box empty) → nothing to resolve; the plugin's
 	// own box-mode / no-endpoint skip handles the degenerate cases.
-	if c.Spice == "" || r.Box == "" {
+	if c.Plugin != "spice" || r.Box == "" {
 		return nil, noop, nil
 	}
 	// The declarative verb honours CHARLY_LIBVIRT_URI for a remote hypervisor, exactly
@@ -55,12 +56,12 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 	// + any ssh tunnel stay host-side.
 	raw, ok := invokeVmPlugin("resolve-spice", r.vmTargetName(), uri)
 	if !ok {
-		res := failf(c, "spice: %s: vm plugin unavailable (go-libvirt resolution is out-of-process)", c.Spice)
+		res := failf(c, "spice: %s: vm plugin unavailable (go-libvirt resolution is out-of-process)", kit.InputStr(c, "method"))
 		return nil, noop, &res
 	}
 	var rr vmResolveResult
 	if err := json.Unmarshal(raw, &rr); err != nil {
-		res := failf(c, "spice: %s: decode resolve: %v", c.Spice, err)
+		res := failf(c, "spice: %s: decode resolve: %v", kit.InputStr(c, "method"), err)
 		return nil, noop, &res
 	}
 	tunnelTarget := rr.TunnelTarget
@@ -69,10 +70,10 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 		// SPICE-less cachyos-gpu operator vs the SPICE-having check bed); any other
 		// resolver error is a real FAIL.
 		if strings.Contains(rr.Error, noVmDisplayDeviceErr) {
-			res := skipf(c, fmt.Sprintf("spice %s — N/A: deployment has no SPICE graphics device (SPICE-less GPU desktop)", c.Spice))
+			res := skipf(c, fmt.Sprintf("spice %s — N/A: deployment has no SPICE graphics device (SPICE-less GPU desktop)", kit.InputStr(c, "method")))
 			return nil, noop, &res
 		}
-		res := failf(c, "spice: %s: %s", c.Spice, rr.Error)
+		res := failf(c, "spice: %s: %s", kit.InputStr(c, "method"), rr.Error)
 		return nil, noop, &res
 	}
 	ep := rr.Endpoint
@@ -94,12 +95,12 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 	// R10 bed is LOCAL, so this path is preserve-but-not-bed-exercised.
 	parsed, perr := ParseLibvirtURI(tunnelTarget)
 	if perr != nil {
-		res := failf(c, "spice: %s: %v", c.Spice, perr)
+		res := failf(c, "spice: %s: %v", kit.InputStr(c, "method"), perr)
 		return nil, noop, &res
 	}
 	tunnel, terr := NewSSHTunnel(parsed.Remote)
 	if terr != nil {
-		res := failf(c, "spice: %s: ssh tunnel to %s: %v", c.Spice, parsed.Remote, terr)
+		res := failf(c, "spice: %s: ssh tunnel to %s: %v", kit.InputStr(c, "method"), parsed.Remote, terr)
 		return nil, noop, &res
 	}
 	tunnelCleanup := func() { _ = tunnel.Close() }
@@ -107,7 +108,7 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 		localSock, _, ferr := tunnel.ForwardUnix(context.Background(), ep.SocketPath)
 		if ferr != nil {
 			tunnelCleanup()
-			res := failf(c, "spice: %s: forwarding remote socket %s: %v", c.Spice, ep.SocketPath, ferr)
+			res := failf(c, "spice: %s: forwarding remote socket %s: %v", kit.InputStr(c, "method"), ep.SocketPath, ferr)
 			return nil, noop, &res
 		}
 		return &SpiceEnv{Socket: localSock, Password: ep.Password}, tunnelCleanup, nil
@@ -115,7 +116,7 @@ func (r *Runner) preresolveSpiceEndpoint(c *Op) (env *SpiceEnv, cleanup func(), 
 	localAddr, _, ferr := tunnel.ForwardTCP(context.Background(), ep.Host, ep.Port)
 	if ferr != nil {
 		tunnelCleanup()
-		res := failf(c, "spice: %s: forwarding remote TCP %s:%d: %v", c.Spice, ep.Host, ep.Port, ferr)
+		res := failf(c, "spice: %s: forwarding remote TCP %s:%d: %v", kit.InputStr(c, "method"), ep.Host, ep.Port, ferr)
 		return nil, noop, &res
 	}
 	return &SpiceEnv{Address: localAddr, Password: ep.Password}, tunnelCleanup, nil

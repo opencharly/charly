@@ -3,7 +3,7 @@
 package params
 
 // #FeaturePlugin documents the command the plugin serves. The command keeps its entire contract
-// in its own CLI grammar (parsed from os.Args in CLI mode), so there is no plugin_input to
+// in its own CLI grammar (parsed from the pass-through argv), so there is no plugin_input to
 // validate here.
 type FeaturePlugin struct {
 	Command string `yaml:"command,omitempty" json:"command"`

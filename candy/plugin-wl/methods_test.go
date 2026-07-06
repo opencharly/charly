@@ -15,28 +15,30 @@ import (
 // by the R10 bed (the sway-browser-vnc `wl: sway-tree` + `wl: screenshot`), not these tests.
 
 // TestCheckRequiredModifiers mirrors the in-tree wlMethods Required specs that moved here.
+// The required names are plugin INPUT keys (the per-verb fields ride the desugared
+// plugin_input map since the schema-compaction cutover; sdk.OpModifierZero is map-first).
 func TestCheckRequiredModifiers(t *testing.T) {
 	cases := []struct {
 		method  string
 		op      spec.Op
 		wantErr string // substring; "" means no error
 	}{
-		{"status", spec.Op{Wl: "status"}, ""},
-		{"toplevel", spec.Op{Wl: "toplevel"}, ""},
-		{"geometry", spec.Op{Wl: "geometry"}, "target"},
-		{"geometry", spec.Op{Wl: "geometry", Target: "chrome"}, ""},
-		{"screenshot", spec.Op{Wl: "screenshot"}, "artifact"},
-		{"screenshot", spec.Op{Wl: "screenshot", Artifact: "/tmp/x.png"}, ""},
-		{"click", spec.Op{Wl: "click"}, "x"},
-		{"click", spec.Op{Wl: "click", X: 10, Y: 20}, ""},
-		{"scroll", spec.Op{Wl: "scroll", X: 1, Y: 1}, "direction"},
-		{"scroll", spec.Op{Wl: "scroll", X: 1, Y: 1, Direction: "down"}, ""},
-		{"type", spec.Op{Wl: "type"}, "text"},
-		{"key", spec.Op{Wl: "key"}, "key"},
-		{"key-combo", spec.Op{Wl: "key-combo"}, "combo"},
-		{"sway-tree", spec.Op{Wl: "sway-tree"}, ""},
-		{"overlay-show", spec.Op{Wl: "overlay-show"}, "text"},
-		{"overlay-show", spec.Op{Wl: "overlay-show", Text: "hello"}, ""},
+		{"status", spec.Op{PluginInput: map[string]any{"method": "status"}}, ""},
+		{"toplevel", spec.Op{PluginInput: map[string]any{"method": "toplevel"}}, ""},
+		{"geometry", spec.Op{PluginInput: map[string]any{"method": "geometry"}}, "target"},
+		{"geometry", spec.Op{PluginInput: map[string]any{"method": "geometry", "target": "chrome"}}, ""},
+		{"screenshot", spec.Op{PluginInput: map[string]any{"method": "screenshot"}}, "artifact"},
+		{"screenshot", spec.Op{PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x.png"}}, ""},
+		{"click", spec.Op{PluginInput: map[string]any{"method": "click"}}, "x"},
+		{"click", spec.Op{PluginInput: map[string]any{"method": "click", "x": 10, "y": 20}}, ""},
+		{"scroll", spec.Op{PluginInput: map[string]any{"method": "scroll", "x": 1, "y": 1}}, "direction"},
+		{"scroll", spec.Op{PluginInput: map[string]any{"method": "scroll", "x": 1, "y": 1, "direction": "down"}}, ""},
+		{"type", spec.Op{PluginInput: map[string]any{"method": "type"}}, "text"},
+		{"key", spec.Op{PluginInput: map[string]any{"method": "key"}}, "key"},
+		{"key-combo", spec.Op{PluginInput: map[string]any{"method": "key-combo"}}, "combo"},
+		{"sway-tree", spec.Op{PluginInput: map[string]any{"method": "sway-tree"}}, ""},
+		{"overlay-show", spec.Op{PluginInput: map[string]any{"method": "overlay-show"}}, "text"},
+		{"overlay-show", spec.Op{PluginInput: map[string]any{"method": "overlay-show", "text": "hello"}}, ""},
 	}
 	for _, tc := range cases {
 		err := sdk.RequireModifiers(tc.method, &tc.op, requiredModifiers)

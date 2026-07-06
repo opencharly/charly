@@ -78,8 +78,8 @@ const BED_SCHEMA = {
 
 phase('Discover')
 const discoverPrompt = requested.length
-  ? `Read the project charly.yml (its top-level check: block) and every box/*/charly.yml check: block in this project. For each of these bed names: ${requested.join(', ')} — return its kind:check target kind (pod/vm/local) and the charly project dir it lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Return JSON {beds:[{bed,target,dir}]}. Do NOT run anything; do NOT return beds not in the list.`
-  : `Read the project charly.yml (its top-level check: block) and every box/*/charly.yml check: block in this project. Return ALL kind:check bed entities as JSON {beds:[{bed,target,dir}]} where target is the entity .target field (pod/vm/local) and dir is the charly project dir the bed lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Do NOT run anything.`
+  ? `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. For each of these bed names: ${requested.join(', ')} — return its substrate kind word and the charly project dir it lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Return JSON {beds:[{bed,target,dir}]}. Do NOT run anything; do NOT return beds not in the list.`
+  : `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. Return ALL such beds as JSON {beds:[{bed,target,dir}]} where target is the substrate kind word and dir is the charly project dir the bed lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Exclude non-disposable deploys (operator profiles). Do NOT run anything.`
 const discovered = await agent(discoverPrompt, { schema: DISCOVER_SCHEMA, label: 'discover-beds', phase: 'Discover' })
 const beds = (discovered && discovered.beds ? discovered.beds : []).filter(Boolean)
 

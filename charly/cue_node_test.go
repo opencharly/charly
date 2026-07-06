@@ -44,18 +44,18 @@ func normalizeAgentDoc(t *testing.T, doc string) error {
 	return nil
 }
 
-// TestNodeFormSteps_RejectsStepTypo proves E1's plan-step typo gate: a node-form
-// entity whose plan step carries an unknown Op field is rejected. Before E1 this
-// passed silently — node-form steps are SIBLING nodes never typed against the closed
-// #Step/#Op (validateNodeFormSteps, run at the validate entrypoint, closes that gap).
+// TestNodeFormSteps_RejectsStepTypo proves the plan-step typo gate on the compact
+// form: an entity whose inline plan step carries an unknown key is rejected
+// (an unknown step key is neither an authored #Op field nor a resolvable
+// plugin-verb sugar word), while a clean builtin-verb step is accepted.
 func TestNodeFormSteps_RejectsStepTypo(t *testing.T) {
-	clean := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n  s:\n    run: fetch the binary\n    download: \"http://example/x\"\n    extract: tar.gz\n"
+	clean := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n    plan:\n      - run: fetch the binary\n        download: \"http://example/x\"\n        extract: tar.gz\n"
 	if err := validateNodeFormSteps("t", []byte(clean)); err != nil {
 		t.Fatalf("clean candy plan step rejected: %v", err)
 	}
-	bad := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n  s:\n    run: fetch the binary\n    download: \"http://example/x\"\n    extract: tar.gz\n    zz_bad_op_field: 1\n"
+	bad := "c:\n  candy:\n    version: \"2026.150.0000\"\n    description: x\n    plan:\n      - run: fetch the binary\n        download: \"http://example/x\"\n        extract: tar.gz\n        zz_bad_op_field: 1\n"
 	if err := validateNodeFormSteps("t", []byte(bad)); err == nil {
-		t.Fatal("a plan step with unknown Op field zz_bad_op_field was NOT rejected — the step-typo gate (E1) is broken")
+		t.Fatal("a plan step with unknown key zz_bad_op_field was NOT rejected — the step-typo gate is broken")
 	}
 }
 

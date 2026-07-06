@@ -9,16 +9,13 @@ plugin-example-dispatch:
             exercises the nested-broker round-trip generically — the generalization of the
             RunHostStep ExternalPlugin arm to any class/op + a standalone build request. The
             machinery M13/M14/M16/M17 reuse.
-    plugin-example-dispatch-decl:
         plugin:
             providers:
                 - verb:exampledispatch
             source: github.com/opencharly/charly/candy/plugin-example-dispatch
-    exampledispatch-module-present:
-        check: the F10 dispatch demo plugin ships a buildable Go module the host can build + serve out-of-process
-        id: exampledispatch-module-present
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the F10 dispatch demo plugin ships a buildable Go module the host can build + serve out-of-process
+              id: exampledispatch-module-present
+              context:
+                - build
+              command: "true"

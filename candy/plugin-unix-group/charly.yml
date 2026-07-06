@@ -7,16 +7,16 @@ plugin-unix-group:
             render an idempotent `groupadd`. A HOST-COUPLED verb on the
             sdk/kit contract (CheckVerbProvider + ProvisionActor), so it is
             COMPILED-IN-ONLY. No matchers — direct field comparison.
-    plugin-unix-group-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-unix-group
             providers:
                 - verb:unix_group
-    unix-group-verb-dispatches:
-        check: the unix_group verb dispatches through the provider registry and probes a group via getent group
-        id: unix-group-verb-dispatches
-        plugin: unix_group
-        plugin_input:
-            unix_group: root
-            gid: 0
-        context: [runtime]
+            primary:
+                unix_group: unix_group
+        plan:
+            - check: the unix_group verb dispatches through the provider registry and probes a group via getent group
+              id: unix-group-verb-dispatches
+              unix_group:
+                unix_group: root
+                gid: 0
+              context: [runtime]

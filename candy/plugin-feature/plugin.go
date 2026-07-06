@@ -18,16 +18,12 @@ package feature
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 // NewProvider returns the feature provider.
 func NewProvider() pb.ProviderServer { return &provider{} }
@@ -38,7 +34,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.179.0000",
 		[]sdk.ProvidedCapability{{Class: "command", Word: "feature"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the out-of-process CLI entrypoint (only reached when feature is NOT compiled in). feature

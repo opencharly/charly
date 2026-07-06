@@ -13,10 +13,8 @@ chrome:
             .desktop entry. (A `--version` invocation is NOT a reliable check —
             when chrome-cdp wraps the binary it launches a full browser instead of
             printing a version banner, contending with the running desktop chrome.)
-    chrome-env:
         env:
             CHROME_FLAGS: "--ozone-platform=wayland --enable-features=UseOzonePlatform,VaapiVideoDecodeLinuxGL,VaapiIgnoreDriverChecks"
-    chrome-env_accept:
         env_accept:
             - name: HTTP_PROXY
               description: "HTTP proxy URL for Chrome (e.g., http://proxy:8080)"
@@ -24,13 +22,11 @@ chrome:
               description: "HTTPS proxy URL for Chrome (e.g., http://proxy:8080)"
             - name: NO_PROXY
               description: "Comma-separated bypass list (e.g., localhost,127.0.0.1,.internal)"
-    chrome-security:
         security:
             shm_size: "1g"
             memory_max: "6g"
             memory_high: "5g"
             memory_swap_max: "2g"
-    chrome-package:
         package:
             - alsa-lib
             - at-spi2-core
@@ -40,7 +36,6 @@ chrome:
             - nss
             - procps-ng
             - libva-utils
-    chrome-distro:
         distro:
             arch:
                 package:
@@ -62,35 +57,26 @@ chrome:
                     - name: google-chrome
                       url: "https://dl.google.com/linux/chrome/rpm/stable/x86_64"
                       gpgkey: "https://dl.google.com/linux/linux_signing_key.pub"
-    chrome-volume:
         volume:
             - name: chrome-data
               path: "~/.chrome-debug"
-    chrome-step-0:
-        run: command=BROWSER= xdg-settings set default-web-browser google-chrome.desktop || true
-        run_as: "${USER}"
-        plugin: command
-        plugin_input:
-            command: BROWSER= xdg-settings set default-web-browser google-chrome.desktop || true
-    chrome-step-1:
-        check: the google-chrome-stable binary is present at its canonical path
-        plugin: file
-        plugin_input:
-            file: /usr/bin/google-chrome-stable
-            exists: true
-    chrome-step-2:
-        check: the google-chrome.desktop entry the default-browser task references is installed
-        plugin: file
-        plugin_input:
-            file: /usr/share/applications/google-chrome.desktop
-            exists: true
-    chrome-package-installed:
-        check: package=google-chrome-stable
-        id: chrome-package-installed
-        plugin: package
-        plugin_input:
-            package: google-chrome-stable
-            package_map:
-                arch: google-chrome
-                fedora: google-chrome-stable
-            installed: true
+        plan:
+            - run: command=BROWSER= xdg-settings set default-web-browser google-chrome.desktop || true
+              run_as: "${USER}"
+              command: BROWSER= xdg-settings set default-web-browser google-chrome.desktop || true
+            - check: the google-chrome-stable binary is present at its canonical path
+              file:
+                file: /usr/bin/google-chrome-stable
+                exists: true
+            - check: the google-chrome.desktop entry the default-browser task references is installed
+              file:
+                file: /usr/share/applications/google-chrome.desktop
+                exists: true
+            - check: package=google-chrome-stable
+              id: chrome-package-installed
+              package:
+                package: google-chrome-stable
+                package_map:
+                    arch: google-chrome
+                    fedora: google-chrome-stable
+                installed: true

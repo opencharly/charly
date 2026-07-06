@@ -11,46 +11,36 @@ typst:
             `typst --version` prints a parseable version on stdout, and
             `typst compile` turns a minimal .typ source into a real PDF whose
             bytes start with the %PDF magic.
-    typst-step-0:
-        run: |
-            command=VER=$(curl -fsSL https://api.github.com/repos/typst/typst/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-            curl -fsSL "https://github.com/typst/typst/releases/download/v${VER}/typst-${BUILD_ARCH}-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz
-            tar -xJf /tmp/typst.tar.xz -C /tmp/
-            find /tmp -name "typst" -type f -executable | head -1 | xargs -I{} mv {} /usr/local/bin/typst
-            chmod +x /usr/local/bin/typst
-            rm -rf /tmp/typst.tar.xz /tmp/typst-*
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=VER=$(curl -fsSL https://api.github.com/repos/typst/typst/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+                curl -fsSL "https://github.com/typst/typst/releases/download/v${VER}/typst-${BUILD_ARCH}-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz
+                tar -xJf /tmp/typst.tar.xz -C /tmp/
+                find /tmp -name "typst" -type f -executable | head -1 | xargs -I{} mv {} /usr/local/bin/typst
+                chmod +x /usr/local/bin/typst
+                rm -rf /tmp/typst.tar.xz /tmp/typst-*
+              run_as: root
+              command: |
                 VER=$(curl -fsSL https://api.github.com/repos/typst/typst/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
                 curl -fsSL "https://github.com/typst/typst/releases/download/v${VER}/typst-${BUILD_ARCH}-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz
                 tar -xJf /tmp/typst.tar.xz -C /tmp/
                 find /tmp -name "typst" -type f -executable | head -1 | xargs -I{} mv {} /usr/local/bin/typst
                 chmod +x /usr/local/bin/typst
                 rm -rf /tmp/typst.tar.xz /tmp/typst-*
-    typst-step-1:
-        check: the typst binary is installed at /usr/local/bin/typst
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/typst
-            exists: true
-    typst-step-2:
-        check: typst reports a parseable version on stdout
-        exit_status: 0
-        stdout:
-            - matches: "typst [0-9]"
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/typst --version
-    typst-step-3:
-        check: typst compiles a minimal .typ source into a real PDF whose bytes start with the %PDF magic
-        exit_status: 0
-        stdout:
-            - contains: "%PDF"
-        plugin: command
-        plugin_input:
-            command: |
+            - check: the typst binary is installed at /usr/local/bin/typst
+              file:
+                file: /usr/local/bin/typst
+                exists: true
+            - check: typst reports a parseable version on stdout
+              exit_status: 0
+              stdout:
+                - matches: "typst [0-9]"
+              command: /usr/local/bin/typst --version
+            - check: typst compiles a minimal .typ source into a real PDF whose bytes start with the %PDF magic
+              exit_status: 0
+              stdout:
+                - contains: "%PDF"
+              command: |
                 printf '= Hello\n\nTypst smoke test.\n' > /tmp/typst-smoke.typ
                 /usr/local/bin/typst compile /tmp/typst-smoke.typ /tmp/typst-smoke.pdf
                 head -c 4 /tmp/typst-smoke.pdf

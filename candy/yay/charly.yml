@@ -7,35 +7,27 @@ yay:
             pulls base-devel + git (on Arch) for building AUR packages.
             Verifiable: the yay binary lands at /usr/local/bin/yay, is executable,
             and reports its version.
-    yay-distro:
         distro:
             arch:
                 package:
                     - base-devel
                     - git
-    yay-step-0:
-        run: |
-            command=URL=$(curl -fsSL https://api.github.com/repos/Jguer/yay/releases/latest \
-              | grep -o "https://github.com/Jguer/yay/releases/download/[^\"]*_${BUILD_ARCH}.tar.gz")
-            curl -fsSL "$URL" | tar -xzf - -C /usr/local/bin --strip-components=1 --wildcards '*/yay'
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: |
+                command=URL=$(curl -fsSL https://api.github.com/repos/Jguer/yay/releases/latest \
+                  | grep -o "https://github.com/Jguer/yay/releases/download/[^\"]*_${BUILD_ARCH}.tar.gz")
+                curl -fsSL "$URL" | tar -xzf - -C /usr/local/bin --strip-components=1 --wildcards '*/yay'
+              run_as: root
+              command: |
                 URL=$(curl -fsSL https://api.github.com/repos/Jguer/yay/releases/latest \
                   | grep -o "https://github.com/Jguer/yay/releases/download/[^\"]*_${BUILD_ARCH}.tar.gz")
                 curl -fsSL "$URL" | tar -xzf - -C /usr/local/bin --strip-components=1 --wildcards '*/yay'
-    yay-step-1:
-        check: the yay binary is installed at /usr/local/bin/yay
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/yay
-            exists: true
-    yay-step-2:
-        check: yay runs and reports its version
-        exit_status: 0
-        stdout:
-            - matches: "yay v[0-9]"
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/yay --version
+            - check: the yay binary is installed at /usr/local/bin/yay
+              file:
+                file: /usr/local/bin/yay
+                exists: true
+            - check: yay runs and reports its version
+              exit_status: 0
+              stdout:
+                - matches: "yay v[0-9]"
+              command: /usr/local/bin/yay --version

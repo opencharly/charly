@@ -8,7 +8,6 @@ pixi:
             and environment manager that backs the python / python-ml
             candies and the fedora/arch builder images. Verifiable by
             asserting the binary landed on PATH and reports its version.
-    pixi-shell:
         # Shell-init: put ~/.pixi/bin (where pixi installs per-user environments
         # and global tools) on the interactive shell PATH. Container images get
         # this via the embedded build vocabulary's runtime_env on the pixi BUILDER definition; this
@@ -17,36 +16,27 @@ pixi:
         shell:
             path_append:
                 - "~/.pixi/bin"
-    pixi-var:
         var:
             # Pinned to the latest pixi release. Was an unpinned `releases/latest`
             # URL, which made the SAME candy version install a different pixi over
             # time (non-reproducible). Bump deliberately to adopt a newer pixi.
             PIXI_VERSION: v0.70.2
-    pixi-step-0:
-        run: download=https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-${BUILD_ARCH}-unknown-linux-musl.tar.gz
-        download: "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-${BUILD_ARCH}-unknown-linux-musl.tar.gz"
-        extract: tar.gz
-        to: /usr/local/bin
-        run_as: root
-    pixi-step-1:
-        check: the pixi binary is installed at /usr/local/bin/pixi
-        plugin: file
-        plugin_input:
-            file: /usr/local/bin/pixi
-            exists: true
-    pixi-step-2:
-        check: running pixi --version reports the pinned v0.70.2 release
-        exit_status: 0
-        stdout:
-            - matches: "0\\.70\\.2"
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/pixi --version
-    pixi-version:
-        check: command=/usr/local/bin/pixi --version
-        id: pixi-version
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/local/bin/pixi --version
+        plan:
+            - run: download=https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-${BUILD_ARCH}-unknown-linux-musl.tar.gz
+              download: "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-${BUILD_ARCH}-unknown-linux-musl.tar.gz"
+              extract: tar.gz
+              to: /usr/local/bin
+              run_as: root
+            - check: the pixi binary is installed at /usr/local/bin/pixi
+              file:
+                file: /usr/local/bin/pixi
+                exists: true
+            - check: running pixi --version reports the pinned v0.70.2 release
+              exit_status: 0
+              stdout:
+                - matches: "0\\.70\\.2"
+              command: /usr/local/bin/pixi --version
+            - check: command=/usr/local/bin/pixi --version
+              id: pixi-version
+              exit_status: 0
+              command: /usr/local/bin/pixi --version

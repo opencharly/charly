@@ -539,7 +539,7 @@ binds host `SSH_AUTH_SOCK` / `GPG_AGENT_SOCK` into the container.
 > with the same DSL as production deploys.
 
 Tests are first-class. Every `charly.yml` (box + candy) declares its
-plan as an ordered set of child step nodes, each carrying exactly one
+plan as an ordered, unnamed `plan:` list of steps, each carrying exactly one
 intent keyword — `run:` (deterministic state-change, the install timeline),
 `check:` (deterministic idempotent probe), `agent-run:` (an agent that
 may mutate), `agent-check:` (read-only agent assessment), or

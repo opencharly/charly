@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/charly/candy/plugin-cdp/params"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
@@ -62,7 +63,9 @@ type devToolsTab struct {
 
 // requiredModifiers mirrors the in-tree cdpMethods required-field specs (the host's
 // validate-time + runtime required-modifier check keyed off the former in-proc live-verb seam,
-// which an external verb is not — so the check moves HERE, at dispatch).
+// which an external verb is not — so the check moves HERE, at dispatch). The strings name
+// INPUT keys (the desugared plugin_input map); `raw` requires `http_method` — the renamed
+// former shared `method` modifier (the input's `method` key is the VERB method).
 var requiredModifiers = map[string][]string{
 	"url":           {"tab"},
 	"text":          {"tab"},
@@ -70,7 +73,7 @@ var requiredModifiers = map[string][]string{
 	"eval":          {"tab", "expression"},
 	"axtree":        {"tab"},
 	"coords":        {"tab", "selector"},
-	"raw":           {"tab", "method"},
+	"raw":           {"tab", "http_method"},
 	"wait":          {"tab", "selector"},
 	"screenshot":    {"tab", "artifact"},
 	"open":          {"url"},
@@ -86,12 +89,14 @@ var requiredModifiers = map[string][]string{
 }
 
 // dispatch runs one cdp method against the host-resolved DevTools endpoint and returns
-// its captured output. A returned error is the verb FAILING (the in-tree CLI Run()
-// returning an error → exit 1); provider.go maps it through the exit_status / stderr
-// matchers. The HTTP methods (status/open/list/close) hit the /json surface directly;
-// every other method opens a per-tab CDP WebSocket.
-func dispatch(ep *cdpEndpoint, op *spec.Op) (string, error) {
-	method := string(op.Cdp)
+// its captured output. The per-verb fields ride the typed plugin input (params.CdpInput,
+// decoded once by provider.go); op stays for the SHARED #Op fields (the required-modifier
+// check off op.PluginInput, the general timeout). A returned error is the verb FAILING
+// (the in-tree CLI Run() returning an error → exit 1); provider.go maps it through the
+// exit_status / stderr matchers. The HTTP methods (status/open/list/close) hit the /json
+// surface directly; every other method opens a per-tab CDP WebSocket.
+func dispatch(ep *cdpEndpoint, op *spec.Op, in *params.CdpInput) (string, error) {
+	method := in.Method
 	if err := sdk.RequireModifiers(method, op, requiredModifiers); err != nil {
 		return "", err
 	}
@@ -100,15 +105,15 @@ func dispatch(ep *cdpEndpoint, op *spec.Op) (string, error) {
 	case "status":
 		return runStatus(ep)
 	case "open":
-		return runOpen(ep, op.URL)
+		return runOpen(ep, in.URL)
 	case "list":
 		return runList(ep)
 	case "close":
-		return runClose(ep, op.Tab)
+		return runClose(ep, in.Tab)
 	}
 
 	// WebSocket methods: connect the tab.
-	client, err := connectTab(ep.URL, op.Tab)
+	client, err := connectTab(ep.URL, in.Tab)
 	if err != nil {
 		return "", err
 	}
@@ -122,33 +127,33 @@ func dispatch(ep *cdpEndpoint, op *spec.Op) (string, error) {
 	case "url":
 		return runURL(client)
 	case "eval":
-		return runEval(client, op.Expression)
+		return runEval(client, in.Expression)
 	case "axtree":
-		return runAxtree(client, op.Query)
+		return runAxtree(client, in.Query)
 	case "coords":
-		return runCoords(client, op.Selector)
+		return runCoords(client, in.Selector)
 	case "raw":
-		return runRaw(client, op.Method, op.Params)
+		return runRaw(client, in.HttpMethod, in.Params)
 	case "wait":
-		return runWait(client, op.Selector, cdpTimeout(op))
+		return runWait(client, in.Selector, cdpTimeout(op))
 	case "screenshot":
-		return runScreenshot(client, op.Artifact)
+		return runScreenshot(client, in.Artifact)
 	case "click":
-		return runClick(client, op.Selector)
+		return runClick(client, in.Selector)
 	case "type":
-		return runType(client, op.Selector, op.Text)
+		return runType(client, in.Selector, in.Text)
 	case "spa-status":
 		return runSpaStatus(client)
 	case "spa-click":
-		return runSpaClick(client, op.X, op.Y, op.Button)
+		return runSpaClick(client, in.X, in.Y, in.Button)
 	case "spa-mouse":
-		return runSpaMouse(client, op.X, op.Y)
+		return runSpaMouse(client, in.X, in.Y)
 	case "spa-type":
-		return runSpaType(client, op.Text)
+		return runSpaType(client, in.Text)
 	case "spa-key":
-		return runSpaKey(client, op.KeyName)
+		return runSpaKey(client, in.KeyName)
 	case "spa-key-combo":
-		return runSpaKeyCombo(client, op.Combo)
+		return runSpaKeyCombo(client, in.Combo)
 	}
 	return "", fmt.Errorf("unknown cdp method %q", method)
 }

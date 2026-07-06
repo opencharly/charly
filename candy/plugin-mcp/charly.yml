@@ -10,10 +10,11 @@ plugin-mcp:
             github.com/modelcontextprotocol/go-sdk library lives HERE, out of charly's
             core:
 
-              - verb:mcp — the `mcp` MCP-protocol CHECK verb (the go-sdk CLIENT). `mcp:`
-                authoring is unchanged: the verb keeps its `mcp:` discriminator + every
-                modifier (mcp_name/tool/uri/input/timeout) + the #McpMethod enum on
-                charly's core #Op and dispatches through the provider registry exactly
+              - verb:mcp — the `mcp` MCP-protocol CHECK verb (the go-sdk CLIENT). Since
+                the schema-compaction cutover an authored `mcp:` step desugars to the
+                internal plugin/plugin_input envelope, and every mcp-exclusive modifier
+                (method/mcp_name/tool/uri/input) lives in the plugin's OWN #McpInput
+                (schema/mcp.cue); the verb dispatches through the provider registry exactly
                 like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider). The
                 host owns the podman / OCI-label / port-mapping resolution
                 (preresolveMcpEndpoint), pre-resolving the declared mcp_provides + the
@@ -38,33 +39,29 @@ plugin-mcp:
             The R10 consumer is an MCP-providing pod bed whose check composes this plugin
             (e.g. jupyter / chrome-devtools-mcp) plus the charly-mcp candy that runs
             `charly mcp serve`.
-    plugin-mcp-decl:
         plugin:
             source: github.com/opencharly/charly/candy/plugin-mcp
             providers:
                 - verb:mcp
                 - command:mcp
-    mcp-verb-dispatches:
-        check: the mcp verb dispatches through the provider registry and pings the declared MCP servers on a live deployment (the out-of-process plugin verb dials the host-resolved MCP endpoint)
-        id: mcp-verb-dispatches
-        mcp: ping
-        timeout: 30s
-        eventually: 90s
-        retry_interval: 3s
-        context:
-            - runtime
-    # ADE build-context check: a deterministic check that does NOT depend on a live MCP
-    # deployment — it proves the candy ships a buildable Go module (go.mod + the provider
-    # main) the host can build, serve verb:mcp over gRPC, and fork/exec for command:mcp.
-    # Mirrors candy/plugin-example-command's pattern (a trivial build-context
-    # `plugin: command` running `true`). The full `charly mcp serve` end-to-end is
-    # exercised by the live R10 (the charly-mcp pod bed) — `charly mcp serve --listen`
-    # then `mcp: ping` against it — and the `--stdio` host smoke test.
-    mcp-command-advertised:
-        check: the out-of-tree plugin ships a buildable Go module providing command:mcp (the externalized `charly mcp` server) the host can build + fork/exec; the full `charly mcp serve` end-to-end is exercised by the live R10
-        id: mcp-command-advertised
-        context:
-            - build
-        plugin: command
-        plugin_input:
-            command: "true"
+        plan:
+            - check: the mcp verb dispatches through the provider registry and pings the declared MCP servers on a live deployment (the out-of-process plugin verb dials the host-resolved MCP endpoint)
+              id: mcp-verb-dispatches
+              mcp: ping
+              timeout: 30s
+              eventually: 90s
+              retry_interval: 3s
+              context:
+                - runtime
+            - # ADE build-context check: a deterministic check that does NOT depend on a live MCP
+              # deployment — it proves the candy ships a buildable Go module (go.mod + the provider
+              # main) the host can build, serve verb:mcp over gRPC, and fork/exec for command:mcp.
+              # Mirrors candy/plugin-example-command's pattern (a trivial build-context
+              # `plugin: command` running `true`). The full `charly mcp serve` end-to-end is
+              # exercised by the live R10 (the charly-mcp pod bed) — `charly mcp serve --listen`
+              # then `mcp: ping` against it — and the `--stdio` host smoke test.
+              check: the out-of-tree plugin ships a buildable Go module providing command:mcp (the externalized `charly mcp` server) the host can build + fork/exec; the full `charly mcp serve` end-to-end is exercised by the live R10
+              id: mcp-command-advertised
+              context:
+                - build
+              command: "true"

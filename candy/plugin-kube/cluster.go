@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/charly/candy/plugin-kube/params"
 )
 
 // cluster.go holds the cluster connection + the shared client-go helpers moved
@@ -24,22 +24,23 @@ import (
 
 // clusterConn carries the resolved cluster-selection inputs the plugin builds a
 // rest.Config from. Unlike the in-tree k8sClusterFlags it has NO --cluster field:
-// the HOST pre-resolves a --cluster <profile> to a concrete kubeconfig context
+// the HOST pre-resolves a `cluster: <profile>` to a concrete kubeconfig context
 // (findK8sSpec → KubeconfigContext, which needs the project loader an
-// out-of-process plugin cannot reach) BEFORE marshaling the Op, so the plugin
-// only ever sees a kubeconfig path + context.
+// out-of-process plugin cannot reach) and writes it into the plugin input's
+// kube_context BEFORE marshaling the Op, so the plugin only ever sees a
+// kubeconfig path + context.
 type clusterConn struct {
-	kubeconfig string // op.Kubeconfig — host path (empty → $KUBECONFIG then ~/.kube/config)
-	context    string // op.KubeContext — kubeconfig context (empty → current-context)
+	kubeconfig string // input kubeconfig — host path (empty → $KUBECONFIG then ~/.kube/config)
+	context    string // input kube_context — kubeconfig context (empty → current-context)
 }
 
-func connFromOp(op *spec.Op) *clusterConn {
-	return &clusterConn{kubeconfig: op.Kubeconfig, context: op.KubeContext}
+func connFromInput(in *params.KubeInput) *clusterConn {
+	return &clusterConn{kubeconfig: in.Kubeconfig, context: in.KubeContext}
 }
 
 // restConfig resolves the cluster connection to a rest.Config. Resolution:
-//  1. kubeconfig path: op.Kubeconfig, else $KUBECONFIG, else ~/.kube/config.
-//  2. context: op.KubeContext, else the kubeconfig current-context.
+//  1. kubeconfig path: the input's kubeconfig, else $KUBECONFIG, else ~/.kube/config.
+//  2. context: the input's kube_context, else the kubeconfig current-context.
 //
 // The resolved context is validated against the loaded kubeconfig BEFORE handing
 // off to the deferred client, so an empty or STALE context fails fast with an

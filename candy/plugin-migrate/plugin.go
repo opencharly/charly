@@ -11,7 +11,6 @@ package migrate
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,9 +18,6 @@ import (
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
-
-//go:embed schema/*.cue
-var schemaFS embed.FS
 
 const calver = "2026.186.0100"
 
@@ -33,7 +29,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "command", Word: "migrate"}},
-		schemaFS)
+		nil)
 }
 
 // CliMain is the plugin's CLI entrypoint (command:migrate dispatch — `charly migrate …`).

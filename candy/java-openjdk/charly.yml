@@ -11,7 +11,6 @@ java-openjdk:
             Gradle, sbt) discover java + javac without hardcoding a distro path.
             Every claim below is observable: the binaries, the canonical symlink
             target, and the reported runtime version.
-    java-openjdk-env:
         env:
             # Distro-agnostic JAVA_HOME. The task below symlinks /usr/lib/jvm/charly-jdk21 to
             # whichever JDK 21 root the distro package installed (fedora java-21-openjdk,
@@ -20,10 +19,8 @@ java-openjdk:
             # distro-specific path. The previous hardcoded /usr/lib/jvm/jre-21-openjdk
             # only existed on Fedora — it silently broke every other distro.
             JAVA_HOME: "/usr/lib/jvm/charly-jdk21"
-    java-openjdk-path_append:
         path_append:
             - "/usr/lib/jvm/charly-jdk21/bin"
-    java-openjdk-distro:
         distro:
             fedora:
                 package:
@@ -38,12 +35,10 @@ java-openjdk:
             ubuntu:
                 package:
                     - openjdk-21-jdk-headless
-    java-openjdk-step-0:
-        run: establish the distro-agnostic JAVA_HOME and set the system-default java launcher
-        run_as: root
-        plugin: command
-        plugin_input:
-            command: |
+        plan:
+            - run: establish the distro-agnostic JAVA_HOME and set the system-default java launcher
+              run_as: root
+              command: |
                 set -e
                 # Establish the canonical, distro-agnostic JAVA_HOME (see env: above).
                 # Pick the JDK 21 root the distro package installed and symlink a stable
@@ -68,52 +63,34 @@ java-openjdk:
                   archlinux-java set "$(basename "$jdk")"
                   echo "java-openjdk: archlinux-java default -> $(basename "$jdk")"
                 fi
-    java-openjdk-step-1:
-        check: the JRE launcher is installed at /usr/bin/java
-        plugin: file
-        plugin_input:
-            file: /usr/bin/java
-            exists: true
-    java-openjdk-step-2:
-        check: the compiler is installed at /usr/bin/javac
-        plugin: file
-        plugin_input:
-            file: /usr/bin/javac
-            exists: true
-    java-openjdk-step-3:
-        check: the distro-agnostic JAVA_HOME exposes a working java launcher
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test -x /usr/lib/jvm/charly-jdk21/bin/java
-    java-openjdk-step-4:
-        check: the distro-agnostic JAVA_HOME exposes a working javac compiler
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: test -x /usr/lib/jvm/charly-jdk21/bin/javac
-    java-openjdk-step-5:
-        check: the runtime identifies itself as OpenJDK version 21
-        exit_status: 0
-        stdout:
-            - contains: "21."
-        plugin: command
-        plugin_input:
-            command: /usr/bin/java -version 2>&1
-    java-runs:
-        check: command=/usr/bin/java -version
-        id: java-runs
-        exit_status: 0
-        plugin: command
-        plugin_input:
-            command: /usr/bin/java -version
-    java-openjdk-package:
-        check: package=openjdk-21-jdk-headless
-        id: java-openjdk-package
-        plugin: package
-        plugin_input:
-            package: openjdk-21-jdk-headless
-            package_map:
-                fedora: java-21-openjdk-headless
-                arch: jdk21-openjdk
-            installed: true
+            - check: the JRE launcher is installed at /usr/bin/java
+              file:
+                file: /usr/bin/java
+                exists: true
+            - check: the compiler is installed at /usr/bin/javac
+              file:
+                file: /usr/bin/javac
+                exists: true
+            - check: the distro-agnostic JAVA_HOME exposes a working java launcher
+              exit_status: 0
+              command: test -x /usr/lib/jvm/charly-jdk21/bin/java
+            - check: the distro-agnostic JAVA_HOME exposes a working javac compiler
+              exit_status: 0
+              command: test -x /usr/lib/jvm/charly-jdk21/bin/javac
+            - check: the runtime identifies itself as OpenJDK version 21
+              exit_status: 0
+              stdout:
+                - contains: "21."
+              command: /usr/bin/java -version 2>&1
+            - check: command=/usr/bin/java -version
+              id: java-runs
+              exit_status: 0
+              command: /usr/bin/java -version
+            - check: package=openjdk-21-jdk-headless
+              id: java-openjdk-package
+              package:
+                package: openjdk-21-jdk-headless
+                package_map:
+                    fedora: java-21-openjdk-headless
+                    arch: jdk21-openjdk
+                installed: true

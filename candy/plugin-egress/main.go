@@ -33,9 +33,6 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 )
 
-//go:embed schema/*.cue
-var describeSchemaFS embed.FS
-
 //go:embed egress-schemas/*.cue egress-schemas/vendor/*.cue
 var egressSchemaFS embed.FS
 
@@ -71,7 +68,7 @@ func NewProvider() pb.ProviderServer {
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "verb", Word: "egress"}},
-		describeSchemaFS)
+		nil)
 }
 
 type provider struct {

@@ -16,10 +16,8 @@ kde-shell:
             out of kde-desktop so the bare-metal seat and the headless pod share ONE
             package list (R3). require: dbus (the Plasma session bus). Every package
             lands a binary at a fixed /usr/bin path, so presence is directly verifiable.
-    kde-shell-require:
         require:
             - dbus
-    kde-shell-distro:
         distro:
             arch:
                 package:
@@ -54,45 +52,32 @@ kde-shell:
                     # input) — keyboard uses wtype, pointer is a separate cutover.
                     package:
                         - kdotool
-    kde-shell-step-0:
-        check: plasmashell, the Plasma shell, is installed at /usr/bin/plasmashell
-        plugin: file
-        plugin_input:
-            file: /usr/bin/plasmashell
-            exists: true
-    kde-shell-step-1:
-        check: kwin_wayland, the Wayland compositor, is installed at /usr/bin/kwin_wayland
-        plugin: file
-        plugin_input:
-            file: /usr/bin/kwin_wayland
-            exists: true
-    kde-shell-step-2:
-        check: startplasma-wayland, the session entry point, is installed at /usr/bin/startplasma-wayland
-        plugin: file
-        plugin_input:
-            file: /usr/bin/startplasma-wayland
-            exists: true
-    kde-shell-step-3:
-        check: the dependency-pulling top package plasma-desktop is installed in the rpm/pacman database
-        plugin: package
-        plugin_input:
-            package: plasma-desktop
-            installed: true
-    kde-shell-step-4:
-        check: the Dolphin file manager is installed at /usr/bin/dolphin
-        plugin: file
-        plugin_input:
-            file: /usr/bin/dolphin
-            exists: true
-    kde-shell-step-5:
-        check: the Konsole terminal is installed at /usr/bin/konsole
-        plugin: file
-        plugin_input:
-            file: /usr/bin/konsole
-            exists: true
-    kde-shell-step-6:
-        check: kdotool, the KWin window-management automation tool that drives the wl check verb on KWin, is installed at /usr/bin/kdotool
-        plugin: file
-        plugin_input:
-            file: /usr/bin/kdotool
-            exists: true
+        plan:
+            - check: plasmashell, the Plasma shell, is installed at /usr/bin/plasmashell
+              file:
+                file: /usr/bin/plasmashell
+                exists: true
+            - check: kwin_wayland, the Wayland compositor, is installed at /usr/bin/kwin_wayland
+              file:
+                file: /usr/bin/kwin_wayland
+                exists: true
+            - check: startplasma-wayland, the session entry point, is installed at /usr/bin/startplasma-wayland
+              file:
+                file: /usr/bin/startplasma-wayland
+                exists: true
+            - check: the dependency-pulling top package plasma-desktop is installed in the rpm/pacman database
+              package:
+                package: plasma-desktop
+                installed: true
+            - check: the Dolphin file manager is installed at /usr/bin/dolphin
+              file:
+                file: /usr/bin/dolphin
+                exists: true
+            - check: the Konsole terminal is installed at /usr/bin/konsole
+              file:
+                file: /usr/bin/konsole
+                exists: true
+            - check: kdotool, the KWin window-management automation tool that drives the wl check verb on KWin, is installed at /usr/bin/kdotool
+              file:
+                file: /usr/bin/kdotool
+                exists: true

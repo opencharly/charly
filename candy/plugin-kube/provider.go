@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/charly/candy/plugin-kube/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -16,10 +18,12 @@ import (
 // every other op is the `kube:` check VERB. For the verb, charly's host dispatches a
 // `kube:` check step through the registry (ResolveVerb("kube") → this grpcProvider →
 // Provider.Invoke) with the FULL #Op marshaled as params_json and a CheckEnv snapshot
-// as env. The SAME provider also serves the k3s kubeconfig-merge the deploy seam
-// needs: that caller (k8s_plugin.go's invokeKubePlugin) builds a synthetic #Op (kube:
-// merge-kubeconfig + the retrieved kubeconfig path + context) and reads the result's
-// Message. Because the out-of-process verb path does NOT run the host-side matcher
+// as env; the kube-exclusive fields ride the desugared plugin input (params.KubeInput —
+// the per-verb fields left core #Op in the schema-compaction cutover). The SAME
+// provider also serves the k3s kubeconfig-merge the deploy seam needs: that caller
+// (k8s_plugin.go's invokeKubePlugin) builds a synthetic op ({method: merge-kubeconfig,
+// kubeconfig, kube_context} in the input map) and reads the result's Message. Because
+// the out-of-process verb path does NOT run the host-side matcher
 // pipeline, this Invoke OWNS the whole verdict:
 // dispatch the method, then evaluate the stdout/stderr/exit_status matchers itself
 // (via the shared sdk implementation — R3), and return the wire {status,message}
@@ -29,7 +33,7 @@ import (
 // Operation.Env for a `kube:` check step (provider_checkenv.go) — only Mode/Box
 // matter here (kube probes a cluster, not a container, so it needs no container
 // resolution). The merge-kubeconfig deploy seam ships no env (the plugin reads the
-// kubeconfig path + context off the Op and uses os.UserHomeDir itself).
+// kubeconfig path + context off the plugin input and uses os.UserHomeDir itself).
 type kubeEnv struct {
 	Box  string `json:"box"`
 	Mode string `json:"mode"` // "live" | "box"
@@ -58,13 +62,18 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	method := string(op.Kube)
+	// The verb's method + kube-exclusive fields ride the desugared plugin input
+	// since the schema-compaction cutover (the host preresolver writes the resolved
+	// kube_context into the SAME input map).
+	var in params.KubeInput
+	kit.DecodeInput(op.PluginInput, &in)
+	method := in.Method
 
 	// merge-kubeconfig is the k3s deploy seam (NOT an authored check method): it
 	// merges the retrieved kubeconfig into ~/.kube/config and returns a short
 	// success message the host's invokeKubePlugin reads. No matcher pipeline.
 	if method == "merge-kubeconfig" {
-		msg, err := mergeKubeconfig(op.Kubeconfig, op.KubeContext)
+		msg, err := mergeKubeconfig(in.Kubeconfig, in.KubeContext)
 		if err != nil {
 			return sdk.ResultJSON("fail", "kube: merge-kubeconfig: "+err.Error())
 		}
@@ -77,8 +86,8 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return sdk.ResultJSON("skip", fmt.Sprintf("kube: %s requires a running cluster (skip under charly check box)", method))
 	}
 
-	conn := connFromOp(&op)
-	out, runErr := dispatch(conn, &op)
+	conn := connFromInput(&in)
+	out, runErr := dispatch(conn, &op, &in)
 
 	// The shared exit/stdout/stderr verdict pipeline (R3). kube produces no artifact.
 	return sdk.VerbVerdict("kube", method, out, runErr, &op, false)

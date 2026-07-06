@@ -2,6 +2,7 @@ package main
 
 import (
 	"maps"
+	"sort"
 	"strings"
 )
 
@@ -65,4 +66,36 @@ func MergeEnvConfigs(configs []*EnvConfig) *EnvConfig {
 	}
 
 	return merged
+}
+
+// envPairsToMap converts KEY=VALUE pairs (the CLI -e / label wire form) into
+// the map form the deploy schema stores since the env-shape unification.
+func envPairsToMap(pairs []string) map[string]string {
+	if len(pairs) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(pairs))
+	for _, kv := range pairs {
+		k, v, _ := strings.Cut(kv, "=")
+		out[k] = v
+	}
+	return out
+}
+
+// envMapToPairs converts the deploy schema's env map into sorted KEY=VALUE
+// pairs (the OCI-label wire + env-resolution chain form).
+func envMapToPairs(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+env[k])
+	}
+	return out
 }
