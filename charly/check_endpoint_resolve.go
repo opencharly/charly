@@ -46,16 +46,42 @@ type graphicsEndpoint struct {
 	SkipMessage            string
 }
 
-// resolveVerbGraphics resolves a VM's <graphics type='<kind>'> listener (kind = "vnc" |
-// "spice") to a dialable endpoint via the out-of-process vm plugin (resolve-<kind>), opening
-// (and registering for post-Invoke teardown) any qemu+ssh:// tunnel. REPLACES the per-verb
-// spice host preresolver. Empty endpoint + nil err = no live VM context (box-mode /
-// no-box); Skip=true = the deployment declares no graphics device of that kind (an N/A skip).
+// resolveVerbGraphics resolves a deployment's <kind> display (kind = "vnc" | "spice") to a
+// dialable endpoint. It is venue-aware and REPLACES the former per-verb vnc + spice host
+// preresolvers (R3):
+//   - vnc + a NON-VM venue → the container/host's published RFB port 5900 + the credential-
+//     store VNC password (spice has no container leg);
+//   - vnc/spice + a VM venue → the VM's <graphics type='kind'> via the vm plugin (resolve-
+//     <kind>), opening any qemu+ssh:// tunnel. The RFB client is TCP-only, so a vnc UNIX
+//     socket is bridged to a local TCP listener; spice hands back the socket directly.
+//
+// Any bridge listener / ssh -L forward it opens is registered for post-Invoke teardown. Empty
+// endpoint + nil err = no live venue (box-mode / no-box); Skip=true = the VM declares no
+// graphics device of that kind (an N/A skip).
 func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 	if r.Box == "" || r.Mode == RunModeBox {
 		return graphicsEndpoint{}, nil
 	}
-	// CHARLY_LIBVIRT_URI selects a remote hypervisor, exactly as the former host preresolver did.
+
+	// vnc CONTAINER leg: a non-VM venue publishes RFB on 5900; the ticket comes from the
+	// credential store. spice is VM-only (no container leg), so it skips straight to the vm plugin.
+	if kind == "vnc" {
+		venue, err := resolveCheckVenue(r.Box, r.Instance)
+		if err != nil {
+			return graphicsEndpoint{}, err
+		}
+		if venue.Kind != "vm" {
+			ep, err := resolveCheckEndpoint(venue, 5900)
+			if err != nil {
+				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
+			}
+			r.endpointCleanups = append(r.endpointCleanups, ep.Close)
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(resolveBoxName(r.Box), r.Instance)}, nil
+		}
+	}
+
+	// VM leg (vnc + spice): resolve the VM's <graphics type='kind'> via the out-of-process vm
+	// plugin. CHARLY_LIBVIRT_URI selects a remote hypervisor.
 	raw, ok := invokeVmPlugin("resolve-"+kind, r.vmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
 	if !ok {
 		return graphicsEndpoint{}, fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
@@ -74,20 +100,34 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 	}
 	ep := rr.Endpoint
 
-	// Local endpoint — hand back the direct socket/address, no tunnel.
-	if !ep.TunnelNeeded {
-		ge := graphicsEndpoint{Password: ep.Password}
-		if ep.IsSocket {
-			ge.Socket = ep.SocketPath
-		} else {
-			ge.Addr = fmt.Sprintf("%s:%d", ep.Host, ep.Port)
+	// bridgeSocket exposes a UNIX socket as a local TCP listener for the TCP-only RFB client
+	// (vnc), registering the listener for teardown. Only vnc needs it; spice dials the socket.
+	bridgeSocket := func(socketPath string) (string, error) {
+		br, berr := unixToTcpBridge(socketPath)
+		if berr != nil {
+			return "", berr
 		}
-		return ge, nil
+		r.endpointCleanups = append(r.endpointCleanups, func() { _ = br.Close() })
+		return br.Addr().String(), nil
+	}
+
+	// Local endpoint — no tunnel.
+	if !ep.TunnelNeeded {
+		if ep.IsSocket {
+			if kind == "vnc" {
+				addr, berr := bridgeSocket(ep.SocketPath)
+				if berr != nil {
+					return graphicsEndpoint{}, berr
+				}
+				return graphicsEndpoint{Addr: addr, Password: ep.Password}, nil
+			}
+			return graphicsEndpoint{Socket: ep.SocketPath, Password: ep.Password}, nil
+		}
+		return graphicsEndpoint{Addr: fmt.Sprintf("%s:%d", ep.Host, ep.Port), Password: ep.Password}, nil
 	}
 
 	// Remote (qemu+ssh://) — open an SSH tunnel forwarding the endpoint to a local address;
-	// register the teardown on the Runner (drained after the verb's Invoke, since the tunnel
-	// carries the live connection).
+	// register the teardown on the Runner (the tunnel carries the live connection).
 	parsed, perr := ParseLibvirtURI(rr.TunnelTarget)
 	if perr != nil {
 		return graphicsEndpoint{}, perr
@@ -101,6 +141,13 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 		localSock, _, ferr := tunnel.ForwardUnix(context.Background(), ep.SocketPath)
 		if ferr != nil {
 			return graphicsEndpoint{}, fmt.Errorf("forwarding remote socket %s: %w", ep.SocketPath, ferr)
+		}
+		if kind == "vnc" {
+			addr, berr := bridgeSocket(localSock)
+			if berr != nil {
+				return graphicsEndpoint{}, berr
+			}
+			return graphicsEndpoint{Addr: addr, Password: ep.Password}, nil
 		}
 		return graphicsEndpoint{Socket: localSock, Password: ep.Password}, nil
 	}

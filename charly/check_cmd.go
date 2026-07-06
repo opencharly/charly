@@ -144,7 +144,7 @@ type CheckCmd struct {
 	// dispatches to that external plugin via the provider registry (invokeVerbProvider, after
 	// the host pre-resolves the deployment's VNC endpoint — a container's published port 5900
 	// OR a kind:vm deployment's libvirt <graphics type='vnc'> listener bridged/tunneled to a
-	// host-reachable RFB address — preresolveVncEndpoint); there is no host `charly check vnc`
+	// host-reachable RFB address, via the cc.ResolveGraphicsEndpoint reverse-leg); there is no host `charly check vnc`
 	// (the former `charly check vnc vm` VM-VNC CLI is subsumed into `vnc:` against a vm target).
 
 	// Check-run management (was `charly check *`)
