@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -66,7 +67,7 @@ func typeOf(v any) string {
 // ---------------------------------------------------------------------------
 
 func TestFormatServers(t *testing.T) {
-	got := formatServers([]mcpProvideEntry{
+	got := formatServers([]spec.MCPProvideEntry{
 		{Name: "jupyter", URL: "http://x:8888/mcp", Transport: ""},
 		{Name: "chrome-devtools", URL: "http://x:9224/mcp", Transport: "sse"},
 	})

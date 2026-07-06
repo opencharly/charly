@@ -30,17 +30,6 @@ type CheckEnv struct {
 	// kit.CheckContext.DialTimeout() leg for an out-of-process host-coupled check verb (a
 	// plain scalar, so it rides the snapshot rather than the CheckContextService channel).
 	DialTimeoutNs int64 `json:"dial_timeout_ns,omitempty"`
-	// Substrate carries the host-resolved, OPAQUE preresolution payload for a verb
-	// whose plugin needs a host-computed input it cannot derive across the process
-	// boundary — a cdp/vnc/mcp/spice dialable endpoint (resolved from podman / venue /
-	// go-libvirt machinery the out-of-process plugin owns none of). It is filled by the
-	// verb's registered preresolver (verb_preresolve.go) keyed on the verb word, and
-	// decoded by the matching plugin into its own endpoint type. nil for any verb with no
-	// registered preresolver (wl/dbus/record/adb/appium/…) and for an op whose preresolver
-	// resolved nothing. This is the check-verb analogue of DeployVenue.Substrate — ONE
-	// generic, opaque, per-plugin channel, never a per-verb typed field (the Uniform API
-	// Invariant): adding a host-resolved verb adds a preresolver, not a CheckEnv field.
-	Substrate json.RawMessage `json:"substrate,omitempty"`
 }
 
 func runModeName(m RunMode) string {
@@ -168,33 +157,15 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 			c = &cc
 		}
 	}
-	// Host-side per-verb preresolution via the GENERIC registry — no per-verb
-	// special-casing in this dispatch (the Uniform API Invariant). The preresolver
-	// registered under this verb word runs: cdp/vnc/mcp/spice fill an opaque endpoint
-	// Substrate (→ CheckEnv.Substrate, decoded by the matching plugin); kube rewrites the
-	// op's KubeContext (carried in params). A verb with no registered preresolver
-	// (wl/dbus/record/adb/appium/…) is a no-op. The preresolver may short-circuit (early
-	// SKIP/FAIL) or open a tunnel/forward whose cleanup defers across Invoke (it carries
-	// the live connection).
-	// The generic host-endpoint reverse-leg (cc.ResolveEndpoint) opens ssh -L forwards DURING
-	// the Invoke; drain them (LIFO) after it returns — the forward must outlive the plugin's
-	// dial. Reset per-Invoke so a leftover from a prior op never leaks in.
+	// A host-coupled verb resolves its own inputs through the GENERIC CheckContextService
+	// reverse-legs (cc.ResolveEndpoint / ResolveGraphicsEndpoint / ResolveClusterContext /
+	// ResolveImageLabel) — this dispatch stays verb-agnostic (the Uniform API Invariant); the
+	// former per-verb host preresolver registry + CheckEnv.Substrate channel are retired. Those
+	// reverse-legs open ssh -L forwards / socket bridges DURING the Invoke; drain them (LIFO)
+	// after it returns — the forward must outlive the plugin's dial. Reset per-Invoke so a
+	// leftover from a prior op never leaks in.
 	r.endpointCleanups = nil
 	defer r.runEndpointCleanups()
-	var substrate json.RawMessage
-	if pre, ok := verbPreresolverFor(word); ok {
-		sub, opOut, cleanup, early := pre(r, c)
-		if cleanup != nil {
-			defer cleanup()
-		}
-		if early != nil {
-			return *early
-		}
-		if opOut != nil {
-			c = opOut
-		}
-		substrate = sub
-	}
 	params, err := marshalJSON(c)
 	if err != nil {
 		res.Status = TestFail
@@ -202,7 +173,6 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 		return res
 	}
 	ce := snapshotCheckEnv(r, c)
-	ce.Substrate = substrate
 	env, err := marshalJSON(ce)
 	if err != nil {
 		res.Status = TestFail
@@ -227,7 +197,7 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 		if r.Scenario != nil {
 			addBg = r.Scenario.AddBackground
 		}
-		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint, resolveGfx: r.resolveVerbGraphics, resolveClusterCtx: r.resolveClusterContext}
+		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint, resolveGfx: r.resolveVerbGraphics, resolveClusterCtx: r.resolveClusterContext, resolveImgLabel: r.resolveImageLabel}
 		out, err = ei.InvokeWithExecutor(ctx, op, r.Exec, buildEngineContext{}, false, cc)
 	} else {
 		out, err = prov.Invoke(ctx, op)

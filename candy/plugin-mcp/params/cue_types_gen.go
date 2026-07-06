@@ -18,9 +18,9 @@ package params
 // authored `mcp: <method>` step (scalar sugar) or `mcp: {method: …, tool: …}`
 // (map form) desugars to the INTERNAL plugin/plugin_input envelope, and every
 // mcp-exclusive modifier lives HERE — the former core #McpMethod enum is this
-// def's `method` field. `mcp_name` is read HOST-side (the mcp endpoint
-// preresolver picks the declared mcp_provides entry it names) but is an authored
-// mcp-step field, so it lives in this def for the closed input validation. The
+// def's `method` field. `mcp_name` is read by the plugin (resolve.go's pickMcpEntry
+// picks the declared mcp_provide entry it names) and is an authored mcp-step field,
+// so it lives in this def for the closed input validation. The
 // shared assertion matchers (exit_status/stdout/stderr) and the general
 // `timeout` stay on core #Op, read off the step Op by the provider.
 //
@@ -33,7 +33,7 @@ type McpInput struct {
 	Method string `yaml:"method,omitempty" json:"method"`
 
 	// mcp_name — which declared mcp_provide server to dial when the image
-	// declares several (host-side disambiguation; auto-picked when single).
+	// declares several (plugin-side disambiguation; auto-picked when single).
 	McpName string `yaml:"mcp_name,omitempty" json:"mcp_name,omitempty"`
 
 	// tool — the tool name `call` invokes.

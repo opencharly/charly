@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
@@ -278,7 +279,7 @@ func TestPodAwareMCPProvides(t *testing.T) {
 	}
 
 	// Pod case: consumer IS the combined-image — own entries resolve to localhost
-	got := podAwareMCPProvides(entries, "combined-image", "charly-combined")
+	got := spec.PodAwareMCPProvides(entries, "combined-image", "charly-combined")
 	if len(got) != 2 {
 		t.Fatalf("podAwareMCPProvides should return 2 entries, got %d", len(got))
 	}
@@ -299,7 +300,7 @@ func TestPodAwareMCPProvidesLocalPrecedence(t *testing.T) {
 		{Name: "jupyter", URL: "http://charly-standalone:8888/mcp", Transport: "http", Source: "standalone"},
 	}
 
-	got := podAwareMCPProvides(entries, "combined-image", "charly-combined")
+	got := spec.PodAwareMCPProvides(entries, "combined-image", "charly-combined")
 	if len(got) != 1 {
 		t.Fatalf("podAwareMCPProvides with name conflict: got %d entries, want 1 (local wins)", len(got))
 	}
@@ -314,7 +315,7 @@ func TestPodAwareMCPProvidesCrossContainer(t *testing.T) {
 		{Name: "jupyter", URL: "http://charly-jupyter:8888/mcp", Transport: "http", Source: "jupyter-image"},
 	}
 
-	got := podAwareMCPProvides(entries, "hermes-image", "charly-hermes")
+	got := spec.PodAwareMCPProvides(entries, "hermes-image", "charly-hermes")
 	if len(got) != 1 {
 		t.Fatalf("cross-container: got %d entries, want 1", len(got))
 	}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // EnvProvideEntry is a resolved env_provides entry in charly.yml.
@@ -13,13 +15,10 @@ type EnvProvideEntry struct {
 	Source string `yaml:"source" json:"source"`
 }
 
-// MCPProvideEntry is a resolved mcp_provides entry in charly.yml.
-type MCPProvideEntry struct {
-	Name      string `yaml:"name" json:"name"`
-	URL       string `yaml:"url" json:"url"`
-	Transport string `yaml:"transport,omitempty" json:"transport,omitempty"`
-	Source    string `yaml:"source" json:"source"`
-}
+// MCPProvideEntry is a resolved mcp_provides entry. It lives in sdk/spec (shared with the
+// out-of-process mcp check verb via spec.PodAwareMCPProvides, R3); aliased here for charly's
+// deploy-time provides pipeline. Its GetName/GetSource (in spec) satisfy Named structurally.
+type MCPProvideEntry = spec.MCPProvideEntry
 
 // ProvidesConfig holds all resolved provides entries in charly.yml.
 type ProvidesConfig struct {
@@ -35,8 +34,6 @@ type Named interface {
 
 func (e EnvProvideEntry) GetName() string   { return e.Name }
 func (e EnvProvideEntry) GetSource() string { return e.Source }
-func (e MCPProvideEntry) GetName() string   { return e.Name }
-func (e MCPProvideEntry) GetSource() string { return e.Source }
 
 // filterOwnProvides removes entries injected by the given image (self-exclusion).
 // NOTE: No longer used in GlobalEnvForImage (replaced by podAwareEnvProvides).
@@ -118,31 +115,8 @@ func removeByExactSource[T Named](entries []T, source string) ([]T, bool) {
 	return result, removed
 }
 
-// podAwareMCPProvides resolves MCP entries for a specific consumer deploy.
-// Same-deploy entries (source == consumerKey EXACTLY) get localhost URLs.
-// Different-deploy entries keep their container hostname URLs. If both
-// local and remote share a name, local wins. See podAwareEnvProvides for
-// the rationale on exact-match vs prefix-match.
-func podAwareMCPProvides(entries []MCPProvideEntry, consumerKey, ctrName string) []MCPProvideEntry {
-	var result []MCPProvideEntry
-	seen := map[string]bool{} // name → true if local entry added
-	// First pass: same-deploy entries with localhost rewrite
-	for _, e := range entries {
-		if e.Source == consumerKey {
-			local := e
-			local.URL = strings.ReplaceAll(e.URL, ctrName, "localhost")
-			result = append(result, local)
-			seen[e.Name] = true
-		}
-	}
-	// Second pass: cross-deploy entries (skip if local exists with same name)
-	for _, e := range entries {
-		if e.Source != consumerKey && !seen[e.Name] {
-			result = append(result, e)
-		}
-	}
-	return result
-}
+// podAwareMCPProvides moved to sdk/spec (spec.PodAwareMCPProvides), shared with the
+// out-of-process mcp check verb (R3); see the same rationale as podAwareEnvProvides above.
 
 // GlobalEnvForImage builds env vars for a consumer from global provides.
 // Returns flat env var slice ready for ResolveEnvVars.
@@ -181,7 +155,7 @@ func (dc *BundleConfig) GlobalEnvForImage(consumerKey, ctrName string, acceptedE
 
 	// MCP provides: pod-aware (always injected — standard discovery mechanism)
 	if len(dc.Provides.MCP) > 0 {
-		mcpEntries := podAwareMCPProvides(dc.Provides.MCP, consumerKey, ctrName)
+		mcpEntries := spec.PodAwareMCPProvides(dc.Provides.MCP, consumerKey, ctrName)
 		if len(mcpEntries) > 0 {
 			mcpJSON, _ := json.Marshal(mcpEntries)
 			result = append(result, "CHARLY_MCP_SERVERS="+string(mcpJSON))

@@ -121,7 +121,7 @@ type CheckCmd struct {
 	// dep-shed into the out-of-tree candy/plugin-mcp module. The `mcp:` DECLARATIVE check verb
 	// dispatches to that external plugin via the provider registry (invokeVerbProvider, after
 	// the host pre-resolves the deployment's declared mcp_provides + the picked, host-routable
-	// dial endpoint — preresolveMcpEndpoint); there is no host `charly check mcp`.
+	// dial endpoint, via the cc.ResolveImageLabel + cc.ResolveEndpoint reverse-legs); there is no host `charly check mcp`.
 	// `cdp` is NOT a CLI subcommand here — the Chrome DevTools Protocol client (the
 	// golang.org/x/net/websocket CDP WebSocket client + the open/list/text/eval/screenshot/
 	// click/SPA dial+dispatch layer) was dep-shed into the out-of-tree candy/plugin-cdp module.

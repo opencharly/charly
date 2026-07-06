@@ -226,7 +226,7 @@ func runRead(ctx context.Context, sess *mcp.ClientSession, in *params.McpInput) 
 
 // formatServers renders the host-resolved mcp_provides entries as tab-separated
 // <name>\t<url>\t<transport> lines (mirroring the in-tree `mcp servers` plaintext).
-func formatServers(entries []mcpProvideEntry) string {
+func formatServers(entries []spec.MCPProvideEntry) string {
 	lines := make([]string, 0, len(entries))
 	for _, e := range entries {
 		transport := e.Transport

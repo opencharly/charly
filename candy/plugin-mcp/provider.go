@@ -22,34 +22,24 @@ import (
 // for the rest), then evaluate the stdout/stderr/exit_status matchers itself (via the
 // shared sdk implementation — R3), and return the wire {status,message} the host decodes.
 
-// mcpProvideEntry mirrors the host's MCPProvideEntry over the wire (the declared
-// mcp_provides list the `servers` method enumerates without dialing).
-type mcpProvideEntry struct {
-	Name      string `json:"name"`
-	URL       string `json:"url"`
-	Transport string `json:"transport,omitempty"`
-	Source    string `json:"source"`
-}
-
-// mcpEndpoint is the plugin-side decode of the host-resolved McpEnv
-// (charly/mcp_preresolve.go). Entries carries every declared server (for `servers`);
-// URL/Transport/Name carry the single picked, host-routable dial endpoint (for every
-// other method). The plugin needs no podman / OCI labels — it just reads this.
+// mcpEndpoint is the mcp check context the plugin builds from the reverse-legs (resolve.go).
+// Entries carries every declared server (for `servers`); URL/Transport/Name carry the single
+// picked, host-routable dial endpoint (for every other method).
 type mcpEndpoint struct {
-	Entries   []mcpProvideEntry `json:"entries"`
-	URL       string            `json:"url"`
-	Transport string            `json:"transport"`
-	Name      string            `json:"name"`
+	Entries   []spec.MCPProvideEntry
+	URL       string
+	Transport string
+	Name      string
 }
 
-// mcpEnv is the plugin-side decode of the CheckEnv the host ships as Operation.Env for
-// a `mcp:` check step (provider_checkenv.go). Box/Mode mirror the shared CheckEnv; Mcp
-// carries the host-resolved context (nil when the host could not resolve one — e.g. no
-// mcp op, no live deployment).
+// mcpEnv is the plugin-side decode of the CheckEnv the host ships as Operation.Env for a `mcp:`
+// check step (provider_checkenv.go). Box/Mode mirror the shared CheckEnv; ContainerName is the
+// host-authoritative running container name (for the {{.ContainerName}} template + pod-aware
+// rewrite). The endpoint is no longer pre-shipped — the plugin resolves it via the reverse-legs.
 type mcpEnv struct {
-	Box       string          `json:"box"`
-	Mode      string          `json:"mode"` // "live" | "box"
-	Substrate json.RawMessage `json:"substrate"`
+	Box           string `json:"box"`
+	Mode          string `json:"mode"` // "live" | "box"
+	ContainerName string `json:"container_name"`
 }
 
 type provider struct{ pb.UnimplementedProviderServer }
@@ -81,16 +71,6 @@ func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	// The host's verb preresolver ships the resolved MCP context in the opaque
-	// CheckEnv.Substrate (the generic per-verb channel that replaced the typed
-	// CheckEnv.Mcp field); decode it into the plugin's own endpoint type.
-	var ep *mcpEndpoint
-	if len(env.Substrate) > 0 {
-		var e mcpEndpoint
-		if err := json.Unmarshal(env.Substrate, &e); err == nil {
-			ep = &e
-		}
-	}
 	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running MCP server on a
@@ -98,11 +78,20 @@ func (p provider) invokeVerb(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 	if env.Mode == "box" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("mcp: %s requires a running deployment (skip under charly check box)", method))
 	}
-	// No endpoint resolved → skip. The host already FAILs the "no mcp_provides" /
-	// resolution-error cases before dispatch, so a nil endpoint here means no live
-	// deployment context at all (the analogue of the host's empty-box skip).
-	if ep == nil {
-		return sdk.ResultJSON("skip", fmt.Sprintf("mcp: %s has no resolved MCP endpoint (box=%q)", method, env.Box))
+	// No live deployment context → skip, the analogue of the host's empty-box skip.
+	if env.Box == "" {
+		return sdk.ResultJSON("skip", fmt.Sprintf("mcp: %s has no live deployment (box=%q)", method, env.Box))
+	}
+	// Resolve the MCP context via the GENERIC reverse-legs (cc.ResolveImageLabel for the declared
+	// servers + cc.ResolveEndpoint for the host-routable URL) — the host owns the podman / OCI /
+	// port-mapping machinery this out-of-process plugin cannot reach. Replaces the mcp preresolver.
+	cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("mcp: %s: %v", method, err))
+	}
+	ep, err := resolveMcpEndpoint(ctx, cc, &env, method, in.McpName)
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("mcp: %s: %v", method, err))
 	}
 
 	out, runErr := dispatch(ctx, ep, &op, &in)

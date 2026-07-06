@@ -189,3 +189,31 @@ func (c runnerCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind stri
 func (c runnerCheckContext) ResolveClusterContext(_ context.Context, cluster string) (string, error) {
 	return c.r.resolveClusterContext(cluster)
 }
+
+// resolveImageLabel reads one raw OCI label off the deployment-under-test's image. It is the
+// host-side leg for CheckContext.ResolveImageLabel — the out-of-process mcp verb needs the
+// baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.
+// Empty value (no live deployment, or the label absent) is a valid result.
+func (r *Runner) resolveImageLabel(label string) (string, error) {
+	if r.Box == "" || r.Mode == RunModeBox {
+		return "", nil
+	}
+	engine, containerName, err := resolveContainer(r.Box, r.Instance)
+	if err != nil {
+		return "", err
+	}
+	imageRef, err := containerImageRef(engine, containerName)
+	if err != nil {
+		return "", err
+	}
+	labels, err := InspectLabels(engine, imageRef)
+	if err != nil {
+		return "", err
+	}
+	return labels[label], nil
+}
+
+// ResolveImageLabel is the in-process CheckContext leg for a baked OCI label.
+func (c runnerCheckContext) ResolveImageLabel(_ context.Context, label string) (string, error) {
+	return c.r.resolveImageLabel(label)
+}

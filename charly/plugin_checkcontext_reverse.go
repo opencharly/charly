@@ -23,6 +23,7 @@ type checkContextReverseServer struct {
 	resolveEp  func(port int) (string, error)         // r.resolveVerbEndpoint — venue→addr, forwards tracked on the Runner for post-Invoke teardown
 	resolveGfx func(kind string) (graphicsEndpoint, error) // r.resolveVerbGraphics — VM graphics (vnc/spice) endpoint, tunnel tracked on the Runner
 	resolveClusterCtx func(cluster string) (string, error) // r.resolveClusterContext — k8s cluster-profile -> kubeconfig context via the project loader
+	resolveImgLabel   func(label string) (string, error)  // r.resolveImageLabel — one raw OCI label off the deployment image
 }
 
 // HTTPDo issues the request from the host's network namespace via the SHARED host HTTP-do
@@ -93,6 +94,20 @@ func (s *checkContextReverseServer) ResolveClusterContext(_ context.Context, req
 		return &pb.ResolveClusterContextReply{Error: err.Error()}, nil
 	}
 	return &pb.ResolveClusterContextReply{Context: ctx}, nil
+}
+
+// ResolveImageLabel reads one raw OCI label off the deployment image via the host's
+// resolveImageLabel (the SAME leg the in-process runnerCheckContext uses, R3). Empty value
+// (label absent / no live deployment) is a valid reply.
+func (s *checkContextReverseServer) ResolveImageLabel(_ context.Context, req *pb.ResolveImageLabelRequest) (*pb.ResolveImageLabelReply, error) {
+	if s.resolveImgLabel == nil {
+		return &pb.ResolveImageLabelReply{Error: "image-label resolution unavailable (no runner context)"}, nil
+	}
+	v, err := s.resolveImgLabel(req.GetLabel())
+	if err != nil {
+		return &pb.ResolveImageLabelReply{Error: err.Error()}, nil
+	}
+	return &pb.ResolveImageLabelReply{Value: v}, nil
 }
 
 // AddBackground registers a host-side background PID with the active plan run for teardown

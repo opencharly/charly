@@ -869,7 +869,7 @@ skipDataProvision:
 		dc := loadDeployConfigForRead("charly config mcp_requires check")
 		var mcpServers []MCPProvideEntry
 		if dc != nil && dc.Provides != nil {
-			mcpServers = podAwareMCPProvides(dc.Provides.MCP, deployKey(c.Box, c.Instance), containerNameInstance(c.Box, c.Instance))
+			mcpServers = spec.PodAwareMCPProvides(dc.Provides.MCP, deployKey(c.Box, c.Instance), containerNameInstance(c.Box, c.Instance))
 		}
 		warnMissingMCPRequires(c.Box, meta.MCPRequire, mcpServers)
 	}
