@@ -41,7 +41,7 @@ func TestGracefulStopDomain_ForcesActiveDomainToShutoff(t *testing.T) {
 		_ = conn.destroyDomain(dom)
 		_ = conn.undefineDomain(dom, true)
 	}
-	if err := conn.defineAndStartDomain(xml); err != nil {
+	if err := conn.defineAndStartDomain(xml, name); err != nil {
 		t.Fatalf("define+start minimal domain: %v", err)
 	}
 	// Always remove the definition, even on failure.

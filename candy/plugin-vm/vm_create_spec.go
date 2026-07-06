@@ -21,7 +21,7 @@ func runVmSpecCreateLibvirt(spec *VmSpec, rt VmRuntimeParams, vmDomainName, home
 		return fmt.Errorf("connecting to libvirt: %w", err)
 	}
 	defer conn.Close() //nolint:errcheck
-	if err := conn.defineAndStartDomain(xmlStr); err != nil {
+	if err := conn.defineAndStartDomain(xmlStr, vmDomainName); err != nil {
 		return fmt.Errorf("creating VM %s: %w", vmDomainName, err)
 	}
 	fmt.Fprintf(os.Stderr, "Created VM %s (libvirt session)\n", vmDomainName)

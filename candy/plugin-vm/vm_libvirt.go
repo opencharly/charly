@@ -208,7 +208,21 @@ func (c *libvirtConn) undefineDomain(dom libvirt.Domain, _ bool) error {
 // Between define and start, pre-creates any missing parent dirs for
 // <listen type='socket'/> sockets (libvirt 12.x Arch bug — see
 // startDomain comment).
-func (c *libvirtConn) defineAndStartDomain(xmlStr string) error {
+func (c *libvirtConn) defineAndStartDomain(xmlStr, domainName string) error {
+	// Reconcile a leftover domain of the SAME NAME but a drifted UUID before
+	// defining. libvirt's DomainDefineXML refuses to redefine when the XML's uuid
+	// differs from an existing same-name domain ("domain X already exists with uuid
+	// Y"); a crashed or force-left disposable run leaves exactly such a stale domain,
+	// and undefine-by-recorded-uuid then misses it. Undefine by NAME first so every
+	// create — and every disposable-bed `charly update` re-run — self-heals.
+	if domainName != "" {
+		if existing, err := c.l.DomainLookupByName(domainName); err == nil {
+			if s, serr := c.domainState(existing); serr == nil && s != libvirt.DomainShutoff {
+				_ = c.destroyDomain(existing)
+			}
+			_ = c.undefineDomain(existing, false)
+		}
+	}
 	dom, err := c.l.DomainDefineXML(xmlStr)
 	if err != nil {
 		return fmt.Errorf("defining domain: %w", err)
