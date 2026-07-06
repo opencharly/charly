@@ -41,22 +41,31 @@ import (
 
 // migCtx is the plugin-local CUE context (this plugin owns the migration engine, so it
 // no longer shares charly's core cueSchemaCtx). migrationSchema is #Migration compiled
-// standalone from the SDK's schema — migration.cue (#Migration) + version.cue
-// (#CanonCalVer, which #Migration.version pins to) concatenated ALONE, so the plugin
-// validates the table WITHOUT pulling charly's full ingress schema and WITHOUT
-// duplicating #CanonCalVer (which must stay the SDK's single source of truth).
+// standalone: this plugin's OWN schema/migration.cue (embedded below — a plugin-only
+// schema living in its plugin per the kernel/plugin boundary law, not the SDK contract)
+// concatenated with the SDK's version.cue (#CanonCalVer, which #Migration.version pins
+// to and which STAYS the SDK's single source of truth), so the plugin validates the
+// table WITHOUT pulling charly's full ingress schema and WITHOUT duplicating #CanonCalVer.
+
+//go:embed schema/migration.cue
+var migrationSchemaCUE []byte
+
 var (
 	migCtx          = cuecontext.New()
 	migrationSchema = compileMigrationDefs()
 )
 
 func compileMigrationDefs() cue.Value {
-	body, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", func(name string) bool {
-		return name != "migration.cue" && name != "version.cue"
+	// Keep ONLY version.cue from the SDK schema (for #CanonCalVer), then append this
+	// plugin's own migration.cue — the two compile as one unit so #Migration.version
+	// resolves against the SDK-owned #CanonCalVer.
+	versionBody, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", func(name string) bool {
+		return name != "version.cue"
 	})
 	if err != nil {
-		panic(fmt.Sprintf("compileMigrationDefs: concat #Migration schema: %v", err))
+		panic(fmt.Sprintf("compileMigrationDefs: concat SDK version.cue: %v", err))
 	}
+	body := versionBody + "\n" + string(migrationSchemaCUE)
 	v := migCtx.CompileString(body)
 	if v.Err() != nil {
 		panic(fmt.Sprintf("compileMigrationDefs: #Migration schema does not compile: %v", cueerrors.Details(v.Err(), nil)))

@@ -2,8 +2,10 @@
 // engine (M15). It advertises command:migrate — the `charly migrate` operator command AND
 // the in-proc engine charly's remote-cache auto-migration (refs.go) invokes with OpRun. The
 // CUE-anchored declarative migration table + the generic op-walker + the file-walk drivers
-// (engine.go) live HERE now, out of charly's core; #Migration is read from the SDK schema
-// (sdk/schema), and the migration DATA (migrations.cue) is embedded here. Same
+// (engine.go) live HERE now, out of charly's core; the #Migration table schema
+// (schema/migration.cue) lives HERE too — a plugin-only validation schema per the
+// kernel/plugin boundary law — as does the migration DATA (migrations.cue); only
+// #CanonCalVer stays SDK-owned (version.cue). Same
 // NewProvider()/NewMeta() + CliMain() shape as every command plugin (plugin-preempt); it
 // JOINS compiled_plugins so command:migrate resolves at init() independent of any config —
 // migrate must run when the config is exactly what cannot load.

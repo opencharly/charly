@@ -1,8 +1,9 @@
 // migrations.cue — the declarative migration table: the DATA the `charly migrate`
-// engine interprets (embedded via //go:embed in charly/migrate_engine.go). Each
-// entry is validated at process start against #Migration (sdk/schema/
-// migration.cue). This file lives in the charly repo, OUTSIDE the sdk schema, so it never enters the
-// spec codegen / vocab concatenation — it is engine data, not ingress schema.
+// engine interprets (embedded via //go:embed in engine.go). Each entry is validated
+// at process start against #Migration (schema/migration.cue, beside this file in the
+// plugin). Both the table DATA and the #Migration schema live HERE in
+// candy/plugin-migrate, OUTSIDE the sdk schema, so neither enters the spec codegen /
+// vocab concatenation — engine data + a plugin-only validation schema, not ingress.
 //
 // At the current migration-baseline reset the table is EMPTY: no config below the
 // current schema HEAD is migratable (`charly migrate` stamps a current-format
