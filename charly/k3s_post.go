@@ -21,8 +21,109 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// k3sServerURLRe matches an `https://<host>:<port>` server URL in a kubeconfig.
+var k3sServerURLRe = regexp.MustCompile(`(https?://)([^:/\s]+):(\d+)`)
+
+// rewriteK3sServerToForward rewrites the retrieved kubeconfig's server URL, mapping
+// the guest-local k3s API port to the host-forwarded port declared on the deploy's VM
+// (network.port_forwards "<host>:<guest>"). No-op when the deploy has no matching VM
+// forward — a bare-metal / already-host-reachable k3s needs no rewrite.
+func rewriteK3sServerToForward(retrievedPath, deployName string) error {
+	forwards := deployVMForwards(deployName)
+	if len(forwards) == 0 {
+		return nil
+	}
+	guestToHost := map[string]string{}
+	for _, pf := range forwards {
+		if host, guest, ok := strings.Cut(pf, ":"); ok {
+			guestToHost[strings.TrimSpace(guest)] = strings.TrimSpace(host)
+		}
+	}
+	data, err := os.ReadFile(retrievedPath)
+	if err != nil {
+		return err
+	}
+	out := rewriteServerPorts(string(data), guestToHost)
+	if out == string(data) {
+		return nil
+	}
+	return os.WriteFile(retrievedPath, []byte(out), 0o600)
+}
+
+// rewriteServerPorts rewrites every `https://<host>:<guestPort>` in data to
+// `https://127.0.0.1:<hostPort>` for each guest→host mapping (the QEMU user-mode
+// forward lives on the host loopback). Pure; unit-tested.
+func rewriteServerPorts(data string, guestToHost map[string]string) string {
+	return k3sServerURLRe.ReplaceAllStringFunc(data, func(m string) string {
+		p := k3sServerURLRe.FindStringSubmatch(m)
+		if hport, ok := guestToHost[p[3]]; ok && hport != p[3] {
+			return p[1] + "127.0.0.1:" + hport
+		}
+		return m
+	})
+}
+
+// deployVMForwards returns the network.port_forwards of the VM the named deploy runs
+// on (the deploy node's `from:` VM template), or nil when the deploy is not a VM.
+func deployVMForwards(deployName string) []string {
+	uf, ok, err := LoadUnified(".")
+	if err != nil || !ok || uf == nil {
+		return nil
+	}
+	// deployName is either a "vm:<entity>" reference (the VM-deploy artifact key) or a
+	// bundle key whose node carries `from: <vm entity>`. Resolve the VM entity either way.
+	vmEntity := ""
+	if e, cut := strings.CutPrefix(deployName, "vm:"); cut {
+		vmEntity = e
+	} else if node := findBundleNodeByName(uf.Bundle, deployName); node != nil {
+		vmEntity = node.From
+	}
+	if vmEntity == "" {
+		return nil
+	}
+	vm := uf.VM[vmEntity]
+	if vm == nil || vm.Network == nil {
+		return nil
+	}
+	return vm.Network.PortForwards
+}
+
+// findBundleNodeByName locates a deploy node by key across the tree (top-level +
+// nested children + peer members).
+func findBundleNodeByName(bundle map[string]BundleNode, name string) *BundleNode {
+	for k := range bundle {
+		n := bundle[k]
+		if k == name {
+			return &n
+		}
+		if r := findBundleNodePtrByName(n.Children, name); r != nil {
+			return r
+		}
+		if r := findBundleNodePtrByName(n.Members, name); r != nil {
+			return r
+		}
+	}
+	return nil
+}
+
+func findBundleNodePtrByName(m map[string]*BundleNode, name string) *BundleNode {
+	for k, n := range m {
+		if k == name {
+			return n
+		}
+		if r := findBundleNodePtrByName(n.Children, name); r != nil {
+			return r
+		}
+		if r := findBundleNodePtrByName(n.Members, name); r != nil {
+			return r
+		}
+	}
+	return nil
+}
 
 // sanitizeDeployName turns a deploy name like "vm:arch" or "stack.web.db"
 // into a shell-safe, path-safe, kubeconfig-context-safe identifier.
@@ -47,6 +148,14 @@ func K3sPostProvision(deployName string) error {
 	if _, err := os.Stat(retrieved); err != nil {
 		// Not a k3s-server deploy, or retricheck was skipped. Nothing to do.
 		return nil
+	}
+
+	// The retrieved kubeconfig carries k3s's GUEST-local server URL (127.0.0.1:6443);
+	// the host reaches the in-guest API only through the VM's host:guest port-forward.
+	// Rewrite the server to the host-forwarded port so `kubectl`/`kube:` checks work
+	// host-side (without this, kubectl dials 127.0.0.1:6443 → connection refused).
+	if err := rewriteK3sServerToForward(retrieved, deployName); err != nil {
+		return fmt.Errorf("rewriting k3s kubeconfig server to the forwarded port: %w", err)
 	}
 
 	contextName := safe
