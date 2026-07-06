@@ -12,6 +12,14 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 )
 
+// maxReverseChannelMsgBytes is the max gRPC message size (recv AND send) for the E3b
+// reverse-channel server (ExecutorService + CheckContextService). go-plugin's default server
+// caps messages at gRPC's 4 MiB, but a reverse ExecutorService call carries whole-FILE payloads
+// — most notably vmPostApply delivering the ~27 MiB host `charly` binary into a guest via
+// exec.PutFile — which overflows the 4 MiB default ("received message larger than max"). 512
+// MiB comfortably covers the binary and any check-verb GetFile artifact with headroom.
+const maxReverseChannelMsgBytes = 512 << 20 // 512 MiB
+
 // This file is charly's side of the plugin wire: the server wrappers that expose
 // charly's in-proc providerRegistry over gRPC (`__plugin serve`), and the client
 // wrappers that turn a connected plugin's advertised capabilities into Providers.
@@ -182,7 +190,9 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 		id := g.conn.Broker.NextId()
 		var srv *grpc.Server
 		go g.conn.Broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
-			srv = grpc.NewServer(opts...)
+			// Raise the message-size cap above gRPC's 4 MiB default so a whole-file reverse
+			// call (vmPostApply's ~27 MiB charly PutFile) is not rejected (maxReverseChannelMsgBytes).
+			srv = grpc.NewServer(append(opts, grpc.MaxRecvMsgSize(maxReverseChannelMsgBytes), grpc.MaxSendMsgSize(maxReverseChannelMsgBytes))...)
 			// Both reverse services share ONE broker id, registered on ONE server: a
 			// deploy/step op supplies exec (ExecutorService); a host-coupled check verb
 			// supplies BOTH exec and cc (ExecutorService for the venue + CheckContextService
