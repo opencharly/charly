@@ -25,11 +25,14 @@ import (
 // ONE candy/plugin-example-* proof-plugin ("≥1 by construction"), so a naive "≥2 real users" rule
 // would falsely fail. Genericity is proven by the word-free SHAPE of the surface, full stop.
 //
-// SCOPE NOTE: the authored-config CUE wire type spec.Op carries per-verb fields (Cdp/Vnc/Mcp/Spice/
-// Libvirt/Kube) — that is the AUTHORING schema (a shared config contract). It is used here as the
-// FORBIDDEN-WORD SOURCE (buildProviderWordUniverse folds spec.OpFields in so kube/libvirt/… are
-// caught), NOT as a SCANNED surface — the scanned surfaces are the SDK/RPC/registry API below. Do
-// not "fix" spec.Op's per-verb fields; they are config vocabulary, correctly the word source.
+// SCOPE NOTE: spec.Op carries only the GENERIC install-verb discriminators (mkdir/copy/write/… +
+// the generic `plugin` dispatcher) plus shared modifiers — the 11 externalized live verbs
+// (cdp/vnc/mcp/spice/libvirt/kube/adb/appium/wl/dbus/record) are NOT fields on spec.Op: each is
+// served by its plugin's own `#*Input` def and desugared into the generic `plugin`/`plugin_input`
+// pair before spec.Op validates. Those verb words enter the FORBIDDEN-WORD universe below via the
+// compiled-in providers' Reserved() words (NOT spec.Op); the CUE slices spec.OpVerbs/OpFields/
+// AuthoringVerbs/KindWords contribute the generic config vocabulary. This is a WORD SOURCE, not a
+// SCANNED surface — the scanned surfaces are the SDK/RPC/registry API below.
 func TestNoSinglePluginAPISurface(t *testing.T) {
 	universe := buildProviderWordUniverse()
 	if len(universe) == 0 {
@@ -106,11 +109,13 @@ var genericConceptCollisions = map[string]bool{"venue": true}
 
 // buildProviderWordUniverse is the set of words that must NOT appear in the plugin↔kernel API
 // surface — the UNION of every CUE-derived authored-config word slice (spec.OpVerbs act-verbs ∪
-// spec.KindWords ∪ spec.OpFields — which holds the externalized check verbs cdp/vnc/mcp/kube/
-// libvirt/spice/adb/appium/… ∪ spec.AuthoringVerbs) PLUS every compiled-in NON-command provider's
-// word, MINUS genericConceptCollisions. This SUBSUMES "no provider word" (every plugin word is one
-// of these CUE-derived field/kind/verb names) and additionally keeps the API surface's names
-// disjoint from the config vocabulary. The drift-guarded CUE slices keep it current automatically.
+// spec.KindWords ∪ spec.OpFields ∪ spec.AuthoringVerbs — the GENERIC config vocabulary) PLUS every
+// compiled-in NON-command provider's Reserved() word, which is where the externalized check verbs
+// (cdp/vnc/mcp/kube/libvirt/spice/adb/appium/…) enter, since they are plugin-served and NOT spec.Op
+// fields — MINUS genericConceptCollisions. This SUBSUMES "no provider word" (every plugin word is
+// one of these CUE-derived names or a registered provider word) and additionally keeps the API
+// surface's names disjoint from the config vocabulary. The drift-guarded CUE slices + the live
+// registry keep it current automatically.
 //
 // Command words (status/start/stop/shell/logs) are excluded: they are generic English verbs that
 // COINCIDE with sdk.Op* lifecycle selector VALUES (OpStatus="status", …), and a command word

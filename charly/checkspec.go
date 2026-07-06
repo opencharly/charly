@@ -308,84 +308,36 @@ var VerbCatalog = map[string]VerbSpec{
 	// (candy/plugin-{http,interface,addr}).
 
 	// live-container — runtime only. EVERY live-container verb is now an
-	// EXTERNAL-CHARLY-VERB served out-of-process; none has a VerbCatalog entry.
-	// `wl` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-wl. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `wl:` discriminator + modifiers + the #WlMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch — EXEC-based (like record/dbus), driving the venue's compositor (wlrctl/grim/
-	// wtype/swaymsg) over the executor reverse channel (the screenshot PNG pulls via GetFile).
-	// wl was the LAST in-core live verb — after it, ZERO check verbs are compiled-in. Its
-	// runtime-context legality now lives on the authored `context:` + the plugin's own
-	// box-mode skip, not this table.
-	// `dbus` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-dbus. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `dbus:` discriminator + modifiers + the #DbusMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch — EXEC-based (like record), driving the venue's session bus with gdbus over
-	// the executor reverse channel. STRUCTURAL externalization, not a dep-shed: dbus drives the
-	// venue bus with gdbus, never godbus. Its runtime-context legality now
-	// lives on the authored `context:` + the plugin's own box-mode skip, not this table.
-	// `vnc` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-vnc. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `vnc:` discriminator + modifiers + the #VncMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch (the host pre-resolves the deployment's VNC endpoint — container port 5900 or
-	// a VM's libvirt <graphics type='vnc'> listener — to a host-reachable RFB address first).
-	// Its runtime-context legality now lives on the authored `context:` + the plugin's own
-	// box-mode skip, not this table.
-	// `cdp` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-cdp. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `cdp:` discriminator + modifiers + the #CdpMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch (the host pre-resolves the deployment's CDP port 9222 to a host-reachable
-	// DevTools base URL first). Its runtime-context legality now lives on the authored
-	// `context:` + the plugin's own box-mode skip, not this table.
-	// `record` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-record. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `record:` discriminator + modifiers + the #RecordMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch — the FIRST EXEC-based external verb, driving the venue over the executor
-	// reverse channel (RunCapture/GetFile). Its runtime-context legality now lives on the
-	// authored `context:` + the plugin's own box-mode skip, not this table.
-	// `mcp` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-mcp. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `mcp:` discriminator + modifiers + the #McpMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch (the host pre-resolves the deployment's declared mcp_provides + the picked
-	// dial endpoint first). Its runtime-context legality now lives on the authored
-	// `context:` + the plugin's own box-mode skip, not this table.
-	// `libvirt` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-vm. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc CheckVerbProvider)
-	// but keeps its `libvirt:` discriminator + modifiers + the #LibvirtMethod enum on core #Op
-	// (authoring unchanged); the registered external provider resolves at dispatch (the host
-	// pre-resolves any VM display endpoint host-side).
-	// `kube` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-kube. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `kube:` discriminator + modifiers + the #KubeMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch (the host pre-resolves any --cluster profile to a kubeconfig context first).
-	// Its deploy/runtime-context legality now lives on the authored `context:` + the
-	// plugin's own box-mode skip, not this table.
-	// `adb` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-adb. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `adb:` discriminator + modifiers + the #AdbMethod
-	// enum on core #Op (authoring unchanged); the registered external provider resolves at
-	// dispatch. Its runtime-context legality now lives on the authored `context:` + the
-	// plugin's own box-mode skip, not this table.
-	// `appium` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-appium. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `appium:` discriminator + modifiers + the
-	// #AppiumMethod enum on core #Op (authoring unchanged); the registered external
-	// provider resolves at dispatch. Its runtime-context legality now lives on the
-	// authored `context:` + the plugin's own box-mode skip, not this table.
-	// `spice` is NOT here — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-	// candy/plugin-spice. It left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) but keeps its `spice:` discriminator + modifiers + the
-	// #SpiceMethod enum on core #Op (authoring unchanged); the registered external
-	// provider resolves at dispatch (the host pre-resolves the VM's live SPICE endpoint
-	// to a dialable address first). Its runtime-context legality now lives on the
-	// authored `context:` + the plugin's own box-mode skip, not this table.
+	// EXTERNAL-CHARLY-VERB served out-of-process; none has a VerbCatalog entry, and
+	// none is a field on core #Op. Each left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
+	// CheckVerbProvider) and is authored as the generic `<word>: <input>` sugar, desugared
+	// to `plugin`/`plugin_input` before #Op validates; its method enum + input schema live
+	// in its own plugin's #<Word>Input def (served over Describe), NOT on core #Op (the
+	// authored YAML shape is unchanged — only the schema's HOME moved to the plugin). The
+	// registered external provider resolves at dispatch; each verb's context legality lives
+	// on the authored `context:` + the plugin's own box-mode skip, not this table. Per-verb
+	// specifics (candy that serves it; what the host pre-resolves):
+	// `wl` (candy/plugin-wl) — EXEC-based (like record/dbus), driving the venue's compositor
+	//   (wlrctl/grim/wtype/swaymsg) over the executor reverse channel; the screenshot PNG
+	//   pulls via GetFile.
+	// `dbus` (candy/plugin-dbus) — EXEC-based, driving the venue's session bus with gdbus
+	//   (never godbus — a STRUCTURAL externalization, not a dep-shed) over the reverse channel.
+	// `vnc` (candy/plugin-vnc) — the host pre-resolves the deployment's VNC endpoint
+	//   (container port 5900 or a VM's libvirt <graphics type='vnc'> listener) to a
+	//   host-reachable RFB address first.
+	// `cdp` (candy/plugin-cdp) — the host pre-resolves the deployment's CDP port 9222 to a
+	//   host-reachable DevTools base URL first.
+	// `record` (candy/plugin-record) — EXEC-based, driving the venue over the executor
+	//   reverse channel (RunCapture/GetFile).
+	// `mcp` (candy/plugin-mcp) — the host pre-resolves the deployment's declared mcp_provides
+	//   + the picked dial endpoint first.
+	// `libvirt` (candy/plugin-vm) — the host pre-resolves any VM display endpoint host-side.
+	// `kube` (candy/plugin-kube) — the host pre-resolves any --cluster profile to a
+	//   kubeconfig context first.
+	// `adb` (candy/plugin-adb) — the registered external provider resolves at dispatch.
+	// `appium` (candy/plugin-appium) — the registered external provider resolves at dispatch.
+	// `spice` (candy/plugin-spice) — the host pre-resolves the VM's live SPICE endpoint to a
+	//   dialable address first.
 
 	// meta.
 
