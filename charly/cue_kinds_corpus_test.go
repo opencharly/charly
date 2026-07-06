@@ -14,6 +14,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -119,14 +120,14 @@ func TestCueKinds_Corpus(t *testing.T) {
 	// C2-candy: every authoring kind is externalized — #Node is an OPEN struct with NO arms, so
 	// KindWords is EMPTY and the #NodeDoc per-entity grammar is structural-only (validating a node
 	// against it is now vacuous). The corpus VALUE gate moved to the KEPT per-kind value defs
-	// (kindValueDef: candy → #CandyValue, pod/vm/k8s/local/android → #<Kind>Value) — the SAME
+	// (spec.KindValueDefs: candy → #CandyValue, pod/vm/k8s/local/android → #<Kind>Value) — the SAME
 	// host-side gate the loader runs (validateKindValueCUE). So this corpus test validates each
 	// node's inline discriminator value against its kept value def (non-concrete closedness),
 	// proving the whole real corpus passes the host-side gate. Plugin kinds without a kept value
 	// def (group/agent/module/…) are validated via their served plugin schema at runPluginKind and
 	// skipped here (nodeHasPluginKindDisc).
-	kinds := make([]string, 0, len(kindValueDef))
-	for k := range kindValueDef {
+	kinds := make([]string, 0, len(spec.KindValueDefs))
+	for k := range spec.KindValueDefs {
 		kinds = append(kinds, k)
 	}
 	sort.Strings(kinds)
@@ -145,7 +146,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))
 		for _, gn := range parseCorpusDocs(t, f, data) {
-			if _, hasDef := kindValueDef[gn.disc]; !hasDef {
+			if _, hasDef := spec.KindValueDefs[gn.disc]; !hasDef {
 				// A PLUGIN kind (agent/module/package-group/group/…) or an external
 				// deploy substrate — validated by the plugin's served schema at
 				// runPluginKind / the loader path, not by a kept core value def, so

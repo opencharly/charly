@@ -151,20 +151,15 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	return nil
 }
 
-// kindValueDef maps an EXTERNALIZED structural kind to its KEPT #<Kind>Value CUE def
-// (schema/node.cue) — the HOST-SIDE closedness gate that replaces the removed #Node arm: a
-// plugin cannot serve a self-contained schema for these rich core-referencing values, so the
-// host validates the authored value against the KEPT def in-core. Covers the 5 substrate kinds
-// (C2-substrate, #<Kind> | #DeployValue) AND candy (C2-candy, #CandyValue = *#Candy | #Image).
-// Keep in lockstep with isStandaloneResourceKind + the foldSubstrateKind/foldCandyKind branches.
-var kindValueDef = map[string]string{
-	"pod":     "#PodValue",
-	"vm":      "#VmValue",
-	"k8s":     "#K8sValue",
-	"local":   "#LocalValue",
-	"android": "#AndroidValue",
-	"candy":   "#CandyValue",
-}
+// The word→#<Kind>Value CUE-def map the host value gate consults is spec.KindValueDefs
+// — CUE-DERIVED from the #<X>Value defs (schema/node.cue) by schemagen (clause D of the
+// kernel/plugin boundary law: kind-recognition data loaded from CUE, NOT a compiled-in
+// per-kind Go map). It is the HOST-SIDE closedness gate replacing the removed #Node arm:
+// a plugin cannot serve a self-contained schema for these rich core-referencing values,
+// so the host validates the authored value against the KEPT def in-core. Covers the 5
+// substrate kinds (C2-substrate, #<Kind> | #DeployValue) AND candy (C2-candy, #CandyValue
+// = *#Candy | #Image); keep the #<Kind>Value defs in lockstep with isStandaloneResourceKind
+// + the foldSubstrateKind/foldCandyKind branches.
 
 // foldSubstrateKind decodes a SUBSTRATE structural kind node (pod/vm/k8s/local/android)
 // HOST-SIDE and folds candy/plugin-substrate's echo into the right map (C2-substrate). The
@@ -287,7 +282,7 @@ func validateKindValueCUE(gn *genericNode) error {
 	if gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
 		return nil
 	}
-	defPath, ok := kindValueDef[gn.disc]
+	defPath, ok := spec.KindValueDefs[gn.disc]
 	if !ok {
 		return nil
 	}
