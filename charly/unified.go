@@ -89,8 +89,9 @@ type UnifiedFile struct {
 	// candy/plugin-builder / the candy/plugin-init candy), so a `distro:`/`builder:`/`init:` node
 	// (incl. the binary-embedded build vocabulary) lands in PluginKinds. The name-keyed
 	// map[string]*XDef the generator/format code consumes is reconstructed on demand by
-	// the Distros() / Builders() / Inits() accessors (decoding the canonical bodies back
-	// into DistroDef = spec.Distro, …) and projected via ProjectDistroConfig /
+	// the Distros() / Builders() / Inits() accessors (RESOLVING the opaque bodies via each
+	// kind plugin's OpResolve leg into the value envelope — DistroDef = spec.ResolvedDistro,
+	// InitDef → ResolvedInit, …) and projected via ProjectDistroConfig /
 	// ProjectBuilderConfig / ProjectInitConfig. The binary-embedded default vocabulary
 	// merges UNDER a project's own entries via the generic root-wins mergePluginKindsMap
 	// (applyEmbeddedDefaults). See unified.go Distros()/Builders()/Inits().
@@ -1581,15 +1582,14 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 
 // Distros reconstructs the name-keyed per-distro build vocabulary from uf.PluginKinds.
 // The `distro` kind is a plugin kind (candy/plugin-distro) — a `distro:` node (incl. the
-// binary-embedded vocabulary) lands in uf.PluginKinds["distro"][<name>] as canonical
-// spec.Distro JSON (produced by the plugin's Invoke). This accessor decodes each body
-// back into a *DistroDef (= *spec.Distro), yielding the SAME map[string]*DistroDef shape
-// the generator/format code consumed when distro was a typed core map (the former
-// uf.Distro). Recomputed per call; returns nil when no distros are configured. A decode
-// error is impossible in practice — the body is canonical JSON the plugin Marshalled from
-// spec.Distro — but a bad entry is skipped rather than poisoning the whole vocabulary.
+// binary-embedded vocabulary) lands in uf.PluginKinds["distro"][<name>] as an OPAQUE
+// canonical body. After the distro de-type (Cutover M) this accessor RESOLVES each body
+// via candy/plugin-distro's OpResolve leg (resolveDistros) into a *DistroDef
+// (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
+// consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
+// are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
 func (uf *UnifiedFile) Distros() map[string]*DistroDef {
-	return decodePluginKindMap[DistroDef](uf, "distro")
+	return uf.resolveDistros()
 }
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from

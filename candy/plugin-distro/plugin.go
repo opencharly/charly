@@ -36,18 +36,38 @@ type provider struct{ pb.UnimplementedProviderServer }
 // Invoke handles OpLoad: decode the authored `distro:` entity into spec.Distro and return it
 // re-marshalled as canonical JSON (the host validated the body against #DistroInput first).
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("distro kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
-	}
-	var in spec.Distro
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("distro kind: decode entity: %w", err)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		var in spec.Distro
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("distro kind: decode entity: %w", err)
+			}
 		}
+		out, err := json.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("distro kind: marshal entity: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpResolve:
+		// The distro de-type (Cutover M): project the opaque distro body into a
+		// ResolvedDistro the kernel's build engine consumes.
+		var in spec.DistroResolveInput
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("distro resolve: decode input: %w", err)
+			}
+		}
+		reply, err := resolveDistro(in)
+		if err != nil {
+			return nil, err
+		}
+		out, err := json.Marshal(reply)
+		if err != nil {
+			return nil, fmt.Errorf("distro resolve: marshal reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("distro kind: unsupported op %q", req.GetOp())
 	}
-	out, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("distro kind: marshal entity: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: out}, nil
 }
