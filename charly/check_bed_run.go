@@ -34,8 +34,50 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 )
+
+// bedVmDomains returns the sorted, deduped libvirt domain names (charly-<from>) a bed's
+// VM(s) occupy — the bed's own vm target plus any group-member vm targets. This is the
+// unit of exclusive host contention two DISTINCT beds can collide on (the per-domain lock
+// in runCheckBed serializes them).
+func bedVmDomains(node BundleNode) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(tmpl string) {
+		if tmpl == "" || seen[tmpl] {
+			return
+		}
+		seen[tmpl] = true
+		out = append(out, "charly-"+tmpl)
+	}
+	if node.Target == "vm" {
+		add(node.From)
+	}
+	for _, m := range node.Members {
+		if isVmMember(m) {
+			add(m.From)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// acquireVmDomainLock takes a BLOCKING, host-global advisory lock serializing every check
+// bed that occupies the given libvirt domain. Host-global (under ~/.cache/charly/.locks/)
+// because the qemu:///session domain namespace is host-wide, shared across project dirs.
+func acquireVmDomainLock(domain string) (func() error, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(home, ".cache", "charly", ".locks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return acquireFileLock(filepath.Join(dir, "vm-domain-"+domain+".lock"), true)
+}
 
 // bedRunOpts carries the per-run knobs (sourced from `charly check run` flags).
 type bedRunOpts struct {
@@ -282,6 +324,26 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		return res, fmt.Errorf("locking check bed %q: %w", name, bedLockErr)
 	}
 	defer func() { _ = bedUnlock() }()
+
+	// Per-DOMAIN serialization for VM beds. A disposable bed's VM(s) occupy libvirt
+	// domain(s) charly-<from>; two DISTINCT beds deploying the SAME vm template (a direct
+	// `from: k3s-vm` bed and a group member `from: k3s-vm`) collide on ONE domain, so a
+	// naive parallel roster clobbers one mid-boot (the wait-for-sshd / define-UUID-collision
+	// incident). Take a BLOCKING, HOST-GLOBAL lock per domain (sorted → no deadlock across a
+	// multi-domain bed), held through teardown, so same-domain beds SERIALIZE (both pass)
+	// while distinct-domain beds stay fully parallel — the concurrency-mandate's
+	// per-exclusive-resource SERIAL group, auto-keyed by the domain. Host-global because the
+	// libvirt session is host-wide (shared across project dirs), not per-.check/.
+	for _, domain := range bedVmDomains(node) {
+		domUnlock, domErr := acquireVmDomainLock(domain)
+		if domErr != nil {
+			res.OK = false
+			res.Step = append(res.Step, stepResult{Name: "vm-domain-lock", OK: false})
+			writeBedSummary(logDir, res)
+			return res, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, name, domErr)
+		}
+		defer func() { _ = domUnlock() }()
+	}
 
 	// Local-candy resolution (the candy-ref analogue of --dev-local-pkg): a bed
 	// in a box/<distro> submodule pulls its parent repo's shared candies via
