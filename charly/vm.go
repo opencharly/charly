@@ -332,12 +332,12 @@ func (c *VmCreateCmd) Run() error {
 	// absent, so the pin was silently dropped; now it is honored.)
 	dir, _ := os.Getwd()
 	var spec *VmSpec
-	var resources map[string]*ResourceDef
+	var resources map[string]*ResolvedResource
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok {
 		if uf.VM != nil {
 			spec = uf.VM[c.Box]
 		}
-		resources = uf.Resources()
+		resources = uf.resolveResources()
 	}
 	backend, err := resolveVmBackend(vmConfiguredBackend(c.Box, rt.VmBackend))
 	if err != nil {

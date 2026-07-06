@@ -47,7 +47,6 @@ type (
 	EphemeralRuntime         = vmshared.EphemeralRuntime
 	ExtractYAML              = vmshared.ExtractYAML
 	FormatDef                = vmshared.FormatDef
-	GpuSelector              = vmshared.GpuSelector
 	HooksConfig              = vmshared.HooksConfig
 	HostDistro               = vmshared.HostDistro
 	InstallOptsConfig        = vmshared.InstallOptsConfig
@@ -80,7 +79,6 @@ type (
 	ReadinessConfig          = vmshared.ReadinessConfig
 	ResolvedReadiness        = vmshared.ResolvedReadiness
 	PollCondition            = vmshared.PollCondition
-	ResourceDef              = vmshared.ResourceDef
 	SecretYAML               = vmshared.SecretYAML
 	SecurityConfig           = vmshared.SecurityConfig
 	ServiceEntry             = vmshared.ServiceEntry

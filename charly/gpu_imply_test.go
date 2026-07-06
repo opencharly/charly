@@ -44,7 +44,7 @@ func TestImpliedGPUShared_NoTokenWithoutResourceConfig(t *testing.T) {
 		t.Fatalf("no resource config → no implied token, got %q", tok)
 	}
 	// A selector-less (abstract) token is not gpu-backed → not implied.
-	abstract := map[string]*ResourceDef{"abstract": {}}
+	abstract := map[string]*ResolvedResource{"abstract": {}}
 	if tok := impliedGPUSharedToken(gpuPodNode(), abstract); tok != "" {
 		t.Fatalf("a selector-less token must not be implied, got %q", tok)
 	}
@@ -145,8 +145,8 @@ func TestApplyImpliedGPUShared_UnionAndNoDoubleClaim(t *testing.T) {
 // --- core test helpers (were in the relocated preempt_test.go / preempt_shared_test.go) ------
 
 // gpuResources is the token map an implied-GPU test sees (drives the imply logic; core type).
-func gpuResources() map[string]*ResourceDef {
-	return map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+func gpuResources() map[string]*ResolvedResource {
+	return map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 }
 
 // sharedNode / claimantNode build a pod deploy declaring a SHARED / EXCLUSIVE claim.

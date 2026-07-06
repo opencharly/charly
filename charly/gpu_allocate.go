@@ -67,7 +67,7 @@ func ovrHasHostdev(ovr *VmInstanceOverride) bool {
 // requiredGPUResource scans a claimant's requires_exclusive tokens for the
 // first that maps to a `resource:` carrying a gpu selector. Returns the token,
 // the selector, and ok=false when the claimant needs no GPU resource.
-func requiredGPUResource(cnode *BundleNode, resources map[string]*ResourceDef) (string, *GpuSelector, bool) {
+func requiredGPUResource(cnode *BundleNode, resources map[string]*ResolvedResource) (string, *ResolvedGpuSelector, bool) {
 	if cnode == nil {
 		return "", nil, false
 	}
@@ -94,7 +94,7 @@ func requiredGPUResource(cnode *BundleNode, resources map[string]*ResourceDef) (
 //
 // ovr is the already-loaded per-host override (may be nil). Returns the
 // (possibly newly-created) override so the caller can ApplyToVmSpec it.
-func autoAllocateExclusiveGPUs(spec *VmSpec, ovr *VmInstanceOverride, cnode *BundleNode, resources map[string]*ResourceDef, domainName, backend string) (*VmInstanceOverride, error) {
+func autoAllocateExclusiveGPUs(spec *VmSpec, ovr *VmInstanceOverride, cnode *BundleNode, resources map[string]*ResolvedResource, domainName, backend string) (*VmInstanceOverride, error) {
 	tok, sel, ok := requiredGPUResource(cnode, resources)
 	if !ok {
 		return ovr, nil

@@ -12,7 +12,7 @@ import (
 // resolved backend. Pre-conditions: `charly vm build <vm-name>` has run,
 // placing disk.qcow2 (+ seed.iso for cloud_image sources) under the per-VM
 // disk dir output/qcow2/<vm>/.
-func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResourceDef) error {
+func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResolvedResource) error {
 	name := vmName
 	if c.Instance != "" {
 		name = vmName + "-" + c.Instance

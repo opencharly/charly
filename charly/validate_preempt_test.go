@@ -27,8 +27,8 @@ func TestValidate_BothExclusiveAndShared_Errors(t *testing.T) {
 // deployNodeSharesGPU reports whether a deploy node claims a SHARED resource backed by a gpu
 // selector — so config_image emits the CDI `--device` even while the card is still vfio-bound.
 func TestDeployNodeSharesGPU(t *testing.T) {
-	resources := map[string]*ResourceDef{
-		"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}},
+	resources := map[string]*ResolvedResource{
+		"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}},
 		"abstract":   {}, // no gpu selector
 	}
 	cases := []struct {

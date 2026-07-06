@@ -35,18 +35,38 @@ type provider struct{ pb.UnimplementedProviderServer }
 // Invoke handles OpLoad: decode the authored `resource:` entity into spec.Resource and return it
 // re-marshalled as canonical JSON (the host validated the body against #ResourceInput first).
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("resource kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
-	}
-	var in spec.Resource
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("resource kind: decode entity: %w", err)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		var in spec.Resource
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("resource kind: decode entity: %w", err)
+			}
 		}
+		out, err := json.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("resource kind: marshal entity: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpResolve:
+		// The resource de-type (Cutover G): project the opaque resource body into a
+		// ResolvedResource the GPU arbiter consumes.
+		var in spec.ResourceResolveInput
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("resource resolve: decode input: %w", err)
+			}
+		}
+		reply, err := resolveResource(in)
+		if err != nil {
+			return nil, err
+		}
+		out, err := json.Marshal(reply)
+		if err != nil {
+			return nil, fmt.Errorf("resource resolve: marshal reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("resource kind: unsupported op %q", req.GetOp())
 	}
-	out, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("resource kind: marshal entity: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: out}, nil
 }

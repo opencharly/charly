@@ -111,7 +111,7 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 	if def.Builders()["pixi"] == nil {
 		t.Error("embedded builder pixi missing from unified parse")
 	}
-	if def.Resources()["nvidia-gpu"] == nil {
+	if def.resolveResources()["nvidia-gpu"] == nil {
 		t.Error("embedded resource nvidia-gpu missing from unified parse")
 	}
 	// Sidecar-template view — sidecar is a plugin kind (candy/plugin-sidecar); the
@@ -191,7 +191,7 @@ amd-gpu:
 	}
 
 	// builder/init/resource are plugin kinds now; read each vocab back via its accessor.
-	builders, inits, resources := uf.Builders(), uf.resolveInits(), uf.Resources()
+	builders, inits, resources := uf.Builders(), uf.resolveInits(), uf.resolveResources()
 
 	// builder: override wins WHOLESALE (gap-fill replaces, never deep-merges), a
 	// new entry coexists, an untouched embedded entry survives.

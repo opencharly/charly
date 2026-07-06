@@ -19,7 +19,7 @@ import (
 // selector — so it must get the GPU device (`--device nvidia.com/gpu=all` via CDI) in its
 // quadlet/run args EVEN when the host card is currently vfio-bound, because the arbiter flips
 // it to nvidia at start.
-func deployNodeSharesGPU(node BundleNode, resources map[string]*ResourceDef) bool {
+func deployNodeSharesGPU(node BundleNode, resources map[string]*ResolvedResource) bool {
 	for _, tok := range node.RequiredShared() {
 		if rdef := resources[tok]; rdef != nil && rdef.Gpu != nil {
 			return true
@@ -31,7 +31,7 @@ func deployNodeSharesGPU(node BundleNode, resources map[string]*ResourceDef) boo
 // nvidiaTokenFromResources returns the `resource:` token whose gpu selector matches the NVIDIA
 // PCI vendor — the arbitration token the auto-detected nvidia GPU device maps onto. "" when no
 // gpu-backed nvidia token is configured. Lowest token name wins on a degenerate multi-match.
-func nvidiaTokenFromResources(resources map[string]*ResourceDef) string {
+func nvidiaTokenFromResources(resources map[string]*ResolvedResource) string {
 	best := ""
 	for tok, rdef := range resources {
 		if rdef != nil && rdef.Gpu != nil && normalizePCIVendor(rdef.Gpu.Vendor) == nvidiaVendorID {
@@ -84,7 +84,7 @@ func nodeConsumesNvidiaGPU(node BundleNode) bool {
 // impliedGPUSharedToken returns the gpu-backed `resource:` token a node implicitly claims as
 // SHARED because it consumes the auto-detected nvidia GPU device — "" when the node is not a
 // GPU consumer, claims a resource exclusively, or no gpu token is configured.
-func impliedGPUSharedToken(node BundleNode, resources map[string]*ResourceDef) string {
+func impliedGPUSharedToken(node BundleNode, resources map[string]*ResolvedResource) string {
 	if len(node.RequiredExclusive()) > 0 {
 		return ""
 	}
@@ -97,7 +97,7 @@ func impliedGPUSharedToken(node BundleNode, resources map[string]*ResourceDef) s
 // applyImpliedGPUShared returns node with its RequiresShared unioned with the implied gpu
 // token — a no-op copy when nothing is implied OR the node already claims the token. Pure
 // (resources injected) so it is unit-testable without disk.
-func applyImpliedGPUShared(node BundleNode, resources map[string]*ResourceDef) BundleNode {
+func applyImpliedGPUShared(node BundleNode, resources map[string]*ResolvedResource) BundleNode {
 	tok := impliedGPUSharedToken(node, resources)
 	if tok == "" || slices.Contains(node.RequiresShared, tok) {
 		return node

@@ -102,7 +102,7 @@ func validatePreemptibleUnified(uf *UnifiedFile) error {
 //     so auto-allocation would silently fail at create time.
 func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
 	// resource is a plugin kind now (candy/plugin-resource); decode the name-keyed vocab once.
-	resources := uf.Resources()
+	resources := uf.resolveResources()
 	for name, rdef := range resources {
 		if rdef == nil {
 			continue

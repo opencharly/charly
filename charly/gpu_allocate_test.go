@@ -85,14 +85,14 @@ func TestVfioGpuToHostdevs(t *testing.T) {
 }
 
 func TestRequiredGPUResource(t *testing.T) {
-	resources := map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 	node := BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
 	tok, sel, ok := requiredGPUResource(&node, resources)
 	if !ok || tok != "nvidia-gpu" || sel.Vendor != "0x10de" {
 		t.Fatalf("requiredGPUResource = (%q,%v,%v), want nvidia-gpu/0x10de/true", tok, sel, ok)
 	}
 	// A token with no gpu selector (free arbitration token) → not a GPU resource.
-	free := map[string]*ResourceDef{"some-lock": {}}
+	free := map[string]*ResolvedResource{"some-lock": {}}
 	if _, _, ok := requiredGPUResource(&BundleNode{RequiresExclusive: []string{"some-lock"}}, free); ok {
 		t.Error("a selector-less resource token must not trigger GPU allocation")
 	}
@@ -117,7 +117,7 @@ func TestAutoAllocate_HitPersistsAndInjects(t *testing.T) {
 
 	spec := &VmSpec{}
 	node := &BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
-	resources := map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 
 	ovr, err := autoAllocateExclusiveGPUs(spec, nil, node, resources, "charly-gpu-vm", "libvirt")
 	if err != nil {
@@ -148,7 +148,7 @@ func TestAutoAllocate_MissFailsHard(t *testing.T) {
 	defer func() { DetectVFIO = orig }()
 
 	node := &BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
-	resources := map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 	_, err := autoAllocateExclusiveGPUs(&VmSpec{}, nil, node, resources, "charly-gpu-vm", "libvirt")
 	if err == nil {
 		t.Fatal("a required-but-absent GPU resource must FAIL HARD, got nil error")
@@ -170,7 +170,7 @@ func TestAutoAllocate_OperatorHostdevWins(t *testing.T) {
 	// vm.yml already committed a hostdev → auto-allocation defers, no detect.
 	spec := &VmSpec{Libvirt: &LibvirtDomain{Devices: &LibvirtDevices{Hostdevs: []LibvirtHostdev{{Type: "pci"}}}}}
 	node := &BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
-	resources := map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 	if _, err := autoAllocateExclusiveGPUs(spec, nil, node, resources, "charly-gpu-vm", "libvirt"); err != nil {
 		t.Fatalf("operator-hostdev path must be a no-op, got %v", err)
 	}
@@ -178,7 +178,7 @@ func TestAutoAllocate_OperatorHostdevWins(t *testing.T) {
 
 func TestAutoAllocate_QemuBackendRejected(t *testing.T) {
 	node := &BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
-	resources := map[string]*ResourceDef{"nvidia-gpu": {Gpu: &GpuSelector{Vendor: "0x10de"}}}
+	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
 	_, err := autoAllocateExclusiveGPUs(&VmSpec{}, nil, node, resources, "charly-gpu-vm", "qemu")
 	if err == nil || !strings.Contains(err.Error(), "libvirt") {
 		t.Fatalf("qemu backend must be rejected for GPU passthrough, got %v", err)
@@ -187,7 +187,7 @@ func TestAutoAllocate_QemuBackendRejected(t *testing.T) {
 
 // TestResourceKind_Loads verifies a node-form resource: kind loads through the plugin
 // path (runPluginKind → uf.PluginKinds["resource"], validated against the served
-// #ResourceInput) and is read back into the typed map[string]*ResourceDef by the
+// #ResourceInput) and is read back into the typed map[string]*ResolvedResource by the
 // Resources() accessor — resource is a plugin kind now (candy/plugin-resource), no longer a
 // typed core map (the former uf.Resource).
 func TestResourceKind_Loads(t *testing.T) {
@@ -207,16 +207,16 @@ some-lock:
 	if err != nil {
 		t.Fatalf("LoadUnified resource plugin kind: %v", err)
 	}
-	resources := uf.Resources()
+	resources := uf.resolveResources()
 	if resources["nvidia-gpu"] == nil || resources["nvidia-gpu"].Gpu == nil ||
 		resources["nvidia-gpu"].Gpu.Vendor != "0x10de" {
 		t.Fatalf("resource nvidia-gpu did not parse: %#v", resources["nvidia-gpu"])
 	}
-	if !resources["nvidia-gpu"].HasSelector() {
-		t.Error("nvidia-gpu should report HasSelector")
+	if resources["nvidia-gpu"].Gpu == nil {
+		t.Error("nvidia-gpu should carry a gpu selector")
 	}
-	if resources["some-lock"] == nil || resources["some-lock"].HasSelector() {
-		t.Error("selector-less some-lock should not report HasSelector")
+	if resources["some-lock"] == nil || resources["some-lock"].Gpu != nil {
+		t.Error("selector-less some-lock should carry no gpu selector")
 	}
 }
 

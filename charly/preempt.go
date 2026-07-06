@@ -399,9 +399,9 @@ func podIsRunning(base, instance string) bool {
 
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
 // flip) from the project charly.yml. nil when none / unreadable.
-func gatherResources() map[string]*ResourceDef {
+func gatherResources() map[string]*ResolvedResource {
 	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
-		return uf.Resources()
+		return uf.resolveResources()
 	}
 	return nil
 }

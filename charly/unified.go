@@ -1644,14 +1644,6 @@ func (uf *UnifiedFile) resolveInits() map[string]*ResolvedInit {
 	return out
 }
 
-// Resources reconstructs the name-keyed exclusive-host-resource vocabulary from
-// uf.PluginKinds["resource"] (the `resource` plugin kind, candy/plugin-resource) into the
-// map[string]*ResourceDef shape the GPU-arbitration code consumed when resource was a
-// typed core map.
-func (uf *UnifiedFile) Resources() map[string]*ResourceDef {
-	return decodePluginKindMap[ResourceDef](uf, "resource")
-}
-
 // decodePluginKindMap reconstructs the typed name-keyed map[string]*T for a plugin kind
 // from uf.PluginKinds[kind] (each body the canonical spec.T JSON the kind plugin's Invoke
 // produced). Shared by the build-vocabulary accessors (Distros/Builders/Inits/Resources)
