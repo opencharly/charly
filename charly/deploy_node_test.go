@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -216,7 +217,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	rp := []string{"32718:2718"}
 	desc := "testing"
 	sec := []DeploySecretConfig{{Name: "test"}}
-	sd := map[string]SidecarDef{"side": {Image: "img"}}
+	sd := map[string]json.RawMessage{"side": json.RawMessage(`{"image":"img"}`)}
 	shl := []DeployShellOverlay{{ID: "x"}}
 	k8s := &K8sDeployConfig{Namespace: "test-ns"}
 	res := &DeployResources{}

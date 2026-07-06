@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -29,11 +30,11 @@ type Config struct {
 	// lists (kind:local templates compose remote @-ref candies too). Populated
 	// from UnifiedFile.Local by ProjectConfig().
 	Local map[string]*LocalSpec `yaml:"local,omitempty" json:"local,omitempty"`
-	// Sidecar carries the project's sidecar-template library (the embedded
-	// default set merged with any project-declared sidecar: entries). Populated
-	// from the UnifiedFile.Sidecars() accessor (over PluginKinds["sidecar"]) by
-	// ProjectConfig(). See /charly-automation:sidecar.
-	Sidecar map[string]SidecarDef `yaml:"sidecar,omitempty" json:"sidecar,omitempty"`
+	// Sidecar carries the project's sidecar-template library as OPAQUE bodies
+	// (the raw PluginKinds["sidecar"] map). The kernel never reads their fields —
+	// candy/plugin-sidecar's OpResolve owns all sidecar business logic (the sidecar
+	// de-type, Cutover D). See /charly-automation:sidecar.
+	Sidecar map[string]json.RawMessage `yaml:"sidecar,omitempty" json:"sidecar,omitempty"`
 	// Namespaces carries child namespaces mounted by namespaced `import:`
 	// entries (alias → projected sub-Config). Qualified refs like
 	// `cachyos.cachyos` resolve through here. Populated from

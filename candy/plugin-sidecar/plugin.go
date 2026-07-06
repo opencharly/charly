@@ -33,21 +33,43 @@ func NewMeta() pb.PluginMetaServer {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke handles OpLoad: decode the authored `sidecar:` entity into spec.Sidecar and return it
-// re-marshalled as canonical JSON (the host validated the body against #SidecarInput first).
+// Invoke handles two ops:
+//   - OpLoad: decode the authored `sidecar:` entity into spec.Sidecar and return it
+//     re-marshalled as canonical JSON (the host validated it against #SidecarInput).
+//   - OpResolve: the host-side sidecar de-type (Cutover D) — the host hands the
+//     opaque sidecar def layers + CLI env; this plugin routes env, merges, and
+//     resolves them into generation-ready spec.ResolvedSidecar values (resolve.go).
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("sidecar kind: unsupported op %q (only %q)", req.GetOp(), sdk.OpLoad)
-	}
-	var in spec.Sidecar
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("sidecar kind: decode entity: %w", err)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		var in spec.Sidecar
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("sidecar kind: decode entity: %w", err)
+			}
 		}
+		out, err := json.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("sidecar kind: marshal entity: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpResolve:
+		var in spec.SidecarResolveInput
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("sidecar resolve: decode input: %w", err)
+			}
+		}
+		reply, err := resolveSidecars(in)
+		if err != nil {
+			return nil, err
+		}
+		out, err := json.Marshal(reply)
+		if err != nil {
+			return nil, fmt.Errorf("sidecar resolve: marshal reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("sidecar kind: unsupported op %q", req.GetOp())
 	}
-	out, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("sidecar kind: marshal entity: %w", err)
-	}
-	return &pb.InvokeReply{ResultJson: out}, nil
 }

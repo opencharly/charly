@@ -90,9 +90,6 @@ type (
 	ServiceSchemaDef         = vmshared.ServiceSchemaDef
 	ShellConfig              = vmshared.ShellConfig
 	ShellSpec                = vmshared.ShellSpec
-	SidecarDef               = vmshared.SidecarDef
-	SidecarSecret            = vmshared.SidecarSecret
-	SidecarVolume            = vmshared.SidecarVolume
 	SnapshotCreateOpts       = vmshared.SnapshotCreateOpts
 	SnapshotDeleteOpts       = vmshared.SnapshotDeleteOpts
 	SnapshotEntry            = vmshared.SnapshotEntry

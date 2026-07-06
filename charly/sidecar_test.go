@@ -1,24 +1,33 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
+// TestEmbeddedSidecarTemplates verifies the binary-embedded tailscale template
+// (charly.yml `sidecar:`) is well-formed. The kernel stores it as an opaque body;
+// this test decodes it purely to assert the embedded vocab is correct.
 func TestEmbeddedSidecarTemplates(t *testing.T) {
-	templates, err := EmbeddedSidecarTemplates()
+	bodies, err := embeddedSidecarBodies()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if templates == nil {
+	if bodies == nil {
 		t.Fatal("expected non-nil templates")
 	}
-
-	ts, ok := templates["tailscale"]
+	body, ok := bodies["tailscale"]
 	if !ok {
 		t.Fatal("expected tailscale sidecar in embedded templates")
+	}
+	var ts spec.Sidecar
+	if err := json.Unmarshal(body, &ts); err != nil {
+		t.Fatalf("decode tailscale template: %v", err)
 	}
 	if ts.Image != "ghcr.io/tailscale/tailscale:latest" {
 		t.Errorf("image = %q, want ghcr.io/tailscale/tailscale:latest", ts.Image)
@@ -37,159 +46,6 @@ func TestEmbeddedSidecarTemplates(t *testing.T) {
 	}
 	if len(ts.Secret) != 1 || ts.Secret[0].Env != "TS_AUTHKEY" {
 		t.Errorf("secrets = %v, want [{ts-authkey TS_AUTHKEY}]", ts.Secret)
-	}
-}
-
-func TestMergeSidecars_EnvMerge(t *testing.T) {
-	base := map[string]SidecarDef{
-		"tailscale": {
-			Image: "tailscale:base",
-			Env: map[string]string{
-				"TS_STATE_DIR":  "/var/lib/tailscale",
-				"TS_USERSPACE":  "false",
-				"TS_ACCEPT_DNS": "true",
-			},
-		},
-	}
-	overlay := map[string]SidecarDef{
-		"tailscale": {
-			Env: map[string]string{
-				"TS_HOSTNAME":  "my-app",
-				"TS_USERSPACE": "true",
-			},
-		},
-	}
-
-	result := MergeSidecar(base, overlay)
-	ts := result["tailscale"]
-
-	if ts.Image != "tailscale:base" {
-		t.Errorf("image = %q, want tailscale:base", ts.Image)
-	}
-	if ts.Env["TS_STATE_DIR"] != "/var/lib/tailscale" {
-		t.Error("TS_STATE_DIR should be preserved from base")
-	}
-	if ts.Env["TS_HOSTNAME"] != "my-app" {
-		t.Error("TS_HOSTNAME should be added from overlay")
-	}
-	if ts.Env["TS_USERSPACE"] != "true" {
-		t.Error("TS_USERSPACE should be overridden by overlay")
-	}
-	if ts.Env["TS_ACCEPT_DNS"] != "true" {
-		t.Error("TS_ACCEPT_DNS should be preserved from base")
-	}
-}
-
-func TestMergeSidecars_NilInputs(t *testing.T) {
-	if result := MergeSidecar(nil, nil); result != nil {
-		t.Error("nil+nil should return nil")
-	}
-	result := MergeSidecar(nil, map[string]SidecarDef{"a": {Image: "x"}})
-	if result["a"].Image != "x" {
-		t.Error("nil base + overlay should return overlay")
-	}
-	result = MergeSidecar(map[string]SidecarDef{"a": {Image: "x"}}, nil)
-	if result["a"].Image != "x" {
-		t.Error("base + nil overlay should return copy of base")
-	}
-}
-
-func TestResolveSidecars(t *testing.T) {
-	defs := map[string]SidecarDef{
-		"tailscale": {
-			Image: "ts:latest",
-			Env:   map[string]string{"TS_HOSTNAME": "test"},
-			Volume: []SidecarVolume{
-				{Name: "state", Path: "/var/lib/tailscale"},
-			},
-			Secret: []SidecarSecret{
-				{Name: "ts-authkey", Env: "TS_AUTHKEY"},
-			},
-			Security: &SecurityConfig{
-				CapAdd: []string{"NET_ADMIN"},
-			},
-		},
-	}
-
-	resolved, err := ResolveSidecar(defs, "my-app", "")
-	if err != nil {
-		t.Fatalf("ResolveSidecar: %v", err)
-	}
-	if len(resolved) != 1 {
-		t.Fatalf("expected 1 sidecar, got %d", len(resolved))
-	}
-
-	sc := resolved[0]
-	if sc.Volume[0].VolumeName != "charly-my-app-tailscale-state" {
-		t.Errorf("volume name = %q, want charly-my-app-tailscale-state", sc.Volume[0].VolumeName)
-	}
-	if sc.Secret[0].Name != "charly-my-app-tailscale-ts-authkey" {
-		t.Errorf("secret name = %q, want charly-my-app-tailscale-ts-authkey", sc.Secret[0].Name)
-	}
-}
-
-func TestResolveSidecarsForConfig(t *testing.T) {
-	deploySidecars := map[string]SidecarDef{
-		"tailscale": {
-			Env: map[string]string{
-				"TS_HOSTNAME": "my-app",
-			},
-		},
-	}
-
-	result, err := ResolveSidecarsForConfig(nil, deploySidecars)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ts, ok := result["tailscale"]
-	if !ok {
-		t.Fatal("tailscale should be resolved from embedded template")
-	}
-	if ts.Image != "ghcr.io/tailscale/tailscale:latest" {
-		t.Errorf("image = %q, should come from embedded template", ts.Image)
-	}
-	if ts.Env["TS_HOSTNAME"] != "my-app" {
-		t.Error("TS_HOSTNAME should be from deploy override")
-	}
-	if ts.Env["TS_STATE_DIR"] != "/var/lib/tailscale" {
-		t.Error("TS_STATE_DIR should be from embedded template")
-	}
-}
-
-func TestResolveSidecarsForConfig_Empty(t *testing.T) {
-	result, err := ResolveSidecarsForConfig(nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result != nil {
-		t.Error("nil input should return nil")
-	}
-}
-
-func TestSidecarEnvKeys(t *testing.T) {
-	sidecars := map[string]SidecarDef{
-		"tailscale": {
-			Env: map[string]string{
-				"TS_STATE_DIR": "/var/lib/tailscale",
-			},
-			Secret: []SidecarSecret{
-				{Name: "ts-authkey", Env: "TS_AUTHKEY"},
-			},
-		},
-	}
-	keys := SidecarEnvKey(sidecars)
-	if keys["TS_STATE_DIR"] != "tailscale" {
-		t.Error("TS_STATE_DIR should map to tailscale")
-	}
-	if keys["TS_AUTHKEY"] != "tailscale" {
-		t.Error("TS_AUTHKEY should map to tailscale")
-	}
-	if keys["TS_HOSTNAME"] != "tailscale" {
-		t.Error("TS_HOSTNAME should map to tailscale (well-known TS_ prefix)")
-	}
-	if keys["TS_EXTRA_ARGS"] != "tailscale" {
-		t.Error("TS_EXTRA_ARGS should map to tailscale (well-known)")
 	}
 }
 
@@ -212,7 +68,7 @@ func TestHasTailscaleSidecar(t *testing.T) {
 	if HasTailscaleSidecar(nil) {
 		t.Error("nil should return false")
 	}
-	if !HasTailscaleSidecar(map[string]SidecarDef{"tailscale": {}}) {
+	if !HasTailscaleSidecar(map[string]json.RawMessage{"tailscale": json.RawMessage("{}")}) {
 		t.Error("tailscale should return true")
 	}
 }

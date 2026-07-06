@@ -1,18 +1,33 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
-// TestLoadUnified_SidecarPluginKind proves the sidecar kind→plugin extraction end-to-end
-// through the REAL loader: a project `sidecar:` node (formerly the typed core map
-// uf.Sidecar) lands in uf.PluginKinds["sidecar"], the Sidecars() accessor reconstructs
-// the name-keyed map[string]SidecarDef, and the Config.Sidecar / BundleConfig.Sidecar
-// projections (rewired to Sidecars()) stay intact — so every downstream deploy/quadlet
-// consumer (which reads the PROJECTED fields) is untouched. The binary-embedded
-// `tailscale` template rides in via applyEmbeddedDefaults.
+// sidecarBodyImage peeks the `image` field of an opaque sidecar body — the kernel
+// stores sidecar defs untyped (the sidecar de-type, Cutover D), so tests decode.
+func sidecarBodyImage(t *testing.T, body json.RawMessage) string {
+	t.Helper()
+	var s struct {
+		Image string `json:"image"`
+	}
+	if err := json.Unmarshal(body, &s); err != nil {
+		t.Fatalf("decode sidecar body: %v", err)
+	}
+	return s.Image
+}
+
+// TestLoadUnified_SidecarPluginKind proves the sidecar kind→plugin extraction
+// end-to-end through the REAL loader: a project `sidecar:` node lands in
+// uf.PluginKinds["sidecar"] as an OPAQUE body, and the Config.Sidecar /
+// BundleConfig.Sidecar projections carry the same opaque library — so every
+// downstream deploy/quadlet consumer is untouched. The binary-embedded `tailscale`
+// template rides in via applyEmbeddedDefaults.
 func TestLoadUnified_SidecarPluginKind(t *testing.T) {
 	dir := t.TempDir()
 	doc := `version: "` + latestSchemaVersion.String() + `"
@@ -29,74 +44,63 @@ mysidecar:
 		t.Fatalf("LoadUnified sidecar plugin kind: %v", err)
 	}
 
-	// (1) The entity lands in uf.PluginKinds["sidecar"], NAME-KEYED.
+	// (1) The entity lands in uf.PluginKinds["sidecar"], NAME-KEYED, opaque.
 	raw := uf.PluginKinds["sidecar"]
 	if _, ok := raw["mysidecar"]; !ok {
 		t.Fatalf("sidecar entity not keyed by node name 'mysidecar'; keys %v", raw)
 	}
-
-	// (2) The Sidecars() accessor reconstructs the name-keyed library with the
-	// authored fields; the binary-embedded `tailscale` template is merged in too.
-	sidecars := uf.Sidecars()
-	if sidecars["mysidecar"].Image != "example.com/mysidecar:1" {
-		t.Errorf("mysidecar.Image = %q, want example.com/mysidecar:1", sidecars["mysidecar"].Image)
+	if img := sidecarBodyImage(t, raw["mysidecar"]); img != "example.com/mysidecar:1" {
+		t.Errorf("mysidecar image = %q, want example.com/mysidecar:1", img)
 	}
-	if _, ok := sidecars["tailscale"]; !ok {
-		t.Errorf("embedded tailscale template missing from Sidecars() (applyEmbeddedDefaults merge broken); keys %v", sidecars)
+	// The binary-embedded `tailscale` template is merged in.
+	if _, ok := raw["tailscale"]; !ok {
+		t.Errorf("embedded tailscale template missing from PluginKinds[sidecar] (applyEmbeddedDefaults merge broken); keys %v", raw)
 	}
 
-	// (3) The projections (rewired to Sidecars()) carry the same library — the shape
-	// every deploy consumer reads (Config.Sidecar / BundleConfig.Sidecar).
+	// (2) The projections carry the same opaque library — the shape every deploy
+	// consumer reads (Config.Sidecar / BundleConfig.Sidecar).
 	cfg := uf.ProjectConfig()
-	if cfg == nil || cfg.Sidecar["mysidecar"].Image != "example.com/mysidecar:1" {
+	if cfg == nil || sidecarBodyImage(t, cfg.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectConfig().Sidecar projection lost the sidecar; got %#v", cfg)
 	}
 	bc := uf.ProjectBundleConfig()
-	if bc == nil || bc.Sidecar["mysidecar"].Image != "example.com/mysidecar:1" {
+	if bc == nil || sidecarBodyImage(t, bc.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectBundleConfig().Sidecar projection lost the sidecar; got %#v", bc)
 	}
 }
 
-// TestEmbeddedTailscaleSidecar_ResolvesEndToEnd proves the binary-embedded `tailscale`
-// template (an authored `sidecar:` node in charly/charly.yml — the complex one carrying
-// security caps + env + a volume + a secret) round-trips through the plugin path:
-// #SidecarInput validates the assembled body, the plugin's Invoke canonicalises it via
-// spec.Sidecar, and EmbeddedSidecarTemplates() / ResolveSidecarsForConfig read it back
-// fully populated — so hasTailscaleSidecar's upstream still resolves "tailscale". A
-// reproduction mismatch in #SidecarInput would fail this (or, earlier, embeddedDefaults()
-// itself, since the embed is parsed through runPluginKind).
-func TestEmbeddedTailscaleSidecar_ResolvesEndToEnd(t *testing.T) {
-	templates, err := EmbeddedSidecarTemplates()
+// TestSidecarResolve_LiveDispatch exercises the REAL production dispatch seam the
+// sidecar de-type introduced (Cutover D): providerRegistry.ResolveKind("sidecar") →
+// Invoke(OpResolve) → wire round-trip → reply, with the COMPILED-IN
+// candy/plugin-sidecar provider — the exact path a live `charly config` takes. It
+// proves env-routing, the embedded-template merge, and reply decoding all survive
+// the real registry + wire, not just an in-package function call.
+func TestSidecarResolve_LiveDispatch(t *testing.T) {
+	if _, ok := providerRegistry.ResolveKind("sidecar"); !ok {
+		t.Fatal("sidecar kind must resolve to the compiled-in candy/plugin-sidecar provider")
+	}
+	embedded, err := embeddedSidecarBodies()
 	if err != nil {
-		t.Fatalf("EmbeddedSidecarTemplates: %v", err)
+		t.Fatalf("embeddedSidecarBodies: %v", err)
 	}
-	ts, ok := templates["tailscale"]
-	if !ok {
-		t.Fatalf("embedded tailscale template missing; keys %v", templates)
-	}
-	if ts.Image != "ghcr.io/tailscale/tailscale:latest" {
-		t.Errorf("tailscale.Image = %q, want ghcr.io/tailscale/tailscale:latest", ts.Image)
-	}
-	// The complex children must all round-trip through #SidecarInput + spec.Sidecar.
-	if ts.Security == nil || len(ts.Security.CapAdd) == 0 {
-		t.Fatalf("tailscale security/cap_add lost in round-trip; got %#v", ts.Security)
-	}
-	if len(ts.Env) == 0 {
-		t.Error("tailscale env lost in round-trip")
-	}
-	if len(ts.Volume) == 0 {
-		t.Error("tailscale volume lost in round-trip")
-	}
-	if len(ts.Secret) == 0 {
-		t.Error("tailscale secret lost in round-trip")
-	}
-
-	// The resolution path (what feeds hasTailscaleSidecar) still finds tailscale.
-	resolved, err := ResolveSidecarsForConfig(nil, map[string]SidecarDef{"tailscale": {}})
+	reply, err := resolveSidecarsViaPlugin(spec.SidecarResolveInput{
+		EmbeddedTemplates: embedded,
+		DeployOverrides:   map[string]json.RawMessage{"tailscale": json.RawMessage(`{"env":{"TS_HOSTNAME":"e2e"},"parameter":{"tailnet":"example.ts.net"}}`)},
+		CliEnv:            []string{"TS_EXTRA_ARGS=--foo", "APP_VAR=x"},
+		Box:               "e2e-app",
+	})
 	if err != nil {
-		t.Fatalf("ResolveSidecarsForConfig: %v", err)
+		t.Fatalf("resolveSidecarsViaPlugin: %v", err)
 	}
-	if _, ok := resolved["tailscale"]; !ok {
-		t.Fatalf("tailscale not resolvable end-to-end (hasTailscaleSidecar upstream broken); got %v", resolved)
+	// App-only env survives; the TS_ var routed to the sidecar through the wire.
+	if len(reply.AppEnv) != 1 || reply.AppEnv[0] != "APP_VAR=x" {
+		t.Errorf("AppEnv = %v, want [APP_VAR=x]", reply.AppEnv)
+	}
+	// The embedded tailscale template resolved through the compiled-in provider.
+	if len(reply.Sidecars) != 1 || reply.Sidecars[0].Image != "ghcr.io/tailscale/tailscale:latest" {
+		t.Fatalf("resolved sidecars = %+v, want the tailscale image", reply.Sidecars)
+	}
+	if reply.Sidecars[0].Env["TS_HOSTNAME"] != "e2e" {
+		t.Errorf("deploy env override lost through dispatch: %v", reply.Sidecars[0].Env)
 	}
 }

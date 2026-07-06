@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // BoxConfigCmd groups box configuration subcommands.
@@ -64,7 +66,7 @@ type BoxConfigSetupCmd struct {
 
 func (c *BoxConfigSetupCmd) Run() error {
 	if c.ListSidecars {
-		templates, err := EmbeddedSidecarTemplates()
+		templates, err := embeddedSidecarBodies()
 		if err != nil {
 			return err
 		}
@@ -74,7 +76,13 @@ func (c *BoxConfigSetupCmd) Run() error {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			fmt.Printf("%-20s %s\n", name, templates[name].Description)
+			// Peek only the description from the opaque body for the listing — the
+			// kernel does not type sidecar bodies (the sidecar de-type, Cutover D).
+			var meta struct {
+				Description string `json:"description"`
+			}
+			_ = json.Unmarshal(templates[name], &meta)
+			fmt.Printf("%-20s %s\n", name, meta.Description)
 		}
 		return nil
 	}
@@ -205,79 +213,52 @@ func (c *BoxConfigSetupCmd) prepareQuadletEnv(dc *BundleConfig, bindMounts []Res
 // c.Env to the app-only set), and provisions sidecar secrets (appending any
 // fallback env to envVars). Returns the deploy sidecar defs, the resolved
 // sidecars, and the (possibly extended) env var list. Split out of runConfig.
-func (c *BoxConfigSetupCmd) resolveSidecars(dc *BundleConfig, rt *ResolvedRuntime, autoGen bool, envVars []string) (map[string]SidecarDef, []ResolvedSidecar, []string, error) {
-	var deploySidecars map[string]SidecarDef
+func (c *BoxConfigSetupCmd) resolveSidecars(dc *BundleConfig, rt *ResolvedRuntime, autoGen bool, envVars []string) (map[string]json.RawMessage, []ResolvedSidecar, []string, error) {
+	// Gather the per-deploy sidecar overrides (OPAQUE bodies) from the deploy node
+	// + any --sidecar flags (an empty override inherits the template).
+	var deploySidecars map[string]json.RawMessage
 	if dc != nil {
 		if overlay, ok := dc.Bundle[deployKey(c.Box, c.Instance)]; ok {
 			deploySidecars = overlay.Sidecar
 		}
 	}
-	// Merge --sidecar flags into deploy sidecars
 	for _, scName := range c.Sidecar {
 		if deploySidecars == nil {
-			deploySidecars = make(map[string]SidecarDef)
+			deploySidecars = make(map[string]json.RawMessage)
 		}
 		if _, ok := deploySidecars[scName]; !ok {
-			deploySidecars[scName] = SidecarDef{} // empty override, inherits from template
+			deploySidecars[scName] = json.RawMessage("{}") // empty override, inherits from template
 		}
 	}
+	if len(deploySidecars) == 0 {
+		return deploySidecars, nil, envVars, nil
+	}
 
-	var resolvedSidecars []ResolvedSidecar
-	var mergedSidecarDefs map[string]SidecarDef
-	if len(deploySidecars) > 0 {
-		// Route CLI -e flags: sidecar-related env vars go to the sidecar, not the app
-		sidecarEnvKeys := SidecarEnvKey(deploySidecars)
-		var appEnv, sidecarEnvOverrides []string
-		for _, e := range c.Env {
-			key := e
-			if before, _, ok := strings.Cut(e, "="); ok {
-				key = before
-			}
-			if scName, ok := sidecarEnvKeys[key]; ok {
-				// Route to sidecar
-				if deploySidecars[scName].Env == nil {
-					def := deploySidecars[scName]
-					def.Env = make(map[string]string)
-					deploySidecars[scName] = def
-				}
-				def := deploySidecars[scName]
-				if _, after, ok := strings.Cut(e, "="); ok {
-					def.Env[key] = after
-				}
-				deploySidecars[scName] = def
-				sidecarEnvOverrides = append(sidecarEnvOverrides, e)
-			} else {
-				appEnv = append(appEnv, e)
-			}
-		}
-		// Replace c.Env with app-only env vars (sidecar vars saved to charly.yml)
-		c.Env = appEnv
-
-		// Resolve: embedded templates + project root sidecar: + per-deploy overrides
-		var resolveErr error
-		mergedSidecarDefs, resolveErr = ResolveSidecarsForConfig(sidecarTemplatesOf(dc), deploySidecars)
-		if resolveErr != nil {
-			return nil, nil, envVars, fmt.Errorf("resolving sidecars: %w", resolveErr)
-		}
-		if len(mergedSidecarDefs) > 0 {
-			var rsErr error
-			resolvedSidecars, rsErr = ResolveSidecar(mergedSidecarDefs, c.Box, c.Instance)
-			if rsErr != nil {
-				return nil, nil, envVars, fmt.Errorf("resolving sidecars: %w", rsErr)
-			}
-		}
-
-		// Log routed env vars
-		if len(sidecarEnvOverrides) > 0 {
-			for _, e := range sidecarEnvOverrides {
-				key := e
-				if before, _, ok := strings.Cut(e, "="); ok {
-					key = before
-				}
-				scName := sidecarEnvKeys[key]
-				fmt.Fprintf(os.Stderr, "Routed %s to sidecar %s\n", key, scName)
-			}
-		}
+	// candy/plugin-sidecar owns ALL sidecar business logic (Cutover D): it routes
+	// CLI -e flags to sidecars (app-only env returned), merges embedded < project <
+	// deploy templates, and resolves volume/secret names + env_from.
+	embedded, err := embeddedSidecarBodies()
+	if err != nil {
+		return nil, nil, envVars, fmt.Errorf("resolving sidecars: %w", err)
+	}
+	reply, err := resolveSidecarsViaPlugin(spec.SidecarResolveInput{
+		EmbeddedTemplates: embedded,
+		ProjectTemplates:  sidecarTemplatesOf(dc),
+		DeployOverrides:   deploySidecars,
+		CliEnv:            c.Env,
+		Box:               c.Box,
+		Instance:          c.Instance,
+	})
+	if err != nil {
+		return nil, nil, envVars, fmt.Errorf("resolving sidecars: %w", err)
+	}
+	// The plugin routed sidecar env vars out of the app env + folded them into the
+	// deploy overrides to persist (opaque bodies).
+	c.Env = reply.AppEnv
+	deploySidecars = reply.PersistOverrides
+	resolvedSidecars := make([]ResolvedSidecar, 0, len(reply.Sidecars))
+	for _, rs := range reply.Sidecars {
+		resolvedSidecars = append(resolvedSidecars, resolvedSidecarFromSpec(rs))
 	}
 
 	// Provision sidecar secrets as podman secrets
@@ -1645,7 +1626,7 @@ func updateAllDeployedQuadlets(rt *ResolvedRuntime, skipBox string) error {
 
 		// Build volumes from metadata
 		var deployVolumes []DeployVolumeConfig
-		var deploySidecars map[string]SidecarDef
+		var deploySidecars map[string]json.RawMessage
 		if overlay, ok := dc.Bundle[key]; ok {
 			deployVolumes = overlay.Volume
 			deploySidecars = overlay.Sidecar
@@ -1733,17 +1714,30 @@ func updateAllDeployedQuadlets(rt *ResolvedRuntime, skipBox string) error {
 			tunnelCfg = TunnelConfigFromMetadata(meta)
 		}
 
-		// Resolve sidecars from charly.yml for pod mode
+		// Resolve sidecars from charly.yml for pod mode (regeneration path — no CLI
+		// env to route; candy/plugin-sidecar merges + resolves the persisted overrides).
 		var resolvedSidecars []ResolvedSidecar
 		podName := ""
 		if len(deploySidecars) > 0 {
-			mergedDefs, resolveErr := ResolveSidecarsForConfig(sidecarTemplatesOf(dc), deploySidecars)
-			if resolveErr == nil && len(mergedDefs) > 0 {
-				var rsErr error
-				resolvedSidecars, rsErr = ResolveSidecar(mergedDefs, boxName, instance)
-				if rsErr != nil {
-					fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, rsErr)
-					continue
+			embedded, embErr := embeddedSidecarBodies()
+			if embErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, embErr)
+				continue
+			}
+			reply, resolveErr := resolveSidecarsViaPlugin(spec.SidecarResolveInput{
+				EmbeddedTemplates: embedded,
+				ProjectTemplates:  sidecarTemplatesOf(dc),
+				DeployOverrides:   deploySidecars,
+				Box:               boxName,
+				Instance:          instance,
+			})
+			if resolveErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: resolving sidecars for %s: %v\n", key, resolveErr)
+				continue
+			}
+			if len(reply.Sidecars) > 0 {
+				for _, rs := range reply.Sidecars {
+					resolvedSidecars = append(resolvedSidecars, resolvedSidecarFromSpec(rs))
 				}
 				podName = PodNameInstance(boxName, instance)
 			}

@@ -114,15 +114,15 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 	if def.Resources()["nvidia-gpu"] == nil {
 		t.Error("embedded resource nvidia-gpu missing from unified parse")
 	}
-	// Sidecar-template view — sidecar is a plugin kind now (candy/plugin-sidecar), so the
-	// embedded tailscale template is read back via the Sidecars() accessor (over
-	// def.PluginKinds["sidecar"]) from the SAME parse, the SAME UnifiedFile.
-	ts, ok := def.Sidecars()["tailscale"]
+	// Sidecar-template view — sidecar is a plugin kind (candy/plugin-sidecar); the
+	// embedded tailscale template is an OPAQUE body in def.PluginKinds["sidecar"]
+	// from the SAME parse, the SAME UnifiedFile.
+	body, ok := def.PluginKinds["sidecar"]["tailscale"]
 	if !ok {
 		t.Fatal("embedded sidecar tailscale missing from unified parse")
 	}
-	if ts.Image != "ghcr.io/tailscale/tailscale:latest" {
-		t.Errorf("tailscale sidecar image = %q, want ghcr.io/tailscale/tailscale:latest", ts.Image)
+	if img := sidecarBodyImage(t, body); img != "ghcr.io/tailscale/tailscale:latest" {
+		t.Errorf("tailscale sidecar image = %q, want ghcr.io/tailscale/tailscale:latest", img)
 	}
 }
 
@@ -145,12 +145,12 @@ tailscale:
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
 	}
-	sidecars := uf.Sidecars()
+	sidecars := uf.PluginKinds["sidecar"]
 	if n := len(sidecars); n != 1 {
 		t.Fatalf("expected exactly 1 tailscale entry after root-wins override, got %d (%v)", n, sidecars)
 	}
-	if sidecars["tailscale"].Image != "example.com/custom-tailscale:pinned" {
-		t.Errorf("project sidecar override lost (embed wrongly won); got %q", sidecars["tailscale"].Image)
+	if img := sidecarBodyImage(t, sidecars["tailscale"]); img != "example.com/custom-tailscale:pinned" {
+		t.Errorf("project sidecar override lost (embed wrongly won); got %q", img)
 	}
 }
 

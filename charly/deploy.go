@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -24,12 +25,11 @@ import (
 type BundleConfig struct {
 	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
 	Bundle   map[string]BundleNode `yaml:"deploy" json:"deploy"`
-	// Sidecar carries the project's sidecar-template library (the embedded
-	// default set merged with any project-declared root sidecar: entries).
-	// Projected from the UnifiedFile.Sidecars() accessor (over PluginKinds["sidecar"])
-	// by ProjectBundleConfig(); deploy-time resolution merges these UNDER each deploy
-	// node's own sidecar overrides.
-	Sidecar map[string]SidecarDef `yaml:"sidecar,omitempty" json:"sidecar,omitempty"`
+	// Sidecar carries the project's sidecar-template library as OPAQUE bodies
+	// (the raw PluginKinds["sidecar"] map). candy/plugin-sidecar's OpResolve merges
+	// these UNDER each deploy node's own overrides; the kernel reads no fields
+	// (the sidecar de-type, Cutover D).
+	Sidecar map[string]json.RawMessage `yaml:"sidecar,omitempty" json:"sidecar,omitempty"`
 }
 
 // ToShellEntry converts a charly.yml overlay into the LabelShell
@@ -1363,7 +1363,7 @@ type SaveDeployStateInput struct {
 	Network  string
 	Security *SecurityConfig
 	Volume   []DeployVolumeConfig
-	Sidecar  map[string]SidecarDef
+	Sidecar  map[string]json.RawMessage
 	Tunnel   *TunnelYAML
 
 	// SecretNames lists env var names declared as secret_accepts /

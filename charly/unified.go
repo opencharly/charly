@@ -161,16 +161,15 @@ type UnifiedFile struct {
 	// reconstructed on demand by the Resources() accessor; the binary-embedded default
 	// set merges UNDER a project's own entries via the generic mergePluginKindsMap.
 
-	// Sidecar — the reusable sidecar-container template library — is no longer a
-	// typed core map: it was extracted into a dedicated plugin kind
-	// (candy/plugin-sidecar), so a `sidecar:` node (incl. the binary-embedded `tailscale`
-	// template) lands in PluginKinds["sidecar"]. The name-keyed map[string]SidecarDef
-	// the deploy/quadlet code consumes is reconstructed on demand by the Sidecars()
-	// accessor (decodes the canonical bodies back into SidecarDef = spec.Sidecar) and
-	// projected into Config.Sidecar / BundleConfig.Sidecar. The binary-embedded default
-	// set (e.g. `tailscale`) merges UNDER a project's own entries via the generic
-	// root-wins mergePluginKindsMap (applyEmbeddedDefaults). See sidecar.go +
-	// Sidecars(), /charly-automation:sidecar.
+	// Sidecar — the reusable sidecar-container template library — is a dedicated
+	// plugin kind (candy/plugin-sidecar), so a `sidecar:` node (incl. the binary-
+	// embedded `tailscale` template) lands in PluginKinds["sidecar"] as an OPAQUE
+	// body. The kernel never types it: Config.Sidecar / BundleConfig.Sidecar carry
+	// the raw bodies, and candy/plugin-sidecar's OpResolve owns ALL sidecar business
+	// logic (merge + env-routing + resolution — the sidecar de-type, Cutover D). The
+	// binary-embedded default set (e.g. `tailscale`) merges UNDER a project's own
+	// entries via the generic root-wins mergePluginKindsMap (applyEmbeddedDefaults).
+	// See sidecar.go, /charly-automation:sidecar.
 
 	// Namespaces holds child namespaces mounted by namespaced `import:`
 	// entries (alias → fully-resolved isolated UnifiedFile). NOT authored
@@ -1590,7 +1589,7 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 		Defaults: uf.Defaults,
 		Box:      images,
 		Local:    uf.Local,
-		Sidecar:  uf.Sidecars(), // sidecar is a plugin kind now; decode the name-keyed library
+		Sidecar:  uf.PluginKinds["sidecar"], // opaque bodies; candy/plugin-sidecar resolves them
 	}
 	cache[uf] = c // cache BEFORE recursing (cycle break)
 	if len(uf.Namespaces) > 0 {
@@ -1696,7 +1695,7 @@ func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
 // of the authored file, independent of any per-machine ~/.config/charly/charly.yml
 // which remains loaded separately by LoadBundleConfig).
 func (uf *UnifiedFile) ProjectBundleConfig() *BundleConfig {
-	sidecars := uf.Sidecars() // sidecar is a plugin kind now; decode the name-keyed library once
+	sidecars := uf.PluginKinds["sidecar"] // opaque bodies; candy/plugin-sidecar resolves them
 	if uf == nil || (len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0) {
 		return nil
 	}

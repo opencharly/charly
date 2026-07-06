@@ -481,6 +481,47 @@ check-k8s-deploy:
         k8s:
             image: check-k8s-deploy-app
             from: vm-k3s-vm
+# =============================================================================
+# check-sidecar-pod — disposable R10 for the sidecar de-type (Cutover D). The
+# sidecar KIND's business logic (embedded<project<deploy template MERGE, CLI
+# env-flag ROUTING, and volume/secret-name + env_from RESOLUTION) moved out of the
+# kernel into candy/plugin-sidecar's OpResolve leg; the kernel stores sidecar defs
+# OPAQUELY (map[string]json.RawMessage). This bed deploys the minimal fedora
+# check-k8s-deploy-app pod with the project `mypause` sidecar attached: `charly
+# config` resolves the sidecar THROUGH the plugin (providerRegistry.ResolveKind →
+# Invoke(OpResolve)) and generates the sidecar quadlet. If the de-type broke
+# resolution, config errors and the bed never reaches steady state; the pause
+# sidecar (a tiny always-running infra image) proves the resolved quadlet deployed
+# as a live pod member beside the app.
+# =============================================================================
+mypause:
+    sidecar:
+        description: a trivial always-running sidecar for the sidecar de-type R10 bed
+        image: registry.k8s.io/pause:3.9
+check-sidecar-pod:
+    pod:
+        image: check-k8s-deploy-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for the sidecar de-type (Cutover D) — candy/plugin-sidecar's OpResolve
+            owns all sidecar business logic; the kernel stores sidecar defs opaquely.
+            Deploys the minimal check-k8s-deploy-app pod with the `mypause` sidecar
+            attached: reaching steady state proves the plugin resolved + generated the
+            sidecar quadlet end-to-end (a broken de-type fails `charly config` at deploy).
+        sidecar:
+            mypause: {}
+        plan:
+            - check: command=charly status --json
+              id: sidecar-pod-running
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-sidecar-pod
+              context:
+                - runtime
+              command:
+                command: charly status --json
+                in_container: false
 check-local:
     local:
         from: check-local-app
