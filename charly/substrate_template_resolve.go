@@ -40,6 +40,28 @@ func resolveK8sViaPlugin(body json.RawMessage) (*ResolvedK8s, error) {
 	return reply.Resolved, nil
 }
 
+// resolveVmViaPlugin projects one opaque vm template body into a *VmSpec
+// (= *spec.ResolvedVm) via candy/plugin-substrate's OpResolve leg (the vm
+// substrate-value de-type, Cutover L). Returns nil for an empty/absent body.
+func resolveVmViaPlugin(body json.RawMessage) (*VmSpec, error) {
+	if len(body) == 0 {
+		return nil, nil
+	}
+	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
+		Vm: &spec.VmResolveInput{Vm: body},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var reply spec.VmResolveReply
+	if len(out) > 0 {
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return nil, fmt.Errorf("vm resolve: decode reply: %w", err)
+		}
+	}
+	return reply.Resolved, nil
+}
+
 // resolvePodViaPlugin projects one opaque pod template body into a *ResolvedPod
 // via candy/plugin-substrate's OpResolve leg (the pod-template de-type, Cutover J).
 func resolvePodViaPlugin(body json.RawMessage) (*ResolvedPod, error) {

@@ -85,7 +85,7 @@ func deployVMForwards(deployName string) []string {
 	if vmEntity == "" {
 		return nil
 	}
-	vm := uf.VM[vmEntity]
+	vm, _ := resolveVmViaPlugin(uf.VM[vmEntity])
 	if vm == nil || vm.Network == nil {
 		return nil
 	}

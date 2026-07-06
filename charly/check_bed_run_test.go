@@ -123,7 +123,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 		t.Fatalf("expected missing-vm-ref error, got %v", err)
 	}
 	ok := &UnifiedFile{
-		VM: map[string]*VmSpec{"k3s-vm": {}},
+		VM: rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
 		Bundle: map[string]BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},

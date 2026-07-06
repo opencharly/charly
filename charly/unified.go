@@ -100,7 +100,7 @@ type UnifiedFile struct {
 	// deleted; the singular `Box yaml:"box"` is the canonical surface.
 	Box   map[string]BoxConfig    `yaml:"box,omitempty" json:"box,omitempty"`
 	Candy map[string]*InlineCandy `yaml:"candy,omitempty" json:"candy,omitempty"`
-	VM    map[string]*VmSpec      `yaml:"vm,omitempty" json:"vm,omitempty"`
+	VM    map[string]json.RawMessage `yaml:"vm,omitempty" json:"vm,omitempty"`
 	// Field-singular cutover: legacy `Deploys *DeploymentsSection
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
 	// the canonical singular surface; the wrapper's `Provides` migrates
@@ -967,7 +967,7 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	}
 	mergeBoxMap(&dst.Box, src.Box)
 	mergeCandyMap(&dst.Candy, src.Candy)
-	mergeVmMap(&dst.VM, src.VM)
+	mergeRawTemplateMap(&dst.VM, src.VM)
 	mergeRawTemplateMap(&dst.Pod, src.Pod)
 	mergeRawTemplateMap(&dst.K8s, src.K8s)
 	mergeRawTemplateMap(&dst.Local, src.Local)
@@ -1031,24 +1031,6 @@ func mergeCandyMap(dst *map[string]*InlineCandy, src map[string]*InlineCandy) {
 		}
 	}
 }
-
-func mergeVmMap(dst *map[string]*VmSpec, src map[string]*VmSpec) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]*VmSpec)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
-
-// Schema v4 target-template merge helpers. Same root-wins semantics as
-// mergeVmMap: existing entries survive; included-file entries fill gaps.
-
 
 // mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
 // android after the Cutover I de-type): copy a name only when ABSENT in dst. One

@@ -875,8 +875,10 @@ func (c *BundleAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg 
 	var img *ResolvedBox
 	if c.vmEntity != "" {
 		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if spec, present := uf.VM[c.vmEntity]; present {
-				img = syntheticVmBox(spec, distroCfg)
+			if body, present := uf.VM[c.vmEntity]; present {
+				if spec, err := resolveVmViaPlugin(body); err == nil && spec != nil {
+					img = syntheticVmBox(spec, distroCfg)
+				}
 			}
 		}
 	}

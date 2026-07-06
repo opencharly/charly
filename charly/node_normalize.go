@@ -146,7 +146,7 @@ func decodeTemplateValueJSON[T any](gn *genericNode) (json.RawMessage, error) {
 func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, uf *UnifiedFile) error {
 	switch disc {
 	case "vm":
-		return foldTemplateReply(name, replyJSON, &uf.VM)
+		return foldOpaqueTemplateReply(name, replyJSON, &uf.VM)
 	case "pod":
 		return foldOpaqueTemplateReply(name, replyJSON, &uf.Pod)
 	case "k8s":

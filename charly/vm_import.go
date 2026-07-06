@@ -485,8 +485,8 @@ func DiffImported(name, domainName string) ([]string, error) {
 	if !ok || uf == nil {
 		return nil, fmt.Errorf("charly.yml not found in %s", cwd)
 	}
-	existingPtr, present := uf.VM[name]
-	if present && existingPtr != nil {
+	existingPtr, _ := resolveVmViaPlugin(uf.VM[name])
+	if existingPtr != nil {
 		existing := *existingPtr
 		var diffs []string
 		if existing.Source.LibvirtName != freshSpec.Source.LibvirtName {

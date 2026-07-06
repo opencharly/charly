@@ -233,7 +233,15 @@ func loadUnifiedForImport() (map[string]*VmSpec, bool, error) {
 	if !ok || uf == nil {
 		return nil, false, nil
 	}
-	return uf.VM, true, nil
+	// uf.VM is opaque after the vm de-type (Cutover L); resolve each body into a
+	// *VmSpec (= *spec.ResolvedVm) via the plugin.
+	out := make(map[string]*VmSpec, len(uf.VM))
+	for k, body := range uf.VM {
+		if v, err := resolveVmViaPlugin(body); err == nil && v != nil {
+			out[k] = v
+		}
+	}
+	return out, true, nil
 }
 
 // osGetwd is a small indirection to make testing easier.

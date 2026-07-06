@@ -57,7 +57,11 @@ func (c *VmBuildCmd) Run() error {
 	// resize+seed ISO; bootc → bootc install reading the bootc-branch
 	// fields from VmSpec.Source.
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok && uf.VM != nil {
-		if spec, hit := uf.VM[boxName]; hit {
+		if body, hit := uf.VM[boxName]; hit {
+			spec, err := resolveVmViaPlugin(body)
+			if err != nil {
+				return err
+			}
 			return c.runVmSpecBuild(boxName, spec, rt)
 		}
 	}

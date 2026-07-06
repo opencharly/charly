@@ -125,9 +125,16 @@ func collectIncludeSteps(uf *UnifiedFile, layers map[string]*Candy, kind, name s
 		return append([]Step(nil), pod.Plan...), nil
 
 	case "vm":
-		vm, ok := uf.VM[name]
+		body, ok := uf.VM[name]
 		if !ok {
 			return nil, fmt.Errorf("vm %q not found (available: %s)", name, sortedVMKeys(uf))
+		}
+		vm, err := resolveVmViaPlugin(body)
+		if err != nil {
+			return nil, err
+		}
+		if vm == nil {
+			return nil, nil
 		}
 		return append([]Step(nil), vm.Plan...), nil
 	}

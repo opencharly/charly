@@ -67,7 +67,30 @@ func resolveSubstrateTemplate(in spec.SubstrateTemplateResolveRequest) ([]byte, 
 			Raw:           in.Android.Android,
 		}}
 		return json.Marshal(reply)
+	case in.Vm != nil:
+		var v spec.Vm
+		if err := json.Unmarshal(in.Vm.Vm, &v); err != nil {
+			return nil, fmt.Errorf("vm resolve: decode: %w", err)
+		}
+		reply := spec.VmResolveReply{Resolved: &spec.ResolvedVm{
+			Source:    v.Source,
+			DiskSize:  v.DiskSize,
+			Ram:       v.Ram,
+			Cpus:      v.Cpus,
+			Machine:   v.Machine,
+			Firmware:  v.Firmware,
+			Backend:   v.Backend,
+			Autostart: v.Autostart,
+			Network:   v.Network,
+			SSH:       v.SSH,
+			CloudInit: v.CloudInit,
+			Libvirt:   v.Libvirt,
+			Plan:      v.Plan,
+			Snapshots: v.Snapshots,
+			Raw:       in.Vm.Vm,
+		}}
+		return json.Marshal(reply)
 	default:
-		return nil, fmt.Errorf("substrate template resolve: neither local nor android set")
+		return nil, fmt.Errorf("substrate template resolve: no arm set")
 	}
 }

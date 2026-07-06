@@ -78,9 +78,16 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 	if !ok || uf.VM == nil {
 		return nil, fmt.Errorf("vm deploy %q: no charly.yml or no kind:vm entities declared", name)
 	}
-	vmSpec, ok := uf.VM[vmName]
+	body, ok := uf.VM[vmName]
 	if !ok {
 		return nil, fmt.Errorf("vm deploy %q: no kind:vm entity named %q in charly.yml", name, vmName)
+	}
+	vmSpec, err := resolveVmViaPlugin(body)
+	if err != nil {
+		return nil, err
+	}
+	if vmSpec == nil {
+		return nil, fmt.Errorf("vm deploy %q: kind:vm entity %q resolved to an empty value", name, vmName)
 	}
 
 	// Ephemeral lifecycle hook (the one Add-time host side effect — panic-safe TTL ordering). Consumes

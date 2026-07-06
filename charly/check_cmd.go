@@ -584,7 +584,7 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName string, nestedLe
 		}
 	}
 	if uf.VM != nil {
-		spec = uf.VM[vmName]
+		spec, _ = resolveVmViaPlugin(uf.VM[vmName])
 	}
 	return vmName, nestedLeaf, spec
 }

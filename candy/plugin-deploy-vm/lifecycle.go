@@ -227,7 +227,7 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 }
 
 // charlyInstallStrategy extracts spec.cloud_init.charly_install.strategy ("" → auto).
-func charlyInstallStrategy(vm *spec.VmSpec) string {
+func charlyInstallStrategy(vm *spec.ResolvedVm) string {
 	if vm != nil && vm.CloudInit != nil && vm.CloudInit.CharlyInstall != nil {
 		return vm.CloudInit.CharlyInstall.Strategy
 	}

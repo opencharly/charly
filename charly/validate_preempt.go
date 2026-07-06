@@ -126,7 +126,7 @@ func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
 			base, _ := parseDeployKey(name)
 			vmName = base
 		}
-		if spec := uf.VM[vmName]; spec != nil && spec.Backend == "qemu" {
+		if spec, _ := resolveVmViaPlugin(uf.VM[vmName]); spec != nil && spec.Backend == "qemu" {
 			errs.Add("deploy %q requires an auto-allocated GPU but its VM %q pins `backend: qemu` — GPU passthrough needs `backend: libvirt` (PCI <hostdev> does not render under qemu)", name, vmName)
 		}
 	}

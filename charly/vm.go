@@ -131,8 +131,10 @@ func vmConfiguredBackend(vmName, rtBackend string) string {
 	}
 	if dir, err := os.Getwd(); err == nil {
 		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if spec, hit := uf.VM[vmName]; hit && spec.Backend != "" {
-				return spec.Backend
+			if body, hit := uf.VM[vmName]; hit {
+				if spec, _ := resolveVmViaPlugin(body); spec != nil && spec.Backend != "" {
+					return spec.Backend
+				}
 			}
 		}
 	}
@@ -335,7 +337,7 @@ func (c *VmCreateCmd) Run() error {
 	var resources map[string]*ResolvedResource
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok {
 		if uf.VM != nil {
-			spec = uf.VM[c.Box]
+			spec, _ = resolveVmViaPlugin(uf.VM[c.Box])
 		}
 		resources = uf.resolveResources()
 	}

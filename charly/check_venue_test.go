@@ -6,9 +6,9 @@ import "testing"
 // shared check-verb resolver must distinguish.
 func newVenueTestUF() *UnifiedFile {
 	return &UnifiedFile{
-		VM: map[string]*VmSpec{
+		VM: rawTemplateMap(map[string]*VmSpec{
 			"cachyos-gpu": {}, // bare kind:vm entity
-		},
+		}),
 		Bundle: map[string]BundleNode{
 			"web-pod":     {Target: "pod"},
 			"k3s-vm":      {Target: "vm", From: "k3s-vm-entity"},
