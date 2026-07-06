@@ -148,8 +148,8 @@ var _ = func() bool { registerStepEmitter("system-packages", stepEmitSystemPacka
 // calls back HostBuild("step-emit", …) during OpEmit and this renders the fragment host-side. For an
 // EXTERNALIZED detection builder (pixi/npm/aur/cargo) the STAGE render itself is kit.BuilderResolve
 // (C10 — the SAME render the box-build path + the plugin's OpResolve use, R3, driven off the
-// host-computed buildStageContext via builderResolveInputFrom); a custom (non-externalized) builder
-// still renders from its vocabulary stage_template / install_template. The build engine
+// host-computed buildStageContext via builderResolveInputFrom); a non-externalized builder has no
+// build-time multi-stage (a custom builder must be an external_builder plugin). The build engine
 // (Generator/BuilderConfig/Box) is threaded on the reverse channel via buildEngineContext (populated
 // by OCITarget.stepEmitBuildContext); a nil BuilderConfig / Box / layer yields the SAME informative
 // skip comment the former in-proc render produced (synthetic test paths), and an undefined builder or
@@ -233,21 +233,17 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 	if ctx == nil {
 		return "", fmt.Errorf("buildStageContext returned nil for %s", s.Builder)
 	}
-	// An EXTERNALIZED multi-stage builder (pixi/npm/aur) renders its stage via kit.BuilderResolve
-	// (C10 — the SAME render the box-build path + the plugin's OpResolve use, R3); a custom one via
-	// its vocabulary stage_template.
-	if externalizedBuilders[s.Builder] {
-		reply, err := kit.BuilderResolve(s.Builder, builderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
-		if err != nil {
-			return "", fmt.Errorf("multi-stage builder %s: %w", s.Builder, err)
-		}
-		return reply.Stage, nil
+	// A multi-stage builder (pixi/npm/aur) renders its stage via kit.BuilderResolve (C10 — the
+	// SAME render the box-build path + the plugin's OpResolve use, R3). Only externalized (plugin)
+	// builders have a multi-stage; a custom builder must be an external_builder plugin.
+	if !externalizedBuilders[s.Builder] {
+		return "", fmt.Errorf("multi-stage builder %s is not an externalized plugin builder (a custom builder must be an external_builder plugin)", s.Builder)
 	}
-	rendered, err := RenderTemplate(s.Builder+"-stage", bDef.StageTemplate, ctx)
+	reply, err := kit.BuilderResolve(s.Builder, builderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
 	if err != nil {
 		return "", fmt.Errorf("multi-stage builder %s: %w", s.Builder, err)
 	}
-	return rendered, nil
+	return reply.Stage, nil
 }
 
 // Register the builder step-emitter at package-var init — the SECOND host-coupled step kind

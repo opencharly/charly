@@ -133,10 +133,6 @@ func TestLoadBuilderConfigFromFile(t *testing.T) {
 	if len(pixi.DetectFiles) == 0 {
 		t.Error("pixi detect_files is empty")
 	}
-	if pixi.StageTemplate == "" {
-		t.Error("pixi stage_template is empty")
-	}
-
 	// Check cargo is inline
 	cargo := builderCfg.Builder["cargo"]
 	if !cargo.Inline {
@@ -193,9 +189,6 @@ func TestAurBuilderDetectConfig(t *testing.T) {
 	}
 	if aur.DetectConfig != "aur" {
 		t.Errorf("aur detect_config = %q, want \"aur\"", aur.DetectConfig)
-	}
-	if aur.StageTemplate == "" {
-		t.Error("aur stage_template is empty")
 	}
 }
 

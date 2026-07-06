@@ -90,7 +90,7 @@ func TestRenderAurScriptPackages(t *testing.T) {
 		"*.pkg.tar.zst",
 		// The DB refresh that keeps the (cached, stale) builder DB from
 		// resolving a makedepend to a mirror-rotated version (the go-1.26.3
-		// .sig 404). Mirrors the embedded charly.yml's aur stage_template (R3).
+		// .sig 404). Mirrors the aur builder's OpResolve stage (kit.BuilderResolve, R3).
 		"pacman -Syu --noconfirm",
 	}
 	for _, m := range mustContain {

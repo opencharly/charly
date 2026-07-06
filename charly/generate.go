@@ -640,8 +640,8 @@ func (g *Generator) emitScratchStages(b *strings.Builder, candyOrder []string) {
 // detect_files and/or detect_config (the embedded builder: vocabulary, host-side DETECTION);
 // for each matching candy an EXTERNALIZED detection builder (pixi/npm/aur) renders its stage
 // via its plugin's OpResolve leg (resolveDetectionBuilder → kit.BuilderResolve, C10 — no longer
-// an in-core stage_template), while a custom non-externalized builder still renders its
-// vocabulary stage_template. The externalized builder plugins are connected on-demand
+// an in-core stage template); a non-externalized builder emits no build-time multi-stage (a
+// custom builder must be an external_builder plugin). The externalized builder plugins are connected on-demand
 // (ensureBuildersConnected). The reply is cached per (candy, builder) for emitBuilderArtifacts.
 func (g *Generator) emitBuilderStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string) error {
 	if img.BuilderConfig == nil {
@@ -653,8 +653,8 @@ func (g *Generator) emitBuilderStages(b *strings.Builder, boxName string, img *R
 
 	// Connect the EXTERNALIZED detection-builder plugins this image triggers (on-demand,
 	// scoped — the SAME machinery the deploy build PRE-PASS uses, R3), so their OpResolve
-	// build leg can be Invoked below. A custom (non-externalized) vocab builder needs no
-	// connect and renders from its own StageTemplate.
+	// build leg can be Invoked below. Only externalized (plugin) builders emit a build-time
+	// multi-stage; a non-externalized builder emits none (a custom builder must be a plugin).
 	if detected := detectExternalizedBuilders(candyOrder, g.Candies, img); len(detected) > 0 {
 		if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, detected); err != nil {
 			return fmt.Errorf("image %q: %w", boxName, err)
@@ -669,10 +669,10 @@ func (g *Generator) emitBuilderStages(b *strings.Builder, boxName string, img *R
 			continue // inline builders handled in writeCandySteps
 		}
 		external := externalizedBuilders[builderName]
-		// A non-externalized (custom) builder with no StageTemplate contributes no stage.
-		// An externalized builder renders via its plugin's OpResolve regardless (its
-		// StageTemplate moved out of the embedded vocabulary into kit.BuilderResolve, C10).
-		if !external && builderDef.StageTemplate == "" {
+		// Only an EXTERNALIZED (plugin) builder emits a build-time multi-stage — via its
+		// plugin's OpResolve (kit.BuilderResolve, C10). A non-externalized builder emits no
+		// stage here (a custom builder must be an external_builder plugin).
+		if !external {
 			continue
 		}
 		for _, candyName := range candyOrder {
@@ -684,25 +684,15 @@ func (g *Generator) emitBuilderStages(b *strings.Builder, boxName string, img *R
 			if builderRef == "" {
 				return fmt.Errorf("image %q: candy %q needs builder %q but no builders.%s configured", boxName, candyName, builderName, builderName)
 			}
-			if external {
-				reply, err := g.resolveDetectionBuilder(builderName, layer, builderDef, img, builderRef)
-				if err != nil {
-					return fmt.Errorf("image %q: candy %q builder %q: %w", boxName, candyName, builderName, err)
-				}
-				if strings.TrimSpace(reply.Stage) == "" {
-					return fmt.Errorf("image %q: candy %q: detection builder %q returned an empty OpResolve stage", boxName, candyName, builderName)
-				}
-				g.detectionBuilderReplies[builderCtxKey(layer.Name, builderName)] = reply
-				b.WriteString(reply.Stage)
-				b.WriteString("\n")
-				continue
-			}
-			ctx := g.buildStageContext(layer, builderName, builderDef, img, builderRef)
-			rendered, err := RenderTemplate(builderName+"-stage", builderDef.StageTemplate, ctx)
+			reply, err := g.resolveDetectionBuilder(builderName, layer, builderDef, img, builderRef)
 			if err != nil {
-				return fmt.Errorf("image %q: rendering %s stage for candy %q: %w", boxName, builderName, candyName, err)
+				return fmt.Errorf("image %q: candy %q builder %q: %w", boxName, candyName, builderName, err)
 			}
-			b.WriteString(rendered)
+			if strings.TrimSpace(reply.Stage) == "" {
+				return fmt.Errorf("image %q: candy %q: detection builder %q returned an empty OpResolve stage", boxName, candyName, builderName)
+			}
+			g.detectionBuilderReplies[builderCtxKey(layer.Name, builderName)] = reply
+			b.WriteString(reply.Stage)
 			b.WriteString("\n")
 		}
 	}
@@ -988,7 +978,7 @@ func (g *Generator) emitBuilderArtifacts(b *strings.Builder, img *ResolvedBox, c
 			continue
 		}
 		external := externalizedBuilders[builderName]
-		if !external && builderDef.StageTemplate == "" {
+		if !external {
 			continue
 		}
 
@@ -2125,7 +2115,7 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *ResolvedB
 	return out
 }
 
-// buildStageContext creates the template context for a builder's stage_template.
+// buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via builderResolveInputFrom).
 func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *BuildStageContext {
 	stageName := fmt.Sprintf("%s-%s-build", layer.Name, builderName)
 	ctx := &BuildStageContext{

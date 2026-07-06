@@ -78,12 +78,13 @@ func TestBuilderDefPhaseTemplateLegacyFallbacks(t *testing.T) {
 	if got := builderPhaseTemplate(inline, PhaseInstall, VenueContainerBuilder); got != inline.InstallTemplate {
 		t.Errorf("inline builder fallback = %q, want %q", got, inline.InstallTemplate)
 	}
-	// Multi-stage builder → falls back to StageTemplate.
-	multi := &BuilderDef{StageTemplate: "FROM pixi AS build"}
-	if got := builderPhaseTemplate(multi, PhaseInstall, VenueContainerBuilder); got != multi.StageTemplate {
-		t.Errorf("multi-stage fallback = %q, want %q", got, multi.StageTemplate)
+	// A non-inline builder without phases → empty for both venues: multi-stage
+	// builders render via their plugin's OpResolve, not this fallback (the former
+	// in-core stage template is gone, C10).
+	multi := &BuilderDef{}
+	if got := builderPhaseTemplate(multi, PhaseInstall, VenueContainerBuilder); got != "" {
+		t.Errorf("multi-stage container fallback = %q, want empty", got)
 	}
-	// Host venue without phases → empty (no legacy shape for host).
 	if got := builderPhaseTemplate(multi, PhaseInstall, VenueHostNative); got != "" {
 		t.Errorf("host-venue legacy = %q, want empty", got)
 	}

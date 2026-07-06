@@ -376,7 +376,7 @@ type BuilderStep struct {
 	// BuilderDef is the resolved builder definition from the embedded build vocabulary (charly/charly.yml) for this builder
 	// (img.BuilderConfig.Builder[Builder]), populated by the compiler. The
 	// host-venue deploy targets render its phase.install.host cell via
-	// renderBuilderScript — the plain-shell analog of stage_template — so the
+	// renderBuilderScript — the plain-shell analog of the container stage — so the
 	// host build script is config-driven, not hardcoded Go. nil only on
 	// synthetic test paths that don't supply a BuilderConfig.
 	BuilderDef *BuilderDef

@@ -484,33 +484,6 @@ func TestPacTemplateBasic(t *testing.T) {
 	}
 }
 
-func TestAurBuilderStageTemplate(t *testing.T) {
-	builderCfg := testBuilderCfg()
-	aurBuilder := builderCfg.Builder["aur"]
-	ctx := &BuildStageContext{
-		BuilderRef:  "ghcr.io/opencharly/arch-builder:latest",
-		StageName:   "my-tool-aur-build",
-		UID:         1000,
-		Home:        "/home/user",
-		User:        "user",
-		CacheMounts: aurBuilder.CacheMount,
-		Packages:    []string{"yay-bin", "neovim-nightly-bin"},
-	}
-	out, err := RenderTemplate("aur-stage-test", aurBuilder.StageTemplate, ctx)
-	if err != nil {
-		t.Fatalf("render error: %v", err)
-	}
-	if !strings.Contains(out, "FROM ghcr.io/opencharly/arch-builder:latest AS my-tool-aur-build") {
-		t.Error("should have correct FROM line")
-	}
-	if !strings.Contains(out, "yay -S --noconfirm --needed") {
-		t.Error("should use yay to install")
-	}
-	if !strings.Contains(out, "yay-bin") {
-		t.Error("should contain yay-bin package")
-	}
-}
-
 func TestAurInstallTemplate(t *testing.T) {
 	arch := testDistroDef("arch")
 	aur := arch.Format["aur"]

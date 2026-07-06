@@ -142,8 +142,8 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 // (pixi/npm/aur) builder. Same dispatch path as the inline test (through the compiled-in plugin's
 // OpEmit and the in-proc HostBuild), proving stepEmitBuilder reaches the threaded
 // Generator/BuilderConfig/Box build engine (buildEngineContext). Since C10, an EXTERNALIZED
-// multi-stage builder (pixi) renders its stage via kit.BuilderResolve (no longer the embedded
-// vocabulary StageTemplate — the bDef needs only the "pixi" key present, the host still resolves the
+// multi-stage builder (pixi) renders its stage via kit.BuilderResolve (no longer an embedded
+// vocabulary stage template — the bDef needs only the "pixi" key present, the host still resolves the
 // builder ref from Box.Builder), so this asserts kit's stage: the `FROM <builder> AS <stage>` line +
 // the pixi cache-dir ENV line kit always emits.
 func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {

@@ -151,22 +151,6 @@ aur:
         cache_mount:
             - dst: /var/cache/pacman/pkg
               sharing: locked
-        stage_template: |
-            FROM {{.BuilderRef}} AS {{.StageName}}
-            USER root
-            RUN echo '{{.User}} ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
-            USER {{.UID}}
-            WORKDIR {{.Home}}
-            RUN {{cacheMounts .CacheMounts}} \
-                mkdir -p /tmp/aur-build && \
-                cp /etc/makepkg.conf /tmp/makepkg.conf && \
-                sed -i '/^OPTIONS/s/ debug/ !debug/' /tmp/makepkg.conf && \
-                yay -S --noconfirm --needed --builddir /tmp/aur-build --makepkgconf /tmp/makepkg.conf
-            {{- range .Options}} {{.}}{{end}}
-            {{- range .Packages}} \
-                  {{.}}{{end}} && \
-                mkdir -p /tmp/aur-pkgs && \
-                find /tmp/aur-build -name '*.pkg.tar.zst' -exec cp {} /tmp/aur-pkgs/ \;
         copy_artifact:
             - src: /tmp/aur-pkgs/
               dst: /tmp/aur-pkgs/
@@ -187,12 +171,6 @@ npm:
             - package.json
         cache_mount:
             - dst: /tmp/npm-cache
-        stage_template: |
-            FROM {{.BuilderRef}} AS {{.StageName}}
-            USER {{.UID}}
-            WORKDIR {{.Home}}
-            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/package.json package.json
-            RUN {{cacheMountsOwned .CacheMounts .UID .GID}}node -e 'var d=require("./package.json").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v==="*"?n:n+"@"+v)' | xargs npm install -g && rm -f package.json
         copy_artifact:
             - src: '{{.Home}}'
               dst: '{{.Home}}'
@@ -206,17 +184,6 @@ pixi:
         cache_mount:
             - dst: /tmp/pixi-cache
             - dst: /tmp/rattler-cache
-        stage_template: |
-            FROM {{.BuilderRef}} AS {{.StageName}}
-            USER {{.UID}}
-            WORKDIR {{.Home}}
-            {{- if .HasLockFile}}
-            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/pixi.lock pixi.lock
-            {{- end}}
-            COPY --chown={{.UID}}:{{.GID}} {{.CopySrc}}/{{.Manifest}} {{.Manifest}}
-            {{.ManylinuxFix}}
-            ENV PIXI_CACHE_DIR=/tmp/pixi-cache RATTLER_CACHE_DIR=/tmp/rattler-cache
-            RUN {{cacheMountsOwned .CacheMounts .UID .GID}}{{.InstallCmd}} && rm -f {{.Manifest}} pixi.lock
         install_command:
             environment.yml: pixi project import environment.yml && pixi install
             pixi.toml: pixi install

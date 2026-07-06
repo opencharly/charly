@@ -351,8 +351,8 @@ type BuilderConfig struct {
 }
 
 // PhaseTemplate is the BuilderDef analog of FormatDef.PhaseTemplate.
-// Same fallback rules apply: (PhaseInstall, container) falls back to
-// legacy InstallTemplate or StageTemplate when Phases is absent.
+// Same fallback rules apply: (PhaseInstall, container) falls back to the
+// legacy inline InstallTemplate when Phases is absent.
 //
 //nolint:unparam // uniform phase-dispatch signature mirroring formatPhaseTemplate (which DOES vary phase via build_target_oci.go s.Phase); the phase param dispatches over the shared BuilderDef.Phases PhaseSet — builders author only the install phase today, but the schema + roadmap (install_build.go "Task 4 will split templates into phases") permit prepare/cleanup.
 func builderPhaseTemplate(b *BuilderDef, phase Phase, venue Venue) string {
@@ -382,15 +382,12 @@ func builderPhaseTemplate(b *BuilderDef, phase Phase, venue Venue) string {
 			}
 		}
 	}
-	// Legacy fallbacks. Builders have two legacy fields: Inline builders
-	// (cargo) use InstallTemplate; non-inline (pixi/npm/aur) use
-	// StageTemplate. The host path needs the container-shaped template to
-	// synthesize a podman-run equivalent.
-	if phase == PhaseInstall && venue == VenueContainerBuilder {
-		if b.Inline && b.InstallTemplate != "" {
-			return b.InstallTemplate
-		}
-		return b.StageTemplate
+	// Legacy fallback: an inline builder (cargo) uses InstallTemplate for the
+	// container-shaped template. Multi-stage builders render via their plugin's
+	// OpResolve (kit.BuilderResolve), NOT this fallback — the former in-core
+	// stage-template path is gone (C10; a custom builder must be an external_builder plugin).
+	if phase == PhaseInstall && venue == VenueContainerBuilder && b.Inline && b.InstallTemplate != "" {
+		return b.InstallTemplate
 	}
 	return ""
 }
