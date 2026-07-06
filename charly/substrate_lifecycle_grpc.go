@@ -44,11 +44,18 @@ func venueFromDescriptor(d spec.VenueDescriptor) (DeployExecutor, error) {
 	}
 }
 
-// hostEnvJSON returns the marshalled HostEnv for a lifecycle Op — the host charly binary path
-// (os.Args[0], the CHARLY process's own path — NOT the plugin's) + the host home.
+// hostEnvJSON returns the marshalled HostEnv for a lifecycle Op — the host charly binary
+// path (the CHARLY process's own RESOLVED path — NOT the plugin's) + the host home. Uses
+// os.Executable() (the absolute binary path), NOT os.Args[0]: argv[0] is the invocation
+// name (a bare "charly" when run as `charly …`), which the vm plugin's scp-into-guest
+// (EnsureCharlyInGuest) rejects as "not a regular file".
 func hostEnvJSON() json.RawMessage {
 	home, _ := os.UserHomeDir()
-	env, _ := marshalJSON(spec.HostEnv{CharlyBin: os.Args[0], Home: home, Version: CharlyVersion()})
+	charlyBin, err := os.Executable()
+	if err != nil || charlyBin == "" {
+		charlyBin = os.Args[0] // last-resort fallback
+	}
+	env, _ := marshalJSON(spec.HostEnv{CharlyBin: charlyBin, Home: home, Version: CharlyVersion()})
 	return env
 }
 
