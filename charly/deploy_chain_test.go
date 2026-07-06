@@ -3,7 +3,23 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
+
+// stampTestDescents mirrors the substrate loader: it stamps the descent-descriptor
+// candy/plugin-substrate adds at OpLoad (recursing the nested/peer subtree), so chain
+// unit tests — which build BundleNode literals directly, bypassing the loader — run
+// against realistically-stamped nodes instead of tripping the nil-descent guard.
+func stampTestDescents(roots map[string]BundleNode) map[string]BundleNode {
+	out := make(map[string]BundleNode, len(roots))
+	for k, v := range roots {
+		n := v
+		kit.StampDescent(&n)
+		out[k] = n
+	}
+	return out
+}
 
 // TestResolveDeployChain_FlatContainer verifies a single-segment pod path
 // produces a one-hop NestedExecutor with JumpPodmanExec into "charly-<name>".
@@ -11,7 +27,7 @@ func TestResolveDeployChain_FlatContainer(t *testing.T) {
 	roots := map[string]BundleNode{
 		"redis": {Target: "pod"},
 	}
-	leaf, chain, err := ResolveDeployChain(roots, "redis", ShellExecutor{})
+	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "redis", ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -37,7 +53,7 @@ func TestResolveDeployChain_VmFlat(t *testing.T) {
 			},
 		},
 	}
-	_, chain, err := ResolveDeployChain(roots, "bench-vm", ShellExecutor{})
+	_, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm", ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -67,7 +83,7 @@ func TestResolveDeployChain_VmInnerPod(t *testing.T) {
 			},
 		},
 	}
-	leaf, chain, err := ResolveDeployChain(roots, "bench-vm.inner", ShellExecutor{})
+	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner", ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -112,7 +128,7 @@ func TestResolveDeployChain_ThreeDeep(t *testing.T) {
 			},
 		},
 	}
-	leaf, chain, err := ResolveDeployChain(roots, "bench-vm.inner.deeper", ShellExecutor{})
+	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner.deeper", ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -136,7 +152,7 @@ func TestResolveDeployChain_UnknownRoot(t *testing.T) {
 		"redis": {Target: "pod"},
 		"web":   {Target: "pod"},
 	}
-	_, _, err := ResolveDeployChain(roots, "missing", ShellExecutor{})
+	_, _, err := ResolveDeployChain(stampTestDescents(roots), "missing", ShellExecutor{})
 	if err == nil {
 		t.Fatal("expected error for unknown root")
 	}
@@ -163,7 +179,7 @@ func TestResolveDeployChain_UnknownNestedChild(t *testing.T) {
 			},
 		},
 	}
-	_, _, err := ResolveDeployChain(roots, "vm.missing-child", ShellExecutor{})
+	_, _, err := ResolveDeployChain(stampTestDescents(roots), "vm.missing-child", ShellExecutor{})
 	if err == nil {
 		t.Fatal("expected error for unknown nested child")
 	}

@@ -130,8 +130,15 @@ func chainEntersVMGuest(chain DeployExecutor) bool {
 // segment (the node's own key), used for a pod deployed STANDALONE inside a VM
 // guest (which has no parent-path concept — see the pod case).
 func appendHopForFlatPath(chain DeployExecutor, node *BundleNode, flatPath, leaf string) (DeployExecutor, error) {
-	switch classifyTarget(node) {
-	case "local", "android":
+	// The venue-hop is selected by the loader-stamped descent-descriptor's generic
+	// TRANSPORT (the descent de-type, Cutover H) — never by switching on the
+	// substrate kind word. A node reaching here without a descriptor was not folded
+	// through the substrate loader (a bug at its fold site, surfaced loudly — R4).
+	if node.Descent == nil {
+		return nil, fmt.Errorf("node %q (target %q) has no descent descriptor — not folded through the substrate loader", flatPath, node.Target)
+	}
+	switch node.Descent.Transport {
+	case "none":
 		// local + android nodes share the parent venue: a local node's
 		// venue IS the chain root (a ShellExecutor for host:local, or an
 		// SSHExecutor for host:<remote> — selected by rootExecutorForDeployNode
@@ -139,7 +146,7 @@ func appendHopForFlatPath(chain DeployExecutor, node *BundleNode, flatPath, leaf
 		// over the parent pod's published port. No new hop.
 		return chain, nil
 
-	case "pod":
+	case "container-exec":
 		// Container name convention: "charly-<flat-path>" — matches quadlet
 		// emission, which deploys a HOST-side nested pod as "charly-<seg1>_<seg2>".
 		// EXCEPTION — a pod nested inside a VM guest: it is deployed by the
@@ -164,7 +171,7 @@ func appendHopForFlatPath(chain DeployExecutor, node *BundleNode, flatPath, leaf
 			Jump:   NestedJump{Kind: engineJump, Target: name},
 		}, nil
 
-	case "vm":
+	case "ssh":
 		// VM SSH alias keys off node.From (the kind:vm entity name) which
 		// matches the stanza written by `charly vm create`. Falling back to
 		// flatPath (the deploy bed name) would produce an charly-<bed> alias
@@ -189,10 +196,10 @@ func appendHopForFlatPath(chain DeployExecutor, node *BundleNode, flatPath, leaf
 			},
 		}, nil
 
-	case "k8s":
+	case "reject":
 		return nil, fmt.Errorf("k8s targets cannot be reached via the deploy chain (use kubectl)")
 	}
-	return nil, fmt.Errorf("unknown target %q on node", classifyTarget(node))
+	return nil, fmt.Errorf("unknown descent transport %q on node %q", node.Descent.Transport, flatPath)
 }
 
 // rootExecutorForDeployNode selects the ROOT DeployExecutor for a

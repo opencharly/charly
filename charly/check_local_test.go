@@ -62,7 +62,7 @@ func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	roots := map[string]BundleNode{
 		"workstation": {Target: "local"},
 	}
-	node, chain, err := ResolveDeployChain(roots, "workstation", ShellExecutor{})
+	node, chain, err := ResolveDeployChain(stampTestDescents(roots), "workstation", ShellExecutor{})
 	if err != nil {
 		t.Fatalf("local node must resolve without error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestResolveScoringChain_Local(t *testing.T) {
 		"localbed": {Target: "local"},
 		"podbed":   {Target: "pod"},
 	}
-	exec, err := resolveScoringChain(roots, "localbed")
+	exec, err := resolveScoringChain(stampTestDescents(roots), "localbed")
 	if err != nil {
 		t.Fatalf("local bed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestResolveScoringChain_Local(t *testing.T) {
 		t.Errorf("local bed → %T, want ShellExecutor (host venue, not a container)", exec)
 	}
 	// A pod target still routes to a container chain (no regression).
-	exec, err = resolveScoringChain(roots, "podbed")
+	exec, err = resolveScoringChain(stampTestDescents(roots), "podbed")
 	if err != nil {
 		t.Fatalf("pod bed: %v", err)
 	}

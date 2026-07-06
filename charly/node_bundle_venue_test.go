@@ -118,7 +118,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 	}
 	const dotted = "nested-check-vm.inner-app-pod.nested-redis-pod"
 
-	leaf, chain, err := ResolveDeployChain(roots, dotted, ShellExecutor{})
+	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), dotted, ShellExecutor{})
 	if err != nil {
 		t.Fatalf("ResolveDeployChain(%q): %v", dotted, err)
 	}
@@ -134,7 +134,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 
 	// resolveScoringChain (the scorer entry point) must route the dotted venue
 	// through ResolveDeployChain and return a chain too.
-	sc, scErr := resolveScoringChain(roots, dotted)
+	sc, scErr := resolveScoringChain(stampTestDescents(roots), dotted)
 	if scErr != nil {
 		t.Fatalf("resolveScoringChain(%q): %v", dotted, scErr)
 	}
@@ -149,7 +149,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 // without any top-level bundle entry (agent-provisioned members are not folded).
 func TestResolveBareAgentProvisionedVenue(t *testing.T) {
 	roots := map[string]BundleNode{} // os is NOT a top-level entry (not folded)
-	sc, err := resolveScoringChain(roots, "os")
+	sc, err := resolveScoringChain(stampTestDescents(roots), "os")
 	if err != nil {
 		t.Fatalf("resolveScoringChain(os): %v", err)
 	}

@@ -352,7 +352,7 @@ func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecuto
 		return nil, fmt.Errorf("step pod %q is dotted but does not resolve through deploy tree: %w", pod, err)
 	}
 	if roots != nil {
-		if node, ok := roots[pod]; ok && classifyTarget(&node) == "local" {
+		if node, ok := roots[pod]; ok && node.Descent != nil && node.Descent.HostRooted {
 			return rootExecutorForDeployNode(&node)
 		}
 	}

@@ -17,6 +17,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // DeployTreePhase indicates which lifecycle phase the walker is in.
@@ -266,6 +268,24 @@ func classifyTarget(node *BundleNode) string {
 		return "pod"
 	}
 	return node.Target
+}
+
+// stampBundleDescents stamps every deploy node's venue-hop descent-descriptor via
+// the shared kit mapping (the descent de-type, Cutover H). Applied uniformly by the
+// loader AFTER all structural kinds have folded into uf.Bundle — so every
+// substrate/group/custom structural kind gets a descriptor without each plugin
+// remembering to stamp — and the kernel's deploy chain (appendHopForFlatPath)
+// descends by TRANSPORT, never by a kind-word switch. The word→transport MAPPING
+// lives in sdk/kit, never the kernel; StampDescent recurses the nested/peer subtree.
+func stampBundleDescents(uf *UnifiedFile) {
+	if uf == nil {
+		return
+	}
+	for name, node := range uf.Bundle {
+		n := node
+		kit.StampDescent(&n)
+		uf.Bundle[name] = n
+	}
 }
 
 // NestedContainerName computes the podman container name used when

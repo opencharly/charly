@@ -438,6 +438,11 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 	// LoadBundleConfig (R3 — one path), so the project charly.yml's inline
 	// deploy: entries get the same promotion + checks. Runs after the folds so
 	// folded beds/peers are covered, before validateDeploymentTree.
+	// Stamp every deploy node's venue-hop descent-descriptor (the descent de-type,
+	// Cutover H) — uniformly here, after ALL structural kinds have folded into
+	// uf.Bundle, so the kernel's deploy chain descends by TRANSPORT and never
+	// switches on the substrate kind word.
+	stampBundleDescents(merged)
 	if err := validateEphemeralUnified(merged); err != nil {
 		return nil, true, fmt.Errorf("%s: %w", root, err)
 	}

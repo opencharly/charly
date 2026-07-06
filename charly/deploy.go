@@ -993,6 +993,21 @@ func SaveBundleConfig(dc *BundleConfig) error {
 // children), so the per-host overlay writer round-trips the deployment tree even
 // though Target/Children/Members are no longer authored/marshaled fields
 // (Risk 5a). Recurses so nested children + members at every depth are preserved.
+// dropMappingKey removes a key (and its value) from a YAML mapping node in place.
+func dropMappingKey(m *yaml.Node, key string) {
+	if m == nil || m.Kind != yaml.MappingNode {
+		return
+	}
+	kept := make([]*yaml.Node, 0, len(m.Content))
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			continue
+		}
+		kept = append(kept, m.Content[i], m.Content[i+1])
+	}
+	m.Content = kept
+}
+
 func marshalBundleNodeLegacy(node *BundleNode) (*yaml.Node, error) {
 	nb, err := yaml.Marshal(node)
 	if err != nil {
@@ -1007,6 +1022,11 @@ func marshalBundleNodeLegacy(node *BundleNode) (*yaml.Node, error) {
 		return &yaml.Node{Kind: yaml.MappingNode}, nil
 	}
 	body := nd.Content[0]
+	// descent: is a loader-DERIVED venue-hop descriptor (Cutover H) re-stamped on
+	// every load by the substrate plugin — NEVER persist it (a stored descent trips
+	// #DeployValue's descent?:_|_ on reload, and migrateDeployEntity does not know
+	// the key). Drop it from the marshaled body at every recursion level.
+	dropMappingKey(body, "descent")
 	// target: — derived from the node's disc/cross-ref at load; re-emit it so a
 	// reload re-derives the same target (also lets a group's empty target stay
 	// absent rather than mis-marshaling).
@@ -1216,6 +1236,7 @@ func isAutoVmDeployEntry(entry BundleNode) bool {
 	probe.VmState = nil
 	probe.Target = ""
 	probe.From = ""
+	probe.Descent = nil // loader-DERIVED (Cutover H), never operator-authored
 	return reflect.DeepEqual(probe, BundleNode{})
 }
 
