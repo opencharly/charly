@@ -129,6 +129,11 @@ type Runner struct {
 	// distros (e.g. openssh-server on Fedora vs openssh on Arch).
 	Distros []string
 
+	// endpointCleanups holds the ssh -L forwards opened by cc.ResolveEndpoint (the generic
+	// host-endpoint reverse-leg) DURING the current verb's Invoke; invokeVerbProvider closes
+	// them AFTER the Invoke returns (the forward must outlive the plugin's dial). Per-Invoke.
+	endpointCleanups []func()
+
 	// CandyDirs maps a candy name → its resolved source directory. Used to
 	// anchor a relative committed-APK path in an `adb: install` / `appium:
 	// install-app` check (apk: ./tests/data/...) against the authoring candy's

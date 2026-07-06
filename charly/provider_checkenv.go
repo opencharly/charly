@@ -176,6 +176,11 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 	// (wl/dbus/record/adb/appium/…) is a no-op. The preresolver may short-circuit (early
 	// SKIP/FAIL) or open a tunnel/forward whose cleanup defers across Invoke (it carries
 	// the live connection).
+	// The generic host-endpoint reverse-leg (cc.ResolveEndpoint) opens ssh -L forwards DURING
+	// the Invoke; drain them (LIFO) after it returns — the forward must outlive the plugin's
+	// dial. Reset per-Invoke so a leftover from a prior op never leaks in.
+	r.endpointCleanups = nil
+	defer r.runEndpointCleanups()
 	var substrate json.RawMessage
 	if pre, ok := verbPreresolverFor(word); ok {
 		sub, opOut, cleanup, early := pre(r, c)
@@ -222,7 +227,7 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 		if r.Scenario != nil {
 			addBg = r.Scenario.AddBackground
 		}
-		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg}
+		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint}
 		out, err = ei.InvokeWithExecutor(ctx, op, r.Exec, buildEngineContext{}, false, cc)
 	} else {
 		out, err = prov.Invoke(ctx, op)

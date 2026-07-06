@@ -12,19 +12,8 @@ import "encoding/json"
 // stays verb-agnostic (the Uniform API Invariant).
 
 func init() {
-	registerVerbPreresolver("cdp", func(r *Runner, c *Op) (json.RawMessage, *Op, func(), *CheckResult) {
-		env, cleanup, early := r.preresolveCdpEndpoint(c)
-		if early != nil {
-			return nil, c, cleanup, early
-		}
-		var sub json.RawMessage
-		if env != nil {
-			if b, err := json.Marshal(env); err == nil {
-				sub = b
-			}
-		}
-		return sub, c, cleanup, nil
-	})
+	// cdp resolves its own endpoint via the generic cc.ResolveEndpoint reverse-leg (H part 2)
+	// — no host preresolver.
 	registerVerbPreresolver("vnc", func(r *Runner, c *Op) (json.RawMessage, *Op, func(), *CheckResult) {
 		env, cleanup, early := r.preresolveVncEndpoint(c)
 		if early != nil {

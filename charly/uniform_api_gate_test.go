@@ -81,7 +81,7 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 	assertMethodSet(t, "ExecutorService", pb.ExecutorService_ServiceDesc,
 		"Venue", "RunSystem", "RunUser", "PutFile", "RunCapture", "GetFile", "RunHostStep", "InvokeProvider", "HostBuild", "HostArbiter")
 	assertMethodSet(t, "CheckContextService", pb.CheckContextService_ServiceDesc,
-		"HTTPDo", "AddBackground")
+		"HTTPDo", "AddBackground", "ResolveEndpoint")
 
 	// Negative arm (teeth): a re-introduced provider word in a surface MUST be flagged. If this
 	// scanner returned empty here, every positive arm above would be a false pass. spec.KindWords

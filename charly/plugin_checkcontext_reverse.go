@@ -18,8 +18,9 @@ import (
 // Invariant) — any check verb may use either RPC, no per-verb coupling.
 type checkContextReverseServer struct {
 	pb.UnimplementedCheckContextServiceServer
-	httpBase *http.Client  // the engine's base HTTP client (default timeout); per-request policy applied per call
-	addBg    func(pid int) // r.Scenario.AddBackground, nil when there is no scenario context
+	httpBase  *http.Client                   // the engine's base HTTP client (default timeout); per-request policy applied per call
+	addBg     func(pid int)                  // r.Scenario.AddBackground, nil when there is no scenario context
+	resolveEp func(port int) (string, error) // r.resolveVerbEndpoint — venue→addr, forwards tracked on the Runner for post-Invoke teardown
 }
 
 // HTTPDo issues the request from the host's network namespace via the SHARED host HTTP-do
@@ -41,6 +42,22 @@ func (s *checkContextReverseServer) HTTPDo(ctx context.Context, req *pb.HTTPDoRe
 		return &pb.HTTPDoReply{Error: err.Error()}, nil
 	}
 	return &pb.HTTPDoReply{Status: int32(resp.Status), Body: resp.Body, HeaderBlob: resp.HeaderBlob}, nil
+}
+
+// ResolveEndpoint resolves the check target's venue to a host-reachable addr for an in-venue
+// TCP port via the host's resolveVerbEndpoint (the SAME machinery the in-process
+// runnerCheckContext.ResolveEndpoint uses, R3). Any ssh -L forward it opens is tracked on the
+// Runner and closed after the calling verb's Invoke. A resolution failure rides the reply
+// error field (the RPC itself succeeds, like HTTPDoReply).
+func (s *checkContextReverseServer) ResolveEndpoint(_ context.Context, req *pb.ResolveEndpointRequest) (*pb.ResolveEndpointReply, error) {
+	if s.resolveEp == nil {
+		return &pb.ResolveEndpointReply{Error: "endpoint resolution unavailable (no runner context)"}, nil
+	}
+	addr, err := s.resolveEp(int(req.GetPort()))
+	if err != nil {
+		return &pb.ResolveEndpointReply{Error: err.Error()}, nil
+	}
+	return &pb.ResolveEndpointReply{Addr: addr}, nil
 }
 
 // AddBackground registers a host-side background PID with the active plan run for teardown

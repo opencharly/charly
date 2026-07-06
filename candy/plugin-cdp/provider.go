@@ -23,21 +23,19 @@ import (
 // itself (via the shared sdk implementation — R3), and return the wire {status,message}
 // the host decodes.
 
-// cdpEndpoint is the plugin-side decode of the host-resolved CdpEnv
-// (charly/cdp_preresolve.go). URL is the host-reachable DevTools base URL the plugin
-// dials. The plugin needs no podman / venue resolution — it just reads this.
+// cdpEndpoint is the dialable Chrome DevTools endpoint the plugin builds from the addr the
+// generic host-endpoint reverse-leg (cc.ResolveEndpoint) returns for the in-venue CDP port
+// 9222. URL is the host-reachable DevTools base URL the plugin dials.
 type cdpEndpoint struct {
 	URL string `json:"url"`
 }
 
 // cdpEnv is the plugin-side decode of the CheckEnv the host ships as Operation.Env for a
-// `cdp:` check step (provider_checkenv.go). Box/Mode mirror the shared CheckEnv; Cdp
-// carries the host-resolved DevTools endpoint (nil when the host could not resolve one —
-// e.g. no cdp op, no live deployment).
+// `cdp:` check step (provider_checkenv.go). Box/Mode mirror the shared CheckEnv; the endpoint
+// is no longer pre-shipped here — the plugin resolves it itself via cc.ResolveEndpoint.
 type cdpEnv struct {
-	Box       string          `json:"box"`
-	Mode      string          `json:"mode"` // "live" | "box"
-	Substrate json.RawMessage `json:"substrate"`
+	Box  string `json:"box"`
+	Mode string `json:"mode"` // "live" | "box"
 }
 
 type provider struct{ pb.UnimplementedProviderServer }
@@ -48,7 +46,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // mode (no live Chrome DevTools endpoint on a disposable `charly check box`),
 // skips a nil endpoint, dispatches the method, and self-evaluates the matchers +
 // screenshot artifact validators.
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {
@@ -61,16 +59,6 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if len(req.GetEnvJson()) > 0 {
 		_ = json.Unmarshal(req.GetEnvJson(), &env)
 	}
-	// The host's verb preresolver ships the dialable DevTools endpoint in the opaque
-	// CheckEnv.Substrate (the generic per-verb channel that replaced the typed
-	// CheckEnv.Cdp field); decode it into the plugin's own endpoint type.
-	var ep *cdpEndpoint
-	if len(env.Substrate) > 0 {
-		var e cdpEndpoint
-		if err := json.Unmarshal(env.Substrate, &e); err == nil {
-			ep = &e
-		}
-	}
 	method := in.Method
 
 	// Live-deployment verb: skip under `charly check box` (no running Chrome DevTools
@@ -78,12 +66,22 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if env.Mode == "box" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("cdp: %s requires a running deployment (skip under charly check box)", method))
 	}
-	// No endpoint resolved → skip. The host already FAILs the resolution-error case before
-	// dispatch, so a nil endpoint here means no live deployment context at all (the
-	// analogue of the host's empty-box skip).
-	if ep == nil {
+	// Resolve the dialable DevTools base URL via the GENERIC host-endpoint reverse-leg
+	// (cc.ResolveEndpoint) — the host owns the venue/port-mapping/ssh -L machinery this
+	// out-of-process plugin cannot reach. Replaces the former host-side cdp preresolver.
+	cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("cdp: %s: %v", method, err))
+	}
+	addr, err := cc.ResolveEndpoint(ctx, 9222)
+	if err != nil {
+		return sdk.ResultJSON("fail", fmt.Sprintf("cdp: %s: %v", method, err))
+	}
+	// No live venue (no-box context) → skip, the analogue of the host's empty-box skip.
+	if addr == "" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("cdp: %s has no resolved DevTools endpoint (box=%q)", method, env.Box))
 	}
+	ep := &cdpEndpoint{URL: "http://" + addr}
 
 	out, runErr := dispatch(ep, &op, &in)
 

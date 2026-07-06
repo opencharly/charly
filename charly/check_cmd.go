@@ -126,8 +126,8 @@ type CheckCmd struct {
 	// golang.org/x/net/websocket CDP WebSocket client + the open/list/text/eval/screenshot/
 	// click/SPA dial+dispatch layer) was dep-shed into the out-of-tree candy/plugin-cdp module.
 	// The `cdp:` DECLARATIVE check verb dispatches to that external plugin via the provider
-	// registry (invokeVerbProvider, after the host pre-resolves the deployment's CDP port 9222
-	// to a host-reachable DevTools base URL — preresolveCdpEndpoint); there is no host
+	// registry (invokeVerbProvider; the plugin resolves the deployment's CDP port 9222 to a
+	// host-reachable DevTools base URL itself via the cc.ResolveEndpoint reverse-leg); there is no host
 	// `charly check cdp`. (charly's core no longer keeps any CDP WebSocket client: the last
 	// in-core consumer — the `wl … --from-cdp` coordinate translation — externalized into
 	// candy/plugin-wl, so the core's minimal CDP WebSocket client was deleted and
