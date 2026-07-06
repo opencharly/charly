@@ -17,7 +17,7 @@ plugin-secrets:
                 resolve (resolve → {value,source}), the doctor keyring health probe (health),
                 and the keyring re-probe (reset) over go-plugin gRPC. Every core credential
                 consumer (enc.go / secrets.go / layer_secrets.go / config_secret_migration.go /
-                runtime_config.go / vnc_preresolve.go) is UNCHANGED — it resolves
+                runtime_config.go / vnc_helpers.go) is UNCHANGED — it resolves
                 secret_require / secret_accept / VNC / enc passphrases exactly as before.
 
               - command:secrets — `charly secrets …` (list / get / set / delete / import /

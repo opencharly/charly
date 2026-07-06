@@ -8,7 +8,7 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// pickMcpEntry — discriminator semantics (ported from charly's mcp_preresolve_test.go when the
+// pickMcpEntry — discriminator semantics (relocated into the plugin from the former host-side resolution when the
 // pick/template/URL-rewrite logic relocated into the plugin, H part 2).
 
 func TestPickMcpEntry_Empty(t *testing.T) {

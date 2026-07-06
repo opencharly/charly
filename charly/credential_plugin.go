@@ -16,7 +16,7 @@ import (
 // the `charly secrets` CLI, the GPG `.secrets` surface) lives OUT-OF-PROCESS in
 // candy/plugin-secrets — the C2 dep-shed removed github.com/zalando/go-keyring from
 // charly/go.mod. Every core credential consumer (enc.go, secrets.go, layer_secrets.go,
-// config_secret_migration.go, runtime_config.go, vnc_preresolve.go, android_deploy_cmd.go,
+// config_secret_migration.go, runtime_config.go, vnc_helpers.go, android_deploy_cmd.go,
 // migrate_charly_cutover4.go) keeps using the SAME CredentialStore interface + the SAME
 // ResolveCredential entry point; pluginCredentialStore forwards every call to
 // verb:credential over the provider registry (built from candy source on a dev host, or
@@ -24,7 +24,7 @@ import (
 
 // CredServiceVNC is the bare-key credential service (VNC passwords use a bare key; every
 // other service uses a composite "service/key" map key). Kept in core because core
-// consumers (runtime_config.go, secrets.go, vnc_preresolve.go) name it directly.
+// consumers (runtime_config.go, secrets.go, vnc_helpers.go) name it directly.
 const CredServiceVNC = "charly/vnc"
 
 // CredentialStore abstracts secret storage backends. The implementation is the

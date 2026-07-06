@@ -20,8 +20,8 @@ import (
 // matcher pipeline + sdk.RunArtifactValidators (a host-side matcher step does
 // not run for an out-of-process verb). The RFB wire behaviour, the X11 keysym tables, and
 // the status tokens are unchanged, so a bed authored against the in-tree verb passes
-// unchanged. The RFB client (vnc_client.go) lives in THIS module now; the host pre-resolves
-// the dialable endpoint (charly/vnc_preresolve.go) — the plugin needs no venue resolution.
+// unchanged. The RFB client (vnc_client.go) lives in THIS module now; the plugin resolves the dialable
+// endpoint via the generic cc.ResolveGraphicsEndpoint reverse-leg — no venue resolution here.
 //
 // Two in-tree extras did NOT move: `vnc passwd` (wayvnc auth is provisioned at DEPLOY time
 // by the wayvnc / sway-desktop-vnc candy, not the check verb) and the `vnc click`

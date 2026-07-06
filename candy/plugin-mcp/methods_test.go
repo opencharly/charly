@@ -9,9 +9,8 @@ import (
 )
 
 // methods_test.go covers the PLUGIN-side dial/dispatch/format layer that moved
-// out-of-process from charly/mcp_client.go. The host-side resolution helpers
-// (pickMCPEntry / resolveContainerNameTemplate / rewriteMCPURLForHost) keep their
-// tests in charly (mcp_preresolve_test.go).
+// out-of-process from charly/mcp_client.go. The pure resolution helpers (pick / template /
+// URL-rewrite) now live in this plugin (resolve.go) and are tested in resolve_test.go.
 
 // ---------------------------------------------------------------------------
 // buildMCPTransport — transport dispatch

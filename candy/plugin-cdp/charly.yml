@@ -16,10 +16,10 @@ plugin-cdp:
             and every cdp-exclusive modifier (method/tab/url/expression/selector/x/y/…)
             lives in the plugin's OWN #CdpInput (schema/cdp.cue); the verb dispatches
             through the provider registry exactly like a built-in (ResolveVerb
-            → grpcProvider → invokeVerbProvider hands it the full #Op). The host owns the
-            podman / venue / port-mapping resolution (preresolveCdpEndpoint), pre-resolving
-            the deployment's CDP port 9222 to a host-reachable DevTools base URL into the
-            check env — so this plugin needs no container inspection at all. Provides the
+            → grpcProvider → invokeVerbProvider hands it the full #Op). The plugin resolves
+            the deployment's CDP port 9222 to a host-reachable DevTools base URL via the generic
+            cc.ResolveEndpoint reverse-leg (the host owns the podman / venue / port-mapping
+            machinery) — so this plugin needs no container inspection at all. Provides the
             full query/action surface (status/list/url/text/html/eval/axtree/coords/raw/wait/
             screenshot/open/close/click/type) plus the SPA remote-desktop input group
             (spa-status/click/mouse/type/key/key-combo). The R10 consumer is a Chrome-bearing

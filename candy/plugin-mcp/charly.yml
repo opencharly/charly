@@ -16,9 +16,9 @@ plugin-mcp:
                 (method/mcp_name/tool/uri/input) lives in the plugin's OWN #McpInput
                 (schema/mcp.cue); the verb dispatches through the provider registry exactly
                 like a built-in (ResolveVerb → grpcProvider → invokeVerbProvider). The
-                host owns the podman / OCI-label / port-mapping resolution
-                (preresolveMcpEndpoint), pre-resolving the declared mcp_provides + the
-                picked, host-routable dial endpoint into the check env — so this plugin
+                plugin resolves the declared mcp_provides (cc.ResolveImageLabel) + the picked,
+                host-routable dial endpoint (cc.ResolveEndpoint) via the generic reverse-legs
+                (the host owns the podman / OCI-label / port-mapping machinery) — so this plugin
                 needs no container inspection. Full 7-method surface
                 (ping/servers/list-tools/list-resources/list-prompts/call/read).
 

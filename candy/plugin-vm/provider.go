@@ -265,9 +265,9 @@ func dispatchInternalOp(env vmEnv) (*pb.InvokeReply, error) {
 			ep, epErr = t.VncEndpoint()
 		}
 		_ = t.Close() //nolint:errcheck
-		// The host decodes {endpoint, error, tunnel_target} and does the skip/SpiceEnv/tunnel
-		// logic (the tunnel + the no-display-device skip stay host-side; tunnel_target is the
-		// libvirt URI's remote for a qemu+ssh:// VM, empty for a local one).
+		// The host decodes {endpoint, error, tunnel_target} and does the skip / dialable-endpoint
+		// / tunnel logic (the tunnel + the no-display-device skip stay host-side; tunnel_target is
+		// the libvirt URI's remote for a qemu+ssh:// VM, empty for a local one).
 		res := map[string]any{"tunnel_target": tunnelTarget}
 		if epErr != nil {
 			res["error"] = epErr.Error()

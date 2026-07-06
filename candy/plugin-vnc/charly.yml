@@ -16,12 +16,12 @@ plugin-vnc:
             (method/x/y/text/key/artifact/http_method/params) lives in the plugin's OWN
             #VncInput (schema/vnc.cue); the verb dispatches through the provider registry
             exactly like a built-in
-            (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full #Op). The host
-            owns the podman / venue / libvirt / port-mapping resolution (preresolveVncEndpoint),
-            pre-resolving the deployment's VNC endpoint — a container's published port 5900, or
-            a VM's libvirt-discovered <graphics type='vnc'> listener bridged/tunneled to a
-            host-reachable TCP address — plus the resolved password into the check env, so this
-            plugin needs no container inspection at all. Provides status/screenshot/click/mouse/
+            (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full #Op). The plugin
+            resolves the deployment's VNC endpoint via the generic cc.ResolveGraphicsEndpoint
+            reverse-leg (the host owns the podman / venue / libvirt / port-mapping machinery) —
+            a container's published port 5900, or a VM's libvirt-discovered <graphics type='vnc'>
+            listener bridged/tunneled to a host-reachable TCP address — plus the resolved
+            password, so this plugin needs no container inspection at all. Provides status/screenshot/click/mouse/
             type/key/rfb. The R10 consumer is a wayvnc-bearing pod bed whose check composes this
             plugin (e.g. sway-browser-vnc via sway-desktop-vnc).
         plugin:

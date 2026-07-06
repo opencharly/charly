@@ -114,7 +114,7 @@ func pickMcpEntry(entries []spec.MCPProvideEntry, wantName string) (spec.MCPProv
 // rewriteURLViaEndpoint rewrites a container-network URL to a host-routable one using the
 // generic ResolveEndpoint reverse-leg (the host maps the container's published port to a host
 // address). A URL whose host is not the container name / localhost is returned unchanged (the
-// user may have set an explicit external URL). Replaces the host rewriteMCPURLForHost + container
+// user may have set an explicit external URL). Replaces the former host-side URL rewrite + container
 // inspection. Takes the resolveEndpoint func (cc.ResolveEndpoint) so the pure logic is testable.
 func rewriteURLViaEndpoint(ctx context.Context, resolveEndpoint func(context.Context, int) (string, error), rawURL, ctrName string) (string, error) {
 	if rawURL == "" {
