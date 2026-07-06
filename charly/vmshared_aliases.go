@@ -15,7 +15,6 @@ type (
 	AlpineBootstrapDef       = vmshared.AlpineBootstrapDef
 	AndroidAdbEndpoint       = vmshared.AndroidAdbEndpoint
 	AndroidGoogleAccount     = vmshared.AndroidGoogleAccount
-	AndroidSpec              = vmshared.AndroidSpec
 	ApkPackageSpec           = vmshared.ApkPackageSpec
 	BaseUserDef              = vmshared.BaseUserDef
 	BootloaderDef            = vmshared.BootloaderDef
@@ -52,14 +51,12 @@ type (
 	InstallOptsConfig        = vmshared.InstallOptsConfig
 	IterateConfig            = vmshared.IterateConfig
 	K8sDeployConfig          = vmshared.K8sDeployConfig
-	K8sSpec                  = vmshared.K8sSpec
 	LibvirtDevices           = vmshared.LibvirtDevices
 	LibvirtDomain            = vmshared.LibvirtDomain
 	LibvirtFilesystem        = vmshared.LibvirtFilesystem
 	LibvirtGraphicsListeners = vmshared.LibvirtGraphicsListeners
 	LibvirtHostdev           = vmshared.LibvirtHostdev
 	LocalPkgDef              = vmshared.LocalPkgDef
-	LocalSpec                = vmshared.LocalSpec
 	Matcher                  = vmshared.Matcher
 	MatcherList              = vmshared.MatcherList
 	MCPServerYAML            = vmshared.MCPServerYAML
@@ -71,7 +68,6 @@ type (
 	PacstrapRepo             = vmshared.PacstrapRepo
 	PhaseSet                 = vmshared.PhaseSet
 	PhaseTemplates           = vmshared.PhaseTemplates
-	PodSpec                  = vmshared.PodSpec
 	PollClass                = vmshared.PollClass
 	PortScope                = vmshared.PortScope
 	PortSpec                 = vmshared.PortSpec

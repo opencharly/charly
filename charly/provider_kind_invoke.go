@@ -43,23 +43,9 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	if gn.disc == "candy" {
 		return foldCandyKind(prov, gn, uf)
 	}
-	body, err := assembleEntityBody(gn)
+	paramsJSON, err := entityBodyJSON(gn)
 	if err != nil {
-		return fmt.Errorf("node %q: assemble: %w", gn.name, err)
-	}
-	yamlBytes, err := yaml.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("node %q: marshal: %w", gn.name, err)
-	}
-	// YAML → JSON for the wire envelope (yaml.v3 decodes mappings as
-	// map[string]any, which marshals to JSON cleanly).
-	var asMap any
-	if err := yaml.Unmarshal(yamlBytes, &asMap); err != nil {
-		return fmt.Errorf("node %q: reparse: %w", gn.name, err)
-	}
-	paramsJSON, err := json.Marshal(asMap)
-	if err != nil {
-		return fmt.Errorf("node %q: to json: %w", gn.name, err)
+		return err
 	}
 	// A plugin KIND validates at LOAD time (inside the loader), BEFORE the
 	// check/deploy paths gate plugin schemas (loadProjectPlugins). Ensure every
@@ -278,6 +264,36 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 // authored fields to typo-check (it is resolved at deploy). The RAW authored value is validated
 // (shorthand intact) since #<Kind>Value accepts the same shorthand the arm did. Covers the 5
 // substrate kinds (#<Kind>Value) AND candy (#CandyValue).
+// entityBodyJSON returns a node's kind-value mapping as canonical JSON, generically
+// (yaml.v3 → map[string]any → JSON) — with NO concrete-kind Go type. It is the single
+// body→wire mechanism for BOTH the op.Params plugin-kind path (runPluginKind) and the
+// substrate TEMPLATE thread (decodeStandaloneTemplateJSON), so the kernel never types a
+// spec.<Kind> merely to canonicalize a value. The value is validated kind-blind
+// (validateKindValueCUE against the data-driven #<Kind>Value def, or the load-time gate),
+// and every plugin OpLoad re-decodes + defaults + echoes, so no host-side typed decode is
+// needed.
+func entityBodyJSON(gn *genericNode) (json.RawMessage, error) {
+	body, err := assembleEntityBody(gn)
+	if err != nil {
+		return nil, fmt.Errorf("node %q: assemble: %w", gn.name, err)
+	}
+	yamlBytes, err := yaml.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("node %q: marshal: %w", gn.name, err)
+	}
+	// YAML → JSON for the wire envelope (yaml.v3 decodes mappings as
+	// map[string]any, which marshals to JSON cleanly).
+	var asMap any
+	if err := yaml.Unmarshal(yamlBytes, &asMap); err != nil {
+		return nil, fmt.Errorf("node %q: reparse: %w", gn.name, err)
+	}
+	j, err := json.Marshal(asMap)
+	if err != nil {
+		return nil, fmt.Errorf("node %q: to json: %w", gn.name, err)
+	}
+	return j, nil
+}
+
 func validateKindValueCUE(gn *genericNode) error {
 	if gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
 		return nil

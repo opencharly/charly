@@ -108,35 +108,22 @@ func isDeployShape(gn *genericNode) bool {
 	return false
 }
 
-// decodeStandaloneTemplateJSON decodes gn (a substrate TEMPLATE node — no cross-ref, no
-// resource members) into its typed spec value via the core decodeNodeValue and returns the
-// CANONICAL JSON the host threads to candy/plugin-substrate (op.Env). The per-substrate
-// decode mirrors the former buildStandaloneResource (R3: one decode path, decodeNodeValue).
+// decodeStandaloneTemplateJSON canonicalizes gn (a substrate TEMPLATE node — no cross-ref,
+// no resource members) to the JSON the host threads to candy/plugin-substrate (op.Env),
+// GENERICALLY via entityBodyJSON — with NO concrete-kind Go type. The value is validated
+// kind-blind (validateKindValueCUE against the data-driven #<Kind>Value def, plus the load
+// gate); the plugin OpLoad re-decodes + defaults + echoes. Shares entityBodyJSON with
+// runPluginKind's op.Params path (R3: one body→wire mechanism).
 func decodeStandaloneTemplateJSON(gn *genericNode) (json.RawMessage, error) {
-	switch gn.disc {
-	case "vm":
-		return decodeTemplateValueJSON[VmSpec](gn)
-	case "pod":
-		return decodeTemplateValueJSON[PodSpec](gn)
-	case "k8s":
-		return decodeTemplateValueJSON[K8sSpec](gn)
-	case "local":
-		return decodeTemplateValueJSON[LocalSpec](gn)
-	case "android":
-		return decodeTemplateValueJSON[AndroidSpec](gn)
+	if !isStandaloneResourceKind(gn.disc) {
+		return nil, fmt.Errorf("node %q: %q is not a standalone resource kind", gn.name, gn.disc)
 	}
-	return nil, fmt.Errorf("node %q: %q is not a standalone resource kind", gn.name, gn.disc)
+	// Generic canonicalization — no concrete-kind Go type. The value was already
+	// validated kind-blind (validateKindValueCUE / load gate); the plugin OpLoad
+	// re-decodes + defaults + echoes. See entityBodyJSON.
+	return entityBodyJSON(gn)
 }
 
-// decodeTemplateValueJSON decodes gn's body into a fresh T (the typed template value) and
-// marshals it to canonical JSON.
-func decodeTemplateValueJSON[T any](gn *genericNode) (json.RawMessage, error) {
-	var v T
-	if err := decodeNodeValue(gn, &v); err != nil {
-		return nil, err
-	}
-	return json.Marshal(&v)
-}
 
 // foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into the
 // right typed template map by kind — the C2-substrate TEMPLATE fold arm (the standalone

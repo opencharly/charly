@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -110,11 +112,26 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if _, dup := uf2.Bundle["substrate-tmpl"]; dup {
 		t.Fatal("template shape also landed in uf.Bundle — must be uf.VM ONLY")
 	}
-	var baseVm VmSpec
-	if err := decodeNodeValue(tmplGn, &baseVm); err != nil {
-		t.Fatalf("baseline decodeNodeValue: %v", err)
+	// The template canonicalizes GENERICALLY (entityBodyJSON — no concrete-kind type,
+	// Cutover N); the plugin echoes it byte-faithfully. Baseline against the same generic
+	// pre-decode, and cross-check that both decode to the SAME ResolvedVm (the byte form
+	// differs from the old typed decode only by non-omitempty empties + key order — the
+	// consumer, resolveVmViaPlugin, is unaffected).
+	baseTmpl, err := entityBodyJSON(tmplGn)
+	if err != nil {
+		t.Fatalf("baseline entityBodyJSON: %v", err)
 	}
-	if got, want := mustJSON(t, vm), mustJSON(t, &baseVm); got != want {
-		t.Fatalf("TEMPLATE-shape plugin fold != direct core decode\n plugin: %s\n core:   %s", got, want)
+	if got, want := string(vm), string(baseTmpl); got != want {
+		t.Fatalf("TEMPLATE-shape plugin fold != generic pre-decode\n plugin: %s\n core:   %s", got, want)
+	}
+	var fromFold, fromBase spec.ResolvedVm
+	if err := json.Unmarshal(vm, &fromFold); err != nil {
+		t.Fatalf("decode fold: %v", err)
+	}
+	if err := json.Unmarshal(baseTmpl, &fromBase); err != nil {
+		t.Fatalf("decode baseline: %v", err)
+	}
+	if mustJSON(t, &fromFold) != mustJSON(t, &fromBase) {
+		t.Fatal("TEMPLATE fold and generic pre-decode must decode to the same ResolvedVm")
 	}
 }
