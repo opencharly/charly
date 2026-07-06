@@ -577,11 +577,12 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 				return nil, err
 			}
 		}
-		for tplName, spec := range cfg.Local {
-			if spec == nil {
+		for tplName, body := range cfg.Local {
+			r, rerr := resolveLocalViaPlugin(body)
+			if rerr != nil || r == nil {
 				continue
 			}
-			for _, candyRef := range spec.Candy {
+			for _, candyRef := range r.Candy {
 				if err := addRef(candyRef, fmt.Sprintf("kind:local %s", tplName)); err != nil {
 					return nil, err
 				}

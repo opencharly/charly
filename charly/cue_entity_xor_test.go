@@ -72,7 +72,7 @@ func TestAndroidDeviceXOR(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := tc.spec
-			uf := &UnifiedFile{Android: map[string]*AndroidSpec{"dev": &s}}
+			uf := &UnifiedFile{Android: rawTemplateMap(map[string]*AndroidSpec{"dev": &s})}
 			err := validateAndroidDevices(uf)
 			if tc.reject {
 				if err == nil {
@@ -85,11 +85,11 @@ func TestAndroidDeviceXOR(t *testing.T) {
 	}
 
 	// Friendly-message spot-checks (both directions name their failure).
-	both := &UnifiedFile{Android: map[string]*AndroidSpec{"d": {Box: "e", Adb: &AndroidAdbEndpoint{Host: "h:1"}}}}
+	both := &UnifiedFile{Android: rawTemplateMap(map[string]*AndroidSpec{"d": {Box: "e", Adb: &AndroidAdbEndpoint{Host: "h:1"}}})}
 	if err := validateAndroidDevices(both); err == nil || !strings.Contains(err.Error(), "both box: and adb:") {
 		t.Errorf("both-source error message: %v", err)
 	}
-	none := &UnifiedFile{Android: map[string]*AndroidSpec{"d": {}}}
+	none := &UnifiedFile{Android: rawTemplateMap(map[string]*AndroidSpec{"d": {}})}
 	if err := validateAndroidDevices(none); err == nil || !strings.Contains(err.Error(), "neither box: nor adb:") {
 		t.Errorf("neither-source error message: %v", err)
 	}

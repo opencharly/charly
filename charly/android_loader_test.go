@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,7 +27,7 @@ pixel9a-36:
 	if err != nil {
 		t.Fatalf("LoadUnified(android node-form): %v", err)
 	}
-	got := uf.Android["pixel9a-36"]
+	got := lookupAndroidSpec(uf, "pixel9a-36")
 	if got == nil {
 		t.Fatalf("android node-form entity not registered in uf.Android; got %v", uf.Android)
 	}
@@ -35,16 +36,31 @@ pixel9a-36:
 	}
 }
 
-// TestMergeAndroidMap verifies the root-wins merge semantics for android: maps.
-func TestMergeAndroidMap(t *testing.T) {
-	dst := map[string]*AndroidSpec{"a": {Box: "keep"}}
-	src := map[string]*AndroidSpec{"a": {Box: "drop"}, "b": {Box: "add"}}
-	mergeAndroidMap(&dst, src)
-	if dst["a"].Box != "keep" {
-		t.Errorf("existing entry should win: got %q", dst["a"].Box)
+// rawTemplateMap marshals a typed substrate-template map into the opaque
+// map[string]json.RawMessage the loader stores after the Cutover I de-type.
+func rawTemplateMap[T any](m map[string]*T) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(m))
+	for k, v := range m {
+		b, _ := json.Marshal(v)
+		out[k] = b
 	}
-	if dst["b"] == nil || dst["b"].Box != "add" {
-		t.Errorf("new entry should be added: %+v", dst["b"])
+	return out
+}
+
+// TestMergeRawTemplateMap verifies the root-wins merge semantics for opaque
+// substrate-template maps (local/android after Cutover I).
+func TestMergeRawTemplateMap(t *testing.T) {
+	keep, _ := json.Marshal(&AndroidSpec{Box: "keep"})
+	drop, _ := json.Marshal(&AndroidSpec{Box: "drop"})
+	add, _ := json.Marshal(&AndroidSpec{Box: "add"})
+	dst := map[string]json.RawMessage{"a": keep}
+	src := map[string]json.RawMessage{"a": drop, "b": add}
+	mergeRawTemplateMap(&dst, src)
+	if string(dst["a"]) != string(keep) {
+		t.Errorf("existing entry should win: got %s", dst["a"])
+	}
+	if string(dst["b"]) != string(add) {
+		t.Errorf("new entry should be added: %s", dst["b"])
 	}
 }
 
@@ -73,7 +89,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 
 	// android bed referencing a defined device → ok.
 	uf3 := &UnifiedFile{
-		Android: map[string]*AndroidSpec{"dev": {Box: "android-emulator"}},
+		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
 		Bundle: map[string]BundleNode{
 			"bed": {Target: "android", From: "dev", Disposable: new(true)},
 		},

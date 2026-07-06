@@ -31,9 +31,13 @@ dev-workstation:
 	if !ok || uf == nil {
 		t.Fatal("expected unified file to load")
 	}
-	spec, exists := uf.Local["dev-workstation"]
+	body, exists := uf.Local["dev-workstation"]
 	if !exists {
 		t.Fatalf("expected dev-workstation in uf.Local; got %+v", uf.Local)
+	}
+	spec, rerr := resolveLocalViaPlugin(body)
+	if rerr != nil || spec == nil {
+		t.Fatalf("resolve dev-workstation: %v", rerr)
 	}
 	if got := spec.Candy; len(got) != 2 || got[0] != "ripgrep" || got[1] != "direnv" {
 		t.Errorf("unexpected layers: %v", got)

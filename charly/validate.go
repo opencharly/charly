@@ -373,7 +373,7 @@ func validateLocalTemplates(dir string, layers map[string]*Candy, errs *Validati
 	if err != nil || uf == nil {
 		return
 	}
-	for name, spec := range uf.Local {
+	for name, spec := range uf.resolveLocals() {
 		if spec == nil {
 			continue
 		}

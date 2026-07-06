@@ -96,12 +96,12 @@ func findHostPort(insp *ContainerInspection, containerPort int) (int, error) {
 
 // findAndroidSpec resolves a kind:android device by name from the unified
 // config (sibling of findK8sSpec).
-func findAndroidSpec(dir, name string) *AndroidSpec {
+func findAndroidSpec(dir, name string) *ResolvedAndroid {
 	uf, ok, err := LoadUnified(dir)
 	if err != nil || !ok || uf == nil || uf.Android == nil {
 		return nil
 	}
-	return uf.Android[name]
+	return lookupAndroidSpec(uf, name)
 }
 
 // resolveAndroidDevice builds the AndroidDevice install handle from the spec
@@ -109,7 +109,7 @@ func findAndroidSpec(dir, name string) *AndroidSpec {
 // the host); image devices target an in-pod emulator (apkeep in-pod). For a
 // nested deploy (dotted path), the in-pod container is the PARENT pod
 // (charly-<flat-parent-path>); for a top-level deploy it resolves by image name.
-func resolveAndroidDevice(spec *AndroidSpec, node *BundleNode, path string) (AndroidDevice, error) {
+func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) (AndroidDevice, error) {
 	serial := spec.EffectiveSerial()
 
 	// Remote/physical endpoint — host-side apkeep + goadb.

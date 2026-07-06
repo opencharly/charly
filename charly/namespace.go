@@ -111,7 +111,7 @@ func (c *Config) findBoxByLeaf(leaf string) (string, bool) {
 }
 
 // resolveLocalRef resolves a (possibly qualified) kind:local template ref.
-func (c *Config) resolveLocalRef(ref string) (*LocalSpec, bool) {
+func (c *Config) resolveLocalRef(ref string) (*ResolvedLocal, bool) {
 	if ns, rest, ok := splitNamespaceRef(ref); ok {
 		sub, ok := c.Namespaces[ns]
 		if !ok {
@@ -119,8 +119,15 @@ func (c *Config) resolveLocalRef(ref string) (*LocalSpec, bool) {
 		}
 		return sub.resolveLocalRef(rest)
 	}
-	l, ok := c.Local[ref]
-	return l, ok
+	body, ok := c.Local[ref]
+	if !ok {
+		return nil, false
+	}
+	r, err := resolveLocalViaPlugin(body)
+	if err != nil || r == nil {
+		return nil, false
+	}
+	return r, true
 }
 
 // resolveNamespacedBases pulls every namespace-qualified base referenced by the

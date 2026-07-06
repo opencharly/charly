@@ -159,9 +159,17 @@ func (a *AndroidCollector) collectOne(opts CollectOpts, dn androidDeployNode) De
 
 // lookupAndroidSpec resolves a kind:android device by name from the unified
 // config. Returns nil when the file or the device is absent.
-func lookupAndroidSpec(uf *UnifiedFile, name string) *AndroidSpec {
+func lookupAndroidSpec(uf *UnifiedFile, name string) *ResolvedAndroid {
 	if uf == nil || uf.Android == nil || name == "" {
 		return nil
 	}
-	return uf.Android[name]
+	body, ok := uf.Android[name]
+	if !ok {
+		return nil
+	}
+	r, err := resolveAndroidViaPlugin(body)
+	if err != nil {
+		return nil
+	}
+	return r
 }

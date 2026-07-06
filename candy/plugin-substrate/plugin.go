@@ -68,9 +68,29 @@ type provider struct{ pb.UnimplementedProviderServer }
 // re-decoded from the raw op.Params (host-canonicalized shorthand), which is why the host
 // pre-decodes and threads via op.Env.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpLoad {
-		return nil, fmt.Errorf("substrate kind %q: unsupported op %q (only %q)", req.GetReserved(), req.GetOp(), sdk.OpLoad)
+	switch req.GetOp() {
+	case sdk.OpLoad:
+		return substrateLoad(req)
+	case sdk.OpResolve:
+		// The substrate-template de-type (Cutover I): project an opaque local:/android:
+		// TEMPLATE body into a Resolved* envelope the kernel consumes.
+		var in spec.SubstrateTemplateResolveRequest
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+				return nil, fmt.Errorf("substrate template resolve: decode input: %w", err)
+			}
+		}
+		out, err := resolveSubstrateTemplate(in)
+		if err != nil {
+			return nil, err
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("substrate kind %q: unsupported op %q", req.GetReserved(), req.GetOp())
 	}
+}
+
+func substrateLoad(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var env spec.StructuralKindLoadEnv
 	if len(req.GetEnvJson()) > 0 {
 		if err := json.Unmarshal(req.GetEnvJson(), &env); err != nil {

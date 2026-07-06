@@ -152,9 +152,9 @@ func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, u
 	case "k8s":
 		return foldTemplateReply(name, replyJSON, &uf.K8s)
 	case "local":
-		return foldTemplateReply(name, replyJSON, &uf.Local)
+		return foldOpaqueTemplateReply(name, replyJSON, &uf.Local)
 	case "android":
-		return foldTemplateReply(name, replyJSON, &uf.Android)
+		return foldOpaqueTemplateReply(name, replyJSON, &uf.Android)
 	}
 	return fmt.Errorf("node %q: %q is not a standalone resource kind", name, disc)
 }
@@ -170,6 +170,17 @@ func foldTemplateReply[T any](name string, replyJSON json.RawMessage, m *map[str
 		*m = map[string]*T{}
 	}
 	(*m)[name] = &v
+	return nil
+}
+
+// foldOpaqueTemplateReply stores the echoed template JSON VERBATIM at name in *m —
+// the opaque counterpart for de-typed substrate templates (local/android, Cutover I):
+// the kernel keeps the body opaque and resolves it via candy/plugin-substrate on read.
+func foldOpaqueTemplateReply(name string, replyJSON json.RawMessage, m *map[string]json.RawMessage) error {
+	if *m == nil {
+		*m = map[string]json.RawMessage{}
+	}
+	(*m)[name] = replyJSON
 	return nil
 }
 

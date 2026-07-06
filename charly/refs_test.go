@@ -388,14 +388,14 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 				},
 			},
 		},
-		Local: map[string]*LocalSpec{
+		Local: rawTemplateMap(map[string]*LocalSpec{
 			"workstation": {
 				Candy: []string{
 					"@github.com/opencharly/charly/layers/nvidia:v1.0.0",
 					"@github.com/myorg/extra-layers/layers/svc:v2.0.0",
 				},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{}
 

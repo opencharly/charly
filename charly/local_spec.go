@@ -7,7 +7,7 @@ package main
 // failure (e.g. a transient discover EACCES from a concurrent sibling build) is
 // never hidden behind a bare not-found. Used by the deploy-add dispatcher to
 // resolve a deployment's `local: <template-name>` reference.
-func findLocalSpec(dir, name string) (*LocalSpec, error) {
+func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	if dir == "" || name == "" {
 		return nil, nil
 	}

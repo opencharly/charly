@@ -108,15 +108,20 @@ type UnifiedFile struct {
 	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
-	Pod   map[string]*PodSpec   `yaml:"pod,omitempty" json:"pod,omitempty"`
-	K8s   map[string]*K8sSpec   `yaml:"k8s,omitempty" json:"k8s,omitempty"`
-	Local map[string]*LocalSpec `yaml:"local,omitempty" json:"local,omitempty"`
+	Pod map[string]*PodSpec `yaml:"pod,omitempty" json:"pod,omitempty"`
+	K8s map[string]*K8sSpec `yaml:"k8s,omitempty" json:"k8s,omitempty"`
+	// Local (kind:local) templates are stored OPAQUELY (the substrate-template
+	// de-type, Cutover I) — candy/plugin-substrate's OpResolve owns spec.Local;
+	// the kernel resolves via uf.resolveLocals(), never reading fields off the map.
+	Local map[string]json.RawMessage `yaml:"local,omitempty" json:"local,omitempty"`
 
 	// Android (kind:android) — Android device substrates (an in-pod emulator
 	// or a remote/physical adb endpoint) onto which `apk:` packages install
 	// via a `target: android` deploy. Modeled on K8s (the device is the
 	// substrate; the apps ride in on the deploy's candies). See android_spec.go.
-	Android map[string]*AndroidSpec `yaml:"android,omitempty" json:"android,omitempty"`
+	// Android (kind:android) templates are stored OPAQUELY (Cutover I) — resolved
+	// via uf.resolveAndroids(); the kernel never reads spec.Android fields off the map.
+	Android map[string]json.RawMessage `yaml:"android,omitempty" json:"android,omitempty"`
 
 	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
 	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
@@ -958,8 +963,8 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	mergeVmMap(&dst.VM, src.VM)
 	mergePodMap(&dst.Pod, src.Pod)
 	mergeK8sMap(&dst.K8s, src.K8s)
-	mergeLocalMap(&dst.Local, src.Local)
-	mergeAndroidMap(&dst.Android, src.Android)
+	mergeRawTemplateMap(&dst.Local, src.Local)
+	mergeRawTemplateMap(&dst.Android, src.Android)
 	// PluginKinds carries every plugin-extracted kind — the build vocabulary
 	// (distro/builder/init/resource), the Calamares target, and sidecar/agent/module/
 	// package-group — merged once here (root-wins, name-keyed override). The former
@@ -1064,26 +1069,15 @@ func mergeK8sMap(dst *map[string]*K8sSpec, src map[string]*K8sSpec) {
 	}
 }
 
-func mergeAndroidMap(dst *map[string]*AndroidSpec, src map[string]*AndroidSpec) {
+// mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
+// android after the Cutover I de-type): copy a name only when ABSENT in dst. One
+// generic helper for both (R3) — the former typed mergeLocalMap/mergeAndroidMap.
+func mergeRawTemplateMap(dst *map[string]json.RawMessage, src map[string]json.RawMessage) {
 	if len(src) == 0 {
 		return
 	}
 	if *dst == nil {
-		*dst = make(map[string]*AndroidSpec)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
-
-func mergeLocalMap(dst *map[string]*LocalSpec, src map[string]*LocalSpec) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]*LocalSpec)
+		*dst = make(map[string]json.RawMessage)
 	}
 	for k, v := range src {
 		if _, exists := (*dst)[k]; !exists {
@@ -1255,7 +1249,7 @@ func validateAndroidDevices(uf *UnifiedFile) error {
 	if uf == nil {
 		return nil
 	}
-	for name, spec := range uf.Android {
+	for name, spec := range uf.resolveAndroids() {
 		if spec == nil {
 			continue
 		}

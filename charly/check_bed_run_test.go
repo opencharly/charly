@@ -145,7 +145,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 		t.Fatalf("expected missing-local-ref error, got %v", err)
 	}
 	ok := &UnifiedFile{
-		Local: map[string]*LocalSpec{"check-local": {}},
+		Local: rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
 		Bundle: map[string]BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},

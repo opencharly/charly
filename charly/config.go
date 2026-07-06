@@ -29,7 +29,7 @@ type Config struct {
 	// validation walk their candy: lists symmetrically with box candy
 	// lists (kind:local templates compose remote @-ref candies too). Populated
 	// from UnifiedFile.Local by ProjectConfig().
-	Local map[string]*LocalSpec `yaml:"local,omitempty" json:"local,omitempty"`
+	Local map[string]json.RawMessage `yaml:"local,omitempty" json:"local,omitempty"`
 	// Sidecar carries the project's sidecar-template library as OPAQUE bodies
 	// (the raw PluginKinds["sidecar"] map). The kernel never reads their fields —
 	// candy/plugin-sidecar's OpResolve owns all sidecar business logic (the sidecar
