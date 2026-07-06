@@ -1,7 +1,5 @@
 package main
 
-import "github.com/opencharly/sdk/kit"
-
 import "os"
 
 // -----------------------------------------------------------------------------
@@ -30,9 +28,9 @@ type K8sPatchTarget struct {
 // findK8sSpec looks up a K8sSpec by name from the project's charly.yml / k8s.yml
 // via the unified loader. Returns nil if no matching kind:k8s entity exists or if
 // the unified file can't be loaded. This is the CLIENT-GO-FREE cluster-context
-// resolver: the host uses it to pre-resolve a `--cluster <name>` profile to a
-// concrete kubeconfig context (preresolveKubeCluster) BEFORE marshaling a `kube:`
-// Op to the out-of-process candy/plugin-kube provider, which cannot reach the
+// resolver: the host uses it to resolve a `--cluster <name>` profile to a
+// concrete kubeconfig context (resolveClusterContext, the CheckContext.ResolveClusterContext
+// reverse-leg the out-of-process candy/plugin-kube provider pulls) — the plugin cannot reach the
 // project loader itself. Also consumed by k8s_deploy_from_box.go (source-less
 // `charly bundle from-box --target k8s`).
 func findK8sSpec(dir, name string) *ResolvedK8s {
@@ -54,29 +52,21 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 	return r
 }
 
-// preresolveKubeCluster turns a `kube:` op's `cluster: <profile>` into a concrete
-// kubeconfig context for the out-of-process candy/plugin-kube provider. The plugin
-// builds its rest.Config from kubeconfig + context, but it cannot reach core's
-// project loader (findK8sSpec) to map a ClusterProfile NAME to a kubeconfig context
-// — so the host resolves it HERE, copy-on-write, before invokeVerbProvider marshals
-// the Op. Returns c unchanged for a non-kube op, an op with no `cluster:`, or an op
-// that already carries an explicit `kube_context:`. When no kind:k8s profile matches
-// the cluster name, the context stays empty and the plugin falls back to the
-// kubeconfig current-context (the same behavior the in-tree restConfig had).
-func preresolveKubeCluster(c *Op) *Op {
-	if c.Plugin != "kube" || kit.InputStr(c, "cluster") == "" || kit.InputStr(c, "kube_context") != "" {
-		return c
+// resolveClusterContext maps a k8s cluster-profile NAME to its kubeconfig context via the
+// project loader (findK8sSpec). It is the host-side leg for CheckContext.ResolveClusterContext
+// — the out-of-process candy/plugin-kube provider builds its rest.Config from kubeconfig +
+// context but cannot reach the project loader, so the plugin PULLS the context through this
+// reverse-leg (replacing the former host op-rewrite). An empty context
+// (no matching kind:k8s profile) is a valid result — the plugin falls back to the kubeconfig
+// current-context (the same behavior the in-tree restConfig had).
+func (r *Runner) resolveClusterContext(cluster string) (string, error) {
+	if cluster == "" {
+		return "", nil
 	}
 	cwd, _ := os.Getwd()
-	spec := findK8sSpec(cwd, kit.InputStr(c, "cluster"))
-	if spec == nil || spec.KubeconfigContext == "" {
-		return c
+	spec := findK8sSpec(cwd, cluster)
+	if spec == nil {
+		return "", nil
 	}
-	cc := *c
-	cc.PluginInput = make(map[string]any, len(c.PluginInput)+1)
-	for k, v := range c.PluginInput {
-		cc.PluginInput[k] = v
-	}
-	cc.PluginInput["kube_context"] = spec.KubeconfigContext
-	return &cc
+	return spec.KubeconfigContext, nil
 }

@@ -22,6 +22,7 @@ type checkContextReverseServer struct {
 	addBg     func(pid int)                  // r.Scenario.AddBackground, nil when there is no scenario context
 	resolveEp  func(port int) (string, error)         // r.resolveVerbEndpoint — venue→addr, forwards tracked on the Runner for post-Invoke teardown
 	resolveGfx func(kind string) (graphicsEndpoint, error) // r.resolveVerbGraphics — VM graphics (vnc/spice) endpoint, tunnel tracked on the Runner
+	resolveClusterCtx func(cluster string) (string, error) // r.resolveClusterContext — k8s cluster-profile -> kubeconfig context via the project loader
 }
 
 // HTTPDo issues the request from the host's network namespace via the SHARED host HTTP-do
@@ -77,6 +78,21 @@ func (s *checkContextReverseServer) ResolveGraphicsEndpoint(_ context.Context, r
 	return &pb.ResolveGraphicsEndpointReply{
 		Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage,
 	}, nil
+}
+
+// ResolveClusterContext maps a k8s cluster-profile name to its kubeconfig context via the host's
+// resolveClusterContext (the SAME project-loader leg the in-process runnerCheckContext uses, R3).
+// An empty context (no matching profile) is a valid reply — the plugin falls back to the
+// kubeconfig current-context.
+func (s *checkContextReverseServer) ResolveClusterContext(_ context.Context, req *pb.ResolveClusterContextRequest) (*pb.ResolveClusterContextReply, error) {
+	if s.resolveClusterCtx == nil {
+		return &pb.ResolveClusterContextReply{Error: "cluster-context resolution unavailable (no runner context)"}, nil
+	}
+	ctx, err := s.resolveClusterCtx(req.GetCluster())
+	if err != nil {
+		return &pb.ResolveClusterContextReply{Error: err.Error()}, nil
+	}
+	return &pb.ResolveClusterContextReply{Context: ctx}, nil
 }
 
 // AddBackground registers a host-side background PID with the active plan run for teardown

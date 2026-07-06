@@ -15,7 +15,7 @@ import (
 // and the container-network → host-routable URL rewrite (InspectContainer +
 // rewriteMCPURLForHost), handing the plugin a plain DIALABLE endpoint (plus the
 // metadata-only entry list the `servers` method needs) via the CheckEnv. This is the
-// mcp analogue of preresolveKubeCluster (k8s_config.go): the out-of-process plugin cannot reach
+// mcp analogue of the former host endpoint/cluster preresolvers: the out-of-process plugin cannot reach
 // core's podman engine / project loader, so the host pre-resolves before marshaling.
 
 // McpEnv is the host-resolved MCP check context shipped to the out-of-process

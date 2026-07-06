@@ -227,7 +227,7 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 		if r.Scenario != nil {
 			addBg = r.Scenario.AddBackground
 		}
-		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint, resolveGfx: r.resolveVerbGraphics}
+		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint, resolveGfx: r.resolveVerbGraphics, resolveClusterCtx: r.resolveClusterContext}
 		out, err = ei.InvokeWithExecutor(ctx, op, r.Exec, buildEngineContext{}, false, cc)
 	} else {
 		out, err = prov.Invoke(ctx, op)

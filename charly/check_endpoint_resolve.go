@@ -184,3 +184,8 @@ func (c runnerCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind stri
 	}
 	return kit.GraphicsEndpoint{Addr: ge.Addr, Socket: ge.Socket, Password: ge.Password, Skip: ge.Skip, SkipMessage: ge.SkipMessage}, nil
 }
+
+// ResolveClusterContext is the in-process CheckContext leg for a k8s cluster-profile context.
+func (c runnerCheckContext) ResolveClusterContext(_ context.Context, cluster string) (string, error) {
+	return c.r.resolveClusterContext(cluster)
+}

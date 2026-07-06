@@ -48,7 +48,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // full #Op + the env, handles the merge-kubeconfig deploy seam first, skips in box
 // mode (cluster probes need a reachable cluster, never a disposable `charly check
 // box`), dispatches the method, and self-evaluates the matchers.
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetClass() == "deploy" {
 		return invokeDeployK8s(req)
 	}
@@ -84,6 +84,22 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	// reach on a disposable `podman run --rm` (mirrors the host's RunModeBox/box-mode skip).
 	if env.Mode == "box" {
 		return sdk.ResultJSON("skip", fmt.Sprintf("kube: %s requires a running cluster (skip under charly check box)", method))
+	}
+
+	// Resolve the `cluster: <profile>` convenience to a concrete kubeconfig context via the
+	// GENERIC cc.ResolveClusterContext reverse-leg — the host reads the project's kind:k8s spec
+	// this out-of-process plugin cannot reach. Replaces the former host-side kube preresolver.
+	// An empty context (no matching profile) falls back to the kubeconfig current-context.
+	if in.Cluster != "" && in.KubeContext == "" {
+		cc, err := sdk.NewCheckContext(req.GetExecutorBrokerId(), req.GetEnvJson())
+		if err != nil {
+			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
+		}
+		kctx, err := cc.ResolveClusterContext(ctx, in.Cluster)
+		if err != nil {
+			return sdk.ResultJSON("fail", fmt.Sprintf("kube: %s: %v", method, err))
+		}
+		in.KubeContext = kctx
 	}
 
 	conn := connFromInput(&in)

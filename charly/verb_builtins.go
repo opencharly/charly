@@ -27,8 +27,8 @@ import "context"
 // left charly's core go.mod). It keeps its `kube:` discriminator + modifiers on core #Op
 // (authoring unchanged) but is NOT a CheckVerbProvider, so it dispatches via
 // invokeVerbProvider (the else-branch in runOne) once the loader registers its grpcProvider
-// — never through this in-proc set. The host pre-resolves any --cluster profile to a
-// concrete kubeconfig context (preresolveKubeCluster) before marshaling; the same plugin's
+// — never through this in-proc set. The plugin resolves any --cluster profile to a
+// concrete kubeconfig context via the cc.ResolveClusterContext reverse-leg; the same plugin's
 // clientcmd-backed k3s kubeconfig-merge routes through it via k8s_plugin.go's invokeKubePlugin.
 
 // adb is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by

@@ -31,9 +31,6 @@ func init() {
 	})
 	// spice resolves its own endpoint via the generic cc.ResolveGraphicsEndpoint reverse-leg
 	// (H part 2) — no host preresolver.
-	registerVerbPreresolver("kube", func(_ *Runner, c *Op) (json.RawMessage, *Op, func(), *CheckResult) {
-		// kube ships no Substrate — it rewrites the op's KubeContext host-side (an
-		// out-of-process kube verb cannot reach core's findK8sSpec project loader).
-		return nil, preresolveKubeCluster(c), nil, nil
-	})
+	// kube resolves its own cluster->context via the generic cc.ResolveClusterContext reverse-leg
+	// (H part 2) — no host preresolver.
 }
