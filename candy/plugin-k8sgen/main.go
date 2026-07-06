@@ -44,6 +44,13 @@ func (p *provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeR
 	if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
 		return nil, fmt.Errorf("k8sgen: decode input: %w", err)
 	}
+	// The k8s substrate-value de-type (Cutover K): the kernel ships the cluster body
+	// OPAQUELY in ClusterRaw; the plugin owns the spec.K8s decode.
+	if len(in.ClusterRaw) > 0 {
+		if err := json.Unmarshal(in.ClusterRaw, &in.Cluster); err != nil {
+			return nil, fmt.Errorf("k8sgen: decode cluster: %w", err)
+		}
+	}
 	reply, err := GenerateTree(in)
 	if err != nil {
 		return nil, err

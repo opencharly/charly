@@ -112,7 +112,10 @@ type UnifiedFile struct {
 	// Cutover J) — resolved via resolvePodViaPlugin; the kernel never reads spec.Pod
 	// fields off the map.
 	Pod map[string]json.RawMessage `yaml:"pod,omitempty" json:"pod,omitempty"`
-	K8s map[string]*K8sSpec        `yaml:"k8s,omitempty" json:"k8s,omitempty"`
+	// K8s (kind:k8s) cluster templates are stored OPAQUELY (the k8s substrate-value
+	// de-type, Cutover K) — resolved via resolveK8sViaPlugin; the full cluster model
+	// rides opaquely to candy/plugin-k8sgen, never typed in the kernel.
+	K8s map[string]json.RawMessage `yaml:"k8s,omitempty" json:"k8s,omitempty"`
 	// Local (kind:local) templates are stored OPAQUELY (the substrate-template
 	// de-type, Cutover I) — candy/plugin-substrate's OpResolve owns spec.Local;
 	// the kernel resolves via uf.resolveLocals(), never reading fields off the map.
@@ -965,7 +968,7 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	mergeCandyMap(&dst.Candy, src.Candy)
 	mergeVmMap(&dst.VM, src.VM)
 	mergeRawTemplateMap(&dst.Pod, src.Pod)
-	mergeK8sMap(&dst.K8s, src.K8s)
+	mergeRawTemplateMap(&dst.K8s, src.K8s)
 	mergeRawTemplateMap(&dst.Local, src.Local)
 	mergeRawTemplateMap(&dst.Android, src.Android)
 	// PluginKinds carries every plugin-extracted kind — the build vocabulary
@@ -1045,19 +1048,6 @@ func mergeVmMap(dst *map[string]*VmSpec, src map[string]*VmSpec) {
 // Schema v4 target-template merge helpers. Same root-wins semantics as
 // mergeVmMap: existing entries survive; included-file entries fill gaps.
 
-func mergeK8sMap(dst *map[string]*K8sSpec, src map[string]*K8sSpec) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]*K8sSpec)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
 
 // mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
 // android after the Cutover I de-type): copy a name only when ABSENT in dst. One

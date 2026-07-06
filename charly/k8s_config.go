@@ -35,18 +35,23 @@ type K8sPatchTarget struct {
 // Op to the out-of-process candy/plugin-kube provider, which cannot reach the
 // project loader itself. Also consumed by k8s_deploy_from_box.go (source-less
 // `charly bundle from-box --target k8s`).
-func findK8sSpec(dir, name string) *K8sSpec {
+func findK8sSpec(dir, name string) *ResolvedK8s {
 	if dir == "" || name == "" {
 		return nil
 	}
 	uf, _, err := LoadUnified(dir)
-	if err != nil || uf == nil {
+	if err != nil || uf == nil || uf.K8s == nil {
 		return nil
 	}
-	if uf.K8s == nil {
+	body, ok := uf.K8s[name]
+	if !ok {
 		return nil
 	}
-	return uf.K8s[name]
+	r, rerr := resolveK8sViaPlugin(body)
+	if rerr != nil {
+		return nil
+	}
+	return r
 }
 
 // preresolveKubeCluster turns a `kube:` op's `cluster: <profile>` into a concrete

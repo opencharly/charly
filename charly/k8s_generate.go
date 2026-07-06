@@ -31,7 +31,7 @@ type K8sGenerateOpts struct {
 	ImageRef       string // fully qualified image ref (registry/name:tag)
 	Deploy         BundleNode
 	Capabilities   *Capabilities
-	Cluster        *K8sSpec
+	Cluster        *ResolvedK8s
 	OutputDir      string // usually <projectDir>/.opencharly/k8s
 }
 
@@ -57,7 +57,8 @@ func GenerateK8sKustomize(opts K8sGenerateOpts) (string, error) {
 		Instance:       opts.Instance,
 		ImageRef:       opts.ImageRef,
 		Deploy:         opts.Deploy,
-		Cluster:        *opts.Cluster,
+		// Ship the cluster body OPAQUELY (Cutover K) — candy/plugin-k8sgen decodes it.
+		ClusterRaw:     opts.Cluster.Raw,
 		Ports:          opts.Capabilities.Port,
 		UID:            opts.Capabilities.UID,
 		GID:            opts.Capabilities.GID,

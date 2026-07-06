@@ -150,7 +150,7 @@ func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, u
 	case "pod":
 		return foldOpaqueTemplateReply(name, replyJSON, &uf.Pod)
 	case "k8s":
-		return foldTemplateReply(name, replyJSON, &uf.K8s)
+		return foldOpaqueTemplateReply(name, replyJSON, &uf.K8s)
 	case "local":
 		return foldOpaqueTemplateReply(name, replyJSON, &uf.Local)
 	case "android":

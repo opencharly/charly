@@ -16,9 +16,9 @@ func k8sUnified(name, image, tmpl, ctx string) *UnifiedFile {
 			name:       {Target: "k8s", Image: image, From: tmpl},
 			"some-pod": {Target: "pod", Image: "redis"},
 		},
-		K8s: map[string]*K8sSpec{
+		K8s: rawTemplateMap(map[string]*K8sSpec{
 			tmpl: {Box: image, KubeconfigContext: ctx, DefaultNamespace: "apps"},
-		},
+		}),
 	}
 }
 

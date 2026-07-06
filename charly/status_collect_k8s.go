@@ -136,11 +136,19 @@ func k8sImageRef(name string, node BundleNode) string {
 
 // k8sSpecFor resolves the kind:k8s template referenced by node.From from the
 // unified projection. Nil when unreferenced or absent.
-func k8sSpecFor(uf *UnifiedFile, node BundleNode) *K8sSpec {
+func k8sSpecFor(uf *UnifiedFile, node BundleNode) *ResolvedK8s {
 	if uf == nil || uf.K8s == nil || node.From == "" {
 		return nil
 	}
-	return uf.K8s[node.From]
+	body, ok := uf.K8s[node.From]
+	if !ok {
+		return nil
+	}
+	r, err := resolveK8sViaPlugin(body)
+	if err != nil {
+		return nil
+	}
+	return r
 }
 
 // The former --nested live-readiness probe (the client-go dynamic-client workload
