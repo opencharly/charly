@@ -159,8 +159,7 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 	}
 	// A host-coupled verb resolves its own inputs through the GENERIC CheckContextService
 	// reverse-legs (cc.ResolveEndpoint / ResolveGraphicsEndpoint / ResolveClusterContext /
-	// ResolveImageLabel) — this dispatch stays verb-agnostic (the Uniform API Invariant); the
-	// former per-verb host preresolver registry + CheckEnv.Substrate channel are retired. Those
+	// ResolveImageLabel) — this dispatch stays verb-agnostic (the Uniform API Invariant). Those
 	// reverse-legs open ssh -L forwards / socket bridges DURING the Invoke; drain them (LIFO)
 	// after it returns — the forward must outlive the plugin's dial. Reset per-Invoke so a
 	// leftover from a prior op never leaks in.
