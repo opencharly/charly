@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) deterministic gate. Blocks (exit 2) a `git push` that
-# force-pushes (forbidden on EVERY branch in EVERY repo — main only
-# fast-forwards, tags are add-only; CLAUDE.md / git-workflow) or bypasses
-# hooks (--no-verify, or a core.hooksPath override in git's global options). It checks ONLY the push invocation's OWN argument span (up to the
-# next shell separator), so a `git branch -f` or other `-f` elsewhere in the
-# same command line never false-triggers. Recognizes git in command position
-# at start, after a separator, or after a shell keyword.
+# PreToolUse(Bash) deterministic gate. Blocks (exit 2) a `git push` that:
+#   - targets `main` (a direct push to main is forbidden — main advances ONLY
+#     via an agent-validated PR merge; CLAUDE.md / git-workflow),
+#   - force-pushes (forbidden on EVERY branch in EVERY repo; tags are add-only), or
+#   - bypasses hooks (--no-verify, or a core.hooksPath override in git's global
+#     options).
+# It checks ONLY the push invocation's OWN argument span (up to the next shell
+# separator), so a `git branch -f` or other `-f` elsewhere in the same command
+# line never false-triggers. A bare `git push` with no refspec is not statically
+# resolvable and is left to the server-side branch protection. Recognizes git in
+# command position at start, after a separator, or after a shell keyword.
 #
 # Fast path: only a git-push-mentioning command reaches the analyzer.
 
@@ -48,6 +52,18 @@ for m in INVOKE.finditer(cmd):
         block("force-push is forbidden on every branch in every repo (CLAUDE.md: main only fast-forwards, tags are add-only). Remove --force / --force-with-lease / -f.")
     if re.search(r'(?:^|\s)--no-verify(?:\s|$)', args):
         block("`git push --no-verify` bypasses hooks — forbidden.")
+    # Block any push whose refspec DESTINATION is `main`. The first non-flag
+    # token in the push arg span is the remote; each later token is a refspec
+    # whose destination is the part after the last ':' (a leading '+' force
+    # marker stripped). `main` / `refs/heads/main` are forbidden destinations —
+    # main advances ONLY via an agent-validated PR merge. A bare `git push` with
+    # no refspec is not statically resolvable and is left to the server-side
+    # branch protection (the authoritative block).
+    non_flags = [t for t in args.split() if not t.startswith('-')]
+    for spec in non_flags[1:]:
+        dst = spec.split(':')[-1].lstrip('+')
+        if dst in ('main', 'refs/heads/main'):
+            block("direct push to `main` is forbidden — `main` advances ONLY via an agent-validated PR merge (CLAUDE.md / git-workflow). Push a `feat/` branch and open a PR; the pr-validator evaluates and merges it.")
 
 sys.exit(0)
 PY
