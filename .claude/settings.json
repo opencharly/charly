@@ -12,7 +12,8 @@
       "Bash(charly check run:*)",
       "Bash(charly check live:*)",
       "Bash(charly check box:*)",
-      "Bash(charly status:*)"
+      "Bash(charly status:*)",
+      "Bash(gh pr merge:*)"
     ]
   },
   "enabledPlugins": {
