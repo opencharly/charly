@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 	"google.golang.org/grpc"
 )
@@ -168,7 +168,7 @@ func structFieldNames(t reflect.Type) []string {
 
 // serviceMethodNames returns every RPC method name of a gRPC service (unary Methods + streaming Streams).
 func serviceMethodNames(desc grpc.ServiceDesc) []string {
-	var out []string
+	out := make([]string, 0, len(desc.Methods)+len(desc.Streams))
 	for _, m := range desc.Methods {
 		out = append(out, m.MethodName)
 	}
@@ -180,7 +180,7 @@ func serviceMethodNames(desc grpc.ServiceDesc) []string {
 
 // hostBuilderKinds returns the registered HostBuild kinds (F10).
 func hostBuilderKinds() []string {
-	var out []string
+	out := make([]string, 0, len(hostBuilders))
 	for k := range hostBuilders {
 		out = append(out, k)
 	}

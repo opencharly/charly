@@ -13,42 +13,14 @@ import (
 // calls the SAME pb.ProviderServer methods over gRPC). Call sites never distinguish
 // the two: placement (compiled-in vs out-of-process) is invisible above the
 // registry. A plugin candy serves ONE provider that works in BOTH placements; this
-// type is how the in-proc placement reaches it without a socket.
+// type is how the in-proc placement reaches it without a socket. It embeds capMeta (the shared
+// class/word + carrier methods, R3) and adds ONLY the in-proc pb.ProviderServer; it deliberately
+// does NOT carry a lifecycle/preresolve flag or InvokeWithExecutor (those are grpc-only — a
+// compiled-in provider must not satisfy the executorInvoker discriminator).
 type inprocProvider struct {
-	srv        pb.ProviderServer
-	class      ProviderClass
-	word       string
-	contract   *stepContract // set ONLY for a compiled-in class:step capability declaring a StepContract (F3); nil otherwise
-	structural bool          // set ONLY for a compiled-in class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates  bool          // set ONLY for a compiled-in class:kind capability serving a deep OpValidate check (F7/C8)
-	phase      string        // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary    string        // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	capMeta
+	srv pb.ProviderServer
 }
-
-func (p *inprocProvider) Reserved() string     { return p.word }
-func (p *inprocProvider) Class() ProviderClass { return p.class }
-
-// declaredStepContract implements stepContractCarrier — the in-proc twin of
-// grpcProvider.declaredStepContract, so a COMPILED-IN class:step plugin carries the SAME
-// declared Scope/Venue/Gate (R3: placement-invisible above the registry).
-func (p *inprocProvider) declaredStepContract() (stepContract, bool) {
-	if p.contract == nil {
-		return stepContract{}, false
-	}
-	return *p.contract, true
-}
-
-// isStructuralKind implements structuralKindCarrier — the in-proc twin of
-// grpcProvider.isStructuralKind, so a COMPILED-IN class:kind plugin folds to uf.Bundle the
-// SAME way (R3: placement-invisible).
-func (p *inprocProvider) isStructuralKind() bool { return p.structural }
-
-// isValidatingKind implements validatingKindCarrier — the in-proc twin of
-// grpcProvider.isValidatingKind (R3 parity).
-func (p *inprocProvider) isValidatingKind() bool { return p.validates }
-
-// pluginPhase implements phaseCarrier — the in-proc twin of grpcProvider.pluginPhase (F9, R3 parity).
-func (p *inprocProvider) pluginPhase() string { return p.phase }
 
 func (p *inprocProvider) Invoke(ctx context.Context, op *Operation) (*Result, error) {
 	rep, err := p.srv.Invoke(ctx, &pb.InvokeRequest{
@@ -77,37 +49,14 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 		return nil, fmt.Errorf("compiled-in plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d",
 			caps.GetProtocolVersion(), caps.GetCalver(), sdk.ProtocolVersion)
 	}
-	provided := caps.GetProvided()
-	providers := make([]Provider, 0, len(provided))
-	inputDefs := make(map[string]string, len(provided))
-	for _, c := range provided {
-		class := ProviderClass(c.GetClass())
-		if !providerClasses[class] || c.GetWord() == "" {
-			return nil, fmt.Errorf("compiled-in plugin advertised malformed capability %q:%q", c.GetClass(), c.GetWord())
-		}
-		ip := &inprocProvider{srv: srv, class: class, word: c.GetWord()}
-		// A compiled-in class:step capability carries its declared StepContract too (F3) —
-		// the in-proc twin of buildUnit's grpcProvider population (R3, placement parity).
-		if sc := c.GetStepContract(); class == ClassStep && sc != nil {
-			ip.contract = &stepContract{Scope: scopeFromName(sc.GetScope()), Venue: Venue(sc.GetVenue()), Gate: Gate(sc.GetGate()), Emits: sc.GetEmits()}
-		}
-		// A compiled-in class:kind capability carries its STRUCTURAL flag too (F5, R3 parity).
-		if class == ClassKind && c.GetStructural() {
-			ip.structural = true
-		}
-		// ...and its VALIDATES flag (F7/C8, R3 parity).
-		if class == ClassKind && c.GetValidates() {
-			ip.validates = true
-		}
-		// ...and its lifecycle PHASE (F9, R3 parity; normalized, default runtime).
-		ip.phase = sdk.NormalizePhase(c.GetPhase())
-		if class == ClassVerb {
-			ip.primary = c.GetPrimary()
-		}
-		providers = append(providers, ip)
-		if c.GetInputDef() != "" {
-			inputDefs[provKey(class, c.GetWord())] = c.GetInputDef()
-		}
+	// The capability-lift loop is shared with buildUnit via liftCapabilities (R3): the compiled-in
+	// factory wraps the SAME capMeta in an inprocProvider (its only extra is the in-proc
+	// pb.ProviderServer). Placement is invisible above the registry.
+	providers, inputDefs, err := liftCapabilities(caps.GetProvided(), "compiled-in plugin", func(meta capMeta, _ *pb.ProvidedCapability) Provider {
+		return &inprocProvider{capMeta: meta, srv: srv}
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &PluginUnit{
 		Providers: providers,
@@ -131,6 +80,3 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	}
 	RegisterBuiltinPluginUnit(*unit)
 }
-
-// primaryInput implements primaryCarrier (the scalar-sugar primary, F/verb).
-func (p *inprocProvider) primaryInput() string { return p.primary }

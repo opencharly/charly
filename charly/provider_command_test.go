@@ -75,11 +75,7 @@ func TestCommandCompileIn_ExampleCommandInProc(t *testing.T) {
 // before the extraction. The test FAILS if any dedicated registration regresses or the
 // command seam stops wiring one of them into the root.
 func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
-	cases := []struct {
-		word     string   // Reserved() + top-level command name
-		parse    []string // argv selecting a leaf subcommand
-		selected string   // expected ctx.Command() after parse
-	}{
+	assertCommandProviderInjected(t, []commandProviderCase{
 		{"alias", []string{"alias", "list"}, "alias list"},
 		{"ssh", []string{"ssh", "tunnel", "spice", "myvm"}, "ssh tunnel spice <vm>"},
 		// `mcp`, `secrets`, `udev`, `tmux`, `preempt`, and `feature` are intentionally absent:
@@ -88,38 +84,7 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 		// `charly feature …` (the third) are now EXTERNAL commands served out-of-process by
 		// candy/plugin-mcp / candy/plugin-secrets / candy/plugin-udev / candy/plugin-tmux /
 		// candy/plugin-preempt / candy/plugin-feature, not builtin CommandProviders.
-	}
-	for _, tc := range cases {
-		t.Run(tc.word, func(t *testing.T) {
-			// 1. Registered as a COMMAND-class provider, resolvable through the registry.
-			p, ok := providerRegistry.resolve(ClassCommand, tc.word)
-			if !ok {
-				t.Fatalf("command:%s not registered — dedicated self-registration regressed", tc.word)
-			}
-			cp, ok := p.(CommandProvider)
-			if !ok {
-				t.Fatalf("%s provider is not a CommandProvider (got %T)", tc.word, p)
-			}
-			if cp.Reserved() != tc.word {
-				t.Fatalf("%s provider Reserved() = %q, want %q", tc.word, cp.Reserved(), tc.word)
-			}
-
-			// 2. Collected by the command seam and injected into the real CLI grammar.
-			var cli CLI
-			cli.Plugins = collectCommandPlugins()
-			parser, err := kong.New(&cli, kong.Name("charly"), kong.Exit(func(int) {}))
-			if err != nil {
-				t.Fatalf("kong.New with the command-plugin seam failed: %v", err)
-			}
-			ctx, err := parser.Parse(tc.parse)
-			if err != nil {
-				t.Fatalf("%s command not injected into the CLI grammar: %v", tc.word, err)
-			}
-			if got := ctx.Command(); got != tc.selected {
-				t.Fatalf("expected %q selected, got %q", tc.selected, got)
-			}
-		})
-	}
+	})
 }
 
 // TestCommandProviders_DeployLifecycleCommands proves every deploy-lifecycle + remaining
@@ -132,11 +97,7 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // deploy/bundle machinery — is preserved verbatim). The test FAILS if any dedicated
 // registration regresses or the command seam stops wiring one of them into the root.
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
-	cases := []struct {
-		word     string   // Reserved() + top-level command name
-		parse    []string // argv selecting the command (or a leaf subcommand)
-		selected string   // expected ctx.Command() after parse
-	}{
+	assertCommandProviderInjected(t, []commandProviderCase{
 		{"start", []string{"start", "mybox"}, "start <box>"},
 		{"stop", []string{"stop", "mybox"}, "stop <box>"},
 		{"status", []string{"status", "mybox"}, "status <box>"},
@@ -152,38 +113,7 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 		{"config", []string{"config", "status", "mybox"}, "config status <box>"},
 		{"bundle", []string{"bundle", "path"}, "bundle path"},
 		{"reap-orphans", []string{"reap-orphans"}, "reap-orphans"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.word, func(t *testing.T) {
-			// 1. Registered as a COMMAND-class provider, resolvable through the registry.
-			p, ok := providerRegistry.resolve(ClassCommand, tc.word)
-			if !ok {
-				t.Fatalf("command:%s not registered — dedicated self-registration regressed", tc.word)
-			}
-			cp, ok := p.(CommandProvider)
-			if !ok {
-				t.Fatalf("%s provider is not a CommandProvider (got %T)", tc.word, p)
-			}
-			if cp.Reserved() != tc.word {
-				t.Fatalf("%s provider Reserved() = %q, want %q", tc.word, cp.Reserved(), tc.word)
-			}
-
-			// 2. Collected by the command seam and injected into the real CLI grammar.
-			var cli CLI
-			cli.Plugins = collectCommandPlugins()
-			parser, err := kong.New(&cli, kong.Name("charly"), kong.Exit(func(int) {}))
-			if err != nil {
-				t.Fatalf("kong.New with the command-plugin seam failed: %v", err)
-			}
-			ctx, err := parser.Parse(tc.parse)
-			if err != nil {
-				t.Fatalf("%s command not injected into the CLI grammar: %v", tc.word, err)
-			}
-			if got := ctx.Command(); got != tc.selected {
-				t.Fatalf("expected %q selected, got %q", tc.selected, got)
-			}
-		})
-	}
+	})
 }
 
 // TestCommandProviders_NonMachineryCommands proves the remaining non-machinery commands
@@ -197,13 +127,26 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 // served out-of-process by candy/plugin-feature / candy/plugin-vm; vm is the fourth
 // welded-command externalization, forwarding to the hidden __vm core command.)
 func TestCommandProviders_NonMachineryCommands(t *testing.T) {
-	cases := []struct {
-		word     string   // Reserved() + top-level command name
-		parse    []string // argv selecting a leaf subcommand
-		selected string   // expected ctx.Command() after parse
-	}{
+	assertCommandProviderInjected(t, []commandProviderCase{
 		{"check", []string{"check", "box", "myimg"}, "check box <image>"},
-	}
+	})
+}
+
+// commandProviderCase is one case for assertCommandProviderInjected: a Reserved() word, the
+// argv that selects its (sub)command, and the expected ctx.Command() after parse.
+type commandProviderCase struct {
+	word     string   // Reserved() + top-level command name
+	parse    []string // argv selecting the command (or a leaf subcommand)
+	selected string   // expected ctx.Command() after parse
+}
+
+// assertCommandProviderInjected proves each case's command is (1) registered in
+// providerRegistry as a CommandProvider with the matching Reserved() word, and (2) collected
+// by collectCommandPlugins() and injected into the REAL charly CLI grammar via kong.Plugins,
+// so its subcommand path parses and selects exactly as authored. Shared by the extracted-leaf
+// / deploy-lifecycle / non-machinery command tests (R3).
+func assertCommandProviderInjected(t *testing.T, cases []commandProviderCase) {
+	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.word, func(t *testing.T) {
 			// 1. Registered as a COMMAND-class provider, resolvable through the registry.

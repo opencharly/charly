@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -110,19 +109,7 @@ func (pluginCredentialStore) callCtx(ctx context.Context, in credentialInput) (c
 			"credential plugin (verb:credential) did not connect — install candy/plugin-secrets " +
 				"alongside charly (/usr/lib/charly/plugins) or run from a project composing it")
 	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		return credentialReply{}, err
-	}
-	out, err := prov.Invoke(ctx, &Operation{Reserved: "credential", Op: OpRun, Params: params})
-	if err != nil {
-		return credentialReply{}, err
-	}
-	var r credentialReply
-	if err := json.Unmarshal(out.JSON, &r); err != nil {
-		return credentialReply{}, fmt.Errorf("decode credential reply: %w", err)
-	}
-	return r, nil
+	return invokeTyped[credentialInput, credentialReply](ctx, prov, "credential", OpRun, in)
 }
 
 func (s pluginCredentialStore) Get(service, key string) (string, error) {

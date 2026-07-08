@@ -1620,9 +1620,10 @@ check-udev-local:
 # and reaches its peer verb:arbiter DIRECTLY via InvokeProvider (no hidden core-command forward, no
 # in-core proxy hop). A disposable kind:local deploy on host: local runs the GPU-less, deterministic
 # preempt CLI host-side:
-#   - `charly preempt status` → exits 0 and (on a fresh, lease-free bed host) prints "No active
-#     preemption leases." — the compiled-in command's Invoke(OpRun) calls InvokeProvider(verb:arbiter,
-#     status) over the in-proc reverse channel + the plugin renders the lease table.
+#   - `charly preempt status` → exits 0 and names no lease owned by THIS bed (a sibling bed's
+#     transient lease is legitimate under a parallel roster) — the compiled-in command's
+#     Invoke(OpRun) calls InvokeProvider(verb:arbiter, status) over the in-proc reverse channel
+#     + the plugin renders the lease table.
 #   - `charly preempt restore` → exits 0 and prints "reconciled stranded leases…" — exercising the
 #     ALWAYS-SERVED HostArbiter seam end-to-end (reconcile → the arbiter's gather/start host seams over
 #     the bare command-dispatch executor). Full acquire→preempt→release is covered by the Go e2e
@@ -1643,13 +1644,13 @@ check-preempt-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` + `restore` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop. On a fresh, GPU-less, lease-free bed host both exit 0 (status → no active leases; restore → reconciled) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end.
+            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` + `restore` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop. Both exit 0 on the bed host (status → a well-formed lease table naming no lease owned by THIS bed — sibling beds' transient leases are legitimate under a parallel roster; restore → reconciled) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end.
         plan:
-            - check: command=charly preempt status exits 0 and reports a clean arbiter (no active leases) on a fresh GPU-less host
+            - check: command=charly preempt status exits 0 and names no lease owned by THIS bed — bed-owned scoping, because a concurrent sibling bed's transient lease is legitimate (a global no-leases assertion can never hold under a parallel roster)
               id: preempt-status-runs
               exit_status: 0
               stdout:
-                - contains: 'No active preemption leases.'
+                - not_matches: '(^|[[:space:]])check-preempt-local([[:space:]]|$)'
               context:
                 - runtime
               command:

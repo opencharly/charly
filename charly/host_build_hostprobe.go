@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"path/filepath"
 
 	"github.com/opencharly/sdk/spec"
@@ -21,11 +19,7 @@ import (
 // (mirroring the detection shims), never a hard fail; only a truly-fatal decode error returns Error.
 const hostProbeBuilderKind = "hostprobe"
 
-func hostBuildHostProbe(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.HostProbeRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return marshalJSON(spec.HostProbeReply{Error: fmt.Sprintf("hostprobe host-build: decode: %v", err)})
-	}
+func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEngineContext) (spec.HostProbeReply, error) {
 	reply := spec.HostProbeReply{}
 
 	// GPU / AMD GPU detection + the container GPU run-flags. GPUFlags depend on the target engine:
@@ -96,10 +90,13 @@ func hostBuildHostProbe(_ context.Context, specJSON []byte, _ buildEngineContext
 		reply.Credential = h
 	}
 
-	return marshalJSON(reply)
+	return reply, nil
 }
 
-var _ = func() bool { registerHostBuilder(hostProbeBuilderKind, hostBuildHostProbe); return true }()
+var _ = func() bool {
+	registerHostBuilder(hostProbeBuilderKind, typedHostBuilder(hostProbeBuilderKind, hostBuildHostProbe))
+	return true
+}()
 
 // deviceDescriptions maps a host device path to a human description for the `charly doctor` hardware
 // section, read from the device_descriptions directive in the embedded charly.yml (data-out-of-Go) via

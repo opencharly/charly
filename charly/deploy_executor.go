@@ -131,14 +131,24 @@ const VenueLocal = "local"
 // the invoking user's host.
 func (ShellExecutor) Venue() string { return VenueLocal }
 
+// run is the shared body of RunSystem/RunUser: asRoot picks the sudo shell
+// (runSudoShell) over the unprivileged one (runUserShell). The ctx is unused —
+// ShellExecutor runs against the invoking user's own shell.
+func (ShellExecutor) run(_ context.Context, script string, asRoot bool, opts EmitOpts) error {
+	if asRoot {
+		return runSudoShell(script, opts)
+	}
+	return runUserShell(script, opts)
+}
+
 // RunSystem delegates to the package-level runSudoShell.
-func (ShellExecutor) RunSystem(_ context.Context, script string, opts EmitOpts) error {
-	return runSudoShell(script, opts)
+func (s ShellExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
+	return s.run(ctx, script, true, opts)
 }
 
 // RunUser delegates to the package-level runUserShell.
-func (ShellExecutor) RunUser(_ context.Context, script string, opts EmitOpts) error {
-	return runUserShell(script, opts)
+func (s ShellExecutor) RunUser(ctx context.Context, script string, opts EmitOpts) error {
+	return s.run(ctx, script, false, opts)
 }
 
 // RunBuilder delegates to the package-level BuilderRun.
@@ -309,7 +319,7 @@ func runCaptureCmd(cmd *exec.Cmd) (string, string, int, error) {
 			// AND so callers treat a killed probe as an error, never a completed result.
 			if ee.ExitCode() < 0 {
 				return stdout.String(), stderr.String(), ee.ExitCode(),
-					fmt.Errorf("process %s (%s): %w", signalKillErrMarker, ee.ProcessState.String(), err)
+					fmt.Errorf("process %s (%s): %w", signalKillErrMarker, ee.String(), err)
 			}
 			return stdout.String(), stderr.String(), ee.ExitCode(), nil
 		}

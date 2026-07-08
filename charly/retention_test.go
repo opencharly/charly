@@ -170,7 +170,6 @@ func TestPruneCheckRuns_DryRunAndDisabled(t *testing.T) {
 	}
 }
 
-
 func assertExists(t *testing.T, p string) {
 	t.Helper()
 	if _, err := os.Stat(p); err != nil {

@@ -54,7 +54,7 @@ func TestNoConcreteKindInKernel(t *testing.T) {
 		importsSpec := false
 		for _, imp := range astF.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
-			name := "spec"
+			var name string
 			if imp.Name != nil {
 				name = imp.Name.Name
 			} else {

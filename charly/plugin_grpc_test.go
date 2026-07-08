@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk"
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // testVerbProvider is an in-proc Provider used to exercise the gRPC contract.

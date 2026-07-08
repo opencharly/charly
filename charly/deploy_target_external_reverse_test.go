@@ -31,7 +31,7 @@ func TestExternalDeploy_FillsPackageRemoveUninstallCmdOnRecord(t *testing.T) {
 	paths := withTempLedger(t)
 	tgt := &externalDeployTarget{
 		name:  "check-aur-local",
-		prov:  &grpcProvider{word: "local"},
+		prov:  &grpcProvider{capMeta: capMeta{word: "local"}},
 		paths: paths,
 		// The SAME DistroConfig the deploy compile used (Add sets this from the
 		// DeployContext) — the datum the plugin cannot reach across the boundary.

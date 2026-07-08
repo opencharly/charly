@@ -196,6 +196,15 @@ func runBoxBuild(req spec.BuildRequest) ([]string, error) {
 		return nil, fmt.Errorf("generating build files: %w", err)
 	}
 
+	// Register this build as LIVE for image-tag retention: gen.Tag is the
+	// CalVer every FROM pin this run's Containerfiles carry (the floor a
+	// concurrent sibling's prune must respect — see liveBuildFloor).
+	buildActivityRelease, err := acquireBuildActivityLock(gen.Tag)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = buildActivityRelease() }()
+
 	// Resolve build-speed tunables from defaults: (the CLI flag / env layer already populated
 	// these BuildCmd fields when set; fill the gaps from project config — a named fallback
 	// applies later if config is silent too).
@@ -295,22 +304,14 @@ func runBoxGenerate(req spec.BuildRequest) ([]string, error) {
 // BuildReply.Error (the plugin echoes it; the RPC itself succeeds) so dispatchBuild surfaces it as
 // the command error. The buildEngineContext arg is unused: the engine reconstructs everything
 // from BuildRequest.Dir (like build_overlay's runOverlayBuild re-runs NewGenerator(dir,…)).
-func hostBuildImage(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.BuildRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return nil, fmt.Errorf("build:box host-build: decode request: %w", err)
-	}
+func hostBuildImage(_ context.Context, req spec.BuildRequest, _ buildEngineContext) (spec.BuildReply, error) {
 	written, err := runBoxBuild(req)
-	return marshalJSON(spec.BuildReply{Written: written, Error: errString(err)})
+	return spec.BuildReply{Written: written, Error: errString(err)}, nil
 }
 
-func hostBuildGenerate(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.BuildRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return nil, fmt.Errorf("build:generate host-build: decode request: %w", err)
-	}
+func hostBuildGenerate(_ context.Context, req spec.BuildRequest, _ buildEngineContext) (spec.BuildReply, error) {
 	written, err := runBoxGenerate(req)
-	return marshalJSON(spec.BuildReply{Written: written, Error: errString(err)})
+	return spec.BuildReply{Written: written, Error: errString(err)}, nil
 }
 
 // Register the image + containerfiles host-builders on the F10 HostBuild seam at package-var init
@@ -319,8 +320,8 @@ func hostBuildGenerate(_ context.Context, specJSON []byte, _ buildEngineContext)
 // .build/ Containerfile tree), deliberately NOT the build:box / build:generate provider WORDS —
 // the F11 uniform-API gate (TestNoSinglePluginAPISurface) forbids a provider word on this surface.
 var _ = func() bool {
-	registerHostBuilder("image", hostBuildImage)
-	registerHostBuilder("containerfiles", hostBuildGenerate)
+	registerHostBuilder("image", typedHostBuilder("image", hostBuildImage))
+	registerHostBuilder("containerfiles", typedHostBuilder("containerfiles", hostBuildGenerate))
 	return true
 }()
 

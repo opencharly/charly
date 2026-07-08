@@ -751,7 +751,7 @@ type ShellSnippetStep struct {
 	Snippet     string   // rendered body, ${SHELL_NAME}-substituted, ready to write
 	PathAppend  []string // already rendered into Snippet by the compiler; tracked here for label round-trip / overlay
 	Destination string   // resolved per-target at compile time; absolute path on the target
-	Marker      string   // managed-block marker tag (= CandyName) — used by replaceOrAppendManagedBlock
+	Marker      string   // managed-block marker tag (= CandyName) — consumed by the kit walk's managed-block splice (sdk/kit/profile.go)
 	UseDropin   bool     // true: write whole file (fish, container drop-in); false: managed-block append into existing rc file
 	Priority    int      // load-order hint, 0 = default
 }

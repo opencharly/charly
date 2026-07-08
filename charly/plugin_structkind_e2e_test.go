@@ -149,7 +149,7 @@ func mustJSON(t *testing.T, v any) string {
 }
 
 func bundleKeysFor(uf *UnifiedFile) []string {
-	out := []string{}
+	out := make([]string, 0, len(uf.Bundle))
 	for k := range uf.Bundle {
 		out = append(out, k)
 	}

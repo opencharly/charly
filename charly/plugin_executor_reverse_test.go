@@ -73,7 +73,7 @@ func TestExecutorReverseServer_DelegatesToExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	client := pb.NewExecutorServiceClient(conn)
 	ctx := context.Background()
 
@@ -115,7 +115,7 @@ func TestExecutorReverseServer_PutFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	client := pb.NewExecutorServiceClient(conn)
 	ctx := context.Background()
 

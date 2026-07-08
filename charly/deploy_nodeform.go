@@ -28,22 +28,22 @@ var bundleCrossRefKeys = map[string]bool{
 // node-form node: the whole body stays INLINE in the kind value (plan steps
 // resugared); nested/peer members become child nodes (recursive; discriminator
 // inferred by bundleDiscForEntity). The legacy `target:` key is dropped.
-func migrateDeployEntity(name string, body *yaml.Node) *yaml.Node {
+func migrateDeployEntity(body *yaml.Node) *yaml.Node {
 	content := &yaml.Node{Kind: yaml.MappingNode}
 	value := &yaml.Node{Kind: yaml.MappingNode}
 	disc := bundleDiscForEntity(body)
 	content.Content = append(content.Content, scalarNode(disc), value)
 	for i := 0; i+1 < len(body.Content); i += 2 {
 		k, v := body.Content[i], body.Content[i+1]
-		switch {
-		case k.Value == "nested" || k.Value == "peer":
+		switch k.Value {
+		case "nested", "peer":
 			for j := 0; j+1 < len(v.Content); j += 2 {
 				mn, mb := v.Content[j], v.Content[j+1]
-				content.Content = append(content.Content, scalarNode(mn.Value), migrateDeployEntity(mn.Value, mb))
+				content.Content = append(content.Content, scalarNode(mn.Value), migrateDeployEntity(mb))
 			}
-		case k.Value == "name" || k.Value == "target":
+		case "name", "target":
 			// dropped (name → the node key; target → the discriminator)
-		case k.Value == "plan":
+		case "plan":
 			resugarPlan(v)
 			value.Content = append(value.Content, k, v)
 		default:

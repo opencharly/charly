@@ -122,18 +122,7 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	if !ok {
 		return nil, fmt.Errorf("substrate template resolve: kind provider not registered")
 	}
-	paramsJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("substrate template resolve: marshal input: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "local", Op: OpResolve, Params: json.RawMessage(paramsJSON)})
-	if err != nil {
-		return nil, err
-	}
-	if out == nil {
-		return nil, nil
-	}
-	return out.JSON, nil
+	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", OpResolve, req)
 }
 
 // resolveLocals / resolveAndroids project the whole opaque template map into resolved

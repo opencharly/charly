@@ -72,17 +72,27 @@ func (e *SSHExecutor) Venue() string {
 	}
 }
 
-// RunSystem executes a bash script as root on the guest.
-// Wraps as `ssh vm 'sudo bash -s'` with the script fed on stdin.
-func (e *SSHExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
+// run is the shared body of RunSystem/RunUser: it wraps the script as
+// `ssh vm ['sudo'] bash -s` with the script fed on stdin. asRoot prepends `sudo`
+// (root on the guest) and picks the CHARLY_ROOT dry-run heredoc label; !asRoot runs
+// as the guest's unprivileged SSH-login user (CHARLY_USER label).
+func (e *SSHExecutor) run(ctx context.Context, script string, asRoot bool, opts EmitOpts) error {
 	if opts.DryRun {
-		fmt.Fprintln(os.Stderr, "[dry-run] ssh vm sudo bash -s <<CHARLY_ROOT")
+		echo, label := "[dry-run] ssh vm bash -s <<CHARLY_USER", "CHARLY_USER"
+		if asRoot {
+			echo, label = "[dry-run] ssh vm sudo bash -s <<CHARLY_ROOT", "CHARLY_ROOT"
+		}
+		fmt.Fprintln(os.Stderr, echo)
 		fmt.Fprintln(os.Stderr, script)
-		fmt.Fprintln(os.Stderr, "CHARLY_ROOT")
+		fmt.Fprintln(os.Stderr, label)
 		return nil
 	}
 	args := e.sshBaseArgs()
-	args = append(args, "sudo", "bash", "-s")
+	if asRoot {
+		args = append(args, "sudo", "bash", "-s")
+	} else {
+		args = append(args, "bash", "-s")
+	}
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Stdout = os.Stdout
@@ -90,22 +100,16 @@ func (e *SSHExecutor) RunSystem(ctx context.Context, script string, opts EmitOpt
 	return cmd.Run()
 }
 
+// RunSystem executes a bash script as root on the guest.
+// Wraps as `ssh vm 'sudo bash -s'` with the script fed on stdin.
+func (e *SSHExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
+	return e.run(ctx, script, true, opts)
+}
+
 // RunUser executes a bash script as the guest's unprivileged user
 // (i.e. spec.SSH.User, the account SSHExecutor connects as).
 func (e *SSHExecutor) RunUser(ctx context.Context, script string, opts EmitOpts) error {
-	if opts.DryRun {
-		fmt.Fprintln(os.Stderr, "[dry-run] ssh vm bash -s <<CHARLY_USER")
-		fmt.Fprintln(os.Stderr, script)
-		fmt.Fprintln(os.Stderr, "CHARLY_USER")
-		return nil
-	}
-	args := e.sshBaseArgs()
-	args = append(args, "bash", "-s")
-	cmd := exec.CommandContext(ctx, "ssh", args...)
-	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return e.run(ctx, script, false, opts)
 }
 
 // RunBuilder delegates to BuilderRun which runs the podman container

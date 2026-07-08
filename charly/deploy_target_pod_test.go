@@ -24,7 +24,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	if err := os.Chdir(ctxRoot); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(old)
+	defer func() { _ = os.Chdir(old) }()
 
 	relBuildDir := filepath.Join(".build", "overlay-test")
 
@@ -75,7 +75,7 @@ func TestPodOverlayStagesRemoteCandySource(t *testing.T) {
 	if err := os.Chdir(ctxRoot); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(old)
+	defer func() { _ = os.Chdir(old) }()
 
 	// Simulate a fetched REMOTE add_candy candy cache dir carrying a copy: source file.
 	remoteSrc := filepath.Join(ctxRoot, "remote-cache", "marker")

@@ -15,10 +15,8 @@ package main
 // unified-target dispatch keep working through it.
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 // runCharlySubcommand shells out to `charly <args…>` in the current working
@@ -36,57 +34,4 @@ var runCharlySubcommand = func(args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-// runCharlySubcommandCapture is like runCharlySubcommand but captures stderr
-// into a buffer instead of mirroring it to os.Stderr. The caller
-// decides whether the captured text is a real error (print it) or a
-// benign signal (suppress). This keeps the update output clean when
-// the child's "error" is actually just "already running" or similar.
-//
-// A package var (like runCharlySubcommand) so tests can stub the
-// child-process boundary — e.g. the vm deploy lifecycle tests record the
-// `charly vm start` call without spawning charly.
-var runCharlySubcommandCapture = func(args ...string) (string, error) {
-	exe := os.Args[0]
-	cmd := exec.Command(exe, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	var buf bytes.Buffer
-	cmd.Stderr = &buf
-	err := cmd.Run()
-	return buf.String(), err
-}
-
-// captureCharlyStdout captures the child's stdout (instead of stderr).
-// Sibling of runCharlySubcommandCapture; used when the caller needs to
-// parse `charly vm list` / `charly status` table output.
-func captureCharlyStdout(args ...string) (string, error) {
-	exe := os.Args[0]
-	cmd := exec.Command(exe, args...)
-	cmd.Stdin = os.Stdin
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	return buf.String(), err
-}
-
-// isBenignAlreadyRunning detects "already running" error text from
-// the underlying VM backend. During an update, `charly vm create` may boot
-// the VM as part of its libvirt-config-injection sequence (or, for
-// QEMU-direct, may auto-start at the end of create); a subsequent
-// `charly vm start` then fails. That's the end state we want — treat it
-// as success.
-//
-// Two backend dialects to match:
-//   - libvirt: "domain is already running" / "operation is not valid"
-//   - qemu-direct: "Cannot lock pid file: Resource temporarily unavailable"
-//     (the second qemu-system-x86_64 invocation can't acquire the same
-//     pid-file lock the first one holds → effectively "already running")
-func isBenignAlreadyRunning(stderr string) bool {
-	s := strings.ToLower(stderr)
-	return strings.Contains(s, "already running") ||
-		strings.Contains(s, "operation is not valid") ||
-		strings.Contains(s, "cannot lock pid file")
 }

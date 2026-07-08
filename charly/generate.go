@@ -451,24 +451,11 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	resolvedBase := g.resolveBaseImage(img)
 	fmt.Fprintf(&b, "ARG BASE_IMAGE=%s\n\n", resolvedBase)
 
-	// Emit scratch stages for each candy
-	g.emitScratchStages(&b, candyOrder)
-
-	// Emit per-candy multi-stage build stages — fully config-driven from the embedded builder: vocabulary.
-	if err := g.emitBuilderStages(&b, boxName, img, candyOrder); err != nil {
+	// Emit the pre-main-FROM per-candy stages: scratch COPY stages, detection-builder
+	// multi-stage build stages, external-builder stages, and extraction stages.
+	if err := g.emitPreMainCandyStages(&b, boxName, img, candyOrder); err != nil {
 		return err
 	}
-
-	// Emit per-candy EXTERNAL builder stages — the build-time BUILDER leg: a candy
-	// selecting an `external_builder:` (an out-of-tree builder plugin) gets the
-	// provider's OpResolve stage spliced here, pre-main-FROM (the artifacts COPY
-	// follows post-main-FROM via emitExternalBuilderArtifacts).
-	if err := g.emitExternalBuilderStages(&b, img, candyOrder); err != nil {
-		return err
-	}
-
-	// Emit extraction stages for candies with extract field
-	g.emitExtractStages(&b, candyOrder)
 
 	// Aggregate candy-contributed capabilities once for this image. Cache
 	// onto ResolvedBox so downstream emit paths (and label emission)
@@ -507,25 +494,9 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	// Main image
 	b.WriteString("FROM ${BASE_IMAGE}\n\n")
 
-	// `from: builder:<name>` — import the pre-built rootfs tarball that
-	// was staged by runPrivilegedBuilders (see build.go preBuildHook).
-	// The path is relative to the project-root build context, so it
-	// dotted-out under .build/<image>/.
-	if after, ok := strings.CutPrefix(img.From, "builder:"); ok {
-		builderName := after
-		fmt.Fprintf(&b, "ADD .build/%s/%s.tar.gz /\n\n", boxName, builderName)
-	}
-
-	// Bootstrap preamble (only for external base images, and only when
-	// not coming from a builder rootfs — the bootstrap step expects an
-	// upstream package manager which from: scratch + ADD doesn't have
-	// pre-installed; that's handled by the builder's package set).
-	if img.IsExternalBase && !strings.HasPrefix(img.From, "builder:") {
-		g.writeBootstrap(&b, img)
-	} else {
-		// Internal base or builder rootfs - reset to root for candy processing
-		b.WriteString("USER root\n\n")
-	}
+	// Import the from-builder rootfs (if any) and reset the base for candy
+	// processing: the bootstrap preamble for an external base, or `USER root`.
+	g.emitBaseBootstrap(&b, boxName, img)
 
 	// Collect and write environment variables from candies
 	g.writeCandyEnv(&b, candyOrder, img)
@@ -612,6 +583,43 @@ func (g *Generator) generateContainerfile(boxName string) error {
 
 	containerfile := filepath.Join(imageDir, "Containerfile")
 	return writeContainerfile(containerfile, content)
+}
+
+// emitPreMainCandyStages emits the pre-main-FROM per-candy stages: the FROM-scratch COPY
+// stages, the detection-builder multi-stage build stages (fully config-driven from the
+// embedded builder: vocabulary), the EXTERNAL builder stages (a candy selecting an
+// `external_builder:` gets its provider's OpResolve stage spliced pre-main-FROM; the
+// artifacts COPY follows post-main-FROM via emitExternalBuilderArtifacts), and the
+// extraction stages. Pure code motion out of generateContainerfile.
+func (g *Generator) emitPreMainCandyStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string) error {
+	g.emitScratchStages(b, candyOrder)
+	if err := g.emitBuilderStages(b, boxName, img, candyOrder); err != nil {
+		return err
+	}
+	if err := g.emitExternalBuilderStages(b, img, candyOrder); err != nil {
+		return err
+	}
+	g.emitExtractStages(b, candyOrder)
+	return nil
+}
+
+// emitBaseBootstrap imports the `from: builder:<name>` rootfs tarball (staged by
+// runPrivilegedBuilders, path relative to the project-root build context) and resets the
+// base for candy processing: the bootstrap preamble for an external base image (skipped
+// for a builder rootfs, which has no upstream package manager — the builder's package set
+// handles that), or `USER root` for an internal base / builder rootfs. Pure code motion
+// out of generateContainerfile.
+func (g *Generator) emitBaseBootstrap(b *strings.Builder, boxName string, img *ResolvedBox) {
+	if after, ok := strings.CutPrefix(img.From, "builder:"); ok {
+		builderName := after
+		fmt.Fprintf(b, "ADD .build/%s/%s.tar.gz /\n\n", boxName, builderName)
+	}
+	if img.IsExternalBase && !strings.HasPrefix(img.From, "builder:") {
+		g.writeBootstrap(b, img)
+	} else {
+		// Internal base or builder rootfs - reset to root for candy processing
+		b.WriteString("USER root\n\n")
+	}
 }
 
 // writeContainerfile validates the rendered Containerfile (catching Go-template

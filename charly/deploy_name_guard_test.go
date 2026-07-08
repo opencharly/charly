@@ -25,12 +25,12 @@ func TestRejectImageRefAsDeployName(t *testing.T) {
 	}
 
 	allow := []string{
-		"check-selkies-kde-pod",                    // short name
-		"github.com/opencharly/charly/box/fedora",  // github REPO ref — no :tag
-		"github.com/opencharly/charly/box@v1",      // github ref pinned with @version
-		"myapp:latest",                             // bare image:tag — no registry host, no invalid key
-		"a.b.c",                                     // dotted-path deploy address — no / and no :tag
-		"redis/prod",                               // Pattern A base/instance
+		"check-selkies-kde-pod",                   // short name
+		"github.com/opencharly/charly/box/fedora", // github REPO ref — no :tag
+		"github.com/opencharly/charly/box@v1",     // github ref pinned with @version
+		"myapp:latest",                            // bare image:tag — no registry host, no invalid key
+		"a.b.c",                                   // dotted-path deploy address — no / and no :tag
+		"redis/prod",                              // Pattern A base/instance
 	}
 	for _, a := range allow {
 		if err := rejectImageRefAsDeployName(a); err != nil {

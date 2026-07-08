@@ -271,7 +271,6 @@ func (s VerbSpec) HasContext(ctx ExecContext) bool {
 var (
 	ctxBuildDeploy        = []ExecContext{CtxBuild, CtxDeploy}
 	ctxBuildDeployRuntime = []ExecContext{CtxBuild, CtxDeploy, CtxRuntime}
-	ctxRuntimeOnly        = []ExecContext{CtxRuntime}
 )
 
 // VerbCatalog is the single source of truth for every verb's legality, default

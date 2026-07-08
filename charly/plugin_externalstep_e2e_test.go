@@ -20,6 +20,8 @@ import (
 // reverse channel) so the plugin writes a marker on the real shell venue and returns a dynamic
 // teardown ReverseOp — NO compiled-in case for the word anywhere. Builds + execs a real binary,
 // gated behind -short like the other reverse-channel e2es.
+//
+//nolint:gocyclo // sequential end-to-end scenario; extraction would fragment the narrative
 func TestExternalStepKind_EndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds + execs the external plugin binary (slow)")
@@ -144,8 +146,11 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 // isolation, drives hostBuildStepEmit by word, and asserts an unregistered word + the registry-level
 // "step-emit" host-builder registration.
 func TestStepEmitHostBuilder(t *testing.T) {
-	// The "step-emit" host-builder is registered on the F10 hostBuilders seam at init.
-	if _, ok := hostBuilderFor("step-emit"); !ok {
+	// The "step-emit" host-builder is registered on the F10 hostBuilders seam at init. Drive it
+	// through the registered wire-level hostBuilder so the test exercises the typedHostBuilder
+	// adapter (JSON decode → typed fn → marshal) alongside the by-word dispatch.
+	stepEmit, ok := hostBuilderFor("step-emit")
+	if !ok {
 		t.Fatal("hostBuilderFor(\"step-emit\") = false, want the step-emit host-builder registered")
 	}
 
@@ -162,9 +167,9 @@ func TestStepEmitHostBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resJSON, err := hostBuildStepEmit(context.Background(), reqJSON, buildEngineContext{})
+	resJSON, err := stepEmit(context.Background(), reqJSON, buildEngineContext{})
 	if err != nil {
-		t.Fatalf("hostBuildStepEmit: %v", err)
+		t.Fatalf("step-emit host-build: %v", err)
 	}
 	var reply spec.EmitReply
 	if err := json.Unmarshal(resJSON, &reply); err != nil {
@@ -179,7 +184,7 @@ func TestStepEmitHostBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := hostBuildStepEmit(context.Background(), bad, buildEngineContext{}); err == nil {
-		t.Fatal("hostBuildStepEmit for an unregistered word = nil error, want a loud failure")
+	if _, err := stepEmit(context.Background(), bad, buildEngineContext{}); err == nil {
+		t.Fatal("step-emit host-build for an unregistered word = nil error, want a loud failure")
 	}
 }

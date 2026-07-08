@@ -98,8 +98,8 @@ type UnifiedFile struct {
 	Defaults BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 	// Field-singular cutover (2026-05): legacy plural `Images yaml:"images"`
 	// deleted; the singular `Box yaml:"box"` is the canonical surface.
-	Box   map[string]BoxConfig    `yaml:"box,omitempty" json:"box,omitempty"`
-	Candy map[string]*InlineCandy `yaml:"candy,omitempty" json:"candy,omitempty"`
+	Box   map[string]BoxConfig       `yaml:"box,omitempty" json:"box,omitempty"`
+	Candy map[string]*InlineCandy    `yaml:"candy,omitempty" json:"candy,omitempty"`
 	VM    map[string]json.RawMessage `yaml:"vm,omitempty" json:"vm,omitempty"`
 	// Field-singular cutover: legacy `Deploys *DeploymentsSection
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
@@ -1664,8 +1664,11 @@ func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
 // of the authored file, independent of any per-machine ~/.config/charly/charly.yml
 // which remains loaded separately by LoadBundleConfig).
 func (uf *UnifiedFile) ProjectBundleConfig() *BundleConfig {
+	if uf == nil {
+		return nil
+	}
 	sidecars := uf.PluginKinds["sidecar"] // opaque bodies; candy/plugin-sidecar resolves them
-	if uf == nil || (len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0) {
+	if len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0 {
 		return nil
 	}
 	return &BundleConfig{

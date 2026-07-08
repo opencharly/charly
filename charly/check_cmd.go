@@ -394,9 +394,12 @@ func guestNestedCheckCmd(guestPod, format, section string, filter []string, inst
 
 func (c *CheckLiveCmd) runVm() error {
 	dir, _ := os.Getwd()
-	uf, _, err := LoadUnified(dir)
+	uf, ok, err := LoadUnified(dir)
 	if err != nil {
 		return err
+	}
+	if !ok || uf == nil {
+		return fmt.Errorf("check live: no charly.yml found in %s (vm targets need the project config)", dir)
 	}
 	vmName, nestedLeaf, spec := c.resolveVmTarget(uf)
 
