@@ -1,7 +1,6 @@
 // buildkit_aliases.go — package-main bindings onto github.com/opencharly/sdk/buildkit,
 // the SDK library holding the pure Containerfile render/compute machinery (the
-// format/builder TEMPLATE render surface — moved out of the former
-// charly/format_template.go in the P3 sdk/buildkit extraction). These thin aliases
+// format/builder TEMPLATE render surface, extracted to sdk/buildkit in P3). These thin aliases
 // keep every package-main call site (generate.go, tasks.go, install_build.go,
 // build_target_oci.go, distro_resolve.go, init_config.go, privileged_runner.go,
 // vm_disk_builder.go, …) compiling unchanged — the build engine's render calls now
