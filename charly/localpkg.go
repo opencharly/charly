@@ -10,7 +10,7 @@ package main
 // the source-dir sentinel, build command, install command, package-file glob,
 // and probe command all come from the resolved *LocalPkgDef
 // (LocalPkgInstallStep.LocalPkg / BuilderStep.LocalPkg), rendered through the
-// EXISTING RenderTemplate engine (format_template.go) — the same machinery the
+// EXISTING RenderTemplate engine (sdk/buildkit) — the same machinery the
 // rest of the build pipeline uses. The install command is the format's
 // AUTO-RESOLVING local-file install (pacman -U / dnf install / apt-get install),
 // so the package's dependencies are satisfied from the target's repos and there

@@ -7,7 +7,7 @@ package main
 // generate.go writeCandySteps→emitTasks; the IR/OCITarget path is deploy-only.
 //
 // OCITarget is a thin walker over the InstallPlan that delegates to the
-// format/template rendering machinery in format_template.go + tasks.go. Every
+// format/template rendering machinery in sdk/buildkit + tasks.go. Every
 // compiler-emitted step kind's BUILD-emit is served by the compiled-in class:step
 // plugin candy/plugin-installstep (routed by pluginEmitStepWords through
 // spliceClassStepEmit); the HOST-COUPLED kinds (system-packages/builder/
