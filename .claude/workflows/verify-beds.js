@@ -56,9 +56,9 @@ const BED_SCHEMA = {
   additionalProperties: false,
   properties: {
     bed: { type: 'string' },
-    exitCode: { type: 'integer', description: '0 pass / 1 infra / 2 checks-failed' },
+    exitCode: { type: 'integer', description: '0 pass / 1 infra / 2 checks-failed / 3 skipped-absent-host-prereq' },
     ok: { type: 'boolean' },
-    skippedPrereq: { type: 'boolean', description: 'true if a host prereq (libvirt/kvm) was missing' },
+    skippedPrereq: { type: 'boolean', description: 'true if a host prereq was missing — set DETERMINISTICALLY when exitCode===3 (charly emits it + a "SKIPPED" line), or when a libvirt/kvm prereq is otherwise absent' },
     steps: {
       type: 'array',
       items: {
@@ -112,7 +112,7 @@ const runBed = (b) => {
   const charlyCmd = b.dir ? `charly -C ${b.dir} check run ${b.bed}` : `charly check run ${b.bed}`
   const checkDir = `${b.dir ? b.dir + '/' : ''}.check/${b.bed}/<calver>/`
   return agent(
-    `You are the check-bed runner. Run the kind:check bed "${b.bed}" EXACTLY as \`${charlyCmd}\` — do NOT add any flags (no --no-rebuild/--keep/--on-*; that would shrink the R10 spec, CLAUDE.md R10 flag-override clause). Capture stdout/stderr and the process exit code. Then read ${checkDir}summary.yml for the per-step verdict and tail any failing step's .log. If a required host prereq is missing (libvirt user session for a vm bed, /dev/kvm for the android bed), set skippedPrereq=true and do NOT report it as a pass. Return the verbatim verdict — never summarize away a failure.`,
+    `You are the check-bed runner. Run the kind:check bed "${b.bed}" EXACTLY as \`${charlyCmd}\` — do NOT add any flags (no --no-rebuild/--keep/--on-*; that would shrink the R10 spec, CLAUDE.md R10 flag-override clause). Capture stdout/stderr and the process exit code. Then read ${checkDir}summary.yml for the per-step verdict and tail any failing step's .log. If the process exit code is 3, charly itself skipped the bed for an ABSENT HOST PREREQ (it prints a "SKIPPED — …" line, e.g. a GPU resource whose vendor has no matching card): set skippedPrereq=true, ok=false, and record its reason — this is DETERMINISTIC, not your inference. Also set skippedPrereq=true if a required host prereq is otherwise missing (libvirt user session for a vm bed, /dev/kvm for the android bed) and do NOT report it as a pass. Return the verbatim verdict — never summarize away a failure.`,
     { schema: BED_SCHEMA, label: `bed:${b.bed}`, phase: 'Run beds' }
   )
 }

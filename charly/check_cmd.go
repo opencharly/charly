@@ -21,6 +21,20 @@ import (
 // main() maps CheckFailedError to this code.
 const CheckFailExitCode = 2
 
+// CheckSkippedExitCode (3) is emitted when a bed cannot run because a required
+// HOST prerequisite is absent — currently a GPU resource (requires_exclusive /
+// requires_shared) whose vendor has no matching card on this host. It is NOT a
+// failure (the bed is unsatisfiable here, like a missing /dev/kvm), so
+// automation distinguishes it from a genuine 0/1/2 pass/infra/check result and
+// records a SKIP rather than a FAIL. main() maps CheckSkippedError to this code.
+const CheckSkippedExitCode = 3
+
+// CheckSkippedError marks a bed skipped for a missing host prerequisite. main()
+// detects it via errors.As and exits CheckSkippedExitCode.
+type CheckSkippedError struct{ Msg string }
+
+func (e *CheckSkippedError) Error() string { return e.Msg }
+
 // CheckFailedError marks an check that ran but had failing checks. main()
 // detects it via errors.As and exits CheckFailExitCode. Wrap with %w to
 // preserve the chain through callers.
