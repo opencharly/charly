@@ -126,7 +126,9 @@ func (c *CheckRunCmd) Run() error {
 		// A skipped bed (absent host prereq) is not a run — report SKIPPED and
 		// propagate CheckSkippedExitCode (3), never a pass/fail summary line.
 		if res != nil && res.SkippedPrereq {
-			fmt.Fprintf(os.Stderr, "charly check run %s: SKIPPED (%s)\n", c.Name, res.SkipReason)
+			// The skip reason is printed ONCE at the top level (main.go's
+			// CheckSkippedError handler) via the returned error's Msg — do not
+			// also print it here (that duplicated the line).
 			return &CheckSkippedError{Msg: fmt.Sprintf("charly check run %s: skipped (%s)", c.Name, res.SkipReason)}
 		}
 		if res != nil {

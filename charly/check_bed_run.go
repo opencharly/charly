@@ -331,7 +331,10 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		res.SkipReason = fmt.Sprintf("no GPU matching vendor %s on this host (bed requires resource %q)", vendor, tok)
 		res.Step = append(res.Step, stepResult{Name: "prereq-gpu-skipped", OK: true})
 		writeBedSummary(logDir, res)
-		fmt.Fprintf(os.Stderr, "charly check run %s: SKIPPED — %s\n", name, res.SkipReason)
+		// Do NOT print the skip reason here — the reason lives on the returned
+		// CheckSkippedError.Msg and is printed ONCE at the top level (main.go's
+		// CheckSkippedError handler). Printing here as well as at the command
+		// level and top level made the reason appear 3× per skipped bed.
 		return res, &CheckSkippedError{Msg: fmt.Sprintf("charly check run %s: skipped (%s)", name, res.SkipReason)}
 	}
 
