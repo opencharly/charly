@@ -14,6 +14,14 @@ import "github.com/opencharly/sdk/buildkit"
 // spec.CacheMount / CacheMountDef); it lives in sdk/buildkit now.
 type CacheMount = buildkit.CacheMount
 
+// DistroConfig / BuilderConfig — the embedded build-vocabulary resolved-config
+// types + their resolution methods live in sdk/buildkit (P3); loader glue
+// (LoadBuildConfigForBox) + the Phase/Venue phase-template resolvers stay in charly.
+type (
+	DistroConfig  = buildkit.DistroConfig
+	BuilderConfig = buildkit.BuilderConfig
+)
+
 var (
 	SharedCacheMount      = buildkit.SharedCacheMount
 	OwnedCacheMount       = buildkit.OwnedCacheMount
@@ -21,6 +29,8 @@ var (
 	RenderCacheMountsAuto = buildkit.RenderCacheMountsAuto
 	RenderTemplate        = buildkit.RenderTemplate
 	NewInstallContext     = buildkit.NewInstallContext
+	wrapDistroDef         = buildkit.WrapDistroDef
+	distroTagChain        = buildkit.DistroTagChain
 	templateFuncs         = buildkit.TemplateFuncs
 	toStringSlice         = buildkit.ToStringSlice
 	toMapSlice            = buildkit.ToMapSlice

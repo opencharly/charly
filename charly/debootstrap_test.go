@@ -72,7 +72,7 @@ distro:
 
 // TestDebootstrapDef_UbuntuInheritsDebian verifies that ubuntu (which sets
 // inherits: debian) gets its OWN debootstrap block — the per-field merge in
-// resolveInherits prefers the child's non-nil sub-block.
+// ResolveInherits prefers the child's non-nil sub-block.
 func TestDebootstrapDef_UbuntuInheritsDebian(t *testing.T) {
 	yamlText := `
 distro:

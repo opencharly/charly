@@ -297,10 +297,10 @@ func TestDistroDefVersionInherits(t *testing.T) {
 		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
 		"cachy":  {Inherits: "debian", Bootstrap: BootstrapDef{InstallCmd: "apt"}}, // no own version
 	}}
-	if v := dc.resolveInherits(dc.Distro["ubuntu"], 10).Version; v != "24.04" {
+	if v := dc.ResolveInherits(dc.Distro["ubuntu"], 10).Version; v != "24.04" {
 		t.Errorf("ubuntu version = %q, want 24.04 (child wins)", v)
 	}
-	if v := dc.resolveInherits(dc.Distro["cachy"], 10).Version; v != "13" {
+	if v := dc.ResolveInherits(dc.Distro["cachy"], 10).Version; v != "13" {
 		t.Errorf("cachy version = %q, want inherited 13", v)
 	}
 }
@@ -338,13 +338,13 @@ func TestExpandPackageInheritance(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := dc.expandPackageInheritance(tc.in); !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("expandPackageInheritance(%v) = %v, want %v", tc.in, got, tc.want)
+			if got := dc.ExpandPackageInheritance(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("ExpandPackageInheritance(%v) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}
 	// nil config returns input unchanged (no panic).
-	if got := (*DistroConfig)(nil).expandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
+	if got := (*DistroConfig)(nil).ExpandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
 		t.Errorf("nil dc must return input unchanged, got %v", got)
 	}
 }
