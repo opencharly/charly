@@ -23,7 +23,7 @@ package params
 //
 // `package` is a STATE-PROVISION verb like service, but the TYPED-STEP form WITHOUT
 // service's PriorEnabled teardown-restore state. It is BOTH a CheckVerbProvider
-// (RunVerb → r.runPackage, the rpm/dpkg/pacman probe that keeps the live *Runner) AND
+// (RunVerb — the rpm/dpkg/pacman presence probe over the live CheckContext) AND
 // a TypedStepProvider — its do:act half lowers into a TYPED SystemPackagesStep whose
 // Reverse() records the LOAD-BEARING reversals (ReverseOpPackageRemove +
 // ReverseOpCoprDisable for a copr repo). A RenderProvisionScript shell string would
@@ -34,8 +34,8 @@ package params
 // for a `run: {plugin: package}` step the check Runner executes.
 //
 // `package`/`installed`/`version`/`package_map` were base #Op fields read ONLY by the
-// `package` verb (resolvePackageName + runPackage), so all four MOVE here when `package`
-// extracts and leave #Op entirely. The SHARED `exclude_distro` modifier (read by the
+// `package` verb (kit.ResolvePackageName + RunVerb), so all four live here now that `package`
+// is externalized and leave #Op entirely. The SHARED `exclude_distro` modifier (read by the
 // generic runOne skip filter for EVERY verb) is NOT here — it stays at step level on #Op.
 type PackageInput struct {
 	// package — the package name the probe queries (assert) / the typed

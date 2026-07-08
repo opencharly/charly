@@ -17,7 +17,7 @@ func TestRunner_Package(t *testing.T) {
 	t.Run("installed via rpm", func(t *testing.T) {
 		r, fake := newFakeRunner(t, RunModeLive)
 		fake.responses = []fakeResponse{
-			{matchPrefix: "rpm -q 'redis'", exit: 0},
+			{matchPrefix: "rpm -q 'redis'", stdout: "INSTALLED", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
@@ -30,7 +30,7 @@ func TestRunner_Package(t *testing.T) {
 	t.Run("installed mismatch", func(t *testing.T) {
 		r, fake := newFakeRunner(t, RunModeLive)
 		fake.responses = []fakeResponse{
-			{matchPrefix: "rpm -q 'redis'", exit: 1},
+			{matchPrefix: "rpm -q 'redis'", stdout: "ABSENT", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
@@ -43,7 +43,7 @@ func TestRunner_Package(t *testing.T) {
 	t.Run("version list match", func(t *testing.T) {
 		r, fake := newFakeRunner(t, RunModeLive)
 		fake.responses = []fakeResponse{
-			{matchPrefix: "rpm -q 'redis' >/dev/null", exit: 0},
+			{matchPrefix: "rpm -q 'redis' >/dev/null", stdout: "INSTALLED", exit: 0},
 			{matchPrefix: "rpm -q --qf '%{VERSION}", stdout: "7.0.5\n", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
