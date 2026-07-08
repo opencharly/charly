@@ -578,7 +578,7 @@ func compileSystemPackageSteps(layer *Candy, img *ResolvedBox, _ HostContext) []
 // declared by the embedded vocabulary (charly/charly.yml), so the hierarchy lives entirely in YAML.
 //
 // Distro INHERITANCE is the complementary YAML mechanism: img.Distro is already
-// expanded (at resolve time, expandPackageInheritance) to include any
+// expanded (at resolve time, ExpandPackageInheritance) to include any
 // `inherit_packages: true` ancestor, so a cachyos image/VM carries [cachyos, …,
 // arch] and a `distro: arch:` block DOES reach cachyos — while ubuntu (no flag)
 // stays isolated from debian. Both knobs live entirely in the embedded vocabulary (charly/charly.yml).

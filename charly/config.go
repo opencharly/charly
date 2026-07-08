@@ -392,7 +392,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		// Expand the package-cascade chain with any inherit_packages: ancestor
 		// (cachyos → [cachyos, arch]) so an `arch:` candy block reaches cachyos.
 		// Idempotent when the box already authored the ancestor explicitly.
-		resolved.Distro = distroCfg.expandPackageInheritance(resolved.Distro)
+		resolved.Distro = distroCfg.ExpandPackageInheritance(resolved.Distro)
 		resolved.DistroDef = distroCfg.ResolveDistro(resolved.Distro)
 	}
 

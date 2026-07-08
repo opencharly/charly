@@ -68,7 +68,7 @@ func BuildBootstrapVM(
 	if !ok {
 		return BootstrapVMResult{}, fmt.Errorf("distro %q not declared in the embedded build vocabulary (charly/charly.yml)", spec.Source.Distro)
 	}
-	distro = distroCfg.resolveInherits(distro, 10)
+	distro = distroCfg.ResolveInherits(distro, 10)
 	if distro.Bootloader == nil {
 		return BootstrapVMResult{}, fmt.Errorf("distro %q has no bootloader: block in the embedded build vocabulary (charly/charly.yml) (required for VM bootstrap)", spec.Source.Distro)
 	}
