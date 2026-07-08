@@ -13,7 +13,8 @@
       "Bash(charly check live:*)",
       "Bash(charly check box:*)",
       "Bash(charly status:*)",
-      "Bash(gh pr merge:*)"
+      "Bash(gh pr merge:*)",
+      "Bash(gh api --method POST repos/opencharly:*)"
     ]
   },
   "enabledPlugins": {
