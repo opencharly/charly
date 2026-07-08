@@ -91,4 +91,3 @@ func runWithEventuallyNoSleep(t *testing.T, h func() CheckResult) CheckResult {
 	// No `eventually:` → single-shot path (the one carrying the infra-kill retry).
 	return runWithEventually(context.Background(), &Op{}, h)
 }
-

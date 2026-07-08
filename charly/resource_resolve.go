@@ -5,9 +5,7 @@ package main
 // resource into a ResolvedResource; the GPU arbiter consumes it, never spec.Resource.
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -41,23 +39,9 @@ func (uf *UnifiedFile) resolveResources() map[string]*ResolvedResource {
 }
 
 func resolveResourceViaPlugin(body json.RawMessage) (*ResolvedResource, error) {
-	prov, ok := providerRegistry.ResolveKind("resource")
-	if !ok {
-		return nil, fmt.Errorf("resource resolve: kind provider not registered")
-	}
-	paramsJSON, err := json.Marshal(spec.ResourceResolveInput{Resource: body})
-	if err != nil {
-		return nil, fmt.Errorf("resource resolve: marshal input: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "resource", Op: OpResolve, Params: json.RawMessage(paramsJSON)})
+	reply, err := hostInvoke[spec.ResourceResolveInput, spec.ResourceResolveReply](ClassKind, "resource", OpResolve, spec.ResourceResolveInput{Resource: body})
 	if err != nil {
 		return nil, err
-	}
-	var reply spec.ResourceResolveReply
-	if out != nil && len(out.JSON) > 0 {
-		if err := json.Unmarshal(out.JSON, &reply); err != nil {
-			return nil, fmt.Errorf("resource resolve: decode reply: %w", err)
-		}
 	}
 	return reply.Resolved, nil
 }

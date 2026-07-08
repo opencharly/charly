@@ -81,7 +81,7 @@ type hostBuilder func(ctx context.Context, specJSON []byte, build buildEngineCon
 var hostBuilders = map[string]hostBuilder{}
 
 // registerHostBuilder records one host-builder kind (F10). Panics on a duplicate (a startup
-// invariant, like registerSubstrateLifecycle / registerDeployPreresolver).
+// invariant, like registerStepEmitter / registerDeployPreresolver).
 func registerHostBuilder(kind string, fn hostBuilder) {
 	if kind == "" || fn == nil {
 		panic("registerHostBuilder: empty kind or nil builder")
@@ -98,17 +98,36 @@ func hostBuilderFor(kind string) (hostBuilder, bool) {
 	return fn, ok
 }
 
+// typedHostBuilder adapts a typed host-builder onto the []byte hostBuilder wire: it decodes
+// specJSON into In, runs fn, and marshals Out. Domain errors stay the builder's own convention
+// (an in-band Reply.Error the fn sets before returning a nil error, or a Go error the fn returns);
+// a DECODE failure is a host-side contract bug and returns a Go error tagged with label. This kills
+// the per-builder json.Unmarshal/marshalJSON skeleton every host-builder used to hand-roll (R3).
+func typedHostBuilder[In, Out any](label string, fn func(context.Context, In, buildEngineContext) (Out, error)) hostBuilder {
+	return func(ctx context.Context, specJSON []byte, build buildEngineContext) ([]byte, error) {
+		var in In
+		if err := json.Unmarshal(specJSON, &in); err != nil {
+			return nil, fmt.Errorf("%s host-build: decode request: %w", label, err)
+		}
+		out, err := fn(ctx, in, build)
+		if err != nil {
+			return nil, err
+		}
+		return marshalJSON(out)
+	}
+}
+
+// pluginBinarySpec is the "plugin-binary" host-build request: the candy dir + provider name to
+// `go build` on the host toolchain.
+type pluginBinarySpec struct {
+	CandyDir string `json:"candy_dir"`
+	Name     string `json:"name"`
+}
+
 // hostBuildPluginBinary is the "plugin-binary" host-builder (F10): build a candy's plugin provider
 // binary on the host (buildPluginBinary — go build on the host toolchain), returning {"path": …}.
 // The concrete host-build proving the HostBuild capability; M13/M14 register "kustomize"/"image".
-func hostBuildPluginBinary(ctx context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var spec struct {
-		CandyDir string `json:"candy_dir"`
-		Name     string `json:"name"`
-	}
-	if err := json.Unmarshal(specJSON, &spec); err != nil {
-		return nil, fmt.Errorf("plugin-binary host-build: decode spec: %w", err)
-	}
+func hostBuildPluginBinary(ctx context.Context, spec pluginBinarySpec, _ buildEngineContext) (map[string]string, error) {
 	if spec.CandyDir == "" || spec.Name == "" {
 		return nil, fmt.Errorf("plugin-binary host-build: spec requires candy_dir + name")
 	}
@@ -116,9 +135,12 @@ func hostBuildPluginBinary(ctx context.Context, specJSON []byte, _ buildEngineCo
 	if err != nil {
 		return nil, err
 	}
-	return marshalJSON(map[string]string{"path": bin})
+	return map[string]string{"path": bin}, nil
 }
 
 // Register the plugin-binary host-builder at package-var init (before any init()), like the
 // substrate/preresolver registries.
-var _ = func() bool { registerHostBuilder("plugin-binary", hostBuildPluginBinary); return true }()
+var _ = func() bool {
+	registerHostBuilder("plugin-binary", typedHostBuilder("plugin-binary", hostBuildPluginBinary))
+	return true
+}()

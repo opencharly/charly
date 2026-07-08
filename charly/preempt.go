@@ -69,21 +69,11 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	if !ok {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("resource arbiter (verb:arbiter) not registered — charly built without candy/plugin-preempt")
 	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s marshal: %w", in.Action, err)
-	}
 	ctx := sdk.ContextWithExecutor(context.Background(),
 		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
-	res, err := prov.Invoke(ctx, &Operation{Reserved: "arbiter", Op: OpRun, Params: params})
+	reply, err := invokeTyped[spec.ArbiterInvokeInput, spec.ArbiterInvokeReply](ctx, prov, "arbiter", OpRun, in)
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s: %w", in.Action, err)
-	}
-	var reply spec.ArbiterInvokeReply
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return spec.ArbiterInvokeReply{}, fmt.Errorf("arbiter %s decode: %w", in.Action, err)
-		}
 	}
 	return reply, nil
 }

@@ -242,6 +242,14 @@ func buildableShortName(image string, cfg *Config) string {
 	// buildable: ResolveBox and the `charly box build` target path are both
 	// namespace-aware, so the build-fallback can build a namespaced builder
 	// the same way it builds a root one.
+	// A QUALIFIED (namespaced) input resolves directly — `fedora.fedora-builder`
+	// names a buildable image as-is (the build path is namespace-aware); the
+	// leaf lookup below can never match a dotted ref (leaves are bare names).
+	if strings.Contains(work, ".") {
+		if _, _, ok := cfg.resolveBoxRef(work); ok {
+			return work
+		}
+	}
 	if q, ok := cfg.findBoxByLeaf(work); ok {
 		return q
 	}

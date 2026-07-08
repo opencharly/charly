@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -69,29 +68,7 @@ type (
 // stderr note rather than crashing a hot deploy path — matching the original
 // best-effort, never-fail detection semantics.
 func gpuProbeReply(in spec.GpuProbeInput) spec.GpuProbeReply {
-	prov, ok := providerRegistry.resolve(ClassVerb, "gpu")
-	if !ok {
-		fmt.Fprintln(os.Stderr, "warning: gpu plugin (verb:gpu) not registered — charly built without candy/plugin-gpu; GPU/VFIO detection unavailable")
-		return spec.GpuProbeReply{}
-	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: gpu probe marshal (%s): %v\n", in.Action, err)
-		return spec.GpuProbeReply{}
-	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: "gpu", Op: OpRun, Params: params})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: gpu probe %s: %v\n", in.Action, err)
-		return spec.GpuProbeReply{}
-	}
-	var reply spec.GpuProbeReply
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: gpu probe %s decode: %v\n", in.Action, err)
-			return spec.GpuProbeReply{}
-		}
-	}
-	return reply
+	return hostInvokeOr[spec.GpuProbeInput, spec.GpuProbeReply](ClassVerb, "gpu", OpRun, in, "gpu probe "+in.Action)
 }
 
 // DetectGPU checks whether an NVIDIA GPU is usable via CDI (driver loaded AND a CDI
@@ -178,22 +155,12 @@ func gpuSwitchReply(in spec.GpuSwitchInput) spec.GpuSwitchReply {
 		fmt.Fprintln(os.Stderr, "warning: gpu plugin (verb:gpu) not registered — charly built without candy/plugin-gpu; GPU driver-switch unavailable")
 		return spec.GpuSwitchReply{}
 	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: gpu switch marshal (%s): %v\n", in.Action, err)
-		return spec.GpuSwitchReply{}
-	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: "gpu", Op: OpRun, Params: params})
+	// Best-effort with an error CARRIER: any dispatch failure rides reply.Error so
+	// switchReplyErr surfaces it (a switch failure must never be silently dropped).
+	reply, err := invokeTyped[spec.GpuSwitchInput, spec.GpuSwitchReply](context.Background(), prov, "gpu", OpRun, in)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: gpu switch %s: %v\n", in.Action, err)
 		return spec.GpuSwitchReply{Error: err.Error()}
-	}
-	var reply spec.GpuSwitchReply
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: gpu switch %s decode: %v\n", in.Action, err)
-			return spec.GpuSwitchReply{}
-		}
 	}
 	return reply
 }

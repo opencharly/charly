@@ -202,3 +202,46 @@ func TestBuildTransform_RegisteredHook(t *testing.T) {
 		t.Error("registered hook not dispatched")
 	}
 }
+
+// TestRunMigrations_ProjectAtHeadOverlayLags: a project already at HEAD must NOT
+// short-circuit a LAGGING per-host overlay — the touches_host chain + the
+// universal stamp bring the overlay up (the pre-fix behavior left operators in
+// an unresolvable "Run: charly migrate" loop: every deploy-state write refused
+// the old overlay schema while migrate reported nothing to do).
+func TestRunMigrations_ProjectAtHeadOverlayLags(t *testing.T) {
+	dir := writeRoot(t, spec.SchemaVersion)
+	overlay := filepath.Join(t.TempDir(), "charly.yml")
+	body := "version: " + spec.SchemaFloor + "\ngithubrunner:\n    pod:\n        image: githubrunner\n"
+	if err := os.WriteFile(overlay, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	changed, err := runMigrations(&MigrateContext{Dir: dir, HostDeployPath: overlay, Out: &out}, false)
+	if err != nil {
+		t.Fatalf("runMigrations: %v", err)
+	}
+	if !changed {
+		t.Fatalf("lagging overlay must be migrated; output: %q", out.String())
+	}
+	after, err := os.ReadFile(overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), "version: "+spec.SchemaVersion) {
+		t.Errorf("overlay not stamped to head:\n%s", after)
+	}
+	// The project root must be untouched (idempotent chain, no spurious rewrite).
+	root, _ := os.ReadFile(filepath.Join(dir, "charly.yml"))
+	if !strings.Contains(string(root), "version: "+spec.SchemaVersion) {
+		t.Error("project root version changed unexpectedly")
+	}
+	// Second run: full no-op.
+	out.Reset()
+	changed, err = runMigrations(&MigrateContext{Dir: dir, HostDeployPath: overlay, Out: &out}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Errorf("second run must be a no-op, output: %q", out.String())
+	}
+}

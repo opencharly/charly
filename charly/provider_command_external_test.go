@@ -18,41 +18,8 @@ import (
 // handshake cookie (so the plugin runs in CLI mode, not serve mode) and stamp CHARLY_BIN.
 func TestExternalCommandExecPlan_PassthroughArgs(t *testing.T) {
 	const word = "zzexeccmd"
-	// Make the strip non-trivial: set the cookie, then assert it is absent from the exec env.
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
-
-	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
-	var cli struct{ kong.Plugins }
-	cli.Plugins = kong.Plugins{holder}
-	parser, err := kong.New(&cli, kong.Name("charly"))
-	if err != nil {
-		t.Fatalf("kong.New with dynamic command holder: %v", err)
-	}
-	if _, err := parser.Parse([]string{word, "nodes", "--wide"}); err != nil {
-		t.Fatalf("kong.Parse external command: %v", err)
-	}
-
-	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
-	if err != nil {
-		t.Fatalf("externalCommandExecPlan: %v", err)
-	}
-	if want := "/fake/plugins/" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
-	}
-	want := []string{bin, "nodes", "--wide"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv = %v, want %v", argv, want)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
-		}
-	}
-	assertCommandEnv(t, env)
+	assertExternalCommandExecPlan(t, word, "/fake/plugins/"+word,
+		[]string{word, "nodes", "--wide"}, []string{"nodes", "--wide"})
 }
 
 // TestExternalCommandExecPlan_Udev proves the externalized `charly udev` command rides the
@@ -63,40 +30,8 @@ func TestExternalCommandExecPlan_PassthroughArgs(t *testing.T) {
 // CommandProvider; it resolves to candy/plugin-udev over this path.
 func TestExternalCommandExecPlan_Udev(t *testing.T) {
 	const word = "udev"
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/plugin-" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
-
-	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
-	var cli struct{ kong.Plugins }
-	cli.Plugins = kong.Plugins{holder}
-	parser, err := kong.New(&cli, kong.Name("charly"))
-	if err != nil {
-		t.Fatalf("kong.New with the udev command holder: %v", err)
-	}
-	if _, err := parser.Parse([]string{word, "generate"}); err != nil {
-		t.Fatalf("kong.Parse `charly udev generate`: %v", err)
-	}
-
-	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
-	if err != nil {
-		t.Fatalf("externalCommandExecPlan: %v", err)
-	}
-	if want := "/fake/plugins/plugin-" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
-	}
-	want := []string{bin, "generate"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv = %v, want %v", argv, want)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
-		}
-	}
-	assertCommandEnv(t, env)
+	assertExternalCommandExecPlan(t, word, "/fake/plugins/plugin-"+word,
+		[]string{word, "generate"}, []string{"generate"})
 }
 
 // TestExternalCommandExecPlan_Tmux proves the externalized `charly tmux` command — the FIRST
@@ -109,40 +44,8 @@ func TestExternalCommandExecPlan_Udev(t *testing.T) {
 // `charly shell` shell-back (CHARLY_BIN is the SAME charly that dispatched it).
 func TestExternalCommandExecPlan_Tmux(t *testing.T) {
 	const word = "tmux"
-	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/plugin-" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
-
-	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
-	var cli struct{ kong.Plugins }
-	cli.Plugins = kong.Plugins{holder}
-	parser, err := kong.New(&cli, kong.Name("charly"))
-	if err != nil {
-		t.Fatalf("kong.New with the tmux command holder: %v", err)
-	}
-	if _, err := parser.Parse([]string{word, "list", "mybox"}); err != nil {
-		t.Fatalf("kong.Parse `charly tmux list mybox`: %v", err)
-	}
-
-	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
-	if err != nil {
-		t.Fatalf("externalCommandExecPlan: %v", err)
-	}
-	if want := "/fake/plugins/plugin-" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
-	}
-	want := []string{bin, "list", "mybox"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv = %v, want %v", argv, want)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
-		}
-	}
-	assertCommandEnv(t, env)
+	assertExternalCommandExecPlan(t, word, "/fake/plugins/plugin-"+word,
+		[]string{word, "list", "mybox"}, []string{"list", "mybox"})
 }
 
 // TestExternalCommandExecPlan_Vm proves the externalized `charly vm` command — the FOURTH
@@ -157,8 +60,21 @@ func TestExternalCommandExecPlan_Tmux(t *testing.T) {
 // inherited stdio/TTY.
 func TestExternalCommandExecPlan_Vm(t *testing.T) {
 	const word = "vm"
+	assertExternalCommandExecPlan(t, word, "/fake/plugins/plugin-"+word,
+		[]string{word, "list"}, []string{"list"})
+}
+
+// assertExternalCommandExecPlan proves an externalized top-level command rides the fork/exec
+// seam: a dynamic Kong holder built for the word parses the given argv, externalCommandExecPlan
+// resolves the baked plugin binary by word and builds the exec argv (binary ++ pass-through
+// args) + a CLI-mode env (handshake cookie stripped, CHARLY_BIN stamped — asserted by
+// assertCommandEnv). Shared by the passthrough/udev/tmux/vm exec-plan tests (R3).
+func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, wantTail []string) {
+	t.Helper()
+	// Set the go-plugin handshake cookie so the strip is non-trivial (assertCommandEnv checks
+	// it is absent from the built exec env — otherwise the plugin would enter serve mode).
 	t.Setenv(sdk.Handshake.MagicCookieKey, sdk.Handshake.MagicCookieValue)
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/fake/plugins/plugin-" + word
+	bakedPluginBinaries[provKey(ClassCommand, word)] = bakedBin
 	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
 
 	field := exportedCommandField(word)
@@ -167,10 +83,10 @@ func TestExternalCommandExecPlan_Vm(t *testing.T) {
 	cli.Plugins = kong.Plugins{holder}
 	parser, err := kong.New(&cli, kong.Name("charly"))
 	if err != nil {
-		t.Fatalf("kong.New with the vm command holder: %v", err)
+		t.Fatalf("kong.New with dynamic command holder for %q: %v", word, err)
 	}
-	if _, err := parser.Parse([]string{word, "list"}); err != nil {
-		t.Fatalf("kong.Parse `charly vm list`: %v", err)
+	if _, err := parser.Parse(parse); err != nil {
+		t.Fatalf("kong.Parse %v: %v", parse, err)
 	}
 
 	d := externalCommandDispatch{word: word, holder: holder, field: field}
@@ -178,10 +94,10 @@ func TestExternalCommandExecPlan_Vm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("externalCommandExecPlan: %v", err)
 	}
-	if want := "/fake/plugins/plugin-" + word; bin != want {
-		t.Fatalf("bin = %q, want the baked binary %q", bin, want)
+	if bin != bakedBin {
+		t.Fatalf("bin = %q, want the baked binary %q", bin, bakedBin)
 	}
-	want := []string{bin, "list"}
+	want := append([]string{bin}, wantTail...)
 	if len(argv) != len(want) {
 		t.Fatalf("argv = %v, want %v", argv, want)
 	}

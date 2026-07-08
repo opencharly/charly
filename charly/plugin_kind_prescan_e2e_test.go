@@ -117,7 +117,7 @@ bad-kind:
 }
 
 func pluginKindKeys(uf *UnifiedFile) []string {
-	out := []string{}
+	out := make([]string, 0, len(uf.PluginKinds))
 	for k := range uf.PluginKinds {
 		out = append(out, k)
 	}

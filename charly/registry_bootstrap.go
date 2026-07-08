@@ -88,12 +88,13 @@ var builtinProviderInstances = []Provider{
 // package-var initializer, which Go runs before ANY init() — so the per-class
 // bijection gates in init() below observe the registration WITHOUT depending on
 // cross-file init ordering (the alphabetical race the gates were structured to avoid).
-// Returns the provider so the `var _ = registerDedicatedBuiltin(...)` call site reads
-// cleanly. RegisterBuiltinProvider panics on a duplicate (class, word), so a provider
-// left in BOTH the manifest/slice and a dedicated file is caught loudly at startup.
-func registerDedicatedBuiltin(p Provider) Provider {
+// Returns true so the `var _ = registerDedicatedBuiltin(...)` call site (the codebase's
+// `var _ = func() bool` registration idiom) reads cleanly. RegisterBuiltinProvider panics
+// on a duplicate (class, word), so a provider left in BOTH the manifest/slice and a
+// dedicated file is caught loudly at startup.
+func registerDedicatedBuiltin(p Provider) bool { //nolint:unparam // bool result is the placeholder that keeps the pre-init `var _ = registerDedicatedBuiltin(...)` package-var registration idiom compiling; discarded by design, never consumed
 	RegisterBuiltinProvider(p)
-	return p
+	return true
 }
 
 // providerManifest is the parsed `providers:` directive — provider class → the

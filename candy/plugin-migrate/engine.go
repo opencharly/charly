@@ -199,36 +199,78 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 	}
 	ver := kit.FirstYAMLVersionLine(data)
 	fileVer, ok := kit.ParseCalVer(ver)
+
+	// Per-host overlay schema state (full mode only). The overlay migrates on
+	// the SAME chain (touches_host entries + the universal stamp) — a project
+	// already at head must NOT short-circuit a lagging overlay, or the operator
+	// is stuck in an unresolvable "Run: charly migrate" loop (every deploy-state
+	// write refuses the old overlay schema while migrate reports nothing to do).
+	overlayVer := kit.CalVer{}
+	overlayLags := false
+	if !projectOnly && ctx.HostDeployPath != "" {
+		if od, oerr := os.ReadFile(ctx.HostDeployPath); oerr == nil {
+			oraw := kit.FirstYAMLVersionLine(od)
+			ocv, ook := kit.ParseCalVer(oraw)
+			switch {
+			case ook && head.Less(ocv):
+				return false, fmt.Errorf(
+					"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:charly` from a fresh checkout)",
+					ctx.HostDeployPath, oraw, head)
+			case ook && ocv == head:
+				// overlay already current
+			case !ook || ocv.Less(floor):
+				return false, fmt.Errorf(
+					"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this per-host overlay against the current schema (a current overlay carries `version: %s`).",
+					ctx.HostDeployPath, oraw, floor, head, head)
+			default:
+				overlayVer, overlayLags = ocv, true
+			}
+		}
+	}
+
 	switch {
 	case ok && head.Less(fileVer):
 		return false, fmt.Errorf(
 			"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:charly` from a fresh checkout)",
 			rootPath, ver, head)
 	case ok && fileVer == head:
-		fmt.Fprintf(out, "already at schema %s; nothing to migrate\n", head)
-		return false, nil
+		if !overlayLags {
+			fmt.Fprintf(out, "already at schema %s; nothing to migrate\n", head)
+			return false, nil
+		}
+		// Project at head, overlay behind: fall through — the chain is
+		// idempotent on the already-migrated project and brings the overlay up.
 	case !ok || fileVer.Less(floor):
 		return false, fmt.Errorf(
 			"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this config against the current schema (a current config carries `version: %s`).",
 			rootPath, ver, floor, head, head)
 	}
 
-	// floor <= fileVer < head: apply the table's newer steps, then re-stamp to head.
+	// floor <= version < head (project and/or overlay): apply the table's newer
+	// steps to each LAGGING side, then re-stamp to head. The sides gate
+	// independently — a project at head with a lagging overlay runs only the
+	// touches_host leg of each pending entry.
 	var applied []string
 	for _, m := range migrationTable {
-		if !fileVer.Less(m.Version) {
-			continue // already covered by the file's current version
+		projectNeeds := fileVer.Less(m.Version)
+		hostNeeds := m.TouchesHost && !projectOnly && overlayLags && overlayVer.Less(m.Version)
+		if !projectNeeds && !hostNeeds {
+			continue // both sides already covered by their current versions
 		}
 		transform, terr := buildTransform(m)
 		if terr != nil {
 			return len(applied) > 0, terr
 		}
-		files, ferr := runDocMigration(ctx.Dir, ctx.DryRun, kit.OpUnifyCandidateFiles, transform)
-		if ferr != nil {
-			return len(applied) > 0, ferr
+		var files []string
+		var ferr error
+		if projectNeeds {
+			files, ferr = runDocMigration(ctx.Dir, ctx.DryRun, kit.OpUnifyCandidateFiles, transform)
+			if ferr != nil {
+				return len(applied) > 0, ferr
+			}
 		}
 		hostChanged := false
-		if m.TouchesHost && !projectOnly {
+		if hostNeeds {
 			hostChanged, ferr = migrateHostOverlayDoc(ctx, transform)
 			if ferr != nil {
 				return len(applied) > 0, ferr

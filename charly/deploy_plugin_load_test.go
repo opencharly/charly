@@ -12,7 +12,7 @@ import (
 // (ah-deploy-recorded / ah-ledger-deploys-dir / ah-ledger-layers-dir) assert.
 func TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger(t *testing.T) {
 	fe := &recordingExec{} // a non-ShellExecutor venue → the remote (guest) write path
-	tgt := &externalDeployTarget{name: "check-arch-vm", prov: &grpcProvider{word: "vm", class: ClassDeployTarget}, exec: fe}
+	tgt := &externalDeployTarget{name: "check-arch-vm", prov: &grpcProvider{capMeta: capMeta{word: "vm", class: ClassDeployTarget}}, exec: fe}
 	plans := []*InstallPlan{{Candy: "ripgrep", Version: "2026.1.1", DeployID: "abc1230000000000"}}
 	if err := tgt.recordVenueLedger(plans); err != nil {
 		t.Fatalf("recordVenueLedger: %v", err)
@@ -33,7 +33,7 @@ func TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger(t *testing.T) {
 // (ShellExecutor) skips the venue write — recordDeploy already wrote the operator-side ledger
 // there, so the venue IS the host and a second write would be redundant.
 func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
-	tgt := &externalDeployTarget{name: "host-bed", prov: &grpcProvider{word: "local", class: ClassDeployTarget}, exec: ShellExecutor{}}
+	tgt := &externalDeployTarget{name: "host-bed", prov: &grpcProvider{capMeta: capMeta{word: "local", class: ClassDeployTarget}}, exec: ShellExecutor{}}
 	plans := []*InstallPlan{{Candy: "direnv", DeployID: "deadbeef00000000"}}
 	if err := tgt.recordVenueLedger(plans); err != nil {
 		t.Fatalf("recordVenueLedger host-local: %v", err)

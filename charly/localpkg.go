@@ -139,6 +139,18 @@ func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, op
 	if lp == nil {
 		return nil, fmt.Errorf("buildLocalPkgOnHost: nil LocalPkgDef")
 	}
+	// Serialize concurrent builds of the SAME source dir (flock, cross-process):
+	// makepkg materializes shared src/ working copies inside pkg/<fmt>, so two
+	// concurrent builds would interleave in one directory — defensive mutual
+	// exclusion; one shared source dir is the design (single source of truth).
+	// (The "fatal: invalid reference: origin/HEAD" failure once blamed on this
+	// race is the detached-sdk-HEAD PKGBUILD source issue — deterministic and
+	// lock-independent; see CHANGELOG.)
+	releaseLock, err := acquireLocalPkgBuildLock(srcDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = releaseLock() }()
 	pkgDest, err := os.MkdirTemp("", "charly-localpkg-")
 	if err != nil {
 		return nil, fmt.Errorf("localpkg build output tempdir: %w", err)

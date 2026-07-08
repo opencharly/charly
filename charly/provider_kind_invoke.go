@@ -63,7 +63,7 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	// input-def gate above — the host dispatches it and surfaces error-severity Diagnostics as a
 	// load failure. A kind that does not declare it pays nothing (no extra round-trip).
 	if vc, ok := prov.(validatingKindCarrier); ok && vc.isValidatingKind() {
-		vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpValidate, Params: json.RawMessage(paramsJSON)})
+		vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpValidate, Params: paramsJSON})
 		if verr != nil {
 			return fmt.Errorf("node %q: plugin kind %q validate: %w", gn.name, gn.disc, verr)
 		}
@@ -99,7 +99,7 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 			return fmt.Errorf("node %q: marshal member env: %w", gn.name, err)
 		}
 	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpLoad, Params: json.RawMessage(paramsJSON), Env: envJSON})
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpLoad, Params: paramsJSON, Env: envJSON})
 	if err != nil {
 		return fmt.Errorf("node %q: plugin kind %q: %w", gn.name, gn.disc, err)
 	}

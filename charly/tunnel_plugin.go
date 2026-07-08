@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -61,19 +60,7 @@ func invokeTunnel(cfg TunnelConfig, method string) (tunnelReply, error) {
 				"(/usr/lib/charly/plugins) or run from a project composing it")
 	}
 	in := tunnelWireInput{Method: method, Config: &cfg}
-	params, err := marshalJSON(map[string]any{"plugin_input": in})
-	if err != nil {
-		return tunnelReply{}, err
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "tunnel", Op: OpRun, Params: params})
-	if err != nil {
-		return tunnelReply{}, err
-	}
-	var r tunnelReply
-	if err := json.Unmarshal(out.JSON, &r); err != nil {
-		return tunnelReply{}, fmt.Errorf("decode tunnel reply: %w", err)
-	}
-	return r, nil
+	return invokeTyped[map[string]any, tunnelReply](context.Background(), prov, "tunnel", OpRun, map[string]any{"plugin_input": in})
 }
 
 // TunnelStart dispatches to verb:tunnel's `start` method. Package-level var for

@@ -60,9 +60,9 @@ type StepGrader interface {
 // `kind: agent` CLI against a live deployment.
 type AgentGrader struct {
 	Agent    *spec.AgentExecSpec // the resolved kind:agent exec spec (how to launch the CLI)
-	Target   string       // the deployment name the agent probes (e.g. "check-pod")
-	Instance string       // optional deploy instance
-	Timeout  string       // optional Go-duration override (from --timeout)
+	Target   string              // the deployment name the agent probes (e.g. "check-pod")
+	Instance string              // optional deploy instance
+	Timeout  string              // optional Go-duration override (from --timeout)
 }
 
 // Grade builds the grader prompt, runs the AI once, and parses its verdict.

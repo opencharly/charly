@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 )
 
@@ -32,17 +31,9 @@ var invokeKubePlugin = func(op *Op) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("kube plugin not loaded — the deploy must compose candy/plugin-kube (its provider serves the clientcmd-backed kubeconfig merge); k3s-server requires it")
 	}
-	params, err := marshalJSON(op)
-	if err != nil {
-		return "", fmt.Errorf("kube plugin: marshal op: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "kube", Op: OpRun, Params: params})
+	pr, err := invokeTyped[*Op, pluginCheckResult](context.Background(), prov, "kube", OpRun, op)
 	if err != nil {
 		return "", fmt.Errorf("kube plugin: %w", err)
-	}
-	var pr pluginCheckResult
-	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		return "", fmt.Errorf("kube plugin: decode result: %w", err)
 	}
 	if pr.Status == "fail" {
 		return pr.Message, fmt.Errorf("kube plugin: %s", pr.Message)

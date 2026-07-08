@@ -13,7 +13,7 @@ import (
 // collides with the `k8s` kind keyword. Two loader/validate sites must handle it:
 //
 //   - applyDiscoveredManifest routes every discovered manifest via classifyDoc,
-//     which inspects the VALUE shape (nodeShapedValue: a `<kind>` discriminator)
+//     which inspects the VALUE shape (kit.NodeShapedValue: a `<kind>` discriminator)
 //     and reports docShapeNode — so the box named `k8s` is parsed as a node-form
 //     image (a candy: node with base:), not mis-decoded as a k8s-kind entity.
 //   - validateVocabularyCollections (the root-shape collection validator) would

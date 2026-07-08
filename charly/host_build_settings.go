@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -17,46 +16,42 @@ import (
 // action noun, NOT a provider word (F11).
 const settingsBuilderKind = "settings"
 
-func hostBuildSettings(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.SettingsRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return marshalJSON(spec.SettingsReply{Error: fmt.Sprintf("settings host-build: decode: %v", err)})
-	}
+func hostBuildSettings(_ context.Context, req spec.SettingsRequest, _ buildEngineContext) (spec.SettingsReply, error) {
 	switch req.Op {
 	case "get":
 		val, err := resolveSettingsGet(req.Key)
 		if err != nil {
-			return marshalJSON(spec.SettingsReply{Error: err.Error()})
+			return spec.SettingsReply{Error: err.Error()}, nil
 		}
-		return marshalJSON(spec.SettingsReply{Value: val})
+		return spec.SettingsReply{Value: val}, nil
 	case "set":
 		if err := SetConfigValue(req.Key, req.Value); err != nil {
-			return marshalJSON(spec.SettingsReply{Error: err.Error()})
+			return spec.SettingsReply{Error: err.Error()}, nil
 		}
-		return marshalJSON(spec.SettingsReply{})
+		return spec.SettingsReply{}, nil
 	case "list":
 		vals, err := ListConfigValues()
 		if err != nil {
-			return marshalJSON(spec.SettingsReply{Error: err.Error()})
+			return spec.SettingsReply{Error: err.Error()}, nil
 		}
 		entries := make([]spec.SettingsEntry, 0, len(vals))
 		for _, v := range vals {
 			entries = append(entries, spec.SettingsEntry{Key: v.Key, Value: v.Value, Source: v.Source})
 		}
-		return marshalJSON(spec.SettingsReply{Entries: entries})
+		return spec.SettingsReply{Entries: entries}, nil
 	case "reset":
 		if err := ResetConfigValue(req.Key); err != nil {
-			return marshalJSON(spec.SettingsReply{Error: err.Error()})
+			return spec.SettingsReply{Error: err.Error()}, nil
 		}
-		return marshalJSON(spec.SettingsReply{})
+		return spec.SettingsReply{}, nil
 	case "path":
 		path, err := RuntimeConfigPath()
 		if err != nil {
-			return marshalJSON(spec.SettingsReply{Error: err.Error()})
+			return spec.SettingsReply{Error: err.Error()}, nil
 		}
-		return marshalJSON(spec.SettingsReply{Value: path})
+		return spec.SettingsReply{Value: path}, nil
 	default:
-		return marshalJSON(spec.SettingsReply{Error: fmt.Sprintf("settings: unknown op %q", req.Op)})
+		return spec.SettingsReply{Error: fmt.Sprintf("settings: unknown op %q", req.Op)}, nil
 	}
 }
 
@@ -98,4 +93,7 @@ func resolveSettingsGet(key string) (string, error) {
 	return "", fmt.Errorf("unknown config key %q (run 'charly settings list' to see valid keys)", key)
 }
 
-var _ = func() bool { registerHostBuilder(settingsBuilderKind, hostBuildSettings); return true }()
+var _ = func() bool {
+	registerHostBuilder(settingsBuilderKind, typedHostBuilder(settingsBuilderKind, hostBuildSettings))
+	return true
+}()

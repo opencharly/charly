@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // Retention fallbacks — used ONLY when defaults.keep_images / keep_check_runs are
 // absent from config. Zero means "disabled" so third-party configs that never
 // declare the keys get NO surprise pruning. The repo's charly.yml opts in
-// (keep_images: 5, keep_check_runs: 10). See /charly-core:clean.
+// (keep_images: 3, keep_check_runs: 3). See /charly-core:clean.
 const (
 	keepImagesFallback    = 0
 	keepCheckRunsFallback = 0
@@ -97,6 +98,7 @@ func imageLabelCalVer(im LocalImageInfo) (CalVer, bool) {
 // and `charly clean --invalidate`.
 type imageTagInfo struct {
 	Ref         string
+	ID          string
 	LabelCalVer CalVer
 	OkLabel     bool
 	TagCalVer   CalVer
@@ -133,7 +135,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 			seenRef[ref] = true
 			tcv, okT := ParseCalVer(extractCalVerTag(ref))
 			groups[short] = append(groups[short], imageTagInfo{
-				Ref: ref, LabelCalVer: lcv, OkLabel: okL,
+				Ref: ref, ID: normImageID(im.ID), LabelCalVer: lcv, OkLabel: okL,
 				TagCalVer: tcv, OkTag: okT, InUse: inUse,
 			})
 		}
@@ -155,6 +157,88 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	return groups, nil
 }
 
+// liveBuildFloor scans the build-activity locks (acquireBuildActivityLock): a
+// lock file whose flock is ACQUIRABLE is stale (its build died) and is reaped;
+// a HELD one is a LIVE build whose recorded generate CalVer floors every FROM
+// pin it may still resolve. Returns the minimum live CalVer, whether that floor
+// is usable, and the live-build count — a live lock with an unreadable CalVer
+// forces floorOK=false, so the caller protects everything.
+func liveBuildFloor() (floor CalVer, floorOK bool, live int) {
+	dir, err := buildActivityDir()
+	if err != nil {
+		return CalVer{}, false, 0
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return CalVer{}, false, 0
+	}
+	haveFloor := false
+	floorOK = true
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		p := filepath.Join(dir, e.Name())
+		if rel, lerr := acquireFileLock(p, false); lerr == nil {
+			_ = rel()
+			_ = os.Remove(p) // stale — its build died without releasing
+			continue
+		}
+		live++
+		var cv CalVer
+		ok := false
+		if b, rerr := os.ReadFile(p); rerr == nil {
+			cv, ok = ParseCalVer(strings.TrimSpace(string(b)))
+		}
+		if !ok {
+			floorOK = false
+			continue
+		}
+		if !haveFloor || cv.Less(floor) {
+			floor, haveFloor = cv, true
+		}
+	}
+	if live == 0 {
+		return CalVer{}, false, 0
+	}
+	if !haveFloor {
+		floorOK = false
+	}
+	return floor, floorOK, live
+}
+
+// retentionRemovable is the pure retention decision for one inventoried tag:
+// the standing rules (keep the newest keepN, never remove an undatable tag,
+// never an in-use one) plus the build-activity protections — while ANY build
+// is live, (a) a tag at or above the oldest live build's generate CalVer may
+// still be FROM-resolved and is kept (an unknown floor keeps everything), and
+// (b) an image's LAST local tag is never removed (an outright mid-build image
+// deletion corrupts buildah's layer store — the layer-not-known/SIGSEGV
+// variant the fan-out surfaced).
+func retentionRemovable(c imageTagInfo, idx, keepN int, floor CalVer, floorOK bool, live int, lastTag bool) bool {
+	if idx < keepN {
+		return false // keep the newest keepN tags
+	}
+	if !c.OkLabel && !c.OkTag {
+		return false // never remove a tag we can't date
+	}
+	if c.InUse {
+		return false // image referenced by a container/deploy
+	}
+	if live > 0 {
+		if !floorOK {
+			return false
+		}
+		if c.OkTag && !c.TagCalVer.Less(floor) {
+			return false
+		}
+		if lastTag {
+			return false
+		}
+	}
+	return true
+}
+
 func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, error) {
 	if keepN <= 0 {
 		return nil, nil
@@ -163,19 +247,26 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 	if err != nil {
 		return nil, err
 	}
+	floor, floorOK, live := liveBuildFloor()
+	tagCount := map[string]int{}
+	for _, group := range groups {
+		for _, c := range group {
+			if c.ID != "" {
+				tagCount[c.ID]++
+			}
+		}
+	}
 	var removed []string
 	for _, group := range groups {
 		for idx, c := range group {
-			if idx < keepN {
-				continue // keep the newest keepN tags
-			}
-			if !c.OkLabel && !c.OkTag {
-				continue // never remove a tag we can't date (no label/tag CalVer)
-			}
-			if c.InUse {
-				continue // image referenced by a container/deploy
+			lastTag := c.ID != "" && tagCount[c.ID] <= 1
+			if !retentionRemovable(c, idx, keepN, floor, floorOK, live, lastTag) {
+				continue
 			}
 			if dryRun {
+				if c.ID != "" {
+					tagCount[c.ID]--
+				}
 				removed = append(removed, c.Ref)
 				continue
 			}
@@ -186,10 +277,89 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 			if err := exec.Command(EngineBinary(engine), "rmi", c.Ref).Run(); err != nil {
 				continue
 			}
+			if c.ID != "" {
+				tagCount[c.ID]--
+			}
 			removed = append(removed, c.Ref)
 		}
 	}
 	return removed, nil
+}
+
+// pruneDanglingCharlyImages removes UNTAGGED (dangling) charly-built images —
+// the residue tag-retention leaves behind (an untagged id) plus dead build
+// intermediates. Scope-guarded three ways: only images carrying the
+// ai.opencharly.box label (never a foreign image), only while NO build is live
+// (an intermediate may be a parent of an in-flight build), and `rmi` without
+// -f (a parent of a tagged image / an in-use id is refused and silently
+// skipped — the same backstop tag retention relies on).
+func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
+	if _, _, live := liveBuildFloor(); live > 0 {
+		return nil, nil // never delete images while any build is in flight
+	}
+	out, err := exec.Command(EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
+	if err != nil {
+		return nil, fmt.Errorf("listing dangling images: %w", err)
+	}
+	imgs, err := parseLocalImagesJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, im := range imgs {
+		if im.Labels[LabelBox] == "" {
+			continue // not charly-built
+		}
+		if dryRun {
+			removed = append(removed, im.ID)
+			continue
+		}
+		if err := exec.Command(EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
+			continue // parent of a kept image / in use — expected, keep
+		}
+		removed = append(removed, im.ID)
+	}
+	return removed, nil
+}
+
+// buildahStagingGlobs are the /var/tmp staging-dir patterns buildah/podman
+// leave behind when a commit dies mid-write (ENOSPC, SIGKILL) — dead weight no
+// engine command reclaims. Swept only when no build is live, and only dirs
+// owned by the current user (rootless storage).
+var buildahStagingGlobs = []string{
+	"/var/tmp/container_images_storage*",
+	"/var/tmp/buildah*",
+}
+
+// pruneBuildahStaging removes dead buildah/podman staging dirs (see
+// buildahStagingGlobs). Live-build-guarded like the dangling reaper.
+func pruneBuildahStaging(dryRun bool) []string {
+	if _, _, live := liveBuildFloor(); live > 0 {
+		return nil
+	}
+	uid := os.Getuid()
+	var removed []string
+	for _, g := range buildahStagingGlobs {
+		matches, _ := filepath.Glob(g)
+		for _, m := range matches {
+			st, err := os.Stat(m)
+			if err != nil || !st.IsDir() {
+				continue
+			}
+			if sys, ok := st.Sys().(*syscall.Stat_t); !ok || int(sys.Uid) != uid {
+				continue // not ours (rootless scope only)
+			}
+			if dryRun {
+				removed = append(removed, m)
+				continue
+			}
+			if err := os.RemoveAll(m); err != nil {
+				continue
+			}
+			removed = append(removed, m)
+		}
+	}
+	return removed
 }
 
 // pruneCheckRuns trims each bed/score subdir of checkDir to the newest keepN run
@@ -329,7 +499,6 @@ func removeOldestByMtime(dir string, keepN int, dryRun bool) []string {
 	return removed
 }
 
-
 // pruneBuildCandyDirs trims .build/_candy/<candy>.<version>/ to the newest keepN
 // versions PER CANDY — the build-staging counterpart to image-tag retention, so
 // outdated candy CalVer stagings don't accumulate (candy names are dot-free, so
@@ -375,4 +544,3 @@ func pruneBuildCandyDirs(buildDir string, keepN int, dryRun bool) []string {
 	}
 	return removed
 }
-

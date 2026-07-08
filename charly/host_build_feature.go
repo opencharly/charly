@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -18,20 +17,16 @@ import (
 // seam returns plain enumerated DATA — the plugin does all the formatting/verdict/exit-code logic.
 const featureBuilderKind = "feature"
 
-func hostBuildFeature(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.FeatureRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return marshalJSON(spec.FeatureReply{Error: fmt.Sprintf("feature host-build: decode: %v", err)})
-	}
+func hostBuildFeature(_ context.Context, req spec.FeatureRequest, _ buildEngineContext) (spec.FeatureReply, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return marshalJSON(spec.FeatureReply{Error: err.Error()})
+		return spec.FeatureReply{Error: err.Error()}, nil
 	}
 	ents, err := enumerateFeatures(dir, req.Filter)
 	if err != nil {
-		return marshalJSON(spec.FeatureReply{Error: err.Error()})
+		return spec.FeatureReply{Error: err.Error()}, nil
 	}
-	return marshalJSON(spec.FeatureReply{Entities: ents})
+	return spec.FeatureReply{Entities: ents}, nil
 }
 
 // enumerateFeatures loads the project config + candies and flattens every kind: entity's plan into
@@ -91,4 +86,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 	return ents, nil
 }
 
-var _ = func() bool { registerHostBuilder(featureBuilderKind, hostBuildFeature); return true }()
+var _ = func() bool {
+	registerHostBuilder(featureBuilderKind, typedHostBuilder(featureBuilderKind, hostBuildFeature))
+	return true
+}()

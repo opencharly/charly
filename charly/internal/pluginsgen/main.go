@@ -175,7 +175,7 @@ func readModulePath(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open go.mod: %w (a compiled plugin must be its own Go module)", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -195,7 +195,7 @@ func readGoDirective(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())

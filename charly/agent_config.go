@@ -52,23 +52,9 @@ const DefaultAgentTimeout = ""
 // name-selection, the no-agents/not-found/multiple errors, and the default
 // application; the kernel reads no spec.Agent fields.
 func resolveAgentViaPlugin(bodies map[string]json.RawMessage, name string) (*spec.AgentExecSpec, string, error) {
-	prov, ok := providerRegistry.ResolveKind("agent")
-	if !ok {
-		return nil, "", fmt.Errorf("agent resolve: kind provider not registered")
-	}
-	paramsJSON, err := json.Marshal(spec.AgentResolveInput{Agents: bodies, Name: name})
-	if err != nil {
-		return nil, "", fmt.Errorf("agent resolve: marshal input: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "agent", Op: OpResolve, Params: json.RawMessage(paramsJSON)})
+	reply, err := hostInvoke[spec.AgentResolveInput, spec.AgentResolveReply](ClassKind, "agent", OpResolve, spec.AgentResolveInput{Agents: bodies, Name: name})
 	if err != nil {
 		return nil, "", err
-	}
-	var reply spec.AgentResolveReply
-	if out != nil && len(out.JSON) > 0 {
-		if err := json.Unmarshal(out.JSON, &reply); err != nil {
-			return nil, "", fmt.Errorf("agent resolve: decode reply: %w", err)
-		}
 	}
 	return reply.Spec, reply.Name, nil
 }
@@ -144,7 +130,7 @@ func ParseAgentTimeout(s spec.Duration) (time.Duration, error) {
 	if s == "" {
 		return 0, nil
 	}
-	return time.ParseDuration(string(s))
+	return time.ParseDuration(s)
 }
 
 // firstNonEmptyLine returns the first non-empty line of s with surrounding

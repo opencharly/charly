@@ -50,6 +50,17 @@ func FetchQcow2(src VmSource) (FetchedImage, error) {
 	cachePath := filepath.Join(cacheDir, hex.EncodeToString(urlHash[:])+".qcow2")
 	cacheSumPath := cachePath + ".sha256"
 
+	// Serialize concurrent fetchers of this image (flock, cross-process): two beds
+	// building VMs from the same cloud image otherwise race on the shared .part —
+	// one renames it away under the other, and interleaved Range-resumes mix bytes.
+	// The cache-hit check runs UNDER the lock (double-checked): a waiter usually
+	// finds the image the first fetcher just promoted.
+	releaseLock, err := acquireVmImageFetchLock(cachePath)
+	if err != nil {
+		return FetchedImage{}, fmt.Errorf("vm-image fetch lock: %w", err)
+	}
+	defer func() { _ = releaseLock() }()
+
 	// Resolve expected sha256.
 	expected := resolveExpectedSHA256(src)
 
@@ -69,20 +80,34 @@ func FetchQcow2(src VmSource) (FetchedImage, error) {
 		}
 	}
 
-	// Download (resumable) to a .part file, then rename.
+	// Download (resumable) to a .part file, then rename. A RESUMED partial that
+	// fails verification is treated as STALE — a mutable upstream URL (an
+	// images/latest/ rotation) changed under it — so it is invalidated and the
+	// fetch restarts ONCE from zero (deterministic cache invalidation, not a
+	// retry: a clean full download that still mismatches is a hard error).
 	partPath := cachePath + ".part"
-	if err := downloadResumable(src.URL, partPath); err != nil {
-		return FetchedImage{}, err
-	}
-
-	// Verify sha256 against expected.
-	actual, err := fileSHA256(partPath)
-	if err != nil {
-		return FetchedImage{}, fmt.Errorf("sha256 of %s: %w", partPath, err)
-	}
-	if expected != "" && actual != expected {
-		// Hard failure — don't promote to cache.
+	var actual string
+	for {
+		resumed := false
+		if st, err := os.Stat(partPath); err == nil && st.Size() > 0 {
+			resumed = true
+		}
+		if err := downloadResumable(src.URL, partPath); err != nil {
+			return FetchedImage{}, err
+		}
+		actual, err = fileSHA256(partPath)
+		if err != nil {
+			return FetchedImage{}, fmt.Errorf("sha256 of %s: %w", partPath, err)
+		}
+		if expected == "" || actual == expected {
+			break
+		}
 		_ = os.Remove(partPath)
+		if resumed {
+			fmt.Fprintf(os.Stderr, "fetch qcow2: resumed partial failed verification (upstream rotated?) — refetching %s from zero\n", src.URL)
+			continue
+		}
+		// Hard failure — a clean full download mismatched.
 		return FetchedImage{}, fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
 	}
 

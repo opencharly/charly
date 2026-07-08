@@ -237,7 +237,6 @@ func docContent(root *yaml.Node) *yaml.Node {
 	return root
 }
 
-
 // imageBodyNode returns the IMAGE BODY node for box `name` in a parsed
 // node-form document — the value of the named entity's `candy:` discriminator.
 // EDGE-INHERIT cutover D merged the `box:` KIND into `candy:`: an image is a

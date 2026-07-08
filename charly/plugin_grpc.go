@@ -126,43 +126,18 @@ func describe(ctx context.Context, conn *sdk.Conn) (*pb.Capabilities, error) {
 }
 
 // grpcProvider is a Provider backed by a remote plugin over gRPC — the
-// out-of-process peer of a built-in. Call sites never distinguish the two.
+// out-of-process peer of a built-in. Call sites never distinguish the two. It embeds capMeta (the
+// shared class/word + carrier methods, R3) and adds ONLY the out-of-process extras: the gRPC
+// connection/broker, the executorInvoker reverse channel (InvokeWithExecutor), and the deploy
+// lifecycle/preresolve flags (grpc-only — a substrate lifecycle needs the reverse channel, so the
+// executorInvoker discriminator, satisfied SOLELY by *grpcProvider, is what routes it).
 type grpcProvider struct {
+	capMeta
 	conn       *sdk.Conn
-	class      ProviderClass
-	word       string
-	contract   *stepContract // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural bool          // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	lifecycle  bool          // set ONLY for a class:deploy capability bringing its OWN host-side venue lifecycle (F6)
-	preresolve bool          // set ONLY for a class:deploy capability declaring a host-side preresolve step (F6)
-	validates  bool          // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase      string        // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary    string        // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	lifecycle  bool // set ONLY for a class:deploy capability bringing its OWN host-side venue lifecycle (F6)
+	preresolve bool // set ONLY for a class:deploy capability declaring a host-side preresolve step (F6)
 }
 
-func (g *grpcProvider) Reserved() string     { return g.word }
-func (g *grpcProvider) Class() ProviderClass { return g.class }
-
-// declaredStepContract implements stepContractCarrier — a class:step provider's plugin-declared
-// Scope/Venue/Gate (F3), nil/false for every other capability.
-func (g *grpcProvider) declaredStepContract() (stepContract, bool) {
-	if g.contract == nil {
-		return stepContract{}, false
-	}
-	return *g.contract, true
-}
-
-// isStructuralKind implements structuralKindCarrier — a class:kind provider whose decode
-// returns a spec.Deploy member tree (-> uf.Bundle) rather than a flat body (F5).
-func (g *grpcProvider) isStructuralKind() bool { return g.structural }
-
-// isValidatingKind implements validatingKindCarrier — a class:kind provider serving a deep
-// OpValidate check the host dispatches at load (F7/C8).
-func (g *grpcProvider) isValidatingKind() bool { return g.validates }
-
-// pluginPhase implements phaseCarrier — the plugin lifecycle phase the kernel loads/invokes this
-// provider in (F9; normalized, never empty).
-func (g *grpcProvider) pluginPhase() string { return g.phase }
 func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, error) {
 	rep, err := g.conn.Provider.Invoke(ctx, &pb.InvokeRequest{
 		Reserved: op.Reserved, Op: op.Op, ParamsJson: op.Params, EnvJson: op.Env, Class: string(g.class),
@@ -241,53 +216,25 @@ func buildUnit(conn *sdk.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
 		return nil, fmt.Errorf("plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d — rebuild the plugin against this charly",
 			caps.GetProtocolVersion(), caps.GetCalver(), sdk.ProtocolVersion)
 	}
-	provided := caps.GetProvided()
-	providers := make([]Provider, 0, len(provided))
-	inputDefs := make(map[string]string, len(provided))
-	for _, c := range provided {
-		class := ProviderClass(c.GetClass())
-		if !providerClasses[class] || c.GetWord() == "" {
-			return nil, fmt.Errorf("plugin advertised malformed capability %q:%q", c.GetClass(), c.GetWord())
-		}
-		gp := &grpcProvider{conn: conn, class: class, word: c.GetWord()}
-		// A class:step capability may DECLARE its install-step contract (F3): the host carries
-		// the plugin-declared Scope/Venue/Gate so compileActOp builds an externalStep with it.
-		if sc := c.GetStepContract(); class == ClassStep && sc != nil {
-			gp.contract = &stepContract{Scope: scopeFromName(sc.GetScope()), Venue: Venue(sc.GetVenue()), Gate: Gate(sc.GetGate()), Emits: sc.GetEmits()}
-		}
-		// A class:kind capability may declare it decodes a STRUCTURAL entity (F5): runPluginKind
-		// folds its spec.Deploy reply into uf.Bundle instead of landing a flat body opaquely.
-		if class == ClassKind && c.GetStructural() {
-			gp.structural = true
-		}
-		// A class:kind capability may declare a deep OpValidate check (F7/C8).
-		if class == ClassKind && c.GetValidates() {
-			gp.validates = true
-		}
-		// Every capability declares a lifecycle PHASE (F9; normalized, default runtime).
-		gp.phase = sdk.NormalizePhase(c.GetPhase())
-		if class == ClassVerb {
-			gp.primary = c.GetPrimary()
-		}
-		// A class:deploy capability may declare it brings its OWN venue lifecycle (F6): the host
-		// registers a wire-backed substrateLifecycle for it at plugin-load.
-		if class == ClassDeployTarget && c.GetLifecycle() {
+	// The capability-lift loop is shared with buildUnitInProc via liftCapabilities (R3); the grpc
+	// factory adds the out-of-process extras — the connection plus the class:deploy lifecycle /
+	// preresolve flags (F6), which ONLY *grpcProvider carries (they need the reverse channel, and
+	// the executorInvoker discriminator is satisfied SOLELY by *grpcProvider).
+	providers, inputDefs, err := liftCapabilities(caps.GetProvided(), "plugin", func(meta capMeta, c *pb.ProvidedCapability) Provider {
+		gp := &grpcProvider{capMeta: meta, conn: conn}
+		if meta.class == ClassDeployTarget && c.GetLifecycle() {
 			gp.lifecycle = true
 		}
-		// A class:deploy capability may declare a host-side preresolve step (F6).
-		if class == ClassDeployTarget && c.GetPreresolve() {
+		if meta.class == ClassDeployTarget && c.GetPreresolve() {
 			gp.preresolve = true
 		}
-		providers = append(providers, gp)
-		if c.GetInputDef() != "" {
-			inputDefs[provKey(class, c.GetWord())] = c.GetInputDef()
-		}
+		return gp
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &PluginUnit{
 		Providers: providers,
 		Schema:    PluginSchema{CueSource: caps.GetSchemaCue(), InputDefs: inputDefs},
 	}, nil
 }
-
-// primaryInput implements primaryCarrier (the scalar-sugar primary, F/verb).
-func (g *grpcProvider) primaryInput() string { return g.primary }

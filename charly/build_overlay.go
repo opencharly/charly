@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -52,14 +51,10 @@ func overlayBuildInputsFrom(ctx context.Context) *overlayBuildInputs {
 // hostBuildOverlay is the F10 "overlay" host-builder: decode the OverlayBuildRequest scalars, read
 // the live plans + parent venue from the ctx, run the pod-overlay build engine HOST-SIDE in-proc,
 // return the opaque OverlayBuildReply (a build FAILURE rides OverlayBuildReply.Error).
-func hostBuildOverlay(ctx context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.OverlayBuildRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return nil, fmt.Errorf("overlay host-build: decode request: %w", err)
-	}
+func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ buildEngineContext) (spec.OverlayBuildReply, error) {
 	reply, err := runOverlayBuild(ctx, req, overlayBuildInputsFrom(ctx))
 	reply.Error = errString(err)
-	return marshalJSON(reply)
+	return reply, nil
 }
 
 // runOverlayBuild is the HOST-SIDE pod-overlay build engine. It reconstructs the Generator +
@@ -170,7 +165,10 @@ func runOverlayBuild(_ context.Context, req spec.OverlayBuildRequest, in *overla
 }
 
 // Register the overlay host-builder on the F10 HostBuild seam at package-var init.
-var _ = func() bool { registerHostBuilder(overlayBuilderKind, hostBuildOverlay); return true }()
+var _ = func() bool {
+	registerHostBuilder(overlayBuilderKind, typedHostBuilder(overlayBuilderKind, hostBuildOverlay))
+	return true
+}()
 
 // podDeployEngine returns the container engine for a pod deploy node — node.Engine when set, else
 // "podman" (the default). Used by the overlay-image teardown.
@@ -180,4 +178,3 @@ func podDeployEngine(node *BundleNode) string {
 	}
 	return "podman"
 }
-

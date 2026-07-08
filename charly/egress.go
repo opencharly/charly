@@ -30,26 +30,20 @@ func egressValidate(kind, label, mode, data string) error {
 	if !ok {
 		return fmt.Errorf("%s: egress plugin (verb:egress) not registered — charly built without candy/plugin-egress", label)
 	}
-	params, err := marshalJSON(map[string]string{"kind": kind, "label": label, "mode": mode, "data": data})
+	reply, err := invokeTyped[map[string]string, egressReply](context.Background(), prov, "egress", OpValidate,
+		map[string]string{"kind": kind, "label": label, "mode": mode, "data": data})
 	if err != nil {
-		return fmt.Errorf("%s: egress marshal: %w", label, err)
-	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: "egress", Op: OpValidate, Params: params})
-	if err != nil {
-		return fmt.Errorf("%s: egress invoke: %w", label, err)
-	}
-	var reply struct {
-		Error string `json:"error"`
-	}
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return fmt.Errorf("%s: egress decode reply: %w", label, err)
-		}
+		return fmt.Errorf("%s: egress: %w", label, err)
 	}
 	if reply.Error != "" {
 		return errors.New(reply.Error)
 	}
 	return nil
+}
+
+// egressReply is verb:egress's OpValidate reply — a single error string ("" = valid).
+type egressReply struct {
+	Error string `json:"error"`
 }
 
 // ValidateEgress validates already-serialized YAML or JSON bytes against the egress kind's

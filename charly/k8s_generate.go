@@ -58,11 +58,11 @@ func GenerateK8sKustomize(opts K8sGenerateOpts) (string, error) {
 		ImageRef:       opts.ImageRef,
 		Deploy:         opts.Deploy,
 		// Ship the cluster body OPAQUELY (Cutover K) — candy/plugin-k8sgen decodes it.
-		ClusterRaw:     opts.Cluster.Raw,
-		Ports:          opts.Capabilities.Port,
-		UID:            opts.Capabilities.UID,
-		GID:            opts.Capabilities.GID,
-		OutputDir:      opts.OutputDir,
+		ClusterRaw: opts.Cluster.Raw,
+		Ports:      opts.Capabilities.Port,
+		UID:        opts.Capabilities.UID,
+		GID:        opts.Capabilities.GID,
+		OutputDir:  opts.OutputDir,
 	}
 
 	prov, ok := providerRegistry.resolve(ClassVerb, "k8sgen")

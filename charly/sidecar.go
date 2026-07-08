@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -36,23 +35,9 @@ type ResolvedSidecar struct {
 // env; the plugin returns generation-ready sidecars, the app-only env, and the routed
 // deploy overrides to persist. The kernel reads no spec.Sidecar fields.
 func resolveSidecarsViaPlugin(in spec.SidecarResolveInput) (spec.SidecarResolveReply, error) {
-	prov, ok := providerRegistry.ResolveKind("sidecar")
-	if !ok {
-		return spec.SidecarResolveReply{}, fmt.Errorf("sidecar resolve: kind provider not registered")
-	}
-	paramsJSON, err := json.Marshal(in)
-	if err != nil {
-		return spec.SidecarResolveReply{}, fmt.Errorf("sidecar resolve: marshal input: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "sidecar", Op: OpResolve, Params: json.RawMessage(paramsJSON)})
+	reply, err := hostInvoke[spec.SidecarResolveInput, spec.SidecarResolveReply](ClassKind, "sidecar", OpResolve, in)
 	if err != nil {
 		return spec.SidecarResolveReply{}, fmt.Errorf("sidecar resolve: %w", err)
-	}
-	var reply spec.SidecarResolveReply
-	if out != nil && len(out.JSON) > 0 {
-		if err := json.Unmarshal(out.JSON, &reply); err != nil {
-			return spec.SidecarResolveReply{}, fmt.Errorf("sidecar resolve: decode reply: %w", err)
-		}
 	}
 	return reply, nil
 }

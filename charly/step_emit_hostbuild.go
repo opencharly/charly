@@ -44,7 +44,7 @@ type stepEmitter func(req spec.StepEmitRequest, build buildEngineContext) (strin
 var stepEmitters = map[string]stepEmitter{}
 
 // registerStepEmitter records one host-coupled step kind's in-core fragment renderer. Panics on
-// a duplicate (a startup invariant, like registerHostBuilder / registerSubstrateLifecycle).
+// a duplicate (a startup invariant, like registerHostBuilder / registerDeployPreresolver).
 func registerStepEmitter(word string, fn stepEmitter) {
 	if word == "" || fn == nil {
 		panic("registerStepEmitter: empty word or nil emitter")
@@ -66,28 +66,27 @@ func stepEmitterFor(word string) (stepEmitter, bool) {
 // fragment as an EmitReply JSON. An unregistered word is a LOUD error (a host-coupled step whose
 // in-core renderer was never registered — never a silent empty bake, R4). The buildEngineContext
 // carries the host engine the emitter renders against.
-func hostBuildStepEmit(_ context.Context, specJSON []byte, build buildEngineContext) ([]byte, error) {
-	var req spec.StepEmitRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return nil, fmt.Errorf("step-emit host-build: decode request: %w", err)
-	}
+func hostBuildStepEmit(_ context.Context, req spec.StepEmitRequest, build buildEngineContext) (spec.EmitReply, error) {
 	if req.Word == "" {
-		return nil, fmt.Errorf("step-emit host-build: request carries no step word")
+		return spec.EmitReply{}, fmt.Errorf("step-emit host-build: request carries no step word")
 	}
 	fn, ok := stepEmitterFor(req.Word)
 	if !ok {
-		return nil, fmt.Errorf("step-emit host-build: no in-core emitter registered for step %q", req.Word)
+		return spec.EmitReply{}, fmt.Errorf("step-emit host-build: no in-core emitter registered for step %q", req.Word)
 	}
 	frag, err := fn(req, build)
 	if err != nil {
-		return nil, fmt.Errorf("step-emit host-build %q: %w", req.Word, err)
+		return spec.EmitReply{}, fmt.Errorf("step-emit host-build %q: %w", req.Word, err)
 	}
-	return marshalJSON(spec.EmitReply{Fragment: frag})
+	return spec.EmitReply{Fragment: frag}, nil
 }
 
 // Register the step-emit host-builder at package-var init (before any init(), like the
 // image/overlay/plugin-binary builders).
-var _ = func() bool { registerHostBuilder("step-emit", hostBuildStepEmit); return true }()
+var _ = func() bool {
+	registerHostBuilder("step-emit", typedHostBuilder("step-emit", hostBuildStepEmit))
+	return true
+}()
 
 // stepEmitSystemPackages renders the SystemPackages InstallStep's BUILD-context (container-venue)
 // Containerfile fragment IN-CORE — the C1.2 relocation of the SystemPackages build-emit off

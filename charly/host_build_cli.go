@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,17 +19,13 @@ import (
 // TTY" doctrine inverted) and Capture=true captures stdout (short results the plugin parses). It is
 // the lifecycle counterpart of the "overlay"/"image"/"plugin-binary" host-builders — a generic
 // action noun, NOT a provider WORD (the F11 uniform-API gate forbids one). It replaces the in-core
-// runCharlySubcommand / captureCharlyStdout the compiled-in pod/vm lifecycles used.
+// subprocess plumbing (run_subcommand.go) the compiled-in pod/vm lifecycles used before M4.
 const cliBuilderKind = "cli"
 
 // hostBuildCli runs a `charly <argv>` subcommand host-side and returns the CliReply. A non-zero exit
 // rides CliReply.Error unless BestEffort. The context is unused (an interactive leg must not be
 // deadlined — the host TTY owns its lifetime, like the operator running the command directly).
-func hostBuildCli(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.CliRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return nil, fmt.Errorf("cli host-build: decode request: %w", err)
-	}
+func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) (spec.CliReply, error) {
 	cmd := exec.Command(os.Args[0], req.Argv...)
 	cmd.Stdin = os.Stdin
 	var reply spec.CliReply
@@ -47,7 +42,7 @@ func hostBuildCli(_ context.Context, specJSON []byte, _ buildEngineContext) ([]b
 		err := cmd.Run()
 		reply.ExitCode, reply.Error = cliExitResult(err, req.BestEffort)
 	}
-	return marshalJSON(reply)
+	return reply, nil
 }
 
 // cliExitResult maps an exec error to (exitCode, errString): clean → (0, ""); non-zero exit →
@@ -68,4 +63,7 @@ func cliExitResult(err error, bestEffort bool) (int, string) {
 
 // Register the cli host-builder on the F10 HostBuild seam at package-var init (before any init(),
 // like the substrate/preresolver registries + the overlay/image builders).
-var _ = func() bool { registerHostBuilder(cliBuilderKind, hostBuildCli); return true }()
+var _ = func() bool {
+	registerHostBuilder(cliBuilderKind, typedHostBuilder(cliBuilderKind, hostBuildCli))
+	return true
+}()

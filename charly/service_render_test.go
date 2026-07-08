@@ -288,7 +288,6 @@ func TestRenderServiceUserScope(t *testing.T) {
 	}
 }
 
-
 func TestServiceEntryIsPackaged(t *testing.T) {
 	packaged := &ServiceEntry{UsePackaged: "foo.service"}
 	custom := &ServiceEntry{Exec: "/bin/foo"}

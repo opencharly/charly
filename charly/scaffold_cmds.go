@@ -246,4 +246,3 @@ func resolveProjectFile(projectDir, relPath string) (string, error) {
 	}
 	return abs, nil
 }
-

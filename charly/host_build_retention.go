@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -20,14 +19,10 @@ import (
 // LoadConfig defaults + the --keep override) and returns the removed refs/dirs/paths + effective counts.
 const retentionBuilderKind = "retention"
 
-func hostBuildRetention(_ context.Context, specJSON []byte, _ buildEngineContext) ([]byte, error) {
-	var req spec.RetentionRequest
-	if err := json.Unmarshal(specJSON, &req); err != nil {
-		return marshalJSON(spec.RetentionReply{Error: fmt.Sprintf("retention host-build: decode: %v", err)})
-	}
+func hostBuildRetention(_ context.Context, req spec.RetentionRequest, _ buildEngineContext) (spec.RetentionReply, error) {
 	rt, err := ResolveRuntime()
 	if err != nil {
-		return marshalJSON(spec.RetentionReply{Error: err.Error()})
+		return spec.RetentionReply{Error: err.Error()}, nil
 	}
 	engineBin := EngineBinary(rt.BuildEngine)
 
@@ -35,9 +30,9 @@ func hostBuildRetention(_ context.Context, specJSON []byte, _ buildEngineContext
 	if req.Invalidate != "" {
 		refs, ierr := invalidateImageTags(engineBin, req.Invalidate, req.DryRun)
 		if ierr != nil {
-			return marshalJSON(spec.RetentionReply{Error: fmt.Sprintf("invalidating image tags: %v", ierr)})
+			return spec.RetentionReply{Error: fmt.Sprintf("invalidating image tags: %v", ierr)}, nil
 		}
-		return marshalJSON(spec.RetentionReply{ImageRefs: refs})
+		return spec.RetentionReply{ImageRefs: refs}, nil
 	}
 
 	// Resolve retention counts: project defaults.keep_* over the fallbacks, then the --keep override.
@@ -55,19 +50,28 @@ func hostBuildRetention(_ context.Context, specJSON []byte, _ buildEngineContext
 	if req.Images {
 		refs, perr := pruneImagesByRetention(engineBin, keepImages, req.DryRun)
 		if perr != nil {
-			return marshalJSON(spec.RetentionReply{Error: fmt.Sprintf("pruning images: %v", perr)})
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning images: %v", perr)}, nil
 		}
 		reply.ImageRefs = refs
+		dangling, derr := pruneDanglingCharlyImages(engineBin, req.DryRun)
+		if derr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning dangling images: %v", derr)}, nil
+		}
+		reply.DanglingIDs = dangling
+		reply.StagingDirs = pruneBuildahStaging(req.DryRun)
 		reply.BuildDirs = pruneBuildCandyDirs(filepath.Join(req.Dir, ".build"), keepImages, req.DryRun)
 	}
 	if req.Check {
 		paths, perr := pruneCheckRuns(filepath.Join(req.Dir, ".check"), keepCheck, req.DryRun)
 		if perr != nil {
-			return marshalJSON(spec.RetentionReply{Error: fmt.Sprintf("pruning check runs: %v", perr)})
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning check runs: %v", perr)}, nil
 		}
 		reply.CheckPaths = paths
 	}
-	return marshalJSON(reply)
+	return reply, nil
 }
 
-var _ = func() bool { registerHostBuilder(retentionBuilderKind, hostBuildRetention); return true }()
+var _ = func() bool {
+	registerHostBuilder(retentionBuilderKind, typedHostBuilder(retentionBuilderKind, hostBuildRetention))
+	return true
+}()

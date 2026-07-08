@@ -42,6 +42,7 @@ const DISCOVER_SCHEMA = {
           bed: { type: 'string' },
           target: { type: 'string', description: 'pod | vm | local' },
           dir: { type: 'string', description: "charly project dir of the bed ('' = repo root, 'box/<distro>' = submodule)" },
+          tokens: { type: 'array', items: { type: 'string' }, description: 'requires_exclusive host-resource tokens (bed node + members); [] when none' },
         },
         required: ['bed', 'target'],
       },
@@ -78,8 +79,8 @@ const BED_SCHEMA = {
 
 phase('Discover')
 const discoverPrompt = requested.length
-  ? `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. For each of these bed names: ${requested.join(', ')} — return its substrate kind word and the charly project dir it lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Return JSON {beds:[{bed,target,dir}]}. Do NOT run anything; do NOT return beds not in the list.`
-  : `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. Return ALL such beds as JSON {beds:[{bed,target,dir}]} where target is the substrate kind word and dir is the charly project dir the bed lives in ('' for the repo root, 'box/<distro>' for a submodule bed). Exclude non-disposable deploys (operator profiles). Do NOT run anything.`
+  ? `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. For each of these bed names: ${requested.join(', ')} — return its substrate kind word, the charly project dir it lives in ('' for the repo root, 'box/<distro>' for a submodule bed), and its requires_exclusive host-resource tokens (from the bed node AND any nested members; [] when none). Return JSON {beds:[{bed,target,dir,tokens}]}. Do NOT run anything; do NOT return beds not in the list.`
+  : `Read the root charly.yml and every box/*/charly.yml in this project. A check bed is a top-level entity whose substrate node (its single kind key: pod/vm/local/k8s/android/group or a plugin substrate word) carries disposable: true. Return ALL such beds as JSON {beds:[{bed,target,dir,tokens}]} where target is the substrate kind word, dir is the charly project dir the bed lives in ('' for the repo root, 'box/<distro>' for a submodule bed), and tokens is the bed's requires_exclusive host-resource token list (bed node + nested members; [] when none). Exclude non-disposable deploys (operator profiles). Do NOT run anything.`
 const discovered = await agent(discoverPrompt, { schema: DISCOVER_SCHEMA, label: 'discover-beds', phase: 'Discover' })
 const beds = (discovered && discovered.beds ? discovered.beds : []).filter(Boolean)
 
@@ -88,10 +89,24 @@ if (!beds.length) {
   return { beds: [], note: 'no beds discovered' }
 }
 
-// All beds run in PARALLEL. KVM and libvirt are multi-tenant; podman builds
-// distinct image tags concurrently. Simultaneity is bounded by the runtime's
-// documented 16-concurrent dynamic-workflow agent ceiling, which queues excess.
-log(`Discovered ${beds.length} bed(s): running all in parallel (bounded + queued by the 16-concurrent runtime ceiling).`)
+// Beds sharing an EXCLUSIVE host-resource token (requires_exclusive, e.g.
+// nvidia-gpu) MUST run serially — the arbiter fast-fails a second same-token
+// claim by design (CLAUDE.md "per-exclusive-resource-token SERIAL groups").
+// Group them into serial CHAINS; everything else runs fully parallel. KVM and
+// libvirt are multi-tenant; podman builds distinct image tags concurrently.
+// Simultaneity is bounded by the runtime's 16-concurrent agent ceiling.
+const chains = []
+const chainByToken = new Map()
+for (const b of beds) {
+  const toks = (b.tokens || []).filter(Boolean)
+  let chain = null
+  for (const t of toks) if (chainByToken.has(t)) { chain = chainByToken.get(t); break }
+  if (!chain) { chain = []; chains.push(chain) }
+  chain.push(b)
+  for (const t of toks) chainByToken.set(t, chain)
+}
+const serialCount = chains.filter((c) => c.length > 1).length
+log(`Discovered ${beds.length} bed(s): ${chains.length} parallel lane(s), ${serialCount} serialized by an exclusive token.`)
 
 const runBed = (b) => {
   const charlyCmd = b.dir ? `charly -C ${b.dir} check run ${b.bed}` : `charly check run ${b.bed}`
@@ -103,7 +118,12 @@ const runBed = (b) => {
 }
 
 phase('Run beds')
-const all = (await parallel(beds.map((b) => () => runBed(b)))).filter(Boolean)
+const chainResults = await parallel(chains.map((chain) => async () => {
+  const out = []
+  for (const b of chain) out.push(await runBed(b))   // serial within a token chain
+  return out
+}))
+const all = chainResults.flat().filter(Boolean)
 const passed = all.filter((r) => r.ok && !r.skippedPrereq)
 const failed = all.filter((r) => !r.ok && !r.skippedPrereq)
 const skipped = all.filter((r) => r.skippedPrereq)

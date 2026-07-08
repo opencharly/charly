@@ -30,7 +30,6 @@ var (
 	sortStrings          = kit.SortStrings
 	firstNonEmpty        = kit.FirstNonEmpty
 	mapValue             = kit.MapValue
-	nodeShapedValue      = kit.NodeShapedValue
 	firstYAMLVersionLine = kit.FirstYAMLVersionLine
 	isGitSubmoduleDir    = kit.IsGitSubmoduleDir
 

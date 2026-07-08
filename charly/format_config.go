@@ -423,8 +423,8 @@ func (bc *BuilderConfig) BuilderNames() []string {
 // BuildFile is the on-disk schema of build.yml — three optional top-level
 // sections that map directly onto DistroConfig/BuilderConfig/InitConfig.
 type BuildFile struct {
-	Distro  map[string]*DistroDef  `yaml:"distro" json:"distro"`
-	Builder map[string]*BuilderDef `yaml:"builder" json:"builder"`
+	Distro  map[string]*DistroDef    `yaml:"distro" json:"distro"`
+	Builder map[string]*BuilderDef   `yaml:"builder" json:"builder"`
 	Init    map[string]*ResolvedInit `yaml:"init" json:"init"`
 }
 

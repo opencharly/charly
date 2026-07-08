@@ -35,10 +35,10 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 		t.Fatalf("baked plan = %+v, want the one plugin: file check", baked)
 	}
 	step := baked[0]
-	if step.Op.Plugin != "file" {
-		t.Errorf("baked step verb = %q, want plugin: file", step.Op.Plugin)
+	if step.Plugin != "file" {
+		t.Errorf("baked step verb = %q, want plugin: file", step.Plugin)
 	}
-	if step.Op.PluginInput["file"] != "/usr/bin/redis-server" {
-		t.Errorf("baked plugin_input.file = %v, want /usr/bin/redis-server", step.Op.PluginInput)
+	if step.PluginInput["file"] != "/usr/bin/redis-server" {
+		t.Errorf("baked plugin_input.file = %v, want /usr/bin/redis-server", step.PluginInput)
 	}
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -164,19 +163,9 @@ func encExecViaPlugin(in spec.EncExecInput) error {
 	if !ok {
 		return fmt.Errorf("enc plugin (verb:enc) not registered — charly built without candy/plugin-enc")
 	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		return fmt.Errorf("enc marshal input: %w", err)
-	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: "enc", Op: OpExecute, Params: params})
+	reply, err := invokeTyped[spec.EncExecInput, spec.EncExecReply](context.Background(), prov, "enc", OpExecute, in)
 	if err != nil {
 		return fmt.Errorf("enc invoke: %w", err)
-	}
-	var reply spec.EncExecReply
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return fmt.Errorf("enc decode reply: %w", err)
-		}
 	}
 	if reply.Error != "" {
 		return errors.New(reply.Error)

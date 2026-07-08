@@ -156,13 +156,13 @@ func (n *NestedExecutor) Venue() string {
 	return "nested:" + n.Jump.String() + "/" + parent
 }
 
-// RunSystem routes a bash script through the jump, then to the
-// parent executor as a single shell line. The parent's RunUser is
-// used rather than RunSystem because entering a container or ssh
-// session already carries its own root-escalation semantics — we
+// run is the shared body of RunSystem/RunUser: it wraps the script for this
+// executor's jump (asRoot bakes `sudo bash` into the jump), then hands the single
+// wrapped shell line to the parent's RunUser — NOT RunSystem — because entering a
+// container or ssh session already carries its own root-escalation semantics; we
 // don't want `sudo ssh sudo bash` triple-escalation.
-func (n *NestedExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
-	wrapped, reap, err := n.prepareJump(script, true /*root*/)
+func (n *NestedExecutor) run(ctx context.Context, script string, asRoot bool, opts EmitOpts) error {
+	wrapped, reap, err := n.prepareJump(script, asRoot)
 	if err != nil {
 		return err
 	}
@@ -173,18 +173,15 @@ func (n *NestedExecutor) RunSystem(ctx context.Context, script string, opts Emit
 	return n.Parent.RunUser(ctx, wrapped, opts)
 }
 
+// RunSystem routes a bash script through the jump as root.
+func (n *NestedExecutor) RunSystem(ctx context.Context, script string, opts EmitOpts) error {
+	return n.run(ctx, script, true /*root*/, opts)
+}
+
 // RunUser runs as the unprivileged user inside the nested
 // environment.
 func (n *NestedExecutor) RunUser(ctx context.Context, script string, opts EmitOpts) error {
-	wrapped, reap, err := n.prepareJump(script, false /*root*/)
-	if err != nil {
-		return err
-	}
-	if n.Parent == nil {
-		return fmt.Errorf("NestedExecutor: nil Parent")
-	}
-	defer reap()
-	return n.Parent.RunUser(ctx, wrapped, opts)
+	return n.run(ctx, script, false /*root*/, opts)
 }
 
 // RunBuilder always runs on the outermost host (where podman with

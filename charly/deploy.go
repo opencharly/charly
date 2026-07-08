@@ -425,34 +425,6 @@ func findVmDeployNode(deploys map[string]BundleNode, name, vmName string) (Bundl
 	return BundleNode{}, false
 }
 
-// vmEntityForDeploy resolves a vm-target deploy KEY to its `vm:` cross-ref
-// (the kind:vm entity name) — operator overlay first, then project config,
-// via the shared findVmDeployNode. Returns "" when no entry declares a vm
-// entity. THE single deploy-key→vm-entity resolver so `charly update <bed>`
-// (the vm lifecycle hook's Rebuild) and any other vm-deploy consumer agree: the deploy KEY
-// (e.g. check-k3s-vm) is NOT the vm entity name (k3s-vm) when they differ —
-// blindly using the key breaks `charly vm create`/`destroy` for such beds.
-func vmEntityForDeploy(deployName string) string {
-	if deployName == "" {
-		return ""
-	}
-	if dc := loadDeployConfigForRead("vmEntityForDeploy"); dc != nil {
-		if node, ok := findVmDeployNode(dc.Bundle, deployName, ""); ok && node.From != "" {
-			return node.From
-		}
-	}
-	if dir, err := os.Getwd(); err == nil {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
-			if pc := uf.ProjectBundleConfig(); pc != nil {
-				if node, ok := findVmDeployNode(pc.Bundle, deployName, ""); ok && node.From != "" {
-					return node.From
-				}
-			}
-		}
-	}
-	return ""
-}
-
 // resolveDeployBoxName is THE single deploy-key→image-name resolver used
 // by every deploy-mode command that starts from a deploy key (charly config /
 // start / shell / check live). It returns the deploy entry's declared
@@ -953,7 +925,7 @@ func SaveBundleConfig(dc *BundleConfig) error {
 		if merr != nil {
 			return fmt.Errorf("marshaling deploy %q: %w", name, merr)
 		}
-		root.Content = append(root.Content, scalarNode(name), migrateDeployEntity(name, body))
+		root.Content = append(root.Content, scalarNode(name), migrateDeployEntity(body))
 	}
 	data, err := yaml.Marshal(root)
 	if err != nil {

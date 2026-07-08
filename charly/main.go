@@ -714,7 +714,8 @@ func main() {
 	// out-of-process subcommands (charly check kube/adb/appium) into the holder's
 	// CheckCmd.Plugins — the wiring that previously read cli.Check.Plugins directly.
 	attachNestedCheckPlugins(cmdPlugins, nestedCmds["check"])
-	cli.Plugins = append(cmdPlugins, topCmds...)
+	cmdPlugins = append(cmdPlugins, topCmds...)
+	cli.Plugins = cmdPlugins
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
 		kong.Description("OpenCharly - the container management experience for you and your agents"),

@@ -215,7 +215,7 @@ func ShellInitFilePath(shell ShellKind, hostHome string) string {
 // The env.d-sourcing managed block is written by the deploy walk's finalizer: in-proc by
 // the OCI build path's helpers, and for the externalized local/vm deploys by the
 // out-of-process kit.WalkPlans (its ensureVenueManagedBlock, sharing ManagedBlockBody /
-// ShellInitFilePath / replaceOrAppendManagedBlock via the kit aliases — R3). The former
+// ShellInitFilePath via the kit aliases — R3; the block-splice itself is kit's, sdk/kit/profile.go). The former
 // in-proc managed-block writers were retired when target:vm
 // (the last in-proc caller) externalized. The GLOBAL env.d block's teardown is the
 // symmetric concern of that same out-of-process walk; the per-candy `shell_snippet:`
@@ -231,84 +231,6 @@ func markersForTag(marker string) (begin, end string) {
 	}
 	return fmt.Sprintf("# opencharly:begin %s (managed by charly; do not edit inside this block)", marker),
 		fmt.Sprintf("# opencharly:end %s", marker)
-}
-
-// replaceOrAppendManagedBlock finds the begin/end fence pair (tagged
-// with `marker` — empty for the global block) in `existing` and replaces
-// its body; if the markers are absent, appends a fresh block at end-of-
-// file. Marker is required (use "" for the global block; non-empty for
-// per-candy blocks).
-func replaceOrAppendManagedBlock(existing, body, marker string) string {
-	begin, end := markersForTag(marker)
-	if strings.Contains(existing, begin) {
-		var out strings.Builder
-		inBlock := false
-		for line := range strings.SplitSeq(existing, "\n") {
-			if strings.Contains(line, begin) {
-				inBlock = true
-				out.WriteString(begin + "\n")
-				out.WriteString(body + "\n")
-				continue
-			}
-			if inBlock && strings.Contains(line, end) {
-				inBlock = false
-				out.WriteString(end + "\n")
-				continue
-			}
-			if !inBlock {
-				out.WriteString(line + "\n")
-			}
-		}
-		return strings.TrimRight(out.String(), "\n") + "\n"
-	}
-	// Not found — append.
-	prefix := existing
-	if prefix != "" && !strings.HasSuffix(prefix, "\n") {
-		prefix += "\n"
-	}
-	if prefix != "" {
-		prefix += "\n"
-	}
-	return prefix + begin + "\n" + body + "\n" + end + "\n"
-}
-
-// replaceOrPrependManagedBlock is the same as replaceOrAppendManagedBlock
-// but PREPENDS when the markers aren't present. Used for ssh_config(5),
-// where Include directives must land at the top of the file (outside any
-// Host block) — otherwise every Host stanza in the included file is
-// gated on matching whatever Host block was open at the Include point.
-// Replace-in-place semantics are preserved when the markers already exist.
-func replaceOrPrependManagedBlock(existing, body, marker string) string {
-	begin, end := markersForTag(marker)
-	if strings.Contains(existing, begin) {
-		// Same in-place replacement as replaceOrAppendManagedBlock.
-		var out strings.Builder
-		inBlock := false
-		for line := range strings.SplitSeq(existing, "\n") {
-			if strings.Contains(line, begin) {
-				inBlock = true
-				out.WriteString(begin + "\n")
-				out.WriteString(body + "\n")
-				continue
-			}
-			if inBlock && strings.Contains(line, end) {
-				inBlock = false
-				out.WriteString(end + "\n")
-				continue
-			}
-			if !inBlock {
-				out.WriteString(line + "\n")
-			}
-		}
-		return strings.TrimRight(out.String(), "\n") + "\n"
-	}
-	// Not found — PREPEND (with a blank-line separator before the
-	// rest of the file when the rest is non-empty).
-	suffix := existing
-	if suffix != "" && !strings.HasPrefix(suffix, "\n") {
-		suffix = "\n" + suffix
-	}
-	return begin + "\n" + body + "\n" + end + "\n" + suffix
 }
 
 // stripManagedBlock removes the begin/end fence pair (tagged with

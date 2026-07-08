@@ -151,18 +151,7 @@ func invokeInitResolve(req spec.InitResolveRequest) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("init resolve: kind provider not registered")
 	}
-	paramsJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("init resolve: marshal input: %w", err)
-	}
-	out, err := prov.Invoke(context.Background(), &Operation{Reserved: "init", Op: OpResolve, Params: json.RawMessage(paramsJSON)})
-	if err != nil {
-		return nil, err
-	}
-	if out == nil {
-		return nil, nil
-	}
-	return out.JSON, nil
+	return invokeTyped[spec.InitResolveRequest, json.RawMessage](context.Background(), prov, "init", OpResolve, req)
 }
 
 // sortedEnvList returns a sorted-by-key slice of env entries. Deterministic ordering

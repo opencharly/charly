@@ -124,7 +124,6 @@ func decodeStandaloneTemplateJSON(gn *genericNode) (json.RawMessage, error) {
 	return entityBodyJSON(gn)
 }
 
-
 // foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into the
 // right typed template map by kind — the C2-substrate TEMPLATE fold arm (the standalone
 // counterpart of runPluginKind's deploy fold into uf.Bundle). The former in-proc path
@@ -144,20 +143,6 @@ func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, u
 		return foldOpaqueTemplateReply(name, replyJSON, &uf.Android)
 	}
 	return fmt.Errorf("node %q: %q is not a standalone resource kind", name, disc)
-}
-
-// foldTemplateReply unmarshals the echoed template JSON into a fresh *T and stores it at
-// name in *m (allocating on first use) — the typed-map counterpart of decodePtrInto.
-func foldTemplateReply[T any](name string, replyJSON json.RawMessage, m *map[string]*T) error {
-	var v T
-	if err := json.Unmarshal(replyJSON, &v); err != nil {
-		return err
-	}
-	if *m == nil {
-		*m = map[string]*T{}
-	}
-	(*m)[name] = &v
-	return nil
 }
 
 // foldOpaqueTemplateReply stores the echoed template JSON VERBATIM at name in *m —

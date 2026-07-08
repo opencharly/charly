@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
@@ -88,27 +87,13 @@ var (
 	substrateLifecycles   = map[string]substrateLifecycle{}
 )
 
-// registerSubstrateLifecycle records one COMPILED-IN substrate's lifecycle hook (pod/vm). Panics
-// on a duplicate word (a startup invariant, like the preresolver + registry duplicate panics).
-func registerSubstrateLifecycle(word string, l substrateLifecycle) {
-	if word == "" || l == nil {
-		panic("registerSubstrateLifecycle: empty word or nil lifecycle")
-	}
-	substrateLifecyclesMu.Lock()
-	defer substrateLifecyclesMu.Unlock()
-	if _, dup := substrateLifecycles[word]; dup {
-		panic(fmt.Sprintf("registerSubstrateLifecycle: duplicate lifecycle for %q", word))
-	}
-	substrateLifecycles[word] = l
-}
-
 // registerPluginSubstrateLifecycle records a WIRE-BACKED lifecycle for an external deploy substrate
 // at plugin-load (F6), idempotently: a plugin reconnect REPLACES the prior wire-backed hook (the new
 // grpcProvider carries the live conn). It never SHADOWS a compiled-in lifecycle, but after M4 there
 // are NONE — pod + vm both externalized (candy/plugin-deploy-{pod,vm}), their compiled-in
 // registrations DELETED — so both plugins' wire-backed hooks register cleanly (nothing to shadow).
-// The shadow guard remains for a future compiled-in singleton. Unlike registerSubstrateLifecycle
-// (the package-init, panic-on-dup path for compiled-in singletons), this runs at runtime.
+// The shadow guard remains for a future compiled-in singleton (a package-init registration
+// path would panic on duplicates; this wire-backed one replaces idempotently at runtime).
 func registerPluginSubstrateLifecycle(word string, l substrateLifecycle) {
 	if word == "" || l == nil {
 		return

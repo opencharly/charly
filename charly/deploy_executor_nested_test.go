@@ -405,7 +405,7 @@ func probeNameOf(s string) string {
 	}
 	rest := s[i:]
 	end := strings.IndexFunc(rest, func(r rune) bool {
-		return !(r == '-' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z'))
+		return r != '-' && (r < '0' || r > '9') && (r < 'a' || r > 'z')
 	})
 	if end < 0 {
 		return rest

@@ -72,6 +72,16 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 			for _, r := range reply.ImageRefs {
 				fmt.Printf("  %s\n", r)
 			}
+			fmt.Printf("dangling: %s %d untagged charly image(s)\n", tag, len(reply.DanglingIDs))
+			for _, id := range reply.DanglingIDs {
+				fmt.Printf("  %s\n", id)
+			}
+			if len(reply.StagingDirs) > 0 {
+				fmt.Printf("staging: %s %d dead buildah staging dir(s)\n", tag, len(reply.StagingDirs))
+				for _, p := range reply.StagingDirs {
+					fmt.Printf("  %s\n", p)
+				}
+			}
 			fmt.Printf("build: %s %d staging dir(s) under .build/_candy (keep_images=%d)\n", tag, len(reply.BuildDirs), reply.KeepImages)
 			for _, p := range reply.BuildDirs {
 				fmt.Printf("  %s\n", p)
