@@ -5,7 +5,7 @@ import (
 )
 
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
-// (ResolveDistro / FindFormat / AllFormatNames / expandPackageInheritance /
+// (ResolveDistro / FindFormat / AllFormatNames / ExpandPackageInheritance /
 // ValidBuilderType / BuilderNames / distroTagChain / bareDistroName / wrapDistroDef)
 // live in sdk/buildkit now (P3), aliased back via buildkit_aliases.go. This file
 // keeps the pieces that stay charly-side: the Phase/Venue-coupled phase-template
