@@ -540,7 +540,7 @@ func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedBox, cfg *C
 	// built COLD once — the others block here, then cache-hit), while DISTINCT
 	// images (the leaf fan-out) take distinct locks and build in parallel. Held
 	// across the privileged bootstrap + the podman build for this image only.
-	buildUnlock, lockErr := acquireImageBuildLock(filepath.Join(dir, ".build"), name)
+	buildUnlock, lockErr := acquireImageBuildLock(img.FullTag)
 	if lockErr != nil {
 		return fmt.Errorf("acquiring build lock for %s: %w", name, lockErr)
 	}
