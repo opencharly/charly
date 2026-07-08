@@ -801,12 +801,6 @@ func compileActOp(op *Op, layer *Candy, img *ResolvedBox) InstallStep {
 // opStepScope classifies a resolved user directive into install scope — root
 // (or empty / 0) is system, everything else user. Shared by the OpStep and
 // service-act lowering so the scope rule lives in one place.
-func opStepScope(userDir string) Scope {
-	if userDir == "" || userDir == "root" || userDir == "0" || userDir == "0:0" {
-		return ScopeSystem
-	}
-	return ScopeUser
-}
 
 // ---------------------------------------------------------------------------
 // Builder compilation
