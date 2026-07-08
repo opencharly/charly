@@ -9,7 +9,7 @@ package main
 // Design (see memory cue-loader-switch-design):
 //   - A type implementing json.Unmarshaler is OPAQUE: cue.Value.Decode runs its
 //     UnmarshalJSON, so its shorthand needs no on-disk change (Matcher, MatcherList,
-//     PortScope). The walker neither expands nor recurses into it.
+//     PortScope, LibvirtGraphicsListeners). The walker neither expands nor recurses into it.
 //   - A registered shorthand type (no UnmarshalJSON) is rewritten by its expander
 //     (PackageItem, PortSpec, ShellConfig, …).
 //   - A scalar bound for a Go string field is force-tagged !!str (yaml.v3 coerced
@@ -34,11 +34,10 @@ type shorthandExpander func(node *yaml.Node) error
 // cueShorthandExpanders maps a canonical Go type to the expander that
 // canonicalizes its shorthand wire forms. Keyed by the value type (not pointer).
 var cueShorthandExpanders = map[reflect.Type]shorthandExpander{
-	reflect.TypeOf(PackageItem{}):              expandPackageItemNode,
-	reflect.TypeOf(PortSpec{}):                 expandPortSpecNode,
-	reflect.TypeOf(LibvirtGraphicsListeners{}): expandLibvirtListenersNode,
-	reflect.TypeOf(PreemptibleConfig{}):        expandPreemptibleNode,
-	reflect.TypeOf(TunnelYAML{}):               expandTunnelNode,
+	reflect.TypeOf(PackageItem{}):       expandPackageItemNode,
+	reflect.TypeOf(PortSpec{}):          expandPortSpecNode,
+	reflect.TypeOf(PreemptibleConfig{}): expandPreemptibleNode,
+	reflect.TypeOf(TunnelYAML{}):        expandTunnelNode,
 }
 
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
@@ -72,8 +71,8 @@ func normalizeNode(node *yaml.Node, t reflect.Type) error {
 		t = t.Elem()
 	}
 
-	// Opaque self-decoding types (Matcher/MatcherList/PortScope): cue.Value.Decode
-	// runs their UnmarshalJSON, so leave the shorthand untouched and do not recurse.
+	// Opaque self-decoding types (Matcher/MatcherList/PortScope/LibvirtGraphicsListeners):
+	// cue.Value.Decode runs their UnmarshalJSON, so leave the shorthand untouched and do not recurse.
 	if implementsJSONUnmarshaler(t) {
 		return nil
 	}
@@ -222,62 +221,6 @@ func expandPortSpecNode(node *yaml.Node) error {
 		"port", portNode,
 		"protocol", scalarNode(proto),
 	)
-	return nil
-}
-
-// expandLibvirtListenersNode: graphics `listen:` shorthand → canonical list of
-// {type,address,…}. scalar `127.0.0.1` → [{type:address,address:127.0.0.1}];
-// a mapping → [mapping] with type inferred from address/network; a sequence →
-// type inferred per element. Ports LibvirtGraphicsListeners.UnmarshalYAML.
-func expandLibvirtListenersNode(node *yaml.Node) error {
-	inferType := func(m *yaml.Node) {
-		if m.Kind != yaml.MappingNode {
-			return
-		}
-		hasType, hasAddr, hasNet := false, false, false
-		for i := 0; i+1 < len(m.Content); i += 2 {
-			switch m.Content[i].Value {
-			case "type":
-				hasType = true
-			case "address":
-				hasAddr = true
-			case "network":
-				hasNet = true
-			}
-		}
-		if hasType {
-			return
-		}
-		typ := ""
-		switch {
-		case hasAddr:
-			typ = "address"
-		case hasNet:
-			typ = "network"
-		default:
-			return // no inferable default — CUE validation will report it
-		}
-		m.Content = append([]*yaml.Node{scalarNode("type"), scalarNode(typ)}, m.Content...)
-	}
-	switch node.Kind {
-	case yaml.ScalarNode:
-		if node.Value == "" {
-			*node = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-			return nil
-		}
-		addr := cloneScalar(node)
-		*node = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{
-			mappingNodes("type", scalarNode("address"), "address", addr),
-		}}
-	case yaml.MappingNode:
-		orig := *node // copy before overwrite (avoid node-in-itself cycle)
-		inferType(&orig)
-		*node = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{&orig}}
-	case yaml.SequenceNode:
-		for _, el := range node.Content {
-			inferType(el)
-		}
-	}
 	return nil
 }
 
