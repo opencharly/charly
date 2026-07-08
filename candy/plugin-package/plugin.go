@@ -47,7 +47,8 @@ type verb struct{}
 func (verb) Reserved() string { return "package" }
 
 // RunVerb (do:assert) probes installed/version via rpm/dpkg/pacman through the live
-// CheckContext. Mirrors r.runPackage.
+// CheckContext, distinguishing a genuine not-installed result from an exec/infra
+// failure via a deterministic INSTALLED/ABSENT token (see the probe comment).
 func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.Result {
 	var in params.PackageInput
 	kit.DecodeInput(op.PluginInput, &in)
@@ -57,14 +58,28 @@ func (verb) RunVerb(ctx context.Context, cc kit.CheckContext, op *spec.Op) kit.R
 	}
 	name := kit.ResolvePackageName(in.Package, in.PackageMap, cc.Distros())
 	pkgQ := kit.ShellQuote(name)
+	// Emit a DETERMINISTIC token, never rely on the probe's exit code: the raw
+	// `rpm||dpkg||pacman` chain returns the LAST command's exit, so a
+	// genuinely-absent package exits 1 on arch but 127 (command-not-found) on
+	// fedora/debian — and, worse, a podman-exec INFRA failure (store-write error
+	// exit 255, killed signal) is indistinguishable from "not installed". The
+	// wrapper `if … then echo INSTALLED else echo ABSENT fi` always exits 0 and
+	// prints one token; anything else (empty/other stdout, non-zero exit, or a
+	// RunCapture err) is an EXEC/infra failure surfaced as such — never a false
+	// content verdict (the check-{debian,jupyter-ml}-coder store-contention
+	// mislabel: "installed=false, want true" for a package that WAS installed).
 	probe := fmt.Sprintf(
-		`rpm -q %[1]s >/dev/null 2>&1 || (dpkg -s %[1]s 2>/dev/null | grep -q "^Status:.*install ok installed") || pacman -Q %[1]s >/dev/null 2>&1`,
+		`if rpm -q %[1]s >/dev/null 2>&1 || (dpkg -s %[1]s 2>/dev/null | grep -q "^Status:.*install ok installed") || pacman -Q %[1]s >/dev/null 2>&1; then echo INSTALLED; else echo ABSENT; fi`,
 		pkgQ)
-	_, stderr, exit, err := cc.Exec().RunCapture(ctx, probe)
+	stdout, stderr, exit, err := cc.Exec().RunCapture(ctx, probe)
 	if err != nil {
-		return kit.Failf("probe failed: %v (%s)", err, stderr)
+		return kit.Failf("package probe could not run: %v (%s)", err, stderr)
 	}
-	isInstalled := exit == 0
+	tok := strings.TrimSpace(stdout)
+	if exit != 0 || (tok != "INSTALLED" && tok != "ABSENT") {
+		return kit.Failf("package probe did not complete (exit %d, stdout %q, stderr %q) — an exec/infra failure, not a content verdict", exit, tok, strings.TrimSpace(stderr))
+	}
+	isInstalled := tok == "INSTALLED"
 	if isInstalled != wantInstalled {
 		return kit.Failf("installed=%v, want %v", isInstalled, wantInstalled)
 	}

@@ -22,7 +22,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("package provider is not a CheckVerbProvider: %T", prov)
 	}
-	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "rpm -q", exit: 0}}}
+	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "rpm -q", stdout: "INSTALLED", exit: 0}}}
 	res := cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive, Distros: []string{"fedora"}},
 		&Op{PluginInput: map[string]any{"package": "bash", "installed": true}})
 	if res.Status != TestPass {
@@ -55,5 +55,44 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	}
 	if sps.Format != "rpm" || sps.Phase != PhaseInstall || len(sps.Packages) != 1 || sps.Packages[0] != "openssh-server" {
 		t.Fatalf("SystemPackagesStep = %+v, want Format=rpm Phase=Install Packages=[openssh-server] (cross-distro map applied)", sps)
+	}
+}
+
+// TestPackageVerb_InfraFailureNotContentFalse proves the package verb
+// distinguishes a genuine "not installed" (the probe ran, printed ABSENT) from
+// an EXEC/INFRA failure (the podman exec died — store-write error exit 255,
+// killed signal — so no INSTALLED/ABSENT token was printed). The infra failure
+// must surface as such, NEVER as the false content verdict "installed=false,
+// want true" (the check-{debian,jupyter-ml}-coder store-contention mislabel).
+func TestPackageVerb_InfraFailureNotContentFalse(t *testing.T) {
+	prov, ok := providerRegistry.ResolveVerb("package")
+	if !ok {
+		t.Fatal("package verb not registered")
+	}
+	cv := prov.(CheckVerbProvider)
+	run := func(fe *fakeExecutor, wantInstalled bool) CheckResult {
+		return cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive, Distros: []string{"arch"}},
+			&Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
+	}
+
+	// Genuine absent: probe printed ABSENT, exit 0. installed:false → pass.
+	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, false); res.Status != TestPass {
+		t.Fatalf("absent-as-expected: want pass, got %v: %s", res.Status, res.Message)
+	}
+	// Genuine absent but wanted installed → a real content FAIL (installed=false).
+	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, true); res.Status != TestFail || !strings.Contains(res.Message, "installed=false") {
+		t.Fatalf("absent-but-wanted: want a content fail 'installed=false', got %v: %s", res.Status, res.Message)
+	}
+	// INFRA failure: exec died (exit 255, store error, no token). Must NOT be
+	// reported as installed=false — surfaced as an exec/infra failure.
+	res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "", exit: 255, stderr: "saving container state: writing container"}}}, true)
+	if res.Status != TestFail {
+		t.Fatalf("infra failure: want fail, got %v", res.Status)
+	}
+	if strings.Contains(res.Message, "installed=false") {
+		t.Fatalf("infra failure MUST NOT be a false content verdict; got: %s", res.Message)
+	}
+	if !strings.Contains(res.Message, "exec/infra failure") {
+		t.Fatalf("infra failure must be labeled as such; got: %s", res.Message)
 	}
 }
