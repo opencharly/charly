@@ -19,9 +19,14 @@ import (
 
 // Generator holds state for generating build artifacts
 type Generator struct {
-	Dir            string
-	Config         *Config
-	Candies        map[string]*Candy
+	Dir     string
+	Config  *Config
+	Candies map[string]*Candy
+	// InitConfig is the project init: vocabulary. Init-system resolution
+	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
+	// on the Generator — one project init config threaded to the build + pod-
+	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
+	InitConfig     *InitConfig
 	Tag            string
 	Boxes          map[string]*ResolvedBox
 	BuildDir       string
@@ -219,6 +224,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		Dir:            dir,
 		Config:         cfg,
 		Candies:        layers,
+		InitConfig:     defaultInitCfg,
 		Tag:            tag,
 		Boxes:          images,
 		BuildDir:       filepath.Join(dir, ".build"),
@@ -471,12 +477,12 @@ func (g *Generator) generateContainerfile(boxName string) error {
 
 	// Detect active init systems from candies (driven by the embedded init: vocabulary config)
 	activeInits := make(map[string]*ResolvedInit)
-	if img.InitConfig != nil {
-		activeInits = img.InitConfig.ActiveInit(g.Candies, candyOrder)
+	if g.InitConfig != nil {
+		activeInits = g.InitConfig.ActiveInit(g.Candies, candyOrder)
 	}
 	// Store init system on ResolvedBox for downstream use (labels, etc.)
-	if img.InitConfig != nil {
-		img.InitSystem, img.InitDef = img.InitConfig.ResolveInitSystem(g.Candies, candyOrder, "")
+	if g.InitConfig != nil {
+		img.InitSystem, img.InitDef = g.InitConfig.ResolveInitSystem(g.Candies, candyOrder, "")
 	}
 
 	// Detect route/traefik candies and emit the traefik-routes scratch stage.
@@ -2336,8 +2342,8 @@ func (g *Generator) writeLabels(b *strings.Builder, boxName string, candyOrder [
 	// labels no longer describe VM boot parameters.
 
 	// Init system label: active init system name + per-init service list
-	if img.InitConfig != nil {
-		labelInitSystem, labelInitDef := img.InitConfig.ResolveInitSystem(g.Candies, candyOrder, "")
+	if g.InitConfig != nil {
+		labelInitSystem, labelInitDef := g.InitConfig.ResolveInitSystem(g.Candies, candyOrder, "")
 		if labelInitSystem != "" && labelInitDef != nil {
 			fmt.Fprintf(b, "LABEL %s=%q\n", LabelInit, labelInitSystem)
 			// Init definition: bake the runtime-relevant subset of the

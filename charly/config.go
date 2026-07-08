@@ -140,7 +140,6 @@ type ResolvedBox struct {
 	DistroConfig  *DistroConfig  `json:"-"` // distro section of the embedded vocabulary (charly/charly.yml)
 	DistroDef     *DistroDef     `json:"-"` // resolved distro definition (cached)
 	BuilderConfig *BuilderConfig `json:"-"` // builder section of the embedded vocabulary (charly/charly.yml)
-	InitConfig    *InitConfig    `json:"-"` // init section of the embedded vocabulary (charly/charly.yml)
 	InitSystem    string         `json:"-"` // resolved init system name ("supervisord", "systemd", "")
 	InitDef       *ResolvedInit  `json:"-"` // resolved init definition (cached)
 
@@ -381,13 +380,12 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 	// Resolve build config from charly.yml. Unconditional — caller must
 	// supply a project dir containing charly.yml. Tests that need
 	// in-memory-only resolution use testProjectDir(t).
-	distroCfg, builderCfg, initCfg, err := LoadBuildConfigForBox(dir)
+	distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
 	if err != nil {
 		return nil, fmt.Errorf("image %s: %w", name, err)
 	}
 	resolved.DistroConfig = distroCfg
 	resolved.BuilderConfig = builderCfg
-	resolved.InitConfig = initCfg
 	if distroCfg != nil {
 		// Expand the package-cascade chain with any inherit_packages: ancestor
 		// (cachyos → [cachyos, arch]) so an `arch:` candy block reaches cachyos.
