@@ -1083,7 +1083,7 @@ func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
 			// distro tag — image/VM parity for the distro-cascade resolver. Then
 			// expand inherit_packages: ancestors (a cachyos VM → [cachyos, arch]
 			// so `arch:` candy blocks reach it), mirroring the image-resolve path.
-			img.Distro = distroCfg.expandPackageInheritance(distroTagChain(distroKey, def.Version))
+			img.Distro = distroCfg.ExpandPackageInheritance(distroTagChain(distroKey, def.Version))
 			if pf := def.PrimaryFormat(); pf != "" {
 				img.Pkg = pf
 				img.BuildFormats = []string{pf}
