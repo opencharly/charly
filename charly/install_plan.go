@@ -147,28 +147,11 @@ type ReverseOp = spec.ReverseOp
 // InstallStep is the common interface every concrete step implements.
 // Consumers (OCITarget / the local deploy target) switch on Kind() to dispatch
 // to the right rendering or execution path.
-type InstallStep interface {
-	// Kind returns the step's concrete type discriminator.
-	Kind() StepKind
-
-	// Scope classifies where the effect lands on the target filesystem.
-	Scope() Scope
-
-	// Venue classifies where the commands physically execute.
-	Venue() Venue
-
-	// RequiresGate names the opt-in flag that must be enabled, or
-	// GateNone if the step can run unconditionally. Only consulted by
-	// host-target emission; the OCI target ignores gates.
-	RequiresGate() Gate
-
-	// Reverse returns the teardown actions this step contributes to the
-	// ledger. Called at install time (not at teardown) so the ledger
-	// captures the exact reversal actions tied to the specific artifacts
-	// created. Empty return value means no reversal is recorded (e.g.
-	// phases that leave no state).
-	Reverse() []ReverseOp
-}
+// InstallStep is the polymorphic InstallPlan step interface, homed in sdk/spec
+// (with the IR enums it returns + the InstallPlan container that holds
+// []InstallStep). The 13 concrete step structs below implement spec.InstallStep
+// structurally, so they need no change beyond this alias (P4).
+type InstallStep = spec.InstallStep
 
 // ---------------------------------------------------------------------------
 // SystemPackagesStep — rpm: / deb: / pac: package install.
