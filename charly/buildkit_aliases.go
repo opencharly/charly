@@ -22,6 +22,17 @@ type (
 	BuilderConfig = buildkit.BuilderConfig
 )
 
+// ResolvedBox (the fully-resolved image config) + its embedded resolved-config
+// value types live in sdk/buildkit now (P3). BuilderMap (build format → builder
+// image) and AggregatedCandyCaps (the pure candy-caps result struct; the
+// AggregateCandyCapabilities walk stays charly-side) move with it. All methods
+// are exported → zero-churn repoint.
+type (
+	ResolvedBox         = buildkit.ResolvedBox
+	BuilderMap          = buildkit.BuilderMap
+	AggregatedCandyCaps = buildkit.AggregatedCandyCaps
+)
+
 var (
 	SharedCacheMount      = buildkit.SharedCacheMount
 	OwnedCacheMount       = buildkit.OwnedCacheMount

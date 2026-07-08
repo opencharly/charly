@@ -6,22 +6,6 @@ import (
 	"strings"
 )
 
-// AggregatedCandyCaps is the output of walking all candies in resolution
-// order. It is populated onto ResolvedBox and consumed wherever code
-// previously read BoxConfig.Bootc, BoxConfig.DataImage, or the
-// init-system bootc parameter.
-type AggregatedCandyCaps struct {
-	PreserveUser       bool
-	NeedsRootAfterInit bool
-	InitSystemHint     string
-	DataOnly           bool
-	OCILabels          map[string]string
-	// Provided is the set of capability names declared by some candy in
-	// the composition. Used by CheckRequiredCapabilities to validate
-	// `requires_capabilities:` cross-candy requirements.
-	Provided map[string]bool
-}
-
 // AggregateCandyCapabilities walks `order` (candy names in topological
 // resolution order) and merges each candy's `capabilities:` contribution.
 // Returns an error if two candies declare conflicting values for the same
