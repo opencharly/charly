@@ -96,12 +96,12 @@ type PodDeployTarget struct {
 // runAppendBlock: the `RUN --mount=... cat >> /etc/supervisord.conf`
 // to place AFTER all overlay install tasks in the main image stage.
 func (t *PodDeployTarget) renderOverlayServices(overlayCandies []string) (string, string, error) {
-	if t.Generator == nil || t.Box == nil || t.Box.InitConfig == nil {
+	if t.Generator == nil || t.Box == nil || t.Generator.InitConfig == nil {
 		return "", "", nil
 	}
 	candyOrder := append([]string{}, t.Box.Candy...)
 	candyOrder = append(candyOrder, overlayCandies...)
-	initName, initDef := t.Box.InitConfig.ResolveInitSystem(t.Generator.Candies, candyOrder, t.Box.InitSystem)
+	initName, initDef := t.Generator.InitConfig.ResolveInitSystem(t.Generator.Candies, candyOrder, t.Box.InitSystem)
 	if initDef == nil || initDef.ServiceSchema == nil {
 		return "", "", nil
 	}
