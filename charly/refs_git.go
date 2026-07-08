@@ -88,7 +88,7 @@ func GitClone(repoURL string, ref string, commit string, targetDir string) error
 	// ref is a tag object, not a commit).
 	if len(commit) >= 7 && isHex(commit) {
 		if err := gitCloneByCommit(repoURL, commit, targetDir); err == nil {
-			return nil
+			return populateSDKSubmodule(targetDir)
 		}
 		_ = os.RemoveAll(targetDir) // clean up partial clone before falling back
 	}
@@ -101,6 +101,35 @@ func GitClone(repoURL string, ref string, commit string, targetDir string) error
 		return fmt.Errorf("git clone --branch %s %s: %w", ref, repoURL, err)
 	}
 
+	return populateSDKSubmodule(targetDir)
+}
+
+// populateSDKSubmodule initializes the `sdk` submodule in a freshly-fetched
+// plugin-repo cache. The raw clone/fetch above populates NO submodules, so
+// without this every plugin BUILD from the cache (go.work `use ./sdk`) fails
+// "cannot load module ../../sdk … no such file" — the out-of-tree plugin
+// provider then fails to connect (the examplestructkind connect-fail warning +
+// the check-live "no provider registered" the concurrent roster surfaced).
+// Only the charly superproject declares an `sdk` submodule; a repo without one
+// is a no-op. The insteadOf rewrite forces the .gitmodules SSH URL
+// (git@github.com:) to HTTPS — matching how the parent repo is cloned — so no
+// SSH key is needed in a headless/CI run. Just `sdk` is initialized (the ONLY
+// submodule a plugin build's go.work depends on), never the heavy box/* ones.
+func populateSDKSubmodule(targetDir string) error {
+	gm := filepath.Join(targetDir, ".gitmodules")
+	out, err := exec.Command("git", "config", "-f", gm, "--get", "submodule.sdk.path").Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return nil // no sdk submodule declared — nothing to populate
+	}
+	cmd := exec.Command("git",
+		"-c", "url.https://github.com/.insteadOf=git@github.com:",
+		"-c", "advice.detachedHead=false",
+		"submodule", "update", "--init", "--depth", "1", "-q", "sdk")
+	cmd.Dir = targetDir
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("populating sdk submodule in %s: %w", targetDir, err)
+	}
 	return nil
 }
 
