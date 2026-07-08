@@ -174,46 +174,12 @@ var templateFuncs = template.FuncMap{
 	},
 }
 
-// InstallContext provides data to format install templates.
-type InstallContext struct {
-	CacheMounts []CacheMountDef
-	Packages    []string
-	Repos       []map[string]any
-	Options     []string
-	// Format-specific fields accessed via Raw
-	Copr    []string
-	Modules []string
-	Exclude []string
-	Keys    []string
-	// Builder-specific
-	StageName  string
-	BuilderRef string
-	User       string
-	UID        int
-	GID        int
-	Home       string
-}
-
-// BuildStageContext provides data to builder stage templates.
-type BuildStageContext struct {
-	BuilderRef     string
-	StageName      string
-	LayerStage     string // scratch stage name for COPY --from
-	CopySrc        string // build context path for candy files (e.g., "candy/python")
-	UID            int
-	GID            int
-	Home           string
-	User           string
-	Manifest       string
-	HasLockFile    bool
-	InstallCmd     string
-	ManylinuxFix   string
-	CacheMounts    []CacheMountDef
-	Packages       []string // for config-detected builders (aur)
-	Options        []string // for config-detected builders (aur)
-	HasBuildScript bool     // true if candy has a build script (e.g., build.sh)
-	BuildScript    string   // build script filename
-}
+// InstallContext + BuildStageContext are the format/builder render-context
+// keystones; they are CUE-sourced in sdk/schema/buildctx.cue and generated into
+// sdk/spec by `task cue:gen`, aliased back via vmshared_aliases.go
+// (BuildStageContext / InstallContext), so a builder plugin can consume them over
+// OpResolve. The render/constructor funcs below operate on the aliased types
+// unchanged.
 
 // RenderTemplate renders a Go text/template with the given context.
 func RenderTemplate(name, tmplStr string, ctx any) (string, error) {

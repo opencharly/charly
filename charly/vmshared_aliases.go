@@ -20,8 +20,10 @@ type (
 	BootloaderDef            = vmshared.BootloaderDef
 	BootstrapDef             = vmshared.BootstrapDef
 	BoxConfig                = vmshared.BoxConfig
+	BuildStageContext        = vmshared.BuildStageContext
 	BuilderDef               = vmshared.BuilderDef
 	BundleNode               = vmshared.BundleNode
+	InstallContext           = vmshared.InstallContext
 	CacheMountDef            = vmshared.CacheMountDef
 	CandyArtifact            = vmshared.CandyArtifact
 	CandyCapabilities        = vmshared.CandyCapabilities
