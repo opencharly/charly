@@ -169,11 +169,22 @@ func bedExternalInPlace(target string) bool {
 // `charly vm destroy`. The next `charly check run` best-effort clears the lingering
 // target before rebuilding, so leaving it up never blocks a re-run.
 func printDebugRetentionNotice(w io.Writer, name string, node BundleNode) {
+	// The bed ran with CHARLY_REPO_OVERRIDE set (testing the LOCAL checkout's
+	// candies + plugins), so a BARE `charly check live` would resolve the
+	// @main-published candies/plugins instead — a DIFFERENT deployment whose
+	// plugins are built from the @main cache, not this tree. Carry the same
+	// override (still active here — set before the run, restored on return) so
+	// the inspect command reproduces the bed's actual state. See selfSuperproject
+	// OverridePair / GitClone's sdk-submodule population.
+	live := "charly check live " + name
+	if ov := os.Getenv(RepoOverrideEnv); ov != "" {
+		live = RepoOverrideEnv + "='" + ov + "' " + live
+	}
 	switch {
 	case node.Target == "vm":
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — VM %q left running for debugging.\n"+
-			"  inspect: charly check live %s | charly vm ssh %s\n"+
-			"  destroy: charly vm destroy %s\n", name, node.From, name, node.From, node.From)
+			"  inspect: %s | charly vm ssh %s\n"+
+			"  destroy: charly vm destroy %s\n", name, node.From, live, node.From, node.From)
 	case node.Target == "local":
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — local apply left in place for debugging.\n"+
 			"  destroy: charly remove %s\n", name, name)
@@ -182,8 +193,8 @@ func printDebugRetentionNotice(w io.Writer, name string, node BundleNode) {
 			"  destroy: charly bundle del %s\n", name, name)
 	default: // pod
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — pod left running for debugging.\n"+
-			"  inspect: charly check live %s | podman exec charly-%s sh\n"+
-			"  destroy: charly remove %s\n", name, name, name, name)
+			"  inspect: %s | podman exec charly-%s sh\n"+
+			"  destroy: charly remove %s\n", name, live, name, name)
 	}
 }
 
