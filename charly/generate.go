@@ -1907,10 +1907,15 @@ func (g *Generator) writeCandySteps(b *strings.Builder, candyName string, img *R
 		if s, ok := step.(*LocalPkgInstallStep); ok {
 			run, err := renderLocalPkgImageInstall(s, g.DevLocalPkg, filepath.Join(g.BuildDir, img.Name), img.Name)
 			if err != nil {
-				fmt.Fprintf(b, "# localpkg render error: %v\n", err)
-			} else {
-				b.WriteString(run)
+				// renderLocalPkgImageInstall's contract is fail-loudly, never a
+				// silent fallback. Emitting the error as a Containerfile COMMENT
+				// (the old behavior) and continuing MASKED the failure: a
+				// --dev-local-pkg build whose makepkg failed shipped an image with
+				// NO /usr/bin/charly, only surfacing downstream as failing charly
+				// checks (the check-charly-selftest-pod defect). Hard-error here.
+				return asUser, fmt.Errorf("candy %q: rendering localpkg install for image %q (dev=%v): %w", candyName, img.Name, g.DevLocalPkg, err)
 			}
+			b.WriteString(run)
 		}
 	}
 
