@@ -19,13 +19,12 @@ postgresql:
             arch:
                 # Arch `postgresql` ships the server (postgres, initdb, pg_ctl); psql,
                 # pg_isready and pg_config come from postgresql-libs (a hard dependency,
-                # pulled transitively). pgvector is not in the Arch repos — it builds
-                # from the AUR (consumer opts in with build: [pac, aur]).
+                # pulled transitively). pgvector moved from the AUR into the
+                # official `extra` repo (extra/pgvector), so it installs as a
+                # plain pacman package — no aur builder stage.
                 package:
                     - postgresql
-                aur:
-                    package:
-                        - pgvector
+                    - pgvector
             fedora:
                 package:
                     - postgresql-server
