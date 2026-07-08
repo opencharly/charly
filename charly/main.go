@@ -801,11 +801,16 @@ func main() {
 	// `charly check` distinguishes "the thing under test is broken" from "the
 	// command/usage/infra errored" via a distinct exit code: 0 = pass,
 	// 1 = command error (Kong's FatalIfErrorf default), 2 = check checks
-	// failed. See CheckFailedError / CheckFailExitCode in check_cmd.go.
+	// failed, 3 = skipped for an absent host prereq. See CheckFailedError /
+	// CheckSkippedError in check_cmd.go.
 	if err != nil {
 		if _, ok := errors.AsType[*CheckFailedError](err); ok {
 			fmt.Fprintln(os.Stderr, FormatCLIError(err))
 			os.Exit(CheckFailExitCode) //nolint:gocritic // reapPlugins() called explicitly at :953 before this os.Exit; the deferred reap is a redundant safety net
+		}
+		if _, ok := errors.AsType[*CheckSkippedError](err); ok {
+			fmt.Fprintln(os.Stderr, FormatCLIError(err))
+			os.Exit(CheckSkippedExitCode) //nolint:gocritic // same reap safety-net note as CheckFailExitCode above
 		}
 	}
 	ctx.FatalIfErrorf(FormatCLIError(err))

@@ -118,6 +118,12 @@ type bedRunResult struct {
 	// deploy / vm-create). The caller maps it to the process exit code so
 	// `charly check run <bed>` distinguishes "checks failed" from "couldn't run".
 	FailExitCode int
+	// SkippedPrereq marks a bed that never ran because a required HOST
+	// prerequisite is absent (a GPU vendor with no matching card). Not a
+	// failure — the caller emits CheckSkippedExitCode + SkipReason. OK stays
+	// true (nothing failed), so callers MUST check SkippedPrereq before OK.
+	SkippedPrereq bool
+	SkipReason    string
 }
 
 // exitCodeOf extracts a subprocess exit code from an exec error. Non-ExitError
@@ -302,6 +308,21 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		return nil, fmt.Errorf("creating %s: %w", logDir, err)
 	}
 	res := &bedRunResult{Bed: name, CalVer: calver, OK: true}
+
+	// Host-prerequisite fail-fast (BEFORE any build/acquire): a bed claiming a
+	// GPU resource whose vendor has no matching card on this host is
+	// unsatisfiable here — building a 10-30 GB image only to die at start with
+	// "unresolvable CDI devices nvidia.com/gpu=all" is waste. Skip it cleanly
+	// (like a missing /dev/kvm), deterministically, so automation records a SKIP
+	// not a FAIL. See bedGPUPrereqMissing.
+	if tok, vendor, missing := bedGPUPrereqMissing(node); missing {
+		res.SkippedPrereq = true
+		res.SkipReason = fmt.Sprintf("no GPU matching vendor %s on this host (bed requires resource %q)", vendor, tok)
+		res.Step = append(res.Step, stepResult{Name: "prereq-gpu-skipped", OK: true})
+		writeBedSummary(logDir, res)
+		fmt.Fprintf(os.Stderr, "charly check run %s: SKIPPED — %s\n", name, res.SkipReason)
+		return res, &CheckSkippedError{Msg: fmt.Sprintf("charly check run %s: skipped (%s)", name, res.SkipReason)}
+	}
 
 	// Per-bed exclusive lock — refuse a SECOND concurrent `charly check run` of
 	// the SAME bed in this project. Without it the second run's pre-run

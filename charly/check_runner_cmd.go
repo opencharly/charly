@@ -123,6 +123,12 @@ func (c *CheckRunCmd) Run() error {
 			exe = os.Args[0]
 		}
 		res, runErr := runCheckBed(exe, c.Name, bedNode, bedRunOpts{Keep: c.Keep, NoRebuild: c.NoRebuild, CheckLevel: bedCheckLevel(uf, bedNode)})
+		// A skipped bed (absent host prereq) is not a run — report SKIPPED and
+		// propagate CheckSkippedExitCode (3), never a pass/fail summary line.
+		if res != nil && res.SkippedPrereq {
+			fmt.Fprintf(os.Stderr, "charly check run %s: SKIPPED (%s)\n", c.Name, res.SkipReason)
+			return &CheckSkippedError{Msg: fmt.Sprintf("charly check run %s: skipped (%s)", c.Name, res.SkipReason)}
+		}
 		if res != nil {
 			fmt.Fprintf(os.Stderr, "charly check run %s: %s (steps=%d)\n",
 				c.Name, summaryStatus(res.OK), len(res.Step))
