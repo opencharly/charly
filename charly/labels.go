@@ -364,11 +364,20 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	// Tunnel config is a deploy-time concern — read from charly.yml only.
 	// Label is no longer written or read.
 
-	// Env
+	// Env — the label is baked as a JSON OBJECT (writeLabels bakes the image's
+	// spec.Box.Env map). meta.Env is the []string KEY=VALUE form every deploy
+	// consumer expects (ResolveEnvVars, the start/shell deployEnv), so decode the
+	// object into a map and convert via envMapToPairs — the exact inverse of the
+	// bake, and symmetric with the overlay-merge path (deploy.go). Decoding the
+	// object straight into []string was the writer/reader mismatch that failed
+	// every image with a box-level env: map (check-box "cannot unmarshal object
+	// into []string").
 	if v := labels[LabelEnv]; v != "" {
-		if err := json.Unmarshal([]byte(v), &meta.Env); err != nil {
+		var envMap map[string]string
+		if err := json.Unmarshal([]byte(v), &envMap); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", LabelEnv, err)
 		}
+		meta.Env = envMapToPairs(envMap)
 	}
 
 	// Hooks
