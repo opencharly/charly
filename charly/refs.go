@@ -21,24 +21,6 @@ type ParsedRef struct {
 	Version  string // e.g. "v1.0.0"
 }
 
-// StripVersion removes the :version suffix from a remote ref.
-// For non-remote refs (no @ prefix), returns (ref, "").
-// e.g. "@github.com/org/repo/name:v1.0.0" -> ("@github.com/org/repo/name", "v1.0.0")
-func StripVersion(ref string) (string, string) {
-	if !strings.HasPrefix(ref, "@") {
-		return ref, ""
-	}
-	if idx := strings.LastIndex(ref, ":"); idx != -1 {
-		return ref[:idx], ref[idx+1:]
-	}
-	return ref, ""
-}
-
-// IsRemoteCandyRef returns true if a candy reference is a remote ref (starts with @)
-func IsRemoteCandyRef(ref string) bool {
-	return strings.HasPrefix(ref, "@")
-}
-
 // IsRemoteImageRef returns true if a ref looks like a remote image reference (starts with @)
 func IsRemoteImageRef(ref string) bool {
 	return strings.HasPrefix(ref, "@")
@@ -92,60 +74,6 @@ func splitRepoAndSubPath(ref string) (repoPath, subPath, name string) {
 		name = subPath
 	}
 	return repoPath, subPath, name
-}
-
-// BareRef returns the candy map key for a remote ref (without @ prefix and without :version).
-// e.g. "@github.com/org/repo/name:v1.0.0" -> "github.com/org/repo/name"
-func BareRef(ref string) string {
-	bare, _ := StripVersion(ref)
-	return strings.TrimPrefix(bare, "@")
-}
-
-// CandyRef is a single candy reference as authored in the candy manifest `require:` /
-// `candy:` (or charly.yml `candy:`). It carries the ORIGINAL ref string — with
-// any `@repo` prefix and `:version` suffix — as the single source of truth; the
-// bare map-key form (.Bare()) and the pinned version (.Version()) are DERIVED on
-// demand, so a ref's identity and its version can never drift apart. The
-// transitive fetch keys on .Raw; the dependency graph keys on .Bare().
-type CandyRef struct {
-	Raw string // original ref, e.g. "@github.com/org/repo/candy/x:v1" or bare "x"
-	// resolved is the qualified candy-map key assigned when a freshly-fetched
-	// remote candy's plain-name sibling deps are qualified to
-	// "<repo>/<subpathprefix><name>" (qualifyRemoteSiblingDeps). Empty for every
-	// other ref, where the map key derives from Raw. Keeping Raw immutable while
-	// resolution lands in a separate slot lets ONE list serve both the graph
-	// (which keys on .Bare()) and the transitive fetch (which keys on .Raw).
-	resolved string
-}
-
-// Bare returns the candy-map key (no @ prefix, no :version) — the form used for
-// dependency resolution and graph keying. After remote sibling-qualification it
-// is the qualified key; otherwise it derives from the original ref.
-func (r CandyRef) Bare() string {
-	if r.resolved != "" {
-		return r.resolved
-	}
-	return BareRef(r.Raw)
-}
-
-// Version returns the pinned version (the ":vX" suffix), or "" for an unpinned
-// remote ref or a local (bare-name) ref.
-func (r CandyRef) Version() string { _, v := StripVersion(r.Raw); return v }
-
-// IsRemote reports whether this is an @-prefixed remote ref.
-func (r CandyRef) IsRemote() bool { return IsRemoteCandyRef(r.Raw) }
-
-// toCandyRefs wraps raw ref strings (as parsed from the candy manifest) into CandyRef
-// values. Returns nil for a nil/empty input so an absent list stays absent.
-func toCandyRefs(raw []string) []CandyRef {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make([]CandyRef, len(raw))
-	for i, s := range raw {
-		out[i] = CandyRef{Raw: s}
-	}
-	return out
 }
 
 // bareRefs returns the bare map-key form of each ref — for the consumers that

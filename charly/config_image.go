@@ -342,13 +342,13 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	if dc != nil {
 		key := deployKey(c.Box, c.Instance)
 		overlay := dc.Bundle[key]
-		containerPorts := containerPortsFromMappings(meta.Port)
+		containerPorts := ContainerPortsFromMappings(meta.Port)
 		if len(containerPorts) > 0 || len(overlay.Port) > 0 {
 			resolved, rErr := ResolveDeployPorts(containerPorts, overlay.Port, overlay.ResolvedPort, dc.OccupiedHostPorts(key))
 			if rErr != nil {
 				return fmt.Errorf("resolving deploy ports: %w", rErr)
 			}
-			if !sameStringSlice(overlay.ResolvedPort, resolved) {
+			if !SameStringSlice(overlay.ResolvedPort, resolved) {
 				overlay.ResolvedPort = resolved
 				dc.Bundle[key] = overlay
 				if saveErr := SaveBundleConfig(dc); saveErr != nil {

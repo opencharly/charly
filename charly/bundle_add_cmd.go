@@ -525,10 +525,10 @@ func pathLeaf(path string) string {
 	return path
 }
 
-// deriveChildExecutorForPath is a small shim over deriveChildExecutor
-// that supplies the current node's flattened container name (derived
-// from the dotted path) when the node's target is container. Keeps
-// the pure-function deriveChildExecutor free of path-awareness.
+// deriveChildExecutorForPath builds the child executor for a nested node:
+// it supplies the current node's flattened container name (derived from the
+// dotted path) for a container target, hops through vmChildExecutor for a vm
+// child, and otherwise shares the parent executor.
 func deriveChildExecutorForPath(path string, node *BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil

@@ -96,7 +96,7 @@ func (a kitVerbActStepAdapter) LowersTo() StepKind {
 	return kitStepKindToCharly(a.sp.StepKind())
 }
 
-func (a kitVerbActStepAdapter) ConstructStep(op *Op, layer *Candy, img *ResolvedBox) InstallStep {
+func (a kitVerbActStepAdapter) ConstructStep(op *Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	return materializeStep(a.sp.ConstructStepDescriptor(op), op, layer, img)
 }
 
@@ -115,7 +115,7 @@ func kitStepKindToCharly(k kit.StepKindName) StepKind {
 // kit.StepDescriptor, computing the package-main-only inputs (the run-as-resolved scope,
 // the candy name) that the candy cannot. The load-bearing Reverse() lives on the built
 // step (package main), unchanged from the typed builtin verb's ConstructStep.
-func materializeStep(desc kit.StepDescriptor, op *Op, layer *Candy, img *ResolvedBox) InstallStep {
+func materializeStep(desc kit.StepDescriptor, op *Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	userDir, _ := resolveUserSpec(op.RunAs, img)
 	switch {
 	case desc.ServicePackaged != nil:
@@ -123,7 +123,7 @@ func materializeStep(desc kit.StepDescriptor, op *Op, layer *Candy, img *Resolve
 			Unit:        desc.ServicePackaged.Unit,
 			TargetScope: opStepScope(userDir),
 			Enable:      desc.ServicePackaged.Enable,
-			CandyName:   layer.Name,
+			CandyName:   layer.GetName(),
 		}
 	case desc.SystemPackages != nil:
 		// Repos/Copr/Options come from the top-level package cascade
@@ -135,7 +135,7 @@ func materializeStep(desc kit.StepDescriptor, op *Op, layer *Candy, img *Resolve
 			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
 		}
 	default:
-		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.Name)
+		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.GetName())
 	}
 }
 

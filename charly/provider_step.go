@@ -45,12 +45,6 @@ func stepProviderFor(kind StepKind) (StepProvider, bool) {
 // deploy view, exercised by step_view_test); the bijection below asserts each kind is SERVED —
 // either by a compiled-in in-proc StepProvider, or (for the pluginEmitStepWords set) by a
 // compiled-in class:step plugin's build-emit.
-var allStepKinds = []StepKind{
-	StepKindSystemPackages, StepKindBuilder, StepKindOp, StepKindFile,
-	StepKindServicePackaged, StepKindServiceCustom, StepKindShellHook,
-	StepKindShellSnippet, StepKindRepoChange, StepKindApkInstall,
-	StepKindLocalPkgInstall, StepKindReboot, StepKindExternalPlugin,
-}
 
 // pluginEmitStepWords maps the builtin InstallStep kinds whose BUILD-emit externalized to the
 // lowercase-hyphenated class:step plugin word that serves their pod-overlay OpEmit

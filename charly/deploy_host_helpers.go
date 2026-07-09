@@ -12,10 +12,7 @@ package main
 //   - runSudoShell: the host sudo wrapper used by deploy_executor.go + reverse_ops.go.
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -84,44 +81,6 @@ func renderBuilderScript(s *BuilderStep, hostHome string) (string, error) {
 	return script, nil
 }
 
-// ContextOrDefault returns opts' context if one's attached, or a background context.
-func (o EmitOpts) ContextOrDefault() context.Context {
-	return context.Background()
-}
-
-// runSudoShell wraps a bash snippet in `sudo -n bash <<EOF`, feeding the body on stdin so it
-// isn't exposed in the argv. Always `sudo -n` (non-interactive): a missing NOPASSWD policy
-// fails FAST with "a password is required" instead of hanging.
-func runSudoShell(script string, opts EmitOpts) error {
-	if opts.DryRun {
-		fmt.Fprintln(os.Stderr, "[dry-run] sudo -n bash <<CHARLY_ROOT")
-		fmt.Fprintln(os.Stderr, script)
-		fmt.Fprintln(os.Stderr, "CHARLY_ROOT")
-		return nil
-	}
-	cmd := exec.Command("sudo", "-n", "bash", "-s")
-	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-// runUserShell runs a script as the invoking user (no sudo). Used by the ShellExecutor's
-// RunUser leg (deploy_executor.go).
-func runUserShell(script string, opts EmitOpts) error {
-	if opts.DryRun {
-		fmt.Fprintln(os.Stderr, "[dry-run] bash <<CHARLY_USER")
-		fmt.Fprintln(os.Stderr, script)
-		fmt.Fprintln(os.Stderr, "CHARLY_USER")
-		return nil
-	}
-	cmd := exec.Command("bash", "-s")
-	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
 // hostReverseExec is the ReverseExecutor adapter combining a teardown's gate flags with a
 // per-call DryRun + ReverseRunner. Used by the host-teardown path (externalDeployTarget.Del
 // for the local/external substrate). Formerly lived in deploy_target_external.go.
@@ -132,10 +91,10 @@ type hostReverseExec struct {
 	Runner          ReverseRunner
 }
 
-func (e *hostReverseExec) reverseDryRun() bool          { return e.DryRun }
-func (e *hostReverseExec) reverseKeepRepoChanges() bool { return e.KeepRepoChanges }
-func (e *hostReverseExec) reverseKeepServices() bool    { return e.KeepServices }
-func (e *hostReverseExec) reverseRunner() ReverseRunner { return e.Runner }
+func (e *hostReverseExec) ReverseDryRun() bool          { return e.DryRun }
+func (e *hostReverseExec) ReverseKeepRepoChanges() bool { return e.KeepRepoChanges }
+func (e *hostReverseExec) ReverseKeepServices() bool    { return e.KeepServices }
+func (e *hostReverseExec) ReverseRunner() ReverseRunner { return e.Runner }
 
 // teardownHostDeploy reverses a single host/external deploy record: for each candy whose
 // refcount drops to zero it replays the recorded ReverseOps, removes the env.d file, and

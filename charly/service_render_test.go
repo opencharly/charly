@@ -187,7 +187,7 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 	plan := &InstallPlan{Steps: []InstallStep{
 		&ServiceCustomStep{Name: "charly-selkies-selkies", UnitText: rendered.UnitText, UnitPath: rendered.UnitPath, TargetScope: ScopeUser},
 	}}
-	plan.ResolveHome("/home/cachy")
+	planResolveHome(plan, "/home/cachy")
 	cs := plan.Steps[0].(*ServiceCustomStep)
 	if !strings.Contains(cs.UnitText, "ExecStart=python3 /home/cachy/.local/bin/selkies-capture-server") {
 		t.Errorf("ResolveHome did not substitute the unit ExecStart; got:\n%s", cs.UnitText)

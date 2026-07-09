@@ -90,7 +90,7 @@ func TestVmSshAlias(t *testing.T) {
 // no UserKnownHostsFile. ssh(1) reads ~/.ssh/config + ssh-agent.
 func TestSshExecutor_NoCredentials(t *testing.T) {
 	e := &SSHExecutor{Host: "charly-arch-vm"}
-	args := e.sshBaseArgs()
+	args := e.SSHBaseArgs()
 	for _, a := range args {
 		if a == "-i" {
 			t.Errorf("unexpected -i flag in sshBaseArgs: %v", args)
@@ -117,7 +117,7 @@ func TestSshExecutor_WithUserPortArgs(t *testing.T) {
 		Port: 2222,
 		Args: []string{"-o", "ProxyJump=bastion"},
 	}
-	args := e.sshBaseArgs()
+	args := e.SSHBaseArgs()
 	wantParts := []string{"-p", "2222", "-o", "ProxyJump=bastion", "ubuntu@ci-runner-3.lan"}
 	for _, want := range wantParts {
 		found := slices.Contains(args, want)

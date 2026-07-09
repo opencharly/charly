@@ -544,21 +544,3 @@ func resolveEntrypointFromMeta(meta *BoxMetadata) []string {
 	}
 	return []string{"sleep", "infinity"}
 }
-
-// containerName returns the deterministic container name for an image
-// (or for a `<base>/<instance>` deploy key — the `/` is canonicalized
-// to `-` per the documented convention "container name is always
-// `charly-<key-with-slash-replaced-by-dash>`"; see /charly-core:deploy "Two
-// supported deploy patterns").
-func containerName(boxName string) string {
-	return "charly-" + strings.ReplaceAll(boxName, "/", "-")
-}
-
-// containerNameInstance returns the container name with optional instance suffix.
-// Slashes in boxName are canonicalized to dashes — see containerName.
-func containerNameInstance(boxName, instance string) string {
-	if instance == "" {
-		return containerName(boxName)
-	}
-	return "charly-" + strings.ReplaceAll(boxName, "/", "-") + "-" + instance
-}

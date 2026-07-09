@@ -35,7 +35,7 @@ func TestCandyRef(t *testing.T) {
 	}
 	// A resolved sibling key overrides Bare() but leaves Raw (and thus the
 	// transitive-fetch view) intact.
-	r := CandyRef{Raw: "ffmpeg", resolved: "github.com/org/repo/layers/ffmpeg"}
+	r := CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
 	if r.Bare() != "github.com/org/repo/layers/ffmpeg" {
 		t.Errorf("resolved Bare() = %q", r.Bare())
 	}

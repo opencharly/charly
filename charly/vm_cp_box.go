@@ -183,9 +183,9 @@ func streamLoadAndTag(ctx context.Context, sshExec *SSHExecutor, de DeployExecut
 	fmt.Fprintf(os.Stderr, "cp-box: streaming %s into guest podman (save | ssh load)...\n", ref)
 	var sshArgs []string
 	if rootless {
-		sshArgs = append(sshExec.sshBaseArgs(), "podman", "load")
+		sshArgs = append(sshExec.SSHBaseArgs(), "podman", "load")
 	} else {
-		sshArgs = append(sshExec.sshBaseArgs(), "sudo", "podman", "load")
+		sshArgs = append(sshExec.SSHBaseArgs(), "sudo", "podman", "load")
 	}
 	save := osExecCommand(ctx, hostEngine, "save", ref)
 	load := osExecCommand(ctx, "ssh", sshArgs...)

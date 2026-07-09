@@ -53,7 +53,7 @@ type ProvisionActor interface {
 type TypedStepProvider interface {
 	Provider
 	LowersTo() StepKind
-	ConstructStep(op *Op, layer *Candy, img *ResolvedBox) InstallStep
+	ConstructStep(op *Op, layer CandyModel, img *ResolvedBox) InstallStep
 }
 
 // BuildEmitter is the build-context act half of a verb provider that renders its

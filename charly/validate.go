@@ -1243,7 +1243,7 @@ func validateBuilders(cfg *Config, layers map[string]*Candy, builderCfg *Builder
 			for builderName, builderDef := range builderCfg.Builder {
 				fileMatched := false
 				for _, f := range builderDef.DetectFiles {
-					if candyHasFile(layer, f) {
+					if layer.HasFile(f) {
 						fileMatched = true
 						break
 					}
@@ -1607,22 +1607,6 @@ func min(a, b, c int) int {
 }
 
 // candyHasFile checks if a candy has a specific file (used for builder detection).
-func candyHasFile(layer *Candy, filename string) bool {
-	switch filename {
-	case "pixi.toml":
-		return layer.HasPixiToml
-	case "pyproject.toml":
-		return layer.HasPyprojectToml
-	case "environment.yml":
-		return layer.HasEnvironmentYml
-	case "package.json":
-		return layer.HasPackageJson
-	case "Cargo.toml":
-		return layer.HasCargoToml
-	default:
-		return fileExists(filepath.Join(layer.SourceDir, filename))
-	}
-}
 
 // candyHasFormatConfig checks if a candy has a non-empty config section for a format.
 // Fully generic — uses the FormatSection accessor which checks both typed and dynamic sections.

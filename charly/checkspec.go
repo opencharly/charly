@@ -227,13 +227,6 @@ func expandAnyVars(v any, env map[string]string) (any, []string) {
 // ExecContext is where an op runs. An op's Context list (or its VerbCatalog
 // default) declares legality; the active engine supplies the running context
 // and skips ops whose context set does not include it (VenueSkip).
-type ExecContext string
-
-const (
-	CtxBuild   ExecContext = "build"   // image construction (OCITarget → Containerfile)
-	CtxDeploy  ExecContext = "deploy"  // host/VM/pod provisioning (DeployExecutor)
-	CtxRuntime ExecContext = "runtime" // a running target (check Runner)
-)
 
 // DoMode is the act/assert/instruct axis. act = perform a side-effect;
 // assert = run the matchers (read-only); instruct = hand free-form text to the

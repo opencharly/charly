@@ -7,7 +7,10 @@
 // package's injection seams (see vmshared/hooks.go).
 package main
 
-import "github.com/opencharly/sdk/vmshared"
+import (
+	"github.com/opencharly/sdk/sshx"
+	"github.com/opencharly/sdk/vmshared"
+)
 
 type (
 	AliasConfig              = vmshared.AliasConfig
@@ -88,7 +91,7 @@ type (
 	SnapshotDeleteOpts       = vmshared.SnapshotDeleteOpts
 	SnapshotEntry            = vmshared.SnapshotEntry
 	SnapshotRegistry         = vmshared.SnapshotRegistry
-	SSHTunnel                = vmshared.SSHTunnel
+	SSHTunnel                = sshx.SSHTunnel
 	Step                     = vmshared.Step
 	StepKeyword              = vmshared.StepKeyword
 	TunnelYAML               = vmshared.TunnelYAML
@@ -124,7 +127,7 @@ var (
 	ListSnapshots               = vmshared.ListSnapshots
 	loadRegistry                = vmshared.LoadRegistry
 	LookupSnapshot              = vmshared.LookupSnapshot
-	NewSSHTunnel                = vmshared.NewSSHTunnel
+	NewSSHTunnel                = sshx.NewSSHTunnel
 	ovmfCandidatesForDistro     = vmshared.OvmfCandidatesForDistro
 	parseGlibcVersion           = vmshared.ParseGlibcVersion
 	ParseLibvirtURI             = vmshared.ParseLibvirtURI
