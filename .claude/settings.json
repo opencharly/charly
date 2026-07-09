@@ -17,6 +17,13 @@
       "Bash(gh api --method POST repos/opencharly:*)"
     ]
   },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(gh pr merge:*)",
+      "Bash(gh api --method POST repos/opencharly:*)"
+    ]
+  },
   "enabledPlugins": {
     "charly-core@charly-plugins": true,
     "charly-build@charly-plugins": true,
