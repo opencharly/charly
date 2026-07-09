@@ -59,6 +59,11 @@ def block(msg):
     sys.stderr.write("pre-commit-gate BLOCKED: " + msg + "\n")
     sys.exit(2)
 
+class _UnparseableCommit(ValueError):
+    """A commit the structured parser cannot cleanly resolve (e.g. a `git commit`
+    hidden behind an unmodeled command wrapper). A ValueError subclass so the
+    caller's fail-closed handler catches it alongside unbalanced-quote errors."""
+
 # --- strict gate for the `documentation reviewed` tier ---------------------
 # That tier is only honest when the staged diff is all-documentation: every
 # staged file is a doc path OR a code file whose staged hunks are full-line
@@ -122,6 +127,55 @@ _VALUE_OPTS = {'-C', '-c', '--git-dir', '--work-tree', '--namespace',
                '--config-env', '--exec-path', '--super-prefix'}
 
 
+# Command-modifier words that run their REMAINING args as a command, so
+# `<word> git commit` still executes a commit. Consumed like a shell keyword so
+# the invocation is recognized. Not exhaustive — the adjacency safety net below
+# fails closed on any wrapper this misses rather than letting a commit through.
+_CMD_WRAPPERS = {'command', 'exec', 'nohup', 'time', 'nice', 'ionice', 'stdbuf',
+                 'setsid', 'sudo', 'doas', 'env', 'xargs', 'builtin'}
+
+
+def _normalize_shell(command):
+    """Bring `command` into line with how bash itself would tokenize it, for the
+    two things shlex gets backwards vs bash — and it gets them EXACTLY backwards:
+
+      * a backslash-newline line-continuation: bash REMOVES it (joining the
+        lines); shlex keeps it as a literal '\\n' token. Removed here.
+      * a raw (unescaped) top-level newline: bash treats it as a command
+        SEPARATOR; shlex swallows it as whitespace, merging two commands into
+        one. Turned into a ';' here.
+
+    Both are done with a single/double-quote-aware char walk (single quotes
+    suppress every special meaning; a raw newline inside double quotes stays
+    literal). Getting this wrong silently drops a real commit past the gate, so
+    it is done at the source rather than patched token-by-token afterwards.
+    """
+    out = []
+    i, n = 0, len(command)
+    in_s = in_d = False
+    while i < n:
+        c = command[i]
+        if in_s:                                   # single quotes: everything literal
+            out.append(c)
+            if c == "'":
+                in_s = False
+            i += 1
+        elif c == '\\' and i + 1 < n:              # escape (also active in double quotes)
+            if command[i + 1] == '\n':             # line continuation -> bash removes it
+                i += 2
+            else:
+                out.append(c); out.append(command[i + 1]); i += 2
+        elif c == '"':
+            in_d = not in_d; out.append(c); i += 1
+        elif c == "'" and not in_d:
+            in_s = True; out.append(c); i += 1
+        elif c == '\n' and not in_d:               # raw top-level newline -> separator
+            out.append(' ; '); i += 1
+        else:
+            out.append(c); i += 1
+    return ''.join(out)
+
+
 def git_commit_invocations(command):
     """Every `git [global-opts] commit [args]` in `command`, as (global_opts, args).
 
@@ -130,7 +184,7 @@ def git_commit_invocations(command):
     the entire gate and failing OPEN. Raises ValueError if `command` cannot be
     tokenized (the caller fails closed).
     """
-    lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lex = shlex.shlex(_normalize_shell(command), posix=True, punctuation_chars=True)
     lex.whitespace_split = True
     tokens = list(lex)          # ValueError on unbalanced quotes
 
@@ -146,10 +200,19 @@ def git_commit_invocations(command):
     out = []
     for seg in segments:
         i = 0
-        while i < len(seg) and (seg[i] in _SHELL_KW or _ENV_ASSIGN.match(seg[i])):
+        while i < len(seg) and (seg[i] in _SHELL_KW or seg[i] in _CMD_WRAPPERS
+                                or _ENV_ASSIGN.match(seg[i])):
             i += 1
         if i >= len(seg) or os.path.basename(seg[i]) != 'git':
-            continue                      # `echo "git commit"` -> command word is echo
+            # Not in git-command position. Safety net: if `git` is nonetheless
+            # immediately followed by `commit` anywhere in the segment, a wrapper
+            # this code does not model is hiding a real commit — fail CLOSED
+            # rather than let it through. (`echo "git commit"` tokenizes the
+            # quoted text as ONE token, so it never trips this.)
+            for j in range(len(seg) - 1):
+                if os.path.basename(seg[j]) == 'git' and seg[j + 1] == 'commit':
+                    raise _UnparseableCommit()
+            continue
         i += 1
         glob_opts = []
         while i < len(seg) and seg[i].startswith('-'):
@@ -324,6 +387,12 @@ commit_cwd = None
 
 try:
     invocations = git_commit_invocations(cmd)
+except _UnparseableCommit:
+    # A `git commit` is present but hidden behind a command wrapper the parser
+    # does not model. Fail CLOSED: an unrecognized shape must never pass unchecked.
+    block('cannot verify this commit: a `git commit` is present but wrapped in a form '
+          'this gate cannot analyze (an unrecognized command prefix). Re-issue it as a '
+          'plain `git [-C <dir>] commit ...` so the gate can inspect it.')
 except ValueError:
     # Unbalanced quotes: the command cannot be tokenized, so it cannot be judged.
     # Fail CLOSED whenever it plausibly IS a commit. Silently skipping is how a
