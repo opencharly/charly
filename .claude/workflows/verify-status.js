@@ -1,10 +1,10 @@
 export const meta = {
   name: 'verify-status',
   description:
-    'Substrate-coverage fan-out for the unified `charly status` surface: for each deployment substrate (pod / vm / local / android) run `charly check run <bed>` to completion (build → check image → deploy → check live → fresh charly update → teardown) on the bed that exercises that substrate, and aggregate a verbatim pass/fail report keyed on the bed\'s `status-shows-*` deploy-scope assertion (the check that proves `charly status --json` reports the right `kind` + nested tree for a live deployment). ALL beds run in PARALLEL via parallel(), bounded by the runtime\'s documented 16-concurrent / 1000-total dynamic-workflow agent ceiling — KVM/libvirt are multi-tenant and podman builds distinct image tags concurrently. A bed skipped for a missing host prereq (libvirt user session for the vm bed, /dev/kvm for the android bed) is logged, never silently dropped.',
+    'Substrate-coverage PLAN for the unified `charly status` surface. It runs NO beds: every substrate bed (pod check-pod, vm check-k3s-vm, android check-android-emulator-pod, local check-local) is either a LONG bed (vm/android substrate, or measured >=600s) or HOST-LOCAL (check-local applies candies to the operator workstation), and an ephemeral agent() sub-agent cannot own either — force-terminating one orphans a libvirt domain or pod container. So it emits, per substrate, the exact `charly check run <bed>` command, the summary.yml path to read, and the `status-shows-*` deploy-scope assertion that bed proves; the PERSISTENT session owns each run as a run_in_background task. The local substrate bed must run inside the disposable eval VM, never on this host. gateComplete is false by construction. The bed-safety classifier lives in /verify-beds (R3) and is not duplicated here.',
   phases: [
-    { title: 'Discover', detail: 'emit the substrate→bed map {pod,vm,local,android}' },
-    { title: 'Verify', detail: 'charly check run <bed> per substrate; return verbatim verdict incl. the status-shows-* assertion' },
+    { title: 'Discover', detail: 'confirm each substrate bed exists in config' },
+    { title: 'Plan', detail: 'emit per-substrate command + summary.yml path + status-shows-* assertion; run nothing' },
   ],
 }
 
@@ -78,33 +78,6 @@ const DISCOVER_SCHEMA = {
   required: ['beds'],
 }
 
-const BED_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    bed: { type: 'string' },
-    substrate: { type: 'string' },
-    exitCode: { type: 'integer', description: '0 pass / 1 infra / 2 checks-failed' },
-    ok: { type: 'boolean' },
-    skippedPrereq: { type: 'boolean', description: 'true if a host prereq (libvirt/kvm) was missing' },
-    statusAssertions: {
-      type: 'array',
-      description: 'verbatim verdicts, one per status-shows-* deploy-scope check',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          id: { type: 'string' },
-          ok: { type: 'boolean' },
-          detail: { type: 'string', description: 'the check-live line for this check (verbatim)' },
-        },
-        required: ['id', 'ok'],
-      },
-    },
-    failingLogTail: { type: 'string' },
-  },
-  required: ['bed', 'substrate', 'exitCode', 'ok'],
-}
 
 phase('Discover')
 // The substrate→bed map is fixed in this workflow; the discover phase only
@@ -138,32 +111,55 @@ if (!beds.length) {
   return { beds: [], note: 'no substrate beds resolved' }
 }
 
-// All beds run in PARALLEL. KVM and libvirt are multi-tenant; podman builds
-// distinct image tags concurrently. Simultaneity is bounded by the runtime's
-// documented 16-concurrent dynamic-workflow agent ceiling, which queues excess.
-log(`Verifying ${beds.length} substrate bed(s) in parallel (bounded + queued by the 16-concurrent runtime ceiling).`)
+// ---------------------------------------------------------------------------
+// THIS WORKFLOW RUNS NO BEDS. It PLANS.
+//
+// An `agent()` sub-agent is EPHEMERAL: it returns synchronously, its background
+// children die with it, and its one foreground `charly check run` is Bash-capped at
+// 600s. So it cannot own a bed that outlives its turn (/charly-internals:agents:
+// "NEVER the sub-agent /verify-beds workflow for >600s beds"). Driving one anyway
+// force-terminates the orchestrator: no verdict, and an ORPHANED libvirt domain or
+// pod container.
+//
+// EVERY substrate bed below is disqualified from sub-agent ownership:
+//   pod     check-pod                   - measured >=600s
+//   vm      check-k3s-vm                - vm substrate: boots a machine
+//   android check-android-emulator-pod  - android substrate: boots an emulator
+//   local   check-local                 - HOST-LOCAL: applies candies to the operator
+//                                          workstation; belongs in a disposable eval VM
+// So a RUNNER form of this workflow is invalid by construction. It emits the plan —
+// the exact command per substrate and the `status-shows-*` assertion each proves — and
+// the PERSISTENT session owns each run as a `run_in_background` task, reading the
+// verdict from `<dir>/.check/<bed>/<calver>/summary.yml`.
+//
+// The bed-safety classifier lives in ONE place, `/verify-beds` (R3): delegate there
+// when you want it applied. This workflow never re-implements it.
+phase('Plan')
+const plan = beds.map((b) => ({
+  substrate: b.substrate,
+  bed: b.bed,
+  dir: b.dir || '',
+  cmd: b.dir ? `charly -C ${b.dir} check run ${b.bed}` : `charly check run ${b.bed}`,
+  summaryPath: `${b.dir ? b.dir + '/' : ''}.check/${b.bed}/<calver>/summary.yml`,
+  proves: b.checks,
+  ownedBy: 'persistent-session',
+  reason:
+    b.substrate === 'local'
+      ? 'HOST-LOCAL: applies candies to the operator workstation — run it inside the disposable eval VM, never on this host'
+      : 'long bed: a sub-agent cannot own a run that outlives its turn',
+}))
 
-const runBed = (b) => {
-  const charlyCmd = b.dir ? `charly -C ${b.dir} check run ${b.bed}` : `charly check run ${b.bed}`
-  const checkDir = `${b.dir ? b.dir + '/' : ''}.check/${b.bed}/<calver>/`
-  const checkList = b.checks.map((c) => `"${c}"`).join(' and ')
-  return agent(
-    `You are the check-bed runner verifying the unified \`charly status\` surface for the "${b.substrate}" substrate. Run the kind:check bed "${b.bed}" EXACTLY as \`${charlyCmd}\` — do NOT add any flags (no --no-rebuild/--keep/--on-*; that would shrink the R10 spec, CLAUDE.md R10 flag-override clause). The bed's full R10 sequence (build → check image → deploy → check live → fresh charly update → teardown) runs the deploy-scope check check(s) ${checkList}, which assert that \`charly status --json\` reports the correct substrate kind (and, for android, the declared pod→android nested tree) for the live deployment. Capture stdout/stderr and the process exit code. Read ${checkDir}summary.yml for the per-step verdict, and extract the VERBATIM check-live line for EACH of those checks into statusAssertions. Tail any failing step's .log into failingLogTail. If a required host prereq is missing (libvirt user session for the vm bed, /dev/kvm for the android bed), set skippedPrereq=true and do NOT report it as a pass. Set substrate="${b.substrate}" and bed="${b.bed}". Return the verbatim verdict — never summarize away a failure.`,
-    { schema: BED_SCHEMA, label: `status:${b.substrate}:${b.bed}`, phase: 'Verify' }
-  )
-}
-
-phase('Verify')
-const all = (await parallel(beds.map((b) => () => runBed(b)))).filter(Boolean)
-const passed = all.filter((r) => r.ok && !r.skippedPrereq)
-const failed = all.filter((r) => !r.ok && !r.skippedPrereq)
-const skipped = all.filter((r) => r.skippedPrereq)
-log(`verify-status: ${passed.length} passed, ${failed.length} failed, ${skipped.length} skipped (missing prereq).`)
+for (const e of plan) log(`PLAN ${e.substrate}: ${e.cmd} — proves ${e.proves.join(', ')} (${e.reason})`)
+log(`verify-status: planned ${plan.length} substrate bed(s). This workflow ran NONE — gateComplete=false by construction.`)
 
 return {
-  total: all.length,
-  passed: passed.map((r) => ({ substrate: r.substrate, bed: r.bed, statusAssertions: r.statusAssertions })),
-  failed: failed.map((r) => ({ substrate: r.substrate, bed: r.bed, exitCode: r.exitCode, statusAssertions: r.statusAssertions, failingLogTail: r.failingLogTail })),
-  skipped: skipped.map((r) => ({ substrate: r.substrate, bed: r.bed })),
-  beds: all,
+  total: 0,
+  planned: plan,
+  ranHere: [],
+  gateComplete: false,
+  note:
+    'PLAN ONLY — no bed was run. Each planned[].cmd must be launched by the PERSISTENT session as a ' +
+    'run_in_background task; read planned[].summaryPath for the verdict and confirm planned[].proves. ' +
+    'The `local` substrate bed is HOST-LOCAL and must run inside the disposable eval VM, never on this host. ' +
+    'The bed-safety classifier lives in /verify-beds (R3); this workflow does not duplicate it.',
 }

@@ -136,7 +136,7 @@ const refusedHostLocalBeds = hostLocalBeds.map((b) => ({ bed: b.bed, cmd: cmdFor
 
 if (!shortBeds.length) {
   log(`No sub-agent-runnable bed: ${longBeds.length} deferred, ${hostLocalBeds.length} refused.`)
-  return { total: 0, passed: [], failed: [], skipped: [], deferredLongBeds, refusedHostLocalBeds, note: 'nothing runnable in a sub-agent' }
+  return { total: 0, passed: [], failed: [], skipped: [], deferredLongBeds, refusedHostLocalBeds, gateComplete: false, note: 'nothing runnable in a sub-agent; see deferredLongBeds + refusedHostLocalBeds' }
 }
 
 // Beds sharing an EXCLUSIVE host-resource token (requires_exclusive, e.g.
