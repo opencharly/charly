@@ -88,6 +88,41 @@ def _git(args, cwd=None):
         return None
     return out.stdout
 
+def resolve_literal_dir(tok):
+    # `tok` is the raw text of a `-C` argument, captured BEFORE the shell runs.
+    # Return a real directory, or block. Never return the hook's CWD as a
+    # fallback: the commit would write one repo's index while the docs-tier
+    # check inspected another's.
+    if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'":
+        inner, quote = tok[1:-1], tok[0]
+    else:
+        inner, quote = tok, ''
+    # Single quotes suppress every expansion; double quotes still expand
+    # $var, `cmd` and \escape; bare words additionally glob and expand ~.
+    if quote == "'":
+        expands = ''
+    elif quote == '"':
+        expands = '$`\\'
+    else:
+        expands = '$`\\~*?['
+    hit = next((c for c in expands if c in inner), None)
+    if hit:
+        block(
+            'cannot verify this commit: the `-C {}` path contains `{}`, which the shell '
+            'expands but this gate — which reads the command as text, before expansion — '
+            'cannot resolve. Re-issue the command ONCE with a literal absolute path '
+            '(`git -C /abs/path/to/repo commit ...`), per git-workflow B7. Do NOT `cd` into '
+            'the repo (a subdirectory project root drops .claude/settings.json), and do NOT '
+            'reshape-and-retry a command the classifier already denied — if you have already '
+            'been denied, stop and surface it.'.format(tok, hit))
+    if not os.path.isdir(inner):
+        block(
+            'cannot verify this commit: `-C {}` is not a directory on this machine, so the '
+            'staged diff cannot be inspected. Re-issue ONCE with a literal absolute path to '
+            'the repository root.'.format(tok))
+    return inner
+
+
 def changed_lines_all_comments(path, repo=None, rangespec=None):
     ext = os.path.splitext(path)[1].lower()
     marker = LINE_COMMENT.get(ext)
@@ -149,9 +184,10 @@ def assert_docs_only_diff(repo=None):
     # to inspect the bumped submodule commit.
     raw = _git(["diff", "--cached", "--no-renames", "--raw"], cwd=repo)
     if raw is None:
-        block('the "documentation reviewed" tier requires inspecting the staged diff, but '
-              '`git diff --cached --raw` failed. Stage the documentation changes and retry, or use '
-              'a runtime tier.')
+        block('cannot verify this commit: the "documentation reviewed" tier requires inspecting '
+              'the staged diff, but `git diff --cached --raw` failed — the target is not a git '
+              'repository, or git is unusable here. (A `-C` path the shell would expand is '
+              'reported separately, with its own remedy.) Fix the invocation, or use a runtime tier.')
     bad = []
     for line in raw.splitlines():
         if not line.startswith(':'):
@@ -253,9 +289,16 @@ for m in INVOKE.finditer(cmd):
     # whose index this commit writes; scope the docs-tier diff inspection there
     # (default: the hook's CWD) so a `git -C <sub> commit` is judged against the
     # submodule's index, not the superproject's.
-    mC = re.search(r'(?:^|\s)-C\s+(\S+)', glob_opts)
+    #
+    # This gate sees the command as TEXT, before the shell expands it, so a
+    # `-C` argument the shell would rewrite ("$P", `pwd`, ~/x, *) names a
+    # directory this hook cannot know. Falling back to the hook's CWD would
+    # then judge the SUPERPROJECT's index while the commit writes the
+    # submodule's — passing a code change off as documentation. So: resolve a
+    # quoted literal, and otherwise fail closed naming the real remedy.
+    mC = re.search(r'''(?:^|\s)-C\s+("(?:[^"\\]|\\.)*"|'[^']*'|\S+)''', glob_opts)
     if mC:
-        commit_cwd = mC.group(1)
+        commit_cwd = resolve_literal_dir(mC.group(1))
     # --amend re-touches the commit at HEAD; its CHANGELOG entry (if runtime-tier)
     # was already recorded in that commit, so the staged delta need not re-add one.
     if re.search(r'(?:^|\s)--amend(?:\s|$)', args):
