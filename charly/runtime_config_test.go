@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/kit"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,10 +9,10 @@ import (
 
 func TestLoadRuntimeConfig_Missing(t *testing.T) {
 	// Point to a non-existent path
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
 
-	RuntimeConfigPath = func() (string, error) {
+	kit.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "nonexistent", "config.yml"), nil
 	}
 
@@ -28,9 +29,9 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	cfg := &RuntimeConfig{
 		Engine:  EngineConfig{Build: "podman", Run: "docker"},
@@ -56,9 +57,9 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 }
 
 func TestResolveRuntime_Defaults(t *testing.T) {
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) {
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -95,9 +96,9 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
 	cfg := &RuntimeConfig{Engine: EngineConfig{Build: "podman"}}
@@ -122,9 +123,9 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 }
 
 func TestResolveRuntime_InvalidEngine(t *testing.T) {
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) {
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -141,9 +142,9 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 }
 
 func TestResolveRuntime_InvalidRunMode(t *testing.T) {
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) {
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -163,9 +164,9 @@ func TestSetConfigValue_Validates(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	err := SetConfigValue("engine.build", "containerd")
 	if err == nil {
@@ -195,9 +196,9 @@ func TestResetConfigValue(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	if err := SetConfigValue("engine.build", "podman"); err != nil {
 		t.Fatal(err)
@@ -216,9 +217,9 @@ func TestResetConfigValue_All(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	if err := SetConfigValue("engine.build", "podman"); err != nil {
 		t.Fatal(err)
@@ -240,9 +241,9 @@ func TestListConfigValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -291,9 +292,9 @@ func TestListConfigValues(t *testing.T) {
 }
 
 func TestGetConfigValue_UnknownKey(t *testing.T) {
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) {
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
@@ -312,14 +313,14 @@ func TestResolveValue(t *testing.T) {
 		{"", "", "docker", "docker"},
 	}
 	for _, tt := range tests {
-		got := resolveValue(tt.env, tt.cfg, tt.def)
+		got := ResolveValue(tt.env, tt.cfg, tt.def)
 		if got != tt.want {
-			t.Errorf("resolveValue(%q, %q, %q) = %q, want %q", tt.env, tt.cfg, tt.def, got, tt.want)
+			t.Errorf("ResolveValue(%q, %q, %q) = %q, want %q", tt.env, tt.cfg, tt.def, got, tt.want)
 		}
 	}
 }
 
-// assertConfigKeySetGetReset points RuntimeConfigPath at a fresh temp config and
+// assertConfigKeySetGetReset points kit.RuntimeConfigPath at a fresh temp config and
 // exercises one config key's set/get/invalid/reset lifecycle: set valid1 + read
 // it back, set valid2 + read it back, reject invalid, then reset to empty.
 // Shared by the per-key *_SetGetReset tests (R3).
@@ -328,9 +329,9 @@ func assertConfigKeySetGetReset(t *testing.T, key, valid1, valid2, invalid strin
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	t.Cleanup(func() { RuntimeConfigPath = orig })
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	t.Cleanup(func() { kit.RuntimeConfigPath = orig })
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// First valid value.
 	if err := SetConfigValue(key, valid1); err != nil {
@@ -376,9 +377,9 @@ func TestAutoEnable_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -407,9 +408,9 @@ func TestAutoEnable_EnvValue1(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -431,9 +432,9 @@ func TestAutoEnable_ListConfigValues(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -473,9 +474,9 @@ func TestBindAddress_EnvOverridesConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -504,9 +505,9 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -535,12 +536,12 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
 
 	dir := t.TempDir()
-	orig := systemdUserRuntimeDir
-	defer func() { systemdUserRuntimeDir = orig }()
-	systemdUserRuntimeDir = func() string { return dir }
+	orig := kit.SystemdUserRuntimeDir
+	defer func() { kit.SystemdUserRuntimeDir = orig }()
+	kit.SystemdUserRuntimeDir = func() string { return dir }
 
-	if systemdUserAvailable() {
-		t.Error("systemdUserAvailable() = true with empty XDG_RUNTIME_DIR; want false")
+	if SystemdUserAvailable() {
+		t.Error("SystemdUserAvailable() = true with empty XDG_RUNTIME_DIR; want false")
 	}
 }
 
@@ -549,13 +550,13 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 func TestSystemdUserAvailable_DirMissing(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	orig := systemdUserRuntimeDir
-	defer func() { systemdUserRuntimeDir = orig }()
+	orig := kit.SystemdUserRuntimeDir
+	defer func() { kit.SystemdUserRuntimeDir = orig }()
 	missing := filepath.Join(t.TempDir(), "definitely-not-a-systemd-dir")
-	systemdUserRuntimeDir = func() string { return missing }
+	kit.SystemdUserRuntimeDir = func() string { return missing }
 
-	if systemdUserAvailable() {
-		t.Error("systemdUserAvailable() = true with missing /run/user/<uid>/systemd; want false")
+	if SystemdUserAvailable() {
+		t.Error("SystemdUserAvailable() = true with missing /run/user/<uid>/systemd; want false")
 	}
 }
 
@@ -569,12 +570,12 @@ func TestSystemdUserAvailable_DirIsFile(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte{}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := systemdUserRuntimeDir
-	defer func() { systemdUserRuntimeDir = orig }()
-	systemdUserRuntimeDir = func() string { return filePath }
+	orig := kit.SystemdUserRuntimeDir
+	defer func() { kit.SystemdUserRuntimeDir = orig }()
+	kit.SystemdUserRuntimeDir = func() string { return filePath }
 
-	if systemdUserAvailable() {
-		t.Error("systemdUserAvailable() = true with regular file at probed path; want false")
+	if SystemdUserAvailable() {
+		t.Error("SystemdUserAvailable() = true with regular file at probed path; want false")
 	}
 }
 
@@ -589,11 +590,11 @@ func TestSystemdUserAvailable_AllPresent(t *testing.T) {
 	if err := os.Mkdir(dirPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	orig := systemdUserRuntimeDir
-	defer func() { systemdUserRuntimeDir = orig }()
-	systemdUserRuntimeDir = func() string { return dirPath }
+	orig := kit.SystemdUserRuntimeDir
+	defer func() { kit.SystemdUserRuntimeDir = orig }()
+	kit.SystemdUserRuntimeDir = func() string { return dirPath }
 
-	if !systemdUserAvailable() {
-		t.Error("systemdUserAvailable() = false with all signals present; want true")
+	if !SystemdUserAvailable() {
+		t.Error("SystemdUserAvailable() = false with all signals present; want true")
 	}
 }

@@ -6,7 +6,10 @@
 // (in-process go-libvirt) implementations of the shared package's seams.
 package vm
 
-import "github.com/opencharly/sdk/vmshared"
+import (
+	"github.com/opencharly/sdk/sshx"
+	"github.com/opencharly/sdk/vmshared"
+)
 
 type (
 	LibvirtAudio             = vmshared.LibvirtAudio
@@ -52,7 +55,7 @@ type (
 	ResolvedReadiness        = vmshared.ResolvedReadiness
 	SnapshotCreateOpts       = vmshared.SnapshotCreateOpts
 	SnapshotEntry            = vmshared.SnapshotEntry
-	SSHTunnel                = vmshared.SSHTunnel
+	SSHTunnel                = sshx.SSHTunnel
 	VmNetwork                = vmshared.VmNetwork
 	VmRuntimeParams          = vmshared.VmRuntimeParams
 	VmSource                 = vmshared.VmSource
@@ -73,7 +76,7 @@ var (
 	DeleteSnapshot           = vmshared.DeleteSnapshot
 	ErrPollFatal             = vmshared.ErrPollFatal
 	KeyToUserTmpfilesD       = vmshared.KeyToUserTmpfilesD
-	NewSSHTunnel             = vmshared.NewSSHTunnel
+	NewSSHTunnel             = sshx.NewSSHTunnel
 	openOutputPath           = vmshared.OpenOutputPath
 	ParseLibvirtURI          = vmshared.ParseLibvirtURI
 	pollUntil                = vmshared.PollUntil

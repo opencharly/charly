@@ -77,26 +77,11 @@ func imageBuildLockPath(fullTag string) (string, error) {
 // beds sharing one cloud image otherwise race on the shared .part file — one renames it away
 // mid-download under the other, and a resumed partial can mix bytes across an upstream
 // rotation of a mutable `latest` URL.
-func acquireVmImageFetchLock(cachePath string) (func() error, error) {
-	return acquireFileLock(cachePath+".lock", true)
-}
 
 // acquireLocalPkgBuildLock serializes concurrent host localpkg builds of the SAME source dir
 // (pkg/<fmt>) across charly processes — concurrent makepkg runs share the dir's src/ git
 // working copies and corrupt each other. Keyed by sha256(srcDir) under the user cache so the
 // lock file never pollutes the repo working tree.
-func acquireLocalPkgBuildLock(srcDir string) (func() error, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("localpkg build lock: %w", err)
-	}
-	dir := filepath.Join(cache, "charly", "locks")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("localpkg build lock dir: %w", err)
-	}
-	sum := sha256.Sum256([]byte(srcDir))
-	return acquireFileLock(filepath.Join(dir, "localpkg-"+hex.EncodeToString(sum[:8])+".lock"), true)
-}
 
 // buildActivityDir is the user-scope directory of LIVE build-activity locks —
 // one flocked nonce file per in-flight `charly box build` engine run.

@@ -5,7 +5,7 @@ import "testing"
 // These tests pin the target-dispatch unification for local deploys: every
 // surface that picks an executor for a `target: local` deployment now routes
 // through ONE selection (rootExecutorForDeployNode) and ONE chain case (the
-// `local` arm of appendHopForFlatPath), instead of assuming a container. Each
+// `local` arm of AppendHopForFlatPath), instead of assuming a container. Each
 // test FAILS against the pre-cutover code (no helper; no `local` chain case;
 // resolveScoringChain fabricating an charly-<pod> container for a local target).
 
@@ -57,7 +57,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 
 // TestResolveDeployChain_LocalNoHop: a `target: local` root node must resolve
 // (no error) and add NO hop — the chain stays at the passed-in root executor.
-// Pre-cutover, appendHopForFlatPath had no `local` case → "unknown target".
+// Pre-cutover, AppendHopForFlatPath had no `local` case → "unknown target".
 func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	roots := map[string]BundleNode{
 		"workstation": {Target: "local"},

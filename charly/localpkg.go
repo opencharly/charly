@@ -292,12 +292,12 @@ func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, bu
 		HostHome:     hostHome,
 		DryRun:       opts.DryRun,
 		RunAsRoot:    true,
-		// Cfg + ProjectDir let BuilderRun's EnsureImagePresent run the
-		// namespace-aware ResolveBox, so a namespace-qualified builder ref
-		// (e.g. the cachyos project's aur builder `charly.arch-builder`) resolves to
-		// its concrete image — matching the aur-CANDY path (deploy_host_helpers.go).
-		Cfg:        cfg,
-		ProjectDir: projectDir,
+		// Inject the image resolve/ensure seams (closing over cfg + projectDir) so
+		// BuilderRun runs the namespace-aware ResolveBox, so a namespace-qualified
+		// builder ref (e.g. the cachyos project's aur builder `charly.arch-builder`)
+		// resolves to its concrete image — matching the aur-CANDY path (deploy_host_helpers.go).
+		ResolveImage: func(img string) (string, error) { return resolveImageRefForEnsure(img, cfg, projectDir) },
+		EnsureImage:  func(ctx context.Context, img string) error { return EnsureImagePresent(ctx, img, cfg, projectDir) },
 	})
 	// Always surface the builder's stdout/stderr — the operator needs to see
 	// compile output to debug build failures, not just the bare exit status.

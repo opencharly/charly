@@ -85,7 +85,7 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 		&FileStep{Dest: "{{.Home}}/.config/foo"},
 		&OpStep{Op: &Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
 	}}
-	plan.ResolveHome("/home/cachy")
+	planResolveHome(plan, "/home/cachy")
 
 	sh := plan.Steps[0].(*ShellHookStep)
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" || sh.PathAdd[0] != "/home/cachy/bin" {
@@ -111,7 +111,7 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 	}
 
 	// Idempotent: a second call (token already gone) is a no-op.
-	plan.ResolveHome("/home/other")
+	planResolveHome(plan, "/home/other")
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" {
 		t.Errorf("ResolveHome not idempotent: %q", sh.EnvVars["P"])
 	}

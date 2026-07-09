@@ -15,16 +15,16 @@ func TestHostReverseExec_AccessorPassthrough(t *testing.T) {
 		KeepServices:    false,
 		Runner:          nil,
 	}
-	if !e.reverseDryRun() {
-		t.Errorf("reverseDryRun = false, want true")
+	if !e.ReverseDryRun() {
+		t.Errorf("ReverseDryRun = false, want true")
 	}
-	if !e.reverseKeepRepoChanges() {
-		t.Errorf("reverseKeepRepoChanges = false, want true")
+	if !e.ReverseKeepRepoChanges() {
+		t.Errorf("ReverseKeepRepoChanges = false, want true")
 	}
-	if e.reverseKeepServices() {
-		t.Errorf("reverseKeepServices = true, want false")
+	if e.ReverseKeepServices() {
+		t.Errorf("ReverseKeepServices = true, want false")
 	}
-	if e.reverseRunner() != nil {
-		t.Errorf("reverseRunner non-nil, want nil")
+	if e.ReverseRunner() != nil {
+		t.Errorf("ReverseRunner non-nil, want nil")
 	}
 }

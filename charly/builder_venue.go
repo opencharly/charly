@@ -181,14 +181,15 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venu
 		HostHome:     venueHome,
 		DryRun:       opts.DryRun,
 		RunAsRoot:    true,
-		// Thread Cfg + ProjectDir so BuilderRun's EnsureImagePresent can resolve a
-		// namespace-qualified / short builder ref (e.g. a bed's
-		// install_opts.builder_image: arch.arch-builder) to its concrete image —
-		// newest-local, or built on-demand from the project — instead of only accepting a
-		// full registry ref (which breaks when its tag is pruned or ghcr publishing is
-		// paused). Mirrors buildDepPkgsOnHost (localpkg.go).
-		Cfg:        build.Cfg,
-		ProjectDir: build.ProjectDir,
+		// Inject the image resolve/ensure seams closing over Cfg + ProjectDir so
+		// BuilderRun can resolve a namespace-qualified / short builder ref (e.g. a
+		// bed's install_opts.builder_image: arch.arch-builder) to its concrete image
+		// — newest-local, or built on-demand from the project — instead of only
+		// accepting a full registry ref. Mirrors buildDepPkgsOnHost (localpkg.go).
+		ResolveImage: func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
+		EnsureImage: func(ctx context.Context, img string) error {
+			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
+		},
 	})
 	if len(out) > 0 {
 		_, _ = os.Stderr.Write(out)

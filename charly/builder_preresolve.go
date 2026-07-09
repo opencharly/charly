@@ -29,14 +29,9 @@ import (
 // builderPreresolved is one candy×builder's pre-resolved payload: the plugin's stage-context keys
 // (merged onto the base context by collectBuilderContext) + its teardown ops (stashed onto
 // BuilderStep.PreResolvedReverse so Reverse() is a pure getter).
-type builderPreresolved struct {
-	Context map[string]any
-	Reverse []ReverseOp
-}
 
 // builderCtxKey keys the pre-resolved map by candy name + builder word (NUL-joined — neither can
 // contain NUL, so the key is unambiguous).
-func builderCtxKey(candy, builder string) string { return candy + "\x00" + builder }
 
 // detectExternalizedBuilders returns the EXTERNALIZED builder words the deploy's resolved candy
 // closure actually triggers, in deterministic order. It applies the SAME detection — INCLUDING the

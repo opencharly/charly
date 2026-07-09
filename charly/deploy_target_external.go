@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/opencharly/sdk/spec"
@@ -269,7 +270,7 @@ func (t *externalDeployTarget) apply(ctx context.Context, node *BundleNode, dir 
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
 		if p != nil {
-			views = append(views, p.wireView())
+			views = append(views, planWireView(p))
 		}
 	}
 	params, err := json.Marshal(views)
@@ -442,7 +443,7 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 			continue
 		}
 		if home != "" {
-			p.ResolveHome(home)
+			planResolveHome(p, home)
 		}
 		for _, step := range p.Steps {
 			switch s := step.(type) {
@@ -519,7 +520,21 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 	// in-proc local/vm deploy targets called before externalization — idempotent
 	// (an op already carrying a command, or a non-package-remove op, is skipped;
 	// a nil DistroConfig is a no-op).
-	fillReverseUninstallCmds(reverseOps, t.build.DistroCfg)
+	fillReverseUninstallCmds(reverseOps, func(format string, packages []string) string {
+		if t.build.DistroCfg == nil {
+			return ""
+		}
+		fd := t.build.DistroCfg.FindFormat(format)
+		if fd == nil || strings.TrimSpace(fd.UninstallTemplate) == "" {
+			return ""
+		}
+		ctx := &InstallContext{Packages: append([]string(nil), packages...)}
+		rendered, err := RenderTemplate(format+"-uninstall", fd.UninstallTemplate, ctx)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(rendered)
+	})
 	if err := AddCandyDeployment(paths, candy, id, func(rec *CandyRecord) {
 		rec.Version = reply.Record.Version
 		rec.ReverseOps = append([]ReverseOp(nil), reverseOps...) // replace (idempotent)

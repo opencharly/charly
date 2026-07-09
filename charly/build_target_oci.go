@@ -85,7 +85,7 @@ func (t *OCITarget) emitPlan(plan *InstallPlan, _ EmitOpts) error {
 	// the image's runtime home. For an OCI build (and the pod-overlay build
 	// that reuses OCITarget) img.Home IS the home the baked paths run under.
 	if t.Box != nil {
-		plan.ResolveHome(t.Box.Home)
+		planResolveHome(plan, t.Box.Home)
 	}
 	fmt.Fprintf(&t.buf, "# Layer: %s\n", plan.Candy)
 	for _, step := range plan.Steps {

@@ -233,49 +233,5 @@ func markersForTag(marker string) (begin, end string) {
 		fmt.Sprintf("# opencharly:end %s", marker)
 }
 
-// stripManagedBlock removes the begin/end fence pair (tagged with
-// `marker` — empty for the global block) and its body from `existing`.
-func stripManagedBlock(existing, marker string) string {
-	begin, end := markersForTag(marker)
-	if !strings.Contains(existing, begin) {
-		return existing
-	}
-	var out strings.Builder
-	inBlock := false
-	for line := range strings.SplitSeq(existing, "\n") {
-		if strings.Contains(line, begin) {
-			inBlock = true
-			continue
-		}
-		if inBlock && strings.Contains(line, end) {
-			inBlock = false
-			continue
-		}
-		if !inBlock {
-			out.WriteString(line + "\n")
-		}
-	}
-	return strings.TrimRight(out.String(), "\n") + "\n"
-}
-
-// RemoveManagedBlockAt strips the managed block (tagged with `marker`)
-// from the file at `path`. If `path` doesn't exist, no-op. If `path`
-// exists and the strip leaves the file empty or whitespace-only, the
-// file is removed.
-func RemoveManagedBlockAt(path, marker string) error {
-	existing, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("RemoveManagedBlockAt read %s: %w", path, err)
-	}
-	stripped := stripManagedBlock(string(existing), marker)
-	if strings.TrimSpace(stripped) == "" {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("RemoveManagedBlockAt remove %s: %w", path, err)
-		}
-		return nil
-	}
-	return os.WriteFile(path, []byte(stripped), 0644)
-}
+// markersForTag's remaining consumer is host_infra_test.go; the managed-block
+// stripping itself moved to kit.RemoveManagedBlockAt (kit/profile.go) in P4.

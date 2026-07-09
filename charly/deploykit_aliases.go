@@ -25,9 +25,41 @@ type (
 	LocalPkgInstallStep = deploykit.LocalPkgInstallStep
 	RebootStep          = deploykit.RebootStep
 	ExternalPluginStep  = deploykit.ExternalPluginStep
+	externalStep        = deploykit.ExternalStep
 )
 
 var (
 	opStepScope        = deploykit.OpStepScope
 	pathIsSystemScoped = deploykit.PathIsSystemScoped
+	isExternalStepKind = deploykit.IsExternalStepKind
+	stepToView         = deploykit.StepToView
+	stepFromView       = deploykit.StepFromView
+	allStepKinds       = deploykit.AllStepKinds
+)
+
+// InstallPlan IR container + deploy-target/executor surface (P4): the InstallPlan
+// struct + its methods (wireView/ResolveHome/StepsByVenue), StepBatch, EmitOpts,
+// DeployTarget iface, DeployExecutor iface, BuilderRunOpts, and the HomeToken/
+// scopeFromName/GateEnabled/extractStringSlice helpers live in sdk/deploykit now.
+type (
+	InstallPlan    = deploykit.InstallPlan
+	StepBatch      = deploykit.StepBatch
+	EmitOpts       = deploykit.EmitOpts
+	DeployTarget   = deploykit.DeployTarget
+	DeployExecutor = deploykit.DeployExecutor
+	BuilderRunOpts = deploykit.BuilderRunOpts
+)
+
+const HomeToken = deploykit.HomeToken
+
+var (
+	scopeFromName      = deploykit.ScopeFromName
+	GateEnabled        = deploykit.GateEnabled
+	extractStringSlice = deploykit.ExtractStringSlice
+
+	// InstallPlan's home-resolution + wire-projection are deploykit FREE FUNCTIONS
+	// (not methods on spec.InstallPlan) because they type-switch the concrete step
+	// vocabulary. These package-main aliases keep the call sites terse.
+	planResolveHome = deploykit.ResolveHome
+	planWireView    = deploykit.WireView
 )

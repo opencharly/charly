@@ -2051,7 +2051,7 @@ func expandBuilderPath(path string, img *ResolvedBox) string {
 // candyNeedsBuilder checks if a candy triggers a builder's detection criteria.
 func (g *Generator) candyNeedsBuilder(img *ResolvedBox, layer *Candy, builderDef *BuilderDef) bool {
 	for _, f := range builderDef.DetectFiles {
-		if candyHasFile(layer, f) {
+		if layer.HasFile(f) {
 			return true
 		}
 	}
@@ -2153,7 +2153,7 @@ func (g *Generator) buildStageContext(layer *Candy, builderName string, builderD
 	if len(builderDef.InstallCommands) > 0 && len(builderDef.DetectFiles) > 0 {
 		manifest := ""
 		for _, f := range builderDef.DetectFiles {
-			if candyHasFile(layer, f) {
+			if layer.HasFile(f) {
 				manifest = f
 				break
 			}
@@ -2184,7 +2184,7 @@ func (g *Generator) buildStageContext(layer *Candy, builderName string, builderD
 	}
 
 	// Detect optional build script (runs in builder stage after install)
-	if builderDef.BuildScript != "" && candyHasFile(layer, builderDef.BuildScript) {
+	if builderDef.BuildScript != "" && layer.HasFile(builderDef.BuildScript) {
 		ctx.HasBuildScript = true
 		ctx.BuildScript = builderDef.BuildScript
 	}

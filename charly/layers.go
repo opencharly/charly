@@ -24,7 +24,6 @@ import (
 // Adding a new shell here is a renderer change (new managed-block / drop-in
 // destination); keep in sync with deploy_host_helpers.go shell-detection
 // probe and the shell-snippet destination table (compileShellSnippetSteps).
-var ShellAllowlist = map[string]bool{"bash": true, "zsh": true, "fish": true, "sh": true}
 
 // sortedEnvDeps returns a deterministic slice from a name-keyed map, sorted by Name.
 func sortedEnvDeps(m map[string]EnvDependency) []EnvDependency {
@@ -261,24 +260,6 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *CandyYAML) {
 			}
 		}
 	}
-}
-
-// PackageSection represents a generic format-specific package config in the candy manifest.
-// All fields from the YAML section are available in Raw for template rendering.
-type PackageSection struct {
-	FormatName string         // "rpm", "deb", "pac", "aur", etc.
-	Packages   []string       // extracted from Raw["package"] for quick access
-	Raw        map[string]any // all fields from YAML, passed to templates
-}
-
-// TagPkgConfig is a distro/version-specific package config (e.g. `debian:13:`,
-// `ubuntu:24.04:`, `fedora:43:`). Packages are installed using the primary
-// format's tool (dnf, apt, pacman). Raw captures the full YAML so that tag
-// sections can carry `repos:`, `options:`, `keys:` — the same schema as the
-// generic format section — for version-specific upstream repo configurations.
-type TagPkgConfig struct {
-	Package []string       `yaml:"package,omitempty" json:"package,omitempty"`
-	Raw     map[string]any `yaml:"-"`
 }
 
 // Format-specific structs (RpmConfig, DebConfig, PacConfig, AurConfig) removed.
@@ -962,12 +943,6 @@ func PopulateCandyInitSystem(layers map[string]*Candy, initCfg *InitConfig) {
 	}
 }
 
-// RouteConfig represents a route file declaration
-type RouteConfig struct {
-	Host string
-	Port string
-}
-
 // Route returns the route config (pre-populated from the candy manifest)
 func (l *Candy) Route() (*RouteConfig, error) { //nolint:unparam // error return kept for interface/API stability
 	if l.route != nil {
@@ -1169,19 +1144,19 @@ func (l *Candy) HasPypiDeps() bool {
 // qualifyRemoteSiblingDeps records, for a freshly-scanned remote candy, the
 // fully-qualified "<repo>/<subpathprefix><dep>" map key of each plain-name
 // require:/candy: dep (the same form ScanRemoteCandy keys fetched siblings
-// under). It sets each ref's resolved key (CandyRef.resolved) and leaves
+// under). It sets each ref's resolved key (CandyRef.Resolved) and leaves
 // CandyRef.Raw intact, so the graph resolves on .Bare() (qualified) while the
 // transitive fetch loop still keys on the original .Raw plain name. @-ref deps
 // are left untouched — their bare path already resolves directly.
 func qualifyRemoteSiblingDeps(layer *Candy) {
 	for i := range layer.Require {
 		if !layer.Require[i].IsRemote() {
-			layer.Require[i].resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.Require[i].Raw
+			layer.Require[i].Resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.Require[i].Raw
 		}
 	}
 	for i := range layer.IncludedCandy {
 		if !layer.IncludedCandy[i].IsRemote() {
-			layer.IncludedCandy[i].resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.IncludedCandy[i].Raw
+			layer.IncludedCandy[i].Resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.IncludedCandy[i].Raw
 		}
 	}
 	// bake_plugin: refs name a sibling PLUGIN candy whose binary is baked into the
@@ -1193,7 +1168,7 @@ func qualifyRemoteSiblingDeps(layer *Candy) {
 	// the baked-binary lookup find it.
 	for i := range layer.BakePlugin {
 		if !layer.BakePlugin[i].IsRemote() {
-			layer.BakePlugin[i].resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.BakePlugin[i].Raw
+			layer.BakePlugin[i].Resolved = layer.RepoPath + "/" + layer.SubPathPrefix + layer.BakePlugin[i].Raw
 		}
 	}
 }

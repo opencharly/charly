@@ -5,7 +5,17 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+
+	"github.com/opencharly/sdk/kit"
 )
+
+// The host-side executors (sdk/kit) resolve their wait bounds through
+// kit.ReadinessProvider. Point it at the project-aware loadedReadiness so an
+// SSHExecutor's wait-for-SSH honors the project's defaults.readiness (kit's
+// own default is the built-in bounds — safe, but project-unaware).
+func init() {
+	kit.ReadinessProvider = loadedReadiness
+}
 
 // readiness_config.go — charly core's readiness ENTRY. The config→resolved resolver AND the
 // CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness + the PluginEnv

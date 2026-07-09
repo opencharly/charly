@@ -206,7 +206,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 			"PIXI_CACHE_DIR": "/home/user/.cache/charly/pixi",
 		},
 	}
-	args := buildBuilderRunArgs(opts)
+	args := BuildBuilderRunArgs(opts)
 	want := []string{
 		"run", "--rm",
 		"--pull=never", // EnsureImagePresent has already handled the pull/build; suppress podman's auto-pull.
@@ -443,7 +443,7 @@ func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
 		HostHome:     "/home/user",
 		RunAsRoot:    true,
 	}
-	args := buildBuilderRunArgs(opts)
+	args := BuildBuilderRunArgs(opts)
 	full := strings.Join(args, " ")
 	if !strings.Contains(full, "--user 0:0") {
 		t.Errorf("RunAsRoot did not emit --user 0:0; got: %s", full)
