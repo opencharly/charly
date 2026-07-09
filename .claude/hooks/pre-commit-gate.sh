@@ -171,12 +171,37 @@ def _normalize_shell(command):
             in_s = True; out.append(c); i += 1
         elif c == '\n' and not in_d:               # raw top-level newline -> separator
             out.append(' ; '); i += 1
+        elif c == '`' and not in_s:                # backtick substitution RUNS its body;
+            out.append(' '); i += 1                # expose it as top-level tokens
         else:
             out.append(c); i += 1
     return ''.join(out)
 
 
-def git_commit_invocations(command):
+# Command words that RUN a following string as a shell command, so a commit can
+# hide one level down. `eval` runs its concatenated args; a shell runs its `-c`
+# argument. Recursed into (bounded depth) so the embedded commit is still judged.
+_STR_EXEC_SHELLS = {'bash', 'sh', 'dash', 'zsh', 'ksh'}
+
+
+def _embedded_command(seg):
+    """If `seg` is a string-executing wrapper, return the command string it runs,
+    else None. `eval a b c` runs "a b c"; `bash -c STR …` runs STR."""
+    if not seg:
+        return None
+    w = os.path.basename(seg[0])
+    if w == 'eval':
+        return ' '.join(seg[1:]) or None
+    if w in _STR_EXEC_SHELLS:
+        for k in range(1, len(seg)):
+            if seg[k] == '-c' and k + 1 < len(seg):
+                return seg[k + 1]
+            if seg[k].startswith('-c') and len(seg[k]) > 2:
+                return seg[k][2:]
+    return None
+
+
+def git_commit_invocations(command, _depth=0):
     """Every `git [global-opts] commit [args]` in `command`, as (global_opts, args).
 
     Shell is TOKENIZED, never regex-matched: a regex cannot span a quoted argument
@@ -199,6 +224,13 @@ def git_commit_invocations(command):
 
     out = []
     for seg in segments:
+        # A `git commit` can hide inside eval / `bash -c STR`; recurse into the
+        # embedded command string (bounded depth, so `bash -c "bash -c …"` can't
+        # spin). A commit found down there is judged exactly as a top-level one.
+        inner = _embedded_command(seg)
+        if inner is not None and _depth < 3:
+            out.extend(git_commit_invocations(inner, _depth + 1))
+            continue
         i = 0
         while i < len(seg) and (seg[i] in _SHELL_KW or seg[i] in _CMD_WRAPPERS
                                 or _ENV_ASSIGN.match(seg[i])):
