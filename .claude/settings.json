@@ -17,6 +17,12 @@
       "Bash(gh api --method POST repos/opencharly:*)"
     ]
   },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "OpenCharly Validated Landing: In the opencharly org only, a FRESH pr-validator sub-agent — spawned with new context, never the PR's author, having independently re-validated the PR against CLAUDE.md R0-R10 — may post the `charly/claude-validation` commit status on that PR, merge it with `gh pr merge --rebase --delete-branch`, and push the merge-time annotated `v<CalVer>` tag. The operator NAMES and grants standing authorization for the two soft blocks this triggers: approving it yourself (a required check stamped on a PR this session authored) and merging without review (no separate human approval). This is accepted knowingly as agent-ATTESTED validation, not two-party review. Covers: the status POST, the rebase merge, the annotated tag push, and the merge-time CalVer version-stamp commit. Does NOT cover: `gh pr merge --admin` or `--force`; force-push on any branch; editing branch protection or marking a required check not-required; disabling CI; a PR's own author self-posting its status (only a fresh pr-validator posts it); posting a status on a PR the agent did not itself validate; or any repository outside the opencharly org."
+    ]
+  },
   "enabledPlugins": {
     "charly-core@charly-plugins": true,
     "charly-build@charly-plugins": true,
