@@ -20,7 +20,7 @@ case "$INPUT" in
 esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python3 - "$INPUT" "$HERE" <<'PY'
+python3 -B - "$INPUT" "$HERE" <<'PY'
 import json, re, sys
 sys.path.insert(0, sys.argv[2])
 from gitcmd import git_invocations, hooks_path_override
