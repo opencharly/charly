@@ -94,6 +94,29 @@ for label, cmd, want in [
     ("commit: compound && echo done -> ALLOW", f"git commit -m 'x\n\n{DOCS}' && echo done", "ALLOW"),
     ("commit: apostrophe-in-heredoc + illegal tier -> BLOCK (fail closed)",
      "git commit -F - <<'EOF'\nit's x\n\nAssisted-by: Claude (theoretical suggestion)\nEOF", "BLOCK"),
+    # Late staging: the hook fires BEFORE the command runs, so anything that stages
+    # during the command leaves the gate judging a stale/empty diff. Fail closed.
+    ("commit: compound `add && commit` at docs tier -> BLOCK (late staging)",
+     f"git add main.go && git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: compound `add && commit` at runtime tier -> BLOCK (late staging)",
+     f"git add main.go && git commit -m 'x\n\n{RUN}'", "BLOCK"),
+    ("commit: -a at docs tier -> BLOCK (late staging)", f"git commit -a -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: --all at runtime tier -> BLOCK (late staging)", f"git commit --all -m 'x\n\n{RUN}'", "BLOCK"),
+    ("commit: bundled -am at docs tier -> BLOCK (late staging)", f"git commit -am 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: -o pathspec at docs tier -> BLOCK (late staging)",
+     f"git commit -o main.go -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: `git stage` in same command -> BLOCK (late staging)",
+     f"git stage main.go; git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    # `-m` ATTACHED to a message starting with 'a' tokenizes as `-ma…`. The scan must
+    # stop at 'm' (rest is the message value), never read that 'a' as --all.
+    ("commit: attached -m'a…' is not --all -> ALLOW", f"git commit -m'a\n\n{DOCS}' --amend", "ALLOW"),
+    # `git add` alone is not a commit at all.
+    ("commit: bare `git add` (no commit) -> ALLOW", "git add main.go", "ALLOW"),
+    # No diff-dependent tier parsed (-F file) -> the diff checks never run, so -a is moot.
+    ("commit: -a with -F file (no inline tier) -> ALLOW", "git commit -a -F msg.txt", "ALLOW"),
+    # A mention of "git add" inside the quoted message is one token, not an invocation.
+    ("commit: 'git add' inside the message -> ALLOW",
+     f"git commit -m 'do not git add here\n\n{DOCS}'", "ALLOW"),
 ]:
     expect(label, gate(CGATE, cmd), want)
 

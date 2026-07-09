@@ -11,7 +11,11 @@
 #     validated`, `analysed on a live system`, `documentation reviewed`),
 #   - claims `documentation reviewed` on a staged diff that is not all-docs,
 #   - carries a runtime tier but stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry
-#     (in a repo that tracks CHANGELOG/), or
+#     (in a repo that tracks CHANGELOG/),
+#   - stages content LATE, after this hook has read the index — a `git add` in the
+#     same command, or `git commit -a`/`-i`/`-o` — while declaring a diff-dependent
+#     tier: the gate would judge a stale (usually empty) diff, so it fails CLOSED.
+#     Stage in a separate Bash call first. Or
 #   - cannot be TOKENIZED — an UNBALANCED or UNQUOTED quote (e.g. an apostrophe in
 #     a heredoc body, or an unterminated `"`): the gate fails CLOSED and blocks it.
 #     Balance the quotes; a clean heredoc / `-F <file>` message parses fine.
@@ -75,15 +79,23 @@ except ValueError:
 if not invocations:
     sys.exit(0)
 
+# Commit flags that stage content THEMSELVES, after this hook has already read the
+# index: -a/--all (all tracked modifications), -i/--include and -o/--only (the named
+# pathspecs). The gate runs BEFORE the command, so it cannot see what they will add.
+LATE_STAGING = {"--all", "--include", "--only"}
+LATE_STAGING_SHORT = "aio"
+
+
 def scan_commit_args(args):
     """Walk a commit arg span POSITIONALLY, returning (has_no_verify, is_amend,
-    has_inline_msg). The value of -m/--message/-F/--file is CONSUMED, never
-    scanned — so message text (which always contains the letter 'a' via the
+    has_inline_msg, stages_late). The value of -m/--message/-F/--file is CONSUMED,
+    never scanned — so message text (which always contains the letter 'a' via the
     mandatory `Assisted-by: Claude` trailer) is never mistaken for a flag, and a
     flag placed AFTER the message (`git commit -m x --no-verify` — valid git) is
     still seen. In a short bundle, the first m/F starts the message VALUE, so
-    letters after it are message text, not flags."""
-    has_nv = is_amend = has_msg = False
+    letters after it are message text, not flags (`-am x` stages; `-ma` does not —
+    its 'a' is the message)."""
+    has_nv = is_amend = has_msg = late = False
     i = 0
     while i < len(args):
         t = args[i]
@@ -98,7 +110,9 @@ def scan_commit_args(args):
         if t == "--no-verify":
             has_nv = True; i += 1; continue
         if t == "--amend":
-            is_amend = True; i += 1; continue
+            is_amend = True; i += 1; continue       # before the generic `--` arm
+        if t in LATE_STAGING:
+            late = True; i += 1; continue
         if t.startswith("--"):
             i += 1; continue                        # other long option
         if t.startswith("-") and len(t) > 1:        # short bundle
@@ -108,9 +122,11 @@ def scan_commit_args(args):
                     break                           # rest of the token is the message value
                 if c == "n":
                     has_nv = True                   # -n is git-commit's --no-verify alias
+                if c in LATE_STAGING_SHORT:
+                    late = True
             i += 1; continue
         i += 1                                      # non-flag token (pathspec / stray)
-    return has_nv, is_amend, has_msg
+    return has_nv, is_amend, has_msg, late
 
 
 def resolve_dir(d):
@@ -127,6 +143,7 @@ commit_cwd = None
 cwd_unresolvable = False
 is_amend = False
 has_inline_msg = False
+stages_late = False
 for globs, args in invocations:
     if hooks_path_override(globs):
         block("`git -c core.hooksPath=...` bypasses the project's git hooks — the config "
@@ -136,12 +153,20 @@ for globs, args in invocations:
     d = dash_c_dir(globs)
     if d is not None:
         commit_cwd, cwd_unresolvable = resolve_dir(d)
-    nv, amend, msg = scan_commit_args(args)
+    nv, amend, msg, late = scan_commit_args(args)
     if nv:
         block("`git commit --no-verify` (or its -n alias) bypasses the project hooks — "
               "forbidden (CLAUDE.md: never bypass hooks).")
     is_amend = is_amend or amend
     has_inline_msg = has_inline_msg or msg
+    stages_late = stages_late or late
+
+# A `git add`/`git stage` in the SAME command stages AFTER this hook read the index
+# (the hook fires once, BEFORE the command runs) — the compound-command half of the
+# same hole as `commit -a`. A mention inside a quoted message is one token, never an
+# invocation, so it cannot false-trigger.
+if git_invocations(cmd, "add") or git_invocations(cmd, "stage"):
+    stages_late = True
 
 # --- attribution tier (string-level over the whole command) -----------------
 tiers = [t.strip() for t in re.findall(r'Assisted-by:\s*Claude\s*\(([^)]*)\)', cmd)]
@@ -260,22 +285,29 @@ def assert_changelog(repo):
               "record it, or use a non-runtime tier if this is not a behavioral change.")
 
 
-# The docs-tier and CHANGELOG checks need to inspect the staged diff of the repo
-# this commit writes. If a `-C <dir>` names a directory the hook cannot resolve (a
-# $VAR, a nonexistent path — the shell expands it, but this gate runs first), the
-# diff cannot be read, so a tier that depends on it FAILS CLOSED. Re-issue with a
-# literal absolute -C path. (A KNOWN LIMITATION, not guarded here: the hook fires
-# ONCE per Bash call BEFORE the command runs, so a compound `git add … && git
-# commit …` or a `git commit -a` stages AFTER this check reads the index; the
-# staged diff will then be stale. Split `git add` and `git commit` into separate
-# commands so the gate — and the pr-validator, the real backstop — inspect the
-# real diff.)
+# The docs-tier and CHANGELOG checks inspect the STAGED DIFF of the repo this commit
+# writes. Two things can make that diff not the one the commit will actually record —
+# both fail CLOSED, because a gate that judges the wrong diff is worse than no gate:
+#
+#   1. An unresolvable `-C <dir>` (a $VAR / nonexistent path — the shell expands it,
+#      but this gate runs first): the diff cannot be read at all.
+#   2. LATE STAGING. The hook fires ONCE per Bash call, BEFORE the command runs, so a
+#      compound `git add … && git commit …`, or a `git commit -a` / `-i` / `-o`,
+#      stages content AFTER this check has read the index — the gate would judge a
+#      stale (often EMPTY) diff and wave the commit through. Split `git add` and
+#      `git commit` into SEPARATE Bash calls so the gate inspects the real diff.
 needs_diff = ("documentation reviewed" in tiers) or any(t in RUNTIME_TIERS for t in tiers)
 if needs_diff and cwd_unresolvable:
     block("this commit's `-C` path is not a resolvable directory (a $VAR or a nonexistent "
           "path), so the gate cannot inspect the staged diff for the `%s` tier. Re-issue with "
           "a literal absolute `-C /path/to/repo`; never `cd` into the repo (a subdirectory "
           "project root drops .claude/settings.json)." % (tiers[0] if tiers else "declared"))
+if needs_diff and stages_late:
+    block("this command stages content AFTER the gate reads the index — a `git add`/`git "
+          "stage` in the same command, or `git commit -a`/`-i`/`-o`. This hook fires ONCE, "
+          "BEFORE the command runs, so it would judge a stale (usually EMPTY) diff and wave "
+          "the `%s` tier through unchecked. Stage in a SEPARATE Bash call first (`git add -u`, "
+          "then `git commit`)." % (tiers[0] if tiers else "declared"))
 
 if not cwd_unresolvable:
     if "documentation reviewed" in tiers:
