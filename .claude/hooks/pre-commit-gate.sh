@@ -41,7 +41,7 @@ case "$INPUT" in
 esac
 
 python3 - "$INPUT" <<'PY'
-import json, os, re, subprocess, sys
+import json, os, re, shlex, subprocess, sys
 try:
     cmd = json.loads(sys.argv[1]).get("tool_input", {}).get("command", "")
 except Exception:
@@ -89,38 +89,93 @@ def _git(args, cwd=None):
     return out.stdout
 
 def resolve_literal_dir(tok):
-    # `tok` is the raw text of a `-C` argument, captured BEFORE the shell runs.
-    # Return a real directory, or block. Never return the hook's CWD as a
-    # fallback: the commit would write one repo's index while the docs-tier
-    # check inspected another's.
-    if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'":
-        inner, quote = tok[1:-1], tok[0]
-    else:
-        inner, quote = tok, ''
-    # Single quotes suppress every expansion; double quotes still expand
-    # $var, `cmd` and \escape; bare words additionally glob and expand ~.
-    if quote == "'":
-        expands = ''
-    elif quote == '"':
-        expands = '$`\\'
-    else:
-        expands = '$`\\~*?['
-    hit = next((c for c in expands if c in inner), None)
+    # `tok` is a `-C` argument, already shell-tokenized (quotes removed) but NOT
+    # expanded: this gate runs BEFORE the shell does. A token still carrying an
+    # expansion sigil names a directory the hook cannot know, so it fails closed.
+    # Never fall back to the hook's CWD: the commit would write one repo's index
+    # while the docs-tier check inspected another's.
+    hit = next((c for c in '$`~*?[' if c in tok), None)
     if hit:
         block(
-            'cannot verify this commit: the `-C {}` path contains `{}`, which the shell '
-            'expands but this gate — which reads the command as text, before expansion — '
-            'cannot resolve. Re-issue the command ONCE with a literal absolute path '
+            'cannot verify this commit: the `-C` path `{}` contains `{}`, which the shell '
+            'expands but this gate — which reads the command before expansion — cannot '
+            'resolve. Re-issue the command ONCE with a literal absolute path '
             '(`git -C /abs/path/to/repo commit ...`), per git-workflow B7. Do NOT `cd` into '
             'the repo (a subdirectory project root drops .claude/settings.json), and do NOT '
-            'reshape-and-retry a command the classifier already denied — if you have already '
-            'been denied, stop and surface it.'.format(tok, hit))
-    if not os.path.isdir(inner):
+            'reshape-and-retry a command that was already denied — if you have been denied, '
+            'stop and surface it.'.format(tok, hit))
+    if not os.path.isdir(tok):
         block(
             'cannot verify this commit: `-C {}` is not a directory on this machine, so the '
             'staged diff cannot be inspected. Re-issue ONCE with a literal absolute path to '
             'the repository root.'.format(tok))
-    return inner
+    return tok
+
+
+# Shell separators, and the keywords a command word may hide behind.
+_SEP_CHARS = set('&|;<>')
+_SHELL_KW = {'if', 'then', 'elif', 'else', 'do', 'while', 'until', '!', '{', '}', '(', ')'}
+_ENV_ASSIGN = re.compile(r'^\w+=')
+# git GLOBAL options that take their value as the NEXT token. `commit`'s own
+# `-c <commit>` (reuse-message) lives AFTER the subcommand and is never global.
+_VALUE_OPTS = {'-C', '-c', '--git-dir', '--work-tree', '--namespace',
+               '--config-env', '--exec-path', '--super-prefix'}
+
+
+def git_commit_invocations(command):
+    """Every `git [global-opts] commit [args]` in `command`, as (global_opts, args).
+
+    Shell is TOKENIZED, never regex-matched: a regex cannot span a quoted argument
+    containing a space, and one that tries will silently fail to match — skipping
+    the entire gate and failing OPEN. Raises ValueError if `command` cannot be
+    tokenized (the caller fails closed).
+    """
+    lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    tokens = list(lex)          # ValueError on unbalanced quotes
+
+    segments, cur = [], []
+    for t in tokens:
+        if t and all(ch in _SEP_CHARS for ch in t):
+            segments.append(cur)
+            cur = []
+        else:
+            cur.append(t)
+    segments.append(cur)
+
+    out = []
+    for seg in segments:
+        i = 0
+        while i < len(seg) and (seg[i] in _SHELL_KW or _ENV_ASSIGN.match(seg[i])):
+            i += 1
+        if i >= len(seg) or os.path.basename(seg[i]) != 'git':
+            continue                      # `echo "git commit"` -> command word is echo
+        i += 1
+        glob_opts = []
+        while i < len(seg) and seg[i].startswith('-'):
+            opt = seg[i]
+            glob_opts.append(opt)
+            i += 1
+            if opt in _VALUE_OPTS and i < len(seg) and not seg[i].startswith('-'):
+                glob_opts.append(seg[i])
+                i += 1
+        if i < len(seg) and seg[i] == 'commit':
+            out.append((glob_opts, seg[i + 1:]))
+    return out
+
+
+def _is_msg_provider(t):
+    # -m/--message supply a message inline; -F/--file supply one from a file.
+    # A bundled short form (-am"x" tokenizes to -amx) starts its VALUE at the m.
+    return (t in ('-m', '--message', '-F', '--file')
+            or t.startswith(('--message=', '--file='))
+            or re.match(r'^-[aiopsvqezS]*[mF]', t) is not None)
+
+
+def _is_inline_msg(t):
+    return (t in ('-m', '--message')
+            or t.startswith('--message=')
+            or re.match(r'^-[aiopsvqezS]*m', t) is not None)
 
 
 def changed_lines_all_comments(path, repo=None, rangespec=None):
@@ -262,63 +317,61 @@ def assert_changelog_entry(repo=None):
               "in this repo — record it (history -> this repo's CHANGELOG/, one file per CalVer version), "
               "or use a non-runtime tier if this is not a behavioral change.")
 
-# git in command position (start / after ;&| / after a shell keyword),
-# optional global opts, then `commit`, then capture the invocation's arg span
-# up to the next shell separator.
-INVOKE = re.compile(
-    r'(?:^\s*|[\n;&|]\s*|(?:^|\s)(?:if|then|elif|else|do|while|until)\s+)'
-    r'git(?:\s+-{1,2}[A-Za-z][^\s]*(?:\s+[^\s-][^\s]*)?)*\s+commit((?:\s+[^\s;&|]+)*)')
-
 found = False
 has_inline_msg = False
 is_amend = False
 commit_cwd = None
-for m in INVOKE.finditer(cmd):
+
+try:
+    invocations = git_commit_invocations(cmd)
+except ValueError:
+    # Unbalanced quotes: the command cannot be tokenized, so it cannot be judged.
+    # Fail CLOSED whenever it plausibly IS a commit. Silently skipping is how a
+    # gate stops gating (a quoted global-opt value containing a space used to
+    # defeat the old regex outright, disabling --no-verify and tier checks too).
+    if re.search(r'(?:^|[\s;&|])git\b', cmd) and re.search(r'\bcommit\b', cmd):
+        block('cannot verify this commit: the command has unbalanced quotes and cannot be '
+              'parsed, so the gate cannot inspect it. Re-issue it in a simple, quoted-balanced '
+              'form.')
+    invocations = []
+
+for glob_opts, args in invocations:
     found = True
-    args = m.group(1) or ''
-    # A core.hooksPath override is the config spelling of --no-verify. The
-    # `-c key=value` form lives in git's GLOBAL options (between `git` and
-    # `commit`), so scan ONLY that span — commit's own `-c <commit>`
-    # (reuse-message) and a message merely mentioning the key never
-    # false-trigger. Env-var config injection is out of scope: the gate is a
-    # discipline backstop, not a security boundary.
-    glob_opts = cmd[m.start(0):m.start(1)]
-    if re.search(r'core\.hookspath', glob_opts, re.IGNORECASE):
-        block("`git -c core.hooksPath=...` bypasses the project's git hooks — the config spelling of --no-verify; forbidden (CLAUDE.md: never bypass hooks).")
-    # A `-C <dir>` in the commit invocation's global options retargets the repo
-    # whose index this commit writes; scope the docs-tier diff inspection there
-    # (default: the hook's CWD) so a `git -C <sub> commit` is judged against the
-    # submodule's index, not the superproject's.
-    #
-    # This gate sees the command as TEXT, before the shell expands it, so a
-    # `-C` argument the shell would rewrite ("$P", `pwd`, ~/x, *) names a
-    # directory this hook cannot know. Falling back to the hook's CWD would
-    # then judge the SUPERPROJECT's index while the commit writes the
-    # submodule's — passing a code change off as documentation. So: resolve a
-    # quoted literal, and otherwise fail closed naming the real remedy.
-    mC = re.search(r'''(?:^|\s)-C\s+("(?:[^"\\]|\\.)*"|'[^']*'|\S+)''', glob_opts)
-    if mC:
-        commit_cwd = resolve_literal_dir(mC.group(1))
+    # A core.hooksPath override is the config spelling of --no-verify. It lives in
+    # git's GLOBAL options (before the `commit` subcommand), so only those are
+    # scanned — commit's own `-c <commit>` (reuse-message) and a message merely
+    # mentioning the key never false-trigger. Env-var config injection remains out
+    # of scope: this gate is a discipline backstop, not a security boundary.
+    for g in glob_opts:
+        if 'core.hookspath' in g.lower():
+            block("`git -c core.hooksPath=...` bypasses the project's git hooks — the config spelling of --no-verify; forbidden (CLAUDE.md: never bypass hooks).")
+    # A `-C <dir>` in the GLOBAL options retargets the repo whose index this commit
+    # writes; scope the docs-tier diff inspection there so a `git -C <sub> commit`
+    # is judged against the submodule's index, not the superproject's.
+    for j, g in enumerate(glob_opts):
+        if g == '-C' and j + 1 < len(glob_opts):
+            commit_cwd = resolve_literal_dir(glob_opts[j + 1])
+        elif g.startswith('-C') and len(g) > 2:          # attached form: -C/abs/path
+            commit_cwd = resolve_literal_dir(g[2:])
     # --amend re-touches the commit at HEAD; its CHANGELOG entry (if runtime-tier)
     # was already recorded in that commit, so the staged delta need not re-add one.
-    if re.search(r'(?:^|\s)--amend(?:\s|$)', args):
+    if '--amend' in args:
         is_amend = True
-    # inline-message detection is scoped to THIS commit invocation's arg span,
-    # so a foreign -m elsewhere on the line (grep -m 1 ...; git commit -F f)
-    # never triggers the absent-trailer check.
-    if re.search(r'(?:^|\s)(?:-m|--message)(?:\s|=)', args):
+    # inline-message detection is scoped to THIS invocation's args, so a foreign -m
+    # elsewhere on the line (grep -m 1 ...; git commit -F f) never triggers the
+    # absent-trailer check.
+    if any(_is_inline_msg(t) for t in args):
         has_inline_msg = True
-    # --no-verify only counts as a FLAG when it appears BEFORE the message
-    # provider (-m/-F); a "--no-verify" mention inside the message must not block.
-    # -n is git-commit's short alias for --no-verify; match it bundled too
-    # (-an, -anm, ...). The bundle charset is git-commit's value-less short
-    # options; m may appear only AFTER the n (a bundled m starts the message
-    # VALUE, so an n after m is message text, e.g. -amnope = -a -m "nope").
-    # A value-carrying token like -uno never false-triggers; long flags (--*)
-    # never match a single dash.
-    pre_msg = re.split(r'(?:^|\s)(?:-m|--message|-F|--file)(?:\s|=)', args, maxsplit=1)[0]
-    if re.search(r'(?:^|\s)(?:--no-verify|-[aiopsvqezS]*n[aiopsvqezSm]*)(?:\s|$)', pre_msg):
-        block("`git commit --no-verify` (or its -n short alias) bypasses the project hooks — forbidden (CLAUDE.md: never bypass hooks).")
+    # --no-verify counts as a FLAG only BEFORE the message provider (-m/-F); a
+    # "--no-verify" mention inside the message must not block. -n is git-commit's
+    # short alias, matched bundled too (-an, -anm, ...); the bundle charset is
+    # git-commit's value-less short options, and m may appear only AFTER the n (a
+    # bundled m starts the message VALUE, so -amnope = -a -m "nope").
+    for t in args:
+        if _is_msg_provider(t):
+            break
+        if t == '--no-verify' or re.match(r'^-[aiopsvqezS]*n[aiopsvqezSm]*$', t):
+            block("`git commit --no-verify` (or its -n short alias) bypasses the project hooks — forbidden (CLAUDE.md: never bypass hooks).")
 
 if found:
     # The Assisted-by trailer is structured; scanning the whole command is correct.
