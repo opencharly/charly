@@ -567,8 +567,14 @@ Three execution modes:
   → check live → fresh `charly update` → check live again → teardown.
   Pick the bed whose kind matches what you changed: `check-pod`,
   `check-local`, `check-k3s-vm`, `check-android-emulator-pod`.
-  To run a whole roster, fan the beds out concurrently — one
-  `charly check run <bed>` per agent — via the `/verify-beds` workflow.
+  To run a whole roster, fan the beds out concurrently BY OWNER: the
+  SHORT beds via the `/verify-beds` workflow (one `charly check run <bed>`
+  per agent), and every LONG bed (`vm`/`android` substrate, or one whose
+  last run took ≥600s) as its own persistent-session background task — an
+  ephemeral sub-agent cannot own a bed that outlives its turn.
+  `/verify-beds` defers those and refuses host-local beds rather than
+  running them; a `gateComplete: false` result is a PARTIAL roster, never
+  a green gate.
 
 Exit codes are goss-style: `0` = all checks passed, `1` =
 infra/usage error (the check never reached a verdict), `2` =
@@ -580,7 +586,9 @@ not "failed".
 (`/verify-beds`, `/audit-deploy-configs`) run `charly check
 run`/`live`/`box` against the existing beds and return verbatim
 pass/fail — the same disposable-bed verification, whether you run it
-or your agent does. → `/charly-internals:agents`.
+or your agent does. A sub-agent runs only what it can own: long beds are
+handed back to the persistent session, host-local beds are refused.
+→ `/charly-internals:agents`.
 
 Eleven live-container probe verbs — authorable inline as `plan:`
 `check:` steps (`cdp: check`, `wl:
@@ -876,10 +884,11 @@ project ships Claude Code **sub-agents** (`plugins/internals/agents/`):
 executors `check-bed-runner` and `deploy-verifier` that drive the `charly check`
 beds and return verbatim proof, plus enforcers `root-cause-analyzer`,
 `testing-validator`, and `layer-validator`. Two **dynamic workflows**
-(`.claude/workflows/`) fan the work out — `/verify-beds` runs every
-disposable check bed as the R10 gate, `/audit-deploy-configs` evaluates your
-deploy configs — and the same agent definitions reuse as **agent-team**
-teammates. Whether you drive `charly` from the keyboard or hand it to an
+(`.claude/workflows/`) fan the work out — `/verify-beds` runs the SHORT
+disposable check beds as part of the R10 gate (deferring long beds to the
+persistent session, refusing host-local ones), `/audit-deploy-configs`
+evaluates your deploy configs — and the same agent definitions reuse as
+**agent-team** teammates. Whether you drive `charly` from the keyboard or hand it to an
 agent, testing and verifying deployments uses the one surface.
 → `/charly-internals:agents`.
 
