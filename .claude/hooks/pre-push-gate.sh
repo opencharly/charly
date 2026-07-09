@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) deterministic gate. Blocks (exit 2) a `git push` that:
-#   - targets `main` (a direct push to main is forbidden — main advances ONLY
-#     via an agent-validated PR merge; CLAUDE.md / git-workflow),
-#   - force-pushes (forbidden on EVERY branch in EVERY repo; tags are add-only), or
-#   - bypasses hooks (--no-verify, or a core.hooksPath override in git's global
-#     options).
-# It checks ONLY the push invocation's OWN argument span (up to the next shell
-# separator), so a `git branch -f` or other `-f` elsewhere in the same command
-# line never false-triggers. A bare `git push` with no refspec is not statically
-# resolvable and is left to the server-side branch protection. Recognizes git in
-# command position at start, after a separator, or after a shell keyword.
+# PreToolUse(Bash) gate for `git push` — a DISCIPLINE BACKSTOP, not a security
+# boundary (GitHub branch protection is the authority). It blocks (exit 2) a
+# push that:
+#   - force-pushes (--force / --force-with-lease / -f) — forbidden on EVERY
+#     branch in EVERY repo (main only fast-forwards, tags are add-only),
+#   - bypasses hooks (--no-verify, or a core.hooksPath override), or
+#   - targets `main` directly (main advances ONLY via an agent-validated PR
+#     merge). A bare `git push` with no refspec is left to the server-side
+#     branch protection, the authoritative block.
+# Shares git-command parsing with pre-commit-gate via gitcmd.py; obfuscation is
+# out of scope by construction (see gitcmd.py / /charly-internals:agents).
 #
 # Fast path: only a git-push-mentioning command reaches the analyzer.
 
@@ -19,51 +19,65 @@ case "$INPUT" in
   *) exit 0 ;;
 esac
 
-python3 - "$INPUT" <<'PY'
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 -B - "$INPUT" "$HERE" <<'PY'
 import json, re, sys
+sys.path.insert(0, sys.argv[2])
+from gitcmd import (git_invocations, hooks_path_override, is_force_refspec,
+                    mentions_subcommand, refspec_dst)
+
 try:
     cmd = json.loads(sys.argv[1]).get("tool_input", {}).get("command", "")
 except Exception:
     sys.exit(0)
 
+
 def block(msg):
     sys.stderr.write("pre-push-gate BLOCKED: " + msg + "\n")
     sys.exit(2)
 
-# git in command position (start / after ;&| / after a shell keyword),
-# optional global opts (`-C path`, `-c k=v`, ...), then `push`, then capture
-# the push invocation's arg span up to the next shell separator.
-INVOKE = re.compile(
-    r'(?:^\s*|[\n;&|]\s*|(?:^|\s)(?:if|then|elif|else|do|while|until)\s+)'
-    r'git(?:\s+-{1,2}[A-Za-z][^\s]*(?:\s+[^\s-][^\s]*)?)*\s+push((?:\s+[^\s;&|]+)*)')
 
-for m in INVOKE.finditer(cmd):
-    args = m.group(1) or ''
-    # A core.hooksPath override is the config spelling of --no-verify; the
-    # `-c key=value` form lives in git's GLOBAL options (between `git` and
-    # `push`), so scan only that span. Env-var config injection is out of
-    # scope: the gate is a discipline backstop, not a security boundary.
-    glob_opts = cmd[m.start(0):m.start(1)]
-    if re.search(r'core\.hookspath', glob_opts, re.IGNORECASE):
-        block("`git -c core.hooksPath=...` bypasses the project's git hooks — the config spelling of --no-verify; forbidden (CLAUDE.md: never bypass hooks).")
-    # -f matches bundled too (-fu, -uf, ...); the bundle charset is git-push's
-    # value-less short options, mirroring the commit gate's -n bundle handling.
-    if re.search(r'(?:^|\s)(?:--force|--force-with-lease|-[uqvnd46]*f[uqvnd46]*)(?:\s|=|$)', args):
-        block("force-push is forbidden on every branch in every repo (CLAUDE.md: main only fast-forwards, tags are add-only). Remove --force / --force-with-lease / -f.")
-    if re.search(r'(?:^|\s)--no-verify(?:\s|$)', args):
-        block("`git push --no-verify` bypasses hooks — forbidden.")
-    # Block any push whose refspec DESTINATION is `main`. The first non-flag
-    # token in the push arg span is the remote; each later token is a refspec
-    # whose destination is the part after the last ':' (a leading '+' force
-    # marker stripped). `main` / `refs/heads/main` are forbidden destinations —
-    # main advances ONLY via an agent-validated PR merge. A bare `git push` with
-    # no refspec is not statically resolvable and is left to the server-side
-    # branch protection (the authoritative block).
-    non_flags = [t for t in args.split() if not t.startswith('-')]
+FORCE = "force-push is forbidden on every branch in every repo (CLAUDE.md: main only " \
+        "fast-forwards, tags are add-only). Remove --force / --force-with-lease / -f, " \
+        "and any leading `+` on a refspec (`+feat/x` forces feat/x)."
+NOVERIFY = "`git push --no-verify` bypasses hooks — forbidden."
+HOOKSPATH = "`git -c core.hooksPath=...` bypasses the project's git hooks — the config " \
+            "spelling of --no-verify; forbidden (CLAUDE.md: never bypass hooks)."
+TOMAIN = "direct push to `main` is forbidden — `main` advances ONLY via an agent-validated " \
+         "PR merge (CLAUDE.md / git-workflow). Push a `feat/` branch and open a PR."
+
+try:
+    invocations = git_invocations(cmd, "push")
+except ValueError:
+    # An UNBALANCED or UNQUOTED quote (shlex cannot tokenize it) — never treat as
+    # "no push". FAIL CLOSED: if a `git … push` is plausibly present, block; no
+    # fallback re-parse. (Returning "no command" here is how a gate stops gating.)
+    if mentions_subcommand(cmd, "push"):
+        block("cannot parse this command — an unbalanced or unquoted quote — so the gate "
+              "cannot verify the push. Balance the quotes and run the push as its own command.")
+    sys.exit(0)
+
+for globs, args in invocations:
+    if hooks_path_override(globs):
+        block(HOOKSPATH)
+    for t in args:
+        if t in ("--force", "--force-with-lease") or t.startswith("--force-with-lease=") \
+                or re.match(r'^-[a-z]*f[a-z]*$', t):
+            block(FORCE)
+        if t == "--no-verify":
+            block(NOVERIFY)
+    # The first non-flag arg is the remote; each later one is a refspec. A leading
+    # `+` on the refspec is a FORCE update (`git push origin +feat/x`) — forbidden
+    # on every branch, exactly like --force. Otherwise its destination is the part
+    # after the last ':'; `main` / `refs/heads/main` are forbidden destinations.
+    # Bounded to THIS invocation's segment, so `git push feat/x && git log main`
+    # never trips.
+    non_flags = [t for t in args if not t.startswith("-")]
     for spec in non_flags[1:]:
-        dst = spec.split(':')[-1].lstrip('+')
-        if dst in ('main', 'refs/heads/main'):
-            block("direct push to `main` is forbidden — `main` advances ONLY via an agent-validated PR merge (CLAUDE.md / git-workflow). Push a `feat/` branch and open a PR; the pr-validator evaluates and merges it.")
+        if is_force_refspec(spec):
+            block(FORCE)
+        if refspec_dst(spec) in ("main", "refs/heads/main"):
+            block(TOMAIN)
 
 sys.exit(0)
 PY
