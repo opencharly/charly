@@ -9,9 +9,13 @@
 #
 # After `apply`, the ONLY way `main` advances in a repo is a PR carrying a green
 # `charly/claude-validation` status (posted by the fresh pr-validator agent),
-# merged by that agent via `gh pr merge --rebase`. `enforce_admins=true` makes
+# merged by that agent via `gh pr merge --squash`. `enforce_admins=true` makes
 # the block real for everyone, admins included; `required_linear_history` +
-# rebase-only keep `main` linear. See CLAUDE.md "Post-Execution Policies" and
+# squash-only keep `main` linear AND make every cutover exactly ONE commit on
+# `main`, no matter how many fix commits its `feat/` branch accumulated across
+# review rounds. That is what lets a PR be UPDATED IN PLACE (append + push) on a
+# CHANGES-REQUESTED review instead of being closed and recreated — with the
+# force-push ban left absolute. See CLAUDE.md "Post-Execution Policies" and
 # /charly-internals:git-workflow.
 #
 # The protection body below is the exact shape proven live during the policy's
@@ -56,9 +60,9 @@ JSON
 
 apply_one() {
   local repo="$1"
-  echo "→ $repo: merge settings (rebase-only, delete-branch-on-merge)"
+  echo "→ $repo: merge settings (squash-only, delete-branch-on-merge)"
   gh api -X PATCH "repos/$repo" \
-    -F allow_rebase_merge=true -F allow_squash_merge=false \
+    -F allow_squash_merge=true -F allow_rebase_merge=false \
     -F allow_merge_commit=false -F delete_branch_on_merge=true \
     -F allow_auto_merge=false >/dev/null
   echo "→ $repo: branch protection on $BRANCH"
@@ -77,8 +81,8 @@ verify_one() {
     return 1
   fi
   read -r pr strict ctx admins linear force del <<<"$p"
-  if ! { [ "$rb" = true ] && [ "$sq" = false ] && [ "$mc" = false ] && [ "$db" = true ]; }; then
-    echo "✗ $repo: merge-settings drift (rebase=$rb squash=$sq mergeCommit=$mc delBranch=$db)"; ok=0
+  if ! { [ "$sq" = true ] && [ "$rb" = false ] && [ "$mc" = false ] && [ "$db" = true ]; }; then
+    echo "✗ $repo: merge-settings drift (squash=$sq rebase=$rb mergeCommit=$mc delBranch=$db)"; ok=0
   fi
   if ! { [ "$pr" = true ] && [ "$strict" = true ] && [ "$ctx" = "$CONTEXT" ] && [ "$admins" = true ] && [ "$linear" = true ] && [ "$force" = false ] && [ "$del" = false ]; }; then
     echo "✗ $repo: protection drift (pr=$pr strict=$strict ctx=$ctx admins=$admins linear=$linear force=$force del=$del)"; ok=0
