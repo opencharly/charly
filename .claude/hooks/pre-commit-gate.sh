@@ -93,6 +93,16 @@ LATE_STAGING_SHORT = "aio"
 # after the gate approved it is the same hole from the other side). Matched by VERB, not
 # by flag: the remedy — run it as its own Bash call — is cheap and always available.
 # `checkout`/`switch` are absent on purpose: they carry the index across unchanged.
+#
+# CEDED BOUNDARY — deliberate, not an oversight. The merge-family verbs (`cherry-pick -n`,
+# `revert -n`, `merge --no-commit`, `stash pop`, `am`, `rebase`, `pull`) also mutate the
+# index and are NOT matched here. They are rare in the honest workflow this gate serves;
+# they fail OPEN into a stale-diff commit that the fresh `pr-validator` re-checks against
+# the REAL diff; and widening the set trades genuine over-blocking risk (`git merge
+# --ff-only origin/main && git commit` is a legitimate sequence) for a backstop the agent
+# layer already provides. Hooks gate mechanical invariants; agents judge proof (CLAUDE.md
+# "Agents, Workflows & Teams" / /charly-internals:agents). Do not "close" this without a
+# real workflow that hits it — the gate is a discipline backstop, not a security boundary.
 INDEX_MUTATING = ("add", "stage", "rm", "mv", "reset", "restore", "apply", "update-index")
 
 
