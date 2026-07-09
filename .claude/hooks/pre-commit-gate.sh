@@ -12,10 +12,11 @@
 #   - claims `documentation reviewed` on a staged diff that is not all-docs,
 #   - carries a runtime tier but stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry
 #     (in a repo that tracks CHANGELOG/),
-#   - stages content LATE, after this hook has read the index — a `git add` in the
-#     same command, or `git commit -a`/`-i`/`-o` — while declaring a diff-dependent
-#     tier: the gate would judge a stale (usually empty) diff, so it fails CLOSED.
-#     Stage in a separate Bash call first. Or
+#   - changes the index LATE, after this hook has read it — `git commit -a`/`-i`/`-o`,
+#     or an index-mutating git subcommand (add/stage/rm/mv/reset/restore/apply/
+#     update-index) in the same command — while declaring a diff-dependent tier: the
+#     gate would judge a stale (usually empty) diff, so it fails CLOSED. Run the
+#     index-mutating command as its own Bash call first. Or
 #   - cannot be TOKENIZED — an UNBALANCED or UNQUOTED quote (e.g. an apostrophe in
 #     a heredoc body, or an unterminated `"`): the gate fails CLOSED and blocks it.
 #     Balance the quotes; a clean heredoc / `-F <file>` message parses fine.
@@ -84,6 +85,15 @@ if not invocations:
 # pathspecs). The gate runs BEFORE the command, so it cannot see what they will add.
 LATE_STAGING = {"--all", "--include", "--only"}
 LATE_STAGING_SHORT = "aio"
+
+# git subcommands that MUTATE THE INDEX. Any of them in the same command as a commit
+# runs after this hook has read that index, so the diff the gate judged is not the diff
+# the commit records. `add`/`stage`/`rm`/`mv`/`apply --cached`/`update-index` stage MORE
+# than the gate saw; `reset`/`restore --staged` stage LESS (unstaging a CHANGELOG entry
+# after the gate approved it is the same hole from the other side). Matched by VERB, not
+# by flag: the remedy — run it as its own Bash call — is cheap and always available.
+# `checkout`/`switch` are absent on purpose: they carry the index across unchanged.
+INDEX_MUTATING = ("add", "stage", "rm", "mv", "reset", "restore", "apply", "update-index")
 
 
 def scan_commit_args(args):
@@ -161,11 +171,11 @@ for globs, args in invocations:
     has_inline_msg = has_inline_msg or msg
     stages_late = stages_late or late
 
-# A `git add`/`git stage` in the SAME command stages AFTER this hook read the index
-# (the hook fires once, BEFORE the command runs) — the compound-command half of the
-# same hole as `commit -a`. A mention inside a quoted message is one token, never an
-# invocation, so it cannot false-trigger.
-if git_invocations(cmd, "add") or git_invocations(cmd, "stage"):
+# An index-mutating git subcommand in the SAME command runs AFTER this hook read the
+# index (the hook fires once, BEFORE the command runs) — the compound-command half of
+# the same hole as `commit -a`. A mention inside a quoted message is one token, never
+# an invocation, so it cannot false-trigger.
+if any(git_invocations(cmd, verb) for verb in INDEX_MUTATING):
     stages_late = True
 
 # --- attribution tier (string-level over the whole command) -----------------
@@ -292,10 +302,11 @@ def assert_changelog(repo):
 #   1. An unresolvable `-C <dir>` (a $VAR / nonexistent path — the shell expands it,
 #      but this gate runs first): the diff cannot be read at all.
 #   2. LATE STAGING. The hook fires ONCE per Bash call, BEFORE the command runs, so a
-#      compound `git add … && git commit …`, or a `git commit -a` / `-i` / `-o`,
-#      stages content AFTER this check has read the index — the gate would judge a
-#      stale (often EMPTY) diff and wave the commit through. Split `git add` and
-#      `git commit` into SEPARATE Bash calls so the gate inspects the real diff.
+#      `git commit -a` / `-i` / `-o`, or ANY index-mutating git subcommand in the same
+#      command (add/stage/rm/mv/reset/restore/apply/update-index), changes the index
+#      AFTER this check has read it — the gate would judge a stale (often EMPTY) diff
+#      and wave the commit through. Run the index-mutating command as its own SEPARATE
+#      Bash call so the gate inspects the real diff.
 needs_diff = ("documentation reviewed" in tiers) or any(t in RUNTIME_TIERS for t in tiers)
 if needs_diff and cwd_unresolvable:
     block("this commit's `-C` path is not a resolvable directory (a $VAR or a nonexistent "
@@ -303,11 +314,12 @@ if needs_diff and cwd_unresolvable:
           "a literal absolute `-C /path/to/repo`; never `cd` into the repo (a subdirectory "
           "project root drops .claude/settings.json)." % (tiers[0] if tiers else "declared"))
 if needs_diff and stages_late:
-    block("this command stages content AFTER the gate reads the index — a `git add`/`git "
-          "stage` in the same command, or `git commit -a`/`-i`/`-o`. This hook fires ONCE, "
-          "BEFORE the command runs, so it would judge a stale (usually EMPTY) diff and wave "
-          "the `%s` tier through unchecked. Stage in a SEPARATE Bash call first (`git add -u`, "
-          "then `git commit`)." % (tiers[0] if tiers else "declared"))
+    block("this command changes the index AFTER the gate reads it — `git commit -a`/`-i`/`-o`, "
+          "or an index-mutating git subcommand (%s) in the same command. This hook fires ONCE, "
+          "BEFORE the command runs, so it would judge a stale (usually EMPTY) diff and wave the "
+          "`%s` tier through unchecked. Run the index-mutating command as its OWN Bash call "
+          "first (e.g. `git add -u`), then `git commit` in the next one."
+          % ("/".join(INDEX_MUTATING), tiers[0] if tiers else "declared"))
 
 if not cwd_unresolvable:
     if "documentation reviewed" in tiers:

@@ -107,6 +107,22 @@ for label, cmd, want in [
      f"git commit -o main.go -m 'x\n\n{DOCS}'", "BLOCK"),
     ("commit: `git stage` in same command -> BLOCK (late staging)",
      f"git stage main.go; git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    # Every other index-mutating verb: staging MORE than the gate saw...
+    ("commit: `git rm` in same command -> BLOCK", f"git rm old.go && git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: `git mv` in same command -> BLOCK", f"git mv a.go b.go && git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: `git apply --cached` -> BLOCK", f"git apply --cached p.patch && git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    ("commit: `git update-index` -> BLOCK", f"git update-index --add m.go && git commit -m 'x\n\n{DOCS}'", "BLOCK"),
+    # ...and staging LESS (unstaging a CHANGELOG entry the gate already approved).
+    ("commit: `git reset` then runtime tier -> BLOCK",
+     f"git reset CHANGELOG/2026.001.0000.md && git commit -m 'x\n\n{RUN}'", "BLOCK"),
+    ("commit: `git restore --staged` then runtime tier -> BLOCK",
+     f"git restore --staged CHANGELOG/x.md && git commit -m 'x\n\n{RUN}'", "BLOCK"),
+    # checkout/switch carry the index across unchanged — must NOT block.
+    ("commit: `git switch -c` then commit -> ALLOW", f"git switch -c feat/x && git commit -m 'x\n\n{DOCS}'", "ALLOW"),
+    ("commit: `git checkout -b` then commit -> ALLOW", f"git checkout -b feat/x && git commit -m 'x\n\n{DOCS}'", "ALLOW"),
+    # a verb name inside the quoted message is one token, never an invocation
+    ("commit: 'git reset' inside the message -> ALLOW",
+     f"git commit -m 'never git reset here\n\n{DOCS}'", "ALLOW"),
     # `-m` ATTACHED to a message starting with 'a' tokenizes as `-ma…`. The scan must
     # stop at 'm' (rest is the message value), never read that 'a' as --all.
     ("commit: attached -m'a…' is not --all -> ALLOW", f"git commit -m'a\n\n{DOCS}' --amend", "ALLOW"),
