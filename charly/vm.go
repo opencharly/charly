@@ -751,9 +751,10 @@ func (c *VmListCmd) Run() error {
 //  2. State == shut off (not running)
 //  3. Either: backing qcow2 doesn't exist, OR no matching state dir.
 //
-// Active (running) domains are never touched. Cleanup runs
-// DomainUndefineFlags(libvirt.DomainUndefineNvram) and removes the
-// per-VM state directory.
+// Active (running) domains are never touched. Cleanup undefines via the vm
+// plugin (clearing any managed save image libvirt wrote across a host reboot,
+// which would otherwise make the domain unremovable) and removes the per-VM
+// state directory.
 func (c *VmListCmd) runCleanOrphans() error {
 	// List + undefine orphans via the out-of-process vm plugin (go-libvirt moved there).
 	raw, ok := invokeVmPlugin("list-domains", "", "")
