@@ -19,9 +19,8 @@ import (
 // These are the package-main bindings; core's call sites (12 files) are unchanged.
 //
 // kit.Status is the single pass/fail/skip enum: the former core CheckStatus.String() and the
-// kitStatusToCheck converter (which mapped kit.Status ⇆ CheckStatus) are gone — the two
-// enums were the same three-valued type, so a verb's kit.Result verdict now flows into a
-// CheckResult with no conversion.
+// kit.Status ⇆ CheckStatus converter are gone — the two enums were the same three-valued
+// type, so a verb's kit.Result verdict now flows into a CheckResult with no conversion.
 type CheckStatus = kit.Status
 
 const (

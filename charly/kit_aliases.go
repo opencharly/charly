@@ -109,13 +109,10 @@ var (
 	runWithEventually  = kit.RunWithEventually
 	NewScenarioContext = kit.NewScenarioContext
 	ResolveCheckLevel  = kit.ResolveCheckLevel
-	IsValidCheckLevel  = kit.IsValidCheckLevel
 	CheckLevelReaches  = kit.CheckLevelReaches
-	CheckLevels        = kit.CheckLevels
 )
 
 const (
-	CheckLevelNone    = kit.CheckLevelNone
 	CheckLevelBuild   = kit.CheckLevelBuild
 	CheckLevelNoAgent = kit.CheckLevelNoAgent
 	CheckLevelAgent   = kit.CheckLevelAgent
