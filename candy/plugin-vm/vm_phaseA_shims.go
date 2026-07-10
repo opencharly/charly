@@ -11,9 +11,10 @@ import (
 // host). unmarshalEmbeddedDefaults implements the vmshared.UnmarshalEmbeddedDefaults injection seam
 // (sdk/vmshared/hooks.go, wired in vmshared_aliases.go). libvirtSessionURI / startLibvirtUserSession
 // are a deliberate per-module copy of core's charly/vm.go host-detection helpers (a const + one tiny
-// var): the SUBSTANTIAL shared VM code — including qemuSystemBinary + vmDiskDir — now lives ONCE in
-// vmshared (vm_helpers.go, aliased in vmshared_aliases.go), and these two are below the bar for
-// exporting trivia across the module boundary (R3 — the shared-vs-trivial line). NOT transitional.
+// var): the SUBSTANTIAL shared VM code — including qemuSystemBinary + vmshared.VmDiskDir — now lives
+// ONCE in vmshared (vm_helpers.go; the ones this module actually calls are aliased in
+// vmshared_aliases.go), and these two are below the bar for exporting trivia across the module
+// boundary (R3 — the shared-vs-trivial line). NOT transitional.
 
 // libvirtSessionURI is the rootless per-user libvirt endpoint (extract from vm.go).
 const libvirtSessionURI = "qemu:///session"

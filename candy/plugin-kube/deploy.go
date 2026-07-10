@@ -41,6 +41,12 @@ import (
 // lockstep with charly.yml + the Describe capability version).
 const deployK8sVersion = "2026.174.1200"
 
+// k8sTeardownProbeTimeout bounds the reachability probe the teardown runs before it attempts
+// `kubectl delete`. Named + bounded rather than an untimed call: a wedged API server must not
+// hang a `charly bundle del`, and an unreachable one must not print a connection error on
+// every teardown of a vm-hosted cluster (whose API dies with the VM).
+const k8sTeardownProbeTimeout = "5s"
+
 // shellSingleQuote is the shared kit helper (R3 — the SAME POSIX single-quoter
 // core + every other plugin alias).
 var shellSingleQuote = kit.ShellQuote
@@ -74,13 +80,25 @@ func invokeDeployK8s(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 		return nil, fmt.Errorf("deploy:k8s: kubectl apply -k %s: %w\n%s", kv.OverlayPath, aerr, strings.TrimSpace(out))
 	}
 
-	// Teardown: `kubectl [--context X] delete -k <overlay> || true; rm -rf <tree>`,
-	// recorded in the ledger and replayed at `charly bundle del` (record-and-replay).
-	// kubectl reads the operator's ~/.kube/config (no sudo) → ScopeUser. `|| true`
-	// keeps it idempotent — the cluster may already be gone when the deploy is torn
-	// down.
-	teardown := fmt.Sprintf("kubectl %sdelete -k %s || true; rm -rf %s",
-		kubectlContextPrefix(kv.KubeContext), shellSingleQuote(kv.OverlayPath), shellSingleQuote(k8sTreeRoot(kv)))
+	// Teardown, recorded in the ledger and replayed at `charly bundle del`
+	// (record-and-replay). kubectl reads the operator's ~/.kube/config (no sudo) → ScopeUser.
+	//
+	// The cluster is routinely ALREADY GONE by teardown time: a vm-hosted k3s deploy destroys
+	// the VM that serves the API. A bare `delete -k … || true` swallows the exit code but
+	// still prints kubectl's `dial tcp …: connect: connection refused` to the log on every
+	// single teardown. An expected, swallowed error trains readers to skim past real ones, so
+	// probe reachability first and skip the delete when the cluster is gone — the same
+	// idempotent-destroy shape as the vm plugin's `already_gone`. --request-timeout bounds the
+	// probe so a wedged API server cannot hang teardown.
+	tree := shellSingleQuote(k8sTreeRoot(kv))
+	overlay := shellSingleQuote(kv.OverlayPath)
+	ctxPrefix := kubectlContextPrefix(kv.KubeContext)
+	teardown := fmt.Sprintf(
+		"if kubectl %s--request-timeout=%s get --raw /readyz >/dev/null 2>&1; then "+
+			"kubectl %sdelete -k %s --ignore-not-found; "+
+			"else echo 'deploy:k8s: cluster unreachable — its workloads went with it; nothing to delete'; fi; "+
+			"rm -rf %s",
+		ctxPrefix, k8sTeardownProbeTimeout, ctxPrefix, overlay, tree)
 	reverseOps := []spec.ReverseOp{sdk.PluginScriptReverseOp(spec.ScopeUser, teardown)}
 	return sdk.BuildDeployReply(reverseOps, "plugin-kube", deployK8sVersion)
 }

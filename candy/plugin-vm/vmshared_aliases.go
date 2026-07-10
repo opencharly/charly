@@ -69,42 +69,35 @@ type (
 var readinessResolve = vmshared.ResolveReadiness
 
 var (
-	boolPtrDefaultTrue       = vmshared.BoolPtrDefaultTrue
-	boolPtrToYesNo           = vmshared.BoolPtrToYesNo
-	boolPtrTrue              = vmshared.BoolPtrTrue
-	defaultMachineForArch    = vmshared.DefaultMachineForArch
-	DeleteSnapshot           = vmshared.DeleteSnapshot
-	ErrPollFatal             = vmshared.ErrPollFatal
-	KeyToUserTmpfilesD       = vmshared.KeyToUserTmpfilesD
-	NewSSHTunnel             = sshx.NewSSHTunnel
-	openOutputPath           = vmshared.OpenOutputPath
-	ParseLibvirtURI          = vmshared.ParseLibvirtURI
-	pollUntil                = vmshared.PollUntil
-	RegisterTempCleanup      = vmshared.RegisterTempCleanup
-	RenderQemuArgv           = vmshared.RenderQemuArgv
-	resolveCPUDefaults       = vmshared.ResolveCPUDefaults
-	SmbiosCredForSSH         = vmshared.SmbiosCredForSSH
-	snapshotExternalDiskPath = vmshared.SnapshotExternalDiskPath
-	splitPortForward         = vmshared.SplitPortForward
-	UnregisterTempCleanup    = vmshared.UnregisterTempCleanup
-	vmDiskPath               = vmshared.VmDiskPath
+	boolPtrDefaultTrue    = vmshared.BoolPtrDefaultTrue
+	boolPtrToYesNo        = vmshared.BoolPtrToYesNo
+	boolPtrTrue           = vmshared.BoolPtrTrue
+	defaultMachineForArch = vmshared.DefaultMachineForArch
+	DeleteSnapshot        = vmshared.DeleteSnapshot
+	ErrPollFatal          = vmshared.ErrPollFatal
+	KeyToUserTmpfilesD    = vmshared.KeyToUserTmpfilesD
+	NewSSHTunnel          = sshx.NewSSHTunnel
+	openOutputPath        = vmshared.OpenOutputPath
+	ParseLibvirtURI       = vmshared.ParseLibvirtURI
+	pollUntil             = vmshared.PollUntil
+	RegisterTempCleanup   = vmshared.RegisterTempCleanup
+	RenderQemuArgv        = vmshared.RenderQemuArgv
+	resolveCPUDefaults    = vmshared.ResolveCPUDefaults
+	SmbiosCredForSSH      = vmshared.SmbiosCredForSSH
+	splitPortForward      = vmshared.SplitPortForward
+	UnregisterTempCleanup = vmshared.UnregisterTempCleanup
+	vmDiskPath            = vmshared.VmDiskPath
 )
 
 // Pure VM helper functions consolidated into vmshared (vm_helpers.go) — the
 // former core↔plugin byte-for-byte duplication (FU-10). These aliases keep the
 // package-main call sites unchanged.
 var (
-	resolveVmRam                   = vmshared.ResolveVmRam
-	resolveVmCpus                  = vmshared.ResolveVmCpus
-	detectRuntimeHostVendor        = vmshared.DetectRuntimeHostVendor
-	qemuSystemBinary               = vmshared.QemuSystemBinary
-	vmDiskDir                      = vmshared.VmDiskDir
-	killQemuByPID                  = vmshared.KillQemuByPID
-	libvirtSessionSocket           = vmshared.LibvirtSessionSocket
-	libvirtSessionSocketWithProbes = vmshared.LibvirtSessionSocketWithProbes
-	writeJSON                      = vmshared.WriteJSON
-	isDeviceElement                = vmshared.IsDeviceElement
-	ValidateLibvirtSnippet         = vmshared.ValidateLibvirtSnippet
+	qemuSystemBinary       = vmshared.QemuSystemBinary
+	libvirtSessionSocket   = vmshared.LibvirtSessionSocket
+	writeJSON              = vmshared.WriteJSON
+	isDeviceElement        = vmshared.IsDeviceElement
+	ValidateLibvirtSnippet = vmshared.ValidateLibvirtSnippet
 )
 
 const (

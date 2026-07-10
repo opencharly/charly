@@ -102,6 +102,19 @@ func vmPluginOpError(raw json.RawMessage) string {
 	return r.Error
 }
 
+// vmPluginOpFlag reports whether the plugin's reply carries a true boolean under key.
+// The idempotent lifecycle ops report WHAT they actually did — "already_running" from
+// start, "already_gone" from destroy — so the CLI can say so instead of claiming an
+// action it never took.
+func vmPluginOpFlag(raw json.RawMessage, key string) bool {
+	var r map[string]any
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return false
+	}
+	b, _ := r[key].(bool)
+	return b
+}
+
 // vmPluginCandyRef is the canonical @github ref to the external VM plugin candy (candy/plugin-vm,
 // the verb:libvirt provider). Core RPCs verb:libvirt directly + unconditionally, but the plugin
 // candy is external (not in compiled_plugins, not in any box's image closure), so the VM-RPC load

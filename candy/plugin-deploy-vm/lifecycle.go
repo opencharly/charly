@@ -341,7 +341,12 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 	if _, err := vmCli(ctx, exec, false, false, "vm", "create", entity); err != nil {
 		return nil, err
 	}
-	_, _ = vmCli(ctx, exec, false, true, "vm", "start", entity) // tolerate an already-running domain
+	// `vm create` already starts the domain; this is the ensure-running guard for a
+	// backend that left it defined-but-off. `vm start` is idempotent (an already-running
+	// domain is a clean success), so its error is real and must not be discarded.
+	if _, err := vmCli(ctx, exec, false, false, "vm", "start", entity); err != nil {
+		return nil, err
+	}
 	if _, err := vmCli(ctx, exec, false, false, "bundle", "add", p.Name); err != nil {
 		return nil, err
 	}
