@@ -200,8 +200,13 @@ func (c *libvirtConn) gracefulStopDomain(dom libvirt.Domain) {
 // undefineDomain removes the domain definition.
 // Note: removeStorage is handled by the caller (file deletion), not via libvirt flags,
 // since libvirt's storage wipe only works with managed storage pools.
+//
+// DomainUndefineManagedSave is required, not optional: libvirt refuses to undefine a
+// domain that holds a managed save image, and the host's libvirt shutdown handler
+// managed-saves every running domain across a host reboot. Without the flag, a VM that
+// was running when the host rebooted becomes unremovable by every charly cleanup path.
 func (c *libvirtConn) undefineDomain(dom libvirt.Domain, _ bool) error {
-	return c.l.DomainUndefineFlags(dom, libvirt.DomainUndefineNvram)
+	return c.l.DomainUndefineFlags(dom, libvirt.DomainUndefineNvram|libvirt.DomainUndefineManagedSave)
 }
 
 // defineAndStartDomain defines a domain from XML and starts it.
