@@ -118,3 +118,13 @@ const (
 	CheckLevelAgent   = kit.CheckLevelAgent
 	DefaultCheckLevel = kit.DefaultCheckLevel
 )
+
+// --- the ${NAME[:arg]} check-variable expansion grammar (P5-unit-4), in sdk/kit so a plugin
+// candy that runs a plan expands ${VAR}s with the SAME grammar the check engine uses. ---
+var (
+	ExpandTestVars    = kit.ExpandTestVars
+	TestVarRefs       = kit.TestVarRefs
+	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
+	opExpandVars      = kit.ExpandOpVars
+	collectAnyStrings = kit.CollectAnyStrings
+)

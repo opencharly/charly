@@ -219,61 +219,6 @@ func TestMatcher_RejectsMultiKey(t *testing.T) {
 }
 
 // Covers both plain ${NAME} and parameterized ${NAME:arg} grammar, plus the
-// unresolved-refs report used by the validator.
-func TestExpandTestVars(t *testing.T) {
-	env := map[string]string{
-		"HOME":           "/home/user",
-		"HOST_PORT:6379": "16379",
-		"VOLUME_PATH:ws": "/tmp/ws",
-		"CONTAINER_IP":   "10.88.0.12",
-	}
-	in := "ls ${HOME} && redis-cli -h ${CONTAINER_IP} -p ${HOST_PORT:6379} ${VOLUME_PATH:ws} ${UNKNOWN} ${HOST_PORT:9999}"
-	out, missing := ExpandTestVars(in, env)
-
-	want := "ls /home/user && redis-cli -h 10.88.0.12 -p 16379 /tmp/ws ${UNKNOWN} ${HOST_PORT:9999}"
-	if out != want {
-		t.Errorf("out =\n  %q\nwant\n  %q", out, want)
-	}
-	// Missing order-preserving, deduplicated
-	wantMissing := []string{"UNKNOWN", "HOST_PORT:9999"}
-	if !reflect.DeepEqual(missing, wantMissing) {
-		t.Errorf("missing = %v, want %v", missing, wantMissing)
-	}
-}
-
-// TestVarRefs returns deduplicated refs in encounter order.
-func TestTestVarRefs(t *testing.T) {
-	got := TestVarRefs("${A} ${B:x} ${A} ${C} ${B:y}")
-	want := []string{"A", "B:x", "C", "B:y"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// IsRuntimeOnlyVar classifies deploy-only variable keys correctly.
-func TestIsRuntimeOnlyVar(t *testing.T) {
-	cases := []struct {
-		key  string
-		want bool
-	}{
-		{"HOME", false},
-		{"USER", false},
-		{"DNS", false},
-		{"HOST_PORT:6379", true},
-		{"VOLUME_PATH:workspace", true},
-		{"VOLUME_CONTAINER_PATH:workspace", true},
-		{"CONTAINER_IP", true},
-		{"CONTAINER_NAME", true},
-		{"INSTANCE", true},
-		{"ENV_TOKEN", true},
-		{"ENV_ANYTHING", true},
-	}
-	for _, tc := range cases {
-		if got := IsRuntimeOnlyVar(tc.key); got != tc.want {
-			t.Errorf("IsRuntimeOnlyVar(%q) = %v, want %v", tc.key, got, tc.want)
-		}
-	}
-}
 
 // Full-Check in-place expansion across all string-bearing fields.
 func TestCheck_ExpandVars(t *testing.T) {
