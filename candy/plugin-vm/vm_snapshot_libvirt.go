@@ -48,8 +48,8 @@ type snapshotDiskDrvr struct {
 // overlay as its active disk and the previous disk becomes immutable.
 //
 // outFile is the absolute path the snapshot's overlay qcow2 should be
-// written to (passed in by the caller; vm_snapshot.go's
-// snapshotExternalDiskPath constructs it).
+// written to (passed in by the caller; vmshared.SnapshotExternalDiskPath
+// constructs it).
 //
 // The overlay qcow2 referenced by libvirt becomes the live disk. The
 // "frozen" disk (the one that existed before the snapshot) is what

@@ -431,7 +431,11 @@ func startVM(box, instance string) error {
 		if e := vmPluginOpError(raw); e != "" {
 			return fmt.Errorf("starting VM %s: %s", name, e)
 		}
-		fmt.Fprintf(os.Stderr, "Started VM %s\n", name)
+		if vmPluginOpFlag(raw, "already_running") {
+			fmt.Fprintf(os.Stderr, "VM %s is already running\n", name)
+		} else {
+			fmt.Fprintf(os.Stderr, "Started VM %s\n", name)
+		}
 	case "qemu":
 		dir, err := vmDir()
 		if err != nil {

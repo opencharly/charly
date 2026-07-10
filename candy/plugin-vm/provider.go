@@ -292,6 +292,15 @@ func dispatchInternalOp(env vmEnv) (*pb.InvokeReply, error) {
 		}
 		switch env.VmOp {
 		case "start":
+			// start is idempotent, exactly as destroy is above: an already-running
+			// domain is a clean success, not an error. libvirt otherwise fails with
+			// "Requested operation is not valid: domain is already running", which
+			// forced every caller that only wants "ensure running" (vmRebuild, after
+			// `vm create` has already started the domain) to discard the error and
+			// print it to the log — noise that trains readers to skim past real ones.
+			if s, serr := conn.domainState(dom); serr == nil && s == libvirt.DomainRunning {
+				return internalJSON(map[string]any{"ok": true, "already_running": true})
+			}
 			err = conn.startDomain(dom)
 		case "stop":
 			if env.Force {
