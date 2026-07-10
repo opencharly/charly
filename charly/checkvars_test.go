@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // Covers the build-time subset: every BoxMetadata field that should populate
@@ -220,7 +222,7 @@ func TestResolver_EndToEndExpansion(t *testing.T) {
 		t.Fatalf("unexpected: %v", err)
 	}
 	in := "redis-cli -h ${CONTAINER_IP} -p ${HOST_PORT:6379} ${HOME}/.rdb"
-	got, missing := ExpandTestVars(in, r.Env)
+	got, missing := kit.ExpandTestVars(in, r.Env)
 	want := "redis-cli -h 10.0.0.5 -p 16379 /home/u/.rdb"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)

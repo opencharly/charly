@@ -120,8 +120,11 @@ const (
 
 // --- the ${NAME[:arg]} check-variable expansion grammar (P5-unit-4), in sdk/kit so a plugin
 // candy that runs a plan expands ${VAR}s with the SAME grammar the check engine uses. ---
+// ExpandTestVars is NOT aliased — core production expands vars via opExpandVars (which wraps
+// kit.ExpandTestVars internally); the sole other caller is checkvars_test.go, which calls
+// kit.ExpandTestVars directly. Aliasing a name only a test uses would be a caller-less-in-
+// production export.
 var (
-	ExpandTestVars    = kit.ExpandTestVars
 	TestVarRefs       = kit.TestVarRefs
 	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
 	opExpandVars      = kit.ExpandOpVars
