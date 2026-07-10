@@ -35,26 +35,10 @@ import (
 // wall-clock-bounded so one stuck prose step can't hang an acceptance run.
 const GraderDefaultTimeout = 5 * time.Minute
 
-// GraderRequest is the context handed to a StepGrader for one agent step.
-// Description is the entity's purpose (the goal); Keyword is the agent step
-// keyword (agent-run / agent-check); Text is the step's prose; ReadOnly is
-// true for agent-check (assessment, never mutates) and false for agent-run
-// (the agent may change state).
-type GraderRequest struct {
-	Description string
-	Keyword     string
-	Text        string
-	ReadOnly    bool
-}
-
-// StepGrader judges a prose-only plan step (one with no embedded check
-// verb). Implementations return an CheckResult with Status TestPass/TestFail
-// and a Message carrying the grader's evidence. A grader that cannot reach a
-// verdict (launch failure, timeout, unparseable output) returns TestFail —
-// never a silent pass.
-type StepGrader interface {
-	Grade(ctx context.Context, req GraderRequest) CheckResult
-}
+// GraderRequest (the context for one agent step) and the StepGrader interface (which judges a
+// prose-only agent step, returning TestFail on any non-verdict — never a silent pass) moved to
+// sdk/kit (planrun.go) with the plan walk that dispatches agent steps to the grader;
+// charly/kit_aliases.go binds the package-main names. AgentGrader below is the production impl.
 
 // AgentGrader is the production StepGrader: it drives the configured
 // `kind: agent` CLI against a live deployment.

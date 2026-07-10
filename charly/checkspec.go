@@ -2,6 +2,8 @@ package main
 
 import (
 	"slices"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // The ${NAME[:arg]} check-variable expansion grammar (ExpandTestVars / TestVarRefs /
@@ -19,15 +21,16 @@ import (
 // default) declares legality; the active engine supplies the running context
 // and skips ops whose context set does not include it (VenueSkip).
 
-// DoMode is the act/assert/instruct axis. act = perform a side-effect;
-// assert = run the matchers (read-only); instruct = hand free-form text to the
+// DoMode (the act/assert/instruct axis) lives in sdk/kit alongside the plan walk that
+// dispatches on it (kit/planrun.go); these are the package-main bindings. act = perform a
+// side-effect; assert = run the matchers (read-only); instruct = hand free-form text to the
 // agent grader.
-type DoMode string
+type DoMode = kit.DoMode
 
 const (
-	DoAct      DoMode = "act"
-	DoAssert   DoMode = "assert"
-	DoInstruct DoMode = "instruct"
+	DoAct      = kit.DoAct
+	DoAssert   = kit.DoAssert
+	DoInstruct = kit.DoInstruct
 )
 
 // VerbSpec is the per-verb metadata in VerbCatalog. Contexts[0] is the

@@ -134,7 +134,7 @@ func ResolveCheckVarsRuntime(meta *BoxMetadata, deploy *BundleNode, engine, depl
 	// identifier K3sPostProvision uses for the kubeconfig context + ClusterProfile
 	// (sanitizeDeployName collapses ':'/'.'/'/'-> '-'). Deploy-scope checks address
 	// their own cluster generically via cluster: "${DEPLOY_NAME}". Runtime-only
-	// (see runtimeOnlyVarPrefixes) so it is never offered to build-scope checks.
+	// (see kit.RuntimeOnlyVarPrefixes) so it is never offered to build-scope checks.
 	if deployName != "" {
 		env["DEPLOY_NAME"] = sanitizeDeployName(deployName)
 	}

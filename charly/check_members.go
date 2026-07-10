@@ -167,23 +167,8 @@ func splitHostKey(key string) (name, arg string, ok bool) {
 
 // filterHostVars returns the subset of unresolved variable keys that are
 // cross-member ${HOST:…} vars. runOne FAILS a check that references any of these
-// unresolved — an unresolved ${HOST:…} var means the member is unreachable, which
-// is a real failure, never a SKIP (a skip on an unreachable dependency is a fake
-// pass). Other unresolved vars (a deploy-only var under build scope, an unmounted
-// volume) stay a legitimate skip.
-func filterHostVars(missing []string) []string {
-	var out []string
-	for _, key := range missing {
-		name := key
-		if before, _, ok := strings.Cut(key, ":"); ok {
-			name = before
-		}
-		if name == hostVar {
-			out = append(out, key)
-		}
-	}
-	return out
-}
+// filterHostVars (the ${HOST:…} unresolved-var filter) moved to sdk/kit (planspec.go) with the
+// plan walk that consumes it; charly/kit_aliases.go binds the package-main name.
 
 // liveTargetResolver builds the `on:` TargetResolver used by `charly check live`
 // (and kind:check beds, which drive `charly check live`). For a named DRIVER

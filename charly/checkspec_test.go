@@ -218,12 +218,10 @@ func TestMatcher_RejectsMultiKey(t *testing.T) {
 	}
 }
 
-// Covers both plain ${NAME} and parameterized ${NAME:arg} grammar, plus the
-
 // Full-Check in-place expansion across all string-bearing fields.
 func TestCheck_ExpandVars(t *testing.T) {
 	// file is now a plugin verb; its path + owner ride plugin_input. opExpandVars walks the
-	// PluginInput map (expandAnyVars), so ${HOME} / ${MISSING} resolve there exactly as they
+	// PluginInput map (kit.ExpandAnyVars), so ${HOME} / ${MISSING} resolve there exactly as they
 	// did when file/owner were base #Op string fields. Command stays an #Op modifier.
 	c := Op{
 		Plugin: "file",

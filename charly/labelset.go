@@ -41,27 +41,8 @@ func (s *LabelSet) IsEmpty() bool {
 //
 // Mirrors LabelShellSet's three-section shape so the collection + merge
 // pipeline and the reporting format can share a mental model.
-type LabelDescriptionSet struct {
-	Candy  []LabeledDescription `json:"candy,omitempty"`
-	Box    []LabeledDescription `json:"box,omitempty"`
-	Deploy []LabeledDescription `json:"deploy,omitempty"`
-}
-
-// LabeledDescription is a plain-string description + its baked plan steps,
-// with a collection-time origin annotation. Origin follows the
-// `candy:<name>` / `box:<name>` / `deploy-default` / `deploy-local`
-// convention also used by LabelShellSet entries' Origin field.
-type LabeledDescription struct {
-	Origin      string `json:"origin"`
-	Description string `json:"description,omitempty"`
-	Plan        []Step `json:"plan,omitempty"`
-}
-
-// IsEmpty returns true if no section has any descriptions. Used by label
-// emission to omit the label entirely when there are none.
-func (s *LabelDescriptionSet) IsEmpty() bool {
-	if s == nil {
-		return true
-	}
-	return len(s.Candy) == 0 && len(s.Box) == 0 && len(s.Deploy) == 0
-}
+//
+// LabelDescriptionSet + LabeledDescription (the plan-set carriers) and IsEmpty moved to
+// sdk/kit (planrun.go) with the plan walk that consumes them; charly/kit_aliases.go binds the
+// package-main names. Origin follows the `candy:<name>` / `box:<name>` / `deploy-default` /
+// `deploy-local` convention also used by LabelShellSet entries' Origin field.

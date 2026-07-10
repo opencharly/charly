@@ -6,7 +6,7 @@ import (
 )
 
 // lowercaseCheckVarPattern matches a ${name} token whose identifier begins with a
-// lowercase letter. The check-var expander (testVarRefPattern in checkspec.go) only
+// lowercase letter. The check-var expander (kit.TestVarRefPattern in sdk/kit) only
 // recognizes UPPERCASE names, so such a token is never substituted — it reaches
 // the verb literally. Used by validateCheck to reject it in pure-identifier check
 // fields (k8s/resource modifiers), catching the k3s-server `${deploy_name}` class.
@@ -110,7 +110,7 @@ func validateCheck(c *Op, loc string, errs *ValidationError) {
 	}
 
 	// Lowercase ${...} in a pure-identifier check field is NEVER an check variable:
-	// the check-var expander (testVarRefPattern) only recognizes UPPERCASE names,
+	// the check-var expander (kit.TestVarRefPattern) only recognizes UPPERCASE names,
 	// so a lowercase token is silently passed through literally and reaches the
 	// verb as the string "${...}" (the k3s-server `cluster: "${deploy_name}"`
 	// class of bug — it passed both validate and runtime, resolving to no cluster).
