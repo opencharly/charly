@@ -175,6 +175,13 @@ func bringUpMembers(node *BundleNode) error {
 			if err := runCharlySubcommand("bundle", "add", memberKey, memberNode.From); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
+			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
+			// PostApply skips target:local children, so deploy them into the guest here.
+			if err := deployNestedLocalChildren(memberKey, memberNode.Children, func(childKey, dotted string) error {
+				return runCharlySubcommand("bundle", "add", dotted)
+			}); err != nil {
+				return fmt.Errorf("peer %q: %w", memberKey, err)
+			}
 		case isPodMember(memberNode):
 			for _, step := range [][]string{{"config", memberKey}, {"start", memberKey}} {
 				if err := runCharlySubcommand(step...); err != nil {
@@ -205,7 +212,13 @@ func tearDownMembers(node *BundleNode) {
 		var err error
 		switch {
 		case isVmMember(memberNode):
+			// `vm destroy` removes the libvirt domain, but bring-up ALSO registered the
+			// member in the deploy ledger via `bundle add`. Reverse that too, or a ledger
+			// record survives every teardown and they accumulate run over run.
 			err = runCharlySubcommand("vm", "destroy", memberNode.From)
+			if delErr := runCharlySubcommand(deployDelArgv(memberKey)...); delErr != nil && err == nil {
+				err = delErr
+			}
 		case isPodMember(memberNode):
 			err = runCharlySubcommand("remove", memberKey, "--purge")
 		default:

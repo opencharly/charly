@@ -188,6 +188,11 @@ func printDebugRetentionNotice(w io.Writer, name string, node BundleNode) {
 	case node.Target == "local":
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — local apply left in place for debugging.\n"+
 			"  destroy: charly remove %s\n", name, name)
+	case node.IsGroup():
+		// A targetless group has no root container — its MEMBERS are the deployment.
+		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — group members left up for debugging.\n"+
+			"  inspect: %s\n"+
+			"  destroy: charly remove %s (members tear down with the group)\n", name, live, name)
 	case bedExternalInPlace(node.Target):
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — external deploy apply left in place for debugging.\n"+
 			"  destroy: charly bundle del %s\n", name, name)
@@ -264,6 +269,32 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 		RequiresExclusive: node.RequiresExclusive,
 		RequiresShared:    node.RequiresShared,
 	})
+}
+
+// deployNestedLocalChildren deploys a VM's nested target:local children via the
+// dotted-path dispatch, which applies each child's local-deploy candies INSIDE the
+// guest over the NestedExecutor (SSH).
+//
+// plugin-deploy-vm's PostApply brings up nested target:pod children as in-guest
+// quadlets, but it SKIPS target:local children — they carry no image, they apply
+// candies in place. Without this loop a nested local child never deploys, and a
+// deploy-scope check against it either fails or (worse) silently checks nothing.
+//
+// Both sites that own a VM venue call this: the isVM bed ROOT and bringUpMembers'
+// VM-member branch. They differ only in how a child deploy is executed (the root
+// wraps it in a recorded step(); a member shells out directly), so that is the
+// injected apply func.
+func deployNestedLocalChildren(parent string, children map[string]*BundleNode, apply func(childKey, dotted string) error) error {
+	for _, childKey := range sortedNestedKeys(children) {
+		child := children[childKey]
+		if child == nil || (child.Target != "local" && child.Target != "host") {
+			continue // pod children handled in-guest by plugin-deploy-vm's PostApply
+		}
+		if err := apply(childKey, parent+"."+childKey); err != nil {
+			return fmt.Errorf("deploy nested local child %s.%s: %w", parent, childKey, err)
+		}
+	}
+	return nil
 }
 
 // runCheckBed executes the canonical R10 sequence for one check bed (a `disposable: true` bundle)
@@ -453,6 +484,24 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 
 	// step records a step's outcome and writes its log file. Returns the
 	// run error so the caller can short-circuit via fail().
+	// phase records an IN-PROCESS phase (one that does not shell out to a `charly`
+	// subcommand, so step() cannot wrap it) in the summary with its real duration.
+	// Without this, the expensive member bring-up — vm create + cold boot + ssh-wait +
+	// the member's deploy — is invisible: summary.yml reported total_seconds: 19 for a
+	// run whose wall clock was 3m09s, because only the shelled-out steps were timed.
+	phase := func(stepName string, fn func() error) error {
+		t0 := time.Now()
+		err := fn()
+		res.Step = append(res.Step, stepResult{Name: stepName, Duration: time.Since(t0), OK: err == nil})
+		if err != nil {
+			res.OK = false
+			if res.FailExitCode == 0 {
+				res.FailExitCode = 1
+			}
+		}
+		return err
+	}
+
 	step := func(stepName string, args []string) error {
 		t0 := time.Now()
 		out, runErr := runCapture(exe, args)
@@ -564,6 +613,11 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		switch {
 		case isVM:
 			_ = step("cleanup", []string{"vm", "destroy", vmTemplate})
+		case isGroup:
+			// A targetless group has NO root container, quadlet, or volumes — its
+			// members ARE the deployment. Driving `charly remove <bed> --purge` here
+			// would run the pod teardown path against a root that never existed.
+			// tearDownMembers below is the whole teardown.
 		case isExternalDeploy:
 			// External deploy: `bundle del` replays the recorded reverse op (e.g.
 			// removes the apply markers); `charly remove` is pod-quadlet-specific.
@@ -595,6 +649,15 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 	// keep running, so it must NOT claim a pod was left up.
 	deployed := false
 	fail := func(format string, args ...any) (*bedRunResult, error) {
+		// fail() is the SINGLE failure tail for the whole sequence, including the
+		// phases that run OUTSIDE step() (bringUpMembers / tearDownMembers). step()
+		// marks its own failures, but a failure arriving here by any other route must
+		// still mark the summary — otherwise summary.yml records `ok: true` for a run
+		// that exits non-zero, and anything reading that field is silently misled.
+		res.OK = false
+		if res.FailExitCode == 0 {
+			res.FailExitCode = 1 // infra failure; a checks-failure (2) is set by step()
+		}
 		writeBedSummary(logDir, res)
 		if deployed {
 			printDebugRetentionNotice(os.Stderr, name, node)
@@ -689,21 +752,10 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		if err := step("deploy-add", []string{"bundle", "add", name, vmTemplate}); err != nil {
 			return fail("bundle add %s: %w", name, err)
 		}
-		// plugin-deploy-vm's PostApply (inside the VM deploy-add above) brings up
-		// nested target:pod children as in-guest quadlets, but it SKIPS
-		// target:local children (they carry no image — they apply candies in
-		// place). Deploy each nested local child via the dotted-path dispatch,
-		// which applies the child's local-deploy candies into the guest over the
-		// NestedExecutor (SSH). Without this, checkLiveTree below would check an
-		// un-deployed child and fail. Mirrors the pod-bed nested-child loop.
-		for _, childKey := range sortedNestedKeys(node.Children) {
-			child := node.Children[childKey]
-			if child == nil || (child.Target != "local" && child.Target != "host") {
-				continue // pod children handled in-guest by plugin-deploy-vm's PostApply
-			}
-			if err := step("deploy-"+childKey, []string{"bundle", "add", name + "." + childKey}); err != nil {
-				return fail("deploy nested local child %s.%s: %w", name, childKey, err)
-			}
+		if err := deployNestedLocalChildren(name, node.Children, func(childKey, dotted string) error {
+			return step("deploy-"+childKey, []string{"bundle", "add", dotted})
+		}); err != nil {
+			return fail("%w", err)
 		}
 	case isGroup:
 		// Group bed: no root container — the members (subject + driver) ARE the
@@ -836,7 +888,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 	// then proves only that the image builds + deploys). Members are instruments
 	// for the runtime probes, so bring-up is gated with them.
 	if runRuntimeCheck {
-		if err := bringUpMembers(&node); err != nil {
+		if err := phase("bring-up-members", func() error { return bringUpMembers(&node) }); err != nil {
 			return fail("bring up peers for %s: %w", name, err)
 		}
 		if err := checkLiveTree("check-live"); err != nil {
@@ -874,7 +926,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		}
 		tearDownMembers(&node)
 		if runRuntimeCheck {
-			if err := bringUpMembers(&node); err != nil {
+			if err := phase("re-bring-up-members", func() error { return bringUpMembers(&node) }); err != nil {
 				return fail("re-bring up members for %s: %w", name, err)
 			}
 			if err := checkLiveTree("check-live-rebuild"); err != nil {

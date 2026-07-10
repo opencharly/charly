@@ -5,9 +5,11 @@ check-substrate-layer:
             Drop /etc/check-substrate-marker on the host filesystem.
             The deployable member of the check-substrate R10 bed (C2-substrate — the externalized
             pod/vm/k8s/local/android structural kinds): a kind:local layer whose write: step lands a
-            marker the member's hoisted check asserts. A DEDICATED marker path (not check-local's /
-            check-group's / check-structkind's) so the beds never collide when /verify-beds fans them
-            out concurrently.
+            marker asserted by a check authored on the DEPLOY NODE'S plan (a composed candy's plan:
+            never reaches a deploy-scope check runner, so a check authored here would never run at
+            deploy scope). A DEDICATED marker path (not check-local's / check-group's /
+            check-structkind's) so the beds never collide when /verify-beds fans them out
+            concurrently.
         plan:
             - run: write=/etc/check-substrate-marker
               write: /etc/check-substrate-marker

@@ -2,11 +2,15 @@ check-group-layer:
     candy:
         version: 2026.182.0440
         description: |
-            Drop /etc/check-group-marker on the host filesystem.
+            Drop /etc/check-group-marker in the filesystem it is deployed into.
             The deployable member of the check-group R10 bed (C2-group — the externalized `group`
-            structural kind): a kind:local layer whose write: step lands a marker the member's
-            hoisted check asserts. A DEDICATED marker path (not check-local's / check-structkind's)
-            so the beds never collide when /verify-beds fans them out concurrently.
+            structural kind): a kind:local layer whose write: step lands a marker asserted by a
+            check authored on the DEPLOY NODE'S plan (a composed candy's plan: never reaches a
+            deploy-scope check runner, so a check authored here would never run at deploy scope).
+            The bed deploys this member INSIDE its disposable eval VM, so the marker lands in the
+            guest, never on the operator's host. A DEDICATED marker path (not check-local's /
+            check-structkind's) so the beds never collide when /verify-beds fans them out
+            concurrently.
         plan:
             - run: write=/etc/check-group-marker
               write: /etc/check-group-marker
@@ -24,7 +28,7 @@ check-group-layer:
                 contains:
                     - contains: "check-group v1"
             - check: command=test -f /etc/check-group-marker
-              id: check-group-marker-host
+              id: check-group-marker-present
               context:
                 - runtime
               command:

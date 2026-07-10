@@ -133,6 +133,35 @@ k3s-vm:
 # Arch Cloud VM backing check-charly-vm — the pac localpkg deploy witness. Plain
 # disposable VM (no port forwards / k3s); charly is installed onto it by the bed's
 # localpkg deploy, so the VM itself carries no opencharly layers.
+# eval-vm — the disposable EVAL VM that every host-mutating `local:` check bed
+# nests into. A `local:` node placed UNDER this vm node deploys INTO the guest via
+# kit.NestedExecutor (tree position; the child carries no `host:` field), so the bed's
+# candies write inside the guest and never touch the operator's workstation.
+# See /charly-core:deploy "Deploy-into nesting"; the shipped precedent is box/arch's
+# check-arch-vm -> arch-host. It owns its OWN domain (charly-eval-vm) — never reuse
+# charly-vm, which check-charly-vm owns, or the two beds collide on one libvirt domain.
+eval-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            checksum:
+                type: sha256
+            base_user: arch
+        backend: libvirt
+        disk_size: 20G
+        ram: 4G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+
 charly-vm:
     vm:
         source:
@@ -608,10 +637,13 @@ check-builder-local:
 # group (proven hermetically by TestExternalStructKind_StructuralDecode, which
 # also covers peer + nested + cross-member ${HOST:} reconstruction). This bed is
 # the RUNTIME leg: the reconstructed member (a kind:local host deploy applying
-# check-structkind-layer) is brought up and its hoisted marker check runs on the
-# host — proving the reconstructed authored member DEPLOYS end-to-end. The
-# deploy-config scalars (disposable/lifecycle/description) ride op.Params; the
-# member rides op.Env (input-threaded).
+# check-structkind-layer) is brought up and the marker check authored on the
+# MEMBER'S OWN plan runs — proving the reconstructed authored member DEPLOYS
+# end-to-end. The check lives on the member's node plan, not in the candy: a
+# composed candy's plan: never reaches a deploy-scope check runner for a non-image
+# deploy, so a candy-authored check would silently never run. The deploy-config
+# scalars (disposable/lifecycle/description) ride op.Params; the member rides
+# op.Env (input-threaded).
 # =============================================================================
 check-structkind-app:
     local:
@@ -626,11 +658,25 @@ check-structkind:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole RUNTIME witness of F5 authored-member INPUT-threading: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/ plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildBundleNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Bundle (with the authored member) into uf.Bundle, byte-equivalent to a builtin group. The reconstructed member (check-structkind-member, a kind:local host deploy of check-structkind-app) is brought up and its hoisted marker check asserts /etc/check-structkind-marker on the host filesystem — proving the reconstructed authored member deploys end-to-end. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
+            Sole RUNTIME witness of F5 authored-member INPUT-threading: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/ plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildBundleNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Bundle (with the authored member) into uf.Bundle, byte-equivalent to a builtin group. The reconstructed member (check-structkind-member, a kind:local host deploy of check-structkind-app) is brought up, and the marker check authored on the MEMBER'S OWN plan asserts /etc/check-structkind-marker — proving the reconstructed authored member deploys end-to-end. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy, so a check authored only in check-structkind-layer would silently never run. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
     check-structkind-member:
         local:
             from: check-structkind-app
             host: local
+            plan:
+                - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
+                  id: sk-member-marker
+                  description: >-
+                      The reconstructed authored member actually DEPLOYED: its composed candy
+                      dropped the marker. Authored on the member's own node plan because a
+                      composed candy's plan: never reaches a deploy-scope check runner for a
+                      non-image deploy — a check placed in check-structkind-layer would never run.
+                  stdout:
+                      - contains: STRUCTKIND-MEMBER-DEPLOY-OK
+                  context:
+                      - runtime
+                  command:
+                      command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
 # =============================================================================
 # check-group — R10 witness for the EXTERNALIZED `group` structural kind (C2-group).
 # `group:` is no longer a compiled-in core KindProvider; it is served by the
@@ -641,15 +687,18 @@ check-structkind:
 # OpLoad via op.Env (F5 authored-member input-threading), and plugin-group attaches it
 # to a targetless spec.Deploy the host folds into uf.Bundle — byte-equivalent to the
 # former builtin groupKind. The reconstructed member (check-group-member, a kind:local
-# host deploy of check-group-app) is brought up and its hoisted marker check asserts
-# /etc/check-group-marker on the host — proving a real group decode deploys end-to-end.
+# deploy of check-group-app) is deployed INSIDE the disposable eval VM, and the marker
+# check authored on the member's OWN plan asserts /etc/check-group-marker in the GUEST —
+# proving a real group decode deploys end-to-end without mutating the host.
 # =============================================================================
 check-group-app:
     local:
         description: |-
             Minimal kind:local template for the check-group member — composes check-group-layer
-            (drops /etc/check-group-marker on the host) so the group member has a deterministic,
-            collision-free host-side deploy effect.
+            (drops /etc/check-group-marker) so the group member has a deterministic,
+            collision-free deploy effect. The member is nested under check-group-vm, so this
+            applies INSIDE the disposable eval VM over kit.NestedExecutor and the marker lands
+            in the guest, never on the operator's host.
         candy:
             - check-group-layer
 check-group:
@@ -657,11 +706,32 @@ check-group:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole R10 witness of the externalized `group` structural kind (candy/plugin-group, C2-group): a REAL targetless `group:` deploy group decoded out of core through the compiled-in plugin-group over the F5 authored-member input-threading foundation. The authored member (check-group-member) is pre-decoded host-side and threaded to plugin-group via op.Env; the plugin attaches it to a targetless spec.Deploy the host folds into uf.Bundle. bringUpMembers deploys the member (a kind:local host deploy of check-group-app applying check-group-layer), and the hoisted marker check asserts /etc/check-group-marker on the host filesystem — proving a real group: decode reconstructs + deploys its authored member end-to-end, identical to the former builtin.
-    check-group-member:
-        local:
-            from: check-group-app
-            host: local
+            Sole R10 witness of the externalized `group` structural kind (candy/plugin-group, C2-group): a REAL targetless `group:` deploy group decoded out of core through the compiled-in plugin-group over the F5 authored-member input-threading foundation. The authored member (check-group-member) is pre-decoded host-side and threaded to plugin-group via op.Env; the plugin attaches it to a targetless spec.Deploy the host folds into uf.Bundle. bringUpMembers deploys the member, and the marker check authored on the MEMBER'S OWN node plan asserts /etc/check-group-marker — proving a real group: decode reconstructs + deploys its authored member end-to-end, identical to the former builtin. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy, so a check authored only in check-group-layer would silently never run (this bed printed "No plan steps to run." and asserted NOTHING before that fix). The member is a kind:local deploy of check-group-app NESTED UNDER the check-group-vm node, so it lands INSIDE the disposable eval VM via kit.NestedExecutor (tree position, no `host:` field) and the marker is written on the GUEST filesystem — never the operator's workstation. NOTE: a nested child runs on NestedExecutor over the guest venue, NOT ShellExecutor; the host-side ShellExecutor + HostDeployTarget arm is witnessed by check-local, which stays a top-level `host: local` bed for exactly that reason (see /charly-core:deploy "Deploy-into nesting").
+    check-group-vm:
+        vm:
+            from: eval-vm
+        # NESTED under the vm node (tree position) => the local: deploy lands INSIDE
+        # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the
+        # parent. Precedent: box/arch check-arch-vm -> arch-host.
+        check-group-member:
+            local:
+                from: check-group-app
+                # The marker check is authored HERE, on the deploy node's OWN plan. A composed
+                # candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image
+                # deploy (checkLocalDeployScope sources only the template's plan, the node's plan,
+                # and the folded entry). The check that lived only in check-group-layer therefore
+                # never executed and this bed passed asserting nothing. hoistVenueSubtree lifts the
+                # step to the group root with venue `check-group-vm.check-group-member` — the guest.
+                plan:
+                    - check: command=test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK
+                      id: cg-member-marker-in-guest
+                      description: the group's authored member deployed INTO the eval VM and its layer wrote /etc/check-group-marker on the GUEST filesystem
+                      stdout:
+                          - contains: GROUP-MEMBER-DEPLOY-OK
+                      context:
+                          - runtime
+                      command:
+                          command: "test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK"
 # =============================================================================
 # check-substrate — R10 witness for the EXTERNALIZED substrate structural kinds
 # (C2-substrate). pod/vm/k8s/local/android are no longer compiled-in core
@@ -676,10 +746,11 @@ check-group:
 #     TEMPLATE fold arm (the standalone counterpart of the deploy fold into uf.Bundle);
 #   - check-substrate is a `local:` DEPLOY (from: check-substrate-app) → foldSubstrateKind
 #     pre-decodes the full BundleNode, threads it, and folds the echo into uf.Bundle.
-# bringUpMembers deploys the member; the hoisted marker check asserts
-# /etc/check-substrate-marker on the host — proving BOTH substrate shapes decode +
-# deploy end-to-end through the plugin, byte-equivalent to the former in-proc
-# standaloneKind. The rich `vm:` TEMPLATE fold (the PRIMARY VM authoring form) into
+# The deploy applies its inherited template's layer; the marker check authored on the
+# DEPLOY NODE'S OWN plan asserts /etc/check-substrate-marker — proving BOTH substrate
+# shapes decode + deploy end-to-end through the plugin, byte-equivalent to the former
+# in-proc standaloneKind. (Node-plan, not candy-plan: a composed candy's plan: never
+# reaches a deploy-scope check runner for a non-image deploy.) The rich `vm:` TEMPLATE fold (the PRIMARY VM authoring form) into
 # uf.VM is proven byte-equivalent by TestSubstrateKind_BothShapesByteEquivalent and
 # LIVE by box/debian's check-debian-debootstrap-vm (a `vm:` template + `vm:` deploy,
 # both now routed through plugin-substrate).
