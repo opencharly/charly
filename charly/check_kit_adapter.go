@@ -58,7 +58,7 @@ func (a kitVerbAdapter) RunVerb(ctx context.Context, r *Runner, op *Op) CheckRes
 	return CheckResult{
 		Op:      op,
 		Verb:    a.kv.Reserved(),
-		Status:  kitStatusToCheck(res.Status),
+		Status:  res.Status,
 		Message: res.Message,
 	}
 }
@@ -136,17 +136,6 @@ func materializeStep(desc kit.StepDescriptor, op *Op, layer CandyModel, img *Res
 		}
 	default:
 		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.GetName())
-	}
-}
-
-func kitStatusToCheck(s kit.Status) CheckStatus {
-	switch s {
-	case kit.StatusFail:
-		return TestFail
-	case kit.StatusSkip:
-		return TestSkip
-	default:
-		return TestPass
 	}
 }
 

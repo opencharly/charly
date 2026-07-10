@@ -5,17 +5,15 @@ import (
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // StepResult pairs a CheckResult with the step's keyword/text + stable id.
 // It is the runner's per-step output unit (one per executed plan step).
-type StepResult struct {
-	Keyword string      `json:"keyword"`
-	Text    string      `json:"text"`
-	Origin  string      `json:"origin,omitempty"`
-	StepID  string      `json:"step_id"`
-	Result  CheckResult `json:"result"`
-}
+// StepResult lives in sdk/kit (checkresult.go) with the rest of the result model; this is
+// the package-main binding.
+type StepResult = kit.StepResult
 
 // flatStep carries a plan step with its collection-time origin + the owning
 // entity's description (for the agent grader).
