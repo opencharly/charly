@@ -66,7 +66,7 @@ func EffectiveStepID(s *Step, origin string, stepIdx int) string {
 	return StepID(origin, stepIdx)
 }
 
-// The tag-set helpers (EffectiveTags / normalizeTag) and the whole tag-expression
-// grammar (TagExpr / ParseTagExpr / CombineTagFilters) live ONCE in sdk/kit — see
-// charly/kit_aliases.go for the package-main bindings. A plugin candy filters a plan
+// The tag-set helpers (kit.EffectiveTags / kit.NormalizeTag) and the whole tag-expression
+// grammar (kit.TagExpr / kit.ParseTagExpr / kit.CombineTagFilters) live ONCE in sdk/kit —
+// charly/kit_aliases.go binds only what core actually calls. A plugin candy filters a plan
 // by tag with the SAME grammar the check engine uses.

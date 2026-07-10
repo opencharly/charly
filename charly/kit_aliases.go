@@ -23,14 +23,17 @@ var (
 
 // --- the tag-expression filter surface (`--tag` / `--tag-exclude`), which lives ONCE in
 // kit so a plugin candy can filter a plan by tag with the SAME grammar the check engine
-// uses. Core's call sites (planTagFilter, RunPlan) are unchanged. ---
+// uses. Core's call sites (planTagFilter, RunPlan, EffectiveTags) are unchanged.
+//
+// Only what core actually CALLS is aliased. kit.NormalizeTag and kit.CombineTagFilters are
+// part of the kit surface a plugin candy uses, but core reaches neither: normalizeTag's only
+// callers (EffectiveTags + the lexer) moved to kit with it, and CombineTagFilters is a CLI
+// composition helper core does not invoke. Aliasing them here would be dead code. ---
 type TagExpr = kit.TagExpr
 
 var (
-	ParseTagExpr      = kit.ParseTagExpr
-	CombineTagFilters = kit.CombineTagFilters
-	normalizeTag      = kit.NormalizeTag
-	EffectiveTags     = kit.EffectiveTags
+	ParseTagExpr  = kit.ParseTagExpr
+	EffectiveTags = kit.EffectiveTags
 )
 
 // --- generic yaml.v3 / path helpers that live ONCE in the importable host-engine
