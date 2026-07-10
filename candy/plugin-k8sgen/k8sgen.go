@@ -131,7 +131,14 @@ func GenerateTree(in spec.K8sGenInput) (spec.K8sGenReply, error) {
 		"resources":  baseResources,
 	}
 	if labels := mergedLabels(in); len(labels) > 0 {
-		baseKustomization["commonLabels"] = labels
+		// kustomize deprecated `commonLabels` ("Please use 'labels' instead") and warns on
+		// every apply. `labels` with includeSelectors:true is its exact replacement — it
+		// adds the pairs AND writes them into the selectors, which is what commonLabels did.
+		// Plain `labels` without includeSelectors would silently stop labelling selectors.
+		baseKustomization["labels"] = []map[string]any{{
+			"pairs":            labels,
+			"includeSelectors": true,
+		}}
 	}
 	if annotations := in.Cluster.Defaults.Annotations; len(annotations) > 0 {
 		baseKustomization["commonAnnotations"] = annotations
