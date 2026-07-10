@@ -28,7 +28,7 @@ check-group-layer:
                 contains:
                     - contains: "check-group v1"
             - check: command=test -f /etc/check-group-marker
-              id: check-group-marker-host
+              id: check-group-marker-present
               context:
                 - runtime
               command:

@@ -695,8 +695,10 @@ check-group-app:
     local:
         description: |-
             Minimal kind:local template for the check-group member — composes check-group-layer
-            (drops /etc/check-group-marker on the host) so the group member has a deterministic,
-            collision-free host-side deploy effect.
+            (drops /etc/check-group-marker) so the group member has a deterministic,
+            collision-free deploy effect. The member is nested under check-group-vm, so this
+            applies INSIDE the disposable eval VM over kit.NestedExecutor and the marker lands
+            in the guest, never on the operator's host.
         candy:
             - check-group-layer
 check-group:
