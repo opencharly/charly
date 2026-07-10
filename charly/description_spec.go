@@ -16,8 +16,6 @@ package main
 // matchers, and modifiers (id, tag, context, pod, depends_on, count, ...).
 
 import (
-	"fmt"
-
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -32,41 +30,9 @@ const (
 	KwInclude    = kit.KwInclude
 )
 
-// StepKind / keywordsSet / KeywordText / IsAgent / IsInclude / Mutates are now
-// methods on the spec.Step type (charly/spec — union_types.go + charly_methods.go),
-// reached through the `type Step = spec.Step` alias. Only the keyword→do-mode
-// dispatch stays here as a free function (DoMode is a package-main enum).
-
-// stepDoMode maps the step keyword to the internal act/assert/instruct dispatch
-// enum (DoMode is a package-main type, so this stays a free function in main).
-func stepDoMode(s *Step) DoMode {
-	switch {
-	case s.Run != "":
-		return DoAct
-	case s.Check != "":
-		return DoAssert
-	case s.AgentRun != "", s.AgentCheck != "":
-		return DoInstruct
-	}
-	return DoAssert
-}
-
-// StepID returns the stable identifier used for plan-overlay merge lookups,
-// depends_on references, and ${STEP_ID} substitution. The author-set Op.ID
-// wins; otherwise a deterministic id is derived from origin + position.
-func StepID(origin string, stepIdx int) string {
-	return fmt.Sprintf("plan:%s:%d", origin, stepIdx)
-}
-
-// EffectiveStepID returns the step's author id when set, else a derived id.
-func EffectiveStepID(s *Step, origin string, stepIdx int) string {
-	if s.ID != "" {
-		return s.ID
-	}
-	return StepID(origin, stepIdx)
-}
-
-// The tag-set helpers (kit.EffectiveTags / kit.NormalizeTag) and the whole tag-expression
-// grammar (kit.TagExpr / kit.ParseTagExpr / kit.CombineTagFilters) live ONCE in sdk/kit —
-// charly/kit_aliases.go binds only what core actually calls. A plugin candy filters a plan
-// by tag with the SAME grammar the check engine uses.
+// StepKind / keywordsSet / KeywordText / IsAgent / IsInclude / Mutates are methods on the
+// spec.Step type (union_types.go + charly_methods.go). The keyword→do-mode dispatch
+// (StepDoMode) and the stable step-id derivation (StepID / EffectiveStepID) moved to sdk/kit
+// (planspec.go) with the plan walk that consumes them; charly/kit_aliases.go binds what core
+// still calls (stepDoMode / EffectiveStepID). The tag-set helpers + tag-expression grammar
+// (kit.EffectiveTags / kit.TagExpr / kit.ParseTagExpr) likewise live once in kit.

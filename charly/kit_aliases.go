@@ -106,7 +106,6 @@ func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }
 type ScenarioContext = kit.ScenarioContext
 
 var (
-	runWithEventually  = kit.RunWithEventually
 	NewScenarioContext = kit.NewScenarioContext
 	ResolveCheckLevel  = kit.ResolveCheckLevel
 	CheckLevelReaches  = kit.CheckLevelReaches
@@ -117,4 +116,38 @@ const (
 	CheckLevelNoAgent = kit.CheckLevelNoAgent
 	CheckLevelAgent   = kit.CheckLevelAgent
 	DefaultCheckLevel = kit.DefaultCheckLevel
+)
+
+// --- the ${NAME[:arg]} check-variable expansion grammar (P5-unit-4), in sdk/kit so a plugin
+// candy that runs a plan expands ${VAR}s with the SAME grammar the check engine uses. ---
+// ExpandTestVars is NOT aliased — core production expands vars via opExpandVars (which wraps
+// kit.ExpandTestVars internally); the sole other caller is checkvars_test.go, which calls
+// kit.ExpandTestVars directly. Aliasing a name only a test uses would be a caller-less-in-
+// production export.
+var (
+	TestVarRefs       = kit.TestVarRefs
+	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
+	opExpandVars      = kit.ExpandOpVars
+	collectAnyStrings = kit.CollectAnyStrings
+)
+
+// --- the check-engine PLAN WALK (P5): the RunOne/RunPlan/runUnit loop + its result model
+// carriers + pure step helpers live ONCE in sdk/kit (planrun.go / planspec.go) so ANY plugin
+// candy that runs a plan drives the SAME walk the check engine uses. The Runner is the host
+// driver (planrun_adapter.go); the grammar the walk consults (VerbCatalog) + the verb dispatch
+// (the provider registry) stay in core behind the kit.PlanContext / kit.VerbResolver seams.
+// Only what core actually CALLS is aliased — StepID (the function) has no core caller (only the
+// StepResult.StepID field), so it is not aliased. ---
+type (
+	LabeledDescription  = kit.LabeledDescription
+	LabelDescriptionSet = kit.LabelDescriptionSet
+	GraderRequest       = kit.GraderRequest
+	StepGrader          = kit.StepGrader
+)
+
+var (
+	keywordOf       = kit.KeywordOf
+	EffectiveStepID = kit.EffectiveStepID
+	stepDoMode      = kit.StepDoMode
+	filterHostVars  = kit.FilterHostVars
 )

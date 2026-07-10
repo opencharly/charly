@@ -105,13 +105,15 @@ func TestRunOne_UnresolvedHostVarFails(t *testing.T) {
 	r := &Runner{Resolver: &CheckVarResolver{Env: map[string]string{}}}
 	// ${HOST:absent:80} can't be resolved → the cross-member probe's premise
 	// failed → FAIL (never reaches the curl; returns at the var-resolution gate).
+	// The per-check walk is kit.RunOne now (planrun.go); r.Run drives it through the
+	// runnerPlanContext adapter, so a one-op Run exercises the same var-resolution gate.
 	hostCheck := cmdOpP("curl -fsS http://${HOST:absent:80}/")
-	if res := r.runOne(context.Background(), hostCheck); res.Status != TestFail {
+	if res := r.Run(context.Background(), []Op{*hostCheck})[0]; res.Status != TestFail {
 		t.Errorf("unresolved ${HOST:…} → status %v (%q), want TestFail", res.Status, res.Message)
 	}
 	// A non-host unresolved var is a legitimate SKIP (input genuinely N/A here).
 	otherCheck := cmdOpP("echo ${SOME_UNSET_VAR}")
-	if res := r.runOne(context.Background(), otherCheck); res.Status != TestSkip {
+	if res := r.Run(context.Background(), []Op{*otherCheck})[0]; res.Status != TestSkip {
 		t.Errorf("unresolved non-host var → status %v (%q), want TestSkip", res.Status, res.Message)
 	}
 }

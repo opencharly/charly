@@ -7,8 +7,6 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/opencharly/sdk/kit"
@@ -253,215 +251,18 @@ func (r *Runner) probeNeverHang(c *Op) time.Duration {
 
 // Run executes the supplied checks sequentially and returns per-check
 // results. Does not short-circuit on failure — the report should show
-// every check's outcome for CI ergonomics.
+// every check's outcome for CI ergonomics. The per-check walk (verb
+// resolution, skip handling, variable expansion, venue swap, do-mode
+// routing, the eventually: retry) is kit.RunOne — the check engine's plan
+// walk lives in sdk/kit (planrun.go); this Runner is its host driver via
+// the runnerPlanContext adapter (planrun_adapter.go).
 func (r *Runner) Run(ctx context.Context, checks []Op) []CheckResult {
+	pc := runnerPlanContext{r: r}
 	results := make([]CheckResult, 0, len(checks))
 	for i := range checks {
-		results = append(results, r.runOne(ctx, &checks[i]))
+		results = append(results, kit.RunOne(ctx, pc, &checks[i]))
 	}
 	return results
-}
-
-// runOne handles all the per-check housekeeping (verb resolution, skip
-// handling, variable expansion, routing) and dispatches to a verb handler.
-//
-// Two BDD-era behaviours layer on top of the classical path:
-//
-//  1. `on:` target dispatch — if the check specifies a non-default
-//     target AND r.TargetResolver is set, runOne temporarily swaps
-//     r.Exec / r.Resolver for the duration of the dispatch. Classical
-//     tests: runs pass nil TargetResolver and never hit this path.
-//  2. `eventually:` retry wrapper — when set, the verb dispatch is
-//     called repeatedly until pass or deadline.
-//
-//nolint:gocyclo // verb dispatch router with on: target-swap and eventually: retry wrapper; branching is essential to the execution model
-func (r *Runner) runOne(ctx context.Context, c *Op) CheckResult {
-	start := time.Now()
-	kind, err := c.Kind()
-	result := CheckResult{Op: c, Verb: kind}
-	if err != nil {
-		result.Status = TestFail
-		result.Message = err.Error()
-		result.Elapsed = time.Since(start)
-		result.Attempts = 1
-		result.TotalElapsed = result.Elapsed
-		return result
-	}
-	if c.Skip {
-		result.Status = TestSkip
-		result.Message = "skip: true"
-		result.Elapsed = time.Since(start)
-		result.Attempts = 1
-		result.TotalElapsed = result.Elapsed
-		return result
-	}
-	// exclude_distros: skip when any of the image's distro tags intersects
-	// with the exclusion list. Used for probes that are only meaningful on
-	// some distros (e.g. a binary that a given distro renames or drops).
-	if len(c.ExcludeDistros) > 0 && len(r.Distros) > 0 {
-		for _, imgTag := range r.Distros {
-			if slices.Contains(c.ExcludeDistros, imgTag) {
-				result.Status = TestSkip
-				result.Message = fmt.Sprintf("excluded on distro %q", imgTag)
-				result.Elapsed = time.Since(start)
-				result.Attempts = 1
-				result.TotalElapsed = result.Elapsed
-				return result
-			}
-		}
-	}
-
-	// Context-vs-mode skip — the unified-Op replacement for the old
-	// scope:build↔check-box / scope:deploy↔check-live split. `charly check box`
-	// (RunModeBox) runs against a disposable BUILD container, so it runs only
-	// build-context steps; `charly check live` (RunModeLive) runs against a
-	// RUNNING target, so it runs runtime-context steps. A step whose effective
-	// context excludes the run's context is SKIPPED with a reason (e.g. a
-	// `context: [runtime]` port/service probe in check box — no service runs in
-	// a disposable build container).
-	wantCtx := CtxRuntime
-	modeName := "live"
-	if r.Mode == RunModeBox {
-		wantCtx, modeName = CtxBuild, "box"
-	}
-	if !opInContext(c, wantCtx) {
-		result.Status = TestSkip
-		result.Message = fmt.Sprintf("context %v not active in %s mode", opEffectiveContexts(c), modeName)
-		result.Elapsed = time.Since(start)
-		result.Attempts = 1
-		result.TotalElapsed = result.Elapsed
-		return result
-	}
-	// Per-step VENUE dispatch (loader-derived from tree position — the former
-	// authored `on:`). Swap executor + resolver + image for the duration of this
-	// check only; restore on return. The self-swap guard (`c.Venue != r.Box`)
-	// skips the swap when the step's venue is already the active target: the
-	// scored-step path (check_runner_live.go) pre-buckets by venue and sets r.Box
-	// to the bucket venue, so its in-bucket steps need no re-swap; the
-	// deterministic path (charly check live <bed>) swaps only for a step whose
-	// venue differs from the bed's default target. When r.TargetResolver is nil
-	// (classical no-tree path), Resolver+Exec stay as-is.
-	//
-	// The swap also retargets r.Box so the out-of-process EXEC-based verbs (record/dbus/wl,
-	// whose CheckEnv snapshot carries the venue) AND the port-based pre-resolvers
-	// (cdp/vnc/mcp/spice/kube, which read r.Box for the venue's endpoint) route against the
-	// venue's pod, not the plan run's default pod.
-	origExec, origResolver, origImage := r.Exec, r.Resolver, r.Box
-	if c.Venue != "" && c.Venue != r.Box && r.TargetResolver != nil {
-		newResolver, newExec, terr := r.TargetResolver(c.Venue)
-		if terr != nil {
-			result.Status = TestFail
-			result.Message = fmt.Sprintf("venue %q — %v", c.Venue, terr)
-			result.Elapsed = time.Since(start)
-			result.Attempts = 1
-			result.TotalElapsed = result.Elapsed
-			return result
-		}
-		if newExec != nil {
-			r.Exec = newExec
-		}
-		if newResolver != nil {
-			r.Resolver = newResolver
-		}
-		r.Box = c.Venue
-		defer func() {
-			r.Exec = origExec
-			r.Resolver = origResolver
-			r.Box = origImage
-		}()
-	}
-
-	// Expand variables in-place on a copy so repeated runs over the same
-	// check list don't accumulate substitutions. The env is derived by
-	// overlaying the ScenarioContext (captures + ids) onto the resolver
-	// base — so classical tests: with Scenario==nil see exactly today's
-	// behavior.
-	expanded := *c
-	env := r.effectiveEnv()
-	missing := opExpandVars(&expanded, env)
-	if len(missing) > 0 {
-		// An unresolved cross-deployment var (${HOST}/${HOST})
-		// means the peer/subject this probe targets is UNREACHABLE — the
-		// probe's whole premise failed, so the check FAILS. A SKIP there would
-		// be a fake pass (the bed must NOT go green on an unreachable peer).
-		// Other unresolved vars stay a legitimate SKIP: a deploy-only var under
-		// build scope, an unmounted volume — inputs that genuinely don't apply
-		// to this run, not a failed dependency.
-		if hostMissing := filterHostVars(missing); len(hostMissing) > 0 {
-			result.Status = TestFail
-			result.Message = fmt.Sprintf("peer unreachable — unresolved cross-deployment variable(s): %s", strings.Join(hostMissing, ", "))
-		} else {
-			result.Status = TestSkip
-			result.Message = fmt.Sprintf("unresolved variables: %s", strings.Join(missing, ", "))
-		}
-		result.Elapsed = time.Since(start)
-		result.Attempts = 1
-		result.TotalElapsed = result.Elapsed
-		return result
-	}
-
-	// Verb dispatch, wrapped in the `eventually:` retry when requested.
-	dispatch := func() CheckResult {
-		// Per-probe never-hang: bound THIS attempt so a wedged probe (a hung
-		// podman exec / black-holed ssh) is cancelled individually and the pass
-		// continues — instead of relying on the bed runner's whole-pass timeout
-		// to SIGKILL the entire 100+-probe `charly check live` subprocess (the
-		// old hard-timeout-not-pooling failure under heavy load). runWithEventually
-		// calls dispatch once per attempt, so each retry gets a FRESH bound; the
-		// author's timeout:/eventually: operate inside it. Shadows ctx for the
-		// rest of this closure so every r.runX(ctx, …) below is bounded.
-		ctx, cancel := context.WithTimeout(ctx, r.probeNeverHang(&expanded))
-		defer cancel()
-		var dr CheckResult
-		// do-mode branch: act on a state-provision verb → execute the
-		// create/configure. Action verbs (command/http/dbus/cdp/…) act in their
-		// own handler, so do:act there falls through to the assert dispatch
-		// below (the handler IS the act). Agent steps never reach runOne —
-		// they route to the grader in runUnit (description_run.go).
-		if opEffectiveDo(&expanded) == DoAct {
-			if act, ok := r.runProvisionAct(ctx, &expanded, kind); ok {
-				return act
-			}
-		}
-		// Verb dispatch is the provider registry (the switch is gone — C1). Every
-		// built-in verb is a CheckVerbProvider (verb_builtins.go); an out-of-tree
-		// plugin verb arrives via the generic `plugin:` envelope (the pluginVerb
-		// provider → runPluginVerb).
-		if prov, ok := providerRegistry.ResolveVerb(kind); !ok {
-			dr.Status = TestSkip
-			dr.Message = fmt.Sprintf("unknown verb %q", kind)
-		} else if cv, ok := prov.(CheckVerbProvider); ok {
-			dr = cv.RunVerb(ctx, r, &expanded)
-		} else {
-			// An OUT-OF-PROCESS verb provider (a grpcProvider, not a CheckVerbProvider):
-			// dispatch the live verb word to the Invoke envelope with the full Op — the
-			// external-charly-verb path. The verb's params stay authored in #Op (no
-			// migration); the plugin reads them from params_json.
-			dr = r.invokeVerbProvider(ctx, prov, kind, &expanded)
-		}
-		// If THIS attempt's per-attempt deadline (probeNeverHang) fired, the probe ran
-		// too long — an AUTHORITATIVE "too slow" failure, NOT an infra interruption.
-		// runCaptureCmd's group-kill surfaces the deadline SIGKILL as a signal-kill;
-		// flag it so the killed-probe retry (description_eventually.go) does NOT futilely
-		// re-run a probe that will only re-hang and re-hit the same deadline.
-		if ctx.Err() == context.DeadlineExceeded {
-			dr.DeadlineExceeded = true
-		}
-		return dr
-	}
-
-	result = runWithEventually(ctx, &expanded, dispatch)
-	result.Op = c
-	result.Verb = kind
-	result.Elapsed = time.Since(start)
-	// runWithEventually sets TotalElapsed relative to its own start time;
-	// prefer that for multi-attempt cases. For single-attempt, Elapsed ≈
-	// TotalElapsed so the caller-facing fields stay consistent.
-	if result.TotalElapsed == 0 {
-		result.TotalElapsed = result.Elapsed
-	}
-
-	return result
 }
 
 // effectiveEnv builds the variable-expansion env map for the current
