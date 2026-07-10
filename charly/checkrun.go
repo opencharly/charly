@@ -10,58 +10,29 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/kit"
 )
 
-// CheckStatus is the outcome of a single Check.
-type CheckStatus int
+// CheckStatus, CheckResult, and the pass/fail/skip verdict constants live ONCE in sdk/kit —
+// they are the check engine's result model, shared with every plugin candy that runs a plan.
+// These are the package-main bindings; core's call sites (12 files) are unchanged.
+//
+// kit.Status is the single pass/fail/skip enum: the former core CheckStatus.String() and the
+// kitStatusToCheck converter (which mapped kit.Status ⇆ CheckStatus) are gone — the two
+// enums were the same three-valued type, so a verb's kit.Result verdict now flows into a
+// CheckResult with no conversion.
+type CheckStatus = kit.Status
 
 const (
-	TestPass CheckStatus = iota
-	TestFail
-	TestSkip
+	TestPass = kit.StatusPass
+	TestFail = kit.StatusFail
+	TestSkip = kit.StatusSkip
 )
 
-func (s CheckStatus) String() string {
-	switch s {
-	case TestPass:
-		return "pass"
-	case TestFail:
-		return "fail"
-	case TestSkip:
-		return "skip"
-	}
-	return "unknown"
-}
-
-// CheckResult captures the outcome of running a single Check.
-//
-// Attempts and TotalElapsed are populated only when the check had an
-// `eventually:` modifier (retry loop). Attempts=1 + TotalElapsed==Elapsed
-// for checks that ran exactly once. Reporters surface these when Attempts>1
-// so slow startup paths are visible ("PASS in 5 attempts over 12.3s").
-type CheckResult struct {
-	Op           *Op
-	Verb         string
-	Status       CheckStatus
-	Message      string
-	Elapsed      time.Duration
-	Attempts     int           `json:"attempts,omitempty"`
-	TotalElapsed time.Duration `json:"total_elapsed,omitempty"`
-
-	// DeadlineExceeded marks a result whose probe was killed by hitting its OWN
-	// per-attempt deadline (probeNeverHang), NOT an external infra interruption. The
-	// group-kill in runCaptureCmd surfaces the deadline SIGKILL as a signal-kill, so
-	// without this flag the killed-probe retry (probeWasKilled) would futilely re-run a
-	// probe that will only re-hang and re-hit the same deadline. An authoritative
-	// "too slow" failure — never retried.
-	DeadlineExceeded bool `json:"-"`
-
-	// CapturedValue is the value stashed under `capture:` for consumption
-	// by downstream steps in the same plan run. Empty when Capture was
-	// unset or the check did not pass (captures are recorded only on
-	// final PASS — failing `eventually:` attempts don't pollute).
-	CapturedValue string `json:"captured_value,omitempty"`
-}
+// CheckResult is the engine's per-step result record; StepResult wraps it with the step's
+// identity. Both live in kit (checkresult.go).
+type CheckResult = kit.CheckResult
 
 // RunMode selects routing rules for a Run() invocation.
 //

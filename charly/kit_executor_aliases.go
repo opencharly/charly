@@ -28,10 +28,6 @@ const (
 	JumpPodmanRun    = kit.JumpPodmanRun
 	JumpSSH          = kit.JumpSSH
 	JumpVirshConsole = kit.JumpVirshConsole
-
-	// signalKillErrMarker is kit's runCaptureCmd signal-kill sentinel, used by
-	// charly's description_eventually.go probe-timeout classification.
-	signalKillErrMarker = kit.SignalKillErrMarker
 )
 
 var (

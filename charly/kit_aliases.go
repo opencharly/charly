@@ -36,6 +36,15 @@ var (
 	EffectiveTags = kit.EffectiveTags
 )
 
+// --- the check-result reporters (`charly check` text/JSON/TAP/JUnit output),
+// all in kit so a plugin candy can format a plan's results identically. ---
+var (
+	FormatStepResultsText  = kit.FormatStepResultsText
+	FormatStepResultsJSON  = kit.FormatStepResultsJSON
+	FormatStepResultsTAP   = kit.FormatStepResultsTAP
+	FormatStepResultsJUnit = kit.FormatStepResultsJUnit
+)
+
 // --- generic yaml.v3 / path helpers that live ONCE in the importable host-engine
 // kit (shared with the out-of-tree plugin candies that also import kit). These thin
 // aliases keep core's call sites unchanged. ---
@@ -90,3 +99,25 @@ func parseTaskMode(mode string, def uint32) uint32 { return kit.ParseTaskMode(mo
 
 // shQuoteArg single-quotes an argument for POSIX shell embedding (re-export).
 func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }
+
+// --- the plan-execution helpers (P5-unit-3), all in sdk/kit so a plugin candy that runs a
+// plan shares the retry loop, the per-run capture context, and the acceptance-depth ladder.
+// Core's call sites are unchanged. ---
+type ScenarioContext = kit.ScenarioContext
+
+var (
+	runWithEventually  = kit.RunWithEventually
+	NewScenarioContext = kit.NewScenarioContext
+	ResolveCheckLevel  = kit.ResolveCheckLevel
+	IsValidCheckLevel  = kit.IsValidCheckLevel
+	CheckLevelReaches  = kit.CheckLevelReaches
+	CheckLevels        = kit.CheckLevels
+)
+
+const (
+	CheckLevelNone    = kit.CheckLevelNone
+	CheckLevelBuild   = kit.CheckLevelBuild
+	CheckLevelNoAgent = kit.CheckLevelNoAgent
+	CheckLevelAgent   = kit.CheckLevelAgent
+	DefaultCheckLevel = kit.DefaultCheckLevel
+)
