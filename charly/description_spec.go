@@ -17,7 +17,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -67,36 +66,7 @@ func EffectiveStepID(s *Step, origin string, stepIdx int) string {
 	return StepID(origin, stepIdx)
 }
 
-// ---------------------------------------------------------------------------
-// Tag-set helpers
-// ---------------------------------------------------------------------------
-
-// EffectiveTags normalizes and de-dups a step's tags. (Per-step tags only —
-// there is no group-level tag inheritance.)
-func EffectiveTags(stepTags []string) []string {
-	if len(stepTags) == 0 {
-		return nil
-	}
-	seen := make(map[string]bool, len(stepTags))
-	var out []string
-	for _, t := range stepTags {
-		t = normalizeTag(t)
-		if t == "" || seen[t] {
-			continue
-		}
-		seen[t] = true
-		out = append(out, t)
-	}
-	return out
-}
-
-// normalizeTag strips a single leading '@' so `@smoke` and `smoke` are
-// treated identically — authors commonly write `@smoke` from Gherkin habit
-// but the leading sigil is optional in our YAML surface.
-func normalizeTag(t string) string {
-	t = strings.TrimSpace(t)
-	if strings.HasPrefix(t, "@") {
-		return t[1:]
-	}
-	return t
-}
+// The tag-set helpers (kit.EffectiveTags / kit.NormalizeTag) and the whole tag-expression
+// grammar (kit.TagExpr / kit.ParseTagExpr / kit.CombineTagFilters) live ONCE in sdk/kit —
+// charly/kit_aliases.go binds only what core actually calls. A plugin candy filters a plan
+// by tag with the SAME grammar the check engine uses.
