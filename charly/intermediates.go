@@ -265,45 +265,6 @@ func sortByPopularity(s []string, popularity map[string]int) {
 
 // collectAllBoxCandies returns the complete set of candies for an image,
 // including all candies inherited through the base chain.
-func collectAllBoxCandies(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy) []string {
-	seen := make(map[string]bool)
-	// walked is an IMAGE-visited guard for the base-chain recursion below. A
-	// base edge may form a cycle (A.base=B, B.base=A); that's caught + reported
-	// by ResolveBoxOrder, but without this guard the walk recurses a cyclic
-	// chain until the stack overflows. Re-visiting a base also can't add new
-	// candies (its candies were collected on the first visit), so skipping it is
-	// correct for the acyclic case too.
-	walked := make(map[string]bool)
-	var result []string
-
-	var walk func(name string)
-	walk = func(name string) {
-		if walked[name] {
-			return
-		}
-		walked[name] = true
-		img, ok := boxes[name]
-		if !ok {
-			return
-		}
-		if !img.IsExternalBase {
-			walk(img.Base)
-		}
-		resolved, err := ResolveCandyOrder(img.Candy, layers, nil)
-		if err != nil {
-			return
-		}
-		for _, l := range resolved {
-			if !seen[l] {
-				seen[l] = true
-				result = append(result, l)
-			}
-		}
-	}
-	walk(boxName)
-	return result
-}
-
 // AbsoluteCandySequence returns an image's complete candy set (own + entire
 // base chain) as a subsequence of the global order.
 func AbsoluteCandySequence(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy, globalOrder []string) []string {
