@@ -74,7 +74,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("debian systemd (vm) enables only libvirtd.socket", func(t *testing.T) {
 		img := &ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
-		steps := compileServiceSteps(layer, img, HostContext{Target: "vm"})
+		steps := compileServiceSteps(layer, img, HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		if len(units) != 1 || units[0] != "libvirtd.socket" {
 			t.Fatalf("debian systemd packaged units = %v, want [libvirtd.socket]", units)
@@ -88,7 +88,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("fedora systemd (vm) enables the modular sockets", func(t *testing.T) {
 		img := &ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
-		steps := compileServiceSteps(layer, img, HostContext{Target: "vm"})
+		steps := compileServiceSteps(layer, img, HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		want := map[string]bool{"virtqemud.socket": true, "virtnetworkd.socket": true}
 		if len(units) != 2 || !want[units[0]] || !want[units[1]] {
@@ -98,7 +98,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("debian supervisord (oci) runs only the libvirtd exec daemon", func(t *testing.T) {
 		img := &ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
-		steps := compileServiceSteps(layer, img, HostContext{Target: "oci"})
+		steps := compileServiceSteps(layer, img, HostContext{})
 		if len(packagedUnits(steps)) != 0 {
 			t.Fatalf("debian supervisord must emit no packaged units, got %v", packagedUnits(steps))
 		}
@@ -109,7 +109,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("fedora supervisord (oci) runs the two modular exec daemons", func(t *testing.T) {
 		img := &ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
-		steps := compileServiceSteps(layer, img, HostContext{Target: "oci"})
+		steps := compileServiceSteps(layer, img, HostContext{})
 		if n := customServiceCount(steps); n != 2 {
 			t.Fatalf("fedora supervisord custom steps = %d, want 2 (virtqemud + virtnetworkd)", n)
 		}
@@ -117,14 +117,14 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	// Regression guard for the R10 failure: a `target: vm` deploy compiles the
 	// plan with the GUEST img (syntheticVmBox → img.Distro=[debian:13,debian])
-	// but detectHostContext() defaults hostCtx.Target="host" + the OPERATOR's
+	// but detectHostContext() defaults hostCtx.MachineVenue=true + the OPERATOR's
 	// distro (e.g. "arch"). The service filter MUST scope to the guest (img),
 	// NOT the operator host — else it keeps the modular [fedora,arch] virtqemud
 	// entries and `systemctl enable virtqemud.socket` fails on the debian guest.
 	t.Run("vm deploy: guest img wins over operator host distro", func(t *testing.T) {
 		img := &ResolvedBox{Name: "vm-adhoc", Distro: []string{"debian:13", "debian"}}
 		// The exact hostCtx a vm deploy carries: Target=host, Distro=<operator>.
-		steps := compileServiceSteps(layer, img, HostContext{Target: "host", Distro: "arch"})
+		steps := compileServiceSteps(layer, img, HostContext{MachineVenue: true, Distro: "arch"})
 		units := packagedUnits(steps)
 		if len(units) != 1 || units[0] != "libvirtd.socket" {
 			t.Fatalf("vm-on-arch-host packaged units = %v, want [libvirtd.socket] (guest wins, NOT operator arch)", units)
@@ -144,7 +144,7 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 			// guest img is debian. img MUST win.
 			name:    "vm deploy guest debian beats operator arch",
 			img:     []string{"debian:13", "debian"},
-			hostCtx: HostContext{Target: "host", Distro: "arch"},
+			hostCtx: HostContext{MachineVenue: true, Distro: "arch"},
 			want:    []string{"debian:13", "debian"},
 		},
 		{
@@ -153,14 +153,14 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 			// (so cachyos also matches `arch:` entries).
 			name:    "host deploy uses the operator img chain",
 			img:     []string{"cachyos", "arch"},
-			hostCtx: HostContext{Target: "host", Distro: "cachyos"},
+			hostCtx: HostContext{MachineVenue: true, Distro: "cachyos"},
 			want:    []string{"cachyos", "arch"},
 		},
 		{
 			// Degenerate: no img distro → fall back to hostCtx.
 			name:    "empty img falls back to hostCtx",
 			img:     nil,
-			hostCtx: HostContext{Target: "host", Distro: "arch"},
+			hostCtx: HostContext{MachineVenue: true, Distro: "arch"},
 			want:    []string{"arch"},
 		},
 	}
@@ -181,15 +181,15 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 
 func TestPrimaryDistroTag_ImgIsAuthoritative(t *testing.T) {
 	// vm deploy: guest img debian must win over operator arch hostCtx.
-	if got := primaryDistroTag(&ResolvedBox{Distro: []string{"debian:13", "debian"}}, HostContext{Target: "host", Distro: "arch"}); got != "debian:13" {
+	if got := primaryDistroTag(&ResolvedBox{Distro: []string{"debian:13", "debian"}}, HostContext{MachineVenue: true, Distro: "arch"}); got != "debian:13" {
 		t.Fatalf("vm-deploy primaryDistroTag = %q, want debian:13 (guest, not operator arch)", got)
 	}
 	// host deploy: img chain == operator; byte-identical result.
-	if got := primaryDistroTag(&ResolvedBox{Distro: []string{"arch"}}, HostContext{Target: "host", Distro: "arch"}); got != "arch" {
+	if got := primaryDistroTag(&ResolvedBox{Distro: []string{"arch"}}, HostContext{MachineVenue: true, Distro: "arch"}); got != "arch" {
 		t.Fatalf("host primaryDistroTag = %q, want arch", got)
 	}
 	// degenerate fallback.
-	if got := primaryDistroTag(&ResolvedBox{}, HostContext{Target: "host", Distro: "arch"}); got != "arch" {
+	if got := primaryDistroTag(&ResolvedBox{}, HostContext{MachineVenue: true, Distro: "arch"}); got != "arch" {
 		t.Fatalf("empty-img primaryDistroTag = %q, want arch (fallback)", got)
 	}
 }

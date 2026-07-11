@@ -233,16 +233,16 @@ func tearDownMembers(node *BundleNode) {
 	}
 }
 
-// isPodMember reports whether a member node is a container (pod) deployment — the
-// default target. Pod members go through config+start; other targets through
-// deploy add.
+// isPodMember reports whether a member node is a CONTAINER-venue (pod) deployment — reading the
+// stamped descent trait (P9), never the substrate kind word (an empty target resolves to the pod
+// default via nodeTraits). Pod members go through config+start; other venues through deploy add.
 func isPodMember(node *BundleNode) bool {
-	return node != nil && (node.Target == "" || node.Target == "pod")
+	return node != nil && nodeTraits(node).Venue == "container"
 }
 
-// isVmMember reports whether a folded group member is a VM substrate (Target
-// "vm"), so the group bed builds its disk (vm build) and brings it up via the
-// libvirt lifecycle (vm create + ssh-wait) rather than the pod/local path.
+// isVmMember reports whether a folded group member is an SSH-venue (vm) substrate (P9 trait, not
+// the kind word), so the group bed builds its disk (vm build) and brings it up via the libvirt
+// lifecycle (vm create + ssh-wait) rather than the pod/local path.
 func isVmMember(node *BundleNode) bool {
-	return node != nil && node.Target == "vm"
+	return node != nil && nodeTraits(node).Venue == "ssh"
 }

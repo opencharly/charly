@@ -302,7 +302,7 @@ func checkVmTarget(uf *UnifiedFile, name string) (vmName string, ok bool) {
 	// Dotted: route through the root segment's VM substrate.
 	if idx := strings.Index(name, "."); idx > 0 {
 		root := name[:idx]
-		if entry, present := uf.Bundle[root]; present && entry.Target == "vm" {
+		if entry, present := uf.Bundle[root]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
 			vm := entry.From
 			if vm == "" {
 				vm = root
@@ -317,7 +317,7 @@ func checkVmTarget(uf *UnifiedFile, name string) (vmName string, ok bool) {
 		}
 	}
 	if uf.Bundle != nil {
-		if entry, present := uf.Bundle[name]; present && entry.Target == "vm" {
+		if entry, present := uf.Bundle[name]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
 			vm := entry.From
 			if vm == "" {
 				vm = name
@@ -345,16 +345,20 @@ func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
 	if idx := strings.Index(name, "."); idx > 0 {
 		root = name[:idx]
 	}
-	// `pod` is an external deploy substrate, but UNLIKE local/android/k8s its check
-	// venue is the running CONTAINER (published ports), not the host — a cdp/vnc/spice
-	// endpoint or a command/file probe against a pod must resolve the container venue
-	// (the default path in resolveCheckVenue), never the host venue (which would dial the
-	// raw container port on host loopback). So pod is NOT host-routed here, regardless of
-	// being a recognized external substrate. (Masked while pod beds used fixed ports
-	// H:C==9222:9222; surfaced once they moved to auto-allocated host ports.)
-	if entry, present := uf.Bundle[root]; present && entry.Target != "pod" &&
-		(entry.Target == "local" || isExternalDeploySubstrate(entry.Target)) {
-		return entry, true
+	// A HOST-VENUE substrate runs its deploy-scope check probes on the host — a SHELL venue
+	// (local's own filesystem apply; k8s's host-side kubectl) or a PARENT venue (android via
+	// the parent pod's published adb port). It is identified by the stamped venue TRAIT (P9),
+	// never the kind word. The CONTAINER venue (pod) is NOT host-routed — its check venue is the
+	// running container (published ports); a cdp/vnc/spice endpoint or a command/file probe
+	// against a pod must resolve the container venue (the default path in resolveCheckVenue),
+	// never the host venue (which would dial the raw container port on host loopback). The SSH
+	// venue (vm) is NOT host-routed either — it is handled earlier by checkVmTarget (the guest
+	// SSHExecutor). (Masked while pod beds used fixed ports H:C==9222:9222; surfaced once they
+	// moved to auto-allocated host ports.)
+	if entry, present := uf.Bundle[root]; present {
+		if v := nodeTraits(&entry).Venue; v == "shell" || v == "parent" {
+			return entry, true
+		}
 	}
 	return BundleNode{}, false
 }

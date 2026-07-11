@@ -45,7 +45,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 		DistroDef: testPacDistroDef(),
 		Builder:   map[string]string{"aur": "ghcr.io/opencharly/arch-builder:latest"},
 	}
-	hostCtx := HostContext{Target: "host", Distro: "arch"}
+	hostCtx := HostContext{MachineVenue: true, Distro: "arch"}
 
 	// A candy with no localpkg entry for the target format → nil.
 	if step := compileLocalPkgStep(&Candy{Name: "no-pkg"}, img, hostCtx); step != nil {
@@ -122,7 +122,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 		},
 	}
 	img := &ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
-	plan, err := BuildDeployPlan(l, img, HostContext{Target: "host", Distro: "arch"})
+	plan, err := BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}

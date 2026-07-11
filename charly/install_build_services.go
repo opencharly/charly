@@ -11,7 +11,7 @@ func init() { deploykit.CompileServiceSteps = compileServiceSteps }
 
 func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext) []InstallStep {
 	var out []InstallStep
-	initIsSystemd := hostCtx.Target == "host" || hostCtx.Target == "vm"
+	initIsSystemd := hostCtx.MachineVenue
 	distros := serviceRenderDistros(img, hostCtx)
 
 	// Detect mixed-entry pairs: which names have a use_packaged form? Only
@@ -59,7 +59,7 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 		// Home is the runtime home. (os.UserHomeDir() — the operator's home — was
 		// the service-side instance of the VM $HOME bug.)
 		svcHome := img.Home
-		if hostCtx.Target == "host" || hostCtx.Target == "vm" {
+		if hostCtx.MachineVenue {
 			svcHome = HomeToken
 		}
 		if svcHome != "" {

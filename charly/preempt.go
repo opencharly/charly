@@ -246,7 +246,7 @@ func gatherPreemptibleHolders() map[string]BundleNode {
 // acquires/releases an exclusive lease for. ok=false when none exists.
 func lookupVMClaimant(vmEntity string) (string, BundleNode, bool) {
 	for name, node := range gatherDeployNodes() {
-		if node.Target == "vm" && node.From == vmEntity && len(node.RequiredExclusive()) > 0 {
+		if deployTraitDescent(node.Target).Venue == "ssh" && node.From == vmEntity && len(node.RequiredExclusive()) > 0 { // vm (ssh venue)
 			return name, node, true
 		}
 	}
@@ -260,7 +260,7 @@ func holderAddrFor(name string, node BundleNode) holderAddr {
 		target = "pod"
 	}
 	addr := holderAddr{Name: name, Target: target, Base: base, Instance: instance}
-	if target == "vm" {
+	if deployTraitDescent(target).Venue == "ssh" { // vm (ssh venue)
 		addr.Vm = node.From
 		if addr.Vm == "" {
 			addr.Vm = base
@@ -270,14 +270,14 @@ func holderAddrFor(name string, node BundleNode) holderAddr {
 }
 
 func holderRunning(addr holderAddr) bool {
-	if addr.Target == "vm" {
+	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		return vmIsRunning(vmName(addr.Vm, addr.Instance))
 	}
 	return podIsRunning(addr.Base, addr.Instance)
 }
 
 func holderStop(addr holderAddr) error {
-	if addr.Target == "vm" {
+	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		return stopVM(addr.Vm, addr.Instance, false)
 	}
 	return stopPodService(addr.Base, addr.Instance)
@@ -294,7 +294,7 @@ func holderStart(addr holderAddr) error {
 		fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no container/quadlet or VM domain) — nothing to restore, freeing its lease\n", addr.Name)
 		return nil
 	}
-	if addr.Target == "vm" {
+	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		return startVM(addr.Vm, addr.Instance)
 	}
 	return startPodService(addr.Base, addr.Instance)
@@ -305,7 +305,7 @@ func holderStart(addr holderAddr) error {
 // domain for a vm holder. Distinguishes a stopped-but-present holder (restore it)
 // from a departed one (free its lease). See holderStart.
 func holderExists(addr holderAddr) bool {
-	if addr.Target == "vm" {
+	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		if _, ok := invokeVmPlugin("domain-state", vmName(addr.Vm, addr.Instance), ""); ok {
 			return true
 		}

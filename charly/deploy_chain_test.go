@@ -7,15 +7,16 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// stampTestDescents mirrors the substrate loader: it stamps the descent-descriptor
-// candy/plugin-substrate adds at OpLoad (recursing the nested/peer subtree), so chain
-// unit tests — which build BundleNode literals directly, bypassing the loader — run
-// against realistically-stamped nodes instead of tripping the nil-descent guard.
+// stampTestDescents mirrors the substrate loader: it stamps the descent descriptor from the
+// substrate's DECLARED #DeployTraits (resolved via the compiled-in registry, exactly like the
+// production stampBundleDescents), recursing the nested/peer subtree — so chain unit tests, which
+// build BundleNode literals directly bypassing the loader, run against realistically-stamped
+// nodes instead of tripping the nil-descent guard.
 func stampTestDescents(roots map[string]BundleNode) map[string]BundleNode {
 	out := make(map[string]BundleNode, len(roots))
 	for k, v := range roots {
 		n := v
-		kit.StampDescent(&n)
+		kit.StampDescent(&n, deployTraitsFor)
 		out[k] = n
 	}
 	return out

@@ -198,6 +198,16 @@ type validatingKindCarrier interface {
 	isValidatingKind() bool
 }
 
+// deployTraitsCarrier is implemented by a provider (grpcProvider out-of-proc, inprocProvider
+// compiled-in) that carries a SUBSTRATE class:kind capability's DECLARED #DeployTraits (P9).
+// Non-nil → deployTraitsFor returns them so kit.StampDescent stamps node.Descent BY TRAIT; nil
+// (or not implemented) → the external-in-place default. This is the SINGLE plugin-declared
+// source for a substrate's deploy behaviour — the consult sites read the stamped traits off
+// node.Descent, never switching on the substrate kind word (the kernel/plugin boundary law).
+type deployTraitsCarrier interface {
+	declaredDeployTraits() *spec.DeployTraits
+}
+
 // phaseCarrier is implemented by a provider (grpcProvider out-of-proc, inprocProvider compiled-in)
 // that carries its declared lifecycle PHASE (F9). A provider not implementing it (e.g. a builtin
 // non-plugin provider) is treated as PhaseRuntime by phaseOfProvider.

@@ -19,14 +19,13 @@ const (
 )
 
 var (
-	WalkDeploymentTree          = deploykit.WalkDeploymentTree
-	WalkDeploymentTreePostOrder = deploykit.WalkDeploymentTreePostOrder
-	vmChildExecutor             = deploykit.VmChildExecutor
-	classifyTarget              = deploykit.ClassifyTarget
-	sshParamsForVm              = deploykit.SSHParamsForVm
-	sortedNestedKeys            = deploykit.SortedNestedKeys
-	rootExecutorForDeployNode   = deploykit.RootExecutorForDeployNode
-	ContainerChain              = deploykit.ContainerChain
-	ImageChain                  = deploykit.ImageChain
-	ResolveDeployChain          = deploykit.ResolveDeployChain
+	WalkDeploymentTree        = deploykit.WalkDeploymentTree
+	vmChildExecutor           = deploykit.VmChildExecutor
+	classifyTarget            = deploykit.ClassifyTarget
+	sshParamsForVm            = deploykit.SSHParamsForVm
+	sortedNestedKeys          = deploykit.SortedNestedKeys
+	rootExecutorForDeployNode = deploykit.RootExecutorForDeployNode
+	ContainerChain            = deploykit.ContainerChain
+	ImageChain                = deploykit.ImageChain
+	ResolveDeployChain        = deploykit.ResolveDeployChain
 )
