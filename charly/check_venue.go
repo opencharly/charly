@@ -346,8 +346,10 @@ func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
 		root = name[:idx]
 	}
 	// A HOST-VENUE substrate runs its deploy-scope check probes on the host — a SHELL venue
-	// (local's own filesystem apply; k8s's host-side kubectl) or a PARENT venue (android via
-	// the parent pod's published adb port). It is identified by the stamped venue TRAIT (P9),
+	// (local's own filesystem apply; k8s's host-side kubectl), a PARENT venue (android via
+	// the parent pod's published adb port), or the NONE / external-in-place venue (an EXTERNAL
+	// deploy-class substrate whose externalDeployTarget applies + probes host-side via
+	// ShellExecutor, exactly like local). It is identified by the stamped venue TRAIT (P9),
 	// never the kind word. The CONTAINER venue (pod) is NOT host-routed — its check venue is the
 	// running container (published ports); a cdp/vnc/spice endpoint or a command/file probe
 	// against a pod must resolve the container venue (the default path in resolveCheckVenue),
@@ -356,7 +358,7 @@ func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
 	// SSHExecutor). (Masked while pod beds used fixed ports H:C==9222:9222; surfaced once they
 	// moved to auto-allocated host ports.)
 	if entry, present := uf.Bundle[root]; present {
-		if v := nodeTraits(&entry).Venue; v == "shell" || v == "parent" {
+		if v := nodeTraits(&entry).Venue; v == "shell" || v == "parent" || v == "none" {
 			return entry, true
 		}
 	}
