@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestPrintDebugRetentionNotice asserts that a FAILED bed prints the
@@ -258,6 +260,11 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	androidNested := map[string]*BundleNode{
 		"web":    {Target: "pod"},
 		"device": {Target: "android"},
+	}
+	// Stamp the descent traits (P9) exactly as the loader does — production passes
+	// BedCheckLiveRefs children from the stamped tree; the android skip reads the venue trait.
+	for _, c := range androidNested {
+		kit.StampDescent(c, deployTraitsFor)
 	}
 	gotA := bedCheckLiveRefs("check-android-emulator-pod", androidNested)
 	wantA := []string{

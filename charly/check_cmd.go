@@ -503,7 +503,7 @@ func (c *CheckLiveCmd) runVm() error {
 	// already confirmed the guest is up + cloud-init settled. Every other check
 	// path (direct pods, the VM itself, host, on:-redirected cross-deployment
 	// probes against a host driver) is unchanged — they never enter this branch.
-	if nestedLeaf != nil && nestedLeaf.Target == "pod" {
+	if nestedLeaf != nil && nodeTraits(nestedLeaf).Venue == "container" { // pod (container venue)
 		parts := strings.Split(c.Box, ".")
 		guestPod := parts[len(parts)-1]
 		guestCmd := guestNestedCheckCmd(guestPod, c.Format, c.Section, c.Filter, c.Instance)
@@ -588,11 +588,11 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName string, nestedLe
 	//       the parent's SSH substrate.
 	vmName = c.Box
 	if uf.Bundle != nil {
-		if entry, ok := uf.Bundle[c.Box]; ok && entry.Target == "vm" && entry.From != "" {
+		if entry, ok := uf.Bundle[c.Box]; ok && nodeTraits(&entry).Venue == "ssh" && entry.From != "" { // vm (ssh venue)
 			vmName = entry.From
 		} else if idx := strings.Index(c.Box, "."); idx > 0 {
 			root := c.Box[:idx]
-			if parent, present := uf.Bundle[root]; present && parent.Target == "vm" {
+			if parent, present := uf.Bundle[root]; present && nodeTraits(&parent).Venue == "ssh" { // vm (ssh venue)
 				if parent.From != "" {
 					vmName = parent.From
 				}

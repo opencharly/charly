@@ -194,7 +194,7 @@ func (c *BundleAddCmd) Run() error {
 	// target's Add deploys them itself after the VM is up
 	// (plugin-deploy-vm's PostApply). A host tree walk would wrongly try to deploy
 	// them locally / double-deploy.
-	if c.NodeOnly || (rootNode != nil && (rootNode.Target == "vm" || strings.HasPrefix(resolvedPath, "vm:"))) {
+	if c.NodeOnly || (rootNode != nil && (nodeTraits(rootNode).Venue == "ssh" || strings.HasPrefix(resolvedPath, "vm:"))) { // vm root (ssh venue): nested pods deploy in-guest
 		return c.dispatchNode(resolvedPath, rootNode, parentExec, dir)
 	}
 
@@ -536,15 +536,19 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 	if !node.HasChildren() {
 		return parentExec, nil
 	}
-	switch classifyNodeTarget(node, path) {
-	case "local", "android":
-		// android shares its host pod's venue (adb reaches the device via
-		// published ports / the endpoint); no executor hop.
+	// P9: classifyNodeTarget produces the child's substrate WORD (dispatch classification,
+	// with the ref-based host/local pathLeaf fallback); the executor HOP is then selected by
+	// that word's DECLARED descent transport (the same closed nesting vocabulary
+	// AppendHopForFlatPath consumes), never by a second switch on the kind word.
+	switch deployTraitDescent(classifyNodeTarget(node, path)).Transport {
+	case "none":
+		// local (host-rooted shell) + android (parent venue) share the parent venue: android
+		// reaches the device via published ports / the endpoint; no executor hop.
 		if parentExec != nil {
 			return parentExec, nil
 		}
 		return ShellExecutor{}, nil
-	case "pod":
+	case "container-exec":
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
 		// executor MUST target that exact name — every other NestedContainerName
@@ -563,9 +567,9 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 			Parent: parentExec,
 			Jump:   NestedJump{Kind: engineJump, Target: name},
 		}, nil
-	case "vm":
+	case "ssh":
 		return vmChildExecutor(node, parentExec, path)
-	case "k8s":
+	case "reject":
 		return nil, fmt.Errorf("k8s targets cannot have children")
 	}
 	return parentExec, nil
@@ -802,7 +806,7 @@ func (c *BundleAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *D
 // graph ordering are unaffected at runtime — their services run under systemd
 // regardless of whether the supervisord package is present.
 func pruneContainerInitForSystemd(order []string, hostCtx HostContext) []string {
-	if hostCtx.Target != "host" && hostCtx.Target != "vm" {
+	if !hostCtx.MachineVenue {
 		return order
 	}
 	out := make([]string, 0, len(order))
@@ -942,7 +946,7 @@ func detectHostContext() HostContext {
 		return HostContext{}
 	}
 	return HostContext{
-		Target:       "host",
+		MachineVenue: true,
 		Distro:       hd.PrimaryTag(),
 		GlibcVersion: glibc,
 	}

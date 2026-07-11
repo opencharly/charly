@@ -40,6 +40,21 @@ const calver = "2026.182.1200"
 // substrateWords is the ONE list of words this provider serves — pod/vm/k8s/local/android.
 var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
 
+// substrateTraits is the per-word DECLARED #DeployTraits (P9) — the SINGLE source the kernel
+// consults for each substrate's deploy behaviour. kit.StampDescent stamps these onto every
+// node's spec.DescentDescriptor (resolved by the host's registry-backed deployTraitsFor), so
+// every consult site reads the behaviour off node.Descent BY TRAIT — never by switching on the
+// kind word. Canonical table (Appendix B): pod=container+image_backed+image_context;
+// vm=ssh+machine_venue+exclusive_venue; local=shell+machine_venue; k8s=shell+image_context+
+// leaf_only; android=parent; a zero-value word = external-in-place.
+var substrateTraits = map[string]*spec.DeployTraits{
+	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true},
+	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
+	"local":   {Venue: "shell", MachineVenue: true},
+	"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
+	"android": {Venue: "parent"},
+}
+
 // NewProvider returns the substrate kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
@@ -52,7 +67,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 func NewMeta() pb.PluginMetaServer {
 	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords))
 	for _, w := range substrateWords {
-		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true})
+		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, DeployTraits: substrateTraits[w]})
 	}
 	return sdk.NewMeta(calver, caps,
 		nil)

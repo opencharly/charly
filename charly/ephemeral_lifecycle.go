@@ -132,7 +132,7 @@ func RegisterEphemeralLifecycle(node *BundleNode, deployName string) (*Ephemeral
 	}
 
 	// Step 5: vm-target snapshot refcount.
-	if node.Target == "vm" && node.From != "" && node.FromSnapshot != "" {
+	if nodeTraits(node).Venue == "ssh" && node.From != "" && node.FromSnapshot != "" { // vm (ssh venue)
 		if err := IncrementSnapshotRefcount(node.From, node.FromSnapshot); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: incrementing snapshot refcount: %v\n", err)
 		}
@@ -176,7 +176,7 @@ func TeardownEphemeralLifecycle(node *BundleNode, deployName string) error {
 	}
 
 	// Step 3: snapshot refcount decrement (vm-target).
-	if node.Target == "vm" && node.From != "" && node.FromSnapshot != "" {
+	if nodeTraits(node).Venue == "ssh" && node.From != "" && node.FromSnapshot != "" { // vm (ssh venue)
 		if err := DecrementSnapshotRefcount(node.From, node.FromSnapshot); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: decrementing snapshot refcount: %v\n", err)
 		}

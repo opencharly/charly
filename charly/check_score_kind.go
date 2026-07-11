@@ -61,12 +61,15 @@ func ResolveIterateSandbox(uf *UnifiedFile, sandbox string) (TargetKind, string)
 	return TargetKindPod, sandbox
 }
 
-// targetKindForNode maps a BundleNode's target to a TargetKind.
+// targetKindForNode maps a BundleNode's DECLARED substrate traits (P9) to a TargetKind — the
+// iterate sandbox's executor backend — reading the stamped descent traits off the node instead
+// of switching on the substrate kind word: an ssh venue (vm) → TargetKindVM; a host-rooted shell
+// venue (local) → TargetKindHost; everything else (the default container venue, pod) → TargetKindPod.
 func targetKindForNode(node *BundleNode) TargetKind {
-	switch node.Target {
-	case "vm":
+	switch d := nodeTraits(node); {
+	case d.Venue == "ssh":
 		return TargetKindVM
-	case "local", "host":
+	case d.HostRooted:
 		return TargetKindHost
 	default:
 		return TargetKindPod

@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // plugin_provider_common.go — the shared capability metadata + capability-lift loop the two
@@ -20,11 +21,12 @@ import (
 type capMeta struct {
 	class      ProviderClass
 	word       string
-	contract   *stepContract // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural bool          // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates  bool          // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase      string        // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary    string        // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	contract   *stepContract      // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	structural bool               // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
+	validates  bool               // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
+	phase      string             // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary    string             // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	traits     *spec.DeployTraits // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -55,6 +57,11 @@ func (m capMeta) pluginPhase() string { return m.phase }
 // input field (empty for every other capability).
 func (m capMeta) primaryInput() string { return m.primary }
 
+// declaredDeployTraits implements deployTraitsCarrier — a SUBSTRATE class:kind capability's
+// declared #DeployTraits (P9), nil for every other capability. deployTraitsFor reads it off the
+// registry so kit.StampDescent can stamp node.Descent BY TRAIT, never by kind-word switch.
+func (m capMeta) declaredDeployTraits() *spec.DeployTraits { return m.traits }
+
 // buildCapMeta lifts one advertised pb.ProvidedCapability into the shared capMeta both provider
 // twins embed — the class/word plus the class-gated contract/structural/validates/phase/primary
 // flags, applied IDENTICALLY regardless of placement (R3). The caller (liftCapabilities) has
@@ -79,6 +86,20 @@ func buildCapMeta(c *pb.ProvidedCapability) capMeta {
 	m.phase = sdk.NormalizePhase(c.GetPhase())
 	if m.class == ClassVerb {
 		m.primary = c.GetPrimary()
+	}
+	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps
+	// them onto node.Descent so the deploy behaviour is consulted BY TRAIT, not by kind word.
+	if m.class == ClassKind {
+		if dt := c.GetDeployTraits(); dt != nil {
+			m.traits = &spec.DeployTraits{
+				Venue:          dt.GetVenue(),
+				ImageBacked:    dt.GetImageBacked(),
+				ImageContext:   dt.GetImageContext(),
+				MachineVenue:   dt.GetMachineVenue(),
+				ExclusiveVenue: dt.GetExclusiveVenue(),
+				LeafOnly:       dt.GetLeafOnly(),
+			}
+		}
 	}
 	return m
 }

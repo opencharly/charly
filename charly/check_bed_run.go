@@ -52,7 +52,7 @@ func bedVmDomains(node BundleNode) []string {
 		seen[tmpl] = true
 		out = append(out, "charly-"+tmpl)
 	}
-	if node.Target == "vm" {
+	if nodeTraits(&node).Venue == "ssh" { // vm (ssh venue)
 		add(node.From)
 	}
 	for _, m := range node.Members {
@@ -157,10 +157,11 @@ func summaryStatus(ok bool) string {
 // path exactly as the in-proc pod — only the `charly bundle add` overlay build internally
 // routes through pod's external deploy target + lifecycle hook now (invisible to the bed
 // runner). Excluding pod here is consistent with the bed runner's other substrate-identity
-// checks (isVM = target=="vm", isLocal = target=="local"); vm sidesteps the in-place logic
-// via its own `case isVM` branch, so this exclusion is pod's analogue.
+// checks (isVM = ssh venue, isLocal = host-rooted venue); vm sidesteps the in-place logic
+// via its own `case isVM` branch, so this exclusion is the container-venue (pod) analogue.
+// P9: exclude the CONTAINER venue by the stamped trait, not the substrate kind word.
 func bedExternalInPlace(target string) bool {
-	return isExternalDeploySubstrate(target) && target != "pod"
+	return isExternalDeploySubstrate(target) && deployTraitDescent(target).Venue != "container"
 }
 
 // printDebugRetentionNotice tells the operator that a FAILED bed was left
@@ -181,11 +182,11 @@ func printDebugRetentionNotice(w io.Writer, name string, node BundleNode) {
 		live = RepoOverrideEnv + "='" + ov + "' " + live
 	}
 	switch {
-	case node.Target == "vm":
+	case nodeTraits(&node).Venue == "ssh": // vm (ssh venue)
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — VM %q left running for debugging.\n"+
 			"  inspect: %s | charly vm ssh %s\n"+
 			"  destroy: charly vm destroy %s\n", name, node.From, live, node.From, node.From)
-	case node.Target == "local":
+	case nodeTraits(&node).HostRooted: // local (host-rooted shell venue)
 		fmt.Fprintf(w, "\n[charly check run] bed %q FAILED — local apply left in place for debugging.\n"+
 			"  destroy: charly remove %s\n", name, name)
 	case node.IsGroup():
@@ -245,7 +246,7 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 	// OTHER project (validateCheckBeds: "references local template … which is not
 	// defined"), poisoning concurrent/cross-project bed runs. Local deploys persist via
 	// the install ledger, not this bundle-map path, so skipping is also lossless.
-	if node.Target == "local" || bedExternalInPlace(node.Target) {
+	if nodeTraits(&node).HostRooted || bedExternalInPlace(node.Target) { // local (host-rooted) or in-place external
 		return
 	}
 	saveDeployState(name, "", SaveDeployStateInput{
@@ -287,8 +288,8 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 func deployNestedLocalChildren(parent string, children map[string]*BundleNode, apply func(childKey, dotted string) error) error {
 	for _, childKey := range sortedNestedKeys(children) {
 		child := children[childKey]
-		if child == nil || (child.Target != "local" && child.Target != "host") {
-			continue // pod children handled in-guest by plugin-deploy-vm's PostApply
+		if child == nil || !nodeTraits(child).HostRooted { // local (host-rooted shell venue) only
+			continue // container/vm children handled in-guest by plugin-deploy-vm's PostApply
 		}
 		if err := apply(childKey, parent+"."+childKey); err != nil {
 			return fmt.Errorf("deploy nested local child %s.%s: %w", parent, childKey, err)
@@ -303,8 +304,8 @@ func deployNestedLocalChildren(parent string, children map[string]*BundleNode, a
 //
 //nolint:gocyclo // canonical R10 bed sequence (build→check→deploy→check-live→update→teardown) woven from 6 interdependent inline closures (step/stepReady/fail/checkLiveTree/recoverVMIfDown/cleanup) over a shared mutable deployed flag + defer-bound preempt lease; contiguous-block extraction is not behavior-preserving
 func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunResult, error) {
-	isVM := node.Target == "vm"
-	isLocal := node.Target == "local"
+	isVM := nodeTraits(&node).Venue == "ssh" // vm (ssh venue)
+	isLocal := nodeTraits(&node).HostRooted  // local (host-rooted shell venue)
 	// An IN-PLACE EXTERNAL deploy substrate (e.g. `exampledeploy`/android/k8s/local,
 	// served by an out-of-process deploy plugin): it applies in place on the host venue via
 	// the E3b reverse channel — like a kind:local deploy it has no image to build, runs no
