@@ -1,0 +1,28 @@
+plugin-refs:
+    candy:
+        version: 2026.192.0000
+        description: |-
+            The remote-repo FETCH BACKEND, relocated out of charly core into a compiled-in plugin
+            candy (P7) — the swappable download seam every `@github` remote-candy fetch reaches. A
+            compiled-in plugin candy is a SEPARATE Go module importing only sdk (never charly core),
+            so it composes the shared sdk/kit git primitives (GitResolveRef/GitClone/DownloadRepo)
+            rather than core code. It serves the cache-miss DOWNLOAD via kit.RefsDownloader: the host
+            dispatches every remote-repo fetch through the registered refs provider, so an alternative
+            refs plugin can serve a different backend (OCI/S3-hosted candies) by registering a
+            different RefsDownloader — the DEFAULT (this candy) fetches via git. The host keeps the
+            fetch ORCHESTRATION (local-override resolution, cache-hit short-circuit, the post-fetch
+            schema auto-migration via command:migrate); this plugin owns only the pluggable backend
+            that turns a (repoPath, version) into a populated local cache tree. The fetch runs deep in
+            config loading, where the compiled-in command:migrate already invokes with no bootstrap
+            cycle, so registering this at init() before the first load is likewise cycle-free.
+            COMPILED-IN (in the embedded compiled_plugins:); unlocks alternative ref backends.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-refs
+            providers:
+                - refs:refs
+        plan:
+            - check: the refs plugin ships a buildable Go module the host compiles in; its git fetch backend (kit.RefsDownloader.Download → git clone into the repo cache) is exercised by every remote-@github-ref resolution at config load — the box/<distro> beds' shared-candy fetch + the live fresh-clone smoke
+              id: refs-module-present
+              context:
+                - build
+              command: "true"

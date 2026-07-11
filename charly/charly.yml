@@ -69,6 +69,7 @@ compiled_plugins:
     - plugin-clean
     - plugin-settings
     - plugin-loader
+    - plugin-refs
     - plugin-candy
     - plugin-doctor
     - plugin-feature

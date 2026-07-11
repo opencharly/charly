@@ -61,12 +61,18 @@ const (
 	// embedded providers: manifest via a plain yaml.Unmarshal, never LoadUnified). See
 	// candy/plugin-loader (P6).
 	ClassLoader ProviderClass = "loader"
+	// ClassRefs serves the remote-repo FETCH BACKEND (the single word "refs"): a compiled-in
+	// plugin implementing kit.RefsDownloader, whose Download turns a (repoPath, version) into a
+	// populated local cache tree. The host dispatches every cache-miss remote-candy fetch through
+	// the registered downloader, so an alternative refs plugin (OCI/S3) can swap the backend. The
+	// host keeps the fetch orchestration (override/cache/migrate). See candy/plugin-refs (P7).
+	ClassRefs ProviderClass = "refs"
 )
 
 // providerClasses is the closed set, used by the loader to validate a plugin's
 // `provides:` entries and by the bijection gate.
 var providerClasses = map[ProviderClass]bool{
-	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true,
+	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true, ClassRefs: true,
 }
 
 // splitCapability parses a "<class>:<word>" capability string as authored in a

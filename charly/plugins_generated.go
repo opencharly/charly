@@ -43,6 +43,7 @@ import (
 	cp_plugin_port "github.com/opencharly/charly/candy/plugin-port"
 	cp_plugin_preempt "github.com/opencharly/charly/candy/plugin-preempt"
 	cp_plugin_process "github.com/opencharly/charly/candy/plugin-process"
+	cp_plugin_refs "github.com/opencharly/charly/candy/plugin-refs"
 	cp_plugin_resource "github.com/opencharly/charly/candy/plugin-resource"
 	cp_plugin_service "github.com/opencharly/charly/candy/plugin-service"
 	cp_plugin_settings "github.com/opencharly/charly/candy/plugin-settings"
@@ -95,6 +96,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_clean.NewProvider(), cp_plugin_clean.NewMeta())
 	registerCompiledPlugin(cp_plugin_settings.NewProvider(), cp_plugin_settings.NewMeta())
 	registerCompiledPlugin(cp_plugin_loader.NewProvider(), cp_plugin_loader.NewMeta())
+	registerCompiledPlugin(cp_plugin_refs.NewProvider(), cp_plugin_refs.NewMeta())
 	registerCompiledPlugin(cp_plugin_candy.NewProvider(), cp_plugin_candy.NewMeta())
 	registerCompiledPlugin(cp_plugin_doctor.NewProvider(), cp_plugin_doctor.NewMeta())
 	registerCompiledPlugin(cp_plugin_feature.NewProvider(), cp_plugin_feature.NewMeta())
