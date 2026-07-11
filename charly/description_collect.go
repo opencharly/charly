@@ -54,7 +54,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 	}
 
 	// Box-level description + plan.
-	if img, ok := cfg.Box[boxName]; ok {
+	if img, ok := cfg.BoxConfig(boxName); ok {
 		baked := bakeableSteps(img.Plan)
 		if img.Description != "" || len(baked) > 0 {
 			set.Box = append(set.Box, LabeledDescription{

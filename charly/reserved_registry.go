@@ -46,9 +46,6 @@ var (
 	// (#ResourceKind). Replaces the hand nodeResourceKinds + node_normalize.go's
 	// inline resource-child switch.
 	resourceKindSet = setFromSlice(spec.ResourceKinds)
-	// stepKeywordSet — the plan-step intent keywords (#Step). Replaces the hand
-	// nodeStepVerbs.
-	stepKeywordSet = setFromSlice(spec.StepKeywords)
 	// authoredOpFieldSet — the AUTHORED #Op field vocabulary (builtin verbs +
 	// shared step modifiers, minus the never-authored internal fields). The
 	// parse-time desugar (node_desugar.go) classifies a step key against it:

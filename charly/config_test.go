@@ -245,12 +245,12 @@ func TestResolveImageBuilders(t *testing.T) {
 			Platforms: []string{"linux/amd64"},
 			Builder:   BuilderMap{"pixi": "default-builder", "npm": "default-builder"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"default-builder": {Candy: []string{}},
 			"custom-builder":  {Candy: []string{}},
 			"uses-default":    {Candy: []string{}},
 			"uses-custom":     {Candy: []string{}, Builder: BuilderMap{"pixi": "custom-builder"}},
-		},
+		}),
 	}
 
 	// Image with no explicit builder inherits defaults.builder
@@ -278,9 +278,9 @@ func TestResolveImageBuilders(t *testing.T) {
 	// No defaults.builder → empty
 	cfg2 := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}, Platforms: []string{"linux/amd64"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"app": {Candy: []string{}},
-		},
+		}),
 	}
 	resolved, err = cfg2.ResolveBox("app", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
@@ -297,9 +297,9 @@ func TestResolveImageBuilders(t *testing.T) {
 			Platforms: []string{"linux/amd64"},
 			Builder:   BuilderMap{"pixi": "my-builder"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"my-builder": {Candy: []string{}},
-		},
+		}),
 	}
 	resolved, err = cfg3.ResolveBox("my-builder", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
@@ -312,11 +312,11 @@ func TestResolveImageBuilders(t *testing.T) {
 	// Inheritance from base image
 	cfg4 := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"pac"}, Platforms: []string{"linux/amd64"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"base-img":    {Build: BuildFormats{"pac"}, Candy: []string{}, Builder: BuilderMap{"aur": "aur-builder"}},
 			"aur-builder": {Candy: []string{}},
 			"child-img":   {Base: "base-img", Candy: []string{}},
-		},
+		}),
 	}
 	resolved, err = cfg4.ResolveBox("child-img", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
@@ -352,11 +352,11 @@ func TestCollectBoxPorts(t *testing.T) {
 		"no-ports": mk("no-ports"),
 	}
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			// child inherits the base box's candy ports
 			"base":  {Candy: []string{"sshd", "web"}},
 			"child": {Base: "base", Candy: []string{"cdp", "udp-svc", "web-dup", "no-ports"}},
-		},
+		}),
 	}
 
 	got, err := CollectBoxPorts(cfg, layers, "child")
@@ -395,7 +395,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// disabled-image exists in raw config
-	disabledImg, ok := cfg.Box["disabled-image"]
+	disabledImg, ok := cfg.BoxConfig("disabled-image")
 	if !ok {
 		t.Fatal("disabled-image not found in raw config")
 	}
@@ -515,7 +515,7 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			// Level 0: defines distro
 			"fedora": {
 				Base:   "quay.io/fedora/fedora:43",
@@ -537,7 +537,7 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 				Base:  "nvidia",
 				Candy: []string{},
 			},
-		},
+		}),
 	}
 
 	tests := []struct {
@@ -571,7 +571,7 @@ func TestResolveImageBuildBaseChain(t *testing.T) {
 			Registry:  "ghcr.io/test",
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			// Level 0: defines build
 			"arch": {
 				Base:  "docker.io/library/archlinux:latest",
@@ -588,7 +588,7 @@ func TestResolveImageBuildBaseChain(t *testing.T) {
 				Base:  "arch-extended",
 				Candy: []string{},
 			},
-		},
+		}),
 	}
 
 	tests := []struct {

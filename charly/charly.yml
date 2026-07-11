@@ -68,6 +68,7 @@ compiled_plugins:
     - plugin-migrate
     - plugin-clean
     - plugin-settings
+    - plugin-loader
     - plugin-candy
     - plugin-doctor
     - plugin-feature

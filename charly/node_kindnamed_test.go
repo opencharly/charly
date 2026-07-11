@@ -43,7 +43,7 @@ discover:
 	if err != nil {
 		t.Fatalf("LoadUnified rejected a box named after a kind keyword: %v", err)
 	}
-	b, ok := uf.Box["k8s"]
+	b, ok := uf.BoxConfig("k8s")
 	if !ok {
 		t.Fatalf("box named 'k8s' not loaded as a box; boxes=%v", boxKeys(uf.Box))
 	}

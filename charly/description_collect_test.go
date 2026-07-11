@@ -22,9 +22,9 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 			},
 		},
 	}
-	cfg := &Config{Box: map[string]BoxConfig{
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{
 		"redis-box": {Candy: []string{"redis"}},
-	}}
+	})}
 
 	set := CollectDescriptions(cfg, layers, "redis-box")
 	if set == nil || len(set.Candy) != 1 {

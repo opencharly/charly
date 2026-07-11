@@ -532,7 +532,7 @@ func loadPluginUnit(ctx context.Context, name string, p *CandyPluginDecl, srcDir
 // undispatched word — while under-load (a MISSED reference) breaks the verb/builder/
 // substrate at dispatch, so collection errs toward INCLUDE: every enumerated site is
 // unioned, and when in doubt a word is added rather than filtered.
-func collectReferencedPluginWords(candies map[string]*Candy, boxes map[string]BoxConfig, extra []string) map[string]struct{} {
+func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra []string) map[string]struct{} {
 	refs := make(map[string]struct{})
 	add := func(w string) {
 		if w != "" {
@@ -564,7 +564,11 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes map[string]Bo
 			addStep(&candy.plan[i].Op)
 		}
 	}
-	for _, box := range boxes {
+	for _, raw := range boxes {
+		box, ok := decodeBox(raw)
+		if !ok {
+			continue
+		}
 		for i := range box.Plan {
 			addStep(&box.Plan[i].Op)
 		}

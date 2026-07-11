@@ -457,7 +457,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 			return nil
 		}
 		seen[name] = true
-		img, ok := c.Box[name]
+		img, ok := c.BoxConfig(name)
 		if !ok {
 			return nil // external OCI base or unknown name — no candies to collect
 		}
@@ -497,7 +497,8 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 		return nil
 	}
 	if cfg != nil {
-		for imgName, img := range cfg.Box {
+		for _, imgName := range cfg.allBoxNames() {
+			img, _ := cfg.BoxConfig(imgName)
 			if !img.IsEnabled() && !opts.shouldIncludeDisabled(imgName) {
 				continue
 			}

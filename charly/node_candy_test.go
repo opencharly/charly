@@ -86,7 +86,7 @@ func TestBuildCandy_RoundTrip(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(candyNodeForm), &doc); err != nil {
 		t.Fatalf("parsing node-form candy: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&doc)
+	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
 		t.Fatalf("parseNodeTree: %v", err)
 	}

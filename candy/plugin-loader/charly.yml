@@ -1,0 +1,28 @@
+plugin-loader:
+    candy:
+        version: 2026.192.0000
+        description: |-
+            The unified-config LOADER's PARSE half, relocated out of charly core into a compiled-in
+            plugin candy (P6) — the config front-end every command reaches before any project is read.
+            A compiled-in plugin candy is a SEPARATE Go module importing only sdk (never charly core),
+            so it cannot produce charly's typed *UnifiedFile (which embeds the core Config mechanism +
+            the runtime Candy graph the plan keeps in core). So the boundary is PARSE/MATERIALIZE: this
+            plugin PARSES the project (file read → import resolution → YAML multi-doc → the #NodeDoc CUE
+            gate → reserved-word node decomposition → discover walk) into a generic, sdk-expressible
+            ParsedProject (kind-keyed opaque nodes + the resolved import/discover structure); the HOST
+            MATERIALIZES the typed *UnifiedFile from it (the kind-blind materializer stays core,
+            consuming the generic tree exactly as the per-node structural-kind fold already does). The
+            bootstrap SEED (registry_bootstrap.go init → the embedded providers: manifest via a plain
+            yaml.Unmarshal) STAYS core and never calls LoadUnified, so a compiled-in loader plugin has
+            NO bootstrap cycle. COMPILED-IN (in the embedded compiled_plugins:), registered at init()
+            before the first LoadUnified call; unlocks alternative config front-ends.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-loader
+            providers:
+                - loader:loader
+        plan:
+            - check: the loader plugin ships a buildable Go module the host compiles in; its project PARSE (file read → import resolution → the #NodeDoc CUE gate → reserved-word node decomposition → discover walk into a generic ParsedProject the host materializes into *UnifiedFile) is exercised by every command + check bed, which all reach the config front-end before any project is read
+              id: loader-module-present
+              context:
+                - build
+              command: "true"

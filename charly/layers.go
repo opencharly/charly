@@ -447,7 +447,13 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 	// (The `candy` discriminator is NESTED under the node name, so the kind-keyed
 	// branch below — which looks for a TOP-LEVEL `candy:` key — won't match.)
 	if len(inner.Content) == 2 && !kindWordSet[inner.Content[0].Value] {
-		if gn, perr := parseNode(inner.Content[0].Value, inner.Content[1], false); perr == nil && gn.disc == "candy" {
+		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
+		// candy genericNode buildCandy consumes is reconstructed from the parsed node.
+		if _, pp, perr := activeLoaderParser.ParseDoc(inner, loaderThreaded()); perr == nil && len(pp.Nodes) == 1 && pp.Nodes[0].Disc == "candy" {
+			gn, gerr := parsedNodeToGeneric(pp.Nodes[0])
+			if gerr != nil {
+				return nil, fmt.Errorf("%s: %w", path, gerr)
+			}
 			_, ic, berr := buildCandy(gn)
 			if berr != nil {
 				return nil, fmt.Errorf("%s: %w", path, berr)

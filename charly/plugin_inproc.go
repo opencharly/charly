@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -79,4 +80,10 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 		panic("registerCompiledPlugin: " + err.Error())
 	}
 	RegisterBuiltinPluginUnit(*unit)
+	// A compiled-in loader plugin (P6) exposes the typed per-document PARSE via loaderkit.DocParser
+	// — wire it as the active config front-end so the host calls it directly (no wire envelope) per
+	// document. The provider's Invoke stays registered for the out-of-process placement.
+	if dp, ok := srv.(loaderkit.DocParser); ok {
+		activeLoaderParser = dp
+	}
 }

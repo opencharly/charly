@@ -36,7 +36,7 @@ func parseCorpusDocs(t *testing.T, f string, data []byte) []*genericNode {
 			t.Errorf("%s: yaml: %v", f, err)
 			break
 		}
-		_, nodes, err := parseNodeTree(&doc)
+		nodes, err := genericNodesFromDoc(&doc)
 		if err != nil {
 			t.Errorf("FAIL %s: parse: %v", f, err)
 			continue

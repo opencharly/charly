@@ -40,7 +40,7 @@ func TestBuildBundleNode_Structure(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(bundleNodeForm), &doc); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&doc)
+	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
 		t.Fatalf("parseNodeTree: %v", err)
 	}

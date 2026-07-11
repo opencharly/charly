@@ -238,7 +238,7 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 	layers := map[string]*Candy{
 		"l": {Name: "l", plan: []Step{{Run: "reach x", Op: Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80"}, Context: []string{"build"}}}}},
 	}
-	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
+	got := runValidateOps(t, &Config{Box: boxMapOf(map[string]BoxConfig{})}, layers)
 	if !strings.Contains(got, "cannot act") {
 		t.Errorf("expected a 'cannot act in build context' rejection, got: %s", got)
 	}

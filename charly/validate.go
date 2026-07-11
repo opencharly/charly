@@ -71,7 +71,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts ResolveOpts, errs *
 	// resolved struct back to YAML and run it through the same ingest path the
 	// on-disk corpus uses. Skip disabled boxes exactly like the Go box
 	// validators (a disabled box's invalid fields are intentionally not flagged).
-	for name, box := range cfg.Box {
+	for name, box := range cfg.eachBox {
 		if !box.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -145,7 +145,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts ResolveOpts, errs *
 // validate`. Both seams call the ONE predicate BoxConfig.HasBaseFromConflict (R3).
 // Neither field set stays valid (a scratch box) — only BOTH is a conflict.
 func validateBoxBaseFrom(cfg *Config, opts ResolveOpts, errs *ValidationError) {
-	for name, img := range cfg.Box {
+	for name, img := range cfg.eachBox {
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -457,7 +457,7 @@ func validateInitDependencies(cfg *Config, initCfg *InitConfig, layers map[strin
 		return
 	}
 
-	for imgName, img := range cfg.Box {
+	for imgName, img := range cfg.eachBox {
 		if img.Enabled != nil && !*img.Enabled {
 			continue
 		}
@@ -623,7 +623,7 @@ func validateBuildAndDistro(cfg *Config, distroCfg *DistroConfig, errs *Validati
 	validateBuild("defaults", cfg.Defaults.Build)
 
 	// Validate per-image
-	for name, img := range cfg.Box {
+	for name, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -635,7 +635,7 @@ func validateBuildAndDistro(cfg *Config, distroCfg *DistroConfig, errs *Validati
 
 // validateCandyReferences ensures all candies referenced in images exist
 func validateCandyReferences(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -944,7 +944,7 @@ func validateBoxDAG(cfg *Config, layers map[string]*Candy, dir string, opts Reso
 	calverTag := "test"
 	// Try to resolve images — some fields may be missing during basic validation
 	images := make(map[string]*ResolvedBox)
-	for name, img := range cfg.Box {
+	for name, img := range cfg.eachBox {
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -999,7 +999,7 @@ func validateBoxDAG(cfg *Config, layers map[string]*Candy, dir string, opts Reso
 // validateCandyDAG checks for circular candy dependencies
 func validateCandyDAG(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
 	// Check each image's candies for cycles
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1071,7 +1071,7 @@ func validateBuildTunables(cfg *Config, errs *ValidationError) {
 	}
 
 	check("defaults", cfg.Defaults)
-	for name, img := range cfg.Box {
+	for name, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1118,7 +1118,7 @@ func validateAliases(cfg *Config, layers map[string]*Candy, errs *ValidationErro
 	}
 
 	// Validate image-level aliases
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1163,7 +1163,7 @@ func validateBuilders(cfg *Config, layers map[string]*Candy, builderCfg *Builder
 	}
 
 	// Validate each enabled image
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1369,7 +1369,7 @@ func validatePackagedServices(cfg *Config, layers map[string]*Candy, errs *Valid
 	// the candy USER (i.e. non-bootc-flavored images). Only systemd-based
 	// compositions consume packaged units; supervisord, the container
 	// default init, can't.
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1498,7 +1498,7 @@ func validateEngineConfig(cfg *Config, layers map[string]*Candy, errs *Validatio
 	// The candy engine enum (docker|podman) is enforced by #Candy.engine; only
 	// cross-candy engine-conflict detection within an image stays here.
 
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1565,7 +1565,7 @@ func validatePortRelay(cfg *Config, layers map[string]*Candy, errs *ValidationEr
 	}
 
 	// Validate that images with port_relay candies include the socat candy
-	for boxName, img := range cfg.Box {
+	for boxName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -1631,7 +1631,7 @@ func validateDataCandies(cfg *Config, layers map[string]*Candy, errs *Validation
 	}
 
 	// Validate per-image constraints
-	for imgName, img := range cfg.Box {
+	for imgName, img := range cfg.eachBox {
 		if !img.IsEnabled() {
 			continue
 		}

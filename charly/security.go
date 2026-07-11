@@ -16,7 +16,7 @@ import (
 func CollectSecurity(cfg *Config, layers map[string]*Candy, boxName string) SecurityConfig {
 	var merged SecurityConfig
 
-	img, ok := cfg.Box[boxName]
+	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return merged
 	}

@@ -16,7 +16,7 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&ydoc)
+	nodes, err := genericNodesFromDoc(&ydoc)
 	if err != nil {
 		t.Fatalf("parseNodeTree: %v", err)
 	}

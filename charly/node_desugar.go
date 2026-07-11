@@ -18,8 +18,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -58,89 +56,6 @@ func registerPluginPrimary(word, field string) error {
 func pluginPrimaryFor(word string) (string, bool) {
 	f, ok := pluginPrimaries[word]
 	return f, ok
-}
-
-// desugarEntityPlan desugars every step of the entity body's `plan:` list in
-// place. A missing plan is a no-op; a non-sequence plan is a hard error.
-func desugarEntityPlan(entity string, body *yaml.Node) error {
-	plan := mapValue(body, "plan")
-	if plan == nil {
-		return nil
-	}
-	if plan.Kind != yaml.SequenceNode {
-		return fmt.Errorf("node %q: plan must be a step LIST (got yaml kind %v); run: charly migrate", entity, plan.Kind)
-	}
-	for i, st := range plan.Content {
-		if err := desugarStep(entity, i, st); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// desugarStep rewrites one authored step mapping in place.
-func desugarStep(entity string, idx int, st *yaml.Node) error {
-	if st.Kind != yaml.MappingNode {
-		return fmt.Errorf("node %q: plan[%d] must be a mapping step", entity, idx)
-	}
-	intents := 0
-	var sugarKeys []int
-	for i := 0; i+1 < len(st.Content); i += 2 {
-		k := st.Content[i].Value
-		switch {
-		case k == "plugin" || k == "plugin_input":
-			return fmt.Errorf("node %q: plan[%d] authors %q — the plugin envelope is internal-only; author the verb as `<word>: <input>` sugar (run: charly migrate)", entity, idx, k)
-		case stepKeywordSet[k]:
-			intents++
-		case authoredOpFieldSet[k]:
-			// a builtin verb or shared step modifier — stays as-is
-		default:
-			sugarKeys = append(sugarKeys, i)
-		}
-	}
-	if intents == 0 {
-		return fmt.Errorf("node %q: plan[%d] has no intent keyword (run/check/agent-run/agent-check/include)", entity, idx)
-	}
-	if intents > 1 {
-		return fmt.Errorf("node %q: plan[%d] has multiple intent keywords — a step has exactly one", entity, idx)
-	}
-	if len(sugarKeys) == 0 {
-		return nil
-	}
-	if len(sugarKeys) > 1 {
-		names := make([]string, 0, len(sugarKeys))
-		for _, i := range sugarKeys {
-			names = append(names, st.Content[i].Value)
-		}
-		sort.Strings(names)
-		return fmt.Errorf("node %q: plan[%d] carries multiple non-#Op keys (%s) — a step takes at most ONE plugin-verb sugar key", entity, idx, strings.Join(names, ", "))
-	}
-	i := sugarKeys[0]
-	wordNode, valNode := st.Content[i], st.Content[i+1]
-	word := wordNode.Value
-	var input *yaml.Node
-	switch valNode.Kind {
-	case yaml.MappingNode:
-		input = valNode
-	case yaml.ScalarNode, yaml.SequenceNode:
-		prim, ok := pluginPrimaryFor(word)
-		if !ok {
-			return fmt.Errorf("node %q: plan[%d] plugin verb %q takes a MAP input (it declares no primary field for the scalar shorthand)", entity, idx, word)
-		}
-		input = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
-			{Kind: yaml.ScalarNode, Tag: "!!str", Value: prim},
-			valNode,
-		}}
-	default:
-		// a null value is an input-less verb
-		input = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	}
-	st.Content[i] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "plugin",
-		HeadComment: wordNode.HeadComment, LineComment: wordNode.LineComment, FootComment: wordNode.FootComment}
-	st.Content[i+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: word}
-	st.Content = append(st.Content,
-		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "plugin_input"}, input)
-	return nil
 }
 
 // resugarPlan is the desugar's INVERSE, used by the deploy-state WRITER

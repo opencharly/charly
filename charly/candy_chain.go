@@ -40,7 +40,7 @@ func (c *Config) boxCandyChain(layers map[string]*Candy, boxName string) ([]stri
 // LEAF-SPECIFIC fields (CollectSecurity, CollectBoxAlias,
 // CollectLibvirtSnippets) that intentionally do NOT inherit from a base box.
 func (c *Config) boxDirectCandies(layers map[string]*Candy, boxName string) ([]string, error) {
-	img, ok := c.Box[boxName]
+	img, ok := c.BoxConfig(boxName)
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)
 	}

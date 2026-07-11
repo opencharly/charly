@@ -10,7 +10,7 @@ package main
 // come from BundleNode.Engine via ResolveBoxEngineForDeploy /
 // ResolveBoxEngineFromMeta.
 func ResolveBoxEngine(cfg *Config, layers map[string]*Candy, boxName string, globalRunEngine string) string {
-	img, ok := cfg.Box[boxName]
+	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return globalRunEngine
 	}

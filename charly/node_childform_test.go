@@ -24,7 +24,7 @@ func parseDocNodes(t *testing.T, nodeform string) []*genericNode {
 	if err := yaml.Unmarshal([]byte(nodeform), &doc); err != nil {
 		t.Fatalf("yaml: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&doc)
+	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
 		t.Fatalf("parseNodeTree: %v", err)
 	}
@@ -38,7 +38,7 @@ func parseDocNodesErr(t *testing.T, nodeform string) error {
 	if err := yaml.Unmarshal([]byte(nodeform), &doc); err != nil {
 		t.Fatalf("yaml: %v", err)
 	}
-	_, _, err := parseNodeTree(&doc)
+	_, err := genericNodesFromDoc(&doc)
 	return err
 }
 

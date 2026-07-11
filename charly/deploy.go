@@ -999,7 +999,8 @@ func saveDeployState(boxName, instance string, input SaveDeployStateInput) {
 // ExportAllBox exports all runtime-relevant fields for all enabled images in a Config.
 func ExportAllBox(cfg *Config) *BundleConfig {
 	dc := &BundleConfig{Bundle: make(map[string]BundleNode)}
-	for name, img := range cfg.Box {
+	for _, name := range cfg.allBoxNames() {
+		img, _ := cfg.BoxConfig(name)
 		if !img.IsEnabled() {
 			continue
 		}

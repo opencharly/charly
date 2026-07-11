@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 )
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
@@ -23,8 +22,8 @@ func noCharlyYmlErr(dir string) error {
 
 // Config represents the charly.yml configuration projection
 type Config struct {
-	Defaults BoxConfig            `yaml:"defaults" json:"defaults"`
-	Box      map[string]BoxConfig `yaml:"box" json:"box"`
+	Defaults BoxConfig `yaml:"defaults" json:"defaults"`
+	Box      boxMap    `yaml:"box" json:"box"`
 	// Local carries kind:local templates so remote-ref collection +
 	// validation walk their candy: lists symmetrically with box candy
 	// lists (kind:local templates compose remote @-ref candies too). Populated
@@ -136,7 +135,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		}
 		return sub.ResolveBox(rest, calverTag, dir, opts)
 	}
-	img, ok := c.Box[name]
+	img, ok := c.BoxConfig(name)
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", name)
 	}
@@ -421,7 +420,8 @@ func (c *Config) resolveBuild(resolved *ResolvedBox, img BoxConfig, name string)
 // without modifying authored config).
 func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (map[string]*ResolvedBox, error) {
 	resolved := make(map[string]*ResolvedBox)
-	for name, img := range c.Box {
+	for _, name := range c.allBoxNames() {
+		img, _ := c.BoxConfig(name)
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -465,7 +465,8 @@ func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (
 // BoxNames returns a sorted list of enabled box names
 func (c *Config) BoxNames() []string {
 	names := make([]string, 0, len(c.Box))
-	for name, img := range c.Box {
+	for _, name := range c.allBoxNames() {
+		img, _ := c.BoxConfig(name)
 		if !img.IsEnabled() {
 			continue
 		}
@@ -524,7 +525,7 @@ func (c *Config) resolveEffectiveBuilder(name string, distro []string, base stri
 		// dangle in this consumer's namespace; the consumer instead gets its
 		// builder distro-keyed via distroBuilderMap above. So the qualified-base
 		// miss is correct, not a divergence bug. See namespace.go's header.
-		if baseImg, ok := c.Box[base]; ok {
+		if baseImg, ok := c.BoxConfig(base); ok {
 			maps.Copy(out, baseImg.Builder)
 		}
 	}
@@ -595,14 +596,10 @@ func (c *Config) distroBuilderMap(distroTags []string) BuilderMap {
 	if len(distroTags) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(c.Box))
-	for name := range c.Box {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := c.allBoxNames()
 	for _, tag := range distroTags {
 		for _, name := range names {
-			img := c.Box[name]
+			img, _ := c.BoxConfig(name)
 			if len(img.Builder) == 0 {
 				continue
 			}
@@ -707,12 +704,12 @@ func (c *Config) walkBaseChain(boxName string) []baseChainNode {
 	current := boxName
 	for current != "" && !seen[current] {
 		seen[current] = true
-		img, ok := c.Box[current]
+		img, ok := c.BoxConfig(current)
 		if !ok {
 			break
 		}
 		out = append(out, baseChainNode{Name: current, Img: img})
-		baseImg, isInternal := c.Box[img.Base]
+		baseImg, isInternal := c.BoxConfig(img.Base)
 		if !isInternal || !baseImg.IsEnabled() {
 			break
 		}

@@ -60,7 +60,7 @@ fedora:
 	if uf.Defaults.Registry != "quay.io/example" {
 		t.Errorf("Defaults.Registry = %q, want quay.io/example", uf.Defaults.Registry)
 	}
-	fedora, ok := uf.Box["fedora"]
+	fedora, ok := uf.BoxConfig("fedora")
 	if !ok {
 		t.Fatal("box.fedora missing")
 	}
@@ -278,8 +278,8 @@ chrome:
 	if err := uf.ApplyDiscover(root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
-	il := uf.Candy["chrome"]
-	if il == nil {
+	il, ok := decodeInlineCandy(uf.Candy["chrome"])
+	if !ok {
 		t.Fatal("candy.chrome missing")
 	}
 	// The explicit inline entry won: it is defined IN-PLACE (From == ""), not a
@@ -421,7 +421,7 @@ foo:
 	if cfg.Defaults.Registry != "r.example.com" {
 		t.Errorf("Defaults.Registry = %q", cfg.Defaults.Registry)
 	}
-	if cfg.Box["foo"].Base != "alpine" {
-		t.Errorf("Box.foo.Base = %q", cfg.Box["foo"].Base)
+	if foo, _ := cfg.BoxConfig("foo"); foo.Base != "alpine" {
+		t.Errorf("Box.foo.Base = %q", foo.Base)
 	}
 }
