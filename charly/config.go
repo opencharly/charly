@@ -306,7 +306,8 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		}
 	case "create":
 		// no-op — resolved.User/UID/GID/Home already reflect image config +
-		// defaults + hardcoded fallback, and writeBootstrap will useradd.
+		// defaults + hardcoded fallback, and the bootstrap preamble
+		// (deploykit.Generator.WriteBootstrap) will useradd.
 	default:
 		return nil, fmt.Errorf("image %s: unknown user_policy %q (expected auto, adopt, or create)", name, policy)
 	}

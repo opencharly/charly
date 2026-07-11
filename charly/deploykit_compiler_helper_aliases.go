@@ -9,8 +9,6 @@ import "github.com/opencharly/sdk/deploykit"
 var (
 	candyNeedsBuilderStep       = deploykit.CandyNeedsBuilderStep
 	compileLocalPkgStep         = deploykit.CompileLocalPkgStep
-	compileShellSnippetSteps    = deploykit.CompileShellSnippetSteps
-	resolveCascadePackages      = deploykit.ResolveCascadePackages
 	serviceEntryAppliesToDistro = deploykit.ServiceEntryAppliesToDistro
 	serviceRenderDistros        = deploykit.ServiceRenderDistros
 	stringSliceFromYAML         = deploykit.StringSliceFromYAML

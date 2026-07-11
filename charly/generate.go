@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -14,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -65,41 +65,18 @@ type Generator struct {
 	// RESET per image at the start of emitBuilderStages. This is the C10 detection-builder
 	// (pixi/npm/aur) counterpart of externalBuilderReplies for the `external_builder:` path.
 	detectionBuilderReplies map[string]spec.BuilderResolveReply
+
+	// dkGen caches the sdk/deploykit render Generator (P8). Built once by
+	// toDeploykit() and reused across an image's render so the deploykit-side
+	// per-image builder-reply caches persist across the render methods (which are
+	// relocating onto deploykit.Generator). Containerfiles is a shared map ref so
+	// writes propagate; Candies/Boxes are stable post-NewGenerator.
+	dkGen *deploykit.Generator
 }
 
-// globalOrderForBox returns the candy order for an image by filtering the
-// global order to only include the image's needed candies. This ensures shared
-// candies appear in the same order across all images, maximizing cache reuse.
+// globalOrderForBox → deploykit.Generator.GlobalOrderForBox (P8 shim).
 func (g *Generator) globalOrderForBox(imageCandies []string, parentCandies map[string]bool) ([]string, error) {
-	// Resolve needed candies (expand composition + transitive deps)
-	needed, err := ResolveCandyOrder(imageCandies, g.Candies, parentCandies)
-	if err != nil {
-		return nil, err
-	}
-
-	neededSet := make(map[string]bool, len(needed))
-	for _, l := range needed {
-		neededSet[l] = true
-	}
-
-	// Filter global order to only include this image's needed candies
-	var order []string
-	for _, l := range g.GlobalOrder {
-		if neededSet[l] {
-			order = append(order, l)
-		}
-	}
-
-	// Safety: if global order is missing some needed candies (shouldn't happen),
-	// append them in their original order
-	for _, l := range needed {
-		found := slices.Contains(order, l)
-		if !found {
-			order = append(order, l)
-		}
-	}
-
-	return order, nil
+	return g.toDeploykit().GlobalOrderForBox(imageCandies, parentCandies)
 }
 
 // resolveUserContext detects existing user in base image or uses configured values
@@ -615,17 +592,9 @@ func (g *Generator) emitPreMainCandyStages(b *strings.Builder, boxName string, i
 // for a builder rootfs, which has no upstream package manager — the builder's package set
 // handles that), or `USER root` for an internal base / builder rootfs. Pure code motion
 // out of generateContainerfile.
+// emitBaseBootstrap → deploykit.Generator.EmitBaseBootstrap (P8 shim).
 func (g *Generator) emitBaseBootstrap(b *strings.Builder, boxName string, img *ResolvedBox) {
-	if after, ok := strings.CutPrefix(img.From, "builder:"); ok {
-		builderName := after
-		fmt.Fprintf(b, "ADD .build/%s/%s.tar.gz /\n\n", boxName, builderName)
-	}
-	if img.IsExternalBase && !strings.HasPrefix(img.From, "builder:") {
-		g.writeBootstrap(b, img)
-	} else {
-		// Internal base or builder rootfs - reset to root for candy processing
-		b.WriteString("USER root\n\n")
-	}
+	g.toDeploykit().EmitBaseBootstrap(b, boxName, img)
 }
 
 // writeContainerfile validates the rendered Containerfile (catching Go-template
@@ -641,13 +610,9 @@ func writeContainerfile(path, content string) error {
 }
 
 // emitScratchStages emits one `FROM scratch AS <candy>` + COPY pair per candy.
+// emitScratchStages → deploykit.Generator.EmitScratchStages (P8 shim).
 func (g *Generator) emitScratchStages(b *strings.Builder, candyOrder []string) {
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		stageName := layer.Name // use short name for stage alias
-		fmt.Fprintf(b, "FROM scratch AS %s\n", stageName)
-		fmt.Fprintf(b, "COPY %s/ /\n\n", g.candyCopySource(candyName))
-	}
+	g.toDeploykit().EmitScratchStages(b, candyOrder)
 }
 
 // emitBuilderStages emits per-candy multi-stage build stages. Each builder declares
@@ -961,17 +926,9 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 
 // emitExtractStages emits a `FROM <source> AS <candy>-extract-<i>` stage for
 // every extract entry across the candy chain.
+// emitExtractStages → deploykit.Generator.EmitExtractStages (P8 shim).
 func (g *Generator) emitExtractStages(b *strings.Builder, candyOrder []string) {
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if !layer.HasExtract() {
-			continue
-		}
-		for i, ext := range layer.Extract() {
-			stageName := fmt.Sprintf("%s-extract-%d", candyName, i)
-			fmt.Fprintf(b, "FROM %s AS %s\n\n", ext.Source, stageName)
-		}
-	}
+	g.toDeploykit().EmitExtractStages(b, candyOrder)
 }
 
 // emitBuilderArtifacts copies builder artifacts/binaries into the main image. For an
@@ -1057,119 +1014,23 @@ func (g *Generator) emitBuilderArtifacts(b *strings.Builder, img *ResolvedBox, c
 
 // emitExtractedFiles copies extracted files from multi-stage build stages into
 // the main image.
+// emitExtractedFiles → deploykit.Generator.EmitExtractedFiles (P8 shim).
 func (g *Generator) emitExtractedFiles(b *strings.Builder, img *ResolvedBox, candyOrder []string) {
-	hasExtract := false
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if !layer.HasExtract() {
-			continue
-		}
-		if !hasExtract {
-			b.WriteString("# Copy extracted files from Docker images\n")
-			b.WriteString("USER root\n")
-			hasExtract = true
-		}
-		for i, ext := range layer.Extract() {
-			stageName := fmt.Sprintf("%s-extract-%d", candyName, i)
-			fmt.Fprintf(b, "COPY --from=%s --chown=%d:%d %s %s\n",
-				stageName, img.UID, img.GID, ext.Path, ext.Dest)
-		}
-	}
-	if hasExtract {
-		b.WriteString("\n")
-	}
+	g.toDeploykit().EmitExtractedFiles(b, img, candyOrder)
 }
 
-// emitInitAssembly assembles init system configs (driven by the embedded init:
-// vocabulary templates): the assembly template, system-level service enablement,
-// and any post-assembly step, per active init system.
+// emitInitAssembly → deploykit.Generator.EmitInitAssembly (P8 shim).
 func (g *Generator) emitInitAssembly(b *strings.Builder, img *ResolvedBox, candyOrder []string, activeInits map[string]*ResolvedInit, initHasFragments map[string]bool) error {
-	for initName, def := range activeInits {
-		// assembly_template bind-mounts from the scratch stage emitted above;
-		// skip it when no fragments were contributed (stage was not emitted).
-		// system_enable_template and post_assembly_template are independent
-		// and still run below.
-		if initHasFragments[initName] {
-			assembly, err := initRenderAssemblyTemplate(def)
-			if err != nil {
-				return fmt.Errorf("rendering assembly for %s: %w", initName, err)
-			}
-			if assembly != "" {
-				b.WriteString(assembly)
-				if !strings.HasSuffix(assembly, "\n") {
-					b.WriteString("\n")
-				}
-				b.WriteString("\n")
-			}
-		}
-
-		// System-level service enablement (e.g., systemctl enable sshd).
-		// Collect every use_packaged: entry across the candy chain — these
-		// are the distro-shipped systemd units the init system must enable.
-		var systemUnits []string
-		for _, candyName := range candyOrder {
-			layer := g.Candies[candyName]
-			for i := range layer.Service() {
-				entry := &layer.Service()[i]
-				if entry.IsPackaged() && entry.EffectiveScope() == "system" &&
-					serviceEntryAppliesToDistro(entry, img.Distro) {
-					systemUnits = append(systemUnits, entry.UsePackaged)
-				}
-			}
-		}
-		sysEnable, err := initRenderSystemEnableTemplate(def, systemUnits)
-		if err != nil {
-			return fmt.Errorf("rendering system enable for %s: %w", initName, err)
-		}
-		if sysEnable != "" {
-			b.WriteString(sysEnable)
-			if !strings.HasSuffix(sysEnable, "\n") {
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-
-		// Post-assembly step (e.g., bootc container lint)
-		postAssembly, err := initRenderPostAssemblyTemplate(def)
-		if err != nil {
-			return fmt.Errorf("rendering post-assembly for %s: %w", initName, err)
-		}
-		if postAssembly != "" {
-			b.WriteString(postAssembly)
-			if !strings.HasSuffix(postAssembly, "\n") {
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-	}
-	return nil
+	return g.toDeploykit().EmitInitAssembly(b, img, candyOrder, activeInits, initHasFragments)
 }
 
 // emitTraefikRouteStage detects whether the image has route candies plus the
 // traefik candy and, when both are present, generates the traefik routes and
 // emits the traefik-routes scratch stage. Returns the two detection flags
 // (consumed downstream for the root-reset decision and the routes COPY).
+// emitTraefikRouteStage → deploykit.Generator.EmitTraefikRouteStage (P8 shim).
 func (g *Generator) emitTraefikRouteStage(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string) (hasRoutes, hasTraefik bool, err error) {
-	// Check if this image has route candies and traefik
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if layer.HasRoute() {
-			hasRoutes = true
-		}
-		if layer.Name == "traefik" {
-			hasTraefik = true
-		}
-	}
-
-	// Generate traefik routes only when traefik is actually present
-	if hasRoutes && hasTraefik {
-		if rerr := g.generateTraefikRoutes(boxName, candyOrder, img); rerr != nil {
-			return hasRoutes, hasTraefik, rerr
-		}
-		b.WriteString("FROM scratch AS traefik-routes\n")
-		fmt.Fprintf(b, "COPY .build/%s/traefik-routes.yml /routes.yml\n\n", boxName)
-	}
-	return hasRoutes, hasTraefik, nil
+	return g.toDeploykit().EmitTraefikRouteStage(b, boxName, img, candyOrder)
 }
 
 // emitInitFragmentStages emits the per-init scratch stages that COPY service
@@ -1182,92 +1043,9 @@ func (g *Generator) emitTraefikRouteStage(b *strings.Builder, boxName string, im
 // `system_services:` (plain unit names) COPYs no fragment files, so emitting an
 // empty `FROM scratch AS <stage>` plus the `assembly_template` RUN that
 // bind-mounts from it would fail at build time with "no such file or directory".
+// emitInitFragmentStages → deploykit.Generator.EmitInitFragmentStages (P8 shim).
 func (g *Generator) emitInitFragmentStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string, activeInits map[string]*ResolvedInit) (map[string]bool, error) {
-	initHasFragments := map[string]bool{}
-	for initName, def := range activeInits {
-		initCandyOrder := candyOrder
-		if !img.IsExternalBase {
-			full := collectAllBoxCandies(boxName, g.Boxes, g.Candies)
-			if len(full) > 0 {
-				initCandyOrder = full
-			}
-		}
-		if err := g.generateInitFragments(boxName, initName, def, initCandyOrder); err != nil {
-			return nil, err
-		}
-
-		// Pre-scan the candy chain to decide whether this init has any fragment
-		// content. If not, skip both the scratch stage emission and the
-		// assembly_template RUN (see emitInitAssembly).
-		hasFragments := false
-		for _, candyName := range initCandyOrder {
-			layer := g.Candies[candyName]
-			if def.Model == "fragment_assembly" && layer.HasInit(initName) {
-				hasFragments = true
-				break
-			}
-			if initHasRelayTemplate(def) && len(layer.PortRelayPorts) > 0 {
-				hasFragments = true
-				break
-			}
-			if def.Model == "file_copy" && len(layer.ServiceFiles()) > 0 {
-				hasFragments = true
-				break
-			}
-		}
-		initHasFragments[initName] = hasFragments
-		if !hasFragments {
-			continue
-		}
-
-		// Emit scratch stage with COPY lines for fragments
-		fmt.Fprintf(b, "FROM scratch AS %s\n", def.StageName)
-		if def.StageHeaderCopy != "" {
-			headerCopy, err := g.rewriteHeaderCopyForRemote(def.StageHeaderCopy)
-			if err != nil {
-				return nil, err
-			}
-			b.WriteString(headerCopy + "\n")
-		}
-		for i, candyName := range initCandyOrder {
-			layer := g.Candies[candyName]
-			// Service content fragments (fragment_assembly model)
-			if def.Model == "fragment_assembly" && layer.HasInit(initName) {
-				// Use the SHORT name (not the map key) — a remote candy's key is
-				// a slashed github ref that would create bogus nested dirs.
-				fileName := fmt.Sprintf("%02d-%s.conf", i+1, layer.Name)
-				copyLine, err := initRenderStageFragmentCopy(def, boxName, fileName)
-				if err != nil {
-					return nil, fmt.Errorf("rendering stage fragment copy for %s/%s: %w", initName, candyName, err)
-				}
-				b.WriteString(copyLine + "\n")
-			}
-			// Relay fragments
-			if initHasRelayTemplate(def) && len(layer.PortRelayPorts) > 0 {
-				for _, port := range layer.PortRelayPorts {
-					confName := fmt.Sprintf("%02d-relay-%d.conf", i+1, port)
-					copyLine, err := initRenderStageFragmentCopy(def, boxName, confName)
-					if err != nil {
-						return nil, fmt.Errorf("rendering relay copy for %s/%s port %d: %w", initName, candyName, port, err)
-					}
-					b.WriteString(copyLine + "\n")
-				}
-			}
-			// File copy model: copy detected service files
-			if def.Model == "file_copy" && len(layer.ServiceFiles()) > 0 {
-				for _, svcPath := range layer.ServiceFiles() {
-					svcName := filepath.Base(svcPath)
-					copyLine, err := initRenderStageFragmentCopy(def, boxName, svcName)
-					if err != nil {
-						return nil, fmt.Errorf("rendering service file copy for %s/%s: %w", initName, candyName, err)
-					}
-					b.WriteString(copyLine + "\n")
-				}
-			}
-		}
-		b.WriteString("\n")
-	}
-	return initHasFragments, nil
+	return g.toDeploykit().EmitInitFragmentStages(b, boxName, img, candyOrder, activeInits)
 }
 
 // generateDataImageContainerfile produces a minimal FROM scratch Containerfile
@@ -1368,26 +1146,16 @@ func (g *Generator) generateDataImageContainerfile(boxName string, img *Resolved
 // For internal bases, uses the exact CalVer tag so each image references
 // the precise version of its parent. Both Docker and Podman resolve local
 // images before pulling from registry.
+// resolveBaseImage → deploykit.Generator.ResolveBaseImage (P8 shim).
 func (g *Generator) resolveBaseImage(img *ResolvedBox) string {
-	if img.IsExternalBase {
-		return img.Base
-	}
-	parentImg := g.Boxes[img.Base]
-	return parentImg.FullTag
+	return g.toDeploykit().ResolveBaseImage(img)
 }
 
 // builderRefForFormat returns the full tag of the builder image for a given format,
 // or "" if no builder is configured for that format.
+// builderRefForFormat → deploykit.Generator.BuilderRefForFormat (P8 shim).
 func (g *Generator) builderRefForFormat(boxName, format string) string {
-	img := g.Boxes[boxName]
-	builder := img.Builder.BuilderFor(format)
-	if builder == "" || builder == boxName {
-		return ""
-	}
-	if builderImg, ok := g.Boxes[builder]; ok {
-		return builderImg.FullTag
-	}
-	return ""
+	return g.toDeploykit().BuilderRefForFormat(boxName, format)
 }
 
 // renderDnfConfWrite returns a bootstrap-RUN fragment that appends the
@@ -1396,646 +1164,50 @@ func (g *Generator) builderRefForFormat(boxName, format string) string {
 // distro has no dnf config or no knobs set (so non-dnf distros and unset
 // configs emit nothing). The keys land under the file's [main] section
 // (Fedora's stock dnf.conf is [main]-only).
-func renderDnfConfWrite(d *DnfConfig) string {
-	if d == nil {
-		return ""
-	}
-	var lines []string
-	if d.MaxParallelDownloads > 0 {
-		lines = append(lines, fmt.Sprintf("max_parallel_downloads=%d", d.MaxParallelDownloads))
-	}
-	if d.Fastestmirror {
-		lines = append(lines, "fastestmirror=True")
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	body := strings.Join(lines, "\\n") + "\\n"
-	return fmt.Sprintf("printf '%s' >> /etc/dnf/dnf.conf && \\\n    ", body)
-}
-
-// writeBootstrap writes the bootstrap preamble for external base images.
-// All distro-specific behavior is driven by the embedded distro: vocabulary config.
-func (g *Generator) writeBootstrap(b *strings.Builder, img *ResolvedBox) {
-	b.WriteString("# Bootstrap\n")
-
-	// Resolve distro config for bootstrap commands
-	var distroDef *DistroDef
-	if img.DistroConfig != nil {
-		distroDef = img.DistroConfig.ResolveDistro(img.Distro)
-	}
-
-	b.WriteString("RUN ")
-	// Cache mounts from distro config (or fall back to primary format's mounts)
-	var cacheMounts []CacheMountDef
-	if distroDef != nil {
-		cacheMounts = distroDef.Bootstrap.CacheMount
-	} else if img.DistroDef != nil {
-		if formatDef, ok := img.DistroDef.Format[img.Pkg]; ok {
-			cacheMounts = formatDef.CacheMount
-		}
-	}
-	b.WriteString(RenderCacheMounts(cacheMounts, -1, 0, " \\\n    ", true))
-
-	// dnf download tuning (max_parallel_downloads / fastestmirror) → written to
-	// /etc/dnf/dnf.conf BEFORE the bootstrap install, so it speeds up the
-	// bootstrap install itself AND every per-candy dnf install in this image
-	// and its descendants. Speed-only — never changes package selection.
-	if distroDef != nil {
-		b.WriteString(renderDnfConfWrite(distroDef.Dnf))
-	}
-
-	// Install bootstrap packages using distro's install command
-	if distroDef != nil && distroDef.Bootstrap.InstallCmd != "" && len(distroDef.Bootstrap.Package) > 0 {
-		fmt.Fprintf(b, "%s %s && \\\n    ", distroDef.Bootstrap.InstallCmd, strings.Join(distroDef.Bootstrap.Package, " "))
-	}
-
-	// Apply distro-specific workarounds
-	if distroDef != nil {
-		for _, w := range distroDef.Workarounds {
-			b.WriteString(w + " && \\\n    ")
-		}
-	}
-
-	b.WriteString("{ [ -L /usr/local ] && mkdir -p \"$(readlink /usr/local)\"; mkdir -p /usr/local/bin; } && \\\n")
-	b.WriteString("    ARCH=$(uname -m) && \\\n")
-	b.WriteString("    case \"$ARCH\" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; esac && \\\n")
-	b.WriteString("    curl -fsSL \"https://github.com/go-task/task/releases/latest/download/task_linux_${ARCH}.tar.gz\" | tar -xzf - -C /usr/local/bin task\n\n")
-
-	// User/group handling — two modes driven by resolved user_policy:
-	//   UserAdopted=true  → base image already ships this user at the
-	//                        declared uid/gid/home; skip creation.
-	//   UserAdopted=false → idempotent create (no-op if uid already taken;
-	//                        the policy layer blocks the collision case
-	//                        via auto/create semantics before we get here).
-	if img.UserAdopted {
-		fmt.Fprintf(b, "# User %s (uid=%d) adopted from base image (declared in the embedded distro.base_user) — no useradd needed\n\n", img.User, img.UID)
-	} else {
-		fmt.Fprintf(b, "RUN if ! getent passwd %d >/dev/null 2>&1; then \\\n", img.UID)
-		fmt.Fprintf(b, "      (getent group %d >/dev/null 2>&1 || groupadd -g %d %s) && \\\n", img.GID, img.GID, img.User)
-		fmt.Fprintf(b, "      useradd -m -u %d -g %d -s /bin/bash %s; \\\n", img.UID, img.GID, img.User)
-		b.WriteString("    fi\n\n")
-	}
-
-	// WORKDIR only - ENV comes from candy env files
-	fmt.Fprintf(b, "WORKDIR %s\n\n", img.Home)
-}
-
-// escapeContainerfileEnvValue prefixes `\` to every `$` so Docker's ENV-
-// value substitution treats the rest as literal text. The escape is
-// preserved through the shell invocations that consume the env value at
-// runtime (bash strips a single `\$` to `$` and substitutes the var as
-// expected). Without this escape, references like `${POSTGRES_PASSWORD}`
-// in env: block values get emptied by Docker at build time because
-// POSTGRES_PASSWORD is not a build arg — it's a runtime-injected secret.
-//
-// Special exception: leave `${PATH}` intact. The path-append code at the
-// PATH ENV directive depends on Docker substituting the parent layer's
-// PATH value during the build. PATH is the only ENV var charly knows is set
-// at every Containerfile build step (Dockerfile spec guarantees it).
-func escapeContainerfileEnvValue(v string) string {
-	// Replace $ with \$ EXCEPT in `${PATH}` references (rare but documented).
-	// Two-step: protect ${PATH}, escape, restore.
-	const sentinel = "\x00CHARLY_PATH_REF\x00"
-	v = strings.ReplaceAll(v, "${PATH}", sentinel)
-	v = strings.ReplaceAll(v, "$", "\\$")
-	v = strings.ReplaceAll(v, sentinel, "${PATH}")
-	return v
-}
+// renderDnfConfWrite → deploykit.RenderDnfConfWrite (P8 shim).
+var renderDnfConfWrite = deploykit.RenderDnfConfWrite
 
 // writeCandyEnv collects env configs from all candies and writes ENV directives.
 // Builder-triggered runtime env contributions (RuntimeEnv + PathContributions
 // on BuilderDef) are merged in alongside candy contributions — see
 // collectBuilderRuntimeEnv.
+// writeCandyEnv → deploykit.Generator.WriteCandyEnv (P8 shim).
 func (g *Generator) writeCandyEnv(b *strings.Builder, candyOrder []string, img *ResolvedBox) {
-	var configs []*EnvConfig
-
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if layer.HasEnv() {
-			cfg, err := layer.EnvConfig()
-			if err == nil && cfg != nil {
-				configs = append(configs, cfg)
-			}
-		}
-	}
-
-	configs = append(configs, g.collectBuilderRuntimeEnv(candyOrder, img)...)
-
-	if len(configs) == 0 {
-		return
-	}
-
-	// Merge all configs
-	merged := MergeEnvConfigs(configs)
-
-	// Expand paths with home directory
-	expanded := ExpandEnvConfig(merged, img.Home)
-
-	// Write ENV directives
-	if len(expanded.Vars) > 0 || len(expanded.PathAppend) > 0 {
-		b.WriteString("# Layer environment variables\n")
-	}
-
-	// Sort keys for deterministic output (prevents Docker cache invalidation)
-	keys := make([]string, 0, len(expanded.Vars))
-	for key := range expanded.Vars {
-		keys = append(keys, key)
-	}
-	sortStrings(keys)
-	for _, key := range keys {
-		// Docker substitutes ${VAR} and $VAR in ENV values at build time
-		// using build args + previously-set ENVs. Candy-author-supplied
-		// values that reference RUNTIME-injected vars (e.g. POSTGRES_PASSWORD
-		// from a podman secret) would be silently emptied. Escape `$` so
-		// the references survive verbatim into the runtime container, where
-		// shell / *_CMD-style invocations resolve them properly.
-		// Build-arg-style refs (TARGETARCH, ARCH) aren't used in env: blocks
-		// — they're handled via ARG/ENV pairs inserted by emitVarsEnv —
-		// so blanket-escaping `$` is safe here.
-		fmt.Fprintf(b, "ENV %s=\"%s\"\n", key, escapeContainerfileEnvValue(expanded.Vars[key]))
-	}
-
-	// Append to PATH if there are path additions
-	if len(expanded.PathAppend) > 0 {
-		pathAdditions := strings.Join(expanded.PathAppend, ":")
-		fmt.Fprintf(b, "ENV PATH=\"%s:${PATH}\"\n", pathAdditions)
-	}
-
-	if len(expanded.Vars) > 0 || len(expanded.PathAppend) > 0 {
-		b.WriteString("\n")
-	}
+	g.toDeploykit().WriteCandyEnv(b, candyOrder, img)
 }
 
 // writeExpose emits EXPOSE directives for the box's inherited candy ports —
 // the SAME set baked into the ai.opencharly.port label (CollectBoxPorts), so
 // EXPOSE and the label can never diverge. CollectBoxPorts already dedups by
 // container port and sorts ascending.
+// writeExpose → deploykit.Generator.WriteExpose (P8 shim).
 func (g *Generator) writeExpose(b *strings.Builder, boxName string) {
-	ports, _ := CollectBoxPorts(g.Config, g.Candies, boxName)
-	if len(ports) == 0 {
-		return
-	}
-	b.WriteString("# Exposed ports\n")
-	for _, port := range ports {
-		fmt.Fprintf(b, "EXPOSE %s\n", port)
-	}
-	b.WriteString("\n")
+	g.toDeploykit().WriteExpose(b, boxName)
 }
 
 // writeDataStaging emits COPY instructions for data candies into /data/<volume>/[dest/].
 // Data files are staged in the image for deploy-time provisioning by charly config / charly update.
+// writeDataStaging → deploykit.Generator.WriteDataStaging (P8 shim).
 func (g *Generator) writeDataStaging(b *strings.Builder, candyOrder []string, img *ResolvedBox) {
-	hasData := false
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if !layer.HasData() {
-			continue
-		}
-		if !hasData {
-			b.WriteString("# Data staging (for deploy-time provisioning into bind-backed volumes)\n")
-			hasData = true
-		}
-		for _, d := range layer.Data() {
-			// Source: candy scratch stage has the candy dir contents at /
-			// so data/notebooks/ in the candy dir becomes /data/notebooks/ in the scratch stage
-			srcPath := "/" + d.Src
-			if !strings.HasSuffix(srcPath, "/") {
-				srcPath += "/"
-			}
-
-			// Destination: /data/<volume>/[dest/]
-			dstPath := "/data/" + d.Volume + "/"
-			if d.Dest != "" {
-				dstPath += d.Dest
-				if !strings.HasSuffix(dstPath, "/") {
-					dstPath += "/"
-				}
-			}
-
-			// Use the short stage alias (layer.Name) to match `FROM scratch AS
-			// <layer.Name>` — for REMOTE candies candyName is the full @github map
-			// key, which is NOT a valid build-stage reference (podman would try to
-			// pull it as an image). Local candies: candyName == layer.Name (no-op).
-			fmt.Fprintf(b, "COPY --from=%s --chown=%d:%d %s %s\n",
-				layer.Name, img.UID, img.GID, srcPath, dstPath)
-		}
-	}
-	if hasData {
-		b.WriteString("\n")
-	}
+	g.toDeploykit().WriteDataStaging(b, candyOrder, img)
 }
 
 // generateTraefikRoutes generates a traefik dynamic config YAML for route candies
-func (g *Generator) generateTraefikRoutes(boxName string, candyOrder []string, _ *ResolvedBox) error {
-	var b strings.Builder
-
-	b.WriteString("# .build/" + boxName + "/traefik-routes.yml (generated -- do not edit)\n")
-	b.WriteString("http:\n")
-	b.WriteString("  routers:\n")
-
-	// Collect routes in candy order (deterministic)
-	type routeEntry struct {
-		name string
-		cfg  *RouteConfig
-	}
-	var routes []routeEntry
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		if !layer.HasRoute() {
-			continue
-		}
-		route, err := layer.Route()
-		if err != nil || route == nil {
-			continue
-		}
-		routes = append(routes, routeEntry{name: candyName, cfg: route})
-	}
-
-	for _, r := range routes {
-		// Schema v4: DNS removed from ResolvedBox (deploy-only choice).
-		// Traefik route hostnames come from the candy's host declaration.
-		// Deploy-time DNS override via BundleNode.DNS applies separately.
-		host := r.cfg.Host
-
-		fmt.Fprintf(&b, "    %s:\n", r.name)
-		fmt.Fprintf(&b, "      rule: \"Host(`%s`)\"\n", host)
-		fmt.Fprintf(&b, "      service: %s\n", r.name)
-		b.WriteString("      entryPoints:\n")
-		b.WriteString("        - websecure\n")
-		b.WriteString("      tls:\n")
-		b.WriteString("        certResolver: letsencrypt\n")
-	}
-
-	b.WriteString("  services:\n")
-	for _, r := range routes {
-		fmt.Fprintf(&b, "    %s:\n", r.name)
-		b.WriteString("      loadBalancer:\n")
-		b.WriteString("        servers:\n")
-		fmt.Fprintf(&b, "          - url: \"http://127.0.0.1:%s\"\n", r.cfg.Port)
-	}
-
-	imageDir := filepath.Join(g.BuildDir, boxName)
-	if err := os.MkdirAll(imageDir, 0755); err != nil {
-		return err
-	}
-
-	routesYAML := []byte(b.String())
-	// Egress gate: the hand-built traefik dynamic config must validate before it
-	// is written into the build context (see /charly-internals:egress).
-	if err := ValidateEgress("traefik_routes", filepath.Join(boxName, "traefik-routes.yml"), routesYAML); err != nil {
-		return err
-	}
-	return atomicWriteFile(filepath.Join(imageDir, "traefik-routes.yml"), routesYAML, 0644)
+// generateTraefikRoutes → deploykit.Generator.GenerateTraefikRoutes (P8 shim).
+func (g *Generator) generateTraefikRoutes(boxName string, candyOrder []string, img *ResolvedBox) error {
+	return g.toDeploykit().GenerateTraefikRoutes(boxName, candyOrder, img)
 }
 
-// generateInitFragments writes init system config fragments to
-// .build/<image>/<fragmentDir>/. Schema-driven: iterates each candy's
-// service: list and renders every entry that binds to this init via
-// per-entry routing (use_packaged → systemd; custom exec → any init with
-// a service_template). No legacy raw-INI path.
+// generateInitFragments → deploykit.Generator.GenerateInitFragments (P8 shim).
+// The pod-overlay build (deploy_target_pod.go) also calls this directly.
 func (g *Generator) generateInitFragments(boxName, initName string, def *ResolvedInit, candyOrder []string) error {
-	fragDir := filepath.Join(g.BuildDir, boxName, def.FragmentDir)
-	if err := os.MkdirAll(fragDir, 0755); err != nil {
-		return err
-	}
-	img := g.Boxes[boxName]
-
-	for i, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		idx := i + 1
-
-		if def.Model == "fragment_assembly" {
-			// Concatenate every service entry in this candy that binds to this init
-			// into ONE fragment file per candy, matching the Containerfile's
-			// stage_fragment_copy naming convention (NN-<candy>.conf).
-			var candyBuf strings.Builder
-			for j := range layer.Service() {
-				entry := &layer.Service()[j]
-				// Per-distro filter: skip entries whose distro: list excludes
-				// this box's distro (the modular virtqemud/virtnetworkd vs
-				// monolithic libvirtd split — see serviceEntryAppliesToDistro).
-				if img != nil && !serviceEntryAppliesToDistro(entry, img.Distro) {
-					continue
-				}
-				// Per-entry routing: only render entries this init can handle.
-				if entry.IsPackaged() {
-					if def.ServiceSchema == nil || !def.ServiceSchema.SupportsPackaged {
-						continue
-					}
-				} else {
-					if def.ServiceSchema == nil || def.ServiceSchema.ServiceTemplate == "" {
-						continue
-					}
-				}
-				ctx := ServiceRenderContext{
-					Name:             entry.Name,
-					Candy:            candyName,
-					Exec:             entry.Exec,
-					Env:              entry.Env,
-					EnvList:          mapToKeyValueSlice(entry.Env),
-					Restart:          entry.Restart,
-					WorkingDirectory: entry.WorkingDirectory,
-					User:             entry.User,
-					After:            entry.After,
-					Before:           entry.Before,
-					Stdout:           entry.Stdout,
-					StopTimeout:      entry.StopTimeout,
-					Scope:            entry.EffectiveScope(),
-				}
-				rendered, err := RenderService(entry, def, ctx)
-				if err != nil {
-					return fmt.Errorf("rendering service %s/%s/%s: %w", initName, candyName, entry.Name, err)
-				}
-				content := rendered.UnitText
-				if content == "" {
-					content = rendered.DropinText
-				}
-				if content == "" {
-					continue
-				}
-				if candyBuf.Len() > 0 && !strings.HasSuffix(candyBuf.String(), "\n\n") {
-					if !strings.HasSuffix(candyBuf.String(), "\n") {
-						candyBuf.WriteString("\n")
-					}
-					candyBuf.WriteString("\n")
-				}
-				candyBuf.WriteString(content)
-				if !strings.HasSuffix(content, "\n") {
-					candyBuf.WriteString("\n")
-				}
-			}
-			if candyBuf.Len() > 0 {
-				// Short name, not the slashed remote map key (see scratch-stage note).
-				fragFile := filepath.Join(fragDir, fmt.Sprintf("%02d-%s.conf", idx, layer.Name))
-				if err := atomicWriteFile(fragFile, []byte(candyBuf.String()), 0644); err != nil {
-					return err
-				}
-			}
-		}
-
-		// Port relay fragments (unchanged — use candy position in filename to
-		// match Containerfile's stage_fragment_copy naming).
-		if initHasRelayTemplate(def) && len(layer.PortRelayPorts) > 0 {
-			for _, port := range layer.PortRelayPorts {
-				content, err := initRenderRelayTemplate(def, port, candyName, idx)
-				if err != nil {
-					return fmt.Errorf("rendering relay for %s/%s port %d: %w", initName, candyName, port, err)
-				}
-				confName := fmt.Sprintf("%02d-relay-%d.conf", idx, port)
-				fragFile := filepath.Join(fragDir, confName)
-				if err := atomicWriteFile(fragFile, []byte(content), 0644); err != nil {
-					return err
-				}
-			}
-		}
-
-		// File copy model: copy detected service files (systemd *.service globs).
-		if def.Model == "file_copy" {
-			for _, svcPath := range layer.ServiceFiles() {
-				content, err := os.ReadFile(svcPath)
-				if err != nil {
-					return fmt.Errorf("reading service file %s: %w", svcPath, err)
-				}
-				destFile := filepath.Join(fragDir, filepath.Base(svcPath))
-				if err := atomicWriteFile(destFile, content, 0644); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
+	return g.toDeploykit().GenerateInitFragments(boxName, initName, def, candyOrder)
 }
 
-// mapToKeyValueSlice deterministically sorts a map into []KeyValue for
-// template iteration. Matches the existing ServiceRenderContext contract.
-func mapToKeyValueSlice(m map[string]string) []KeyValue {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make([]KeyValue, 0, len(m))
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		out = append(out, KeyValue{Key: k, Value: m[k]})
-	}
-	return out
-}
-
-// writeCandySteps writes the RUN steps for a single candy.
-// skipRootReset prevents emitting USER root after user-mode steps (used for the
-// last candy when no post-candy root steps follow).
-// Returns true if the candy ended in user mode.
-//
-//nolint:gocyclo // candy-build step sequence (ENV/packages/localpkg/tasks/builders/shell/user-reset) sharing asUser state; conditionally ordered, cohesive
+// writeCandySteps → deploykit.Generator.WriteCandySteps (P8 shim). The pod-overlay
+// build reaches the render through generateContainerfile, not this directly.
 func (g *Generator) writeCandySteps(b *strings.Builder, candyName string, img *ResolvedBox, skipRootReset bool) (bool, error) {
-	layer := g.Candies[candyName]
-	stageName := layer.Name // short name used as scratch stage alias
-
-	fmt.Fprintf(b, "# Layer: %s\n", candyName)
-
-	// Track if we've switched to user mode
-	asUser := false
-
-	// 0. ENV from vars: + ARCH (ARG TARGETARCH) — emitted once per candy
-	// before packages/tasks so Docker's variable substitution sees the
-	// values in subsequent directives (COPY dests, RUN commands, etc.).
-	if layer.HasTasks() || len(layer.vars) > 0 {
-		emitVarsEnv(b, layer.vars)
-	}
-
-	// 1. System packages — resolved by THE shared distro-specificity cascade
-	// (resolveCascadePackages — the SAME resolver the deploy path uses, so build
-	// and deploy can never diverge). It folds the candy's top-level `package:`
-	// base, unions every matching distro tag section over img.Distro, and
-	// resolves repo/options/etc. most-specific-wins. Emits the PRIMARY format
-	// (img.Pkg) install; non-primary build formats (the `aur` builder) emit from
-	// their own format section below.
-	if pkgs, raw, matched := resolveCascadePackages(layer, img); (matched || len(pkgs) > 0) && img.DistroDef != nil {
-		if formatDef := img.DistroDef.Format[img.Pkg]; formatDef != nil {
-			ctx := NewInstallContext(raw, formatDef.CacheMount)
-			if rendered, err := RenderTemplate(img.Pkg+"-install", formatDef.InstallTemplate, ctx); err == nil {
-				b.WriteString(rendered)
-			}
-		}
-	}
-
-	// Non-primary build formats (e.g. `aur` for build: [pac, aur]) are secondary
-	// BUILD formats consumed by a multi-stage builder, NOT distro package tags, so
-	// they emit from their own format section (the cascade above owns img.Pkg).
-	for _, format := range img.BuildFormats {
-		if format == img.Pkg {
-			continue // primary format handled by the cascade above
-		}
-		section := layer.FormatSection(format)
-		if section == nil || len(section.Packages) == 0 {
-			continue
-		}
-		if img.DistroDef == nil || img.DistroDef.Format == nil {
-			continue
-		}
-		formatDef := img.DistroDef.Format[format]
-		if formatDef == nil {
-			continue
-		}
-		if builderDef, ok := img.BuilderConfig.Builder[format]; ok && !builderDef.Inline {
-			// Format with builder: use the format's install_template (e.g., aur COPY + pacman -U)
-			ctx := &InstallContext{
-				CacheMounts: formatDef.CacheMount,
-				Packages:    section.Packages,
-				StageName:   fmt.Sprintf("%s-%s-build", layer.Name, format),
-			}
-			if rendered, err := RenderTemplate(format+"-install", formatDef.InstallTemplate, ctx); err == nil {
-				b.WriteString(rendered)
-			}
-		} else {
-			ctx := NewInstallContext(section.Raw, formatDef.CacheMount)
-			if rendered, err := RenderTemplate(format+"-install", formatDef.InstallTemplate, ctx); err == nil {
-				b.WriteString(rendered)
-			}
-		}
-	}
-
-	// 2.5 localpkg: install the candy's OS package in the IMAGE build — the same
-	// dep-resolving install the deploy LocalPkgInstallStep performs, so a localpkg
-	// candy (the `charly` toolchain) installs as a proper, OS-tracked,
-	// dependency-resolving package on EVERY distro image, not a curl'd raw binary.
-	// compileLocalPkgStep resolves the target distro's localpkg-capable format and
-	// the candy's source; renderLocalPkgImageInstall (shared with OCITarget — R3)
-	// then picks the binary source by box type: a PRODUCTION box downloads the
-	// PUBLISHED release; a DISPOSABLE check bed (g.DevLocalPkg) builds the
-	// IN-DEVELOPMENT package from local source. Emits "" when the format declares
-	// no localpkg contract (the candy's own task: install is the fallback).
-	if step := compileLocalPkgStep(layer, img, HostContext{}); step != nil {
-		if s, ok := step.(*LocalPkgInstallStep); ok {
-			run, err := renderLocalPkgImageInstall(s, g.DevLocalPkg, filepath.Join(g.BuildDir, img.Name), img.Name)
-			if err != nil {
-				// renderLocalPkgImageInstall's contract is fail-loudly, never a
-				// silent fallback. Emitting the error as a Containerfile COMMENT
-				// (the old behavior) and continuing MASKED the failure: a
-				// --dev-local-pkg build whose makepkg failed shipped an image with
-				// NO /usr/bin/charly, only surfacing downstream as failing charly
-				// checks (the check-charly-selftest-pod defect). Hard-error here.
-				return asUser, fmt.Errorf("candy %q: rendering localpkg install for image %q (dev=%v): %w", candyName, img.Name, g.DevLocalPkg, err)
-			}
-			b.WriteString(run)
-		}
-	}
-
-	// 2a. tasks: list (new path — replaces both root.yml and user.yml).
-	// Validator rejects candies that have both tasks: and root.yml/user.yml.
-	if layer.HasTasks() {
-		boxName := img.Name
-		buildDir := filepath.Join(g.BuildDir, boxName)
-		contextRelPrefix := filepath.ToSlash(filepath.Join(".build", boxName))
-		finalUser, err := g.emitTasks(b, layer, img, layer.runOps(), buildDir, contextRelPrefix)
-		if err != nil {
-			// Phase 0: log but continue; validator should catch this earlier.
-			fmt.Fprintf(b, "# emitTasks error: %v\n", err)
-		}
-		if finalUser != "0" && finalUser != "root" {
-			// Tasks ended in non-root state; reset for builders/user.yml that
-			// follow in existing code paths (they assume USER=root at entry).
-			b.WriteString("USER root\n")
-		}
-	}
-
-	// 4. Inline builders (cargo, etc.) — an EXTERNALIZED inline builder (cargo) renders its
-	// in-candy RUN via its plugin's OpResolve build leg (C10, InlineFragment); a custom
-	// (non-externalized) inline builder renders from the embedded builder: vocabulary
-	// install_template.
-	if img.BuilderConfig != nil {
-		for _, bName := range img.BuilderConfig.BuilderNames() {
-			bDef := img.BuilderConfig.Builder[bName]
-			if !bDef.Inline {
-				continue
-			}
-			external := externalizedBuilders[bName]
-			if !external && bDef.InstallTemplate == "" {
-				continue
-			}
-			if !g.candyNeedsBuilder(img, layer, bDef) {
-				continue
-			}
-			if !asUser {
-				fmt.Fprintf(b, "USER %d\n", img.UID)
-				asUser = true
-			}
-			ctx := &BuildStageContext{
-				LayerStage:  stageName,
-				UID:         img.UID,
-				GID:         img.GID,
-				CacheMounts: bDef.CacheMount,
-			}
-			if external {
-				if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
-					return asUser, fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)
-				}
-				prov, ok := providerRegistry.ResolveBuilder(bName)
-				if !ok {
-					return asUser, fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
-				}
-				in := builderResolveInputFrom(layer.Name, bName, bDef, ctx)
-				reply, err := resolveBuilderStage(prov, bName, in, img)
-				if err != nil {
-					return asUser, fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)
-				}
-				if strings.TrimSpace(reply.InlineFragment) == "" {
-					return asUser, fmt.Errorf("candy %q: inline builder %q returned an empty OpResolve inline fragment", candyName, bName)
-				}
-				b.WriteString(reply.InlineFragment)
-				continue
-			}
-			rendered, err := RenderTemplate(bName+"-inline", bDef.InstallTemplate, ctx)
-			if err != nil {
-				return asUser, fmt.Errorf("candy %q: rendering inline builder %q: %w", candyName, bName, err)
-			}
-			b.WriteString(rendered)
-		}
-	}
-
-	// 5. Shell-init snippets from the candy manifest `shell:` block.
-	// Reuses the InstallPlan compiler so the box-build generator and the
-	// pod-overlay path share one source of truth for selection-rule +
-	// destination resolution. We emit the resulting steps inline as
-	// RUN-heredoc directives (parallel to how candy/plugin-installstep's
-	// shell-snippet OpEmit renders the pod-overlay fragment — same
-	// sha256-derived end-marker).
-	if shellSteps := compileShellSnippetSteps(layer, img, HostContext{}); len(shellSteps) > 0 {
-		// Shell snippets are root-owned system drop-ins; reset to root
-		// before emission so RUN runs as root.
-		if asUser {
-			b.WriteString("USER root\n")
-			asUser = false
-		}
-		for _, step := range shellSteps {
-			s, ok := step.(*ShellSnippetStep)
-			if !ok || s == nil || s.Snippet == "" {
-				continue
-			}
-			h := sha256.Sum256([]byte(s.Snippet))
-			marker := fmt.Sprintf("CHARLY_SHELL_%s_%x", strings.ToUpper(s.Shell), h[:4])
-			fmt.Fprintf(b,
-				"RUN mkdir -p %s && cat > %s <<'%s'\n%s\n%s\n",
-				shellQuote(filepath.Dir(s.Destination)),
-				shellQuote(s.Destination),
-				marker,
-				s.Snippet,
-				marker,
-			)
-		}
-	}
-
-	// Reset to root for next candy (skip for last candy when no root steps follow)
-	if asUser && !skipRootReset {
-		b.WriteString("USER root\n")
-	}
-
-	b.WriteString("\n")
-	return asUser, nil
+	return g.toDeploykit().WriteCandySteps(b, candyName, img, skipRootReset)
 }
 
 // Old format-specific write functions removed — all generation is now
@@ -2049,33 +1221,9 @@ func expandBuilderPath(path string, img *ResolvedBox) string {
 }
 
 // candyNeedsBuilder checks if a candy triggers a builder's detection criteria.
+// candyNeedsBuilder → deploykit.Generator.CandyNeedsBuilder (P8 shim).
 func (g *Generator) candyNeedsBuilder(img *ResolvedBox, layer *Candy, builderDef *BuilderDef) bool {
-	for _, f := range builderDef.DetectFiles {
-		if layer.HasFile(f) {
-			return true
-		}
-	}
-	if builderDef.DetectConfig != "" {
-		section := layer.FormatSection(builderDef.DetectConfig)
-		if section != nil && len(section.Packages) > 0 {
-			// Distro-aware gate: a config-only detection (no DetectFiles
-			// match) means the builder is tightly coupled to a specific
-			// distro's install_template (e.g. arch.formats.aur runs
-			// `pacman -U`). The IR compiler (install_build.go:236-249)
-			// only emits install steps for formats in img.BuildFormats —
-			// so when the image's build modes don't include this format,
-			// the section is unreachable and the builder is not needed.
-			// Multi-distro candies can carry rpm: + pac: + aur: together
-			// without forcing every Fedora consumer to invoke
-			// arch-builder. Mirrors the validate.go validateBuilders
-			// gate (Section K-1).
-			if img != nil && !buildFormatsInclude(img.BuildFormats, builderDef.DetectConfig) {
-				return false
-			}
-			return true
-		}
-	}
-	return false
+	return g.toDeploykit().CandyNeedsBuilder(img, layer, builderDef)
 }
 
 // buildFormatsInclude returns true if formats contains target.
@@ -2099,106 +1247,15 @@ func buildFormatsInclude(formats []string, target string) bool {
 // the binary lived at ~/.pixi/envs/default/bin/jupyter. Threading via the
 // BUILDER means any image whose candies trigger pixi gets the contract
 // automatically.
+// collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *ResolvedBox) []*EnvConfig {
-	if img == nil || img.BuilderConfig == nil {
-		return nil
-	}
-	var out []*EnvConfig
-	for _, builderName := range img.BuilderConfig.BuilderNames() {
-		def := img.BuilderConfig.Builder[builderName]
-		if def == nil {
-			continue
-		}
-		if len(def.RuntimeEnv) == 0 && len(def.PathContributions) == 0 {
-			continue
-		}
-		triggered := false
-		for _, candyName := range candyOrder {
-			layer, ok := g.Candies[candyName]
-			if !ok {
-				continue
-			}
-			if g.candyNeedsBuilder(img, layer, def) {
-				triggered = true
-				break
-			}
-		}
-		if !triggered {
-			continue
-		}
-		out = append(out, &EnvConfig{
-			Vars:       def.RuntimeEnv,
-			PathAppend: def.PathContributions,
-		})
-	}
-	return out
+	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }
 
 // buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via builderResolveInputFrom).
+// buildStageContext → deploykit.Generator.BuildStageContext (P8 shim).
 func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *BuildStageContext {
-	stageName := fmt.Sprintf("%s-%s-build", layer.Name, builderName)
-	ctx := &BuildStageContext{
-		BuilderRef:  builderRef,
-		StageName:   stageName,
-		LayerStage:  layer.Name,
-		CopySrc:     g.candyCopySource(candyMapKey(layer)),
-		UID:         img.UID,
-		GID:         img.GID,
-		Home:        img.Home,
-		User:        img.User,
-		CacheMounts: builderDef.CacheMount,
-	}
-
-	// Resolve manifest and install command for file-detected builders (pixi)
-	if len(builderDef.InstallCommands) > 0 && len(builderDef.DetectFiles) > 0 {
-		manifest := ""
-		for _, f := range builderDef.DetectFiles {
-			if layer.HasFile(f) {
-				manifest = f
-				break
-			}
-		}
-		ctx.Manifest = manifest
-		ctx.HasLockFile = fileExists(filepath.Join(layer.SourceDir, manifest+".lock")) ||
-			(manifest == "pixi.toml" && layer.HasPixiLock)
-
-		// Select install command from builder config
-		if ctx.HasLockFile {
-			if cmd, ok := builderDef.InstallCommands[manifest+"+lock"]; ok {
-				ctx.InstallCmd = cmd
-			}
-		}
-		if ctx.InstallCmd == "" {
-			if cmd, ok := builderDef.InstallCommands[manifest]; ok {
-				ctx.InstallCmd = cmd
-			}
-		}
-	}
-
-	// Resolve manylinux fix template
-	if builderDef.ManylinuxFix != "" && ctx.Manifest != "" {
-		rendered, err := RenderTemplate(builderName+"-manylinux", builderDef.ManylinuxFix, ctx)
-		if err == nil {
-			ctx.ManylinuxFix = rendered
-		}
-	}
-
-	// Detect optional build script (runs in builder stage after install)
-	if builderDef.BuildScript != "" && layer.HasFile(builderDef.BuildScript) {
-		ctx.HasBuildScript = true
-		ctx.BuildScript = builderDef.BuildScript
-	}
-
-	// For config-detected builders (aur), extract packages/options from candy config
-	if builderDef.DetectConfig != "" {
-		section := layer.FormatSection(builderDef.DetectConfig)
-		if section != nil {
-			ctx.Packages = section.Packages
-			ctx.Options = toStringSlice(section.Raw["options"])
-		}
-	}
-
-	return ctx
+	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
 }
 
 // writeLabels emits OCI LABEL directives with all runtime-relevant metadata.
@@ -2926,12 +1983,8 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 // the short name for local ones. Use this whenever code holds a *Candy but
 // needs to look it up (or pass its key to candyCopySource), since a remote
 // candy's short Name does NOT match its map key.
-func candyMapKey(layer *Candy) string {
-	if layer.Remote {
-		return layer.RepoPath + "/" + layer.SubPathPrefix + layer.Name
-	}
-	return layer.Name
-}
+// candyMapKey → deploykit.CandyMapKey (P8 shim).
+var candyMapKey = deploykit.CandyMapKey
 
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
 // It is the FORWARD counterpart of candyMapKey (which maps a *Candy back to its
@@ -2966,30 +2019,10 @@ func (g *Generator) candyByName(name string) *Candy {
 // `charly clean` can prune outdated versions. Candy names are dot-free
 // (lowercase-hyphenated), so the version (a dotted CalVer) parses back off the
 // FIRST dot. Cache-safe: the path changes iff the candy version changes.
-func candyStageDirName(layer *Candy) string {
-	if layer.Version == "" {
-		return layer.Name // defensive; remote candies are mandatorily versioned
-	}
-	return layer.Name + "." + layer.Version
-}
+// candyStageDirName → deploykit.CandyStageDirName (P8 shim).
+var candyStageDirName = deploykit.CandyStageDirName
 
+// candyCopySource → deploykit.Generator.CandyCopySource (P8 shim).
 func (g *Generator) candyCopySource(candyRef string) string {
-	layer := g.Candies[candyRef]
-	if layer.Remote {
-		return ".build/_candy/" + candyStageDirName(layer)
-	}
-	// If SourceDir matches the default candy/<candyRef>/ location, preserve
-	// the legacy path format (cheap, avoids filepath.Rel calls on hot path).
-	defaultDir := filepath.Join(g.Dir, DefaultCandyDir, candyRef)
-	if layer.SourceDir == "" || layer.SourceDir == defaultDir {
-		return DefaultCandyDir + "/" + candyRef
-	}
-	// `directory:` override — resolve SourceDir relative to the build root.
-	rel, err := filepath.Rel(g.Dir, layer.SourceDir)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		// Falling back to the default means the Containerfile will miss files
-		// from an out-of-tree SourceDir — validation should have caught this.
-		return DefaultCandyDir + "/" + candyRef
-	}
-	return rel
+	return g.toDeploykit().CandyCopySource(candyRef)
 }

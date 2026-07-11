@@ -16,44 +16,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
+	"github.com/opencharly/sdk/kit"
 	"golang.org/x/sys/unix"
 )
 
-// atomicWriteFile writes data to path atomically: a temp file in the SAME dir
-// (same filesystem, so rename is atomic) is written, chmod'd, then renamed over
-// path. A concurrent reader sees either the old complete file or the new complete
-// file, never a partial write; concurrent writers of identical content converge
-// (last rename wins, bytes identical). Replaces a plain os.WriteFile wherever the
-// target may be read by a concurrent build.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp.*")
-	if err != nil {
-		return fmt.Errorf("atomic write %s: %w", path, err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed away
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("atomic write %s: %w", path, err)
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("atomic write %s: %w", path, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("atomic write %s: %w", path, err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("atomic write %s: %w", path, err)
-	}
-	return nil
-}
+// atomicWriteFile → kit.AtomicWriteFile (P8 shim — the pure atomic-write primitive
+// moved to sdk/kit so the build render engine shares it).
+var atomicWriteFile = kit.AtomicWriteFile
 
 // installDirAtomic atomically installs the freshly-populated tmp directory as
 // final. When final already exists, the two dirs are swapped in a single atomic

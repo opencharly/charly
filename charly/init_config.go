@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
-	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // --- Init Config ---
@@ -22,24 +23,8 @@ type FragmentContext struct {
 	Index     int
 }
 
-// RelayContext is the template context for relay_template rendering.
-type RelayContext struct {
-	Port      int
-	CandyName string
-	Index     int
-}
-
-// StageFragmentContext is the template context for stage_fragment_copy rendering.
-type StageFragmentContext struct {
-	BoxName     string
-	FragmentDir string
-	FileName    string
-}
-
 // SystemEnableContext is the template context for system_enable_template rendering.
-type SystemEnableContext struct {
-	Units []string
-}
+type SystemEnableContext = deploykit.SystemEnableContext
 
 // ServiceCommandContext is the template context for management_commands rendering.
 type ServiceCommandContext struct {
@@ -227,10 +212,8 @@ func initDefRequirementsMet(def *ResolvedInit, caps *AggregatedCandyCaps) bool {
 	return true
 }
 
-// HasRelayTemplate returns true if this init definition has a relay template.
-func initHasRelayTemplate(def *ResolvedInit) bool {
-	return def.RelayTemplate != ""
-}
+// initHasRelayTemplate → deploykit.InitHasRelayTemplate (P8 shim).
+var initHasRelayTemplate = deploykit.InitHasRelayTemplate
 
 // RenderManagementCommand renders a management command template with the given service name.
 func initRenderManagementCommand(def *ResolvedInit, operation, serviceName string) (string, error) {
@@ -259,66 +242,11 @@ func (ic *InitConfig) InitNames() []string {
 	return names
 }
 
-// RenderStageFragmentCopy renders the stage_fragment_copy template.
-func initRenderStageFragmentCopy(def *ResolvedInit, boxName, fileName string) (string, error) {
-	if def.StageFragmentCopy == "" {
-		return "", nil
-	}
-	ctx := StageFragmentContext{
-		BoxName:     boxName,
-		FragmentDir: def.FragmentDir,
-		FileName:    fileName,
-	}
-	return RenderTemplate("stage-fragment-copy", def.StageFragmentCopy, ctx)
-}
-
 // RenderFragmentTemplate was the legacy path that took raw-INI service
 // content from a candy manifest `service: |STRING|` and re-rendered it via an
 // init-system template. Replaced by RenderService per F3 of the services
 // refactor — each ServiceEntry is rendered via ServiceSchema.ServiceTemplate.
 // Function deleted; fragment_template field removed from InitDef.
 
-// RenderRelayTemplate renders the relay_template for a port relay.
-func initRenderRelayTemplate(def *ResolvedInit, port int, candyName string, index int) (string, error) {
-	if def.RelayTemplate == "" {
-		return "", fmt.Errorf("init system has no relay_template")
-	}
-	ctx := RelayContext{
-		Port:      port,
-		CandyName: candyName,
-		Index:     index,
-	}
-	result, err := RenderTemplate("relay", def.RelayTemplate, ctx)
-	if err != nil {
-		return "", err
-	}
-	if !strings.HasSuffix(result, "\n") {
-		result += "\n"
-	}
-	return result, nil
-}
-
-// RenderAssemblyTemplate renders the assembly_template.
-func initRenderAssemblyTemplate(def *ResolvedInit) (string, error) {
-	if def.AssemblyTemplate == "" {
-		return "", nil
-	}
-	return RenderTemplate("assembly", def.AssemblyTemplate, nil)
-}
-
-// RenderSystemEnableTemplate renders the system_enable_template.
-func initRenderSystemEnableTemplate(def *ResolvedInit, units []string) (string, error) {
-	if def.SystemEnableTemplate == "" || len(units) == 0 {
-		return "", nil
-	}
-	ctx := SystemEnableContext{Units: units}
-	return RenderTemplate("system-enable", def.SystemEnableTemplate, ctx)
-}
-
-// RenderPostAssemblyTemplate renders the post_assembly_template.
-func initRenderPostAssemblyTemplate(def *ResolvedInit) (string, error) {
-	if def.PostAssemblyTemplate == "" {
-		return "", nil
-	}
-	return RenderTemplate("post-assembly", def.PostAssemblyTemplate, nil)
-}
+// initRenderRelayTemplate → deploykit.InitRenderRelayTemplate (P8 shim).
+var initRenderRelayTemplate = deploykit.InitRenderRelayTemplate

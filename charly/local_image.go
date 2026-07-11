@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
-	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // LocalImageInfo describes an image present in the engine's local storage.
@@ -306,40 +307,10 @@ func sameRepoAcross(cands []resolverCandidate) bool {
 // wrong answer because "10" < "9" as strings but 10 > 9 numerically).
 // Non-numeric components fall through to lexical compare as a defensive
 // fallback, but extractCalVerTag only returns valid numeric CalVers.
+// compareCalVer delegates to kit.CompareCalVer (relocated in P8 so the build
+// render engine and charly's image-tag logic share one comparator).
 func compareCalVer(a, b string) int {
-	aParts := strings.Split(a, ".")
-	bParts := strings.Split(b, ".")
-	n := len(aParts)
-	if len(bParts) < n {
-		n = len(bParts)
-	}
-	for i := 0; i < n; i++ {
-		ai, aErr := strconv.Atoi(aParts[i])
-		bi, bErr := strconv.Atoi(bParts[i])
-		if aErr != nil || bErr != nil {
-			// Fall back to lexical for this component.
-			if aParts[i] < bParts[i] {
-				return -1
-			}
-			if aParts[i] > bParts[i] {
-				return 1
-			}
-			continue
-		}
-		if ai < bi {
-			return -1
-		}
-		if ai > bi {
-			return 1
-		}
-	}
-	if len(aParts) < len(bParts) {
-		return -1
-	}
-	if len(aParts) > len(bParts) {
-		return 1
-	}
-	return 0
+	return kit.CompareCalVer(a, b)
 }
 
 // extractCalVerTag returns the CalVer portion of a ref's tag, or ""
