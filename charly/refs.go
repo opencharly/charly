@@ -97,45 +97,6 @@ func bareRefs(refs []CandyRef) []string {
 // therefore collects EVERY distinct (repo, git-tag) a ref is referenced at;
 // the per-entity dedup + warn happens once, after fetch.
 
-// RepoCacheDir returns the cache directory for remote repos.
-// Uses $CHARLY_REPO_CACHE env var if set, otherwise ~/.cache/charly/repos/
-func RepoCacheDir() (string, error) {
-	if envDir := os.Getenv("CHARLY_REPO_CACHE"); envDir != "" {
-		return envDir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home directory: %w", err)
-	}
-	return filepath.Join(home, ".cache", "charly", "repos"), nil
-}
-
-// RepoCachePath returns the cache path for a specific repo version.
-// e.g. ~/.cache/charly/repos/github.com/org/repo@v1.0.0/
-func RepoCachePath(repoPath, version string) (string, error) {
-	cacheDir, err := RepoCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(cacheDir, repoPath+"@"+version), nil
-}
-
-// IsRepoCached checks if a repo version is already in the cache
-func IsRepoCached(repoPath, version string) (bool, error) {
-	cachePath, err := RepoCachePath(repoPath, version)
-	if err != nil {
-		return false, err
-	}
-	_, err = os.Stat(cachePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
 // RepoOverrideEnv configures RDD local-overrides: it points a remote `@github`
 // repo ref at a LOCAL working tree (Go-`replace`-style), so an UNCOMMITTED
 // candy / charly.yml change can be built and `charly check`'d by ANY
@@ -304,7 +265,9 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	if cached {
 		path, err = RepoCachePath(repoPath, version)
 	} else {
-		path, err = DownloadRepo(repoPath, version)
+		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
+		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
+		path, err = activeRefsDownloader.Download(repoPath, version)
 	}
 	if err != nil {
 		return "", err

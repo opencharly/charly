@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/sdk/proto"
 )
@@ -85,5 +86,11 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	// document. The provider's Invoke stays registered for the out-of-process placement.
 	if dp, ok := srv.(loaderkit.DocParser); ok {
 		activeLoaderParser = dp
+	}
+	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —
+	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download
+	// through it (no wire envelope). See candy/plugin-refs.
+	if rd, ok := srv.(kit.RefsDownloader); ok {
+		activeRefsDownloader = rd
 	}
 }
