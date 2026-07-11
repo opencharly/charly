@@ -28,5 +28,6 @@ not the rule itself):
 - R9 deployed binary == source; runtime deps in package mgmt
 - R10 verify on `disposable: true`; prove on a FRESH rebuild; tier == proof
 - ONE PHASE through R10 (Hard Cutover): approved plan = an immutable CONTRACT (no mid-execution change); transitional/legacy/deprecated code gone BEFORE the R10 acceptance run (FINAL code only); run the R10 gate by change class
-Detail: CLAUDE.md R0-R10 / RDD / ADE; load skills per the Skill Dispatcher.
+- AUTONOMY: run fully autonomously to done (only the defined STOP-and-ask exceptions). Size/difficulty/PRIORITY are never a reason not to do something. "Out of context / needs a fresh session / continuing would break the tree" are FORBIDDEN excuses ("break the tree" is fabricated) — compact-and-continue OR DELEGATE the unit to a fresh teammate/sub-agent (that IS a fresh session, on demand; the primitives' primary purpose)
+Detail: CLAUDE.md R0-R10 / RDD / ADE / "Hard Cutover by Default" / "Agents, Workflows & Teams"; load skills per the Skill Dispatcher.
 EOF

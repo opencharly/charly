@@ -18,6 +18,13 @@ re-verify THIS turn for FULL CLAUDE.md compliance.
   ALWAYS YES — keep going AUTOMATICALLY (Hard Cutover runs end-to-end through
   R10; disposable:true targets need no extra permission). Do NOT stop to ask
   whether to proceed.
+- Tempted to stop because context is running out / "it needs a fresh session" /
+  continuing "would leave a broken, unbuildable tree"? Those are FORBIDDEN excuses
+  (CLAUDE.md "Hard Cutover by Default" — the Size/budget/context bullet; "would
+  break the tree" is FABRICATED, zero evidence). Running low on context is NEVER a
+  stop reason: COMPACT-and-continue, OR DELEGATE the unit to a fresh teammate /
+  sub-agent (`Agent`/team/workflow) — that IS "a fresh session," delivered on
+  demand. NEVER hand the user a "start a fresh session on task #N" note.
 - Did EVERY failure / warning / anomaly this turn get a proper RCA and a real
   fix per CLAUDE.md (R1)? "flake" / "transient" / "out of scope" / "follow-up"
   are FORBIDDEN framings (R2) — fix it now, or open its own immediate-next cutover.
