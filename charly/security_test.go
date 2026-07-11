@@ -258,9 +258,9 @@ func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"big", "small"}},
-		},
+		}),
 	}
 	sec := CollectSecurity(cfg, layers, "test")
 	if sec.MemoryMax != "4g" {
@@ -283,12 +283,12 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"heavy": {
 				Candy:    []string{"chrome"},
 				Security: &SecurityConfig{MemoryMax: "16g"},
 			},
-		},
+		}),
 	}
 	sec := CollectSecurity(cfg, layers, "heavy")
 	if sec.MemoryMax != "16g" {

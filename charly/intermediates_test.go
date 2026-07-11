@@ -164,7 +164,7 @@ func TestComputeIntermediates_NoBranching(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box:      map[string]BoxConfig{"app": {Candy: []string{"python"}}},
+		Box:      boxMapOf(map[string]BoxConfig{"app": {Candy: []string{"python"}}}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -212,11 +212,11 @@ func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora": {Candy: []string{}},
 			"app1":   {Base: "fedora", Candy: []string{"python", "testapi"}},
 			"app2":   {Base: "fedora", Candy: []string{"nodejs"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -273,11 +273,11 @@ func TestComputeIntermediates_SharedPrefix(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora":      {Candy: []string{}},
 			"fedora-test": {Base: "fedora", Candy: []string{"testapi"}},
 			"openclaw":    {Base: "fedora", Candy: []string{"openclaw"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -340,11 +340,11 @@ func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora": {Candy: []string{}},
 			"app1":   {Base: "fedora", Candy: []string{"pixi"}},
 			"app2":   {Base: "fedora", Candy: []string{"nodejs"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -453,12 +453,12 @@ func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"builder":     {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":      {Candy: []string{}},
 			"fedora-test": {Base: "fedora", Candy: []string{"traefik", "testapi"}},
 			"openclaw":    {Base: "fedora", Candy: []string{"openclaw"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -587,7 +587,7 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"builder":      {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":       {Candy: []string{}},
 			"nvidia":       {Base: "fedora", Candy: []string{"cuda"}},
@@ -599,7 +599,7 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 			"fedora-test":  {Base: "fedora", Candy: []string{"traefik", "testapi"}},
 			"openclaw":     {Base: "fedora", Candy: []string{"openclaw"}},
 			"githubrunner": {Base: "fedora", Candy: []string{"github-runner"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -736,12 +736,12 @@ func TestComputeIntermediates_UserImageAtBranchPoint(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora": {Candy: []string{}},
 			"svbase": {Base: "fedora", Candy: []string{"supervisord"}},
 			"app1":   {Base: "svbase", Candy: []string{"testapi"}},
 			"app2":   {Base: "svbase", Candy: []string{"webapp"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -833,12 +833,12 @@ func TestComputeIntermediates_UserImageAsBranchIntermediate(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"base": {Candy: []string{}},
 			"mid":  {Base: "base", Candy: []string{"B"}},
 			"app1": {Base: "base", Candy: []string{"C"}},
 			"app2": {Base: "base", Candy: []string{"D"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -941,13 +941,13 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 			Builder:   BuilderMap{"pixi": "builder", "npm": "builder"},
 			Platforms: []string{"linux/amd64", "linux/arm64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
 			"fedora":  {Candy: []string{}},
 			"nvidia":  {Base: "fedora", Candy: []string{"cuda"}, Platforms: []string{"linux/amd64"}},
 			"appA":    {Base: "nvidia", Candy: []string{"appA"}},
 			"appB":    {Base: "nvidia", Candy: []string{"appB"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -1108,14 +1108,14 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"builder":             {Candy: []string{"pixi"}},
 			"fedora":              {Candy: []string{}},
 			"nvidia":              {Base: "fedora", Candy: []string{"cuda"}},
 			"jupyter-ml":          {Base: "nvidia", Candy: []string{"agent-forwarding", "jupyter-ml", "notebook-templates", "dbus", "charly"}},
 			"jupyter-ml-notebook": {Base: "nvidia", Candy: []string{"agent-forwarding", "jupyter-ml", "notebook-templates", "notebook-finetuning", "dbus", "charly"}},
 			"unsloth-studio":      {Base: "nvidia", Candy: []string{"agent-forwarding", "unsloth-studio", "notebook-finetuning", "dbus", "charly"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -1221,12 +1221,12 @@ func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 			Distro:   []string{"fedora"},
 			Build:    BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora":   {Candy: []string{}},
 			"arch":     {Base: "ext:arch", Candy: []string{}},
 			"arch-a-b": {Base: "arch", Candy: []string{"a", "b"}},
 			"arch-a-c": {Base: "arch", Candy: []string{"a", "c"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -1310,11 +1310,11 @@ func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 			Distro:   []string{"fedora"},
 			Build:    BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"cachyos":     {Base: "ext:cachyos", Candy: []string{}},
 			"cachyos-a-b": {Base: "cachyos", Candy: []string{"a", "b"}},
 			"cachyos-a-c": {Base: "cachyos", Candy: []string{"a", "c"}},
-		},
+		}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")

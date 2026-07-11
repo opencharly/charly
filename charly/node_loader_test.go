@@ -45,15 +45,15 @@ shop:
 	if err != nil {
 		t.Fatalf("LoadUnified node-form: %v", err)
 	}
-	if uf.Candy["redis"] == nil {
+	if redis, ok := decodeInlineCandy(uf.Candy["redis"]); !ok {
 		t.Errorf("candy redis not loaded; candies=%v", mapKeys(uf.Candy))
-	} else if uf.Candy["redis"].Version != "2026.150.0000" {
-		t.Errorf("candy redis version = %q", uf.Candy["redis"].Version)
+	} else if redis.Version != "2026.150.0000" {
+		t.Errorf("candy redis version = %q", redis.Version)
 	}
-	if _, ok := uf.Box["coder"]; !ok {
+	if coder, ok := uf.BoxConfig("coder"); !ok {
 		t.Errorf("box coder not loaded; boxes=%v", boxKeys(uf.Box))
-	} else if uf.Box["coder"].Base != "fedora" {
-		t.Errorf("box coder base = %q", uf.Box["coder"].Base)
+	} else if coder.Base != "fedora" {
+		t.Errorf("box coder base = %q", coder.Base)
 	}
 	shop, ok := uf.Bundle["shop"]
 	if !ok {
@@ -121,17 +121,28 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 	}
 }
 
-func mapKeys(m map[string]*InlineCandy) []string {
+func mapKeys(m candyMap) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
 	return out
 }
-func boxKeys(m map[string]BoxConfig) []string {
+func boxKeys(m boxMap) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
+	}
+	return out
+}
+
+// boxMapOf folds typed BoxConfig test literals into the generic image map — the
+// test-construction analog of the loader's encodeBox (P6 map-killing). Tests author
+// readable typed boxes; this marshals each opaque exactly as the loader stores them.
+func boxMapOf(m map[string]BoxConfig) boxMap {
+	out := make(boxMap, len(m))
+	for k, v := range m {
+		out[k] = encodeBox(v)
 	}
 	return out
 }

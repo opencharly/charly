@@ -180,11 +180,17 @@ func validateNodeFormSteps(path string, data []byte) error {
 	if err := yaml.Unmarshal(data, &ydoc); err != nil {
 		return fmt.Errorf("%s: yaml: %w", path, err)
 	}
-	_, nodes, err := parseNodeTree(&ydoc)
+	// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
+	// genericNode validateEntityNodeRec consumes is reconstructed from each ParsedNode.
+	_, pp, err := activeLoaderParser.ParseDoc(&ydoc, loaderThreaded())
 	if err != nil {
 		return fmt.Errorf("%s: parse: %w", path, err)
 	}
-	for _, gn := range nodes {
+	for i := range pp.Nodes {
+		gn, gerr := parsedNodeToGeneric(pp.Nodes[i])
+		if gerr != nil {
+			return fmt.Errorf("%s: %w", path, gerr)
+		}
 		if verr := validateEntityNodeRec(gn, path); verr != nil {
 			return verr
 		}

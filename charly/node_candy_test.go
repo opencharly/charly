@@ -86,9 +86,9 @@ func TestBuildCandy_RoundTrip(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(candyNodeForm), &doc); err != nil {
 		t.Fatalf("parsing node-form candy: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&doc)
+	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
-		t.Fatalf("parseNodeTree: %v", err)
+		t.Fatalf("genericNodesFromDoc: %v", err)
 	}
 	if len(nodes) != 1 || nodes[0].name != "redis" {
 		t.Fatalf("expected one node 'redis', got %d nodes", len(nodes))

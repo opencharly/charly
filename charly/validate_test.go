@@ -13,9 +13,9 @@ func TestValidateSuccess(t *testing.T) {
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"base": {Candy: []string{"pixi"}},
-		},
+		}),
 	}
 
 	layers := map[string]*Candy{
@@ -54,7 +54,7 @@ func TestValidateBuildTunables(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Defaults: tc.ic, Box: map[string]BoxConfig{}}
+			cfg := &Config{Defaults: tc.ic, Box: boxMapOf(map[string]BoxConfig{})}
 			errs := &ValidationError{}
 			validateBuildTunables(cfg, errs)
 			if tc.wantErr == "" {
@@ -78,7 +78,7 @@ func TestValidateInvalidPkg(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"invalid"},
 		},
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{}
 
@@ -93,9 +93,9 @@ func TestValidateInvalidPkg(t *testing.T) {
 
 func TestValidateMissingCandy(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"nonexistent"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{}
 
@@ -110,9 +110,9 @@ func TestValidateMissingCandy(t *testing.T) {
 
 func TestValidateMissingCandyWithTypo(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"pixie"}}, // typo for "pixi"
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi": {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -129,7 +129,7 @@ func TestValidateMissingCandyWithTypo(t *testing.T) {
 
 func TestValidateCandyNoInstallFiles(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"empty": {Name: "empty"}, // no install files
@@ -146,7 +146,7 @@ func TestValidateCandyNoInstallFiles(t *testing.T) {
 
 func TestValidateCargoWithoutSrc(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"tool": {
@@ -167,7 +167,7 @@ func TestValidateCargoWithoutSrc(t *testing.T) {
 
 func TestValidateCoprWithoutPackages(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"layer": {
@@ -190,7 +190,7 @@ func TestValidateCoprWithoutPackages(t *testing.T) {
 
 func TestValidateReposWithoutPackages(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"layer": {
@@ -213,7 +213,7 @@ func TestValidateReposWithoutPackages(t *testing.T) {
 
 func TestValidateModulesWithoutPackages(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"layer": {
@@ -243,7 +243,7 @@ func TestValidateModulesWithoutPackages(t *testing.T) {
 func TestValidatePacPkgValue(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"pac"}},
-		Box:      map[string]BoxConfig{},
+		Box:      boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{}
 
@@ -258,7 +258,7 @@ func TestValidateInvalidPkgValue(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"zypper"},
 		},
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{}
 
@@ -282,13 +282,13 @@ func TestValidateAurWithoutAurBuilder(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"pac", "aur"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"arch-img": {
 				Base:  "arch:latest",
 				Build: BuildFormats{"pac", "aur"},
 				Candy: []string{"aur-layer"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"aur-layer": {
@@ -319,13 +319,13 @@ func TestValidateAurOnFedoraImageNoError(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora-img": {
 				Base:  "quay.io/fedora/fedora:43",
 				Build: BuildFormats{"rpm"},
 				Candy: []string{"multi-distro-layer"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"multi-distro-layer": {
@@ -351,13 +351,13 @@ func TestValidateAurOnArchImageWithoutAurInBuildFormats(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"pac"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"arch-pac-only": {
 				Base:  "arch:latest",
 				Build: BuildFormats{"pac"},
 				Candy: []string{"aur-layer"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"aur-layer": {
@@ -385,13 +385,13 @@ func TestValidatePixiBuilderUnconditional(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"fedora-img": {
 				Base:  "quay.io/fedora/fedora:43",
 				Build: BuildFormats{"rpm"},
 				Candy: []string{"pixi-layer"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi-layer": {
@@ -411,7 +411,7 @@ func TestValidatePixiBuilderUnconditional(t *testing.T) {
 
 func TestValidateUnknownDependency(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"layer": {
@@ -433,11 +433,11 @@ func TestValidateUnknownDependency(t *testing.T) {
 func TestValidateImageCycle(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"a": {Base: "b", Candy: []string{}},
 			"b": {Base: "c", Candy: []string{}},
 			"c": {Base: "a", Candy: []string{}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{}
 
@@ -452,9 +452,9 @@ func TestValidateImageCycle(t *testing.T) {
 
 func TestValidateCandyCycle(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"a"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"a": {Name: "a", plan: []Step{{Run: "build", Op: cmdOp("true")}}, Require: toCandyRefs([]string{"b"})},
@@ -474,9 +474,9 @@ func TestValidateCandyCycle(t *testing.T) {
 func TestValidateMultipleErrors(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"invalid"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"missing1", "missing2"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{}
 
@@ -500,9 +500,9 @@ func TestValidateRouteWithoutTraefik(t *testing.T) {
 	// Route without traefik is valid — routes are generic metadata consumed by traefik or tunnel
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"svc"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -525,9 +525,9 @@ func TestValidateRouteWithTraefik(t *testing.T) {
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"traefik", "svc"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"traefik": {
@@ -554,14 +554,14 @@ func TestValidateSkipsDisabledImages(t *testing.T) {
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"good": {Candy: []string{"pixi"}},
 			"bad-disabled": {
 				Enabled: new(false),
 				Candy:   []string{"nonexistent-layer"},
 				Build:   BuildFormats{"invalid"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi": {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -575,7 +575,7 @@ func TestValidateSkipsDisabledImages(t *testing.T) {
 
 func TestValidateVolumesValid(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -593,7 +593,7 @@ func TestValidateVolumesValid(t *testing.T) {
 
 func TestValidateVolumesDuplicate(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -618,12 +618,12 @@ func TestValidateVolumesDuplicate(t *testing.T) {
 func TestValidateAliasesValid(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {
 				Candy: []string{"svc"},
 				Alias: []AliasConfig{{Name: "mycli", Command: "mycli-bin"}},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -641,7 +641,7 @@ func TestValidateAliasesValid(t *testing.T) {
 
 func TestValidateAliasesDuplicate(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -665,7 +665,7 @@ func TestValidateAliasesDuplicate(t *testing.T) {
 
 func TestValidateAliasesInvalidName(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -686,7 +686,7 @@ func TestValidateAliasesInvalidName(t *testing.T) {
 
 func TestValidateImageAliasesDuplicate(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {
 				Candy: []string{"svc"},
 				Alias: []AliasConfig{
@@ -694,7 +694,7 @@ func TestValidateImageAliasesDuplicate(t *testing.T) {
 					{Name: "mycli", Command: "cmd2"},
 				},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {Name: "svc", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -714,12 +714,12 @@ func TestValidateSelfBuilder(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"myimg": {
 				Candy:   []string{"pixi"},
 				Builder: BuilderMap{"pixi": "myimg"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi": {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -741,9 +741,9 @@ func TestValidateBuilderInheritedSelfNotError(t *testing.T) {
 			Build:   BuildFormats{"rpm"},
 			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi": {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -760,12 +760,12 @@ func TestValidatePerImageBuilderNotFound(t *testing.T) {
 		Defaults: BoxConfig{
 			Build: BuildFormats{"rpm"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"app": {
 				Candy:   []string{"pixi"},
 				Builder: BuilderMap{"pixi": "nonexistent"},
 			},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pixi": {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -783,9 +783,9 @@ func TestValidatePerImageBuilderNotFound(t *testing.T) {
 func TestValidateCandyWithIncludesNoInstallFiles(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"sway-desktop"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"pipewire":     {Name: "pipewire", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
@@ -801,7 +801,7 @@ func TestValidateCandyWithIncludesNoInstallFiles(t *testing.T) {
 
 func TestValidateCandyIncludesCycle(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"a": {Name: "a", plan: []Step{{Run: "build", Op: cmdOp("true")}}, IncludedCandy: toCandyRefs([]string{"b"})},
@@ -816,7 +816,7 @@ func TestValidateCandyIncludesCycle(t *testing.T) {
 
 func TestValidateCandyIncludesMissing(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"desktop": {Name: "desktop", IncludedCandy: toCandyRefs([]string{"nonexistent"})},
@@ -855,9 +855,9 @@ func TestLevenshteinDistance(t *testing.T) {
 func TestValidatePortRelayValid(t *testing.T) {
 	cfg := &Config{
 		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"supervisord", "socat", "chrome"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}, formatSections: map[string]*PackageSection{"rpm": {FormatName: "rpm", Packages: []string{"supervisor"}}}},
@@ -880,7 +880,7 @@ func TestValidatePortRelayValid(t *testing.T) {
 
 func TestValidatePortRelayNotInPorts(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -903,7 +903,7 @@ func TestValidatePortRelayNotInPorts(t *testing.T) {
 
 func TestValidatePortRelayNoPorts(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -924,7 +924,7 @@ func TestValidatePortRelayNoPorts(t *testing.T) {
 
 func TestValidatePortRelayDuplicate(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{},
+		Box: boxMapOf(map[string]BoxConfig{}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
@@ -947,9 +947,9 @@ func TestValidatePortRelayDuplicate(t *testing.T) {
 
 func TestValidatePortRelayMissingSocat(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"test": {Candy: []string{"chrome"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"chrome": {
@@ -978,9 +978,9 @@ func TestValidatePortRelayMissingSocat(t *testing.T) {
 // directory.
 func TestValidateDataEntryUnknownVolume(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"jupyter": {Candy: []string{"jupyter", "notebook-templates"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"jupyter": {
@@ -1021,9 +1021,9 @@ func TestValidateDataEntryKnownVolume(t *testing.T) {
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"jupyter": {Candy: []string{"jupyter", "notebook-templates"}},
-		},
+		}),
 	}
 	layers := map[string]*Candy{
 		"jupyter": {
@@ -1067,7 +1067,7 @@ func secretDepsCandy(opts func(l *Candy)) *Candy {
 // TestValidateSecretAcceptsHappyPath — valid secret_accepts entry with an
 // explicit Key override that matches the charly/<service>/<key> format. No errors.
 func TestValidateSecretAcceptsHappyPath(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.secretAccepts = []EnvDependency{
@@ -1089,7 +1089,7 @@ func TestValidateSecretAcceptsHappyPath(t *testing.T) {
 // TestValidateSecretAcceptsCollidesWithEnvAccepts — plan §4.4 rule 1: a name
 // cannot appear in both env_accepts and secret_accepts.
 func TestValidateSecretAcceptsCollidesWithEnvAccepts(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.envAccepts = []EnvDependency{
@@ -1112,7 +1112,7 @@ func TestValidateSecretAcceptsCollidesWithEnvAccepts(t *testing.T) {
 // TestValidateSecretRequiresCollidesWithEnvRequires — same collision check for
 // requires variants.
 func TestValidateSecretRequiresCollidesWithEnvRequires(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.envRequires = []EnvDependency{
@@ -1135,7 +1135,7 @@ func TestValidateSecretRequiresCollidesWithEnvRequires(t *testing.T) {
 // TestValidateSecretAcceptsCollidesWithSecretRequires — a name cannot appear
 // in both secret_accepts and secret_requires in the same candy.
 func TestValidateSecretAcceptsCollidesWithSecretRequires(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.secretRequires = []EnvDependency{
@@ -1159,7 +1159,7 @@ func TestValidateSecretAcceptsCollidesWithSecretRequires(t *testing.T) {
 // entry name cannot also be in env_provides. env_provides is for plaintext
 // service discovery URLs; credentials must not be advertised that way.
 func TestValidateSecretCollidesWithEnvProvides(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.envProvides = map[string]string{
@@ -1186,7 +1186,7 @@ func TestValidateSecretCollidesWithEnvProvides(t *testing.T) {
 // podman-secret slug (e.g., leading underscore → leading hyphen after
 // lowercase-kebab) must be rejected.
 func TestValidateSecretAcceptsInvalidSlug(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	layers := map[string]*Candy{
 		"svc": secretDepsCandy(func(l *Candy) {
 			l.secretAccepts = []EnvDependency{

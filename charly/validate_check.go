@@ -52,7 +52,7 @@ func validateOps(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
 	for name, layer := range layers {
 		validatePlanOps(layer.plan, fmt.Sprintf("candy %q", name))
 	}
-	for name, img := range cfg.Box {
+	for name, img := range cfg.eachBox {
 		if img.Enabled != nil && !*img.Enabled {
 			continue
 		}

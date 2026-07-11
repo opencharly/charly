@@ -31,7 +31,7 @@ func TestValidateOps_MultiVerbRejected(t *testing.T) {
 	layers := map[string]*Candy{
 		"lyr": opsCandy("lyr", Op{Copy: "/x", Mkdir: "/tmp/d"}),
 	}
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	got := runValidateOps(t, cfg, layers)
 	if !strings.Contains(got, "multiple verbs") {
 		t.Errorf("expected 'multiple verbs' error: %s", got)
@@ -48,7 +48,7 @@ func TestValidateOps_RuntimeVarInBuildContext(t *testing.T) {
 			Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}},
 		),
 	}
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	got := runValidateOps(t, cfg, layers)
 	if !strings.Contains(got, "runtime-only variable") || !strings.Contains(got, "HOST_PORT:6379") {
 		t.Errorf("expected runtime-only variable error: %s", got)
@@ -62,7 +62,7 @@ func TestValidateOps_RuntimeVarInDeployContext(t *testing.T) {
 			Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Context: []string{"deploy"}},
 		),
 	}
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	got := runValidateOps(t, cfg, layers)
 	if got != "" {
 		t.Errorf("unexpected errors: %s", got)
@@ -88,7 +88,7 @@ func TestValidateOps_McpClean(t *testing.T) {
 			Op{Plugin: "mcp", PluginInput: map[string]any{"method": "read", "uri": "file:///x"}},
 		),
 	}
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 	got := runValidateOps(t, cfg, layers)
 	if got != "" {
 		t.Errorf("clean mcp fixture produced errors: %s", got)
@@ -113,7 +113,7 @@ func TestValidateOps_RecordClean(t *testing.T) {
 			Op{Plugin: "record", PluginInput: map[string]any{"method": "stop", "artifact": "/tmp/demo.cast", "artifact_min_bytes": 100}},
 		),
 	}
-	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
+	got := runValidateOps(t, &Config{Box: boxMapOf(map[string]BoxConfig{})}, layers)
 	if got != "" {
 		t.Errorf("clean record fixture produced errors: %s", got)
 	}
@@ -138,7 +138,7 @@ func TestValidateOps_SpiceClean(t *testing.T) {
 			Op{Plugin: "spice", PluginInput: map[string]any{"method": "key", "key": "Return"}},
 		),
 	}
-	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
+	got := runValidateOps(t, &Config{Box: boxMapOf(map[string]BoxConfig{})}, layers)
 	if got != "" {
 		t.Errorf("clean spice fixture produced errors: %s", got)
 	}
@@ -169,7 +169,7 @@ func TestValidateOps_LibvirtClean(t *testing.T) {
 			Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "send-key", "key": "ctrl alt F2"}},
 		),
 	}
-	got := runValidateOps(t, &Config{Box: map[string]BoxConfig{}}, layers)
+	got := runValidateOps(t, &Config{Box: boxMapOf(map[string]BoxConfig{})}, layers)
 	if got != "" {
 		t.Errorf("clean libvirt fixture produced errors: %s", got)
 	}
@@ -184,7 +184,7 @@ func TestValidateOps_Clean(t *testing.T) {
 			Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379} ping", "in_container": false}, Context: []string{"deploy"}},
 		),
 	}
-	cfg := &Config{Box: map[string]BoxConfig{
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{
 		"redis-ml": {
 			Enabled: new(true),
 			Candy:   []string{"redis"},
@@ -193,7 +193,7 @@ func TestValidateOps_Clean(t *testing.T) {
 				{Check: "routed", Op: Op{ID: "routed", Plugin: "http", PluginInput: map[string]any{"http": "https://${DNS}/health", "status": 200}}},
 			},
 		},
-	}}
+	})}
 	got := runValidateOps(t, cfg, layers)
 	if got != "" {
 		t.Errorf("clean fixture produced errors: %s", got)
@@ -205,7 +205,7 @@ func TestValidateOps_Clean(t *testing.T) {
 // (the k3s-server "cluster: ${deploy_name}" class of bug). Uppercase is accepted,
 // and a lowercase ${var} in a shell command body is NOT flagged (legit bash var).
 func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
-	cfg := &Config{Box: map[string]BoxConfig{}}
+	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
 
 	bad := map[string]*Candy{
 		"lyr": opsCandy("lyr", Op{Plugin: "kube", PluginInput: map[string]any{"method": "addons", "cluster": "${deploy_name}"}, Context: []string{"deploy"}}),

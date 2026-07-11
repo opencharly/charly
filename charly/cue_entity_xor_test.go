@@ -42,7 +42,7 @@ func TestBoxBaseFromXOR_RejectsConflict(t *testing.T) {
 				t.Fatalf("HasBaseFromConflict()=%v, want %v", got, tc.reject)
 			}
 			// Integration: the validate-time surface that collects the error.
-			cfg := &Config{Box: map[string]BoxConfig{"b": tc.box}}
+			cfg := &Config{Box: boxMapOf(map[string]BoxConfig{"b": tc.box})}
 			errs := &ValidationError{}
 			validateBoxBaseFrom(cfg, ResolveOpts{}, errs)
 			if tc.reject && !errs.HasErrors() {

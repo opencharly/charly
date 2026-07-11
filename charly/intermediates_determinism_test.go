@@ -67,12 +67,12 @@ func determinismFixture() (map[string]*ResolvedBox, map[string]*Candy, *Config) 
 
 	cfg := &Config{
 		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"pac"}, Distro: []string{"arch"}},
-		Box: map[string]BoxConfig{
+		Box: boxMapOf(map[string]BoxConfig{
 			"a-one": {Candy: []string{"leafA", "x", "y"}},
 			"a-two": {Candy: []string{"leafB", "y", "x"}},
 			"b-one": {Candy: []string{"leafA"}},
 			"b-two": {Candy: []string{"leafB"}},
-		},
+		}),
 	}
 	return images, layers, cfg
 }

@@ -42,7 +42,7 @@ func TestRunPluginKind_DecodesViaEnvelope(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
 		t.Fatal(err)
 	}
-	_, nodes, err := parseNodeTree(&ydoc)
+	nodes, err := genericNodesFromDoc(&ydoc)
 	if err != nil {
 		t.Fatalf("parse rejected the plugin kind (loader-recognition gap): %v", err)
 	}

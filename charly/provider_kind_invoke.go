@@ -244,16 +244,14 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", gn.name, err)
 		}
-		ensureMap(&uf.Box)
-		uf.Box[gn.name] = b
+		uf.SetBox(gn.name, b)
 		return nil
 	}
 	var c CandyYAML
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", gn.name, err)
 	}
-	ensureMap(&uf.Candy)
-	uf.Candy[gn.name] = &InlineCandy{CandyYAML: c}
+	uf.SetCandy(gn.name, &InlineCandy{CandyYAML: c})
 	return nil
 }
 

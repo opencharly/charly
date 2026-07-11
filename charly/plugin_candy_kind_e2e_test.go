@@ -14,9 +14,9 @@ func candyNodeFromYAML(t *testing.T, doc string) *genericNode {
 	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&ydoc)
+	nodes, err := genericNodesFromDoc(&ydoc)
 	if err != nil {
-		t.Fatalf("parseNodeTree: %v", err)
+		t.Fatalf("genericNodesFromDoc: %v", err)
 	}
 	if len(nodes) != 1 {
 		t.Fatalf("want 1 node, got %d", len(nodes))
@@ -57,7 +57,7 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	if err := foldCandyKind(prov, imgGn, &ufImg); err != nil {
 		t.Fatalf("foldCandyKind (image): %v", err)
 	}
-	bc, ok := ufImg.Box["my-image"]
+	bc, ok := ufImg.BoxConfig("my-image")
 	if !ok {
 		t.Fatalf("image shape not folded into uf.Box; boxes=%v", boxKeys(ufImg.Box))
 	}
@@ -91,7 +91,7 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	if err := foldCandyKind(prov, layerGn, &ufLayer); err != nil {
 		t.Fatalf("foldCandyKind (layer): %v", err)
 	}
-	ic, ok := ufLayer.Candy["my-layer"]
+	ic, ok := decodeInlineCandy(ufLayer.Candy["my-layer"])
 	if !ok {
 		t.Fatalf("layer shape not folded into uf.Candy; candies=%v", mapKeys(ufLayer.Candy))
 	}

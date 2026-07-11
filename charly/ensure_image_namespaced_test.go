@@ -10,9 +10,9 @@ import "testing"
 // buildable short-name match" (the check-builder-local failure mode).
 func TestBuildableShortName_NamespacedRef(t *testing.T) {
 	cfg := &Config{
-		Box: map[string]BoxConfig{"root-image": {}},
+		Box: boxMapOf(map[string]BoxConfig{"root-image": {}}),
 		Namespaces: map[string]*Config{
-			"fedora": {Box: map[string]BoxConfig{"fedora-builder": {}}},
+			"fedora": {Box: boxMapOf(map[string]BoxConfig{"fedora-builder": {}})},
 		},
 	}
 

@@ -136,7 +136,7 @@ type CollectedAlias struct {
 // No base chain traversal — aliases are leaf-box specific.
 // Candy aliases come first; box-level overrides by name.
 func CollectBoxAlias(cfg *Config, layers map[string]*Candy, boxName string) ([]CollectedAlias, error) {
-	img, ok := cfg.Box[boxName]
+	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)
 	}

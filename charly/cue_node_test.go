@@ -31,7 +31,7 @@ func normalizeAgentDoc(t *testing.T, doc string) error {
 	if err := yaml.Unmarshal([]byte(doc), &d); err != nil {
 		t.Fatalf("yaml: %v", err)
 	}
-	_, nodes, err := parseNodeTree(&d)
+	nodes, err := genericNodesFromDoc(&d)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func nodeFormRejected(doc string) bool {
 	if yaml.Unmarshal([]byte(doc), &d) != nil {
 		return true
 	}
-	_, nodes, err := parseNodeTree(&d)
+	nodes, err := genericNodesFromDoc(&d)
 	if err != nil {
 		return true
 	}

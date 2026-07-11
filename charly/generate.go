@@ -107,7 +107,7 @@ func (g *Generator) resolveUserContext(img *ResolvedBox) {
 	if !img.IsExternalBase {
 		// Internal base - inherit from parent, but respect explicit overrides
 		parentImg := g.Boxes[img.Base]
-		origCfg := g.Config.Box[img.Name]
+		origCfg, _ := g.Config.BoxConfig(img.Name)
 
 		if origCfg.User == "" {
 			img.User = parentImg.User
@@ -2307,7 +2307,7 @@ func (g *Generator) writeLabels(b *strings.Builder, boxName string, candyOrder [
 	// Managed via charly.yml only (charly config setup).
 
 	// Image-level env vars
-	imgCfg := g.Config.Box[boxName]
+	imgCfg, _ := g.Config.BoxConfig(boxName)
 	writeJSONLabel(b, LabelEnv, imgCfg.Env)
 
 	// Hooks: collected from candies
@@ -2660,7 +2660,7 @@ func (g *Generator) writeLabels(b *strings.Builder, boxName string, candyOrder [
 	seenDataCandies := make(map[string]bool)
 	current := boxName
 	for {
-		imgDef, ok := g.Config.Box[current]
+		imgDef, ok := g.Config.BoxConfig(current)
 		if !ok {
 			break
 		}
@@ -2690,7 +2690,7 @@ func (g *Generator) writeLabels(b *strings.Builder, boxName string, candyOrder [
 				})
 			}
 		}
-		if baseImg, isInternal := g.Config.Box[imgDef.Base]; isInternal && baseImg.IsEnabled() {
+		if baseImg, isInternal := g.Config.BoxConfig(imgDef.Base); isInternal && baseImg.IsEnabled() {
 			current = imgDef.Base
 		} else {
 			break
@@ -2701,7 +2701,7 @@ func (g *Generator) writeLabels(b *strings.Builder, boxName string, candyOrder [
 	}
 
 	// Data image flag
-	imgConfig := g.Config.Box[boxName]
+	imgConfig, _ := g.Config.BoxConfig(boxName)
 	if imgConfig.DataImage {
 		fmt.Fprintf(b, "LABEL %s=%q\n", LabelDataBox, "true")
 	}

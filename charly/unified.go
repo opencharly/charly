@@ -98,8 +98,11 @@ type UnifiedFile struct {
 	Defaults BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 	// Field-singular cutover (2026-05): legacy plural `Images yaml:"images"`
 	// deleted; the singular `Box yaml:"box"` is the canonical surface.
-	Box   map[string]BoxConfig       `yaml:"box,omitempty" json:"box,omitempty"`
-	Candy map[string]*InlineCandy    `yaml:"candy,omitempty" json:"candy,omitempty"`
+	// Box is the generic kind-keyed IMAGE map (P6): name → opaque marshaled BoxConfig; consumers
+	// decode the authored BoxConfig via the accessors in uf_box_generic.go (the kernel holds no
+	// per-kind TYPE). Config.Box shares this map.
+	Box   boxMap                     `yaml:"box,omitempty" json:"box,omitempty"`
+	Candy candyMap                   `yaml:"candy,omitempty" json:"candy,omitempty"`
 	VM    map[string]json.RawMessage `yaml:"vm,omitempty" json:"vm,omitempty"`
 	// Field-singular cutover: legacy `Deploys *DeploymentsSection
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
@@ -317,9 +320,10 @@ func (s *ScanSpec) UnmarshalYAML(node *yaml.Node) error {
 type InlineCandy struct {
 	From      string `yaml:"from,omitempty" json:"from,omitempty"`
 	CandyYAML `yaml:",inline"`
-	// manifest carries the discovery manifest filename for a `From:` directory
-	// so ProjectCandies→scanCandy reads the right file. Not serialized.
-	manifest string
+	// Manifest carries the discovery manifest filename for a `From:` directory
+	// so ProjectCandies→scanCandy reads the right file. Not YAML-authored; carried
+	// through the opaque candy-map fold (P6) via JSON, hence exported + json-tagged.
+	Manifest string `yaml:"-" json:"__manifest,omitempty"`
 }
 
 // DeploymentsSection carries repo-shipped deployment defaults plus per-image
@@ -744,8 +748,12 @@ func mergeUnifiedDocs(merged *UnifiedFile, data []byte, srcLabel, srcDir string)
 			if err := validateNodeDocCUE(label, raw); err != nil {
 				return nil, err
 			}
-			// Parse the document into its reserved directives + entity nodes.
-			directives, nodes, err := parseNodeTree(&node)
+			// Parse the document into its reserved directives + the generic spec.ParsedProject via
+			// the registered config front-end (P6): activeLoaderParser is the compiled-in loader
+			// plugin's loaderkit.DocParser (candy/plugin-loader), swappable for an alternative
+			// front-end. The host threads the registry-derived kind-recognition DATA
+			// (loaderThreaded); the parse itself is the ONE copy in sdk/loaderkit.
+			directives, pp, err := activeLoaderParser.ParseDoc(&node, loaderThreaded())
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", label, err)
 			}
@@ -763,10 +771,11 @@ func mergeUnifiedDocs(merged *UnifiedFile, data []byte, srcLabel, srcDir string)
 					return nil, fmt.Errorf("%s: decoding node-form directives: %w", label, derr)
 				}
 			}
-			for _, gn := range nodes {
-				if err := normalizeNodeInto(gn, &sub); err != nil {
-					return nil, fmt.Errorf("%s: %w", label, err)
-				}
+			// MATERIALIZE the typed UnifiedFile from the loader's ParsedProject — the host half of
+			// the seam (materializeProject → normalizeNodeInto), unchanged whether pp came from the
+			// in-core loaderkit call above or, later, from candy/plugin-loader's OpLoad.
+			if err := materializeProject(&pp, &sub); err != nil {
+				return nil, fmt.Errorf("%s: %w", label, err)
 			}
 			importQueue = append(importQueue, sub.Import...)
 			sub.Import = nil
@@ -892,7 +901,7 @@ const (
 // mapping is a node-form document (arbitrary entity-name nodes and/or the reserved
 // directives version/import/discover/…); a scalar-null / empty mapping is
 // docShapeEmpty; a non-mapping top level is an error. Entity + directive validation
-// happens downstream (parseNodeTree + the #NodeDoc CUE gate).
+// happens downstream (the loader parse + the #NodeDoc CUE gate).
 func classifyDoc(node *yaml.Node) (docShape, error) {
 	if node == nil || node.Kind == 0 {
 		return docShapeEmpty, nil
@@ -918,7 +927,7 @@ func classifyDoc(node *yaml.Node) (docShape, error) {
 	// A non-empty top-level mapping is a node-form document (arbitrary entity-name
 	// nodes and/or the reserved directives version/import/discover/…). The bilingual
 	// legacy-kind-map reader was deleted; entity + directive validation is downstream
-	// (parseNodeTree + the #NodeDoc CUE gate).
+	// (the loader parse + the #NodeDoc CUE gate).
 	return docShapeNode, nil
 }
 
@@ -965,8 +974,8 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	if len(src.Discover) > 0 {
 		dst.Discover = append(dst.Discover, anchorScanSpecs(src.Discover, srcDir)...)
 	}
-	mergeBoxMap(&dst.Box, src.Box)
-	mergeCandyMap(&dst.Candy, src.Candy)
+	mergeRawTemplateMap(&dst.Box, src.Box)
+	mergeRawTemplateMap(&dst.Candy, src.Candy)
 	mergeRawTemplateMap(&dst.VM, src.VM)
 	mergeRawTemplateMap(&dst.Pod, src.Pod)
 	mergeRawTemplateMap(&dst.K8s, src.K8s)
@@ -1002,34 +1011,6 @@ func anchorScanSpecs(specs []ScanSpec, srcDir string) []ScanSpec {
 		}
 	}
 	return out
-}
-
-func mergeBoxMap(dst *map[string]BoxConfig, src map[string]BoxConfig) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]BoxConfig)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
-
-func mergeCandyMap(dst *map[string]*InlineCandy, src map[string]*InlineCandy) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]*InlineCandy)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
 }
 
 // mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
@@ -1487,13 +1468,19 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 		if verr := validateNodeDocCUE(target, raw); verr != nil {
 			return verr
 		}
-		_, nfNodes, perr := parseNodeTree(&node)
+		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
+		// genericNode the candy pre-check + normalizeNodeInto consume is reconstructed per node.
+		_, pp, perr := activeLoaderParser.ParseDoc(&node, loaderThreaded())
 		if perr != nil {
 			// A malformed node-form manifest is a HARD error, never silently
 			// dropped (a swallowed parse error would discover "0 candies").
 			return fmt.Errorf("%s: %w", target, perr)
 		}
-		for _, gn := range nfNodes {
+		for i := range pp.Nodes {
+			gn, gerr := parsedNodeToGeneric(pp.Nodes[i])
+			if gerr != nil {
+				return fmt.Errorf("%s: %w", target, gerr)
+			}
 			if gn.disc == "candy" && !candyIsImage(gn) {
 				// LAYER candy: register a lazy directory reference (name = dir base, as
 				// the legacy scanner did). scanCandy does the real parse later. This
@@ -1504,9 +1491,6 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 				// runPluginKind → foldCandyKind → uf.Box (decoded eagerly by the compiled-in
 				// candy plugin, already registered at init before this load runs).
 				name := filepath.Base(dir)
-				if uf.Candy == nil {
-					uf.Candy = map[string]*InlineCandy{}
-				}
 				if _, exists := uf.Candy[name]; exists {
 					continue // explicit entry wins
 				}
@@ -1514,7 +1498,7 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 				if relErr != nil {
 					rel = dir
 				}
-				uf.Candy[name] = &InlineCandy{From: rel, manifest: manifest}
+				uf.SetCandy(name, &InlineCandy{From: rel, Manifest: manifest})
 				continue
 			}
 			if err := normalizeNodeInto(gn, uf); err != nil {
@@ -1544,7 +1528,7 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 	}
 	images := uf.Box
 	if images == nil {
-		images = map[string]BoxConfig{}
+		images = boxMap{}
 	}
 	c := &Config{
 		Defaults: uf.Defaults,
@@ -1684,8 +1668,9 @@ func (uf *UnifiedFile) ProjectBundleConfig() *BundleConfig {
 // embedded CandyYAML (Part A's `directory:` field still applies).
 func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]*Candy, error) {
 	out := map[string]*Candy{}
-	for name, il := range uf.Candy {
-		if il == nil {
+	for name, raw := range uf.Candy {
+		il, ok := decodeInlineCandy(raw)
+		if !ok {
 			continue
 		}
 		if il.From != "" {
@@ -1694,7 +1679,7 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]*Candy, error)
 			if !filepath.IsAbs(p) {
 				p = filepath.Join(rootDir, p)
 			}
-			manifest := il.manifest
+			manifest := il.Manifest
 			if manifest == "" {
 				manifest = UnifiedFileName
 			}

@@ -53,12 +53,20 @@ const (
 	// generate engine runs host-side in-proc (the engine is I/O-bound with unexported state +
 	// a huge blast radius, so it STAYS core — only a wire envelope crosses). See candy/plugin-build.
 	ClassBuild ProviderClass = "build"
+	// ClassLoader serves the unified-config PARSE (the single word "loader"): a compiled-in
+	// plugin whose OpLoad parses the project (file read → import resolution → the #NodeDoc CUE
+	// gate → reserved-word node decomposition → discover walk) into a generic, sdk-expressible
+	// ParsedProject the host MATERIALIZES into the typed *UnifiedFile. Registered at init()
+	// before the first LoadUnified call — no bootstrap cycle (the registry seed reads the
+	// embedded providers: manifest via a plain yaml.Unmarshal, never LoadUnified). See
+	// candy/plugin-loader (P6).
+	ClassLoader ProviderClass = "loader"
 )
 
 // providerClasses is the closed set, used by the loader to validate a plugin's
 // `provides:` entries and by the bijection gate.
 var providerClasses = map[ProviderClass]bool{
-	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true,
+	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true,
 }
 
 // splitCapability parses a "<class>:<word>" capability string as authored in a

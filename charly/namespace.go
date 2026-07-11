@@ -69,7 +69,7 @@ func (c *Config) resolveBoxRef(ref string) (BoxConfig, *Config, bool) {
 		}
 		return sub.resolveBoxRef(rest)
 	}
-	img, ok := c.Box[ref]
+	img, ok := c.BoxConfig(ref)
 	if !ok {
 		return BoxConfig{}, nil, false
 	}
