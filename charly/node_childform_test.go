@@ -26,7 +26,7 @@ func parseDocNodes(t *testing.T, nodeform string) []*genericNode {
 	}
 	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
-		t.Fatalf("parseNodeTree: %v", err)
+		t.Fatalf("genericNodesFromDoc: %v", err)
 	}
 	return nodes
 }

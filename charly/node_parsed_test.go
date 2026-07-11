@@ -11,7 +11,7 @@ import (
 
 // genericNodesFromDoc parses a node-form document into genericNodes via the PRODUCTION loader
 // (the registered config front-end sdk/loaderkit) + the materialize reconstruction — the SAME
-// path production uses (P6). The test-side replacement for the deleted core parseNodeTree, so
+// path production uses (P6). The test-side helper that runs the production loader parse, so
 // the genericNode-consuming tests (candy/substrate/bundle decode) exercise the real reconstructed
 // node, not a separate decomposition.
 func genericNodesFromDoc(doc *yaml.Node) ([]*genericNode, error) {

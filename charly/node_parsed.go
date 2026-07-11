@@ -17,8 +17,8 @@ import (
 // parsedNodeToGeneric reconstructs the genericNode the host MATERIALIZER folds (via
 // normalizeNodeInto) from a spec.ParsedNode: the JSON body becomes the discValue mapping node
 // the fold + the substrate/candy host-pre-decode read (entityBodyMapping / buildBundleNode use
-// gn.discValue only; gn.raw is never read by any materialize path). The materialize runs
-// entirely host-side on this reconstruction — no re-entrancy back into the loader plugin.
+// gn.discValue only). The materialize runs entirely host-side on this reconstruction — no
+// re-entrancy back into the loader plugin.
 func parsedNodeToGeneric(pn spec.ParsedNode) (*genericNode, error) {
 	gn := &genericNode{name: pn.Name, disc: pn.Disc, discClass: "entity"}
 	if len(pn.Body) > 0 {

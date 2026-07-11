@@ -901,7 +901,7 @@ const (
 // mapping is a node-form document (arbitrary entity-name nodes and/or the reserved
 // directives version/import/discover/…); a scalar-null / empty mapping is
 // docShapeEmpty; a non-mapping top level is an error. Entity + directive validation
-// happens downstream (parseNodeTree + the #NodeDoc CUE gate).
+// happens downstream (the loader parse + the #NodeDoc CUE gate).
 func classifyDoc(node *yaml.Node) (docShape, error) {
 	if node == nil || node.Kind == 0 {
 		return docShapeEmpty, nil
@@ -927,7 +927,7 @@ func classifyDoc(node *yaml.Node) (docShape, error) {
 	// A non-empty top-level mapping is a node-form document (arbitrary entity-name
 	// nodes and/or the reserved directives version/import/discover/…). The bilingual
 	// legacy-kind-map reader was deleted; entity + directive validation is downstream
-	// (parseNodeTree + the #NodeDoc CUE gate).
+	// (the loader parse + the #NodeDoc CUE gate).
 	return docShapeNode, nil
 }
 

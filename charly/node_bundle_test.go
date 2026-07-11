@@ -42,7 +42,7 @@ func TestBuildBundleNode_Structure(t *testing.T) {
 	}
 	nodes, err := genericNodesFromDoc(&doc)
 	if err != nil {
-		t.Fatalf("parseNodeTree: %v", err)
+		t.Fatalf("genericNodesFromDoc: %v", err)
 	}
 	if len(nodes) != 1 {
 		t.Fatalf("want 1 top node, got %d", len(nodes))

@@ -18,7 +18,7 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 	}
 	nodes, err := genericNodesFromDoc(&ydoc)
 	if err != nil {
-		t.Fatalf("parseNodeTree: %v", err)
+		t.Fatalf("genericNodesFromDoc: %v", err)
 	}
 	if len(nodes) != 1 {
 		t.Fatalf("want 1 node, got %d", len(nodes))

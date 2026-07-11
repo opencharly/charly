@@ -118,7 +118,7 @@ func isDeclaredExternalKind(word string) bool {
 // externalKindMayNestMembers reports whether a node whose discriminator is `word` may nest
 // sub-ENTITY (resource-member) children at PARSE time because `word` is an EXTERNAL STRUCTURAL plugin
 // kind (F5 authored-member input-threading). It admits ONLY a connected STRUCTURAL kind — a FLAT
-// plugin kind and every non-structural CORE kind (candy/distro/…) stay guarded (parseNode's
+// plugin kind and every non-structural CORE kind (candy/distro/…) stay guarded (the loader parse's
 // resourceKindSet check covers the core DEPLOY kinds). During the depth-0 connect pre-pass a declared
 // external kind may not be connected yet (structural-ness unknown), so it is admitted THERE and the
 // definitive decision is deferred to runPluginKind once connected: a STRUCTURAL kind reconstructs the

@@ -19,7 +19,7 @@ import (
 )
 
 // parseCorpusDocs decodes a corpus file's YAML multi-document stream and runs
-// each document through the SAME parseNodeTree the loader uses — which desugars
+// each document through the SAME parse the loader uses (activeLoaderParser.ParseDoc) — which desugars
 // every plan step's `<word>: <input>` plugin sugar IN PLACE, so the CUE value
 // gates below see the internal plugin/plugin_input form exactly as the loader's
 // validate-before-execute gate does.
@@ -150,7 +150,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 				// A PLUGIN kind (agent/module/package-group/group/…) or an external
 				// deploy substrate — validated by the plugin's served schema at
 				// runPluginKind / the loader path, not by a kept core value def, so
-				// skip it here (parseNodeTree already hard-rejected any node with NO
+				// skip it here (the loader parse already hard-rejected any node with NO
 				// recognized discriminator).
 				continue
 			}
