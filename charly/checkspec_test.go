@@ -317,7 +317,7 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 }
 
 // Verifies the extended ${NAME[:arg]} regex does not regress plain ${NAME}
-// references (backward compatibility with taskVarRefPattern consumers).
+// references (backward compatibility with deploykit.TaskVarRefPattern consumers).
 func TestTestVarRefPattern_BackwardCompatible(t *testing.T) {
 	got := TestVarRefs("${HOME}/x ${USER}")
 	want := []string{"HOME", "USER"}

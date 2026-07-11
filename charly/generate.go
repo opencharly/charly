@@ -1167,19 +1167,6 @@ func (g *Generator) builderRefForFormat(boxName, format string) string {
 // renderDnfConfWrite → deploykit.RenderDnfConfWrite (P8 shim).
 var renderDnfConfWrite = deploykit.RenderDnfConfWrite
 
-// escapeContainerfileEnvValue prefixes `\` to every `$` so Docker's ENV-
-// value substitution treats the rest as literal text. The escape is
-// preserved through the shell invocations that consume the env value at
-// runtime (bash strips a single `\$` to `$` and substitutes the var as
-// expected). Without this escape, references like `${POSTGRES_PASSWORD}`
-// in env: block values get emptied by Docker at build time because
-// POSTGRES_PASSWORD is not a build arg — it's a runtime-injected secret.
-//
-// Special exception: leave `${PATH}` intact. The path-append code at the
-// PATH ENV directive depends on Docker substituting the parent layer's
-// PATH value during the build. PATH is the only ENV var charly knows is set
-// at every Containerfile build step (Dockerfile spec guarantees it).
-
 // writeCandyEnv collects env configs from all candies and writes ENV directives.
 // Builder-triggered runtime env contributions (RuntimeEnv + PathContributions
 // on BuilderDef) are merged in alongside candy contributions — see

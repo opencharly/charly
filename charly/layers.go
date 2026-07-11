@@ -23,7 +23,7 @@ import (
 // ShellAllowlist enumerates valid per-shell sub-block keys inside `shell:`.
 // Adding a new shell here is a renderer change (new managed-block / drop-in
 // destination); keep in sync with deploy_host_helpers.go shell-detection
-// probe and the shell-snippet destination table (compileShellSnippetSteps).
+// probe and the shell-snippet destination table (deploykit.CompileShellSnippetSteps).
 
 // sortedEnvDeps returns a deterministic slice from a name-keyed map, sorted by Name.
 func sortedEnvDeps(m map[string]EnvDependency) []EnvDependency {
@@ -1012,7 +1012,7 @@ func (l *Candy) Hooks() *HooksConfig {
 // nil if not set). The returned config carries an intrinsic body (init,
 // path_append, path, priority) plus per-shell sub-blocks (bash/zsh/fish/
 // sh) in ByShell. Selection rule applied at install time — see
-// compileShellSnippetSteps in install_build.go.
+// deploykit.CompileShellSnippetSteps in sdk/deploykit/install_build.go.
 func (l *Candy) Shell() *ShellConfig {
 	return l.shell
 }

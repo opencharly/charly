@@ -23,9 +23,6 @@ type FragmentContext struct {
 	Index     int
 }
 
-// RelayContext + StageFragmentContext → deploykit (P8; consumed only by the
-// relocated init render helpers).
-
 // SystemEnableContext is the template context for system_enable_template rendering.
 type SystemEnableContext = deploykit.SystemEnableContext
 

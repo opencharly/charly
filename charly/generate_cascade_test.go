@@ -7,7 +7,7 @@ import (
 
 // TestGenerateBuildPath_FoldsTopPackagesAndCascade is the regression guard for
 // the build-path unification: `generate.go`'s package emission MUST go through
-// the SAME `resolveCascadePackages` the deploy path uses, so the candy's
+// the SAME `deploykit.ResolveCascadePackages` the deploy path uses, so the candy's
 // top-level `package:` base is folded AND distro tag sections cascade (union).
 // Before the unification the build path read only TagSection/FormatSection and
 // silently dropped every candy's top-level packages.
