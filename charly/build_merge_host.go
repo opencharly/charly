@@ -29,11 +29,11 @@ import (
 // reply-error convention) so the candy warns without failing the build, exactly as
 // the host-side mergeAfterBuild warned; the image stays functional-but-unmerged.
 func hostBuildMerge(_ context.Context, req spec.MergeRequest, _ buildEngineContext) (spec.MergeReply, error) {
-	maxMB := int(req.MaxMB)
+	maxMB := req.MaxMB
 	if maxMB <= 0 {
 		maxMB = defaultMaxMB
 	}
-	maxTotalMB := int(req.MaxTotalMB)
+	maxTotalMB := req.MaxTotalMB
 	if maxTotalMB <= 0 {
 		maxTotalMB = defaultMaxTotalMB
 	}

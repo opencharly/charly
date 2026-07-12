@@ -221,8 +221,8 @@ func (c driveConfig) mergeBox(ctx context.Context, ex *sdk.Executor, box spec.Bu
 	reqJSON, err := json.Marshal(spec.MergeRequest{
 		ImageRef:   box.FullTag,
 		Engine:     c.EngineName,
-		MaxMB:      box.MergeMaxMB,
-		MaxTotalMB: box.MergeMaxTotalMB,
+		MaxMB:      int(box.MergeMaxMB),
+		MaxTotalMB: int(box.MergeMaxTotalMB),
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
