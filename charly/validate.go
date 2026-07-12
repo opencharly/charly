@@ -1033,7 +1033,7 @@ func validateMergeConfig(cfg *Config, errs *ValidationError) {
 }
 
 // validBuildCacheModes is the allow-list for defaults.cache / image.cache.
-// Empty string means "auto" (resolved at build time in cacheArgs).
+// Empty string means "auto" (resolved at build time by the build drive's cache-arg logic).
 var validBuildCacheModes = map[string]bool{
 	"": true, "image": true, "registry": true, "gha": true, "none": true,
 }
