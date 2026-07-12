@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 
@@ -163,11 +164,18 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 	var brokerID uint32
 	if g.conn.Broker != nil && (exec != nil || cc != nil) {
 		id := g.conn.Broker.NextId()
-		var srv *grpc.Server
+		// srv is WRITTEN by the AcceptAndServe callback (which runs on the broker-accept
+		// goroutine below) and READ by the deferred Stop() on THIS goroutine after Invoke
+		// returns — a cross-goroutine handoff that must be synchronized (an unguarded
+		// `var srv *grpc.Server` was a data race the -race detector flags). An atomic pointer
+		// gives the happens-before edge without a serialize-to-hide: the callback Stores the
+		// server it built, the deferred Load reads it (or nil if the plugin never dialed back
+		// and the callback never ran — nothing to stop).
+		var srv atomic.Pointer[grpc.Server]
 		go g.conn.Broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
 			// Raise the message-size cap above gRPC's 4 MiB default so a whole-file reverse
 			// call (vmPostApply's ~27 MiB charly PutFile) is not rejected (maxReverseChannelMsgBytes).
-			srv = grpc.NewServer(append(opts, grpc.MaxRecvMsgSize(maxReverseChannelMsgBytes), grpc.MaxSendMsgSize(maxReverseChannelMsgBytes))...)
+			s := grpc.NewServer(append(opts, grpc.MaxRecvMsgSize(maxReverseChannelMsgBytes), grpc.MaxSendMsgSize(maxReverseChannelMsgBytes))...)
 			// Both reverse services share ONE broker id, registered on ONE server: a
 			// deploy/step op supplies exec (ExecutorService); a host-coupled check verb
 			// supplies BOTH exec and cc (ExecutorService for the venue + CheckContextService
@@ -176,16 +184,17 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 				// live overlay-build inputs (M4): a lifecycle Invoke attaches them to the ctx
 				// (withOverlayBuildInputs) so the reverse server can re-thread them onto a
 				// HostBuild("overlay") builder ctx; nil for every other Invoke.
-				pb.RegisterExecutorServiceServer(srv, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx)})
+				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx)})
 			}
 			if cc != nil {
-				pb.RegisterCheckContextServiceServer(srv, cc)
+				pb.RegisterCheckContextServiceServer(s, cc)
 			}
-			return srv
+			srv.Store(s)
+			return s
 		})
 		defer func() {
-			if srv != nil {
-				srv.Stop()
+			if s := srv.Load(); s != nil {
+				s.Stop()
 			}
 		}()
 		brokerID = id
