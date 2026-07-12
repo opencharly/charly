@@ -2,7 +2,7 @@ package main
 
 // restartCommand is the `charly restart` leaf command extracted into its OWN file as a
 // dedicated COMMAND-class provider — the same externalizable dedicated-provider pattern
-// (see plugin_command_alias.go for the full rationale). It self-registers via
+// (see plugin_command_ssh.go for the full rationale). It self-registers via
 // registerDedicatedBuiltin, is absent from builtinProviderInstances + the `providers:`
 // manifest, and reaches the CLI root through collectCommandPlugins() → kong.Plugins.
 // KongCommand() returns RestartCmd verbatim (its Run handler still calls the unchanged
