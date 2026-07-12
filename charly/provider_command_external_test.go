@@ -48,21 +48,10 @@ func TestExternalCommandExecPlan_Tmux(t *testing.T) {
 		[]string{word, "list", "mybox"}, []string{"list", "mybox"})
 }
 
-// TestExternalCommandExecPlan_Vm proves the externalized `charly vm` command — the FOURTH
-// welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder built
-// for the `vm` word parses `vm list` (a leaf of the VM lifecycle tree), externalCommandExecPlan
-// resolves the (baked) plugin-vm binary by word and builds the exec argv `<bin> list` + the
-// CLI-mode env (handshake cookie stripped, CHARLY_BIN stamped). This is the externalization
-// gate — `charly vm` no longer resolves to a builtin CommandProvider (the deleted in-core
-// command provider); it resolves to candy/plugin-vm over this path, and the plugin (command.go)
-// raw-forwards the pass-through args to the hidden in-core `charly __vm <args…>` (CHARLY_BIN is
-// the SAME charly that dispatched it), so the VmCmd Run handlers run in core with charly's
-// inherited stdio/TTY.
-func TestExternalCommandExecPlan_Vm(t *testing.T) {
-	const word = "vm"
-	assertExternalCommandExecPlan(t, word, "/fake/plugins/plugin-"+word,
-		[]string{word, "list"}, []string{"list"})
-}
+// (The former TestExternalCommandExecPlan_Vm was removed with the P10 VM-CLI move: `charly vm`
+// is now a COMPILED-IN command served by candy/plugin-vm (command:vm), dispatched IN-PROC — it
+// no longer rides the external fork/exec seam, so it is not an example word for this suite. The
+// generic external exec-plan mechanism stays covered by the passthrough/udev/tmux/nested cases.)
 
 // assertExternalCommandExecPlan proves an externalized top-level command rides the fork/exec
 // seam: a dynamic Kong holder built for the word parses the given argv, externalCommandExecPlan

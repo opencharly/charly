@@ -73,6 +73,7 @@ compiled_plugins:
     - plugin-candy
     - plugin-doctor
     - plugin-feature
+    - plugin-vm
 # context_ignore_baseline — the built-in build-context ignore patterns (VCS/binary
 # excludes + cache-hygiene globs), formerly the Go var baselineContextIgnore. Read by
 # generate.go to emit .containerignore / .dockerignore; a project's

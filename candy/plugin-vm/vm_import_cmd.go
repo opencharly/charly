@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"fmt"
@@ -222,23 +222,16 @@ func scanDriftAcrossImports() ([][2]string, error) {
 // loadUnifiedForImport reads the project's vm: map. Centralized so the
 // drift scanner doesn't duplicate file resolution.
 func loadUnifiedForImport() (map[string]*VmSpec, bool, error) {
-	cwd, err := osGetwd()
+	// The declared kind:vm entities come from the config-resolve seam (the loader is a core Mechanism).
+	// The empty entity yields the project-wide name list; each is resolved to its *VmSpec via the seam.
+	reply, err := hostConfigResolve("")
 	if err != nil {
 		return nil, false, err
 	}
-	uf, ok, lerr := LoadUnified(cwd)
-	if lerr != nil {
-		return nil, false, lerr
-	}
-	if !ok || uf == nil {
-		return nil, false, nil
-	}
-	// uf.VM is opaque after the vm de-type (Cutover L); resolve each body into a
-	// *VmSpec (= *spec.ResolvedVm) via the plugin.
-	out := make(map[string]*VmSpec, len(uf.VM))
-	for k, body := range uf.VM {
-		if v, err := resolveVmViaPlugin(body); err == nil && v != nil {
-			out[k] = v
+	out := make(map[string]*VmSpec, len(reply.VmEntities))
+	for _, k := range reply.VmEntities {
+		if r, rerr := hostConfigResolve(k); rerr == nil && r.VM != nil {
+			out[k] = r.VM
 		}
 	}
 	return out, true, nil

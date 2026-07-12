@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"context"
@@ -7,10 +7,26 @@ import (
 	"strings"
 )
 
-// vm_scp.go — the single host→guest single-file copy primitive that survives
-// the P10 VM-CLI move. The `charly vm scp` subcommand (VmScpCmd) moved into
-// candy/plugin-vm; scpToVm stays because the harness credential sync
-// (check_synccreds_cmd.go — syncCredentialsToVM) still calls it.
+// VmScpCmd copies a single LOCAL file into a running VM guest over SSH — the
+// arbitrary-file analogue of `charly vm cp-box` (cp-box streams a whole
+// container image; scp copies one file). It resolves the guest SSH endpoint the
+// SAME way `charly vm ssh` / `charly vm cp-box` do (the managed charly-<name>
+// ssh_config alias, via sshParamsForVm), so no host/port/key plumbing is
+// needed, and a leading `~` in the destination resolves against the guest
+// user's $HOME (faithful scp semantics).
+type VmScpCmd struct {
+	VM  string `arg:"" help:"kind:vm entity name (uses its managed charly-<name> ssh alias)"`
+	Src string `arg:"" help:"local source file to copy into the guest (a leading ~ resolves against the host $HOME)"`
+	Dst string `arg:"" help:"destination path in the guest (a leading ~ resolves against the guest user's $HOME)"`
+}
+
+func (c *VmScpCmd) Run() error {
+	srcAbs, err := expandHostPath(c.Src)
+	if err != nil {
+		return fmt.Errorf("source %q: %w", c.Src, err)
+	}
+	return scpToVm(context.Background(), c.VM, srcAbs, c.Dst, "")
+}
 
 // scpToVm copies srcAbs (an already host-resolved local file) into the named VM
 // guest at dst. The single host→guest single-file copy primitive (R3), shared

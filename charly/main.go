@@ -59,38 +59,17 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// __vm re-homes the WHOLE in-core VmCmd tree (vm.go / vm_snapshot_cmd.go — build/create/
-	// start/stop/destroy/console/ssh/snapshot/gpu/import/clone/cp-box/list) onto ONE hidden
-	// command, exposing it to the externalized `charly vm …` COMMAND plugin (candy/plugin-vm,
-	// command:vm). The VmCmd Run handlers STAY core — they drive the libvirt/qemu backends,
-	// cloud-init, the VM deploy target, and the VmOp resolution RPCs the plugin's verb:libvirt
-	// serves — so they cannot move to the plugin (R3); the plugin is a THIN forwarder that
-	// syscall.Exec's `charly __vm <args…>` (command.go), inheriting charly's stdio/TTY so
-	// `charly vm console` / `charly vm ssh` keep their interactive terminal. This is the SAME
-	// internal-command pattern as __cli-model / __plugin-providers, but re-homing the whole
-	// subtree onto one hidden command instead of one hidden command per leaf (the VmCmd grammar
-	// is large + nested, so the plugin forwards raw args rather than re-expressing each leaf).
-	VmInternal VmCmd `cmd:"" name:"__vm" hidden:"" help:"internal: the VM lifecycle command tree (the externalized charly vm plugin forwards here)"`
-
-	// vm is the LAST WELDED machinery command still re-homed onto a hidden core command
-	// (__vm above): its Run handlers STAY core — VmCmd drives the libvirt/qemu backends +
-	// cloud-init + the VmOp RPCs — machinery an out-of-process plugin cannot reach (R3) — so it is a
-	// THIN forwarder to `charly __vm`. clean + settings + candy + doctor, by contrast, are COMPILED-IN
-	// and OWN their commands: clean + settings + doctor reach the genuine core-coupled subsystem over a
-	// generic HostBuild seam (clean → "retention" over charly/retention.go; settings → "settings" over
-	// the config subsystem; doctor → "hostprobe" over the GPU/VFIO/device detection primitives +
-	// credentialHealth + the core install-hint/device tables — candy/plugin-doctor OWNS the WHOLE
-	// host-dependency report, only the RAW host facts cross the seam); candy owns its ENTIRE logic — the
-	// yaml.Node candy-manifest mutation — itself, sharing only the generic
-	// kit.SetByDotPath / kit.MappingChild utilities (sdk/kit/yaml.go, also used by `charly box set` /
-	// `box scaffold`). None of those four uses a hidden core command. NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION
-	// kept core (the Version field below) — NOT an "unfixable" one. RDD (2026-07-01) refuted the old
-	// chicken-and-egg claim: pkgver()'s `bin/charly version` is only a convenience (the CalVer is
-	// already Taskfile-computed via pkg/arch/calver.sh, and reading it from a sidecar / recomputing at
-	// the superproject root sidesteps the submodule mismatch), so externalizing IS feasible. It is
-	// excluded because it sheds ZERO deps, removes ~5 core lines, and would make R9's canonical identity
-	// command depend on the plugin-resolution subsystem across 3 package repos — worst-value, highest-
-	// blast-radius of any externalization. Operator-decided to keep core.
+	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
+	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
+	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
+	// pkg/arch/calver.sh, and reading it from a sidecar / recomputing at the superproject root
+	// sidesteps the submodule mismatch), so externalizing IS feasible. It is excluded because it sheds
+	// ZERO deps, removes ~5 core lines, and would make R9's canonical identity command depend on the
+	// plugin-resolution subsystem across 3 package repos — worst-value, highest-blast-radius of any
+	// externalization. Operator-decided to keep core. (vm was the last such machinery command; P10
+	// externalized it onto the COMPILED-IN command:vm plugin — candy/plugin-vm — which reaches the
+	// config loader + deploy ledger + egress over generic seams and the libvirt/gpu/arbiter engines
+	// over verb dispatch, so it OWNS its `charly vm …` CLI with no hidden core command.)
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
 	// ssh, start, stop, status, restart, update, remove, logs,
@@ -99,12 +78,12 @@ type CLI struct {
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
 	// (mcp/secrets/udev/tmux/preempt/feature/vm AND clean/settings/candy/doctor AND migrate are now
 	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
-	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. vm forwards
-	// to the hidden __vm core command above — its Run handlers stay core. migrate/clean/settings/candy/
-	// doctor/feature/preempt OWN their engine/command in candy/plugin-<name> (NONE uses a hidden core
-	// command): clean/settings/doctor/feature reach a shared core subsystem over a generic HostBuild seam
-	// (retention/settings/hostprobe/feature), preempt reaches its peer verb:arbiter over InvokeProvider,
-	// candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
+	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. migrate/clean/
+	// settings/candy/doctor/feature/preempt/vm OWN their engine/command in candy/plugin-<name> (NONE uses
+	// a hidden core command): clean/settings/doctor/feature reach a shared core subsystem over a generic
+	// HostBuild seam (retention/settings/hostprobe/feature), preempt reaches its peer verb:arbiter over
+	// InvokeProvider, vm reaches config/ledger/egress over generic seams + libvirt/gpu/arbiter over verb
+	// dispatch, candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
 	// resolves at init() independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.

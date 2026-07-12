@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 // disk dir output/qcow2/<vm>/.
 //
 //nolint:gocyclo // flat sequential vm-create orchestration; extraction relocates, not clarifies
-func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResolvedResource) error {
+func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResolvedResource, vmState *VmDeployState) error {
 	name := vmName
 	if c.Instance != "" {
 		name = vmName + "-" + c.Instance
@@ -41,15 +41,10 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	}
 	ovr.ApplyToVmSpec(spec)
 
-	// Fill schema-declared defaults (unify-after-merge): the loader decode
-	// leaves unset fields at their zero value so config + the instance override
-	// above merge on true-unset; now that the spec is fully resolved, materialize
-	// #Vm's required-with-default fields (firmware → "bios") from the schema —
-	// the single source of truth. Backend is already resolved into the `backend`
-	// param above, so materializing spec.Backend here is inert. See cue_defaults.go.
-	if err := applyCueDefaults("vm", spec); err != nil {
-		return fmt.Errorf("applying vm defaults for %s: %w", vmName, err)
-	}
+	// #Vm's required-with-default fields (firmware/network-mode/cpu-mode) were already materialized on
+	// spec host-side by the config-resolve seam (hostConfigResolve applies applyCueDefaults to reply.VM),
+	// so the former in-handler applyCueDefaults call is redundant. The instance override above only
+	// touches libvirt: overlays (never a defaulted field), so the seam-applied defaults are unaffected.
 
 	// Locate prebuilt disk + seed ISO in this VM's OWN per-VM disk dir, so a
 	// fresh create can never adopt a sibling VM's stale disk/seed (whose
@@ -81,11 +76,8 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// `charly vm create` without forcing an explicit `charly vm build`. The qcow2
 	// disk is left alone — only the seed ISO is cheap to rebuild.
 	if spec.Source.Kind == "cloud_image" && seedISOAbs != "" {
-		var existingState *VmDeployState
-		if entry, ok := loadDeployConfigForRead("charly vm create seed-iso").LookupKey("vm:" + vmName); ok {
-			existingState = entry.VmState
-		}
-		if err := RegenerateSeedISO(spec, seedISOAbs, vmStateDir, existingState); err != nil {
+		// existingState (the prior instance-id) comes from the config-resolve seam's VmState.
+		if err := RegenerateSeedISO(spec, seedISOAbs, vmStateDir, vmState); err != nil {
 			return fmt.Errorf("regenerating seed ISO: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Regenerated cloud-init seed ISO from vm.yml\n")
@@ -126,13 +118,12 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// allocates a DIFFERENT one, probes the wrong port, declares the VM
 	// unreachable, and auto-boots `charly vm create` into an "already exists" error.
 	if spec.SSH != nil && spec.SSH.PortAuto {
-		deployKey := "vm:" + vmName
 		st := &VmDeployState{}
-		if entry, ok := loadDeployConfigForRead("charly vm create persist-auto-port").LookupKey(deployKey); ok && entry.VmState != nil {
-			st = entry.VmState
+		if vmState != nil {
+			st = vmState
 		}
 		st.SshPort = sshPort
-		if err := saveVmDeployState(deployKey, vmName, st); err != nil {
+		if err := hostConfigPersist("vm:"+vmName, vmName, st, false); err != nil {
 			return fmt.Errorf("persisting auto-allocated ssh port: %w", err)
 		}
 	}
@@ -154,15 +145,14 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// already read by the renderers directly. Populating rt here would
 	// duplicate every entry.
 
-	// Backend dispatch → the out-of-process vm plugin (RenderDomainXML + defineAndStartDomain /
-	// qemu exec moved there). The host fully resolved spec + rt (OVMF/NVRAM/smbios/ports) above;
-	// the plugin renders + creates the domain/process.
+	// Backend dispatch → the in-package engine (RenderDomainXML + defineAndStartDomain / qemu exec).
+	// spec + rt (OVMF/NVRAM/smbios/ports) are fully resolved above; the engine renders + creates.
 	//
-	// Two-phase create for host-side EGRESS validation: the out-of-process plugin must not carry
-	// the egress subsystem, so phase 1 (ValidateOnly) has the plugin RENDER + RETURN the libvirt
-	// domain XML; the host runs the real ValidateXMLEgress; only then phase 2 creates. The
-	// cloud-init seed is already egress-validated host-side above (RegenerateSeedISO →
-	// RenderCloudInit → ValidateEgress). QEMU returns no XML, so its validate pass is a no-op gate.
+	// Two-phase create for EGRESS validation: phase 1 (ValidateOnly) RENDERS + RETURNS the libvirt
+	// domain XML; ValidateXMLEgress validates it via verb:egress (the egress subsystem lives in
+	// candy/plugin-egress, reached in-proc — vm_egress_shim.go); only then phase 2 creates. The
+	// cloud-init seed is egress-validated above (RegenerateSeedISO → RenderCloudInit → the
+	// vmshared.ValidateEgress hook → verb:egress). QEMU returns no XML, so its validate pass is a no-op.
 	baseReq := vmCreateReq{
 		Spec: spec, RT: rt, VmDomainName: vmDomainName, Home: home,
 		VmName: vmName, Name: name, Backend: backend, VmStateDir: vmStateDir,

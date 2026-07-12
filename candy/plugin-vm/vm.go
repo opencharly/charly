@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"crypto/ed25519"
@@ -19,8 +19,6 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
-
-const libvirtSessionURI = "qemu:///session"
 
 // VmCmd groups VM management subcommands.
 type VmCmd struct {
@@ -56,133 +54,6 @@ func vmDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".local", "share", "charly", "vm"), nil
-}
-
-// resolveVmBackend detects the available VM backend.
-// Priority: libvirt → qemu
-func resolveVmBackend(configured string) (string, error) {
-	if configured == "libvirt" || configured == "auto" {
-		// Spawn the libvirt session daemon BEFORE probing for its socket.
-		// On hosts that ship no persistent virtqemud.socket (Arch/CachyOS),
-		// the socket exists only AFTER a client triggers libvirt's on-demand
-		// autospawn — so a COLD os.Stat() false-negatives a fully working
-		// libvirt and silently falls back to qemu (or errors on
-		// `backend: libvirt`). resolveVmBackend is called from many verbs
-		// (create/build/start/stop/destroy/console) and only some had a
-		// preceding spawn, so the detection was nondeterministic per-verb;
-		// spawning HERE makes every caller detect uniformly. The call is
-		// idempotent + best-effort (a no-op when libvirt is absent — virsh
-		// LookPath simply fails). NOTE: a `systemctl is-active <service>`
-		// check is the WRONG probe — socket-activated / autospawn daemons
-		// report the SERVICE inactive while libvirt is fully usable; the
-		// socket (or a real connection) is the only valid signal.
-		startLibvirtUserSession()
-		picked, probed := libvirtSessionSocketWithProbes()
-		// `picked` is the last-resort dial target; we still need to
-		// confirm it exists. The earlier probes (in `probed`) ARE
-		// already stat'd inside libvirtSessionSocketWithProbes, but
-		// that function returns the legacy path when neither exists,
-		// so we re-stat here to be sure.
-		if _, err := os.Stat(picked); err == nil {
-			return "libvirt", nil
-		}
-		if configured == "libvirt" {
-			var trail strings.Builder
-			for _, p := range probed {
-				_, err := os.Stat(p)
-				if err == nil {
-					fmt.Fprintf(&trail, "\n  %s — found", p)
-				} else {
-					fmt.Fprintf(&trail, "\n  %s — not found", p)
-				}
-			}
-			return "", fmt.Errorf(
-				"libvirt backend requires libvirt session daemon (probed:%s\n"+
-					"configure libvirt session daemon or run: charly settings set vm.backend qemu)",
-				trail.String(),
-			)
-		}
-	}
-	if configured == "qemu" || configured == "auto" {
-		qemuBin := qemuSystemBinary()
-		if _, err := exec.LookPath(qemuBin); err == nil {
-			return "qemu", nil
-		}
-		if configured == "qemu" {
-			return "", fmt.Errorf("qemu backend requires %s", qemuBin)
-		}
-	}
-	return "", fmt.Errorf("no VM backend available (install libvirt or qemu-system)")
-}
-
-// vmConfiguredBackend returns the backend string to feed resolveVmBackend for
-// a vm entity: the entity's `backend:` pin (VmSpec.Backend) when set, else the
-// global vm.backend setting. THE single source so EVERY vm verb (create /
-// destroy / start / stop / console) resolves the SAME backend for a given
-// entity. Without it, `charly vm create` (honoring the pin) and `charly vm destroy`
-// (using the global setting) can pick DIFFERENT backends — the destroy then
-// silently operates on the wrong backend's (non-existent) domain and leaves
-// the created libvirt domain running, surfacing as "domain already exists" on
-// the next create (the check-k3s-vm `charly update` failure when vm.backend=qemu
-// but the bed pins backend: libvirt).
-func vmConfiguredBackend(vmName, rtBackend string) string {
-	if vmName == "" {
-		return rtBackend
-	}
-	if dir, err := os.Getwd(); err == nil {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if body, hit := uf.VM[vmName]; hit {
-				if spec, _ := resolveVmViaPlugin(body); spec != nil && spec.Backend != "" {
-					return spec.Backend
-				}
-			}
-		}
-	}
-	return rtBackend
-}
-
-// startLibvirtUserSession ensures the libvirt user-session daemon is
-// running. Modular libvirt's `virtqemud --timeout=120` auto-exits
-// after 120 s of idle, so consecutive `charly check libvirt …` calls
-// spaced wider than that find the socket gone.
-//
-// Three start mechanisms tried in order, all best-effort:
-//
-//  1. `systemctl --user start virtqemud.service` — preferred when the
-//     unit is installed (Debian/Ubuntu mostly).
-//  2. `systemctl --user start libvirtd.service` — legacy monolithic
-//     libvirt.
-//  3. `virsh -c qemu:///session list` — works on Arch and any host
-//     where libvirt installs WITHOUT systemd user units. virsh
-//     dispatches to `virt-ssh-helper` / `virtqemud` directly, which
-//     spawns the daemon and creates `/run/user/$UID/libvirt/
-//     virtqemud-sock` on first connect.
-//
-// The function silently ignores all failures. Two outcomes:
-//   - Daemon now running → caller's subsequent socket dial succeeds.
-//   - Daemon not installable (no libvirt on this host) → caller's
-//     downstream socket dial returns "no such file or directory",
-//     which surfaces the real error.
-//
-// Reason for best-effort: don't block legitimate non-libvirt users.
-//
-// Package-level var (not a plain func) so hermetic tests can stub it to a
-// no-op — resolveVmBackend now calls it before probing the socket, and an
-// un-stubbed real spawn would create a socket inside a test's temp
-// XDG_RUNTIME_DIR and defeat "no socket" fixtures (see stubNoLibvirtSpawn).
-var startLibvirtUserSession = func() {
-	// Try systemd user-units first.
-	for _, unit := range []string{"virtqemud.service", "libvirtd.service"} {
-		// Idempotent: systemctl start on an already-active unit is a no-op.
-		_ = exec.Command("systemctl", "--user", "start", unit).Run()
-	}
-	// Fall back to virsh-driven spawn for Arch-class hosts that ship
-	// libvirt WITHOUT systemd user units (the binary is launched on-
-	// demand via D-Bus or virt-ssh-helper). `list` is read-only and
-	// returns 0 even with no domains.
-	if _, err := exec.LookPath("virsh"); err == nil {
-		_ = exec.Command("virsh", "-c", "qemu:///session", "list").Run()
-	}
 }
 
 // ensureBootAutostartPrereqs makes a qemu:///session domain actually start at
@@ -298,70 +169,34 @@ type VmCreateCmd struct {
 }
 
 func (c *VmCreateCmd) Run() error {
-	rt, err := ResolveRuntime()
+	// The host resolves the kind:vm entity + backend + resources + claimant + runtime settings over
+	// the config-resolve seam (the loader / settings store / backend probe are core Mechanisms the
+	// plugin cannot hold). resolveVmBackend inside the seam also starts the libvirt user session
+	// before returning reply.Backend, so no separate startLibvirtUserSession is needed here. The
+	// entity's `backend:` pin is honored host-side (vmConfiguredBackend runs before the probe).
+	reply, err := hostConfigResolve(c.Box)
 	if err != nil {
 		return err
 	}
 
-	// Best-effort: start the libvirt user-session daemon before backend
-	// probe. Many fresh-user setups have virtqemud.service installed but
-	// not started, which silently falls libvirt → qemu in resolveVmBackend
-	// when backend is "auto", and produces a hard error when backend is
-	// "libvirt". Auto-starting it gives a frictionless first-VM experience
-	// without masking real problems: if the unit doesn't exist (libvirt
-	// truly not installed), this is a no-op and the downstream gate
-	// surfaces the actual issue.
-	startLibvirtUserSession()
-
-	// Resource arbitration: a standalone `charly vm create` of a VM that a
-	// deploy/check node claims via requires_exclusive preempts the running
-	// holders of that resource (persistent lease — released by `charly vm stop`/
-	// `charly vm destroy`). No-op when an outer orchestrator already owns the lease
-	// (CHARLY_PREEMPT_LEASE set, e.g. an check bed run) or when no claimant node
-	// references this VM entity. See charly/preempt.go.
-	claimant, claimantNode, hasClaimant := lookupVMClaimant(c.Box)
-	if hasClaimant {
-		if _, perr := acquireExclusiveForClaimant(claimant, claimantNode, false); perr != nil {
+	// Resource arbitration: a standalone `charly vm create` of a VM that a deploy/check node claims
+	// via requires_exclusive preempts the running holders of that resource (persistent lease — released
+	// by `charly vm stop`/`destroy`). No-op when no claimant node references this entity
+	// (reply.ClaimantNode nil) or an outer orchestrator already owns the lease (CHARLY_PREEMPT_LEASE).
+	if reply.ClaimantNode != nil {
+		if _, perr := acquireExclusiveForClaimant(reply.Claimant, *reply.ClaimantNode, false); perr != nil {
 			return perr
 		}
 	}
 
-	// --- New kind:vm entity path (D1, D4, D12) ---
-	// Resolve the kind:vm entity FIRST so its `backend:` pin (when set)
-	// overrides the global vm.backend setting BEFORE backend resolution —
-	// the documented "pin backend: libvirt so the auto→qemu fallback can't
-	// mask a missing daemon" behavior. (VmSpec.Backend was previously
-	// absent, so the pin was silently dropped; now it is honored.)
-	dir, _ := os.Getwd()
-	var spec *VmSpec
-	var resources map[string]*ResolvedResource
-	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok {
-		if uf.VM != nil {
-			spec, _ = resolveVmViaPlugin(uf.VM[c.Box])
-		}
-		resources = uf.resolveResources()
-	}
-	backend, err := resolveVmBackend(vmConfiguredBackend(c.Box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
-	if spec != nil {
-		// VmSpec-driven create pipeline: RenderDomain for libvirt,
-		// RenderQemuArgv for qemu. Uses output/qcow2/{disk,seed} produced
-		// by `charly vm build` (the cloud_image branch of vm_build.go).
-		// claimantNode + resources drive GPU auto-allocation (gpu_allocate.go).
-		var claimantPtr *BundleNode
-		if hasClaimant {
-			claimantPtr = &claimantNode
-		}
-		return c.runVmSpecCreate(c.Box, spec, backend, claimantPtr, resources)
+	if reply.VM != nil {
+		// VmSpec-driven create pipeline: RenderDomain for libvirt, RenderQemuArgv for qemu. Uses
+		// output/qcow2/{disk,seed} produced by `charly vm build`. claimantNode + resources drive GPU
+		// auto-allocation (gpu_allocate.go).
+		return c.runVmSpecCreate(c.Box, reply.VM, reply.Backend, reply.ClaimantNode, reply.Resources, reply.VmState)
 	}
 
-	// Reached here = image is not a `kind: vm` entity, AND the legacy
-	// BoxConfig.Vm / OCI LabelVm fallback was removed in the VM
-	// hard-cutover. Tell the user what to do.
-	_ = rt
-	_ = backend
+	// Reached here = image is not a `kind: vm` entity.
 	return fmt.Errorf(
 		"VM %q has no kind:vm entity in vm.yml.\n"+
 			"  Declare one (optionally paired with a bootc image), e.g.:\n"+
@@ -410,15 +245,11 @@ func (c *VmStartCmd) Run() error {
 // by VmStartCmd.Run and the resource arbiter (charly/preempt.go) so the holder-
 // restart path runs the exact same lifecycle code as `charly vm start`.
 func startVM(box, instance string) error {
-	rt, err := ResolveRuntime()
+	reply, err := hostConfigResolve(box)
 	if err != nil {
 		return err
 	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
+	backend := reply.Backend
 
 	name := vmName(box, instance)
 
@@ -489,15 +320,11 @@ func (c *VmStopCmd) Run() error {
 // (charly/preempt.go), which always calls it with force=false so a preempted
 // holder is gracefully shut down and remains restartable.
 func stopVM(box, instance string, force bool) error {
-	rt, err := ResolveRuntime()
+	reply, err := hostConfigResolve(box)
 	if err != nil {
 		return err
 	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
+	backend := reply.Backend
 
 	name := vmName(box, instance)
 
@@ -559,15 +386,11 @@ func (c *VmDestroyCmd) Run() error {
 		defer releaseResourceClaim(claimant)
 	}
 
-	rt, err := ResolveRuntime()
+	reply, err := hostConfigResolve(c.Box)
 	if err != nil {
 		return err
 	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(c.Box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
+	backend := reply.Backend
 
 	name := vmName(c.Box, c.Instance)
 
@@ -638,7 +461,7 @@ func (c *VmDestroyCmd) Run() error {
 	// a deliberate re-create, mirroring `charly remove --keep-deploy` for pods.
 	if !c.KeepDeploy {
 		deployName := "vm:" + deployKey(c.Box, c.Instance)
-		if err := removeVmDeployEntry(deployName); err != nil {
+		if err := hostConfigPersist(deployName, "", nil, true); err != nil {
 			fmt.Fprintf(os.Stderr, "note: charly.yml entry cleanup (%s): %v\n", deployName, err)
 		}
 	}
@@ -812,15 +635,11 @@ type VmConsoleCmd struct {
 }
 
 func (c *VmConsoleCmd) Run() error {
-	rt, err := ResolveRuntime()
+	reply, err := hostConfigResolve(c.Box)
 	if err != nil {
 		return err
 	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(c.Box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
+	backend := reply.Backend
 
 	name := vmName(c.Box, c.Instance)
 

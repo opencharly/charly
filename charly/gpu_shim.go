@@ -181,12 +181,6 @@ func switchReplyErr(r spec.GpuSwitchReply) error {
 	return nil
 }
 
-// switchGPUDriverMode flips a SPECIFIC card's whole IOMMU group to mode (the `charly vm gpu
-// mode`/`recover` exact-card path). Errors with errGPUSwitchWedged on a device_lock wedge.
-func switchGPUDriverMode(gpu VFIOGpu, mode string) error {
-	return switchReplyErr(gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionMode, Gpu: &gpu, Mode: mode}))
-}
-
 // gpuSwitchModeTolerant flips the vendor-matched card's group to mode, TOLERANT of an absent
 // card (the arbiter's switchMode seam — a claim stays portable across GPU/no-GPU hosts).
 // Returns wedged so the arbiter can carry the wedge over its own reverse channel + poison.
@@ -197,36 +191,3 @@ func gpuSwitchModeTolerant(vendor, mode string) (wedged bool, err error) {
 
 // ensureCDIRoot (re)generates /etc/cdi/nvidia.yaml as root after a flip to nvidia.
 func ensureCDIRoot() { gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionEnsureCDI}) }
-
-// gpuWedgeDetected is the read-only device_lock-wedge probe (`charly vm gpu status`/`recover`).
-func gpuWedgeDetected() bool {
-	return gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionWedgeDetected}).Bool
-}
-
-// groupInMode reports whether a GPU's whole IOMMU group is already in mode (the idempotency
-// gate; `charly vm gpu`).
-func groupInMode(gpu VFIOGpu, mode string) bool {
-	return gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionGroupInMode, Gpu: &gpu, Mode: mode}).Bool
-}
-
-// currentGPUMode reports the live mode of a GPU's display function (`charly vm gpu`).
-func currentGPUMode(gpu VFIOGpu) string {
-	return gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionCurrentMode, Gpu: &gpu}).Str
-}
-
-// gpuDisplayDriver reads the live driver of a single PCI function (`charly vm gpu` status).
-func gpuDisplayDriver(addr string) string {
-	return gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionDisplayDriver, Addr: addr}).Str
-}
-
-// gpuSwitchPlan returns the EXACT vfio/nvidia rebind commands for mode WITHOUT touching sysfs —
-// the cred/hardware-free DRY-RUN dispatch proof (`charly vm gpu plan`). gpu==nil makes the plugin
-// synthesize a documented example card, so the plan is available on a GPU-less host.
-func gpuSwitchPlan(gpu *VFIOGpu, mode string) ([]string, error) {
-	in := spec.GpuSwitchInput{Action: spec.GpuSwitchActionPlan, Mode: mode}
-	if gpu != nil {
-		in.Gpu = gpu
-	}
-	r := gpuSwitchReply(in)
-	return r.Plan, switchReplyErr(r)
-}

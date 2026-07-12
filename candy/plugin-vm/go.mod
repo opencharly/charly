@@ -11,6 +11,8 @@ require (
 	libvirt.org/go/libvirtxml v1.12002.0
 )
 
+require golang.org/x/term v0.41.0 // indirect
+
 require (
 	cuelang.org/go v0.16.1 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect

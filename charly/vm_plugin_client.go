@@ -20,44 +20,8 @@ type vmPluginEnv struct {
 	URI        string             `json:"uri"`
 	Force      bool               `json:"force,omitempty"`
 	DeleteDisk bool               `json:"delete_disk,omitempty"`
-	Create     *vmCreateReq       `json:"create,omitempty"`
 	Snap       *vmSnapInternalReq `json:"snap,omitempty"`
 	StateDir   string             `json:"state_dir,omitempty"`
-}
-
-// vmCreateReq is the host-resolved create payload sent to the plugin's "create" op (the host did
-// the override/GPU/defaults/disk/seed/SSH/smbios/OVMF resolution; the plugin renders + creates).
-type vmCreateReq struct {
-	Spec         *VmSpec         `json:"spec"`
-	RT           VmRuntimeParams `json:"rt"`
-	VmDomainName string          `json:"vm_domain_name"`
-	Home         string          `json:"home"`
-	VmName       string          `json:"vm_name"`
-	Name         string          `json:"name"`
-	Backend      string          `json:"backend"`
-	VmStateDir   string          `json:"vm_state_dir"`
-	// ValidateOnly: the plugin renders the libvirt domain XML and RETURNS it
-	// (rendered_domain_xml) WITHOUT creating, so the host can run the real
-	// ValidateXMLEgress (the out-of-process plugin must not carry the egress
-	// subsystem). The host then issues a second create call (ValidateOnly=false).
-	// QEMU has no domain XML — the validate pass returns empty (cloud-init is
-	// already egress-validated host-side via RegenerateSeedISO).
-	ValidateOnly bool `json:"validate_only,omitempty"`
-}
-
-// invokeVmCreate RPCs the plugin's "create" op with the fully host-resolved request.
-func invokeVmCreate(req vmCreateReq) (json.RawMessage, bool) {
-	return invokeVmPluginEnv(vmPluginEnv{VmOp: "create", Create: &req})
-}
-
-// vmCreateRenderedXML decodes the libvirt domain XML the plugin returns from a
-// ValidateOnly create pass ("" for the QEMU backend, which has no domain XML).
-func vmCreateRenderedXML(raw json.RawMessage) string {
-	var r struct {
-		RenderedDomainXML string `json:"rendered_domain_xml"`
-	}
-	_ = json.Unmarshal(raw, &r)
-	return r.RenderedDomainXML
 }
 
 // displayEndpointWire decodes the vm plugin's resolve-spice/resolve-vnc result's `endpoint` (the
