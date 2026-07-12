@@ -4,6 +4,7 @@ import (
 	"os/exec"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -51,11 +52,18 @@ func TestHarnessPhaseRe_BoundaryNotProgress(t *testing.T) {
 // the moment claude is about to read its credentials for iter 1.
 func TestRunWithPhaseResync_BoundariesTriggerResyncSkippingPhase1(t *testing.T) {
 	callCh := make(chan int, 16)
+	// seenScore is written by every resync goroutine (the boundaries fire 4 concurrent
+	// resyncs), so guard it: the mock runs on N goroutines at once and unsynchronized
+	// writes to a plain var — even of the same value — are a data race. A mutex is the
+	// root-cause fix (never a -race suppression).
+	var seenMu sync.Mutex
 	var seenScore string
 
 	origFn := phaseResyncFn
 	phaseResyncFn = func(scoreName string, phase int) error {
+		seenMu.Lock()
 		seenScore = scoreName
+		seenMu.Unlock()
 		callCh <- phase
 		return nil
 	}
@@ -101,8 +109,11 @@ func TestRunWithPhaseResync_BoundariesTriggerResyncSkippingPhase1(t *testing.T) 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("phase resync set: got=%v want=%v", got, want)
 	}
-	if seenScore != "test-score" {
-		t.Errorf("scoreName forwarded to phaseResyncFn: got=%q want=%q", seenScore, "test-score")
+	seenMu.Lock()
+	gotScore := seenScore
+	seenMu.Unlock()
+	if gotScore != "test-score" {
+		t.Errorf("scoreName forwarded to phaseResyncFn: got=%q want=%q", gotScore, "test-score")
 	}
 }
 
@@ -123,13 +134,14 @@ func TestRunWithPhaseResync_ResyncFailureDoesNotAbortRun(t *testing.T) {
 	`)
 	// Expect: cmd.Wait() returns nil because sh exits 0 and the
 	// resync's error is swallowed (logged) inside the goroutine.
+	// runWithPhaseResync now WAITS for its resync goroutines (resyncWG) before
+	// returning, so by the time this call returns every goroutine — and its
+	// phaseResyncFn read — has completed; the deferred phaseResyncFn restore below
+	// cannot race it, and no goroutine leaks past the test. (This replaces a former
+	// `time.Sleep(100ms)` timing bandaid — R4 — with the runner's real barrier.)
 	if err := runWithPhaseResync(cmd, "test-score"); err != nil {
 		t.Fatalf("runWithPhaseResync should swallow resync errors: %v", err)
 	}
-	// Brief sleep so the goroutine's stderr log lands before the test
-	// returns (no assertion on stderr; we just want to keep the
-	// goroutine from leaking past the test).
-	time.Sleep(100 * time.Millisecond)
 }
 
 type simulatedResyncError struct{ phase int }

@@ -7,13 +7,15 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestScaffoldProject covers the happy path + the don't-clobber guard.
 // Doesn't run `box validate`, that's exercised in TestScaffoldProject_AddImageRoundtrip.
 func TestScaffoldProject(t *testing.T) {
 	dir := t.TempDir()
-	if err := ScaffoldProject(dir); err != nil {
+	if err := kit.ScaffoldProject(dir); err != nil {
 		t.Fatalf("ScaffoldProject: %v", err)
 	}
 	for _, p := range []string{"charly.yml", "candy", ".gitignore"} {
@@ -28,7 +30,7 @@ func TestScaffoldProject(t *testing.T) {
 	}
 	// Idempotency: re-scaffolding the same dir should fail (we never
 	// silently clobber an existing charly.yml).
-	if err := ScaffoldProject(dir); err == nil {
+	if err := kit.ScaffoldProject(dir); err == nil {
 		t.Errorf("expected re-scaffold to error; got nil")
 	}
 }
@@ -40,10 +42,10 @@ func TestScaffoldProject(t *testing.T) {
 // correctly and not destroying authoring metadata).
 func TestScaffoldProject_AddImageRoundtrip(t *testing.T) {
 	dir := t.TempDir()
-	if err := ScaffoldProject(dir); err != nil {
+	if err := kit.ScaffoldProject(dir); err != nil {
 		t.Fatalf("ScaffoldProject: %v", err)
 	}
-	if err := AddBox(dir, "hello", "quay.io/fedora/fedora:43", []string{"sshd"}); err != nil {
+	if err := kit.AddBox(dir, "hello", "quay.io/fedora/fedora:43", []string{"sshd"}); err != nil {
 		t.Fatalf("AddBox: %v", err)
 	}
 	// The scaffold's charly.yml leading comment is untouched — AddBox writes a
@@ -86,10 +88,10 @@ func TestScaffoldProject_AddImageRoundtrip(t *testing.T) {
 // TestAddCandyToImage covers the idempotent-append behaviour.
 func TestAddCandyToImage(t *testing.T) {
 	dir := t.TempDir()
-	if err := ScaffoldProject(dir); err != nil {
+	if err := kit.ScaffoldProject(dir); err != nil {
 		t.Fatalf("ScaffoldProject: %v", err)
 	}
-	if err := AddBox(dir, "hello", "fedora", nil); err != nil {
+	if err := kit.AddBox(dir, "hello", "fedora", nil); err != nil {
 		t.Fatalf("AddBox: %v", err)
 	}
 	if err := AddCandyToBox(dir, "hello", "sshd"); err != nil {
@@ -115,10 +117,10 @@ func TestAddCandyToImage(t *testing.T) {
 // the candy isn't present.
 func TestRemoveCandyFromImage(t *testing.T) {
 	dir := t.TempDir()
-	if err := ScaffoldProject(dir); err != nil {
+	if err := kit.ScaffoldProject(dir); err != nil {
 		t.Fatalf("ScaffoldProject: %v", err)
 	}
-	if err := AddBox(dir, "hello", "fedora", []string{"sshd", "tmux"}); err != nil {
+	if err := kit.AddBox(dir, "hello", "fedora", []string{"sshd", "tmux"}); err != nil {
 		t.Fatalf("AddBox: %v", err)
 	}
 	if err := RemoveCandyFromBox(dir, "hello", "sshd"); err != nil {
