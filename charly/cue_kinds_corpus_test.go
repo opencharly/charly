@@ -46,12 +46,43 @@ func parseCorpusDocs(t *testing.T, f string, data []byte) []*genericNode {
 	return all
 }
 
+// boxSubmoduleCheckedOut reports whether the box/<distro> submodule rooted at
+// boxDir is checked out in THIS worktree. An un-inited git submodule leaves an
+// EMPTY gitlink placeholder directory, so os.Stat(boxDir) is a false-positive
+// "present"; the submodule's top-level charly.yml manifest is the reliable
+// "checked out" signal. The box-corpus tests use it to skip GRACEFULLY (rather
+// than hard-fail) on a box-less checkout, so `go test ./...` is green when box/*
+// is not inited while still validating the corpus when it is.
+func boxSubmoduleCheckedOut(boxDir string) bool {
+	_, err := os.Stat(filepath.Join(boxDir, "charly.yml"))
+	return err == nil
+}
+
 // TestCueBox_Corpus validates every discovered box entity (node-form
 // box/<distro>/box/<name>/charly.yml) against #Box.
 func TestCueBox_Corpus(t *testing.T) {
 	matches, err := filepath.Glob("../box/*/box/*/charly.yml")
 	if err != nil {
 		t.Fatalf("glob: %v", err)
+	}
+	if len(matches) == 0 {
+		// Distinguish "box submodules not checked out" (genuinely absent → skip so
+		// the suite stays green on a box-less checkout) from "box present but the
+		// discovery glob is wrong" (a real regression → fall through to the ok==0
+		// t.Fatal below). A checked-out box submodule always has its top-level
+		// box/<distro>/charly.yml manifest; an un-inited one leaves only an empty
+		// gitlink placeholder dir.
+		distroDirs, _ := filepath.Glob("../box/*")
+		anyCheckedOut := false
+		for _, d := range distroDirs {
+			if boxSubmoduleCheckedOut(d) {
+				anyCheckedOut = true
+				break
+			}
+		}
+		if !anyCheckedOut {
+			t.Skip("no box/* submodule checked out — no box corpus to validate")
+		}
 	}
 	var ok int
 	for _, f := range matches {
