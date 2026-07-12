@@ -2,27 +2,31 @@ plugin-build:
     candy:
         version: 2026.182.1600
         description: |-
-            The BUILD-ENGINE DISPATCH plugin: a thin dispatch/echo over the F10 HostBuild
-            reverse-channel seam, serving `build:box` (the `charly box build` engine) and
-            `build:generate` (the `charly box generate` engine). The heavy engine — the Generator,
-            the OCITarget, the runtime Candy graph — is I/O-bound with unexported state and a huge
-            blast radius, so it STAYS host-side in-process, UNCHANGED. This plugin does NOT run the
-            engine: its Invoke forwards the host-constructed spec.BuildRequest (op.Params, verbatim)
-            BACK to the host via Executor.HostBuild(kind, …) and ECHOES the host-builder's opaque
-            spec.BuildReply — build:box → HostBuild("image"), build:generate → HostBuild("generate").
-            The group/substrate/candy echo pattern applied to build: only the wire envelope crosses
-            the seam. COMPILED-IN (in the embedded compiled_plugins:) — `charly box build` /
-            `charly box generate` dispatch it IN-PROCESS, the host threading the reverse channel onto
-            the Invoke context so HostBuild is reachable without a go-plugin broker. Also serves
-            out-of-process via cmd/serve for module-shape parity (one provider, two placements).
+            The BUILD-DRIVE plugin: it OWNS the podman build drive (the build-order loop, the
+            per-image build lock, the push, and the merge gate) for `build:box` (the `charly box
+            build` engine) and `build:generate` (the `charly box generate` engine). The heavy
+            loader/render RESOLVE (NewGenerator → Generate → the privileged builder-bootstrap → the
+            builder-image ensure) and the layer MERGE stay host-side, reached over the F10 HostBuild
+            reverse channel: Invoke marshals a spec.BuildResolveRequest and calls
+            HostBuild("build-resolve", …), receives a spec.BuildResolveReply drive-model
+            (engine/platform/order/levels/per-image descriptors + resolved tunables), then runs
+            podman directly — building each image (Containerfile piped over stdin), gating the inline
+            layer merge on the box's MergeAuto via HostBuild("merge", …), and pushing (podman) after
+            merge; build:generate renders the .build/ Containerfile tree host-side and returns the
+            written paths (no podman, no merge). Only the wire envelopes cross the seam; the podman
+            exec happens IN the candy. COMPILED-IN (in the embedded compiled_plugins:) — `charly box
+            build` / `charly box generate` dispatch it IN-PROCESS, the host threading the reverse
+            channel onto the Invoke context so HostBuild is reachable without a go-plugin broker.
+            Also serves out-of-process via cmd/serve for module-shape parity (one provider, two
+            placements).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-build
             providers:
                 - build:box
                 - build:generate
         plan:
-            - check: the build-engine dispatch plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its build:box / build:generate words route `charly box build` and `charly box generate` through the F10 HostBuild seam, exercised by EVERY box build across the whole ecosystem (every `charly box build` / `charly box generate` invocation)
-              id: build-dispatch-module-present
+            - check: the build-drive plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its build:box / build:generate words own the podman build drive and resolve/merge over the F10 HostBuild seam, exercised by EVERY box build across the whole ecosystem (every `charly box build` / `charly box generate` invocation)
+              id: build-drive-module-present
               context:
                 - build
               command: "true"
