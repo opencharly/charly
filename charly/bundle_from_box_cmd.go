@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// DeployFromImageCmd implements `charly bundle from-box <ref> [name]` — a
-// SOURCE-LESS deploy driven entirely by an image's baked ai.opencharly.* OCI
+// deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>
+// [name]` — a SOURCE-LESS deploy driven entirely by an image's baked ai.opencharly.* OCI
 // labels, with NO charly.yml project. Two targets:
 //
 //   - pod (default): generate + enable a podman quadlet from the image's labels
@@ -25,17 +25,19 @@ import (
 // `ssh guest 'charly bundle from-box <ref> <name>'` to bring a nested pod up as a
 // persistent quadlet (it survives reboot via the quadlet [Install] section once
 // the guest user has lingering enabled — the orchestrator handles that).
-type BundleFromBoxCmd struct {
-	Ref       string   `arg:"" help:"Full image ref (local or registry), e.g. ghcr.io/opencharly/selkies-kde-nvidia:latest"`
-	Name      string   `arg:"" optional:"" help:"Deploy name (default: the image-ref basename without tag)"`
-	Instance  string   `short:"i" long:"instance" help:"Instance name"`
-	Env       []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
-	Port      []string `short:"p" help:"Remap host port (newHost:containerPort)"`
-	Cluster   string   `long:"cluster" help:"Target a K8s cluster profile instead of a local pod (emits Kustomize via the K8s from-box path)"`
-	Namespace string   `long:"namespace" help:"K8s namespace override (--cluster only)"`
+// The CLI GRAMMAR lives in the command:bundle plugin (candy/plugin-bundle); this struct
+// is reconstructed from spec.DeployFromBoxRequest by the deploy-from-box host-build seam.
+type deployFromBoxCmd struct {
+	Ref       string
+	Name      string
+	Instance  string
+	Env       []string
+	Port      []string
+	Cluster   string
+	Namespace string
 }
 
-func (c *BundleFromBoxCmd) Run() error {
+func (c *deployFromBoxCmd) Run() error {
 	if strings.TrimSpace(c.Ref) == "" {
 		return fmt.Errorf("charly bundle from-box: a full image <ref> is required")
 	}
