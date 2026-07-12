@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/alecthomas/kong"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -643,7 +645,23 @@ func (c *NewCandyCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return ScaffoldCandy(dir, c.Name)
+	// The scaffold ENGINE lives in sdk/kit (shared with the Wave-2 command:box plugin); the CLI
+	// handler owns the user-facing output. ComputeCalVer() stays core (the wall-clock read) and is
+	// passed in so kit stays clock-free.
+	if err := kit.ScaffoldCandy(dir, c.Name, ComputeCalVer()); err != nil {
+		return err
+	}
+	fmt.Printf("Created candy at %s\n", filepath.Join(dir, DefaultCandyDir, c.Name))
+	fmt.Println("Files created:")
+	fmt.Println("  charly.yml - Candy config (distro packages, require, env, port, route, service)")
+	fmt.Println()
+	fmt.Println("Optional files you can add:")
+	fmt.Println("  root.yml        - Custom root install task")
+	fmt.Println("  pixi.toml       - Python/conda packages")
+	fmt.Println("  package.json    - npm packages")
+	fmt.Println("  Cargo.toml      - Rust crate (requires src/)")
+	fmt.Println("  user.yml        - Custom user install task")
+	return nil
 }
 
 // VersionCmd prints the computed CalVer tag
