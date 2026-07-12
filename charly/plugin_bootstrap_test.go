@@ -42,6 +42,7 @@ func (zzWireTestBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Re
 // post-merge gate rejects → LoadUnified errors. WITH the fix, LoadUnified succeeds + merged.Version
 // is HEAD.
 func TestBootstrapTransformReachesParse(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	RegisterBuiltinProvider(zzWireTestBootstrapProvider{}) // global but marker-gated → no pollution
 	dir := t.TempDir()
 	cfg := "# CHARLY_F9_WIRE_TEST\nversion: 2026.001.0001\n"

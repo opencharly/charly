@@ -17,6 +17,7 @@ import (
 // the peer) and (2) HostBuild a candy's plugin binary (host-build). Builds real binaries, so
 // -short-gated.
 func TestPluginDispatch_InvokeProviderAndHostBuild(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds plugin binaries OOP (slow)")
 	}
