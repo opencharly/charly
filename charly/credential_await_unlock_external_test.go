@@ -23,6 +23,7 @@ import (
 // resolved passphrase. The full keyring-LOCKED → unlock transition needs a live Secret
 // Service and is exercised on the disposable R10 bed; this is its unit-level live proof.
 func TestCredentialAwaitUnlock_ExternalEndToEnd(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the plugin-secrets binary (slow)")
 	}

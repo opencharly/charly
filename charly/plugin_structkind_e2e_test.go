@@ -43,6 +43,7 @@ const authoredMemberTree = `    web:
 // externalizing the seven builtin structural kind decoders (group first). Builds the real plugin
 // OOP, so -short-gated. Reuses copyCandyFixReplace from plugin_kind_prescan_e2e_test.go (same package).
 func TestExternalStructKind_StructuralDecode(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds the external structural kind plugin binary (slow)")
 	}

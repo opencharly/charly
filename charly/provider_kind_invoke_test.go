@@ -30,6 +30,7 @@ func (e3KindTestProv) Invoke(_ context.Context, op *Operation) (*Result, error) 
 // the external (out-of-proc-capable) path. The whole test FAILS without the E3-kind
 // host implementation.
 func TestRunPluginKind_DecodesViaEnvelope(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	RegisterBuiltinProvider(e3KindTestProv{})
 	if err := registerPluginUnitSchema("e3kind-test", PluginSchema{
 		CueSource: "#E3kindInput: {name: string & !=\"\"}\n",

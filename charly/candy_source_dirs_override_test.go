@@ -23,8 +23,12 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	repoRoot := filepath.Dir(wd) // .../av-charly
 	boxCachyos := filepath.Join(repoRoot, "box", "cachyos")
 	apkFixture := filepath.Join(repoRoot, "tests", "data", "ApiDemos-debug.apk")
-	if _, err := os.Stat(boxCachyos); err != nil {
-		t.Skipf("box/cachyos not present (%v) — submodule not checked out", err)
+	// An un-inited box/cachyos submodule leaves an EMPTY gitlink placeholder dir,
+	// so os.Stat(boxCachyos) succeeds and LoadUnified then hard-fails on the
+	// missing manifest; detect "checked out" by the charly.yml manifest instead
+	// (boxSubmoduleCheckedOut) so a box-less checkout skips gracefully.
+	if !boxSubmoduleCheckedOut(boxCachyos) {
+		t.Skip("box/cachyos submodule not checked out (no charly.yml) — box-less checkout")
 	}
 	if _, err := os.Stat(apkFixture); err != nil {
 		t.Skipf("committed APK fixture absent (%v)", apkFixture)

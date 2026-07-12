@@ -23,6 +23,7 @@ import (
 //
 //nolint:gocyclo // sequential end-to-end scenario; extraction would fragment the narrative
 func TestExternalStepKind_EndToEnd(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the external plugin binary (slow)")
 	}

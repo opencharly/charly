@@ -27,6 +27,7 @@ import (
 // Builds + execs a real binary, so it is gated behind -short exactly like
 // TestExternalPluginEndToEnd.
 func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the external plugin binary (slow)")
 	}
