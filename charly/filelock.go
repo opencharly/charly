@@ -14,12 +14,9 @@ package main
 //   - resource-arbiter ledger ~/.local/share/charly/preemption/.lock (blocking, IN the plugin)
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/opencharly/sdk/kit"
@@ -32,44 +29,6 @@ var errLockBusy = kit.ErrLockBusy
 // acquireFileLock is the core alias of the shared kit primitive.
 func acquireFileLock(path string, blocking bool) (release func() error, err error) {
 	return kit.AcquireFileLock(path, blocking)
-}
-
-// acquireImageBuildLock serializes concurrent COLD builds of the SAME image —
-// identified by its full registry/name ref, TAG-STRIPPED — across ALL charly
-// processes AND projects, while letting DISTINCT image refs (the leaf fan-out)
-// build in parallel. User-cache-keyed (sha256 of the ref, like
-// acquireLocalPkgBuildLock — R3), NOT per-.build-dir: box/arch's `arch-builder`
-// and box/cachyos's namespaced `arch.arch-builder` both resolve to
-// ghcr.io/opencharly/arch-builder, so a per-dir lock let them cold-build the
-// SAME ref concurrently into the ONE shared podman graphroot (a store-write
-// race). Keying on the shared ref serializes them; a busy build blocks, then
-// cache-hits.
-func acquireImageBuildLock(fullTag string) (func() error, error) {
-	path, err := imageBuildLockPath(fullTag)
-	if err != nil {
-		return nil, err
-	}
-	return acquireFileLock(path, true)
-}
-
-// imageBuildLockPath is the pure lock-key derivation: the user-cache lock file
-// for an image ref, keyed on the TAG-STRIPPED registry/name so every tag of the
-// same image (and every project producing that ref) shares one lock.
-func imageBuildLockPath(fullTag string) (string, error) {
-	ref := fullTag
-	if i := strings.LastIndex(ref, ":"); i > strings.LastIndex(ref, "/") {
-		ref = ref[:i] // strip :<tag>, preserving any registry:port colon
-	}
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("image build lock: %w", err)
-	}
-	dir := filepath.Join(cache, "charly", "locks")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("image build lock dir: %w", err)
-	}
-	sum := sha256.Sum256([]byte(ref))
-	return filepath.Join(dir, "image-"+hex.EncodeToString(sum[:8])+".lock"), nil
 }
 
 // acquireVmImageFetchLock serializes concurrent fetches of the SAME cached VM image across

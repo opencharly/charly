@@ -113,11 +113,11 @@ func (c *GenerateCmd) Run() error {
 		return err
 	}
 
-	// Route generation through the compiled-in build:generate plugin over the F10 HostBuild
-	// seam: the heavy Generator engine STAYS host-side in-proc (runBoxGenerate) — only this
-	// BuildRequest envelope crosses. The `all` sentinel collapses to "every enabled box", and a
-	// named selection scopes the resolved set (and, with --include-disabled, relaxes the gate
-	// for exactly those names). See dispatchBuild + hostBuildGenerate.
+	// Route generation through the compiled-in candy/plugin-build DRIVE (build:generate): the
+	// candy asks the host to render the .build/ Containerfile tree over the build-resolve seam,
+	// and only this BuildRequest envelope crosses. The `all` sentinel collapses to "every enabled
+	// box", and a named selection scopes the resolved set (and, with --include-disabled, relaxes
+	// the gate for exactly those names). See dispatchBuild + dispatchBoxGenerate.
 	return dispatchBoxGenerate(spec.BuildRequest{
 		Boxes:           normalizeBoxArgs(c.Boxes),
 		Tag:             c.Tag,
