@@ -45,7 +45,7 @@ type externalDeployTarget struct {
 
 	// nodeOnly mirrors `charly bundle add --node-only`: when true, Add does NOT run the
 	// substrate's PostApply (vm: skip the nested target:pod children — the caller deploys
-	// them via the dotted path). Set by the dispatcher from BundleAddCmd.NodeOnly.
+	// them via the dotted path). Set by the dispatcher from deployAddCmd.NodeOnly.
 	nodeOnly bool
 
 	// rebootable records whether this substrate owns a charly-managed venue that may be

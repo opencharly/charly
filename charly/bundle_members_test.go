@@ -184,9 +184,22 @@ func deployKeysList(m map[string]BundleNode) []string {
 // the resource. This test exercises real flag parsing so the drift can never
 // silently re-land.
 func TestDeployDelArgv_KongAccepts(t *testing.T) {
+	// delGrammarStub mirrors the command:bundle plugin's `charly bundle del` leaf grammar
+	// (candy/plugin-bundle) — the Kong-tagged field set the real CLI parses. The plugin
+	// owns the grammar now (P13) and a core unit test cannot import a separate module, so
+	// this stub reproduces the exact tag shape (AssumeYes → --assume-yes / -y; the
+	// historically-wrong --yes/--force absent) to keep the deployDelArgv regression guard.
+	type delGrammarStub struct {
+		Name            string `arg:""`
+		AssumeYes       bool   `long:"yes" short:"y"`
+		KeepRepoChanges bool   `long:"keep-repo-changes"`
+		KeepServices    bool   `long:"keep-services"`
+		KeepImage       bool   `long:"keep-image"`
+		DryRun          bool   `long:"dry-run"`
+	}
 	type bundleGrammar struct {
 		Bundle struct {
-			Del BundleDelCmd `cmd:""`
+			Del delGrammarStub `cmd:""`
 		} `cmd:""`
 	}
 	parse := func(args ...string) error {

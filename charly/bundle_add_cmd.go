@@ -24,45 +24,48 @@ import (
 	"strings"
 )
 
-// BundleAddCmd implements `charly bundle add <name> [<ref>]`.
-type BundleAddCmd struct {
-	Name string `arg:"" help:"Deploy name ('host' for local system; any other string is a container deploy name)"`
-	Ref  string `arg:"" optional:"" help:"Box or candy reference (local name, ./path.yml, or github.com/org/repo[/box/<n>|/candy/<n>][@ref])"`
+// deployAddCmd is the host-side orchestration for `charly bundle add <name> [<ref>]`.
+// The CLI GRAMMAR moved to the command:bundle plugin (candy/plugin-bundle); this struct
+// is reconstructed from spec.DeployAddRequest by the deploy-add host-build seam and its
+// Run() logic runs VERBATIM in charly's own process.
+type deployAddCmd struct {
+	Name string
+	Ref  string
 
 	// Candy overlays (repeatable).
-	AddCandy []string `long:"add-candy" help:"Extra candy to apply on top of the base image (repeatable)"`
+	AddCandy []string
 
 	// Plan-level flags.
-	Tag      string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	DryRun   bool   `long:"dry-run" help:"Print the plan without executing"`
-	NodeOnly bool   `long:"node-only" help:"Dispatch only the named node; do not descend into nested children (children of a pod can't deploy until the pod is started)"`
-	Format   string `long:"format" default:"table" enum:"table,json" help:"Output format for --dry-run"`
-	Pull     bool   `long:"pull" help:"Force re-fetch of remote refs / image pull"`
-	Verify   bool   `long:"verify" help:"Re-run candy tests: on the host after install"`
+	Tag      string
+	DryRun   bool
+	NodeOnly bool
+	Format   string
+	Pull     bool
+	Verify   bool
 
 	// Host-only gates.
-	WithServices     bool   `long:"with-services" help:"Install systemd services (host target only)"`
-	AllowRepoChanges bool   `long:"allow-repo-changes" help:"Allow repo config mutations (host target only)"`
-	AllowRootTasks   bool   `long:"allow-root-tasks" help:"Allow arbitrary root cmd: tasks (host target only)"`
-	SkipIncompatible bool   `long:"skip-incompatible" help:"Skip candies without host-matching format (host target only)"`
-	BuilderImage     string `long:"builder-image" help:"Override the compile builder image"`
-	AssumeYes        bool   `long:"yes" short:"y" help:"Assume yes; implies all allow-* gates plus skip sudo preflight"`
+	WithServices     bool
+	AllowRepoChanges bool
+	AllowRootTasks   bool
+	SkipIncompatible bool
+	BuilderImage     string
+	AssumeYes        bool
 
 	// Disposable + lifecycle classification (see /charly-internals:disposable).
 	// --disposable writes `disposable: true` into the charly.yml
 	// entry and authorizes autonomous `charly update`. --lifecycle writes
 	// the informational tier tag; it has NO effect on disposability
 	// (no derivation).
-	Disposable bool   `long:"disposable" help:"Mark this deploy disposable (authorizes autonomous charly update; writes disposable: true into charly.yml)"`
-	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
+	Disposable bool
+	Lifecycle  string
 
 	// vmEntity is the resolved kind:vm entity name this deploy targets,
 	// populated per-node by dispatchNode from the node's `vm:` cross-ref
 	// (kind:check beds + charly.yml target:vm entries) OR the "vm:<name>"
 	// deploy-key prefix (the CLI `charly bundle add vm:<name>` form). The candy
 	// compiler reads it to build plans against the GUEST's distro/format
-	// (apt/dnf), not the operator host's. Not a Kong flag.
-	vmEntity string `kong:"-"`
+	// (apt/dnf), not the operator host's. Host-derived during dispatch.
+	vmEntity string
 
 	// builderImageOverride is this deploy's effective builder-image override —
 	// opts.BuilderImageOverride, i.e. --builder-image (CLI) with
@@ -75,25 +78,27 @@ type BundleAddCmd struct {
 	// into the out-of-process local/vm deploy walk, so builderStepImage there failed
 	// "no builder image for <builder>". Seeding it at compile makes the image travel IN
 	// the step view (step_view.go round-trips BuilderImage) to the out-of-process walk.
-	// Mirrors the vmEntity per-node field. Not a Kong flag.
-	builderImageOverride string `kong:"-"`
+	// Mirrors the vmEntity per-node field. Host-derived during dispatch.
+	builderImageOverride string
 }
 
-// BundleDelCmd implements `charly bundle del <name>`.
-type BundleDelCmd struct {
-	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
+// deployDelCmd is the host-side orchestration for `charly bundle del <name>`.
+// The CLI GRAMMAR moved to the command:bundle plugin (candy/plugin-bundle); this struct
+// is reconstructed from spec.DeployDelRequest by the deploy-del host-build seam.
+type deployDelCmd struct {
+	Name string
 
-	AssumeYes       bool `long:"yes" short:"y" help:"Skip confirmation prompts"`
-	KeepRepoChanges bool `long:"keep-repo-changes" help:"Don't revert repo config even at zero refcount"`
-	KeepServices    bool `long:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
-	KeepImage       bool `long:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
-	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
+	AssumeYes       bool
+	KeepRepoChanges bool
+	KeepServices    bool
+	KeepImage       bool
+	DryRun          bool
 
 	// Runner routes reverse ops to the right privilege context. It is
 	// carried onto the resolved the local deploy target by Run before Del. Nil
-	// falls back to the local-exec path in reverse_ops.go. Not exposed as
-	// a Kong flag.
-	Runner ReverseRunner `kong:"-"`
+	// falls back to the local-exec path in reverse_ops.go. Set programmatically
+	// by host-side teardown callers, never authored on the CLI.
+	Runner ReverseRunner
 }
 
 // deployDelArgv returns the argv (everything AFTER the charly binary) for a
@@ -103,12 +108,13 @@ type BundleDelCmd struct {
 // (exec.Command), and the systemd-run TTL timer — so the flag can never drift
 // across call sites again.
 //
-// The flag is `--assume-yes`, NOT `--yes`/`--force`: BundleDelCmd.AssumeYes
-// renders as --assume-yes because Kong derives the long name from the FIELD
-// (the `long:"yes"` tag is a Kong no-op in the separate-tag form), with `-y` as
-// the short form. A `--yes`/`--force` drift — neither of which Kong accepts —
-// once aborted teardown at arg-parse and silently leaked the resource (see
-// CHANGELOG/); the deploy-del-flag regression test guards this.
+// The flag is `--assume-yes`, NOT `--yes`/`--force`: the command:bundle plugin's
+// `charly bundle del` Kong grammar (candy/plugin-bundle) renders its AssumeYes field
+// as --assume-yes because Kong derives the long name from the FIELD (the `long:"yes"`
+// tag is a Kong no-op in the separate-tag form), with `-y` as the short form. A
+// `--yes`/`--force` drift — neither of which Kong accepts — once aborted teardown at
+// arg-parse and silently leaked the resource (see CHANGELOG/); the deploy-del-flag
+// regression test guards this.
 func deployDelArgv(name string) []string {
 	return []string{"bundle", "del", name, "--assume-yes"}
 }
@@ -123,7 +129,7 @@ func deployDelArgv(name string) []string {
 //
 // For a flat name (no children, no dots) the behavior is unchanged —
 // exactly one target's Emit() call.
-func (c *BundleAddCmd) Run() error {
+func (c *deployAddCmd) Run() error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
@@ -233,7 +239,7 @@ func (c *BundleAddCmd) Run() error {
 // parentExec is the DeployExecutor of the enclosing environment; nil
 // at the root. Non-nil means "this node is a child of something" —
 // its target composes a NestedExecutor over parentExec.
-func (c *BundleAddCmd) dispatchNode(path string, node *BundleNode, parentExec DeployExecutor, dir string) error {
+func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec DeployExecutor, dir string) error {
 	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node, parentExec)
 	if err != nil {
 		return err
@@ -356,7 +362,7 @@ func (c *BundleAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 // CLI flags. On the root this matches the pre-v2 behavior; on children the
 // fields come from the child node (not c.Name's top-level entry). Returns an
 // error only when neither a <ref> nor a charly.yml entry resolves a ref.
-func (c *BundleAddCmd) resolveNodeOverlays(path string, node *BundleNode, parentExec DeployExecutor) (EmitOpts, string, []string, string, error) {
+func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parentExec DeployExecutor) (EmitOpts, string, []string, string, error) {
 	opts := c.emitOpts()
 	opts.ParentExec = parentExec
 	opts.Path = path
@@ -425,7 +431,7 @@ func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies 
 // …) rather than the operator host's context — otherwise the candy's install
 // tasks pick the wrong distro section and the overlay build fails. Returns the
 // plans, the base identity, and the candy set.
-func (c *BundleAddCmd) compileNodePlans(target, refStr, tag, path string, addCandies []string, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCandies []string, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
 	var plans []*InstallPlan
 	var base string
 	var candySet []string
@@ -581,7 +587,7 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 // still works for ref-based deploys without a charly.yml entry: a node
 // is synthesized from the classified target so the resolver has a
 // target: to dispatch on.
-func (c *BundleDelCmd) Run() error {
+func (c *deployDelCmd) Run() error {
 	paths, err := DefaultLedgerPaths()
 	if err != nil {
 		return err
@@ -656,7 +662,7 @@ func (c *BundleDelCmd) Run() error {
 // direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
 // loudly, instead of being silently synthesized into a pod del that tears down
 // nothing and then fails with a misleading "unknown target pod".
-func (c *BundleDelCmd) resolveDelNode() (*BundleNode, string, error) {
+func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
 	if c.Name == "host" {
 		return &BundleNode{Target: "local"}, "local", nil
 	}
@@ -699,7 +705,7 @@ func podDeploymentArtifactExists(name string) bool {
 // Helpers
 // ---------------------------------------------------------------------------
 
-func (c *BundleAddCmd) emitOpts() EmitOpts {
+func (c *deployAddCmd) emitOpts() EmitOpts {
 	return EmitOpts{
 		DryRun:               c.DryRun,
 		FormatJSON:           c.Format == "json",
@@ -718,7 +724,7 @@ func (c *BundleAddCmd) emitOpts() EmitOpts {
 // each. For image refs: walk the image's candies in topological order.
 // For candy refs: compile a single plan. For remote refs: fetch and
 // proceed (remote fetch is handled by existing EnsureRepoDownloaded).
-func (c *BundleAddCmd) compilePlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compilePlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
 	if ref.Source == RefSourceRemote && ref.Kind == RefKindBox {
 		return nil, "", nil, fmt.Errorf("remote image refs are not supported by bundle add (ref=%s)", ref.Raw)
 	}
@@ -738,7 +744,7 @@ func (c *BundleAddCmd) compilePlans(ref *DeployRef, cfg *Config, distroCfg *Dist
 // the ref, so the existing CollectRemoteRefs/ScanAllCandy machinery pulls it —
 // and keys by its bare ref. This makes `charly bundle add --add-layer <remote>`
 // (e.g. the VM check beds' add_candy:) fully automatic with no manual pre-fetch.
-func (c *BundleAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]*Candy, string, error) {
+func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]*Candy, string, error) {
 	scanCfg := cfg
 	candyKey := ref.Name
 	if ref.Source == RefSourceRemote {
@@ -759,7 +765,7 @@ func (c *BundleAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 	return layers, candyKey, nil
 }
 
-func (c *BundleAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
 	_ = distroCfg
 	_ = builderCfg
 	img, err := cfg.ResolveBox(ref.Name, c.Tag, dir, ResolveOpts{})
@@ -823,7 +829,7 @@ func pruneContainerInitForSystemd(order []string, hostCtx HostContext) []string 
 // the provided *ResolvedBox as the compile context (so add_candy for
 // a pod/k8s deployment compile against the base image's distro/user
 // context, not the operator host's).
-func (c *BundleAddCmd) compileCandyPlansWithContext(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string, ctx *ResolvedBox) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileCandyPlansWithContext(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string, ctx *ResolvedBox) ([]*InstallPlan, string, []string, error) {
 	_ = builderCfg
 	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
 	if err != nil {
@@ -856,7 +862,7 @@ func (c *BundleAddCmd) compileCandyPlansWithContext(ref *DeployRef, cfg *Config,
 	return plans, ref.Name, order, nil
 }
 
-func (c *BundleAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
 	_ = builderCfg
 	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
 	if err != nil {
@@ -922,7 +928,7 @@ func (c *BundleAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg 
 	return plans, ref.Name, order, nil
 }
 
-func (c *BundleAddCmd) printPlans(plans []*InstallPlan, opts EmitOpts) error {
+func (c *deployAddCmd) printPlans(plans []*InstallPlan, opts EmitOpts) error {
 	if opts.FormatJSON {
 		return json.NewEncoder(os.Stdout).Encode(plans)
 	}
@@ -965,7 +971,7 @@ func detectHostContext() HostContext {
 // a namespaced fedora.fedora-builder) is resolved to a concrete image later by
 // BuilderRun → EnsureImagePresent (builder_run.go), so it need not be a full registry
 // ref.
-func (c *BundleAddCmd) compileHostContext() HostContext {
+func (c *deployAddCmd) compileHostContext() HostContext {
 	hostCtx := detectHostContext()
 	if c.builderImageOverride != "" {
 		hostCtx.BuilderImage = c.builderImageOverride

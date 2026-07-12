@@ -1,0 +1,31 @@
+plugin-bundle:
+    candy:
+        version: 2026.193.1200
+        description: |-
+            The `charly bundle …` deployment CLI, externalized into a COMPILED-IN
+            command:bundle plugin (F8) mirroring candy/plugin-vm. `charly bundle add`
+            / `del` / `show` / `export` / `import` / `reset` / `path` / `status` /
+            `from-box` dispatch IN-PROC via Invoke(OpRun) (runBundleCommand →
+            kong-parse the BundleCmd tree), so the handlers run in charly's OWN process
+            and inherit charly's real stdio/TTY natively. They compile InstallPlans over
+            sdk/deploykit (the P4 IR compiler) and reach the host-only Mechanisms — the
+            config loader + deploy ledger, and the deploy-dispatch kernel (ResolveTarget
+            → externalDeployTarget over the executor reverse channel) — over the generic
+            fabric adapters (HostBuild config-resolve / config-persist / deploy-apply /
+            cli). command:bundle is COMPILED-IN; its grammar is prescanned into the CLI.
+        plugin:
+            providers:
+                - command:bundle
+            source: github.com/opencharly/charly/candy/plugin-bundle
+        plan:
+            - # ADE check: a deterministic build-context check that does NOT depend on the
+              # project context the `charly bundle` CLI needs. Mirrors plugin-vm /
+              # plugin-example-command — a trivial build-context `plugin: command` (the
+              # built-in command CHECK verb) running `true`. The full CLI end-to-end
+              # (`charly bundle add`/`del` deploy dispatch) is exercised by the Go e2e +
+              # the live R10 bed roster (bundle add is every bed's entry point).
+              check: the command:bundle plugin ships a buildable Go module the host compiles into charly; the full `charly bundle add`/`del` deploy dispatch is exercised by the Go e2e + the live R10 roster
+              id: bundle-module-present
+              context:
+                - build
+              command: "true"
