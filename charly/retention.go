@@ -157,13 +157,24 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	return groups, nil
 }
 
-// liveBuildFloor scans the build-activity locks (acquireBuildActivityLock): a
+// liveBuildFloor is a package-level var for testability — the same seam
+// ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
+// build-activity lock dir (~/.cache/charly/locks/builds, shared across every
+// worktree on the host), so a retention test that does NOT stub it is
+// non-deterministic: a concurrent build in ANOTHER process holds a lock, the
+// live-build protection engages, and the test's expected pruning silently does
+// not happen. A test stubs this to a fixed (no-live-build) result so the
+// retention decision under test is deterministic regardless of host build
+// activity.
+var liveBuildFloor = defaultLiveBuildFloor
+
+// defaultLiveBuildFloor scans the build-activity locks (acquireBuildActivityLock): a
 // lock file whose flock is ACQUIRABLE is stale (its build died) and is reaped;
 // a HELD one is a LIVE build whose recorded generate CalVer floors every FROM
 // pin it may still resolve. Returns the minimum live CalVer, whether that floor
 // is usable, and the live-build count — a live lock with an unreadable CalVer
 // forces floorOK=false, so the caller protects everything.
-func liveBuildFloor() (floor CalVer, floorOK bool, live int) {
+func defaultLiveBuildFloor() (floor CalVer, floorOK bool, live int) {
 	dir, err := buildActivityDir()
 	if err != nil {
 		return CalVer{}, false, 0
