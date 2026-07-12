@@ -159,6 +159,50 @@ subprocess.run(["git", "-C", rcl, "add", "CHANGELOG/2026.190.1300.md"], capture_
 expect("commit: runtime tier, CHANGELOG staged -> ALLOW", gate(CGATE, f"git -C {rcl} commit -m 'x\n\n{RUN}'"), "ALLOW")
 shutil.rmtree(rcl, ignore_errors=True)
 
+# --- commit gate: the Go-lint criterion --------------------------------------
+# The gate runs the CONFIGURED `golangci-lint run` on each touched Go MODULE. It fails
+# OPEN when golangci-lint is absent (the pr-validator remains the gate), so the BLOCK
+# cases only assert when the tool is installed; the docs-only ALLOW case is tool-free.
+HAS_GOLANGCI = shutil.which("golangci-lint") is not None
+
+
+def mkgorepo():
+    """A base-committed clean git repo that IS a Go module (go.mod + main.go)."""
+    d = tempfile.mkdtemp(prefix="gate-golint-")
+    for a in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", d, *a], capture_output=True)
+    open(os.path.join(d, "go.mod"), "w").write("module golinttest\n\ngo 1.24\n")
+    open(os.path.join(d, "main.go"), "w").write("package main\n\nfunc main() {}\n")
+    subprocess.run(["git", "-C", d, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", d, "commit", "-qm", "i"], capture_output=True)
+    return d
+
+
+if HAS_GOLANGCI:
+    rgd = mkgorepo()  # stage a change that introduces an UNUSED symbol -> BLOCK
+    open(os.path.join(rgd, "main.go"), "w").write("package main\n\nfunc main() {}\n\nfunc dead() {}\n")
+    subprocess.run(["git", "-C", rgd, "add", "main.go"], capture_output=True)
+    expect("commit: Go module with an unused symbol -> BLOCK (golangci-lint)",
+           gate(CGATE, f"git -C {rgd} commit -m 'x\n\n{RUN}'"), "BLOCK")
+    shutil.rmtree(rgd, ignore_errors=True)
+
+    rgc = mkgorepo()  # a lint-clean .go change (greet is called) -> ALLOW
+    open(os.path.join(rgc, "main.go"), "w").write("package main\n\nfunc main() { greet() }\n\nfunc greet() {}\n")
+    subprocess.run(["git", "-C", rgc, "add", "main.go"], capture_output=True)
+    expect("commit: lint-clean Go module -> ALLOW", gate(CGATE, f"git -C {rgc} commit -m 'x\n\n{RUN}'"), "ALLOW")
+    shutil.rmtree(rgc, ignore_errors=True)
+else:
+    print("[SKIP] Go-lint BLOCK/ALLOW cases (golangci-lint not installed; gate fails OPEN by design)")
+
+# A docs-only change in a Go repo must NOT invoke golangci-lint (no .go staged) -> ALLOW.
+# Tool-free: exercises go_modules_touched returning empty regardless of golangci-lint.
+rgn = mkgorepo()
+open(os.path.join(rgn, "README.md"), "w").write("# doc\n")
+subprocess.run(["git", "-C", rgn, "add", "README.md"], capture_output=True)
+expect("commit: docs-only change in a Go repo -> ALLOW (no .go staged, lint skipped)",
+       gate(CGATE, f"git -C {rgn} commit -m 'x\n\n{DOCS}'"), "ALLOW")
+shutil.rmtree(rgn, ignore_errors=True)
+
 # quoted-space -C, CODE at docs tier -> BLOCK (the original fail-open).
 # The space must be in the REPO dir name; put it inside our OWN mkdtemp parent and
 # remove that parent. (Never rmtree(dirname(mkdtemp(...))) — that is the shared

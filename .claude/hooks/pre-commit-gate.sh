@@ -12,6 +12,11 @@
 #   - claims `documentation reviewed` on a staged diff that is not all-docs,
 #   - carries a runtime tier but stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry
 #     (in a repo that tracks CHANGELOG/),
+#   - stages a Go (*.go) change whose module is NOT golangci-lint-clean — the Go-lint
+#     criterion, so dead/unused code cannot slip in the way the P10 VM-CLI sweep did. It
+#     runs the CONFIGURED `golangci-lint run` (never --fix, never --enable-only) on each
+#     touched module (GOWORK=off for candy/plugin-* candies), and fails OPEN when
+#     golangci-lint is absent or times out (the pr-validator remains the real gate),
 #   - changes the index LATE, after this hook has read it — `git commit -a`/`-i`/`-o`,
 #     or an index-mutating git subcommand (add/stage/rm/mv/reset/restore/apply/
 #     update-index) in the same command — while declaring a diff-dependent tier: the
@@ -35,7 +40,7 @@ esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -B - "$INPUT" "$HERE" <<'PY'
-import json, os, re, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 sys.path.insert(0, sys.argv[2])
 from gitcmd import git_invocations, hooks_path_override, dash_c_dir, mentions_subcommand
 
@@ -305,6 +310,65 @@ def assert_changelog(repo):
               "record it, or use a non-runtime tier if this is not a behavioral change.")
 
 
+# --- Go-lint criterion (tier-independent) ------------------------------------
+# The `unused` linter needs WHOLE-package analysis (charly is one big package main), so
+# the gate lints each touched MODULE, not just the changed files. It runs the CONFIGURED
+# `golangci-lint run` (the deduped set CI + contributors see — never --enable-only, never
+# --fix, which corrupts the tree). Fails OPEN (skip) when the tool is absent or times out.
+GO_LINT_TIMEOUT = 180
+
+
+def go_modules_touched(repo):
+    """Module-root dirs (a dir with go.mod) that have a .go file in THIS commit: staged
+    .go, plus — if the command late-stages (commit -a / -i / -o) — unstaged-modified .go
+    (what -a would add). Empty when no Go is involved (a docs/CHANGELOG commit is skipped)."""
+    files = set()
+    staged = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.go"], cwd=repo)
+    if staged:
+        files.update(x for x in staged.splitlines() if x.strip())
+    if stages_late:
+        un = git(["diff", "--name-only", "--diff-filter=ACMR", "--", "*.go"], cwd=repo)
+        if un:
+            files.update(x for x in un.splitlines() if x.strip())
+    base = repo or os.getcwd()
+    roots = set()
+    for f in files:
+        d = os.path.dirname(os.path.join(base, f))
+        while d and len(d) >= len(base):
+            if os.path.isfile(os.path.join(d, "go.mod")):
+                roots.add(d)
+                break
+            nd = os.path.dirname(d)
+            if nd == d:
+                break
+            d = nd
+    return roots
+
+
+def assert_go_lint(repo):
+    if shutil.which("golangci-lint") is None:
+        return  # tool absent -> fail OPEN (the pr-validator remains the real gate)
+    for root in sorted(go_modules_touched(repo)):
+        env = dict(os.environ)
+        if (os.sep + "candy" + os.sep) in (root + os.sep):
+            env["GOWORK"] = "off"  # a plugin candy lints standalone, exactly as it builds
+        try:
+            out = subprocess.run(["golangci-lint", "run"], cwd=root, env=env,
+                                 capture_output=True, text=True, timeout=GO_LINT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            sys.stderr.write("pre-commit-gate NOTE: golangci-lint timed out in %s — skipped "
+                             "(the pr-validator remains the gate).\n" % root)
+            continue
+        except Exception:
+            continue  # fail OPEN on any exec error
+        if out.returncode != 0:
+            detail = ((out.stdout or "") + (out.stderr or "")).strip()
+            block("golangci-lint reports issues in %s — a Go commit must be lint-clean (this "
+                  "criterion exists so dead/unused code cannot slip through the way the P10 "
+                  "VM-CLI sweep's 21 orphaned symbols did). Fix them, then re-commit:\n%s"
+                  % (root, detail[:4000]))
+
+
 # The docs-tier and CHANGELOG checks inspect the STAGED DIFF of the repo this commit
 # writes. Two things can make that diff not the one the commit will actually record —
 # both fail CLOSED, because a gate that judges the wrong diff is worse than no gate:
@@ -332,6 +396,7 @@ if needs_diff and stages_late:
           % ("/".join(INDEX_MUTATING), tiers[0] if tiers else "declared"))
 
 if not cwd_unresolvable:
+    assert_go_lint(commit_cwd)  # tier-independent: any Go commit must be lint-clean
     if "documentation reviewed" in tiers:
         assert_docs_only(commit_cwd)
     if not is_amend and any(t in RUNTIME_TIERS for t in tiers):
