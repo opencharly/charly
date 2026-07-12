@@ -95,7 +95,7 @@ func stampBundleDescents(uf *UnifiedFile) {
 // resolveTreeRoot returns the DeploymentsSection's Images map from
 // the merged UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
-// the same way BundleAddCmd.Run does today.
+// the same way deployAddCmd.Run does today.
 func resolveTreeRoot(dir string) (map[string]BundleNode, error) {
 	var projectDC *BundleConfig
 	if uf, ok, err := LoadUnified(dir); err != nil {

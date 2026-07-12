@@ -5,11 +5,8 @@ import (
 	"strings"
 )
 
-// VolumeMount represents a resolved volume ready for docker/podman
-type VolumeMount struct {
-	VolumeName    string // e.g. "charly-openclaw-data"
-	ContainerPath string // e.g. "/home/user/.openclaw" (~ expanded)
-}
+// VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); aliased in
+// deploykit_state_aliases.go so callers here are unchanged.
 
 // CollectBoxVolume resolves all volumes for a box by traversing the
 // full box chain (box → base → base's base) and collecting volume

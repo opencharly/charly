@@ -14,6 +14,14 @@ type (
 	PackageSection  = deploykit.PackageSection
 	TagPkgConfig    = deploykit.TagPkgConfig
 	RouteConfig     = deploykit.RouteConfig
+
+	// Volume slice (P13/C15): VolumeMount is RESOLVED RUNTIME STATE — never marshaled (the
+	// ai.opencharly.volume label is []LabelVolumeEntry; VolumeMount is built from it at
+	// decode), so it is plain-Go in sdk/deploykit, NOT a spec wire type — aliased here as
+	// part of the volume-slice move (10 package-main files reference it). ResolvedBindMount
+	// (the same resolved-state category) stays in charly/enc.go — another cutover's
+	// single-owner file (C6); it relocates to deploykit with that cutover's enc move.
+	VolumeMount = deploykit.VolumeMount
 )
 
 var (
@@ -37,5 +45,9 @@ var (
 	stripSecretEnvNames        = deploykit.StripSecretEnvNames
 	mergeEnvVars               = deploykit.MergeEnvVars
 	MergeDeployConfigs         = deploykit.MergeDeployConfigs
+	LoadDeployFile             = deploykit.LoadDeployFile
+	RemoveBoxDeploy            = deploykit.RemoveBoxDeploy
+	deployVolumePrefix         = deploykit.DeployVolumePrefix
+	deployStorageDir           = deploykit.DeployStorageDir
 )
 var podAwareEnvProvides = deploykit.PodAwareEnvProvides

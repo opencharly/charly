@@ -8,34 +8,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// BundleCmd manages deployments and charly.yml overrides.
-//
-// The `add` and `del` subcommands (added in the BuildTarget refactor)
-// apply a box/candy plan to a target: either a container (named
-// anything) or the local host (literal name "host"). The existing
-// config-management subcommands (export/import/show/reset/path/status)
-// remain unchanged — they manipulate charly.yml itself.
-type BundleCmd struct {
-	Add BundleAddCmd `cmd:"" help:"Apply a deploy: 'host' targets the local system; any other name targets a container"`
-	Del BundleDelCmd `cmd:"" help:"Tear down a deploy by name"`
-
-	FromImage BundleFromBoxCmd `cmd:"" name:"from-box" help:"Source-less deploy from a built image's baked OCI labels (no charly.yml project). Pod by default; --cluster targets K8s"`
-
-	Export BundleExportCmd `cmd:"" help:"Export effective config as charly.yml"`
-	Import BundleImportCmd `cmd:"" help:"Import charly.yml file(s) into config"`
-	Path   BundlePathCmd   `cmd:"" help:"Print charly.yml file path"`
-	Reset  BundleResetCmd  `cmd:"" help:"Remove charly.yml overrides"`
-	Show   BundleShowCmd   `cmd:"" help:"Show current charly.yml overrides"`
-	Status BundleStatusCmd `cmd:"" help:"Show sync status between charly.yml and quadlet files"`
+// deployShowCmd displays the current charly.yml content. The CLI grammar for
+// `charly bundle show` lives in the command:bundle plugin (candy/plugin-bundle);
+// this struct is reconstructed from spec.DeployConfigRequest by the deploy-config
+// host-build seam (op "show").
+type deployShowCmd struct {
+	Box      string
+	Instance string
 }
 
-// BundleShowCmd displays the current charly.yml content.
-type BundleShowCmd struct {
-	Box      string `arg:"" optional:"" help:"Show overrides for a specific box"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *BundleShowCmd) Run() error {
+func (c *deployShowCmd) Run() error {
 	dc, err := LoadBundleConfig()
 	if err != nil {
 		return err
@@ -60,21 +42,21 @@ func (c *BundleShowCmd) Run() error {
 	return marshalToStdout(dc)
 }
 
-// BundleExportCmd exports the current effective runtime configuration.
-type BundleExportCmd struct {
-	Boxes  []string `arg:"" optional:"" help:"Boxes to export (default: all with overrides)"`
-	Output string   `short:"o" help:"Write to file instead of stdout"`
-	All    bool     `help:"Export all enabled boxes with all runtime fields"`
+// deployExportCmd exports the current effective runtime configuration.
+type deployExportCmd struct {
+	Boxes  []string
+	Output string
+	All    bool
 }
 
-func (c *BundleExportCmd) Run() error {
+func (c *deployExportCmd) Run() error {
 	if c.All {
 		return c.exportAll()
 	}
 	return c.exportOverrides()
 }
 
-func (c *BundleExportCmd) exportAll() error {
+func (c *deployExportCmd) exportAll() error {
 	dir, _ := os.Getwd()
 	cfg, err := LoadConfigRaw(dir)
 	if err != nil {
@@ -87,7 +69,7 @@ func (c *BundleExportCmd) exportAll() error {
 	return c.output(dc)
 }
 
-func (c *BundleExportCmd) exportOverrides() error {
+func (c *deployExportCmd) exportOverrides() error {
 	dc, err := LoadBundleConfig()
 	if err != nil {
 		return err
@@ -102,7 +84,7 @@ func (c *BundleExportCmd) exportOverrides() error {
 	return c.output(dc)
 }
 
-func (c *BundleExportCmd) output(dc *BundleConfig) error {
+func (c *deployExportCmd) output(dc *BundleConfig) error {
 	if c.Output != "" {
 		data, err := yaml.Marshal(dc)
 		if err != nil {
@@ -117,14 +99,14 @@ func (c *BundleExportCmd) output(dc *BundleConfig) error {
 	return marshalToStdout(dc)
 }
 
-// BundleImportCmd loads charly.yml file(s) into ~/.config/charly/charly.yml.
-type BundleImportCmd struct {
-	Files   []string `arg:"" help:"Deploy YAML files to import (merged left-to-right)"`
-	Replace bool     `help:"Replace entire charly.yml instead of merging with existing"`
-	Box     string   `long:"box" help:"Import only this box's config"`
+// deployImportCmd loads charly.yml file(s) into ~/.config/charly/charly.yml.
+type deployImportCmd struct {
+	Files   []string
+	Replace bool
+	Box     string
 }
 
-func (c *BundleImportCmd) Run() error {
+func (c *deployImportCmd) Run() error {
 	// Load input files
 	var inputs []*BundleConfig
 	for _, f := range c.Files {
@@ -180,13 +162,13 @@ func (c *BundleImportCmd) Run() error {
 	return nil
 }
 
-// BundleResetCmd removes charly.yml overrides.
-type BundleResetCmd struct {
-	Box      string `arg:"" optional:"" help:"Box to reset (omit to clear all)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
+// deployResetCmd removes charly.yml overrides.
+type deployResetCmd struct {
+	Box      string
+	Instance string
 }
 
-func (c *BundleResetCmd) Run() error {
+func (c *deployResetCmd) Run() error {
 	if c.Box == "" {
 		// Clear entire charly.yml
 		path, err := DeployConfigPath()
@@ -236,22 +218,10 @@ func (c *BundleResetCmd) Run() error {
 	return nil
 }
 
-// BundlePathCmd prints the charly.yml file path.
-type BundlePathCmd struct{}
+// deployStatusCmd shows sync status between charly.yml and quadlet files.
+type deployStatusCmd struct{}
 
-func (c *BundlePathCmd) Run() error {
-	path, err := DeployConfigPath()
-	if err != nil {
-		return err
-	}
-	fmt.Println(path)
-	return nil
-}
-
-// BundleStatusCmd shows sync status between charly.yml and quadlet files.
-type BundleStatusCmd struct{}
-
-func (c *BundleStatusCmd) Run() error {
+func (c *deployStatusCmd) Run() error {
 	dc, err := LoadBundleConfig()
 	if err != nil {
 		return err
