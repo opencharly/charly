@@ -128,8 +128,10 @@ for label, cmd, want in [
     ("commit: attached -m'a…' is not --all -> ALLOW", f"git commit -m'a\n\n{DOCS}' --amend", "ALLOW"),
     # `git add` alone is not a commit at all.
     ("commit: bare `git add` (no commit) -> ALLOW", "git add main.go", "ALLOW"),
-    # No diff-dependent tier parsed (-F file) -> the diff checks never run, so -a is moot.
-    ("commit: -a with -F file (no inline tier) -> ALLOW", "git commit -a -F msg.txt", "ALLOW"),
+    # #35: an UNREADABLE -F <file> hides the tier from the cmd scan -> the gate can no
+    # longer verify attribution -> fail CLOSED (this was the fail-OPEN hole; msg.txt does
+    # not exist here). A readable -F file is exercised in the #35 block below.
+    ("commit: -a with UNREADABLE -F file -> BLOCK (#35 fail-closed)", "git commit -a -F msg.txt", "BLOCK"),
     # A mention of "git add" inside the quoted message is one token, not an invocation.
     ("commit: 'git add' inside the message -> ALLOW",
      f"git commit -m 'do not git add here\n\n{DOCS}'", "ALLOW"),
@@ -212,6 +214,99 @@ sb_parent, sb_top = mksubbump()
 expect("commit: docs tier, pure docs submodule pointer bump, no CHANGELOG -> ALLOW (#34 exemption)",
        gate(CGATE, f"git -C {sb_top} commit -m 'x\n\n{DOCS}'"), "ALLOW")
 shutil.rmtree(sb_parent, ignore_errors=True)
+
+# --- commit gate: #35 — tier read from -F files; unscannable forms fail CLOSED
+# The tier historically came ONLY from the command string, so an external `-F <file>`
+# (or a `$(...)` substitution) hid it and every tier-dependent check silently failed
+# OPEN. Now a readable -F file is READ; a substitution / unreadable-F / editor message
+# fails CLOSED. A heredoc body is already IN the command string — it stays scannable.
+
+
+def mkmsg(with_tier=True):
+    """A temp message FILE carrying (optionally) the `documentation reviewed` trailer."""
+    p = tempfile.mktemp(prefix="gate35msg-", suffix=".txt")
+    open(p, "w").write("subject\n" + ("\n%s\n" % DOCS if with_tier else ""))
+    return p
+
+
+# -F <file> with the tier + docs change + NO CHANGELOG -> BLOCK (tier now READ -> #34 fires)
+r = mkrepo(with_changelog=True)
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+mf = mkmsg(True)
+expect("commit: -F <file> docs tier, no CHANGELOG -> BLOCK (#35 tier read + #34)",
+       gate(CGATE, "git -C %s commit -F %s" % (r, mf)), "BLOCK")
+os.unlink(mf); shutil.rmtree(r, ignore_errors=True)
+
+# -F <file> with the tier + docs change + CHANGELOG staged -> ALLOW
+r = mkrepo(with_changelog=True)
+open(os.path.join(r, "README.md"), "a").write("more\n")
+open(os.path.join(r, "CHANGELOG", "2026.190.1500.md"), "w").write("# n\n")
+subprocess.run(["git", "-C", r, "add", "README.md", "CHANGELOG/2026.190.1500.md"], capture_output=True)
+mf = mkmsg(True)
+expect("commit: -F <file> docs tier, CHANGELOG staged -> ALLOW (#35 tier read)",
+       gate(CGATE, "git -C %s commit -F %s" % (r, mf)), "ALLOW")
+os.unlink(mf); shutil.rmtree(r, ignore_errors=True)
+
+# -F <file> docs tier on a CODE diff -> BLOCK (the docs-only check now fires for -F too)
+r = mkrepo()
+open(os.path.join(r, "main.go"), "a").write("func q(){}\n")
+subprocess.run(["git", "-C", r, "add", "main.go"], capture_output=True)
+mf = mkmsg(True)
+expect("commit: -F <file> docs tier on CODE diff -> BLOCK (#35 tier read)",
+       gate(CGATE, "git -C %s commit -F %s" % (r, mf)), "BLOCK")
+os.unlink(mf); shutil.rmtree(r, ignore_errors=True)
+
+# -F <file> with NO trailer -> BLOCK (readable file, attribution genuinely absent)
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+mf = mkmsg(False)
+expect("commit: -F <file> no trailer -> BLOCK (#35 absent)",
+       gate(CGATE, "git -C %s commit -F %s" % (r, mf)), "BLOCK")
+os.unlink(mf); shutil.rmtree(r, ignore_errors=True)
+
+# -F <nonexistent path> -> BLOCK (fail closed; the gate cannot read the tier)
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+expect("commit: -F <nonexistent file> -> BLOCK (#35 fail-closed)",
+       gate(CGATE, "git -C %s commit -F /nonexistent/gate35/msg.txt" % r), "BLOCK")
+shutil.rmtree(r, ignore_errors=True)
+
+# -m "$(...)" command substitution -> BLOCK (fail closed; message not in the command)
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+mf = mkmsg(True)
+expect('commit: -m "$(cat file)" substitution -> BLOCK (#35 fail-closed)',
+       gate(CGATE, 'git -C %s commit -m "$(cat %s)"' % (r, mf)), "BLOCK")
+os.unlink(mf); shutil.rmtree(r, ignore_errors=True)
+
+# heredoc body carries the tier -> STILL scannable (in the command string), NOT a hole:
+# docs tier + no CHANGELOG via heredoc -> BLOCK proves the heredoc tier is seen (#34 fires).
+r = mkrepo(with_changelog=True)
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+expect("commit: heredoc docs tier, no CHANGELOG -> BLOCK (#35 heredoc still scannable)",
+       gate(CGATE, "git -C %s commit -F - <<'EOF'\nsubject\n\n%s\nEOF" % (r, DOCS)), "BLOCK")
+shutil.rmtree(r, ignore_errors=True)
+
+# bare `git commit` (editor, no -m/-F) -> BLOCK (fail closed; message unreadable)
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+expect("commit: bare editor commit (no -m/-F) -> BLOCK (#35 fail-closed)",
+       gate(CGATE, "git -C %s commit" % r), "BLOCK")
+shutil.rmtree(r, ignore_errors=True)
+
+# --amend --no-edit (no new message) -> ALLOW (inherits an already-gated message; exempt)
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("more\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+expect("commit: --amend --no-edit (inherited message) -> ALLOW (#35 exempt)",
+       gate(CGATE, "git -C %s commit --amend --no-edit" % r), "ALLOW")
+shutil.rmtree(r, ignore_errors=True)
 
 # --- commit gate: the Go-lint criterion --------------------------------------
 # The gate runs the CONFIGURED `golangci-lint run` on each touched Go MODULE. It fails

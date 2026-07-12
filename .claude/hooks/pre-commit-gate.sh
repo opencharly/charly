@@ -5,7 +5,11 @@
 # mistakes cheaply and leaves nuance (and the adversarial case) to them. It
 # blocks (exit 2) a commit that:
 #   - bypasses hooks: --no-verify / its -n alias / a core.hooksPath override,
-#   - has an inline -m message with no `Assisted-by: Claude (<tier>)` trailer,
+#   - has a READABLE message (inline -m, a heredoc body, or a -F <file> the gate reads)
+#     with no `Assisted-by: Claude (<tier>)` trailer — OR a message the gate CANNOT read
+#     to find the tier (a $(...)/backtick substitution, a piped/unreadable -F, or an
+#     editor message with no -m/-F): the latter fails CLOSED (inline the tier with -m, or
+#     point -F at a readable file),
 #   - carries a tier illegal on a commit (`theoretical suggestion`,
 #     `syntax check only`, or any unknown tier; legal: `fully tested and
 #     validated`, `analysed on a live system`, `documentation reviewed`),
@@ -50,6 +54,7 @@ except Exception:
     sys.exit(0)
 
 LEGAL = {"fully tested and validated", "analysed on a live system", "documentation reviewed"}
+TIER_RE = re.compile(r'Assisted-by:\s*Claude\s*\(([^)]*)\)')  # the attribution trailer (cmd + -F file)
 CHANGELOG_ENTRY = re.compile(r'^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$')
 DOC_PATH = re.compile(r'(?:^|/)(?:CHANGELOG|README|LICENSE|VISION)[^/]*$|\.(?:md|txt)$', re.IGNORECASE)
 
@@ -110,31 +115,50 @@ LATE_STAGING_SHORT = "aio"
 INDEX_MUTATING = ("add", "stage", "rm", "mv", "reset", "restore", "apply", "update-index")
 
 
+# git-commit flags that REUSE an already-authored (already-gated) message instead of
+# taking a NEW one: -c/-C <commit>, --reuse-message/--reedit-message, --fixup/--squash.
+# Like --amend, they inherit a message the gate cannot (and need not) re-read, so a
+# missing inline tier on them is NOT an unattributed new commit — they are exempt from
+# the fail-closed below. Each consumes a ref value, mirroring -m/-F.
+REUSE_OPTS = {"-c", "-C", "--reuse-message", "--reedit-message", "--fixup", "--squash"}
+
+
 def scan_commit_args(args):
     """Walk a commit arg span POSITIONALLY, returning (has_no_verify, is_amend,
-    has_inline_msg, stages_late). The value of -m/--message/-F/--file is CONSUMED,
-    never scanned — so message text (which always contains the letter 'a' via the
-    mandatory `Assisted-by: Claude` trailer) is never mistaken for a flag, and a
-    flag placed AFTER the message (`git commit -m x --no-verify` — valid git) is
-    still seen. In a short bundle, the first m/F starts the message VALUE, so
-    letters after it are message text, not flags (`-am x` stages; `-ma` does not —
-    its 'a' is the message)."""
-    has_nv = is_amend = has_msg = late = False
+    has_inline_msg, stages_late, msg_files, reuses_msg). The value of
+    -m/--message/-F/--file is CONSUMED, never scanned as a flag — so message text
+    (which always contains 'a' via the mandatory `Assisted-by: Claude` trailer) is
+    never mistaken for a flag, and a flag AFTER the message (`git commit -m x
+    --no-verify`) is still seen. A -F/--file VALUE is CAPTURED into msg_files so the
+    tier parser can READ the message file (the #35 fix: an external -F <file> hid the
+    trailer from the cmd-only scan). reuses_msg flags the REUSE_OPTS (an inherited,
+    already-gated message). In a short bundle the first m/F starts the message VALUE
+    (`-am x` stages; `-ma` does not — its 'a' is the message)."""
+    has_nv = is_amend = has_msg = late = reuses = False
+    msg_files = []
     i = 0
     while i < len(args):
         t = args[i]
         if t in ("-m", "-F", "--message", "--file"):
+            if t in ("-F", "--file") and i + 1 < len(args):
+                msg_files.append(args[i + 1])       # capture the message-file path
             has_msg = has_msg or t in ("-m", "--message")
             i += 2                                  # consume the value token
             continue
         if t.startswith("--message="):
             has_msg = True; i += 1; continue
         if t.startswith("--file="):
-            i += 1; continue
+            msg_files.append(t[len("--file="):]); i += 1; continue
         if t == "--no-verify":
             has_nv = True; i += 1; continue
         if t == "--amend":
             is_amend = True; i += 1; continue       # before the generic `--` arm
+        if t in REUSE_OPTS:
+            reuses = True
+            i += 2 if (i + 1 < len(args) and not args[i + 1].startswith("-")) else 1
+            continue
+        if t.startswith(("--reuse-message=", "--reedit-message=", "--fixup=", "--squash=")):
+            reuses = True; i += 1; continue
         if t in LATE_STAGING:
             late = True; i += 1; continue
         if t.startswith("--"):
@@ -150,7 +174,34 @@ def scan_commit_args(args):
                     late = True
             i += 1; continue
         i += 1                                      # non-flag token (pathspec / stray)
-    return has_nv, is_amend, has_msg, late
+    return has_nv, is_amend, has_msg, late, msg_files, reuses
+
+
+def read_file_tiers(msg_files, cmd):
+    """Read the attribution tier from -F/--file message files (the #35 fix). Returns
+    (file_tiers, unreadable). A '-' value is stdin: readable ONLY via a heredoc, whose
+    body already lives in `cmd` (scanned there) — a PIPED '-' (no `<<`) is unreadable.
+    A relative path is resolved against the gate's cwd (best effort; an unresolved or
+    non-regular path -> unreadable -> fail CLOSED). Only a regular file is read (capped),
+    never a device/FIFO that could block."""
+    file_tiers, unreadable = [], False
+    for mf in msg_files:
+        if mf == "-":
+            if "<<" not in cmd:
+                unreadable = True            # piped stdin: content is not in the command
+            continue                         # a heredoc body is already scanned from cmd
+        path = mf if os.path.isabs(mf) else os.path.join(os.getcwd(), mf)
+        if not os.path.isfile(path):
+            unreadable = True
+            continue
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                body = f.read(1 << 20)
+        except OSError:
+            unreadable = True
+            continue
+        file_tiers += TIER_RE.findall(body)
+    return file_tiers, unreadable
 
 
 def resolve_dir(d):
@@ -168,6 +219,8 @@ cwd_unresolvable = False
 is_amend = False
 has_inline_msg = False
 stages_late = False
+msg_files = []
+reuses_msg = False
 for globs, args in invocations:
     if hooks_path_override(globs):
         block("`git -c core.hooksPath=...` bypasses the project's git hooks — the config "
@@ -177,13 +230,15 @@ for globs, args in invocations:
     d = dash_c_dir(globs)
     if d is not None:
         commit_cwd, cwd_unresolvable = resolve_dir(d)
-    nv, amend, msg, late = scan_commit_args(args)
+    nv, amend, msg, late, files, reuses = scan_commit_args(args)
     if nv:
         block("`git commit --no-verify` (or its -n alias) bypasses the project hooks — "
               "forbidden (CLAUDE.md: never bypass hooks).")
     is_amend = is_amend or amend
     has_inline_msg = has_inline_msg or msg
     stages_late = stages_late or late
+    msg_files += files
+    reuses_msg = reuses_msg or reuses
 
 # An index-mutating git subcommand in the SAME command runs AFTER this hook read the
 # index (the hook fires once, BEFORE the command runs) — the compound-command half of
@@ -192,15 +247,30 @@ for globs, args in invocations:
 if any(git_invocations(cmd, verb) for verb in INDEX_MUTATING):
     stages_late = True
 
-# --- attribution tier (string-level over the whole command) -----------------
-tiers = [t.strip() for t in re.findall(r'Assisted-by:\s*Claude\s*\(([^)]*)\)', cmd)]
+# --- attribution tier -------------------------------------------------------
+# The tier is read from the COMMAND STRING (an inline -m value OR a heredoc body, both
+# of which live in `cmd`) AND from any readable -F/--file message file (the #35 fix: an
+# external -F <file> previously hid the trailer, so every tier-dependent check silently
+# failed OPEN). What stays UNREADABLE — a `$(...)`/backtick substitution, a piped `-F -`,
+# an unreadable -F path, or an editor message (no -m/-F/heredoc) — fails CLOSED below.
+file_tiers, msg_file_unreadable = read_file_tiers(msg_files, cmd)
+tiers = [t.strip() for t in (TIER_RE.findall(cmd) + file_tiers)]
 for tier in tiers:
     if tier == "syntax check only":
         block('committing at tier "syntax check only" is a CLAUDE.md violation (AI Attribution: '
               'this tier pairs with "do NOT commit" — R10 has not run; STOP and ask).')
     if tier not in LEGAL:
         block('illegal AI-attribution tier "%s". Legal on a commit: %s.' % (tier, sorted(LEGAL)))
-if has_inline_msg and not tiers and '$(' not in cmd and '<<' not in cmd:
+# No tier found and the message is NOT inherited (amend/reuse): either the gate could
+# not READ the message (fail CLOSED) or it read it and the trailer is genuinely ABSENT.
+if not tiers and not is_amend and not reuses_msg:
+    msg_unreadable = ("$(" in cmd) or ("`" in cmd) or msg_file_unreadable
+    readable_msg = has_inline_msg or ("<<" in cmd) or (bool(msg_files) and not msg_file_unreadable)
+    if msg_unreadable or not readable_msg:
+        block("the gate cannot READ this commit's message to verify its attribution tier — a "
+              "`$(...)`/backtick substitution, a piped or unreadable `-F` file, or an editor "
+              "message (no -m/-F). Inline the trailer with `-m`, or point `-F <path>` at a "
+              "readable file, so the tier is scannable (the gate fails CLOSED here, not open).")
     block("commit message has no `Assisted-by: Claude (<tier>)` trailer (every commit Claude is "
           "involved in must attribute; docs-only commits use `documentation reviewed`).")
 
