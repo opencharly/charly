@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"sync"
 )
 
 // The HarnessCmd top-level type was deleted in the check-cutover. Its
@@ -382,6 +383,14 @@ func runWithPhaseResync(cmd *exec.Cmd, scoreName string) error {
 	}
 
 	seen := map[int]bool{1: true} // preflight already covered phase 1
+	// resyncWG tracks the per-boundary resync goroutines so the function WAITS for
+	// them before returning: each goroutine reads phaseResyncFn (a package-var test
+	// seam), so leaking one past the return would (a) leave a credential `podman cp`
+	// mid-flight after the run is done and (b) race the test's phaseResyncFn restore
+	// (a read/write on the var). wg.Wait() below establishes the happens-before that
+	// closes both — a synchronization primitive, never a sleep (the deleted test
+	// `time.Sleep` was the R4 bandaid this replaces at the root).
+	var resyncWG sync.WaitGroup
 	scanner := bufio.NewScanner(stderrPipe)
 	scanner.Buffer(make([]byte, 1024*1024), 4*1024*1024)
 	for scanner.Scan() {
@@ -396,7 +405,9 @@ func runWithPhaseResync(cmd *exec.Cmd, scoreName string) error {
 			continue
 		}
 		seen[n] = true
+		resyncWG.Add(1)
 		go func(phase int) {
+			defer resyncWG.Done()
 			fmt.Fprintf(os.Stderr,
 				"harness: phase %d boundary — resyncing AI credentials before iter 1\n",
 				phase)
@@ -410,7 +421,9 @@ func runWithPhaseResync(cmd *exec.Cmd, scoreName string) error {
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "harness: stderr scan stopped early: %v\n", err)
 	}
-	return cmd.Wait()
+	waitErr := cmd.Wait()
+	resyncWG.Wait() // no resync goroutine (nor its phaseResyncFn read) outlives the return
+	return waitErr
 }
 
 // ---------------------------------------------------------------------------
