@@ -1,18 +1,82 @@
-package main
+package alias
 
 import (
 	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
-// aliasNameRe matches valid alias names: starts with alphanumeric, allows dots/underscores/hyphens
-var aliasNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
-
 const aliasMarker = "# charly-alias"
+
+// hostClient is the alias command's ONE host coupling: it reaches charly's host process over the
+// generic HostBuild("cli") reverse channel (the same seam the pod/vm lifecycles use) to run
+// `charly box labels …` — the only image facts `add`/`install` need. Every other subcommand is a
+// pure ~/.local/bin wrapper-script operation with no host dependency.
+type hostClient struct {
+	ctx  context.Context
+	exec *sdk.Executor
+}
+
+// cli asks the HOST to run `charly <argv>` via the generic "cli" host-builder and returns the
+// CliReply (stdout when capture, the process exit code, any spawn error).
+func (h *hostClient) cli(capture, bestEffort bool, argv ...string) (spec.CliReply, error) {
+	reqJSON, err := json.Marshal(spec.CliRequest{Argv: argv, Capture: capture, BestEffort: bestEffort})
+	if err != nil {
+		return spec.CliReply{}, err
+	}
+	resJSON, err := h.exec.HostBuild(h.ctx, "cli", reqJSON)
+	if err != nil {
+		return spec.CliReply{}, err
+	}
+	var r spec.CliReply
+	if uerr := json.Unmarshal(resJSON, &r); uerr != nil {
+		return spec.CliReply{}, uerr
+	}
+	return r, nil
+}
+
+// imageExists reports whether the box image is in local container storage, via `charly box labels
+// <box>` (which resolves the ref against local storage and fails when the image is absent).
+func (h *hostClient) imageExists(box string) (bool, error) {
+	r, err := h.cli(true, true, "box", "labels", box)
+	if err != nil {
+		return false, err
+	}
+	return r.ExitCode == 0, nil
+}
+
+// collectAliases reads the box image's baked ai.opencharly.alias label (a JSON []CollectedAlias)
+// via `charly box labels <box> --format alias`. An absent label (no aliases) exits non-zero and
+// yields an empty slice — the caller distinguishes "image missing" earlier via imageExists.
+func (h *hostClient) collectAliases(box string) ([]collectedAlias, error) {
+	r, err := h.cli(true, true, "box", "labels", box, "--format", "alias")
+	if err != nil {
+		return nil, err
+	}
+	out := strings.TrimSpace(r.Stdout)
+	if r.ExitCode != 0 || out == "" {
+		return nil, nil
+	}
+	var aliases []collectedAlias
+	if uerr := json.Unmarshal([]byte(out), &aliases); uerr != nil {
+		return nil, fmt.Errorf("parsing ai.opencharly.alias label of %s: %w", box, uerr)
+	}
+	return aliases, nil
+}
+
+// collectedAlias mirrors charly's baked ai.opencharly.alias label entry (name + host command).
+type collectedAlias struct {
+	Name    string `json:"name"`
+	Command string `json:"command"`
+}
 
 // generateAliasScript produces the wrapper script content for a host command alias.
 // The wrapper builds a properly quoted command string and calls charly shell -c.
@@ -126,69 +190,6 @@ func parseAliasScript(path string) (*AliasInfo, error) {
 	return &AliasInfo{Box: image, Command: command}, nil
 }
 
-// CollectedAlias represents a resolved alias ready for installation.
-type CollectedAlias struct {
-	Name    string `json:"name"`
-	Command string `json:"command"`
-}
-
-// CollectBoxAlias gathers aliases from the box's own candies + box-level config.
-// No base chain traversal — aliases are leaf-box specific.
-// Candy aliases come first; box-level overrides by name.
-func CollectBoxAlias(cfg *Config, layers map[string]*Candy, boxName string) ([]CollectedAlias, error) {
-	img, ok := cfg.BoxConfig(boxName)
-	if !ok {
-		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)
-	}
-
-	// Resolve candies for this box (leaf-specific — aliases do NOT inherit from
-	// a base box; the shared boxDirectCandies walk).
-	resolved, err := cfg.boxDirectCandies(layers, boxName)
-	if err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]bool)
-	var result []CollectedAlias
-
-	// Collect from candies
-	for _, candyName := range resolved {
-		layer, ok := layers[candyName]
-		if !ok || !layer.HasAliases() {
-			continue
-		}
-		for _, a := range layer.Alias() {
-			if seen[a.Name] {
-				continue
-			}
-			seen[a.Name] = true
-			result = append(result, CollectedAlias(a))
-		}
-	}
-
-	// Collect from box config (overrides candy aliases with same name)
-	for _, a := range img.Alias {
-		cmd := a.Command
-		if cmd == "" {
-			cmd = a.Name
-		}
-		if seen[a.Name] {
-			// Override: find and replace
-			for i := range result {
-				if result[i].Name == a.Name {
-					result[i].Command = cmd
-					break
-				}
-			}
-		} else {
-			seen[a.Name] = true
-			result = append(result, CollectedAlias{Name: a.Name, Command: cmd})
-		}
-	}
-
-	return result, nil
-}
-
 // defaultAliasDir returns ~/.local/bin, creating it if needed.
 func defaultAliasDir() string {
 	home, err := os.UserHomeDir()
@@ -196,6 +197,21 @@ func defaultAliasDir() string {
 		return filepath.Join(os.Getenv("HOME"), ".local", "bin")
 	}
 	return filepath.Join(home, ".local", "bin")
+}
+
+// dispatchAliasCLI kong-parses the pass-through args into the AliasCmd tree and runs the selected
+// leaf, binding the hostClient so the `add`/`install` handlers can reach the host reverse channel.
+func dispatchAliasCLI(hc *hostClient, args []string) error {
+	var cli AliasCmd
+	parser, err := kong.New(&cli, kong.Name("alias"), kong.Exit(func(int) {}))
+	if err != nil {
+		return err
+	}
+	kctx, err := parser.Parse(args)
+	if err != nil {
+		return err
+	}
+	return kctx.Run(hc)
 }
 
 // --- CLI Commands ---
@@ -217,16 +233,15 @@ type AliasAddCmd struct {
 	Dest    string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
-func (c *AliasAddCmd) Run() error {
-	rt, err := ResolveRuntime()
+func (c *AliasAddCmd) Run(hc *hostClient) error {
+	// Validate the image exists locally. If not, surface the standard
+	// "charly box pull" recommendation.
+	exists, err := hc.imageExists(c.Box)
 	if err != nil {
 		return err
 	}
-
-	// Validate the image exists locally. If not, surface the standard
-	// "charly box pull" recommendation via ErrImageNotLocal.
-	if !LocalImageExists(rt.RunEngine, c.Box) {
-		return fmt.Errorf("%w: %s", ErrImageNotLocal, c.Box)
+	if !exists {
+		return fmt.Errorf("image %q is not in local storage (run `charly box pull %s` first)", c.Box, c.Box)
 	}
 
 	command := c.Command
@@ -299,22 +314,19 @@ type AliasInstallCmd struct {
 	Dest string `long:"dest" default:"" help:"Directory for wrapper scripts (default: ~/.local/bin)"`
 }
 
-func (c *AliasInstallCmd) Run() error {
-	// Read aliases from image labels.
-	rt, err := ResolveRuntime()
+func (c *AliasInstallCmd) Run(hc *hostClient) error {
+	// Read aliases from the built image's baked ai.opencharly.alias label.
+	exists, err := hc.imageExists(c.Box)
 	if err != nil {
 		return err
 	}
-	imageRef := resolveShellImageRef("", c.Box, "")
-	runEngine := ResolveBoxEngineForDeploy(c.Box, "", rt.RunEngine)
-	meta, err := ExtractMetadata(runEngine, imageRef)
+	if !exists {
+		return fmt.Errorf("image %q is not in local storage; rebuild or `charly box pull %s` first", c.Box, c.Box)
+	}
+	aliases, err := hc.collectAliases(c.Box)
 	if err != nil {
 		return err
 	}
-	if meta == nil {
-		return fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
-	}
-	aliases := meta.Alias
 
 	if len(aliases) == 0 {
 		fmt.Fprintf(os.Stderr, "No aliases defined for image %s\n", c.Box)
@@ -371,40 +383,5 @@ func (c *AliasUninstallCmd) Run() error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Removed %d alias(es) for %s\n", count, c.Box)
-	return nil
-}
-
-// ListAliasesCmd lists candies with alias declarations
-type ListAliasesCmd struct{}
-
-func (c *ListAliasesCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return err
-	}
-
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return err
-	}
-
-	result := AliasCandy(layers)
-	names := make([]string, 0, len(result))
-	for _, layer := range result {
-		names = append(names, layer.Name)
-	}
-	sortStrings(names)
-
-	for _, name := range names {
-		layer := layers[name]
-		for _, a := range layer.Alias() {
-			fmt.Printf("%s\t%s\t%s\n", name, a.Name, a.Command)
-		}
-	}
 	return nil
 }
