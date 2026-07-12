@@ -73,17 +73,17 @@ func TestResolveDelNode_TypoRejected(t *testing.T) {
 	containerExists = func(engine, name string) bool { return false }
 	t.Cleanup(func() { containerExists = prev })
 
-	if _, _, err := (&BundleDelCmd{Name: "zzz-mistyped-name"}).resolveDelNode(); err == nil {
+	if _, _, err := (&deployDelCmd{Name: "zzz-mistyped-name"}).resolveDelNode(); err == nil {
 		t.Fatal("a mistyped name must be rejected, not synthesized into a pod del")
 	} else if !strings.Contains(err.Error(), "no such deployment") {
 		t.Fatalf("error must say 'no such deployment', got: %v", err)
 	}
 
 	// The legacy prefixes still resolve without an artifact.
-	if _, kind, err := (&BundleDelCmd{Name: "host"}).resolveDelNode(); err != nil || kind != "local" {
+	if _, kind, err := (&deployDelCmd{Name: "host"}).resolveDelNode(); err != nil || kind != "local" {
 		t.Fatalf(`"host" must resolve to local, got kind=%q err=%v`, kind, err)
 	}
-	if _, kind, err := (&BundleDelCmd{Name: "vm:arch"}).resolveDelNode(); err != nil || kind != "vm" {
+	if _, kind, err := (&deployDelCmd{Name: "vm:arch"}).resolveDelNode(); err != nil || kind != "vm" {
 		t.Fatalf(`"vm:arch" must resolve to vm, got kind=%q err=%v`, kind, err)
 	}
 }

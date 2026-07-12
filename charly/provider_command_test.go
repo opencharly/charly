@@ -113,12 +113,15 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // TestCommandProviders_DeployLifecycleCommands proves every deploy-lifecycle + remaining
 // leaf command extracted into a dedicated COMMAND-class provider (the deploy-lifecycle
 // batch: start/stop/status/restart/update/remove/logs/shell/cmd/cp/volume/service/config/
-// bundle/reap-orphans) is (1) registered in providerRegistry as a CommandProvider with the
+// reap-orphans) is (1) registered in providerRegistry as a CommandProvider with the
 // matching Reserved() word, and (2) collected by collectCommandPlugins() and injected into
 // the REAL charly CLI grammar via kong.Plugins, so its subcommand path parses and selects
 // exactly as before the extraction (the Run handler — which calls the unchanged core
-// deploy/bundle machinery — is preserved verbatim). The test FAILS if any dedicated
+// deploy machinery — is preserved verbatim). The test FAILS if any dedicated
 // registration regresses or the command seam stops wiring one of them into the root.
+// (`bundle` is no longer here — `charly bundle …` is now a dynamic command served by
+// candy/plugin-bundle (compiled-in), dispatched in-proc via Invoke(OpRun) rather than
+// through a builtin CommandProvider, exactly like vm/feature.)
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"start", []string{"start", "mybox"}, "start <box>"},
@@ -134,7 +137,6 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 		{"volume", []string{"volume", "list", "mybox"}, "volume list <box>"},
 		{"service", []string{"service", "status", "mybox"}, "service status <box>"},
 		{"config", []string{"config", "status", "mybox"}, "config status <box>"},
-		{"bundle", []string{"bundle", "path"}, "bundle path"},
 		{"reap-orphans", []string{"reap-orphans"}, "reap-orphans"},
 	})
 }

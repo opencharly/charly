@@ -12,6 +12,7 @@ import (
 	cp_plugin_alias "github.com/opencharly/charly/candy/plugin-alias"
 	cp_plugin_build "github.com/opencharly/charly/candy/plugin-build"
 	cp_plugin_builder "github.com/opencharly/charly/candy/plugin-builder"
+	cp_plugin_bundle "github.com/opencharly/charly/candy/plugin-bundle"
 	cp_plugin_candy "github.com/opencharly/charly/candy/plugin-candy"
 	cp_plugin_candy_kind "github.com/opencharly/charly/candy/plugin-candy-kind"
 	cp_plugin_clean "github.com/opencharly/charly/candy/plugin-clean"
@@ -103,5 +104,6 @@ func init() {
 	registerCompiledPlugin(cp_plugin_doctor.NewProvider(), cp_plugin_doctor.NewMeta())
 	registerCompiledPlugin(cp_plugin_feature.NewProvider(), cp_plugin_feature.NewMeta())
 	registerCompiledPlugin(cp_plugin_vm.NewProvider(), cp_plugin_vm.NewMeta())
+	registerCompiledPlugin(cp_plugin_bundle.NewProvider(), cp_plugin_bundle.NewMeta())
 	registerCompiledPlugin(cp_plugin_alias.NewProvider(), cp_plugin_alias.NewMeta())
 }

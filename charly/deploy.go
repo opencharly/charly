@@ -307,29 +307,11 @@ func MergeDeployOntoMetadata(meta *BoxMetadata, dc *BundleConfig, deployName, in
 
 }
 
-// deployVolumePrefix is the named-volume prefix for a deploy: it equals the
-// deploy's container name plus a dash, so EVERY distinctly-named deploy — a base
-// deploy, a Pattern-B deploy, a `<base>/<instance>`, or a kind:check bed — gets
-// its own volume namespace. Two deploys NEVER share a named volume unless they
-// share a container name (which they can't — container names are unique). This
-// is the single source of truth for volume naming; ResolveVolumeBacking,
-// removeVolumes, and scopeVolumesToDeployKey all key off it.
-func deployVolumePrefix(deployKey, instance string) string {
-	return containerNameInstance(deployKey, instance) + "-"
-}
-
-// deployStorageDir is the per-deploy directory component for bind-auto paths and
-// encrypted-volume directories. Like deployVolumePrefix it is unique per deploy
-// (base vs instance vs Pattern-B vs bed), so auto-provisioned bind/encrypted
-// storage is never shared across differently-named deploys. For a base deploy
-// with no instance it is just the deploy key (unchanged from the historical
-// layout); an instance appends "-<instance>".
-func deployStorageDir(deployKey, instance string) string {
-	if instance == "" {
-		return deployKey
-	}
-	return deployKey + "-" + instance
-}
+// deployVolumePrefix + deployStorageDir moved to sdk/deploykit as
+// DeployVolumePrefix/DeployStorageDir (P13/C15); aliased in
+// deploykit_state_aliases.go. ResolveVolumeBacking + resolveVolumeHostPath stay
+// core (enc.go encryption-naming coupling), and scopeVolumesToDeployKey below
+// stays core (it reads *BoxMetadata, not yet spec-sourced — folds with P2B).
 
 // scopeVolumesToDeployKey renames meta's named-volume mounts from the
 // image-derived prefix (charly-<image>-) to the deploy's own prefix
@@ -446,19 +428,6 @@ func ResolveVolumeBacking(boxName, instance string, labelVolumes []VolumeMount, 
 	}
 
 	return volumes, bindMounts
-}
-
-// LoadDeployFile reads a charly.yml from an arbitrary path.
-func LoadDeployFile(path string) (*BundleConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", path, err)
-	}
-	var dc BundleConfig
-	if err := yaml.Unmarshal(data, &dc); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
-	}
-	return &dc, nil
 }
 
 // SaveBundleConfig writes a BundleConfig to the standard charly.yml
@@ -676,13 +645,6 @@ func loadDeployConfigForWrite(context string) (*BundleConfig, error) {
 		dc.Bundle = make(map[string]BundleNode)
 	}
 	return dc, nil
-}
-
-// RemoveBoxDeploy removes an image's entry from a deploy config.
-func RemoveBoxDeploy(dc *BundleConfig, boxName string) {
-	if dc != nil && dc.Bundle != nil {
-		delete(dc.Bundle, boxName)
-	}
 }
 
 // cleanDeployEntry removes an image's entry from charly.yml (best-effort).
