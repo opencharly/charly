@@ -1,16 +1,17 @@
-// Package build is the importable form of charly's BUILD-ENGINE DISPATCH plugin: a thin
-// dispatch/echo over the F10 HostBuild reverse-channel seam, serving the two build words
-// `build:box` (the `charly box build` engine) and `build:generate` (the `charly box generate`
-// engine).
+// Package build is the importable form of charly's BUILD-DRIVE plugin: it OWNS the podman
+// build drive (the build-order loop, the per-image build lock, the push, and the merge gate)
+// for the two build words `build:box` (the `charly box build` engine) and `build:generate`
+// (the `charly box generate` engine).
 //
-// PURE DISPATCH/ECHO seam (the group/substrate/candy echo pattern applied to build). The image
-// build engine — the Generator, the OCITarget, the runtime Candy graph — is I/O-bound with
-// unexported state and a huge blast radius, so it STAYS host-side in-process, UNCHANGED. This
-// plugin therefore does NOT run the engine: its Invoke forwards the host-constructed BuildRequest
-// (op.Params, verbatim) BACK to the host via Executor.HostBuild(kind, …) over the reverse channel,
-// and ECHOES the host-builder's opaque BuildReply as its result. build:box → HostBuild("image");
-// build:generate → HostBuild("generate"). Only the wire envelope (BuildRequest in, BuildReply out)
-// crosses the seam.
+// OWNS THE DRIVE, RESOLVES + MERGES OVER HostBuild. The heavy loader/render RESOLVE (NewGenerator
+// → Generate → the privileged builder-bootstrap → the builder-image ensure) and the layer MERGE
+// stay HOST-SIDE, reached over the F10 HostBuild reverse channel: Invoke marshals a
+// spec.BuildResolveRequest and calls HostBuild("build-resolve", …), receiving a
+// spec.BuildResolveReply drive-model (engine/platform/order/levels/per-image descriptors +
+// resolved tunables). The candy then runs podman directly — building each image (Containerfile
+// piped over stdin), gating the post-build inline layer merge on the box's MergeAuto via
+// HostBuild("merge", …), and pushing (podman) after merge. Only the wire envelopes cross the seam;
+// the podman exec happens IN the candy.
 //
 // PLACEMENT — COMPILED-IN (listed in the embedded charly/charly.yml compiled_plugins:). `charly
 // box build` / `charly box generate` dispatch it IN-PROCESS: the host threads the reverse channel
@@ -22,10 +23,12 @@ package build
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 //go:embed schema/*.cue
@@ -33,10 +36,10 @@ var schemaFS embed.FS
 
 const calver = "2026.182.1600"
 
-// NewProvider returns the build-dispatch provider for in-proc registration or out-of-proc serving.
+// NewProvider returns the build-drive provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises the two build-dispatch capabilities (Class "build", words "box" +
+// NewMeta advertises the two build-drive capabilities (Class "build", words "box" +
 // "generate", Phase "build") + the plugin's self-contained CUE schema (via sdk.NewMeta →
 // BuildCapabilities). InputDef is "" for both: the BuildRequest is HOST-constructed (by
 // BuildCmd / GenerateCmd), never user-authored in charly.yml, so there is no plugin_input
@@ -55,34 +58,43 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke handles OpBuild for the build words. It resolves the host reverse channel
 // (sdk.ExecutorForInvoke — the in-proc context executor when compiled-in, the go-plugin broker
-// when served out-of-process), maps the served word to its host-builder kind, and forwards the
-// host-constructed BuildRequest (req.ParamsJson, verbatim) to Executor.HostBuild. The host-builder
-// runs the engine in-process and returns the opaque BuildReply, which this ECHOES as the result.
-// A build FAILURE rides BuildReply.Error inside the echoed JSON (the RPC succeeds); an
-// infrastructure failure (no executor, RPC error) is returned as a Go error.
+// when served out-of-process), decodes the host-constructed spec.BuildRequest (req.ParamsJson),
+// and drives the build: build:box runs the full build/merge/push drive (runBoxBuild), build:generate
+// renders the Containerfile tree host-side and returns the written paths (runBoxGenerate). Both
+// resolve + merge over HostBuild but run podman IN the candy. A build FAILURE rides
+// spec.BuildReply.Error inside the returned JSON (the RPC succeeds); an infrastructure failure
+// (no executor, unknown op/word) is returned as a Go error.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpBuild {
-		return nil, fmt.Errorf("build dispatch: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
+		return nil, fmt.Errorf("build: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
 	}
-	// Map the served word to its class-generic host-builder KIND (an action noun, disjoint from
-	// the provider words per the F11 uniform-API gate): build:box → "image" (build an image),
-	// build:generate → "containerfiles" (generate the .build/ Containerfile tree).
-	var kind string
-	switch req.GetReserved() {
+	word := req.GetReserved()
+	if word != "box" && word != "generate" {
+		return nil, fmt.Errorf("build: unknown build word %q (want box|generate)", word)
+	}
+	var breq spec.BuildRequest
+	if len(req.GetParamsJson()) > 0 {
+		if err := json.Unmarshal(req.GetParamsJson(), &breq); err != nil {
+			return nil, fmt.Errorf("build %q: decode BuildRequest: %w", word, err)
+		}
+	}
+	ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+	if err != nil {
+		return nil, fmt.Errorf("build %q: reach host reverse channel: %w", word, err)
+	}
+
+	var written []string
+	var buildErr error
+	switch word {
 	case "box":
-		kind = "image"
+		written, buildErr = runBoxBuild(ctx, ex, breq)
 	case "generate":
-		kind = "containerfiles"
-	default:
-		return nil, fmt.Errorf("build dispatch: unknown build word %q (want box|generate)", req.GetReserved())
+		written, buildErr = runBoxGenerate(ctx, ex, breq)
 	}
-	exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+
+	out, err := json.Marshal(spec.BuildReply{Written: written, Error: errString(buildErr)})
 	if err != nil {
-		return nil, fmt.Errorf("build dispatch %q: reach host reverse channel: %w", req.GetReserved(), err)
+		return nil, fmt.Errorf("build %q: encode reply: %w", word, err)
 	}
-	reply, err := exec.HostBuild(ctx, kind, req.GetParamsJson())
-	if err != nil {
-		return nil, fmt.Errorf("build dispatch %q: host build: %w", req.GetReserved(), err)
-	}
-	return &pb.InvokeReply{ResultJson: reply}, nil
+	return &pb.InvokeReply{ResultJson: out}, nil
 }
