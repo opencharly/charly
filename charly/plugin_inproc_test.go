@@ -41,6 +41,7 @@ func TestCompiledInPlugin_ExternalprobeDispatches(t *testing.T) {
 // the SAME load gate a builtin/external schema does: loadBuiltinPluginUnits must
 // accept it (the candy's Describe-served #ExternalprobeInput splices onto base).
 func TestCompiledInPlugin_SchemaGated(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if err := loadBuiltinPluginUnits(); err != nil {
 		t.Fatalf("loadBuiltinPluginUnits (gates the compiled-in externalprobe schema): %v", err)
 	}

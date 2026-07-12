@@ -14,6 +14,7 @@ func (c *reapTrackingCloser) Close() error { c.closes++; return nil }
 // orphan-leak fix — and is idempotent (a second reap is a no-op, never a
 // double-Close), matching the os.Exit-skips-defers reality main relies on.
 func TestReapPlugins_ClosesRegisteredPluginClients(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	tc := &reapTrackingCloser{}
 	// ps=nil + a non-nil conn registers ONLY the closer (no provider words), so
 	// this test never collides with a reserved word in the global registry.

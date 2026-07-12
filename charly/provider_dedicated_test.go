@@ -9,6 +9,7 @@ import "testing"
 // externalizedBuilders set with a serving plugin candy in externalBuilderPlugins. A regression
 // that re-introduced an in-proc builtin builder would resolve here and fail.
 func TestExternalizedBuilders_NoInProcProvider(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	byKey := builtinInstanceMap()
 	manifest := parseEmbeddedProviderManifest()
 	for _, word := range []string{"cargo", "npm", "pixi", "aur"} {

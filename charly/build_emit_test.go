@@ -103,6 +103,7 @@ func (stubBuildEmitterVerb) Invoke(_ context.Context, _ *Operation) (*Result, er
 //   - EXTERNAL standalone-validate (a prescan-declared, not-yet-connected verb — the
 //     gap that blocked authoring a build-context external plugin step in `charly box validate`).
 func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	// 1. BUILTIN placement: a connected in-proc BuildEmitter acts in build/deploy.
 	if err := providerRegistry.register(stubBuildEmitterVerb{}, "test:stubbuildemit"); err != nil {
 		t.Fatalf("register stub BuildEmitter: %v", err)
@@ -164,6 +165,7 @@ func (stubIdemVerb) Invoke(context.Context, *Operation) (*Result, error) {
 // backstop). Without the guard, `charly bundle add` (loadDeployPlugins then the pod-overlay
 // NewGenerator connect seam) warns on the second load.
 func TestPluginAlreadyConnected_Idempotent(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	const src = "github.com/test/idem-plugin"
 	if err := providerRegistry.register(stubIdemVerb{}, src); err != nil {
 		t.Fatalf("register stub: %v", err)
