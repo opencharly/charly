@@ -1,0 +1,76 @@
+# Pruned GUEST PROJECT for the check-local guest-as-host bed (eval-host-vm).
+#
+# The superproject `check-local` bed (a top-level `vm: {from: eval-host-vm}` deploy)
+# rsyncs THIS file + `sdk/` + the four closure candies (check-local-layer,
+# examplestep-deploy-consumer, plugin-example-step, plugin-deploy-local) into the guest
+# at /home/arch/eval-project, then runs `charly --host charly-eval-host-vm check run
+# check-local`. The guest's welded charly (add_candy:[charly] → opencharly-git) resolves
+# THIS project via CHARLY_PROJECT_DIR (set in the guest's /etc/environment) and runs the
+# check-local bed below against its OWN `host: local` venue — the guest ShellExecutor +
+# HostDeployTarget path — so the kind:local layer-application coverage is preserved OFF
+# the operator's workstation (all /etc + /tmp markers land in the disposable guest).
+#
+# PRUNED: only deploy:local + examplestep build in-guest (2 out-of-tree Go plugins,
+# `replace => ../../sdk`), never the full superproject plugin fleet (which OOM'd a 3.8G
+# guest). No `import:` of the distro submodules — check-local-app is a kind:local template
+# with no base image, so no distro closure is needed.
+#
+# Kept in lockstep with the superproject check-local closure (candy/check-local-layer,
+# candy/examplestep-deploy-consumer, candy/plugin-example-step, candy/plugin-deploy-local).
+# NOT discovered by the superproject — `check/` is not on its `discover:` path.
+version: 2026.186.2323
+discover:
+    - path: candy
+      recursive: true
+check-local-app:
+    local:
+        description: |-
+            Minimal kind:local template applying check-local-layer to the guest host.
+        candy:
+            - check-local-layer
+check-local:
+    local:
+        from: check-local-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Guest-run proof of the kind:local layer-application path via ShellExecutor +
+            HostDeployTarget, executed INSIDE the disposable eval-host-vm guest (driven from
+            the operator host by `charly --host`). Applies check-local-layer to the guest's
+            own `host: local`, dropping /etc/check-local-marker in the GUEST, then runs host-side
+            command/file probes plus charly status --json asserting kind:local + source:ledger.
+            ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution:
+            add_candy composes examplestep-deploy-consumer (a DEPLOY-context `run: plugin:
+            examplestep` step) + plugin-example-step (the out-of-tree examplestep verb, built
+            in-guest against the delivered sdk/), so at local deploy charly lowers the run-step
+            to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b
+            ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/
+            examplestep-deploy/{applied,probe} on the GUEST venue and returns a plugin-script
+            reverse op the host records; teardown (charly bundle del) replays it so the markers
+            are gone. Every side effect is confined to the disposable guest.
+        add_candy:
+            - plugin-example-step
+            - examplestep-deploy-consumer
+        plan:
+            - check: command=charly status --json
+              id: status-shows-local
+              stdout:
+                # local deploy-ids are content hashes (not the bed name), so assert
+                # the substrate renders via the kind discriminator + ledger source.
+                - contains: '"kind": "local"'
+                - contains: '"source": "ledger"'
+              context:
+                - runtime
+              command:
+                command: charly status --json
+                in_container: false
+            - check: the external examplestep verb-as-step EXECUTED at local deploy — its OpExecute wrote the probe marker on the guest venue over the E3b reverse channel (proves ExternalPluginStep → InvokeWithExecutor(OpExecute))
+              id: examplestep-deploy-marker
+              stdout:
+                - contains: EXAMPLESTEP-DEPLOY-PROBE-PRESENT
+              context:
+                - runtime
+              command:
+                command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe && echo EXAMPLESTEP-DEPLOY-PROBE-PRESENT"
+                in_container: false
