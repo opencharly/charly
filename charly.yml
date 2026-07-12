@@ -161,6 +161,49 @@ eval-vm:
             timezone: UTC
             package:
                 - sudo
+# eval-host-vm — the disposable GUEST-AS-HOST VM for the check-local bed. Unlike
+# eval-vm (the light nesting VM), this guest runs check-local as ITS OWN top-level
+# `host: local` bed via the guest's ShellExecutor + HostDeployTarget (driven from
+# the host by `charly --host`), so the kind:local layer-application ShellExecutor
+# coverage is PRESERVED off the operator's workstation (a nested-as-member move
+# would drop it to NestedExecutor). Needs: go+git (build the 2 out-of-tree plugins
+# check-local composes — deploy:local + examplestep — in-guest), the welded charly
+# (add_candy:[charly] on the bed), the pruned check-local project + sdk/ delivered
+# by the bed's plan, and CHARLY_PROJECT_DIR in /etc/environment so the guest charly
+# finds the delivered project (`charly --host` strips -C; ssh is non-interactive, so
+# pam_env/UsePAM delivers /etc/environment — NOT ~/.bashrc). 6G RAM is headroom for
+# the in-guest go-build (the pruned closure builds only 2 plugins, not the full
+# fleet that OOM'd at 3.8G). It owns its OWN domain (charly-eval-host-vm) — distinct
+# from eval-vm (charly-eval-vm) and charly-vm (charly-charly-vm).
+eval-host-vm:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            checksum:
+                type: sha256
+            base_user: arch
+        backend: libvirt
+        disk_size: 20G
+        ram: 6G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+                - go
+                - git
+            runcmd:
+                # The check-local bed delivers the pruned project to this path; the guest
+                # charly resolves it via CHARLY_PROJECT_DIR (`charly --host` strips -C, and
+                # `ssh host cmd` is non-interactive so /etc/environment — pam_env/UsePAM —
+                # is the ONLY channel that reaches it).
+                - "echo 'CHARLY_PROJECT_DIR=/home/arch/eval-project' >> /etc/environment"
 
 charly-vm:
     vm:
@@ -551,132 +594,115 @@ check-sidecar-pod:
               command:
                 command: charly status --json
                 in_container: false
-check-local:
-    local:
-        from: check-local-app
-        host: local
+# check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
+# runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
+# Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers
+# on the OPERATOR's workstation. It is now a
+# disposable `vm:` bed: it boots eval-host-vm, welds charly into the guest
+# (add_candy:[charly]), rsyncs the PRUNED check-local closure + sdk/ into the guest
+# (check/eval-host-project/), then runs `charly --host charly-eval-host-vm check run
+# check-local` so the GUEST's charly applies check-local-layer to its OWN `host: local`
+# venue via the guest ShellExecutor + HostDeployTarget. This PRESERVES the kind:local
+# ShellExecutor coverage (a nest-as-member move would drop it to NestedExecutor) while
+# confining every /etc + /tmp side-effect to the disposable guest. The delivery +
+# `charly --host` steps run HOST-SIDE (in_container: false; cwd = this project per
+# main.go:734); the guest resolves the delivered project via CHARLY_PROJECT_DIR
+# (/etc/environment, pam_env). The guest builds the 2 out-of-tree plugins check-local
+# composes (deploy:local + examplestep) against the delivered sdk/, fetching their module
+# deps over the guest's outbound network. LONG bed (VM + nested check-run) — persistent-
+# session-owned R10.
+check-local-vm:
+    vm:
+        from: eval-host-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the kind:local layer-application path via ShellExecutor + HostDeployTarget, and the fastest bed. Applies check-local-layer to the operator host (host: local), dropping /etc/check-local-marker, then runs host-side command/file probes plus charly status --json asserting kind:local + source:ledger (status-shows-local). ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution: add_candy composes examplestep-deploy-consumer (a DEPLOY-context `run: plugin: examplestep` step) + plugin-example-step (the out-of-tree examplestep verb), so at local deploy charly lowers the run-step to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/examplestep-deploy/{applied,probe} on the host venue and returns a plugin-script reverse op the host records; the fresh-rebuild (charly update) re-applies idempotently and teardown (charly bundle del) replays the recorded reverse op so the markers are gone (zero operator side-effect). The deploy-context counterpart of check-pod's build-context examplestep-build-baked.
+            Guest-as-host proof of the kind:local layer-application path via ShellExecutor +
+            HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's
+            workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → opencharly-git),
+            rsyncs the pruned check-local closure (check/eval-host-project/charly.yml + sdk/ +
+            candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local})
+            into the guest, then runs `charly --host charly-eval-host-vm check run check-local`: the
+            guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies
+            check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget),
+            dropping /etc/check-local-marker + the examplestep /tmp markers in the GUEST. ALSO the
+            witness for the STEP DEPLOY-EXECUTE leg of external plugin execution (ExternalPluginStep
+            → InvokeWithExecutor(OpExecute) over the E3b reverse channel): the guest builds the
+            out-of-tree examplestep + deploy:local plugins against the delivered sdk/. exit 0 from
+            the nested run proves the kind:local path end-to-end; every side-effect is confined to
+            the disposable guest.
         add_candy:
-            # The out-of-tree examplestep verb (host-built + connected out-of-process via
-            # loadDeployPlugins) and its DEPLOY-context consumer step — drives the STEP
-            # DEPLOY-EXECUTE leg over the E3b reverse channel (ExternalPluginStep).
-            - plugin-example-step
-            - examplestep-deploy-consumer
-        plan:
-            - check: command=charly status --json
-              id: status-shows-local
-              stdout:
-                # local deploy-ids are content hashes (not the bed name), so assert
-                # the substrate renders via the kind discriminator + ledger source.
-                - contains: '"kind": "local"'
-                - contains: '"source": "ledger"'
-              context:
-                - runtime
-              command:
-                command: charly status --json
-                in_container: false
-            - check: the external examplestep verb-as-step EXECUTED at local deploy — its OpExecute wrote the probe marker on the host venue over the E3b reverse channel (proves ExternalPluginStep → InvokeWithExecutor(OpExecute))
-              id: examplestep-deploy-marker
-              stdout:
-                - contains: EXAMPLESTEP-DEPLOY-PROBE-PRESENT
-              context:
-                - runtime
-              command:
-                command: "test -f /tmp/charly-examplestep/examplestep-deploy/probe && echo EXAMPLESTEP-DEPLOY-PROBE-PRESENT"
-                in_container: false
-# =============================================================================
-# check-builder-local — dedicated builder-DEPLOY-leg bed (added with the C1.3
-# Builder build-emit externalization). Closes the flagged gap: before this bed no
-# disposable deploy applied a built-in pixi/npm/cargo/aur detection-builder candy
-# to a local:/vm: venue, so runVenueBuilderStep (the host-engine builder deploy
-# leg → runVenueHomeArtifactBuilder) was only TRANSITIVELY exercised. A kind:local
-# host deploy (host: local) composing check-builder-npm (a package.json declaring
-# the tiny zero-dep is-number): at deploy charly compiles the npm global prefix in
-# the fedora.fedora-builder image on the host and ships ~/.npm-global onto the
-# venue, then asserts is-number is present under ~/.npm-global on the host. The
-# builder image is pinned via install_opts.builder_image (a kind:local template
-# carries no base-distro builder wiring, so runVenueBuilderStep takes it from the
-# --builder-image override, exactly like check-arch-vm / check-fedora-vm). NOTE the
-# C1.3 change itself is the pod-overlay BUILD-emit (OCITarget.emitStep(BuilderStep)
-# → the step:builder plugin → stepEmitBuilder), proven by the real-chain unit tests
-# (TestOCITargetEmitBuilder{Inline,MultiStage}ViaPlugin) + the live check-addcandy-pod
-# pod-overlay dispatch gate; this bed is the complementary builder-DEPLOY-leg gate
-# the cutover adds.
-# =============================================================================
-check-builder-local:
-    local:
-        from: check-builder-local-app
-        host: local
-        disposable: true
-        lifecycle: dev
-        description: >-
-            Sole proof of the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder) applying a built-in npm detection-builder candy to a host: local venue — the dedicated builder-deploy bed added with the C1.3 Builder build-emit externalization (previously runVenueBuilderStep was only transitively exercised, no bed deployed a pixi/npm/cargo/aur builder candy to a local:/vm: venue). Composes check-builder-npm (a package.json declaring the tiny zero-dep is-number), so at local deploy charly compiles the npm global prefix in the fedora.fedora-builder image on the host and ships ~/.npm-global onto the venue; the bed asserts ~/.npm-global/lib/node_modules/is-number is present on the host filesystem. The builder image is pinned via install_opts.builder_image (a kind:local template has no base-distro builder wiring). The C1.3 change's pod-overlay BUILD-emit is proven separately by the real-chain unit tests + the live check-addcandy-pod pod-overlay dispatch.
+            # Welded charly (opencharly-git) so the guest has `charly` on PATH + the 48
+            # compiled_plugins; the localpkg build runs host-side (makepkg) + pacman -U into
+            # the guest — the same path check-charly-vm proves.
+            - charly
         install_opts:
-            builder_image: fedora.fedora-builder
+            allow_repo_changes: true # pacman -U auto-resolves opencharly-git repo deps in the guest
             allow_root_tasks: true
         plan:
-            - check: the npm builder deployed the is-number artifact into ~/.npm-global on the host venue (proves the builder DEPLOY leg runVenueBuilderStep → runVenueHomeArtifactBuilder applied a detection-builder candy end-to-end)
-              id: builder-artifact-present
+            - check: deliver the pruned check-local closure + sdk/ into the eval-host-vm guest project dir (host-side rsync over the managed charly-eval-host-vm ssh alias; cwd = this project per main.go:734)
+              id: guest-project-delivered
               context:
                 - runtime
+              exit_status: 0
               command:
-                command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
                 in_container: false
+                command: |
+                    set -euo pipefail
+                    ssh charly-eval-host-vm 'mkdir -p /home/arch/eval-project/candy'
+                    rsync -a ./check/eval-host-project/charly.yml charly-eval-host-vm:/home/arch/eval-project/charly.yml
+                    rsync -a ./sdk/ charly-eval-host-vm:/home/arch/eval-project/sdk/
+                    rsync -a ./candy/check-local-layer ./candy/examplestep-deploy-consumer ./candy/plugin-example-step ./candy/plugin-deploy-local charly-eval-host-vm:/home/arch/eval-project/candy/
+            - check: run check-local host:local INSIDE the guest via `charly --host` — the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host:local (guest ShellExecutor + HostDeployTarget), building the 2 out-of-tree plugins in-guest; exit 0 proves the kind:local path end-to-end off the operator's workstation
+              id: guest-as-host-check-local
+              context:
+                - runtime
+              exit_status: 0
+              command:
+                in_container: false
+                command: charly --host charly-eval-host-vm check run check-local
 # =============================================================================
-# check-structkind — R10 witness for F5 authored-member INPUT-threading (the
-# foundation the group/pod/vm/k8s/local/android/candy structural-kind
-# externalizations land on). The TOP node is an EXTERNAL STRUCTURAL plugin kind
-# (examplestructkind, candy/plugin-example-structkind, out-of-process — NOT
-# compiled in): its authored resource-MEMBER child is pre-decoded HOST-SIDE (the
-# core buildBundleNode recursion) and threaded to the plugin's OpLoad via op.Env;
-# the plugin ATTACHES it to its spec.Deploy reply, so the host folds a COMPLETE
-# Bundle (with the AUTHORED member) into uf.Bundle — byte-equivalent to a builtin
-# group (proven hermetically by TestExternalStructKind_StructuralDecode, which
-# also covers peer + nested + cross-member ${HOST:} reconstruction). This bed is
-# the RUNTIME leg: the reconstructed member (a kind:local host deploy applying
-# check-structkind-layer) is brought up and the marker check authored on the
-# MEMBER'S OWN plan runs — proving the reconstructed authored member DEPLOYS
-# end-to-end. The check lives on the member's node plan, not in the candy: a
-# composed candy's plan: never reaches a deploy-scope check runner for a non-image
-# deploy, so a candy-authored check would silently never run. The deploy-config
-# scalars (disposable/lifecycle/description) ride op.Params; the member rides
-# op.Env (input-threaded).
+# check-builder-vm — dedicated builder-DEPLOY-leg bed (added with the C1.3 Builder
+# build-emit externalization), MOVED off the operator's workstation into the disposable
+# eval VM. Before this bed no disposable deploy applied a built-in pixi/npm/cargo/aur
+# detection-builder candy to a local:/vm: venue, so runVenueBuilderStep (the host-engine
+# builder deploy leg → runVenueHomeArtifactBuilder) was only TRANSITIVELY exercised. The
+# check-builder-local-app template (composing check-builder-npm, a package.json declaring
+# the tiny zero-dep is-number) is NESTED under a `vm: {from: eval-vm}` node — tree position,
+# no `host:` field — so it deploys INTO the guest via kit.NestedExecutor. runVenueBuilderStep
+# still compiles the npm global prefix in the fedora.fedora-builder image HOST-SIDE (the
+# host-engine leg over RunHostStep) and ships ~/.npm-global onto the GUEST venue; the marker
+# check asserts is-number under ~/.npm-global in the GUEST — so the ~/.npm-global write never
+# touches the operator's home. Precedent for the vm-bed-with-nested-local-member shape:
+# box/arch check-arch-vm → arch-host. Shares the eval-vm domain (charly-eval-vm) with
+# check-group — both deferred long vm beds, serialized. The C1.3 pod-overlay BUILD-emit is
+# proven separately by the real-chain unit tests (TestOCITargetEmitBuilder{Inline,MultiStage}ViaPlugin)
+# + the live check-addcandy-pod pod-overlay dispatch gate; this bed is the complementary
+# builder-DEPLOY-leg gate.
 # =============================================================================
-check-structkind-app:
-    local:
-        description: |-
-            Minimal kind:local template for the check-structkind member — composes
-            check-structkind-layer (drops /etc/check-structkind-marker on the host) so the
-            structural-kind member has a deterministic, collision-free host-side deploy effect.
-        candy:
-            - check-structkind-layer
-check-structkind:
-    examplestructkind:
+check-builder-vm:
+    vm:
+        from: eval-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Sole RUNTIME witness of F5 authored-member INPUT-threading: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/ plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildBundleNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Bundle (with the authored member) into uf.Bundle, byte-equivalent to a builtin group. The reconstructed member (check-structkind-member, a kind:local host deploy of check-structkind-app) is brought up, and the marker check authored on the MEMBER'S OWN plan asserts /etc/check-structkind-marker — proving the reconstructed authored member deploys end-to-end. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy, so a check authored only in check-structkind-layer would silently never run. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
-    check-structkind-member:
+            Sole proof of the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder) applying a built-in npm detection-builder candy to a venue, run INSIDE the disposable eval VM (off the operator's workstation). Nests check-builder-local-app (composing check-builder-npm, a package.json declaring the tiny zero-dep is-number) under the vm node via kit.NestedExecutor: at deploy charly compiles the npm global prefix in the fedora.fedora-builder image HOST-SIDE (the host-engine builder leg over RunHostStep) and ships ~/.npm-global onto the GUEST venue; the nested member's marker check asserts ~/.npm-global/lib/node_modules/is-number in the GUEST home, never the operator's. The builder image is pinned via the member's install_opts.builder_image (a kind:local template has no base-distro builder wiring). The C1.3 pod-overlay BUILD-emit is proven separately by the real-chain unit tests + the live check-addcandy-pod pod-overlay dispatch.
+    check-builder-member:
         local:
-            from: check-structkind-app
-            host: local
+            # NESTED under the vm node (tree position) → deploys INTO the eval VM guest via
+            # kit.NestedExecutor. No `host:` field: the venue comes from the parent. The builder
+            # DEPLOY leg compiles host-side and ships ~/.npm-global onto the GUEST venue.
+            from: check-builder-local-app
+            install_opts:
+                builder_image: fedora.fedora-builder
+                allow_root_tasks: true
             plan:
-                - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
-                  id: sk-member-marker
-                  description: >-
-                      The reconstructed authored member actually DEPLOYED: its composed candy
-                      dropped the marker. Authored on the member's own node plan because a
-                      composed candy's plan: never reaches a deploy-scope check runner for a
-                      non-image deploy — a check placed in check-structkind-layer would never run.
-                  stdout:
-                      - contains: STRUCTKIND-MEMBER-DEPLOY-OK
+                - check: the npm builder deployed the is-number artifact into ~/.npm-global INSIDE the eval VM guest (proves the builder DEPLOY leg runVenueBuilderStep → runVenueHomeArtifactBuilder applied a detection-builder candy end-to-end to a nested guest venue)
+                  id: builder-artifact-present-in-guest
                   context:
-                      - runtime
+                    - runtime
                   command:
-                      command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
+                    command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
 # =============================================================================
 # check-group — R10 witness for the EXTERNALIZED `group` structural kind (C2-group).
 # `group:` is no longer a compiled-in core KindProvider; it is served by the
@@ -706,7 +732,7 @@ check-group:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole R10 witness of the externalized `group` structural kind (candy/plugin-group, C2-group): a REAL targetless `group:` deploy group decoded out of core through the compiled-in plugin-group over the F5 authored-member input-threading foundation. The authored member (check-group-member) is pre-decoded host-side and threaded to plugin-group via op.Env; the plugin attaches it to a targetless spec.Deploy the host folds into uf.Bundle. bringUpMembers deploys the member, and the marker check authored on the MEMBER'S OWN node plan asserts /etc/check-group-marker — proving a real group: decode reconstructs + deploys its authored member end-to-end, identical to the former builtin. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy, so a check authored only in check-group-layer would silently never run (this bed printed "No plan steps to run." and asserted NOTHING before that fix). The member is a kind:local deploy of check-group-app NESTED UNDER the check-group-vm node, so it lands INSIDE the disposable eval VM via kit.NestedExecutor (tree position, no `host:` field) and the marker is written on the GUEST filesystem — never the operator's workstation. NOTE: a nested child runs on NestedExecutor over the guest venue, NOT ShellExecutor; the host-side ShellExecutor + HostDeployTarget arm is witnessed by check-local, which stays a top-level `host: local` bed for exactly that reason (see /charly-core:deploy "Deploy-into nesting").
+            Sole R10 witness of the externalized `group` structural kind (candy/plugin-group, C2-group): a REAL targetless `group:` deploy group decoded out of core through the compiled-in plugin-group over the F5 authored-member input-threading foundation. The authored member (check-group-member) is pre-decoded host-side and threaded to plugin-group via op.Env; the plugin attaches it to a targetless spec.Deploy the host folds into uf.Bundle. bringUpMembers deploys the member, and the marker check authored on the MEMBER'S OWN node plan asserts /etc/check-group-marker — proving a real group: decode reconstructs + deploys its authored member end-to-end, identical to the former builtin. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy, so a check authored only in check-group-layer would silently never run (this bed printed "No plan steps to run." and asserted NOTHING before that fix). The member is a kind:local deploy of check-group-app NESTED UNDER the check-group-vm node, so it lands INSIDE the disposable eval VM via kit.NestedExecutor (tree position, no `host:` field) and the marker is written on the GUEST filesystem — never the operator's workstation. NOTE: a nested child runs on NestedExecutor over the guest venue, NOT ShellExecutor; the host-side ShellExecutor + HostDeployTarget arm is witnessed by check-local running INSIDE the guest-as-host VM (the check-local-vm bed) — the guest's charly applies check-local to the GUEST's OWN host:local via the guest ShellExecutor + HostDeployTarget, still ShellExecutor, just off the operator's workstation (see /charly-core:deploy "Deploy-into nesting").
     check-group-vm:
         vm:
             from: eval-vm
@@ -733,27 +759,77 @@ check-group:
                       command:
                           command: "test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK"
 # =============================================================================
+# check-structkind — R10 witness for F5 authored-member INPUT-threading, run INSIDE
+# the disposable eval VM (moved off the operator host per the eval-bed hygiene directive).
+# The TOP node is an EXTERNAL STRUCTURAL plugin kind (examplestructkind, out-of-process,
+# NOT compiled in): its authored resource-MEMBER child is pre-decoded HOST-SIDE (the core
+# buildBundleNode recursion) and threaded to the plugin's OpLoad via op.Env; the plugin
+# ATTACHES it to its spec.Deploy reply so the host folds a COMPLETE Bundle (with the AUTHORED
+# member) into uf.Bundle — byte-equivalent to a builtin group (proven hermetically by
+# TestExternalStructKind_StructuralDecode, which also covers peer + nested + cross-member
+# reconstruction). This bed is the RUNTIME leg: the reconstructed authored member is a `vm:`
+# node (check-structkind-vm) with a nested kind:local grandchild (check-structkind-member)
+# that applies check-structkind-layer INSIDE the guest via kit.NestedExecutor, so the marker
+# /etc/check-structkind-marker lands in the GUEST, never the operator's host. The F5 threading
+# + structural decode are executor-agnostic (load-time), so nesting preserves them exactly as
+# check-group's group:-decode survived nesting. The check lives on the member's node plan: a
+# composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy.
+# Mirror: check-group.
+# =============================================================================
+check-structkind-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-structkind member — composes
+            check-structkind-layer (drops /etc/check-structkind-marker in the guest) so the
+            structural-kind member has a deterministic, collision-free deploy effect.
+        candy:
+            - check-structkind-layer
+check-structkind:
+    examplestructkind:
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole RUNTIME witness of F5 authored-member INPUT-threading, run inside the disposable eval VM: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildBundleNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Bundle (with the authored member) into uf.Bundle, byte-equivalent to a builtin group. The reconstructed authored member is a `vm:` node (check-structkind-vm) with a nested kind:local grandchild (check-structkind-member, a deploy of check-structkind-app) that lands INSIDE the eval VM guest via kit.NestedExecutor; the marker check authored on the member's OWN plan asserts /etc/check-structkind-marker in the GUEST — proving the reconstructed authored member deploys end-to-end off the operator's workstation. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
+    check-structkind-vm:
+        vm:
+            from: eval-vm
+        # NESTED under the vm node (tree position) → the kind:local grandchild deploys INSIDE
+        # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the parent.
+        # Mirror: check-group's check-group-vm → check-group-member.
+        check-structkind-member:
+            local:
+                from: check-structkind-app
+                plan:
+                    - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
+                      id: sk-member-marker-in-guest
+                      description: >-
+                          The reconstructed authored member actually DEPLOYED into the eval VM guest:
+                          its composed candy dropped /etc/check-structkind-marker on the GUEST filesystem.
+                          Authored on the member's own node plan because a composed candy's plan: never
+                          reaches a deploy-scope check runner for a non-image deploy.
+                      stdout:
+                          - contains: STRUCTKIND-MEMBER-DEPLOY-OK
+                      context:
+                          - runtime
+                      command:
+                          command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
+# =============================================================================
 # check-substrate — R10 witness for the EXTERNALIZED substrate structural kinds
-# (C2-substrate). pod/vm/k8s/local/android are no longer compiled-in core
-# KindProviders; the compiled-in structural plugin candy/plugin-substrate serves all
-# 5 (kind:pod/vm/k8s/local/android, Structural:true). This bed exercises the full
-# path in ITS lightest RUNNABLE form using the `local:` substrate (host-side, no VM/
-# image boot):
-#   - check-substrate-app is a BARE `local:` TEMPLATE (no from:/image:, no members) →
-#     runPluginKind → foldSubstrateKind pre-decodes it via the core loader, validates
-#     its value against the KEPT #LocalValue def, threads it to plugin-substrate's
-#     OpLoad, and folds the ECHO into the typed template map uf.Local — the C2-substrate
-#     TEMPLATE fold arm (the standalone counterpart of the deploy fold into uf.Bundle);
-#   - check-substrate is a `local:` DEPLOY (from: check-substrate-app) → foldSubstrateKind
-#     pre-decodes the full BundleNode, threads it, and folds the echo into uf.Bundle.
-# The deploy applies its inherited template's layer; the marker check authored on the
-# DEPLOY NODE'S OWN plan asserts /etc/check-substrate-marker — proving BOTH substrate
-# shapes decode + deploy end-to-end through the plugin, byte-equivalent to the former
-# in-proc standaloneKind. (Node-plan, not candy-plan: a composed candy's plan: never
-# reaches a deploy-scope check runner for a non-image deploy.) The rich `vm:` TEMPLATE fold (the PRIMARY VM authoring form) into
-# uf.VM is proven byte-equivalent by TestSubstrateKind_BothShapesByteEquivalent and
-# LIVE by box/debian's check-debian-debootstrap-vm (a `vm:` template + `vm:` deploy,
-# both now routed through plugin-substrate).
+# (C2-substrate, candy/plugin-substrate), run INSIDE the disposable eval VM. pod/vm/k8s/
+# local/android are served by the compiled-in structural plugin candy/plugin-substrate. This
+# bed exercises the LOCAL substrate decode in both shapes:
+#   - check-substrate-app is a BARE `local:` TEMPLATE (top-level, no deploy) → foldSubstrateKind
+#     pre-decodes it, validates against the KEPT #LocalValue def, and folds the ECHO into
+#     uf.Local (the standalone TEMPLATE fold arm — decode-only, no host mutation);
+#   - check-substrate is a `vm: {from: eval-vm}` bed whose nested `local:` member
+#     (check-substrate-member, from: check-substrate-app) is decoded via foldSubstrateKind (the
+#     deploy fold into uf.Bundle) and DEPLOYED into the guest via kit.NestedExecutor.
+# The nested member applies check-substrate-layer INSIDE the guest; the marker check on the
+# member's OWN plan asserts /etc/check-substrate-marker in the GUEST — proving both substrate
+# shapes decode + deploy end-to-end off the operator's host, byte-equivalent to the former
+# in-proc standaloneKind (also proven hermetically by TestSubstrateKind_BothShapesByteEquivalent).
+# The decode is load-time (executor-agnostic), so nesting preserves it exactly as check-group's
+# decode survived nesting. Mirror: check-group / check-builder-vm.
 # =============================================================================
 check-substrate-app:
     local:
@@ -761,28 +837,31 @@ check-substrate-app:
             Minimal kind:local TEMPLATE for the check-substrate member — a BARE `local:` node (no
             from:/image:, no members) so it folds into uf.Local via candy/plugin-substrate's TEMPLATE
             fold arm (C2-substrate). Composes check-substrate-layer (drops /etc/check-substrate-marker
-            on the host) so the member has a deterministic, collision-free host-side deploy effect.
+            in the guest) so the member has a deterministic, collision-free deploy effect.
         candy:
             - check-substrate-layer
 check-substrate:
-    local:
-        from: check-substrate-app
-        host: local
+    vm:
+        from: eval-vm
         disposable: true
         lifecycle: dev
         description: >-
-            Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate, C2-substrate): a REAL `local:` DEPLOY (deploy shape → uf.Bundle) inheriting a REAL BARE `local:` TEMPLATE (check-substrate-app, template shape → uf.Local), BOTH decoded out of core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes each node via the core loader (buildBundleNode for the deploy, decodeNodeValue for the template — the single decode source of truth), validates its value against the KEPT #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the ECHO into uf.Bundle / uf.Local. The deploy applies check-substrate-layer to the host, and the marker check asserts /etc/check-substrate-marker — proving both substrate shapes reconstruct + deploy end-to-end, byte-equivalent to the former in-proc standaloneKind.
-        plan:
-            - check: command=test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK
-              id: substrate-marker-present
-              description: the substrate local DEPLOY (folded into uf.Bundle via plugin-substrate) applied its inherited template's marker layer on the host
-              stdout:
-                - contains: SUBSTRATE-DEPLOY-OK
-              context:
-                - runtime
-              command:
-                command: "test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK"
-                in_container: false
+            Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate, C2-substrate), run inside the disposable eval VM: a BARE `local:` TEMPLATE (check-substrate-app, template shape → uf.Local) plus a nested `local:` DEPLOY member (check-substrate-member, deploy shape → uf.Bundle), BOTH decoded out of core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes each node via the core loader, validates its value against the KEPT #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the ECHO into uf.Local / uf.Bundle. The nested member applies check-substrate-layer INSIDE the guest via kit.NestedExecutor, and the marker check asserts /etc/check-substrate-marker in the GUEST — proving both substrate shapes reconstruct + deploy end-to-end off the operator's workstation, byte-equivalent to the former in-proc standaloneKind.
+    check-substrate-member:
+        local:
+            from: check-substrate-app
+            # NESTED under the vm node (tree position) → deploys INSIDE the guest via
+            # kit.NestedExecutor. No `host:` field: the venue comes from the parent.
+            plan:
+                - check: command=test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK
+                  id: substrate-marker-in-guest
+                  description: the nested substrate local DEPLOY (folded into uf.Bundle via plugin-substrate) applied its inherited template's marker layer INSIDE the eval VM guest
+                  stdout:
+                      - contains: SUBSTRATE-DEPLOY-OK
+                  context:
+                      - runtime
+                  command:
+                      command: "test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK"
 # candy/plugin-example-deploy (recognized at parse time via the plugin-declaration
 # pre-scan, connected at deploy time via loadDeployPlugins). Add Invokes the plugin
 # out-of-process; it dials back through the SDK Executor to write markers on the host
@@ -1620,17 +1699,17 @@ check-local-app:
                 command: "test -f /etc/check-local-marker"
                 in_container: false
 # =================================================================
-# check-builder-local-app — the kind:local template for the check-builder-local
-# builder-deploy bed. Composes check-builder-npm (the minimal npm builder fixture)
-# so the bed exercises the builder DEPLOY leg (runVenueBuilderStep) on a host:local
-# venue. Mirrors check-local-app / check-udev-app.
+# check-builder-local-app — the kind:local template for the check-builder-vm bed's
+# nested member. Composes check-builder-npm (the minimal npm builder fixture) so the
+# bed exercises the builder DEPLOY leg (runVenueBuilderStep) INSIDE the eval VM guest
+# venue (kit.NestedExecutor). Mirrors check-udev-app.
 # =================================================================
 check-builder-local-app:
     local:
         description: |-
-            Minimal kind:local template for the check-builder-local bed — composes the npm builder
-            fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
-            (runVenueBuilderStep → runVenueHomeArtifactBuilder) on a host: local venue.
+            Minimal kind:local template for the check-builder-vm bed's nested member — composes the npm
+            builder fixture candy check-builder-npm so the bed exercises the builder DEPLOY leg
+            (runVenueBuilderStep → runVenueHomeArtifactBuilder) inside the eval VM guest venue.
         candy:
             - check-builder-npm
 # =================================================================
@@ -1695,10 +1774,13 @@ check-udev-local:
 #     transient lease is legitimate under a parallel roster) — the compiled-in command's
 #     Invoke(OpRun) calls InvokeProvider(verb:arbiter, status) over the in-proc reverse channel
 #     + the plugin renders the lease table.
-#   - `charly preempt restore` → exits 0 and prints "reconciled stranded leases…" — exercising the
-#     ALWAYS-SERVED HostArbiter seam end-to-end (reconcile → the arbiter's gather/start host seams over
-#     the bare command-dispatch executor). Full acquire→preempt→release is covered by the Go e2e
-#     (TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed.
+# The live `charly preempt restore` step is INTENTIONALLY NOT run here (eval-bed hygiene): reconcileStranded
+# reads the operator's GLOBAL lease ledger (~/.local/share/charly/preemption/leases.yml) and would restart a
+# genuinely-stranded operator holder (e.g. a preempted GPU-VM) — a side-effect on operator infrastructure an
+# eval bed must not have (it is a no-op on a clean host + provably restorative-only, but global-scope). Its
+# reconcile→gather/start path stays covered by the Go e2e (TestArbiter_ReconcileStrandedRestores +
+# TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed; the kept
+# `status` step exercises the same command:preempt → InvokeProvider(verb:arbiter) dispatch.
 # =================================================================
 check-preempt-app:
     local:
@@ -1715,7 +1797,7 @@ check-preempt-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` + `restore` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop. Both exit 0 on the bed host (status → a well-formed lease table naming no lease owned by THIS bed — sibling beds' transient leases are legitimate under a parallel roster; restore → reconciled) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end.
+            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop. status exits 0 with a well-formed lease table naming no lease owned by THIS bed (sibling beds' transient leases are legitimate under a parallel roster) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end. The live `restore`/reconcile step is intentionally omitted (it reads the operator's global lease ledger, so an eval bed must not run it); its reconcile→gather/start path stays covered by the Go e2e (TestArbiter_ReconcileStrandedRestores + TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed.
         plan:
             - check: command=charly preempt status exits 0 and names no lease owned by THIS bed — bed-owned scoping, because a concurrent sibling bed's transient lease is legitimate (a global no-leases assertion can never hold under a parallel roster)
               id: preempt-status-runs
@@ -1726,16 +1808,6 @@ check-preempt-local:
                 - runtime
               command:
                 command: charly preempt status
-                in_container: false
-            - check: command=charly preempt restore exits 0 and reconciles stranded leases — exercising the ALWAYS-SERVED HostArbiter seam (reconcile → the arbiter's gather/start host seams) reached via InvokeProvider(verb:arbiter) over the bare command-dispatch executor
-              id: preempt-restore-runs
-              exit_status: 0
-              stderr:
-                - contains: 'reconciled stranded leases'
-              context:
-                - runtime
-              command:
-                command: charly preempt restore
                 in_container: false
 # =================================================================
 # check-migrate-local — R10 witness for the externalized config-schema MIGRATION ENGINE
