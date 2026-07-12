@@ -15,7 +15,7 @@ import (
 //     thread the tables into the plugin via GpuProbeInput (R3 — no duplicate copy);
 //   - the pure, host-INDEPENDENT env/group helpers the deploy paths call
 //     (appendAutoDetectedEnv / appendEnvUnique / appendGroupsForAMDGPU /
-//     LogDetectedDevices / memlockUnlimited).
+//     LogDetectedDevices).
 // The sysfs/exec detection PRIMITIVES (DetectGPU / DetectAMDGPU / DetectVFIO /
 // DetectHostDevices / EnsureCDI / MemlockLimitBytes / VfioGroupAccessible + their
 // impls + the VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices types) now live in
@@ -142,8 +142,3 @@ func appendEnvUnique(envVars []string, kv string) []string {
 	}
 	return append(envVars, kv)
 }
-
-// memlockUnlimited reports whether the hard limit is effectively unlimited. VFIO
-// passthrough pins all guest RAM (see the MemlockLimitBytes shim in gpu_shim.go);
-// consumed by `charly vm gpu status` + `charly doctor`.
-func memlockUnlimited(hard uint64) bool { return hard >= 1<<62 }

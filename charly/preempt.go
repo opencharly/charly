@@ -90,23 +90,6 @@ func (a *arbiterProxy) ReleaseClaimant(claimant string, success bool) error {
 	return nil
 }
 
-// clearPoison removes a token's poison marker (`charly vm gpu recover`).
-func (a *arbiterProxy) clearPoison(token string) {
-	if _, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionClearPoison, Token: token}); err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: clear poison %q: %v\n", token, err)
-	}
-}
-
-// resourcePoisoned reports whether a token is poisoned for the current boot (`charly vm gpu status`).
-func (a *arbiterProxy) resourcePoisoned(token string) bool {
-	r, err := arbiterInvoke(spec.ArbiterInvokeInput{Action: spec.ArbiterActionResourcePoisoned, Token: token})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: resource-poisoned %q: %v\n", token, err)
-		return false
-	}
-	return r.Bool
-}
-
 // Lease is the handle returned by the acquire shims. Release()/ReleaseFailed() dispatch the
 // release through the arbiter proxy. A zero/no-op Lease (nothing claimed) is safe to Release.
 type Lease struct {

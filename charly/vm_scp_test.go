@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/alecthomas/kong"
 )
 
 // recordingScpExec is a DeployExecutor fake that records the PutFile +
@@ -120,27 +118,5 @@ func TestScpToVmExec_DirectorySourceRejected(t *testing.T) {
 	}
 	if fe.putCalled {
 		t.Error("PutFile was called for a directory source; want early rejection")
-	}
-}
-
-func TestVmScpCmd_ArgParsing(t *testing.T) {
-	var cli struct {
-		Vm VmCmd `cmd:""`
-	}
-	p, err := kong.New(&cli)
-	if err != nil {
-		t.Fatalf("kong.New: %v", err)
-	}
-	if _, err := p.Parse([]string{"vm", "scp", "arch", "/local/cred.json", "~/.claude/.credentials.json"}); err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if cli.Vm.Scp.VM != "arch" {
-		t.Errorf("VM = %q, want arch", cli.Vm.Scp.VM)
-	}
-	if cli.Vm.Scp.Src != "/local/cred.json" {
-		t.Errorf("Src = %q, want /local/cred.json", cli.Vm.Scp.Src)
-	}
-	if cli.Vm.Scp.Dst != "~/.claude/.credentials.json" {
-		t.Errorf("Dst = %q, want ~/.claude/.credentials.json", cli.Vm.Scp.Dst)
 	}
 }

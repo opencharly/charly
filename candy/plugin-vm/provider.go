@@ -81,7 +81,14 @@ type vmCreateReq struct {
 
 // Invoke runs one `libvirt:` verb method against the in-process libvirt impl and self-evaluates
 // the authored matchers (mirrors the former host-side matcher pipeline).
-func (vmProvider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (vmProvider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	// command:vm — the `charly vm …` CLI (compiled-in, in-proc). Dispatched via Invoke(OpRun) with
+	// Reserved=="vm": recover the reverse-channel executor + run the VmCmd tree (command.go). In-proc
+	// dispatch means the handlers inherit charly's real stdio/TTY (console/ssh stay interactive).
+	if req.GetOp() == sdk.OpRun && req.GetReserved() == "vm" {
+		return runVmCommand(ctx, req)
+	}
+
 	var op spec.Op
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &op); err != nil {

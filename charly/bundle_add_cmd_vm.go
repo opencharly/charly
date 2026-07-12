@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 )
 
@@ -152,9 +151,9 @@ func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error 
 func removeVmDeployEntry(deployName string) error {
 	// Same shared-file serialization as saveVmDeployState / cleanDeployEntry: a VM
 	// destroy mutating the overlay must not race a concurrent writer's
-	// load→modify→save (the lost-update class). Reentrancy: its caller
-	// (VmDestroyCmd) holds no deploy-config lock — single-level acquire, no
-	// self-deadlock.
+	// load→modify→save (the lost-update class). Reentrancy: its caller (the vm
+	// destroy handler in candy/plugin-vm, reached via the config-persist seam)
+	// holds no deploy-config lock — single-level acquire, no self-deadlock.
 	unlock, lockErr := acquireDeployConfigLock()
 	if lockErr != nil {
 		return fmt.Errorf("locking charly.yml for vm-entry removal: %w", lockErr)
@@ -239,17 +238,4 @@ func vmDeployEntryKeys(dc *BundleConfig, deployName string) []string {
 		}
 	}
 	return keys
-}
-
-// hostArchRuntime returns runtime.GOARCH translated to the libvirt/
-// QEMU canonical form (amd64 → x86_64, arm64 → aarch64).
-func hostArchRuntime() string {
-	switch runtime.GOARCH {
-	case "amd64":
-		return "x86_64"
-	case "arm64":
-		return "aarch64"
-	default:
-		return runtime.GOARCH
-	}
 }

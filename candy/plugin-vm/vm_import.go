@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"encoding/json"
@@ -285,16 +285,14 @@ func ListUnmanagedDomains() ([]string, error) {
 // A legacy per-kind vm.yml is reachable transparently via includes:,
 // so a single read of charly.yml suffices.
 func loadManagedVmSet() (map[string]bool, error) {
-	cwd, err := os.Getwd()
+	// The declared kind:vm entity names come from the config-resolve seam (the loader is a core
+	// Mechanism); the empty entity resolves the project-wide list in reply.VmEntities.
+	reply, err := hostConfigResolve("")
 	if err != nil {
-		return map[string]bool{}, err
-	}
-	uf, ok, err := LoadUnified(cwd)
-	if err != nil || !ok || uf == nil {
 		return map[string]bool{}, nil
 	}
 	out := map[string]bool{}
-	for k := range uf.VM {
+	for _, k := range reply.VmEntities {
 		out[k] = true
 	}
 	return out, nil
@@ -477,15 +475,11 @@ func DiffImported(name, domainName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	cwd, _ := os.Getwd()
-	uf, ok, err := LoadUnified(cwd)
+	reply, err := hostConfigResolve(name)
 	if err != nil {
-		return nil, fmt.Errorf("loading charly.yml: %w", err)
+		return nil, fmt.Errorf("resolving charly.yml: %w", err)
 	}
-	if !ok || uf == nil {
-		return nil, fmt.Errorf("charly.yml not found in %s", cwd)
-	}
-	existingPtr, _ := resolveVmViaPlugin(uf.VM[name])
+	existingPtr := reply.VM
 	if existingPtr != nil {
 		existing := *existingPtr
 		var diffs []string

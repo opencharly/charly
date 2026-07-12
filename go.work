@@ -52,3 +52,4 @@ use ./candy/plugin-refs
 use ./candy/plugin-candy
 use ./candy/plugin-doctor
 use ./candy/plugin-feature
+use ./candy/plugin-vm

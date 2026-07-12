@@ -115,7 +115,6 @@ var readinessResolve = vmshared.ResolveReadiness
 var (
 	CompareGlibc                = vmshared.CompareGlibc
 	CreateSnapshot              = vmshared.CreateSnapshot
-	currentUsername             = vmshared.CurrentUsername
 	DecrementSnapshotRefcount   = vmshared.DecrementSnapshotRefcount
 	DeleteSnapshot              = vmshared.DeleteSnapshot
 	DetectHostDistro            = vmshared.DetectHostDistro
@@ -125,7 +124,6 @@ var (
 	IncrementSnapshotRefcount   = vmshared.IncrementSnapshotRefcount
 	InstallSignalHandler        = vmshared.InstallSignalHandler
 	ListSnapshots               = vmshared.ListSnapshots
-	loadRegistry                = vmshared.LoadRegistry
 	LookupSnapshot              = vmshared.LookupSnapshot
 	NewSSHTunnel                = sshx.NewSSHTunnel
 	ovmfCandidatesForDistro     = vmshared.OvmfCandidatesForDistro
@@ -136,16 +134,13 @@ var (
 	PromoteSnapshot             = vmshared.PromoteSnapshot
 	RegisterShutdownHook        = vmshared.RegisterShutdownHook
 	RegisterTempCleanup         = vmshared.RegisterTempCleanup
-	registryPath                = vmshared.RegistryPath
 	RenderCloudInit             = vmshared.RenderCloudInit
 	RenderQemuArgv              = vmshared.RenderQemuArgv
 	ResolveKeyInjectionChannels = vmshared.ResolveKeyInjectionChannels
 	ResolveOvmfForSpec          = vmshared.ResolveOvmfForSpec
 	ResolveOvmfPaths            = vmshared.ResolveOvmfPaths
 	RevertSnapshot              = vmshared.RevertSnapshot
-	saveRegistry                = vmshared.SaveRegistry
 	SmbiosCredForSSH            = vmshared.SmbiosCredForSSH
-	snapshotsDir                = vmshared.SnapshotsDir
 	splitOsReleaseLine          = vmshared.SplitOsReleaseLine
 	SweepStaleTemps             = vmshared.SweepStaleTemps
 	UnregisterTempCleanup       = vmshared.UnregisterTempCleanup
@@ -156,15 +151,11 @@ var (
 // former core↔plugin byte-for-byte duplication (FU-10). These aliases keep the
 // package-main call sites unchanged.
 var (
-	resolveVmRam                   = vmshared.ResolveVmRam
-	resolveVmCpus                  = vmshared.ResolveVmCpus
-	detectRuntimeHostVendor        = vmshared.DetectRuntimeHostVendor
 	qemuSystemBinary               = vmshared.QemuSystemBinary
 	vmDiskDir                      = vmshared.VmDiskDir
 	killQemuByPID                  = vmshared.KillQemuByPID
 	libvirtSessionSocket           = vmshared.LibvirtSessionSocket
 	libvirtSessionSocketWithProbes = vmshared.LibvirtSessionSocketWithProbes
-	writeJSON                      = vmshared.WriteJSON
 	isDeviceElement                = vmshared.IsDeviceElement
 	ValidateLibvirtSnippet         = vmshared.ValidateLibvirtSnippet
 )

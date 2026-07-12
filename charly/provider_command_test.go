@@ -123,9 +123,9 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 // grammar via kong.Plugins, so each subcommand path parses and selects exactly as before
 // the extraction (the Run handlers — the check tree — are preserved verbatim).
 // The test FAILS if any dedicated registration regresses or the command seam stops wiring one
-// of them into the root. (`feature` and `vm` are no longer here — each is an EXTERNAL command
-// served out-of-process by candy/plugin-feature / candy/plugin-vm; vm is the fourth
-// welded-command externalization, forwarding to the hidden __vm core command.)
+// of them into the root. (`feature` and `vm` are no longer here — each is a dynamic command
+// served by its own plugin candy (candy/plugin-feature / candy/plugin-vm, both compiled-in),
+// dispatched in-proc rather than through a builtin CommandProvider.)
 func TestCommandProviders_NonMachineryCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"check", []string{"check", "box", "myimg"}, "check box <image>"},

@@ -2,23 +2,24 @@ plugin-vm:
     candy:
         version: 2026.177.0400
         description: |-
-            The VM subsystem relocated into an OUT-OF-PROCESS candy. It provides TWO capabilities:
-            verb:libvirt — the `libvirt` live check verb (list, info, screenshot, send-key, QMP,
-            qemu-guest-agent, snapshots, events) plus the internal VM-resolution ops (resolve-target
-            / domain-state / list-domains the host's spice/vnc/ssh/status/preempt consumers call),
-            served over gRPC; and command:vm — the externalized `charly vm …` lifecycle CLI (build /
-            create / start / stop / destroy / console / ssh / snapshot / gpu / import / clone /
-            cp-box / list), dispatched by charly syscall.Exec'ing this binary in CLI mode, which
-            raw-forwards to the hidden in-core `charly __vm` command (the VmCmd Run handlers stay
-            core — they own the loader + libvirt/qemu backends + the deploy target). All of it is
-            backed by go-libvirt + kata-containers/govmm + libvirt.org/go/libvirtxml, which this
-            plugin keeps OUT of charly's core go.mod — the dep-shed. The `libvirt:` verb dispatches
-            through the provider registry exactly like a built-in (the `libvirt: <method>` sugar
-            desugars to plugin/plugin_input — the method + every libvirt-exclusive modifier ride the
-            input map, validated against this plugin's own #LibvirtInput; authoring unchanged),
-            running the extracted LibvirtCmd Kong
-            tree IN this plugin's process. command:vm is declared in plugin.providers (CLI-grammar
-            prescan + baked manifest) but NOT advertised in Describe (mirrors plugin-secrets).
+            The VM subsystem relocated into a COMPILED-IN plugin candy (P10). It provides TWO
+            capabilities: verb:libvirt — the `libvirt` live check verb (list, info, screenshot,
+            send-key, QMP, qemu-guest-agent, snapshots, events) plus the internal VM-resolution ops
+            (resolve-target / domain-state / list-domains the host's spice/vnc/ssh/status/preempt
+            consumers call), dispatched through the provider registry; and command:vm — the
+            `charly vm …` lifecycle CLI (build / create / start / stop / destroy / console / ssh /
+            snapshot / gpu / import / clone / cp-box / list), COMPILED-IN and dispatched IN-PROC via
+            Invoke(OpRun), so its handlers run in charly's own process (native stdio/TTY for
+            console/ssh). The handlers own the CLI + the libvirt/qemu engine in-package and reach the
+            host-only Mechanisms over generic seams: the config loader + deploy ledger via
+            HostBuild("config-resolve"/"config-persist"), the VM-disk build engine via
+            HostBuild("vm-build"), egress via verb:egress, preempt via verb:arbiter, GPU via verb:gpu.
+            All of it is backed by go-libvirt + kata-containers/govmm + libvirt.org/go/libvirtxml,
+            compiled into charly for this canonical placement. The `libvirt:` verb dispatches through
+            the provider registry exactly like a built-in (the `libvirt: <method>` sugar desugars to
+            plugin/plugin_input — the method + every libvirt-exclusive modifier ride the input map,
+            validated against this plugin's own #LibvirtInput; authoring unchanged), running the
+            LibvirtCmd Kong tree IN this plugin's process.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-vm
             providers:

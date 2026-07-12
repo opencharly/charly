@@ -52,6 +52,7 @@ import (
 	cp_plugin_tunnel "github.com/opencharly/charly/candy/plugin-tunnel"
 	cp_plugin_unix_group "github.com/opencharly/charly/candy/plugin-unix-group"
 	cp_plugin_user "github.com/opencharly/charly/candy/plugin-user"
+	cp_plugin_vm "github.com/opencharly/charly/candy/plugin-vm"
 )
 
 func init() {
@@ -100,4 +101,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_candy.NewProvider(), cp_plugin_candy.NewMeta())
 	registerCompiledPlugin(cp_plugin_doctor.NewProvider(), cp_plugin_doctor.NewMeta())
 	registerCompiledPlugin(cp_plugin_feature.NewProvider(), cp_plugin_feature.NewMeta())
+	registerCompiledPlugin(cp_plugin_vm.NewProvider(), cp_plugin_vm.NewMeta())
 }
