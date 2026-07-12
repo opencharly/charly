@@ -54,3 +54,4 @@ use ./candy/plugin-doctor
 use ./candy/plugin-feature
 use ./candy/plugin-vm
 use ./candy/plugin-bundle
+use ./candy/plugin-alias

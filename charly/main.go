@@ -71,19 +71,20 @@ type CLI struct {
 	// config loader + deploy ledger + egress over generic seams and the libvirt/gpu/arbiter engines
 	// over verb dispatch, so it OWNS its `charly vm …` CLI with no hidden core command.)
 
-	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (alias,
-	// ssh, start, stop, status, restart, update, remove, logs,
+	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (ssh,
+	// start, stop, status, restart, update, remove, logs,
 	// shell, cmd, cp, volume, service, config, bundle, reap-orphans) PLUS check
 	// — is no longer a hardcoded field: each arrives via cli.Plugins as a builtin
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
-	// (mcp/secrets/udev/tmux/preempt/feature/vm AND clean/settings/candy/doctor AND migrate are now
-	// EXTERNAL commands served by candy/plugin-* , dispatched via syscall.Exec (out-of-process) or an
-	// in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins. migrate/clean/
-	// settings/candy/doctor/feature/preempt/vm OWN their engine/command in candy/plugin-<name> (NONE uses
-	// a hidden core command): clean/settings/doctor/feature reach a shared core subsystem over a generic
-	// HostBuild seam (retention/settings/hostprobe/feature), preempt reaches its peer verb:arbiter over
-	// InvokeProvider, vm reaches config/ledger/egress over generic seams + libvirt/gpu/arbiter over verb
-	// dispatch, candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
+	// (mcp/secrets/udev/tmux/preempt/feature/vm/alias AND clean/settings/candy/doctor AND migrate are now
+	// EXTERNAL or COMPILED-IN command CANDIES served by candy/plugin-* , dispatched via syscall.Exec
+	// (out-of-process) or an in-proc command:<word> Invoke (compiled-in); see collectExternalCommandPlugins.
+	// migrate/clean/settings/candy/doctor/feature/preempt/vm/alias OWN their engine/command in
+	// candy/plugin-<name> (NONE uses a hidden core command): clean/settings/doctor/feature reach a shared
+	// core subsystem over a generic HostBuild seam (retention/settings/hostprobe/feature), preempt reaches
+	// its peer verb:arbiter over InvokeProvider, vm reaches config/ledger/egress over generic seams +
+	// libvirt/gpu/arbiter over verb dispatch, alias reaches image labels via HostBuild("cli") reentry,
+	// candy needs no seam (pure yaml via kit), migrate owns its engine. All compiled-in, so command:<word>
 	// resolves at init() independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.

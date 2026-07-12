@@ -1,0 +1,29 @@
+plugin-alias:
+    candy:
+        version: 2026.193.1052
+        description: |-
+            The `charly alias …` CLI — the host command alias manager, a COMMAND-class charly
+            plugin (github.com/opencharly/sdk). `charly alias add/install/list/remove/uninstall`
+            create and manage ~/.local/bin wrapper scripts that shell into a box (each wrapper
+            runs `charly shell <box> -c "<command> …"`), so a box's tools are reachable as plain
+            host commands. COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun) (kong-parse the
+            AliasCmd tree), so the handlers own charly's real stdio; `add` (image-exists guard) and
+            `install` (read the baked ai.opencharly.alias label) reach the host over the generic
+            HostBuild("cli") reverse channel by re-running `charly box labels …`. Placement-invisible
+            (F8): the SAME provider compiles into charly or serves out-of-process.
+        plugin:
+            providers:
+                - command:alias
+            source: github.com/opencharly/charly/candy/plugin-alias
+        plan:
+            - # ADE check: a deterministic build-context check that does NOT depend on the host
+              # reverse channel the `charly alias add`/`install` handlers need (the prescan finds
+              # this candy from the project dir). It mirrors candy/plugin-example-command's pattern
+              # — a trivial build-context `command` (the built-in command CHECK verb) running `true`.
+              # The full CLI end-to-end (`charly alias add/install/list/remove/uninstall`) is
+              # exercised by the live R10 (check-commands-local) + the Go tests.
+              check: the alias command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly alias` end-to-end is exercised by the live R10 + the Go tests
+              id: alias-module-present
+              context:
+                - build
+              command: "true"

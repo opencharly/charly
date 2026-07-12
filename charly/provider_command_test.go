@@ -67,8 +67,30 @@ func TestCommandCompileIn_ExampleCommandInProc(t *testing.T) {
 	}
 }
 
+// TestCommandCompileIn_AliasInProc proves the P14 alias extraction: `charly alias …`, formerly a
+// dedicated builtin CommandProvider, is now the compiled-in command candy candy/plugin-alias —
+// registered IN-PROC as a ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin
+// CommandProvider), so dispatchCommand routes `charly alias` to it via Invoke(OpRun) and its
+// `add`/`install` handlers reach the host over the HostBuild("cli") reverse channel. (End-to-end
+// CLI dispatch is exercised by the live check-commands-local bed + the plugin's Go tests.)
+func TestCommandCompileIn_AliasInProc(t *testing.T) {
+	prov, ok := providerRegistry.resolve(ClassCommand, "alias")
+	if !ok {
+		t.Fatal("compiled-in command candy plugin-alias did not register command:alias (pluginsgen/compiled_plugins)")
+	}
+	if _, isGrpc := prov.(*grpcProvider); isGrpc {
+		t.Fatal("alias registered as a *grpcProvider — expected an in-proc inprocProvider (compiled-in placement)")
+	}
+	if _, isInproc := prov.(*inprocProvider); !isInproc {
+		t.Fatalf("alias provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
+	}
+	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
+		t.Fatal("alias should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+	}
+}
+
 // TestCommandProviders_ExtractedLeafCommands proves every leaf-domain command extracted
-// into a dedicated COMMAND-class provider (alias/ssh — the builtin leaf-domain
+// into a dedicated COMMAND-class provider (ssh — the builtin leaf-domain
 // batch) is (1) registered in providerRegistry as a CommandProvider with the matching
 // Reserved() word, and (2) collected by collectCommandPlugins() and injected into the REAL
 // charly CLI grammar via kong.Plugins, so its subcommand path parses and selects exactly as
@@ -76,14 +98,15 @@ func TestCommandCompileIn_ExampleCommandInProc(t *testing.T) {
 // command seam stops wiring one of them into the root.
 func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
-		{"alias", []string{"alias", "list"}, "alias list"},
 		{"ssh", []string{"ssh", "tunnel", "spice", "myvm"}, "ssh tunnel spice <vm>"},
-		// `mcp`, `secrets`, `udev`, `tmux`, `preempt`, and `feature` are intentionally absent:
-		// `charly mcp serve` (C1), `charly secrets …` (C2), `charly udev …`, `charly tmux …` (the
-		// first welded-command externalization), `charly preempt …` (the second), and
-		// `charly feature …` (the third) are now EXTERNAL commands served out-of-process by
-		// candy/plugin-mcp / candy/plugin-secrets / candy/plugin-udev / candy/plugin-tmux /
-		// candy/plugin-preempt / candy/plugin-feature, not builtin CommandProviders.
+		// `mcp`, `secrets`, `udev`, `tmux`, `preempt`, `feature`, and `alias` are intentionally
+		// absent: `charly mcp serve` (C1), `charly secrets …` (C2), `charly udev …`, `charly tmux …`
+		// (the first welded-command externalization), `charly preempt …` (the second),
+		// `charly feature …` (the third), and `charly alias …` (P14, candy/plugin-alias — COMPILED-IN)
+		// are now dynamic command candies served by their own plugin (candy/plugin-mcp /
+		// candy/plugin-secrets / candy/plugin-udev / candy/plugin-tmux / candy/plugin-preempt /
+		// candy/plugin-feature / candy/plugin-alias), NOT builtin CommandProviders. alias's
+		// compiled-in in-proc registration is asserted by TestCommandCompileIn_AliasInProc.
 	})
 }
 
@@ -228,19 +251,18 @@ func TestCommandProviders_CheckNestedPluginsInjected(t *testing.T) {
 	}
 }
 
-// TestCommandProviders_ExtractedReachMCP proves the command extraction did not change the
-// reflected CLI surface for the extracted commands — collectCommandPlugins() feeds
-// buildCLIModel's modelCLI exactly as it feeds the real CLI, so each extracted command's
-// leaves stay in the CLI model the out-of-process MCP bridge (candy/plugin-mcp) reflects into
-// tools. `mcp` itself is now an EXTERNAL command served by candy/plugin-mcp — not a builtin
-// CommandProvider — so it is correctly ABSENT from this builtin-only model (the MCP server
-// does not expose "start an MCP server" as one of its own tools).
+// TestCommandProviders_ExtractedReachMCP proves the builtin-only CLI model (buildCLIModel's
+// modelCLI, fed by collectCommandPlugins() exactly as the real CLI is) EXCLUDES every command that
+// became a dynamic command candy — a compiled-in or external command is a pass-through Args holder
+// (collectExternalCommandPlugins), never a builtin CommandProvider, so its subcommand leaves are
+// NOT reflected into the out-of-process MCP bridge's (candy/plugin-mcp) tool surface. The
+// still-builtin leaf-domain commands (ssh) that DO stay reflected are covered by
+// TestCommandProviders_ExtractedLeafCommands; `mcp` itself is correctly absent (the MCP server does
+// not expose "start an MCP server" as one of its own tools).
 func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	paths := cliModelLeafPaths(t)
-	for _, name := range []string{"alias.list"} {
-		if !paths[name] {
-			t.Errorf("%s missing from the CLI model after extracting its command into a CommandProvider", name)
-		}
+	if paths["alias.list"] {
+		t.Error("alias.list unexpectedly present in the builtin CLI model — `alias` is now a compiled-in command (candy/plugin-alias, command:alias), a dynamic holder not a builtin CommandProvider")
 	}
 	if paths["mcp.serve"] {
 		t.Error("mcp.serve unexpectedly present in the builtin CLI model — `mcp` is now an external command (candy/plugin-mcp), not a builtin CommandProvider")

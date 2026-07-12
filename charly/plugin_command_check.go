@@ -20,7 +20,7 @@ type checkCommandHolder struct {
 
 // checkCommand is the `charly check` command tree extracted into its OWN file as a
 // dedicated COMMAND-class provider — the same externalizable dedicated-provider pattern
-// (see plugin_command_alias.go for the full rationale). It self-registers via
+// (see plugin_command_ssh.go for the full rationale). It self-registers via
 // registerDedicatedBuiltin, is absent from builtinProviderInstances + the `providers:`
 // manifest, and reaches the CLI root through collectCommandPlugins() → kong.Plugins.
 // KongCommand() returns a fresh checkCommandHolder (CheckCmd verbatim, with an EMPTY
