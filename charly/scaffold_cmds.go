@@ -24,7 +24,7 @@ type NewProjectCmd struct {
 }
 
 func (c *NewProjectCmd) Run() error {
-	if err := ScaffoldProject(c.Dir); err != nil {
+	if err := kit.ScaffoldProject(c.Dir); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "Scaffolded project at %s\n", c.Dir)
@@ -52,7 +52,7 @@ func (c *NewBoxCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	if err := AddBox(dir, c.Name, c.Base, c.Candies); err != nil {
+	if err := kit.AddBox(dir, c.Name, c.Base, c.Candies); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "Added box %s to charly.yml\n", c.Name)
