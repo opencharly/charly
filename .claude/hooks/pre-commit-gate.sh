@@ -10,8 +10,8 @@
 #     `syntax check only`, or any unknown tier; legal: `fully tested and
 #     validated`, `analysed on a live system`, `documentation reviewed`),
 #   - claims `documentation reviewed` on a staged diff that is not all-docs,
-#   - carries a runtime tier but stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry
-#     (in a repo that tracks CHANGELOG/),
+#   - stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry at ANY legal tier (in a repo
+#     that tracks CHANGELOG/), except a pure submodule-pointer bump,
 #   - stages a Go (*.go) change whose module is NOT golangci-lint-clean — the Go-lint
 #     criterion, so dead/unused code cannot slip in the way the P10 VM-CLI sweep did. It
 #     runs the CONFIGURED `golangci-lint run` (never --fix, never --enable-only) on each
@@ -50,7 +50,6 @@ except Exception:
     sys.exit(0)
 
 LEGAL = {"fully tested and validated", "analysed on a live system", "documentation reviewed"}
-RUNTIME_TIERS = {"fully tested and validated", "analysed on a live system"}
 CHANGELOG_ENTRY = re.compile(r'^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$')
 DOC_PATH = re.compile(r'(?:^|/)(?:CHANGELOG|README|LICENSE|VISION)[^/]*$|\.(?:md|txt)$', re.IGNORECASE)
 
@@ -306,8 +305,9 @@ def assert_changelog(repo):
     if not any_entry or only_gitlinks:
         return  # nothing staged, or a pure pointer bump (recorded in the submodule)
     if not entry:
-        block("runtime-tier commit stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry in this repo — "
-              "record it, or use a non-runtime tier if this is not a behavioral change.")
+        block("this commit stages no CHANGELOG/<YYYY.DDD.HHMM>.md entry in this repo — every "
+              "commit at a legal attribution tier records one (a pure submodule-pointer bump, "
+              "whose narrative lives in the submodule, is exempt). Add the CHANGELOG entry.")
 
 
 # --- Go-lint criterion (tier-independent) ------------------------------------
@@ -381,7 +381,7 @@ def assert_go_lint(repo):
 #      AFTER this check has read it — the gate would judge a stale (often EMPTY) diff
 #      and wave the commit through. Run the index-mutating command as its own SEPARATE
 #      Bash call so the gate inspects the real diff.
-needs_diff = ("documentation reviewed" in tiers) or any(t in RUNTIME_TIERS for t in tiers)
+needs_diff = bool(tiers)
 if needs_diff and cwd_unresolvable:
     block("this commit's `-C` path is not a resolvable directory (a $VAR or a nonexistent "
           "path), so the gate cannot inspect the staged diff for the `%s` tier. Re-issue with "
@@ -399,7 +399,7 @@ if not cwd_unresolvable:
     assert_go_lint(commit_cwd)  # tier-independent: any Go commit must be lint-clean
     if "documentation reviewed" in tiers:
         assert_docs_only(commit_cwd)
-    if not is_amend and any(t in RUNTIME_TIERS for t in tiers):
+    if not is_amend and tiers:
         assert_changelog(commit_cwd)
 
 sys.exit(0)

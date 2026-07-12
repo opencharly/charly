@@ -159,6 +159,60 @@ subprocess.run(["git", "-C", rcl, "add", "CHANGELOG/2026.190.1300.md"], capture_
 expect("commit: runtime tier, CHANGELOG staged -> ALLOW", gate(CGATE, f"git -C {rcl} commit -m 'x\n\n{RUN}'"), "ALLOW")
 shutil.rmtree(rcl, ignore_errors=True)
 
+# --- commit gate: #34 — a CHANGELOG entry is required at EVERY legal tier -----
+# The gate historically fired the CHANGELOG check only for the two RUNTIME tiers, so a
+# `documentation reviewed` skill/doc edit in a CHANGELOG-tracking repo slipped through
+# with no history entry (the gap #35 hit — caught by convention, not the gate). It now
+# fires for every legal tier; the pure-submodule-pointer-bump exemption survives.
+rdl = mkrepo(with_changelog=True)
+open(os.path.join(rdl, "README.md"), "a").write("more docs\n")
+subprocess.run(["git", "-C", rdl, "add", "README.md"], capture_output=True)
+expect("commit: docs tier, docs change, no CHANGELOG -> BLOCK (#34)",
+       gate(CGATE, f"git -C {rdl} commit -m 'x\n\n{DOCS}'"), "BLOCK")
+open(os.path.join(rdl, "CHANGELOG", "2026.190.1400.md"), "w").write("# n\n")
+subprocess.run(["git", "-C", rdl, "add", "CHANGELOG/2026.190.1400.md"], capture_output=True)
+expect("commit: docs tier, docs change, CHANGELOG staged -> ALLOW (#34)",
+       gate(CGATE, f"git -C {rdl} commit -m 'x\n\n{DOCS}'"), "ALLOW")
+shutil.rmtree(rdl, ignore_errors=True)
+
+
+def mksubbump():
+    """A superrepo (tracking CHANGELOG/) whose ONLY staged change is a docs-only
+    submodule POINTER BUMP — the #81 scenario. The gate must ALLOW it with no
+    CHANGELOG entry: assert_docs_only certifies the submodule's old..new diff is
+    all-docs, and assert_changelog's only-gitlinks arm exempts the pure pointer bump
+    (its narrative lives in the submodule). Returns (parent_to_rmtree, superrepo)."""
+    parent = tempfile.mkdtemp(prefix="gate-subbump-")
+    sub = os.path.join(parent, "sub")
+    os.makedirs(sub)
+    for a in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", sub, *a], capture_output=True)
+    open(os.path.join(sub, "README.md"), "w").write("# sub v1\n")
+    subprocess.run(["git", "-C", sub, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", sub, "commit", "-qm", "v1"], capture_output=True)
+    top = os.path.join(parent, "top")
+    os.makedirs(top)
+    for a in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", top, *a], capture_output=True)
+    os.makedirs(os.path.join(top, "CHANGELOG"))
+    open(os.path.join(top, "CHANGELOG", "2026.001.0000.md"), "w").write("# old\n")
+    subprocess.run(["git", "-C", top, "-c", "protocol.file.allow=always",
+                    "submodule", "add", "-q", sub, "sub"], capture_output=True)
+    subprocess.run(["git", "-C", top, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", top, "commit", "-qm", "init"], capture_output=True)
+    # advance the submodule with a DOCS-ONLY commit IN PLACE, then stage just the bump
+    topsub = os.path.join(top, "sub")
+    open(os.path.join(topsub, "README.md"), "a").write("v2 docs\n")
+    subprocess.run(["git", "-C", topsub, "commit", "-qam", "v2 docs"], capture_output=True)
+    subprocess.run(["git", "-C", top, "add", "sub"], capture_output=True)
+    return parent, top
+
+
+sb_parent, sb_top = mksubbump()
+expect("commit: docs tier, pure docs submodule pointer bump, no CHANGELOG -> ALLOW (#34 exemption)",
+       gate(CGATE, f"git -C {sb_top} commit -m 'x\n\n{DOCS}'"), "ALLOW")
+shutil.rmtree(sb_parent, ignore_errors=True)
+
 # --- commit gate: the Go-lint criterion --------------------------------------
 # The gate runs the CONFIGURED `golangci-lint run` on each touched Go MODULE. It fails
 # OPEN when golangci-lint is absent (the pr-validator remains the gate), so the BLOCK
