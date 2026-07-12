@@ -140,6 +140,18 @@ func (c *MergeCmd) runOne(cfg *Config, boxName string) error {
 	}
 	engine := rt.BuildEngine
 
+	return mergeImageRef(imageRef, engine, maxBytes, maxTotalMB, c.DryRun)
+}
+
+// mergeImageRef is the shared REF-BASED merge engine: load → size → skip-if-large →
+// planMerge → dry-run → executeMerge → save, for an ALREADY-RESOLVED image ref.
+// Extracted from MergeCmd.runOne (which resolves a box name → ref + knobs, then
+// calls this — ONE merge implementation, R3) so the P8b HostBuild("merge") drive
+// seam (build_merge_host.go) can merge a built ref WITHOUT re-resolving box config.
+// TRANSITIONAL: P14a moves the whole merge engine into candy/plugin-oci (verb:oci) —
+// this function AND the HostBuild("merge") seam delete then, the candy swapping to
+// InvokeProvider("verb","oci",OpMerge,…).
+func mergeImageRef(imageRef, engine string, maxBytes int64, maxTotalMB int, dryRun bool) error {
 	img, cleanup, isManifest, err := loadImageFromDaemon(imageRef, engine)
 	if err != nil {
 		return err
@@ -175,7 +187,7 @@ func (c *MergeCmd) runOne(cfg *Config, boxName string) error {
 
 	steps := planMerge(sizes, maxBytes)
 
-	if c.DryRun {
+	if dryRun {
 		printMergePlan(sizes, steps)
 		return nil
 	}

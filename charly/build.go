@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,12 +12,9 @@ import (
 	"runtime"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"text/template"
-	"time"
 
-	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk"
@@ -60,10 +56,12 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 		return resolved, nil
 	}
 	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
-	// Call the host-side build engine DIRECTLY (not through the build:box plugin dispatch): this
-	// is the engine recursing on a dependency image, not the `charly box build` CLI command
-	// re-entering, so it needs no reverse-channel round-trip.
-	if _, err := runBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
+	// Recurse on the dependency image through the SAME build:box dispatch the CLI uses
+	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-resolve")):
+	// the podman drive lives in the candy now (P8b), so the host cannot build inline. The
+	// in-proc reverse channel makes this re-entrant call cheap (no socket). Reached from the
+	// build-resolve bootstrap pre-pass AND the vm bootstrap path.
+	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
 		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
 	}
 	resolved, err := resolveLocalImageRef(engine, builderRef)
@@ -122,13 +120,31 @@ func (c *BuildCmd) Run() error {
 		return err
 	}
 
-	// Route the build through the compiled-in build:box plugin over the F10 HostBuild seam:
-	// the heavy engine (Generator / buildImages / merge / push / retention) STAYS host-side
-	// in-proc — only this small BuildRequest envelope crosses. The plugin calls back
-	// HostBuild("image"), which runs runBoxBuild host-side. See dispatchBuild + hostBuildImage.
-	return dispatchBoxBuild(spec.BuildRequest{
+	// Compute the build tag ONCE host-side so the retention activity-lock floor and
+	// the built images (build-resolve's NewGenerator) agree on ONE CalVer —
+	// ComputeCalVer is clock-derived, so resolving it in two places would diverge.
+	tag := c.Tag
+	if tag == "" {
+		tag = ComputeCalVer()
+	}
+
+	// Retention floor: mark this build LIVE (acquireBuildActivityLock) so a
+	// concurrent sibling's retention prune respects our tag floor (liveBuildFloor).
+	// Held across the whole build (the candy podman drive) + the post-build prune.
+	// The PER-IMAGE build lock moved INTO the candy (kit.AcquireImageBuildLock) so
+	// distinct leaves fan out in parallel while a shared intermediate builds once.
+	buildActivityRelease, err := acquireBuildActivityLock(tag)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = buildActivityRelease() }()
+
+	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box); the
+	// host is a RESOLVE/RENDER seam provider (HostBuild("build-resolve")). P8b
+	// reversed the P8 "permanent facade" — the engine's drive now lives in the candy.
+	if err := dispatchBoxBuild(spec.BuildRequest{
 		Boxes:           c.Boxes,
-		Tag:             c.Tag,
+		Tag:             tag,
 		Dir:             dir,
 		IncludeDisabled: c.IncludeDisabled,
 		DevLocalPkg:     c.DevLocalPkg,
@@ -138,192 +154,46 @@ func (c *BuildCmd) Run() error {
 		NoCache:         c.NoCache,
 		Jobs:            c.Jobs,
 		PodmanJobs:      c.PodmanJobs,
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Reusable-artifact retention (host POST-step; skipped for push): prune old
+	// CalVer tags + stale .build/_candy dirs down to defaults.keep_images. It is
+	// host-side (go-containerregistry/podman, shared with `charly clean`) and runs
+	// AFTER the candy build drive completes, under the activity lock held above.
+	if !c.Push {
+		pruneAfterBuild(dir)
+	}
+	return nil
 }
 
-// runBoxBuild is the HOST-SIDE image-build engine behind the build:box plugin (F10 HostBuild
-// seam). It reconstructs everything from req.Dir — Config / ResolvedBox / Candy via NewGenerator,
-// exactly as build_overlay's runOverlayBuild re-runs NewGenerator(dir,…) — then generates Containerfiles,
-// builds every selected image (with inline merge), pushes (podman --push), and prunes old tags.
-// Returns the built image refs. The engine never crosses the plugin boundary; only the
-// BuildRequest in and the BuildReply out do. Also called DIRECTLY (not through the plugin
-// dispatch) by ensureBuilderImageBuilt — that is the host engine recursing on a dependency, not
-// the `charly box build` CLI command re-entering.
-func runBoxBuild(req spec.BuildRequest) ([]string, error) {
-	dir := req.Dir
-	if dir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		dir = cwd
-	}
-	c := &BuildCmd{
-		Boxes:           req.Boxes,
-		Tag:             req.Tag,
-		Push:            req.Push,
-		Platform:        req.Platform,
-		Cache:           req.Cache,
-		NoCache:         req.NoCache,
-		Jobs:            req.Jobs,
-		PodmanJobs:      req.PodmanJobs,
-		IncludeDisabled: req.IncludeDisabled,
-		DevLocalPkg:     req.DevLocalPkg,
-	}
-
-	// Generate Containerfiles via the shared box-selection rule. An empty selection builds
-	// every enabled box; a named selection scopes the resolved set (RequestedBoxes) and, with
-	// --include-disabled, relaxes the enabled: false gate for exactly those names — so the
-	// override never widens the working set globally and surfaces unrelated disabled-image dep
-	// errors. Explicit targets are also how a qualified name (e.g. `charly box build
-	// charly.arch-builder`) is pulled into the resolved set even when it isn't a base/builder of
-	// any root image. Remote (`@github…`) refs were already dispatched to buildRemote by
-	// BuildCmd.Run, so these are local names.
-	resolveOpts := boxResolveOpts(c.Boxes, c.IncludeDisabled)
-	gen, err := NewGenerator(dir, c.Tag, resolveOpts)
+// pruneAfterBuild runs the post-build retention prune host-side (best-effort,
+// warn-only): old-CalVer image-tag retention (keep_images) + stale build-staging
+// dir cleanup. It reads keep_images from a lightweight project-config load (the
+// full model already rendered in build-resolve; this is a cheap charly.yml read)
+// and resolves the engine via ResolveRuntime. Runs after the candy build drive
+// (build:box) completes.
+func pruneAfterBuild(dir string) {
+	cfg, err := LoadConfig(dir)
 	if err != nil {
-		return nil, err
+		return
 	}
-	// No per-dir build lock here: generate writes the shared .build/ tree race-free via atomic
-	// staging (build_stage_atomic.go), and buildImage takes a PER-IMAGE lock so shared
-	// intermediates build once while leaves fan out in parallel (acquireImageBuildLock).
-	// Serializing the whole build phase would stall parallel cold builds — the long pole — which
-	// we must not do. Disposable check beds build the charly toolchain (any localpkg candy) from
-	// LOCAL in-development source; production boxes download the published release. The check-bed
-	// runner passes --dev-local-pkg (see check_bed_run.go).
-	gen.DevLocalPkg = c.DevLocalPkg
-	if err := gen.Generate(); err != nil {
-		return nil, fmt.Errorf("generating build files: %w", err)
-	}
-
-	// Register this build as LIVE for image-tag retention: gen.Tag is the
-	// CalVer every FROM pin this run's Containerfiles carry (the floor a
-	// concurrent sibling's prune must respect — see liveBuildFloor).
-	buildActivityRelease, err := acquireBuildActivityLock(gen.Tag)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = buildActivityRelease() }()
-
-	// Resolve build-speed tunables from defaults: (the CLI flag / env layer already populated
-	// these BuildCmd fields when set; fill the gaps from project config — a named fallback
-	// applies later if config is silent too).
-	def := gen.Config.Defaults
-	c.resolveBuildTunables(def)
-
-	if err := ensureCharlyBinaryFresh(dir, gen.Boxes, c.Boxes); err != nil {
-		return nil, fmt.Errorf("refreshing charly binary: %w", err)
-	}
-
-	engine, buildEngine, built, err := c.buildImages(dir, gen)
-	if err != nil {
-		return nil, err
-	}
-
-	// Push after merge (Podman only; Docker buildx pushes during build)
-	if c.Push && buildEngine == "podman" {
-		order, err := ResolveBoxOrder(gen.Boxes, gen.Candies)
-		if err != nil {
-			return nil, err
-		}
-		if len(c.Boxes) > 0 {
-			order, err = filterBox(order, c.Boxes, gen.Boxes)
-			if err != nil {
-				return nil, err
-			}
-		}
-		fmt.Fprintf(os.Stderr, "\n=== Pushing images ===\n")
-		for _, name := range order {
-			img := gen.Boxes[name]
-			tags := imageTags(name, img, gen.Config)
-			if err := c.pushImage(dir, tags); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// Reusable-artifact retention: prune old CalVer tags per image down to defaults.keep_images
-	// (in-use images skipped; rmi without -f). Skipped for push runs. keep_images: 0 / absent
-	// disables. See `charly clean`.
-	if !c.Push {
-		keep := resolveIntPtr(def.KeepImages, nil, keepImagesFallback)
-		if keep > 0 {
+	keep := resolveIntPtr(cfg.Defaults.KeepImages, nil, keepImagesFallback)
+	if keep > 0 {
+		if rt, rtErr := ResolveRuntime(); rtErr == nil {
+			engine := EngineBinary(rt.BuildEngine)
 			if removed, err := pruneImagesByRetention(engine, keep, false); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
 			} else if len(removed) > 0 {
 				fmt.Fprintf(os.Stderr, "Pruned %d old image tag(s) (keep_images=%d)\n", len(removed), keep)
 			}
 		}
-		// Build-staging retention: prune outdated .build/_candy/<candy>.<version>/
-		// dirs (+ remove the legacy _layers dir), keyed on keep_images.
-		if removed := pruneBuildCandyDirs(filepath.Join(dir, ".build"), keep, false); len(removed) > 0 {
-			fmt.Fprintf(os.Stderr, "Pruned %d build-staging dir(s) under .build/_candy\n", len(removed))
-		}
 	}
-
-	return built, nil
+	if removed := pruneBuildCandyDirs(filepath.Join(dir, ".build"), keep, false); len(removed) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d build-staging dir(s) under .build/_candy\n", len(removed))
+	}
 }
-
-// runBoxGenerate is the HOST-SIDE Containerfile-generation engine behind the build:generate
-// plugin word (F10 HostBuild seam): the `charly box generate` path. It reconstructs config from
-// req.Dir via NewGenerator and writes the .build/ tree; it does NOT build images. Returns the
-// emitted Containerfile paths.
-func runBoxGenerate(req spec.BuildRequest) ([]string, error) {
-	dir := req.Dir
-	if dir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		dir = cwd
-	}
-	// Share the box-selection rule with the build path: the `all` sentinel collapses to "every
-	// enabled box" (idempotent — BuildCmd/GenerateCmd already normalized), and a named selection
-	// scopes the resolved set (and, with --include-disabled, relaxes the gate for those names).
-	boxes := normalizeBoxArgs(req.Boxes)
-	gen, err := NewGenerator(dir, req.Tag, boxResolveOpts(boxes, req.IncludeDisabled))
-	if err != nil {
-		return nil, err
-	}
-	// No lock: Generate() writes the shared .build/ tree race-free via atomic staging
-	// (build_stage_atomic.go), so concurrent generates in one dir are safe.
-	if err := gen.Generate(); err != nil {
-		return nil, err
-	}
-	written := make([]string, 0, len(gen.Containerfiles))
-	for name := range gen.Containerfiles {
-		written = append(written, filepath.Join(dir, ".build", name, "Containerfile"))
-	}
-	sort.Strings(written)
-	return written, nil
-}
-
-// hostBuildImage / hostBuildGenerate are the F10 host-builders behind the build:box /
-// build:generate plugin words: the plugin calls back HostBuild(kind, BuildRequest) and these run
-// the engine HOST-SIDE in-proc, returning the opaque BuildReply. A build FAILURE rides
-// BuildReply.Error (the plugin echoes it; the RPC itself succeeds) so dispatchBuild surfaces it as
-// the command error. The buildEngineContext arg is unused: the engine reconstructs everything
-// from BuildRequest.Dir (like build_overlay's runOverlayBuild re-runs NewGenerator(dir,…)).
-func hostBuildImage(_ context.Context, req spec.BuildRequest, _ buildEngineContext) (spec.BuildReply, error) {
-	written, err := runBoxBuild(req)
-	return spec.BuildReply{Written: written, Error: errString(err)}, nil
-}
-
-func hostBuildGenerate(_ context.Context, req spec.BuildRequest, _ buildEngineContext) (spec.BuildReply, error) {
-	written, err := runBoxGenerate(req)
-	return spec.BuildReply{Written: written, Error: errString(err)}, nil
-}
-
-// Register the image + containerfiles host-builders on the F10 HostBuild seam at package-var init
-// (before any init(), like the substrate/preresolver registries + the plugin-binary builder). The
-// kinds are class-generic ACTION nouns ("image" builds an image, "containerfiles" generates the
-// .build/ Containerfile tree), deliberately NOT the build:box / build:generate provider WORDS —
-// the F11 uniform-API gate (TestNoSinglePluginAPISurface) forbids a provider word on this surface.
-var _ = func() bool {
-	registerHostBuilder("image", typedHostBuilder("image", hostBuildImage))
-	registerHostBuilder("containerfiles", typedHostBuilder("containerfiles", hostBuildGenerate))
-	return true
-}()
 
 // dispatchBoxBuild / dispatchBoxGenerate route `charly box build` / `charly box generate`
 // through their compiled-in plugin word (build:box / build:generate) over the F10 HostBuild seam.
@@ -409,183 +279,6 @@ func (c *BuildCmd) resolveBuildTunables(def BoxConfig) {
 	}
 }
 
-// buildImages resolves the runtime build engine + target platform, then builds
-// every selected image. A filtered (named) selection builds sequentially in
-// dependency order; a full build uses level-based parallelism bounded by c.Jobs,
-// merging each level before the next so children start from a merged
-// (fewer-layer) base image. Returns the engine binary, the runtime build-engine
-// name (for the caller's push + retention steps), and the built image refs (the
-// BuildReply.Written provenance).
-func (c *BuildCmd) buildImages(dir string, gen *Generator) (string, string, []string, error) {
-	// Resolve runtime config for build engine
-	rt, err := ResolveRuntime()
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	engine := EngineBinary(rt.BuildEngine)
-
-	// Determine platform
-	platform := c.Platform
-	if platform == "" && !c.Push {
-		platform = hostPlatform()
-	}
-
-	var built []string
-
-	if len(c.Boxes) > 0 {
-		// Filtered build: use sequential order
-		order, err := ResolveBoxOrder(gen.Boxes, gen.Candies)
-		if err != nil {
-			return "", "", nil, err
-		}
-		order, err = filterBox(order, c.Boxes, gen.Boxes)
-		if err != nil {
-			return "", "", nil, err
-		}
-		for _, name := range order {
-			img := gen.Boxes[name]
-			content := gen.Containerfiles[name]
-			if err := c.buildImage(engine, dir, name, img, gen.Config, platform, rt.BuildEngine, content); err != nil {
-				return "", "", nil, fmt.Errorf("building %s: %w", name, err)
-			}
-			built = append(built, img.FullTag)
-			mergeAfterBuild(name, img)
-		}
-	} else {
-		// Full build: use level-based parallelism
-		levels, err := ResolveBoxLevels(gen.Boxes, gen.Candies)
-		if err != nil {
-			return "", "", nil, err
-		}
-
-		jobs := c.Jobs
-		if jobs < 1 {
-			jobs = jobsFallback
-		}
-
-		for i, level := range levels {
-			fmt.Fprintf(os.Stderr, "\n=== Build level %d/%d (%d images) ===\n", i+1, len(levels), len(level))
-
-			if len(level) == 1 {
-				// Single image, no need for goroutine overhead
-				name := level[0]
-				img := gen.Boxes[name]
-				content := gen.Containerfiles[name]
-				if err := c.buildImage(engine, dir, name, img, gen.Config, platform, rt.BuildEngine, content); err != nil {
-					return "", "", nil, fmt.Errorf("building %s: %w", name, err)
-				}
-			} else {
-				g, _ := errgroup.WithContext(context.Background())
-				g.SetLimit(jobs)
-
-				for _, name := range level {
-					img := gen.Boxes[name]
-					content := gen.Containerfiles[name]
-					g.Go(func() error {
-						if err := c.buildImage(engine, dir, name, img, gen.Config, platform, rt.BuildEngine, content); err != nil {
-							return fmt.Errorf("building %s: %w", name, err)
-						}
-						return nil
-					})
-				}
-
-				if err := g.Wait(); err != nil {
-					return "", "", nil, err
-				}
-			}
-
-			// Merge this level before building the next so children
-			// start from a merged (fewer-layer) base image.
-			for _, name := range level {
-				mergeAfterBuild(name, gen.Boxes[name])
-				built = append(built, gen.Boxes[name].FullTag)
-			}
-		}
-	}
-	return engine, rt.BuildEngine, built, nil
-}
-
-// imageTags computes the tags for an image. charly is CalVer-only — it never
-// emits `:latest`. Every built image carries exactly its CalVer tag
-// (`img.FullTag`, e.g. `ghcr.io/opencharly/fedora:2026.114.1042`), and
-// short-name resolution goes through `ResolveNewestLocalCalVer` in
-// local_image.go via the `ai.opencharly.version` OCI label.
-func imageTags(_ string, img *ResolvedBox, _ *Config) []string {
-	return []string{img.FullTag}
-}
-
-// mergeAfterBuild merges a single image if merge.auto is enabled.
-// Called immediately after building so child images inherit a merged base.
-func mergeAfterBuild(name string, img *ResolvedBox) {
-	if img.Merge == nil || !img.Merge.Auto {
-		return
-	}
-	mergeCmd := &MergeCmd{Box: name, Tag: ""}
-	if err := mergeCmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", name, err)
-	}
-}
-
-// buildImage builds a single image with the configured engine.
-// containerfileContent is piped via stdin (-f -) to avoid race conditions
-// with concurrent charly generate overwrites on disk.
-// For Podman --push, the image is built locally (--manifest) without pushing;
-// push happens separately after merge in Run().
-func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedBox, cfg *Config, platform, engineName, containerfileContent string) error {
-	tags := imageTags(name, img, cfg)
-
-	// Per-image build lock: serialize concurrent builds of THIS image across
-	// charly processes (so a shared intermediate built by many parallel beds is
-	// built COLD once — the others block here, then cache-hit), while DISTINCT
-	// images (the leaf fan-out) take distinct locks and build in parallel. Held
-	// across the privileged bootstrap + the podman build for this image only.
-	buildUnlock, lockErr := acquireImageBuildLock(img.FullTag)
-	if lockErr != nil {
-		return fmt.Errorf("acquiring build lock for %s: %w", name, lockErr)
-	}
-	defer func() { _ = buildUnlock() }()
-
-	// Pre-build phase for `from: builder:<name>` images: run the named
-	// kind:bootstrap builder in a privileged container, capture its
-	// rootfs.tar.gz into .build/<image>/<builder>.tar.gz so the
-	// Containerfile's ADD <builder>.tar.gz / step finds it.
-	if strings.HasPrefix(img.From, "builder:") {
-		if err := c.runPrivilegedBootstrap(engineName, dir, name, img); err != nil {
-			return err
-		}
-	}
-
-	var args []string
-
-	if c.Push {
-		args = c.buildPushArgs(engine, tags, img.Platforms, engineName, name, img.Registry)
-	} else {
-		args = c.buildLocalArgs(engine, tags, platform, name, img.Registry)
-	}
-
-	fmt.Fprintf(os.Stderr, "\n--- Building %s ---\n", name)
-
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(containerfileContent)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s build failed: %w", engine, err)
-	}
-
-	return nil
-}
-
-// runPrivilegedBootstrap executes the kind: bootstrap builder selected
-// by img.From ("builder:<name>") via RunPrivileged. The output rootfs
-// tarball lands at .build/<image>/<builder>.tar.gz, where the
-// Containerfile's ADD step picks it up.
-//
-// Skipped (returns nil) when img.From is not a builder ref. Errors when
-// the builder is missing, isn't kind: bootstrap, or doesn't have a
-// resolved BuilderImage on the ResolvedBox.
 // pacstrapMicroarchRe matches pacman microarchitecture-level tokens (e.g.
 // x86_64_v3) embedded in a repo Server URL. CachyOS's cachyos-v3 repos serve
 // such packages; pacman rejects them unless the matching token is in
@@ -791,48 +484,6 @@ func bootstrapPackagesForBox(img *ResolvedBox) []string {
 	return nil
 }
 
-// pushImage pushes a Podman image to the registry for each tag with retry.
-// Detects whether the primary tag is a manifest list or a regular image
-// and uses the appropriate push command.
-func (c *BuildCmd) pushImage(dir string, tags []string) error {
-	if len(tags) == 0 {
-		return nil
-	}
-
-	// Check if the primary tag is a manifest list
-	isManifest := false
-	checkCmd := exec.Command("podman", "manifest", "inspect", tags[0])
-	checkCmd.Stdout = io.Discard
-	checkCmd.Stderr = io.Discard
-	if checkCmd.Run() == nil {
-		isManifest = true
-	}
-
-	for _, tag := range tags {
-		fmt.Fprintf(os.Stderr, "Pushing %s\n", tag)
-		pushTag := tag
-		if err := retryCmd(5*time.Second, func() error {
-			var pushCmd *exec.Cmd
-			if isManifest {
-				pushCmd = exec.Command("podman", "manifest", "push", "--all", tags[0], "docker://"+pushTag)
-			} else {
-				pushCmd = exec.Command("podman", "push", tags[0], "docker://"+pushTag)
-			}
-			pushCmd.Dir = dir
-			pushCmd.Stdout = os.Stderr
-			pushCmd.Stderr = os.Stderr
-			return pushCmd.Run()
-		}); err != nil {
-			kind := "push"
-			if isManifest {
-				kind = "manifest push"
-			}
-			return fmt.Errorf("podman %s %s failed: %w", kind, tag, err)
-		}
-	}
-	return nil
-}
-
 // podmanJobsCapFallback is the ceiling on the auto-computed
 // `podman build --jobs` value, used ONLY when defaults.podman_jobs_cap is
 // absent from project config. The operative ceiling is
@@ -867,134 +518,6 @@ func resolvePodmanJobs(override, jobsCap int) int {
 		return n
 	}
 	return jobsCap
-}
-
-// buildLocalArgs constructs args for a local (single-platform, load into store) build.
-// Uses -f - to read the Containerfile from stdin.
-func (c *BuildCmd) buildLocalArgs(engine string, tags []string, platform, name, registry string) []string {
-	args := []string{engine, "build", "--layers=true", "-f", "-"}
-	for _, tag := range tags {
-		args = append(args, "-t", tag)
-	}
-	if platform != "" {
-		args = append(args, "--platform", platform)
-	}
-	if engine == "podman" {
-		args = append(args, "--jobs", strconv.Itoa(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)))
-	}
-	args = append(args, c.cacheArgs(name, registry, engine)...)
-	args = append(args, ".")
-	return args
-}
-
-// buildPushArgs constructs args for a multi-platform push build.
-func (c *BuildCmd) buildPushArgs(_ string, tags []string, platforms []string, engineName, name, registry string) []string {
-	if engineName == "podman" {
-		return c.buildPodmanPushArgs(tags, platforms, name, registry)
-	}
-	return c.buildDockerPushArgs(tags, platforms, name, registry)
-}
-
-func (c *BuildCmd) buildDockerPushArgs(tags []string, platforms []string, name, registry string) []string {
-	args := []string{"docker", "buildx", "build", "--push", "-f", "-"}
-	for _, tag := range tags {
-		args = append(args, "-t", tag)
-	}
-	if len(platforms) > 0 {
-		args = append(args, "--platform", strings.Join(platforms, ","))
-	}
-	args = append(args, c.cacheArgs(name, registry, "docker")...)
-	args = append(args, ".")
-	return args
-}
-
-// cacheArgs returns cache flags for the given image name based on the --cache setting.
-// Default: "image" (read-only from registry) for local builds, "registry" (read+write) for push builds.
-// Podman uses plain image refs for --cache-from/--cache-to (no tags allowed for --cache-to).
-// Docker buildx uses type=registry,ref=... syntax with a separate cache repo.
-func (c *BuildCmd) cacheArgs(name, registry, engine string) []string {
-	if c.NoCache || c.Cache == "none" {
-		return nil
-	}
-
-	cacheType := c.Cache
-	// Auto-detect: default to "image" for local, "registry" for push
-	if cacheType == "" && registry != "" {
-		if c.Push {
-			cacheType = "registry"
-		} else {
-			cacheType = "image"
-		}
-	}
-
-	switch cacheType {
-	case "registry":
-		if registry == "" {
-			return nil
-		}
-		ref := fmt.Sprintf("%s/%s", registry, name)
-		if engine == "podman" {
-			// Podman --cache-to takes a plain repo ref (no tag, no type= syntax).
-			// Intermediate build layers are pushed to the same repo as the image.
-			return []string{
-				"--cache-from", ref,
-				"--cache-to", ref,
-			}
-		}
-		// Docker buildx uses a separate cache repo with type=registry syntax
-		cacheRef := fmt.Sprintf("%s/cache:%s", registry, name)
-		return []string{
-			"--cache-from", fmt.Sprintf("type=registry,ref=%s", cacheRef),
-			"--cache-to", fmt.Sprintf("type=registry,ref=%s,mode=max,compression=zstd", cacheRef),
-		}
-	case "gha":
-		return []string{
-			"--cache-from", fmt.Sprintf("type=gha,scope=%s", name),
-			"--cache-to", fmt.Sprintf("type=gha,mode=max,scope=%s", name),
-		}
-	case "image":
-		if registry == "" {
-			return nil
-		}
-		ref := fmt.Sprintf("%s/%s", registry, name)
-		return []string{"--cache-from", ref}
-	default:
-		return nil
-	}
-}
-
-func (c *BuildCmd) buildPodmanPushArgs(tags []string, platforms []string, name, registry string) []string {
-	// Podman uses --manifest for multi-platform builds
-	args := []string{"podman", "build", "--layers=true", "-f", "-"}
-	if len(tags) > 0 {
-		args = append(args, "--manifest", tags[0])
-	}
-	if len(platforms) > 0 {
-		args = append(args, "--platform", strings.Join(platforms, ","))
-	}
-	args = append(args, "--jobs", strconv.Itoa(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)))
-	args = append(args, c.cacheArgs(name, registry, "podman")...)
-	args = append(args, ".")
-	return args
-}
-
-// retryCmd retries fn up to maxAttempts times with exponential backoff starting at baseDelay.
-func retryCmd(baseDelay time.Duration, fn func() error) error {
-	const maxAttempts = 3
-	var err error
-	for i := range maxAttempts {
-		if i > 0 {
-			delay := baseDelay * time.Duration(1<<(i-1))
-			fmt.Fprintf(os.Stderr, "Retry %d/%d after %v...\n", i, maxAttempts-1, delay)
-			time.Sleep(delay)
-		}
-		err = fn()
-		if err == nil {
-			return nil
-		}
-		fmt.Fprintf(os.Stderr, "Attempt %d/%d failed: %v\n", i+1, maxAttempts, err)
-	}
-	return err
 }
 
 // hostPlatform returns the host platform in OCI format.
