@@ -22,8 +22,13 @@ func img(id, name, short, version string) LocalImageInfo {
 // keep-newest-N, the in-use skip, and the "never touch unlabelled / undateable"
 // guards. Uses dryRun so no real rmi runs.
 func TestPruneImagesByRetention(t *testing.T) {
-	origList, origCtr := ListLocalImages, listContainerImageRefs
-	defer func() { ListLocalImages, listContainerImageRefs = origList, origCtr }()
+	origList, origCtr, origFloor := ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	// Stub the build-activity floor to "no live build" so the retention decision under
+	// test is deterministic regardless of a concurrent host build holding a lock in the
+	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
+	// host-global lock dir and made the test fail whenever another build ran concurrently).
+	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
 
 	ListLocalImages = func(string) ([]LocalImageInfo, error) {
 		return []LocalImageInfo{
@@ -57,8 +62,13 @@ func TestPruneImagesByRetention(t *testing.T) {
 // each row's Names listing every tag — model that worst case (pre-dedup input)
 // to prove retention is per-TAG and never wipes the just-built/newest tag.
 func TestPruneImagesByRetention_SharedID(t *testing.T) {
-	origList, origCtr := ListLocalImages, listContainerImageRefs
-	defer func() { ListLocalImages, listContainerImageRefs = origList, origCtr }()
+	origList, origCtr, origFloor := ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	// Stub the build-activity floor to "no live build" so the retention decision under
+	// test is deterministic regardless of a concurrent host build holding a lock in the
+	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
+	// host-global lock dir and made the test fail whenever another build ran concurrently).
+	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
 
 	allTags := []string{
 		"ghcr/check-pod:2026.150.0827",
