@@ -28,6 +28,7 @@ func (zzCmdSeamProv) KongCommand() any {
 // non-machinery command reaches the CLI once migrated into a provider (Phase 1-4).
 // The test FAILS if the seam does not wire the provider's command into the root.
 func TestCommandSeam_PluginCommandInjected(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	RegisterBuiltinProvider(zzCmdSeamProv{})
 
 	var cli CLI
@@ -215,6 +216,7 @@ func assertCommandProviderInjected(t *testing.T, cases []commandProviderCase) {
 // the verbatim built-in check subcommands still parse. The test FAILS if extracting check
 // dropped the kong.Plugins nesting seam.
 func TestCommandProviders_CheckNestedPluginsInjected(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	// Register a fake out-of-process nested-under-check command provider.
 	RegisterBuiltinProvider(&fakeNestedCheckCmd{})
 

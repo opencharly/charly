@@ -215,8 +215,11 @@ func (stubAdbExternalVerb) Invoke(context.Context, *Operation) (*Result, error) 
 // fails with "not a candy origin" instead. Asserting the sentinel appears in the step
 // result proves the origin reached the Op.
 func TestRunPlan_StampsStepOrigin(t *testing.T) {
+	// Snapshot BEFORE any registration so the stub adb provider AND its served schema are
+	// undone on cleanup — the ONE reset pattern, hermetic under `-count>1`.
+	t.Cleanup(snapshotProviderState())
 	// Register the stub external adb provider for the duration of this test (adb is no
-	// longer a builtin, so the global registry slot is free), removing it on cleanup.
+	// longer a builtin, so the global registry slot is free).
 	if err := providerRegistry.register(stubAdbExternalVerb{}, "test:stub-adb"); err != nil {
 		t.Fatalf("register stub adb provider: %v", err)
 	}
@@ -231,13 +234,6 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("register stub adb schema: %v", err)
 	}
-	t.Cleanup(func() {
-		k := provKey(ClassVerb, "adb")
-		providerRegistry.mu.Lock()
-		delete(providerRegistry.byKey, k)
-		delete(providerRegistry.origins, k)
-		providerRegistry.mu.Unlock()
-	})
 
 	r := NewRunner(nil, nil, RunModeLive) // resolveCheckApk errors before any subprocess
 	r.Box = "android-emulator"            // satisfy the image-context guard

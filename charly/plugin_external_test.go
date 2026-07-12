@@ -18,6 +18,7 @@ import (
 // author → wire → external process → result. It ALSO proves the SCHEMA travels
 // over the same Describe channel (unit.Schema), the zero-distinction mechanism.
 func TestExternalPluginEndToEnd(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the external plugin binary (slow)")
 	}

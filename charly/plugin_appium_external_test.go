@@ -21,6 +21,7 @@ import (
 // is enough to prove load + dispatch; the live W3C behaviour is proved by the
 // check-android-emulator-pod R10 bed.
 func TestAppiumExternalPluginLoads(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the external appium plugin binary (slow)")
 	}

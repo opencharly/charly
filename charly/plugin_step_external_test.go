@@ -14,6 +14,7 @@ import (
 // (the OpStep rule); Gate is None (operator-authorized); Reverse() is static-nil
 // because the teardown ops are recorded DYNAMICALLY from the OpExecute reply.
 func TestExternalPluginStep_Derivations(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	rootStep := &ExternalPluginStep{Op: &Op{Plugin: "examplestep"}, ResolvedUser: "root"}
 	if rootStep.Kind() != StepKindExternalPlugin {
 		t.Fatalf("Kind = %q, want %q", rootStep.Kind(), StepKindExternalPlugin)
@@ -59,6 +60,7 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 // Builds + execs a real binary, so it is gated behind -short exactly like
 // TestExternalDeployPlugin_ReverseChannelEndToEnd.
 func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds + execs the external plugin binary (slow)")
 	}

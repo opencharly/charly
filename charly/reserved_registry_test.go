@@ -82,6 +82,7 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 // (vm), whose grpcProvider connects at plugin-load time; and FAILS when a word is NEITHER
 // builtin NOR externalized (the in-proc XOR externalized invariant — never neither).
 func TestReservedWordRegistry_DeployBijection(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	// Positive: the live registry (all five externalized, none in-proc) passes — the same
 	// gate the init() bijection runs at process start.
 	if err := checkDeployProviderBijection(); err != nil {

@@ -16,6 +16,7 @@ import (
 // run out-of-process (the channel M4 reuses to externalize pod/vm). Builds the real plugin OOP, so
 // -short-gated. The slow live-SSH-descriptor + auto-boot path is the check-k3s-vm bed (M4-time).
 func TestSubstrateLifecycle_PrepareVenueDescriptorRoundTrip(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds the external lifecycle plugin binary (slow)")
 	}

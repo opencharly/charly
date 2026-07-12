@@ -16,6 +16,7 @@ import (
 // COMPLETING is the re-entrancy proof. Builds the real candy/plugin-example-kind OOP, so it is
 // -short-gated like the other reverse-channel e2es.
 func TestExternalKind_PrescanConnectDecode(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds the external kind plugin binary (slow)")
 	}
@@ -75,6 +76,7 @@ my-example-kind:
 // `marker?: string` would pass). The sentinel marker "INVALID" trips plugin-example-kind's
 // OpValidate. Builds the real plugin OOP, so -short-gated; reuses copyCandyFixReplace.
 func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
 		t.Skip("builds the external kind plugin binary (slow)")
 	}
