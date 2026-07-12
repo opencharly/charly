@@ -15,8 +15,9 @@ import "github.com/opencharly/sdk/buildkit"
 type CacheMount = buildkit.CacheMount
 
 // DistroConfig / BuilderConfig — the embedded build-vocabulary resolved-config
-// types + their resolution methods live in sdk/buildkit (P3); loader glue
-// (LoadBuildConfigForBox) + the Phase/Venue phase-template resolvers stay in charly.
+// types + their resolution methods live in sdk/buildkit (P3); the Phase/Venue
+// phase-template resolvers moved there too (P8b, aliased back in format_config.go).
+// Only the loader glue (LoadBuildConfigForBox) stays in charly.
 type (
 	DistroConfig  = buildkit.DistroConfig
 	BuilderConfig = buildkit.BuilderConfig

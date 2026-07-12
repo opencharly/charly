@@ -128,17 +128,17 @@ func TestGlobalCandyOrder_Deterministic(t *testing.T) {
 // TestSortedSiblingKeys asserts the helper returns keys ordered by (base, uid).
 func TestSortedSiblingKeys(t *testing.T) {
 	m := map[siblingKey][]string{
-		{base: "fedora", uid: 1000}: {"x"},
-		{base: "arch", uid: 0}:      {"y"},
-		{base: "fedora", uid: 0}:    {"z"},
-		{base: "arch", uid: 1000}:   {"w"},
+		{Base: "fedora", UID: 1000}: {"x"},
+		{Base: "arch", UID: 0}:      {"y"},
+		{Base: "fedora", UID: 0}:    {"z"},
+		{Base: "arch", UID: 1000}:   {"w"},
 	}
 	got := sortedSiblingKeys(m)
 	want := []siblingKey{
-		{base: "arch", uid: 0},
-		{base: "arch", uid: 1000},
-		{base: "fedora", uid: 0},
-		{base: "fedora", uid: 1000},
+		{Base: "arch", UID: 0},
+		{Base: "arch", UID: 1000},
+		{Base: "fedora", UID: 0},
+		{Base: "fedora", UID: 1000},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d", len(got), len(want))

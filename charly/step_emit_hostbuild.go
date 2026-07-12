@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -114,23 +115,10 @@ func stepEmitSystemPackages(req spec.StepEmitRequest, build buildEngineContext) 
 	if !ok {
 		return "", fmt.Errorf("step-emit system-packages: view kind %q is not a SystemPackagesStep", view.Kind)
 	}
-	formatDef := build.DistroCfg.FindFormat(s.Format)
-	if formatDef == nil {
-		return "", fmt.Errorf("no distro definition for format %q", s.Format)
-	}
-	template := formatPhaseTemplate(formatDef, s.Phase, VenueContainerBuilder)
-	if template == "" {
-		// No template for this phase/venue is not an error — some phases simply have
-		// nothing to emit in the container (e.g. cleanup phases whose host: blocks only
-		// record state for teardown).
-		return "", nil
-	}
-	ctx := NewInstallContext(s.RawInstallContext, formatDefCacheMountDefs(formatDef))
-	rendered, err := RenderTemplate(s.Format+"-install", template, ctx)
-	if err != nil {
-		return "", fmt.Errorf("rendering %s install template: %w", s.Format, err)
-	}
-	return rendered, nil
+	// The pure render body (FormatDef resolution → phase.install.container template →
+	// InstallContext render) lives in sdk/buildkit (P8b — RenderSystemPackagesFragment);
+	// core keeps only the deploykit-coupled wire-view → concrete-step reconstruction.
+	return buildkit.RenderSystemPackagesFragment(s.Format, s.Phase, s.RawInstallContext, build.DistroCfg)
 }
 
 // Register the system-packages step-emitter at package-var init — the FIRST host-coupled step
