@@ -7,12 +7,15 @@ plugin-bundle:
             / `del` / `show` / `export` / `import` / `reset` / `path` / `status` /
             `from-box` dispatch IN-PROC via Invoke(OpRun) (runBundleCommand →
             kong-parse the BundleCmd tree), so the handlers run in charly's OWN process
-            and inherit charly's real stdio/TTY natively. They compile InstallPlans over
-            sdk/deploykit (the P4 IR compiler) and reach the host-only Mechanisms — the
-            config loader + deploy ledger, and the deploy-dispatch kernel (ResolveTarget
-            → externalDeployTarget over the executor reverse channel) — over the generic
-            fabric adapters (HostBuild config-resolve / config-persist / deploy-apply /
-            cli). command:bundle is COMPILED-IN; its grammar is prescanned into the CLI.
+            and inherit charly's real stdio/TTY natively. Each leaf FORWARDS its parsed
+            flags to the host over four generic host-build seams — HostBuild deploy-add /
+            deploy-del / deploy-from-box (the deploy dispatch) and deploy-config (the
+            show/export/import/reset/status config-management ops) — where the host runs
+            the existing deploy orchestration VERBATIM: the config loader + deploy ledger,
+            the InstallPlan compiler, and the deploy-dispatch kernel (ResolveTarget →
+            externalDeployTarget over the executor reverse channel) all STAY core. `path`
+            resolves plugin-side via kit.DefaultDeployConfigPath (no seam). command:bundle
+            is COMPILED-IN; its grammar is prescanned into the CLI.
         plugin:
             providers:
                 - command:bundle

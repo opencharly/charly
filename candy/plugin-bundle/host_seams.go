@@ -11,10 +11,12 @@ import (
 // host_seams.go — the command:bundle plugin's bridge to the host. The bundle CLI handlers moved out
 // of charly core (P13); the config loader + deploy ledger + the deploy-dispatch kernel (ResolveTarget
 // → externalDeployTarget over the executor reverse channel) are core Mechanisms a plugin cannot
-// import (separate module), so the handlers reach them over the in-proc reverse channel: config →
-// HostBuild("config-resolve"), ledger writes → HostBuild("config-persist"), the ResolveTarget +
-// tree-walk + executor-threading + Add dispatch → HostBuild("deploy-apply"), generic charly reentry
-// → HostBuild("cli"). command:bundle is COMPILED-IN and dispatches exactly ONE `charly bundle …`
+// import (separate module), so the handlers reach them over the in-proc reverse channel via four
+// host-build seams: the ref-resolve + InstallPlan-compile + ResolveTarget + tree-walk +
+// executor-threading + Add dispatch runs host-side behind HostBuild("deploy-add") /
+// HostBuild("deploy-del") / HostBuild("deploy-from-box"), and the whole-file config-management ops
+// (show/export/import/reset/status) behind HostBuild("deploy-config") — each running the existing
+// core orchestration VERBATIM. command:bundle is COMPILED-IN and dispatches exactly ONE `charly bundle …`
 // invocation per process, so the reverse-channel executor is stashed in a package var at
 // Invoke(OpRun) entry (setCommandContext) — race-free single-command-per-process. Mirrors
 // candy/plugin-vm/vm_host_seams.go.

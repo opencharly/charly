@@ -13,8 +13,8 @@ import (
 
 // command.go is the command:bundle leg — the `charly bundle …` CLI, COMPILED-IN (F8). It dispatches
 // IN-PROC via Invoke(OpRun): the reverse-channel executor is stashed (setCommandContext) so the
-// moved BundleCmd handlers reach their host seams (config-resolve / config-persist / deploy-apply /
-// cli, verb:egress / verb:arbiter), then the pass-through args are kong-parsed into the BundleCmd
+// moved BundleCmd handlers reach their host seams (deploy-add / deploy-del / deploy-from-box /
+// deploy-config), then the pass-through args are kong-parsed into the BundleCmd
 // tree and run. Because in-proc dispatch runs in charly's OWN process, the handlers inherit charly's
 // real stdin/stdout/stderr/TTY natively — which keeps `charly bundle add`'s interactive prompts and
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
@@ -65,8 +65,8 @@ func dispatchBundleCLI(args []string) error {
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
-// command:bundle's handlers reach the host reverse channel (config load/persist, the deploy-dispatch
-// kernel), which is unavailable out-of-process, so this errors (like candy/plugin-vm's CliMain).
+// command:bundle's handlers reach the host reverse channel (the deploy-add/del/from-box dispatch +
+// the deploy-config seam), which is unavailable out-of-process, so this errors (like plugin-vm's CliMain).
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly bundle: requires compiled-in placement (the command's host reverse channel is unavailable out-of-process)")
 	return 1

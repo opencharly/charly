@@ -6,11 +6,14 @@
 //   - command:bundle — `charly bundle add / del / show / export / import / reset / path / status /
 //     from-box`, the deployment CLI. COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun)
 //     (runBundleCommand → kong-parse the BundleCmd tree — command.go), so the handlers run in
-//     charly's OWN process and inherit charly's real stdio/TTY natively. They compile InstallPlans
-//     over sdk/deploykit (the P4 IR compiler) and reach the host-only Mechanisms — the config
-//     loader + deploy ledger, and the deploy-dispatch kernel (ResolveTarget → externalDeployTarget
-//     over the executor reverse channel) — over the generic fabric adapters: the config-resolve /
-//     config-persist / deploy-apply / cli HostBuild seams and verb:egress / verb:arbiter.
+//     charly's OWN process and inherit charly's real stdio/TTY natively. Each leaf FORWARDS its
+//     parsed CLI flags to the host over four generic host-build seams — HostBuild deploy-add /
+//     deploy-del / deploy-from-box (the deploy dispatch) and deploy-config (the show/export/import/
+//     reset/status config-management ops) — where the host runs the existing deploy orchestration
+//     VERBATIM: the config loader + deploy ledger, the InstallPlan compiler, and the deploy-dispatch
+//     kernel (ResolveTarget → externalDeployTarget over the executor reverse channel + live-executor
+//     composition) all STAY core, exactly as the box-build engine stayed core behind
+//     HostBuild("image"). `path` resolves plugin-side via kit.DefaultDeployConfigPath (no seam).
 //
 // A standalone Go module (its own go.mod) importing ONLY the sdk module, compiled into charly for
 // the canonical placement. The capability is advertised in Describe (NewMeta); command:bundle's
