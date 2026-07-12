@@ -7,7 +7,7 @@ import "testing"
 // is buildable as-is by the namespace-aware build path, but the leaf lookup can
 // never match a dotted ref — before the fix the fallback returned "" and a bed
 // racing its siblings to first-build the builder image failed with "no
-// buildable short-name match" (the check-builder-local failure mode).
+// buildable short-name match" (the check-builder-vm failure mode).
 func TestBuildableShortName_NamespacedRef(t *testing.T) {
 	cfg := &Config{
 		Box: boxMapOf(map[string]BoxConfig{"root-image": {}}),

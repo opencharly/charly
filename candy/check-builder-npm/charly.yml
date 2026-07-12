@@ -2,9 +2,9 @@ check-builder-npm:
     candy:
         version: 2026.182.1300
         description: |-
-            Minimal npm BUILDER fixture candy for the check-builder-local R10 bed. Its package.json
+            Minimal npm BUILDER fixture candy for the check-builder-vm R10 bed. Its package.json
             declares a single tiny zero-dependency package (is-number@7.0.0), so the built-in npm
-            detection builder installs it into ~/.npm-global. Composed onto a kind:local host deploy,
+            detection builder installs it into ~/.npm-global. Composed onto a kind:local deploy nested in the eval VM guest,
             it drives the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder): the
             host builds the npm global prefix in the fedora-builder image and ships ~/.npm-global onto
             the venue. is-number is zero-dependency so the install is small + deterministic. No box
