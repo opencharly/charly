@@ -4,11 +4,61 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
+
+// vmBuildStamp is the content signature of a built disk base (output/qcow2/<entity>/disk.qcow2),
+// recorded at output/qcow2/<entity>/.build.stamp AFTER a successful build. `vm build` compares the
+// CURRENT source signature to the recorded one to decide whether the base is content-fresh and the
+// (expensive + hazardous) overlay-create + resize can be skipped. Source-hash-derived (the fetched
+// base's sha, resolved by FetchQcow2's content-addressed cache), never a bare os.Stat file-exists —
+// a stale base is worse than a rebuild, so any signature drift forces a rebuild.
+type vmBuildStamp struct {
+	BaseSHA256 string `json:"base_sha256"` // sha256 of the fetched cached base qcow2 (FetchQcow2)
+	DiskSize   string `json:"disk_size"`   // the resize target (spec.DiskSize) baked into the overlay
+	SourceURL  string `json:"source_url"`  // the source image URL (a changed source rebuilds)
+}
+
+func vmBuildStampPath(outputDir string) string { return filepath.Join(outputDir, ".build.stamp") }
+
+func readVmBuildStamp(outputDir string) (vmBuildStamp, bool) {
+	data, err := os.ReadFile(vmBuildStampPath(outputDir))
+	if err != nil {
+		return vmBuildStamp{}, false
+	}
+	var s vmBuildStamp
+	if json.Unmarshal(data, &s) != nil {
+		return vmBuildStamp{}, false
+	}
+	return s, true
+}
+
+func writeVmBuildStamp(outputDir string, s vmBuildStamp) error {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(vmBuildStampPath(outputDir), data, 0o644)
+}
+
+// diskBaseFresh reports whether the built base at diskPath is content-fresh for the given signature:
+// the recorded stamp matches AND disk.qcow2 is present + a readable qcow2 (a torn/half-written base
+// from an interrupted build fails `qemu-img info`, so it is never mistaken for fresh). The stamp is
+// written LAST on a build, so a matching stamp already implies a complete build.
+func diskBaseFresh(outputDir, diskPath string, want vmBuildStamp) bool {
+	got, ok := readVmBuildStamp(outputDir)
+	if !ok || got != want {
+		return false
+	}
+	if _, err := os.Stat(diskPath); err != nil {
+		return false
+	}
+	return exec.Command("qemu-img", "info", diskPath).Run() == nil
+}
 
 // CloudImageBuildResult summarizes what `buildCloudImage` produced so
 // the caller (vm_build.go) can populate output paths and record state.
@@ -55,10 +105,14 @@ type CloudImageBuildResult struct {
 // Idempotent: if existingState.InstanceID is set, the same instance-id
 // is reused so cloud-init treats the VM as the same instance and
 // honors first-boot-only directives the way the user expects.
+// force rebuilds the disk base even when content-fresh; the default idempotent-skips a fresh base so
+// N concurrent beds sharing this entity (serialized on the caller's per-entity build flock) build it
+// ONCE and the rest reuse it — never rewriting a base a live per-domain overlay backs onto (P33).
 func BuildCloudImage(
 	spec *VmSpec,
 	outputDir, vmStateDir string,
 	existingState *VmDeployState,
+	force bool,
 ) (CloudImageBuildResult, error) {
 	if spec.Source.Kind != "cloud_image" {
 		return CloudImageBuildResult{}, fmt.Errorf("BuildCloudImage called with source.kind=%q (expected cloud_image)", spec.Source.Kind)
@@ -77,18 +131,28 @@ func BuildCloudImage(
 	diskPath := filepath.Join(outputDir, "disk.qcow2")
 	seedPath := filepath.Join(outputDir, "seed.iso")
 
-	// Always recreate the overlay so a new base or a new disk_size
-	// takes effect. The overlay is cheap — it points at the cached
-	// base file.
-	_ = os.Remove(diskPath)
-	if err := qemuImgCreateOverlay(fetched.Path, diskPath); err != nil {
-		return CloudImageBuildResult{}, err
-	}
-
-	// --- Step 3: Grow disk to requested size. ---
-	if spec.DiskSize != "" {
-		if err := qemuImgResize(diskPath, spec.DiskSize); err != nil {
+	// Idempotent skip of the (expensive + hazardous) overlay-create + resize: rebuild the base ONLY
+	// when the source signature drifted (a rotated `latest` upstream → new base sha, or a changed
+	// disk_size/url) or --force is set. A fresh base is left untouched so a live per-domain overlay
+	// that already backs onto it is never mutated. The seed ISO below is cheap + non-hazardous and
+	// is always (re)rendered so a vm.yml cloud_init edit still takes effect.
+	sig := vmBuildStamp{BaseSHA256: fetched.SHA256, DiskSize: spec.DiskSize, SourceURL: spec.Source.URL}
+	if !force && diskBaseFresh(outputDir, diskPath, sig) {
+		fmt.Fprintf(os.Stderr, "Base disk %s is content-fresh (base sha256=%s) — skipping rebuild\n", diskPath, fetched.SHA256)
+	} else {
+		_ = os.Remove(diskPath)
+		if err := qemuImgCreateOverlay(fetched.Path, diskPath); err != nil {
 			return CloudImageBuildResult{}, err
+		}
+		// --- Step 3: Grow disk to requested size. ---
+		if spec.DiskSize != "" {
+			if err := qemuImgResize(diskPath, spec.DiskSize); err != nil {
+				return CloudImageBuildResult{}, err
+			}
+		}
+		// Record the content signature LAST — a matching stamp then implies a COMPLETE build.
+		if err := writeVmBuildStamp(outputDir, sig); err != nil {
+			return CloudImageBuildResult{}, fmt.Errorf("writing build stamp: %w", err)
 		}
 	}
 

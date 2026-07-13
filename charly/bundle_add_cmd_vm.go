@@ -198,22 +198,23 @@ func removeVmDeployEntry(deployName string) error {
 }
 
 // vmDeployEntryKeys resolves the per-host charly.yml bundle key(s) a VM teardown
-// for deployName targets. It exists because the entry is WRITTEN and REMOVED
-// under DIFFERENT keys whenever a bundle's name differs from "vm:<entity>":
+// for deployName targets. It handles the case where a bundle's name differs from
+// its `vm:<X>` runtime-state key:
 //
 //   - WRITE: the vm lifecycle hook's PrepareVenue persists vm_state via saveVmDeployState(dctx.Name)
 //     — keyed by the BUNDLE name (e.g. the kind:check VM bed bundle `check-k3s-vm`,
 //     which cross-refs `vm: k3s-vm`). (charly vm create's port_auto persist keys
-//     by the prefixed entity form `vm:<entity>`.)
-//   - REMOVE: every teardown caller passes the prefixed VM-ENTITY form
-//     `vm:<entity>` — the vm deploy's Del path rewrites t.NodeName to
-//     "vm:"+node.From, and `charly vm destroy` builds "vm:"+box.
+//     by the prefixed DOMAIN-IDENTITY form `vm:<domain>` — the deploy name, not the entity.)
+//   - REMOVE (deploy teardown): the vm plugin's OpPostTeardown ships BOTH the deploy-name key
+//     and `vm:<domain>` directly (never `vm:<entity>`), so a teardown removes ONLY this deploy's
+//     two entries and never a sibling bed sharing the entity. `charly vm destroy` builds
+//     "vm:"+domainOr(box,--domain).
 //
-// An exact-key delete on "vm:k3s-vm" therefore MISSES the `check-k3s-vm` bundle
-// entry, which leaks (the domain is destroyed; only the config entry lingers).
-// So target BOTH: the literal deployName key (legacy `vm:<name>` + plain-name
-// deploys where the key == bundle name), AND — when deployName is "vm:<entity>"
-// — every bundle whose `vm:` cross-ref names <entity> (the bundle-keyed write).
+// The literal-key delete + the `vm:`-form From-scan below remain for the DIRECT
+// `charly vm destroy <entity>` path and any legacy `vm:<name>` teardown key: they target the
+// literal deployName key AND — when deployName is "vm:<X>" — every bundle whose `vm:` cross-ref
+// names <X>. Because domain identities are unique and never equal an entity a sibling shares, the
+// From-scan can no longer over-match sibling beds during a deploy teardown.
 func vmDeployEntryKeys(dc *BundleConfig, deployName string) []string {
 	var keys []string
 	seen := map[string]bool{}

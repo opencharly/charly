@@ -8,6 +8,19 @@ import (
 	"strings"
 )
 
+// consoleHint returns the `charly vm console` argument string that attaches to
+// THIS domain: the bare entity for a direct create (domainID == entity), else
+// `<entity> --domain <domainID>` for a per-deploy domain (P33). Passing
+// `--domain <domainID>` reconstructs exactly `charly-<domainID>`, so the hint
+// targets this deploy's own domain — never the shared entity's (which, for a bed,
+// is a domain that does not exist).
+func consoleHint(entity, domainID string) string {
+	if domainID == entity {
+		return entity
+	}
+	return entity + " --domain " + domainID
+}
+
 // runVmSpecCreateLibvirt creates the VM via the libvirt backend: render the
 // domain XML, define+start it, apply autostart + raw snippets, and publish the
 // managed ssh-config alias.
@@ -46,7 +59,7 @@ func runVmSpecCreateLibvirt(spec *VmSpec, rt VmRuntimeParams, vmDomainName, home
 	}
 	// HOST-PASSES-DATA: publishing the managed ssh-config alias is a host-side ~/.config concern;
 	// the host writes it (VmSshStanza / EnsureSshConfigInclude) after the create RPC.
-	fmt.Fprintf(os.Stderr, "Console: charly vm console %s\n", vmName)
+	fmt.Fprintf(os.Stderr, "Console: charly vm console %s\n", consoleHint(vmName, name))
 	return nil
 }
 
@@ -88,7 +101,7 @@ func runVmSpecCreateQemu(spec *VmSpec, rt VmRuntimeParams, vmDomainName, home, v
 	fmt.Fprintf(os.Stderr, "Created and started VM %s (QEMU)\n", vmDomainName)
 	// HOST-PASSES-DATA: publishing the managed ssh-config alias is a host-side ~/.config concern;
 	// the host writes it (VmSshStanza / EnsureSshConfigInclude) after the create RPC.
-	fmt.Fprintf(os.Stderr, "Console: charly vm console %s\n", vmName)
+	fmt.Fprintf(os.Stderr, "Console: charly vm console %s\n", consoleHint(vmName, name))
 	return nil
 }
 

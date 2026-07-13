@@ -5,33 +5,40 @@ import (
 	"testing"
 )
 
-// TestBedVmDomains proves the per-domain serialization key-gathering: a bed's VM domains
-// are collected from its OWN vm target AND from any group-member vm targets, deduped +
-// sorted. This is what makes a direct `from: k3s-vm` bed (check-k3s-vm) and a GROUP whose
-// member is `from: k3s-vm` (check-k8s-deploy's cluster member) resolve to the SAME domain
-// charly-k3s-vm — so runCheckBed serializes them on one lock instead of clobbering. Without
-// gathering the MEMBER domain, the group bed would take no lock and collide (the incident).
+// TestBedVmDomains proves the per-DEPLOY domain serialization key-gathering (P33): a bed's VM
+// domains are collected from its OWN vm target (keyed by the BED NAME) AND from any group-member vm
+// targets (keyed by the MEMBER KEY), deduped + sorted. Because the domain is keyed by the DEPLOY —
+// NOT the shared kind:vm entity — two DISTINCT beds referencing one entity resolve to DISTINCT
+// domains and so hold distinct locks and run concurrently (the collision-free-by-construction goal).
+// The lock only serializes two invocations of the SAME deploy on its own domain.
 func TestBedVmDomains(t *testing.T) {
-	if got := bedVmDomains(BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-k3s-vm"}) {
-		t.Fatalf("direct vm bed: got %v, want [charly-k3s-vm]", got)
+	// Direct vm bed: the domain is charly-<bed-name>, NOT charly-<entity>.
+	if got := bedVmDomains("check-k3s-vm", BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-k3s-vm"}) {
+		t.Fatalf("direct vm bed: got %v, want [charly-check-k3s-vm]", got)
 	}
+	// A SIBLING bed sharing the SAME entity resolves to a DIFFERENT domain — the P33 property that
+	// makes them collision-free (pre-P33 both were charly-k3s-vm and serialized).
+	if got := bedVmDomains("check-substrate", BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-substrate"}) {
+		t.Fatalf("sibling vm bed sharing the entity: got %v, want [charly-check-substrate] (distinct domain)", got)
+	}
+	// Group with a vm member: the member's domain is keyed by the MEMBER KEY.
 	group := BundleNode{Target: "group", Members: map[string]*BundleNode{
 		"check-k8s-deploy-cluster":  {Target: "vm", From: "k3s-vm"},
 		"check-k8s-deploy-workload": {Target: "k8s"},
 	}}
-	if got := bedVmDomains(group); !reflect.DeepEqual(got, []string{"charly-k3s-vm"}) {
-		t.Fatalf("group with a vm member: got %v, want [charly-k3s-vm] (must gather the MEMBER domain)", got)
+	if got := bedVmDomains("check-k8s-deploy", group); !reflect.DeepEqual(got, []string{"charly-check-k8s-deploy-cluster"}) {
+		t.Fatalf("group with a vm member: got %v, want [charly-check-k8s-deploy-cluster] (member-key domain)", got)
 	}
-	if got := bedVmDomains(BundleNode{Target: "pod"}); len(got) != 0 {
+	if got := bedVmDomains("check-pod", BundleNode{Target: "pod"}); len(got) != 0 {
 		t.Fatalf("non-vm bed: got %v, want no domains", got)
 	}
-	// Two distinct vm domains (a hypothetical multi-vm group) come back sorted + deduped.
+	// A multi-vm group's distinct member domains come back sorted + deduped (dup member keys can't
+	// occur in a map, so dedup here guards the root+member overlap path).
 	multi := BundleNode{Target: "group", Members: map[string]*BundleNode{
-		"b": {Target: "vm", From: "vm-b"},
-		"a": {Target: "vm", From: "vm-a"},
-		"d": {Target: "vm", From: "vm-a"}, // dup of vm-a
+		"member-b": {Target: "vm", From: "shared-entity"},
+		"member-a": {Target: "vm", From: "shared-entity"},
 	}}
-	if got := bedVmDomains(multi); !reflect.DeepEqual(got, []string{"charly-vm-a", "charly-vm-b"}) {
-		t.Fatalf("multi-vm group: got %v, want sorted deduped [charly-vm-a charly-vm-b]", got)
+	if got := bedVmDomains("multi", multi); !reflect.DeepEqual(got, []string{"charly-member-a", "charly-member-b"}) {
+		t.Fatalf("multi-vm group: got %v, want sorted [charly-member-a charly-member-b]", got)
 	}
 }

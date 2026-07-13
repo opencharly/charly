@@ -3,8 +3,9 @@
 # The superproject `check-local` bed (a top-level `vm: {from: eval-host-vm}` deploy)
 # rsyncs THIS file + `sdk/` + the four closure candies (check-local-layer,
 # examplestep-deploy-consumer, plugin-example-step, plugin-deploy-local) into the guest
-# at /home/arch/eval-project, then runs `charly --host charly-eval-host-vm check run
-# check-local`. The guest's welded charly (add_candy:[charly] → opencharly-git) resolves
+# at /home/arch/eval-project, then runs `charly --host charly-check-local-vm check run
+# check-local` (the guest's domain/alias is named after the DEPLOY check-local-vm, not the
+# eval-host-vm entity — P33). The guest's welded charly (add_candy:[charly] → opencharly-git) resolves
 # THIS project via CHARLY_PROJECT_DIR (set in the guest's /etc/environment) and runs the
 # check-local bed below against its OWN `host: local` venue — the guest ShellExecutor +
 # HostDeployTarget path — so the kind:local layer-application coverage is preserved OFF

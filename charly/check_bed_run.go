@@ -42,22 +42,31 @@ import (
 // VM(s) occupy — the bed's own vm target plus any group-member vm targets. This is the
 // unit of exclusive host contention two DISTINCT beds can collide on (the per-domain lock
 // in runCheckBed serializes them).
-func bedVmDomains(node BundleNode) []string {
+func bedVmDomains(name string, node BundleNode) []string {
 	seen := map[string]bool{}
 	var out []string
-	add := func(tmpl string) {
-		if tmpl == "" || seen[tmpl] {
+	add := func(domainID string) {
+		if domainID == "" {
 			return
 		}
-		seen[tmpl] = true
-		out = append(out, "charly-"+tmpl)
+		dom := "charly-" + domainID
+		if seen[dom] {
+			return
+		}
+		seen[dom] = true
+		out = append(out, dom)
 	}
-	if nodeTraits(&node).Venue == "ssh" { // vm (ssh venue)
-		add(node.From)
+	// Post-P33 the domain is keyed by the DEPLOY (charly-<domainIdentity>), not the shared entity:
+	// the VM root's domain derives from the bed name, each VM member's from its member key. So
+	// distinct beds sharing one kind:vm entity now hold DISTINCT domain locks and run fully parallel
+	// (the collision-free-by-construction goal); the lock only serializes two invocations of the SAME
+	// deploy on its own domain.
+	if nodeTraits(&node).Venue == "ssh" { // vm (ssh venue) root
+		add(vmDomainIdentity(name))
 	}
-	for _, m := range node.Members {
+	for memberKey, m := range node.Members {
 		if isVmMember(m) {
-			add(m.From)
+			add(vmDomainIdentity(memberKey))
 		}
 	}
 	sort.Strings(out)
@@ -325,6 +334,11 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 	isGroup := node.IsGroup()
 	image := node.Image
 	vmTemplate := node.From
+	// bedDomain is THIS bed's per-deploy VM domain identity (charly-<bedDomain> is the live domain +
+	// managed ssh alias). Keyed by the DEPLOY (bed name), not the shared kind:vm entity (vmTemplate),
+	// so sibling beds sharing one entity get distinct domains (P33). Consumed only on the isVM paths
+	// (root VM bed create/recover/rebuild); group-member domains key off the member key instead.
+	bedDomain := vmDomainIdentity(name)
 	localRef := node.From
 
 	// Acceptance-depth gating by the box's check_level rung (see check_level.go):
@@ -393,15 +407,14 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 	defer func() { _ = bedUnlock() }()
 
 	// Per-DOMAIN serialization for VM beds. A disposable bed's VM(s) occupy libvirt
-	// domain(s) charly-<from>; two DISTINCT beds deploying the SAME vm template (a direct
-	// `from: k3s-vm` bed and a group member `from: k3s-vm`) collide on ONE domain, so a
-	// naive parallel roster clobbers one mid-boot (the wait-for-sshd / define-UUID-collision
-	// incident). Take a BLOCKING, HOST-GLOBAL lock per domain (sorted → no deadlock across a
-	// multi-domain bed), held through teardown, so same-domain beds SERIALIZE (both pass)
-	// while distinct-domain beds stay fully parallel — the concurrency-mandate's
-	// per-exclusive-resource SERIAL group, auto-keyed by the domain. Host-global because the
-	// libvirt session is host-wide (shared across project dirs), not per-.check/.
-	for _, domain := range bedVmDomains(node) {
+	// domain(s) charly-<domainIdentity> — keyed by the DEPLOY (P33), so distinct beds referencing
+	// one kind:vm entity now occupy DISTINCT domains and stay fully parallel (each with its own disk
+	// overlay + host ssh port). Take a BLOCKING, HOST-GLOBAL lock per domain (sorted → no deadlock
+	// across a multi-domain bed), held through teardown, so only two invocations of the SAME deploy
+	// SERIALIZE on their shared domain (the wait-for-sshd / define-UUID-collision guard) while
+	// distinct deploys run concurrently. Host-global because the libvirt session is host-wide
+	// (shared across project dirs), not per-.check/.
+	for _, domain := range bedVmDomains(name, node) {
 		domUnlock, domErr := acquireVmDomainLock(domain)
 		if domErr != nil {
 			res.OK = false
@@ -593,15 +606,15 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		if !isVM || !node.IsDisposable() {
 			return
 		}
-		alias := "charly-" + vmTemplate
+		alias := "charly-" + bedDomain // this bed's per-deploy domain, not the entity
 		probe := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
 			"-o", "LogLevel=ERROR", alias, "true")
 		if probe.Run() == nil {
 			return // guest answers — not a dead VM
 		}
-		fmt.Fprintf(os.Stderr, "charly check run %s: VM bed %q unreachable mid-check — restarting disposable domain before retry\n", name, vmTemplate)
-		_ = exec.Command(exe, "vm", "start", vmTemplate).Run()
-		waitForVmSshReady(vmTemplate)
+		fmt.Fprintf(os.Stderr, "charly check run %s: VM bed %q unreachable mid-check — restarting disposable domain %s before retry\n", name, vmTemplate, alias)
+		_ = exec.Command(exe, "vm", "start", vmTemplate, "--domain", bedDomain).Run()
+		waitForVmSshReady(bedDomain)
 	}
 
 	// cleanup tears the disposable bed down (suppressed by --keep). Used on
@@ -613,7 +626,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		}
 		switch {
 		case isVM:
-			_ = step("cleanup", []string{"vm", "destroy", vmTemplate})
+			_ = step("cleanup", []string{"vm", "destroy", vmTemplate, "--domain", bedDomain})
 		case isGroup:
 			// A targetless group has NO root container, quadlet, or volumes — its
 			// members ARE the deployment. Driving `charly remove <bed> --purge` here
@@ -728,20 +741,24 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 		// resolution) AND for the `backend: libvirt` resolver. Best-effort start before any VM step;
 		// the downstream gate surfaces a missing daemon as a clear error.
 		startLibvirtUserSession()
+		// This bed's libvirt domain is named after the DEPLOY (bedDomain), not the shared kind:vm
+		// entity (vmTemplate) — so N beds referencing one entity get distinct, collision-free
+		// domains + per-domain disk overlays + host ssh ports (P33). `vm build` builds the shared
+		// base off the entity; every `charly vm …` that touches THIS domain passes --domain.
 		// Best-effort destroy first to clear any lingering libvirt domain
 		// from a previous interrupted run, then build → create → deploy-add.
-		_ = exec.Command(exe, "vm", "destroy", vmTemplate).Run()
+		_ = exec.Command(exe, "vm", "destroy", vmTemplate, "--domain", bedDomain).Run()
 		if err := step("vm-build", []string{"vm", "build", vmTemplate}); err != nil {
 			return fail("vm build %s: %w", vmTemplate, err)
 		}
-		if err := step("vm-create", []string{"vm", "create", vmTemplate}); err != nil {
+		if err := step("vm-create", []string{"vm", "create", vmTemplate, "--domain", bedDomain}); err != nil {
 			return fail("vm create %s: %w", vmTemplate, err)
 		}
 		deployed = true // VM domain exists — keep it on any later failure
 		// `charly vm create` auto-starts the domain, but in-guest sshd takes
 		// 30-90s on cold boot; poll until ssh connects so deploy-add starts
 		// at a known-ready state. Best-effort: silent on timeout.
-		waitForVmSshReady(vmTemplate)
+		waitForVmSshReady(bedDomain)
 		// Deploy the VM node's own candies AND its nested target:pod children.
 		// The VM target's Add applies the candies over SSH (incl. any kernel-driver
 		// reboot), then deploys each nested pod as a PERSISTENT in-guest quadlet via
@@ -954,7 +971,7 @@ func runCheckBed(exe, name string, node BundleNode, opts bedRunOpts) (*bedRunRes
 				// auto-starts on the fresh boot — no re-assert needed. Just wait
 				// for ssh; the rebuild check-live then PROVES the nested pod
 				// survived the domain recreate (the Cutover 2 persistence gate).
-				waitForVmSshReady(vmTemplate)
+				waitForVmSshReady(bedDomain)
 			} else {
 				waitForContainerReady(name)
 				for _, childKey := range sortedNestedKeys(node.Children) {
@@ -1016,8 +1033,11 @@ func runCaptureCtx(ctx context.Context, exe string, args []string) ([]byte, erro
 // signal — so deploy-add never races a still-running first-boot pacman). vmName
 // is the kind:vm entity name. Best-effort: silent on timeout — the downstream
 // deploy-add surfaces the real error.
-func waitForVmSshReady(vmName string) {
-	gate := &SSHExecutor{Host: VmSshAlias(vmName), ConnectTimeout: 5}
+// waitForVmSshReady polls the managed alias charly-<domainID> until the guest's sshd answers and
+// cloud-init settles. domainID is the per-deploy DOMAIN IDENTITY (the bed/member deploy name), not
+// the shared kind:vm entity — the alias the create path published.
+func waitForVmSshReady(domainID string) {
+	gate := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 5}
 	ctx := context.Background()
 	if err := gate.WaitForSSH(ctx); err != nil {
 		return

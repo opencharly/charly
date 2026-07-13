@@ -79,10 +79,11 @@ func (v *VMCollector) Collect(ctx context.Context, opts CollectOpts) ([]Deployme
 	return rows, nil
 }
 
-// rowForDomain builds a DeploymentStatus for one libvirt domain. The domain
-// name carries the canonical charly-<entity> shape; the entity name (charly- prefix
-// stripped) is both the Image cell and the key used to find the matching
-// target:vm deploy entry for vm_state enrichment.
+// rowForDomain builds a DeploymentStatus for one libvirt domain. The domain name carries the
+// canonical charly-<domainIdentity> shape (the domain identity is the DEPLOY name for a bed VM,
+// or the entity for a direct `charly vm create`); the charly- prefix is stripped to yield both the
+// Image cell and the deploy-first lookup key (findVmDeployNode matches by deploy NAME first, then by
+// vm: cross-ref) for vm_state enrichment.
 func (v *VMCollector) rowForDomain(d domainInfo, opts CollectOpts) DeploymentStatus {
 	entity := strings.TrimPrefix(d.Name, "charly-")
 	cs := DeploymentStatus{
