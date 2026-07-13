@@ -6,17 +6,18 @@ import (
 )
 
 // CheckVerbProvider is the typed in-process form of a check-verb Provider: it
-// runs the assert-mode probe and returns a CheckResult directly (carrying the
-// live *Runner, which cannot cross the wire). Every built-in verb implements it;
-// `runOne` resolves the verb through providerRegistry and calls RunVerb — the
-// switch is gone.
+// runs the assert-mode probe and returns a CheckResult directly. It is threaded the
+// host verb resolver (*hostVerbResolver — which holds the kit.Runner engine state and
+// builds the live host CheckContext), NOT a serializable value, so it cannot cross the
+// wire. Every built-in verb implements it; the verb dispatch resolves the verb through
+// providerRegistry and calls RunVerb — the switch is gone.
 //
 // An OUT-OF-PROCESS plugin verb does NOT implement this — it is reached via the
 // generic `plugin:` envelope (runPluginVerb → ResolveVerb → the Invoke wire
-// form), so runOne only ever deals with in-proc CheckVerbProviders.
+// form), so the dispatch only ever deals with in-proc CheckVerbProviders here.
 type CheckVerbProvider interface {
 	Provider
-	RunVerb(ctx context.Context, rt *Runner, op *Op) CheckResult
+	RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult
 }
 
 // The EXTERNAL-CHARLY-VERBS kube/adb/appium/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are

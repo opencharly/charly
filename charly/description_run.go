@@ -18,9 +18,9 @@ type StepResult = kit.StepResult
 //
 // The plan walk itself — flatten by layer, mode-gated step selection, agent-step
 // grading, and per-step dispatch through RunOne — lives in sdk/kit (planrun.go).
-// The Runner is its host driver via the runnerPlanContext adapter; the unused
-// *TagExpr keeps the package-main signature its callers pass (tag filtering is
-// applied upstream at collection time).
-func RunPlan(ctx context.Context, r *Runner, set *LabelDescriptionSet, _ *TagExpr, strict bool) []StepResult {
-	return kit.RunPlan(ctx, runnerPlanContext{r: r}, set, strict)
+// kit.Runner IS the host driver (it implements kit.PlanContext); the unused *TagExpr
+// keeps the package-main signature its callers pass (tag filtering is applied upstream
+// at collection time).
+func RunPlan(ctx context.Context, r *kit.Runner, set *LabelDescriptionSet, _ *TagExpr, strict bool) []StepResult {
+	return kit.RunPlan(ctx, r, set, strict)
 }

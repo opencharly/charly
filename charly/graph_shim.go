@@ -6,8 +6,8 @@ package main
 // sites (which hold map[string]*Candy) compiling unchanged by converting to
 // map[string]deploykit.CandyModel and delegating. They shrink and delete as their
 // callers relocate to deploykit / candy/plugin-build — the end state has ZERO graph
-// code in charly core. CycleError is aliased so step_topo.go / validate.go /
-// step_validate.go keep working after charly/graph.go is deleted.
+// code in charly core. CycleError is aliased so step_topo.go / validate.go
+// keep working after charly/graph.go is deleted.
 
 import "github.com/opencharly/sdk/deploykit"
 

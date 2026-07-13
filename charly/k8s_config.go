@@ -59,7 +59,7 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 // reverse-leg (replacing the former host op-rewrite). An empty context
 // (no matching kind:k8s profile) is a valid result — the plugin falls back to the kubeconfig
 // current-context (the same behavior the in-tree restConfig had).
-func (r *Runner) resolveClusterContext(cluster string) (string, error) {
+func (h *hostVerbResolver) resolveClusterContext(cluster string) (string, error) {
 	if cluster == "" {
 		return "", nil
 	}

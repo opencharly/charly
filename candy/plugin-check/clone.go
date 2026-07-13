@@ -1,12 +1,12 @@
-package main
+package check
 
-// harness_clone.go — per-run clone lifecycle + iteration commit + push-back.
+// clone.go — per-run clone lifecycle + iteration commit + push-back (P12: relocated
+// verbatim from charly/check_clone.go — pure git + file I/O, no host coupling).
 //
-// The harness's per-target driver clones the project's bind-mounted
-// /workspace (or $PWD on host targets) into a per-run scratch dir on a
-// fresh charlycheck/<run-id> branch. Per-iteration commits land in that
-// clone. At end of run the branch pushes back to the project repo for
-// an audit trail.
+// The harness's per-target driver clones the project's bind-mounted /workspace (or
+// $PWD on host targets) into a per-run scratch dir on a fresh charlycheck/<run-id>
+// branch. Per-iteration commits land in that clone. At end of run the branch pushes
+// back to the project repo for an audit trail.
 //
 // All operations shell out to git; no external git library.
 
@@ -26,17 +26,16 @@ import (
 
 // RunLayout is the canonical set of paths for one harness run.
 //
-// All harness state lives under <ProjectDir>/.check/<score>/. The
-// directory is broadly gitignored (same pattern as .claude/memory/,
-// .claude/plans/) but stays IN the project tree so Syncthing-style
-// replication carries result files + NOTES.md memory across machines.
-// Result files are durable per-run records; runs/ are bulky transient
-// build artifacts the user can prune by hand.
+// All harness state lives under <ProjectDir>/.check/<score>/. The directory is
+// broadly gitignored but stays IN the project tree so Syncthing-style replication
+// carries result files + NOTES.md memory across machines. Result files are durable
+// per-run records; runs/ are bulky transient build artifacts the user can prune by
+// hand.
 //
-// Same RunLayout shape applies to host / pod / vm targets — the only
-// difference is which executor walks the tree. For pod targets the
-// in-pod run-local writes under /workspace/.check/ (the bind-mounted
-// project), so the host's mirrored copy is automatic.
+// Same RunLayout shape applies to host / pod / vm targets — the only difference is
+// which executor walks the tree. For pod targets the in-pod run-local writes under
+// /workspace/.check/ (the bind-mounted project), so the host's mirrored copy is
+// automatic.
 type RunLayout struct {
 	ProjectDir  string // project tree (workspace)
 	Score       string // score name
@@ -46,10 +45,9 @@ type RunLayout struct {
 	RepoDir     string // <HarnessRoot>/runs/<run-id>/repo (per-run clone)
 	Branch      string // "charlycheck/<run-id>"
 	// Phase, when > 0, segregates iteration dirs under
-	// <RunDir>/phase<Phase>/iter<k>/. Set by the progressive caller
-	// before each phase-RunHarness call. Zero = single-phase
-	// (legacy/non-progressive) runs that write iter dirs directly
-	// under RunDir/iter<k>/.
+	// <RunDir>/phase<Phase>/iter<k>/. Set by the progressive caller before each
+	// phase-RunHarness call. Zero = single-phase (legacy/non-progressive) runs
+	// that write iter dirs directly under RunDir/iter<k>/.
 	Phase int
 }
 
@@ -74,15 +72,10 @@ func NewRunLayout(projectDir, score, runID string) RunLayout {
 	}
 }
 
-// HarnessDataRoot returns the absolute path to the harness data
-// directory for this (project, score) pair. Convention:
-//
-//	<projectDir>/.check/<score>
-//
-// In-project location is deliberate — Syncthing-style file syncs
-// replicate the durable result files + NOTES.md memory across the
-// user's machines without an extra ~/.local/share replication path.
-// .harness/ is broadly gitignored (matches .claude/memory/ pattern).
+// HarnessDataRoot returns the absolute path to the harness data directory for this
+// (project, score) pair: <projectDir>/.check/<score>. In-project location is
+// deliberate — Syncthing-style file syncs replicate the durable result files +
+// NOTES.md memory across the user's machines. .check/ is broadly gitignored.
 func HarnessDataRoot(projectDir, score string) string {
 	return filepath.Join(projectDir, ".check", score)
 }
@@ -97,10 +90,10 @@ func GenerateRunID() string {
 	return ts + "-" + hex.EncodeToString(buf)
 }
 
-// IterDir returns the path for iteration k under this run. When the
-// layout's Phase is > 0 (progressive scoring), paths are segregated
-// under phase<Phase>/iter<k> so each phase has its own iter1/, iter2/,
-// etc. without colliding across phase boundaries.
+// IterDir returns the path for iteration k under this run. When the layout's Phase
+// is > 0 (progressive scoring), paths are segregated under phase<Phase>/iter<k> so
+// each phase has its own iter1/, iter2/, etc. without colliding across phase
+// boundaries.
 func (l RunLayout) IterDir(k int) string {
 	if l.Phase > 0 {
 		return filepath.Join(l.RunDir, fmt.Sprintf("phase%d", l.Phase), fmt.Sprintf("iter%d", k))
@@ -108,20 +101,19 @@ func (l RunLayout) IterDir(k int) string {
 	return filepath.Join(l.RunDir, fmt.Sprintf("iter%d", k))
 }
 
-// ResultsDir returns the per-entity results directory (sibling of
-// runs/) under the harness data root — outside the project tree.
+// ResultsDir returns the per-entity results directory (sibling of runs/) under the
+// harness data root.
 func (l RunLayout) ResultsDir() string {
 	return filepath.Join(l.HarnessRoot, "results")
 }
 
-// NoteDir returns the per-entity note directory under the harness
-// data root.
+// NoteDir returns the per-entity note directory under the harness data root.
 func (l RunLayout) NoteDir() string {
 	return filepath.Join(l.HarnessRoot, "note")
 }
 
-// CreateRunClone creates a per-run scratch clone at l.RepoDir on a
-// fresh branch charlycheck/<run-id>. Source: l.ProjectDir.
+// CreateRunClone creates a per-run scratch clone at l.RepoDir on a fresh branch
+// charlycheck/<run-id>. Source: l.ProjectDir.
 func CreateRunClone(ctx context.Context, l RunLayout) error {
 	if err := os.MkdirAll(l.RunDir, 0o755); err != nil {
 		return fmt.Errorf("create run dir %s: %w", l.RunDir, err)
@@ -140,21 +132,16 @@ func CreateRunClone(ctx context.Context, l RunLayout) error {
 		return fmt.Errorf("git checkout -b %s: %w\n%s", l.Branch, err, string(out))
 	}
 
-	// Source submodule clones from the host working tree so locally-pinned
-	// commits that haven't been pushed to origin still resolve. Without
-	// this, mid-cutover state (e.g. parent repo points at a plugins
-	// commit that lives only in the host clone) breaks every per-run
-	// scratch clone with `upload-pack: not our ref <sha>`. The override
-	// is benign when origin DOES have the commit — git just fetches from
-	// the local path, which is faster anyway.
+	// Source submodule clones from the host working tree so locally-pinned commits
+	// that haven't been pushed to origin still resolve. The override is benign when
+	// origin DOES have the commit — git just fetches from the local path.
 	if err := overrideSubmoduleUrlsToLocal(ctx, l.RepoDir, l.ProjectDir); err != nil {
 		return fmt.Errorf("override submodule URLs: %w", err)
 	}
 
-	// `-c protocol.file.allow=always` lifts git's CVE-2022-39253
-	// hardening for local-path submodule URLs. Required because the
-	// override above points each submodule at the host's working-tree
-	// .git directory.
+	// `-c protocol.file.allow=always` lifts git's CVE-2022-39253 hardening for
+	// local-path submodule URLs — required because the override above points each
+	// submodule at the host's working-tree .git directory.
 	subCmd := exec.CommandContext(ctx, "git",
 		"-c", "protocol.file.allow=always",
 		"-C", l.RepoDir, "submodule", "update", "--init", "--recursive")
@@ -203,8 +190,8 @@ func PushBranchToHost(ctx context.Context, l RunLayout) error {
 	return nil
 }
 
-// CommitIterationInRepo stages all changes + commits with the standard
-// message. Hooks run; --allow-empty is on so no-op iterations leave a marker.
+// CommitIterationInRepo stages all changes + commits with the standard message.
+// Hooks run; --allow-empty is on so no-op iterations leave a marker.
 func CommitIterationInRepo(ctx context.Context, l RunLayout, k int, score int, solvedIDs []string) (string, error) {
 	addCmd := exec.CommandContext(ctx, "git", "-C", l.RepoDir, "add", "-A")
 	if out, err := addCmd.CombinedOutput(); err != nil {
@@ -228,12 +215,12 @@ func formatCommitMessage(k int, score int, solvedIDs []string) string {
 	return fmt.Sprintf("iter%d: score=%d, solved=[%s]", k, score, strings.Join(idsTrunc, ","))
 }
 
-func truncateIDs(ids []string, max int) []string {
-	if len(ids) <= max {
+func truncateIDs(ids []string, maxN int) []string {
+	if len(ids) <= maxN {
 		return ids
 	}
-	out := append([]string(nil), ids[:max]...)
-	return append(out, fmt.Sprintf("...+%d", len(ids)-max))
+	out := append([]string(nil), ids[:maxN]...)
+	return append(out, fmt.Sprintf("...+%d", len(ids)-maxN))
 }
 
 func resolveHeadSHA(ctx context.Context, repoDir string) (string, error) {
@@ -246,7 +233,7 @@ func resolveHeadSHA(ctx context.Context, repoDir string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// RunSummary describes one past harness run found under .harness/<score>/runs.
+// RunSummary describes one past harness run found under .check/<score>/runs.
 type RunSummary struct {
 	Score        string
 	RunID        string
@@ -257,8 +244,8 @@ type RunSummary struct {
 	BranchExists bool
 }
 
-// ListRuns walks <projectDir>/.check/*/runs/ across all scores
-// and returns one RunSummary per run dir. Sorted newest first.
+// ListRuns walks <projectDir>/.check/*/runs/ across all scores and returns one
+// RunSummary per run dir. Sorted newest first.
 func ListRuns(ctx context.Context, projectDir string) ([]RunSummary, error) {
 	base := filepath.Join(projectDir, ".check")
 	scores, err := os.ReadDir(base)
@@ -289,7 +276,6 @@ func ListRuns(ctx context.Context, projectDir string) ([]RunSummary, error) {
 				RunDir: filepath.Join(runsDir, runID),
 			}
 			s.Status = "incomplete"
-			// Look in the per-score results dir for any result file.
 			resultsDir := filepath.Join(base, rEntry.Name(), "results")
 			if results, err := os.ReadDir(resultsDir); err == nil {
 				for _, r := range results {
@@ -329,23 +315,10 @@ func parseRunIDTimestamp(runID string) time.Time {
 	return t
 }
 
-// overrideSubmoduleUrlsToLocal rewrites every `submodule.<name>.url` in
-// the freshly-cloned repo's .gitmodules to a `file://<projectDir>/<path>`
-// pointing at the host's working-tree submodule, then runs
-// `git submodule sync` so .git/config picks up the override.
-//
-// Why .gitmodules and not just .git/config: uninitialized submodules
-// read their URL from .gitmodules at `git submodule init` time. Editing
-// only .git/config has no effect on the first `submodule update --init`.
-//
-// Why local URLs: locally-pinned commits that haven't been pushed to
-// origin still resolve via file://. Without this, mid-cutover state
-// (parent repo points at a submodule commit that lives only in the
-// host clone) breaks every per-run scratch clone with
-// `upload-pack: not our ref <sha>`. The override is benign when origin
-// DOES have the commit — git just fetches from the local path.
-//
-// Submodules whose host directory does not exist are left untouched.
+// overrideSubmoduleUrlsToLocal rewrites every submodule.<name>.url in the
+// freshly-cloned repo's .gitmodules to the host's working-tree submodule, then runs
+// `git submodule sync` so .git/config picks up the override. Submodules whose host
+// directory does not exist are left untouched.
 func overrideSubmoduleUrlsToLocal(ctx context.Context, repoDir, projectDir string) error {
 	out, err := exec.CommandContext(ctx, "git", "-C", repoDir,
 		"config", "-f", ".gitmodules",
@@ -368,11 +341,9 @@ func overrideSubmoduleUrlsToLocal(ctx context.Context, repoDir, projectDir strin
 		if _, err := os.Stat(filepath.Join(hostSub, ".git")); err != nil {
 			continue
 		}
-		// Plain absolute path (NOT file://) — file:// triggers
-		// `transport 'file' not allowed` even with the protocol.file.allow
-		// flag because git applies that policy by URL scheme, not by
-		// resolved path. A bare absolute path is treated as a local
-		// repository directly.
+		// Plain absolute path (NOT file://) — file:// triggers `transport 'file'
+		// not allowed` even with the protocol.file.allow flag because git applies
+		// that policy by URL scheme, not by resolved path.
 		if err := exec.CommandContext(ctx, "git", "-C", repoDir,
 			"config", "-f", ".gitmodules",
 			"submodule."+name+".url", hostSub).Run(); err != nil {

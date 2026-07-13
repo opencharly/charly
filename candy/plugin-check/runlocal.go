@@ -1,45 +1,32 @@
-package main
+package check
 
-// check_runlocal_cmd.go — in-target entry point of the harness.
+// runlocal.go — the in-target entry point of the harness (P12: relocated from
+// charly/check_runlocal_cmd.go).
 //
-// The host-side `charly check run <score>` is a thin forwarder. All real
-// work happens here, executed *inside the chosen target* (pod via
-// `podman exec`, vm via `ssh`, or host directly).
-//
-// Responsibilities (in order):
-//   1. Acquire .harness/<score>/.lock — per-target concurrency guard
-//   2. Resolve the entity's `plan:` (baked + include:'d + inline) to a merged step list
-//   3. Clone <project> -> <project>/.check/<score>/runs/<run-id>/repo
-//   4. Create branch charlycheck/<run-id> + submodule init
-//   5. Synthesize the pre-AI baseline from the merged plan steps
-//   6. Drive RunHarness — the iteration state machine
-//   7. Push branch back to the bind-mounted/host project repo
-//   8. Release lock
+// The host-side `charly check run <score>` is a thin forwarder; all real work happens
+// here, executed *inside the chosen target* (pod via `podman exec`, vm via `ssh`, or
+// host directly). Responsibilities: acquire the in-sandbox flock, resolve the
+// entity's plan (via the "check-config" host seam — the loader stays core), clone the
+// project, synthesize the pre-AI baseline, drive RunHarness, push the branch back.
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
-// pinPersistentXDGRuntimeDir relocates `XDG_RUNTIME_DIR` to a persistent
-// path under `$HOME` when the current value points at a transient
-// `/run/user/<uid>` tmpfs. Crun stores per-container status files at
-// `$XDG_RUNTIME_DIR/crun/<id>/status`; if that location is wiped while
-// containers are still running, every subsequent `podman exec` against
-// those containers fails with "container does not exist" — even though
-// the container processes are alive. Forensic evidence from the
-// 2026-04-27 N canary: `/run/user/1000` disappeared between phases 6
-// and 7, breaking the harness's per-iter `RunCheckLive`
-// probes for every pre-existing pod. Pinning to `$HOME/.local/share/charly-runtime`
-// (a regular directory on the harness sandbox's persistent overlay) survives
-// whatever wipes the tmpfs.
-//
-// Only relocates when XDG_RUNTIME_DIR is empty or a `/run/user/...`
-// path; explicit overrides are respected.
+// pinPersistentXDGRuntimeDir relocates XDG_RUNTIME_DIR to a persistent path under
+// $HOME when the current value points at a transient /run/user/<uid> tmpfs. Crun
+// stores per-container status files there; if that tmpfs is wiped while containers
+// run, every subsequent `podman exec` fails with "container does not exist". Only
+// relocates when XDG_RUNTIME_DIR is empty or a /run/user/... path.
 func pinPersistentXDGRuntimeDir() error {
 	current := os.Getenv("XDG_RUNTIME_DIR")
 	if current != "" && !strings.HasPrefix(current, "/run/user/") {
@@ -61,11 +48,11 @@ func pinPersistentXDGRuntimeDir() error {
 
 // CheckRunLocalCmd drives the iteration loop in the chosen target.
 type CheckRunLocalCmd struct {
-	Score       string `arg:"" help:"Score name (from check.yml)"`
+	Score       string `arg:"" help:"Score name (from the iterate: entity)"`
 	TargetImage string `name:"target-image" help:"Target image to score (default: derived from score / pod)"`
-	Agent       string `name:"agent" help:"Agent to invoke (defaults to score.agent when single-element)"`
+	Agent       string `name:"agent" help:"Agent to invoke (defaults to the entity's agent when single-element)"`
 	RunID       string `name:"run-id" help:"Run identifier (set by host harness; auto if empty)"`
-	PlateauIter int    `name:"plateau-iteration" help:"Override score.plateau_iteration"`
+	PlateauIter int    `name:"plateau-iteration" help:"Override plateau_iteration"`
 	MaxStep     int    `name:"max-step" help:"Cap the pending input set"`
 	Tag         string `name:"tag" help:"tag expression to narrow plan steps"`
 	DryRun      bool   `name:"dry-run" help:"Render scope+prompt then exit; no AI invocation, no rebuild"`
@@ -76,8 +63,8 @@ type CheckRunLocalCmd struct {
 	ProjectDir  string `name:"project-dir" hidden:"" help:"Override project root (default: cwd or /workspace)"`
 }
 
-// HarnessLockPath returns the absolute path of the per-score flock
-// file under the harness data root.
+// HarnessLockPath returns the absolute path of the per-score flock file under the
+// harness data root.
 func HarnessLockPath(projectDir, score string) string {
 	return filepath.Join(HarnessDataRoot(projectDir, score), ".lock")
 }
@@ -85,12 +72,7 @@ func HarnessLockPath(projectDir, score string) string {
 func (c *CheckRunLocalCmd) Run() error {
 	ctx := context.Background()
 
-	// Pin XDG_RUNTIME_DIR to a persistent location BEFORE any podman
-	// operation runs. Every child process the harness spawns — the AI's
-	// claude subprocess, its bash subshells, the per-iter probe path's
-	// `podman exec` calls — inherits this env. With it pinned, crun
-	// status files live on the harness sandbox's overlay (persistent) rather
-	// than `/run/user/1000` (transient).
+	// Pin XDG_RUNTIME_DIR to a persistent location BEFORE any podman operation.
 	if err := pinPersistentXDGRuntimeDir(); err != nil {
 		return err
 	}
@@ -108,37 +90,33 @@ func (c *CheckRunLocalCmd) Run() error {
 		}
 	}
 
-	uf, ok, err := LoadUnified(projectDir)
+	// Resolve the entity's config + scored plan over the "check-config" host seam
+	// (LoadUnified + ScanCandy + ExpandPlanIncludes are core loader Mechanisms).
+	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Entity: c.Score, Dir: projectDir})
 	if err != nil {
 		return fmt.Errorf("load harness config from %s: %w", projectDir, err)
 	}
-	if !ok || uf == nil {
+	if !reply.HasNode {
 		return fmt.Errorf("charly check run-local: no charly.yml in %s", projectDir)
 	}
-
-	node, found := uf.Bundle[c.Score]
-	if !found || node.Iterate == nil {
+	if !reply.HasIterate {
 		return fmt.Errorf("charly check run-local: entity %q has no iterate: block", c.Score)
 	}
-	iterate := node.Iterate
-	tk, tn := ResolveIterateSandbox(uf, iterate.Sandbox)
-
-	// Build the entity's scored plan: its own plan: with include: directives
-	// expanded against the project candies. The MergedPlan is the AI-facing
-	// slice (nonces un-substituted).
-	layers, lerr := ScanCandy(projectDir)
-	if lerr != nil {
-		return fmt.Errorf("scan candies: %w", lerr)
+	var iterate spec.Iterate
+	if len(reply.IterateJSON) > 0 {
+		if err := json.Unmarshal(reply.IterateJSON, &iterate); err != nil {
+			return fmt.Errorf("charly check run-local: decode iterate: %w", err)
+		}
 	}
-	mergedPlan, err := ExpandPlanIncludes(uf, layers, node.Plan)
-	if err != nil {
-		return fmt.Errorf("entity %q: expand includes: %w", c.Score, err)
-	}
+	tk, tn := reply.SandboxKind, reply.SandboxName
 
-	// Generate per-run nonces and substitute into a SECOND plan for scoring.
-	// The AI sees the un-substituted plan via ${PLAN}/${CHECKS}; the
-	// substituted plan flows into baseline + per-iter scoring so probes carry
-	// real nonce values the AI cannot have pre-set.
+	// The entity's scored plan (its own plan: with include: expanded against the
+	// project candies) — the AI-facing slice (nonces un-substituted).
+	mergedPlan := reply.Plan
+
+	// Generate per-run nonces and substitute into a SECOND plan for scoring: the AI
+	// sees the un-substituted plan via ${PLAN}/${CHECKS}; the substituted plan flows
+	// into baseline + per-iter scoring so probes carry real nonce values.
 	nonces, err := GenerateHarnessNonces(mergedPlan)
 	if err != nil {
 		return fmt.Errorf("generate harness nonces: %w", err)
@@ -148,8 +126,7 @@ func (c *CheckRunLocalCmd) Run() error {
 		for name := range nonces {
 			names = append(names, name)
 		}
-		fmt.Fprintf(os.Stderr,
-			"harness: generated %d per-run nonce(s): %v\n", len(nonces), names)
+		fmt.Fprintf(os.Stderr, "harness: generated %d per-run nonce(s): %v\n", len(nonces), names)
 	}
 
 	// AI selection — iterate.Agent is the eligible list; --agent picks one.
@@ -164,7 +141,7 @@ func (c *CheckRunLocalCmd) Run() error {
 			return fmt.Errorf("iterate entity %q has multiple eligible agents (%v); pass --agent NAME", c.Score, iterate.Agent)
 		}
 	}
-	ai, _, err := resolveAgentViaPlugin(uf.PluginKinds["agent"], aiName)
+	ai, err := resolveAgentSpec(cmdExec, cmdCtx, reply.AgentBodies, aiName)
 	if err != nil {
 		return err
 	}
@@ -190,13 +167,6 @@ func (c *CheckRunLocalCmd) Run() error {
 
 	targetImage := c.TargetImage
 
-	// No in-pod preflight: the harness only owns the harness sandbox itself
-	// (rebuilt fresh per run by the host-side preflight in check_runner_cmd.go).
-	// Inside the sandbox, the AI is on its own — it builds whatever images
-	// each step needs, creates each pod a step references via `charly bundle
-	// add`, and modifies state until check: steps pass. The harness scoring
-	// code probes per step.Op.Pod after the AI exits.
-
 	tagExpr := c.Tag
 	plateau := c.PlateauIter
 	if plateau == 0 {
@@ -208,7 +178,7 @@ func (c *CheckRunLocalCmd) Run() error {
 		notesSnap, _ = ReadNote(projectDir, c.Score)
 	}
 
-	mcp := iterateEffectiveMCPEndpoint(iterate)
+	mcp := iterateEffectiveMCPEndpoint(&iterate)
 
 	aiVer := LocalCaptureVersion(ctx, ai)
 
@@ -216,8 +186,8 @@ func (c *CheckRunLocalCmd) Run() error {
 	commonOpts := HarnessOpts{
 		ProjectDir:       projectDir,
 		ScoreName:        c.Score,
-		Iterate:          iterate,
-		TargetKind:       string(tk),
+		Iterate:          &iterate,
+		TargetKind:       tk,
 		TargetName:       tn,
 		AgentName:        aiName,
 		Agent:            ai,
@@ -263,7 +233,7 @@ func runSinglePhaseHarness(
 	ctx context.Context,
 	layout RunLayout,
 	commonOpts HarnessOpts,
-	mergedPlan []Step,
+	mergedPlan []spec.Step,
 	nonces map[string]string,
 ) (*FinalReport, error) {
 	scoringPlan, err := SubstituteStepNonces(mergedPlan, nonces)
@@ -280,36 +250,42 @@ func runSinglePhaseHarness(
 	return RunHarness(ctx, opts, layout)
 }
 
-// acquireHarnessLock takes a fail-fast exclusive flock on the per-score lock
-// file via the shared acquireFileLock primitive (filelock.go).
+// acquireHarnessLock takes a fail-fast exclusive flock on the per-score lock file. It
+// runs INSIDE the sandbox, so it uses the stdlib syscall.Flock directly (the core's
+// acquireFileLock is package-main-only; K2 statekit later owns any-process state).
 func acquireHarnessLock(projectDir, score string) (func(), error) {
 	path := HarnessLockPath(projectDir, score)
-	release, err := acquireFileLock(path, false)
-	if err != nil {
-		if errors.Is(err, errLockBusy) {
-			return nil, fmt.Errorf("harness: another run is in progress for score %q (lock: %s)", score, path)
-		}
-		return nil, err
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("harness: mkdir lock dir: %w", err)
 	}
-	return func() { _ = release() }, nil
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("harness: open lock %s: %w", path, err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("harness: another run is in progress for score %q (lock: %s)", score, path)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
 }
 
-// loadDescriptionsFromDir is retained for the (deprecated) image-baked
-// path; the score-based flow uses synthesizeScoreBaseline instead.
-func loadDescriptionsFromDir(dir, image string) *LabelDescriptionSet {
-	origWd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		return nil
-	}
-	defer func() { _ = os.Chdir(origWd) }()
-
-	cfg, err := LoadConfig(dir)
-	if err != nil || cfg == nil {
-		return nil
-	}
-	layers, err := ScanCandy(dir)
+// loadDescriptionsFromDir is the (deprecated) image-baked-fingerprint path: it wraps
+// the include-expanded plan (resolved over the "check-config" seam — the loader stays
+// core) into a LabelDescriptionSet keyed by the "plan" origin so the derived step ids
+// align with the "score"-mode scoring ids. The score-based live flow uses
+// synthesizeScoreBaseline instead, so this only feeds the source-only rebuild path
+// (dead for iterate entities, which always carry a ScoringPlan).
+func loadDescriptionsFromDir(ctx context.Context, score string) *kit.LabelDescriptionSet {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return nil
 	}
-	return CollectDescriptions(cfg, layers, image)
+	reply, err := checkConfig(cmdExec, ctx, spec.CheckConfigRequest{Entity: score, Dir: cwd})
+	if err != nil || len(reply.Plan) == 0 {
+		return nil
+	}
+	return &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{Origin: scoredPlanOrigin, Plan: reply.Plan}}}
 }

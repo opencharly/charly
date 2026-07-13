@@ -86,8 +86,8 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 
 // NestedCommandProvider is an optional refinement of a ClassCommand Provider: it nests its
 // command UNDER an existing parent command (e.g. `check`) rather than at the CLI root. The
-// parent command must embed kong.Plugins for the dynamic subcommand to attach (CheckCmd
-// does), as BoxCmd now does too. Used by the compiled-in command:box plugin —
+// parent command must embed kong.Plugins for the dynamic subcommand to attach (BoxCmd
+// does). Used by the compiled-in command:box plugin —
 // `charly box generate`/`new`/`validate`/`pkg` nested under `box` (candy/plugin-box); the check
 // verbs kube/adb/appium stay `verb:` providers, a possible future nested-command target.
 type NestedCommandProvider interface {

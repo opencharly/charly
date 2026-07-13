@@ -32,7 +32,15 @@ func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) 
 	if req.Capture {
 		var buf bytes.Buffer
 		cmd.Stdout = &buf
-		cmd.Stderr = os.Stderr
+		if req.Combined {
+			// MERGE stderr into the captured buffer — a `charly check …` child writes its results
+			// to STDERR, so the check-bed plugin's per-step .log needs the combined stream to match
+			// the pre-relocation core runCapture (which captured combined output). Both streams share
+			// one *bytes.Buffer; exec serializes the two writer goroutines' Write calls on it.
+			cmd.Stderr = &buf
+		} else {
+			cmd.Stderr = os.Stderr
+		}
 		err := cmd.Run()
 		reply.Stdout = buf.String()
 		reply.ExitCode, reply.Error = cliExitResult(err, req.BestEffort)

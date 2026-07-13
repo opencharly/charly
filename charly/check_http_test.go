@@ -12,7 +12,7 @@ import (
 )
 
 // TestDoHTTPRequest exercises the host-side HTTP execution shared by the in-proc
-// runnerCheckContext.HTTPDo and the out-of-process CheckContextService.HTTPDo (F2 — R3):
+// hostCheckContext.HTTPDo and the out-of-process CheckContextService.HTTPDo (F2 — R3):
 // status, body + header blob, custom timeout, allow_insecure against a self-signed TLS
 // server, and no_follow_redirects. doHTTPRequest issues from the host's network namespace
 // applying the per-request policy carried in kit.HTTPRequest — the leg that proves the

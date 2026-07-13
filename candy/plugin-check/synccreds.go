@@ -1,25 +1,37 @@
-package main
+package check
 
-// check_synccreds_cmd.go — host-side `charly check sync-credential <score>`.
+// synccreds.go — `charly check sync-credential <score>` (P12: relocated from
+// charly/check_synccreds_cmd.go).
 //
-// One-shot copy of AI-CLI auth material from the host's $HOME into the
-// score's target. Per-target dispatch:
-//   - pod: `podman cp` into the running pod
-//   - vm:  `scp` over SSH into the VM
-//   - host: no-op (credentials already in the host's $HOME)
+// One-shot copy of AI-CLI auth material from the host's $HOME into the score's
+// target. Per-target dispatch: pod → `podman cp` (plugin-local); vm → `charly vm scp`
+// (the "cli" host seam, the shared host→guest single-file copy primitive); host →
+// no-op (credentials already in the host's $HOME). The project read (iterate block +
+// sandbox class + agent catalog) rides the "check-config" host seam; agent
+// resolution rides InvokeProvider(kind:agent).
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
-// RunActual executes the credential sync. The CheckSyncCredCmd struct
-// + its Kong tags are declared in check_runner_cmd.go.
+// CheckSyncCredCmd is `charly check sync-credential <score>`.
+type CheckSyncCredCmd struct {
+	Score string `arg:"" help:"Score name"`
+	Agent string `name:"agent" help:"Sync credentials for this agent only (default: all configured)"`
+}
+
+func (c *CheckSyncCredCmd) Run() error { return c.RunActual() }
+
+// RunActual executes the credential sync.
 func (c *CheckSyncCredCmd) RunActual() error {
 	ctx := context.Background()
 
@@ -27,19 +39,23 @@ func (c *CheckSyncCredCmd) RunActual() error {
 	if err != nil {
 		return err
 	}
-	uf, ok, err := LoadUnified(projectDir)
+	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Entity: c.Score, Dir: projectDir})
 	if err != nil {
 		return err
 	}
-	if !ok || uf == nil {
+	if !reply.HasNode {
 		return errors.New("harness sync-credential: no charly.yml in current directory")
 	}
-	node, found := uf.Bundle[c.Score]
-	if !found || node.Iterate == nil {
+	if !reply.HasIterate {
 		return fmt.Errorf("harness sync-credential: entity %q has no iterate: block", c.Score)
 	}
-	iterate := node.Iterate
-	tk, tn := ResolveIterateSandbox(uf, iterate.Sandbox)
+	var iterate spec.Iterate
+	if len(reply.IterateJSON) > 0 {
+		if err := json.Unmarshal(reply.IterateJSON, &iterate); err != nil {
+			return fmt.Errorf("harness sync-credential: decode iterate: %w", err)
+		}
+	}
+	tk, tn := reply.SandboxKind, reply.SandboxName
 
 	var aiNames []string
 	if c.Agent != "" {
@@ -51,9 +67,9 @@ func (c *CheckSyncCredCmd) RunActual() error {
 		return fmt.Errorf("harness sync-credential: score %q has no agents configured", c.Score)
 	}
 
-	bodies := uf.PluginKinds["agent"]
+	bodies := reply.AgentBodies
 	for _, aiName := range aiNames {
-		ai, _, err := resolveAgentViaPlugin(bodies, aiName)
+		ai, err := resolveAgentSpec(cmdExec, cmdCtx, bodies, aiName)
 		if err != nil {
 			return err
 		}
@@ -64,7 +80,7 @@ func (c *CheckSyncCredCmd) RunActual() error {
 			aiName, tk, tn, len(ai.Credential))
 
 		switch tk {
-		case TargetKindPod:
+		case targetKindPod:
 			containerName := "charly-" + tn
 			if err := podRunning(ctx, containerName); err != nil {
 				return err
@@ -72,11 +88,11 @@ func (c *CheckSyncCredCmd) RunActual() error {
 			if err := syncCredentialsToPod(ctx, containerName, ai.Credential); err != nil {
 				return fmt.Errorf("ai %s: %w", aiName, err)
 			}
-		case TargetKindVM:
+		case targetKindVM:
 			if err := syncCredentialsToVM(ctx, tn, ai.Credential); err != nil {
 				return fmt.Errorf("ai %s (vm:%s): %w", aiName, tn, err)
 			}
-		case TargetKindHost:
+		case targetKindHost:
 			fmt.Fprintf(os.Stderr, "  (host target — no sync needed; credentials already in $HOME)\n")
 		}
 	}
@@ -95,7 +111,7 @@ func podRunning(ctx context.Context, containerName string) error {
 	return nil
 }
 
-func syncCredentialsToPod(ctx context.Context, containerName string, mounts []CredentialMount) error {
+func syncCredentialsToPod(ctx context.Context, containerName string, mounts []spec.CredentialMount) error {
 	var podHome string
 	for _, m := range mounts {
 		srcAbs, err := expandHostPath(m.Src)
@@ -135,7 +151,14 @@ func syncCredentialsToPod(ctx context.Context, containerName string, mounts []Cr
 	return nil
 }
 
-func syncCredentialsToVM(ctx context.Context, vmName string, mounts []CredentialMount) error {
+// syncCredentialsToVM copies each credential mount into the VM sandbox via the
+// shared `charly vm scp` host→guest single-file primitive (the "cli" host seam). The
+// command resolves the guest endpoint + a leading ~ in dst against the guest $HOME +
+// USER-owned delivery itself; the optional-source skip is preserved plugin-side (a
+// missing optional src is not shipped). The per-mount `mode:` is not threaded (the
+// `charly vm scp` command uses the source's mode) — a benign divergence for
+// credential files.
+func syncCredentialsToVM(ctx context.Context, vmName string, mounts []spec.CredentialMount) error {
 	for _, m := range mounts {
 		srcAbs, err := expandHostPath(m.Src)
 		if err != nil {
@@ -148,12 +171,12 @@ func syncCredentialsToVM(ctx context.Context, vmName string, mounts []Credential
 			}
 			return fmt.Errorf("credential src %q unreadable: %w", srcAbs, err)
 		}
-		// scpToVm (vm_scp.go) — the same host→guest single-file copy primitive
-		// the `charly vm scp` subcommand uses (R3): resolves the managed
-		// charly-<name> ssh alias, the guest $HOME for a leading ~ in dst, and
-		// delivers the file USER-owned via SSHExecutor.PutFile.
-		if err := scpToVm(ctx, vmName, srcAbs, m.Dst, m.Mode); err != nil {
+		reply, err := bedCli(cmdExec, ctx, false, "vm", "scp", vmName, srcAbs, m.Dst)
+		if err != nil {
 			return fmt.Errorf("credential %q: %w", m.Src, err)
+		}
+		if reply.ExitCode != 0 {
+			return fmt.Errorf("credential %q: vm scp exited %d: %s", m.Src, reply.ExitCode, reply.Error)
 		}
 	}
 	return nil

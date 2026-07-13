@@ -181,7 +181,7 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 	// SKIPPED for a substrate with a lifecycle hook (vm): the in-Add --verify resolves a
 	// deploy's checks against the venue executor, which is correct for a flat host/local deploy
 	// but WRONG for a VM bed — (1) its libvirt:/spice: probes resolve the live domain from the
-	// per-deploy DOMAIN IDENTITY (charly-<domain>, via the check runner's vmTargetName), which the
+	// per-deploy DOMAIN IDENTITY (charly-<domain>, via the check runner's VmTargetName), which the
 	// in-Add path does not thread; and (2) its FLATTENED plan carries the nested-child (member)
 	// checks, which are not yet deployed at Add time (the bed runner deploys members AFTER bundle
 	// add, then check-lives the whole tree). The in-proc VM target never ran an in-Add --verify for

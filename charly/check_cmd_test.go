@@ -3,7 +3,7 @@ package main
 import "testing"
 
 // TestGuestNestedCheckCmd verifies the guest-side `charly check live` command that
-// runVm dispatches for a nested-in-VM pod (Cutover 6 delegation). The host's
+// checkLiveVM dispatches for a nested-in-VM pod (Cutover 6 delegation). The host's
 // format/section/filter/instance selectors must pass through, single-quoted, so
 // the guest produces the same report shape the host would.
 func TestGuestNestedCheckCmd(t *testing.T) {

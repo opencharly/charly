@@ -1,82 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
 )
-
-// TestPrintDebugRetentionNotice asserts that a FAILED bed prints the
-// target-appropriate inspect + destroy hints — the keep-the-bed-up-on-failure
-// behavior (fail() no longer tears the bed down). Each target kind gets the
-// right destroy command.
-func TestPrintDebugRetentionNotice(t *testing.T) {
-	cases := []struct {
-		name     string
-		node     BundleNode
-		wantSubs []string
-	}{
-		{"pod", BundleNode{Target: "pod"}, []string{"left running for debugging", "podman exec charly-bed1", "charly remove bed1"}},
-		{"vm", BundleNode{Target: "vm", From: "k3s-vm"}, []string{"VM \"k3s-vm\" left running", "charly vm destroy k3s-vm"}},
-		{"local", BundleNode{Target: "local"}, []string{"local apply left in place", "charly remove bed1"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			printDebugRetentionNotice(&buf, "bed1", tc.node)
-			got := buf.String()
-			for _, sub := range tc.wantSubs {
-				if !strings.Contains(got, sub) {
-					t.Errorf("notice for %s missing %q; got:\n%s", tc.name, sub, got)
-				}
-			}
-		})
-	}
-}
-
-// TestExitCodeOf asserts exit-code extraction: nil→0, plain error→1,
-// subprocess exit 2→2. Underpins the `charly check run <bed>` exit-code
-// propagation (check-check failure = 2, infra failure = 1).
-func TestExitCodeOf(t *testing.T) {
-	if got := exitCodeOf(nil); got != 0 {
-		t.Errorf("exitCodeOf(nil) = %d, want 0", got)
-	}
-	if got := exitCodeOf(errors.New("plain")); got != 1 {
-		t.Errorf("exitCodeOf(plain) = %d, want 1", got)
-	}
-	if got := exitCodeOf(exec.Command("sh", "-c", "exit 2").Run()); got != 2 {
-		t.Errorf("exitCodeOf(exit 2) = %d, want 2", got)
-	}
-}
-
-// TestCheckFailedError asserts the distinct check-fail exit code is neither 0
-// nor 1, and that a wrapped CheckFailedError is detectable via errors.As (the
-// path main() uses to map it to CheckFailExitCode).
-func TestCheckFailedError(t *testing.T) {
-	if CheckFailExitCode == 0 || CheckFailExitCode == 1 {
-		t.Fatalf("CheckFailExitCode must differ from 0 and 1, got %d", CheckFailExitCode)
-	}
-	var ef *CheckFailedError
-	if !errors.As(fmt.Errorf("ctx: %w", &CheckFailedError{Failed: 3}), &ef) {
-		t.Fatal("errors.As did not detect a wrapped CheckFailedError")
-	}
-	if ef.Failed != 3 {
-		t.Errorf("Failed = %d, want 3", ef.Failed)
-	}
-	if got := (&CheckFailedError{Failed: 3}).Error(); got != "3 check(s) failed" {
-		t.Errorf("Error() = %q, want \"3 check(s) failed\"", got)
-	}
-	if got := (&CheckFailedError{Msg: "bed x: check checks failed"}).Error(); got != "bed x: check checks failed" {
-		t.Errorf("Error() msg override = %q", got)
-	}
-}
 
 // TestCheckBeds_DerivesFromDisposableBundles asserts the R10 bed set is derived
 // from the `disposable: true` bundles in the Deploy map (the separate kind:check

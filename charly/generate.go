@@ -150,7 +150,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	// Build-time plugin connect (operator-authorized build-time plugin execution).
 	// Connect the project's OUT-OF-TREE plugin candies so an external step/builder/verb
 	// provider is registered + dialable DURING image generation — the SAME loader the
-	// deploy/check paths use (loadDeployPlugins / attachCheckRunnerContext), transport-
+	// deploy/check paths use (loadDeployPlugins / resolveCheckRunnerContext), transport-
 	// invisible above the registry. A BUILTIN plugin is already registered via init() and
 	// needs no connect; only an EXTERNAL one is host-built + connected here. This is what
 	// lets a `run:` plugin verb (and a plugin builder) EXECUTE at build time to emit its

@@ -52,7 +52,6 @@ var (
 	fileExists           = kit.FileExists
 	dirExists            = kit.DirExists
 	sortStrings          = kit.SortStrings
-	firstNonEmpty        = kit.FirstNonEmpty
 	mapValue             = kit.MapValue
 	firstYAMLVersionLine = kit.FirstYAMLVersionLine
 	isGitSubmoduleDir    = kit.IsGitSubmoduleDir
@@ -93,9 +92,6 @@ func renderOpCommand(s *OpStep) (string, error) {
 	}
 	return script, nil
 }
-
-// parseTaskMode parses a candy task mode string ("0644","0o755") into a uint32 file mode (re-export).
-func parseTaskMode(mode string, def uint32) uint32 { return kit.ParseTaskMode(mode, def) }
 
 // shQuoteArg single-quotes an argument for POSIX shell embedding (re-export).
 func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }

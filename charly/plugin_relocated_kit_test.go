@@ -34,7 +34,7 @@ func assertRelocatedVerbDispatch(t *testing.T, verb string, cases []relocatedVer
 	}
 	for _, tc := range cases {
 		fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: tc.matchPrefix, exit: tc.exit}}}
-		res := cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: tc.mode}, &Op{PluginInput: tc.input})
+		res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, tc.mode), &Op{PluginInput: tc.input})
 		if res.Status != tc.want {
 			t.Fatalf("%s/%s: want %v, got %v: %s", verb, tc.desc, tc.want, res.Status, res.Message)
 		}

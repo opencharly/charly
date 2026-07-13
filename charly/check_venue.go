@@ -213,8 +213,8 @@ type CheckVenue struct {
 func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "container" }
 
 // resolveCheckVenue maps an `charly check` verb's <name> argument to an execution
-// venue, mirroring CheckLiveCmd's dispatch order so the SAME name resolves the
-// SAME way for declarative and interactive verbs:
+// venue, mirroring the live-check dispatch order (checkLiveGather) so the SAME name
+// resolves the SAME way for declarative and interactive verbs:
 //
 //	"."                         → the local host (ShellExecutor).
 //	kind:vm entity / target:vm  → SSHExecutor over the managed charly-<vm> alias
@@ -223,7 +223,7 @@ func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "containe
 //	otherwise                   → a running container (ContainerChain).
 //
 // A missing/unreadable charly.yml is not fatal — name simply falls through
-// to the container path (matching CheckLiveCmd.isVmTarget returning false on a
+// to the container path (matching checkVmTarget returning false on a
 // load error).
 func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 	// "." is the local host — lets a check verb run in-place against the host venue,
@@ -294,7 +294,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 // direct kind:vm entity (its own name IS the domain identity), a kind:deployment with target:vm (the
 // deploy name, NOT its vm: entity — the domain is named after the deploy, P33), and a dotted path
 // whose root segment is a target:vm deployment (the parent deploy owns the domain). Shared by
-// CheckLiveCmd.isVmTarget and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
+// checkLiveGather and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
 func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 	if uf == nil {
 		return "", false
@@ -325,7 +325,7 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 // out-of-process deploy (whose externalDeployTarget runs its deploy-scope probes
 // host-side via ShellExecutor, exactly like local) — and returns its node so the
 // caller can build the host/ssh executor via rootExecutorForDeployNode. Shared by
-// CheckLiveCmd.isLocalTarget and resolveCheckVenue (R3): one classifier routes an
+// checkLiveGather and resolveCheckVenue (R3): one classifier routes an
 // external deploy to the host path for BOTH the declarative `charly check live`
 // and the interactive `charly check <verb>`, instead of the pod/container path
 // (which would fail at resolveContainer with "container ... is not running").

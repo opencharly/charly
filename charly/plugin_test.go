@@ -12,7 +12,7 @@ import (
 // round-trips author → provider → result, and that an unregistered plugin verb
 // FAILS (not skips — a bed must go red, not fake-green).
 func TestRunPluginVerb_Dispatch(t *testing.T) {
-	r := &Runner{Mode: RunModeBox}
+	r := hostVerbResolverFor(nil, RunModeBox)
 
 	op := &Op{Plugin: "exampleprobe", PluginInput: map[string]any{"marker": "unit-marker"}}
 	res := r.runPluginVerb(context.Background(), op)

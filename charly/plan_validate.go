@@ -7,8 +7,7 @@ import (
 
 // plan_validate.go — validatePlanSteps, the SHARED static plan-block validator. It STAYS core because
 // it is invoked by BOTH `charly box validate` (validate.go) AND the externalized `charly feature`
-// command's "feature" HostBuild seam (host_build_feature.go) — one copy, R3. Complementary to
-// ValidatePlan in step_validate.go (which validates list structure / depends_on).
+// command's "feature" HostBuild seam (host_build_feature.go) — one copy, R3.
 //
 //   - description non-empty
 //   - every step has exactly one keyword (StepKind())

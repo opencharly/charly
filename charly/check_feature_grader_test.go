@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -143,8 +144,7 @@ func proseAgentSet() *LabelDescriptionSet {
 
 func TestRunPlan_GraderDispatchPass(t *testing.T) {
 	g := &stubGrader{pass: true}
-	r := NewRunner(nil, nil, RunModeLive)
-	r.Grader = g
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, Grader: g})
 	res := RunPlan(context.Background(), r, proseAgentSet(), nil, false)
 	if len(res) != 1 || res[0].Result.Status != TestPass {
 		t.Fatalf("graded agent step should pass, got %+v", res)
@@ -159,8 +159,7 @@ func TestRunPlan_GraderDispatchPass(t *testing.T) {
 }
 
 func TestRunPlan_GraderDispatchFail(t *testing.T) {
-	r := NewRunner(nil, nil, RunModeLive)
-	r.Grader = &stubGrader{pass: false}
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, Grader: &stubGrader{pass: false}})
 	res := RunPlan(context.Background(), r, proseAgentSet(), nil, false)
 	if len(res) != 1 || res[0].Result.Status != TestFail {
 		t.Fatalf("a failing grader must fail the agent step, got %+v", res)
@@ -168,7 +167,7 @@ func TestRunPlan_GraderDispatchFail(t *testing.T) {
 }
 
 func TestRunPlan_NoGrader_ProseSkips(t *testing.T) {
-	r := NewRunner(nil, nil, RunModeLive) // no grader
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive}) // no grader
 	res := RunPlan(context.Background(), r, proseAgentSet(), nil, false)
 	if len(res) != 1 {
 		t.Fatalf("want 1 step result, got %d", len(res))
