@@ -57,6 +57,11 @@ type provider struct{ pb.UnimplementedProviderServer }
 // walk on a venue here — the plugin returns an EMPTY DeployReply (no reverse ops; pod
 // teardown is `charly remove` + drop overlay, owned by the host hook's PostTeardown).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	// P11 (Q1=(a)): the POD config-WRITE — `charly config` (host) resolves the QuadletConfig + the
+	// target paths and Invokes this to render + write the quadlet/.pod/sidecar/tunnel files.
+	if req.GetOp() == sdk.OpConfigWrite {
+		return podConfigWrite(req)
+	}
 	// M4: the pod substrate lifecycle Ops (prepare-venue/start/stop/status/logs/shell/rebuild/
 	// post-teardown/…) — externalized out of core — reach the plugin here over the reverse channel.
 	if isLifecycleOp(req.GetOp()) {

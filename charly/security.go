@@ -196,16 +196,6 @@ func SecurityArgs(sec SecurityConfig) []string {
 	return args
 }
 
-// ipcModeBlocksShmSize reports whether the IPC namespace mode forces
-// the shm-size directive to be omitted (podman rejects shm-size when
-// the IPC namespace is shared with the host kernel).
-//
-// Currently only "host" qualifies. "shareable" / "private" / "" all
-// allow per-container shm-size sizing.
-func ipcModeBlocksShmSize(ipcMode string) bool {
-	return ipcMode == "host"
-}
-
 // resourceCapArgs returns the podman run flags for memory and CPU caps.
 // Emitted identically in both the privileged and non-privileged branches
 // of SecurityArgs because privileged containers still need resource limits.

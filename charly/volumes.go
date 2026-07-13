@@ -62,44 +62,6 @@ func expandHome(path, home string) string {
 // (keyed by the deploy's container name), so a dedicated instance-only renamer is
 // no longer needed.
 
-// BareVolumeName recovers the short volume name (e.g. "workspace") from a
-// fully-qualified podman volume name. Inverse of deployVolumePrefix: pass the
-// DEPLOY KEY (not the image) so it strips the deploy-scoped prefix
-// (`charly-<deploy>-` or `charly-<deploy>-<instance>-`). Strips the instance segment
-// first when present, then the deploy-name segment, so instance volumes
-// (`charly-versa-ecovoyage-workspace`) and base volumes (`charly-versa-workspace`)
-// BOTH collapse to "workspace".
-//
-// Returns the input unchanged when no prefix matches — callers can detect
-// "not a managed volume name" by checking equality with the input.
-func BareVolumeName(volumeName, boxName, instance string) string {
-	if instance != "" {
-		if p := "charly-" + boxName + "-" + instance + "-"; strings.HasPrefix(volumeName, p) {
-			return volumeName[len(p):]
-		}
-	}
-	if p := "charly-" + boxName + "-"; strings.HasPrefix(volumeName, p) {
-		return volumeName[len(p):]
-	}
-	return volumeName
-}
-
-// resolveWorkingDir returns the container working directory.
-// Prefers the "workspace" volume's container path if declared, else home.
-func resolveWorkingDir(volumes []VolumeMount, bindMounts []ResolvedBindMount, home, boxName, instance string) string {
-	for _, v := range volumes {
-		if BareVolumeName(v.VolumeName, boxName, instance) == "workspace" {
-			return v.ContainerPath
-		}
-	}
-	for _, bm := range bindMounts {
-		if bm.Name == "workspace" {
-			return bm.ContPath
-		}
-	}
-	return home
-}
-
 // workspaceBindHost returns the host path of the "workspace" bind mount, or "".
 func workspaceBindHost(bindMounts []ResolvedBindMount) string {
 	for _, bm := range bindMounts {

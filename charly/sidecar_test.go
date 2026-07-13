@@ -49,21 +49,6 @@ func TestEmbeddedSidecarTemplates(t *testing.T) {
 	}
 }
 
-func TestSortedSidecarEnv(t *testing.T) {
-	env := map[string]string{
-		"TS_USERSPACE":  "false",
-		"TS_ACCEPT_DNS": "true",
-		"TS_STATE_DIR":  "/var/lib/tailscale",
-	}
-	sorted := SortedSidecarEnv(env)
-	if len(sorted) != 3 {
-		t.Fatalf("expected 3, got %d", len(sorted))
-	}
-	if sorted[0] != "TS_ACCEPT_DNS=true" {
-		t.Errorf("sorted[0] = %q, want TS_ACCEPT_DNS=true", sorted[0])
-	}
-}
-
 func TestHasTailscaleSidecar(t *testing.T) {
 	if HasTailscaleSidecar(nil) {
 		t.Error("nil should return false")

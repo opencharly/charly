@@ -19,8 +19,17 @@ plugin-deploy-pod:
             drop overlay images, owned by the host lifecycle hook's PostTeardown). The
             pod-substrate sibling of candy/plugin-deploy-vm; the host's pod lifecycle hook
             owns the container lifecycle (overlay build + config/start/remove + the
-            `charly update` rebuild gate), this plugin only serves the substrate word
-            out-of-process.
+            `charly update` rebuild gate), this plugin serves the substrate word
+            out-of-process. P11 (Ruling C): the pod config-WRITE also moved here — the
+            OpConfigWrite Op renders the quadlet/.pod/sidecar/tunnel file CONTENTS (via the
+            deploykit GenerateQuadlet/GeneratePodQuadlet/GenerateSidecarQuadlet/
+            GenerateTunnelUnit generators) and os.WriteFiles them at the host-resolved
+            absolute paths + exact modes (0600/0600/0600/0644). `charly config` (host)
+            resolves the QuadletConfig + computes the paths + provisions dirs/secrets +
+            runs the systemctl/enc/seed side-effects, then connects this plugin on-demand
+            (connectPluginByWordRef, like the credential/vm/kube host out-calls) and Invokes
+            OpConfigWrite — so the WRITE is the plugin's, byte-identical to the former
+            in-core write phase.
         plugin:
             providers:
                 - deploy:pod

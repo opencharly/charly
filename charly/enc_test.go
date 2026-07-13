@@ -9,36 +9,8 @@ import (
 
 // resolveBindMounts tests moved to deploy_test.go (TestResolveVolumeBacking*)
 
-func TestEncryptedVolumeName(t *testing.T) {
-	tests := []struct {
-		image, name, want string
-	}{
-		{"myapp", "secrets", "charly-myapp-secrets"},
-		{"openclaw", "data", "charly-openclaw-data"},
-	}
-	for _, tt := range tests {
-		got := encryptedVolumeName(tt.image, tt.name)
-		if got != tt.want {
-			t.Errorf("encryptedVolumeName(%q, %q) = %q, want %q", tt.image, tt.name, got, tt.want)
-		}
-	}
-}
-
-func TestEncryptedCipherDir(t *testing.T) {
-	got := encryptedCipherDir("/data/enc", "myapp", "secrets")
-	want := "/data/enc/charly-myapp-secrets/cipher"
-	if got != want {
-		t.Errorf("encryptedCipherDir() = %q, want %q", got, want)
-	}
-}
-
-func TestEncryptedPlainDir(t *testing.T) {
-	got := encryptedPlainDir("/data/enc", "myapp", "secrets")
-	want := "/data/enc/charly-myapp-secrets/plain"
-	if got != want {
-		t.Errorf("encryptedPlainDir() = %q, want %q", got, want)
-	}
-}
+// TestEncryptedVolumeName / TestEncryptedCipherDir / TestEncryptedPlainDir moved to
+// sdk/deploykit (deploy_volume_backing_test.go) with the enc-path helpers in P11.
 
 func TestIsEncryptedInitialized(t *testing.T) {
 	// Non-existent directory

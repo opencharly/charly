@@ -16,30 +16,6 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// ResolvedBindMount is ready for -v flags.
-// Represents a volume backed by a host path (either plain bind or encrypted gocryptfs).
-type ResolvedBindMount struct {
-	Name      string // e.g. "secrets"
-	HostPath  string // effective host path (plain: expanded host, encrypted: plain dir)
-	ContPath  string // container path (expanded)
-	Encrypted bool   // for status/mount checks
-}
-
-// encryptedVolumeName returns the directory name for an encrypted volume: charly-<image>-<name>
-func encryptedVolumeName(boxName, name string) string {
-	return "charly-" + boxName + "-" + name
-}
-
-// encryptedCipherDir returns the cipher directory path for an encrypted bind mount.
-func encryptedCipherDir(storagePath, boxName, name string) string {
-	return filepath.Join(storagePath, encryptedVolumeName(boxName, name), "cipher")
-}
-
-// encryptedPlainDir returns the plain (FUSE mount point) directory path.
-func encryptedPlainDir(storagePath, boxName, name string) string {
-	return filepath.Join(storagePath, encryptedVolumeName(boxName, name), "plain")
-}
-
 // resolveEncVolumeDir returns the volume directory for an encrypted volume.
 // If the volume has an explicit Host path, use it directly.
 // Otherwise, use the global default: <storagePath>/charly-<image>-<name>.
