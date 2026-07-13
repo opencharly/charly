@@ -5,7 +5,7 @@
 //
 // UNLIKE most plugins, this schema does NOT validate a per-word plugin_input: the build words
 // (build:box / build:generate) carry a HOST-constructed spec.BuildRequest (built by BuildCmd /
-// GenerateCmd from CLI flags), never a user-authored plugin_input, so both capabilities declare
+// candy/plugin-box's generate handler from CLI flags), never a user-authored plugin_input, so both capabilities declare
 // InputDef:"" and there is nothing to validate against a served schema. This def exists ONLY to
 // satisfy the non-empty-schema load gate and to DOCUMENT the seam — it is never used for
 // validation. The build request/reply wire shapes are the authoritative Go types

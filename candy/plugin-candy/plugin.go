@@ -6,8 +6,9 @@
 // logic and no HostBuild seam — a plugin editing yaml owns that itself. Because the logic is
 // self-contained, `charly candy` works identically compiled-in OR out-of-process (like migrate).
 //
-// NOTE: this is the TOP-LEVEL `charly candy` authoring tree — NOT `charly new candy` (NewCandyCmd, a
-// child of `charly new`), which is a different command and stays a builtin.
+// NOTE: this is the TOP-LEVEL `charly candy` authoring tree (edit an EXISTING candy's fields) — NOT
+// `charly box new candy` (SCAFFOLD a new candy dir), which is a different command served by
+// candy/plugin-box (command:new).
 //
 // candy is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) (provider.go) runs in charly's
 // process and runs runCandyCLI directly (no reverse channel needed — the yaml mutation is host-local

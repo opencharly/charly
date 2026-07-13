@@ -195,10 +195,10 @@ func pruneAfterBuild(dir string) {
 	}
 }
 
-// dispatchBoxBuild / dispatchBoxGenerate route `charly box build` / `charly box generate`
-// through their compiled-in plugin word (build:box / build:generate) over the F10 HostBuild seam.
-func dispatchBoxBuild(req spec.BuildRequest) error    { return dispatchBuild("box", req) }
-func dispatchBoxGenerate(req spec.BuildRequest) error { return dispatchBuild("generate", req) }
+// dispatchBoxBuild routes `charly box build` through its compiled-in plugin word (build:box) over
+// the F10 HostBuild seam. (`charly box generate` was externalized to candy/plugin-box, which
+// invokes build:generate directly via the InvokeProvider reverse leg — see candy/plugin-box.)
+func dispatchBoxBuild(req spec.BuildRequest) error { return dispatchBuild("box", req) }
 
 // dispatchBuild invokes the compiled-in build:<word> plugin, threading the IN-PROC reverse
 // channel onto the ctx (sdk.ContextWithExecutor) so the plugin's Invoke reaches HostBuild without

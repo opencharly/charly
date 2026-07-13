@@ -16,48 +16,9 @@ import (
 // (candy/plugin-mcp) reads, so adding one here adds it to both the CLI and the
 // MCP server in lockstep.
 
-// ---------------------------------------------------------------------------
-// `charly box new project <dir>`
-
-type NewProjectCmd struct {
-	Dir string `arg:"" help:"Directory to scaffold the project in (created if missing)"`
-}
-
-func (c *NewProjectCmd) Run() error {
-	if err := kit.ScaffoldProject(c.Dir); err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "Scaffolded project at %s\n", c.Dir)
-	fmt.Fprintln(os.Stderr, "Next steps:")
-	fmt.Fprintln(os.Stderr, "  # The distro/builder/init build vocabulary is embedded — declare distro:/builder:/init: only to override it.")
-	fmt.Fprintln(os.Stderr, "  # Add a candy, populate it, wire it into a box, then build:")
-	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box new candy my-candy")
-	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" candy add-rpm my-candy curl jq")
-	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy")
-	fmt.Fprintln(os.Stderr, "  charly -C "+c.Dir+" box build my-box")
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// `charly box new box <name>`
-
-type NewBoxCmd struct {
-	Name    string   `arg:"" help:"Name for the new box entry"`
-	Base    string   `long:"base" required:"" help:"Base image (URL like quay.io/... or another box name)"`
-	Candies []string `long:"candy" sep:"," help:"Comma-separated list of candy names to include"`
-}
-
-func (c *NewBoxCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	if err := kit.AddBox(dir, c.Name, c.Base, c.Candies); err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "Added box %s to charly.yml\n", c.Name)
-	return nil
-}
+// The `charly box new project/box/candy` scaffolding commands moved to the COMPILED-IN
+// candy/plugin-box (command:new, nested under box); they call kit.ScaffoldProject / kit.AddBox /
+// kit.ScaffoldCandy directly, so no core handler remains here.
 
 // ---------------------------------------------------------------------------
 // `charly box set <dotpath> <value>`

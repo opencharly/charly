@@ -14,7 +14,7 @@ import (
 // scaffold_project.go — the project-level authoring-EDIT helpers used by the
 // `charly box add-candy` and `charly box rm-candy` commands (the create-side
 // `charly box new project/box/candy` ENGINE now lives in sdk/kit — kit.ScaffoldProject /
-// kit.AddBox / kit.ScaffoldCandy — shared with the Wave-2 command:box plugin). These exist
+// kit.AddBox / kit.ScaffoldCandy — shared with the command:box plugin, candy/plugin-box). These exist
 // primarily so the MCP tool surface can author a project over RPC, without the agent needing
 // direct filesystem access.
 //

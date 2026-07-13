@@ -6,23 +6,35 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/alecthomas/kong"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml (or, in the
 // case of BoxPullCmd, resolve registry/tag via charly.yml and then fetch the
 // image into local storage so deploy-mode commands can read its OCI labels).
+//
+// `charly box` is a SHARED command group: the RETAINED verbs below are the core
+// grammar spine (build → plugin-build; merge/labels; feature; the authoring
+// verbs; inspect/list — the two whose --format/list-shape rendering still needs
+// the fully-resolved config+layers graph the plugin cannot compute pre-K1). The
+// generate/validate/new/pkg verbs are contributed as NESTED command providers by
+// the COMPILED-IN candy/plugin-box (each a command:<word> with CommandParent()
+// =="box"), attached into the embedded kong.Plugins below. This mirrors how
+// CheckCmd embeds kong.Plugins for its nested external subcommands.
 type BoxCmd struct {
-	Build    BuildCmd      `cmd:"" help:"Build container boxes"`
-	Generate GenerateCmd   `cmd:"" help:"Write .build/ (Containerfiles) for the named boxes (default: all enabled)"`
-	Inspect  InspectCmd    `cmd:"" help:"Print resolved config for a box (JSON)"`
-	List     ListCmd       `cmd:"" help:"List components from charly.yml"`
-	Merge    MergeCmd      `cmd:"" help:"Merge small layers in a built container image"`
-	New      NewCmd        `cmd:"" help:"Scaffold new components"`
-	Pull     BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
-	Pkg      BoxPkgCmd     `cmd:"" help:"Build standalone native package artifacts (.pkg.tar.zst/.rpm/.deb) for a candy's localpkg sources into dist/"`
-	Validate ValidateCmd   `cmd:"" help:"Check charly.yml + candies, exit 0 or 1"`
-	Labels   BoxLabelsCmd  `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
-	Feature  BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
+	// Plugins carries the nested command providers whose CommandParent()=="box"
+	// (candy/plugin-box's generate/validate/new/pkg). main() sets this to
+	// collectExternalCommandPlugins()'s nestedByParent["box"] before kong.Parse.
+	kong.Plugins
+
+	Build   BuildCmd      `cmd:"" help:"Build container boxes"`
+	Inspect InspectCmd    `cmd:"" help:"Print resolved config for a box (JSON)"`
+	List    ListCmd       `cmd:"" help:"List components from charly.yml"`
+	Merge   MergeCmd      `cmd:"" help:"Merge small layers in a built container image"`
+	Pull    BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
+	Labels  BoxLabelsCmd  `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
+	Feature BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 
 	// Authoring verbs — added so the MCP tool surface (auto-reflected from
 	// Kong) can author a project from scratch over RPC.

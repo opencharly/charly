@@ -1992,7 +1992,7 @@ check-doctor-local:
                 command: charly doctor
                 in_container: false
 # =================================================================
-# check-commands-local — R10 witness for cutover C15's THREE remaining externalized COMMANDs
+# check-commands-local — R10 witness for cutover C15's THREE remaining externalized COMMANDs + P15's command:box verbs
 # (candy/plugin-{clean,settings,candy}: command:clean / command:settings / command:candy) — the
 # sixth-through-eighth welded-command externalizations. ONE disposable kind:local deploy on
 # host: local composes the three command plugins and runs each command host-side with a SAFE,
@@ -2017,13 +2017,15 @@ check-doctor-local:
 check-commands-app:
     local:
         description: |-
-            Minimal kind:local template for the check-commands-local bed — composes the three
-            command-only candy/plugin-{clean,settings,candy} plugins (no install content) so the bed
-            exercises the externalized `charly clean`/`settings`/`candy` CLIs host-side.
+            Minimal kind:local template for the check-commands-local bed — composes the
+            command-only candy/plugin-{clean,settings,candy,box} plugins (no install content) so the bed
+            exercises the externalized `charly clean`/`settings`/`candy` CLIs AND the P15 `charly box …`
+            command verbs (generate/validate/new/pkg, nested under the box grammar group) host-side.
         candy:
             - plugin-clean
             - plugin-settings
             - plugin-candy
+            - plugin-box
 check-commands-local:
     local:
         from: check-commands-app
@@ -2031,7 +2033,7 @@ check-commands-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean + settings reach a shared core engine over a generic HostBuild seam (clean → "retention", settings → "settings"); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.)
+            Sole proof of cutover C15's three remaining externalized COMMANDs (candy/plugin-clean, plugin-settings, plugin-candy — command:clean / command:settings / command:candy), the sixth-through-eighth welded-command externalizations in the core-externalization program. A disposable kind:local deploy on host: local runs each command host-side with a safe read-only / dry-run / --help invocation. clean + settings + candy are all COMPILED-IN and OWN their commands (each Invoke(OpRun) dispatched in-proc): clean + settings reach a shared core engine over a generic HostBuild seam (clean → "retention", settings → "settings"); candy owns its ENTIRE logic (the yaml.Node candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities. None uses a hidden core command. Every command exits 0 — proving the externalized commands end-to-end. (`charly version` is excluded — it stays a core command; pkgver() stamps the package version via it.) P15 EXTENSION — the bed also composes candy/plugin-box and exercises the `charly box` command verbs (generate/validate/new/pkg, nested under the box grammar group): one step scaffolds a project + candy + box then drives box validate + box generate to a rendered Containerfile (proving command:new/validate/generate end-to-end, generate via InvokeProvider to the build-generate word), and one proves box pkg dispatches.
         plan:
             - check: command=charly settings list exits 0 and lists the resolved runtime-config keys (proving the externalized settings command owns the get/set/list/reset/path grammar + reaches the core config subsystem over the "settings" HostBuild seam)
               id: settings-list-runs
@@ -2060,6 +2062,22 @@ check-commands-local:
                 - runtime
               command:
                 command: charly clean --dry-run
+                in_container: false
+            - check: charly box new + candy + box + validate + generate render a valid box Containerfile in a scratch project, proving the box command plugin (candy/plugin-box, P15) dispatches its NESTED verbs end-to-end host-side — new via the sdk/kit scaffold engine, validate via the hidden __box-validate reentry, generate via InvokeProvider to the build-generate word then build-resolve
+              id: box-new-validate-generate
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: "rm -rf /tmp/charly-p15-boxbed && charly box new project /tmp/charly-p15-boxbed && charly -C /tmp/charly-p15-boxbed box new candy my-candy && charly -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && charly -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && charly -C /tmp/charly-p15-boxbed box validate && charly -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
+                in_container: false
+            - check: charly box pkg --help exits 0, proving the box command plugin pkg verb is registered and dispatches as a NESTED command under the box grammar group (candy/plugin-box, P15)
+              id: box-pkg-dispatches
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: charly box pkg --help
                 in_container: false
 # =================================================================
 # check-gpu-local — R10 witness for cutover C11's externalized GPU/VFIO HOST-DETECTION

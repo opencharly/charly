@@ -5,13 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/alecthomas/kong"
-
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 )
 
 // CLI defines the command-line interface structure
@@ -61,6 +57,15 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
+	// __box-validate / __box-pkg are the hidden core reentry points behind the COMPILED-IN
+	// candy/plugin-box command:validate / command:pkg words (nested under `box`). The plugin owns
+	// the user-facing `charly box validate` / `charly box pkg` grammar + dispatch and reaches these
+	// over HostBuild("cli") — the validate/pkg data still needs the fully-resolved project the
+	// plugin cannot load pre-K1.
+	// K1-doomed: both die when plugin-box loads the project itself via sdk/loadkit (K1).
+	BoxValidate ValidateCmd `cmd:"" name:"__box-validate" hidden:"" help:"internal: validate charly.yml + candies (reentry behind box validate)"`
+	BoxPkg      BoxPkgCmd   `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
+
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
 	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
@@ -100,33 +105,12 @@ type CLI struct {
 	Version VersionCmd `cmd:"" help:"Print computed CalVer tag"`
 }
 
-// GenerateCmd generates Containerfiles
-type GenerateCmd struct {
-	Boxes           []string `arg:"" optional:"" help:"Boxes to generate (default: all enabled). The sentinel 'all' is equivalent to passing no argument."`
-	Tag             string   `long:"tag" help:"Override tag (default: CalVer)"`
-	IncludeDisabled bool     `long:"include-disabled" help:"Generate boxes with enabled: false in charly.yml (does not modify the file). Scoped to the named boxes when any are given."`
-}
-
-func (c *GenerateCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	// Route generation through the compiled-in candy/plugin-build DRIVE (build:generate): the
-	// candy asks the host to render the .build/ Containerfile tree over the build-resolve seam,
-	// and only this BuildRequest envelope crosses. The `all` sentinel collapses to "every enabled
-	// box", and a named selection scopes the resolved set (and, with --include-disabled, relaxes
-	// the gate for exactly those names). See dispatchBuild + dispatchBoxGenerate.
-	return dispatchBoxGenerate(spec.BuildRequest{
-		Boxes:           normalizeBoxArgs(c.Boxes),
-		Tag:             c.Tag,
-		Dir:             dir,
-		IncludeDisabled: c.IncludeDisabled,
-	})
-}
-
-// ValidateCmd validates charly.yml and candies
+// ValidateCmd validates charly.yml and candies. The user-facing `charly box validate`
+// grammar now lives in the COMPILED-IN candy/plugin-box (command:validate, nested under box);
+// this struct is registered as the hidden `charly __box-validate` reentry the plugin reaches over
+// HostBuild("cli").
+//
+// K1-doomed: dies when plugin-box loads the project itself via sdk/loadkit (K1).
 type ValidateCmd struct {
 	IncludeDisabled bool `long:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
 }
@@ -628,42 +612,6 @@ func (c *ListVolumesCmd) Run() error {
 	return nil
 }
 
-// NewCmd groups scaffolding subcommands
-type NewCmd struct {
-	Candy   NewCandyCmd   `cmd:"" name:"candy" help:"Scaffold a candy directory"`
-	Project NewProjectCmd `cmd:"" help:"Scaffold a fresh charly project (charly.yml + candy/)"`
-	Box     NewBoxCmd     `cmd:"" name:"box" help:"Add a new box entry to charly.yml"`
-}
-
-// NewCandyCmd scaffolds a new candy
-type NewCandyCmd struct {
-	Name string `arg:"" help:"Candy name"`
-}
-
-func (c *NewCandyCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	// The scaffold ENGINE lives in sdk/kit (shared with the Wave-2 command:box plugin); the CLI
-	// handler owns the user-facing output. ComputeCalVer() stays core (the wall-clock read) and is
-	// passed in so kit stays clock-free.
-	if err := kit.ScaffoldCandy(dir, c.Name, ComputeCalVer()); err != nil {
-		return err
-	}
-	fmt.Printf("Created candy at %s\n", filepath.Join(dir, DefaultCandyDir, c.Name))
-	fmt.Println("Files created:")
-	fmt.Println("  charly.yml - Candy config (distro packages, require, env, port, route, service)")
-	fmt.Println()
-	fmt.Println("Optional files you can add:")
-	fmt.Println("  root.yml        - Custom root install task")
-	fmt.Println("  pixi.toml       - Python/conda packages")
-	fmt.Println("  package.json    - npm packages")
-	fmt.Println("  Cargo.toml      - Rust crate (requires src/)")
-	fmt.Println("  user.yml        - Custom user install task")
-	return nil
-}
-
 // VersionCmd prints the computed CalVer tag
 type VersionCmd struct{}
 
@@ -712,6 +660,10 @@ func main() {
 	// out-of-process subcommands (charly check kube/adb/appium) into the holder's
 	// CheckCmd.Plugins — the wiring that previously read cli.Check.Plugins directly.
 	attachNestedCheckPlugins(cmdPlugins, nestedCmds["check"])
+	// `charly box` is a hardcoded CLI field (the core grammar spine), so — unlike check — its
+	// nested command providers (the COMPILED-IN candy/plugin-box generate/validate/new/pkg words,
+	// CommandParent()=="box") attach directly onto its embedded kong.Plugins here.
+	cli.Box.Plugins = nestedCmds["box"]
 	cmdPlugins = append(cmdPlugins, topCmds...)
 	cli.Plugins = cmdPlugins
 	ctx := kong.Parse(&cli,

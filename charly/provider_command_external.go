@@ -32,7 +32,7 @@ type externalCommandDispatch struct {
 // post-parse via dispatchExternalCommand. Returns the holder structs for kong.Plugins embedding
 // — TOP-LEVEL on the CLI root, or NESTED under a parent command (e.g. `check`) for a provider
 // implementing NestedCommandProvider — plus the dispatch table keyed by the full command PATH
-// ("vm" top-level, "check kube" nested). TWO sources, unioned:
+// ("vm" top-level, "box generate" nested). TWO sources, unioned:
 //   - (a) an already-CONNECTED external command provider in the registry (the eager path —
 //     uncommon, since command plugins are never connected for dispatch; carries the
 //     NestedCommandProvider parent for grammar nesting);
@@ -87,7 +87,9 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 // NestedCommandProvider is an optional refinement of a ClassCommand Provider: it nests its
 // command UNDER an existing parent command (e.g. `check`) rather than at the CLI root. The
 // parent command must embed kong.Plugins for the dynamic subcommand to attach (CheckCmd
-// does). Used by the dep-shed command extractions — `charly check kube`/`adb`/`appium`.
+// does), as BoxCmd now does too. Used by the compiled-in command:box plugin —
+// `charly box generate`/`new`/`validate`/`pkg` nested under `box` (candy/plugin-box); the check
+// verbs kube/adb/appium stay `verb:` providers, a possible future nested-command target.
 type NestedCommandProvider interface {
 	Provider
 	CommandParent() string

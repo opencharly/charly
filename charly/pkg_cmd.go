@@ -18,7 +18,13 @@ import (
 	"path/filepath"
 )
 
-// BoxPkgCmd builds native package artifacts for a candy's localpkg sources.
+// BoxPkgCmd builds native package artifacts for a candy's localpkg sources. The user-facing
+// `charly box pkg` grammar now lives in the COMPILED-IN candy/plugin-box (command:pkg, nested
+// under box); this struct is registered as the hidden `charly __box-pkg` reentry the plugin reaches
+// over HostBuild("cli") — the pkg build engine (buildLocalPkgOnHost) needs the host build context
+// the plugin cannot compute pre-K1.
+//
+// K1-doomed: dies when plugin-box loads the project itself via sdk/loadkit (K1).
 type BoxPkgCmd struct {
 	Format []string `arg:"" optional:"" help:"Package formats to build (pac/rpm/deb). Default: every format the candy declares a localpkg source for."`
 	Candy  string   `long:"candy" default:"charly" help:"Candy whose localpkg sources to build."`

@@ -55,6 +55,19 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 	// factory wraps the SAME capMeta in an inprocProvider (its only extra is the in-proc
 	// pb.ProviderServer). Placement is invisible above the registry.
 	providers, inputDefs, err := liftCapabilities(caps.GetProvided(), "compiled-in plugin", func(meta capMeta, _ *pb.ProvidedCapability) Provider {
+		// A COMPILED-IN command candy may NEST its command(s) under a parent command word
+		// (e.g. candy/plugin-box's generate/validate/… under `box`). The parent rides an
+		// optional Go interface on the plugin's own provider (the SAME srv-interface-detection
+		// pattern registerCompiledPlugin uses for loaderkit.DocParser / kit.RefsDownloader), so
+		// the compiled-in inprocProvider surfaces it via capMeta.CommandParent() and
+		// collectExternalCommandPlugins nests the dynamic Kong subcommand under that parent. This
+		// is the compiled-in placement of nesting; an out-of-process command declares no parent
+		// (top-level) — no live out-of-process nested command exists.
+		if meta.class == ClassCommand {
+			if ncp, ok := srv.(interface{ CommandParent() string }); ok {
+				meta.cmdParent = ncp.CommandParent()
+			}
+		}
 		return &inprocProvider{capMeta: meta, srv: srv}
 	})
 	if err != nil {
