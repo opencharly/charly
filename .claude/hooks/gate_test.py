@@ -370,6 +370,57 @@ expect("commit: quoted spaced -C, CODE at docs tier -> BLOCK (original fail-open
        gate(CGATE, f'git -C "{sp}" commit -m \'x\n\n{DOCS}\''), "BLOCK")
 shutil.rmtree(sp_parent, ignore_errors=True)
 
+# --- commit gate: #49 v2 ZERO-ALIASES teeth (tier-independent, declaration-form only) ---
+# Blocks a NEW charly/*_aliases.go file or a `type X = kit.Y` / `var x = kit.Y` alias line.
+# Does NOT block a plain residual kit CALL or import (a K-wave mechanism move leaves those in
+# core legitimately — the pr-validator's migration-pattern exception judges them).
+
+
+def mkcharly():
+    """A repo with a base-committed charly/ Go dir (no CHANGELOG/ → the changelog check no-ops,
+    isolating the alias-block; charly/ is not a Go module → the go-lint check no-ops)."""
+    d = tempfile.mkdtemp(prefix="gate-alias-")
+    for a in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", d, *a], capture_output=True)
+    os.makedirs(os.path.join(d, "charly"))
+    open(os.path.join(d, "charly", "existing.go"), "w").write("package main\n\nfunc main() {}\n")
+    subprocess.run(["git", "-C", d, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", d, "commit", "-qm", "i"], capture_output=True)
+    return d
+
+
+# NEW charly/*_aliases.go file -> BLOCK
+r = mkcharly()
+open(os.path.join(r, "charly", "vmshared_aliases.go"), "w").write("package main\n\ntype BoxConfig = deploykit.Box\n")
+subprocess.run(["git", "-C", r, "add", "charly/vmshared_aliases.go"], capture_output=True)
+expect("commit: NEW charly/*_aliases.go file -> BLOCK (#49 ZERO-ALIASES)",
+       gate(CGATE, f"git -C {r} commit -m 'x\n\n{RUN}'"), "BLOCK")
+shutil.rmtree(r, ignore_errors=True)
+
+# a `type X = deploykit.Y` alias line added in a plain charly/*.go -> BLOCK
+r = mkcharly()
+open(os.path.join(r, "charly", "bar.go"), "w").write("package main\n\ntype BoxConfig = deploykit.Box\n")
+subprocess.run(["git", "-C", r, "add", "charly/bar.go"], capture_output=True)
+expect("commit: type-alias line in charly/*.go -> BLOCK (#49 NO-NEW-ALIASES)",
+       gate(CGATE, f"git -C {r} commit -m 'x\n\n{RUN}'"), "BLOCK")
+shutil.rmtree(r, ignore_errors=True)
+
+# a plain residual kit CALL (not an alias) -> ALLOW (a K-wave move leaves these)
+r = mkcharly()
+open(os.path.join(r, "charly", "bar.go"), "w").write("package main\n\nfunc x() { _ = kit.Compute(1) }\n")
+subprocess.run(["git", "-C", r, "add", "charly/bar.go"], capture_output=True)
+expect("commit: residual kit CALL line in charly/*.go -> ALLOW (#49 migration exception)",
+       gate(CGATE, f"git -C {r} commit -m 'x\n\n{RUN}'"), "ALLOW")
+shutil.rmtree(r, ignore_errors=True)
+
+# a plain residual kit IMPORT (not an alias) -> ALLOW (declaration-form guard skips imports)
+r = mkcharly()
+open(os.path.join(r, "charly", "bar.go"), "w").write('package main\n\nimport "github.com/opencharly/sdk/deploykit"\n\nvar _ = deploykit.Box{}\n')
+subprocess.run(["git", "-C", r, "add", "charly/bar.go"], capture_output=True)
+expect("commit: residual kit IMPORT line in charly/*.go -> ALLOW (#49 migration exception)",
+       gate(CGATE, f"git -C {r} commit -m 'x\n\n{RUN}'"), "ALLOW")
+shutil.rmtree(r, ignore_errors=True)
+
 # --- push gate --------------------------------------------------------------
 for label, cmd, want in [
     ("push: --force blocked", "git push --force origin feat/x", "BLOCK"),

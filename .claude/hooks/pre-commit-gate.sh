@@ -57,6 +57,17 @@ LEGAL = {"fully tested and validated", "analysed on a live system", "documentati
 TIER_RE = re.compile(r'Assisted-by:\s*Claude\s*\(([^)]*)\)')  # the attribution trailer (cmd + -F file)
 CHANGELOG_ENTRY = re.compile(r'^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$')
 DOC_PATH = re.compile(r'(?:^|/)(?:CHANGELOG|README|LICENSE|VISION)[^/]*$|\.(?:md|txt)$', re.IGNORECASE)
+# v2 architecture (CLAUDE.md "Core is a PLUGIN HOST" — ZERO-ALIASES / NO-NEW-ALIASES). A
+# `charly/*_aliases.go` re-export keeps a capability CALL SITE in core; the fix is moving the
+# call site into its owning plugin, never an alias. This blocks the DECLARATION FORM only —
+# a `type X = kit.Y` / `var x = kit.Y` alias line, or a new `charly/*_aliases.go` file — NEVER
+# a plain `= kit.Foo()` call or a bare import (a K-wave cutover MOVES kit-referencing call/import
+# lines into core as a mechanism body leaves; those are legal residual sites, not aliases).
+ALIASES_FILE = re.compile(r'(?:^|/)charly/.*_aliases\.go$')
+_KITS = r'(?:kit|deploykit|buildkit|loaderkit|vmshared|enginekit|statekit)'
+KIT_ALIAS_DECL = re.compile(
+    r'^\+\s*type\s+\w+\s*=\s*' + _KITS + r'\.\w'          # type X = kit.Y   (type alias)
+    r'|^\+\s*var\s+\w+\s*=\s*' + _KITS + r'\.\w+\s*(?://.*)?$')  # var x = kit.Y  (var alias, no call parens)
 
 
 def block(msg):
@@ -465,8 +476,40 @@ if needs_diff and stages_late:
           "first (e.g. `git add -u`), then `git commit` in the next one."
           % ("/".join(INDEX_MUTATING), tiers[0] if tiers else "declared"))
 
+def assert_no_new_alias(repo):
+    """v2 ZERO-ALIASES teeth (tier-independent, fail-OPEN). Blocks a commit that ADDS a new
+    `charly/*_aliases.go` file OR a declaration-form kit-alias line (`type X = kit.Y` /
+    `var x = kit.Y`) in any `charly/*.go`. A plain residual kit CALL or import a K-wave move
+    leaves behind is NOT an alias and is deliberately NOT matched — the pr-validator ARCHITECTURE
+    GATE judges those (the migration-pattern exception)."""
+    raw = raw_staged(repo)
+    if raw is None:
+        return  # fail OPEN (the pr-validator remains the real gate)
+    for line in raw.splitlines():
+        if not line.startswith(':'):
+            continue
+        meta, _t, rest = line.partition('\t')
+        f = meta[1:].split()
+        path = rest.strip()
+        status = f[4][:1] if len(f) > 4 else ''
+        if status == 'A' and ALIASES_FILE.search(path):
+            block("v2 architecture (ZERO-ALIASES): this commit ADDS a new alias file `%s`. An alias "
+                  "re-export keeps a capability call site in core — move the call site into its owning "
+                  "plugin, never re-export. See CLAUDE.md \"Core is a PLUGIN HOST\"." % path)
+    diff = git(["diff", "--cached", "--no-renames", "-U0", "--", "charly/*.go"], cwd=repo)
+    if diff is None:
+        return
+    for line in diff.splitlines():
+        if line.startswith('+') and not line.startswith('+++') and KIT_ALIAS_DECL.match(line):
+            block("v2 architecture (NO-NEW-ALIASES): this commit adds a declaration-form kit alias — "
+                  "`%s`. An alias is a mislocated call site; move it into its owning plugin (a plain "
+                  "residual kit call/import a same-PR mechanism move leaves is fine and is not matched "
+                  "here). See CLAUDE.md \"Core is a PLUGIN HOST\"." % line[1:].strip()[:120])
+
+
 if not cwd_unresolvable:
-    assert_go_lint(commit_cwd)  # tier-independent: any Go commit must be lint-clean
+    assert_go_lint(commit_cwd)       # tier-independent: any Go commit must be lint-clean
+    assert_no_new_alias(commit_cwd)  # tier-independent: v2 ZERO-ALIASES teeth (fail-open)
     if "documentation reviewed" in tiers:
         assert_docs_only(commit_cwd)
     if not is_amend and tiers:
