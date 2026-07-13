@@ -415,10 +415,12 @@ func (c *CheckLiveCmd) runVm() error {
 	if !ok || uf == nil {
 		return fmt.Errorf("check live: no charly.yml found in %s (vm targets need the project config)", dir)
 	}
-	vmName, nestedLeaf, spec := c.resolveVmTarget(uf)
+	vmName, domainID, nestedLeaf, spec := c.resolveVmTarget(uf)
 
 	user := resolveVmSshUser(spec)
-	port, err := resolveVmSshPort(spec, vmName)
+	// Port + ssh alias key off the per-deploy DOMAIN IDENTITY (the live domain is charly-<domainID>);
+	// the spec + DEPLOY_NAME (k8s cluster context) stay keyed by the ENTITY.
+	port, err := resolveVmSshPort(spec, domainID)
 	if err != nil {
 		return err
 	}
@@ -426,11 +428,11 @@ func (c *CheckLiveCmd) runVm() error {
 	plan, user, port := c.loadVmCheckPlans(uf, dir, vmName, nestedLeaf, user, port)
 
 	// SSH connection details (User/Port/IdentityFile) live in the
-	// managed ssh-config Host stanza (charly-<vmName>) written at deploy
+	// managed ssh-config Host stanza (charly-<domainID>) written at deploy
 	// time. We point the executor at the alias and let ssh(1) resolve
 	// the rest from ~/.ssh/config + agent.
 	host := "127.0.0.1"
-	var executor DeployExecutor = &SSHExecutor{Host: VmSshAlias(vmName), ConnectTimeout: 10}
+	var executor DeployExecutor = &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
 
 	// 2026-04 cutover: when c.Box is dotted ("vm.inner-pod"), walk
 	// the deploy tree and construct the full chain via ResolveDeployChain
@@ -456,13 +458,13 @@ func (c *CheckLiveCmd) runVm() error {
 	// not fixed sleeps — the same SSHExecutor preflight the external vm deploy walk runs
 	// at deploy time. Fast no-op on an already-settled guest (zero added
 	// latency); the VM analog of waitForContainerReady for the bed runner.
-	gate := &SSHExecutor{Host: VmSshAlias(vmName), ConnectTimeout: 5}
+	gate := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 5}
 	gctx := context.Background()
 	if gerr := gate.WaitForSSH(gctx); gerr != nil {
-		return fmt.Errorf("vm %q is not up / SSH-reachable — is the domain running? %w", vmName, gerr)
+		return fmt.Errorf("vm %q is not up / SSH-reachable — is the domain running? %w", domainID, gerr)
 	}
 	if gerr := gate.WaitForCloudInit(gctx); gerr != nil {
-		return fmt.Errorf("vm %q cloud-init did not settle (still running or restarting?): %w", vmName, gerr)
+		return fmt.Errorf("vm %q cloud-init did not settle (still running or restarting?): %w", domainID, gerr)
 	}
 
 	env := map[string]string{
@@ -470,7 +472,7 @@ func (c *CheckLiveCmd) runVm() error {
 		"INSTANCE":       c.Instance,
 		"HOST_PORT:22":   strconv.Itoa(port),
 		"CONTAINER_IP":   host,
-		"CONTAINER_NAME": "charly-" + c.Box,
+		"CONTAINER_NAME": "charly-" + domainID,
 		"USER":           user,
 		"HOME":           "/home/" + user,
 		// VM_HOSTDEV_COUNT = how many <hostdev> passthrough devices THIS VM's
@@ -507,8 +509,8 @@ func (c *CheckLiveCmd) runVm() error {
 		parts := strings.Split(c.Box, ".")
 		guestPod := parts[len(parts)-1]
 		guestCmd := guestNestedCheckCmd(guestPod, c.Format, c.Section, c.Filter, c.Instance)
-		vmSSH := &SSHExecutor{Host: VmSshAlias(vmName), ConnectTimeout: 10}
-		fmt.Fprintf(os.Stderr, "VM: charly-%s — nested pod %q evaluated IN the guest (%s)\n", c.Box, guestPod, VmSshAlias(vmName))
+		vmSSH := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
+		fmt.Fprintf(os.Stderr, "VM: %s — nested pod %q evaluated IN the guest (%s)\n", VmSshAlias(domainID), guestPod, VmSshAlias(domainID))
 		stdout, stderr, exit, rerr := vmSSH.RunCapture(context.Background(), guestCmd)
 		if stdout != "" {
 			fmt.Print(stdout)
@@ -548,13 +550,12 @@ func (c *CheckLiveCmd) runVm() error {
 		runner.Box = c.Box
 		runner.Instance = c.Instance
 	}
-	// Box stays the deploy/bed name (container + DEPLOY_NAME identity); VmName is the
-	// resolved vm: ENTITY name (deploy name remapped via uf.Bundle[box].From). The
-	// operator-side libvirt/spice verbs must address the live libvirt domain
-	// charly-<VmName>, so they read vmTargetName() — the out-of-process vm plugin
-	// cannot LoadUnified to remap the name itself, so the host threads the
-	// already-resolved entity name through.
-	runner.VmName = vmName
+	// Box stays the deploy/bed name (container + DEPLOY_NAME identity); VmName is the per-deploy
+	// DOMAIN IDENTITY (the deploy name → charly-<domainID>, the live libvirt domain — NOT the shared
+	// entity). The operator-side libvirt/spice verbs must address that domain, so they read
+	// vmTargetName() — the out-of-process vm plugin cannot LoadUnified to compute it itself, so the
+	// host threads the already-resolved domain identity through.
+	runner.VmName = domainID
 	// Cross-deployment support for a VM SUBJECT (the `on:` driver dispatch +
 	// ${HOST}/${HOST} resolution) — the SAME wiring the pod
 	// (CheckLiveCmd.Run) and local (runLocalCheck) paths already do (R3). Without
@@ -578,7 +579,7 @@ func (c *CheckLiveCmd) runVm() error {
 // resolveVmTarget resolves the VM check request (c.Box) to its kind:vm entity
 // name, an optional nested-leaf node (for a dotted "parent.child" path), and the
 // VmSpec.
-func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName string, nestedLeaf *BundleNode, spec *VmSpec) {
+func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string, nestedLeaf *BundleNode, spec *VmSpec) {
 	// Schema v4: c.Box may be
 	//   (a) a kind:vm entity name directly (e.g. "arch"),
 	//   (b) a kind:deployment name with target:vm (e.g. "arch-vm") whose
@@ -586,7 +587,13 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName string, nestedLe
 	//   (c) a dotted path "parent.child" where `parent` is a target:vm
 	//       deployment and `child` is a nested node whose tests run in
 	//       the parent's SSH substrate.
+	//
+	// vmName resolves to the kind:vm ENTITY (the disk/spec source); domainID is the per-deploy
+	// DOMAIN IDENTITY (charly-<domainID> is the live libvirt domain + managed ssh alias + ssh-port
+	// key). The domain is named after the DEPLOY (the key the operator typed — c.Box, or the parent
+	// for a dotted leaf), NOT the entity, so distinct beds sharing one entity stay collision-free.
 	vmName = c.Box
+	domainKey := c.Box
 	if uf.Bundle != nil {
 		if entry, ok := uf.Bundle[c.Box]; ok && nodeTraits(&entry).Venue == "ssh" && entry.From != "" { // vm (ssh venue)
 			vmName = entry.From
@@ -596,14 +603,16 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName string, nestedLe
 				if parent.From != "" {
 					vmName = parent.From
 				}
+				domainKey = root // the parent vm deploy owns the live domain
 				nestedLeaf = resolveNestedNode(uf.Bundle, c.Box)
 			}
 		}
 	}
+	domainID = vmDomainIdentity(domainKey)
 	if uf.VM != nil {
 		spec, _ = resolveVmViaPlugin(uf.VM[vmName])
 	}
-	return vmName, nestedLeaf, spec
+	return vmName, domainID, nestedLeaf, spec
 }
 
 // loadVmCheckPlans aggregates the VM deployment's check plan from the project

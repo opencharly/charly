@@ -85,11 +85,11 @@ type Runner struct {
 	ProbeTimeout time.Duration
 	Box          string
 	Instance     string
-	// VmName is the resolved vm: ENTITY name for a VM deployment — the deploy/bed
-	// name remapped to its entity (uf.Bundle[box].From). Box stays the deploy name
-	// (container + DEPLOY_NAME identity); the operator-side libvirt/spice verbs must
-	// address the live libvirt domain charly-<VmName>, so they read vmTargetName().
-	// Empty for non-VM deployments, where vmTargetName() falls back to Box.
+	// VmName is the per-deploy DOMAIN IDENTITY for a VM deployment — the deploy/bed name
+	// (vmDomainIdentity), NOT the shared kind:vm entity. Box stays the deploy name (container +
+	// DEPLOY_NAME identity); the operator-side libvirt/spice verbs must address the live libvirt
+	// domain charly-<VmName>, so they read vmTargetName(). Empty for non-VM deployments, where
+	// vmTargetName() falls back to Box.
 	VmName string
 	// Distros is the image's distro tag list (e.g. ["fedora:43", "fedora"]
 	// or ["arch"]). Used by the `package:` verb's PackageMap resolution
@@ -184,12 +184,11 @@ func (r *Runner) CloseHosts() {
 }
 
 // vmTargetName returns the name the host-side check verbs hand to the
-// out-of-process vm/spice plugins as the libvirt-domain target: the resolved VM
-// ENTITY name (VmName) when set, else the deploy name (Box). The plugin prefixes
-// charly- onto whatever it receives and cannot LoadUnified to remap a deploy name
-// to its vm: entity itself, so the host threads the already-resolved entity name
-// through. A pod deployment leaves VmName empty, so its verbs correctly address
-// charly-<deploy-name>.
+// out-of-process vm/spice plugins as the libvirt-domain target: the per-deploy DOMAIN IDENTITY
+// (VmName) when set, else the deploy name (Box). The plugin prefixes charly- onto whatever it
+// receives and cannot LoadUnified to compute the domain itself, so the host threads the
+// already-resolved domain identity through. A pod deployment leaves VmName empty, so its verbs
+// correctly address charly-<deploy-name>.
 func (r *Runner) vmTargetName() string {
 	if r.VmName != "" {
 		return r.VmName

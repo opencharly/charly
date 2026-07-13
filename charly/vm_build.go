@@ -16,6 +16,7 @@ type VmBuildCmd struct {
 	Type      string `long:"type" default:"qcow2" help:"Output format: qcow2, raw"`
 	Transport string `long:"transport" help:"Image transport: registry, containers-storage, oci, oci-archive"`
 	Console   bool   `long:"console" help:"Enable console output for debugging"`
+	Force     bool   `long:"force" help:"Rebuild the disk base even when content-fresh (default: skip if the base already matches the source). SINGLE-BED ONLY — do NOT force-rebuild a base that live per-domain overlays back onto (it mutates a read-only backing file); the concurrent-bed R10 uses idempotent-skip, never --force."`
 }
 
 func (c *VmBuildCmd) Run() error {
@@ -106,6 +107,18 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 	if err != nil {
 		return err
 	}
+
+	// Per-ENTITY build flock: serialize concurrent `vm build <entity>` so N beds sharing this
+	// entity's disk base never race on output/qcow2/<entity>/ (and a second build never rewrites a
+	// base a live per-domain overlay backs onto). Blocking — the first builds, the rest wait then
+	// idempotent-skip. Released on return (BEFORE `vm create`), so per-domain overlay-creates stay
+	// unserialized. The dir is created by AcquireFileLock's MkdirAll.
+	unlock, lockErr := acquireVmBuildLock(outputDir)
+	if lockErr != nil {
+		return fmt.Errorf("acquiring vm build lock for %s: %w", vmName, lockErr)
+	}
+	defer func() { _ = unlock() }()
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -121,7 +134,7 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 
 	switch spec.Source.Kind {
 	case "cloud_image":
-		res, err := BuildCloudImage(spec, outputDir, vmStateDir, existingState)
+		res, err := BuildCloudImage(spec, outputDir, vmStateDir, existingState, c.Force)
 		if err != nil {
 			return err
 		}

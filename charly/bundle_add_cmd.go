@@ -574,7 +574,7 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 			Jump:   NestedJump{Kind: engineJump, Target: name},
 		}, nil
 	case "ssh":
-		return vmChildExecutor(node, parentExec, path)
+		return vmChildExecutor(parentExec, path)
 	case "reject":
 		return nil, fmt.Errorf("k8s targets cannot have children")
 	}

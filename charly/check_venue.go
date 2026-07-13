@@ -235,8 +235,8 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 
 	dir, _ := os.Getwd()
 	if uf, ok, err := LoadUnified(dir); err == nil && ok && uf != nil {
-		if vmName, isVM := checkVmTarget(uf, name); isVM {
-			var exec DeployExecutor = &SSHExecutor{Host: VmSshAlias(vmName), ConnectTimeout: 10}
+		if domainID, isVM := checkVmTarget(uf, name); isVM {
+			var exec DeployExecutor = &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
 			// Dotted nested path (vm.inner-pod): build the full chain so the
 			// verb lands inside the leaf's venue, not the parent VM's shell.
 			if strings.Contains(name, ".") {
@@ -246,7 +246,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 					}
 				}
 			}
-			return &CheckVenue{Exec: exec, Kind: "vm", Name: vmName, VMName: vmName, Instance: instance}, nil
+			return &CheckVenue{Exec: exec, Kind: "vm", Name: domainID, VMName: domainID, Instance: instance}, nil
 		}
 		if node, isLocal := checkLocalTarget(uf, name); isLocal {
 			exec, err := rootExecutorForDeployNode(&node)
@@ -289,13 +289,13 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 	}, nil
 }
 
-// checkVmTarget reports whether `name` resolves to a VM venue and, if so, the
-// kind:vm entity name to SSH into. Covers a direct kind:vm entity, a
-// kind:deployment with target:vm (its Vm field, falling back to the deploy
-// name), and a dotted path whose root segment is a target:vm deployment.
-// Shared by CheckLiveCmd.isVmTarget/runVm and resolveCheckVenue (R3 — one
-// classifier, no per-call-site re-derivation).
-func checkVmTarget(uf *UnifiedFile, name string) (vmName string, ok bool) {
+// checkVmTarget reports whether `name` resolves to a VM venue and, if so, the per-deploy DOMAIN
+// IDENTITY to SSH into (charly-<domainID> is the live libvirt domain + managed ssh alias). Covers a
+// direct kind:vm entity (its own name IS the domain identity), a kind:deployment with target:vm (the
+// deploy name, NOT its vm: entity — the domain is named after the deploy, P33), and a dotted path
+// whose root segment is a target:vm deployment (the parent deploy owns the domain). Shared by
+// CheckLiveCmd.isVmTarget and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
+func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 	if uf == nil {
 		return "", false
 	}
@@ -303,26 +303,18 @@ func checkVmTarget(uf *UnifiedFile, name string) (vmName string, ok bool) {
 	if idx := strings.Index(name, "."); idx > 0 {
 		root := name[:idx]
 		if entry, present := uf.Bundle[root]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
-			vm := entry.From
-			if vm == "" {
-				vm = root
-			}
-			return vm, true
+			return vmDomainIdentity(root), true
 		}
 		return "", false
 	}
 	if uf.VM != nil {
 		if _, present := uf.VM[name]; present {
-			return name, true
+			return vmDomainIdentity(name), true
 		}
 	}
 	if uf.Bundle != nil {
 		if entry, present := uf.Bundle[name]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
-			vm := entry.From
-			if vm == "" {
-				vm = name
-			}
-			return vm, true
+			return vmDomainIdentity(name), true
 		}
 	}
 	return "", false

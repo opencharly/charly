@@ -109,18 +109,6 @@ func qemuImgCreateOverlay(basePath, overlayPath string) error {
 	return nil
 }
 
-// qemuImgResize runs `qemu-img resize <disk> <size>`. The guest's
-// cloud-utils-growpart expands the root partition at first boot to
-// match the new total size.
-func qemuImgResize(diskPath, size string) error {
-	cmd := exec.Command("qemu-img", "resize", diskPath, size)
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("qemu-img resize %s %s: %w", diskPath, size, err)
-	}
-	return nil
-}
-
 // newUUID4 generates an RFC 4122 v4 UUID. Used for cloud-init
 // instance-id on first VM create (persisted into VmDeployState).
 func newUUID4() string {

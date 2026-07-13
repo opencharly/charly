@@ -89,15 +89,14 @@ func TestSaveVmDeployState_LockReleasedBetweenCalls(t *testing.T) {
 	}
 }
 
-// TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry guards BUG 2: a kind:check
-// VM bed (e.g. check-k3s-vm) writes its vm_state under the BUNDLE key
-// (check-k3s-vm) cross-referencing the VM ENTITY (k3s-vm), but every teardown
-// caller reaches removeVmDeployEntry with the prefixed ENTITY form (vm:k3s-vm —
-// the vm lifecycle hook PostTeardown computes the entry key as "vm:"+node.From; `charly vm destroy`
-// builds "vm:"+box). The pre-fix code did an exact-key delete on "vm:k3s-vm",
-// missed the bundle-keyed entry, and the entry leaked (domain destroyed, config
-// entry left behind). The fix: the write persists the `vm:` cross-ref, and
-// removeVmDeployEntry resolves the bundle-keyed entry back via that cross-ref.
+// TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry exercises the `vm:`-form From-scan in
+// vmDeployEntryKeys: a kind:check VM bed (e.g. check-k3s-vm) writes its vm_state under the BUNDLE
+// key (check-k3s-vm) cross-referencing the VM ENTITY (k3s-vm). The scan lets the DIRECT
+// `charly vm destroy k3s-vm` path (which builds "vm:k3s-vm") still resolve the bundle-keyed entry
+// via that cross-ref — an exact-key delete on "vm:k3s-vm" alone would miss it and leak it. (The
+// per-deploy teardown does NOT rely on this scan — OpPostTeardown ships the deploy-name +
+// vm:<domain> keys directly; see vmPostTeardown.) The From-scan must not over-match an UNRELATED
+// bundle (check-other-vm, From=other-vm).
 func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 	overlay := filepath.Join(t.TempDir(), "charly.yml")
 	orig := DeployConfigPath
@@ -127,8 +126,8 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 		t.Fatalf("seed entry missing vm: cross-ref (teardown linkage): got %q", seeded.From)
 	}
 
-	// Teardown reaches removeVmDeployEntry with the prefixed ENTITY form — NOT the
-	// bundle key the entry was written under.
+	// The DIRECT `charly vm destroy k3s-vm` path reaches removeVmDeployEntry with the prefixed
+	// ENTITY form — NOT the bundle key the entry was written under. The From-scan bridges the gap.
 	if err := removeVmDeployEntry("vm:k3s-vm"); err != nil {
 		t.Fatalf("removeVmDeployEntry: %v", err)
 	}

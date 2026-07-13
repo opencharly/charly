@@ -22,23 +22,23 @@ func newVenueTestUF() *UnifiedFile {
 func TestCheckVmTarget(t *testing.T) {
 	uf := newVenueTestUF()
 	cases := []struct {
-		name   string
-		wantVM string
-		wantOK bool
+		name       string
+		wantDomain string // the per-deploy DOMAIN IDENTITY (deploy key, NOT the vm: entity) — P33
+		wantOK     bool
 	}{
-		{"cachyos-gpu", "cachyos-gpu", true},    // kind:vm entity
-		{"k3s-vm", "k3s-vm-entity", true},       // target:vm deploy → entry.Vm
-		{"bare-vm-dep", "bare-vm-dep", true},    // target:vm, no Vm → key fallback
-		{"k3s-vm.inner", "k3s-vm-entity", true}, // dotted root is target:vm
-		{"web-pod", "", false},                  // pod is not a VM
-		{"my-local", "", false},                 // local is not a VM
-		{"nonexistent", "", false},              // unknown
+		{"cachyos-gpu", "cachyos-gpu", true}, // kind:vm entity: its own name IS the domain identity
+		{"k3s-vm", "k3s-vm", true},           // target:vm deploy → the DEPLOY key (not entry.From "k3s-vm-entity")
+		{"bare-vm-dep", "bare-vm-dep", true}, // target:vm, no Vm → deploy key
+		{"k3s-vm.inner", "k3s-vm", true},     // dotted root is the target:vm deploy → its domain identity
+		{"web-pod", "", false},               // pod is not a VM
+		{"my-local", "", false},              // local is not a VM
+		{"nonexistent", "", false},           // unknown
 	}
 	for _, tc := range cases {
-		gotVM, gotOK := checkVmTarget(uf, tc.name)
-		if gotOK != tc.wantOK || gotVM != tc.wantVM {
+		gotDomain, gotOK := checkVmTarget(uf, tc.name)
+		if gotOK != tc.wantOK || gotDomain != tc.wantDomain {
 			t.Errorf("checkVmTarget(%q) = (%q, %v), want (%q, %v)",
-				tc.name, gotVM, gotOK, tc.wantVM, tc.wantOK)
+				tc.name, gotDomain, gotOK, tc.wantDomain, tc.wantOK)
 		}
 	}
 }

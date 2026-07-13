@@ -64,25 +64,40 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	case sdk.OpPostApply:
 		return vmPostApply(ctx, exec, p, host)
 	case sdk.OpArtifactKey:
+		// Artifacts (+ the k3s ClusterProfile) key by the shared ENTITY, not the per-deploy domain:
+		// one k3s cluster per VM is reached by several beds, so its profile lands under the shared
+		// vm:<entity> name the `cluster:` refs use. This is DELIBERATELY the entity, not domainIdentity.
 		return marshalReply(map[string]string{"key": "vm:" + vmEntity(p)})
 	case sdk.OpTeardownExecutor:
-		return marshalReply(spec.VenueDescriptor{Kind: "ssh", Host: kit.VmSshAlias(vmEntity(p)), ConnectTimeout: 10})
+		return marshalReply(spec.VenueDescriptor{Kind: "ssh", Host: kit.VmSshAlias(domainIdentity(p)), ConnectTimeout: 10})
 	case sdk.OpPostTeardown:
 		return vmPostTeardown(p, host)
 	case sdk.OpStart:
-		return cliOK(vmCli(ctx, exec, false, false, "vm", "start", vmEntity(p)))
+		return cliOK(vmCli(ctx, exec, false, false, "vm", "start", vmEntity(p), "--domain", domainIdentity(p)))
 	case sdk.OpStop:
-		return cliOK(vmCli(ctx, exec, false, false, "vm", "stop", vmEntity(p)))
+		return cliOK(vmCli(ctx, exec, false, false, "vm", "stop", vmEntity(p), "--domain", domainIdentity(p)))
 	case sdk.OpStatus:
-		return vmStatus(ctx, exec, vmEntity(p))
+		return vmStatus(ctx, exec, domainIdentity(p))
 	case sdk.OpLogs:
-		return cliOK(vmCli(ctx, exec, false, false, "vm", "console", vmEntity(p)))
+		return cliOK(vmCli(ctx, exec, false, false, "vm", "console", vmEntity(p), "--domain", domainIdentity(p)))
 	case sdk.OpShell:
-		return cliOK(vmCli(ctx, exec, false, false, append([]string{"vm", "ssh", vmEntity(p)}, p.Cmd...)...))
+		// `charly vm ssh` keys the connection off the managed ssh alias (charly-<domain>), so it takes
+		// the DOMAIN IDENTITY as its positional — no --domain flag (it resolves no entity spec).
+		return cliOK(vmCli(ctx, exec, false, false, append([]string{"vm", "ssh", domainIdentity(p)}, p.Cmd...)...))
 	case sdk.OpRebuild:
 		return vmRebuild(ctx, exec, p)
 	}
 	return nil, fmt.Errorf("plugin-deploy-vm: unhandled lifecycle op %q", req.GetOp())
+}
+
+// domainIdentity resolves the per-deploy DOMAIN IDENTITY from the deploy name (p.Name) — the token
+// the libvirt domain (charly-<identity>), the per-domain disk overlay + state dir, the managed ssh
+// alias, and the ssh-port ledger key off. It is DISTINCT from the disk/spec-source ENTITY
+// (vmEntity): several beds may share one entity, so keying the domain by the DEPLOY name makes them
+// collision-free by construction. The host preresolver derives the SAME value from the SAME deploy
+// name via vmshared.VmDomainIdentity, so the domain the two name always agrees.
+func domainIdentity(p lifecycleParams) string {
+	return vmshared.VmDomainIdentity(p.Name)
 }
 
 // vmEntity resolves the kind:vm entity from the shipped node: node.From (the `vm:` cross-ref) wins,
@@ -156,10 +171,12 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 		addr := fmt.Sprintf("127.0.0.1:%d", in.SSHPort)
 		if conn, derr := net.DialTimeout("tcp", addr, 2*time.Second); derr != nil {
 			fmt.Fprintf(os.Stderr, "VM %q not reachable on %s — auto-booting via charly vm build/create...\n", in.Entity, addr)
+			// build the shared ENTITY base disk; create this DEPLOY's own domain (--domain) — a
+			// per-domain overlay + state so sibling beds sharing the entity never collide.
 			if _, err := vmCli(ctx, exec, false, false, "vm", "build", in.Entity); err != nil {
 				return nil, fmt.Errorf("auto-boot build %s: %w", in.Entity, err)
 			}
-			if _, err := vmCli(ctx, exec, false, false, "vm", "create", in.Entity); err != nil {
+			if _, err := vmCli(ctx, exec, false, false, "vm", "create", in.Entity, "--domain", domainIdentity(p)); err != nil {
 				return nil, fmt.Errorf("auto-boot create %s: %w", in.Entity, err)
 			}
 		} else {
@@ -243,7 +260,9 @@ func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, hos
 	if len(node.Children) == 0 {
 		return marshalReply(struct{}{})
 	}
-	entity := vmEntity(p)
+	// `vm cp-box` reaches the guest over the managed ssh alias (charly-<domain>), so it addresses the
+	// running VM by its DOMAIN IDENTITY, not the entity.
+	domain := domainIdentity(p)
 
 	// Deliver the HOST's own charly to a /tmp path OUTSIDE $PATH (the from-box authority — never the
 	// guest's possibly-stale PATH charly), invoked by explicit path. One delivery for every child.
@@ -267,11 +286,11 @@ func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, hos
 			continue // android / k8s / vm children are not in-guest pods
 		}
 		asRef := "localhost/charly-" + childKey + ":latest"
-		fmt.Fprintf(os.Stderr, "Deploying nested pod %s.%s (%s) as a persistent in-guest quadlet...\n", entity, childKey, child.Image)
+		fmt.Fprintf(os.Stderr, "Deploying nested pod %s.%s (%s) as a persistent in-guest quadlet...\n", domain, childKey, child.Image)
 		if _, err := vmCli(ctx, exec, false, false, "box", "build", child.Image); err != nil {
 			return nil, fmt.Errorf("build nested image %s (%s): %w", childKey, child.Image, err)
 		}
-		if _, err := vmCli(ctx, exec, false, false, "vm", "cp-box", entity, child.Image, "--as", asRef, "--rootless"); err != nil {
+		if _, err := vmCli(ctx, exec, false, false, "vm", "cp-box", domain, child.Image, "--as", asRef, "--rootless"); err != nil {
 			return nil, fmt.Errorf("cp-box nested %s -> guest: %w", childKey, err)
 		}
 		script := fmt.Sprintf(
@@ -282,7 +301,7 @@ func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, hos
 		if err := exec.RunUser(ctx, script, nil); err != nil {
 			return nil, fmt.Errorf("deploy nested pod %s in guest: %w", childKey, err)
 		}
-		fmt.Fprintf(os.Stderr, "Nested pod %s.%s deployed (persistent in-guest quadlet)\n", entity, childKey)
+		fmt.Fprintf(os.Stderr, "Nested pod %s.%s deployed (persistent in-guest quadlet)\n", domain, childKey)
 	}
 	return marshalReply(struct{}{})
 }
@@ -297,13 +316,14 @@ func sortedChildKeys(children map[string]*spec.Deploy) []string {
 	return keys
 }
 
-// vmStatus reads `charly vm list` and walks for this VM's domain row (want = "charly-<entity>").
-func vmStatus(ctx context.Context, exec *sdk.Executor, entity string) (*pb.InvokeReply, error) {
+// vmStatus reads `charly vm list` and walks for this VM's domain row (want = "charly-<domain>", the
+// per-deploy domain identity — NOT the shared entity).
+func vmStatus(ctx context.Context, exec *sdk.Executor, domain string) (*pb.InvokeReply, error) {
 	r, err := vmCli(ctx, exec, true, true, "vm", "list")
 	if err != nil {
 		return marshalReply(map[string]any{"State": "unknown"})
 	}
-	want := "charly-" + entity
+	want := "charly-" + domain
 	for _, line := range strings.Split(r.Stdout, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 3 || fields[0] != want {
@@ -328,23 +348,24 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 		RebuildImage bool `json:"RebuildImage"`
 	}
 	_ = json.Unmarshal(p.Opts, &ropts)
-	entity := vmEntity(p)
+	entity := vmEntity(p)       // disk/spec SOURCE (the `vm build` arg + the create's entity positional)
+	domain := domainIdentity(p) // per-deploy DOMAIN IDENTITY (destroy/create/start THIS domain)
 	if ropts.DryRun {
 		return marshalReply(struct{}{})
 	}
-	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", entity) // best-effort (may not exist yet)
+	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", entity, "--domain", domain) // best-effort (may not exist yet)
 	if ropts.RebuildImage {
 		if _, err := vmCli(ctx, exec, false, false, "vm", "build", entity); err != nil {
 			return nil, err
 		}
 	}
-	if _, err := vmCli(ctx, exec, false, false, "vm", "create", entity); err != nil {
+	if _, err := vmCli(ctx, exec, false, false, "vm", "create", entity, "--domain", domain); err != nil {
 		return nil, err
 	}
 	// `vm create` already starts the domain; this is the ensure-running guard for a
 	// backend that left it defined-but-off. `vm start` is idempotent (an already-running
 	// domain is a clean success), so its error is real and must not be discarded.
-	if _, err := vmCli(ctx, exec, false, false, "vm", "start", entity); err != nil {
+	if _, err := vmCli(ctx, exec, false, false, "vm", "start", entity, "--domain", domain); err != nil {
 		return nil, err
 	}
 	if _, err := vmCli(ctx, exec, false, false, "bundle", "add", p.Name); err != nil {
@@ -355,14 +376,13 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 
 // vmPostTeardown removes the managed ssh-config stanza (host file I/O the co-located plugin does),
 // stripping the Include line when it was the last managed alias, and ships the charly.yml deploy-entry
-// key for the host to remove (the plugin cannot touch charly.yml; the ephemeral teardown stays a host
-// hook). The entry keys off "vm:<entity>" for a schema-v4 bed whose deploy key differs from the entity.
+// keys for the host to remove (the plugin cannot touch charly.yml; the ephemeral teardown stays a host
+// hook). Everything keys off the per-deploy DOMAIN IDENTITY so a teardown removes ONLY this deploy's
+// artifacts — never a sibling bed's (the collision this cutover eliminates).
 func vmPostTeardown(p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
-	var node spec.BundleNode
-	_ = json.Unmarshal(p.Node, &node)
-	entity := vmEntity(p)
+	domain := domainIdentity(p)
 
-	if remaining, err := kit.RemoveVmSshStanza(host.Home, kit.VmSshAlias(entity)); err != nil {
+	if remaining, err := kit.RemoveVmSshStanza(host.Home, kit.VmSshAlias(domain)); err != nil {
 		fmt.Fprintf(os.Stderr, "note: ssh-config stanza cleanup: %v\n", err)
 	} else if remaining == 0 {
 		if err := kit.RemoveSshConfigInclude(host.Home); err != nil {
@@ -370,11 +390,16 @@ func vmPostTeardown(p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, erro
 		}
 	}
 
-	entryKey := p.Name
-	if !strings.HasPrefix(p.Name, "vm:") && node.From != "" {
-		entryKey = "vm:" + string(node.From)
+	// Two entries carry this deploy's state, both keyed by the deploy (never the shared entity):
+	//   - the deploy-state entry the proxy persisted under the deploy name (p.Name), and
+	//   - the port/instance-id entry vm:<domain> runVmSpecCreate persisted.
+	// Removing them by domain (not vm:<entity>) avoids removeVmDeployEntry's From-scan over-matching
+	// sibling beds that share the entity.
+	entries := []string{p.Name}
+	if portKey := "vm:" + domain; portKey != p.Name {
+		entries = append(entries, portKey)
 	}
-	return marshalReply(spec.PostTeardownReply{RemoveEntries: []string{entryKey}})
+	return marshalReply(spec.PostTeardownReply{RemoveEntries: entries})
 }
 
 // cliOK returns an empty-struct reply, propagating a cli error.

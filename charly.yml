@@ -138,8 +138,11 @@ k3s-vm:
 # kit.NestedExecutor (tree position; the child carries no `host:` field), so the bed's
 # candies write inside the guest and never touch the operator's workstation.
 # See /charly-core:deploy "Deploy-into nesting"; the shipped precedent is box/arch's
-# check-arch-vm -> arch-host. It owns its OWN domain (charly-eval-vm) — never reuse
-# charly-vm, which check-charly-vm owns, or the two beds collide on one libvirt domain.
+# check-arch-vm -> arch-host. This entity is the shared read-only DISK BASE: each bed that
+# references it (check-builder-vm / check-substrate / check-group-vm / check-structkind-vm) gets
+# its OWN libvirt domain (charly-<bed>) + per-domain disk overlay + host ssh port, so the beds are
+# collision-free BY CONSTRUCTION and run concurrently — the domain is keyed by the DEPLOY, never the
+# entity (see /charly-vm:vm "per-deploy domain identity"; the naming logic is vmshared.VmDomainIdentity).
 eval-vm:
     vm:
         source:
@@ -173,8 +176,9 @@ eval-vm:
 # finds the delivered project (`charly --host` strips -C; ssh is non-interactive, so
 # pam_env/UsePAM delivers /etc/environment — NOT ~/.bashrc). 6G RAM is headroom for
 # the in-guest go-build (the pruned closure builds only 2 plugins, not the full
-# fleet that OOM'd at 3.8G). It owns its OWN domain (charly-eval-host-vm) — distinct
-# from eval-vm (charly-eval-vm) and charly-vm (charly-charly-vm).
+# fleet that OOM'd at 3.8G). The bed that references it (check-local-vm) gets its own domain
+# charly-check-local-vm (keyed by the DEPLOY, not this entity) + per-domain disk overlay + host ssh
+# port, so it is collision-free with every other eval VM bed by construction.
 eval-host-vm:
     vm:
         source:
@@ -600,7 +604,7 @@ check-sidecar-pod:
 # on the OPERATOR's workstation. It is now a
 # disposable `vm:` bed: it boots eval-host-vm, welds charly into the guest
 # (add_candy:[charly]), rsyncs the PRUNED check-local closure + sdk/ into the guest
-# (check/eval-host-project/), then runs `charly --host charly-eval-host-vm check run
+# (check/eval-host-project/), then runs `charly --host charly-check-local-vm check run
 # check-local` so the GUEST's charly applies check-local-layer to its OWN `host: local`
 # venue via the guest ShellExecutor + HostDeployTarget. This PRESERVES the kind:local
 # ShellExecutor coverage (a nest-as-member move would drop it to NestedExecutor) while
@@ -622,7 +626,7 @@ check-local-vm:
             workstation). Boots eval-host-vm, welds charly (add_candy:[charly] → opencharly-git),
             rsyncs the pruned check-local closure (check/eval-host-project/charly.yml + sdk/ +
             candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local})
-            into the guest, then runs `charly --host charly-eval-host-vm check run check-local`: the
+            into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the
             guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies
             check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget),
             dropping /etc/check-local-marker + the examplestep /tmp markers in the GUEST. ALSO the
@@ -640,7 +644,7 @@ check-local-vm:
             allow_repo_changes: true # pacman -U auto-resolves opencharly-git repo deps in the guest
             allow_root_tasks: true
         plan:
-            - check: deliver the pruned check-local closure + sdk/ into the eval-host-vm guest project dir (host-side rsync over the managed charly-eval-host-vm ssh alias; cwd = this project per main.go:734)
+            - check: deliver the pruned check-local closure + sdk/ into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734)
               id: guest-project-delivered
               context:
                 - runtime
@@ -649,10 +653,10 @@ check-local-vm:
                 in_container: false
                 command: |
                     set -euo pipefail
-                    ssh charly-eval-host-vm 'mkdir -p /home/arch/eval-project/candy'
-                    rsync -a ./check/eval-host-project/charly.yml charly-eval-host-vm:/home/arch/eval-project/charly.yml
-                    rsync -a ./sdk/ charly-eval-host-vm:/home/arch/eval-project/sdk/
-                    rsync -a ./candy/check-local-layer ./candy/examplestep-deploy-consumer ./candy/plugin-example-step ./candy/plugin-deploy-local charly-eval-host-vm:/home/arch/eval-project/candy/
+                    ssh charly-check-local-vm 'mkdir -p /home/arch/eval-project/candy'
+                    rsync -a ./check/eval-host-project/charly.yml charly-check-local-vm:/home/arch/eval-project/charly.yml
+                    rsync -a ./sdk/ charly-check-local-vm:/home/arch/eval-project/sdk/
+                    rsync -a ./candy/check-local-layer ./candy/examplestep-deploy-consumer ./candy/plugin-example-step ./candy/plugin-deploy-local charly-check-local-vm:/home/arch/eval-project/candy/
             - check: run check-local host:local INSIDE the guest via `charly --host` — the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host:local (guest ShellExecutor + HostDeployTarget), building the 2 out-of-tree plugins in-guest; exit 0 proves the kind:local path end-to-end off the operator's workstation
               id: guest-as-host-check-local
               context:
@@ -660,7 +664,7 @@ check-local-vm:
               exit_status: 0
               command:
                 in_container: false
-                command: charly --host charly-eval-host-vm check run check-local
+                command: charly --host charly-check-local-vm check run check-local
 # =============================================================================
 # check-builder-vm — dedicated builder-DEPLOY-leg bed (added with the C1.3 Builder
 # build-emit externalization), MOVED off the operator's workstation into the disposable
@@ -674,8 +678,10 @@ check-local-vm:
 # host-engine leg over RunHostStep) and ships ~/.npm-global onto the GUEST venue; the marker
 # check asserts is-number under ~/.npm-global in the GUEST — so the ~/.npm-global write never
 # touches the operator's home. Precedent for the vm-bed-with-nested-local-member shape:
-# box/arch check-arch-vm → arch-host. Shares the eval-vm domain (charly-eval-vm) with
-# check-group — both deferred long vm beds, serialized. The C1.3 pod-overlay BUILD-emit is
+# box/arch check-arch-vm → arch-host. Shares the eval-vm DISK BASE with check-group /
+# check-substrate / check-structkind, but each gets its OWN domain (charly-check-builder-vm here) +
+# per-domain disk overlay + host ssh port, so these long vm beds run CONCURRENTLY (collision-free by
+# construction — the domain is keyed by the deploy, not the entity). The C1.3 pod-overlay BUILD-emit is
 # proven separately by the real-chain unit tests (TestOCITargetEmitBuilder{Inline,MultiStage}ViaPlugin)
 # + the live check-addcandy-pod pod-overlay dispatch gate; this bed is the complementary
 # builder-DEPLOY-leg gate.

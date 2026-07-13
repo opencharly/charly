@@ -15,9 +15,16 @@ import (
 //
 //nolint:gocyclo // flat sequential vm-create orchestration; extraction relocates, not clarifies
 func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend string, claimantNode *BundleNode, resources map[string]*ResolvedResource, vmState *VmDeployState) error {
-	name := vmName
+	// entity = the kind:vm ENTITY (the disk/spec SOURCE — the shared read-only base every per-deploy
+	// overlay backs onto). domainID = the per-deploy DOMAIN IDENTITY: the DEPLOY name when the deploy
+	// path passes --domain (so sibling beds sharing one entity get distinct, collision-free domains),
+	// else the entity itself for a direct `charly vm create <entity>` (behavior unchanged).
+	entity := vmName
+	domainID := domainOr(vmName, c.Domain)
+	perDomain := domainID != entity
+	name := domainID
 	if c.Instance != "" {
-		name = vmName + "-" + c.Instance
+		name = domainID + "-" + c.Instance
 	}
 	vmDomainName := "charly-" + name
 
@@ -46,22 +53,8 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// so the former in-handler applyCueDefaults call is redundant. The instance override above only
 	// touches libvirt: overlays (never a defaulted field), so the seam-applied defaults are unaffected.
 
-	// Locate prebuilt disk + seed ISO in this VM's OWN per-VM disk dir, so a
-	// fresh create can never adopt a sibling VM's stale disk/seed (whose
-	// embedded SSH key would mismatch this VM's id_ed25519).
-	qcow2 := filepath.Join(vmDiskDir(vmName), "disk.qcow2")
-	if _, err := os.Stat(qcow2); err != nil {
-		return fmt.Errorf("disk.qcow2 not found at %s — run `charly vm build %s` first", qcow2, vmName)
-	}
-	qcow2Abs, _ := filepath.Abs(qcow2)
-
-	seedISO := filepath.Join(vmDiskDir(vmName), "seed.iso")
-	seedISOAbs := ""
-	if _, err := os.Stat(seedISO); err == nil {
-		seedISOAbs, _ = filepath.Abs(seedISO)
-	}
-
-	// Resolve SSH pubkey (honoring spec.SSH.KeySource).
+	// Per-domain state dir (id_ed25519, NVRAM, known_hosts, and — on the deploy path — the disk
+	// overlay + per-domain seed). Keyed by the DOMAIN, so N beds sharing one entity never collide.
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -71,10 +64,47 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 		return err
 	}
 
-	// For cloud_image sources, always regenerate the seed ISO so vm.yml
-	// edits (cloud_init packages/runcmd/network-config/etc.) take effect on
-	// `charly vm create` without forcing an explicit `charly vm build`. The qcow2
-	// disk is left alone — only the seed ISO is cheap to rebuild.
+	// Locate the built BASE disk in the ENTITY's shared per-entity dir. A deploy boots a per-domain
+	// copy-on-write OVERLAY of it (so N beds sharing one entity never write the same qcow2 — the
+	// P33 disk isolation); a direct create (domainID == entity) boots the base directly (unchanged).
+	baseQcow2 := filepath.Join(vmDiskDir(entity), "disk.qcow2")
+	if _, err := os.Stat(baseQcow2); err != nil {
+		return fmt.Errorf("disk.qcow2 not found at %s — run `charly vm build %s` first", baseQcow2, entity)
+	}
+	baseAbs, _ := filepath.Abs(baseQcow2)
+	qcow2Abs := baseAbs
+	if perDomain {
+		overlay := filepath.Join(vmStateDir, "disk.qcow2")
+		// Fresh overlay on every (re)create: a create fires only on first boot or after a destroy,
+		// so the domain always boots clean off the CURRENT base (the disposable-bed / fresh-rebuild
+		// contract). qemu-img refuses an existing target, so drop a stale overlay first.
+		_ = os.Remove(overlay)
+		if err := qemuImgCreateOverlay(baseAbs, overlay); err != nil {
+			return fmt.Errorf("creating per-domain disk overlay for %s: %w", vmDomainName, err)
+		}
+		qcow2Abs, _ = filepath.Abs(overlay)
+	}
+
+	// Resolve the seed ISO path. A deploy renders its OWN per-domain seed (per-domain ssh key +
+	// instance-id — two beds must NEVER share one seed, or their cloud-init keys/instance-ids
+	// collide); a direct create regenerates the entity's base seed in place (unchanged).
+	seedISOAbs := ""
+	if perDomain {
+		if spec.Source.Kind == "cloud_image" && spec.CloudInit != nil {
+			seedISOAbs = filepath.Join(vmStateDir, "seed.iso")
+		}
+	} else {
+		baseSeed := filepath.Join(vmDiskDir(entity), "seed.iso")
+		if _, err := os.Stat(baseSeed); err == nil {
+			seedISOAbs, _ = filepath.Abs(baseSeed)
+		}
+	}
+
+	// For cloud_image sources, always (re)render the seed ISO so vm.yml edits
+	// (cloud_init packages/runcmd/network-config/etc.) take effect on `charly vm
+	// create` without forcing an explicit `charly vm build`. The qcow2 disk is
+	// left alone — only the seed ISO is cheap to rebuild. On the deploy path this
+	// renders the per-domain seed (with the per-domain ssh key) from scratch.
 	if spec.Source.Kind == "cloud_image" && seedISOAbs != "" {
 		// existingState (the prior instance-id) comes from the config-resolve seam's VmState.
 		if err := RegenerateSeedISO(spec, seedISOAbs, vmStateDir, vmState); err != nil {
@@ -106,8 +136,11 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 
 	// Compose VmRuntimeParams. SSH port resolves here so ssh.port_auto can
 	// allocate (or reuse the persisted) host port before the libvirt forward
-	// is rendered.
-	sshPort, err := resolveVmSshPort(spec, vmName)
+	// is rendered. Keyed by the DOMAIN IDENTITY (not the entity) so every deploy
+	// sharing one entity gets its OWN auto-allocated host port — two beds
+	// forwarding the same host port to their guests' :22 is the collision this
+	// cutover removes.
+	sshPort, err := resolveVmSshPort(spec, domainID)
 	if err != nil {
 		return fmt.Errorf("resolving SSH port: %w", err)
 	}
@@ -117,13 +150,15 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// without persisting here deploy-add re-resolves, finds no persisted port,
 	// allocates a DIFFERENT one, probes the wrong port, declares the VM
 	// unreachable, and auto-boots `charly vm create` into an "already exists" error.
+	// The ledger key is vm:<domainID> (entity carried as the `vm:` cross-ref), so
+	// the preresolver's resolveVmSshPort(spec, domainID) reads back the SAME entry.
 	if spec.SSH != nil && spec.SSH.PortAuto {
 		st := &VmDeployState{}
 		if vmState != nil {
 			st = vmState
 		}
 		st.SshPort = sshPort
-		if err := hostConfigPersist("vm:"+vmName, vmName, st, false); err != nil {
+		if err := hostConfigPersist("vm:"+domainID, entity, st, false); err != nil {
 			return fmt.Errorf("persisting auto-allocated ssh port: %w", err)
 		}
 	}
@@ -155,7 +190,7 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	// vmshared.ValidateEgress hook → verb:egress). QEMU returns no XML, so its validate pass is a no-op.
 	baseReq := vmCreateReq{
 		Spec: spec, RT: rt, VmDomainName: vmDomainName, Home: home,
-		VmName: vmName, Name: name, Backend: backend, VmStateDir: vmStateDir,
+		VmName: entity, Name: name, Backend: backend, VmStateDir: vmStateDir,
 	}
 	validateReq := baseReq
 	validateReq.ValidateOnly = true
@@ -183,10 +218,43 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	if backend == "libvirt" && spec.Autostart {
 		ensureBootAutostartPrereqs(vmDomainName)
 	}
-	if err := publishVmSshAlias(home, vmName, name, spec, rt); err != nil {
+	// On the deploy path (domain named after the deploy, not the entity), prune the pre-P33
+	// entity-keyed ssh alias so it does not linger as an orphan after the naming cutover.
+	if perDomain {
+		migrateStaleEntityAlias(home, entity)
+	}
+	if err := publishVmSshAlias(home, name, spec, rt); err != nil {
 		return fmt.Errorf("publishing ssh-config alias: %w", err)
 	}
 	return nil
+}
+
+// migrateStaleEntityAlias best-effort prunes the pre-P33 managed ssh-config stanza for the
+// ENTITY-keyed alias (charly-<entity>). Before this cutover a deploy's VM was named after the
+// kind:vm ENTITY; it is now named after the DEPLOY (domain identity), so on the first create under
+// the new naming the old entity-keyed alias is removed. Only the recoverable ssh stanza is pruned —
+// the stale libvirt DOMAIN charly-<entity> (if any) is left for the operator to reclaim
+// (`charly vm destroy <entity>` / `charly vm list --clean-orphans`), because auto-destroying it is
+// unsafe when charly-<entity> is a legitimately direct-created operator VM. Idempotent + silent when
+// no stale alias is present (the common case — bed-only entities were never aliased under charly-<entity>).
+func migrateStaleEntityAlias(home, entity string) {
+	staleAlias := VmSshAlias(entity)
+	aliases, _ := ListVmSshAliases(home)
+	present := false
+	for _, a := range aliases {
+		if a == staleAlias {
+			present = true
+			break
+		}
+	}
+	if !present {
+		return
+	}
+	if _, err := RemoveVmSshStanza(home, staleAlias); err != nil {
+		fmt.Fprintf(os.Stderr, "note: pruning stale ssh alias %s: %v\n", staleAlias, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "note: pruned pre-P33 ssh alias %s (this VM is now named after its deploy); reclaim any leftover domain with `charly vm destroy %s` or `charly vm list --clean-orphans`\n", staleAlias, entity)
 }
 
 // publishVmSshAlias writes (or refreshes) the managed ssh-config Host
@@ -210,13 +278,16 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 // SSH step with "Host key verification failed", which surfaces in
 // the vm deploy's SSHExecutor.WaitForSSH preflight as "Could not resolve hostname" — see the
 // 2026-05-06 R10 follow-up RCA.
-func publishVmSshAlias(home, vmName, deployName string, spec *VmSpec, rt VmRuntimeParams) error {
-	stateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+vmName)
+// domainName is the FULL per-domain identity (domainID[-instance]) — the same token the per-domain
+// state dir (charly-<domainName>) and the libvirt domain use, so the published alias, its identity
+// file, and its known_hosts all point at THIS domain's own state (never a sibling's).
+func publishVmSshAlias(home, domainName string, spec *VmSpec, rt VmRuntimeParams) error {
+	stateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+domainName)
 	knownHostsPath := filepath.Join(stateDir, "known_hosts")
 	// Best-effort: ignore "no such file" on first-create.
 	_ = os.Remove(knownHostsPath)
 	stanza := VmSshStanza{
-		Alias:          VmSshAlias(deployName),
+		Alias:          VmSshAlias(domainName),
 		Hostname:       "127.0.0.1",
 		Port:           rt.SshPort,
 		User:           resolveVmSshUser(spec),

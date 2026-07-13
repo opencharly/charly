@@ -47,6 +47,18 @@ func vmName(box, instance string) string {
 	return name
 }
 
+// domainOr returns the per-deploy DOMAIN IDENTITY when the `--domain` flag is set (the deploy path,
+// where the libvirt domain is keyed by the DEPLOY name so sibling beds sharing one kind:vm entity get
+// distinct, collision-free domains), else the positional box/entity (the direct `charly vm …` path,
+// whose domain identity IS the entity — behavior unchanged). The positional arg still drives entity
+// spec/backend/claimant resolution; only the domain NAME + ssh alias + per-domain state switch to it.
+func domainOr(box, domain string) string {
+	if domain != "" {
+		return domain
+	}
+	return box
+}
+
 // vmDir returns the directory for storing VM state (QEMU backend).
 func vmDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -164,6 +176,7 @@ type VmCreateCmd struct {
 	Ram             string `long:"ram" help:"Override RAM size (e.g. 4G, 8192M)"`
 	Cpus            int    `long:"cpus" help:"Override CPU count"`
 	Instance        string `short:"i" long:"instance" help:"Instance name"`
+	Domain          string `long:"domain" help:"Per-deploy domain identity: name the libvirt domain charly-<domain> (+ its per-domain disk overlay/state/ssh alias) after the DEPLOY, not the kind:vm entity. Set by the deploy path so sibling beds sharing one entity get distinct domains; absent for a direct create (domain = entity)."`
 	SshKey          string `long:"ssh-key" default:"auto" help:"SSH public key: path to .pub file, 'auto' (default ~/.ssh key), 'generate', or 'none'"`
 	AutoDetectFlags `embed:""`
 }
@@ -234,24 +247,25 @@ func parseRAMtoMB(ram string) int {
 type VmStartCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Domain   string `long:"domain" help:"Per-deploy domain identity (start charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct start (domain = entity)."`
 }
 
 func (c *VmStartCmd) Run() error {
-	return startVM(c.Box, c.Instance)
+	return startVM(c.Box, c.Instance, c.Domain)
 }
 
 // startVM starts a previously-created VM by image+instance, dispatching by
 // backend (libvirt domain start / re-exec the stored qemu command). Shared
 // by VmStartCmd.Run and the resource arbiter (charly/preempt.go) so the holder-
 // restart path runs the exact same lifecycle code as `charly vm start`.
-func startVM(box, instance string) error {
+func startVM(box, instance, domain string) error {
 	reply, err := hostConfigResolve(box)
 	if err != nil {
 		return err
 	}
 	backend := reply.Backend
 
-	name := vmName(box, instance)
+	name := vmName(domainOr(box, domain), instance)
 
 	switch backend {
 	case "libvirt":
@@ -298,11 +312,12 @@ func startVM(box, instance string) error {
 type VmStopCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Domain   string `long:"domain" help:"Per-deploy domain identity (stop charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct stop (domain = entity)."`
 	Force    bool   `long:"force" help:"Force stop (destroy) instead of graceful shutdown"`
 }
 
 func (c *VmStopCmd) Run() error {
-	if err := stopVM(c.Box, c.Instance, c.Force); err != nil {
+	if err := stopVM(c.Box, c.Instance, c.Domain, c.Force); err != nil {
 		return err
 	}
 	// Releasing a persistent exclusive claim on this VM restores any holder it
@@ -319,14 +334,14 @@ func (c *VmStopCmd) Run() error {
 // destroys/kills it. Shared by VmStopCmd.Run and the resource arbiter
 // (charly/preempt.go), which always calls it with force=false so a preempted
 // holder is gracefully shut down and remains restartable.
-func stopVM(box, instance string, force bool) error {
+func stopVM(box, instance, domain string, force bool) error {
 	reply, err := hostConfigResolve(box)
 	if err != nil {
 		return err
 	}
 	backend := reply.Backend
 
-	name := vmName(box, instance)
+	name := vmName(domainOr(box, domain), instance)
 
 	switch backend {
 	case "libvirt":
@@ -374,6 +389,7 @@ func stopVM(box, instance string, force bool) error {
 type VmDestroyCmd struct {
 	Box        string `arg:"" help:"Box name"`
 	Instance   string `short:"i" long:"instance" help:"Instance name"`
+	Domain     string `long:"domain" help:"Per-deploy domain identity (destroy charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct destroy (domain = entity)."`
 	Disk       bool   `long:"disk" help:"Also delete the QCOW2 disk image"`
 	KeepDeploy bool   `long:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
 }
@@ -392,7 +408,10 @@ func (c *VmDestroyCmd) Run() error {
 	}
 	backend := reply.Backend
 
-	name := vmName(c.Box, c.Instance)
+	// The libvirt domain + per-domain state + ssh alias are keyed by the DEPLOY (domain identity),
+	// so a deploy's destroy targets charly-<domain> and never a sibling bed sharing the entity; the
+	// entity (c.Box) still drives backend/claimant/disk-source resolution.
+	name := vmName(domainOr(c.Box, c.Domain), c.Instance)
 
 	switch backend {
 	case "libvirt":
@@ -460,7 +479,11 @@ func (c *VmDestroyCmd) Run() error {
 	// bed cleanup tears down via `charly vm destroy`). --keep-deploy preserves it for
 	// a deliberate re-create, mirroring `charly remove --keep-deploy` for pods.
 	if !c.KeepDeploy {
-		deployName := "vm:" + deployKey(c.Box, c.Instance)
+		// Key the removed entry by the DOMAIN IDENTITY (vm:<domain>) — that is where the port +
+		// instance-id ledger for THIS domain lives (runVmSpecCreate persists vm:<domain>). Removing
+		// vm:<entity> instead would, via removeVmDeployEntry's From-scan, over-match every sibling
+		// bed sharing the entity — the collision this cutover eliminates.
+		deployName := "vm:" + deployKey(domainOr(c.Box, c.Domain), c.Instance)
 		if err := hostConfigPersist(deployName, "", nil, true); err != nil {
 			fmt.Fprintf(os.Stderr, "note: charly.yml entry cleanup (%s): %v\n", deployName, err)
 		}
@@ -559,9 +582,9 @@ func (c *VmListCmd) Run() error {
 	}
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tBACKEND\tSTATE")
+	_, _ = fmt.Fprintln(tw, "NAME\tBACKEND\tSTATE")
 	for _, r := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Backend, r.State)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Backend, r.State)
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -632,6 +655,7 @@ func (c *VmListCmd) runCleanOrphans() error {
 type VmConsoleCmd struct {
 	Box      string `arg:"" help:"Box name"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Domain   string `long:"domain" help:"Per-deploy domain identity (console charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct console (domain = entity)."`
 }
 
 func (c *VmConsoleCmd) Run() error {
@@ -641,7 +665,7 @@ func (c *VmConsoleCmd) Run() error {
 	}
 	backend := reply.Backend
 
-	name := vmName(c.Box, c.Instance)
+	name := vmName(domainOr(c.Box, c.Domain), c.Instance)
 
 	switch backend {
 	case "libvirt":
@@ -737,15 +761,6 @@ func resolveSSHPubKey(flag, generateDir string) (string, error) {
 		}
 		return strings.TrimSpace(string(data)), nil
 	}
-}
-
-// containerSSHKeyDir returns the directory for storing container SSH keypairs.
-func containerSSHKeyDir(name string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "charly", "ssh", name), nil
 }
 
 // generateSSHKeypair creates an ed25519 keypair in the given directory.

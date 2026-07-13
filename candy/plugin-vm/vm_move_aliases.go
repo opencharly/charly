@@ -54,6 +54,7 @@ var (
 	EnsureSshConfigInclude      = kit.EnsureSshConfigInclude
 	RemoveSshConfigInclude      = kit.RemoveSshConfigInclude
 	RemoveVmSshStanza           = kit.RemoveVmSshStanza
+	ListVmSshAliases            = kit.ListVmSshAliases
 	VmSshAlias                  = kit.VmSshAlias
 	WriteVmSshStanza            = kit.WriteVmSshStanza
 	deployKey                   = deploykit.DeployKey
