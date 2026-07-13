@@ -113,16 +113,16 @@ func (c *VmImportCmd) Run() error {
 		}
 		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		if len(domains) > 0 {
-			fmt.Fprintln(tw, "DOMAIN\tWOULD-IMPORT-AS")
+			_, _ = fmt.Fprintln(tw, "DOMAIN\tWOULD-IMPORT-AS")
 			for _, d := range domains {
-				fmt.Fprintf(tw, "%s\t%s\n", d, stripCharlyPrefix(d))
+				_, _ = fmt.Fprintf(tw, "%s\t%s\n", d, stripCharlyPrefix(d))
 			}
-			fmt.Fprintln(tw, "")
+			_, _ = fmt.Fprintln(tw, "")
 		}
 		if len(driftRows) > 0 {
-			fmt.Fprintln(tw, "ENTRY\tDRIFT-SUMMARY")
+			_, _ = fmt.Fprintln(tw, "ENTRY\tDRIFT-SUMMARY")
 			for _, r := range driftRows {
-				fmt.Fprintf(tw, "%s\t%s\n", r[0], r[1])
+				_, _ = fmt.Fprintf(tw, "%s\t%s\n", r[0], r[1])
 			}
 		}
 		return tw.Flush()
@@ -236,6 +236,3 @@ func loadUnifiedForImport() (map[string]*VmSpec, bool, error) {
 	}
 	return out, true, nil
 }
-
-// osGetwd is a small indirection to make testing easier.
-var osGetwd = os.Getwd

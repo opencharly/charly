@@ -179,15 +179,15 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 	// `--verify` sources + runs probes identically to `charly check live` (R3).
 	//
 	// SKIPPED for a substrate with a lifecycle hook (vm): the in-Add --verify resolves a
-	// deploy's checks by the DEPLOY name + against the venue executor, which is correct for a
-	// flat host/local deploy but WRONG for a VM bed — (1) its libvirt:/spice: probes resolve
-	// the domain from the VM-ENTITY name (charly-<entity>, via the check runner's
-	// vmTargetName), not the deploy name; and (2) its FLATTENED plan carries the nested-child
-	// (member) checks, which are not yet deployed at Add time (the bed runner deploys members
-	// AFTER bundle add, then check-lives the whole tree). The in-proc VM target never ran an
-	// in-Add --verify for exactly this reason — verification is the bed runner's separate
-	// `charly check live` phase, which resolves the VM-entity domain + runs after the full
-	// tree is up. So a lifecycle substrate defers verification to check-live (R3 parity).
+	// deploy's checks against the venue executor, which is correct for a flat host/local deploy
+	// but WRONG for a VM bed — (1) its libvirt:/spice: probes resolve the live domain from the
+	// per-deploy DOMAIN IDENTITY (charly-<domain>, via the check runner's vmTargetName), which the
+	// in-Add path does not thread; and (2) its FLATTENED plan carries the nested-child (member)
+	// checks, which are not yet deployed at Add time (the bed runner deploys members AFTER bundle
+	// add, then check-lives the whole tree). The in-proc VM target never ran an in-Add --verify for
+	// exactly this reason — verification is the bed runner's separate `charly check live` phase,
+	// which resolves the per-deploy domain + runs after the full tree is up. So a lifecycle substrate
+	// defers verification to check-live (R3 parity).
 	if opts.Verify {
 		if _, isLifecycle := substrateLifecycleFor(t.prov.word); isLifecycle {
 			fmt.Fprintf(os.Stderr, "external deploy %q: --verify deferred to `charly check live` (the %s substrate verifies its live venue post-deploy, with the venue's runtime identity)\n", t.name, t.prov.word)

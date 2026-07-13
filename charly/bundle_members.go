@@ -167,11 +167,16 @@ func bringUpMembers(node *BundleNode) error {
 			// ref, like the isVM root's deploy-add), not the bare pod/local form.
 			// Best-effort pre-destroy clears a stale domain from an interrupted run.
 			startLibvirtUserSession()
-			_ = runCharlySubcommand("vm", "destroy", memberNode.From)
-			if err := runCharlySubcommand("vm", "create", memberNode.From); err != nil {
+			// The member's libvirt domain is named after the MEMBER deploy (memberKey), not the
+			// shared kind:vm entity (memberNode.From) — so member VMs sharing one entity across beds
+			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
+			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
+			memberDomain := vmDomainIdentity(memberKey)
+			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain)
+			if err := runCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
-			waitForVmSshReady(memberNode.From)
+			waitForVmSshReady(memberDomain)
 			if err := runCharlySubcommand("bundle", "add", memberKey, memberNode.From); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
@@ -212,10 +217,11 @@ func tearDownMembers(node *BundleNode) {
 		var err error
 		switch {
 		case isVmMember(memberNode):
-			// `vm destroy` removes the libvirt domain, but bring-up ALSO registered the
-			// member in the deploy ledger via `bundle add`. Reverse that too, or a ledger
-			// record survives every teardown and they accumulate run over run.
-			err = runCharlySubcommand("vm", "destroy", memberNode.From)
+			// `vm destroy` removes the libvirt domain (named after the MEMBER deploy, not the shared
+			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
+			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
+			// accumulate run over run.
+			err = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey))
 			if delErr := runCharlySubcommand(deployDelArgv(memberKey)...); delErr != nil && err == nil {
 				err = delErr
 			}

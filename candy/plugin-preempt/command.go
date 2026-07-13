@@ -98,7 +98,7 @@ func arbiterAction(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 // it reads only spec types, so it is pure plugin-side formatting).
 func renderLeaseTable(ledger *spec.PreemptLedger, stranded []string, out io.Writer) error {
 	if ledger == nil || len(ledger.Leases) == 0 {
-		fmt.Fprintln(out, "No active preemption leases.")
+		_, _ = fmt.Fprintln(out, "No active preemption leases.")
 		return nil
 	}
 	strandedSet := map[string]bool{}
@@ -106,7 +106,7 @@ func renderLeaseTable(ledger *spec.PreemptLedger, stranded []string, out io.Writ
 		strandedSet[s] = true
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "CLAIMANT\tTOKENS\tTRANSIENT\tPREEMPTED HOLDERS\tCREATED\tSTATE")
+	_, _ = fmt.Fprintln(tw, "CLAIMANT\tTOKENS\tTRANSIENT\tPREEMPTED HOLDERS\tCREATED\tSTATE")
 	for _, lz := range ledger.Leases {
 		holders := make([]string, 0, len(lz.Preempted))
 		for _, ph := range lz.Preempted {
@@ -120,7 +120,7 @@ func renderLeaseTable(ledger *spec.PreemptLedger, stranded []string, out io.Writ
 		if strandedSet[lz.Claimant] {
 			state = "STRANDED — run `charly preempt restore`"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%t\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%t\t%s\t%s\t%s\n",
 			lz.Claimant, strings.Join(lz.Tokens, ","), lz.Transient, hs, lz.Created, state)
 	}
 	return tw.Flush()

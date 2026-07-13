@@ -65,13 +65,13 @@ func (c *VmSnapshotListCmd) Run() error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tMODE\tCREATED\tREFCOUNT\tDESCRIPTION")
+	_, _ = fmt.Fprintln(tw, "NAME\tMODE\tCREATED\tREFCOUNT\tDESCRIPTION")
 	for _, e := range entries {
 		desc := e.Description
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", e.Name, e.Mode, e.Created, e.Refcount, desc)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", e.Name, e.Mode, e.Created, e.Refcount, desc)
 	}
 	return tw.Flush()
 }

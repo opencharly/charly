@@ -323,7 +323,9 @@ func mirrorPodHarnessDir(containerName string) error {
 }
 
 func dispatchToVM(vmName, scoreName string, args []string) error {
-	full := append([]string{"vm", "ssh", vmName, "--", "charly"}, args...)
+	// `vm ssh` addresses the guest by its managed alias charly-<domainIdentity>; the iterate sandbox
+	// name IS the deploy name, so resolve its per-deploy domain identity (a no-op for a plain bed name).
+	full := append([]string{"vm", "ssh", vmDomainIdentity(vmName), "--", "charly"}, args...)
 	cmd := exec.Command("charly", full...)
 	return runWithPhaseResync(cmd, scoreName)
 }

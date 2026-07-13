@@ -106,9 +106,15 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 	if err != nil {
 		return nil, fmt.Errorf("resolving home dir: %w", err)
 	}
-	stateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+vmName)
+	// The libvirt domain, per-domain state dir, managed ssh alias, and ssh-port ledger key off the
+	// per-deploy DOMAIN IDENTITY (the deploy name), NOT the shared kind:vm entity — so sibling beds
+	// referencing one entity get distinct, collision-free domains + disks + ports. The plugin derives
+	// the SAME identity from the SAME deploy name (vmshared.VmDomainIdentity), so the two agree. Entity
+	// stays the disk/spec source (`vm build` builds it; each deploy overlays it).
+	domainID := vmDomainIdentity(name)
+	stateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+domainID)
 
-	sshPort, err := resolveVmSshPort(vmSpec, vmName)
+	sshPort, err := resolveVmSshPort(vmSpec, domainID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +124,7 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 		VM:             vmSpec,
 		SSHUser:        resolveVmSshUser(vmSpec),
 		SSHPort:        sshPort,
-		Alias:          VmSshAlias(vmName),
+		Alias:          VmSshAlias(domainID),
 		SSHKeyPath:     filepath.Join(stateDir, "id_ed25519"),
 		KnownHostsPath: filepath.Join(stateDir, "known_hosts"),
 		StateDir:       stateDir,

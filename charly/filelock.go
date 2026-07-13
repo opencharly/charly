@@ -42,6 +42,18 @@ func acquireFileLock(path string, blocking bool) (release func() error, err erro
 // working copies and corrupt each other. Keyed by sha256(srcDir) under the user cache so the
 // lock file never pollutes the repo working tree.
 
+// acquireVmBuildLock serializes concurrent `charly vm build <entity>` of the SAME entity across
+// charly processes, keyed by the entity's output disk dir (output/qcow2/<entity>/.build.lock). N
+// check beds sharing one kind:vm entity each preflight `vm build <entity>`; without this they race
+// on output/qcow2/<entity>/disk.qcow2 (concurrent overlay-create + resize) AND a second build could
+// rewrite the base a live per-domain overlay already backs onto — mutating a supposed read-only
+// backing file. Blocking (LOCK_EX): the first builds, the rest wait then skip-if-fresh. The lock is
+// held ONLY for the duration of `charly vm build` and released before `charly vm create`, so the
+// per-domain overlay-creates run UNSERIALIZED (the whole point of per-deploy isolation — P33).
+func acquireVmBuildLock(outputDir string) (func() error, error) {
+	return acquireFileLock(filepath.Join(outputDir, ".build.lock"), true)
+}
+
 // buildActivityDir is the user-scope directory of LIVE build-activity locks —
 // one flocked nonce file per in-flight `charly box build` engine run.
 func buildActivityDir() (string, error) {
