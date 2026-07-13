@@ -57,9 +57,10 @@ func materializeParsedNode(pn spec.ParsedNode, uf *UnifiedFile) error {
 
 // materializeProject folds a whole spec.ParsedProject (the loader plugin's OpLoad reply — one
 // document's decomposed nodes) into the typed UnifiedFile, node by node. This is the exact
-// host-side entry the plugin dispatch drops into: today mergeUnifiedDocs builds the
-// ParsedProject in-core then calls this; when the parse relocates, the same ParsedProject
-// arrives from candy/plugin-loader unchanged.
+// host-side entry the plugin dispatch drops into: today the loaderkit.Walk WALK builds the
+// spec.LoadedProject/ParsedProject and materializeLoadedProject (loader_driver.go) calls this per
+// document; when the parse relocates, the same ParsedProject arrives from candy/plugin-loader
+// unchanged.
 func materializeProject(pp *spec.ParsedProject, uf *UnifiedFile) error {
 	if pp == nil {
 		return nil

@@ -17,8 +17,10 @@ import (
 // some repo imports THIS repo back (the intentional main <-> cachyos mutual
 // import) at a DIFFERENT pinned version, the back-reference resolves to the node
 // already in progress up the load stack (above all the local root) instead of
-// fetching a divergent — and possibly stale-schema — snapshot. See
-// loadNamespaceCached + LoadUnified's root registration in unified.go.
+// fetching a divergent — and possibly stale-schema — snapshot. The cycle-break
+// itself now lives in loaderkit.Walk (its namespace-mount recursion), consulting
+// this function through the WalkSeams.RepoIdentity seam; the root's own identity
+// is seeded into the walk by hostWalkProject (loader_driver.go).
 
 // nsRepoIdentity returns the canonical repo identity of an import ref, or "" when
 // it can't be determined (in which case the loader degrades to version-keyed

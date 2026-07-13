@@ -42,9 +42,10 @@ func NewMeta() pb.PluginMetaServer {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// ParseDoc implements loaderkit.DocParser — the typed per-document parse the host calls for every
-// config document (compiled-in, no wire envelope). The default charly node-form parse.
-func (*provider) ParseDoc(doc *yaml.Node, t loaderkit.Threaded) (map[string]*yaml.Node, spec.ParsedProject, error) {
+// ParseDoc implements spec.DocParser — the typed per-document parse the host calls for every
+// config document (compiled-in, no wire envelope). The default charly node-form parse, delegating
+// to the ONE copy in sdk/loaderkit.
+func (*provider) ParseDoc(doc *yaml.Node, t spec.Threaded) (map[string]*yaml.Node, spec.ParsedProject, error) {
 	return loaderkit.ParseDoc(doc, t)
 }
 

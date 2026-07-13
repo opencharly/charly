@@ -6,8 +6,8 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // inprocProvider is a Provider backed by a COMPILED-IN plugin candy's
@@ -94,10 +94,12 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 		panic("registerCompiledPlugin: " + err.Error())
 	}
 	RegisterBuiltinPluginUnit(*unit)
-	// A compiled-in loader plugin (P6) exposes the typed per-document PARSE via loaderkit.DocParser
+	// A compiled-in loader plugin (P6) exposes the typed per-document PARSE via spec.DocParser
 	// — wire it as the active config front-end so the host calls it directly (no wire envelope) per
-	// document. The provider's Invoke stays registered for the out-of-process placement.
-	if dp, ok := srv.(loaderkit.DocParser); ok {
+	// document. The provider's Invoke stays registered for the out-of-process placement. There is no
+	// in-core fallback parser (K1 deleted loaderkit.DefaultParser): the compiled-in loader plugin is
+	// the sole parser, registered here at init before any load; requireLoaderParser FATALs if absent.
+	if dp, ok := srv.(spec.DocParser); ok {
 		activeLoaderParser = dp
 	}
 	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —

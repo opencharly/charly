@@ -17,14 +17,15 @@ import (
 var embeddedCharlyDefaults []byte
 
 // embeddedDefaults parses the binary-embedded node-form defaults into a UnifiedFile
-// through the SAME document-routing core (mergeUnifiedDocs → classifyDoc →
-// normalizeNodeInto) that every on-disk charly.yml flows through — including the
-// validate-before-execute #NodeDoc gate. The embedded default is just another
-// node-form config that happens to live in the binary. Parsed fresh on each call
-// so no mutable state is shared across loads.
+// through the SAME per-document routing (kit.ClassifyDoc → #NodeDoc gate → parse →
+// materialize) that every on-disk charly.yml document flows through — via
+// materializeDocStream (loader_driver.go), the in-memory counterpart of the loaderkit.Walk
+// mechanism (the embedded vocab has no imports/discover/namespaces, so it needs no file walk).
+// The embedded default is just another node-form config that happens to live in the
+// binary. Parsed fresh on each call so no mutable state is shared across loads.
 func embeddedDefaults() (*UnifiedFile, error) {
 	var uf UnifiedFile
-	if _, err := mergeUnifiedDocs(&uf, embeddedCharlyDefaults, "charly defaults (embedded)", ""); err != nil {
+	if err := materializeDocStream(embeddedCharlyDefaults, "charly defaults (embedded)", &uf); err != nil {
 		return nil, fmt.Errorf("parsing embedded defaults: %w", err)
 	}
 	return &uf, nil
@@ -41,10 +42,10 @@ func embeddedDefaults() (*UnifiedFile, error) {
 // root-wins mergePluginKindsMap (copy a name only when ABSENT). So a project's
 // `distro: fedora` / `sidecar: tailscale` overrides the embedded one. Calling this AFTER
 // all project sources are merged fills only what the project did not define —
-// project-wins is structural, not order-dependent. Called at the depth-0 boundary of
-// loadUnifiedInto for the root AND every namespace child, so each project/namespace
-// inherits the default vocabulary + sidecar templates. (Replaces the former explicit
-// mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeSidecarMap calls.)
+// project-wins is structural, not order-dependent. Called by materializeLoadedProject
+// (loader_driver.go) for the root AND every namespace child it materializes, so each
+// project/namespace inherits the default vocabulary + sidecar templates. (Replaces the
+// former explicit mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeSidecarMap calls.)
 func applyEmbeddedDefaults(uf *UnifiedFile) error {
 	def, err := embeddedDefaults()
 	if err != nil {

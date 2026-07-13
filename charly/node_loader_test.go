@@ -8,7 +8,7 @@ import (
 )
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
-// end-to-end: classifyDoc → docShapeNode → validate-before-execute (#NodeDoc) →
+// end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
 // normalizeNodeInto → the projected UnifiedFile maps. Candy + box + a bundle group
 // with two alongside pod members + an inline cross-member check.
 func TestLoadUnified_NodeForm(t *testing.T) {
@@ -83,7 +83,7 @@ shop:
 }
 
 // TestLoadUnified_RejectsLegacyShapes proves the #NodeDoc-sole-gate cutover:
-// classifyDoc hard-rejects a legacy kind-keyed document AND a legacy root-shape
+// kit.ClassifyDoc hard-rejects a legacy kind-keyed document AND a legacy root-shape
 // collection map (both superseded by the unified node-form), each with a
 // `charly migrate` hint — the bilingual reader was deleted.
 func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {

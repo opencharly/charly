@@ -1,27 +1,42 @@
 package main
 
-import "github.com/opencharly/sdk/loaderkit"
+import (
+	"log"
 
-// activeLoaderParser is the registered config-front-end PARSE — the loaderkit.DocParser of the
-// compiled-in loader plugin (candy/plugin-loader), wired at registration when a provider that
-// implements loaderkit.DocParser registers (plugin_inproc.go). Defaults to the built-in
-// node-form parse so the bootstrap path (before any loader plugin registers — there is none, the
-// compiled-in loader registers at init before the first load) still parses. Swapping the loader
-// plugin swaps the config front-end here.
-var activeLoaderParser loaderkit.DocParser = loaderkit.DefaultParser{}
+	"github.com/opencharly/sdk/spec"
+)
 
-// loader_threaded.go — the host snapshot of the registry-derived kind-recognition DATA the
-// unified-config PARSE (sdk/loaderkit) consults (P6). The parse is a kind-blind mechanism that
-// never queries the provider registry directly (boundary law clause D); the host snapshots which
-// words it recognizes into a loaderkit.Threaded and threads it in. Computed fresh per parse pass:
+// loader_threaded.go — the host side of the unified-config loader seam (P6/K1). It holds the
+// registered per-document PARSER (activeLoaderParser) and builds the registry-derived
+// kind-recognition snapshot (loaderThreaded) the parse consults instead of querying the provider
+// registry directly (boundary law clause D). The seam CONTRACT types (spec.DocParser / spec.Threaded)
+// live in sdk/spec so neither the host nor the loader plugin imports the other; the WALK mechanism
+// (loaderkit.Walk) is reached through the single loader_driver.go import.
+
+// activeLoaderParser is the registered config-front-end PARSE — the spec.DocParser of the
+// compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). There
+// is NO in-core fallback (K1 deleted loaderkit.DefaultParser): the compiled-in loader registers at
+// init before the first load, so a nil parser means the loader plugin was not compiled in — a
+// FATAL, never a silent fallback (requireLoaderParser).
+var activeLoaderParser spec.DocParser
+
+// requireLoaderParser returns the registered parser or FATALs with a clear message. Every parse
+// site (the Walk driver + the box-validate node-form parse + the layers candy scan) goes through
+// it, so a missing loader plugin fails loudly and identically everywhere.
+func requireLoaderParser() spec.DocParser {
+	if activeLoaderParser == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeLoaderParser
+}
+
+// loaderThreaded builds the spec.Threaded snapshot: the recognized kind / deploy-substrate words
+// (registered providers + parse-time pre-scan declarations), the kinds that may nest sub-entity
+// members, and each plugin verb's scalar-sugar primary field. Computed fresh per parse pass:
 // connectDeclaredKindPlugins runs before the document parse, so the registry is stable within a
 // pass, and the re-entrant connect-then-reload re-snapshots.
-
-// loaderThreaded builds the loaderkit.Threaded snapshot: the recognized kind / deploy-substrate
-// words (registered providers + parse-time pre-scan declarations), the kinds that may nest
-// sub-entity members, and each plugin verb's scalar-sugar primary field.
-func loaderThreaded() loaderkit.Threaded {
-	t := loaderkit.Threaded{
+func loaderThreaded() spec.Threaded {
+	t := spec.Threaded{
 		Kinds:            map[string]bool{},
 		DeploySubstrates: map[string]bool{},
 		StructuralKinds:  map[string]bool{},

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -181,9 +182,9 @@ func validateVocabularyCollections(doc cue.Value, kinds []string, srcLabel strin
 }
 
 // isNodeFormFile reports whether any document in a YAML file is unified
-// node-form (classifyDoc → docShapeNode). Used to skip the legacy root-shape
-// collection validator on node-form manifests (whose entities are validated at
-// load + via the resolved cfg.Box path).
+// node-form (kit.ClassifyDoc → kit.DocShapeNode). Used to skip the legacy
+// root-shape collection validator on node-form manifests (whose entities are
+// validated at load + via the resolved cfg.Box path).
 func isNodeFormFile(data []byte) bool {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	for {
@@ -191,7 +192,7 @@ func isNodeFormFile(data []byte) bool {
 		if err := dec.Decode(&node); err != nil {
 			break
 		}
-		if shape, err := classifyDoc(&node); err == nil && shape == docShapeNode {
+		if shape, err := kit.ClassifyDoc(&node); err == nil && shape == kit.DocShapeNode {
 			return true
 		}
 	}

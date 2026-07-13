@@ -182,7 +182,7 @@ func validateNodeFormSteps(path string, data []byte) error {
 	}
 	// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
 	// genericNode validateEntityNodeRec consumes is reconstructed from each ParsedNode.
-	_, pp, err := activeLoaderParser.ParseDoc(&ydoc, loaderThreaded())
+	_, pp, err := requireLoaderParser().ParseDoc(&ydoc, loaderThreaded())
 	if err != nil {
 		return fmt.Errorf("%s: parse: %w", path, err)
 	}

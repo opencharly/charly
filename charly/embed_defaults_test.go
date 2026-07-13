@@ -90,7 +90,7 @@ mydistro:
 
 // TestEmbeddedDefaults_SameLoaderPath proves the consolidation invariant: the
 // SINGLE binary-embedded charly.yml is compiled + parsed by the SAME unified
-// loader core (embeddedDefaults → mergeUnifiedDocs (node-form)) and yields
+// loader core (embeddedDefaults → materializeDocStream (node-form)) and yields
 // BOTH the build vocabulary
 // AND the sidecar-template library from one parse — no bespoke per-section
 // loader. This is the core "parse its own charly.yml with exactly the same code

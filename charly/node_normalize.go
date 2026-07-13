@@ -5,7 +5,7 @@ package main
 // authoring surface's decode path, and the ONLY one: the legacy kind-keyed
 // routing (the kind-first decode + per-kind document wrappers) was DELETED in the
 // #NodeDoc-sole-gate cutover — a legacy kind-keyed / root-shape document is now
-// hard-rejected at classifyDoc with a `charly migrate` hint. Every kind flows
+// hard-rejected at kit.ClassifyDoc with a `charly migrate` hint. Every kind flows
 // through the ONE generic value-decoder (node_build.go),
 // so node-form yields the exact same domain structs the kind-first decode
 // produced (proven by the *_RoundTrip tests).

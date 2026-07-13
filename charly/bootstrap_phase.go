@@ -17,9 +17,9 @@ import (
 // the remote-cache auto-migration (refs.go), and the load gate
 // keeps the `Run: charly migrate` reject for a stale config — the chain is whole-project file-based
 // + host-coupled (it needs host-prelifted inputs from a completed LoadUnified) and so cannot run on
-// the root bytes alone inside this phase. LoadUnified seeds the returned bytes into
-// loadUnifiedInto via the `fileOverrides` map (keyed on the root's abs path), so the rewrite reaches
-// the actual PARSE + the post-merge gate — not just the early version gate. Bootstrap providers are
+// the root bytes alone inside this phase. LoadUnified threads the returned bytes into hostWalkProject
+// as the walk's ROOT OVERRIDE (loaderkit.Walk parses them instead of re-reading disk), so the rewrite
+// reaches the actual PARSE + the post-merge gate — not just the early version gate. Bootstrap providers are
 // COMPILED-IN (in-proc — no validated config exists yet to discover an out-of-process source), so
 // this NEVER re-enters the validated-config load (the F4 connect-cycle hazard avoided by
 // construction). A no-op bootstrap plugin returns the bytes unchanged. Returns the bytes after all
