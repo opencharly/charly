@@ -58,7 +58,7 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 		// A COMPILED-IN command candy may NEST its command(s) under a parent command word
 		// (e.g. candy/plugin-box's generate/validate/… under `box`). The parent rides an
 		// optional Go interface on the plugin's own provider (the SAME srv-interface-detection
-		// pattern registerCompiledPlugin uses for loaderkit.DocParser / kit.RefsDownloader), so
+		// pattern registerCompiledPlugin uses for spec.DocParser / kit.RefsDownloader), so
 		// the compiled-in inprocProvider surfaces it via capMeta.CommandParent() and
 		// collectExternalCommandPlugins nests the dynamic Kong subcommand under that parent. This
 		// is the compiled-in placement of nesting; an out-of-process command declares no parent

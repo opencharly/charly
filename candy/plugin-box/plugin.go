@@ -68,7 +68,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // CommandParent is the optional interface buildUnitInProc detects on a compiled-in command
 // plugin's provider (the SAME srv-interface-detection pattern registerCompiledPlugin uses for
-// loaderkit.DocParser / kit.RefsDownloader): every command word this plugin serves NESTS under the
+// spec.DocParser / kit.RefsDownloader): every command word this plugin serves NESTS under the
 // core `box` command group, so `charly box generate/validate/new/pkg` parse + dispatch here.
 func (provider) CommandParent() string { return "box" }
 

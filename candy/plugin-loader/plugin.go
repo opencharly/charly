@@ -1,11 +1,11 @@
 // Package loader is the loader plugin candy — the swappable config front-end (P6). It serves the
-// per-document PARSE via loaderkit.DocParser: the host resolves the registered loader provider to
-// a loaderkit.DocParser and calls it for every config document, so an alternative loader plugin
+// per-document PARSE via spec.DocParser: the host resolves the registered loader provider to
+// a spec.DocParser and calls it for every config document, so an alternative loader plugin
 // can serve a different config front-end by registering a different DocParser. The DEFAULT
 // (this candy) parses charly's node-form via the shared sdk/loaderkit — the ONE copy of the parse
 // (R3), the way sdk/kit is the one copy of the check walk.
 //
-// The parse consults ONLY spec vocabulary + yaml + the host-threaded loaderkit.Threaded
+// The parse consults ONLY spec vocabulary + yaml + the host-threaded spec.Threaded
 // (registry-derived kind-recognition DATA), never charly core — a compiled-in plugin candy is a
 // separate module importing only sdk. The bootstrap SEED (the embedded providers: manifest via a
 // plain yaml.Unmarshal) STAYS in core and never calls the loader, so registering this at init()
@@ -30,7 +30,7 @@ import (
 const calver = "2026.192.0000"
 
 // NewProvider returns the loader provider — a pb.ProviderServer that ALSO implements
-// loaderkit.DocParser (the typed per-document parse the host calls compiled-in).
+// spec.DocParser (the typed per-document parse the host calls compiled-in).
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises the loader capability (Class "loader", word "loader").
