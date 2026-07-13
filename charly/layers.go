@@ -341,7 +341,7 @@ type Candy struct {
 	apk             []ApkPackageSpec  // Android apps to install on a kind:android device (from the candy manifest apk:)
 	localpkg        map[string]string // per-format native-package source dirs (pac/rpm/deb → dir) from the candy manifest localpkg:
 	reboot          bool              // reboot the deploy target after this candy (from the candy manifest reboot:)
-	ExternalBuilder string            // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see generate.go emitExternalBuilderStages
+	ExternalBuilder string            // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see deploykit EmitExternalBuilderStages
 	plan            []Step            // unified ordered plan (from the candy manifest plan:): run:/check:/agent-*/include:
 	artifacts       []CandyArtifact   // files to retrieve after setup (from the candy manifest artifacts:)
 	shell           *ShellConfig      // shell-init declarations (from the candy manifest shell:)

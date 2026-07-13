@@ -103,8 +103,59 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	dg.ExternalizedBuilders = externalizedBuilders
 	dg.RenderLocalPkgImageInstall = renderLocalPkgImageInstall
 	dg.ResolveInlineBuilder = g.resolveInlineBuilderSeam
+	// Builder-cluster registry seams (K3-A): the multi-stage BUILDER render moved to
+	// deploykit (builders_render.go); its ONLY host coupling — the provider registry
+	// (on-demand connect + ResolveBuilder + OpResolve Invoke) — is wired here. Error
+	// strings are formatted in the seam closures so they stay byte-exact.
+	dg.EnsureBuildersConnected = func(detected []string) error {
+		return ensureBuildersConnected(context.Background(), g.Config, g.Dir, detected)
+	}
+	dg.ResolveDetectionBuilderStage = g.resolveDetectionBuilderStageSeam
+	dg.ResolveExternalBuilderStage = g.resolveExternalBuilderStageSeam
 	g.dkGen = dg
 	return dg
+}
+
+// resolveDetectionBuilderStageSeam is the core impl wired onto deploykit's
+// ResolveDetectionBuilderStage seam: resolve the externalized detection-builder provider
+// from the registry (its "not connected" error byte-preserved) and Invoke its OpResolve
+// leg (resolveBuilderStage). deploykit builds the render input (BuildStageContext +
+// BuilderResolveInputFrom) and passes it here; the registry resolve + Invoke stays core.
+func (g *Generator) resolveDetectionBuilderStageSeam(builderName string, in spec.BuilderResolveInput, img *ResolvedBox) (spec.BuilderResolveReply, error) {
+	var zero spec.BuilderResolveReply
+	prov, ok := providerRegistry.ResolveBuilder(builderName)
+	if !ok {
+		return zero, fmt.Errorf("detection builder %q is externalized but its plugin is not connected (a plugin-load gap?)", builderName)
+	}
+	return resolveBuilderStage(prov, builderName, in, img)
+}
+
+// resolveExternalBuilderStageSeam is the core impl wired onto deploykit's
+// ResolveExternalBuilderStage seam: resolve the `external_builder:`-selected out-of-tree
+// provider (its not-registered + compiled-in + resolve errors byte-preserved), assert it
+// is an EXTERNAL grpcProvider, and Invoke its OpResolve leg (resolveExternalBuilder, the
+// minimal candy-name-only input). Registry-coupled, stays core.
+func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img *ResolvedBox) (spec.BuilderResolveReply, error) {
+	var zero spec.BuilderResolveReply
+	prov, ok := providerRegistry.ResolveBuilder(word)
+	if !ok {
+		return zero, fmt.Errorf("candy %q: external_builder %q is not a registered builder (an external plugin not connected at build time?)", candyName, word)
+	}
+	// Only an EXTERNAL out-of-process builder (a *grpcProvider) drives this build-time
+	// OpResolve path; reject any compiled-in provider (defensive — no in-proc builder exists
+	// today). NOTE: the four detection-builders (pixi/cargo/npm/aur) are ALSO external
+	// grpcProviders now, but they serve only the DEPLOY-time OpCollectContext/OpReverse legs and
+	// are SELECTED BY DETECTION (their detect-files / aur: section via the embedded builder:
+	// vocabulary), never by external_builder:. Mis-selecting one here passes this type-assert but
+	// then fails LOUDLY at resolveExternalBuilder's OpResolve Invoke (the plugin rejects the op).
+	if _, isExternal := prov.(*grpcProvider); !isExternal {
+		return zero, fmt.Errorf("candy %q: external_builder %q resolves to a compiled-in builder, not an external plugin", candyName, word)
+	}
+	reply, err := resolveExternalBuilder(prov, word, candyName, img)
+	if err != nil {
+		return zero, fmt.Errorf("candy %q: external_builder %q resolve: %w", candyName, word, err)
+	}
+	return reply, nil
 }
 
 // resolveInlineBuilderSeam is the core impl wired onto deploykit's
@@ -121,7 +172,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 	if !ok {
 		return "", fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
 	}
-	in := builderResolveInputFrom(layer.Name, bName, bDef, ctx)
+	in := deploykit.BuilderResolveInputFrom(layer.Name, bName, bDef, ctx)
 	reply, err := resolveBuilderStage(prov, bName, in, img)
 	if err != nil {
 		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)

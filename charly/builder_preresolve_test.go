@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // builderTestImg builds a ResolvedBox carrying the four externalized builders in its BuilderConfig
@@ -37,7 +39,7 @@ func TestDetectExternalizedBuilders_ScopedAndDistroGated(t *testing.T) {
 	// (1) A pixi-only deploy on a FEDORA image surfaces ONLY pixi — not npm/cargo/aur. This is the
 	// exact C4 scenario (check-jupyter-pod): jupyter has pixi.toml, nothing else.
 	pixiOnly := map[string]*Candy{"jupyter": {Name: "jupyter", HasPixiToml: true}}
-	got := detectExternalizedBuilders([]string{"jupyter"}, pixiOnly, builderTestImg("rpm"))
+	got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, candyModelMap(pixiOnly), externalizedBuilders, builderTestImg("rpm"))
 	if !reflect.DeepEqual(got, []string{"pixi"}) {
 		t.Fatalf("pixi-only fedora deploy surfaced %v, want exactly [pixi] (the C4 over-build is back if this lists npm/cargo/aur)", got)
 	}
@@ -46,26 +48,26 @@ func TestDetectExternalizedBuilders_ScopedAndDistroGated(t *testing.T) {
 	// [rpm], no aur), surfaces NO aur — the distro gate. (It also carries no pixi.toml etc., so the
 	// result is empty.)
 	multiAur := map[string]*Candy{"chrome": aurCandy("chrome", "google-chrome")}
-	got = detectExternalizedBuilders([]string{"chrome"}, multiAur, builderTestImg("rpm"))
+	got = deploykit.DetectExternalizedBuilders([]string{"chrome"}, candyModelMap(multiAur), externalizedBuilders, builderTestImg("rpm"))
 	if len(got) != 0 {
 		t.Fatalf("fedora deploy of an aur:-section candy surfaced %v, want [] (aur must be distro-gated out on a non-aur box)", got)
 	}
 
 	// (3) The SAME candy on an ARCH image (build formats include aur) DOES surface aur — under-load
 	// would break a real arch deploy.
-	got = detectExternalizedBuilders([]string{"chrome"}, multiAur, builderTestImg("pac", "aur"))
+	got = deploykit.DetectExternalizedBuilders([]string{"chrome"}, candyModelMap(multiAur), externalizedBuilders, builderTestImg("pac", "aur"))
 	if !reflect.DeepEqual(got, []string{"aur"}) {
 		t.Fatalf("arch deploy of an aur:-section candy surfaced %v, want [aur]", got)
 	}
 
 	// (4) A candy that triggers NO builder surfaces nothing.
 	none := map[string]*Candy{"plain": {Name: "plain"}}
-	if got := detectExternalizedBuilders([]string{"plain"}, none, builderTestImg("rpm")); len(got) != 0 {
+	if got := deploykit.DetectExternalizedBuilders([]string{"plain"}, candyModelMap(none), externalizedBuilders, builderTestImg("rpm")); len(got) != 0 {
 		t.Fatalf("no-builder candy surfaced %v, want []", got)
 	}
 
 	// (5) No BuilderConfig (e.g. a synthetic compile context) → nil, never a panic.
-	if got := detectExternalizedBuilders([]string{"jupyter"}, pixiOnly, &ResolvedBox{Name: "x"}); got != nil {
+	if got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, candyModelMap(pixiOnly), externalizedBuilders, &ResolvedBox{Name: "x"}); got != nil {
 		t.Fatalf("nil BuilderConfig surfaced %v, want nil", got)
 	}
 }

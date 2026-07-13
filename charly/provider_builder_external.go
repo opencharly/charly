@@ -4,12 +4,12 @@ package main
 // builder-class companion of provider_deploy.go's externalizedDeploySubstrates /
 // externalDeploySubstratePlugins. The four detection-builders (cargo/npm/pixi/aur) are served
 // by OUT-OF-PROCESS plugin candies: their BUILD-TIME multi-stage is resolved by the plugin's
-// OpResolve leg (kit.BuilderResolve, spliced by emitBuilderStages/emitBuilderArtifacts — C10),
+// OpResolve leg (kit.BuilderResolve, spliced by deploykit EmitBuilderStages/EmitBuilderArtifacts — C10),
 // and their DEPLOY-TIME IR shim (per-candy stage context + teardown ops) is carried
 // out-of-process over OpCollectContext + OpReverse, resolved in the host-side build PRE-PASS
 // (builder_preresolve.go).
 //
-// Selection stays DETECTION (candyNeedsBuilder against the embedded builder: vocabulary), never an
+// Selection stays DETECTION (deploykit CandyNeedsBuilder against the embedded builder: vocabulary), never an
 // authored external_builder: field — so the ~39 consumer candies that carry a pixi.toml /
 // package.json / Cargo.toml / aur: section are untouched. These maps only say WHICH builder words
 // are external and WHICH candy serves each. Connection is PRECISELY SCOPED + on-demand: the build
