@@ -101,8 +101,8 @@ type UnifiedFile struct {
 
 	// Schema v4: first-class target template maps (singular keys).
 	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
-	// Cutover J) — resolved via resolvePodViaPlugin; the kernel never reads spec.Pod
-	// fields off the map.
+	// Cutover J); the kernel never reads spec.Pod fields off the map — consuming
+	// PLUGINS decode a body into the concrete kind they need.
 	Pod map[string]json.RawMessage `yaml:"pod,omitempty" json:"pod,omitempty"`
 	// K8s (kind:k8s) cluster templates are stored OPAQUELY (the k8s substrate-value
 	// de-type, Cutover K) — resolved via resolveK8sViaPlugin; the full cluster model

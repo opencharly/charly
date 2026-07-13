@@ -249,4 +249,21 @@ func TestResolvedProject_SeamRoundTrip(t *testing.T) {
 	if cv.Version != "2026.179.0000" || !strings.Contains(cv.Description, "resolved-project seam round-trips") {
 		t.Fatalf("candy view decoded wrong over the seam: %+v", cv)
 	}
+
+	// Collection A growth (would be ABSENT pre-#54): the candy BUILD model is projected — the
+	// check-projection / validate / K3-D enabler. The fixture candy declares one plan step.
+	cm, ok := rp.CandyModels["rp-fixture"]
+	if !ok {
+		t.Fatalf("rp-fixture candy MODEL missing from CandyModels: %+v", rp.CandyModels)
+	}
+	if len(cm.Plan) == 0 {
+		t.Fatalf("candy model Plan not projected over the seam (the check-include/validate enabler): %+v", cm)
+	}
+	// build VOCABULARY (the validate ENGINE consumer) is projected from the embedded charly.yml.
+	if len(rp.Distro) == 0 {
+		t.Fatalf("build-vocab Distro not projected into the envelope (validate needs it)")
+	}
+	if len(rp.Builder) == 0 {
+		t.Fatalf("build-vocab Builder not projected into the envelope (validate needs it)")
+	}
 }

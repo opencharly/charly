@@ -7,7 +7,7 @@ package check
 // target. Per-target dispatch: pod → `podman cp` (plugin-local); vm → `charly vm scp`
 // (the "cli" host seam, the shared host→guest single-file copy primitive); host →
 // no-op (credentials already in the host's $HOME). The project read (iterate block +
-// sandbox class + agent catalog) rides the "check-config" host seam; agent
+// sandbox class + agent catalog) is derived off the resolved-project envelope; agent
 // resolution rides InvokeProvider(kind:agent).
 
 import (
@@ -39,7 +39,7 @@ func (c *CheckSyncCredCmd) RunActual() error {
 	if err != nil {
 		return err
 	}
-	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Entity: c.Score, Dir: projectDir})
+	reply, err := resolveCheckProjection(cmdExec, cmdCtx, c.Score, projectDir)
 	if err != nil {
 		return err
 	}

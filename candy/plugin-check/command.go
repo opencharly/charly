@@ -124,33 +124,11 @@ func bedCliReq(ex *sdk.Executor, ctx context.Context, req spec.CliRequest) (spec
 	return reply, nil
 }
 
-// checkConfig resolves the AI-harness's check-project projection over the dedicated "check-config"
-// host seam (a plugin, a separate module, cannot LoadUnified). The harness leaves consume the reply's
-// bed-vs-iterate classification (IsBed/HasNode/HasIterate), sandbox class, pod-target disposability,
-// the resolved iterate: config, the include-expanded plan, and the kind:agent catalog. ex/ctx are
-// explicit (the harness owns its executor). Retention rides HostBuild("retention"); this seam carries
-// no keep-count. TRANSITIONAL: dies at K1 (post-loaderkit the plugin self-loads the project).
-func checkConfig(ex *sdk.Executor, ctx context.Context, req spec.CheckConfigRequest) (spec.CheckConfigReply, error) {
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return spec.CheckConfigReply{}, err
-	}
-	out, err := ex.HostBuild(ctx, "check-config", reqJSON)
-	if err != nil {
-		return spec.CheckConfigReply{}, err
-	}
-	var reply spec.CheckConfigReply
-	if err := json.Unmarshal(out, &reply); err != nil {
-		return spec.CheckConfigReply{}, fmt.Errorf("check-config: decode reply: %w", err)
-	}
-	return reply, nil
-}
-
 // hostRetention runs the SHARED check-run prune engine over the existing "retention" host seam
 // (pruneCheckRuns STAYS core — multi-caller: box build / check run / list tags all prune). The
 // harness dispatcher defers a {Check:true, Dir} call so `.check/<name>/` is trimmed to
 // keep_check_runs after a run; the host resolves the keep-count (Defaults.KeepCheckRuns + the
-// fallback) itself, so this seam — not a check-config field — owns retention (R3). The plugin prints
+// fallback) itself, so this seam — not the check projection — owns retention (R3). The plugin prints
 // the "Pruned N (keep_check_runs=K)" line from reply.CheckPaths/KeepCheckRuns.
 func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequest) (spec.RetentionReply, error) {
 	reqJSON, err := json.Marshal(req)

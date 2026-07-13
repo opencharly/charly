@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -19,8 +21,8 @@ import (
 // It is exposed BOTH ways: as the generic action-noun HostBuild kind "resolved-project" (F11 — a
 // plugin requests it over the established reverse channel via Executor.HostBuild) AND callable
 // host-side directly (projectResolvedBox / projectCandyView / buildResolvedProjectFromDir). The
-// per-concern config-resolve / status-substrate / check-config seams collapse into this one envelope
-// at their consumers' later K5 units; this unit adds only the envelope + its fill.
+// per-concern config-resolve / status-substrate seams collapse into this one envelope at their
+// consumers' later K5 units (the AI-harness check projection already did — plugin-check reads it here).
 
 // resolvedProjectBuilderKind is the F11 hostBuilders key — a generic action noun, never a provider word.
 const resolvedProjectBuilderKind = "resolved-project"
@@ -91,16 +93,90 @@ func projectCandyView(c *Candy) spec.CandyView {
 	for _, s := range c.Service() {
 		v.ServiceNames = append(v.ServiceNames, s.Name)
 	}
+	// list-subcommand growth: route/volumes/aliases carry the authored detail
+	// `charly box list routes|volumes|aliases` prints; has_init + port_relay reconstruct
+	// the init-triggering predicate (HasAnyInit || PortRelayPorts>0) for `list services`.
+	v.HasInit = c.HasAnyInit()
+	v.PortRelayPorts = c.PortRelayPorts
+	if route, _ := c.Route(); route != nil {
+		v.Route = route
+	}
+	v.Volumes = c.Volume()
+	v.Aliases = c.Alias()
 	return v
+}
+
+// projectCandyModel projects a runtime *Candy into the serializable spec.CandyModel — the candy
+// BUILD model (plan + lowered ops + resolved package/service/env/route sections) that validate, the
+// plan-include splicer, and K3-D read WITHOUT the live *Candy. Distinct from projectCandyView
+// (identity/graph). A pure DATA projection over accessors the *Candy already exposes.
+func projectCandyModel(c *Candy) spec.CandyModel {
+	m := spec.CandyModel{
+		Name:           c.Name,
+		Version:        c.Version,
+		SourceDir:      c.SourceDir,
+		Reboot:         c.Reboot(),
+		Plan:           c.PlanSteps(),
+		RunOps:         c.runOps(),
+		Service:        c.Service(),
+		Extract:        c.Extract(),
+		Data:           c.Data(),
+		Apk:            c.Apk(),
+		TopPackages:    c.TopPackages(),
+		Vars:           c.Vars(),
+		Libvirt:        c.Libvirt(),
+		Engine:         c.Engine(),
+		PortRelayPorts: c.PortRelayPorts,
+		ServiceFiles:   c.ServiceFiles(),
+		Volumes:        c.Volume(),
+		Aliases:        c.Alias(),
+		EnvRequire:     c.EnvRequire(),
+		EnvAccept:      c.EnvAccept(),
+		SecretRequire:  c.SecretRequire(),
+		SecretAccept:   c.SecretAccept(),
+		MCPRequire:     c.MCPRequire(),
+		MCPAccept:      c.MCPAccept(),
+	}
+	for _, f := range c.LocalPkgFormats() {
+		if m.LocalPkg == nil {
+			m.LocalPkg = map[string]string{}
+		}
+		m.LocalPkg[f] = c.LocalPkg(f)
+	}
+	if len(c.formatSections) > 0 {
+		m.FormatSections = make(map[string]spec.PackageSection, len(c.formatSections))
+		for k, v := range c.formatSections {
+			if v != nil {
+				m.FormatSections[k] = *v
+			}
+		}
+	}
+	if len(c.tagSections) > 0 {
+		m.TagSections = make(map[string]spec.TagPkgConfig, len(c.tagSections))
+		for k, v := range c.tagSections {
+			if v != nil {
+				m.TagSections[k] = *v
+			}
+		}
+	}
+	if env, _ := c.EnvConfig(); env != nil {
+		m.Env = env
+	}
+	if route, _ := c.Route(); route != nil {
+		m.Route = route
+	}
+	m.Shell = c.Shell()
+	return m
 }
 
 // projectResolvedProject assembles the spec.ResolvedProject from already-loaded resolve-engine
 // outputs — a pure DATA projection, no resolution logic of its own. boxes come from ResolveBox
 // (enabled boxes, sorted), candies from ScanAllCandy (sorted), deploy from the folded uf.Bundle tree.
-func projectResolvedProject(cfg *Config, layers map[string]*Candy, bundle map[string]BundleNode, dir, version string, opts ResolveOpts) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
+	resolvedBoxes := map[string]*ResolvedBox{}
 	for _, name := range cfg.allBoxNames() {
 		img, ok := cfg.BoxConfig(name)
 		if !ok {
@@ -113,10 +189,29 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, bundle map[st
 		if err != nil {
 			return nil, fmt.Errorf("resolving box %q: %w", name, err)
 		}
+		resolvedBoxes[name] = resolved
+		view := projectResolvedBox(resolved)
+		// box-AGGREGATES (charly box inspect --format ports|volumes|aliases|engine): run the existing
+		// cross-candy collectors into the view; a collector error leaves that aggregate empty (a
+		// read-only projection never fails the whole load).
+		if ports, perr := CollectBoxPorts(cfg, layers, name); perr == nil {
+			view.Ports = ports
+		}
+		if vols, verr := CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
+			for _, vm := range vols {
+				view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount{VolumeName: vm.VolumeName, ContainerPath: vm.ContainerPath})
+			}
+		}
+		if als, aerr := CollectBoxAlias(cfg, layers, name); aerr == nil {
+			for _, a := range als {
+				view.Aliases = append(view.Aliases, spec.CandyAlias{Name: a.Name, Command: a.Command})
+			}
+		}
+		view.Engine = ResolveBoxEngine(cfg, layers, name, "")
 		if rp.Boxes == nil {
 			rp.Boxes = make(map[string]spec.ResolvedBoxView, len(cfg.Box))
 		}
-		rp.Boxes[name] = projectResolvedBox(resolved)
+		rp.Boxes[name] = view
 	}
 
 	for name, c := range layers {
@@ -125,21 +220,144 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, bundle map[st
 		}
 		if rp.Candies == nil {
 			rp.Candies = make(map[string]spec.CandyView, len(layers))
+			rp.CandyModels = make(map[string]spec.CandyModel, len(layers))
 		}
 		rp.Candies[name] = projectCandyView(c)
+		rp.CandyModels[name] = projectCandyModel(c)
 	}
 
-	if len(bundle) > 0 {
+	if uf != nil && len(uf.Bundle) > 0 {
 		// BundleNode is a type alias for spec.Deploy, so the folded deploy tree projects into the
 		// envelope's map[string]*Deploy directly (a per-iteration copy, addressed).
-		rp.Deploy = make(map[string]*spec.Deploy, len(bundle))
-		for k, v := range bundle {
+		rp.Deploy = make(map[string]*spec.Deploy, len(uf.Bundle))
+		for k, v := range uf.Bundle {
 			node := v
 			rp.Deploy[k] = &node
 		}
 	}
 
+	// build VOCABULARY (the validate ENGINE consumer): the embedded distro/builder/init sections.
+	// DistroDef=spec.ResolvedDistro, BuilderDef=spec.Builder, ResolvedInit=spec.ResolvedInit, so the
+	// maps assign straight into the pinned envelope members.
+	if distroCfg != nil {
+		rp.Distro = distroCfg.Distro
+	}
+	if builderCfg != nil {
+		rp.Builder = builderCfg.Builder
+	}
+	if initCfg != nil {
+		rp.Init = initCfg.Init
+	}
+
+	if uf != nil {
+		// kind TEMPLATES (validate localtemplates + check-include pod/vm arms + status k8s/adb).
+		rp.Templates = projectTemplates(uf)
+		// kind:agent catalog (the harness AI-CLI pick + charly feature list-agent).
+		if agents := uf.PluginKinds["agent"]; len(agents) > 0 {
+			rp.AgentBodies = make(map[string]spec.RawBody, len(agents))
+			for k, v := range agents {
+				rp.AgentBodies[k] = v
+			}
+		}
+	}
+
+	// box_plans (the `include: box:<name>` plan-splice arm): the include-ready FLATTENED acceptance
+	// plan per box, computed by the SAME base-chain CollectDescriptions the former in-core box arm
+	// used (candy-chain bakeable steps + the box-level bakeable plan), keyed by the QUALIFIED box
+	// name so a namespaced ref (fedora.jupyter) resolves. A plugin cannot recompute it (base-chain
+	// walk + candy-order + bakeable filter are host resolve Mechanisms over the runtime Candy).
+	boxPlans := map[string][]spec.Step{}
+	fillBoxPlans(cfg, layers, "", boxPlans, map[*Config]bool{})
+	if len(boxPlans) > 0 {
+		rp.BoxPlans = boxPlans
+	}
+
+	// build ORDER + auto-intermediates (charly box list targets): ComputeIntermediates adds the
+	// auto-generated intermediate images; ResolveBoxOrder returns them dependency-ordered.
+	if inter, ierr := ComputeIntermediates(resolvedBoxes, layers, cfg, calver); ierr == nil {
+		if order, oerr := ResolveBoxOrder(inter, layers); oerr == nil {
+			for _, name := range order {
+				bt := spec.BuildTarget{Name: name}
+				if b := inter[name]; b != nil {
+					bt.Auto = b.Auto
+				}
+				rp.BuildTargets = append(rp.BuildTargets, bt)
+			}
+		}
+	}
+
 	return rp, nil
+}
+
+// fillBoxPlans populates out with the include-ready FLATTENED acceptance plan for every box
+// reachable from cfg (its own boxes + every import namespace, recursively), keyed by QUALIFIED
+// name (`fedora.jupyter`). It mirrors the former in-core `include: box:<name>` arm EXACTLY: the
+// SAME CollectDescriptions base-chain walk (candy-chain bakeable steps + the box-level bakeable
+// plan) flattened over the three sections, so the relocated plugin box arm reads a byte-equivalent
+// plan without the resolve engine. Only boxes with a non-empty plan are recorded. The visited set
+// guards the pointer-keyed namespace cache against a self-referential cycle.
+func fillBoxPlans(cfg *Config, layers map[string]*Candy, prefix string, out map[string][]spec.Step, visited map[*Config]bool) {
+	if cfg == nil || visited[cfg] {
+		return
+	}
+	visited[cfg] = true
+	for _, name := range cfg.allBoxNames() {
+		qualified := name
+		if prefix != "" {
+			qualified = prefix + "." + name
+		}
+		set := CollectDescriptions(cfg, layers, name)
+		if set == nil {
+			continue
+		}
+		var steps []spec.Step
+		for _, sec := range [][]LabeledDescription{set.Candy, set.Box, set.Deploy} {
+			for _, ld := range sec {
+				steps = append(steps, ld.Plan...)
+			}
+		}
+		if len(steps) > 0 {
+			out[qualified] = steps
+		}
+	}
+	for ns, sub := range cfg.Namespaces {
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
+		fillBoxPlans(sub, layers, child, out, visited)
+	}
+}
+
+// projectTemplates decodes the uf.Local/K8s/Pod/VM/Android raw template maps (map[string]json.RawMessage)
+// into the existing spec kind types — the resolved kind-template maps validate/check-include/status read.
+// Returns nil when no template kind is present.
+func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
+	if uf == nil {
+		return nil
+	}
+	t := &spec.ProjectTemplates{}
+	// KIND-BLIND copy: the raw template bytes ride into the envelope verbatim as opaque RawBody. The
+	// host NEVER decodes them into a concrete spec.<Kind> (that would be per-kind knowledge in the
+	// kernel — a boundary-law violation the TestNoConcreteKindInKernel gate catches). The consuming
+	// PLUGINS decode a RawBody into the concrete kind they need.
+	cp := func(src map[string]json.RawMessage, dst *map[string]spec.RawBody) {
+		for name, raw := range src {
+			if *dst == nil {
+				*dst = make(map[string]spec.RawBody, len(src))
+			}
+			(*dst)[name] = raw
+		}
+	}
+	cp(uf.Local, &t.Local)
+	cp(uf.K8s, &t.K8s)
+	cp(uf.Pod, &t.Pod)
+	cp(uf.VM, &t.VM)
+	cp(uf.Android, &t.Android)
+	if t.Local == nil && t.K8s == nil && t.Pod == nil && t.VM == nil && t.Android == nil {
+		return nil
+	}
+	return t
 }
 
 // buildResolvedProjectFromDir is the load+project entry the "resolved-project" host-builder wraps and
@@ -147,28 +365,40 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, bundle map[st
 // distro/builder reliably, the box-list/validate path), loads the project, and projects it.
 func buildResolvedProjectFromDir(dir string, opts ResolveOpts) (*spec.ResolvedProject, error) {
 	cfg, err := LoadConfig(dir)
+	if errors.Is(err, ErrNoCharlyYml) {
+		// A project-less directory resolves to an EMPTY project, not an error — the same
+		// contract `charly box list boxes` has always honoured (the charly-mcp box.list.boxes tool
+		// runs in CHARLY_PROJECT_DIR before any charly.yml exists, so it must exit 0 empty). Every
+		// list subcommand + inspect then reads an empty envelope naturally.
+		return &spec.ResolvedProject{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	if distroCfg, _, _, verr := LoadDefaultBuildConfig(dir); verr == nil {
+	// The build vocabulary is BOTH registered (so ResolveBox resolves distro/builder) AND projected
+	// into the envelope's distro/builder/init members (the validate consumer).
+	distroCfg, builderCfg, initCfg, _ := LoadDefaultBuildConfig(dir)
+	if distroCfg != nil {
 		RegisterBuildVocabulary(distroCfg)
 	}
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		return nil, err
 	}
-	var bundle map[string]BundleNode
-	version := ""
-	if uf, present, uerr := LoadUnified(dir); uerr != nil {
+	uf, present, uerr := LoadUnified(dir)
+	if uerr != nil {
 		return nil, uerr
-	} else if present {
+	}
+	var ufPtr *UnifiedFile
+	version := ""
+	if present {
 		if derr := uf.ApplyDiscover(dir); derr != nil {
 			return nil, derr
 		}
-		bundle = uf.Bundle
+		ufPtr = uf
 		version = uf.Version
 	}
-	return projectResolvedProject(cfg, layers, bundle, dir, version, opts)
+	return projectResolvedProject(cfg, layers, ufPtr, distroCfg, builderCfg, initCfg, dir, version, opts)
 }
 
 // hostBuildResolvedProject is the "resolved-project" host-builder (F11): resolve the project at

@@ -126,31 +126,9 @@ func TestPlanUnify_ValidateRejectsNoCheckStep(t *testing.T) {
 	}
 }
 
-// §J.6 — an `include: candy:X` step splices the referenced candy's plan steps
-// in place.
-func TestPlanUnify_IncludeSplicesCandyPlan(t *testing.T) {
-	layers := map[string]*Candy{
-		"redis": {Name: "redis", plan: []Step{
-			{Check: "redis answers ping", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}}},
-			{Check: "redis binary present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis-server"}}},
-		}},
-	}
-	plan := []Step{{Include: "candy:redis"}}
-	expanded, err := ExpandPlanIncludes(&UnifiedFile{}, layers, plan)
-	if err != nil {
-		t.Fatalf("ExpandPlanIncludes: %v", err)
-	}
-	if len(expanded) != 2 {
-		t.Fatalf("include should splice 2 steps, got %d", len(expanded))
-	}
-	if expanded[0].Check != "redis answers ping" || expanded[1].Check != "redis binary present" {
-		t.Errorf("spliced steps not in order: %+v", expanded)
-	}
-	// The spliced steps carry the include source origin for reporting.
-	if expanded[0].Origin != "candy:redis" {
-		t.Errorf("spliced step missing source origin, got %q", expanded[0].Origin)
-	}
-}
+// §J.6 — the `include: <kind>:<name>` candy/box/pod/vm plan-splice arms relocated to
+// candy/plugin-check (the include-splicer now reads the resolved-project envelope, not the core
+// loader). Coverage lives in candy/plugin-check/checkproject_test.go.
 
 // §J.8 — a migrated task:→run: step lowers to an InstallStep AND reverses on
 // `charly bundle del` (the task:→plan: fold preserves the ledger/reversal).

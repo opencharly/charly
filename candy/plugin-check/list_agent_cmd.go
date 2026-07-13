@@ -2,8 +2,8 @@ package check
 
 // list_agent_cmd.go — `charly check list-ai` (P12 Unit iv). Prints the project's
 // configured agents (the AI-CLI catalog). PrintAgents relocates here from
-// charly/agent_config.go; the OPAQUE kind:agent catalog is fed from the
-// "check-config" host seam's AgentBodies (uf.PluginKinds["agent"]). The kind:agent
+// charly/agent_config.go; the OPAQUE kind:agent catalog is read off the resolved-project
+// envelope's AgentBodies (the host's uf.PluginKinds["agent"]). The kind:agent
 // RESOLVER + the grader STAY core.
 
 import (
@@ -14,8 +14,6 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
-
-	"github.com/opencharly/sdk/spec"
 )
 
 // CheckListAgentCmd implements `charly check list-ai`.
@@ -26,7 +24,7 @@ func (c *CheckListAgentCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Dir: dir})
+	reply, err := resolveCheckProjection(cmdExec, cmdCtx, "", dir)
 	if err != nil {
 		return err
 	}

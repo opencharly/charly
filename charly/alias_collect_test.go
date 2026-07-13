@@ -116,21 +116,6 @@ func TestCandyAliases(t *testing.T) {
 	}
 }
 
-func TestAliasCandies(t *testing.T) {
-	layers, err := ScanCandy("testdata")
-	if err != nil {
-		t.Fatalf("ScanCandy() error = %v", err)
-	}
-
-	result := AliasCandy(layers)
-	if len(result) != 1 {
-		t.Errorf("AliasCandy() returned %d candies, want 1", len(result))
-	}
-	if len(result) > 0 && result[0].Name != "webservice" {
-		t.Errorf("AliasCandy()[0].Name = %q, want %q", result[0].Name, "webservice")
-	}
-}
-
 func TestAliasNameRegex(t *testing.T) {
 	tests := []struct {
 		name string

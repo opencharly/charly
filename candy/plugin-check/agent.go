@@ -6,7 +6,7 @@ package check
 // operate on that resolved spec.
 //
 // (a) is candy/plugin-agent's OpResolve leg (the agent de-type, Cutover E): the
-// plugin gets the opaque kind:agent catalog from the "check-config" host seam
+// plugin gets the opaque kind:agent catalog from the resolved-project envelope
 // (AgentBodies) and dispatches it back through the host registry to
 // InvokeProvider(kind:agent, OpResolve) — the SAME provider core's resolveAgentViaPlugin
 // calls, so the name-selection + default application is single-sourced in the agent

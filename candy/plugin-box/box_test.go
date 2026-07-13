@@ -18,9 +18,9 @@ func TestCommandParent_NestsUnderBox(t *testing.T) {
 	}
 }
 
-// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the four nested command
-// capabilities (generate/validate/new/pkg), all class "command", each with no InputDef (a command's
-// args are pass-through tokens, not a structured plugin_input).
+// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the six nested command
+// capabilities (generate/validate/new/pkg/inspect/list), all class "command", each with no InputDef
+// (a command's args are pass-through tokens, not a structured plugin_input).
 func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 	caps, err := NewMeta().Describe(context.Background(), &pb.Empty{})
 	if err != nil {
@@ -36,13 +36,13 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pkg"} {
+	for _, want := range []string{"generate", "validate", "new", "pkg", "inspect", "list"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 4 {
-		t.Errorf("want 4 command capabilities, got %d", len(caps.GetProvided()))
+	if len(caps.GetProvided()) != 6 {
+		t.Errorf("want 6 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 

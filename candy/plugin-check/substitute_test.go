@@ -1,4 +1,10 @@
-package main
+package check
+
+// substitute_test.go — coverage for the ${TOKEN} harness substitution, relocated
+// from the deleted core duplicate (charly/check_substitute_test.go) onto the LIVE
+// plugin twin (substitute.go) in the K5 check-residue dedup (R3/R5). The core
+// copy was a dead duplicate with zero callers; these tests now exercise the one
+// live Substitute / SubstContext / SubstituteArgv.
 
 import (
 	"os"
@@ -53,10 +59,9 @@ func TestSubstitute_WellKnownTokens(t *testing.T) {
 }
 
 func TestSubstitute_RemovedTokens(t *testing.T) {
-	// ${RECIPE_NAME} and ${MAX_ITERATION} are removed in the 2026-04
-	// cutover. Tokens that aren't well-known fall through the env
-	// chain and finally to os.Getenv. Without any binding they
-	// resolve to "".
+	// ${RECIPE_NAME} and ${MAX_ITERATION} are removed tokens. Tokens that aren't
+	// well-known fall through the env chain and finally to os.Getenv. Without any
+	// binding they resolve to "".
 	t.Setenv("RECIPE_NAME", "")
 	t.Setenv("MAX_ITERATION", "")
 	ctx := &SubstContext{ScoreName: "default"}

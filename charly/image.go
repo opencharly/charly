@@ -16,21 +16,18 @@ import (
 //
 // `charly box` is a SHARED command group: the RETAINED verbs below are the core
 // grammar spine (build → plugin-build; merge/labels; feature; the authoring
-// verbs; inspect/list — the two whose --format/list-shape rendering still needs
-// the fully-resolved config+layers graph the plugin cannot compute pre-K1). The
-// generate/validate/new/pkg verbs are contributed as NESTED command providers by
-// the COMPILED-IN candy/plugin-box (each a command:<word> with CommandParent()
-// =="box"), attached into the embedded kong.Plugins below. This mirrors how a
-// compiled-in command holder embeds kong.Plugins for its nested external subcommands.
+// verbs). The generate/validate/new/pkg/inspect/list verbs are contributed as
+// NESTED command providers by the COMPILED-IN candy/plugin-box (each a
+// command:<word> with CommandParent()=="box"), attached into the embedded
+// kong.Plugins below. This mirrors how a compiled-in command holder embeds
+// kong.Plugins for its nested external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg). main() sets this to
-	// collectExternalCommandPlugins()'s nestedByParent["box"] before kong.Parse.
+	// (candy/plugin-box's generate/validate/new/pkg/inspect/list). main() sets this
+	// to collectExternalCommandPlugins()'s nestedByParent["box"] before kong.Parse.
 	kong.Plugins
 
 	Build   BuildCmd      `cmd:"" help:"Build container boxes"`
-	Inspect InspectCmd    `cmd:"" help:"Print resolved config for a box (JSON)"`
-	List    ListCmd       `cmd:"" help:"List components from charly.yml"`
 	Merge   MergeCmd      `cmd:"" help:"Merge small layers in a built container image"`
 	Pull    BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
 	Labels  BoxLabelsCmd  `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
