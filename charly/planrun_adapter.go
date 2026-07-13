@@ -3,95 +3,38 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/opencharly/sdk/kit"
 )
 
-// planrun_adapter.go — the host side of the check-engine plan walk, dissolved into sdk/kit
-// (kit/planrun.go). The walk drives the host through kit.PlanContext + kit.VerbResolver;
-// these wrappers adapt the live *Runner to those interfaces. They are wrapper structs (NOT
-// methods on *Runner) because *Runner already has fields named Distros/Mode/VerifyOnly/
-// SkipDeterministicRun/Scenario/Grader — a method of the same name would collide (the SAME
-// reason runnerCheckContext wraps rather than extends). The grammar the walk consults
-// (VerbCatalog / opEffectiveDo / opEffectiveContexts) and the verb dispatch (the provider
-// registry) STAY in core behind these seams.
+// planrun_adapter.go — the host seams the check-engine plan walk (kit.RunOne/RunPlan) drives
+// through. The walk lives in sdk/kit and consumes the runner (kit.Runner, kit.PlanContext) plus
+// two host-supplied interfaces: kit.VerbResolver (verb dispatch, satisfied by the core provider
+// registry) and kit.PlanGrammar (the VerbCatalog do-mode/context grammar). The grammar the walk
+// consults (VerbCatalog / opEffectiveDo / opEffectiveContexts) and the verb dispatch (the
+// provider registry) STAY in core behind these seams.
 
-// runnerPlanContext adapts *Runner to kit.PlanContext — the driver surface the plan walk reads.
-type runnerPlanContext struct{ r *Runner }
-
-func (c runnerPlanContext) Distros() []string          { return c.r.Distros }
-func (c runnerPlanContext) VerifyOnly() bool           { return c.r.VerifyOnly }
-func (c runnerPlanContext) SkipDeterministicRun() bool { return c.r.SkipDeterministicRun }
-func (c runnerPlanContext) EffectiveEnv() map[string]string {
-	return c.r.effectiveEnv()
-}
-func (c runnerPlanContext) ProbeNeverHang(op *Op) time.Duration { return c.r.probeNeverHang(op) }
-func (c runnerPlanContext) EffectiveDo(op *Op) kit.DoMode       { return opEffectiveDo(op) }
-func (c runnerPlanContext) Scenario() *ScenarioContext          { return c.r.Scenario }
-func (c runnerPlanContext) SetScenario(sc *ScenarioContext)     { c.r.Scenario = sc }
-func (c runnerPlanContext) Verbs() kit.VerbResolver             { return runnerVerbResolver(c) }
-func (c runnerPlanContext) Grader() kit.StepGrader              { return c.r.Grader }
-
-func (c runnerPlanContext) Mode() kit.RunMode {
-	if c.r.Mode == RunModeBox {
-		return kit.ModeBox
-	}
-	return kit.ModeLive
+// hostVerbResolver is the verb-dispatch seam — the ONE thing the walk needs from the core
+// provider registry — plus the host machinery a live-container verb reaches THROUGH the check
+// context: the reverse-leg endpoint/graphics/cluster/image-label resolution (check_endpoint_
+// resolve.go), the out-of-process verb Invoke (provider_checkenv.go), the do:act runner
+// (checkrun_act.go), and the committed-APK anchoring (checkrun_charly_verbs.go). It holds the
+// kit.Runner ref (to read engine state + build the CheckContext) and OWNS the per-Invoke
+// endpointCleanups (the host reverse-leg lifecycle — NOT on kit.Runner, which a plugin module
+// lacks the machinery for).
+type hostVerbResolver struct {
+	kr *kit.Runner
+	// endpointCleanups holds the ssh -L forwards opened by the ResolveEndpoint/ResolveGraphics
+	// reverse-legs DURING the current verb's Invoke; invokeVerbProvider closes them AFTER the
+	// Invoke returns (the forward must outlive the plugin's dial). Per-Invoke.
+	endpointCleanups []func()
 }
 
-// ContextSkipReason wraps the core VerbCatalog grammar: it returns a non-empty skip message
-// when the op's effective execution context is not active in the run's mode (box→build,
-// live→runtime). ExecContext never crosses the kit seam — the message is pre-formatted here.
-func (c runnerPlanContext) ContextSkipReason(op *Op) string {
-	wantCtx := CtxRuntime
-	modeName := "live"
-	if c.r.Mode == RunModeBox {
-		wantCtx, modeName = CtxBuild, "box"
-	}
-	if !opInContext(op, wantCtx) {
-		return fmt.Sprintf("context %v not active in %s mode", opEffectiveContexts(op), modeName)
-	}
-	return ""
-}
-
-// SwapVenue retargets the executor + resolver + image to op's per-step venue for the duration
-// of one dispatch, returning a restore func (nil when no swap) and a non-empty failReason when
-// the venue cannot be resolved. It mutates the *Runner in place so EffectiveEnv + the verb
-// dispatch (which read r.Exec/r.Resolver/r.Box) see the swapped venue — the same self-swap
-// guard the classical inline path used (venue set, differs from the active target, and a
-// TargetResolver is wired).
-func (c runnerPlanContext) SwapVenue(op *Op) (func(), string) {
-	r := c.r
-	if op.Venue == "" || op.Venue == r.Box || r.TargetResolver == nil {
-		return nil, ""
-	}
-	newResolver, newExec, terr := r.TargetResolver(op.Venue)
-	if terr != nil {
-		return nil, fmt.Sprintf("venue %q — %v", op.Venue, terr)
-	}
-	origExec, origResolver, origImage := r.Exec, r.Resolver, r.Box
-	if newExec != nil {
-		r.Exec = newExec
-	}
-	if newResolver != nil {
-		r.Resolver = newResolver
-	}
-	r.Box = op.Venue
-	return func() {
-		r.Exec = origExec
-		r.Resolver = origResolver
-		r.Box = origImage
-	}, ""
-}
-
-// runnerVerbResolver adapts *Runner to kit.VerbResolver — the verb-dispatch seam. The walk
-// hands it an already-variable-expanded, already-validated Op; this resolves the verb word in
-// the provider registry and runs it (in-proc CheckVerbProvider fast path, else the
-// out-of-process Invoke envelope), or reports the provision-act for a do:act state verb.
-type runnerVerbResolver struct{ r *Runner }
-
-func (v runnerVerbResolver) RunVerb(ctx context.Context, op *Op) (CheckResult, bool) {
+// RunVerb resolves op's verb word in the provider registry and runs it: an in-proc
+// CheckVerbProvider via its typed RunVerb (threaded the host CheckContext over the kit.Runner),
+// an out-of-process provider via the Invoke envelope (invokeVerbProvider). (_, false) means no
+// such verb is registered — the walk reports the op as an unknown-verb skip.
+func (h *hostVerbResolver) RunVerb(ctx context.Context, op *Op) (CheckResult, bool) {
 	kind, err := op.Kind()
 	if err != nil {
 		return CheckResult{}, false
@@ -101,13 +44,65 @@ func (v runnerVerbResolver) RunVerb(ctx context.Context, op *Op) (CheckResult, b
 		return CheckResult{}, false
 	}
 	if cv, ok := prov.(CheckVerbProvider); ok {
-		return cv.RunVerb(ctx, v.r, op), true
+		return cv.RunVerb(ctx, h, op), true
 	}
 	// An OUT-OF-PROCESS verb provider (a grpcProvider, not a CheckVerbProvider): dispatch the
 	// live verb word to the Invoke envelope with the full Op — the external-charly-verb path.
-	return v.r.invokeVerbProvider(ctx, prov, kind, op), true
+	return h.invokeVerbProvider(ctx, prov, kind, op), true
 }
 
-func (v runnerVerbResolver) RunProvisionAct(ctx context.Context, op *Op, verb string) (CheckResult, bool) {
-	return v.r.runProvisionAct(ctx, op, verb)
+// RunProvisionAct runs a do:act state-provision verb's create/configure act; (_, false) means
+// the verb has no act path (the walk falls through to the assert dispatch).
+func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *Op, verb string) (CheckResult, bool) {
+	return h.runProvisionAct(ctx, op, verb)
+}
+
+// hostPlanGrammar adapts the core VerbCatalog do-mode + execution-context grammar to
+// kit.PlanGrammar. ExecContext never crosses the kit seam — InContext takes a bool (runtime vs
+// build) and ContextsLabel pre-formats the effective-contexts list for the skip message.
+type hostPlanGrammar struct{}
+
+// EffectiveDo resolves op's do-mode (the keyword-stamped intentDo wins, else the verb's
+// VerbCatalog default, else DoAssert).
+func (hostPlanGrammar) EffectiveDo(op *Op) kit.DoMode { return opEffectiveDo(op) }
+
+// InContext reports whether op is legal in the run's active context: runtime=true → the live
+// (runtime) context, runtime=false → the box (build) context.
+func (hostPlanGrammar) InContext(op *Op, runtime bool) bool {
+	wantCtx := CtxBuild
+	if runtime {
+		wantCtx = CtxRuntime
+	}
+	return opInContext(op, wantCtx)
+}
+
+// ContextsLabel is op's effective-contexts list pre-formatted for the context-skip message —
+// the SAME %v rendering the former core ContextSkipReason used, so the message is
+// byte-identical.
+func (hostPlanGrammar) ContextsLabel(op *Op) string {
+	return fmt.Sprintf("%v", opEffectiveContexts(op))
+}
+
+// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *CheckVarResolver +
+// DeployExecutor) to the kit.VenueResolver seam (venue → kit.Executor + env + hasRuntime) the
+// runner's per-step SwapVenue drives. It always returns a non-nil env map so SwapVenue swaps the
+// engine env for the driver venue (matching the former "always swap the resolver" behaviour: a
+// driver with no resolvable vars clears the base env rather than leaking the subject's).
+func venueResolver(instance string) kit.VenueResolver {
+	resolve := liveTargetResolver(instance)
+	return func(venue string) (kit.Executor, map[string]string, bool, error) {
+		res, exec, err := resolve(venue)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		env := map[string]string{}
+		hasRuntime := false
+		if res != nil {
+			if res.Env != nil {
+				env = res.Env
+			}
+			hasRuntime = res.HasRuntime
+		}
+		return exec, env, hasRuntime, nil
+	}
 }

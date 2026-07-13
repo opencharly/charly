@@ -8,41 +8,42 @@ import (
 	pb "github.com/opencharly/sdk/proto"
 )
 
-// runnerCheckContext adapts the live *Runner to kit.CheckContext — the surface a
-// HOST-COUPLED verb candy consumes. It is a wrapper (NOT methods on *Runner) because
-// *Runner already has fields named Exec/Mode/HTTPClient/DialTimeout/Box/Instance/
-// Distros; a method of the same name would collide. DeployExecutor satisfies
-// kit.Executor structurally (identical RunCapture + Kind signatures), so Exec()
-// returns r.Exec straight through.
-type runnerCheckContext struct{ r *Runner }
+// hostCheckContext adapts the live check pass to kit.CheckContext — the surface a HOST-COUPLED
+// verb candy consumes. It wraps the *hostVerbResolver (which holds the kit.Runner engine state +
+// the per-Invoke endpoint cleanups) rather than the runner directly, so the six host-reverse legs
+// (HTTPDo + the four Resolve* podman/go-libvirt/ssh ops) share ONE cleanup lifecycle with the
+// out-of-process dispatch. The engine-state legs read the kit.Runner accessors; the host-reverse
+// legs (check_endpoint_resolve.go) call the SAME resolveVerb* machinery the out-of-proc
+// checkContextReverseServer uses — one source, two consumers, endpoint-identical (R3).
+// DeployExecutor satisfies kit.Executor structurally, so Exec() returns the runner's straight
+// through.
+type hostCheckContext struct{ h *hostVerbResolver }
 
-func (c runnerCheckContext) Exec() kit.Executor         { return c.r.Exec }
-func (c runnerCheckContext) DialTimeout() time.Duration { return c.r.DialTimeout }
+var _ kit.CheckContext = hostCheckContext{}
+
+func (c hostCheckContext) Exec() kit.Executor         { return c.h.kr.Exec() }
+func (c hostCheckContext) DialTimeout() time.Duration { return c.h.kr.DialTimeout() }
 
 // HTTPDo issues the request from the host (in-process) via the SHARED host HTTP-do path
 // (doHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
-// derived from the engine's base client r.HTTPClient.
-func (c runnerCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
-	return doHTTPRequest(ctx, c.r.HTTPClient, req)
+// derived from the engine's base client.
+func (c hostCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
+	return doHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
 }
-func (c runnerCheckContext) Box() string           { return c.r.Box }
-func (c runnerCheckContext) Instance() string      { return c.r.Instance }
-func (c runnerCheckContext) Distros() []string     { return c.r.Distros }
-func (c runnerCheckContext) AddBackground(pid int) { c.r.Scenario.AddBackground(pid) }
-func (c runnerCheckContext) Mode() kit.RunMode {
-	if c.r.Mode == RunModeBox {
-		return kit.ModeBox
-	}
-	return kit.ModeLive
-}
+func (c hostCheckContext) Box() string           { return c.h.kr.Box() }
+func (c hostCheckContext) Instance() string      { return c.h.kr.Instance() }
+func (c hostCheckContext) Distros() []string     { return c.h.kr.Distros() }
+func (c hostCheckContext) AddBackground(pid int) { c.h.kr.Scenario().AddBackground(pid) }
+func (c hostCheckContext) Mode() kit.RunMode     { return c.h.kr.Mode() }
 
 // kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's kit.CheckVerbProvider
 // as a package-main CheckVerbProvider, so runOne dispatches it through the SAME
-// providerRegistry path as an typed builtin verb. It passes the live *Runner as a
-// kit.CheckContext and converts the returned kit.Result back to a CheckResult
-// (stamping Op + Verb). It embeds builtinVerbBase for Class()=ClassVerb + the
-// in-proc-only Invoke stub — a kit verb is in-process only (RunVerb needs the live
-// *Runner, which cannot cross a process boundary).
+// providerRegistry path as an typed builtin verb. It passes the live check context
+// (hostCheckContext over the *hostVerbResolver) as a kit.CheckContext and converts the
+// returned kit.Result back to a CheckResult (stamping Op + Verb). It embeds
+// builtinVerbBase for Class()=ClassVerb + the in-proc-only Invoke stub — a kit verb is
+// in-process only (RunVerb needs the live host context, which cannot cross a process
+// boundary).
 type kitVerbAdapter struct {
 	builtinVerbBase
 	kv kit.CheckVerbProvider
@@ -53,8 +54,8 @@ type kitVerbAdapter struct {
 
 func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
 
-func (a kitVerbAdapter) RunVerb(ctx context.Context, r *Runner, op *Op) CheckResult {
-	res := a.kv.RunVerb(ctx, runnerCheckContext{r: r}, op)
+func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult {
+	res := a.kv.RunVerb(ctx, hostCheckContext{h: h}, op)
 	return CheckResult{
 		Op:      op,
 		Verb:    a.kv.Reserved(),

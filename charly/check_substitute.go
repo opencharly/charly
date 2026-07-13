@@ -212,10 +212,9 @@ func intTok(n int) string {
 // require cross-pod traffic at scoring time (e.g., redis-cli SET) so the
 // AI cannot pre-set the expected key/value via shortcut paths
 // (`podman exec` into the target pod, hardcoding values). Generation
-// happens at CheckRunLocalCmd entry; substitution happens in-place
-// on a copy of the merged plan that flows ONLY into baseline
-// synthesis + per-iter scoring (never into ${PLAN}/${CHECKS}
-// prompt rendering).
+// happens at the harness run-local (command:check) entry; substitution
+// happens in-place on a copy of the merged plan that flows ONLY into
+// per-iter scoring (never into ${PLAN}/${CHECKS} prompt rendering).
 // ---------------------------------------------------------------------------
 
 // nonceTokenRe matches ${EVAL_NONCE_<NAME>} where NAME is uppercase

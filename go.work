@@ -58,3 +58,4 @@ use ./candy/plugin-alias
 use ./candy/plugin-box
 use ./candy/plugin-oci
 use ./candy/plugin-status
+use ./candy/plugin-check

@@ -22,7 +22,7 @@ func TestRelocatedUserVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("user provider is not a CheckVerbProvider: %T", prov)
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "getent passwd", stdout: "root:x:0:0:root:/root:/bin/bash\n", exit: 0}}}
-	res := cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive},
+	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&Op{PluginInput: map[string]any{"user": "root", "uid": 0}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)

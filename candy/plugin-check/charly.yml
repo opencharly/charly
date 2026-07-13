@@ -1,0 +1,56 @@
+plugin-check:
+    candy:
+        version: 2026.193.0900
+        description: |-
+            COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly check`
+            command family (P12) — the box/live/run/feature evaluation surface plus the AI-iteration
+            harness / R10 disposable bed-runner. The plugin owns the command end to end: the kong
+            grammar (charly check box/live/run/feature/note/scope/list-agent/…), the plan gathering,
+            the iteration loop, and the text/json/tap/junit/yaml output.
+
+            The things the plugin cannot compute itself are the composite HOST-SERVING Mechanisms —
+            building the venue executor, extracting the OCI-label baked plan, and dispatching the
+            plan-walk's verbs through the provider registry. Those STAY core (the venue→executor,
+            endpoint-resolve, and HTTP-do serving atoms are the explicitly-retained fabric floor) and
+            the plugin reaches them via the generic "check-run" HostBuild seam (charly/host_build_
+            check_run.go, spec.CheckRunRequest → kit.CheckRunReply): the host builds the venue + runs
+            the kit-Runner through the in-core VerbResolver + returns the []StepResult the plugin
+            formats. The check ENGINE itself (the Runner + plan walk + grammar) lives in sdk/kit as a
+            library both the host seam and any plugin import. "check-run" is a class-generic action
+            noun, not a provider word (F11). The harness reaches the config loader + deploy ledger via
+            HostBuild("config-resolve"/"config-persist"), re-invokes `charly` build/deploy/check
+            subcommands via HostBuild("cli"), and resolves the agent CLI via InvokeProvider(kind:
+            agent). No plugin-specific command LOGIC is left in core — this is the same "plugin owns
+            the logic + a generic seam for the core-coupled bits" doctrine the vm + clean + pod deploy
+            plugins established.
+
+            check is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
+            Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand — to
+            reach the check-run / config / cli / agent host seams. The out-of-process CliMain path has
+            no reverse channel, so it errors: check cannot run out-of-process. There is NO hidden
+            core-command forward — the plugin does the work directly, calling back only for the
+            host-serving atoms; no core symbol crosses the boundary, no ad-hoc podman.
+
+            command:check dispatches through the COMPILED-IN registry path (registerCompiledPlugin →
+            resolve(ClassCommand,"check") → dispatchInProcCommand → Invoke(OpRun) with the threaded
+            in-proc reverse channel), so NewMeta advertises command:check while the served schema
+            carries no plugin_input (the args are plain CLI tokens kong-parsed into the CheckCmd tree).
+            The R10 witness is the disposable check-local bed run to a fresh `charly update` plus a
+            short iterate: smoke, proving the externalized command + the full box→deploy→live→bed-run
+            gate machinery end-to-end.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-check
+            providers:
+                - command:check
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-clean's module-present: a trivial build-context `plugin: command`
+              # (the built-in command CHECK verb) running `true`, the mandatory ≥1 deterministic check every
+              # candy ships. The full `charly check` end-to-end — the compiled-in in-proc HostBuild("check-run")
+              # dispatch driving box/live/run/feature + the bed-runner gate machinery — is exercised by the
+              # live R10 bed (check-local + the roster, since check IS the gate machinery).
+              check: the check command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly check` end-to-end (the in-proc HostBuild check-run dispatch + the bed-runner gate) is exercised by the live R10 (check-local + the roster)
+              id: check-module-present
+              context:
+                - build
+              command: "true"

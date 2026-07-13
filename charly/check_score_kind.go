@@ -13,21 +13,6 @@ package main
 // The scored content is the entity's OWN `plan:` (baked + include:'d + inline)
 // — there is no separate catalog to resolve.
 
-// EffectiveMCPEndpoint resolves the canonical ${MCP_ENDPOINT} value.
-//
-//   - nil pointer (unset)        → DefaultMCPEndpoint
-//   - non-nil, value=""          → "" (disabled by author)
-//   - non-nil, value=<something> → that value verbatim
-func iterateEffectiveMCPEndpoint(i *IterateConfig) string {
-	if i == nil || i.MCPEndpoint == nil {
-		return DefaultMCPEndpoint
-	}
-	return *i.MCPEndpoint
-}
-
-// DefaultMCPEndpoint is the canonical charly-mcp bind URL.
-const DefaultMCPEndpoint = "http://localhost:18765/mcp"
-
 // ---------------------------------------------------------------------------
 // Target discriminator
 // ---------------------------------------------------------------------------

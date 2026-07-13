@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // blockingExecutor blocks RunCapture until the per-probe context is cancelled
@@ -39,8 +41,8 @@ func TestRunner_PerProbeNeverHang(t *testing.T) {
 		{matchPrefix: "echo healthy", stdout: "ok\n"},
 	}}
 	be := &blockingExecutor{fakeExecutor: fake, blockOn: "WEDGEPROBE"}
-	r := NewRunner(be, &CheckVarResolver{Env: map[string]string{}}, RunModeLive)
-	r.ProbeTimeout = 100 * time.Millisecond // a tight per-probe bound for the test
+	// a tight per-probe bound for the test
+	r := newCheckRunner(kit.RunnerConfig{Exec: be, Mode: RunModeLive, Env: map[string]string{}, ProbeTimeout: 100 * time.Millisecond})
 
 	checks := []Op{
 		{Plugin: "command", PluginInput: map[string]any{"command": "WEDGEPROBE check"}},                      // wedges → must be cancelled at ProbeTimeout
@@ -73,7 +75,7 @@ func matcherEq(s string) MatcherList { return MatcherList{{Op: "equals", Value: 
 // floor (ProbeTimeout) unless the author declared a LONGER timeout:, which must
 // be honored (+a small buffer) so a legitimately-slow probe is never cut short.
 func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
-	r := &Runner{ProbeTimeout: 120 * time.Second}
+	r := kit.NewRunner(kit.RunnerConfig{ProbeTimeout: 120 * time.Second})
 	cases := []struct {
 		name    string
 		timeout string
@@ -86,15 +88,19 @@ func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := r.probeNeverHang(&Op{Timeout: tc.timeout})
+			got := r.ProbeNeverHang(&Op{Timeout: tc.timeout})
 			if got != tc.want {
-				t.Errorf("probeNeverHang(timeout=%q) = %s, want %s", tc.timeout, got, tc.want)
+				t.Errorf("ProbeNeverHang(timeout=%q) = %s, want %s", tc.timeout, got, tc.want)
 			}
 		})
 	}
-	// Zero ProbeTimeout falls back to the named constant (zero-value-safe).
-	if got := (&Runner{}).probeNeverHang(&Op{}); got != readinessPerAttemptFallback {
-		t.Errorf("zero ProbeTimeout: got %s, want fallback %s", got, readinessPerAttemptFallback)
+	// A runner built the production way (newCheckRunner) gets the readiness per-attempt
+	// floor as its per-probe never-hang, not the zero-value; that floor is
+	// readinessPerAttemptFallback when no readiness config is loaded. (The bare
+	// kit.NewRunner zero-value fallback is a kit-internal defensive const the host path
+	// never hits, since newCheckRunner always sets ProbeTimeout from the readiness table.)
+	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&Op{}); got != readinessPerAttemptFallback {
+		t.Errorf("newCheckRunner default: got %s, want readiness floor %s", got, readinessPerAttemptFallback)
 	}
 }
 

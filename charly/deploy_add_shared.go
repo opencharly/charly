@@ -52,7 +52,7 @@ func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string
 // safe, never under). The deployment's add_candy: candies + any caller-supplied extra
 // refs are ADDED to the scan via ExtraCandyRefs (so a REMOTE composed plugin not in
 // the local scan is fetched too, and its words are then collected from its plan). The
-// SAME scan + loadProjectPlugins the check runner uses (attachCheckRunnerContext) and
+// SAME scan + loadProjectPlugins the check runner uses (resolveCheckRunnerContext) and
 // the bundle-add path uses — so bundle add / bundle del / charly update all connect a
 // deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
 // turns the pre-scanned placeholder word into a connected grpcProvider that

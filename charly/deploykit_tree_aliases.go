@@ -22,7 +22,6 @@ var (
 	WalkDeploymentTree        = deploykit.WalkDeploymentTree
 	vmChildExecutor           = deploykit.VmChildExecutor
 	classifyTarget            = deploykit.ClassifyTarget
-	sshParamsForVm            = deploykit.SSHParamsForVm
 	sortedNestedKeys          = deploykit.SortedNestedKeys
 	rootExecutorForDeployNode = deploykit.RootExecutorForDeployNode
 	ContainerChain            = deploykit.ContainerChain

@@ -1,35 +1,30 @@
 package main
 
-// check_feature_run.go — the Agent Driven Evaluation (ADE) acceptance
-// runners: `charly box feature run <image>` and `charly check feature run <deployment>`.
+// check_feature_run.go — the `charly box feature run <image>` Agent Driven
+// Evaluation (ADE) acceptance runner (the core box-grammar CLI leaf) + the shared
+// step-reporting / grader-resolution helpers.
 //
-// These run an entity's OWN baked plan steps (the `plan:` list, shipped in
-// the ai.opencharly.description OCI label) as acceptance tests — the RUN
-// half of the `charly feature {list,pending,validate}` family (the inspection
-// half is the externalized command plugin candy/plugin-feature, which reaches
-// the in-core loader over the "feature" HostBuild seam (host_build_feature.go)).
-// Both reuse the shared plan engine
-// (RunPlan, description_run.go) and the same target/var resolution as
-// `charly check box` / `charly check live` (R3); the only new behaviour is surfacing
-// step results as a first-class pass/fail run and, for the live verb,
-// wiring the agent grader so prose-only steps are agent-graded.
+// The DEPLOY-scope `charly check feature run <deployment>` CLI leaf moved to the
+// compiled-in command:check plugin (candy/plugin-check); its CLI-free engine
+// (hostFeatureLive, wiring the host-side agent grader) lives behind the check-run
+// seam (host_build_check_run.go). This file keeps the BUILD-scope `charly box
+// feature run` leaf — which stays in the box grammar (image.go) — plus the helpers
+// both the box leaf and the deploy-scope engine share: reportSteps / stepFailCount
+// (step formatting), resolveGraderAgent (the kind:agent catalog resolution the
+// grader needs), and planTagFilter (the --tag parser).
 //
-//   - `charly box feature run <image>`     — BUILD scope. Disposable container
-//     (podman run --rm per check); deterministic steps only. A prose-only
-//     step has no stable target to probe, so it stays advisory-skip — use the
-//     live verb to agent-grade it.
-//   - `charly check feature run <name>`     — DEPLOY scope. Against a running
-//     image-backed (pod) deployment; deterministic steps run their checks and
-//     prose-only steps bind to the agent grader (unless --no-agent), which
-//     probes the live deployment and returns a pass/fail verdict.
+//   - `charly box feature run <image>` — BUILD scope. Disposable container
+//     (podman run --rm per check); deterministic steps only. A prose-only step
+//     has no stable target to probe, so it stays advisory-skip — use the
+//     deploy-scope verb to agent-grade it.
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -115,146 +110,20 @@ type BoxFeatureRunCmd struct {
 }
 
 func (c *BoxFeatureRunCmd) Run() error {
-	rt, err := ResolveRuntime()
+	// Transitional CLI shell over the CLI-free engine (hostFeatureBox), the same one the
+	// "feature-box" atom arm calls — engine is the single source, ZERO behavior change.
+	reply, err := hostFeatureBox(spec.CheckRunRequest{Mode: "feature-box", Image: c.Image, Tag: c.Tag, Strict: c.Strict})
 	if err != nil {
 		return err
 	}
-	imageRef, err := resolveLocalImageRef(rt.RunEngine, c.Image)
-	if err != nil {
-		return err
-	}
-	meta, err := ExtractMetadata(rt.RunEngine, imageRef)
-	if err != nil {
-		return err
-	}
-	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
+	if reply.NoSteps {
 		fmt.Fprintln(os.Stderr, "No plan steps baked into this image (author a plan: with check: steps).")
 		return nil
 	}
-	filter, err := planTagFilter(c.Tag)
-	if err != nil {
-		return fmt.Errorf("parsing --tag: %w", err)
-	}
-
-	runner := NewRunner(ImageChain(rt.RunEngine, imageRef), ResolveCheckVarsBuild(meta), RunModeBox)
-	runner.Distros = meta.Distro
-	// ADE acceptance: verify the built image; do NOT re-run the build-time
-	// install (run:) steps — they provisioned the image during the Containerfile
-	// build and reference build-only context (/ctx) absent from the disposable
-	// feature-run container.
-	runner.SkipDeterministicRun = true
-	// Build scope: no live target to probe, so no grader — prose-only steps
-	// stay advisory (skip, or fail under --strict).
-	results := RunPlan(context.Background(), runner, meta.Description, filter, c.Strict)
-
-	fmt.Fprintf(os.Stderr, "Feature run (image, build scope): %s\n", imageRef)
-	fails := reportSteps(os.Stdout, results, c.Format)
+	fmt.Fprintln(os.Stderr, reply.Header)
+	fails := reportSteps(os.Stdout, reply.Steps, c.Format)
 	if fails > 0 {
-		return &CheckFailedError{Failed: fails}
-	}
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// charly check feature run <deployment>  (DEPLOY scope)
-// ---------------------------------------------------------------------------
-
-// CheckFeatureCmd groups `charly check feature run` under the live-check hierarchy.
-type CheckFeatureCmd struct {
-	Run CheckFeatureRunCmd `cmd:"" help:"Run a running deployment's baked plan steps as acceptance tests; prose-only steps are agent-graded (Agent Driven Evaluation)"`
-}
-
-// CheckFeatureRunCmd: `charly check feature run <deployment>`. Deploy-scope
-// acceptance against a running image-backed (pod) deployment. Deterministic
-// steps run their embedded check; prose-only steps bind to the agent grader
-// (unless --no-agent), which probes the live deployment for evidence.
-type CheckFeatureRunCmd struct {
-	Box      string `arg:"" help:"Deployment name (a box-backed pod deployment)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-	Format   string `long:"format" default:"text" help:"Output format: text, json, tap, junit"`
-	Tag      string `long:"tag" help:"Only run steps matching this tag expression"`
-	Agent    string `long:"agent" help:"kind:agent entry to use as the prose-step grader (default: the sole configured agent)"`
-	Timeout  string `long:"timeout" help:"Per-grader-call wall-clock cap (Go duration; default 5m or the ai entry's timeout)"`
-	NoAgent  bool   `long:"no-agent" help:"Deterministic-only: do not agent-grade prose-only steps (they report as unbound/skip)"`
-	Strict   bool   `long:"strict" help:"Treat unbound steps as failures (only meaningful with --no-agent)"`
-}
-
-func (c *CheckFeatureRunCmd) Run() error {
-	engine, containerName, err := resolveContainer(c.Box, c.Instance)
-	if err != nil {
-		return err
-	}
-
-	dir, _ := os.Getwd()
-	var projectCfg *Config
-	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
-		projectCfg = uf.ProjectConfig()
-	}
-
-	// Resolve the deploy key → declared image short-name via the shared
-	// resolver, then to a registry ref, then read its OCI labels — the same
-	// metadata path `charly check live` uses (R3).
-	imageRef := resolveDeployBoxName(c.Box, c.Instance)
-	resolvedRef, err := resolveImageRefForEnsure(imageRef, projectCfg, dir)
-	if err != nil {
-		return fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
-	}
-	meta, err := ExtractMetadata(engine, resolvedRef)
-	if err != nil {
-		return err
-	}
-	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
-		fmt.Fprintln(os.Stderr, "No plan steps baked into this deployment's image (author a plan: with check: steps).")
-		return nil
-	}
-
-	// Deploy overlay → runtime variable resolution (real HOST_PORT mappings,
-	// container IP, env), same as `charly check live`.
-	var deployOverlay *BundleNode
-	if dc := loadDeployConfigForRead("charly check feature run"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(c.Box, c.Instance)]; ok {
-			deployOverlay = &entry
-		} else if entry, ok := dc.Bundle[c.Box]; ok {
-			deployOverlay = &entry
-		}
-	}
-	resolver, _ := ResolveCheckVarsRuntime(meta, deployOverlay, engine, c.Box, containerName, c.Instance)
-
-	filter, err := planTagFilter(c.Tag)
-	if err != nil {
-		return fmt.Errorf("parsing --tag: %w", err)
-	}
-
-	runner := NewRunner(ContainerChain(engine, containerName), resolver, RunModeLive)
-	// ADE acceptance: verify the deployed result via check:/agent-check: and
-	// grade agent-run:; do NOT re-run the build-time install (run:) steps —
-	// they already provisioned the image and reference build-only context.
-	runner.SkipDeterministicRun = true
-	// Shared identity + committed-APK anchoring (CandyDirs) — the SAME wiring
-	// `charly check live` uses, so an adb/appium `apk:` check resolves its fixture
-	// here too (R3). Omitting it left feature run scanning 0 candies → the apk
-	// failed to anchor only under feature run.
-	attachCheckRunnerContext(runner, c.Box, c.Instance, meta.Distro, dir, projectCfg)
-
-	// Wire the agent grader for prose-only steps unless deterministic-only.
-	if !c.NoAgent {
-		ai, aerr := resolveGraderAgent(dir, c.Agent)
-		if aerr != nil {
-			return aerr
-		}
-		runner.Grader = &AgentGrader{Agent: ai, Target: c.Box, Instance: c.Instance, Timeout: c.Timeout}
-	}
-
-	results := RunPlan(context.Background(), runner, meta.Description, filter, c.Strict)
-
-	grading := "agent-graded prose"
-	if c.NoAgent {
-		grading = "deterministic-only"
-	}
-	fmt.Fprintf(os.Stderr, "Feature run (deploy scope, %s): %s (container: %s)\n", grading, meta.Box, containerName)
-	fails := reportSteps(os.Stdout, results, c.Format)
-	if fails > 0 {
-		return &CheckFailedError{Failed: fails}
+		return &sdk.ExitCodeError{Code: sdk.CheckFailExitCode, Err: fmt.Errorf("%d check(s) failed", fails)}
 	}
 	return nil
 }

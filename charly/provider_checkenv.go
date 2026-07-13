@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -43,21 +44,21 @@ func runModeName(m RunMode) string {
 
 // snapshotCheckEnv captures the serializable invocation context for a verb
 // provider call.
-func snapshotCheckEnv(r *Runner, _ *Op) *CheckEnv {
+func snapshotCheckEnv(kr *kit.Runner, _ *Op) *CheckEnv {
 	// Box is the verb's TARGET name across the wire. For a VM deployment it must be the per-deploy
-	// DOMAIN IDENTITY (vmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
+	// DOMAIN IDENTITY (VmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
 	// go-libvirt shed dropped that in-core remap). A pod/k8s/android deployment leaves VmName empty,
-	// so vmTargetName() == Box (unchanged).
-	ce := &CheckEnv{Box: r.vmTargetName(), Instance: r.Instance, Distros: r.Distros, Mode: runModeName(r.Mode), DialTimeoutNs: int64(r.DialTimeout)}
+	// so VmTargetName() == Box (unchanged).
+	ce := &CheckEnv{Box: kr.VmTargetName(), Instance: kr.Instance(), Distros: kr.Distros(), Mode: runModeName(kr.Mode()), DialTimeoutNs: int64(kr.DialTimeout())}
 	// The container name is meaningful only for a live (non-box) run with a real box —
 	// the same condition under which a live-container verb runs at all.
-	if r.Mode != RunModeBox && r.Box != "" && r.Box != "." {
-		ce.ContainerName = containerNameInstance(resolveBoxName(r.Box), r.Instance)
+	if kr.Mode() != RunModeBox && kr.Box() != "" && kr.Box() != "." {
+		ce.ContainerName = containerNameInstance(resolveBoxName(kr.Box()), kr.Instance())
 	}
-	if r.Exec != nil {
-		ce.Venue = r.Exec.Venue()
-		ce.VenueKind = r.Exec.Kind()
+	if de := deployExecOf(kr); de != nil {
+		ce.Venue = de.Venue()
+		ce.VenueKind = de.Kind()
 	}
 	return ce
 }
@@ -75,7 +76,7 @@ type pluginCheckResult struct {
 // (built-in OR out-of-tree, transport-invisible). This is the permanent plugin
 // fall-through the foundation cutover (C0) adds; the built-in verb switch above is
 // migrated into the registry in C1.
-func (r *Runner) runPluginVerb(ctx context.Context, c *Op) CheckResult {
+func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *Op) CheckResult {
 	word := c.Plugin
 	res := CheckResult{Verb: "plugin"}
 	// connectBakedPlugin (not a bare ResolveVerb) so a BAKED verb plugin resolves
@@ -111,17 +112,17 @@ func (r *Runner) runPluginVerb(ctx context.Context, c *Op) CheckResult {
 		res.Message = err.Error()
 		return res
 	}
-	// A CheckVerbProvider plugin unit is IN-PROCESS and keeps the live executor: an
-	// EXECUTION-NEEDING verb (one that reaches r.Exec / the *Runner) dispatches via
-	// RunVerb, which carries the *Runner that cannot cross the wire. Only an
-	// OUT-OF-PROCESS provider falls through to invokeVerbProvider, which marshals the
-	// Op into the Invoke envelope (necessarily dropping the *Runner).
+	// A CheckVerbProvider plugin unit is IN-PROCESS and keeps the live check context: an
+	// EXECUTION-NEEDING verb (one that reaches the executor / the host CheckContext)
+	// dispatches via RunVerb, threaded the host verb resolver that cannot cross the wire.
+	// Only an OUT-OF-PROCESS provider falls through to invokeVerbProvider, which marshals
+	// the Op into the Invoke envelope (necessarily dropping the live host context).
 	if cv, ok := prov.(CheckVerbProvider); ok {
-		res = cv.RunVerb(ctx, r, c)
+		res = cv.RunVerb(ctx, h, c)
 		res.Verb = "plugin"
 		return res
 	}
-	res = r.invokeVerbProvider(ctx, prov, word, c)
+	res = h.invokeVerbProvider(ctx, prov, word, c)
 	res.Verb = "plugin"
 	return res
 }
@@ -133,15 +134,15 @@ func (r *Runner) runPluginVerb(ctx context.Context, c *Op) CheckResult {
 // OUT-OF-PROCESS, not a CheckVerbProvider): an external verb reads the FULL Op it is
 // handed here (params_json), so a verb's params stay authored in #Op with NO migration
 // when its implementation moves out-of-tree. The caller sets res.Verb.
-func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *Op) CheckResult {
+func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *Op) CheckResult {
 	res := CheckResult{}
 	// Resolve a relative committed-APK path (appium: install-app, `apk: ./tests/data/…`)
 	// against the ORIGINATING candy's source tree HOST-side, BEFORE marshaling — an
-	// out-of-process verb has no Runner.CandyDirs, so it cannot anchor the fixture itself.
+	// out-of-process verb has no CandyDirs, so it cannot anchor the fixture itself.
 	// Same candy-anchored walk-up the host APK resolver uses (R3); the plugin then sees
 	// an absolute, candy-anchored path.
 	if apk := kit.InputStr(c, "apk"); apk != "" {
-		resolved, err := r.resolveCheckApk(apk, c.Origin)
+		resolved, err := h.resolveCheckApk(apk, c.Origin)
 		if err != nil {
 			res.Status = TestFail
 			res.Message = fmt.Sprintf("verb %q: %v", word, err)
@@ -163,15 +164,15 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 	// reverse-legs open ssh -L forwards / socket bridges DURING the Invoke; drain them (LIFO)
 	// after it returns — the forward must outlive the plugin's dial. Reset per-Invoke so a
 	// leftover from a prior op never leaks in.
-	r.endpointCleanups = nil
-	defer r.runEndpointCleanups()
+	h.endpointCleanups = nil
+	defer h.runEndpointCleanups()
 	params, err := marshalJSON(c)
 	if err != nil {
 		res.Status = TestFail
 		res.Message = fmt.Sprintf("verb %q: marshal op: %v", word, err)
 		return res
 	}
-	ce := snapshotCheckEnv(r, c)
+	ce := snapshotCheckEnv(h.kr, c)
 	env, err := marshalJSON(ce)
 	if err != nil {
 		res.Status = TestFail
@@ -186,18 +187,19 @@ func (r *Runner) invokeVerbProvider(ctx context.Context, prov Provider, word str
 	// dispatches in-proc via RunVerb in runPluginVerb).
 	op := &Operation{Reserved: word, Op: OpRun, Params: params, Env: env}
 	var out *Result
-	if ei, ok := prov.(executorInvoker); ok && r.Exec != nil {
+	de := deployExecOf(h.kr)
+	if ei, ok := prov.(executorInvoker); ok && de != nil {
 		// A check verb never drives the RunHostStep host-engine channel, so the host-engine
 		// context is the zero value (no project Config needed for RunCapture/GetFile) and the
 		// venue is never rebootable (a check verb never reboots the target). Alongside the
 		// ExecutorService (the venue), serve the CheckContextService (F2) so a HOST-COUPLED
 		// out-of-process kit verb reaches the host-vantage HTTPDo + AddBackground legs.
 		var addBg func(int)
-		if r.Scenario != nil {
-			addBg = r.Scenario.AddBackground
+		if h.kr.Scenario() != nil {
+			addBg = h.kr.Scenario().AddBackground
 		}
-		cc := &checkContextReverseServer{httpBase: r.HTTPClient, addBg: addBg, resolveEp: r.resolveVerbEndpoint, resolveGfx: r.resolveVerbGraphics, resolveClusterCtx: r.resolveClusterContext, resolveImgLabel: r.resolveImageLabel}
-		out, err = ei.InvokeWithExecutor(ctx, op, r.Exec, buildEngineContext{}, false, cc)
+		cc := &checkContextReverseServer{httpBase: h.kr.HTTPClient(), addBg: addBg, resolveEp: h.resolveVerbEndpoint, resolveGfx: h.resolveVerbGraphics, resolveClusterCtx: h.resolveClusterContext, resolveImgLabel: h.resolveImageLabel}
+		out, err = ei.InvokeWithExecutor(ctx, op, de, buildEngineContext{}, false, cc)
 	} else {
 		out, err = prov.Invoke(ctx, op)
 	}

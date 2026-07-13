@@ -9,6 +9,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // §J.1 — a check: step runs and reports its verdict through RunPlan.
@@ -20,7 +22,7 @@ func TestPlanUnify_CheckStepRuns(t *testing.T) {
 			PluginInput: map[string]any{"matching": "charly-marker", "contains": map[string]any{"contains": "charly-marker"}},
 		}}},
 	}}}
-	r := NewRunner(nil, nil, RunModeLive)
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive})
 	res := RunPlan(context.Background(), r, set, nil, false)
 	if len(res) != 1 {
 		t.Fatalf("want 1 step result, got %d", len(res))
@@ -45,8 +47,7 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 			}},
 		},
 	}}}
-	r := NewRunner(nil, nil, RunModeLive)
-	r.VerifyOnly = true
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, VerifyOnly: true})
 	res := RunPlan(context.Background(), r, set, nil, false)
 	if len(res) != 2 {
 		t.Fatalf("want 2 step results, got %d", len(res))
@@ -83,8 +84,7 @@ func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 			{AgentRun: "an agent drives the UI", Op: Op{}}, // agent step, NOT a deterministic install
 		},
 	}}}
-	r := NewRunner(nil, nil, RunModeLive)
-	r.SkipDeterministicRun = true // the `charly check feature run` (ADE acceptance) mode
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, SkipDeterministicRun: true}) // the `charly check feature run` (ADE acceptance) mode
 	res := RunPlan(context.Background(), r, set, nil, false)
 	if len(res) != 3 {
 		t.Fatalf("want 3 step results, got %d", len(res))
@@ -149,32 +149,6 @@ func TestPlanUnify_IncludeSplicesCandyPlan(t *testing.T) {
 	// The spliced steps carry the include source origin for reporting.
 	if expanded[0].Origin != "candy:redis" {
 		t.Errorf("spliced step missing source origin, got %q", expanded[0].Origin)
-	}
-}
-
-// §J.7 — the per-step scorer reports N/M solved and identifies the failing step
-// by id (the scenario→step scoring change).
-func TestPlanUnify_PerStepScorerReportsSolvedAndFailingID(t *testing.T) {
-	verdicts := []StepVerdict{
-		{ID: "redis-ping", Verdict: VerdictSolved},
-		{ID: "redis-config", Verdict: VerdictUnchanged}, // still failing
-	}
-	s := computeSummary(verdicts, 2)
-	if s.Solved != 1 || s.Input != 2 {
-		t.Fatalf("want 1/2 solved, got %d/%d", s.Solved, s.Input)
-	}
-	if s.PercentSolved != 50.0 {
-		t.Errorf("PercentSolved = %v, want 50", s.PercentSolved)
-	}
-	// The failing step is identifiable by id (verdict != solved).
-	var failing []string
-	for _, v := range verdicts {
-		if v.Verdict != VerdictSolved {
-			failing = append(failing, v.ID)
-		}
-	}
-	if len(failing) != 1 || failing[0] != "redis-config" {
-		t.Errorf("failing step by id = %v, want [redis-config]", failing)
 	}
 }
 

@@ -17,7 +17,7 @@ import (
 // httpClientFor builds a per-request *http.Client honoring the kit.HTTPRequest policy
 // (AllowInsecure, NoFollowRedirects, CAPEM, Timeout), derived from the engine's base
 // client. HOST-side: the SINGLE client builder for BOTH the in-proc check context
-// (runnerCheckContext.HTTPDo) AND the out-of-process CheckContextService.HTTPDo (R3 —
+// (hostCheckContext.HTTPDo) AND the out-of-process CheckContextService.HTTPDo (R3 —
 // relocated from candy/plugin-http/plugin.go, which no longer holds the live client). The
 // base supplies the default timeout; req.Timeout overrides it.
 func httpClientFor(base *http.Client, req kit.HTTPRequest) (*http.Client, error) {

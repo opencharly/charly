@@ -43,8 +43,8 @@ import (
 // holderAddr is spec.HolderAddr — the self-contained deployment address the host seams act on.
 type holderAddr = spec.HolderAddr
 
-// envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (runCheckBed,
-// or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
+// envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (a check-bed
+// run, or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
 // spawns do NOT independently acquire/release the lease — the owner manages it. Managed by the
 // in-core shims (the arbiter plugin never sees the env).
 const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"

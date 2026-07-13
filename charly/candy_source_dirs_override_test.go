@@ -54,7 +54,7 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	}
 
 	// The committed apk path must resolve against that SourceDir (walking up to the repo root).
-	r := &Runner{CandyDirs: dirs}
+	r := hostVerbResolverWithCandyDirs(dirs, nil)
 	resolved, err := r.resolveCheckApk("./tests/data/ApiDemos-debug.apk", "candy:"+key)
 	if err != nil {
 		t.Fatalf("resolveCheckApk errored: %v", err)
