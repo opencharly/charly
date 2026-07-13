@@ -655,8 +655,11 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 		return c.runConfigDirect(qcfg, bindMounts, resolvedSidecars, tunnelCfg)
 	}
 
-	content := generateQuadlet(qcfg)
-
+	// The config-WRITE (quadlet/.pod/sidecar/tunnel file generation) is owned by the deploy:pod
+	// plugin (P11, Ruling C). The HOST resolves the QuadletConfig (above), provisions the target
+	// dirs, and computes the exact file PATHS (the core filename helpers), then Invokes the plugin
+	// to render + write the file CONTENTS byte-identically. RESOLVE + the host side-effects below
+	// (cloudflareTunnelSetup, systemctl, enc-mount, data-seed) stay here.
 	qdir, err := quadletDir()
 	if err != nil {
 		return err
@@ -664,36 +667,16 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	if err := os.MkdirAll(qdir, 0755); err != nil {
 		return fmt.Errorf("creating quadlet directory: %w", err)
 	}
-
-	qpath := filepath.Join(qdir, quadletFilenameInstance(c.Box, c.Instance))
-	if err := os.WriteFile(qpath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("writing quadlet file: %w", err)
+	writeReq := spec.PodConfigWriteRequest{
+		ContainerPath: filepath.Join(qdir, quadletFilenameInstance(c.Box, c.Instance)),
 	}
-
-	fmt.Fprintf(os.Stderr, "Wrote %s\n", qpath)
-
-	// Write pod and sidecar files when sidecars are configured
 	if len(resolvedSidecars) > 0 {
-		// Generate and write .pod file
-		podContent := generatePodQuadlet(qcfg)
-		podPath := filepath.Join(qdir, podQuadletFilenameInstance(c.Box, c.Instance))
-		if err := os.WriteFile(podPath, []byte(podContent), 0600); err != nil {
-			return fmt.Errorf("writing pod file: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "Wrote %s\n", podPath)
-
-		// Generate and write sidecar .container files
+		writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(c.Box, c.Instance))
+		writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
 		for _, sc := range resolvedSidecars {
-			scContent := generateSidecarQuadlet(sc, podName)
-			scPath := filepath.Join(qdir, sidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
-			if err := os.WriteFile(scPath, []byte(scContent), 0600); err != nil {
-				return fmt.Errorf("writing sidecar file for %s: %w", sc.Name, err)
-			}
-			fmt.Fprintf(os.Stderr, "Wrote %s\n", scPath)
+			writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
 		}
 	}
-
-	// Write companion tunnel service if cloudflare tunnel is configured
 	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
 		svcDir, err := systemdUserDir()
 		if err != nil {
@@ -702,14 +685,26 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 		if err := os.MkdirAll(svcDir, 0755); err != nil {
 			return fmt.Errorf("creating systemd user directory: %w", err)
 		}
-		tunnelContent := generateTunnelUnit(qcfg)
-		tunnelPath := filepath.Join(svcDir, tunnelServiceFilename(c.Box))
-		if err := os.WriteFile(tunnelPath, []byte(tunnelContent), 0644); err != nil {
-			return fmt.Errorf("writing tunnel service file: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "Wrote %s\n", tunnelPath)
+		writeReq.TunnelPath = filepath.Join(svcDir, tunnelServiceFilename(c.Box))
+		cfgPath, _ := tunnelConfigPath(tunnelCfg.TunnelName)
+		writeReq.CloudflaredCfgPath = cfgPath
+	}
+	qcfgJSON, err := json.Marshal(qcfg)
+	if err != nil {
+		return fmt.Errorf("marshaling pod config for write: %w", err)
+	}
+	writeReq.PodConfigJSON = qcfgJSON
+	writeReply, err := writePodConfigViaPlugin(writeReq)
+	if err != nil {
+		return fmt.Errorf("writing pod config files: %w", err)
+	}
+	for _, p := range writeReply.WrittenPaths {
+		fmt.Fprintf(os.Stderr, "Wrote %s\n", p)
+	}
 
-		// Setup: create tunnel, write cloudflared config, route DNS
+	// Cloudflare tunnel setup (create tunnel, write cloudflared config, route DNS) — a HOST
+	// side-effect that stays here (Q1=(a)); the plugin only WROTE the .service unit above.
+	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
 		if _, _, setupErr := cloudflareTunnelSetup(*tunnelCfg); setupErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: tunnel setup failed: %v\n", setupErr)
 		}
@@ -1778,26 +1773,26 @@ func updateAllDeployedQuadlets(rt *ResolvedRuntime, skipBox string) error {
 			qcfg.Env = appendAutoDetectedEnv(qcfg.Env, detected)
 		}
 
-		content := generateQuadlet(qcfg)
-		if err := os.WriteFile(qpath, []byte(content), 0600); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not update quadlet for %s: %v\n", key, err)
+		// Config-WRITE via the deploy:pod plugin (P11) — the host computed the paths (qpath +
+		// pod/sidecar) + Invokes the plugin to render + write the file contents. Best-effort per the
+		// --update-all contract: a write failure warns + moves to the next deploy.
+		writeReq := spec.PodConfigWriteRequest{ContainerPath: qpath}
+		if len(resolvedSidecars) > 0 {
+			writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(boxName, instance))
+			writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
+			for _, sc := range resolvedSidecars {
+				writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(boxName, instance, sc.Name))
+			}
+		}
+		qcfgJSON, err := json.Marshal(qcfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not marshal config for %s: %v\n", key, err)
 			continue
 		}
-
-		// Regenerate pod and sidecar files when sidecars are configured
-		if len(resolvedSidecars) > 0 {
-			podContent := generatePodQuadlet(qcfg)
-			podPath := filepath.Join(qdir, podQuadletFilenameInstance(boxName, instance))
-			if err := os.WriteFile(podPath, []byte(podContent), 0600); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: could not update pod file for %s: %v\n", key, err)
-			}
-			for _, sc := range resolvedSidecars {
-				scContent := generateSidecarQuadlet(sc, podName)
-				scPath := filepath.Join(qdir, sidecarQuadletFilenameInstance(boxName, instance, sc.Name))
-				if err := os.WriteFile(scPath, []byte(scContent), 0600); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: could not update sidecar file for %s/%s: %v\n", key, sc.Name, err)
-				}
-			}
+		writeReq.PodConfigJSON = qcfgJSON
+		if _, err := writePodConfigViaPlugin(writeReq); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not update quadlet for %s: %v\n", key, err)
+			continue
 		}
 
 		updated = append(updated, key)

@@ -49,5 +49,13 @@ var (
 	RemoveBoxDeploy            = deploykit.RemoveBoxDeploy
 	deployVolumePrefix         = deploykit.DeployVolumePrefix
 	deployStorageDir           = deploykit.DeployStorageDir
+
+	// P11 enc-model move: the enc-coupled volume RESOLVER + the pure enc-path cluster
+	// (deploykit/deploy_volume.go). ResolveVolumeBacking is called host-side (config_image/
+	// start/shell + the config-resolve seam); encryptedVolumeName feeds resolveEncVolumeDir,
+	// encryptedPlainDir the enc mount-state checks — both stay core (Ruling C: deploy state).
+	ResolveVolumeBacking = deploykit.ResolveVolumeBacking
+	encryptedVolumeName  = deploykit.EncryptedVolumeName
+	encryptedPlainDir    = deploykit.EncryptedPlainDir
 )
 var podAwareEnvProvides = deploykit.PodAwareEnvProvides

@@ -8,8 +8,9 @@
 // Describe either way.
 //
 // The RESOLUTION half of the tunnel subsystem STAYS in charly's core
-// (charly/tunnel.go: ResolveTunnelConfig / TunnelConfigFromMetadata + the pure
-// schemeTarget/tailscaleFlag/isTCPFamily helpers the quadlet emitter shares). Only the
+// (charly/tunnel.go: ResolveTunnelConfig / TunnelConfigFromMetadata; the pure
+// schemeTarget/tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to
+// sdk/deploykit with the emitter in P11). Only the
 // EXECUTION leg lives HERE: charly's core tunnel_plugin.go resolves a TunnelConfig, then
 // forwards TunnelStart / TunnelStop / cloudflareTunnelSetup over this verb's Invoke
 // envelope ({method, config}); tunnel_exec.go runs the actual tailscale serve/funnel and

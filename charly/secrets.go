@@ -88,33 +88,16 @@ type LabelSecretEntry struct {
 	Env    string `json:"env,omitempty"`
 }
 
-// CollectedSecret represents a fully resolved secret ready for provisioning.
-//
-// Service, Key, and RotateOnConfig are populated by CollectCandySecretAccepts
-// (added in a later step) for credential-store-backed secrets derived from
-// secret_accepts / secret_requires candy manifest entries. They are zero for
-// candy-owned secrets (the existing CollectSecretsFromLabels path), preserving
-// the current behavior.
-//
-//   - Service / Key: optional override for the ResolveCredential lookup.
-//     Defaults: Service="charly/secret", Key=SecretName. When set, these are
-//     passed through resolveSecretValue to the credential store.
-//   - RotateOnConfig: if true, ProvisionPodmanSecrets bypasses the
-//     podmanSecretExists short-circuit and always rm+creates the podman
-//     secret, so rotation via `charly secrets set` + `charly config` takes effect
-//     on the next reconcile. Candy-owned secrets (like immich db-password)
-//     must keep this false — you cannot re-init a live postgres cluster
-//     with a rotated password.
-type CollectedSecret struct {
-	Name           string // podman secret name: "charly-<image>-<name>"
-	Target         string // container mount path
-	Env            string // env var name INSIDE the container (the name the app expects, e.g. TS_AUTHKEY)
-	HostEnv        string // env var name on the HOST to read the value from (templated for multi-tailnet; empty = same as Env)
-	SecretName     string // original secret name from the candy manifest
-	Service        string // credential store service override (empty = use default lookup)
-	Key            string // credential store key override (empty = use default lookup)
-	RotateOnConfig bool   // if true, bypass podmanSecretExists short-circuit (rotate on every charly config)
-}
+// CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
+// Secret= directive) is a deploykit resolved-runtime type now, aliased in
+// deploykit_pod_aliases.go — it moved to sdk/deploykit with the pod config-write
+// mechanism (P11). Service/Key/RotateOnConfig are populated by CollectCandySecretAccepts
+// for credential-store-backed secrets (secret_accepts / secret_requires); zero for
+// candy-owned secrets (the CollectSecretsFromLabels path). Service/Key override the
+// ResolveCredential lookup (defaults Service="charly/secret", Key=SecretName);
+// RotateOnConfig=true makes ProvisionPodmanSecrets bypass the podmanSecretExists
+// short-circuit and rm+recreate every reconcile (candy-owned secrets keep it false —
+// you cannot re-init a live postgres cluster with a rotated password).
 
 // ListProvisionedSecretNames returns the engine-side podman secrets
 // provisioned for a box (the charly-<box>-* names, sidecar secrets

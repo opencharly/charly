@@ -309,9 +309,10 @@ func MergeDeployOntoMetadata(meta *BoxMetadata, dc *BundleConfig, deployName, in
 
 // deployVolumePrefix + deployStorageDir moved to sdk/deploykit as
 // DeployVolumePrefix/DeployStorageDir (P13/C15); aliased in
-// deploykit_state_aliases.go. ResolveVolumeBacking + resolveVolumeHostPath stay
-// core (enc.go encryption-naming coupling), and scopeVolumesToDeployKey below
-// stays core (it reads *BoxMetadata, not yet spec-sourced — folds with P2B).
+// deploykit_state_aliases.go. ResolveVolumeBacking + resolveVolumeHostPath also
+// relocated to sdk/deploykit with the P11 enc-model move (see below); only
+// scopeVolumesToDeployKey below stays core (it reads *BoxMetadata, not yet
+// spec-sourced — folds with P2B).
 
 // scopeVolumesToDeployKey renames meta's named-volume mounts from the
 // image-derived prefix (charly-<image>-) to the deploy's own prefix
@@ -340,95 +341,11 @@ func scopeVolumesToDeployKey(meta *BoxMetadata, deployName, instance string) {
 	}
 }
 
-// ResolveVolumeBacking splits image volumes into named volumes and bind mounts
-// based on charly.yml volume configuration.
-// Volumes without a deploy override remain as named volumes.
-// Volumes with type=bind or type=encrypted become ResolvedBindMount.
-// Deploy-only volumes (with Path set, not in labels) are also supported.
-// resolveVolumeHostPath computes the host-side path for a bind/encrypted deploy
-// volume. It is the single home for the host-path strategy (R3): ResolveVolumeBacking
-// applies it in two passes — label-matched volumes (keyed by the short name) and
-// deploy-only volumes (keyed by the config name) — that previously carried
-// byte-identical copies of this switch differing only in that name argument.
-//
-//	encrypted + explicit Host:  <Host>/plain
-//	encrypted + default:        <encStoragePath>/<storageDir>/plain  (per-deploy)
-//	bind + explicit Host:       <Host>
-//	bind + default:             <volumesPath>/<storageDir>/<name>    (per-deploy)
-func resolveVolumeHostPath(dv DeployVolumeConfig, name, storageDir, encStoragePath, volumesPath string) string {
-	switch {
-	case dv.Type == "encrypted":
-		if dv.Host != "" {
-			return filepath.Join(expandHostHome(dv.Host), "plain")
-		}
-		return encryptedPlainDir(encStoragePath, storageDir, name)
-	case dv.Host != "":
-		return expandHostHome(dv.Host)
-	default:
-		return filepath.Join(volumesPath, storageDir, name)
-	}
-}
-
-func ResolveVolumeBacking(boxName, instance string, labelVolumes []VolumeMount, deployVolumes []DeployVolumeConfig, home string, encStoragePath string, volumesPath string) ([]VolumeMount, []ResolvedBindMount) {
-	// Index deploy volume configs by name
-	deployByName := make(map[string]DeployVolumeConfig, len(deployVolumes))
-	for _, dv := range deployVolumes {
-		deployByName[dv.Name] = dv
-	}
-
-	// Track which deploy entries matched a label volume
-	matched := make(map[string]bool)
-
-	var volumes []VolumeMount
-	var bindMounts []ResolvedBindMount
-
-	for _, vol := range labelVolumes {
-		// Extract short name from the deploy-scoped prefix (charly-<deploy>-<name>).
-		shortName := strings.TrimPrefix(vol.VolumeName, deployVolumePrefix(boxName, instance))
-
-		dv, hasOverride := deployByName[shortName]
-		if hasOverride {
-			matched[shortName] = true
-		}
-
-		if hasOverride && (dv.Type == "bind" || dv.Type == "encrypted") {
-			hostPath := resolveVolumeHostPath(dv, shortName, deployStorageDir(boxName, instance), encStoragePath, volumesPath)
-			bindMounts = append(bindMounts, ResolvedBindMount{
-				Name:      shortName,
-				HostPath:  hostPath,
-				ContPath:  vol.ContainerPath,
-				Encrypted: dv.Type == "encrypted",
-			})
-		} else {
-			// Default: keep as named volume
-			volumes = append(volumes, vol)
-		}
-	}
-
-	// Add deploy-only volumes (not in any candy, must have Path)
-	for _, dv := range deployVolumes {
-		if matched[dv.Name] || dv.Path == "" {
-			continue
-		}
-		containerPath := ExpandPath(dv.Path, home)
-		if dv.Type == "bind" || dv.Type == "encrypted" {
-			hostPath := resolveVolumeHostPath(dv, dv.Name, deployStorageDir(boxName, instance), encStoragePath, volumesPath)
-			bindMounts = append(bindMounts, ResolvedBindMount{
-				Name:      dv.Name,
-				HostPath:  hostPath,
-				ContPath:  containerPath,
-				Encrypted: dv.Type == "encrypted",
-			})
-		} else {
-			volumes = append(volumes, VolumeMount{
-				VolumeName:    deployVolumePrefix(boxName, instance) + dv.Name,
-				ContainerPath: containerPath,
-			})
-		}
-	}
-
-	return volumes, bindMounts
-}
+// ResolveVolumeBacking + resolveVolumeHostPath relocated to sdk/deploykit
+// (deploy_volume.go) with the P11 enc-model move, alongside the pure enc-path cluster —
+// aliased in deploykit_state_aliases.go so the host call sites (config_image.go / start.go
+// / shell.go, and step 3's config-resolve seam) compile unchanged. scopeVolumesToDeployKey
+// stays here (it reads *BoxMetadata, folding with the BoxMetadata cutover).
 
 // SaveBundleConfig writes a BundleConfig to the standard charly.yml
 // path. Uses tempfile + os.Rename for atomic write — defense in depth

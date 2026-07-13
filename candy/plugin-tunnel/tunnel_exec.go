@@ -1,8 +1,9 @@
 package tunnelverb
 
 // tunnel_exec.go is the EXECUTION LEG of the tunnel subsystem, externalized out of
-// charly's core (charly/tunnel.go kept the pure RESOLUTION + the schemeTarget/
-// tailscaleFlag/isTCPFamily helpers the quadlet emitter shares). It runs the actual
+// charly's core (charly/tunnel.go kept the pure RESOLUTION; the schemeTarget/
+// tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to sdk/deploykit
+// with the emitter in P11). It runs the actual
 // tailscale serve/funnel commands and the cloudflared tunnel lifecycle, stopping at the
 // exec/auth boundary. The pure argv-building helpers here are the plugin's own copies of
 // the core helpers (a cross-process-boundary duplication of a few tiny pure functions,

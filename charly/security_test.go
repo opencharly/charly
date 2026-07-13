@@ -329,49 +329,8 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 	}
 }
 
-func TestNormalizeCgroupSize(t *testing.T) {
-	tests := []struct {
-		in, want string
-	}{
-		{"", ""},
-		{"6g", "6G"},
-		{"512m", "512M"},
-		{"64k", "64K"},
-		{"1t", "1T"},
-		{"6G", "6G"}, // already uppercase
-		{"512M", "512M"},
-		{"1024", "1024"}, // raw bytes, no suffix
-		{"  2g  ", "2G"},
-	}
-	for _, tt := range tests {
-		got := normalizeCgroupSize(tt.in)
-		if got != tt.want {
-			t.Errorf("normalizeCgroupSize(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
-func TestFormatCPUQuota(t *testing.T) {
-	tests := []struct {
-		in, want string
-	}{
-		{"", ""},
-		{"0", ""},
-		{"-1", ""},
-		{"bogus", ""},
-		{"1", "100%"},
-		{"2.5", "250%"},
-		{"0.5", "50%"},
-		{"4", "400%"},
-		{"  2  ", "200%"},
-	}
-	for _, tt := range tests {
-		got := formatCPUQuota(tt.in)
-		if got != tt.want {
-			t.Errorf("formatCPUQuota(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
+// TestNormalizeCgroupSize + TestFormatCPUQuota moved to sdk/deploykit
+// (quadlet_test.go) with the NormalizeCgroupSize/FormatCPUQuota helpers in P11.
 
 func TestBuildStartArgsWithPrivileged(t *testing.T) {
 	sec := SecurityConfig{Privileged: true}

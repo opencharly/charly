@@ -142,6 +142,11 @@ const (
 	// invoked host-side in the build PRE-PASS, never inside the pure BuildDeployPlan compile.
 	OpCollectContext = sdk.OpCollectContext
 	OpReverse        = sdk.OpReverse
+
+	// OpConfigWrite — the POD config-WRITE Op (P11): `charly config` (host) Invokes the deploy:pod
+	// plugin to render + write the quadlet/.pod/sidecar/tunnel files (Ruling C — the plugin owns the
+	// config-WRITE; resolve + host side-effects stay in the host command).
+	OpConfigWrite = sdk.OpConfigWrite
 )
 
 // marshalParams / unmarshalResult are the small helpers the in-proc adapters and

@@ -18,17 +18,11 @@ import (
 // (map[string]json.RawMessage) and consumes the resolved ResolvedSidecar values this
 // file's adapter builds; the quadlet/naming helpers below are pure host machinery.
 
-// ResolvedSidecar is a fully resolved sidecar ready for quadlet generation — the
-// resolve-to-envelope form the sidecar plugin produces (as spec.ResolvedSidecar,
-// adapted here into the host's CollectedSecret/VolumeMount/SecurityConfig types).
-type ResolvedSidecar struct {
-	Name     string            // sidecar key (e.g., "tailscale")
-	Image    string            // resolved OCI image ref
-	Env      map[string]string // merged env vars
-	Secret   []CollectedSecret // provisioned podman secrets
-	Volume   []VolumeMount     // resolved named volumes
-	Security SecurityConfig    // merged security config
-}
+// ResolvedSidecar (the host-adapted, generation-ready sidecar form the sidecar plugin's
+// spec.ResolvedSidecar wire type is adapted into) is a deploykit resolved-runtime type
+// now, aliased in deploykit_pod_aliases.go — it moved to sdk/deploykit with the pod
+// config-write mechanism (P11), since its CollectedSecret/VolumeMount/SecurityConfig
+// fields are all deploykit/vmshared types.
 
 // resolveSidecarsViaPlugin invokes candy/plugin-sidecar's OpResolve leg — the single
 // point where sidecar defs are resolved. The host passes OPAQUE def layers + the CLI
@@ -156,21 +150,4 @@ func sidecarConfigDir() (string, error) {
 		return "", fmt.Errorf("determining config directory: %w", err)
 	}
 	return filepath.Join(configDir, "charly", "sidecar"), nil
-}
-
-func SortedSidecarEnv(env map[string]string) []string {
-	keys := make([]string, 0, len(env))
-	for k := range env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	result := make([]string, 0, len(keys))
-	for _, k := range keys {
-		result = append(result, k+"="+env[k])
-	}
-	return result
-}
-
-func IsSidecarEnvQuotable(val string) bool {
-	return strings.ContainsAny(val, `"{}[] `)
 }
