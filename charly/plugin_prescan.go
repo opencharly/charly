@@ -10,7 +10,8 @@ package main
 // parser must recognize at LOAD time, before the provider connects. Chicken-and-egg.
 //
 // The fix (the lightweight declaration pre-scan): before the root entity nodes are
-// normalized (loadUnifiedInto depth-0, ahead of mergeUnifiedDocs), cheaply read each
+// normalized (the walk's Boundary seam — loaderkit.Walk calls this at the root file AND
+// each namespace root, before that boundary's documents parse), cheaply read each
 // discovered candy's `plugin:` DECLARATION and register the DEPLOY words it declares
 // as recognized substrate discriminators. This needs only the WORD + its class — no
 // provider instance, no build, no connect (the real provider still connects later at
@@ -31,6 +32,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -185,8 +187,9 @@ func setKindConnectPass(v bool) {
 
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
 // project's declared external KIND words (F4), so a `kind: <plugin-word>` entity decodes via
-// runPluginKind during load. Called at the depth-0 loader hook AFTER the prescan and BEFORE
-// mergeUnifiedDocs decodes the entity nodes. The connect re-loads the project (LoadConfig +
+// runPluginKind during load. Called at the walk's Boundary seam AFTER the prescan and BEFORE the
+// host materialize (materializeLoadedProject, loader_driver.go) decodes/folds the entity nodes.
+// The connect re-loads the project (LoadConfig +
 // ScanAllCandyWithConfigOpts → LoadUnified, which fetches @github kind candies too), so it is
 // GUARDED by inKindConnectPass — the nested load skips this pre-pass and DEFERS its kind nodes
 // (normalizeNodeInto), so the scan succeeds; this OUTER pass then has the providers registered.
@@ -373,7 +376,7 @@ func registerExternalVerbsFromCandies(candies map[string]*Candy) {
 // `charly status` / `charly box validate` repo-wide.
 func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	var doc struct {
-		Discover DiscoverConfig `yaml:"discover"`
+		Discover kit.DiscoverConfig `yaml:"discover"`
 	}
 	if err := yaml.Unmarshal(rootData, &doc); err != nil || len(doc.Discover) == 0 {
 		return
@@ -390,7 +393,7 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		if !filepath.IsAbs(root) {
 			root = filepath.Join(baseDir, root)
 		}
-		dirs, err := findEntityDirs(root, manifest, spec.Recursive)
+		dirs, err := kit.FindEntityDirs(root, manifest, spec.Recursive)
 		if err != nil {
 			continue
 		}

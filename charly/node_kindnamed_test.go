@@ -12,9 +12,9 @@ import (
 // image is a `candy:` node carrying `base:`), where the top-level key `k8s`
 // collides with the `k8s` kind keyword. Two loader/validate sites must handle it:
 //
-//   - applyDiscoveredManifest routes every discovered manifest via classifyDoc,
+//   - applyDiscoveredManifest routes every discovered manifest via kit.ClassifyDoc,
 //     which inspects the VALUE shape (kit.NodeShapedValue: a `<kind>` discriminator)
-//     and reports docShapeNode — so the box named `k8s` is parsed as a node-form
+//     and reports kit.DocShapeNode — so the box named `k8s` is parsed as a node-form
 //     image (a candy: node with base:), not mis-decoded as a k8s-kind entity.
 //   - validateVocabularyCollections (the root-shape collection validator) would
 //     read top-level `k8s:` as the k8s collection and validate the `candy` child
@@ -52,7 +52,7 @@ discover:
 	}
 
 	// The legacy root-shape collection validator must SKIP this node-form file
-	// (classifyDoc → docShapeNode), or it validates the `box` child against #K8s.
+	// (kit.ClassifyDoc → kit.DocShapeNode), or it validates the `box` child against #K8s.
 	data, _ := os.ReadFile(filepath.Join(dir, "box", "k8s", "charly.yml"))
 	if !isNodeFormFile(data) {
 		t.Error("kind-named node-form file not recognized as node-form — the legacy collection validator would misvalidate it")

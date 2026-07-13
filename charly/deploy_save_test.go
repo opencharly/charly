@@ -287,7 +287,7 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 	}
 	// A config the unified loader REJECTS: a legacy top-level `deploy:` map at
 	// HEAD version (the exact shape the per-host migrate-path bug produced —
-	// classifyDoc hard-rejects it as legacy kind-keyed config).
+	// kit.ClassifyDoc hard-rejects it as legacy kind-keyed config).
 	rejected := "version: " + LatestSchemaVersion().String() + "\n" +
 		"provides:\n" +
 		"    env:\n" +

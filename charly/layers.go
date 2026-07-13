@@ -449,7 +449,7 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 	if len(inner.Content) == 2 && !kindWordSet[inner.Content[0].Value] {
 		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
 		// candy genericNode buildCandy consumes is reconstructed from the parsed node.
-		if _, pp, perr := activeLoaderParser.ParseDoc(inner, loaderThreaded()); perr == nil && len(pp.Nodes) == 1 && pp.Nodes[0].Disc == "candy" {
+		if _, pp, perr := requireLoaderParser().ParseDoc(inner, loaderThreaded()); perr == nil && len(pp.Nodes) == 1 && pp.Nodes[0].Disc == "candy" {
 			gn, gerr := parsedNodeToGeneric(pp.Nodes[0])
 			if gerr != nil {
 				return nil, fmt.Errorf("%s: %w", path, gerr)

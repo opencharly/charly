@@ -36,11 +36,11 @@ func (zzWireTestBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Re
 }
 
 // TestBootstrapTransformReachesParse proves the F9 WIRING FIX: a bootstrap plugin's rewrite of the
-// root config bytes reaches the actual PARSE (loadUnifiedInto via fileOverrides) + the post-merge
-// version gate — not just the early version gate. The on-disk config has a stale `version:` the
-// bootstrap bumps to HEAD; WITHOUT the fix, loadUnifiedInto re-reads the stale disk bytes and the
-// post-merge gate rejects → LoadUnified errors. WITH the fix, LoadUnified succeeds + merged.Version
-// is HEAD.
+// root config bytes reaches the actual PARSE (threaded into hostWalkProject as the walk's root
+// override) + the post-merge version gate — not just the early version gate. The on-disk config has
+// a stale `version:` the bootstrap bumps to HEAD; WITHOUT the fix, the walk re-reads the stale disk
+// bytes and the post-merge gate rejects → LoadUnified errors. WITH the fix, LoadUnified succeeds +
+// merged.Version is HEAD.
 func TestBootstrapTransformReachesParse(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	RegisterBuiltinProvider(zzWireTestBootstrapProvider{}) // global but marker-gated → no pollution

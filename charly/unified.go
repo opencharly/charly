@@ -1,23 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
-
-// namespaceAliasRe constrains an `import:` namespace alias to a bare
-// lowercase-hyphenated identifier — no dots, since `.` is the
-// qualified-reference separator (`alias.entry`).
-var namespaceAliasRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // -----------------------------------------------------------------------------
 // Unified YAML Format — Parts B/C/D/E of the refactor plan.
@@ -35,7 +27,7 @@ var namespaceAliasRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 //
 // Key properties:
 //   - name-first node-form documents (`<name>: {<kind>: …}`), routed by SHAPE —
-//     a legacy kind-keyed / root-shape document is hard-rejected at classifyDoc
+//     a legacy kind-keyed / root-shape document is hard-rejected at kit.ClassifyDoc
 //     with a `charly migrate` hint — never by filename;
 //   - import: for composition — a flat root-merge string OR a namespaced child import;
 //   - discover: for recursive directory scan of node-form standalone files;
@@ -52,10 +44,6 @@ const UnifiedFileName = kit.UnifiedFileName
 // 2026.141.1530) — the same scheme as image tags. LatestSchemaVersion()
 // (CUE-owned via spec.SchemaVersion) is the HEAD value; the LoadUnified gate
 // refuses anything older with a hint pointing at `charly migrate`.
-
-// MaxIncludeDepth caps recursive include resolution. A cycle or excessive depth
-// raises a clear error with the offending file path.
-const MaxIncludeDepth = 8
 
 // UnifiedFile is the full schema of a single unified-format YAML document.
 // Every field is optional — a file with only `distro:` is valid (typical for
@@ -81,9 +69,9 @@ type UnifiedFile struct {
 	// items are either a bare string (flat import into THIS root namespace —
 	// same-repo file splits + shared build vocabulary) or a single-key
 	// map `alias: ref` (a namespaced child import — cross-repo entity
-	// cherry-pick, referenced qualified as `alias.entry`). See ImportList.
-	Import   ImportList     `yaml:"import,omitempty" json:"import,omitempty"`
-	Discover DiscoverConfig `yaml:"discover,omitempty" json:"discover,omitempty"`
+	// cherry-pick, referenced qualified as `alias.entry`). See kit.ImportList.
+	Import   kit.ImportList     `yaml:"import,omitempty" json:"import,omitempty"`
+	Discover kit.DiscoverConfig `yaml:"discover,omitempty" json:"discover,omitempty"`
 	// The build-vocabulary kinds (distro/builder/init) are no longer typed core maps:
 	// each was extracted into a dedicated plugin kind (candy/plugin-distro /
 	// candy/plugin-builder / the candy/plugin-init candy), so a `distro:`/`builder:`/`init:` node
@@ -187,131 +175,19 @@ type UnifiedFile struct {
 
 	// Namespaces holds child namespaces mounted by namespaced `import:`
 	// entries (alias → fully-resolved isolated UnifiedFile). NOT authored
-	// directly and NOT flat-merged into the root maps — populated at load
-	// time by loadUnifiedInto. Entries are referenced qualified, e.g.
+	// directly and NOT flat-merged into the root maps — populated by
+	// materializeLoadedProject (loader_driver.go) from the walk's namespace
+	// mounts. Entries are referenced qualified, e.g.
 	// `base: cachyos.cachyos` resolves `cachyos` in Namespaces, then its
 	// Box["cachyos"]. Bare refs inside a namespace resolve within that
 	// namespace first (Go package-member semantics). See charly/namespace.go.
 	Namespaces map[string]*UnifiedFile `yaml:"-"`
 }
 
-// ImportEntry is one parsed `import:` list item. A flat entry (Namespace == "")
-// merges the referenced file into the current root namespace; a namespaced
-// entry mounts the referenced project under Namespace.
-type ImportEntry struct {
-	Namespace string // "" = flat import into the current root namespace
-	Ref       string // local path or `@host/org/repo[/sub/path]:version`
-}
-
-// ImportList is the `import:` field type. Custom YAML decoding accepts a list
-// whose items are either a bare string (flat) or a single-key mapping
-// `alias: ref` (namespaced child import).
-type ImportList []ImportEntry
-
-// UnmarshalYAML decodes the mixed-shape import list.
-func (il *ImportList) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind != yaml.SequenceNode {
-		return fmt.Errorf("import: must be a list (got kind=%v)", node.Kind)
-	}
-	out := make(ImportList, 0, len(node.Content))
-	for i, item := range node.Content {
-		switch item.Kind {
-		case yaml.ScalarNode:
-			if item.Value == "" {
-				return fmt.Errorf("import[%d]: empty ref", i)
-			}
-			out = append(out, ImportEntry{Ref: item.Value})
-		case yaml.MappingNode:
-			if len(item.Content) != 2 {
-				return fmt.Errorf("import[%d]: a namespaced entry must be a single-key map `alias: ref`", i)
-			}
-			alias := item.Content[0].Value
-			ref := item.Content[1].Value
-			if alias == "" || ref == "" {
-				return fmt.Errorf("import[%d]: namespaced entry needs both an alias and a ref", i)
-			}
-			out = append(out, ImportEntry{Namespace: alias, Ref: ref})
-		default:
-			return fmt.Errorf("import[%d]: each item must be a string ref or a single-key `alias: ref` map (got kind=%v)", i, item.Kind)
-		}
-	}
-	*il = out
-	return nil
-}
-
-// MarshalYAML emits each entry compactly: a flat entry as a scalar string, a
-// namespaced entry as a single-key `alias: ref` map — the same shapes
-// UnmarshalYAML accepts (round-trip safe; used by migrators that write configs).
-func (il ImportList) MarshalYAML() (any, error) { //nolint:unparam // error return kept for interface/API stability
-	seq := &yaml.Node{Kind: yaml.SequenceNode}
-	for _, e := range il {
-		if e.Namespace == "" {
-			seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: e.Ref})
-			continue
-		}
-		seq.Content = append(seq.Content, &yaml.Node{
-			Kind: yaml.MappingNode,
-			Content: []*yaml.Node{
-				{Kind: yaml.ScalarNode, Value: e.Namespace},
-				{Kind: yaml.ScalarNode, Value: e.Ref},
-			},
-		})
-	}
-	return seq, nil
-}
-
-// DiscoverConfig is a FLAT list of generic scan specs. Each spec scans a path
-// for directories containing its manifest; every discovered manifest is parsed
-// as a multi-document stream and routed by SHAPE (the kind-key it carries), so
-// one discover root can surface candies, boxes, deploys — any kind. There is no
-// kind dimension and no hardcoded path/filename: discovery is fully configured
-// in charly.yml.
-type DiscoverConfig []ScanSpec
-
-// ScanSpec describes one discovery root. Accepts string shorthand
-// ("candy" → {Path: "candy", Recursive: true}) or the explicit object form
-// ({path: X, recursive: false}). Empty Path is invalid.
-type ScanSpec struct {
-	Path      string `yaml:"path" json:"path"`
-	Recursive bool   `yaml:"recursive" json:"recursive"`
-	// Manifest is the per-directory manifest filename to look for. Empty
-	// defaults to UnifiedFileName; configurable per spec in charly.yml.
-	Manifest string `yaml:"manifest,omitempty" json:"manifest,omitempty"`
-}
-
-// UnmarshalYAML accepts the string shorthand where Recursive defaults to true,
-// and the object form where Recursive defaults to true when omitted.
-func (s *ScanSpec) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode {
-		s.Path = node.Value
-		s.Recursive = true
-		s.Manifest = UnifiedFileName
-		return nil
-	}
-	// Object form — decode with `recursive` defaulting to true when absent.
-	// yaml.v3 has no direct "default true"; we interpret missing as true by
-	// looking at the raw node and only clearing Recursive when the field is
-	// explicitly set to false.
-	var raw struct {
-		Path      string `yaml:"path" json:"path"`
-		Recursive *bool  `yaml:"recursive" json:"recursive"`
-		Manifest  string `yaml:"manifest" json:"manifest"`
-	}
-	if err := node.Decode(&raw); err != nil {
-		return err
-	}
-	s.Path = raw.Path
-	if raw.Recursive == nil {
-		s.Recursive = true
-	} else {
-		s.Recursive = *raw.Recursive
-	}
-	s.Manifest = raw.Manifest
-	if s.Manifest == "" {
-		s.Manifest = UnifiedFileName
-	}
-	return nil
-}
+// ImportEntry, ImportList, DiscoverConfig, and ScanSpec are the kind-blind
+// config-loader document DIRECTIVE types — relocated to sdk/kit
+// (loader_directives.go) so charly core AND sdk/loaderkit share ONE copy (R3).
+// See kit.ImportEntry / kit.ImportList / kit.DiscoverConfig / kit.ScanSpec.
 
 // InlineCandy is a candy declared inline in the unified file's `candy:` map.
 // Mutually exclusive options: `from:` points at a directory to scan via the
@@ -381,21 +257,20 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 	if !fileExists(root) {
 		return nil, false, nil
 	}
-	// F9 BOOTSTRAP PHASE: invoke bootstrap-phase plugins on the RAW root config bytes FIRST —
-	// before the schema gate AND before the parse — so a bootstrap plugin can
-	// rewrite the root bytes, and that rewrite reaches the gate AND the actual PARSE
-	// (loadUnifiedInto reads the transformed bytes via fileOverrides, keyed on the root's abs path,
-	// instead of a stale disk re-read). Today only the no-op candy/plugin-example-bootstrap registers
-	// here; a no-op bootstrap plugin (or none registered) returns the bytes unchanged → identity.
-	fileOverrides := map[string][]byte{}
-	if rootData, err := os.ReadFile(root); err == nil {
-		rootData = runBootstrapPhase(rootData)
-		// EARLY schema-version gate: a below-HEAD (or absent) root `version:` is rejected
-		// with the `charly migrate` hint BEFORE any shape parsing — so an out-of-date config
-		// never reaches node-form CUE validation (a confusing type error instead of the
-		// migrate hint). Reads the bootstrap-transformed bytes.
+	// F9 BOOTSTRAP PHASE: invoke bootstrap-phase plugins on the RAW root config bytes FIRST — before
+	// the early schema gate AND before the walk — so a bootstrap plugin's rewrite reaches both. The
+	// transformed bytes are threaded into the walk as the root override so it PARSES them (not a
+	// stale disk re-read). A read error is tolerated: the walk then reads the root from disk (no
+	// bootstrap / early gate), exactly as before. Today only the no-op candy/plugin-example-bootstrap
+	// registers here; a no-op (or none) returns the bytes unchanged → identity.
+	var rootData []byte
+	if data, rerr := os.ReadFile(root); rerr == nil {
+		data = runBootstrapPhase(data)
+		// EARLY schema-version gate: a below-HEAD (or absent) root `version:` is rejected with the
+		// `charly migrate` hint BEFORE any shape parsing — so an out-of-date config never reaches
+		// node-form CUE validation (a confusing type error instead of the migrate hint).
 		var vdoc yaml.Node
-		if yaml.Unmarshal(rootData, &vdoc) == nil {
+		if yaml.Unmarshal(data, &vdoc) == nil {
 			ver := ""
 			if vn := mapValue(mappingRoot(&vdoc), "version"); vn != nil {
 				ver = vn.Value
@@ -404,25 +279,20 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 				return nil, true, err
 			}
 		}
-		// Seed the transformed root so loadUnifiedInto PARSES it (the F9 wiring fix — the
-		// rewrite reaches the parse + the post-merge gate, not just the early version gate).
-		if absRoot, aerr := filepath.Abs(root); aerr == nil {
-			fileOverrides[absRoot] = rootData
-		}
+		rootData = data
 	}
+	// THE KIND-BLIND WALK (sdk/loaderkit): import queue + discover + namespaced-import mounts +
+	// per-document parse → a generic spec.LoadedProject. No materialize, no merge — those are the
+	// registry-coupled host half below (boundary law). The root's repo-identity cycle-break seed +
+	// the six kind-blind host seams live in hostWalkProject (loader_driver.go).
+	lp, err := hostWalkProject(dir, rootData)
+	if err != nil {
+		return nil, true, err
+	}
+	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *UnifiedFile, exactly as
+	// the former inline loadUnifiedInto did (materializeLoadedProject, loader_driver.go).
 	merged := &UnifiedFile{}
-	visited := map[string]bool{}
-	nsCache := map[string]*UnifiedFile{}
-	// Register the local root under its repo identity so a transitive import of
-	// THIS repo (at any pinned version) cycle-breaks to the working tree (root's
-	// namespace pins win — see ns_identity.go). Seeded BEFORE the load and never
-	// popped, so it matches anywhere in the import graph. "" (no `repo:`, no git
-	// origin) → no registration → version-keyed behavior, as before.
-	loadingRepos := map[string]*UnifiedFile{}
-	if rootID := rootRepoIdentity(dir); rootID != "" {
-		loadingRepos[rootID] = merged
-	}
-	if err := loadUnifiedInto(root, merged, visited, 0, nsCache, loadingRepos, fileOverrides); err != nil {
+	if err := materializeLoadedProject(&lp, merged, map[int64]*UnifiedFile{}); err != nil {
 		return nil, true, err
 	}
 	normalizeV4Aliases(merged)
@@ -598,197 +468,6 @@ func validateDeploymentName(name, parentPath string) error {
 	return nil
 }
 
-// loadUnifiedInto reads one file, merges every one of its documents into merged,
-// then processes any `import:` it declared. Flat imports recurse into the SAME
-// merged/visited (root namespace); namespaced imports mount an isolated child
-// UnifiedFile under merged.Namespaces via the shared nsCache (cycle-broken).
-// Cycle-safe within a namespace via the visited set; across namespaces via nsCache.
-func loadUnifiedInto(path string, merged *UnifiedFile, visited map[string]bool, depth int, nsCache, loadingRepos map[string]*UnifiedFile, fileOverrides map[string][]byte) error {
-	if depth > MaxIncludeDepth {
-		return fmt.Errorf("include depth exceeded %d at %s", MaxIncludeDepth, path)
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return fmt.Errorf("resolving %s: %w", path, err)
-	}
-	if visited[abs] {
-		return fmt.Errorf("include cycle: %s already visited", abs)
-	}
-	visited[abs] = true
-
-	// fileOverrides supplies pre-read bytes for a file. The F9 bootstrap phase seeds the
-	// ROOT here with its transformed config bytes, so a bootstrap plugin's rewrite
-	// reaches the actual PARSE + the post-merge gates — not just the early version gate.
-	// Absent → read from disk (every imported/discovered file).
-	data, ok := fileOverrides[abs]
-	if !ok {
-		var rerr error
-		data, rerr = os.ReadFile(abs)
-		if rerr != nil {
-			return fmt.Errorf("reading %s: %w", abs, rerr)
-		}
-	}
-
-	// EXTERNAL-deploy-substrate parse pre-scan (plugin_prescan.go): at a project
-	// boundary (depth 0 = the root file OR a namespace root), register the external
-	// DEPLOY words this file's discovered candies' `plugin:` declarations name —
-	// BEFORE mergeUnifiedDocs normalizes the entity nodes below — so a deploy using
-	// such a word as its substrate (`check-foo: { exampledeploy: {…} }`) parses even
-	// though the provider connects only later at loadProjectPlugins. Additive +
-	// best-effort: a no-external-substrate project is unaffected.
-	if depth == 0 {
-		prescanDeclaredPluginWords(data, filepath.Dir(abs))
-		// F4: connect the out-of-process plugins serving any declared external KIND words BEFORE
-		// mergeUnifiedDocs decodes the entity nodes, so a `kind: <plugin-word>` entity decodes via
-		// runPluginKind. Re-entrancy-guarded (the connect re-loads the project to resolve + fetch
-		// the kind candy); a no-op when no external kind is declared or all are already connected.
-		connectDeclaredKindPlugins(filepath.Dir(abs))
-	}
-
-	// Parse + merge every document in the file via the SHARED routing core
-	// (mergeUnifiedDocs → classifyDoc → #NodeDoc gate → normalizeNodeInto →
-	// mergeUnified). The SAME mergeUnifiedDocs parses the data compiled from the
-	// binary-embedded charly.yml (embeddedDefaults, embed_defaults.go), so the
-	// default config flows through EXACTLY the same code path as any project
-	// charly.yml. Imports are returned for resolution below.
-	importQueue, err := mergeUnifiedDocs(merged, data, abs, filepath.Dir(abs))
-	if err != nil {
-		return err
-	}
-
-	// Process imports relative to this file's directory.
-	base := filepath.Dir(abs)
-	for _, imp := range importQueue {
-		if imp.Namespace == "" {
-			// Flat import — merge UNDER the root file (root wins). We already
-			// merged the root's fields above; the merge function preserves
-			// existing (root) values. Shares merged + visited.
-			_, incPath, err := canonicalRef(imp.Ref, base)
-			if err != nil {
-				return fmt.Errorf("%s: import %q: %w", abs, imp.Ref, err)
-			}
-			if err := loadUnifiedInto(incPath, merged, visited, depth+1, nsCache, loadingRepos, fileOverrides); err != nil {
-				return err
-			}
-			continue
-		}
-		// Namespaced import — mount an isolated child UnifiedFile.
-		if err := validateNamespaceAlias(imp.Namespace); err != nil {
-			return fmt.Errorf("%s: import %q: %w", abs, imp.Ref, err)
-		}
-		sub, err := loadNamespaceCached(imp.Ref, base, nsCache, loadingRepos)
-		if err != nil {
-			return fmt.Errorf("%s: import %s (%q): %w", abs, imp.Namespace, imp.Ref, err)
-		}
-		if merged.Namespaces == nil {
-			merged.Namespaces = map[string]*UnifiedFile{}
-		}
-		if existing, ok := merged.Namespaces[imp.Namespace]; ok && existing != sub {
-			return fmt.Errorf("%s: import namespace %q bound to two different refs", abs, imp.Namespace)
-		}
-		merged.Namespaces[imp.Namespace] = sub
-	}
-	// At a project boundary (depth 0 = the root file OR a namespace root) every
-	// import is now merged, so run discovery here — the SINGLE site for ALL
-	// consumers (box config, candies, deploy). discover: scans each spec and
-	// registers discovered entities by SHAPE (candies AND boxes AND any other
-	// kind). Historically only the candy-loading path called ApplyDiscover, so a
-	// discovered `box:` dir never reached ProjectConfig/Config.Box; routing
-	// it through the loader fixes box-via-discover uniformly.
-	if depth == 0 {
-		if err := merged.ApplyDiscover(base); err != nil {
-			return fmt.Errorf("%s: %w", abs, err)
-		}
-		// Fill any distro/builder/init/resource vocabulary AND sidecar templates
-		// the project did NOT declare from the binary-embedded default charly.yml
-		// (project-wins; see applyEmbeddedDefaults). Runs for the root AND every
-		// namespace, so a project needs no build vocabulary of its own.
-		if err := applyEmbeddedDefaults(merged); err != nil {
-			return fmt.Errorf("%s: %w", abs, err)
-		}
-	}
-	return nil
-}
-
-// mergeUnifiedDocs parses `data` as a multi-document YAML stream and merges
-// every document into `merged` via the shared routing core — classifyDoc to
-// determine each doc's shape (a legacy kind-keyed / root-shape doc is hard
-// rejected), the #NodeDoc validate-before-execute gate, then normalizeNodeInto
-// + mergeUnified for the node-form entities. srcLabel labels diagnostics; srcDir
-// anchors relative discover paths. Returns the concatenated `import:` queue of
-// every doc (the caller resolves imports). This is the SINGLE document-
-// interpretation path: both loadUnifiedInto (an on-disk charly.yml) and
-// embeddedDefaults (the data compiled from the binary-embedded charly.yml) call
-// it, so the embedded default is parsed EXACTLY like every other charly.yml.
-func mergeUnifiedDocs(merged *UnifiedFile, data []byte, srcLabel, srcDir string) (ImportList, error) {
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	docIdx := 0
-	var importQueue ImportList
-	for {
-		var node yaml.Node
-		if err := decoder.Decode(&node); err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return nil, fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
-		}
-		shape, err := classifyDoc(&node)
-		if err != nil {
-			return nil, fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
-		}
-		switch shape {
-		case docShapeNode:
-			label := fmt.Sprintf("%s:doc%d", srcLabel, docIdx)
-			// VALIDATE-BEFORE-EXECUTE: the whole node-form document against
-			// #NodeDoc (strict + closed) BEFORE anything is normalized.
-			raw, err := yaml.Marshal(&node)
-			if err != nil {
-				return nil, fmt.Errorf("%s: re-marshal node-form doc: %w", label, err)
-			}
-			if err := validateNodeDocCUE(label, raw); err != nil {
-				return nil, err
-			}
-			// Parse the document into its reserved directives + the generic spec.ParsedProject via
-			// the registered config front-end (P6): activeLoaderParser is the compiled-in loader
-			// plugin's loaderkit.DocParser (candy/plugin-loader), swappable for an alternative
-			// front-end. The host threads the registry-derived kind-recognition DATA
-			// (loaderThreaded); the parse itself is the ONE copy in sdk/loaderkit.
-			directives, pp, err := activeLoaderParser.ParseDoc(&node, loaderThreaded())
-			if err != nil {
-				return nil, fmt.Errorf("%s: %w", label, err)
-			}
-			// Decode ONLY the reserved directives (import/discover via their Go
-			// unmarshalers; version/repo/defaults/provides) — NOT the entity nodes,
-			// which are normalized below. A directives-only mapping avoids decoding a
-			// node named after a kind (e.g. `vm:`) into a UnifiedFile field.
-			var sub UnifiedFile
-			if len(directives) > 0 {
-				dirMap := &yaml.Node{Kind: yaml.MappingNode}
-				for k, v := range directives {
-					dirMap.Content = append(dirMap.Content, scalarNode(k), v)
-				}
-				if derr := dirMap.Decode(&sub); derr != nil {
-					return nil, fmt.Errorf("%s: decoding node-form directives: %w", label, derr)
-				}
-			}
-			// MATERIALIZE the typed UnifiedFile from the loader's ParsedProject — the host half of
-			// the seam (materializeProject → normalizeNodeInto), unchanged whether pp came from the
-			// in-core loaderkit call above or, later, from candy/plugin-loader's OpLoad.
-			if err := materializeProject(&pp, &sub); err != nil {
-				return nil, fmt.Errorf("%s: %w", label, err)
-			}
-			importQueue = append(importQueue, sub.Import...)
-			sub.Import = nil
-			normalizeV4Aliases(&sub)
-			mergeUnified(merged, &sub, srcDir)
-		case docShapeEmpty:
-			// Skip empty docs (YAML streams commonly end with "---\n").
-		}
-		docIdx++
-	}
-	return importQueue, nil
-}
-
 // canonicalRef resolves an import ref (local path or
 // `@host/org/repo[/sub/path]:version`) to a concrete on-disk path AND a stable
 // cache key. Remote refs are downloaded into the shared repo cache (and
@@ -824,112 +503,13 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 	return abs, abs, nil
 }
 
-// loadNamespaceCached loads a namespaced import target as a fully-resolved,
-// isolated UnifiedFile — its OWN files (flat imports for vocabulary, its own
-// entities) plus its OWN namespaced imports. A fresh `visited` set isolates its
-// file-cycle detection; the shared nsCache breaks cross-namespace cycles
-// (including the intentional main<->cachyos mutual import) by recording an
-// in-progress node BEFORE recursing. A whole-repo ref (empty sub-path) resolves
-// to its charly.yml.
-func loadNamespaceCached(ref, baseDir string, nsCache, loadingRepos map[string]*UnifiedFile) (*UnifiedFile, error) {
-	// Cycle-break by REPO IDENTITY (not pinned version), BEFORE any fetch: if
-	// this ref targets a repo already being loaded up the stack (the root or an
-	// ancestor namespace), resolve to that in-progress node. This terminates the
-	// intentional mutual import (main <-> cachyos) even when the loop's pins
-	// diverge — a transitive back-reference to an in-progress repo at a DIFFERENT
-	// pinned version resolves to the in-progress node instead of fetching a
-	// divergent (possibly stale-schema) snapshot. See ns_identity.go.
-	repoID := nsRepoIdentity(ref, baseDir)
-	if repoID != "" {
-		if existing, ok := loadingRepos[repoID]; ok {
-			return existing, nil
-		}
-	}
-	key, path, err := canonicalRef(ref, baseDir)
-	if err != nil {
-		return nil, err
-	}
-	if existing, ok := nsCache[key]; ok {
-		return existing, nil // version-keyed diamond memo (dedup identical refs)
-	}
-	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
-		path = filepath.Join(path, UnifiedFileName)
-	}
-	sub := &UnifiedFile{}
-	nsCache[key] = sub // version-keyed memo entry (persists across the whole load)
-	if repoID != "" {
-		// Stack-scoped in-progress (ancestor) marker for the identity cycle-break
-		// above: pushed before recursing, popped after, so two SIBLING imports of
-		// the same repo at different versions still each load — only a genuine
-		// back-edge (an ancestor still on the stack) short-circuits.
-		loadingRepos[repoID] = sub
-		defer delete(loadingRepos, repoID)
-	}
-	// A namespaced import is a SEPARATE project root — it gets no root-bootstrap override
-	// (the F9 bootstrap transforms only the importing project's own root, nil here).
-	if err := loadUnifiedInto(path, sub, map[string]bool{}, 0, nsCache, loadingRepos, nil); err != nil {
-		return nil, err
-	}
-	return sub, nil
-}
-
-// validateNamespaceAlias enforces a bare lowercase-hyphenated alias (no dots).
-func validateNamespaceAlias(alias string) error {
-	if !namespaceAliasRe.MatchString(alias) {
-		return fmt.Errorf("import namespace alias %q must match %s", alias, namespaceAliasRe.String())
-	}
-	return nil
-}
-
 // -----------------------------------------------------------------------------
 // Document-shape classifier.
 // -----------------------------------------------------------------------------
 
-type docShape int
-
-const (
-	docShapeEmpty docShape = iota
-	// docShapeNode — the unified name-first node-form: reserved document
-	// directives (version/import/discover/defaults/repo/provides) plus a flat
-	// map of arbitrary-name entity nodes (each `<name>: {<discriminator>: …}`),
-	// and NO top-level kind-map key. The ONE authoring surface; a legacy
-	// kind-keyed / root-shape document is hard-rejected at classifyDoc.
-	docShapeNode
-)
-
-// classifyDoc inspects a document's top level and returns its shape: a non-empty
-// mapping is a node-form document (arbitrary entity-name nodes and/or the reserved
-// directives version/import/discover/…); a scalar-null / empty mapping is
-// docShapeEmpty; a non-mapping top level is an error. Entity + directive validation
-// happens downstream (the loader parse + the #NodeDoc CUE gate).
-func classifyDoc(node *yaml.Node) (docShape, error) {
-	if node == nil || node.Kind == 0 {
-		return docShapeEmpty, nil
-	}
-	// yaml.NewDecoder wraps content in a DocumentNode.
-	inner := node
-	if node.Kind == yaml.DocumentNode {
-		if len(node.Content) == 0 {
-			return docShapeEmpty, nil
-		}
-		inner = node.Content[0]
-	}
-	if inner.Kind == yaml.ScalarNode && inner.Tag == "!!null" {
-		return docShapeEmpty, nil
-	}
-	if inner.Kind != yaml.MappingNode {
-		return 0, fmt.Errorf("top-level must be a mapping, got kind=%v", inner.Kind)
-	}
-	if len(inner.Content) == 0 {
-		return docShapeEmpty, nil
-	}
-
-	// A non-empty top-level mapping is a node-form document (arbitrary entity-name
-	// nodes and/or the reserved directives version/import/discover/…). The bilingual
-	// legacy-kind-map reader was deleted; entity + directive validation is downstream
-	// (the loader parse + the #NodeDoc CUE gate).
-	return docShapeNode, nil
-}
+// docShape (kit.DocShape) + classifyDoc (kit.ClassifyDoc) are the kind-blind
+// document-shape classifier — relocated to sdk/kit (loader_classify.go) so
+// charly core AND sdk/loaderkit share ONE copy (R3).
 
 // -----------------------------------------------------------------------------
 // AI-CLI catalog validation.
@@ -949,9 +529,10 @@ func normalizeV4Aliases(u *UnifiedFile) {
 }
 
 // mergeUnified merges src into dst such that dst's existing values WIN on
-// conflict at the same leaf (root-wins). This means when loadUnifiedInto is
-// called with the root file first and then includes, the root file's values
-// are already present before any include's fields are considered, so root wins.
+// conflict at the same leaf (root-wins). This means when materializeLoadedProject
+// replays the walk's documents in order (the root file first, then its flat
+// imports), the root file's values are already present before any import's
+// fields are considered, so root wins.
 //
 // For included files: the same mergeUnified is called but dst already contains
 // the root's values, so those fields stay untouched. src's fields that aren't
@@ -972,7 +553,7 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	// downstream workspace that `include:`-s an upstream charly.yml
 	// would look for upstream's `candy/` inside the workspace tree.
 	if len(src.Discover) > 0 {
-		dst.Discover = append(dst.Discover, anchorScanSpecs(src.Discover, srcDir)...)
+		dst.Discover = append(dst.Discover, kit.AnchorScanSpecs(src.Discover, srcDir)...)
 	}
 	mergeRawTemplateMap(&dst.Box, src.Box)
 	mergeRawTemplateMap(&dst.Candy, src.Candy)
@@ -995,23 +576,9 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	mergeBoxConfig(&dst.Defaults, &src.Defaults)
 }
 
-// anchorScanSpecs returns a copy of `specs` with every relative Path
-// resolved to an absolute path against `srcDir`. Absolute paths are
-// kept verbatim. Empty srcDir leaves specs unchanged so the
-// root-file merge (called with rootDir == workspace) is a no-op.
-func anchorScanSpecs(specs []ScanSpec, srcDir string) []ScanSpec {
-	if srcDir == "" || len(specs) == 0 {
-		return specs
-	}
-	out := make([]ScanSpec, len(specs))
-	for i, s := range specs {
-		out[i] = s
-		if s.Path != "" && !filepath.IsAbs(s.Path) {
-			out[i].Path = filepath.Join(srcDir, s.Path)
-		}
-	}
-	return out
-}
+// anchorScanSpecs (kit.AnchorScanSpecs) is the discover-path anchoring helper
+// — relocated to sdk/kit (loader_directives.go) so charly core AND
+// sdk/loaderkit share ONE copy (R3).
 
 // mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
 // android after the Cutover I de-type): copy a name only when ABSENT in dst. One
@@ -1333,7 +900,7 @@ func (uf *UnifiedFile) ApplyDiscover(rootDir string) error {
 		if !filepath.IsAbs(scanPath) {
 			scanPath = filepath.Join(rootDir, scanPath)
 		}
-		dirs, err := findEntityDirs(scanPath, manifest, s.Recursive)
+		dirs, err := kit.FindEntityDirs(scanPath, manifest, s.Recursive)
 		if err != nil {
 			return fmt.Errorf("discover %q: %w", s.Path, err)
 		}
@@ -1346,89 +913,13 @@ func (uf *UnifiedFile) ApplyDiscover(rootDir string) error {
 	return nil
 }
 
-// findEntityDirs walks a scan root and returns every directory that contains
-// the given canonical filename. When recursive is false, only the immediate
-// children of path are considered.
-func findEntityDirs(path, filename string, recursive bool) ([]string, error) {
-	if !dirExists(path) {
-		// A discover path that doesn't exist yields zero entities — NOT an
-		// error. discover: is universally applied at load now (not just on the
-		// candy path), and a project may legitimately declare a uniform
-		// `discover: [box, candy]` while carrying only one of the directories
-		// (e.g. a distro submodule with boxes but no candy/ of its own).
-		return nil, nil
-	}
-	var out []string
-	if !recursive {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			target := filepath.Join(path, e.Name(), filename)
-			if fileExists(target) {
-				out = append(out, filepath.Join(path, e.Name()))
-			}
-		}
-		sort.Strings(out)
-		return out, nil
-	}
-	err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			// A per-entry error must NOT abort the whole discover walk: a
-			// discoverable manifest can never live in an unreadable directory,
-			// and under concurrency a SIBLING build's transient artifact (a
-			// makepkg fakeroot-owned `pkg/` under a candy's pkgbuild/) yields a
-			// passing EACCES that would otherwise fail EVERY concurrent
-			// LoadUnified. Skip the offending entry/subtree and continue; only the
-			// scan root itself (info == nil) is a real, propagated error.
-			if info == nil {
-				return err
-			}
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.IsDir() {
-			// VCS + build-artifact dirs never hold a discoverable manifest;
-			// skipping them avoids both the wasted traversal AND the
-			// concurrent-build race for the common cases.
-			if discoverSkipDir(info.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.Name() == filename {
-			out = append(out, filepath.Dir(p))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-// discoverSkipDir reports whether a directory name is a VCS or build-artifact
-// dir that never contains a discoverable charly.yml manifest — skipped by the
-// discover walk both for speed and to avoid traversing concurrently-mutated
-// build outputs (e.g. a candy's pkgbuild/{pkg,src} under a live makepkg).
-func discoverSkipDir(name string) bool {
-	switch name {
-	case ".git", ".build", "output", "node_modules":
-		return true
-	}
-	return false
-}
+// findEntityDirs (kit.FindEntityDirs) + discoverSkipDir (kit.DiscoverSkipDir)
+// are the discover-walk PRIMITIVES — relocated to sdk/kit
+// (loader_discover.go) so charly core AND sdk/loaderkit share ONE copy (R3).
 
 // applyDiscoveredManifest loads one discovered manifest and routes every
 // document it contains by SHAPE through the SAME classifier the main loader uses
-// (classifyDoc): a legacy kind-keyed / root-shape manifest is hard-rejected with
+// (kit.ClassifyDoc): a legacy kind-keyed / root-shape manifest is hard-rejected with
 // a `charly migrate` hint, an empty/directive-only doc is skipped, and a unified
 // node-form doc is validated against #NodeDoc (the sole grammar gate) before its
 // entities are registered. A `candy` node registers a lazy `From:` directory
@@ -1450,16 +941,16 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 			}
 			return fmt.Errorf("%s: %w", target, err)
 		}
-		shape, cerr := classifyDoc(&node)
+		shape, cerr := kit.ClassifyDoc(&node)
 		if cerr != nil {
 			return fmt.Errorf("%s: %w", target, cerr)
 		}
-		if shape == docShapeEmpty {
+		if shape == kit.DocShapeEmpty {
 			continue // empty / directive-only document — nothing to register
 		}
 		// VALIDATE-BEFORE-EXECUTE: the whole node-form manifest against #NodeDoc
-		// (strict + closed) — the SAME grammar gate mergeUnifiedDocs applies to the
-		// root charly.yml, so #NodeDoc is the sole load-time gate for EVERY loaded
+		// (strict + closed) — the SAME #NodeDoc gate the walk's GateDoc seam applies to
+		// the root charly.yml, so #NodeDoc is the sole load-time gate for EVERY loaded
 		// document, discovered manifests included.
 		raw, merr := yaml.Marshal(&node)
 		if merr != nil {
@@ -1470,7 +961,7 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 		}
 		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
 		// genericNode the candy pre-check + normalizeNodeInto consume is reconstructed per node.
-		_, pp, perr := activeLoaderParser.ParseDoc(&node, loaderThreaded())
+		_, pp, perr := requireLoaderParser().ParseDoc(&node, loaderThreaded())
 		if perr != nil {
 			// A malformed node-form manifest is a HARD error, never silently
 			// dropped (a swallowed parse error would discover "0 candies").
@@ -1481,27 +972,11 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 			if gerr != nil {
 				return fmt.Errorf("%s: %w", target, gerr)
 			}
-			if gn.disc == "candy" && !candyIsImage(gn) {
-				// LAYER candy: register a lazy directory reference (name = dir base, as
-				// the legacy scanner did). scanCandy does the real parse later. This
-				// bootstrap-critical pre-check calls candyIsImage DIRECTLY (it stays core),
-				// so it needs no plugin — that is why the COMPILED-IN candy/plugin-candy-kind
-				// (C2-candy) has no bootstrap cycle. EDGE-INHERIT cutover D: an IMAGE candy
-				// (base/from — the former box:) falls through to normalizeNodeInto →
-				// runPluginKind → foldCandyKind → uf.Box (decoded eagerly by the compiled-in
-				// candy plugin, already registered at init before this load runs).
-				name := filepath.Base(dir)
-				if _, exists := uf.Candy[name]; exists {
-					continue // explicit entry wins
-				}
-				rel, relErr := filepath.Rel(rootDir, dir)
-				if relErr != nil {
-					rel = dir
-				}
-				uf.SetCandy(name, &InlineCandy{From: rel, Manifest: manifest})
-				continue
-			}
-			if err := normalizeNodeInto(gn, uf); err != nil {
+			// The SAME per-node discovered-fold the LoadUnified walk path uses
+			// (materializeDiscoveredNode, loader_driver.go) — a LAYER candy registers a lazy
+			// `From:` reference (explicit entry wins), every other kind materializes inline. R3:
+			// one discovered-node handler for both the walk path and this candy-scan path.
+			if err := materializeDiscoveredNode(gn, dir, rootDir, manifest, uf); err != nil {
 				return fmt.Errorf("%s: %w", target, err)
 			}
 		}
