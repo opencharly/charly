@@ -139,8 +139,8 @@ func buildGraderPrompt(req GraderRequest, target, instance string) string {
 
 // RunAgentOnce launches the configured AI CLI exactly once with the given
 // prompt and returns its stdout/stderr. It is the bounded, single-shot
-// sibling of the harness loop's iteration launcher (check_loop.go) and of
-// LocalCaptureVersion (agent_config.go) — same host-exec shape, no iteration
+// sibling of the harness loop's iteration launcher (candy/plugin-check/harness_loop.go)
+// and of LocalCaptureVersion (candy/plugin-check/agent.go) — same host-exec shape, no iteration
 // directories, no plateau state. ${PROMPT} in the AI's command argv (and a
 // PromptVia: file temp file) is substituted with the prompt text.
 func RunAgentOnce(ctx context.Context, ai *spec.AgentExecSpec, prompt string, timeout time.Duration) (string, string, error) {
