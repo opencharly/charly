@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"sort"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // AndroidCollector is the kind:android SubstrateCollector. It enumerates every
@@ -33,7 +35,7 @@ func init() {
 }
 
 // Kind reports the android substrate.
-func (a *AndroidCollector) Kind() SubstrateKind { return SubstrateAndroid }
+func (a *AndroidCollector) Kind() spec.SubstrateKind { return spec.SubstrateAndroid }
 
 // Available reports whether any `target: android` deploy is declared. With no
 // android device declared there is nothing to probe and the collector is
@@ -45,9 +47,9 @@ func (a *AndroidCollector) Available(opts CollectOpts) bool {
 // Collect resolves every declared android device and derives its status host-side.
 // The work is sequential — there are at most a handful of android devices and each
 // status check is a single cheap engine inspect — so no worker pool is warranted.
-func (a *AndroidCollector) Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error) {
+func (a *AndroidCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error) {
 	nodes := collectAndroidDeployNodes(opts)
-	rows := make([]DeploymentStatus, 0, len(nodes))
+	rows := make([]spec.DeploymentStatus, 0, len(nodes))
 	for _, n := range nodes {
 		rows = append(rows, a.collectOne(opts, n))
 	}
@@ -112,30 +114,30 @@ func sortedDeployKeys(m map[string]BundleNode) []string {
 // (containerRunning for an in-pod device, "declared" for an endpoint — no goadb).
 // Resolution failures degrade to an "absent" row — never an error that would drop
 // the whole substrate.
-func (a *AndroidCollector) collectOne(opts CollectOpts, dn androidDeployNode) DeploymentStatus {
-	row := DeploymentStatus{
-		Kind:    SubstrateAndroid,
+func (a *AndroidCollector) collectOne(opts CollectOpts, dn androidDeployNode) spec.DeploymentStatus {
+	row := spec.DeploymentStatus{
+		Kind:    spec.SubstrateAndroid,
 		Source:  "adb",
 		Image:   dn.path,
 		Status:  "absent",
 		RunMode: opts.RunMode,
 	}
 
-	spec := lookupAndroidSpec(opts.Unified, dn.node.From)
-	if spec == nil {
+	aspec := lookupAndroidSpec(opts.Unified, dn.node.From)
+	if aspec == nil {
 		// Device reference not declared — surface the deploy path with an
 		// absent status so the misconfiguration is visible, not swallowed.
 		row.Container = dn.node.From
 		return row
 	}
-	row.Container = spec.EffectiveSerial()
-	if spec.IsEndpoint() {
-		row.Network = "endpoint " + spec.Adb.Host
-	} else if spec.Box != "" {
-		row.Network = "in-pod " + spec.Box
+	row.Container = aspec.EffectiveSerial()
+	if aspec.IsEndpoint() {
+		row.Network = "endpoint " + aspec.Adb.Host
+	} else if aspec.Box != "" {
+		row.Network = "in-pod " + aspec.Box
 	}
 
-	dev, err := resolveAndroidDevice(spec, &dn.node, dn.path)
+	dev, err := resolveAndroidDevice(aspec, &dn.node, dn.path)
 	if err != nil {
 		// Emulator pod not running / endpoint unreachable — absent is the
 		// correct, graceful answer.

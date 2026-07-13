@@ -90,6 +90,30 @@ func TestCommandCompileIn_AliasInProc(t *testing.T) {
 	}
 }
 
+// TestCommandCompileIn_StatusInProc proves the P14a chunk 2b status extraction: `charly status
+// …`, formerly a dedicated builtin CommandProvider (the plugin_command_status.go registration,
+// deleted), is now the compiled-in command candy candy/plugin-status — registered IN-PROC as a
+// ClassCommand inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
+// dispatchCommand routes `charly status` to it via Invoke(OpRun) and its render/overlay logic
+// reaches the host collection engine over the HostBuild("status-substrate") reverse channel.
+// (End-to-end CLI dispatch is exercised by the live R10 bed + the candy's own
+// overlay_golden_test.go byte-parity golden.)
+func TestCommandCompileIn_StatusInProc(t *testing.T) {
+	prov, ok := providerRegistry.resolve(ClassCommand, "status")
+	if !ok {
+		t.Fatal("compiled-in command candy plugin-status did not register command:status (pluginsgen/compiled_plugins)")
+	}
+	if _, isGrpc := prov.(*grpcProvider); isGrpc {
+		t.Fatal("status registered as a *grpcProvider — expected an in-proc inprocProvider (compiled-in placement)")
+	}
+	if _, isInproc := prov.(*inprocProvider); !isInproc {
+		t.Fatalf("status provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
+	}
+	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
+		t.Fatal("status should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+	}
+}
+
 // TestCommandProviders_ExtractedLeafCommands proves every leaf-domain command extracted
 // into a dedicated COMMAND-class provider (ssh — the builtin leaf-domain
 // batch) is (1) registered in providerRegistry as a CommandProvider with the matching
@@ -113,7 +137,7 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 
 // TestCommandProviders_DeployLifecycleCommands proves every deploy-lifecycle + remaining
 // leaf command extracted into a dedicated COMMAND-class provider (the deploy-lifecycle
-// batch: start/stop/status/restart/update/remove/logs/shell/cmd/cp/volume/service/config/
+// batch: start/stop/restart/update/remove/logs/shell/cmd/cp/volume/service/config/
 // reap-orphans) is (1) registered in providerRegistry as a CommandProvider with the
 // matching Reserved() word, and (2) collected by collectCommandPlugins() and injected into
 // the REAL charly CLI grammar via kong.Plugins, so its subcommand path parses and selects
@@ -122,12 +146,14 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // registration regresses or the command seam stops wiring one of them into the root.
 // (`bundle` is no longer here — `charly bundle …` is now a dynamic command served by
 // candy/plugin-bundle (compiled-in), dispatched in-proc via Invoke(OpRun) rather than
-// through a builtin CommandProvider, exactly like vm/feature.)
+// through a builtin CommandProvider, exactly like vm/feature. `status` is no longer here
+// either — P14a chunk 2b externalized it to the compiled-in candy/plugin-status
+// (command:status), the SAME dynamic in-proc bridge alias/settings/clean/candy use; its
+// compiled-in registration is asserted by TestCommandCompileIn_StatusInProc.)
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"start", []string{"start", "mybox"}, "start <box>"},
 		{"stop", []string{"stop", "mybox"}, "stop <box>"},
-		{"status", []string{"status", "mybox"}, "status <box>"},
 		{"restart", []string{"restart", "mybox"}, "restart <box>"},
 		{"update", []string{"update", "mybox"}, "update <box>"},
 		{"remove", []string{"remove", "mybox"}, "remove <box>"},
@@ -297,5 +323,12 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	}
 	if paths["candy.set"] {
 		t.Error("candy.set unexpectedly present in the builtin CLI model — `candy` is now a compiled-in command (candy/plugin-candy, command:candy), a dynamic holder not a builtin CommandProvider")
+	}
+	// status (P14a chunk 2b) is likewise now COMPILED-IN and OWNS its command
+	// (candy/plugin-status reaches the shared collection engine over the generic
+	// HostBuild("status-substrate") seam) — absent from this builtin-only model, a flat leaf
+	// command with no subcommands, so its CLI-model path is bare "status" (mirrors "clean").
+	if paths["status"] {
+		t.Error("status unexpectedly present in the builtin CLI model — `status` is now a compiled-in command (candy/plugin-status, command:status), a dynamic holder not a builtin CommandProvider")
 	}
 }

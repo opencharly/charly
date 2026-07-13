@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // redirectLocalLedger points localLedgerPaths at a fresh temp ledger for the
@@ -27,7 +29,7 @@ func redirectLocalLedger(t *testing.T, ensure bool) *LedgerPaths {
 	return paths
 }
 
-func collectLocal(t *testing.T) []DeploymentStatus {
+func collectLocal(t *testing.T) []spec.DeploymentStatus {
 	t.Helper()
 	lc := &LocalCollector{}
 	rows, err := lc.Collect(context.Background(), CollectOpts{RunMode: "quadlet"})
@@ -39,8 +41,8 @@ func collectLocal(t *testing.T) []DeploymentStatus {
 
 func TestLocalCollector_Kind(t *testing.T) {
 	lc := &LocalCollector{}
-	if lc.Kind() != SubstrateLocal {
-		t.Errorf("Kind() = %q, want %q", lc.Kind(), SubstrateLocal)
+	if lc.Kind() != spec.SubstrateLocal {
+		t.Errorf("Kind() = %q, want %q", lc.Kind(), spec.SubstrateLocal)
 	}
 }
 
@@ -95,7 +97,7 @@ func TestLocalCollector_SynthesizesFromCandyRecords(t *testing.T) {
 	if a.Container != "deploy-A" {
 		t.Errorf("row[0].Container = %q, want deploy-A", a.Container)
 	}
-	if a.Kind != SubstrateLocal || a.Source != "ledger" || a.Status != "applied" {
+	if a.Kind != spec.SubstrateLocal || a.Source != "ledger" || a.Status != "applied" {
 		t.Errorf("row[0] kind/source/status = %q/%q/%q, want local/ledger/applied", a.Kind, a.Source, a.Status)
 	}
 	if a.RunMode != "quadlet" {

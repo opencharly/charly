@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // withMockLibvirtDomains swaps the package-level listLibvirtCharlyDomains for the
@@ -43,21 +45,21 @@ func TestVMCollector_Collect(t *testing.T) {
 		name    string
 		domains []domainInfo
 		deploy  *BundleConfig
-		want    []DeploymentStatus
+		want    []spec.DeploymentStatus
 	}{
 		{
 			name:    "no domains",
 			domains: nil,
-			want:    []DeploymentStatus{},
+			want:    []spec.DeploymentStatus{},
 		},
 		{
 			name: "running domain, no deploy entry",
 			domains: []domainInfo{
 				{Name: "charly-cachyos-gpu", State: "running"},
 			},
-			want: []DeploymentStatus{
+			want: []spec.DeploymentStatus{
 				{
-					Kind:      SubstrateVM,
+					Kind:      spec.SubstrateVM,
 					Source:    "libvirt",
 					Image:     "cachyos-gpu",
 					Status:    "running",
@@ -71,9 +73,9 @@ func TestVMCollector_Collect(t *testing.T) {
 				{Name: "charly-arch", State: "shut off"},
 				{Name: "charly-k3s-vm", State: "paused"},
 			},
-			want: []DeploymentStatus{
-				{Kind: SubstrateVM, Source: "libvirt", Image: "arch", Status: "stopped", Container: "charly-arch"},
-				{Kind: SubstrateVM, Source: "libvirt", Image: "k3s-vm", Status: "paused", Container: "charly-k3s-vm"},
+			want: []spec.DeploymentStatus{
+				{Kind: spec.SubstrateVM, Source: "libvirt", Image: "arch", Status: "stopped", Container: "charly-arch"},
+				{Kind: spec.SubstrateVM, Source: "libvirt", Image: "k3s-vm", Status: "paused", Container: "charly-k3s-vm"},
 			},
 		},
 		{
@@ -90,14 +92,14 @@ func TestVMCollector_Collect(t *testing.T) {
 					},
 				},
 			},
-			want: []DeploymentStatus{
+			want: []spec.DeploymentStatus{
 				{
-					Kind:      SubstrateVM,
+					Kind:      spec.SubstrateVM,
 					Source:    "libvirt",
 					Image:     "cachyos-gpu",
 					Status:    "running",
 					Container: "charly-cachyos-gpu",
-					Ports:     []PortMapping{{HostPort: 12228, CtrPort: 22, Proto: "tcp"}},
+					Ports:     []spec.PortMapping{{HostPort: 12228, CtrPort: 22, Proto: "tcp"}},
 				},
 			},
 		},
@@ -116,14 +118,14 @@ func TestVMCollector_Collect(t *testing.T) {
 					},
 				},
 			},
-			want: []DeploymentStatus{
+			want: []spec.DeploymentStatus{
 				{
-					Kind:      SubstrateVM,
+					Kind:      spec.SubstrateVM,
 					Source:    "libvirt",
 					Image:     "k3s-vm",
 					Status:    "running",
 					Container: "charly-k3s-vm",
-					Ports:     []PortMapping{{HostPort: 2225, CtrPort: 22, Proto: "tcp"}},
+					Ports:     []spec.PortMapping{{HostPort: 2225, CtrPort: 22, Proto: "tcp"}},
 				},
 			},
 		},
@@ -157,8 +159,8 @@ func TestVMCollector_CollectError(t *testing.T) {
 
 func TestVMCollector_Kind(t *testing.T) {
 	v := &VMCollector{}
-	if v.Kind() != SubstrateVM {
-		t.Errorf("Kind() = %q, want %q", v.Kind(), SubstrateVM)
+	if v.Kind() != spec.SubstrateVM {
+		t.Errorf("Kind() = %q, want %q", v.Kind(), spec.SubstrateVM)
 	}
 }
 
@@ -166,7 +168,7 @@ func TestVMCollector_Kind(t *testing.T) {
 // DeploymentStatus slices (Kind, Source, Image, Status, Container, Ports). It
 // avoids reflect.DeepEqual on the whole struct so unrelated zero-value fields
 // don't make the comparison brittle.
-func assertDeploymentRowsEqual(t *testing.T, got, want []DeploymentStatus) {
+func assertDeploymentRowsEqual(t *testing.T, got, want []spec.DeploymentStatus) {
 	t.Helper()
 	if len(got) != len(want) {
 		t.Fatalf("row count = %d, want %d\n got: %+v\nwant: %+v", len(got), len(want), got, want)

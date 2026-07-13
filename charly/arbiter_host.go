@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -128,7 +129,7 @@ func (h *arbiterHostServer) gpuCDIHolders() []spec.HolderAddr {
 	if err != nil {
 		return nil
 	}
-	snaps, err := NewEngineClient(rt.RunEngine).SnapshotAll(false) // running only, resolved run engine
+	snaps, err := enginekit.NewEngineClient(rt.RunEngine).SnapshotAll(false) // running only, resolved run engine
 	if err != nil {
 		return nil
 	}

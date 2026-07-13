@@ -1,0 +1,64 @@
+plugin-status:
+    candy:
+        version: 2026.194.1600
+        description: |-
+            COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly status`
+            CLI — the runtime-status surface (table / detail / JSON, --all, --nested). The plugin
+            owns the command end to end: the Kong grammar (command.go, moved from
+            charly/status.go's StatusCmd), the PURE nested-deployment overlay fold (overlay.go,
+            ported from charly/status_nested.go's applyNestedOverlay/buildNestedChildren/
+            nestedChildStatus/claimFlatRow), and the render output (render.go, moved verbatim
+            from charly/status_render.go). No plugin-specific command LOGIC is left in core.
+
+            The ONE thing the plugin cannot do itself is the LIVE collection engine — fan out
+            across every deployment substrate (pod/vm/k8s/local/android), probe live tools, and
+            pre-resolve the declared nested-deployment tree into the wire-safe
+            spec.StatusNestedNode shape the PURE overlay folds. That engine STAYS core
+            (charly/status_collector.go's Collector + the per-substrate collectors +
+            charly/status_nested.go's buildStatusRootsTree) and is reached via the generic
+            "status-substrate" HostBuild seam (charly/status_substrate_host.go,
+            spec.StatusSubstrateRequest{Single,IncludeAll,Nested,Box,Instance} →
+            spec.StatusSubstrateReply{Rows,Roots,Single}). "status-substrate" is a
+            class-generic action noun, not a provider word (F11). This is the same "plugin owns
+            the command + a generic seam for the core-coupled bits" doctrine
+            candy/plugin-settings established.
+
+            status is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
+            Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
+            ("Seam A") — to call HostBuild("status-substrate"). The out-of-process CliMain path
+            has no reverse channel, so it errors: status cannot run out-of-process, it needs the
+            status-substrate host seam. There is NO hidden core-command forward — the plugin does
+            the work directly, calling back only for the live-collection engine it can't run
+            itself; no core symbol crosses the boundary, no ad-hoc podman.
+
+            The plugin ALSO serves sdk.OpStatusCollect — the programmatic status-collection API
+            (distinct from the lifecycle OpStatus a substrate plugin serves): HostBuild
+            ("status-substrate") → the PURE overlay → the overlaid []spec.DeploymentStatus as
+            ResultJson (no render), reachable by any in-process peer via
+            InvokeProvider(class:command, word:status, op:status-collect).
+
+            command:status dispatches through the COMPILED-IN registry path
+            (registerCompiledPlugin → resolve(ClassCommand,"status") → dispatchInProcCommand →
+            Invoke(OpRun) with the threaded in-proc reverse channel), so NewMeta advertises
+            command:status while the served CUE schema carries no plugin_input (the args are
+            plain CLI tokens). The overlay's byte-parity is proven by the candy's OWN
+            overlay_golden_test.go; the host collection engine's parity by the HOST
+            TestStatusCollectGoldenParity (charly/status_golden_test.go).
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-status
+            providers:
+                - command:status
+        plan:
+            - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
+              # it mirrors candy/plugin-settings' settings-module-present, a trivial build-context
+              # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
+              # deterministic check every candy ships. The full `charly status` end-to-end — the
+              # compiled-in in-proc HostBuild("status-substrate") dispatch, the PURE overlay fold, and
+              # the render output — is exercised by the live R10 bed (check-local / check-pod, whichever
+              # composes the affected substrate) plus the candy's own overlay_golden_test.go byte-parity
+              # golden.
+              check: the status command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly status` end-to-end (the in-proc HostBuild status-substrate dispatch + the PURE nested overlay) is exercised by the live R10 bed plus the candy's overlay_golden_test.go
+              id: status-module-present
+              context:
+                  - build
+              command: "true"

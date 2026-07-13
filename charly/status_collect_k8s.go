@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // K8sCollector is the kubernetes SubstrateCollector. It surfaces every
@@ -30,7 +32,7 @@ func init() {
 }
 
 // Kind reports the k8s substrate.
-func (k *K8sCollector) Kind() SubstrateKind { return SubstrateK8s }
+func (k *K8sCollector) Kind() spec.SubstrateKind { return spec.SubstrateK8s }
 
 // Available reports true when this host has any k8s footprint: either the
 // .opencharly/k8s tree directory exists, or at least one target:k8s deploy is
@@ -50,19 +52,19 @@ func (k *K8sCollector) Available(opts CollectOpts) bool {
 // cluster/context from the referenced kind:k8s template. There is no live cluster
 // readiness probe — that left for candy/plugin-kube with the client-go subset (see
 // the type docstring); a `kube:` check asserts live health instead.
-func (k *K8sCollector) Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error) {
+func (k *K8sCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error) {
 	entries := k8sDeployEntries(opts.Unified)
 	if len(entries) == 0 {
 		return nil, nil
 	}
 	treeRoot, rootErr := k8sTreeRoot()
 
-	rows := make([]DeploymentStatus, 0, len(entries))
+	rows := make([]spec.DeploymentStatus, 0, len(entries))
 	for _, name := range entries {
 		node := opts.Unified.Bundle[name]
 
-		row := DeploymentStatus{
-			Kind:      SubstrateK8s,
+		row := spec.DeploymentStatus{
+			Kind:      spec.SubstrateK8s,
 			Source:    "tree",
 			Image:     k8sImageRef(name, node),
 			Container: name,
@@ -85,9 +87,9 @@ func (k *K8sCollector) Collect(ctx context.Context, opts CollectOpts) ([]Deploym
 
 		// Cluster/context from the referenced kind:k8s template. Network is
 		// the contextual cell used to show where the workload points.
-		spec := k8sSpecFor(opts.Unified, node)
-		if spec != nil && spec.KubeconfigContext != "" {
-			row.Network = spec.KubeconfigContext
+		ks := k8sSpecFor(opts.Unified, node)
+		if ks != nil && ks.KubeconfigContext != "" {
+			row.Network = ks.KubeconfigContext
 		} else if node.From != "" {
 			row.Network = node.From
 		}

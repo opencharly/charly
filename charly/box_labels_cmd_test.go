@@ -58,12 +58,6 @@ func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
 	}
 }
 
-func TestParsePS_PodmanRowsCarryImageRef(t *testing.T) {
-	rows, err := parsePS(`[{"Names":["charly-probe"],"State":"running","Status":"Up 2 minutes","Image":"ghcr.io/opencharly/check-box-check:2026.160.0804","Ports":[]}]`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 || rows[0].Image != "ghcr.io/opencharly/check-box-check:2026.160.0804" {
-		t.Errorf("podman ps Image not parsed: %+v", rows)
-	}
-}
+// NOTE: TestParsePS_PodmanRowsCarryImageRef (formerly here) moved to the
+// enginekit package with the parsePS engine-parsing code it exercised (chunk 1
+// relocated parsePS to sdk/enginekit as an unexported symbol).

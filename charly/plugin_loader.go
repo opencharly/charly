@@ -420,7 +420,15 @@ func connectBakedPlugin(class ProviderClass, word string) (Provider, bool) {
 // only the referenced plugin is built). The project dir is the post-chdir cwd (main resolved
 // -C/--dir/--repo before dispatch). Returns (nil,false) on any failure — surfaced loudly by the
 // caller (the credential store adapter). The ONE on-demand plugin-connect entry point for a word
-// that appears in NO plan step (the credential VERB the core adapter drives directly).
+// that appears in NO plan step (the credential/kube/tunnel/oci VERB the core adapter drives directly).
+//
+// `class` is a DELIBERATE generic-seam parameter, not dead weight: the F11 uniform-API gate
+// (uniform_api_gate_test.go) documents this as the generic host-subsystem connect entry point a
+// future adapter MAY call with any ProviderClass (kind/command/…). Every CURRENT host out-call
+// happens to connect a VERB, so unparam sees only ClassVerb — suppressed here rather than collapsed,
+// which would contradict that documented invariant and cascade the same finding into connectBakedPlugin.
+//
+//nolint:unparam // class is a generic-seam param (F11 uniform-API gate); kept though all current callers pass ClassVerb.
 func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 	return connectPluginByWordRef(class, word, "")
 }

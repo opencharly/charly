@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // k8sUnified builds a minimal UnifiedFile projection with one target:k8s
@@ -55,8 +57,8 @@ func TestK8sCollector_TreePresent(t *testing.T) {
 		t.Fatalf("rows = %d, want 1 (pod deploy must be ignored): %+v", len(rows), rows)
 	}
 	r := rows[0]
-	if r.Kind != SubstrateK8s {
-		t.Errorf("Kind = %q, want %q", r.Kind, SubstrateK8s)
+	if r.Kind != spec.SubstrateK8s {
+		t.Errorf("Kind = %q, want %q", r.Kind, spec.SubstrateK8s)
 	}
 	if r.Source != "tree" {
 		t.Errorf("Source = %q, want %q", r.Source, "tree")
@@ -105,8 +107,8 @@ func TestK8sCollector_NotGenerated(t *testing.T) {
 	if r.Status != "not-generated" {
 		t.Errorf("Status = %q, want %q", r.Status, "not-generated")
 	}
-	if r.Kind != SubstrateK8s {
-		t.Errorf("Kind = %q, want %q", r.Kind, SubstrateK8s)
+	if r.Kind != spec.SubstrateK8s {
+		t.Errorf("Kind = %q, want %q", r.Kind, spec.SubstrateK8s)
 	}
 	if r.Network != ctx {
 		t.Errorf("Network (context) = %q, want %q", r.Network, ctx)

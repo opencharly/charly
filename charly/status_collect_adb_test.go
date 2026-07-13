@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // androidBedUnified builds a synthetic UnifiedFile mirroring the
@@ -42,8 +44,8 @@ func androidBedUnified() *UnifiedFile {
 
 func TestAndroidCollector_Kind(t *testing.T) {
 	a := &AndroidCollector{}
-	if a.Kind() != SubstrateAndroid {
-		t.Errorf("Kind() = %q, want %q", a.Kind(), SubstrateAndroid)
+	if a.Kind() != spec.SubstrateAndroid {
+		t.Errorf("Kind() = %q, want %q", a.Kind(), spec.SubstrateAndroid)
 	}
 }
 
@@ -136,8 +138,8 @@ func TestAndroidCollector_CollectOneEndpointDeclared(t *testing.T) {
 		},
 	}
 	row := a.collectOne(opts, dn)
-	if row.Kind != SubstrateAndroid {
-		t.Errorf("Kind = %q, want %q", row.Kind, SubstrateAndroid)
+	if row.Kind != spec.SubstrateAndroid {
+		t.Errorf("Kind = %q, want %q", row.Kind, spec.SubstrateAndroid)
 	}
 	if row.Source != "adb" {
 		t.Errorf("Source = %q, want adb", row.Source)
@@ -191,7 +193,7 @@ func TestAndroidCollector_CollectBed(t *testing.T) {
 		"check-android-emulator-pod.device-net": "declared", // endpoint, no in-core probe
 	}
 	for _, r := range rows {
-		if r.Kind != SubstrateAndroid || r.Source != "adb" {
+		if r.Kind != spec.SubstrateAndroid || r.Source != "adb" {
 			t.Errorf("row kind/source = %q/%q, want android/adb", r.Kind, r.Source)
 		}
 		want, ok := wantStatus[r.Image]

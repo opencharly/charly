@@ -1,4 +1,4 @@
-package main
+package oci
 
 import (
 	"archive/tar"
@@ -118,7 +118,7 @@ func readTarEntries(layer v1.Layer) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	entries := make(map[string]string)
 	tr := tar.NewReader(rc)

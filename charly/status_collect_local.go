@@ -35,6 +35,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // localLedgerPaths is the swappable ledger-paths resolver, defaulting to the
@@ -54,7 +56,7 @@ func init() {
 }
 
 // Kind reports the local substrate.
-func (l *LocalCollector) Kind() SubstrateKind { return SubstrateLocal }
+func (l *LocalCollector) Kind() spec.SubstrateKind { return spec.SubstrateLocal }
 
 // Available reports whether the ledger's deploys/ dir exists. Absence means no
 // local deploy has ever run on this host, so the substrate contributes no rows
@@ -81,7 +83,7 @@ func (l *LocalCollector) Available(opts CollectOpts) bool {
 // For each deploy-id we surface: the applied-candy count (Image cell, since a
 // kind:local deploy has no container image), the deploy-id (Container cell),
 // and the most-recent deployed_at as an absolute UTC timestamp (Uptime cell).
-func (l *LocalCollector) Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error) {
+func (l *LocalCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error) {
 	paths, err := localLedgerPaths()
 	if err != nil {
 		return nil, fmt.Errorf("local ledger paths: %w", err)
@@ -158,10 +160,10 @@ func (l *LocalCollector) Collect(ctx context.Context, opts CollectOpts) ([]Deplo
 		}
 	}
 
-	rows := make([]DeploymentStatus, 0, len(aggs))
+	rows := make([]spec.DeploymentStatus, 0, len(aggs))
 	for id, a := range aggs {
-		rows = append(rows, DeploymentStatus{
-			Kind:      SubstrateLocal,
+		rows = append(rows, spec.DeploymentStatus{
+			Kind:      spec.SubstrateLocal,
 			Source:    "ledger",
 			Image:     localDeployLabel(len(a.candySet)),
 			Status:    "applied",

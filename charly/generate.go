@@ -108,14 +108,15 @@ func (g *Generator) resolveUserContext(img *ResolvedBox) {
 		return
 	}
 
-	// External base - try to detect existing user at configured UID
-	userInfo, err := InspectImageUser(img.Base, img.UID)
+	// External base - try to detect existing user at configured UID via verb:oci
+	// (the go-containerregistry adopt-user probe lives in candy/plugin-oci now).
+	userInfo, err := invokeOciInspectUser(img.Base, img.UID)
 	if err != nil {
 		// Can't inspect, use configured defaults
 		return
 	}
 
-	if userInfo != nil {
+	if userInfo.Found {
 		// Found existing user - use their info
 		img.User = userInfo.Name
 		img.Home = userInfo.Home

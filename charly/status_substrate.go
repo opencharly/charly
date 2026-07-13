@@ -1,31 +1,23 @@
 package main
 
-import "context"
+import (
+	"context"
 
-// SubstrateKind identifies which deployment substrate a DeploymentStatus row
-// came from. It is the discriminator that lets `charly status` present pod, VM,
-// k8s, local, and android deployments side-by-side from one unified table.
-type SubstrateKind string
-
-const (
-	SubstratePod     SubstrateKind = "pod"
-	SubstrateVM      SubstrateKind = "vm"
-	SubstrateK8s     SubstrateKind = "k8s"
-	SubstrateLocal   SubstrateKind = "local"
-	SubstrateAndroid SubstrateKind = "android"
+	"github.com/opencharly/sdk/enginekit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // CollectOpts is the read-only input every SubstrateCollector receives. It is
 // built once per `charly status` invocation by Collector.All and handed to every
 // registered collector unchanged. Nothing in a collector may mutate it.
 type CollectOpts struct {
-	IncludeAll bool          // mirrors --all
-	Nested     bool          // mirrors --nested (live multi-hop probing of nested children + live k8s)
-	Deploy     *BundleConfig // ~/.config/charly/charly.yml (may be nil)
-	Unified    *UnifiedFile  // charly.yml projection incl. folded kind:check beds (may be nil)
-	Engine     *EngineClient // shared podman/docker client
-	Quadlet    string        // quadlet dir
-	RunMode    string        // c.rt.RunMode
+	IncludeAll bool                    // mirrors --all
+	Nested     bool                    // mirrors --nested (live multi-hop probing of nested children + live k8s)
+	Deploy     *BundleConfig           // ~/.config/charly/charly.yml (may be nil)
+	Unified    *UnifiedFile            // charly.yml projection incl. folded kind:check beds (may be nil)
+	Engine     *enginekit.EngineClient // shared podman/docker client
+	Quadlet    string                  // quadlet dir
+	RunMode    string                  // c.rt.RunMode
 }
 
 // SubstrateCollector is implemented once per deployment substrate. Each
@@ -35,7 +27,7 @@ type CollectOpts struct {
 type SubstrateCollector interface {
 	// Kind reports which substrate this collector covers. Used to stamp
 	// DeploymentStatus.Kind and to sort the merged rows.
-	Kind() SubstrateKind
+	Kind() spec.SubstrateKind
 
 	// Available reports whether this substrate's backend is reachable on this
 	// host. An unavailable substrate is skipped silently (no error, no rows) —
@@ -45,7 +37,7 @@ type SubstrateCollector interface {
 	// Collect gathers status rows for this substrate. A returned error degrades
 	// gracefully: Collector.All logs it to stderr and contributes no rows for
 	// this kind, but NEVER aborts the whole command.
-	Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error)
+	Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error)
 }
 
 // collectorFactory builds a SubstrateCollector bound to the active Collector.

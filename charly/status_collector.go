@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/opencharly/sdk/enginekit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Collector orchestrates one charly-status invocation. Loop-invariant work
@@ -17,7 +20,7 @@ import (
 // construction; per-container work runs in a worker pool with a NumCPU*2 cap.
 type Collector struct {
 	rt      *ResolvedRuntime
-	engine  *EngineClient
+	engine  *enginekit.EngineClient
 	quadlet string
 	deploy  *BundleConfig
 	unified *UnifiedFile // best-effort charly.yml projection (may be nil)
@@ -29,7 +32,7 @@ type Collector struct {
 func NewCollector(rt *ResolvedRuntime) (*Collector, error) { //nolint:unparam // error return kept for interface/API stability
 	c := &Collector{
 		rt:     rt,
-		engine: NewEngineClient(rt.RunEngine),
+		engine: enginekit.NewEngineClient(rt.RunEngine),
 	}
 	if dc, err := LoadBundleConfig(); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: charly.yml has validation errors:\n  %v\n", err)
@@ -52,15 +55,20 @@ func NewCollector(rt *ResolvedRuntime) (*Collector, error) { //nolint:unparam //
 	return c, nil
 }
 
-// All collects status across every registered deployment substrate (pod / vm /
-// k8s / local / android). It builds one read-only CollectOpts, fans the
-// available collectors out across a NumCPU*2-bounded goroutine pool, merges
-// their rows, applies the nested overlay, and sorts by (Kind, cellBox).
+// collectFlat collects status across every registered deployment substrate
+// (pod / vm / k8s / local / android). It builds one read-only CollectOpts, fans
+// the available collectors out across a NumCPU*2-bounded goroutine pool,
+// merges their rows, and sorts by (Kind, deployKey) — the FLAT fan-out ONLY,
+// stopping BEFORE the nested overlay (the overlay is now the command:status
+// candy's PURE fold; the host pre-resolves the declared tree separately via
+// buildStatusRootsTree). Returns the resolved CollectOpts too, so the caller
+// (hostBuildStatusSubstrate) can feed it to buildStatusRootsTree without
+// re-deriving c.deploy/c.unified.
 //
 // A collector returning an error logs a WARNING to stderr and contributes no
 // rows (graceful degradation) — it NEVER aborts the whole command. The pod
 // substrate's worker-pool fan-out lives inside PodCollector.Collect.
-func (c *Collector) All(ctx context.Context, includeAll, nested bool) ([]DeploymentStatus, error) { //nolint:unparam // error return kept for interface/API stability
+func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([]spec.DeploymentStatus, CollectOpts, error) { //nolint:unparam // error return kept for interface/API stability
 	opts := CollectOpts{
 		IncludeAll: includeAll,
 		Nested:     nested,
@@ -82,7 +90,7 @@ func (c *Collector) All(ctx context.Context, includeAll, nested bool) ([]Deploym
 
 	// Concurrent substrate fan-out, bounded by the same NumCPU*2 cap the pod
 	// worker pool uses.
-	perKind := make([][]DeploymentStatus, len(collectors))
+	perKind := make([][]spec.DeploymentStatus, len(collectors))
 	workers := max(runtime.NumCPU()*2, 4)
 	if workers > len(collectors) {
 		workers = len(collectors)
@@ -108,34 +116,32 @@ func (c *Collector) All(ctx context.Context, includeAll, nested bool) ([]Deploym
 	}
 	wg.Wait()
 
-	var results []DeploymentStatus
+	var results []spec.DeploymentStatus
 	for _, rows := range perKind {
 		results = append(results, rows...)
 	}
-
-	results = applyNestedOverlay(results, opts)
 
 	sort.SliceStable(results, func(i, j int) bool {
 		if results[i].Kind != results[j].Kind {
 			return results[i].Kind < results[j].Kind
 		}
-		return cellBox(results[i]) < cellBox(results[j])
+		return deployKey(results[i].Image, results[i].Instance) < deployKey(results[j].Image, results[j].Instance)
 	})
-	return results, nil
+	return results, opts, nil
 }
 
 // Single collects status for one image+instance. Sequential — only one
 // container, no need for the worker pool. Pod-scoped: the `charly status <image>`
 // detail path covers the podman/docker substrate.
-func (c *Collector) Single(ctx context.Context, image, instance string) (DeploymentStatus, error) { //nolint:unparam // error return kept for interface/API stability
+func (c *Collector) Single(ctx context.Context, image, instance string) (spec.DeploymentStatus, error) { //nolint:unparam // error return kept for interface/API stability
 	boxName := resolveBoxName(image)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, c.rt.RunEngine)
-	engine := NewEngineClient(runEngine)
+	engine := enginekit.NewEngineClient(runEngine)
 	containerName := containerNameInstance(boxName, instance)
 
 	// Build a snapshot for this single container (bounded engine call surface).
 	snapshots, _ := engine.SnapshotAll(true)
-	var snap *ContainerSnapshot
+	var snap *enginekit.ContainerSnapshot
 	for i := range snapshots {
 		if snapshots[i].Name == containerName {
 			snap = &snapshots[i]
@@ -145,7 +151,7 @@ func (c *Collector) Single(ctx context.Context, image, instance string) (Deploym
 	if snap == nil {
 		// Not in podman: fall back to a synthesized snapshot and let the
 		// systemd / quadlet path determine its lifecycle state.
-		stub := ContainerSnapshot{
+		stub := enginekit.ContainerSnapshot{
 			Name:     containerName,
 			Box:      boxName,
 			Instance: instance,
@@ -176,9 +182,9 @@ func (c *Collector) Single(ctx context.Context, image, instance string) (Deploym
 // (snapshot, deploy, engine); no global state, safe to call concurrently
 // from worker goroutines. Every row is stamped Kind=SubstratePod,
 // Source="podman" — this is the pod substrate's row builder.
-func (c *Collector) collectOne(ctx context.Context, snap *ContainerSnapshot) DeploymentStatus {
-	cs := DeploymentStatus{
-		Kind:      SubstratePod,
+func (c *Collector) collectOne(ctx context.Context, snap *enginekit.ContainerSnapshot) spec.DeploymentStatus {
+	cs := spec.DeploymentStatus{
+		Kind:      spec.SubstratePod,
 		Source:    "podman",
 		Image:     snap.Box,
 		ImageRef:  snap.ImageRef,
@@ -258,11 +264,11 @@ func (c *Collector) collectOne(ctx context.Context, snap *ContainerSnapshot) Dep
 // runProbes runs all host probes in parallel goroutines and ALL guest probes
 // in a single batched podman exec. Per-container subprocess count: ~1 (the
 // guest batch) plus N HTTP/TCP probes (host probes don't fork subprocesses).
-func (c *Collector) runProbes(ctx context.Context, snap *ContainerSnapshot) []ToolStatus {
+func (c *Collector) runProbes(ctx context.Context, snap *enginekit.ContainerSnapshot) []spec.ToolStatus {
 	var (
 		wg       sync.WaitGroup
-		hostRes  = make([]ToolStatus, len(hostProbes))
-		guestRes []ToolStatus
+		hostRes  = make([]spec.ToolStatus, len(hostProbes))
+		guestRes []spec.ToolStatus
 	)
 	for i, p := range hostProbes {
 		wg.Add(1)
@@ -276,7 +282,7 @@ func (c *Collector) runProbes(ctx context.Context, snap *ContainerSnapshot) []To
 	})
 	wg.Wait()
 
-	all := append([]ToolStatus{}, hostRes...)
+	all := append([]spec.ToolStatus{}, hostRes...)
 	all = append(all, guestRes...)
 	out := all[:0]
 	for _, t := range all {
@@ -292,7 +298,7 @@ func (c *Collector) runProbes(ctx context.Context, snap *ContainerSnapshot) []To
 // `Description=OpenCharly <image> (<instance>)` line of the matching quadlet
 // unit. Falls through to the joined `charly-*` name when the description isn't
 // present (legacy / hand-rolled units).
-func (c *Collector) applyQuadletDescription(snap *ContainerSnapshot) {
+func (c *Collector) applyQuadletDescription(snap *enginekit.ContainerSnapshot) {
 	joined := strings.TrimPrefix(snap.Name, "charly-")
 	snap.Box = joined
 	snap.Instance = ""
@@ -309,12 +315,12 @@ func (c *Collector) applyQuadletDescription(snap *ContainerSnapshot) {
 // enabledQuadlets returns synthetic snapshots for quadlet units present on
 // disk but not represented in `podman ps -a`. Used by --all to surface
 // enabled-but-never-run deployments.
-func (c *Collector) enabledQuadlets(seen map[string]bool) []ContainerSnapshot {
+func (c *Collector) enabledQuadlets(seen map[string]bool) []enginekit.ContainerSnapshot {
 	if c.quadlet == "" {
 		return nil
 	}
 	matches, _ := filepath.Glob(filepath.Join(c.quadlet, "charly-*.container"))
-	var out []ContainerSnapshot
+	var out []enginekit.ContainerSnapshot
 	for _, path := range matches {
 		joined := strings.TrimSuffix(filepath.Base(path), ".container")
 		if seen[joined] {
@@ -324,7 +330,7 @@ func (c *Collector) enabledQuadlets(seen map[string]bool) []ContainerSnapshot {
 		if image == "" {
 			image = strings.TrimPrefix(joined, "charly-")
 		}
-		out = append(out, ContainerSnapshot{
+		out = append(out, enginekit.ContainerSnapshot{
 			Name:     joined,
 			State:    "enabled",
 			Box:      image,
@@ -407,18 +413,18 @@ func statusFromState(state string) string {
 // parsePortStrings converts a charly.yml / image-label []string ports list
 // to []PortMapping using the canonical ParsePortMapping. Unparseable entries
 // log loudly to stderr (matches the existing behaviour for tunnel ports).
-func parsePortStrings(ports []string) []PortMapping {
+func parsePortStrings(ports []string) []spec.PortMapping {
 	if len(ports) == 0 {
 		return nil
 	}
-	var out []PortMapping
+	var out []spec.PortMapping
 	for _, raw := range ports {
 		p, ok := ParsePortMapping(strings.TrimSpace(raw))
 		if !ok {
 			fmt.Fprintf(os.Stderr, "WARNING: charly status: cannot parse port mapping %q\n", raw)
 			continue
 		}
-		out = append(out, PortMapping{
+		out = append(out, spec.PortMapping{
 			HostIP:   p.BindAddr,
 			HostPort: p.Host,
 			CtrPort:  p.Container,
@@ -464,7 +470,7 @@ func parseQuadletDescription(unitPath string) (box, instance string) {
 // diagnosis: `charly status` showed `charly-immich-cache -> /home/user/.immich/
 // cache` (the OCI label default) instead of the actual bind to the
 // gocryptfs plain dir, masking the encryption state from the operator.
-func formatLiveMounts(mounts []MountInfo) []string {
+func formatLiveMounts(mounts []enginekit.MountInfo) []string {
 	out := make([]string, 0, len(mounts))
 	for _, m := range mounts {
 		name := m.Name
@@ -491,4 +497,33 @@ func isEncryptedPlainPath(p string) bool {
 		return false
 	}
 	return strings.Contains(p, "/encrypted/")
+}
+
+// formatTunnelSummary renders a TunnelYAML as a one-line human-readable
+// summary. A COLLECTION helper (DeploymentStatus.Tunnel is already a plain
+// string by the time it reaches a renderer), so it lives here — beside its
+// sole caller, collectOne — rather than in the command:status candy's pure
+// render.go, which formats only already-resolved strings.
+func formatTunnelSummary(t *TunnelYAML) string {
+	if t == nil {
+		return ""
+	}
+	provider := t.Provider
+	if provider == "" {
+		provider = "tailscale"
+	}
+	if t.Public.All || t.Private.All {
+		return fmt.Sprintf("%s (all ports)", provider)
+	}
+	ports := make([]int, 0, len(t.Public.Ports)+len(t.Private.Ports))
+	ports = append(ports, t.Public.Ports...)
+	ports = append(ports, t.Private.Ports...)
+	if len(ports) > 0 {
+		ps := make([]string, len(ports))
+		for i, p := range ports {
+			ps[i] = fmt.Sprintf("%d", p)
+		}
+		return fmt.Sprintf("%s (ports %s)", provider, strings.Join(ps, ","))
+	}
+	return provider
 }

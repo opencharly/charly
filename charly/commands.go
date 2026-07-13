@@ -11,8 +11,6 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// StatusCmd is defined in status.go
-
 // LogsCmd shows service container logs
 type LogsCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`

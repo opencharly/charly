@@ -169,8 +169,8 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 			MergeAuto:     img.Merge != nil && img.Merge.Auto,
 		}
 		// Carry the per-box merge knobs (box config) — the candy's ref-based merge
-		// seam (HostBuild("merge")) can't re-resolve the box, so it passes these
-		// through; 0 → host defaults (matching MergeCmd.runOne's box-config lookup).
+		// (InvokeProvider(verb:oci)) can't re-resolve the box, so it passes these
+		// through; 0 → plugin defaults (matching MergeCmd.runOne's box-config lookup).
 		if img.Merge != nil {
 			d.MergeMaxMB = int64(img.Merge.MaxMB)
 			d.MergeMaxTotalMB = int64(img.Merge.MaxTotalMB)
