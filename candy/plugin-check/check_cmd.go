@@ -96,17 +96,46 @@ func (c *CheckBoxCmd) Run() error {
 		return emitImageTestYAML(os.Stdout, reply.Image, "", reply.Steps)
 	}
 
-	fails := reportSteps(os.Stderr, reply.Steps, c.Format)
-	if fails > 0 {
-		return &CheckFailedError{Failed: fails}
+	reportSteps(os.Stderr, reply.Steps, c.Format)
+	return failErrorFor(reply.Steps)
+}
+
+// failErrorFor returns the exit-classifying error for a set of check step results — the ONE
+// classifier for every check verb (box/live/feature — R3). nil when none failed; a
+// *CheckFailedError (→ exit 2, checks-failed) when any GENUINE check failed; or a plain infra
+// error (→ exit 1, the host default) when the ONLY failures are podman container-SETUP infra
+// failures (R44). An infra failure means the check command never ran (the probe container's
+// mount/passwd-gen raced concurrent build churn), so it MUST NOT read as a checks-failed
+// verdict — and, having survived the eventually.go bounded retry, it is reported loudly, never
+// swallowed as a pass. A run with BOTH classes surfaces as checks-failed (2) — a real check
+// failure dominates. Keyed on the kit infra marker (kit.IsContainerInfraResult).
+func failErrorFor(results []kit.StepResult) error {
+	checkFails, infraFails := 0, 0
+	for i := range results {
+		if results[i].Result.Status != kit.StatusFail {
+			continue
+		}
+		if kit.IsContainerInfraResult(results[i].Result.Message) {
+			infraFails++
+		} else {
+			checkFails++
+		}
+	}
+	if checkFails > 0 {
+		return &CheckFailedError{Failed: checkFails}
+	}
+	if infraFails > 0 {
+		return fmt.Errorf("%d container-setup infra failure%s: podman setup raced concurrent build churn and the check command never ran — an infra error, not a check verdict (see the INFRA step(s) above)",
+			infraFails, kit.Plural(infraFails))
 	}
 	return nil
 }
 
-// reportSteps writes results in the requested format and returns the fail count. It reuses the kit
-// formatters (FormatStepResults*), so the externalized output is byte-identical to the former in-core
-// path (R3 — one formatter set, both consumers).
-func reportSteps(w io.Writer, results []kit.StepResult, format string) int {
+// reportSteps writes results in the requested format (the pass/fail tallying + exit
+// classification is failErrorFor's, R44). It reuses the kit formatters (FormatStepResults*),
+// so the externalized output is byte-identical to the former in-core path (R3 — one formatter
+// set, both consumers).
+func reportSteps(w io.Writer, results []kit.StepResult, format string) {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "json":
 		_ = kit.FormatStepResultsJSON(w, results)
@@ -117,11 +146,6 @@ func reportSteps(w io.Writer, results []kit.StepResult, format string) int {
 	default:
 		kit.FormatStepResultsText(w, results)
 	}
-	n := 0
-	for _, r := range results {
-		if r.Result.Status == kit.StatusFail {
-			n++
-		}
-	}
-	return n
+	// The pass/fail tallying moved to failErrorFor (which splits check-fails from
+	// container-setup INFRA fails, R44) — reportSteps is now formatting-only.
 }

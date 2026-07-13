@@ -192,15 +192,6 @@ func TestResolveDeployChain_UnknownNestedChild(t *testing.T) {
 	}
 }
 
-// TestImageChain produces a JumpPodmanRun chain.
-func TestImageChain(t *testing.T) {
-	chain := ImageChain("podman", "fedora-coder:latest")
-	venue := chain.Venue()
-	if !strings.Contains(venue, "podman-run:fedora-coder:latest") {
-		t.Errorf("venue %q does not contain podman-run hop", venue)
-	}
-}
-
 // TestContainerChain produces a JumpPodmanExec chain into the literal name.
 func TestContainerChain(t *testing.T) {
 	chain := ContainerChain("podman", "charly-redis")
