@@ -12,21 +12,23 @@ import (
 )
 
 // check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2). Class-generic
-// venue→dialable-endpoint resolutions serve BOTH the in-process runnerCheckContext and the
+// venue→dialable-endpoint resolutions serve BOTH the in-process hostCheckContext and the
 // out-of-process CheckContextService, REPLACING the per-verb host preresolvers (cdp/vnc/spice
 // each declared their port / graphics kind and wrapped this SAME host machinery). The plugin
 // decides WHAT to resolve (its port / graphics kind); the host holds the venue / podman /
-// go-libvirt / tunnel machinery the out-of-process plugin cannot reach.
+// go-libvirt / tunnel machinery the out-of-process plugin cannot reach. The legs are methods on
+// the host verb resolver (which reads the kit.Runner engine state through accessors and owns the
+// per-Invoke endpoint cleanups).
 
 // resolveVerbEndpoint resolves the current check target's venue (container / VM / ssh /
 // local) and returns a host-reachable "host:port" for an in-venue TCP port, registering
 // any opened ssh -L forward (VM/ssh venue) for post-Invoke teardown. Empty addr + nil err
 // = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
-func (r *Runner) resolveVerbEndpoint(port int) (string, error) {
-	if r.Box == "" || r.Mode == RunModeBox {
+func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
+	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
 		return "", nil
 	}
-	venue, err := resolveCheckVenue(r.Box, r.Instance)
+	venue, err := resolveCheckVenue(h.kr.Box(), h.kr.Instance())
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +36,7 @@ func (r *Runner) resolveVerbEndpoint(port int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r.endpointCleanups = append(r.endpointCleanups, ep.Close)
+	h.endpointCleanups = append(h.endpointCleanups, ep.Close)
 	return ep.Addr, nil
 }
 
@@ -58,15 +60,15 @@ type graphicsEndpoint struct {
 // Any bridge listener / ssh -L forward it opens is registered for post-Invoke teardown. Empty
 // endpoint + nil err = no live venue (box-mode / no-box); Skip=true = the VM declares no
 // graphics device of that kind (an N/A skip).
-func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
-	if r.Box == "" || r.Mode == RunModeBox {
+func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
+	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
 		return graphicsEndpoint{}, nil
 	}
 
 	// vnc CONTAINER leg: a non-VM venue publishes RFB on 5900; the ticket comes from the
 	// credential store. spice is VM-only (no container leg), so it skips straight to the vm plugin.
 	if kind == "vnc" {
-		venue, err := resolveCheckVenue(r.Box, r.Instance)
+		venue, err := resolveCheckVenue(h.kr.Box(), h.kr.Instance())
 		if err != nil {
 			return graphicsEndpoint{}, err
 		}
@@ -75,14 +77,14 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 			if err != nil {
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}
-			r.endpointCleanups = append(r.endpointCleanups, ep.Close)
-			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(resolveBoxName(r.Box), r.Instance)}, nil
+			h.endpointCleanups = append(h.endpointCleanups, ep.Close)
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(resolveBoxName(h.kr.Box()), h.kr.Instance())}, nil
 		}
 	}
 
 	// VM leg (vnc + spice): resolve the VM's <graphics type='kind'> via the out-of-process vm
 	// plugin. CHARLY_LIBVIRT_URI selects a remote hypervisor.
-	raw, ok := invokeVmPlugin("resolve-"+kind, r.vmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
+	raw, ok := invokeVmPlugin("resolve-"+kind, h.kr.VmTargetName(), os.Getenv("CHARLY_LIBVIRT_URI"))
 	if !ok {
 		return graphicsEndpoint{}, fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}
@@ -107,7 +109,7 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 		if berr != nil {
 			return "", berr
 		}
-		r.endpointCleanups = append(r.endpointCleanups, func() { _ = br.Close() })
+		h.endpointCleanups = append(h.endpointCleanups, func() { _ = br.Close() })
 		return br.Addr().String(), nil
 	}
 
@@ -136,7 +138,7 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 	if terr != nil {
 		return graphicsEndpoint{}, fmt.Errorf("ssh tunnel to %s: %w", parsed.Remote, terr)
 	}
-	r.endpointCleanups = append(r.endpointCleanups, func() { _ = tunnel.Close() })
+	h.endpointCleanups = append(h.endpointCleanups, func() { _ = tunnel.Close() })
 	if ep.IsSocket {
 		localSock, _, ferr := tunnel.ForwardUnix(context.Background(), ep.SocketPath)
 		if ferr != nil {
@@ -161,24 +163,24 @@ func (r *Runner) resolveVerbGraphics(kind string) (graphicsEndpoint, error) {
 // runEndpointCleanups closes every forward opened during the verb's Invoke (LIFO) and
 // resets the list. Called by invokeVerbProvider after the Invoke returns — the forward must
 // outlive the plugin's dial, so it is released only once the Invoke completes.
-func (r *Runner) runEndpointCleanups() {
-	for i := len(r.endpointCleanups) - 1; i >= 0; i-- {
-		if r.endpointCleanups[i] != nil {
-			r.endpointCleanups[i]()
+func (h *hostVerbResolver) runEndpointCleanups() {
+	for i := len(h.endpointCleanups) - 1; i >= 0; i-- {
+		if h.endpointCleanups[i] != nil {
+			h.endpointCleanups[i]()
 		}
 	}
-	r.endpointCleanups = nil
+	h.endpointCleanups = nil
 }
 
 // ResolveEndpoint is the in-process CheckContext leg — a compiled-in kit verb reaches the
 // SAME generic endpoint resolution an out-of-process one gets over CheckContextService.
-func (c runnerCheckContext) ResolveEndpoint(_ context.Context, port int) (string, error) {
-	return c.r.resolveVerbEndpoint(port)
+func (c hostCheckContext) ResolveEndpoint(_ context.Context, port int) (string, error) {
+	return c.h.resolveVerbEndpoint(port)
 }
 
 // ResolveGraphicsEndpoint is the in-process CheckContext leg for VM graphics endpoints.
-func (c runnerCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (kit.GraphicsEndpoint, error) {
-	ge, err := c.r.resolveVerbGraphics(kind)
+func (c hostCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind string) (kit.GraphicsEndpoint, error) {
+	ge, err := c.h.resolveVerbGraphics(kind)
 	if err != nil {
 		return kit.GraphicsEndpoint{}, err
 	}
@@ -186,19 +188,19 @@ func (c runnerCheckContext) ResolveGraphicsEndpoint(_ context.Context, kind stri
 }
 
 // ResolveClusterContext is the in-process CheckContext leg for a k8s cluster-profile context.
-func (c runnerCheckContext) ResolveClusterContext(_ context.Context, cluster string) (string, error) {
-	return c.r.resolveClusterContext(cluster)
+func (c hostCheckContext) ResolveClusterContext(_ context.Context, cluster string) (string, error) {
+	return c.h.resolveClusterContext(cluster)
 }
 
 // resolveImageLabel reads one raw OCI label off the deployment-under-test's image. It is the
 // host-side leg for CheckContext.ResolveImageLabel — the out-of-process mcp verb needs the
 // baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.
 // Empty value (no live deployment, or the label absent) is a valid result.
-func (r *Runner) resolveImageLabel(label string) (string, error) {
-	if r.Box == "" || r.Mode == RunModeBox {
+func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
+	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
 		return "", nil
 	}
-	engine, containerName, err := resolveContainer(r.Box, r.Instance)
+	engine, containerName, err := resolveContainer(h.kr.Box(), h.kr.Instance())
 	if err != nil {
 		return "", err
 	}
@@ -214,6 +216,6 @@ func (r *Runner) resolveImageLabel(label string) (string, error) {
 }
 
 // ResolveImageLabel is the in-process CheckContext leg for a baked OCI label.
-func (c runnerCheckContext) ResolveImageLabel(_ context.Context, label string) (string, error) {
-	return c.r.resolveImageLabel(label)
+func (c hostCheckContext) ResolveImageLabel(_ context.Context, label string) (string, error) {
+	return c.h.resolveImageLabel(label)
 }

@@ -27,7 +27,7 @@ type checkContextReverseServer struct {
 }
 
 // HTTPDo issues the request from the host's network namespace via the SHARED host HTTP-do
-// path (doHTTPRequest — the SAME builder the in-proc runnerCheckContext.HTTPDo uses, R3) and
+// path (doHTTPRequest — the SAME builder the in-proc hostCheckContext.HTTPDo uses, R3) and
 // returns status/body/header-blob. A transport-level failure rides the reply error field (the
 // RPC itself succeeds), like RunReply/CaptureReply.
 func (s *checkContextReverseServer) HTTPDo(ctx context.Context, req *pb.HTTPDoRequest) (*pb.HTTPDoReply, error) {
@@ -49,7 +49,7 @@ func (s *checkContextReverseServer) HTTPDo(ctx context.Context, req *pb.HTTPDoRe
 
 // ResolveEndpoint resolves the check target's venue to a host-reachable addr for an in-venue
 // TCP port via the host's resolveVerbEndpoint (the SAME machinery the in-process
-// runnerCheckContext.ResolveEndpoint uses, R3). Any ssh -L forward it opens is tracked on the
+// hostCheckContext.ResolveEndpoint uses, R3). Any ssh -L forward it opens is tracked on the
 // Runner and closed after the calling verb's Invoke. A resolution failure rides the reply
 // error field (the RPC itself succeeds, like HTTPDoReply).
 func (s *checkContextReverseServer) ResolveEndpoint(_ context.Context, req *pb.ResolveEndpointRequest) (*pb.ResolveEndpointReply, error) {
@@ -65,7 +65,7 @@ func (s *checkContextReverseServer) ResolveEndpoint(_ context.Context, req *pb.R
 
 // ResolveGraphicsEndpoint resolves a VM's <graphics type='<kind>'> listener to a dialable
 // endpoint via the host's resolveVerbGraphics (the SAME machinery the in-process
-// runnerCheckContext.ResolveGraphicsEndpoint uses, R3). Any ssh -L forward it opens is tracked
+// hostCheckContext.ResolveGraphicsEndpoint uses, R3). Any ssh -L forward it opens is tracked
 // on the Runner and closed after the calling verb's Invoke. A resolution failure rides the
 // reply error field; Skip signals an N/A (no graphics device of that kind).
 func (s *checkContextReverseServer) ResolveGraphicsEndpoint(_ context.Context, req *pb.ResolveGraphicsEndpointRequest) (*pb.ResolveGraphicsEndpointReply, error) {
@@ -82,7 +82,7 @@ func (s *checkContextReverseServer) ResolveGraphicsEndpoint(_ context.Context, r
 }
 
 // ResolveClusterContext maps a k8s cluster-profile name to its kubeconfig context via the host's
-// resolveClusterContext (the SAME project-loader leg the in-process runnerCheckContext uses, R3).
+// resolveClusterContext (the SAME project-loader leg the in-process hostCheckContext uses, R3).
 // An empty context (no matching profile) is a valid reply — the plugin falls back to the
 // kubeconfig current-context.
 func (s *checkContextReverseServer) ResolveClusterContext(_ context.Context, req *pb.ResolveClusterContextRequest) (*pb.ResolveClusterContextReply, error) {
@@ -97,7 +97,7 @@ func (s *checkContextReverseServer) ResolveClusterContext(_ context.Context, req
 }
 
 // ResolveImageLabel reads one raw OCI label off the deployment image via the host's
-// resolveImageLabel (the SAME leg the in-process runnerCheckContext uses, R3). Empty value
+// resolveImageLabel (the SAME leg the in-process hostCheckContext uses, R3). Empty value
 // (label absent / no live deployment) is a valid reply.
 func (s *checkContextReverseServer) ResolveImageLabel(_ context.Context, req *pb.ResolveImageLabelRequest) (*pb.ResolveImageLabelReply, error) {
 	if s.resolveImgLabel == nil {

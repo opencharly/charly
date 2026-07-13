@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -99,7 +98,7 @@ func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, w
 }
 
 // TestExternalCommandExecPlan_NestedCheckCommand proves a NestedCommandProvider's dynamic
-// command nests UNDER `check` (kong.Plugins embedded in a CheckCmd-like parent), parses
+// command nests UNDER `check` (kong.Plugins embedded in a check-like parent), parses
 // `check examplekube …`, keys the dispatch table by the full path "check examplekube"
 // (commandPathKey), and builds the exec plan from the resolved (baked) binary + pass-through
 // args.
@@ -160,17 +159,4 @@ func assertCommandEnv(t *testing.T, env []string) {
 	if !hasBin {
 		t.Fatal("env must stamp CHARLY_BIN so the plugin shells back to the dispatching charly")
 	}
-}
-
-// fakeNestedCheckCmd is a NestedCommandProvider that nests its command under `check` — the
-// shape the dep-shed extractions (charly check kube/adb/appium) take. Used by
-// TestCommandProviders_CheckNestedPluginsInjected (provider_command_test.go) to prove the
-// nested-under-check grammar seam survives the check-command extraction.
-type fakeNestedCheckCmd struct{}
-
-func (*fakeNestedCheckCmd) Reserved() string      { return "examplekube" }
-func (*fakeNestedCheckCmd) Class() ProviderClass  { return ClassCommand }
-func (*fakeNestedCheckCmd) CommandParent() string { return "check" }
-func (*fakeNestedCheckCmd) Invoke(context.Context, *Operation) (*Result, error) {
-	return &Result{}, nil
 }

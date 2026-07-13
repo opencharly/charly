@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // The install-retry race remedy (installWithRetry) moved out of core with the deploy
@@ -153,7 +155,7 @@ func TestResolveCheckApk(t *testing.T) {
 	}
 
 	// LOCAL candy: map key == bare name. Origin "candy:<name>" → resolves.
-	r := &Runner{CandyDirs: map[string]string{"android-emulator-layer": authorDir, "sshd": siblingDir}}
+	r := hostVerbResolverWithCandyDirs(map[string]string{"android-emulator-layer": authorDir, "sshd": siblingDir}, nil)
 	if got, err := r.resolveCheckApk("./tests/data/x.apk", "candy:android-emulator-layer"); err != nil || got != apk {
 		t.Errorf("local-candy resolve = (%q,%v), want (%q,nil)", got, err, apk)
 	}
@@ -161,18 +163,18 @@ func TestResolveCheckApk(t *testing.T) {
 	// with that same ref (description_run.go op.Origin = fs.origin). CandyDirs[ref]
 	// must match.
 	const ref = "github.com/owner/repo/candy/android-emulator-layer"
-	rRemote := &Runner{CandyDirs: map[string]string{ref: authorDir}}
+	rRemote := hostVerbResolverWithCandyDirs(map[string]string{ref: authorDir}, nil)
 	if got, err := rRemote.resolveCheckApk("./tests/data/x.apk", "candy:"+ref); err != nil || got != apk {
 		t.Errorf("fetched-candy (ref-keyed) resolve = (%q,%v), want (%q,nil)", got, err, apk)
 	}
 	// Authoring candy NOT in CandyDirs → HARD ERROR (no fallback to a sibling).
-	r2 := &Runner{CandyDirs: map[string]string{"sshd": siblingDir}}
+	r2 := hostVerbResolverWithCandyDirs(map[string]string{"sshd": siblingDir}, nil)
 	if _, err := r2.resolveCheckApk("./tests/data/x.apk", "candy:android-emulator-layer"); err == nil {
 		t.Error("unknown candy must error, got nil")
 	}
 	// A scan error surfaces as the root cause (not a misleading not-found).
-	r2.CandyScanErr = errors.New("boom")
-	if _, err := r2.resolveCheckApk("./tests/data/x.apk", "candy:android-emulator-layer"); err == nil || !strings.Contains(err.Error(), "boom") {
+	r2boom := hostVerbResolverWithCandyDirs(map[string]string{"sshd": siblingDir}, errors.New("boom"))
+	if _, err := r2boom.resolveCheckApk("./tests/data/x.apk", "candy:android-emulator-layer"); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("scan-error path = %v, want error mentioning the scan failure", err)
 	}
 	// Non-candy origin (the step's candy Origin was lost) → HARD ERROR.
@@ -235,9 +237,8 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 		t.Fatalf("register stub adb schema: %v", err)
 	}
 
-	r := NewRunner(nil, nil, RunModeLive) // resolveCheckApk errors before any subprocess
-	r.Box = "android-emulator"            // satisfy the image-context guard
-	r.CandyScanErr = errors.New("scan-sentinel-boom")
+	// resolveCheckApk errors before any subprocess; Box satisfies the image-context guard.
+	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, Box: "android-emulator", CandyScanErr: errors.New("scan-sentinel-boom")})
 	set := &LabelDescriptionSet{
 		Candy: []LabeledDescription{{
 			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",

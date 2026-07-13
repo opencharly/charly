@@ -1,11 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // fakeExecutor records calls and returns canned results by command-prefix.
@@ -55,10 +55,14 @@ func (f *fakeExecutor) GetFile(_ context.Context, _ string, _ bool, _ EmitOpts) 
 	return nil, nil
 }
 
-func newFakeRunner(t *testing.T, mode RunMode) (*Runner, *fakeExecutor) {
+func newFakeRunner(t *testing.T, mode RunMode, box ...string) (*kit.Runner, *fakeExecutor) {
 	t.Helper()
 	fake := &fakeExecutor{}
-	r := NewRunner(fake, &CheckVarResolver{Env: map[string]string{}}, mode)
+	cfg := kit.RunnerConfig{Exec: fake, Mode: mode, Env: map[string]string{}}
+	if len(box) > 0 {
+		cfg.Box = box[0]
+	}
+	r := newCheckRunner(cfg)
 	return r, fake
 }
 
@@ -210,7 +214,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "redis-cli -p 16379", stdout: "PONG\n", exit: 0},
 		}
-		r := NewRunner(fake, &CheckVarResolver{Env: map[string]string{"HOST_PORT:6379": "16379"}}, RunModeLive)
+		r := newCheckRunner(kit.RunnerConfig{Exec: fake, Mode: RunModeLive, Env: map[string]string{"HOST_PORT:6379": "16379"}})
 		res := r.Run(context.Background(), []Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
@@ -248,23 +252,6 @@ func TestRunner_EmptyCheck(t *testing.T) {
 	}
 }
 
-// Text formatter emits one line per result and a summary footer, returns
-// the number of failures.
-func TestFormatResultsText(t *testing.T) {
-	results := []CheckResult{
-		{Op: &Op{Plugin: "file", PluginInput: map[string]any{"file": "/x"}}, Verb: "file", Status: TestPass, Message: "ok"},
-		{Op: &Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:6379"}}, Verb: "addr", Status: TestFail, Message: "not reachable", Elapsed: 5 * time.Millisecond},
-		{Op: cmdOpP("a"), Verb: "command", Status: TestSkip, Message: "skipped"},
-	}
-	var buf bytes.Buffer
-	fails := FormatResultsText(&buf, results)
-	if fails != 1 {
-		t.Errorf("fails = %d, want 1", fails)
-	}
-	out := buf.String()
-	for _, want := range []string{"✓ file /x", "✗ addr 127.0.0.1:6379", "⚠ command a", "1 passed", "1 failed", "1 skipped"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\n--\n%s", want, out)
-		}
-	}
-}
+// The package-main result-list formatters were relocated to sdk/kit in the P12 check-engine
+// cutover (kit.FormatStepResults*, exercised via reportSteps); their coverage lives with the
+// reporters in sdk/kit. No package-main formatter remains to test here.

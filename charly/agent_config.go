@@ -6,41 +6,19 @@ package main
 // kernel stores agent bodies OPAQUELY and the check/iterate harness consumes a
 // generic spec.AgentExecSpec (a resolved "launch + version-capture + iterate-poll
 // a CLI" descriptor) — it never imports the concrete `agent` kind.
+//
+// The `charly check list-agent` table printer + the harness's version-capture helpers
+// live in the compiled-in command:check plugin (candy/plugin-check) with the rest of the
+// `charly check` CLI + AI-harness. The host keeps only resolveAgentViaPlugin (the
+// grader-catalog resolution the `charly box feature run` grader path needs) plus the
+// version-parse helpers.
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"os/exec"
-	"sort"
-	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/opencharly/sdk/spec"
 )
-
-// AgentOutputFormatStreamJSON is the explicit non-default value of
-// AgentExecSpec.OutputFormat (the default "" is the plain format). The legal set
-// {"", "stream-json"} is enforced by the closed CUE schema at load
-// (agent.cue: output_format: *"" | "stream-json").
-const AgentOutputFormatStreamJSON = "stream-json"
-
-// DefaultProgressCheckInterval / DefaultProgressNoImprovementTimeout are the
-// Go-level defaults the harness loop applies when a resolved AI's progress_*
-// fields are empty: poll every 5 minutes; terminate after 30 minutes of no
-// scoring improvement. Both configurable per-AI via the yaml fields.
-const (
-	DefaultProgressCheckInterval        = 5 * time.Minute
-	DefaultProgressNoImprovementTimeout = 30 * time.Minute
-)
-
-// DefaultAgentTimeout is the resolved Timeout when an AI entry leaves `timeout:`
-// empty — "" means no per-iteration wall-clock cap (the loop is plateau-bounded).
-// Applied by candy/plugin-agent's OpResolve; named here only for the list display.
-const DefaultAgentTimeout = ""
 
 // ---------------------------------------------------------------------------
 // Resolution (via candy/plugin-agent's OpResolve)
@@ -79,50 +57,6 @@ func (v VersionResult) String() string {
 	return v.Stdout
 }
 
-// CaptureVersion runs the resolved AI's `version_command:` via the supplied
-// executor's Run callback (LocalExecutor / NestedExecutor / SSHExecutor). Returns
-// a VersionResult capturing trimmed stdout or the error string. Failure is NOT
-// fatal — the loop carries on and records it under agent_version:.
-func CaptureVersion(
-	ctx context.Context,
-	ai *spec.AgentExecSpec,
-	run func(ctx context.Context, argv []string) (string, string, error),
-) VersionResult {
-	if len(ai.VersionCommand) == 0 {
-		return VersionResult{Error: "version_command: not configured"}
-	}
-	stdout, stderr, err := run(ctx, ai.VersionCommand)
-	if err != nil {
-		msg := err.Error()
-		if s := strings.TrimSpace(stderr); s != "" {
-			msg = msg + ": " + s
-		}
-		return VersionResult{Error: msg}
-	}
-	first := firstNonEmptyLine(stdout)
-	if first == "" {
-		return VersionResult{Error: "version_command: produced empty output"}
-	}
-	return VersionResult{Stdout: first}
-}
-
-// LocalCaptureVersion runs the version command on the host directly (for a
-// host-target iterate sandbox). Exposed so the host-target preflight + the per-AI
-// capture share one path.
-func LocalCaptureVersion(ctx context.Context, ai *spec.AgentExecSpec) VersionResult {
-	return CaptureVersion(ctx, ai, func(ctx context.Context, argv []string) (string, string, error) {
-		if len(argv) == 0 {
-			return "", "", errors.New("argv empty")
-		}
-		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-		var stdout, stderr strings.Builder
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		err := cmd.Run()
-		return stdout.String(), stderr.String(), err
-	})
-}
-
 // ParseAgentTimeout parses a resolved Duration field (Timeout / progress_*). Empty
 // (the default) returns 0 — "no wall-clock cap"; callers branch on `dur == 0` to
 // skip context.WithTimeout entirely so the plateau bound governs.
@@ -131,67 +65,4 @@ func ParseAgentTimeout(s spec.Duration) (time.Duration, error) {
 		return 0, nil
 	}
 	return time.ParseDuration(s)
-}
-
-// firstNonEmptyLine returns the first non-empty line of s with surrounding
-// whitespace trimmed. Used to normalize multi-line --version output.
-func firstNonEmptyLine(s string) string {
-	for line := range strings.SplitSeq(s, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
-// ---------------------------------------------------------------------------
-// Listing
-// ---------------------------------------------------------------------------
-
-// PrintAgents writes a human-readable table of configured agents to w (for
-// `charly check list-ai`). It peeks the display fields from each OPAQUE body — the
-// kernel does not type agent bodies (the agent de-type, Cutover E).
-func PrintAgents(w io.Writer, catalog map[string]json.RawMessage) {
-	if len(catalog) == 0 {
-		fmt.Fprintln(w, "No agents configured. Add an 'agent:' map to check.yml.")
-		return
-	}
-	names := make([]string, 0, len(catalog))
-	for name := range catalog {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tCOMMAND\tVERSION_COMMAND\tTIMEOUT\tPROMPT_VIA\tCREDENTIAL")
-	for _, name := range names {
-		var ai struct {
-			Command        []string          `json:"command"`
-			PromptVia      string            `json:"prompt_via"`
-			VersionCommand []string          `json:"version_command"`
-			Timeout        string            `json:"timeout"`
-			Credential     []json.RawMessage `json:"credential"`
-		}
-		_ = json.Unmarshal(catalog[name], &ai)
-		timeout := ai.Timeout
-		if timeout == "" {
-			timeout = DefaultAgentTimeout + " (default)"
-		}
-		promptVia := ai.PromptVia
-		if promptVia == "" {
-			promptVia = "argv (default)"
-		}
-		cmd := strings.Join(ai.Command, " ")
-		if len(cmd) > 50 {
-			cmd = cmd[:47] + "..."
-		}
-		ver := strings.Join(ai.VersionCommand, " ")
-		if ver == "" {
-			ver = "(none)"
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\n",
-			name, cmd, ver, timeout, promptVia, len(ai.Credential))
-	}
-	_ = tw.Flush()
 }

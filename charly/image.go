@@ -20,8 +20,8 @@ import (
 // the fully-resolved config+layers graph the plugin cannot compute pre-K1). The
 // generate/validate/new/pkg verbs are contributed as NESTED command providers by
 // the COMPILED-IN candy/plugin-box (each a command:<word> with CommandParent()
-// =="box"), attached into the embedded kong.Plugins below. This mirrors how
-// CheckCmd embeds kong.Plugins for its nested external subcommands.
+// =="box"), attached into the embedded kong.Plugins below. This mirrors how a
+// compiled-in command holder embeds kong.Plugins for its nested external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
 	// (candy/plugin-box's generate/validate/new/pkg). main() sets this to

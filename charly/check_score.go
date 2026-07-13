@@ -16,53 +16,27 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
 // ---------------------------------------------------------------------------
 // `charly check box --format yaml` parser
 // ---------------------------------------------------------------------------
-
-// CheckRunResults is the structured result of one `charly check box` run, as
-// produced by `--format yaml`. The zero value is a usable empty result.
-type CheckRunResults struct {
-	Box     string         `yaml:"box,omitempty" json:"box,omitempty"`
-	Mode    string         `yaml:"mode,omitempty" json:"mode,omitempty"` // "box" | "run"
-	Step    []StepScore    `yaml:"step,omitempty" json:"step,omitempty"`
-	Summary TestRunSummary `yaml:"summary" json:"summary"`
-}
-
-// StepScore is the scorer's verdict for a single check:/agent-check: step,
-// keyed by step id across iterations for plateau tracking.
-type StepScore struct {
-	ID      string   `yaml:"id" json:"id"`
-	Origin  string   `yaml:"origin,omitempty" json:"origin,omitempty"`
-	Text    string   `yaml:"text,omitempty" json:"text,omitempty"`
-	Tag     []string `yaml:"tag,omitempty" json:"tag,omitempty"`
-	Keyword string   `yaml:"keyword,omitempty" json:"keyword,omitempty"`
-	Verb    string   `yaml:"verb,omitempty" json:"verb,omitempty"`
-	Status  string   `yaml:"status" json:"status"` // "pass" | "fail" | "skip" | "skipped"
-	// SkippedReason is set when Status == "skipped" — the depends_on upstream
-	// that didn't pass. Format: "dep-unmet: <upstream-id>".
-	SkippedReason string `yaml:"skipped_reason,omitempty" json:"skipped_reason,omitempty"`
-}
-
-// TestRunSummary mirrors the summary block emitted by `charly check box
-// --format yaml`.
-type TestRunSummary struct {
-	Total int `yaml:"total" json:"total"`
-	Pass  int `yaml:"pass" json:"pass"`
-	Fail  int `yaml:"fail" json:"fail"`
-	Skip  int `yaml:"skip" json:"skip"`
-}
+//
+// The scoring result model — spec.CheckRunResults / spec.StepScore / spec.ScoreSummary — is a
+// CUE-sourced sdk WIRE TYPE (sdk/schema/seam.cue, SDD): ONE definition serves both this core
+// scorer AND the relocated plugin scorer (no alias). The pure parser/classifier helpers below
+// (ParseCharlyTestOutput / Classify / FingerprintSet / Verdict) STAY in core (they have core
+// callers).
 
 // ParseCharlyTestOutput parses the byte slice emitted by `charly check box
-// <tag> --format yaml` into a *CheckRunResults. Empty input → empty result.
-func ParseCharlyTestOutput(b []byte) (*CheckRunResults, error) {
+// <tag> --format yaml` into a *spec.CheckRunResults. Empty input → empty result.
+func ParseCharlyTestOutput(b []byte) (*spec.CheckRunResults, error) {
 	if len(b) == 0 {
-		return &CheckRunResults{}, nil
+		return &spec.CheckRunResults{}, nil
 	}
-	var r CheckRunResults
+	var r spec.CheckRunResults
 	dec := yaml.NewDecoder(strings.NewReader(string(b)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&r); err != nil {
@@ -74,9 +48,9 @@ func ParseCharlyTestOutput(b []byte) (*CheckRunResults, error) {
 	return &r, nil
 }
 
-// deriveSummary computes TestRunSummary from step-level statuses.
-func deriveSummary(steps []StepScore) TestRunSummary {
-	var s TestRunSummary
+// deriveSummary computes a spec.ScoreSummary from step-level statuses.
+func deriveSummary(steps []spec.StepScore) spec.ScoreSummary {
+	var s spec.ScoreSummary
 	for _, st := range steps {
 		s.Total++
 		switch st.Status {
@@ -89,18 +63,6 @@ func deriveSummary(steps []StepScore) TestRunSummary {
 		}
 	}
 	return s
-}
-
-// StepByID builds a map from step id to its scorer result.
-func (r *CheckRunResults) StepByID() map[string]StepScore {
-	out := make(map[string]StepScore)
-	if r == nil {
-		return out
-	}
-	for _, st := range r.Step {
-		out[st.ID] = st
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------

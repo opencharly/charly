@@ -126,8 +126,7 @@ func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
 // --- live-container verb box-mode skip ---
 
 func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
-	r, _ := newFakeRunner(t, RunModeBox)
-	r.Box = "jupyter"
+	r, _ := newFakeRunner(t, RunModeBox, "jupyter")
 	// A live verb's runtime-context legality rides the AUTHORED `context:` since
 	// the live-verb externalization (the generic `plugin` verb itself is
 	// context-permissive) — a wl step authors context: [runtime], exactly as the

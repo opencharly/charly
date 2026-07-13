@@ -18,19 +18,20 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
 // scoredStep pairs a plan step with its stable declaration-order id so the ids
-// stay consistent across baseline synthesis and live scoring regardless of the
-// topo/bucket execution reorder.
+// stay consistent across live scoring regardless of the topo/bucket execution reorder.
 type scoredStep struct {
 	id   string
 	step Step
 }
 
 // scoredPlanOrigin is the fixed origin used to derive step ids so that
-// synthesizeScoreBaseline and RunCheckLive produce matching ids.
+// scoredSteps and RunCheckLive produce matching ids.
 const scoredPlanOrigin = "plan"
 
 // scoredSteps wraps a plan with stable ids by declaration order.
@@ -47,15 +48,15 @@ func scoredSteps(plan []Step) []scoredStep {
 func isScored(s Step) bool { return s.Check != "" || s.AgentCheck != "" }
 
 // RunCheckLive scores `plan` against the live containers its check:/agent-check:
-// steps target via Op.Pod. Returns a CheckRunResults shaped like
+// steps target via Op.Pod. Returns a spec.CheckRunResults shaped like
 // ParseCharlyTestOutput's so the scorer (Classify, fingerprints, summary)
 // consumes it unchanged. `deployment` is legacy/unused; `scoreName` labels the
 // run.
-func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step) (*CheckRunResults, error) {
+func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step) (*spec.CheckRunResults, error) {
 	_ = deployment
 
 	if len(plan) == 0 {
-		return &CheckRunResults{}, nil
+		return &spec.CheckRunResults{}, nil
 	}
 
 	entries := scoredSteps(plan)
@@ -70,7 +71,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step
 	// Topologically order by depends_on, then group consecutive same-pod runs.
 	sorted, cyclic := topoSortScored(entries)
 
-	out := &CheckRunResults{Box: "score:" + scoreName, Mode: "run"}
+	out := &spec.CheckRunResults{Box: "score:" + scoreName, Mode: "run"}
 	verdictByID := make(map[string]string, len(entries))
 
 	cwd, _ := os.Getwd()
@@ -88,7 +89,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step
 		if !isScored(e.step) {
 			continue
 		}
-		out.Step = append(out.Step, StepScore{
+		out.Step = append(out.Step, spec.StepScore{
 			ID:            e.id,
 			Origin:        "pod:" + e.step.Venue,
 			Text:          e.step.KeywordText(),
@@ -109,7 +110,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step
 // bucket's runner, then runs each step — appending verdicts to out and
 // recording them in verdictByID. Split out of RunCheckLive, which keeps the
 // outer pod-grouping loop.
-func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]BundleNode, out *CheckRunResults, verdictByID map[string]string) {
+func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
 	pod := bucket[0].step.Venue
 
 	var ephemeralCleanup func(bool)
@@ -149,19 +150,25 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		fmt.Fprintf(os.Stderr, "score live: pod %q unreachable: %v\n", pod, reachableErr)
 	}
 
-	var runner *Runner
+	var runner *kit.Runner
+	var hostCleanups []func()
 	if reachableErr == nil {
-		runner = NewRunner(chainExec, &CheckVarResolver{}, RunModeLive)
-		runner.Box = pod
 		roots := deployRoots
-		runner.TargetResolver = func(target string) (*CheckVarResolver, DeployExecutor, error) {
-			ex, err := resolveScoringChain(roots, target)
-			if err != nil {
-				return nil, nil, err
-			}
-			return &CheckVarResolver{}, ex, nil
-		}
-		applyHostVarsSteps(runner, bucketSteps(bucket), "")
+		hostVars, cleanups := resolveHostVarsForSteps(bucketSteps(bucket), "")
+		hostCleanups = cleanups
+		runner = newCheckRunner(kit.RunnerConfig{
+			Exec:     chainExec,
+			Mode:     RunModeLive,
+			Box:      pod,
+			HostVars: hostVars,
+			TargetResolver: kit.VenueResolver(func(venue string) (kit.Executor, map[string]string, bool, error) {
+				ex, err := resolveScoringChain(roots, venue)
+				if err != nil {
+					return nil, nil, false, err
+				}
+				return ex, map[string]string{}, false, nil
+			}),
+		})
 	}
 
 	for _, e := range bucket {
@@ -178,7 +185,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 
 		if reachableErr != nil {
 			if isScored(e.step) {
-				out.Step = append(out.Step, StepScore{
+				out.Step = append(out.Step, spec.StepScore{
 					ID:     e.id,
 					Origin: "pod:" + pod,
 					Text:   e.step.KeywordText(),
@@ -205,7 +212,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		if len(results) > 0 {
 			status = results[0].Result.Status.String()
 		}
-		score := StepScore{
+		score := spec.StepScore{
 			ID:      e.id,
 			Origin:  "pod:" + pod,
 			Text:    e.step.KeywordText(),
@@ -241,9 +248,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		}
 		ephemeralCleanup(bucketFailed)
 	}
-	if runner != nil {
-		runner.CloseHosts()
-	}
+	closeHostCleanups(hostCleanups)
 }
 
 // topoSortScored orders scored steps by depends_on (id-keyed), returning the
@@ -331,8 +336,8 @@ func bucketSteps(b []scoredStep) []Step {
 }
 
 // skippedStepScore builds a depends-on-cascade skip result for one scored step.
-func skippedStepScore(e scoredStep, pod, blockedBy string) StepScore {
-	return StepScore{
+func skippedStepScore(e scoredStep, pod, blockedBy string) spec.StepScore {
+	return spec.StepScore{
 		ID:            e.id,
 		Origin:        "pod:" + pod,
 		Text:          e.step.KeywordText(),
@@ -357,34 +362,6 @@ func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecuto
 		}
 	}
 	return ContainerChain("podman", "charly-"+pod), nil
-}
-
-// synthesizeScoreBaseline builds the pre-AI baseline from the scored steps,
-// marking each check:/agent-check: step status: fail at baseline. IDs match the
-// declaration-order ids RunCheckLive emits.
-func synthesizeScoreBaseline(scoreName string, plan []Step) ([]StepScore, map[string]string, map[string]string) {
-	_ = scoreName
-	var out []StepScore
-	fps := make(map[string]string)
-	tagFps := make(map[string]string)
-	for i := range plan {
-		s := plan[i]
-		if !isScored(s) {
-			continue
-		}
-		id := EffectiveStepID(&s, scoredPlanOrigin, i)
-		out = append(out, StepScore{
-			ID:      id,
-			Origin:  "pod:" + s.Venue,
-			Text:    s.KeywordText(),
-			Tag:     EffectiveTags(s.Tag),
-			Keyword: string(keywordOf(&s)),
-			Status:  "fail",
-		})
-		fps[id] = FingerprintStep(s)
-		tagFps[id] = FingerprintTags(s.Tag)
-	}
-	return out, fps, tagFps
 }
 
 // RenderPlanYAML returns the plan rendered as a YAML block for ${PLAN}.

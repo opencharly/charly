@@ -22,14 +22,14 @@ package main
 //                              VM/host member). The host-vantage address a
 //                              local/host driver uses to reach a pod/VM.
 //
-// Host vars are pre-resolved per run and overlaid by Runner.effectiveEnv onto
-// WHATEVER resolver is active (primary, on:-swapped, or harness bucket), so a
-// `cdp:` check with `on: chrome` and `url: http://${HOST:web}:8080` works
-// the same in `charly check live`, a kind:check bed, and an AI-iteration run (R3).
+// Host vars are pre-resolved per run and folded into RunnerConfig.HostVars, which
+// kit.Runner.EffectiveEnv overlays onto WHATEVER env is active (primary, on:-swapped,
+// or harness bucket), so a `cdp:` check with `on: chrome` and `url:
+// http://${HOST:web}:8080` works the same in `charly check live`, a kind:check bed, and
+// an AI-iteration run (R3).
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -41,32 +41,38 @@ import (
 // runtime-only (IsRuntimeOnlyVar) so a build-scope check can't reference it.
 const hostVar = "HOST"
 
-// applyHostVars scans the given checks for ${HOST:<member>} references, resolves each,
-// and stores the result on the runner (HostVars + hostCleanups). Idempotent and
-// a no-op when no host refs are present. The caller MUST `defer r.CloseHosts()`
-// so any ssh -L forwards opened for ${HOST} against a VM/host subject
-// are torn down at run end.
-func applyHostVars(r *Runner, checks []Op, instance string) {
+// resolveHostVarsForChecks scans the given checks for ${HOST:<member>} references, resolves
+// each, and returns the resolved address map (folded into RunnerConfig.HostVars) plus the
+// teardown funcs for any ssh -L forwards opened for ${HOST} against a VM/host subject. Returns
+// (nil, nil) when no host refs are present. The caller closes the returned cleanups at run end
+// (via closeHostCleanups) on the paths that tear down ${HOST} forwards (VM / group); the
+// pod / local paths, which historically leaked them, still discard them.
+func resolveHostVarsForChecks(checks []Op, instance string) (map[string]string, []func()) {
 	refs := collectHostRefs(checks)
 	if len(refs) == 0 {
-		return
+		return nil, nil
 	}
-	vars, cleanups := resolveHostVars(refs, instance)
-	if r.HostVars == nil {
-		r.HostVars = map[string]string{}
-	}
-	maps.Copy(r.HostVars, vars)
-	r.hostCleanups = append(r.hostCleanups, cleanups...)
+	return resolveHostVars(refs, instance)
 }
 
-// applyHostVarsSteps is the plan-step counterpart (harness / iterate /
-// feature-run paths), flattening every step's embedded Op.
-func applyHostVarsSteps(r *Runner, plan []Step, instance string) {
+// resolveHostVarsForSteps is the plan-step counterpart (harness / iterate / feature-run /
+// live-plan paths), flattening every step's embedded Op.
+func resolveHostVarsForSteps(plan []Step, instance string) (map[string]string, []func()) {
 	checks := make([]Op, 0, len(plan))
 	for _, st := range plan {
 		checks = append(checks, st.Op)
 	}
-	applyHostVars(r, checks, instance)
+	return resolveHostVarsForChecks(checks, instance)
+}
+
+// closeHostCleanups tears down any ssh -L forwards opened while resolving ${HOST:<member>}
+// address variables. Safe to call on a nil/empty slice.
+func closeHostCleanups(cleanups []func()) {
+	for _, c := range cleanups {
+		if c != nil {
+			c()
+		}
+	}
 }
 
 // collectHostRefs returns the distinct ${HOST:<member>} variable keys referenced
@@ -170,16 +176,16 @@ func splitHostKey(key string) (name, arg string, ok bool) {
 // filterHostVars (the ${HOST:…} unresolved-var filter) moved to sdk/kit (planspec.go) with the
 // plan walk that consumes it; charly/kit_aliases.go binds the package-main name.
 
-// liveTargetResolver builds the `on:` TargetResolver used by `charly check live`
-// (and kind:check beds, which drive `charly check live`). For a named DRIVER
-// deployment it resolves the execution venue (resolveCheckVenue — container / VM
-// / local, the same classifier the interactive verbs use) plus a best-effort
-// runtime var resolver (the driver's own ${HOST_PORT}/${CONTAINER_IP}). The
-// per-step swap in checkrun.go also sets r.Image = <driver> so the host-side
-// cdp/wl/vnc/mcp verb dispatch connects to the driver's endpoint (cdp/vnc/mcp via their
-// out-of-process plugins, wl in-core). ${HOST:<member>} addressing of the
-// SUBJECT rides in via
-// Runner.HostVars (effectiveEnv overlay), independent of which resolver is active.
+// liveTargetResolver builds the `on:` DRIVER venue resolver used by `charly check live`
+// (and kind:check beds, which drive `charly check live`); venueResolver (planrun_adapter.go)
+// adapts it to the kit.VenueResolver seam the runner's per-step SwapVenue drives. For a named
+// DRIVER deployment it resolves the execution venue (resolveCheckVenue — container / VM /
+// local, the same classifier the interactive verbs use) plus a best-effort runtime var
+// resolver (the driver's own ${HOST_PORT}/${CONTAINER_IP}). The per-step swap (kit.Runner.
+// SwapVenue) also sets the runner's box to <driver> so the host-side cdp/vnc/mcp verb dispatch
+// connects to the driver's endpoint (via their out-of-process plugins). ${HOST:<member>}
+// addressing of the SUBJECT rides in via RunnerConfig.HostVars (the kit.Runner.EffectiveEnv
+// overlay), independent of which venue is active.
 func liveTargetResolver(instance string) func(string) (*CheckVarResolver, DeployExecutor, error) {
 	return func(target string) (*CheckVarResolver, DeployExecutor, error) {
 		venue, err := resolveCheckVenue(target, instance)

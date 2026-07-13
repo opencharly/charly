@@ -61,6 +61,6 @@ import "context"
 type pluginVerb struct{ builtinVerbBase }
 
 func (pluginVerb) Reserved() string { return "plugin" }
-func (pluginVerb) RunVerb(ctx context.Context, r *Runner, op *Op) CheckResult {
-	return r.runPluginVerb(ctx, op)
+func (pluginVerb) RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult {
+	return h.runPluginVerb(ctx, op)
 }

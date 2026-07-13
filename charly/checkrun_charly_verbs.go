@@ -30,7 +30,7 @@ import (
 // file missing under the candy tree. There is NO fallback and NO silent
 // cwd-relative pass-through: a wrong CandyDirs must surface here, not be patched
 // over into a misleading downstream "no such file".
-func (r *Runner) resolveCheckApk(apk, origin string) (string, error) {
+func (h *hostVerbResolver) resolveCheckApk(apk, origin string) (string, error) {
 	if apk == "" || filepath.IsAbs(apk) {
 		return apk, nil
 	}
@@ -38,12 +38,13 @@ func (r *Runner) resolveCheckApk(apk, origin string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("committed APK %q has origin %q, not a candy origin — cannot anchor it to a candy source tree (the step's candy Origin was not propagated)", apk, origin)
 	}
-	dir := r.CandyDirs[key]
+	candyDirs := h.kr.CandyDirs()
+	dir := candyDirs[key]
 	if dir == "" {
-		if r.CandyScanErr != nil {
-			return "", fmt.Errorf("committed APK %q (candy %q): candy source-dir scan failed: %w", apk, key, r.CandyScanErr)
+		if h.kr.CandyScanErr() != nil {
+			return "", fmt.Errorf("committed APK %q (candy %q): candy source-dir scan failed: %w", apk, key, h.kr.CandyScanErr())
 		}
-		return "", fmt.Errorf("committed APK %q: candy %q is absent from the source scan (%d candies scanned) — cannot anchor the fixture", apk, key, len(r.CandyDirs))
+		return "", fmt.Errorf("committed APK %q: candy %q is absent from the source scan (%d candies scanned) — cannot anchor the fixture", apk, key, len(candyDirs))
 	}
 	return resolveApkPath(apk, dir)
 }

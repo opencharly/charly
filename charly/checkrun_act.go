@@ -67,15 +67,15 @@ func resolveProvisionScript(op *Op, distros []string) (string, bool) {
 // provision renderer (an action verb whose handler already acts, or a pure
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
-func (r *Runner) runProvisionAct(ctx context.Context, c *Op, verb string) (CheckResult, bool) {
-	script, ok := resolveProvisionScript(c, r.Distros)
+func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *Op, verb string) (CheckResult, bool) {
+	script, ok := resolveProvisionScript(c, h.kr.Distros())
 	if !ok {
 		return CheckResult{}, false
 	}
-	if r.Mode == RunModeBox {
+	if h.kr.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
 	}
-	_, stderr, exit, err := r.Exec.RunCapture(ctx, wrapContainerCommand(script))
+	_, stderr, exit, err := h.kr.Exec().RunCapture(ctx, wrapContainerCommand(script))
 	if err != nil {
 		return failf(c, "act %s: execution error: %v", verb, err), true
 	}

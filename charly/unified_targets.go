@@ -24,6 +24,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // runUnifiedTargetChecks runs a deploy-scope check list via a live-mode Runner
@@ -49,7 +51,7 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 	if exec == nil {
 		return fmt.Errorf("%s %q: no executor configured", kind, nodeName)
 	}
-	runner := NewRunner(exec, nil, RunModeLive)
+	runner := newCheckRunner(kit.RunnerConfig{Exec: exec, Mode: RunModeLive})
 	results := runner.Run(ctx, filtered)
 	failed := 0
 	for _, r := range results {

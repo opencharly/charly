@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestSplitHostKey(t *testing.T) {
@@ -45,33 +47,34 @@ func TestCollectHostRefs(t *testing.T) {
 }
 
 // TestEffectiveEnv_HostVarsOverlay: ${HOST:…} addresses overlay onto the active
-// resolver's env in effectiveEnv — the single injection point that makes
-// cross-member addressing work for the primary AND on:-swapped resolvers.
+// env in kit.Runner.EffectiveEnv — the single injection point that makes
+// cross-member addressing work for the primary AND on:-swapped venues.
 func TestEffectiveEnv_HostVarsOverlay(t *testing.T) {
-	r := &Runner{
-		Resolver: &CheckVarResolver{Env: map[string]string{"USER": "user"}},
+	base := map[string]string{"USER": "user"}
+	kr := kit.NewRunner(kit.RunnerConfig{
+		Env:      base,
 		HostVars: map[string]string{"HOST:web": "charly-web"},
-	}
-	env := r.effectiveEnv()
+	})
+	env := kr.EffectiveEnv()
 	if env["USER"] != "user" {
-		t.Errorf("base resolver var lost: %v", env)
+		t.Errorf("base var lost: %v", env)
 	}
 	if env["HOST:web"] != "charly-web" {
 		t.Errorf("host var not overlaid: %v", env)
 	}
-	// The base resolver's own map must stay clean (copy-on-overlay).
-	if _, leaked := r.Resolver.Env["HOST:web"]; leaked {
-		t.Errorf("effectiveEnv mutated the shared resolver Env")
+	// The base env map must stay clean (copy-on-overlay).
+	if _, leaked := base["HOST:web"]; leaked {
+		t.Errorf("EffectiveEnv mutated the shared base Env")
 	}
 }
 
 // TestEffectiveEnv_NoHostVarsReturnsBase: with no HostVars and no Scenario,
-// effectiveEnv returns the resolver's map directly (behaviour unchanged).
+// EffectiveEnv returns the base map directly (behaviour unchanged).
 func TestEffectiveEnv_NoHostVarsReturnsBase(t *testing.T) {
 	base := map[string]string{"USER": "user"}
-	r := &Runner{Resolver: &CheckVarResolver{Env: base}}
-	if got := r.effectiveEnv(); !reflect.DeepEqual(got, base) {
-		t.Errorf("effectiveEnv = %v, want the base map %v", got, base)
+	kr := kit.NewRunner(kit.RunnerConfig{Env: base})
+	if got := kr.EffectiveEnv(); !reflect.DeepEqual(got, base) {
+		t.Errorf("EffectiveEnv = %v, want the base map %v", got, base)
 	}
 }
 
@@ -102,11 +105,12 @@ func TestFilterHostVars(t *testing.T) {
 // unreachable) FAILS the check — a SKIP there would be a fake pass on an
 // unreachable dependency. A non-host unresolved var stays a legitimate SKIP.
 func TestRunOne_UnresolvedHostVarFails(t *testing.T) {
-	r := &Runner{Resolver: &CheckVarResolver{Env: map[string]string{}}}
+	r := newCheckRunner(kit.RunnerConfig{Env: map[string]string{}})
 	// ${HOST:absent:80} can't be resolved → the cross-member probe's premise
 	// failed → FAIL (never reaches the curl; returns at the var-resolution gate).
-	// The per-check walk is kit.RunOne now (planrun.go); r.Run drives it through the
-	// runnerPlanContext adapter, so a one-op Run exercises the same var-resolution gate.
+	// The per-check walk is kit.RunOne now (planrun.go); kit.Runner drives it
+	// directly (it implements kit.PlanContext), so a one-op Run exercises the same
+	// var-resolution gate.
 	hostCheck := cmdOpP("curl -fsS http://${HOST:absent:80}/")
 	if res := r.Run(context.Background(), []Op{*hostCheck})[0]; res.Status != TestFail {
 		t.Errorf("unresolved ${HOST:…} → status %v (%q), want TestFail", res.Status, res.Message)

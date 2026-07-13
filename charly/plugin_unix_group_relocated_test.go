@@ -22,7 +22,7 @@ func TestRelocatedUnixGroupVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("unix_group provider is not a CheckVerbProvider: %T", prov)
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "getent group", stdout: "root:x:0:\n", exit: 0}}}
-	res := cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive},
+	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&Op{PluginInput: map[string]any{"unix_group": "root", "gid": 0}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)

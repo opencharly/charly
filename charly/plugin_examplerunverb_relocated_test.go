@@ -20,7 +20,7 @@ func TestRelocatedExamplerunverbVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("examplerunverb provider is not a CheckVerbProvider: %T", prov)
 	}
-	res := cv.RunVerb(context.Background(), &Runner{Mode: RunModeLive},
+	res := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
 		&Op{PluginInput: map[string]any{"marker": "runverb-xyz"}})
 	if res.Status != TestPass {
 		t.Fatalf("want pass, got %v: %s", res.Status, res.Message)

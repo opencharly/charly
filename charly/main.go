@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk"
 )
 
 // CLI defines the command-line interface structure
@@ -95,9 +96,8 @@ type CLI struct {
 	// resolves at init() independent of any config — migrate must run when the config is exactly what cannot load.)
 	// KongCommand() returns the existing <Name>Cmd struct verbatim, so the Run handler (and
 	// the core machinery it calls) is unchanged: only the CLI registration LOCATION moved.
-	// check is special-cased: its nested out-of-process command plugins (charly check
-	// kube/adb/appium) are injected into the holder's CheckCmd.Plugins by
-	// attachNestedCheckPlugins below. Only the machinery commands box / __plugin / migrate / version
+	// The whole `charly check` family is the compiled-in command:check plugin (candy/plugin-check),
+	// dispatched as a top-level dynamic command. Only the machinery commands box / __plugin / migrate / version
 	// (plus the hidden __* internals above) stay hardcoded on the CLI struct. (version stays core as a
 	// deliberate value/risk EXCEPTION — NOT unfixable: RDD 2026-07-01 proved externalizing is feasible
 	// but zero-value + highest-blast-radius, weakening R9's canonical identity command; operator-decided
@@ -656,10 +656,9 @@ func main() {
 	// ones embed on the CLI root; nested ones (e.g. `check kube`) embed under their parent.
 	topCmds, nestedCmds, extCmdTable := collectExternalCommandPlugins()
 	cmdPlugins := collectCommandPlugins()
-	// `charly check` is now itself a builtin command provider; inject its nested
-	// out-of-process subcommands (charly check kube/adb/appium) into the holder's
-	// CheckCmd.Plugins — the wiring that previously read cli.Check.Plugins directly.
-	attachNestedCheckPlugins(cmdPlugins, nestedCmds["check"])
+	// `charly check` is the compiled-in command:check plugin (candy/plugin-check), dispatched as a
+	// top-level dynamic command (topCmds → dispatchInProcCommand), so it needs no per-parent nested
+	// wiring here — the check command family is fully plugin-owned.
 	// `charly box` is a hardcoded CLI field (the core grammar spine), so — unlike check — its
 	// nested command providers (the COMPILED-IN candy/plugin-box generate/validate/new/pkg words,
 	// CommandParent()=="box") attach directly onto its embedded kong.Plugins here.
@@ -751,16 +750,14 @@ func main() {
 	// `charly check` distinguishes "the thing under test is broken" from "the
 	// command/usage/infra errored" via a distinct exit code: 0 = pass,
 	// 1 = command error (Kong's FatalIfErrorf default), 2 = check checks
-	// failed, 3 = skipped for an absent host prereq. See CheckFailedError /
-	// CheckSkippedError in check_cmd.go.
+	// failed, 3 = skipped for an absent host prereq. The check command family is the
+	// candy/plugin-check command plugin, which signals its exit code across the module
+	// boundary via *sdk.ExitCodeError (the host cannot classify the plugin's own error
+	// TYPES). `charly box feature run` (core) uses the SAME sdk.ExitCodeError contract.
 	if err != nil {
-		if _, ok := errors.AsType[*CheckFailedError](err); ok {
+		if ece, ok := errors.AsType[*sdk.ExitCodeError](err); ok && ece.Code != 0 {
 			fmt.Fprintln(os.Stderr, FormatCLIError(err))
-			os.Exit(CheckFailExitCode) //nolint:gocritic // reapPlugins() called explicitly at :953 before this os.Exit; the deferred reap is a redundant safety net
-		}
-		if _, ok := errors.AsType[*CheckSkippedError](err); ok {
-			fmt.Fprintln(os.Stderr, FormatCLIError(err))
-			os.Exit(CheckSkippedExitCode) //nolint:gocritic // same reap safety-net note as CheckFailExitCode above
+			os.Exit(ece.Code) //nolint:gocritic // reapPlugins() called explicitly above before this os.Exit; the deferred reap is a redundant safety net
 		}
 	}
 	ctx.FatalIfErrorf(FormatCLIError(err))

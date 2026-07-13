@@ -23,7 +23,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("package provider is not a CheckVerbProvider: %T", prov)
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "rpm -q", stdout: "INSTALLED", exit: 0}}}
-	res := cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive, Distros: []string{"fedora"}},
+	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "fedora"),
 		&Op{PluginInput: map[string]any{"package": "bash", "installed": true}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
@@ -71,7 +71,7 @@ func TestPackageVerb_InfraFailureNotContentFalse(t *testing.T) {
 	}
 	cv := prov.(CheckVerbProvider)
 	run := func(fe *fakeExecutor, wantInstalled bool) CheckResult {
-		return cv.RunVerb(context.Background(), &Runner{Exec: fe, Mode: RunModeLive, Distros: []string{"arch"}},
+		return cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "arch"),
 			&Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
 	}
 
