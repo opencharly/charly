@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // Validation for the resource-arbitration ("preemptible") classification axis
@@ -29,11 +31,11 @@ func ValidatePreemptibleOnNode(name string, node *BundleNode, errs *ValidationEr
 		if len(dedupeNonEmpty(p.Holds)) == 0 {
 			errs.Add("deploy %q: `preemptible.holds` must list at least one exclusive-resource token — a preemptible holder that holds nothing is meaningless", name)
 		}
-		if p.Stop != "" && p.Stop != PreemptStopShutdown {
-			errs.Add("deploy %q: `preemptible.stop: %s` is not supported — only %q (graceful shutdown, disk preserved) frees a passthrough device; pause/managedsave keep the device assigned to the holder", name, p.Stop, PreemptStopShutdown)
+		if p.Stop != "" && p.Stop != spec.PreemptStopShutdown {
+			errs.Add("deploy %q: `preemptible.stop: %s` is not supported — only %q (graceful shutdown, disk preserved) frees a passthrough device; pause/managedsave keep the device assigned to the holder", name, p.Stop, spec.PreemptStopShutdown)
 		}
-		if p.Restore != "" && p.Restore != PreemptRestoreAlways && p.Restore != PreemptRestoreSuccess {
-			errs.Add("deploy %q: `preemptible.restore: %s` is invalid — must be %q or %q", name, p.Restore, PreemptRestoreAlways, PreemptRestoreSuccess)
+		if p.Restore != "" && p.Restore != spec.PreemptRestoreAlways && p.Restore != spec.PreemptRestoreSuccess {
+			errs.Add("deploy %q: `preemptible.restore: %s` is invalid — must be %q or %q", name, p.Restore, spec.PreemptRestoreAlways, spec.PreemptRestoreSuccess)
 		}
 	}
 	for _, tok := range node.RequiresExclusive {

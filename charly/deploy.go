@@ -14,14 +14,6 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// Canonical preemption policy values. Stop is the freeing mechanism;
-// Restore is when the holder is brought back.
-const (
-	PreemptStopShutdown   = "shutdown"   // graceful ACPI shutdown / podman stop; disk preserved (only supported value)
-	PreemptRestoreAlways  = "always"     // restart the holder regardless of the claim's outcome (default)
-	PreemptRestoreSuccess = "on-success" // restart only if the claim released cleanly; leave stopped on failure
-)
-
 // resolveDeployKeyToBox maps a deploy-key name to the `box:` field of
 // its deploy entry. User (~/.config/charly/charly.yml) wins over project
 // (charly.yml/check.yml) — the same precedence the check runner and
@@ -940,7 +932,3 @@ func shellOverlayToEntry(o *DeployShellOverlay) ShellEntry {
 	// signal.
 	return entry
 }
-
-// occupiedHostPorts returns the host ports already claimed by other deploys in dc
-// (excluding excludeKey). A charly free function (not a BundleConfig method) because
-// it reaches charly's ports.go parsers (IsAutoPort/ParseHostPort).

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // deploy_node_test.go — tests for BundleNode tree walking and
@@ -51,7 +53,7 @@ func TestWalkPostOrder_ChildrenThenRoot(t *testing.T) {
 	tree := makeTree()
 	root := tree["stack"]
 	var paths []string
-	err := bundleWalkPostOrder(&root, "stack", func(path string, node *BundleNode) error {
+	err := deploykit.BundleWalkPostOrder(&root, "stack", func(path string, node *BundleNode) error {
 		paths = append(paths, path)
 		return nil
 	})

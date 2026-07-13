@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // resolveBindMounts tests moved to deploy_test.go (TestResolveVolumeBacking*)
@@ -326,7 +328,7 @@ func TestCryptoPasswdRequiresUnmount(t *testing.T) {
 	storagePath := "/data/enc"
 
 	for _, m := range mounts {
-		plainDir := encryptedPlainDir(storagePath, boxName, m.Name)
+		plainDir := deploykit.EncryptedPlainDir(storagePath, boxName, m.Name)
 		if isEncryptedMounted(plainDir) {
 			err := fmt.Errorf("encrypted volume %q is still mounted; run 'charly config unmount %s' first", m.Name, boxName)
 			if !strings.Contains(err.Error(), "still mounted") {
