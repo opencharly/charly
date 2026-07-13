@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // IsPreemptible is independent of disposable/ephemeral: a node may be both, and
@@ -53,10 +56,10 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if got := listForm.PreemptionHolds(); len(got) != 2 || got[0] != "gpu" || got[1] != "tpu" {
 		t.Fatalf("list shorthand holds = %v, want [gpu tpu]", got)
 	}
-	if preemptEffectiveStop(listForm.Preemptible) != PreemptStopShutdown {
-		t.Errorf("default stop = %q, want shutdown", preemptEffectiveStop(listForm.Preemptible))
+	if deploykit.PreemptEffectiveStop(listForm.Preemptible) != spec.PreemptStopShutdown {
+		t.Errorf("default stop = %q, want shutdown", deploykit.PreemptEffectiveStop(listForm.Preemptible))
 	}
-	if preemptEffectiveRestore(listForm.Preemptible) != PreemptRestoreAlways {
+	if preemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
 		t.Errorf("default restore = %q, want always", preemptEffectiveRestore(listForm.Preemptible))
 	}
 
@@ -66,7 +69,7 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if err := decodeViaCUEForTest(t, blockYAML, &blockForm); err != nil {
 		t.Fatalf("block unmarshal: %v", err)
 	}
-	if preemptEffectiveRestore(blockForm.Preemptible) != PreemptRestoreSuccess {
+	if preemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
 		t.Errorf("block restore = %q, want on-success", preemptEffectiveRestore(blockForm.Preemptible))
 	}
 
