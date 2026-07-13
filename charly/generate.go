@@ -932,7 +932,7 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *ResolvedB
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }
 
-// buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via builderResolveInputFrom).
+// buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
 // buildStageContext → deploykit.Generator.BuildStageContext (P8 shim).
 func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *BuildStageContext {
 	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)

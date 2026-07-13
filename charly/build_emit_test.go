@@ -65,8 +65,8 @@ func (stubResolveBuilder) Invoke(_ context.Context, op *Operation) (*Result, err
 
 // TestResolveExternalBuilder_BuildTimeOpResolve is the build-time-plugin-execution
 // BUILDER-leg gate: an external builder provider renders its build-context multi-stage
-// block via Invoke(OpResolve), which emitExternalBuilderStages splices pre-main-FROM
-// (the Stage) and emitExternalBuilderArtifacts splices post-main-FROM (the
+// block via Invoke(OpResolve), which deploykit.EmitExternalBuilderStages splices pre-main-FROM
+// (the Stage) and deploykit.EmitExternalBuilderArtifacts splices post-main-FROM (the
 // CopyArtifacts). This proves the resolve helper extracts both — placement-agnostic,
 // since the stub is reached through the SAME Provider.Invoke an external grpcProvider
 // implements.

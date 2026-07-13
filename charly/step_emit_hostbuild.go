@@ -136,7 +136,7 @@ var _ = func() bool { registerStepEmitter("system-packages", stepEmitSystemPacka
 // calls back HostBuild("step-emit", …) during OpEmit and this renders the fragment host-side. For an
 // EXTERNALIZED detection builder (pixi/npm/aur/cargo) the STAGE render itself is kit.BuilderResolve
 // (C10 — the SAME render the box-build path + the plugin's OpResolve use, R3, driven off the
-// host-computed buildStageContext via builderResolveInputFrom); a non-externalized builder has no
+// host-computed buildStageContext via deploykit.BuilderResolveInputFrom); a non-externalized builder has no
 // build-time multi-stage (a custom builder must be an external_builder plugin). The build engine
 // (Generator/BuilderConfig/Box) is threaded on the reverse channel via buildEngineContext (populated
 // by OCITarget.stepEmitBuildContext); a nil BuilderConfig / Box / layer yields the SAME informative
