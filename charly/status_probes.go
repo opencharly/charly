@@ -9,16 +9,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
-)
 
-// ToolStatus is one row of the live tool-probe result. Status="-" means the
-// tool isn't configured in this container; it gets filtered before render.
-type ToolStatus struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-	Port   int    `json:"port,omitempty"`
-	Detail string `json:"detail,omitempty"`
-}
+	"github.com/opencharly/sdk/enginekit"
+	"github.com/opencharly/sdk/spec"
+)
 
 // Probe is the union root. Implementations are either HostProbe (network
 // probe from the operator host) or GuestProbe (runs inside the container).
@@ -31,7 +25,7 @@ type Probe interface {
 // shell-out. ctx allows the collector to bound probe duration.
 type HostProbe interface {
 	Probe
-	ProbeHost(ctx context.Context, snap *ContainerSnapshot) ToolStatus
+	ProbeHost(ctx context.Context, snap *enginekit.ContainerSnapshot) spec.ToolStatus
 }
 
 // GuestProbe runs INSIDE a container. The collector batches every applicable
@@ -43,7 +37,7 @@ type HostProbe interface {
 type GuestProbe interface {
 	Probe
 	Snippet() string
-	Parse(stdout string) ToolStatus
+	Parse(stdout string) spec.ToolStatus
 }
 
 // hostProbes / guestProbes are the registered probe sets. Stateless singletons.
@@ -73,8 +67,8 @@ func (supervisordProbe) Snippet() string {
 echo PRESENT=1
 supervisorctl status 2>&1 || true`
 }
-func (supervisordProbe) Parse(stdout string) ToolStatus {
-	ts := ToolStatus{Name: "supervisord", Status: "-"}
+func (supervisordProbe) Parse(stdout string) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "supervisord", Status: "-"}
 	stdout = strings.TrimSpace(stdout)
 	if stdout == "" || !strings.HasPrefix(stdout, "PRESENT=1") {
 		return ts
@@ -120,8 +114,8 @@ for d in swaync mako dunst; do
 done
 true`
 }
-func (dbusProbe) Parse(stdout string) ToolStatus {
-	ts := ToolStatus{Name: "dbus", Status: "-"}
+func (dbusProbe) Parse(stdout string) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "dbus", Status: "-"}
 	if !strings.Contains(stdout, "DBUS=1") {
 		return ts
 	}
@@ -147,8 +141,8 @@ func (charlyProbe) Snippet() string {
 echo CHARLY=1
 charly version 2>/dev/null || true`
 }
-func (charlyProbe) Parse(stdout string) ToolStatus {
-	ts := ToolStatus{Name: "charly", Status: "-"}
+func (charlyProbe) Parse(stdout string) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "charly", Status: "-"}
 	if !strings.Contains(stdout, "CHARLY=1") {
 		return ts
 	}
@@ -171,8 +165,8 @@ func (wlProbe) Snippet() string {
 done
 true`
 }
-func (wlProbe) Parse(stdout string) ToolStatus {
-	ts := ToolStatus{Name: "wl", Status: "-"}
+func (wlProbe) Parse(stdout string) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "wl", Status: "-"}
 	var tools []string
 	seenScreenshot := false
 	for line := range strings.SplitSeq(stdout, "\n") {
@@ -211,8 +205,8 @@ export SWAYSOCK
 echo SWAY=1
 swaymsg -t get_outputs 2>/dev/null || true`
 }
-func (swayProbe) Parse(stdout string) ToolStatus {
-	ts := ToolStatus{Name: "sway", Status: "-"}
+func (swayProbe) Parse(stdout string) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "sway", Status: "-"}
 	stdout = strings.TrimSpace(stdout)
 	if !strings.HasPrefix(stdout, "SWAY=1") {
 		return ts
@@ -243,8 +237,8 @@ func (swayProbe) Parse(stdout string) ToolStatus {
 type cdpProbe struct{}
 
 func (cdpProbe) Name() string { return "cdp" }
-func (cdpProbe) ProbeHost(ctx context.Context, snap *ContainerSnapshot) ToolStatus {
-	ts := ToolStatus{Name: "cdp", Status: "-"}
+func (cdpProbe) ProbeHost(ctx context.Context, snap *enginekit.ContainerSnapshot) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "cdp", Status: "-"}
 	ip, port, ok := snap.HostPortFor(9222, "tcp")
 	if !ok {
 		return ts
@@ -274,8 +268,8 @@ func (cdpProbe) ProbeHost(ctx context.Context, snap *ContainerSnapshot) ToolStat
 type vncProbe struct{}
 
 func (vncProbe) Name() string { return "vnc" }
-func (vncProbe) ProbeHost(ctx context.Context, snap *ContainerSnapshot) ToolStatus {
-	ts := ToolStatus{Name: "vnc", Status: "-"}
+func (vncProbe) ProbeHost(ctx context.Context, snap *enginekit.ContainerSnapshot) spec.ToolStatus {
+	ts := spec.ToolStatus{Name: "vnc", Status: "-"}
 	ip, port, ok := snap.HostPortFor(5900, "tcp")
 	if !ok {
 		return ts
@@ -311,7 +305,7 @@ const probeEndMarker = "===PROBE_END:"
 // runs it via a single ExecBatched, splits the stdout by per-probe markers,
 // and dispatches each section to its probe's Parse. One subprocess per
 // container (was 7+).
-func runGuestProbes(ctx context.Context, e *EngineClient, container string, probes []GuestProbe) []ToolStatus {
+func runGuestProbes(ctx context.Context, e *enginekit.EngineClient, container string, probes []GuestProbe) []spec.ToolStatus {
 	if len(probes) == 0 {
 		return nil
 	}
@@ -325,7 +319,7 @@ func runGuestProbes(ctx context.Context, e *EngineClient, container string, prob
 	}
 	out, _ := e.ExecBatched(ctx, container, b.String())
 	sections := splitProbeSections(out)
-	results := make([]ToolStatus, len(probes))
+	results := make([]spec.ToolStatus, len(probes))
 	for i, p := range probes {
 		results[i] = p.Parse(sections[p.Name()])
 	}

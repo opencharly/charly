@@ -10,8 +10,8 @@ import (
 // ReapOrphansCmd finds and cleans up orphaned ephemeral deployments —
 // entries whose charly.yml ledger says "active" but whose underlying engine
 // resource (libvirt domain, podman container, k8s namespace) is gone. Lifted
-// out of the old `charly status --reap-orphans` flag so StatusCmd stays single-
-// purpose.
+// out of the old `charly status --reap-orphans` flag so `charly status` stays
+// single-purpose.
 //
 // Pure orphan detection — no race resolution. If a teardown is concurrently
 // in progress, the second `charly bundle del --assume-yes` no-ops on the already-

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // VMCollector is the libvirt SubstrateCollector. It lists charly-* libvirt
@@ -47,7 +49,7 @@ func init() {
 }
 
 // Kind reports the vm substrate.
-func (v *VMCollector) Kind() SubstrateKind { return SubstrateVM }
+func (v *VMCollector) Kind() spec.SubstrateKind { return spec.SubstrateVM }
 
 // Available reports whether a libvirt session daemon is reachable on this host
 // WITHOUT spinning one up. It stat()s the modular/legacy session socket via
@@ -67,12 +69,12 @@ func (v *VMCollector) Available(opts CollectOpts) bool {
 // Collect lists charly-* libvirt domains and maps each to a DeploymentStatus.
 // Rows are NOT pre-sorted here — Collector.All sorts the merged set across all
 // substrates.
-func (v *VMCollector) Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error) {
+func (v *VMCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error) {
 	domains, err := listLibvirtCharlyDomains()
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]DeploymentStatus, 0, len(domains))
+	rows := make([]spec.DeploymentStatus, 0, len(domains))
 	for _, d := range domains {
 		rows = append(rows, v.rowForDomain(d, opts))
 	}
@@ -84,10 +86,10 @@ func (v *VMCollector) Collect(ctx context.Context, opts CollectOpts) ([]Deployme
 // or the entity for a direct `charly vm create`); the charly- prefix is stripped to yield both the
 // Image cell and the deploy-first lookup key (findVmDeployNode matches by deploy NAME first, then by
 // vm: cross-ref) for vm_state enrichment.
-func (v *VMCollector) rowForDomain(d domainInfo, opts CollectOpts) DeploymentStatus {
+func (v *VMCollector) rowForDomain(d domainInfo, opts CollectOpts) spec.DeploymentStatus {
 	entity := strings.TrimPrefix(d.Name, "charly-")
-	cs := DeploymentStatus{
-		Kind:      SubstrateVM,
+	cs := spec.DeploymentStatus{
+		Kind:      spec.SubstrateVM,
 		Source:    "libvirt",
 		Image:     entity,
 		Status:    vmStatusFromDomainState(d.State),
@@ -104,7 +106,7 @@ func (v *VMCollector) rowForDomain(d domainInfo, opts CollectOpts) DeploymentSta
 // entity) so a bed whose key differs from its vm entity is still matched.
 // Absence of a deploy entry is normal: the libvirt domain still shows with
 // Source:libvirt and no enrichment.
-func (v *VMCollector) enrichFromDeploy(cs *DeploymentStatus, entity string, opts CollectOpts) {
+func (v *VMCollector) enrichFromDeploy(cs *spec.DeploymentStatus, entity string, opts CollectOpts) {
 	if opts.Deploy == nil || opts.Deploy.Bundle == nil {
 		return
 	}
@@ -123,7 +125,7 @@ func (v *VMCollector) enrichFromDeploy(cs *DeploymentStatus, entity string, opts
 	// PORTS column reflects how an operator reaches the VM. This is the live
 	// truth recorded by the vm lifecycle hook's PrepareVenue on first apply.
 	if state.SshPort > 0 {
-		cs.Ports = append(cs.Ports, PortMapping{
+		cs.Ports = append(cs.Ports, spec.PortMapping{
 			HostPort: state.SshPort,
 			CtrPort:  22,
 			Proto:    "tcp",

@@ -1,0 +1,49 @@
+plugin-oci:
+    candy:
+        version: 2026.194.1200
+        description: |-
+            OUT-OF-TREE charly plugin serving the `oci` VERB (verb:oci) — the OCI IMAGE
+            ENGINE externalized from charly core (the P14a cutover). It OWNS the
+            go-containerregistry stack: the layer-MERGE engine (merge.go: planMerge →
+            executeMerge → mergeLayers with full whiteout handling, plus the podman/skopeo
+            daemon save/load) and the remote-image adopt-user PROBE (inspect_user.go:
+            /etc/passwd lookup at a configured uid). Both run HOST-SIDE and exec
+            podman/skopeo themselves — the verb:libvirt precedent — so go-containerregistry
+            lives HERE, and charly/go.mod links it NOWHERE.
+
+            It is DUAL-PLACEMENT: its importable provider package (NewProvider/NewMeta,
+            serving verb:oci) is COMPILED INTO charly when listed in charly.yml
+            `compiled_plugins:` (the DEFAULT — the merge + adopt-user probes sit on the
+            core BUILD PATH and must resolve project-lessly and reliably, mirroring the
+            compiled-in verb:libvirt / verb:tunnel / verb:enc profile; registered in-process
+            via registerCompiledPlugin), and the SAME provider is served OUT-OF-PROCESS over
+            go-plugin gRPC by the cmd/serve shim (host-built + connected via LocalTransport)
+            when it is not. Placement is invisible above the provider registry.
+
+            verb:oci is a pure INTERNAL RPC verb — NEVER authored as an `oci:` check step
+            (it declares NO InputDef and ships NO schema; the load gate waives an input-less
+            plugin). It is keyed by an OciOp env discriminator (mirroring the vm plugin's
+            VmOp): oci_op=merge decodes a spec.MergeRequest and returns a spec.MergeReply
+            (layer counts + progress Notes the host prints; a per-merge failure rides
+            Reply.Error), oci_op=inspect-user decodes a spec.ImageUserInput and returns a
+            spec.UserInfo. The core consumers reach it via the oci_plugin.go shim
+            (`charly box merge` MergeCmd.runOne + generate.go's adopt-user resolution) and,
+            from the build drive, via Executor.InvokeProvider(verb:oci). The MERGE engine's
+            byte-identical relocation is locked by the candy's TestMergeEngineGoldenParity
+            (the merged-layer DiffID golden).
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-oci
+            providers:
+                - verb:oci
+        plan:
+            - # ADE build-context check — the deterministic module-present check: a `plugin: command`
+              # running `true`, mirror plugin-tunnel's tunnel-plugin-builds. It proves the candy ships
+              # a buildable Go module (go.mod + the provider) the host can build, compile in, and serve
+              # verb:oci; the byte-identical MERGE relocation is exercised by the candy's Go golden
+              # TestMergeEngineGoldenParity, and the live merge/inspect-user round-trips by the
+              # OCI-consuming box builds. Deterministic, credential-free.
+              check: the out-of-tree plugin ships a buildable Go module providing verb:oci (the externalized OCI merge + adopt-user engine, carrying the go-containerregistry stack) the host can build, compile in, and serve; the merge engine's byte-identical relocation is locked by TestMergeEngineGoldenParity
+              id: oci-plugin-builds
+              context:
+                - build
+              command: "true"

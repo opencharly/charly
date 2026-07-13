@@ -1,151 +1,21 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/enginekit"
+	"github.com/opencharly/sdk/spec"
 )
 
-// --- Cell formatters ---
+// status_test.go — HOST-side `charly status` collection + probe tests. The
+// render-side tests (cell formatters, table/JSON rendering) moved to
+// candy/plugin-status/render_test.go alongside the code they exercise
+// (status_render.go relocated wholesale, minus formatTunnelSummary which
+// stayed here — a COLLECTION helper, not a render one).
 
-func TestCellPorts(t *testing.T) {
-	tests := []struct {
-		name string
-		in   []PortMapping
-		want string
-	}{
-		{"empty", nil, "-"},
-		{"single", []PortMapping{{HostPort: 5900, CtrPort: 5900, Proto: "tcp"}}, "5900"},
-		{
-			"multiple sorted",
-			[]PortMapping{
-				{HostPort: 8080, CtrPort: 8080, Proto: "tcp"},
-				{HostPort: 5900, CtrPort: 5900, Proto: "tcp"},
-				{HostPort: 18789, CtrPort: 18789, Proto: "tcp"},
-			},
-			"5900,8080,18789",
-		},
-		{
-			"dedup duplicate host ports",
-			[]PortMapping{
-				{HostPort: 9222, CtrPort: 9222, Proto: "tcp"},
-				{HostPort: 9222, CtrPort: 9222, Proto: "udp"},
-			},
-			"9222",
-		},
-		{"udp counts", []PortMapping{{HostPort: 47998, CtrPort: 47998, Proto: "udp"}}, "47998"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cellPorts(tt.in); got != tt.want {
-				t.Errorf("cellPorts() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCellDevices(t *testing.T) {
-	tests := []struct {
-		name string
-		in   []string
-		want string
-	}{
-		{"empty", nil, "-"},
-		{"gpu only", []string{"nvidia.com/gpu=all"}, "gpu"},
-		{"dri only", []string{"/dev/dri/renderD128"}, "dri"},
-		{"gpu+dri", []string{"nvidia.com/gpu=all", "/dev/dri/renderD128"}, "dri,gpu"},
-		{"gpu+dri+kvm", []string{"nvidia.com/gpu=all", "/dev/dri/renderD128", "/dev/kvm"}, "dri,gpu,kvm"},
-		{"dedup dri", []string{"/dev/dri/renderD128", "/dev/dri/card0"}, "dri"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cellDevices(tt.in); got != tt.want {
-				t.Errorf("cellDevices() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCellTools(t *testing.T) {
-	tests := []struct {
-		name string
-		in   []ToolStatus
-		want string
-	}{
-		{"empty", nil, "-"},
-		{"all unconfigured", []ToolStatus{{Name: "cdp", Status: "-"}}, "-"},
-		{"one ok with port", []ToolStatus{{Name: "cdp", Status: "ok", Port: 9222}}, "cdp:9222"},
-		{"socket tool", []ToolStatus{{Name: "sway", Status: "ok"}}, "sway"},
-		{
-			"mixed sorted",
-			[]ToolStatus{
-				{Name: "cdp", Status: "ok", Port: 9222},
-				{Name: "vnc", Status: "ok", Port: 5900},
-				{Name: "sway", Status: "ok"},
-				{Name: "wl", Status: "ok"},
-			},
-			"cdp:9222,sway,vnc:5900,wl",
-		},
-		{
-			"remapped port + unreachable",
-			[]ToolStatus{
-				{Name: "cdp", Status: "ok", Port: 9223},
-				{Name: "vnc", Status: "unreachable", Port: 5901},
-			},
-			"cdp:9223,vnc:5901",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cellTools(tt.in); got != tt.want {
-				t.Errorf("cellTools() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCellToolsDetail(t *testing.T) {
-	tools := []ToolStatus{
-		{Name: "cdp", Status: "ok", Port: 9222},
-		{Name: "vnc", Status: "ok", Port: 5900},
-		{Name: "sway", Status: "ok"},
-		{Name: "wl", Status: "ok"},
-	}
-	got := cellToolsDetail(tools)
-	want := "cdp:9222 (ok), sway (ok), vnc:5900 (ok), wl (ok)"
-	if got != want {
-		t.Errorf("cellToolsDetail() = %q, want %q", got, want)
-	}
-}
-
-func TestCellImage(t *testing.T) {
-	tests := []struct {
-		name string
-		in   DeploymentStatus
-		want string
-	}{
-		{"image only", DeploymentStatus{Image: "redis"}, "redis"},
-		{"image+instance", DeploymentStatus{Image: "selkies-desktop", Instance: "work"}, "selkies-desktop/work"},
-		{"hyphen in image", DeploymentStatus{Image: "check-sway-browser-vnc-pod"}, "check-sway-browser-vnc-pod"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cellBox(tt.in); got != tt.want {
-				t.Errorf("cellBox() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCellTunnel(t *testing.T) {
-	if got := cellTunnel(""); got != "-" {
-		t.Errorf("empty tunnel = %q, want %q", got, "-")
-	}
-	if got := cellTunnel("tailscale (all ports)"); got != "tailscale (all ports)" {
-		t.Errorf("non-empty tunnel passthrough = %q", got)
-	}
-}
+// --- formatTunnelSummary (a collection helper — stays host) ---
 
 func TestFormatTunnelSummary(t *testing.T) {
 	tests := []struct {
@@ -168,80 +38,16 @@ func TestFormatTunnelSummary(t *testing.T) {
 	}
 }
 
-// --- Engine ps parsing ---
-
-func TestParsePS_Podman(t *testing.T) {
-	in := `[{"Names":["charly-ollama"],"State":"running","Status":"Up 3 hours","Ports":[{"host_ip":"127.0.0.1","container_port":11434,"host_port":11434,"range":1,"protocol":"tcp"}]}]`
-	rows, err := parsePS(in)
-	if err != nil {
-		t.Fatalf("parsePS: %v", err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("got %d rows, want 1", len(rows))
-	}
-	if rows[0].Name != "charly-ollama" || rows[0].State != "running" {
-		t.Errorf("name/state = %q/%q", rows[0].Name, rows[0].State)
-	}
-	if len(rows[0].Ports) != 1 || rows[0].Ports[0].HostPort != 11434 || rows[0].Ports[0].CtrPort != 11434 {
-		t.Errorf("ports = %+v", rows[0].Ports)
-	}
-}
-
-func TestParsePS_Podman_PortRange(t *testing.T) {
-	in := `[{"Names":["charly-x"],"State":"running","Status":"Up","Ports":[{"host_ip":"127.0.0.1","container_port":8000,"host_port":8000,"range":3,"protocol":"tcp"}]}]`
-	rows, err := parsePS(in)
-	if err != nil {
-		t.Fatalf("parsePS: %v", err)
-	}
-	if len(rows[0].Ports) != 3 {
-		t.Fatalf("expected range expansion to 3 mappings, got %d", len(rows[0].Ports))
-	}
-	if rows[0].Ports[2].HostPort != 8002 || rows[0].Ports[2].CtrPort != 8002 {
-		t.Errorf("range mapping[2] = %+v, want host=8002 ctr=8002", rows[0].Ports[2])
-	}
-}
-
-func TestParsePS_DockerNDJSON(t *testing.T) {
-	in := `{"Names":"charly-ollama","State":"running","Status":"Up 3 hours","Ports":"127.0.0.1:11434->11434/tcp"}` + "\n" +
-		`{"Names":"charly-jupyter","State":"running","Status":"Up 1 hour","Ports":"127.0.0.1:8888->8888/tcp, 0.0.0.0:5900->5900/tcp"}`
-	rows, err := parsePS(in)
-	if err != nil {
-		t.Fatalf("parsePS: %v", err)
-	}
-	if len(rows) != 2 {
-		t.Fatalf("rows=%d, want 2", len(rows))
-	}
-	if rows[0].Ports[0].HostPort != 11434 || rows[0].Ports[0].HostIP != "127.0.0.1" {
-		t.Errorf("row0 port[0] = %+v", rows[0].Ports[0])
-	}
-	if len(rows[1].Ports) != 2 || rows[1].Ports[1].HostPort != 5900 {
-		t.Errorf("row1 ports = %+v", rows[1].Ports)
-	}
-}
-
-func TestParseDockerPortString_IPv6(t *testing.T) {
-	out := parseDockerPortString("[::]:8080->8080/tcp")
-	if len(out) != 1 {
-		t.Fatalf("got %d entries, want 1", len(out))
-	}
-	if out[0].HostIP != "::" || out[0].HostPort != 8080 || out[0].CtrPort != 8080 {
-		t.Errorf("ipv6 mapping = %+v", out[0])
-	}
-}
-
-func TestParseDockerPortString_Unpublished(t *testing.T) {
-	out := parseDockerPortString("80/tcp")
-	if len(out) != 0 {
-		t.Errorf("unpublished port should be skipped, got %+v", out)
-	}
-}
+// NOTE: the parsePS / parseDockerPortString white-box tests (formerly here)
+// moved to the enginekit package with the engine-parsing code they exercise
+// (chunk 1 relocated those functions to sdk/enginekit as unexported symbols).
 
 // --- Snapshot HostPortFor ---
 
 func TestHostPortFor_Bridge(t *testing.T) {
-	snap := &ContainerSnapshot{
+	snap := &enginekit.ContainerSnapshot{
 		NetworkMode: "charly",
-		Ports: []PortMapping{
+		Ports: []spec.PortMapping{
 			{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"},
 			{HostIP: "0.0.0.0", HostPort: 5900, CtrPort: 5900, Proto: "tcp"},
 		},
@@ -260,7 +66,7 @@ func TestHostPortFor_Bridge(t *testing.T) {
 }
 
 func TestHostPortFor_HostNetwork(t *testing.T) {
-	snap := &ContainerSnapshot{NetworkMode: "host"}
+	snap := &enginekit.ContainerSnapshot{NetworkMode: "host"}
 	ip, port, ok := snap.HostPortFor(9222, "tcp")
 	if !ok || ip != "127.0.0.1" || port != 9222 {
 		t.Errorf("host-net 9222: ok=%v ip=%q port=%d", ok, ip, port)
@@ -371,56 +177,6 @@ func TestSplitProbeSections(t *testing.T) {
 	}
 }
 
-// --- Renderers ---
-
-func TestRenderTable_HasColumns(t *testing.T) {
-	statuses := []DeploymentStatus{
-		{
-			Image:    "selkies-desktop",
-			Instance: "work",
-			Status:   "running",
-			Ports:    []PortMapping{{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"}},
-			Tunnel:   "tailscale (all ports)",
-			Tools:    []ToolStatus{{Name: "cdp", Status: "ok", Port: 9240}},
-			RunMode:  "quadlet",
-		},
-	}
-	var buf bytes.Buffer
-	if err := RenderTable(&buf, statuses); err != nil {
-		t.Fatalf("RenderTable: %v", err)
-	}
-	out := buf.String()
-	if !strings.Contains(out, "IMAGE") || !strings.Contains(out, "TUNNEL") {
-		t.Errorf("table missing IMAGE/TUNNEL header columns:\n%s", out)
-	}
-	if !strings.Contains(out, "selkies-desktop/work") {
-		t.Errorf("instance not merged into IMAGE cell:\n%s", out)
-	}
-	if !strings.Contains(out, "9240") {
-		t.Errorf("host port not rendered:\n%s", out)
-	}
-	if !strings.Contains(out, "tailscale (all ports)") {
-		t.Errorf("tunnel summary missing:\n%s", out)
-	}
-}
-
-func TestRenderJSON_StructuredPorts(t *testing.T) {
-	statuses := []DeploymentStatus{
-		{
-			Image: "x",
-			Ports: []PortMapping{{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"}},
-		},
-	}
-	var buf bytes.Buffer
-	if err := RenderJSON(&buf, statuses); err != nil {
-		t.Fatalf("RenderJSON: %v", err)
-	}
-	out := buf.String()
-	if !strings.Contains(out, `"host_port": 9240`) {
-		t.Errorf("structured port object missing:\n%s", out)
-	}
-}
-
 // --- Collector lookup helpers ---
 
 func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
@@ -460,14 +216,14 @@ func TestCollector_CollectOne_UsesBaseImageForLabels(t *testing.T) {
 	// by R10. This test pins the data-flow invariant.
 	c := &Collector{
 		rt:     &ResolvedRuntime{RunMode: "quadlet"},
-		engine: &EngineClient{bin: "podman"},
+		engine: enginekit.NewEngineClient("podman"),
 	}
-	snap := &ContainerSnapshot{
+	snap := &enginekit.ContainerSnapshot{
 		Name:        "charly-selkies-desktop-w",
 		Box:         "selkies-desktop",
 		Instance:    "w",
 		State:       "running",
-		Ports:       []PortMapping{{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"}},
+		Ports:       []spec.PortMapping{{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"}},
 		NetworkMode: "charly",
 	}
 	cs := c.collectOne(context.Background(), snap)

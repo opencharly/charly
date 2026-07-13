@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // PodCollector is the pod/container SubstrateCollector. It wraps the existing
@@ -22,7 +24,7 @@ func init() {
 }
 
 // Kind reports the pod substrate.
-func (p *PodCollector) Kind() SubstrateKind { return SubstratePod }
+func (p *PodCollector) Kind() spec.SubstrateKind { return spec.SubstratePod }
 
 // Available always returns true — podman/docker is the baseline substrate, and
 // an absent engine surfaces as a Collect error (graceful degradation) rather
@@ -33,7 +35,7 @@ func (p *PodCollector) Available(opts CollectOpts) bool { return true }
 // not-running quadlet entries when opts.IncludeAll is set. Per-container work
 // is fanned out across a NumCPU*2 worker pool. Rows are NOT pre-sorted here —
 // Collector.All sorts the merged set across all substrates.
-func (p *PodCollector) Collect(ctx context.Context, opts CollectOpts) ([]DeploymentStatus, error) {
+func (p *PodCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.DeploymentStatus, error) {
 	c := p.c
 	snapshots, err := c.engine.SnapshotAll(opts.IncludeAll)
 	if err != nil {
@@ -63,7 +65,7 @@ func (p *PodCollector) Collect(ctx context.Context, opts CollectOpts) ([]Deploym
 	}
 
 	// Worker pool fan-out across containers.
-	results := make([]DeploymentStatus, len(snapshots))
+	results := make([]spec.DeploymentStatus, len(snapshots))
 	workers := max(runtime.NumCPU()*2, 4)
 	if workers > len(snapshots) {
 		workers = len(snapshots)

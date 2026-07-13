@@ -160,7 +160,7 @@ func (c *BuildCmd) Run() error {
 
 	// Reusable-artifact retention (host POST-step; skipped for push): prune old
 	// CalVer tags + stale .build/_candy dirs down to defaults.keep_images. It is
-	// host-side (go-containerregistry/podman, shared with `charly clean`) and runs
+	// host-side (podman image tooling, shared with `charly clean`) and runs
 	// AFTER the candy build drive completes, under the activity lock held above.
 	if !c.Push {
 		pruneAfterBuild(dir)

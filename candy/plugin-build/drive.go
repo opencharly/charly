@@ -208,16 +208,13 @@ func (c driveConfig) buildImages(ctx context.Context, ex *sdk.Executor, reply sp
 	return built, nil
 }
 
-// mergeBox gates the post-build inline layer merge on the box's MergeAuto and, when set, asks the
-// host to run it via HostBuild("merge", …). Tag is left empty → the host merge resolves the
-// newest-local built tag (matching the former MergeCmd{Box:name, Tag:""}); the size knobs default
-// to project config host-side. Like the former mergeAfterBuild, a merge failure only WARNS to
-// stderr — it never fails the build.
+// mergeBox gates the post-build inline layer merge on the box's MergeAuto and, when set, asks
+// verb:oci to run it via InvokeProvider (the F10 peer-dispatch leg — the go-containerregistry
+// merge engine lives in candy/plugin-oci now). Engine is the resolved build engine; the per-box
+// MaxMB/MaxTotalMB ride from the build-resolve model (box config, 0 → plugin defaults). Like the
+// former mergeAfterBuild, a merge failure only WARNS to stderr — it never fails the build; the
+// plugin's progress Notes are printed by the ordinary MergeCmd path, not this inline gate.
 func (c driveConfig) mergeBox(ctx context.Context, ex *sdk.Executor, box spec.BuildResolveBox) {
-	// Merge the just-built image BY REF via the transitional HostBuild("merge") seam
-	// (swaps to InvokeProvider("verb","oci") when P14a lands). ImageRef is the
-	// resolved built tag; Engine is the resolved build engine; the per-box MaxMB/
-	// MaxTotalMB ride from the build-resolve model (box config, 0 → host defaults).
 	reqJSON, err := json.Marshal(spec.MergeRequest{
 		ImageRef:   box.FullTag,
 		Engine:     c.EngineName,
@@ -228,7 +225,13 @@ func (c driveConfig) mergeBox(ctx context.Context, ex *sdk.Executor, box spec.Bu
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
 		return
 	}
-	replyJSON, err := ex.HostBuild(ctx, "merge", reqJSON)
+	// verb:oci is keyed by an oci_op ENV discriminator; the MergeRequest rides Params.
+	envJSON, err := json.Marshal(map[string]string{"oci_op": "merge"})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
+		return
+	}
+	replyJSON, err := ex.InvokeProvider(ctx, "verb", "oci", sdk.OpRun, reqJSON, envJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
 		return
@@ -237,6 +240,9 @@ func (c driveConfig) mergeBox(ctx context.Context, ex *sdk.Executor, box spec.Bu
 	if err := json.Unmarshal(replyJSON, &reply); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
 		return
+	}
+	for _, note := range reply.Notes {
+		fmt.Fprintln(os.Stderr, note)
 	}
 	if reply.Error != "" {
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %s\n", box.Name, reply.Error)
