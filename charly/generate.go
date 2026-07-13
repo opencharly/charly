@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,21 +49,9 @@ type Generator struct {
 	// a production box build leaves it false. See renderLocalPkgImageInstall.
 	DevLocalPkg bool
 
-	// externalBuilderReplies caches each candy's external-builder OpResolve reply
-	// for ONE image: emitExternalBuilderStages populates it (writing the pre-main-FROM
-	// stage) and emitExternalBuilderArtifacts reads it (writing the post-main-FROM
-	// COPY --from artifacts) — so the provider is Invoked exactly once per candy. Keyed
-	// by candy name; RESET per image at the start of emitExternalBuilderStages.
-	externalBuilderReplies map[string]spec.BuilderResolveReply
-
-	// detectionBuilderReplies caches each (candy, builder) DETECTION-builder OpResolve
-	// reply for ONE image: emitBuilderStages populates it (writing the pre-main-FROM
-	// FROM…AS stage) and emitBuilderArtifacts reads it (writing the post-main-FROM
-	// COPY --from artifacts + the once-per-builder binary copy) — so the builder plugin
-	// is Invoked exactly once per (candy, builder). Keyed by builderCtxKey(candy, builder);
-	// RESET per image at the start of emitBuilderStages. This is the C10 detection-builder
-	// (pixi/npm/aur) counterpart of externalBuilderReplies for the `external_builder:` path.
-	detectionBuilderReplies map[string]spec.BuilderResolveReply
+	// (The per-image builder-reply caches externalBuilderReplies/detectionBuilderReplies
+	// moved to the deploykit render Generator with the BUILDER-render engine, K3-A; the
+	// dkGen memo below keeps them stable across an image's render methods.)
 
 	// dkGen caches the sdk/deploykit render Generator (P8). Built once by
 	// toDeploykit() and reused across an image's render so the deploykit-side
@@ -161,7 +148,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	// external_builder selections + box plans reference — an unreferenced box/<distro>
 	// plugin candy is not host-built. No deploy substrate / add_candy at build (no deploy).
 	// A detection-builder's build-time multi-stage is resolved by its plugin's OpResolve leg
-	// (C10, kit.BuilderResolve); emitBuilderStages connects those builder plugins on-demand
+	// (C10, kit.BuilderResolve); the deploykit EmitBuilderStages render connects those builder plugins on-demand
 	// (ensureBuildersConnected), so they are NOT collected here.
 	buildRefs := collectReferencedPluginWords(layers, cfg.Box, nil)
 	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
@@ -436,8 +423,10 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	fmt.Fprintf(&b, "ARG BASE_IMAGE=%s\n\n", resolvedBase)
 
 	// Emit the pre-main-FROM per-candy stages: scratch COPY stages, detection-builder
-	// multi-stage build stages, external-builder stages, and extraction stages.
-	if err := g.emitPreMainCandyStages(&b, boxName, img, candyOrder); err != nil {
+	// multi-stage build stages, external-builder stages, and extraction stages. The
+	// BUILDER-render engine lives in deploykit (K3-A); the registry couplings are wired
+	// as seams in toDeploykit().
+	if err := g.toDeploykit().EmitPreMainCandyStages(&b, boxName, img, candyOrder); err != nil {
 		return err
 	}
 
@@ -495,11 +484,11 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	// buildkit cache for every downstream RUN/COPY in a 100-step stack.
 
 	// Copy builder artifacts — fully config-driven from the embedded builder: vocabulary copy_artifacts/copy_binary
-	g.emitBuilderArtifacts(&b, img, candyOrder)
+	g.toDeploykit().EmitBuilderArtifacts(&b, img, candyOrder)
 
 	// Copy EXTERNAL builder artifacts — the cached OpResolve reply's COPY --from
 	// directives (the post-main-FROM half of the build-time BUILDER leg).
-	g.emitExternalBuilderArtifacts(&b, candyOrder)
+	g.toDeploykit().EmitExternalBuilderArtifacts(&b, candyOrder)
 
 	// Bake out-of-tree `bake_plugin:` provider binaries into the FINAL image at
 	// /usr/lib/charly/plugins/ — the BUILD-side half of the S0 baked-plugin seam, so a
@@ -569,24 +558,6 @@ func (g *Generator) generateContainerfile(boxName string) error {
 	return writeContainerfile(containerfile, content)
 }
 
-// emitPreMainCandyStages emits the pre-main-FROM per-candy stages: the FROM-scratch COPY
-// stages, the detection-builder multi-stage build stages (fully config-driven from the
-// embedded builder: vocabulary), the EXTERNAL builder stages (a candy selecting an
-// `external_builder:` gets its provider's OpResolve stage spliced pre-main-FROM; the
-// artifacts COPY follows post-main-FROM via emitExternalBuilderArtifacts), and the
-// extraction stages. Pure code motion out of generateContainerfile.
-func (g *Generator) emitPreMainCandyStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string) error {
-	g.emitScratchStages(b, candyOrder)
-	if err := g.emitBuilderStages(b, boxName, img, candyOrder); err != nil {
-		return err
-	}
-	if err := g.emitExternalBuilderStages(b, img, candyOrder); err != nil {
-		return err
-	}
-	g.emitExtractStages(b, candyOrder)
-	return nil
-}
-
 // emitBaseBootstrap imports the `from: builder:<name>` rootfs tarball (staged by
 // runPrivilegedBuilders, path relative to the project-root build context) and resets the
 // base for candy processing: the bootstrap preamble for an external base image (skipped
@@ -608,193 +579,6 @@ func writeContainerfile(path, content string) error {
 	// same-dir fan-out) always sees a complete file; concurrent writers of the
 	// same deterministic content converge.
 	return atomicWriteFile(path, []byte(content), 0644)
-}
-
-// emitScratchStages emits one `FROM scratch AS <candy>` + COPY pair per candy.
-// emitScratchStages → deploykit.Generator.EmitScratchStages (P8 shim).
-func (g *Generator) emitScratchStages(b *strings.Builder, candyOrder []string) {
-	g.toDeploykit().EmitScratchStages(b, candyOrder)
-}
-
-// emitBuilderStages emits per-candy multi-stage build stages. Each builder declares
-// detect_files and/or detect_config (the embedded builder: vocabulary, host-side DETECTION);
-// for each matching candy an EXTERNALIZED detection builder (pixi/npm/aur) renders its stage
-// via its plugin's OpResolve leg (resolveDetectionBuilder → kit.BuilderResolve, C10 — no longer
-// an in-core stage template); a non-externalized builder emits no build-time multi-stage (a
-// custom builder must be an external_builder plugin). The externalized builder plugins are connected on-demand
-// (ensureBuildersConnected). The reply is cached per (candy, builder) for emitBuilderArtifacts.
-func (g *Generator) emitBuilderStages(b *strings.Builder, boxName string, img *ResolvedBox, candyOrder []string) error {
-	if img.BuilderConfig == nil {
-		return nil
-	}
-	// Reset the per-image detection-builder reply cache (populated below, read by
-	// emitBuilderArtifacts). Scopes to ONE image, exactly like externalBuilderReplies.
-	g.detectionBuilderReplies = map[string]spec.BuilderResolveReply{}
-
-	// Connect the EXTERNALIZED detection-builder plugins this image triggers (on-demand,
-	// scoped — the SAME machinery the deploy build PRE-PASS uses, R3), so their OpResolve
-	// build leg can be Invoked below. Only externalized (plugin) builders emit a build-time
-	// multi-stage; a non-externalized builder emits none (a custom builder must be a plugin).
-	if detected := detectExternalizedBuilders(candyOrder, g.Candies, img); len(detected) > 0 {
-		if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, detected); err != nil {
-			return fmt.Errorf("image %q: %w", boxName, err)
-		}
-	}
-
-	// Process builders in deterministic order
-	builderNames := img.BuilderConfig.BuilderNames()
-	for _, builderName := range builderNames {
-		builderDef := img.BuilderConfig.Builder[builderName]
-		if builderDef.Inline {
-			continue // inline builders handled in writeCandySteps
-		}
-		external := externalizedBuilders[builderName]
-		// Only an EXTERNALIZED (plugin) builder emits a build-time multi-stage — via its
-		// plugin's OpResolve (kit.BuilderResolve, C10). A non-externalized builder emits no
-		// stage here (a custom builder must be an external_builder plugin).
-		if !external {
-			continue
-		}
-		for _, candyName := range candyOrder {
-			layer := g.Candies[candyName]
-			if !g.candyNeedsBuilder(img, layer, builderDef) {
-				continue
-			}
-			builderRef := g.builderRefForFormat(boxName, builderName)
-			if builderRef == "" {
-				return fmt.Errorf("image %q: candy %q needs builder %q but no builders.%s configured", boxName, candyName, builderName, builderName)
-			}
-			reply, err := g.resolveDetectionBuilder(builderName, layer, builderDef, img, builderRef)
-			if err != nil {
-				return fmt.Errorf("image %q: candy %q builder %q: %w", boxName, candyName, builderName, err)
-			}
-			if strings.TrimSpace(reply.Stage) == "" {
-				return fmt.Errorf("image %q: candy %q: detection builder %q returned an empty OpResolve stage", boxName, candyName, builderName)
-			}
-			g.detectionBuilderReplies[builderCtxKey(layer.Name, builderName)] = reply
-			b.WriteString(reply.Stage)
-			b.WriteString("\n")
-		}
-	}
-	return nil
-}
-
-// resolveDetectionBuilder Invokes an externalized detection-builder plugin's OpResolve build
-// leg for one (candy, builder), returning the rendered BuilderResolveReply (Stage +
-// CopyArtifacts + CopyBinary). The host computes the render context host-side (buildStageContext
-// + pre-rendered cache mounts) and the plugin (kit.BuilderResolve) renders the multi-stage — the
-// C10 counterpart of resolveExternalBuilder for the `external_builder:` path, sharing the SAME
-// OpResolve Invoke helper (resolveBuilderStage, R3).
-func (g *Generator) resolveDetectionBuilder(builderName string, layer *Candy, builderDef *BuilderDef, img *ResolvedBox, builderRef string) (spec.BuilderResolveReply, error) {
-	var zero spec.BuilderResolveReply
-	prov, ok := providerRegistry.ResolveBuilder(builderName)
-	if !ok {
-		return zero, fmt.Errorf("detection builder %q is externalized but its plugin is not connected (a plugin-load gap?)", builderName)
-	}
-	ctx := g.buildStageContext(layer, builderName, builderDef, img, builderRef)
-	in := builderResolveInputFrom(layer.Name, builderName, builderDef, ctx)
-	return resolveBuilderStage(prov, builderName, in, img)
-}
-
-// builderResolveInputFrom builds the serializable spec.BuilderResolveInput a builder plugin's
-// OpResolve leg needs, from the host-computed BuildStageContext. Cache mounts are PRE-RENDERED
-// to flag strings here (the host owns the cache_mount vocab + RenderCacheMounts) with the SAME
-// separator/trailing the former cacheMountsOwned/cacheMountsAuto template funcs used, so the
-// plugin's rendered stage is byte-identical to the former embedded-vocabulary render. Shared by
-// the box-build path (resolveDetectionBuilder) AND the pod-overlay build-emit (stepEmitBuilder), R3.
-func builderResolveInputFrom(candyName, builderName string, builderDef *BuilderDef, ctx *BuildStageContext) spec.BuilderResolveInput {
-	return spec.BuilderResolveInput{
-		Candy:            candyName,
-		Builder:          builderName,
-		BuilderRef:       ctx.BuilderRef,
-		StageName:        ctx.StageName,
-		LayerStage:       ctx.LayerStage,
-		CopySrc:          ctx.CopySrc,
-		UID:              ctx.UID,
-		GID:              ctx.GID,
-		Home:             ctx.Home,
-		User:             ctx.User,
-		Manifest:         ctx.Manifest,
-		HasLockFile:      ctx.HasLockFile,
-		InstallCmd:       ctx.InstallCmd,
-		ManylinuxFix:     ctx.ManylinuxFix,
-		HasBuildScript:   ctx.HasBuildScript,
-		BuildScript:      ctx.BuildScript,
-		Packages:         ctx.Packages,
-		Options:          ctx.Options,
-		CacheMountsOwned: RenderCacheMounts(ctx.CacheMounts, ctx.UID, ctx.GID, " \\\n    ", true),
-		CacheMountsAuto:  RenderCacheMountsAuto(ctx.CacheMounts, ctx.UID, ctx.GID, " \\\n    ", false),
-		Inline:           builderDef.Inline,
-	}
-}
-
-// emitExternalBuilderStages emits the pre-main-FROM multi-stage block for every
-// candy that selects an `external_builder:` — the build-time BUILDER leg, the
-// multi-stage counterpart of a `run:` step's `plugin:` verb (emitPluginFragment).
-// For each such candy it resolves the builder word through providerRegistry; an
-// EXTERNAL provider (a *grpcProvider connected by the build-time plugin connect seam
-// in NewGenerator) is Invoked with OpResolve and the returned BuilderResolveReply's
-// Stage is written verbatim (egress-validated with the rest of the Containerfile).
-// The reply is CACHED on the Generator so emitExternalBuilderArtifacts can splice the
-// matching COPY --from directives post-main-FROM without re-Invoking. An unresolvable
-// external_builder, a non-external (compiled-in) provider, or an Invoke error (including a
-// detection-builder plugin rejecting OpResolve — see below) fails LOUDLY (R4) — never a
-// silently-dropped builder stage. The cache is RESET here so it scopes to ONE image.
-func (g *Generator) emitExternalBuilderStages(b *strings.Builder, img *ResolvedBox, candyOrder []string) error {
-	g.externalBuilderReplies = map[string]spec.BuilderResolveReply{}
-	for _, candyName := range candyOrder {
-		layer := g.Candies[candyName]
-		word := layer.ExternalBuilder
-		if word == "" {
-			continue
-		}
-		prov, ok := providerRegistry.ResolveBuilder(word)
-		if !ok {
-			return fmt.Errorf("candy %q: external_builder %q is not a registered builder (an external plugin not connected at build time?)", candyName, word)
-		}
-		// Only an EXTERNAL out-of-process builder (a *grpcProvider) drives this build-time
-		// OpResolve path; reject any compiled-in provider (defensive — no in-proc builder exists
-		// today). NOTE: the four detection-builders (pixi/cargo/npm/aur) are ALSO external
-		// grpcProviders now, but they serve only the DEPLOY-time OpCollectContext/OpReverse legs and
-		// are SELECTED BY DETECTION (their detect-files / aur: section via the embedded builder:
-		// vocabulary), never by external_builder:. Mis-selecting one here passes this type-assert but
-		// then fails LOUDLY at resolveExternalBuilder's OpResolve Invoke (the plugin rejects the op).
-		if _, isExternal := prov.(*grpcProvider); !isExternal {
-			return fmt.Errorf("candy %q: external_builder %q resolves to a compiled-in builder, not an external plugin", candyName, word)
-		}
-		reply, err := resolveExternalBuilder(prov, word, candyName, img)
-		if err != nil {
-			return fmt.Errorf("candy %q: external_builder %q resolve: %w", candyName, word, err)
-		}
-		g.externalBuilderReplies[candyName] = reply
-		b.WriteString(reply.Stage)
-		if !strings.HasSuffix(reply.Stage, "\n") {
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-	return nil
-}
-
-// emitExternalBuilderArtifacts writes the post-main-FROM COPY --from directives for
-// each candy whose external builder resolved in emitExternalBuilderStages (read from
-// the per-image cache — never re-Invoked). The artifacts pull the built files out of
-// the plugin's multi-stage build into the final image.
-func (g *Generator) emitExternalBuilderArtifacts(b *strings.Builder, candyOrder []string) {
-	for _, candyName := range candyOrder {
-		reply, ok := g.externalBuilderReplies[candyName]
-		if !ok || len(reply.CopyArtifacts) == 0 {
-			continue
-		}
-		fmt.Fprintf(b, "# Copy external_builder artifacts (%s)\n", g.Candies[candyName].ExternalBuilder)
-		for _, line := range reply.CopyArtifacts {
-			b.WriteString(line)
-			if !strings.HasSuffix(line, "\n") {
-				b.WriteString("\n")
-			}
-		}
-		b.WriteString("\n")
-	}
 }
 
 // resolveBuilderStage is the SHARED OpResolve Invoke+decode for the builder BUILDER leg (R3 —
@@ -855,7 +639,7 @@ func resolveExternalBuilder(prov Provider, word, candyName string, img *Resolved
 // resolve the candy under an @github ref while the in-container project sees it bare, so the
 // only identity both halves agree on is the leaf.
 //
-// Called post-main-FROM (right after emitExternalBuilderArtifacts) so the COPY lands in
+// Called post-main-FROM (right after deploykit EmitExternalBuilderArtifacts) so the COPY lands in
 // the final stage. For each referenced plugin it resolves the candy's SOURCE DIR the SAME
 // way loadProjectPlugins does — g.Candies[key].SourceDir on the scanned set
 // (ScanAllCandyWithConfig) — host-builds the provider binary (buildPluginBinary; the SAME
@@ -923,94 +707,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 		}
 	}
 	return nil
-}
-
-// emitExtractStages emits a `FROM <source> AS <candy>-extract-<i>` stage for
-// every extract entry across the candy chain.
-// emitExtractStages → deploykit.Generator.EmitExtractStages (P8 shim).
-func (g *Generator) emitExtractStages(b *strings.Builder, candyOrder []string) {
-	g.toDeploykit().EmitExtractStages(b, candyOrder)
-}
-
-// emitBuilderArtifacts copies builder artifacts/binaries into the main image. For an
-// EXTERNALIZED detection builder (pixi/npm/aur) the COPY lines come from the plugin's cached
-// OpResolve reply (detectionBuilderReplies, populated by emitBuilderStages) — the plugin owns
-// the copy_artifact/copy_binary shape now (C10). For a custom (non-externalized) builder they
-// come from the embedded builder: vocabulary copy_artifacts/copy_binary. Both preserve the
-// former structure: the `# Copy <builder> artifacts` header once per builder, then each candy's
-// artifacts, and the builder BINARY copied ONCE per builder (deduped across candies).
-func (g *Generator) emitBuilderArtifacts(b *strings.Builder, img *ResolvedBox, candyOrder []string) {
-	if img.BuilderConfig == nil {
-		return
-	}
-	builderNames := img.BuilderConfig.BuilderNames()
-	for _, builderName := range builderNames {
-		builderDef := img.BuilderConfig.Builder[builderName]
-		if builderDef.Inline {
-			continue
-		}
-		external := externalizedBuilders[builderName]
-		if !external {
-			continue
-		}
-
-		// Find candies that triggered this builder
-		hasArtifacts := false
-		binaryCopied := false
-		for _, candyName := range candyOrder {
-			layer := g.Candies[candyName]
-			if !g.candyNeedsBuilder(img, layer, builderDef) {
-				continue
-			}
-
-			if external {
-				reply, ok := g.detectionBuilderReplies[builderCtxKey(layer.Name, builderName)]
-				if !ok {
-					continue
-				}
-				for _, line := range reply.CopyArtifacts {
-					if !hasArtifacts {
-						fmt.Fprintf(b, "# Copy %s artifacts\n", builderName)
-						hasArtifacts = true
-					}
-					b.WriteString(line)
-					b.WriteString("\n")
-				}
-				if reply.CopyBinary != "" && !binaryCopied {
-					b.WriteString(reply.CopyBinary)
-					b.WriteString("\n")
-					binaryCopied = true
-				}
-				continue
-			}
-
-			stageName := fmt.Sprintf("%s-%s-build", layer.Name, builderName)
-
-			// Copy artifacts
-			for _, art := range builderDef.CopyArtifacts {
-				if !hasArtifacts {
-					fmt.Fprintf(b, "# Copy %s artifacts\n", builderName)
-					hasArtifacts = true
-				}
-				src := expandBuilderPath(art.Src, img)
-				dst := expandBuilderPath(art.Dst, img)
-				if art.Chown {
-					fmt.Fprintf(b, "COPY --from=%s --chown=%d:%d %s %s\n", stageName, img.UID, img.GID, src, dst)
-				} else {
-					fmt.Fprintf(b, "COPY --from=%s %s %s\n", stageName, src, dst)
-				}
-			}
-
-			// Copy binary (only once, from first matching candy)
-			if builderDef.CopyBinary != nil && !binaryCopied {
-				fmt.Fprintf(b, "COPY --from=%s %s %s\n", stageName, builderDef.CopyBinary.Src, builderDef.CopyBinary.Dst)
-				binaryCopied = true
-			}
-		}
-		if hasArtifacts || binaryCopied {
-			b.WriteString("\n")
-		}
-	}
 }
 
 // emitExtractedFiles copies extracted files from multi-stage build stages into
@@ -1214,23 +910,6 @@ func (g *Generator) writeCandySteps(b *strings.Builder, candyName string, img *R
 // Old format-specific write functions removed — all generation is now
 // config-driven via the embedded distro: vocabulary format templates rendered by renderFormatInstall*
 // and the embedded builder: vocabulary templates rendered by buildStageContext + RenderTemplate.
-
-// expandBuilderPath replaces {{.Home}} placeholders in copy artifact paths.
-func expandBuilderPath(path string, img *ResolvedBox) string {
-	path = strings.ReplaceAll(path, "{{.Home}}", img.Home)
-	return path
-}
-
-// candyNeedsBuilder checks if a candy triggers a builder's detection criteria.
-// candyNeedsBuilder → deploykit.Generator.CandyNeedsBuilder (P8 shim).
-func (g *Generator) candyNeedsBuilder(img *ResolvedBox, layer *Candy, builderDef *BuilderDef) bool {
-	return g.toDeploykit().CandyNeedsBuilder(img, layer, builderDef)
-}
-
-// buildFormatsInclude returns true if formats contains target.
-func buildFormatsInclude(formats []string, target string) bool {
-	return slices.Contains(formats, target)
-}
 
 // collectBuilderRuntimeEnv returns synthesised EnvConfig entries for every
 // builder triggered by any candy in candyOrder. Each builder contributes at

@@ -661,7 +661,7 @@ func validateCandyContents(layers map[string]*Candy, errs *ValidationError) {
 		// plugin: block — a plugin candy's content IS its provider declaration (its Go
 		// provider is compiled in or fetched+built), an external_builder: candy's content
 		// is the multi-stage build artifact the selected builder bakes at image build
-		// (emitExternalBuilderStages), and a localpkg: candy's content is the OS package
+		// (deploykit EmitExternalBuilderStages), and a localpkg: candy's content is the OS package
 		// it builds + installs on a deploy target (LocalPkgInstallStep) / downloads at
 		// image build — so all legitimately ship no install files.
 		if !layer.HasInstallFiles() && len(layer.IncludedCandy) == 0 && !layer.HasData() && layer.Plugin == nil && layer.ExternalBuilder == "" && len(layer.LocalPkgFormats()) == 0 {

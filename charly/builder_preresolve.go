@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -20,7 +21,7 @@ import (
 //
 // CONNECTION IS PRECISELY SCOPED + ON-DEMAND. The pre-pass detects exactly the builders the
 // deploy's RESOLVED closure triggers — applying the SAME distro/build-format gate the generator's
-// candyNeedsBuilder applies, so a fedora deploy never connects aur (even when a multi-distro candy
+// deploykit CandyNeedsBuilder applies, so a fedora deploy never connects aur (even when a multi-distro candy
 // carries an aur: section for its arch variant), and a pixi-only deploy connects ONLY pixi. It then
 // build-connects just those plugins by their canonical ref (the same on-demand, scoped pattern as
 // connectPluginByWordRef, R3) — NOT a blanket "all four builder plugins" surfaced across an entire
@@ -33,41 +34,9 @@ import (
 // builderCtxKey keys the pre-resolved map by candy name + builder word (NUL-joined — neither can
 // contain NUL, so the key is unambiguous).
 
-// detectExternalizedBuilders returns the EXTERNALIZED builder words the deploy's resolved candy
-// closure actually triggers, in deterministic order. It applies the SAME detection — INCLUDING the
-// distro/build-format gate the generator's candyNeedsBuilder applies — so a DetectConfig builder
-// (aur, tightly coupled to a distro's install_template) is surfaced ONLY when the image's build
-// formats include that format. Net: a fedora deploy never surfaces aur, a pixi-only deploy surfaces
-// ONLY pixi. Pure (no I/O); the unit gate for the scoping fix (builder_preresolve_test.go).
-func detectExternalizedBuilders(order []string, layers map[string]*Candy, img *ResolvedBox) []string {
-	if img == nil || img.BuilderConfig == nil {
-		return nil
-	}
-	var out []string
-	for _, bName := range img.BuilderConfig.BuilderNames() {
-		if !externalizedBuilders[bName] {
-			continue
-		}
-		bDef := img.BuilderConfig.Builder[bName]
-		if bDef == nil {
-			continue
-		}
-		// Distro gate (mirror generate.go candyNeedsBuilder): a config-only detection (aur) runs a
-		// distro-specific install_template, so it is only needed when the image's build formats
-		// include that format — a multi-distro candy's aur: section must NOT pull arch tooling onto
-		// a fedora build.
-		if bDef.DetectConfig != "" && !buildFormatsInclude(img.BuildFormats, bDef.DetectConfig) {
-			continue
-		}
-		for _, candyName := range order {
-			if layer := layers[candyName]; layer != nil && candyNeedsBuilderStep(layer, bDef) {
-				out = append(out, bName)
-				break
-			}
-		}
-	}
-	return out
-}
+// (detectExternalizedBuilders relocated to sdk/deploykit as the shared
+// DetectExternalizedBuilders pkg func (K3-A, R3) — the SAME detection the box-build
+// render uses; preresolveBuilderContexts calls it over candyModelMap(layers) below.)
 
 // preresolveBuilderContexts connects the EXACT externalized builder plugins the deploy triggers
 // (on-demand, scoped) and RPCs each one's OpCollectContext + OpReverse for every (candy, builder)
@@ -77,7 +46,7 @@ func detectExternalizedBuilders(order []string, layers map[string]*Candy, img *R
 // externalized builder that cannot be connected fails LOUDLY (R4 — never a silent incomplete
 // teardown).
 func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]*Candy, img *ResolvedBox) (map[string]builderPreresolved, error) {
-	needed := detectExternalizedBuilders(order, layers, img)
+	needed := deploykit.DetectExternalizedBuilders(order, candyModelMap(layers), externalizedBuilders, img)
 	if len(needed) == 0 {
 		return nil, nil
 	}

@@ -39,7 +39,7 @@ import (
 // is what lets a `target: vm` deploy write env.d that points at the guest
 // user's home (/home/<guest-user>) rather than the host operator's home.
 // The `{{.Home}}` spelling matches the existing builder-artifact convention
-// (generate.go:expandBuilderPath), so the two token systems stay aligned.
+// (deploykit expandBuilderPath), so the two token systems stay aligned.
 
 // ---------------------------------------------------------------------------
 // Scope — where the effect lands on the target filesystem.

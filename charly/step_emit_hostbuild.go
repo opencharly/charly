@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -191,7 +192,7 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 			CacheMounts: bDef.CacheMount,
 		}
 		if externalizedBuilders[s.Builder] {
-			reply, err := kit.BuilderResolve(s.Builder, builderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
+			reply, err := kit.BuilderResolve(s.Builder, deploykit.BuilderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
 			if err != nil {
 				return "", fmt.Errorf("inline builder %s: %w", s.Builder, err)
 			}
@@ -226,7 +227,7 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 	if !externalizedBuilders[s.Builder] {
 		return "", fmt.Errorf("multi-stage builder %s is not an externalized plugin builder (a custom builder must be an external_builder plugin)", s.Builder)
 	}
-	reply, err := kit.BuilderResolve(s.Builder, builderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
+	reply, err := kit.BuilderResolve(s.Builder, deploykit.BuilderResolveInputFrom(layer.Name, s.Builder, bDef, ctx))
 	if err != nil {
 		return "", fmt.Errorf("multi-stage builder %s: %w", s.Builder, err)
 	}

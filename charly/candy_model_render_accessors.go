@@ -11,6 +11,7 @@ func (l *Candy) GetIncludedCandy() []CandyRef { return l.IncludedCandy }
 func (l *Candy) GetRequire() []CandyRef       { return l.Require }
 func (l *Candy) GetHasPackageJson() bool      { return l.HasPackageJson }
 func (l *Candy) GetHasCargoToml() bool        { return l.HasCargoToml }
+func (l *Candy) GetExternalBuilder() string   { return l.ExternalBuilder }
 func (l *Candy) GetRemote() bool              { return l.Remote }
 func (l *Candy) GetHasPixiLock() bool         { return l.HasPixiLock }
 func (l *Candy) GetRepoPath() string          { return l.RepoPath }
