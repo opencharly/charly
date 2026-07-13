@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 )
 
@@ -12,13 +11,13 @@ import (
 //
 //   - CollectBoxAlias / CollectedAlias — the BUILD-TIME collector: generate.go bakes the resolved
 //     alias set into the image's ai.opencharly.alias OCI label, and labels.go carries it on
-//     BoxMetadata.Alias (the OCI-label contract). `charly box inspect --aliases` prints it.
+//     BoxMetadata.Alias (the OCI-label contract). The projector (resolved_project_host.go) runs it
+//     into the ResolvedBoxView box-aggregate `charly box inspect --format aliases` prints.
 //   - aliasNameRe — the LOAD-TIME validation regex (validate.go rejects malformed alias names).
-//   - ListAliasesCmd — the `charly box list-aliases` box-verb (ListCmd), which enumerates candies
-//     that DECLARE aliases from the project (a build-mode config read, not the deploy-mode CLI).
 //
-// The `charly alias` command reads the BAKED label (via `charly box labels … --format alias`) and
-// owns the wrapper-script logic; it shares none of the code below.
+// The `charly box list aliases` enumeration moved into candy/plugin-box (it reads the CandyView.Aliases
+// off the resolved-project envelope). The `charly alias` command reads the BAKED label (via `charly box
+// labels … --format alias`) and owns the wrapper-script logic; it shares none of the code below.
 
 // aliasNameRe matches valid alias names: starts with alphanumeric, allows dots/underscores/hyphens
 var aliasNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
@@ -84,39 +83,4 @@ func CollectBoxAlias(cfg *Config, layers map[string]*Candy, boxName string) ([]C
 	}
 
 	return result, nil
-}
-
-// ListAliasesCmd lists candies with alias declarations
-type ListAliasesCmd struct{}
-
-func (c *ListAliasesCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return err
-	}
-
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return err
-	}
-
-	result := AliasCandy(layers)
-	names := make([]string, 0, len(result))
-	for _, layer := range result {
-		names = append(names, layer.Name)
-	}
-	sortStrings(names)
-
-	for _, name := range names {
-		layer := layers[name]
-		for _, a := range layer.Alias() {
-			fmt.Printf("%s\t%s\t%s\n", name, a.Name, a.Command)
-		}
-	}
-	return nil
 }

@@ -48,10 +48,9 @@ func scoredSteps(plan []Step) []scoredStep {
 func isScored(s Step) bool { return s.Check != "" || s.AgentCheck != "" }
 
 // RunCheckLive scores `plan` against the live containers its check:/agent-check:
-// steps target via Op.Pod. Returns a spec.CheckRunResults shaped like
-// ParseCharlyTestOutput's so the scorer (Classify, fingerprints, summary)
-// consumes it unchanged. `deployment` is legacy/unused; `scoreName` labels the
-// run.
+// steps target via Op.Pod. Returns the spec.CheckRunResults wire shape the
+// plugin scorer (candy/plugin-check) consumes unchanged. `deployment` is
+// legacy/unused; `scoreName` labels the run.
 func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step) (*spec.CheckRunResults, error) {
 	_ = deployment
 

@@ -14,11 +14,10 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// ResolvedLocal / ResolvedAndroid / ResolvedPod / ResolvedK8s are the substrate-template value envelopes.
+// ResolvedLocal / ResolvedAndroid / ResolvedK8s are the substrate-template value envelopes.
 type (
 	ResolvedLocal   = spec.ResolvedLocal
 	ResolvedAndroid = spec.ResolvedAndroid
-	ResolvedPod     = spec.ResolvedPod
 	ResolvedK8s     = spec.ResolvedK8s
 )
 
@@ -57,24 +56,6 @@ func resolveVmViaPlugin(body json.RawMessage) (*VmSpec, error) {
 	if len(out) > 0 {
 		if err := json.Unmarshal(out, &reply); err != nil {
 			return nil, fmt.Errorf("vm resolve: decode reply: %w", err)
-		}
-	}
-	return reply.Resolved, nil
-}
-
-// resolvePodViaPlugin projects one opaque pod template body into a *ResolvedPod
-// via candy/plugin-substrate's OpResolve leg (the pod-template de-type, Cutover J).
-func resolvePodViaPlugin(body json.RawMessage) (*ResolvedPod, error) {
-	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
-		Pod: &spec.PodResolveInput{Pod: body},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.PodResolveReply
-	if len(out) > 0 {
-		if err := json.Unmarshal(out, &reply); err != nil {
-			return nil, fmt.Errorf("pod resolve: decode reply: %w", err)
 		}
 	}
 	return reply.Resolved, nil

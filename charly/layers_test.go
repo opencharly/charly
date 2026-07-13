@@ -449,21 +449,6 @@ func TestCandyVolumesNone(t *testing.T) {
 	}
 }
 
-func TestVolumeCandies(t *testing.T) {
-	layers, err := ScanCandy("testdata")
-	if err != nil {
-		t.Fatalf("ScanCandy() error = %v", err)
-	}
-
-	vols := VolumeCandy(layers)
-	if len(vols) != 1 {
-		t.Errorf("VolumeCandy() returned %d candies, want 1", len(vols))
-	}
-	if len(vols) > 0 && vols[0].Name != "webservice" {
-		t.Errorf("VolumeCandy()[0].Name = %q, want %q", vols[0].Name, "webservice")
-	}
-}
-
 func TestCandyPortRelayFromYAML(t *testing.T) {
 	layers, err := ScanCandy("testdata")
 	if err != nil {
@@ -530,20 +515,5 @@ func TestCandyPortRelayMultiple(t *testing.T) {
 	}
 	if relay[0] != 9222 || relay[1] != 5900 {
 		t.Errorf("PortRelayPorts = %v, want [9222 5900]", relay)
-	}
-}
-
-func TestRouteCandies(t *testing.T) {
-	layers, err := ScanCandy("testdata")
-	if err != nil {
-		t.Fatalf("ScanCandy() error = %v", err)
-	}
-
-	routes := RouteCandy(layers)
-	if len(routes) != 1 {
-		t.Errorf("RouteCandy() returned %d candies, want 1", len(routes))
-	}
-	if len(routes) > 0 && routes[0].Name != "webservice" {
-		t.Errorf("RouteCandy()[0].Name = %q, want %q", routes[0].Name, "webservice")
 	}
 }

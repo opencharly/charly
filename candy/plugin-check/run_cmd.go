@@ -3,8 +3,8 @@ package check
 // run_cmd.go — `charly check run <name>` host-side dispatcher (P12: relocated from
 // charly/check_runner_cmd.go).
 //
-// Overloaded by the kind the name resolves to (classified via the "check-config"
-// host seam): a check bed (a `disposable: true` deploy without an iterate: block)
+// Overloaded by the kind the name resolves to (classified off the resolved-project
+// envelope): a check bed (a `disposable: true` deploy without an iterate: block)
 // runs the full R10 sequence (runCheckBed → the "check-bed" session seam +
 // HostBuild("cli")); an iterate: entity drives the AI iteration loop (dispatched into
 // the sandbox target). ONE bed / one entity per invocation.
@@ -16,14 +16,15 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/opencharly/sdk/spec"
 )
 
-// Target-kind strings the "check-config" seam returns (ResolveIterateSandbox's
-// result) — the plugin classifies the iterate sandbox by these instead of the core
-// TargetKind type.
+// Target-kind strings the plugin's resolveIterateSandbox returns — the plugin classifies
+// the iterate sandbox by these (over the resolved-project envelope's Deploy tree) instead
+// of a core TargetKind type.
 const (
 	targetKindPod  = "pod"
 	targetKindVM   = "vm"
@@ -79,7 +80,7 @@ func (c *CheckRunCmd) Run() error {
 		return fmt.Errorf("charly check run: provide an iterate: entity or a check bed name (run a full roster concurrently via the /verify-beds workflow)")
 	}
 
-	reply, err := checkConfig(ex, ctx, spec.CheckConfigRequest{Entity: c.Name, Dir: cwd})
+	reply, err := resolveCheckProjection(ex, ctx, c.Name, cwd)
 	if err != nil {
 		return err
 	}
@@ -111,11 +112,11 @@ func (c *CheckRunCmd) Run() error {
 }
 
 // runIterateEntity drives the iterate: AI iteration loop for the named entity: it
-// resolves the sandbox target (from the "check-config" reply), generates a run ID,
+// resolves the sandbox target (from the check projection), generates a run ID,
 // builds the run-local argv, performs the disposable-pod preflight, and dispatches to
 // the host / pod / VM runner. The seams it drives (preflight check-run, cred sync,
 // self-reentry) use the package cmdExec/cmdCtx, so no executor is threaded here.
-func (c *CheckRunCmd) runIterateEntity(reply spec.CheckConfigReply, cwd string) error {
+func (c *CheckRunCmd) runIterateEntity(reply checkProjection, cwd string) error {
 	if !reply.HasNode || !reply.HasIterate {
 		return fmt.Errorf("charly check run %s: no iterate: block and no check bed by that name", c.Name)
 	}
@@ -152,7 +153,7 @@ func (c *CheckRunCmd) runIterateEntity(reply spec.CheckConfigReply, cwd string) 
 	// restart its systemd quadlet so the container is destroyed (`--rm`) and recreated
 	// before dispatch. The sandbox pod IS the harness's sole disposable resource;
 	// everything inside is the AI's job and is wiped on restart. (PodTargetDisposable
-	// is resolved host-side by the "check-config" seam.)
+	// is resolved over the thin "pod-disposable" host seam — the per-host overlay read.)
 	if tk == targetKindPod && reply.PodTargetDisposable {
 		unit := "charly-" + tn + ".service"
 		container := "charly-" + tn
@@ -191,17 +192,54 @@ func (c *CheckRunCmd) runIterateEntity(reply spec.CheckConfigReply, cwd string) 
 		// building first. Rides the "preflight" check-run mode (ensureScoreImages STAYS
 		// core — the R3-shared EnsureImagePresent).
 		if !c.DryRun {
-			if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd}); err != nil {
+			// Thread the plugin-side include-expanded plan (reply.Plan) so the host preflight ensures
+			// every step-venue image without re-running the include-splicer core-side (it moved here).
+			if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd, Plan: reply.Plan}); err != nil {
 				return err
 			}
 		}
 		return runLocalInProcess(args, cwd)
 	case targetKindPod:
+		// A non-disposable pod sandbox is NOT restarted above, so its container must
+		// already be running for the podman exec below to succeed. When it is absent
+		// or stopped — typically because the operator has not provisioned the per-host
+		// sandbox deploy — fail EARLY with the provisioning remediation instead of the
+		// bare exit-125 ("container does not exist") the exec would otherwise emit.
+		if !reply.PodTargetDisposable {
+			if err := ensureHarnessSandboxRunning(tn, c.Name); err != nil {
+				return err
+			}
+		}
 		return dispatchToPod(tn, c.Name, args)
 	case targetKindVM:
 		return dispatchToVM(tn, c.Name, args)
 	}
 	return fmt.Errorf("unsupported target kind: %s", tk)
+}
+
+// podContainerRunning reports whether a podman container is present AND running. A
+// package var so the sandbox-provisioning guard is unit-testable without podman.
+var podContainerRunning = func(container string) bool {
+	out, err := exec.Command("podman", "container", "inspect", "--format", "{{.State.Running}}", container).Output()
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// ensureHarnessSandboxRunning fails with a provisioning remediation when the iterate
+// sandbox's pod container is not running. The sandbox is an OPERATOR-provisioned
+// per-host deploy (never shipped with the repo — Mode Purity keeps the overlay out of
+// the project), so an absent sandbox is a host-setup gap, not a code fault; surfacing
+// the exact `charly` remediation beats the bare exit-125 the downstream `podman exec`
+// would emit ("container does not exist").
+func ensureHarnessSandboxRunning(sandbox, score string) error {
+	if podContainerRunning("charly-" + sandbox) {
+		return nil
+	}
+	return fmt.Errorf(
+		"charly check run %s: harness sandbox %q is not running on this host — the iterate "+
+			"sandbox is an operator-provisioned per-host deploy. Provision it first:\n"+
+			"  charly bundle add %s <ref> --disposable\n"+
+			"  charly start %s",
+		score, sandbox, sandbox, sandbox)
 }
 
 // runLocalInProcess invokes CheckRunLocalCmd as a self-reentry subprocess for host targets.

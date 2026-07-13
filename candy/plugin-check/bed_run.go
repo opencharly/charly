@@ -46,8 +46,7 @@ const repoOverrideEnvName = "CHARLY_REPO_OVERRIDE"
 // check itself IS the readiness condition (a real synchronization primitive, not a
 // fixed sleep — a fresh service still running its first-boot migration is not ready
 // when merely exec-able). The generous cap mirrors the core's config-sourced
-// PollHeavy; the config-sourced cap moves onto the plugin via the check-config
-// seam's ReadinessJSON in a later K-wave.
+// PollHeavy.
 const (
 	bedReadyPollInterval = 10 * time.Second
 	bedReadyPollCap      = 15 * time.Minute

@@ -15,9 +15,10 @@ import (
 )
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the
-// reverse channel — either InvokeProvider (peer plugin dispatch, for generate → build:generate) or
-// the generic HostBuild("cli") reentry (for validate/pkg → the hidden __box-* core commands). The
-// `new` command needs neither (it calls kit scaffolding directly).
+// reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
+// HostBuild("resolved-project") envelope fetch (inspect/list), or the generic HostBuild("cli")
+// reentry (validate/pkg → the hidden __box-* core commands, and inspect/list's overlay/store residue
+// → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
@@ -53,6 +54,10 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchNew(args)
 	case "pkg":
 		return dispatchPkg(hc, args)
+	case "inspect":
+		return dispatchInspect(hc, args)
+	case "list":
+		return dispatchList(hc, args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}

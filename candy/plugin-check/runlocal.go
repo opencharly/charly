@@ -6,7 +6,7 @@ package check
 // The host-side `charly check run <score>` is a thin forwarder; all real work happens
 // here, executed *inside the chosen target* (pod via `podman exec`, vm via `ssh`, or
 // host directly). Responsibilities: acquire the in-sandbox flock, resolve the
-// entity's plan (via the "check-config" host seam — the loader stays core), clone the
+// entity's plan (off the resolved-project envelope — the loader stays core), clone the
 // project, synthesize the pre-AI baseline, drive RunHarness, push the branch back.
 
 import (
@@ -90,9 +90,9 @@ func (c *CheckRunLocalCmd) Run() error {
 		}
 	}
 
-	// Resolve the entity's config + scored plan over the "check-config" host seam
-	// (LoadUnified + ScanCandy + ExpandPlanIncludes are core loader Mechanisms).
-	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Entity: c.Score, Dir: projectDir})
+	// Resolve the entity's config + scored plan off the resolved-project envelope
+	// (resolveCheckProjection self-derives the projection from the generic envelope the host serves).
+	reply, err := resolveCheckProjection(cmdExec, cmdCtx, c.Score, projectDir)
 	if err != nil {
 		return fmt.Errorf("load harness config from %s: %w", projectDir, err)
 	}
@@ -252,7 +252,8 @@ func runSinglePhaseHarness(
 
 // acquireHarnessLock takes a fail-fast exclusive flock on the per-score lock file. It
 // runs INSIDE the sandbox, so it uses the stdlib syscall.Flock directly (the core's
-// acquireFileLock is package-main-only; K2 statekit later owns any-process state).
+// acquireFileLock is package-main-only; the flock'd any-process-state family already
+// lives in sdk/kit — filelock/install_ledger/deployconfig, the K4-B ruling).
 func acquireHarnessLock(projectDir, score string) (func(), error) {
 	path := HarnessLockPath(projectDir, score)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -273,7 +274,7 @@ func acquireHarnessLock(projectDir, score string) (func(), error) {
 }
 
 // loadDescriptionsFromDir is the (deprecated) image-baked-fingerprint path: it wraps
-// the include-expanded plan (resolved over the "check-config" seam — the loader stays
+// the include-expanded plan (derived off the resolved-project envelope — the loader stays
 // core) into a LabelDescriptionSet keyed by the "plan" origin so the derived step ids
 // align with the "score"-mode scoring ids. The score-based live flow uses
 // synthesizeScoreBaseline instead, so this only feeds the source-only rebuild path
@@ -283,7 +284,7 @@ func loadDescriptionsFromDir(ctx context.Context, score string) *kit.LabelDescri
 	if err != nil {
 		return nil
 	}
-	reply, err := checkConfig(cmdExec, ctx, spec.CheckConfigRequest{Entity: score, Dir: cwd})
+	reply, err := resolveCheckProjection(cmdExec, ctx, score, cwd)
 	if err != nil || len(reply.Plan) == 0 {
 		return nil
 	}

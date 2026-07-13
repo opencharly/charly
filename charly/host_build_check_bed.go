@@ -39,7 +39,8 @@ import (
 // with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never aliased).
 //
 // TRANSITIONAL host seam — dies at K5: post-loaderkit the plugin holds its own flock via
-// statekit, computes the repo-override itself, and calls the arbiter over InvokeProvider.
+// sdk/kit (filelock/install_ledger/deployconfig, the delivered K4-B state family), computes the
+// repo-override itself, and calls the arbiter over InvokeProvider.
 const checkBedBuilderKind = "check-bed"
 
 // bedSession holds the live host handles a bed run owns across its HostBuild ops.

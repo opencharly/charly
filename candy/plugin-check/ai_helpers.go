@@ -10,8 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-
-	"github.com/opencharly/sdk/spec"
 )
 
 // CheckScopeCmd reads the active iteration's scope.yml.
@@ -55,8 +53,8 @@ func (c *CheckLastTagCmd) Run() error {
 // CheckSelfCheckCmd implements `charly check self-evaluate` — the AI's canonical
 // self-verification path during a harness iteration. It runs the SAME live scoring
 // the end-of-iter harness scorer calls (the "score" check-run mode) against the
-// SAME in-scope plan (loaded from the PROJECT tree via the "check-config" seam, NOT
-// the per-iter repo clone — the anti-deception property: the host resolves the plan
+// SAME in-scope plan (derived from the PROJECT tree off the resolved-project envelope, NOT
+// the per-iter repo clone — the anti-deception property: the host resolves the project
 // from cwd, so AI edits to the clone don't change what self-evaluate sees).
 type CheckSelfCheckCmd struct{}
 
@@ -72,7 +70,7 @@ func (c *CheckSelfCheckCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	reply, err := checkConfig(cmdExec, cmdCtx, spec.CheckConfigRequest{Entity: score, Dir: cwd})
+	reply, err := resolveCheckProjection(cmdExec, cmdCtx, score, cwd)
 	if err != nil {
 		return fmt.Errorf("charly check self-evaluate: load charly.yml: %w", err)
 	}

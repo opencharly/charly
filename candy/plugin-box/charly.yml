@@ -3,25 +3,31 @@ plugin-box:
         version: 2026.194.0000
         description: |-
             The build-mode `charly box …` verb HANDLERS relocated into a COMPILED-IN command plugin
-            candy (P15). `charly box` is a SHARED command group whose subcommands have different
+            candy (P15, K5). `charly box` is a SHARED command group whose subcommands have different
             owners: the core BoxCmd keeps the grammar spine + build (→plugin-build) / merge / labels /
-            feature / inspect / list / the authoring verbs, while THIS candy contributes four NESTED
-            command providers under the `box` parent (each command:<word> with CommandParent()=="box"):
-            generate, validate, new, pkg. COMPILED-IN, each dispatches IN-PROC via Invoke(OpRun) (kong-
-            parse its sub-grammar), so the handlers own charly's real stdio. `generate` renders the
-            .build/ tree by InvokeProvider'ing the peer build:generate word (candy/plugin-build), which
-            drives HostBuild("build-resolve", GenerateOnly); `new` (candy/project/box) calls the
+            feature / the authoring verbs, while THIS candy contributes six NESTED command providers
+            under the `box` parent (each command:<word> with CommandParent()=="box"): generate,
+            validate, new, pkg, inspect, list. COMPILED-IN, each dispatches IN-PROC via Invoke(OpRun)
+            (kong-parse its sub-grammar), so the handlers own charly's real stdio. `generate` renders
+            the .build/ tree by InvokeProvider'ing the peer build:generate word (candy/plugin-build),
+            which drives HostBuild("build-resolve", GenerateOnly); `new` (candy/project/box) calls the
             sdk/kit scaffold engine directly (kit.ScaffoldCandy/ScaffoldProject/AddBox), no core
             reentry; `validate` and `pkg` reach the hidden core __box-validate / __box-pkg reentries
-            over HostBuild("cli") (their data still needs the fully-resolved project the plugin cannot
-            load pre-K1). It imports only the sdk module, never charly core. Placement-invisible (F8):
-            the SAME provider compiles into charly or serves out-of-process.
+            over HostBuild("cli"); `inspect` and `list` read the generic spec.ResolvedProject envelope
+            (HostBuild("resolved-project")) — inspect's default JSON is snake_case canonical — with the
+            deploy-overlay formats (inspect tunnel/bind_mounts) + store-live `list tags` reaching the
+            hidden core __box-inspect-overlay / __box-list-tags reentries. Their data still needs the
+            fully-resolved project / deploy overlay / podman store the plugin cannot compute pre-K1. It
+            imports only the sdk module, never charly core. Placement-invisible (F8): the SAME provider
+            compiles into charly or serves out-of-process.
         plugin:
             providers:
                 - command:generate
                 - command:validate
                 - command:new
                 - command:pkg
+                - command:inspect
+                - command:list
             source: github.com/opencharly/charly/candy/plugin-box
         plan:
             - # ADE check: a deterministic build-context check that does NOT depend on the host

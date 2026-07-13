@@ -4,9 +4,9 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves FOUR command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg` parse + dispatch here while the retained core BoxCmd
-// verbs — build/merge/labels/feature/inspect/list/the authoring verbs — stay in core):
+// It serves SIX command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/inspect/list` parse + dispatch here while the retained
+// core BoxCmd verbs — build/merge/labels/feature/the authoring verbs — stay in core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
@@ -18,6 +18,12 @@
 //     pre-K1).
 //   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
 //     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
+//   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
+//     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
+//     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) reenter
+//     the hidden core `__box-inspect-overlay`. See inspect_list.go.
+//   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
+//     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio natively. It imports ONLY the sdk module, never charly core.
@@ -37,7 +43,7 @@ import (
 const calver = "2026.194.0000"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list"}
 
 // NewProvider returns the box command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.

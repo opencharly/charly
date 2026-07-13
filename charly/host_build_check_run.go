@@ -60,8 +60,10 @@ func hostCheckRunScore(ctx context.Context, req spec.CheckRunRequest) (kit.Check
 
 // hostCheckRunPreflight is the "preflight" atom arm: for a host-target iterate entity, ensure every
 // image the score's plan steps spawn is present in local storage BEFORE the harness runner walks
-// them. It runs the loader-coupled scan (ScanCandy + ExpandPlanIncludes) + the R3-shared
-// EnsureImagePresent (via ensureScoreImages) — all core Mechanisms — and returns an empty reply.
+// them. The include-EXPANDED scored plan is computed PLUGIN-SIDE off the resolved-project envelope
+// (candy/plugin-check's include-splicer, which owns the plan expansion) and threaded here as
+// req.Plan; the host runs the R3-shared EnsureImagePresent (via ensureScoreImages) over it and
+// returns an empty reply.
 func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	dir := req.Dir
 	if dir == "" {
@@ -76,13 +78,10 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.Che
 	if !ok || uf == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no charly.yml in %s", dir)
 	}
-	node, has := uf.Bundle[req.Name]
-	if !has {
+	if _, has := uf.Bundle[req.Name]; !has {
 		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
 	}
-	layers, _ := ScanCandy(dir)
-	plan, _ := ExpandPlanIncludes(uf, layers, node.Plan)
-	if err := ensureScoreImages(context.Background(), plan, uf, dir); err != nil {
+	if err := ensureScoreImages(context.Background(), req.Plan, uf, dir); err != nil {
 		return kit.CheckRunReply{}, err
 	}
 	return kit.CheckRunReply{}, nil

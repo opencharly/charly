@@ -1,0 +1,17 @@
+# golangci-lint v2 config for the command:check plugin candy — mirrors charly/.golangci.yml's
+# errcheck policy. plugin-check is a CLI-output-heavy command relocated from charly's check family
+# (P12), so it uses the SAME fmt.Fprint(os.Stdout/os.Stderr/tabwriter) idiom charly does; writing to
+# stdout/stderr/a string-builder never produces an actionable error in a CLI, and a deferred Close on
+# a network conn / read handle is idiomatic best-effort cleanup. Genuinely actionable errors
+# (os.WriteFile, exec.Cmd.Run, fmt.Sscanf, io.Copy, …) are NOT excluded and ARE handled. Keeps the
+# standard set (errcheck, govet, ineffassign, staticcheck, unused).
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Closer).Close

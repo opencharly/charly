@@ -957,17 +957,6 @@ func (l *Candy) Route() (*RouteConfig, error) { //nolint:unparam // error return
 	return nil, nil
 }
 
-// RouteCandy returns candies that have a route file
-func RouteCandy(layers map[string]*Candy) []*Candy {
-	var routes []*Candy
-	for _, layer := range layers {
-		if layer.HasRoute() {
-			routes = append(routes, layer)
-		}
-	}
-	return routes
-}
-
 // CandyNames returns a sorted list of candy names
 func CandyNames(layers map[string]*Candy) []string {
 	names := make([]string, 0, len(layers))
@@ -1078,42 +1067,9 @@ func (l *Candy) Engine() string {
 	return l.engine
 }
 
-// InitCandy returns candies that trigger any init system.
-func InitCandy(layers map[string]*Candy) []*Candy {
-	var result []*Candy
-	for _, layer := range layers {
-		if layer.HasAnyInit() || len(layer.PortRelayPorts) > 0 {
-			result = append(result, layer)
-		}
-	}
-	return result
-}
-
-// VolumeCandy returns candies that have volume declarations
-func VolumeCandy(layers map[string]*Candy) []*Candy {
-	var vols []*Candy
-	for _, layer := range layers {
-		if layer.HasVolumes() {
-			vols = append(vols, layer)
-		}
-	}
-	return vols
-}
-
 // Alias returns the alias declarations (pre-populated from the candy manifest)
 func (l *Candy) Alias() []AliasYAML {
 	return l.aliases
-}
-
-// AliasCandy returns candies that have alias declarations
-func AliasCandy(layers map[string]*Candy) []*Candy {
-	var result []*Candy
-	for _, layer := range layers {
-		if layer.HasAliases() {
-			result = append(result, layer)
-		}
-	}
-	return result
 }
 
 // NeedsGit returns true if the pixi manifest contains git-based dependencies
