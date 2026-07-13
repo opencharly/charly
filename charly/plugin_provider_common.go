@@ -27,10 +27,20 @@ type capMeta struct {
 	phase      string             // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
 	primary    string             // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
 	traits     *spec.DeployTraits // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
+	cmdParent  string             // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
 }
 
 func (m capMeta) Reserved() string     { return m.word }
 func (m capMeta) Class() ProviderClass { return m.class }
+
+// CommandParent implements NestedCommandProvider (provider_command_external.go) — the parent
+// command word this command nests UNDER (e.g. "box" for `charly box generate`), or "" for a
+// top-level command. Both provider twins EMBED capMeta, so both satisfy NestedCommandProvider via
+// promotion; the VALUE is set only for a COMPILED-IN class:command capability whose provider
+// declares it via the optional CommandParent() interface (buildUnitInProc). Every other capability
+// — and every OUT-OF-PROCESS command — returns "" (top-level; no live out-of-process nested command
+// exists), so collectExternalCommandPlugins's `parent != ""` guard is what actually gates nesting.
+func (m capMeta) CommandParent() string { return m.cmdParent }
 
 // declaredStepContract implements stepContractCarrier — a class:step capability's plugin-declared
 // Scope/Venue/Gate/Emits (F3), nil/false for every other capability.

@@ -3,8 +3,6 @@ package main
 import (
 	"reflect"
 	"testing"
-
-	"github.com/alecthomas/kong"
 )
 
 // TestNormalizeBoxArgs asserts the `all` sentinel collapses to nil ONLY when it
@@ -116,37 +114,6 @@ func TestBuildResolveOptsParity(t *testing.T) {
 	}
 }
 
-// TestGenerateCmdKongParse confirms `charly box generate` now accepts the
-// optional box positional and the --include-disabled flag (the new surface),
-// and still parses with no arguments (the default-all path).
-func TestGenerateCmdKongParse(t *testing.T) {
-	parse := func(args ...string) GenerateCmd {
-		var cli struct {
-			Generate GenerateCmd `cmd:""`
-		}
-		p, err := kong.New(&cli)
-		if err != nil {
-			t.Fatalf("kong.New: %v", err)
-		}
-		if _, err := p.Parse(args); err != nil {
-			t.Fatalf("parse %v: %v", args, err)
-		}
-		return cli.Generate
-	}
-
-	if g := parse("generate"); len(g.Boxes) != 0 {
-		t.Errorf("bare generate: Boxes = %v, want empty", g.Boxes)
-	}
-	if g := parse("generate", "all"); !reflect.DeepEqual(g.Boxes, []string{"all"}) {
-		t.Errorf("generate all: Boxes = %v, want [all]", g.Boxes)
-	}
-	if g := parse("generate", "fedora"); !reflect.DeepEqual(g.Boxes, []string{"fedora"}) {
-		t.Errorf("generate fedora: Boxes = %v, want [fedora]", g.Boxes)
-	}
-	if g := parse("generate", "fedora", "arch"); !reflect.DeepEqual(g.Boxes, []string{"fedora", "arch"}) {
-		t.Errorf("generate fedora arch: Boxes = %v, want [fedora arch]", g.Boxes)
-	}
-	if g := parse("generate", "immich", "--include-disabled"); !g.IncludeDisabled {
-		t.Errorf("generate immich --include-disabled: IncludeDisabled = false, want true")
-	}
-}
+// `charly box generate`'s Kong-parse coverage (its boxes positional + --include-disabled flag) moved
+// into candy/plugin-box's own tests with the P15 externalization — `charly box generate` is now a
+// nested command served by the COMPILED-IN candy/plugin-box.

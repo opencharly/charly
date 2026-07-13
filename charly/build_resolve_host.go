@@ -32,7 +32,7 @@ import (
 // placement RE-JUDGED at P15/P16 after the loader-residue fold, never a silent keep.
 //
 // The build-ACTIVITY lock (retention floor) + the post-build retention prune are
-// NOT here — they wrap the whole build in BuildCmd.Run/GenerateCmd.Run host-side
+// NOT here — they wrap the whole build in BuildCmd.Run host-side
 // (BuildCmd.Run computes the tag once + threads it here as req.Tag so the
 // activity-lock tag matches the built images). The PER-IMAGE build lock moved to
 // the candy (kit.AcquireImageBuildLock) so distinct leaves still fan out in

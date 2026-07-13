@@ -275,9 +275,6 @@ func Validate(cfg *Config, layers map[string]*Candy, dir string, opts ResolveOpt
 	// Validate package config (rpm/deb/pac/aur sections in the candy manifest)
 	validatePkgConfig(layers, errs)
 
-	// Validate image base references
-	validateBaseReferences(cfg, errs)
-
 	// Validate no circular dependencies in images
 	validateBoxDAG(cfg, layers, dir, opts, errs)
 
@@ -298,9 +295,6 @@ func Validate(cfg *Config, layers map[string]*Candy, dir string, opts ResolveOpt
 		validateBuilders(cfg, layers, defaultBuilderCfg, dir, opts, errs)
 	}
 
-	// Validate DNS and ACME email
-	validateDNS(cfg, errs)
-
 	// Tunnel is a deploy-time concern (charly.yml only) — not validated here.
 
 	// Validate candy composition (candy: field)
@@ -319,7 +313,7 @@ func Validate(cfg *Config, layers map[string]*Candy, dir string, opts ResolveOpt
 	validatePackagedServices(cfg, layers, errs)
 
 	// Validate libvirt snippets
-	validateLibvirt(cfg, layers, errs)
+	validateLibvirt(layers, errs)
 
 	// Validate engine declarations
 	validateEngineConfig(cfg, layers, errs)
@@ -931,14 +925,6 @@ func validatePkgConfig(layers map[string]*Candy, errs *ValidationError) {
 	}
 }
 
-// validateBaseReferences ensures base references resolve
-func validateBaseReferences(cfg *Config, errs *ValidationError) {
-	// Base references can be:
-	// 1. External OCI images (always valid)
-	// 2. Names of other images in charly.yml (validated by image DAG check)
-	// No additional validation needed here
-}
-
 // validateBoxDAG checks for circular image dependencies
 func validateBoxDAG(cfg *Config, layers map[string]*Candy, dir string, opts ResolveOpts, errs *ValidationError) {
 	calverTag := "test"
@@ -1281,13 +1267,6 @@ func validateBuilders(cfg *Config, layers map[string]*Candy, builderCfg *Builder
 	}
 }
 
-// validateDNS is a no-op in schema v4. DNS and AcmeEmail moved off
-// BoxConfig to BundleNode (they're deployment choices). Deploy-side
-// validation of these fields is handled by validateDeployConfig.
-func validateDNS(cfg *Config, errs *ValidationError) {
-	// intentionally empty — schema v4 removed image-level dns/acme_email
-}
-
 // validateRemoteCandies checks remote candy consistency
 func validateRemoteCandies(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
 	// Check version conflicts (same repo referenced with different versions)
@@ -1469,7 +1448,7 @@ func levenshteinDistance(a, b string) int {
 }
 
 // validateLibvirt validates libvirt XML snippets in candies and images
-func validateLibvirt(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
+func validateLibvirt(layers map[string]*Candy, errs *ValidationError) {
 	// Validate candy-level snippets
 	for name, layer := range layers {
 		if !layer.HasLibvirt() {
@@ -1489,8 +1468,6 @@ func validateLibvirt(cfg *Config, layers map[string]*Candy, errs *ValidationErro
 	// XML well-formedness is not checked at config time (it surfaces at
 	// libvirt-define time) — ValidateLibvirtSnippet remains the candy/image
 	// check above.
-	_ = cfg
-	_ = layers
 }
 
 // validateEngineConfig validates engine declarations in candies and images
