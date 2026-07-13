@@ -1,0 +1,97 @@
+{
+  "version": "2026.100.0000",
+  "boxes": {
+    "demo": {
+      "name": "demo",
+      "version": "2026.100.0001",
+      "effective_version": "2026.100.0002",
+      "status": "working",
+      "info": "a demo box",
+      "check_level": "noagent",
+      "base": "fedora:43",
+      "from": "builder:pacstrap",
+      "bootstrap_builder_image": "ghcr.io/opencharly/builder",
+      "platforms": [
+        "linux/amd64"
+      ],
+      "tag": "2026.100.0003",
+      "registry": "ghcr.io/opencharly",
+      "pkg": "rpm",
+      "distro": [
+        "fedora:43",
+        "fedora"
+      ],
+      "build_formats": [
+        "rpm"
+      ],
+      "tags": [
+        "all",
+        "fedora"
+      ],
+      "candy": [
+        "base",
+        "charly"
+      ],
+      "user": "user",
+      "uid": 1000,
+      "gid": 1000,
+      "home": "/home/user",
+      "user_adopted": true,
+      "merge": {
+        "auto": true,
+        "max_mb": 512,
+        "max_total_mb": 4096
+      },
+      "builder": {
+        "pixi": "ghcr.io/opencharly/pixi"
+      },
+      "builder_capabilities": [
+        "pixi"
+      ],
+      "auto": true,
+      "network": "host",
+      "data_image": true,
+      "is_external_base": true,
+      "full_tag": "ghcr.io/opencharly/demo:2026.100.0003"
+    }
+  },
+  "candies": {
+    "charly": {
+      "name": "charly",
+      "version": "2026.100.0004",
+      "description": "the charly toolchain",
+      "status": "working",
+      "info": "the charly toolchain",
+      "remote": true,
+      "repo_path": "github.com/opencharly/charly",
+      "require": [
+        "base"
+      ],
+      "candy": [
+        "gnupg"
+      ],
+      "env_provide": {
+        "CHARLY_HOME": "/opt/charly"
+      },
+      "mcp_provide": [
+        {
+          "name": "charly-mcp",
+          "url": "http://localhost:9000",
+          "transport": "http"
+        }
+      ],
+      "port": [
+        9000
+      ],
+      "service_name": [
+        "charly-daemon"
+      ]
+    }
+  },
+  "deploy": {
+    "demo-pod": {
+      "description": "demo deploy",
+      "target": "pod"
+    }
+  }
+}
