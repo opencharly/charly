@@ -501,8 +501,13 @@ arch:
                 local_pkg:
                     pkg_glob: '*.pkg.tar.zst'
                     source_sentinel: PKGBUILD
+                    # #72: GIT_CONFIG_* disables git's DEFAULT on-demand submodule recursion, so
+                    # makepkg's working-copy `git fetch` of the (worktree-shared, all-branches) .git
+                    # superproject does NOT try to pull a sibling branch's unpushed sdk gitlink from
+                    # the sdk remote ("fatal: … not our ref"). sdk is wired by PKGBUILD prepare() from
+                    # a SEPARATE file:// source, so superproject-fetch recursion is never needed.
                     build_template: |
-                        cd {{.SrcDir}} && PKGDEST={{.PkgDest}} makepkg -sf --noconfirm
+                        cd {{.SrcDir}} && PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
                     # Refresh the sync DB (+ reseed the keyring from the installed keyring
                     # packages) BEFORE installing the local pkg — `pacman -U` resolves the
                     # pkg's depends= from the sync DB, and a pinned base image's DB drifts

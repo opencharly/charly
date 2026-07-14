@@ -114,9 +114,15 @@ type CLI struct {
 // VersionCmd prints the computed CalVer tag
 type VersionCmd struct{}
 
-func (c *VersionCmd) Run() error { //nolint:unparam // error return kept for interface/API stability
+func (c *VersionCmd) Run() error {
 	// The BINARY's identity (stamped at build time), NOT the wall clock.
-	fmt.Println(CharlyVersion())
+	v := CharlyVersion()
+	fmt.Println(v)
+	if v == "unknown" {
+		// A non-zero exit lets scripts gate on an UNSTAMPED binary (build with
+		// `task build:binary`); the version is still printed to stdout above (#74).
+		return fmt.Errorf("unstamped binary (version %q) — build with `task build:binary`", v)
+	}
 	return nil
 }
 
@@ -212,6 +218,12 @@ func main() {
 	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
 	// the 2026-05-09 cuda-cudnn cache-mount incident).
 	CheckBinaryFreshness(ctx.Command())
+
+	// Refuse the disposable-bed RUNNER (`charly check run`) on an UNSTAMPED binary
+	// (version "unknown") — the version-identity analog of the freshness guard above.
+	// See CheckBinaryStamped (#74: the twice-recurred gate defect where a plain
+	// `go build` binary fails a bed run minutes in, or passes vacuously).
+	CheckBinaryStamped(ctx.Command())
 
 	// Cleanup hygiene: install a global signal handler so that registered
 	// temp-file paths are removed on SIGTERM/SIGINT/SIGHUP, and sweep any
