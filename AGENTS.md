@@ -106,6 +106,58 @@ and touching code third. Never reverse this order.
 12. Prove the factory from inside disposable candyboxes: the full `charly`
     line builds, deploys, evaluates, and improves fresh candyboxes recursively.
 
+## Risk Driven Development (RDD)
+
+Validate every high-risk assumption empirically on a live target explicitly
+marked `disposable: true` during planning or early implementation. Risk is the
+trigger: if being wrong invalidates the plan, is costly to reverse, or derails
+RCA, neither a skill, this rulebook, memory, nor source inspection is proof.
+Load the owning skill first, then verify the hypothesis against reality. When
+the live result contradicts documentation, correct the documentation in the
+same change.
+
+Use a spike for one named high-risk unknown. A spike is time-boxed, throwaway
+work that discovers HOW to satisfy the approved plan. Discard its code after
+capturing the proven mechanism and required documentation corrections. A spike
+never changes whether the work happens, reduces scope, ships as implementation,
+or replaces the final R10 gate. A discovery that genuinely changes the contract
+requires stopping and asking the operator.
+
+## Memory hygiene
+
+Treat every saved system fact as a claim. R1 establishes that the fact is real,
+and RDD proves high-risk system claims on a disposable target before they are
+saved. User preferences and other low-risk context require accuracy, a narrow
+statement, absolute dates where relevant, and verification that named artifacts
+still exist before reuse. Live evidence outranks memory; correct or delete stale
+memory in the same change.
+
+## Agent Driven Evaluation (ADE)
+
+Capture intended behavior as an executable `plan:` on the candy that provides
+it. Every candy has a non-empty `description:` and a `plan:` containing at least
+one deterministic `check:` step; `charly box validate` rejects omissions, and
+the baked plan must pass. Each plan item has exactly one intent: `run:` for a
+deterministic state change, `check:` for an idempotent probe, `agent-run:` for a
+potentially mutating agent action, `agent-check:` for a read-only live agent
+assessment, or `include:` for another entity's plan. Unparseable, timed-out, or
+failed agent grading fails the step. `charly check` and `charly check live` run
+only `check:` and `agent-check:` steps. One candy plan covers every composing
+box: the specification is the acceptance test.
+
+## Schema Driven Design (SDD)
+
+Define every authored configuration surface and host/plugin wire shape in CUE
+before code. Generate its Go representation with `task cue:gen`; never maintain
+a hand-transcribed wire struct. Validation at ingress, plugin inputs, migration,
+and egress derives from the same schema. Wire types are plain or discriminated
+CUE structs. Adding `@go(-)` or another handwritten schema-shaped exception
+requires a full RCA and a live `cue exp gengotypes` spike proving generation
+cannot express the shape; only the exception catalog owned by
+`/charly-internals:go` is permitted. Clean regeneration is a no-op, and drift is
+an R1 incident. Prove a high-risk schema shape with a schema spike before code
+depends on it.
+
 ## Ground-truth rules R1–R10
 
 - **R1 — RCA every anomaly.** The first failure, warning, error, unexpected
@@ -214,6 +266,28 @@ After R10 passes:
 6. After any `main` advance, update sibling PRs and run a risk-proportional
    delta re-gate. Divergent submodule lineage requires a disposable RDD proof,
    never descendant-wins guessing.
+
+## Acceptance checklist
+
+Before declaring work complete, answer every applicable item YES:
+
+- Every high-risk assumption was proven early under RDD.
+- Every failure, warning, anomaly, rule violation, and stale claim received RCA
+  before remediation, and every discovered issue was fixed or escalated.
+- Removed identifiers remain only in dated changelog or migration-help history;
+  no transitional path, alias, shim, or stale current reference survives.
+- The real artifact was built from the changed source, its deployed version and
+  dependencies match, and shipped check coverage would fail without the change.
+- The exact change-class R10 gate ran against the final committed tree. Runtime
+  work includes exploratory and fresh-rebuild outputs from every affected
+  disposable target; documentation-only work includes every non-runtime check.
+- All targets finish healthy and zero warnings remain.
+- The approved plan ran as written; no scope change, deferred phase, TODO, or
+  follow-up substitutes for completing the cutover.
+- Each repository lands as one squash commit on `main`, with exact attribution,
+  through a feature PR accepted by a fresh independent validator. The validator
+  posts `charly/claude-validation`, merges without bypass, creates the immutable
+  merge-time CalVer tag, and verifies clean final state.
 
 Changes requested stay on the same PR with append-only commits. Close and
 replace only work that cannot land at all. Never bypass branch protection,
