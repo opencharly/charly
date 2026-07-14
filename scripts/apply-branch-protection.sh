@@ -8,7 +8,7 @@
 #   scripts/apply-branch-protection.sh apply opencharly/sdk   # a subset
 #
 # After `apply`, the ONLY way `main` advances in a repo is a PR carrying a green
-# `charly/claude-validation` status (posted by the fresh pr-validator agent),
+# `charly/pr-validator` status (posted by the fresh pr-validator agent),
 # merged by that agent via `gh pr merge --squash`. `enforce_admins=true` makes
 # the block real for everyone, admins included; `required_linear_history` +
 # squash-only keep `main` linear AND make every cutover exactly ONE commit on
@@ -37,7 +37,7 @@ REPOS=(
   opencharly/pkg-debian
   opencharly/pkg-fedora
 )
-CONTEXT="charly/claude-validation"
+CONTEXT="charly/pr-validator"
 BRANCH="main"
 
 mode="${1:-verify}"
