@@ -255,12 +255,13 @@ session. Worktree builds always use the worktree-local `bin`.
 
 ## Hooks
 
-Hooks point to this rulebook and skills. AI-harness command gates block bypass
-flags, force pushes, direct-main pushes, untokenizable commit commands, invalid
-AI attribution tiers, missing required changelogs, configured staged Go lint,
-and new core alias forms. Hooks do not apply AI attribution requirements to an
-ordinary 100% human commit made without an AI harness. Agents still judge the
-complete change class, architecture, proof, and R0–R10 gate.
+Hooks point to this rulebook and skills. They enforce only deterministic
+immediate command mechanics: bypass flags, force pushes, direct-main pushes,
+untokenizable commit commands, and configured staged Go lint. Attribution
+identity/confidence, change class, changelog coverage, architecture, and R0–R10
+proof are judged once by the fresh PR validator, never duplicated as hook
+regexes. Ordinary 100% human commits remain outside AI-harness attribution
+gates.
 
 ## Attribution and confidence
 
