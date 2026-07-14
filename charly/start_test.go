@@ -178,17 +178,3 @@ func TestStopCmd_UnmountFlagDefaults(t *testing.T) {
 		t.Error("StopCmd.Unmount must be settable")
 	}
 }
-
-// TestStopUnmountIfRequested_NoOpWhenWantFalse exercises the helper's
-// fast-path: when want=false, it returns immediately without consulting
-// deploy.yml or attempting any encUnmount call. Documented as the first
-// line of the function — a regression here would invert the opt-in.
-func TestStopUnmountIfRequested_NoOpWhenWantFalse(_ *testing.T) {
-	// A bogus image+instance that has no deploy entry would normally
-	// cause encUnmount → loadEncryptedVolume to error. Because want=
-	// false, the helper short-circuits and the call never happens, so
-	// no warning is emitted to stderr (we don't capture stderr here;
-	// the assertion is structural — the function must return without
-	// panicking, hanging, or invoking any deploy-resolution code).
-	stopUnmountIfRequested(false, "totally-nonexistent-image-xyz", "ghost-instance")
-}

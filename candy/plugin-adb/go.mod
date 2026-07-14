@@ -4,6 +4,8 @@ go 1.26.0
 
 require github.com/zach-klippenstein/goadb v0.0.0-20201208042340-620e0e950ed7
 
+require github.com/alecthomas/kong v1.15.0 // indirect
+
 require (
 	cuelang.org/go v0.16.1 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect

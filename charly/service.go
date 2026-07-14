@@ -1,9 +1,8 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"slices"
 	"strings"
 )
@@ -27,7 +26,7 @@ func (c *ServiceStatusCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	return execInitCommand(engine, name, initDef, "status")
+	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "status")
 }
 
 // ServiceStartCmd starts a service
@@ -45,7 +44,7 @@ func (c *ServiceStartCmd) Run() error {
 	if err := validateServiceName(engine, name, c.Service); err != nil {
 		return err
 	}
-	return execInitCommand(engine, name, initDef, "start", c.Service)
+	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "start", c.Service)
 }
 
 // ServiceStopCmd stops a service
@@ -63,7 +62,7 @@ func (c *ServiceStopCmd) Run() error {
 	if err := validateServiceName(engine, name, c.Service); err != nil {
 		return err
 	}
-	return execInitCommand(engine, name, initDef, "stop", c.Service)
+	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "stop", c.Service)
 }
 
 // ServiceRestartCmd restarts a service
@@ -81,7 +80,7 @@ func (c *ServiceRestartCmd) Run() error {
 	if err := validateServiceName(engine, name, c.Service); err != nil {
 		return err
 	}
-	return execInitCommand(engine, name, initDef, "restart", c.Service)
+	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "restart", c.Service)
 }
 
 // resolveServiceInit resolves the container, engine, and init system for service management.
@@ -176,8 +175,14 @@ func resolveInitDefFromMeta(meta *BoxMetadata) (*ResolvedInit, error) {
 	return nil, fmt.Errorf("unknown init system %q; cannot determine management commands (image predates the ai.opencharly.init_def label — rebuild it to bake the init contract)", meta.Init)
 }
 
-// execInitCommand executes a service management command inside a container.
-func execInitCommand(engine, containerName string, initDef *ResolvedInit, operation string, args ...string) error {
+// execInitCommand runs a service-management command INSIDE the container (the K4 deep-body move).
+// The HOST resolves the full `<engine> exec <container> <tool> <op> [svc]` argv from the image's baked
+// init contract, and the owning deploy PLUGIN executes it over the served executor via
+// LifecycleTarget.Shell — capturing the output, REPRINTING it, and PRESERVING the container command's
+// exit code exactly (grpcSubstrateLifecycle.Shell → the pod plugin's podExec). This replaces the
+// former inline host `podman exec` (a passthrough exec that lived in core); interactive `charly shell`
+// stays a CORE command (host-process TTY, F12/#62) — service is non-interactive, so it moves.
+func execInitCommand(box, instance, engine, containerName string, initDef *ResolvedInit, operation string, args ...string) error {
 	serviceName := ""
 	if len(args) > 0 {
 		serviceName = args[0]
@@ -188,11 +193,12 @@ func execInitCommand(engine, containerName string, initDef *ResolvedInit, operat
 		return err
 	}
 
-	execArgs := append([]string{"exec", containerName, initDef.ManagementTool}, strings.Fields(rendered)...)
-	cmd := exec.Command(engine, execArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	argv := append([]string{engine, "exec", containerName, initDef.ManagementTool}, strings.Fields(rendered)...)
+	lt, err := dispatchLifecycleTarget("service", box, instance)
+	if err != nil {
+		return err
+	}
+	return lt.Shell(context.Background(), argv)
 }
 
 // validateServiceName checks that a service name exists in the image's service list.

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -64,15 +63,11 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 }
 
 // parseLeaf kong-parses args into a single-command grammar struct (positional args + flags, no
-// subcommands). kong.Exit is neutralised so a parse/`--help` error returns instead of exiting the
-// whole charly process.
-func parseLeaf(name string, target any, args []string) error {
-	parser, err := kong.New(target, kong.Name("box "+name), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	_, err = parser.Parse(args)
-	return err
+// subcommands) via the shared sdk helper, which neutralises kong's process-exit and handles
+// `--help`/`--version` cleanly. done=true means kong printed help/version — the caller MUST return
+// nil without running the leaf's action (otherwise `charly box <leaf> --help` would run the leaf).
+func parseLeaf(name string, target any, args []string) (done bool, err error) {
+	return sdk.ParseInProcCLI("box "+name, target, args)
 }
 
 // --- box generate ---
@@ -91,7 +86,7 @@ type generateGrammar struct {
 // seam normalizes the `all` sentinel + scopes the selection, so the boxes ride verbatim.
 func dispatchGenerate(hc *hostClient, args []string) error {
 	var g generateGrammar
-	if err := parseLeaf("generate", &g, args); err != nil {
+	if done, err := parseLeaf("generate", &g, args); err != nil || done {
 		return err
 	}
 	dir, err := os.Getwd()
@@ -136,7 +131,7 @@ type validateGrammar struct {
 // as the command error.
 func dispatchValidate(hc *hostClient, args []string) error {
 	var g validateGrammar
-	if err := parseLeaf("validate", &g, args); err != nil {
+	if done, err := parseLeaf("validate", &g, args); err != nil || done {
 		return err
 	}
 	argv := []string{"__box-validate"}
@@ -167,7 +162,7 @@ type pkgGrammar struct {
 // subprocess inherits charly's stdio (it prints the built file paths + status) and exits 0/1.
 func dispatchPkg(hc *hostClient, args []string) error {
 	var g pkgGrammar
-	if err := parseLeaf("pkg", &g, args); err != nil {
+	if done, err := parseLeaf("pkg", &g, args); err != nil || done {
 		return err
 	}
 	argv := append([]string{"__box-pkg"}, g.Format...)
@@ -197,15 +192,7 @@ type newGrammar struct {
 // to that leaf's Run — none needs the host reverse channel).
 func dispatchNew(args []string) error {
 	var g newGrammar
-	parser, err := kong.New(&g, kong.Name("box new"), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run()
+	return sdk.RunInProcCLI("box new", &g, args)
 }
 
 // nowCalVer computes the current wall-clock CalVer via the existing kit.CalVer type (no duplicate

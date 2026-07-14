@@ -42,13 +42,8 @@ type StatusCmd struct {
 // in-core StatusCmd.Run did.
 func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	var cmd StatusCmd
-	parser, err := kong.New(&cmd, kong.Name("status"),
-		kong.Description("Show service status (all if no box given)"),
-		kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	if _, err := parser.Parse(args); err != nil {
+	if done, err := sdk.ParseInProcCLI("status", &cmd, args,
+		kong.Description("Show service status (all if no box given)")); err != nil || done {
 		return err
 	}
 

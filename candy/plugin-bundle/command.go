@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
@@ -53,15 +52,7 @@ func runBundleCommand(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 // leaf.
 func dispatchBundleCLI(args []string) error {
 	var cli BundleCmd
-	parser, err := kong.New(&cli, kong.Name("bundle"), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run()
+	return sdk.RunInProcCLI("bundle", &cli, args)
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.

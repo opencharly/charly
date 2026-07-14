@@ -78,7 +78,7 @@ type inspectGrammar struct {
 // hidden core overlay command (deploy-overlay state the envelope does not carry).
 func dispatchInspect(hc *hostClient, args []string) error {
 	var g inspectGrammar
-	if err := parseLeaf("inspect", &g, args); err != nil {
+	if done, err := parseLeaf("inspect", &g, args); err != nil || done {
 		return err
 	}
 

@@ -466,18 +466,22 @@ check-k8s-deploy-app:
         version: 2026.180.1000
         base: quay.io/fedora/fedora:43
         description: |-
-            Minimal Fedora base box — the check-k8s-deploy bed's target:k8s workload.
-            A small charly image whose ai.opencharly labels the deploy:k8s preresolver
-            reads to generate the Kustomize tree. Composes supervisord + os-layer
-            (local pure-rpm candies, no builder/@github) so it builds from the root
-            project. The deployed pod is not asserted Ready (the locally-built image is
-            absent from the disposable cluster's containerd); the bed asserts only that
-            the Deployment OBJECT landed — exactly the externalized `kubectl apply -k`.
+            Minimal Fedora base box — the check-k8s-deploy bed's target:k8s workload
+            AND the check-sidecar-pod bed's pod workload. A small charly image whose
+            ai.opencharly labels the deploy:k8s preresolver reads to generate the
+            Kustomize tree. Composes check-keepalive (→ supervisord + a `keepalive`
+            sleep-infinity program) + os-layer (local pure-rpm / coreutils candies, no
+            builder/@github) so it builds from the root project. The keepalive program
+            makes supervisord non-degenerate — it supervises a real program, so
+            `charly service status` reports it (the K4 service-move coverage on
+            check-sidecar-pod). The deployed pod is not asserted Ready (the locally-built
+            image is absent from the disposable cluster's containerd); the k8s bed asserts
+            only that the Deployment OBJECT landed — exactly the externalized `kubectl apply -k`.
         distro:
             - fedora:43
             - fedora
         candy:
-            - supervisord
+            - check-keepalive
             - os-layer
 # =============================================================================
 # check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:k8s SUBSTRATE
@@ -594,6 +598,42 @@ check-sidecar-pod:
         plan:
             - check: command=charly status --json
               id: sidecar-pod-running
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-sidecar-pod
+              context:
+                - runtime
+              command:
+                command: charly status --json
+                in_container: false
+            - check: charly service status reprints the in-container supervisorctl output — the keepalive program RUNNING — proving the K4 service move (charly service → LifecycleTarget.Shell → the pod plugin's OpShell captured exec) carries the container command's output back through the host. A swallowing capture bug yields EMPTY output and FAILS this step; the host-resolved `<engine> exec <ctr> supervisorctl status` argv is executed IN the pod plugin over the served executor, not by core.
+              id: service-status-output-present
+              exit_status: 0
+              stdout:
+                - contains: keepalive
+                - contains: RUNNING
+              context:
+                - runtime
+              command:
+                command: charly service status check-sidecar-pod
+                in_container: false
+            - run: stop the pod through the K4 deep-body STOP path (charly stop → LifecycleTarget.Stop → the pod plugin's podStop over F6, with the arbiter release bracket)
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: charly stop check-sidecar-pod
+                in_container: false
+            - run: start the pod again through the K4 deep-body START path (charly start → LifecycleTarget.Start → the pod plugin's podStart over F6, with the arbiter acquire bracket)
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: charly start check-sidecar-pod
+                in_container: false
+            - check: after the explicit stop→start cycle the pod is running again — the BOTH-DIRECTIONS coverage that would FAIL without the K4 deep-body start/stop move (a broken lifecycle dispatch leaves the pod down after stop, or never restarts it)
+              id: sidecar-pod-restarted
+              exit_status: 0
               stdout:
                 - contains: '"kind": "pod"'
                 - contains: check-sidecar-pod

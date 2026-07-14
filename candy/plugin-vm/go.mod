@@ -3,7 +3,6 @@ module github.com/opencharly/charly/candy/plugin-vm
 go 1.26.0
 
 require (
-	github.com/alecthomas/kong v1.14.0
 	github.com/digitalocean/go-libvirt v0.0.0-20260217163227-273eaa321819
 	github.com/kata-containers/govmm v0.0.0-20220119175834-88960a15dacd
 	golang.org/x/crypto v0.49.0
@@ -11,7 +10,10 @@ require (
 	libvirt.org/go/libvirtxml v1.12002.0
 )
 
-require golang.org/x/term v0.41.0 // indirect
+require (
+	github.com/alecthomas/kong v1.15.0 // indirect
+	golang.org/x/term v0.41.0
+)
 
 require (
 	cuelang.org/go v0.16.1 // indirect

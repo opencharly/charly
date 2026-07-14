@@ -18,7 +18,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alecthomas/kong"
 	libvirt "github.com/digitalocean/go-libvirt"
 
 	"github.com/opencharly/charly/candy/plugin-vm/params"
@@ -175,15 +174,7 @@ func dispatchLibvirtVerb(op *spec.Op, in *params.LibvirtVerbInput, box string) (
 	}
 	return captureOutput(func() error {
 		var cli LibvirtCmd
-		parser, err := kong.New(&cli, kong.Name("libvirt"), kong.Exit(func(int) {}))
-		if err != nil {
-			return err
-		}
-		kctx, err := parser.Parse(args)
-		if err != nil {
-			return err
-		}
-		return kctx.Run()
+		return sdk.RunInProcCLI("libvirt", &cli, args)
 	})
 }
 
