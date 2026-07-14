@@ -144,6 +144,64 @@ func isFreshnessSafeVerb(verbPath string) bool {
 	return false
 }
 
+// CheckBinaryStamped refuses to run the disposable-bed RUNNER (`charly check run <bed>`) when the
+// executing binary reports an UNSTAMPED version ("unknown"), pointing at `task build:binary`. It is
+// the version-identity analog of CheckBinaryFreshness: a plain `go build -o bin/charly ./charly`
+// leaves BuildCalVer empty → CharlyVersion()=="unknown", and the bed runner then fails MINUTES later
+// inside an eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all key off the
+// version) — or passes vacuously. This makes the precondition mechanical instead of a behavioral
+// "remember to task build:binary" rule the gate defect twice slipped past (R4: a precondition, never a
+// retry). Scope is ONLY `charly check run`: ctx.Command() collapses the whole check family to "check"
+// (the subcommand is a passthrough arg), so "run" is read from os.Args; check box/live and every other
+// verb are unaffected. The CHARLY_SKIP_FRESHNESS_CHECK bypass disables this too (CI / pinned builds).
+func CheckBinaryStamped(verbPath string) {
+	if !shouldRefuseUnstamped(verbPath) {
+		return
+	}
+	binPath, _ := os.Executable()
+	fmt.Fprintf(os.Stderr, `charly: error: refusing to run "check run" with an UNSTAMPED binary (version "unknown")
+
+  running:  %s
+
+A plain `+"`go build`"+` produces an unstamped binary. `+"`charly check run`"+` bakes the version into
+image tags, plugin-cache keys, and bed stamp assertions, so a bed run against an
+unstamped binary fails minutes later inside a plan step (or passes vacuously) — the
+twice-recurred gate defect.
+
+Fix:    task build:binary                        # stamps the CalVer identity
+Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1      (NOT recommended)
+`, binPath)
+	os.Exit(1)
+}
+
+// checkSubcommandIsRun reports whether the check family's passthrough subcommand is "run" — the token
+// immediately after the "check" command word in os.Args. externalCommandHolder forwards everything
+// after the command word as passthrough Args, so ctx.Command() collapses to "check" for run/box/live
+// alike, and the subcommand can only be recovered from os.Args.
+func checkSubcommandIsRun() bool {
+	for i, a := range os.Args {
+		if a == "check" {
+			return i+1 < len(os.Args) && os.Args[i+1] == "run"
+		}
+	}
+	return false
+}
+
+// shouldRefuseUnstamped is CheckBinaryStamped's pure decision: refuse iff the verb is `check run`
+// (the bed runner) AND the binary is unstamped, and the CHARLY_SKIP_FRESHNESS_CHECK bypass is unset.
+// verbPath is normalized via commandPathKey because Kong renders the check family's passthrough as
+// `check <args>` (NOT `check`), so an exact "check" compare silently misses every real invocation —
+// the bug the isolated os.Args unit test could not catch.
+func shouldRefuseUnstamped(verbPath string) bool {
+	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
+		return false
+	}
+	if commandPathKey(verbPath) != "check" || !checkSubcommandIsRun() {
+		return false
+	}
+	return CharlyVersion() == "unknown"
+}
+
 // findCharlySourceRoot walks up from start looking for a directory that
 // contains BOTH charly/main.go AND charly.yml. Returns the path to that
 // directory, or empty string if no such ancestor exists within 12 levels.

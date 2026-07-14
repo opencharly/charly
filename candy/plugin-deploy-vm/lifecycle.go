@@ -73,7 +73,7 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	case sdk.OpTeardownExecutor:
 		return marshalReply(spec.VenueDescriptor{Kind: "ssh", Host: kit.VmSshAlias(domainIdentity(p)), ConnectTimeout: 10})
 	case sdk.OpPostTeardown:
-		return vmPostTeardown(p, host)
+		return vmPostTeardown(ctx, exec, p, host)
 	case sdk.OpStart:
 		return cliOK(vmCli(ctx, exec, false, false, "vm", "start", vmEntity(p), "--domain", domainIdentity(p)))
 	case sdk.OpStop:
@@ -400,8 +400,17 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 // keys for the host to remove (the plugin cannot touch charly.yml; the ephemeral teardown stays a host
 // hook). Everything keys off the per-deploy DOMAIN IDENTITY so a teardown removes ONLY this deploy's
 // artifacts — never a sibling bed's (the collision this cutover eliminates).
-func vmPostTeardown(p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
+func vmPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
 	domain := domainIdentity(p)
+
+	// Destroy the libvirt/qemu DOMAIN — `bundle del`'s ONLY domain-teardown owner. The Del path
+	// replays the in-guest ReverseOps and removes host config, but nothing else tore down the venue,
+	// so a non-ephemeral vm deploy leaked a running domain (#69b). Keyed by the per-deploy DOMAIN
+	// IDENTITY (--domain) so it removes ONLY this deploy's domain, never a sibling bed's; --keep-deploy
+	// leaves the charly.yml entry cleanup to the RemoveEntries below (single owner). Best-effort: a
+	// deploy whose domain is already stopped/gone must not fail the whole teardown (`vm destroy`
+	// hard-errors on an absent domain, and bestEffort swallows it).
+	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", vmEntity(p), "--domain", domain, "--keep-deploy")
 
 	if remaining, err := kit.RemoveVmSshStanza(host.Home, kit.VmSshAlias(domain)); err != nil {
 		fmt.Fprintf(os.Stderr, "note: ssh-config stanza cleanup: %v\n", err)

@@ -394,6 +394,51 @@ type VmDestroyCmd struct {
 	KeepDeploy bool   `long:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
 }
 
+// destroyVmDomain tears the VM domain named `name` down from whichever backend ACTUALLY holds it
+// and VERIFIES the teardown, returning torn=true only when a domain was found and removed. It probes
+// libvirt authoritatively — the domain-state op spawns the libvirt session daemon (connectLibvirt),
+// so a libvirt domain is detected even when the configured/default backend is qemu; qemu is a
+// state-dir probe. torn=false with a nil error means no domain exists in EITHER backend (the caller
+// decides whether that is an error). This replaces the old "trust the single resolved backend" arm,
+// which took the qemu no-op path for a libvirt domain and falsely reported "Destroyed VM" (#69).
+func destroyVmDomain(name string, deleteDisk bool) (bool, error) {
+	// libvirt first — the authoritative existence probe (domain-state spawns the session daemon).
+	if raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "domain-state", VmName: name}); ok && vmPluginOpFlag(raw, "exists") {
+		dr, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "destroy", VmName: name, DeleteDisk: deleteDisk})
+		if !ok {
+			return false, fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
+		}
+		if e := vmPluginOpError(dr); e != "" {
+			return false, fmt.Errorf("destroying VM %s: %s", name, e)
+		}
+		// Confirm the domain is really gone: undefining a still-running domain that was NOT
+		// force-stopped first leaves a lingering TRANSIENT domain — the exact false-success this
+		// closes — so a residual definition is a real failure, never a silent success.
+		if vr, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "domain-state", VmName: name}); ok && vmPluginOpFlag(vr, "exists") {
+			return false, fmt.Errorf("VM %s: libvirt reported the destroy succeeded but the domain is still defined", name)
+		}
+		return true, nil
+	}
+
+	// qemu — a per-VM state dir with a (possibly running) qemu process.
+	dir, err := vmDir()
+	if err != nil {
+		return false, err
+	}
+	stateDir := filepath.Join(dir, name)
+	if _, statErr := os.Stat(stateDir); statErr != nil {
+		return false, nil // no libvirt domain and no qemu state dir → nothing to destroy
+	}
+	// Kill process — try QMP quit first, fall back to PID kill.
+	if err := qemuForceShutdown(stateDir); err != nil {
+		killQemuByPID(stateDir)
+	}
+	if err := os.RemoveAll(stateDir); err != nil {
+		return false, fmt.Errorf("removing qemu state dir %s: %w", stateDir, err)
+	}
+	return true, nil
+}
+
 func (c *VmDestroyCmd) Run() error {
 	// Releasing a persistent exclusive claim on this VM restores any preempted
 	// holder once the claimant is gone (deferred so it runs on every exit;
@@ -402,47 +447,25 @@ func (c *VmDestroyCmd) Run() error {
 		defer releaseResourceClaim(claimant)
 	}
 
-	reply, err := hostConfigResolve(c.Box)
+	// The libvirt domain + per-domain state + ssh alias are keyed by the DEPLOY (domain identity),
+	// so a deploy's destroy targets charly-<domain> and never a sibling bed sharing the entity.
+	name := vmName(domainOr(c.Box, c.Domain), c.Instance)
+
+	// Tear the domain down from whichever backend ACTUALLY holds it, verifying it is gone — never
+	// trust a resolved/default backend. A deploy-name positional resolves no entity `backend:` pin,
+	// so the backend fell back to the global vm.backend setting; when that was qemu but the live
+	// domain was libvirt, the old code took the qemu no-op arm and printed "Destroyed VM" while the
+	// libvirt domain kept running (#69).
+	torn, err := destroyVmDomain(name, c.Disk)
 	if err != nil {
 		return err
 	}
-	backend := reply.Backend
-
-	// The libvirt domain + per-domain state + ssh alias are keyed by the DEPLOY (domain identity),
-	// so a deploy's destroy targets charly-<domain> and never a sibling bed sharing the entity; the
-	// entity (c.Box) still drives backend/claimant/disk-source resolution.
-	name := vmName(domainOr(c.Box, c.Domain), c.Instance)
-
-	switch backend {
-	case "libvirt":
-		// Destroy via the out-of-process vm plugin (the op graceful-stops + undefines, and is
-		// idempotent on an already-gone domain); the charly.yml + ssh-config cleanup below still
-		// runs so a lingering config whose domain is already destroyed is still removed.
-		raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "destroy", VmName: name, DeleteDisk: c.Disk})
-		if !ok {
-			return fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
-		}
-		if e := vmPluginOpError(raw); e != "" {
-			return fmt.Errorf("undefining VM %s: %s", name, e)
-		}
-		fmt.Fprintf(os.Stderr, "Destroyed VM %s\n", name)
-
-	case "qemu":
-		dir, err := vmDir()
-		if err != nil {
-			return err
-		}
-		stateDir := filepath.Join(dir, name)
-
-		// Kill process — try QMP quit first, fall back to PID kill
-		if err := qemuForceShutdown(stateDir); err != nil {
-			killQemuByPID(stateDir)
-		}
-
-		// Remove state directory
-		_ = os.RemoveAll(stateDir)
-		fmt.Fprintf(os.Stderr, "Destroyed VM %s\n", name)
+	if !torn {
+		// No domain in EITHER backend — a genuinely-absent target must FAIL, never report a false
+		// "Destroyed VM" success (#69 regression: destroy-nonexistent exits non-zero).
+		return fmt.Errorf("no such VM %q: no libvirt domain and no qemu state — nothing destroyed", name)
 	}
+	fmt.Fprintf(os.Stderr, "Destroyed VM %s\n", name)
 
 	// Remove any boot-autostart user unit (the inverse of ensureBootAutostartPrereqs),
 	// so a destroyed VM doesn't leave a unit that fails at boot. Idempotent.
