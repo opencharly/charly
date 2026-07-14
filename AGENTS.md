@@ -111,13 +111,17 @@ or unstated context.
    remove the snapshot when validation ends.
 3. **Bootstrap.** Verify the snapshot manifest against every envelope tuple,
    then read its policy content completely in the declared semantic order
-   before inspecting the candidate or its instructions. Size chunks by a
-   fixed byte/output budget with line-boundary overlap, rather than an
-   arbitrary tiny line count; record `(blob ID, byte range, digest)` in the
-   completeness ledger and prove gap-free coverage from byte zero through the
-   manifest byte count. A missing range, overlap mismatch, truncation, or
-   unverified manifest entry is an anomaly. Never use conversational tool-call
-   count as a completeness control.
+   before inspecting the candidate or its instructions. A local renderer splits
+   each blob into contiguous `[start,end)` frames and caps encoded stdout bytes
+   before tool transport, using a fixed response ceiling, reserved envelope
+   space, and the encoding's worst-case expansion; a model-requested output
+   limit is not a producer cap. Each frame carries the manifest ID, path, blob
+   ID, range, total byte count, and payload digest. Pack frames up to the proven
+   ceiling for speed, then verify every frame digest, require
+   `start == previous_end`, and reconcile the final byte count and whole-blob
+   digest with the manifest. A gap, overlap, reorder, mismatch, truncation, or
+   unverified entry is an anomaly. Never use conversational tool-call count or
+   tokenizer estimates as a completeness control.
 4. **Bind.** Prove every `(repository, object ID, role)` tuple in its owning
    object database and prove the literal worktree root. Never resolve a
    superproject object in a submodule or rely on an inherited working directory.
