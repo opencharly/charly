@@ -5,14 +5,22 @@ dispatcher; do not mirror its rules here.
 
 ## Startup
 
-1. Start at the superproject root and read the root `CLAUDE.md` completely. Run
-   submodule Git operations from there with literal absolute `git -C <path>`
+1. Start at the superproject root. Before reading `CLAUDE.md`, load every
+   matching skill already identifiable from the request or assigned role. A PR
+   validator first reads `plugins/internals/agents/pr-validator.md`,
+   `plugins/internals/skills/git-workflow/SKILL.md`, and
+   `plugins/internals/skills/strict-policy/SKILL.md`; an RCA role first reads
+   `plugins/internals/agents/root-cause-analyzer.md` and
+   `plugins/internals/skills/strict-policy/SKILL.md`.
+2. Read the root `CLAUDE.md` completely, then load every additional skill its
+   dispatcher selects before exploration or mutation. Run submodule Git
+   operations from the superproject with literal absolute `git -C <path>`
    commands; never root a worker inside a submodule.
-2. Read the nearest per-directory `CLAUDE.md` signpost for every touched area.
-3. Apply R0 before exploration or mutation. If a dispatched skill is not
+3. Read the nearest per-directory `CLAUDE.md` signpost for every touched area.
+4. If a dispatched skill is not
    registered with Codex, read its on-disk `SKILL.md` completely; registration
    never determines whether a repository skill applies.
-4. Treat Claude-specific tool names as roles and preserve their isolation,
+5. Treat Claude-specific tool names as roles and preserve their isolation,
    authorization, and proof requirements with the Codex equivalent. Stop if a
    mandatory capability has no equivalent; never weaken the gate.
 
@@ -61,3 +69,18 @@ paragraphs, lists or tables for structured facts, and fenced blocks for
 verbatim validation evidence. Preserve the italicized `Assisted-by:` footer and
 submit multiline bodies with `gh pr create --body-file`; never encode newlines
 as escape sequences or publish an unstructured wall of text.
+
+## Process integrity
+
+- Create every AI-authored commit, including every merge commit, with the exact
+  `Assisted-by:` trailer. Before the first push, verify its complete message,
+  tree, and ordered parents.
+- A fresh validator loads protected-`main` policy and every dispatched skill
+  before inspecting the candidate change. Use validation commands that are
+  read-only or self-cleaning and leave the candidate worktree unchanged. Any
+  validator anomaly invalidates that run and requires RCA plus a new context.
+- For validation scope, follow `/charly-check:check` "R10 gate by change
+  class"; Codex adds no alternate gate or bed requirement.
+- For submodule-pointer conflicts, follow `/charly-internals:git-workflow`
+  "Gitlink ANCESTOR bump → `gh pr update-branch` flags CONFLICTING (recover
+  locally)"; Codex adds no alternate conflict-recovery procedure.
