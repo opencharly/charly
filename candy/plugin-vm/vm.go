@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -328,59 +329,27 @@ func (c *VmStopCmd) Run() error {
 	return nil
 }
 
-// stopVM stops a running VM by image+instance. force=false performs a
-// graceful ACPI shutdown (disk + definition preserved — the "stopped, but
-// not depleted" semantic the resource arbiter relies on); force=true
-// destroys/kills it. Shared by VmStopCmd.Run and the resource arbiter
-// (charly/preempt.go), which always calls it with force=false so a preempted
-// holder is gracefully shut down and remains restartable.
+// stopVM stops a running VM by image+instance+domain — the `charly vm stop` command handler. It
+// tears the domain down from whichever backend ACTUALLY holds it and VERIFIES the stop via
+// stopVmDomain — never trusting the single resolved/default backend, which took the qemu no-op
+// path for a libvirt domain and falsely reported "Stopped VM" while the domain kept running (#77,
+// the stop sibling of #69's destroy false-success, sharing the vmHolder probe). force=false is a
+// graceful ACPI shutdown (disk + definition preserved — the "stopped, not depleted" semantic);
+// force=true destroys/kills it. Called only by VmStopCmd.Run (the resource arbiter's holderStop
+// uses the separate core stopVM in charly/vm_backend_lifecycle.go — the same backend-mismatch
+// class, registered for the next vm-lifecycle cutover).
 func stopVM(box, instance, domain string, force bool) error {
-	reply, err := hostConfigResolve(box)
+	name := vmName(domainOr(box, domain), instance)
+	stopped, err := stopVmDomain(name, force)
 	if err != nil {
 		return err
 	}
-	backend := reply.Backend
-
-	name := vmName(domainOr(box, domain), instance)
-
-	switch backend {
-	case "libvirt":
-		raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "stop", VmName: name, Force: force})
-		if !ok {
-			return fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
-		}
-		if e := vmPluginOpError(raw); e != "" {
-			return fmt.Errorf("stopping VM %s: %s", name, e)
-		}
-		fmt.Fprintf(os.Stderr, "Stopped VM %s\n", name)
-	case "qemu":
-		dir, err := vmDir()
-		if err != nil {
-			return err
-		}
-		stateDir := filepath.Join(dir, name)
-		if force {
-			// Try QMP quit first, fall back to process kill
-			if err := qemuForceShutdown(stateDir); err != nil {
-				// Fallback: kill via PID
-				killQemuByPID(stateDir)
-			}
-		} else {
-			// Graceful ACPI shutdown via QMP
-			if err := qemuGracefulShutdown(stateDir); err != nil {
-				// Fallback: SIGTERM via PID
-				pidFile := filepath.Join(stateDir, "qemu.pid")
-				if data, readErr := os.ReadFile(pidFile); readErr == nil {
-					if pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data))); parseErr == nil {
-						if proc, findErr := os.FindProcess(pid); findErr == nil {
-							_ = proc.Signal(syscall.SIGTERM)
-						}
-					}
-				}
-			}
-		}
-		fmt.Fprintf(os.Stderr, "Stopped VM %s\n", name)
+	if !stopped {
+		// No libvirt domain and no qemu state — a genuinely-absent target must FAIL, never a false
+		// "Stopped VM" success (the #77 regression, mirroring #69's destroy-nonexistent).
+		return fmt.Errorf("no such VM %q: no libvirt domain and no qemu state — nothing stopped", name)
 	}
+	fmt.Fprintf(os.Stderr, "Stopped VM %s\n", name)
 	return nil
 }
 
@@ -394,16 +363,44 @@ type VmDestroyCmd struct {
 	KeepDeploy bool   `long:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
 }
 
+// vmHolder probes which backend ACTUALLY holds the VM domain named `name`, authoritatively — the
+// ONE shared "never trust the single resolved/default backend" primitive. #69 introduced it inline
+// for destroy (the qemu no-op path for a libvirt domain falsely reported "Destroyed VM"); #77
+// reuses it for stop (the same mismatch falsely reported "Stopped VM"). Libvirt is probed FIRST: the
+// domain-state op spawns the libvirt session daemon (connectLibvirt), so a libvirt domain is
+// detected even when the configured/default backend is qemu; the qemu per-VM state dir is the
+// fallback. Returns ("libvirt", libvirtRunning, "") for a libvirt domain (libvirtRunning = whether it
+// is DomainRunning), ("qemu", false, qemuStateDir) for a qemu state dir, ("", false, "") when no
+// domain exists in EITHER backend — the caller decides whether that is an error (destroy: "no such
+// VM"; stop: a clean no-op for an already-stopped/absent VM). A libvirt probe that answers
+// exists=false (incl. a connect error, which domain-state reports as exists=false) falls through to
+// the qemu state-dir probe — matching #69's behavior so destroyVmDomain stays byte-equivalent.
+func vmHolder(name string) (backend string, libvirtRunning bool, qemuStateDir string, err error) {
+	if raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "domain-state", VmName: name}); ok && vmPluginOpFlag(raw, "exists") {
+		return "libvirt", vmPluginOpFlag(raw, "running"), "", nil
+	}
+	dir, derr := vmDir()
+	if derr != nil {
+		return "", false, "", derr
+	}
+	stateDir := filepath.Join(dir, name)
+	if _, statErr := os.Stat(stateDir); statErr == nil {
+		return "qemu", false, stateDir, nil
+	}
+	return "", false, "", nil
+}
+
 // destroyVmDomain tears the VM domain named `name` down from whichever backend ACTUALLY holds it
 // and VERIFIES the teardown, returning torn=true only when a domain was found and removed. It probes
-// libvirt authoritatively — the domain-state op spawns the libvirt session daemon (connectLibvirt),
-// so a libvirt domain is detected even when the configured/default backend is qemu; qemu is a
-// state-dir probe. torn=false with a nil error means no domain exists in EITHER backend (the caller
-// decides whether that is an error). This replaces the old "trust the single resolved backend" arm,
-// which took the qemu no-op path for a libvirt domain and falsely reported "Destroyed VM" (#69).
+// via the shared vmHolder (#69) — never trusting the resolved/default backend. torn=false with a
+// nil error means no domain exists in EITHER backend (the caller decides whether that is an error).
 func destroyVmDomain(name string, deleteDisk bool) (bool, error) {
-	// libvirt first — the authoritative existence probe (domain-state spawns the session daemon).
-	if raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "domain-state", VmName: name}); ok && vmPluginOpFlag(raw, "exists") {
+	backend, _, stateDir, err := vmHolder(name)
+	if err != nil {
+		return false, err
+	}
+	switch backend {
+	case "libvirt":
 		dr, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "destroy", VmName: name, DeleteDisk: deleteDisk})
 		if !ok {
 			return false, fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
@@ -418,25 +415,89 @@ func destroyVmDomain(name string, deleteDisk bool) (bool, error) {
 			return false, fmt.Errorf("VM %s: libvirt reported the destroy succeeded but the domain is still defined", name)
 		}
 		return true, nil
+	case "qemu":
+		// Kill process — try QMP quit first, fall back to PID kill.
+		if err := qemuForceShutdown(stateDir); err != nil {
+			killQemuByPID(stateDir)
+		}
+		if err := os.RemoveAll(stateDir); err != nil {
+			return false, fmt.Errorf("removing qemu state dir %s: %w", stateDir, err)
+		}
+		return true, nil
 	}
+	return false, nil // no libvirt domain and no qemu state dir → nothing to destroy
+}
 
-	// qemu — a per-VM state dir with a (possibly running) qemu process.
-	dir, err := vmDir()
+// stopVmDomain stops the VM domain named `name` from whichever backend ACTUALLY holds it and
+// VERIFIES the stop, returning stopped=true only when a domain was found and stopped — #77, the stop
+// sibling of #69's destroyVmDomain, sharing the vmHolder probe (R3: ONE authoritative-probe
+// abstraction, never a duplicate). force=false is a graceful ACPI shutdown (disk + definition
+// preserved — the "stopped, not depleted" semantic); force=true destroys/kills. stopped=false with a
+// nil error means no domain exists in EITHER backend: an already-stopped/absent VM is a clean
+// success for the arbiter's holderStop (a departed holder is "stopped" — its resource is freed),
+// while the `charly vm stop` COMMAND turns it into a hard "no such VM" error (mirroring #69's
+// destroy-nonexistent) so a typo never false-succeeds. This replaces the old "trust the single
+// resolved backend" arm, which took the qemu no-op path for a libvirt domain and falsely reported
+// "Stopped VM" while the domain kept running (#77).
+func stopVmDomain(name string, force bool) (bool, error) {
+	backend, libvirtRunning, stateDir, err := vmHolder(name)
 	if err != nil {
 		return false, err
 	}
-	stateDir := filepath.Join(dir, name)
-	if _, statErr := os.Stat(stateDir); statErr != nil {
-		return false, nil // no libvirt domain and no qemu state dir → nothing to destroy
+	switch backend {
+	case "libvirt":
+		// Only dispatch the libvirt stop op for a RUNNING domain: shutdownDomain on an already-SHUTOFF
+		// domain errors ("domain not running"), and a shutoff domain is already "stopped" by
+		// construction — so a found-but-not-running libvirt domain is stopped=true with no op.
+		if libvirtRunning {
+			raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "stop", VmName: name, Force: force})
+			if !ok {
+				return false, fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
+			}
+			if e := vmPluginOpError(raw); e != "" {
+				return false, fmt.Errorf("stopping VM %s: %s", name, e)
+			}
+			// The libvirt stop op is ASYNC for a graceful stop: shutdownDomain sends an ACPI poweroff
+			// and returns immediately, and the guest powers off over the StopGate grace. A verify
+			// that re-probed IMMEDIATELY would false-positive on every graceful stop (the domain is
+			// still RUNNING while shutting down — confirmed live) — so POLL for the domain to leave
+			// DomainRunning (the same poll gracefulStopDomain uses for destroy; `vm list -a` reports
+			// "running" only for DomainRunning, so this is exactly "no longer running"), and only fail
+			// if it is still RUNNING after the grace — the real false-success #77 closes (a wedged
+			// guest that ignores ACPI; the qemu no-op path the authoritative vmHolder probe already
+			// eliminated). force=true (destroyDomain) is synchronous, so the poll returns at once.
+			cfg := loadedReadiness().StopGate("stop domain " + name)
+			if pollErr := pollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
+				vr, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "domain-state", VmName: name})
+				return ok && !vmPluginOpFlag(vr, "running"), 0, nil
+			}); pollErr != nil {
+				return false, fmt.Errorf("VM %s: did not reach a stopped state within the stop grace (still running) — use 'charly vm stop --force' if the guest ignores ACPI: %w", name, pollErr)
+			}
+		}
+		return true, nil
+	case "qemu":
+		if force {
+			// Try QMP quit first, fall back to process kill.
+			if err := qemuForceShutdown(stateDir); err != nil {
+				killQemuByPID(stateDir)
+			}
+		} else {
+			// Graceful ACPI shutdown via QMP.
+			if err := qemuGracefulShutdown(stateDir); err != nil {
+				// Fallback: SIGTERM via PID file.
+				pidFile := filepath.Join(stateDir, "qemu.pid")
+				if data, readErr := os.ReadFile(pidFile); readErr == nil {
+					if pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data))); parseErr == nil {
+						if proc, findErr := os.FindProcess(pid); findErr == nil {
+							_ = proc.Signal(syscall.SIGTERM)
+						}
+					}
+				}
+			}
+		}
+		return true, nil
 	}
-	// Kill process — try QMP quit first, fall back to PID kill.
-	if err := qemuForceShutdown(stateDir); err != nil {
-		killQemuByPID(stateDir)
-	}
-	if err := os.RemoveAll(stateDir); err != nil {
-		return false, fmt.Errorf("removing qemu state dir %s: %w", stateDir, err)
-	}
-	return true, nil
+	return false, nil // no libvirt domain and no qemu state dir → nothing to stop
 }
 
 func (c *VmDestroyCmd) Run() error {
