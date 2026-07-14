@@ -91,6 +91,16 @@ func summaryStatus(ok bool) string {
 	return "FAIL"
 }
 
+// withRunTag appends `--tag <tag>` to a step argv when tag is non-empty — the bed's
+// per-run image tag (#75) every box build + pod deploy in the run passes so
+// concurrent beds building the same fixture image name never collide.
+func withRunTag(args []string, tag string) []string {
+	if tag == "" {
+		return args
+	}
+	return append(args, "--tag", tag)
+}
+
 // runCheckBed executes the canonical R10 sequence for one check bed and writes
 // per-step logs + summary.yml to .check/<name>/<calver>/. Returns the result struct
 // (always non-nil once setup succeeds) and the first error encountered.
@@ -321,7 +331,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			if m.Image == "" {
 				continue // kind:local member — applies candies in place, no image
 			}
-			if err := step("image-build-"+m.Key, "box", "build", m.Image, "--dev-local-pkg"); err != nil {
+			if err := step("image-build-"+m.Key, withRunTag([]string{"box", "build", m.Image, "--dev-local-pkg"}, d.ImageTag)...); err != nil {
 				return fail("image build member %s (%s): %w", m.Key, m.Image, err)
 			}
 			if d.RunBuild {
@@ -342,7 +352,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	if !d.IsVM && !d.IsLocal && !d.IsExternal && d.Image != "" {
 		// Disposable check beds ALWAYS bake the IN-DEVELOPMENT charly toolchain via
 		// --dev-local-pkg — so a bed tests the code under development.
-		if err := step("image-build", "box", "build", d.Image, "--dev-local-pkg"); err != nil {
+		if err := step("image-build", withRunTag([]string{"box", "build", d.Image, "--dev-local-pkg"}, d.ImageTag)...); err != nil {
 			return fail("image build %s: %w", d.Image, err)
 		}
 		if d.RunBuild {
@@ -408,6 +418,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		}
 		// Clear any sibling members left over from a previous interrupted run.
 		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-down", Bed: name})
+		addArgs = withRunTag(addArgs, d.ImageTag)
 		if err := step("deploy-add", addArgs...); err != nil {
 			return fail("bundle add %s: %w", name, err)
 		}
@@ -415,10 +426,10 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// kind:local + external apply candies in place during deploy add; pod beds
 		// need `charly config` + `charly start`.
 		if !isInPlace {
-			if err := step("config", "config", name); err != nil {
+			if err := step("config", withRunTag([]string{"config", name}, d.ImageTag)...); err != nil {
 				return fail("config %s: %w", name, err)
 			}
-			if err := step("start", "start", name); err != nil {
+			if err := step("start", withRunTag([]string{"start", name}, d.ImageTag)...); err != nil {
 				return fail("start %s: %w", name, err)
 			}
 			waitReady()
@@ -479,7 +490,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			if m.Image == "" {
 				continue
 			}
-			if err := step("update-image-"+m.Key, "box", "build", m.Image, "--dev-local-pkg"); err != nil {
+			if err := step("update-image-"+m.Key, withRunTag([]string{"box", "build", m.Image, "--dev-local-pkg"}, d.ImageTag)...); err != nil {
 				return fail("rebuild member image %s (%s): %w", m.Key, m.Image, err)
 			}
 		}
