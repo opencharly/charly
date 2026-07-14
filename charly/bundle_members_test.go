@@ -95,6 +95,53 @@ func TestValidateMembers_BadTarget(t *testing.T) {
 	}
 }
 
+// TestValidateMembers_AcceptsCanonicalSubstrates proves the kind-blind
+// validation: a peer member whose target is any of the CANONICAL deploy substrates
+// (consulted via the deployTargetWords D-data set, not a compiled-in per-kind
+// switch on the consumer) is ACCEPTED. Non-vacuous — asserts all 5 (pod/vm/local/
+// k8s/android), so a silently-empty canonical set or a broken membership check
+// cannot pass. This is the check-coverage gate for the incomplete-seam fix.
+func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
+	for _, target := range deployTargetWords {
+		uf := &UnifiedFile{Bundle: map[string]BundleNode{
+			"bed": {Target: "pod", Image: "web", Members: map[string]*BundleNode{
+				"side": {Target: target, Image: "side-img"},
+			}},
+		}}
+		if err := validateMembers(uf); err != nil {
+			t.Errorf("canonical deploy substrate %q must be a valid member target, got: %v", target, err)
+		}
+	}
+}
+
+// TestValidateMembers_RejectsGroup guards the kind-boundary: `group` is a
+// spec.ResourceKinds kind but NOT a deploy substrate (no deploy provider), so it
+// is NOT a valid peer-member target — the kind-blind predicate must not over-accept
+// every resource kind.
+func TestValidateMembers_RejectsGroup(t *testing.T) {
+	uf := &UnifiedFile{Bundle: map[string]BundleNode{
+		"bed": {Target: "pod", Image: "web", Members: map[string]*BundleNode{
+			"grp": {Target: "group", Image: "grp-img"},
+		}},
+	}}
+	if err := validateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
+		t.Fatalf("group must not be a valid member target, got: %v", err)
+	}
+}
+
+// TestValidateMembers_AcceptsEmptyTarget documents the "" default (defaults to
+// pod) is a valid member target under the kind-blind predicate.
+func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
+	uf := &UnifiedFile{Bundle: map[string]BundleNode{
+		"bed": {Target: "pod", Image: "web", Members: map[string]*BundleNode{
+			"side": {Target: "", Image: "side-img"},
+		}},
+	}}
+	if err := validateMembers(uf); err != nil {
+		t.Fatalf("the empty target (default pod) must be a valid member target, got: %v", err)
+	}
+}
+
 // TestValidateMembers_DottedKeyRejected: a member key with a dot collides with the
 // nested dotted-path addressing grammar.
 func TestValidateMembers_DottedKeyRejected(t *testing.T) {
