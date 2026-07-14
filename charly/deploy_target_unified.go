@@ -132,6 +132,18 @@ type LifecycleTarget interface {
 	// non-empty, is run instead of starting a login shell.
 	Shell(ctx context.Context, cmd []string) error
 
+	// Attach runs an INTERACTIVE or live-stdio session on the target's venue,
+	// wired to the operator's terminal (F12). It is the `charly shell` / `charly
+	// cmd` leg — distinct from Shell (the #57 `charly service` NON-interactive
+	// capture leg). tty selects the resolver + PTY policy: tty=true is `charly
+	// shell` (a `-it` TTY, with an ephemeral-run fallback for a stopped pod);
+	// tty=false is `charly cmd` (a `-i` inherited-stdin exec into the running
+	// container). cmd is the command argv (empty ⇒ an interactive login shell).
+	// The host resolves the venue-local command; the owning plugin runs it over
+	// the served venue executor via RunInteractive (stdio stays host-side). A
+	// non-zero exit is propagated as *sdk.ExitCodeError.
+	Attach(ctx context.Context, cmd []string, tty bool) error
+
 	// Rebuild is destroy + create + start. Gated on the target's
 	// Disposable flag — each implementation must verify it before
 	// any destructive action. See /charly-internals:disposable for the
@@ -208,6 +220,10 @@ type LogsOpts struct {
 
 	// Tail is the number of trailing lines to emit first. 0 = all.
 	Tail int
+
+	// Sidecar, when set, targets the named sidecar container's journal
+	// instead of the app container's (`charly logs --sidecar <name>`).
+	Sidecar string
 }
 
 // RebuildOpts parameterizes the rebuild path of `charly update`. Per /charly-internals:disposable, the

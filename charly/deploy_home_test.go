@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // recordingExec is a DeployExecutor that records PutFile calls (destination +
@@ -39,6 +41,12 @@ func (e *recordingExec) PutFile(_ context.Context, localPath, remotePath string,
 }
 func (e *recordingExec) GetFile(context.Context, string, bool, EmitOpts) ([]byte, error) {
 	return nil, os.ErrNotExist
+}
+func (e *recordingExec) RunInteractive(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
+func (e *recordingExec) RunStream(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
 }
 func (e *recordingExec) RunCapture(context.Context, string) (string, string, int, error) {
 	return e.runCaptureReturn, "", 0, nil

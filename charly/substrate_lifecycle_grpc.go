@@ -34,7 +34,7 @@ type grpcSubstrateLifecycle struct {
 func venueFromDescriptor(d spec.VenueDescriptor) (DeployExecutor, error) {
 	switch d.Kind {
 	case "":
-		return nil, nil // no venue (e.g. TeardownExecutor declining → caller keeps its executor)
+		return nil, nil // no venue (e.g. VenueExecutor declining → caller keeps its executor)
 	case "shell":
 		return ShellExecutor{}, nil
 	case "ssh":
@@ -177,7 +177,7 @@ func (l grpcSubstrateLifecycle) PostApply(ctx context.Context, name, dir string,
 	return err
 }
 
-func (l grpcSubstrateLifecycle) TeardownExecutor(name string, node *BundleNode) (DeployExecutor, error) {
+func (l grpcSubstrateLifecycle) VenueExecutor(name string, node *BundleNode) (DeployExecutor, error) {
 	res, err := l.lifecycleInvoke(context.Background(), sdk.OpTeardownExecutor, name, "", node, nil, ShellExecutor{})
 	if err != nil {
 		return nil, err
@@ -279,8 +279,61 @@ func (l grpcSubstrateLifecycle) Status(ctx context.Context, name string, node *B
 }
 
 func (l grpcSubstrateLifecycle) Logs(ctx context.Context, name string, node *BundleNode, opts LogsOpts) error {
-	_, err := l.lifecycleInvoke(ctx, sdk.OpLogs, name, "", node, map[string]any{"opts": opts}, ShellExecutor{})
+	// A substrate with a logs plan resolver (pod, F12) resolves the #PodLiveStdioPlan host-side (the
+	// `<engine> logs`/`journalctl` stream command) and threads it so the plugin streams it via
+	// exec.RunStream — killing the former podCli("logs") `charly logs` reentry (an infinite loop once
+	// `charly logs` routes through here). A substrate without one (vm) keeps the plain opts-threaded
+	// OpLogs path (its `charly vm console` cli reentry). Logs runs on the host ShellExecutor.
+	extra := map[string]any{"opts": opts}
+	if planHook, ok := lifecycleLogsPlanHooks[l.prov.word]; ok {
+		box, instance := parseDeployKey(name)
+		planJSON, err := planHook(ctx, box, instance, opts)
+		if err != nil {
+			return err
+		}
+		extra["plan"] = planJSON
+	}
+	_, err := l.lifecycleInvoke(ctx, sdk.OpLogs, name, "", node, extra, ShellExecutor{})
 	return err
+}
+
+// Attach drives the F12 interactive/live-stdio session (`charly shell` / `charly cmd`) over the
+// substrate's live VENUE executor — pod → host ShellExecutor (the resolver's full `podman exec/run
+// -it` argv runs on the host), vm → the guest *SSHExecutor (RunInteractive wraps the resolver's
+// in-guest command in `ssh -t <alias>`). The venue executor is the SAME one a running deploy's
+// teardown replays over (VenueExecutor: vm → guest SSH, pod → nil → host ShellExecutor), resolved
+// side-effect-free. The host RESOLVES the #PodLiveStdioPlan (#59 inventory stays core) and threads it
+// to OpAttach; the plugin decodes it and calls exec.RunInteractive (stdio host-held, never crosses the
+// wire). NO arbiter bracket — an interactive session claims no exclusive resource. A non-zero exit
+// round-trips as spec.PodExecReply.ExitCode → *sdk.ExitCodeError (main.go maps it to the process exit).
+func (l grpcSubstrateLifecycle) Attach(ctx context.Context, name string, node *BundleNode, cmd []string, tty bool) error {
+	planHook, ok := lifecycleAttachPlanHooks[l.prov.word]
+	if !ok {
+		return fmt.Errorf("substrate %q: interactive attach not supported", l.prov.word)
+	}
+	venue := DeployExecutor(ShellExecutor{})
+	if ve, verr := l.VenueExecutor(name, node); verr == nil && ve != nil {
+		venue = ve // vm → guest SSHExecutor; pod → nil → host ShellExecutor
+	}
+	box, instance := parseDeployKey(name)
+	planJSON, err := planHook(ctx, box, instance, cmd, tty)
+	if err != nil {
+		return err
+	}
+	res, err := l.lifecycleInvoke(ctx, sdk.OpAttach, name, "", node, map[string]any{"plan": planJSON}, venue)
+	if err != nil {
+		return err
+	}
+	var reply spec.PodExecReply
+	if res != nil && len(res.JSON) > 0 {
+		if err := json.Unmarshal(res.JSON, &reply); err != nil {
+			return fmt.Errorf("substrate %q attach: decode reply: %w", l.prov.word, err)
+		}
+	}
+	if reply.ExitCode != 0 {
+		return &sdk.ExitCodeError{Code: reply.ExitCode}
+	}
+	return nil
 }
 
 // Shell drives a NON-interactive in-container exec (the K4 `charly service` move — the host

@@ -1,9 +1,8 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"time"
 )
 
@@ -18,6 +17,13 @@ type CmdCmd struct {
 
 func (c *CmdCmd) Run() error {
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+
+	// Resolve the target container up-front for the completion notification (the venue whose session
+	// bus the desktop notify drives, and the running-container gate). The exec itself routes through
+	// the unified LifecycleTarget → OpAttach (F12): the host resolves the `<engine> exec -i … sh -c`
+	// command (resolvePodCmdPlan re-resolves the same container host-side), the owning plugin runs it
+	// over the served venue executor via RunInteractive (stdio host-held; `-i` forwards the operator's
+	// stdin). --notify stays a host wrapper — it is a host desktop-bus op, not a venue op.
 	resolve := func() (string, string, error) {
 		if c.Sidecar != "" {
 			return resolveSidecarContainer(c.Box, c.Instance, c.Sidecar)
@@ -29,33 +35,13 @@ func (c *CmdCmd) Run() error {
 		return err
 	}
 
-	// Resolve agent forwarding env vars for exec
-	rt, rtErr := ResolveRuntime()
-	var agentEnv []string
-	if rtErr == nil {
-		var deployBox *BundleNode
-		if overlay, ok := loadDeployConfigForRead("charly cmd").Lookup(c.Box, c.Instance); ok {
-			deployBox = &overlay
-		}
-		// Use host user's home as a reasonable default for GPG socket path.
-		// For exec, sockets are already mounted — this only affects env vars.
-		hostHome, _ := os.UserHomeDir()
-		agentFwd := ResolveAgentForwarding(rt, deployBox, hostHome)
-		agentEnv = agentFwd.Env
+	lt, err := dispatchLifecycleTarget("cmd", c.Box, c.Instance)
+	if err != nil {
+		return err
 	}
 
 	start := time.Now()
-	args := []string{engine, "exec"}
-	for _, e := range agentEnv {
-		args = append(args, "-e", e)
-	}
-	args = append(args, name, "sh", "-c", c.Command)
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	runErr := cmd.Run()
+	runErr := lt.Attach(withPodCmdOpts(context.Background(), podCmdOpts{Sidecar: c.Sidecar}), []string{c.Command}, false)
 	elapsed := time.Since(start).Truncate(time.Millisecond)
 
 	if c.Notify {

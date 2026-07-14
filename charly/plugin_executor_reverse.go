@@ -106,6 +106,23 @@ func (s *executorReverseServer) RunCapture(ctx context.Context, req *pb.RunReque
 	return &pb.CaptureReply{Stdout: stdout, Stderr: stderr, ExitCode: int32(exit), Error: errString(err)}, nil
 }
 
+// RunInteractive is the F12 LIVE-TTY leg: this server runs IN the charly host process, so
+// s.exec.RunInteractive inherits the host's os.Stdin/os.Stdout/os.Stderr = the OPERATOR's
+// terminal. Stdio never crosses the wire — only the script came in and the exit code goes back.
+// The pod plugin's OpAttach drives it for `charly shell`/`charly cmd`. Not deadlined (the TTY owns
+// its lifetime).
+func (s *executorReverseServer) RunInteractive(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
+	exit, err := s.exec.RunInteractive(ctx, req.GetScript())
+	return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+}
+
+// RunStream is the F12 LIVE-OUTPUT leg (charly logs --follow): streams stdout/stderr to the
+// operator's terminal (host-held); only script→exit crosses the wire.
+func (s *executorReverseServer) RunStream(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
+	exit, err := s.exec.RunStream(ctx, req.GetScript())
+	return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+}
+
 // GetFile is the CHECK-VERB artifact-pull leg: a verb that produces a file on the venue
 // (a record .cast / a screenshot) reads it back to the host. asRoot reads via sudo.
 func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequest) (*pb.GetFileReply, error) {

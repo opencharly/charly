@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -293,6 +294,12 @@ func (e *localPkgRecExec) PutFile(_ context.Context, _, remotePath string, _ uin
 }
 func (e *localPkgRecExec) GetFile(context.Context, string, bool, EmitOpts) ([]byte, error) {
 	return nil, nil
+}
+func (e *localPkgRecExec) RunInteractive(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
+func (e *localPkgRecExec) RunStream(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
 }
 func (e *localPkgRecExec) RunCapture(_ context.Context, _ string) (string, string, int, error) {
 	// The probe script echoes "yes"/"no"; mirror that contract.

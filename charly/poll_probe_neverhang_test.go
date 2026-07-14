@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // blockingExecutor blocks RunCapture until the per-probe context is cancelled
@@ -19,6 +20,12 @@ type blockingExecutor struct {
 	blockOn string
 }
 
+func (b *blockingExecutor) RunInteractive(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
+func (b *blockingExecutor) RunStream(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
 func (b *blockingExecutor) RunCapture(ctx context.Context, cmd string) (string, string, int, error) {
 	if b.blockOn != "" && strings.Contains(cmd, b.blockOn) {
 		<-ctx.Done() // wedged: only the per-probe deadline frees us

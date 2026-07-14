@@ -1,13 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
-	"syscall"
 )
 
 // isTerminal reports whether stdout is connected to a terminal.
@@ -64,9 +63,6 @@ type ShellCmd struct {
 }
 
 func (c *ShellCmd) Run() error {
-	// Set global forceTTY so buildShellArgs/buildExecArgs pick it up
-	forceTTY = c.TTY
-
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
 	// Users must pull first, then run shell on the short name.
 	if IsRemoteImageRef(StripURLScheme(c.Box)) {
@@ -74,135 +70,29 @@ func (c *ShellCmd) Run() error {
 	}
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
 
-	var detected DetectedDevices
-	if !c.NoAutoDetect {
-		detected = DetectHostDevices()
-		LogDetectedDevices(detected)
-	}
-
-	rt, err := ResolveRuntime()
+	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
+	// venue command (resolvePodShellPlan, #59 inventory), the owning plugin runs it over the served
+	// venue executor via RunInteractive (stdio host-held). The per-invocation CLI extras ride the ctx
+	// (podShellOpts) into the attach-plan hook; tty=true selects the interactive `charly shell` resolver
+	// (its `-it`-vs-`-i` decision reads ForceTTY/isTerminal internally).
+	lt, err := dispatchLifecycleTarget("shell", c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-	engine := rt.RunEngine
-
-	// Ensure NVIDIA CDI specs exist for nested container GPU access
-	if detected.GPU && engine == "podman" {
-		EnsureCDI()
+	opts := podShellOpts{
+		Tag:          c.Tag,
+		EnvFile:      c.EnvFile,
+		Env:          c.Env,
+		VolumeFlag:   c.VolumeFlag,
+		Bind:         c.Bind,
+		NoAutoDetect: c.NoAutoDetect,
+		ForceTTY:     c.TTY,
 	}
-
-	// Load charly.yml for volume backing config + later use (env merge,
-	// agent forwarding, metadata overlay).
-	dc := loadDeployConfigForRead("charly shell")
-	var deployVolumes []DeployVolumeConfig
-	if overlay, ok := dc.Lookup(c.Box, c.Instance); ok {
-		deployVolumes = overlay.Volume
+	var cmd []string
+	if c.Command != "" {
+		cmd = []string{c.Command}
 	}
-
-	// Resolve the deploy key → declared image short-name via THE shared
-	// resolver (deploy.go); the same one charly config / start / check live use,
-	// so no command diverges when key != image. c.Box stays the deploy-KEY;
-	// only the image ref uses the resolved name.
-	deployBoxName := resolveDeployBoxName(c.Box, c.Instance)
-	// Resolve from image labels (+ charly.yml overlay). No charly.yml.
-	imageRef := resolveShellImageRef("", deployBoxName, c.Tag)
-	if err := EnsureImage(imageRef, rt); err != nil {
-		return err
-	}
-	meta, err := ExtractMetadata(engine, imageRef)
-	if err != nil {
-		return err
-	}
-	if meta == nil {
-		return fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
-	}
-	engine = ResolveBoxEngineFromMeta(meta, rt.RunEngine)
-	MergeDeployOntoMetadata(meta, dc, c.Box, c.Instance)
-
-	uid := meta.UID
-	gid := meta.GID
-	home := meta.Home
-	ports := meta.Port
-	security := meta.Security
-	network := meta.Network
-	deployEnv := meta.Env
-	var deployEnvFile string
-
-	cliVolumes := parseVolumeFlagsStandalone(c.VolumeFlag, c.Bind)
-	volumes, bindMounts := ResolveVolumeBacking(c.Box, c.Instance, meta.Volume, mergeVolumeConfigs(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
-
-	envAccepts := meta.EnvAccept
-	envRequires := meta.EnvRequire
-	if meta.Registry != "" {
-		imageRef = resolveShellImageRef(meta.Registry, deployBoxName, c.Tag)
-	}
-
-	shellCtrName := containerNameInstance(c.Box, c.Instance)
-	shellAccepted := AcceptedEnvSet(envAccepts, envRequires)
-	shellGlobalEnv := dc.GlobalEnvForImage(deployKey(c.Box, c.Instance), shellCtrName, shellAccepted)
-	envVars, err := ResolveEnvVars(shellGlobalEnv, deployEnv, deployEnvFile, workspaceBindHost(bindMounts), c.EnvFile, c.Env)
-	if err != nil {
-		return err
-	}
-
-	// Resolve agent forwarding (SSH/GPG socket mounts)
-	var deployBox *BundleNode
-	if overlay, ok := dc.Lookup(c.Box, c.Instance); ok {
-		deployBox = &overlay
-	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
-
-	// If the container is already running, exec into it instead of starting a new one
-	name := containerNameInstance(c.Box, c.Instance)
-	if containerRunning(engine, name) {
-		// Exec path: inject env vars only (can't add volumes to running container)
-		execEnv := append(slices.Clone(envVars), agentFwd.Env...)
-		workDir := resolveWorkingDir(volumes, bindMounts, home, c.Box, c.Instance)
-		args := buildExecArgs(engine, name, uid, gid, c.Command, execEnv, workDir)
-		enginePath, err := findExecutable(EngineBinary(engine))
-		if err != nil {
-			return err
-		}
-		return execCommand(enginePath, args)
-	}
-
-	// Verify bind mounts
-	if err := verifyBindMounts(bindMounts, c.Box); err != nil {
-		return err
-	}
-
-	// Merge auto-detected devices into security config
-	if !security.Privileged {
-		security.Devices = appendUnique(security.Devices, detected.Devices...)
-		if detected.AMDGPU {
-			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
-		}
-	}
-	envVars = appendAutoDetectedEnv(envVars, detected)
-
-	// Inject agent forwarding mounts and env (new container path)
-	for _, v := range agentFwd.Volumes {
-		security.Mounts = appendUnique(security.Mounts, v)
-	}
-	envVars = append(envVars, agentFwd.Env...)
-
-	// Resolve network (default to shared "charly" network)
-	resolvedNetwork, err := ResolveNetwork(network, engine)
-	if err != nil {
-		return err
-	}
-
-	workDir := resolveWorkingDir(volumes, bindMounts, home, c.Box, c.Instance)
-	args := buildShellArgs(engine, imageRef, uid, gid, ports, volumes, bindMounts, detected.GPU, c.Command, rt.BindAddress, envVars, security, workDir, resolvedNetwork)
-
-	// Find engine binary
-	enginePath, err := findExecutable(EngineBinary(engine))
-	if err != nil {
-		return err
-	}
-
-	// Replace process with engine
-	return execCommand(enginePath, args)
+	return lt.Attach(withPodShellOpts(context.Background(), opts), cmd, true)
 }
 
 // resolveShellImageRef builds the full image reference from registry,
@@ -233,122 +123,6 @@ func resolveShellImageRef(registry, name, tag string) string {
 		return fmt.Sprintf("%s/%s:%s", registry, name, tag)
 	}
 	return fmt.Sprintf("%s:%s", name, tag)
-}
-
-// buildShellArgs constructs the container run argument list.
-func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volumes []VolumeMount, bindMounts []ResolvedBindMount, gpu bool, command string, bindAddr string, envVars []string, security SecurityConfig, workingDir string, network ...string) []string {
-	binary := EngineBinary(engine)
-	interactive := "-i"
-	if forceTTY || isTerminal() {
-		interactive = "-it"
-	}
-	args := []string{
-		binary, "run", "--rm", interactive,
-		"-w", workingDir,
-		"--user", fmt.Sprintf("%d:%d", uid, gid),
-	}
-	if len(network) > 0 && network[0] != "" {
-		args = append(args, "--network", network[0])
-	}
-	if gpu {
-		args = append(args, GPURunArgs(engine)...)
-	}
-	args = append(args, SecurityArgs(security)...)
-	for _, port := range ports {
-		args = append(args, "-p", localizePort(port, bindAddr))
-	}
-	for _, vol := range volumes {
-		args = append(args, "-v", fmt.Sprintf("%s:%s", vol.VolumeName, vol.ContainerPath))
-	}
-	for _, bm := range bindMounts {
-		args = append(args, "-v", fmt.Sprintf("%s:%s", bm.HostPath, bm.ContPath))
-	}
-	for _, m := range security.Mounts {
-		if after, ok := strings.CutPrefix(m, "tmpfs:"); ok {
-			// tmpfs:/path:options → --tmpfs /path:options
-			args = append(args, "--tmpfs", after)
-		} else {
-			args = append(args, "-v", m)
-		}
-	}
-	if engine == "podman" && len(bindMounts) > 0 {
-		args = append(args, fmt.Sprintf("--userns=keep-id:uid=%d,gid=%d", uid, gid))
-	}
-	for _, e := range envVars {
-		args = append(args, "-e", e)
-	}
-	args = append(args, "--entrypoint", "bash", imageRef)
-	if command != "" {
-		args = append(args, "-c", command)
-	}
-	return args
-}
-
-// buildExecArgs constructs the container exec argument list for attaching to a running container.
-func buildExecArgs(engine, name string, uid, gid int, command string, envVars []string, workingDir string) []string {
-	binary := EngineBinary(engine)
-	interactive := "-i"
-	if forceTTY || isTerminal() {
-		interactive = "-it"
-	}
-	args := []string{
-		binary, "exec", interactive,
-		"--user", fmt.Sprintf("%d:%d", uid, gid),
-		"-w", workingDir,
-	}
-	for _, e := range envVars {
-		args = append(args, "-e", e)
-	}
-	args = append(args, name, "bash")
-	if command != "" {
-		args = append(args, "-c", command)
-	}
-	return args
-}
-
-// execCommand runs the given args via syscall.Exec. When forceTTY is set
-// and there is no real terminal, it wraps the command with `script` to
-// provide a proper PTY so that programs requiring a TTY work correctly
-// from automation tools.
-func execCommand(path string, args []string) error {
-	if forceTTY && !isTerminal() {
-		// Wrap with script to provide a real PTY.
-		// script -qefc "<cmd>" /dev/null
-		//   -q: quiet (no "Script started" banner)
-		//   -e: return child exit code
-		//   -f: flush output after each write
-		//   -c: command to run
-		cmdStr := shellQuoteArgs(args)
-		scriptPath, err := findExecutable("script")
-		if err != nil {
-			return fmt.Errorf("--tty requires 'script' (util-linux): %w", err)
-		}
-		scriptArgs := []string{"script", "-qefc", cmdStr, "/dev/null"}
-		return syscall.Exec(scriptPath, scriptArgs, os.Environ())
-	}
-	return syscall.Exec(path, args, os.Environ())
-}
-
-// shellQuoteArgs joins args into a shell-safe command string.
-func shellQuoteArgs(args []string) string {
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		if strings.ContainsAny(arg, " \t\n\"'\\$`!#&|;(){}[]<>?*~") {
-			quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
-		} else {
-			quoted[i] = arg
-		}
-	}
-	return strings.Join(quoted, " ")
-}
-
-// findExecutable locates an executable in PATH.
-func findExecutable(name string) (string, error) {
-	path, err := exec_LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf("%s not found in PATH", name)
-	}
-	return path, nil
 }
 
 // exec_LookPath wraps os/exec.LookPath to avoid importing os/exec in syscall code.

@@ -44,6 +44,14 @@ func (c *inprocExecutorClient) RunCapture(ctx context.Context, in *pb.RunRequest
 	return c.srv.RunCapture(ctx, in)
 }
 
+func (c *inprocExecutorClient) RunInteractive(ctx context.Context, in *pb.RunRequest, _ ...grpc.CallOption) (*pb.LiveReply, error) {
+	return c.srv.RunInteractive(ctx, in)
+}
+
+func (c *inprocExecutorClient) RunStream(ctx context.Context, in *pb.RunRequest, _ ...grpc.CallOption) (*pb.LiveReply, error) {
+	return c.srv.RunStream(ctx, in)
+}
+
 func (c *inprocExecutorClient) GetFile(ctx context.Context, in *pb.GetFileRequest, _ ...grpc.CallOption) (*pb.GetFileReply, error) {
 	return c.srv.GetFile(ctx, in)
 }

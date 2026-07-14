@@ -592,7 +592,7 @@ func (t *externalDeployTarget) Del(ctx context.Context, opts DelOpts) error {
 	// runner → reverse_ops falls back to local exec.Command (the host:local path).
 	exec := t.exec
 	if life, ok := substrateLifecycleFor(t.prov.word); ok {
-		if e, lerr := life.TeardownExecutor(t.name, t.node); lerr != nil {
+		if e, lerr := life.VenueExecutor(t.name, t.node); lerr != nil {
 			return fmt.Errorf("external deploy %q: teardown executor: %w", t.name, lerr)
 		} else if e != nil {
 			exec = e
@@ -691,6 +691,16 @@ func (t *externalDeployTarget) Logs(ctx context.Context, opts LogsOpts) error {
 func (t *externalDeployTarget) Shell(ctx context.Context, cmd []string) error {
 	if life, ok := substrateLifecycleFor(t.prov.word); ok {
 		return life.Shell(ctx, t.name, t.node, cmd)
+	}
+	return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
+}
+
+// Attach is the F12 interactive/live-stdio leg (`charly shell` / `charly cmd`). A substrate with a
+// lifecycle hook (pod/vm) runs the resolved venue command over its live venue executor; a hookless
+// substrate (local/android/k8s) has no interactive venue lifecycle and errors like the host target.
+func (t *externalDeployTarget) Attach(ctx context.Context, cmd []string, tty bool) error {
+	if life, ok := substrateLifecycleFor(t.prov.word); ok {
+		return life.Attach(ctx, t.name, t.node, cmd, tty)
 	}
 	return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 }
