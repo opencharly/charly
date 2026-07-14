@@ -286,7 +286,7 @@ Before declaring work complete, answer every applicable item YES:
   follow-up substitutes for completing the cutover.
 - Each repository lands as one squash commit on `main`, with exact attribution,
   through a feature PR accepted by a fresh independent validator. The validator
-  posts `charly/claude-validation`, merges without bypass, creates the immutable
+  posts `charly/pr-validator`, merges without bypass, creates the immutable
   merge-time CalVer tag, and verifies clean final state.
 
 Changes requested stay on the same PR with append-only commits. Close and
