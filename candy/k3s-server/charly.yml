@@ -63,18 +63,18 @@ k3s-server:
         # tls-san: so the emitted kubeconfig server URL is valid.
         #
         # K3S_KUBECONFIG_SERVER is an optional full-URL override applied ONLY
-        # to the retrieved kubeconfig's `server:` field. Needed when the
-        # operator reaches the API via a port-forwarded host port (e.g. a VM
-        # with `port_forwards: ["16443:6443"]` — the guest-side cert SAN is
-        # still just the hostname, but the URL must point at the forwarded
-        # port). Without this, a single-hostname rewrite produces the wrong
-        # URL because the guest-side URL "https://127.0.0.1:6443" already
-        # hardcodes :6443 and K3S_SERVER_HOSTNAME alone can't change the port.
+        # to the retrieved kubeconfig's `server:` field, for a port-forwarded
+        # reachability path where the host port differs from the guest-side
+        # :6443. NOT needed for a charly `vm:` deploy: its host port-forward is
+        # resolved (an `auto:<guest>` entry is allocated + persisted in vm_state)
+        # and k3s_post automatically rewrites the retrieved kubeconfig's :6443 to
+        # the allocated host port. Set this override only for a NON-charly /
+        # manual forward with no vm_state entry.
         env_accept:
             - name: K3S_SERVER_HOSTNAME
               description: Public hostname/IP of the k3s server (used for tls-san). Defaults to the hostname seen by uname -n.
             - name: K3S_KUBECONFIG_SERVER
-              description: Optional full-URL override for the retrieved kubeconfig's server field (e.g. "https://127.0.0.1:16443" for a port-forwarded VM bed). Default falls back to "https://${K3S_SERVER_HOSTNAME}:6443".
+              description: Optional full-URL override for the retrieved kubeconfig's server field, for a manual/non-charly port-forward. A charly vm deploy needs no override — k3s_post rewrites the guest port 6443 to the auto-allocated host port from vm_state. Default falls back to "https://${K3S_SERVER_HOSTNAME}:6443".
         # The kubeconfig ends up at /etc/rancher/k3s/k3s.yaml after k3s boots.
         # We publish it back to the operator via the new artifacts: mechanism
         # (charly/layer_artifacts.go), rewriting the server URL from 127.0.0.1 to

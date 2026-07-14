@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
@@ -103,4 +104,72 @@ func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 		return spec.SSH.Port, nil
 	}
 	return 2222, nil
+}
+
+// resolveVmPortForwards resolves each network.port_forwards entry to a concrete
+// "<host>:<guest>" string, mirroring resolveVmSshPort: an `auto:<guest>` entry
+// auto-allocates a free host port — reusing the persisted allocation from vm_state
+// (guest→host map) for idempotency across the vm-create → deploy-add sequence — while
+// a fixed "<host>:<guest>" passes through unchanged. The shared `occupied` set (seeded
+// with the ssh host port by the caller) prevents an auto forward from colliding with
+// the ssh port or another forward WITHIN one create. Returns the resolved strings (fed
+// to rt.ExtraPortForwards, the sole render input) plus the guest→host allocation map to
+// persist. The persisted READ is the ONE core-coupled bit (routed through the seam).
+func resolveVmPortForwards(spec *VmSpec, vmName string, occupied map[int]bool) (resolved []string, allocated map[string]int, err error) {
+	if spec.Network == nil || len(spec.Network.PortForwards) == 0 {
+		return nil, nil, nil
+	}
+	// Prior persisted allocations (an `auto` entry reuses the same host port keyed by
+	// its guest port, so a create→deploy-add re-resolve is stable). The seam READ is
+	// the ONLY core-coupled bit; the pure allocation logic is resolvePortForwards.
+	var prior map[string]int
+	if reply, rerr := hostConfigResolve(vmName); rerr == nil && reply.VmState != nil {
+		prior = reply.VmState.PortForwards
+	}
+	return resolvePortForwards(spec.Network.PortForwards, prior, occupied, vmName)
+}
+
+// resolvePortForwards is the pure (seam-free, unit-tested) allocation core: given the
+// authored port_forwards entries, the prior persisted guest→host allocations, and the
+// shared occupied set, it resolves each entry to a concrete "<host>:<guest>" string
+// (auto → reused-prior-else-allocated; fixed → passthrough) and returns the resolved
+// list + the guest→host map of the auto allocations to persist.
+func resolvePortForwards(forwards []string, prior map[string]int, occupied map[int]bool, vmName string) (resolved []string, allocated map[string]int, err error) {
+	if occupied == nil {
+		occupied = map[int]bool{}
+	}
+	for _, pf := range forwards {
+		host, guest, ok := strings.Cut(pf, ":")
+		if !ok || host == "" || guest == "" {
+			// Malformed — CUE rejects these at load; defensive skip mirrors the renderers.
+			continue
+		}
+		if host != "auto" {
+			resolved = append(resolved, pf) // fixed passthrough (e.g. "2222:22")
+			continue
+		}
+		if h, hit := prior[guest]; hit && h > 0 && !occupied[h] {
+			occupied[h] = true
+			if allocated == nil {
+				allocated = map[string]int{}
+			}
+			allocated[guest] = h
+			resolved = append(resolved, fmt.Sprintf("%d:%s", h, guest))
+			continue
+		}
+		gi, cerr := strconv.Atoi(guest)
+		if cerr != nil || gi <= 0 {
+			return nil, nil, fmt.Errorf("vm %q: invalid guest port %q in port_forwards %q", vmName, guest, pf)
+		}
+		alloc, aerr := kit.AllocateAutoPorts([]int{gi}, occupied)
+		if aerr != nil {
+			return nil, nil, fmt.Errorf("vm %q: port_forwards auto-allocation failed for guest %d: %w", vmName, gi, aerr)
+		}
+		if allocated == nil {
+			allocated = map[string]int{}
+		}
+		allocated[guest] = alloc[0].Host
+		resolved = append(resolved, fmt.Sprintf("%d:%s", alloc[0].Host, guest))
+	}
+	return resolved, allocated, nil
 }

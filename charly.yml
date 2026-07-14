@@ -104,12 +104,14 @@ k3s-vm:
         network:
             mode: user
             # `port_forwards` (plural) is the canonical key — VmNetwork.PortForwards
-            # (yaml:"port_forwards"), a kept-plural key in the field-singular cutover.
-            # The original bed used the singular `port_forward:`, which YAML silently
-            # dropped → no host:16443 forward → the k8s probes hit
-            # `dial 127.0.0.1:16443: connection refused`.
+            # (yaml:"port_forwards"). The host side is the `auto` sentinel: the host
+            # port is auto-allocated at vm-create (persisted in vm_state, the sibling
+            # of ssh.port_auto), so the two beds sharing this entity (check-k3s-vm +
+            # check-k8s-deploy-cluster) never collide on a hardcoded host port — the
+            # concurrent host-port collision this feature removed. k3s_post rewrites the
+            # retrieved kubeconfig's :6443 to the allocated host port from vm_state automatically.
             port_forwards:
-                - "16443:6443"
+                - "auto:6443"
         ssh:
             # port_auto auto-allocates the host SSH port at create (was a fixed
             # 2225 chosen to dodge collisions — port_auto does that automatically).
@@ -319,14 +321,16 @@ check-k3s-vm:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (host 16443->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against cluster vm-k3s-vm, an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
+            Sole deterministic proof of the external-vm-deploy->k8s end-to-end path and the full 13-method k8s probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full k8s suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against cluster vm-k3s-vm, an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
         add_candy:
             - k3s-server
         env:
+            # The host port is auto-allocated (network.port_forwards: ["auto:6443"]);
+            # k3s_post rewrites the retrieved kubeconfig's :6443 to the allocated host
+            # port from vm_state automatically, so NO hardcoded K3S_KUBECONFIG_SERVER
+            # override is set (a fixed value would force a stale port). K3S_SERVER_HOSTNAME
+            # stays for the tls-san / hostname rewrite.
             K3S_SERVER_HOSTNAME: 127.0.0.1
-            # Host port 16443 forwards into the guest's :6443; the retrieved
-            # kubeconfig's server: line is rewritten to this URL.
-            K3S_KUBECONFIG_SERVER: https://127.0.0.1:16443
         install_opts:
             with_service: true
             allow_repo_changes: true # pacman sync / repo key import
@@ -497,7 +501,7 @@ check-k8s-deploy:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, host 16443->guest 6443) brings up a control plane and merges kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-k3s-vm apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+            R10 for the EXTERNALIZED deploy:k8s substrate (F1) — `target: k8s` resolves out-of-process to candy/plugin-kube's deploy:k8s provider over the E3b reverse channel, not a compiled-in DeployTarget. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a target:k8s deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-k3s-vm apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
     # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
     # create + bundle add (k3s-server over SSH); K3sPostProvision merges the
     # kubeconfig to context vm-k3s-vm. The kube: assertion checks live HERE (this
@@ -509,10 +513,10 @@ check-k8s-deploy:
             add_candy:
                 - k3s-server
             env:
+                # Host port auto-allocated (port_forwards: ["auto:6443"]); k3s_post
+                # rewrites the kubeconfig to the allocated port from vm_state
+                # automatically — no hardcoded K3S_KUBECONFIG_SERVER (cf. check-k3s-vm).
                 K3S_SERVER_HOSTNAME: 127.0.0.1
-                # Host port 16443 forwards into the guest's :6443; the retrieved
-                # kubeconfig's server: line is rewritten to this URL (cf. check-k3s-vm).
-                K3S_KUBECONFIG_SERVER: https://127.0.0.1:16443
             install_opts:
                 with_service: true
                 allow_repo_changes: true
