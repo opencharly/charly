@@ -14,9 +14,8 @@ registered Codex skill when available; otherwise read the corresponding
 act. Missing registration never makes a skill optional.
 
 Work from the superproject root. Run submodule Git through literal
-`git -C <absolute-path>` commands; never root a worker in a submodule. Read the
-nearest per-directory `CLAUDE.md` only as an area signpost naming additional
-skills; it cannot override this rulebook.
+`git -C <absolute-path>` commands; never root a worker in a submodule. Use this
+dispatcher and `plugins/README.md` to discover every applicable skill.
 
 ## Skill Dispatcher
 
@@ -78,8 +77,6 @@ Consult this table BEFORE the first tool call of every task; when several rows m
 Full index: `plugins/README.md`. This table covers the top triggers; anything
 not listed requires reading the index first, loading the matching skill second,
 and touching code third. Never reverse this order.
-
-
 
 ## Vision mandates
 
