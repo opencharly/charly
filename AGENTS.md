@@ -77,8 +77,11 @@ as escape sequences or publish an unstructured wall of text.
   tree, and ordered parents.
 - A fresh validator loads protected-`main` policy and every dispatched skill
   before inspecting the candidate change. Use validation commands that are
-  read-only or self-cleaning and leave the candidate worktree unchanged. Any
-  validator anomaly invalidates that run and requires RCA plus a new context.
+  read-only or self-cleaning and leave the candidate worktree unchanged. The
+  first unexpected exit, warning, or anomaly ends the validator turn: do not
+  retry, correct the command, self-RCA, continue evaluating, or issue PASS. A
+  separate RCA and a new no-fork validator context are required. PASS requires
+  a transcript with zero anomalies and zero corrected commands.
 - For validation scope, follow `/charly-check:check` "R10 gate by change
   class"; Codex adds no alternate gate or bed requirement.
 - For submodule-pointer conflicts, follow `/charly-internals:git-workflow`
