@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -220,6 +222,22 @@ func pluginBuildCacheDir() string {
 	return filepath.Join(base, "charly", "plugins")
 }
 
+// pluginSourceTag returns a short, filesystem-safe digest of the plugin candy's resolved source
+// directory, so the built binary's cache path is SCOPED BY SOURCE — the #76 root fix. The plugin
+// build cache (~/.cache/charly/plugins/) was word-keyed shared-mutable state: two worktrees (or a
+// bed/dev pair) building the SAME plugin word from DIFFERENT source raced the one `go build -o <bin>`
+// output file (the #75 shared-image-tag collision class). Keying the path by source dir makes each
+// worktree's build land its OWN file — same source reuses the path (the per-binary lock serializes
+// the build), different source (a different worktree, or a remote @github ref fetched to a different
+// cache dir) lands a distinct path, so the cross-worktree overwrite race is gone. The digest is of the
+// ABSOLUTE srcDir (worktree-distinct by path), not the source CONTENT — go-build correctness depends
+// on the full dependency graph (the sdk submodule, replace directives), so a content hash would
+// cache-hit a STALE binary after a dependency bump; always-rebuild (no cache-hit skip) keeps it fresh.
+func pluginSourceTag(srcDir string) string {
+	sum := sha256.Sum256([]byte(filepath.Clean(srcDir)))
+	return hex.EncodeToString(sum[:8]) // 16 hex chars — collision-safe for a cache filename
+}
+
 // buildPluginBinary go-builds an out-of-tree plugin's provider binary on the HOST
 // (never in a venue — the host owns the toolchain; the built binary is delivered
 // into a venue by the in-venue transport). srcDir is the plugin candy's resolved
@@ -229,22 +247,31 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", fmt.Errorf("plugin %q: build cache: %w", name, err)
 	}
-	// The candy key may be an @github ref ("github.com/org/repo/candy/<name>") with
-	// slashes; flatten it to ONE safe filename so `go build -o` lands a regular file
-	// in cacheDir (a slash would imply non-existent nested dirs).
-	bin := filepath.Join(cacheDir, safePluginBinName(name))
-	// Serialize concurrent builds of the SAME plugin binary. Multiple check beds
-	// (or a roster fan-out) can call buildPluginBinary for one plugin at once,
-	// racing the shared `go build -o <bin>` output file — the observed failure mode
-	// was a plugin whose provider "did not connect" mid-fan-out because its binary
-	// was momentarily half-written. A blocking per-binary file lock makes the second
-	// builder wait for the first (then rebuild against the same source), never
-	// collide (R4: a synchronization primitive, not a retry).
+	// The candy key may be an @github ref ("github.com/org/repo/candy/<name>") with slashes; flatten
+	// it to ONE safe filename so `go build -o` lands a regular file in cacheDir (a slash would imply
+	// non-existent nested dirs). SUFFIX it with the source-dir digest (#76) so the cache path is
+	// scoped by source — two worktrees building the same plugin word land distinct files, never
+	// racing the one shared output path.
+	bin := filepath.Join(cacheDir, safePluginBinName(name)+"-"+pluginSourceTag(srcDir))
+	// Serialize concurrent builds of the SAME plugin binary (same source → same path). Multiple check
+	// beds (or a roster fan-out) can call buildPluginBinary for one plugin at once, racing the shared
+	// `go build -o <bin>` output file — the observed failure mode was a plugin whose provider "did not
+	// connect" mid-fan-out because its binary was momentarily half-written. A blocking per-binary file
+	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
+	// not a retry).
 	release, lockErr := kit.AcquireFileLock(bin+".lock", true)
 	if lockErr != nil {
 		return "", fmt.Errorf("plugin %q: acquire build lock: %w", name, lockErr)
 	}
 	defer func() { _ = release() }()
+	// Publish ATOMICALLY: build to a sibling temp file, then os.Rename onto `bin` (a same-directory
+	// rename is atomic on POSIX). A reader (the LocalTransport.Connect that spawns the built binary)
+	// then sees either the OLD complete binary or the NEW one — never a half-written file. This
+	// closes the post-build read/write race: without it, a second worktree's rebuild could overwrite
+	// `bin` in the window between this build's completion and the consumer's exec, handing the reader
+	// a truncated binary (#76). The temp path lives under the per-binary lock, so two same-source
+	// builders never race the temp file either.
+	binTmp := bin + ".build"
 	// An OUT-OF-PROCESS plugin binary builds STANDALONE in the candy's own module
 	// (its go.mod + `replace …/charly => ../../charly`), NEVER in the repo
 	// workspace: set GOWORK=off so a repo-root go.work — which lists only the
@@ -262,11 +289,16 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	if st, statErr := os.Stat(filepath.Join(srcDir, "cmd", "serve")); statErr == nil && st.IsDir() {
 		target = "./cmd/serve"
 	}
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", bin, target)
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", binTmp, target)
 	cmd.Dir = srcDir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
 		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
+	}
+	if err := os.Rename(binTmp, bin); err != nil {
+		_ = os.Remove(binTmp)
+		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
 	}
 	return bin, nil
 }
