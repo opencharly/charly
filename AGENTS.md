@@ -300,6 +300,18 @@ Use a separate Codex agent thread wherever a skill requires a teammate,
 executor, RCA, or independent validator. The author orchestrates; it never
 impersonates the validator.
 
+Preserve valid evidence and invalidate only the conclusion touched by a
+failure. Do not discard completed analysis, verified repository facts, passing
+checks, or an unchanged candidate merely because an agent made a process error
+outside their scope. Record one RCA for the process error, carry its prevention
+into the next required handoff, and continue from the last trustworthy state.
+Never rerun the same RCA or validation against the same candidate with the same
+evidence merely to obtain a cleaner report. A fresh validation run is required
+only after the candidate identity changes, the previous run could not establish
+a verdict, or concrete evidence shows that its verdict is untrustworthy. Fresh
+context means independent judgment, not repeated rediscovery or a validator
+bootstrap ceremony.
+
 A PR validator:
 
 - starts in a new no-fork context and receives a self-contained envelope with
