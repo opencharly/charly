@@ -44,7 +44,7 @@ esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -B - "$INPUT" "$HERE" <<'PY'
-import json, os, re, shutil, subprocess, sys, tempfile
+import json, os, re, shutil, subprocess, sys
 sys.path.insert(0, sys.argv[2])
 from gitcmd import git_invocations, hooks_path_override, dash_c_dir, mentions_subcommand
 
@@ -443,16 +443,8 @@ def assert_go_lint(repo):
         if (os.sep + "candy" + os.sep) in (root + os.sep):
             env["GOWORK"] = "off"  # a plugin candy lints standalone, exactly as it builds
         try:
-            # Agent sandboxes may expose the user's ~/.cache read-only or with stale
-            # Go cache entries. Isolate both caches per invocation so infrastructure
-            # state cannot masquerade as a source lint finding.
-            with tempfile.TemporaryDirectory(prefix="charly-golint-") as cache_root:
-                env["GOCACHE"] = os.path.join(cache_root, "go-build")
-                env["GOLANGCI_LINT_CACHE"] = os.path.join(cache_root, "golangci-lint")
-                os.makedirs(env["GOCACHE"])
-                os.makedirs(env["GOLANGCI_LINT_CACHE"])
-                out = subprocess.run(["golangci-lint", "run"], cwd=root, env=env,
-                                     capture_output=True, text=True, timeout=GO_LINT_TIMEOUT)
+            out = subprocess.run(["golangci-lint", "run"], cwd=root, env=env,
+                                 capture_output=True, text=True, timeout=GO_LINT_TIMEOUT)
         except subprocess.TimeoutExpired:
             sys.stderr.write("pre-commit-gate NOTE: golangci-lint timed out in %s — skipped "
                              "(the pr-validator remains the gate).\n" % root)
