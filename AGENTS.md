@@ -35,6 +35,18 @@ This file is the Codex adapter for OpenCharly. The canonical project rulebook is
 - The validator independently fetches the PR body, diff, commits, checks, and
   required evidence. It begins read-only, derives its own change class and test
   tier, and treats missing, ambiguous, or conflicting proof as a failure.
+- Spawn the validator with the same repository, shell, GitHub, build, and
+  disposable-target tools available to the authoring workflow. Existing
+  user-approved permissions must be available to it, but it receives no bypass
+  authority and may never weaken a gate or branch protection.
+- The validator runs the full R10 gate for the independently derived change
+  class itself, including the exact fresh-rebuild disposable eval bed or
+  concurrent bed roster required by the matching skill. Author-supplied output
+  is evidence to challenge, never a substitute for the validator's own run.
+- If a required tool, target, credential, or permission is unavailable, the
+  validator cannot downgrade the gate or issue a partial PASS. It reports the
+  precise blocker; after capability is restored, validation restarts in another
+  newly spawned, no-fork agent thread.
 - A failed verdict never merges. Fixes stay on the same PR, and a changed head
   is reviewed by another newly spawned, no-fork validator. The authoring context
   must not post the success status, override the verdict, or merge around it.
