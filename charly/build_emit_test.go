@@ -46,7 +46,7 @@ func TestEmitPluginFragment_BuildTimeOpEmit(t *testing.T) {
 
 // stubResolveBuilder is an in-proc Provider that resolves a build-time BUILDER stage
 // via OpResolve — the same Provider.Invoke interface a real OUT-OF-PROCESS grpcProvider
-// satisfies, so this exercises the placement-agnostic build-resolve dispatch (the
+// satisfies, so this exercises the placement-agnostic build-prep dispatch (the
 // BUILDER leg) without a subprocess (the gRPC path is covered by the plugin transport
 // round-trip tests).
 type stubResolveBuilder struct{}

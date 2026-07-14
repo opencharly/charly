@@ -104,10 +104,15 @@ func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 		}
 	}
 
-	// No host-only compute cache leaks into the wire view.
-	for _, cache := range []string{"distroconfig", "distrodef", "builderconfig", "initsystem", "initdef", "candycaps"} {
+	// No host-only compute cache leaks into the wire view. The 3 RESOLVE-time vocab pointers
+	// (DistroConfig/DistroDef/BuilderConfig) STAY host-only — the plugin render re-attaches them
+	// from the project vocab (NewSpecResolvedBox), so they must never cross the wire. The
+	// build-RENDER caches (BakedMetadata/Caps/RenderCandyOrder/InitSystem/InitDef/ActiveInits)
+	// ARE wire data now (#67 render-DRIVE move — the plugin render reads them from the envelope
+	// WITHOUT the live *Candy graph), so they are asserted in the positive set below.
+	for _, cache := range []string{"distroconfig", "distrodef", "builderconfig"} {
 		if _, leaked := viewCanon[cache]; leaked {
-			t.Fatalf("host-only cache %q leaked into ResolvedBoxView (must stay json:%q, never wire data)", cache, "-")
+			t.Fatalf("host-only vocab pointer %q leaked into ResolvedBoxView (must stay json:%q, never wire data)", cache, "-")
 		}
 	}
 }

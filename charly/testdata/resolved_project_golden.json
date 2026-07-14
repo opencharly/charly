@@ -52,7 +52,8 @@
       "network": "host",
       "data_image": true,
       "is_external_base": true,
-      "full_tag": "ghcr.io/opencharly/demo:2026.100.0003"
+      "full_tag": "ghcr.io/opencharly/demo:2026.100.0003",
+      "init_system": "supervisord"
     }
   },
   "candies": {

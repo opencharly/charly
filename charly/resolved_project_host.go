@@ -32,7 +32,7 @@ const resolvedProjectBuilderKind = "resolved-project"
 // are DROPPED — they are re-derivable by a resolving plugin (or reached via RunHostStep), never wire
 // data (S-K5 verdict, the design key).
 func projectResolvedBox(b *ResolvedBox) spec.ResolvedBoxView {
-	return spec.ResolvedBoxView{
+	v := spec.ResolvedBoxView{
 		Name:                  b.Name,
 		Version:               b.Version,
 		EffectiveVersion:      b.EffectiveVersion,
@@ -64,6 +64,21 @@ func projectResolvedBox(b *ResolvedBox) spec.ResolvedBoxView {
 		IsExternalBase:        b.IsExternalBase,
 		FullTag:               b.FullTag,
 	}
+	// build-RENDER caches (#67): copy when present. Filled ONLY in the build-render
+	// projection (render-prep ran); empty for the validate/inspect path.
+	v.BakedMetadata = b.BakedMetadata
+	v.RenderCandyOrder = b.RenderCandyOrder
+	v.InitSystem = b.InitSystem
+	v.InitDef = b.InitDef
+	v.ActiveInits = b.ActiveInits
+	if b.CandyCaps != nil {
+		v.Caps = &spec.AggregatedCandyCapsView{
+			PreserveUser:       b.CandyCaps.PreserveUser,
+			NeedsRootAfterInit: b.CandyCaps.NeedsRootAfterInit,
+			OCILabels:          b.CandyCaps.OCILabels,
+		}
+	}
+	return v
 }
 
 // projectCandyView projects a scanned candy (the runtime *Candy) into the wire-safe spec.CandyView:
@@ -80,6 +95,7 @@ func projectCandyView(c *Candy) spec.CandyView {
 		Info:          c.Info,
 		Remote:        c.Remote,
 		RepoPath:      c.RepoPath,
+		SubPathPrefix: c.SubPathPrefix, // #67 build-render: remote-candy COPY-source leg
 		IsPlugin:      c.Plugin != nil,
 		Require:       bareRefs(c.Require),
 		IncludedCandy: bareRefs(c.IncludedCandy),
@@ -151,6 +167,12 @@ func projectCandyModel(c *Candy) spec.CandyModel {
 		SecretAccept:    c.SecretAccept(),
 		MCPRequire:      c.MCPRequire(),
 		MCPAccept:       c.MCPAccept(),
+		// Host-precomputed predicates (#67): the live *Candy verdicts the envelope CandyModel
+		// cannot recompute faithfully (env/ports/route/volumes/aliases/libvirt/init + the fs-probe
+		// caches). Carried so the specCandyAdapter matches the live *Candy byte-exactly (the
+		// candy-graph composition + pixi-bound detection gate on these).
+		HasContent:      c.HasContent(),
+		HasInstallFiles: c.HasInstallFiles(),
 	}
 	for _, f := range c.LocalPkgFormats() {
 		if m.LocalPkg == nil {
@@ -194,6 +216,46 @@ func projectCandyModel(c *Candy) spec.CandyModel {
 // project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
 // aggregate empty), so the tolerant branch is confined to the ResolveBox call.
 func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
+}
+
+// projectBoxAggregates fills the box-AUTHORED + box-AGGREGATE fields on a ResolvedBoxView
+// from the authored BoxConfig + the cross-candy collectors. The authored surfaces (Plan,
+// AuthoredAliases) come from cfg.BoxConfig(name) and are SKIPPED for auto-intermediate boxes
+// (which have no authored config). The aggregates (Ports/Volumes/Aliases/Engine) read
+// cfg+layers by name and work for authored boxes AND intermediates — render-prep's
+// buildBakedMetadata already used the same collectors for every gen.Box. A collector error
+// leaves that aggregate empty (a read-only projection never fails the whole load). Shared by
+// the pre-resolved (build-prep), fresh-resolve (validate), and auto-intermediate passes (R3).
+func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, resolved *ResolvedBox, view *spec.ResolvedBoxView) {
+	if img, ok := cfg.BoxConfig(name); ok {
+		view.Plan = img.Plan
+		view.AuthoredAliases = img.Alias
+	}
+	if ports, perr := CollectBoxPorts(cfg, layers, name); perr == nil {
+		view.Ports = ports
+	}
+	if vols, verr := CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
+		for _, vm := range vols {
+			view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount(vm))
+		}
+	}
+	if als, aerr := CollectBoxAlias(cfg, layers, name); aerr == nil {
+		for _, a := range als {
+			view.Aliases = append(view.Aliases, spec.CandyAlias(a))
+		}
+	}
+	view.Engine = ResolveBoxEngine(cfg, layers, name, "")
+}
+
+// projectResolvedProjectWithBoxes is the envelope assembler with an optional pre-resolved
+// boxes map. When preResolvedBoxes is non-nil (the build-prep seam path), the boxes are used
+// AS-IS — skipping the cfg.ResolveBox loop — so the render-prep caches
+// (BakedMetadata/RenderCandyOrder/InitSystem/InitDef/ActiveInits/CandyCaps) are preserved
+// on the ResolvedBoxView. When nil (the validate/inspect path), boxes are resolved fresh.
+//
+//nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*ResolvedBox) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
@@ -206,45 +268,55 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFi
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
+		// When pre-resolved boxes are provided (build-prep seam), use them directly —
+		// render-prep has already filled the build-render caches on them.
+		if preResolvedBoxes != nil {
+			resolved, exists := preResolvedBoxes[name]
+			if !exists {
+				continue
+			}
+			resolvedBoxes[name] = resolved
+			view := projectResolvedBox(resolved)
+			projectBoxAggregates(cfg, layers, name, resolved, &view)
+			if rp.Boxes == nil {
+				rp.Boxes = make(map[string]spec.ResolvedBoxView, len(cfg.Box))
+			}
+			rp.Boxes[name] = view
+			continue
+		}
 		resolved, err := cfg.ResolveBox(name, calver, dir, opts)
 		if err != nil {
 			if diags == nil {
 				return nil, fmt.Errorf("resolving box %q: %w", name, err)
 			}
-			// tolerant (validate): a box that fails to resolve is SILENTLY skipped from the envelope —
-			// matching the former Validate()'s validateBoxDAG "continue"-on-ResolveBox-error. The dedicated
-			// host-natural rules (validateBoxBaseFrom / validateBuildAndDistro / validateBuilderRefs, over
-			// the RAW cfg) report the actual config error exactly as before; emitting a blanket
-			// "resolving box …" diagnostic here OVER-reports vs the pre-cutover verdict (corpus-proven), so
-			// we don't — the box is dropped and the specific rule owns the message.
 			continue
 		}
 		resolvedBoxes[name] = resolved
 		view := projectResolvedBox(resolved)
-		// box-AUTHORED surfaces the validate ENGINE re-validates (task #60): the box entity's own raw
-		// `plan:` (validateOps box-arm) + `alias:` (validateAliases box-arm), read from the authored
-		// BoxConfig (not the resolved box). Distinct from the resolved alias AGGREGATE below.
-		view.Plan = img.Plan
-		view.AuthoredAliases = img.Alias
-		// box-AGGREGATES (charly box inspect --format ports|volumes|aliases|engine): run the existing
-		// cross-candy collectors into the view; a collector error leaves that aggregate empty (a
-		// read-only projection never fails the whole load).
-		if ports, perr := CollectBoxPorts(cfg, layers, name); perr == nil {
-			view.Ports = ports
-		}
-		if vols, verr := CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
-			for _, vm := range vols {
-				view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount(vm))
-			}
-		}
-		if als, aerr := CollectBoxAlias(cfg, layers, name); aerr == nil {
-			for _, a := range als {
-				view.Aliases = append(view.Aliases, spec.CandyAlias(a))
-			}
-		}
-		view.Engine = ResolveBoxEngine(cfg, layers, name, "")
+		projectBoxAggregates(cfg, layers, name, resolved, &view)
 		if rp.Boxes == nil {
 			rp.Boxes = make(map[string]spec.ResolvedBoxView, len(cfg.Box))
+		}
+		rp.Boxes[name] = view
+	}
+
+	// Auto-intermediates (#67): preResolvedBoxes (gen.Boxes) carries the auto-generated
+	// intermediate images that cfg.allBoxNames() (authored-only) omits. The build order
+	// returned to plugin-build includes them, so the render envelope must too — otherwise
+	// dg.Generate(order) hits a box not in dg.Boxes and panics. The collectors read
+	// cfg+layers by name and work for intermediates (render-prep's buildBakedMetadata
+	// already used them for every gen.Box); an intermediate has no authored Plan/alias,
+	// which projectBoxAggregates skips via the cfg.BoxConfig(name) ok-check. A no-op range
+	// when preResolvedBoxes is nil (the validate/inspect path passes nil).
+	for name, resolved := range preResolvedBoxes {
+		if _, exists := rp.Boxes[name]; exists {
+			continue
+		}
+		resolvedBoxes[name] = resolved
+		view := projectResolvedBox(resolved)
+		projectBoxAggregates(cfg, layers, name, resolved, &view)
+		if rp.Boxes == nil {
+			rp.Boxes = make(map[string]spec.ResolvedBoxView, len(preResolvedBoxes))
 		}
 		rp.Boxes[name] = view
 	}
