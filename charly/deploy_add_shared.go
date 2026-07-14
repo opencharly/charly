@@ -102,16 +102,18 @@ func buildArtifactEnv(secretEnv map[string]string, node *BundleNode) map[string]
 // (merge kubeconfig + register ClusterProfile) when the candy set includes
 // k3s-server. No-op under DryRun.
 //
-// Shared by the local deploy target.Add / the vm deploy's Add path.
-func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList []*Candy, name string, artifactEnv map[string]string, opts EmitOpts) error {
+// Shared by the local deploy target.Add / the vm deploy's Add path. artifactKey is
+// ENTITY-scoped (the artifact retrieve dir + the shared per-VM k3s cluster cache/context);
+// deployName is the real per-deploy (domain) identity the k3s port-forward lookup keys off.
+func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts EmitOpts) error {
 	if opts.DryRun {
 		return nil
 	}
-	if err := RetrieveCandyArtifacts(ctx, exec, candyList, sanitizeDeployName(name), artifactEnv, opts); err != nil {
+	if err := RetrieveCandyArtifacts(ctx, exec, candyList, sanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
 		return err
 	}
 	if deployHasCandy(candyList, "k3s-server") {
-		if err := K3sPostProvision(name); err != nil {
+		if err := K3sPostProvision(artifactKey, deployName); err != nil {
 			return err
 		}
 	}

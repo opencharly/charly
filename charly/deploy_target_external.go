@@ -159,7 +159,10 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 			artifactKey = k
 		}
 	}
-	if err := retrieveArtifactsAndK3s(ctx, t.exec, candyList, artifactKey, artifactEnv, opts); err != nil {
+	// artifactKey is ENTITY-scoped (the shared per-VM k3s cluster cache dir + context);
+	// t.name is the real DEPLOY name (domain identity) the k3s kubeconfig port-forward
+	// lookup keys off (the auto-forward allocation is persisted per-deploy at vm-create).
+	if err := retrieveArtifactsAndK3s(ctx, t.exec, candyList, artifactKey, t.name, artifactEnv, opts); err != nil {
 		return fmt.Errorf("external deploy %q: retrieving candy artifacts: %w", t.name, err)
 	}
 

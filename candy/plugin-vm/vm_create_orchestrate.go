@@ -144,22 +144,39 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	if err != nil {
 		return fmt.Errorf("resolving SSH port: %w", err)
 	}
-	// For ssh.port_auto, persist the resolved port NOW so deploy-add's
-	// reachability probe (and every later read) reuses THIS exact port. The
-	// auto-allocation must be stable across the vm-create → deploy-add sequence;
-	// without persisting here deploy-add re-resolves, finds no persisted port,
-	// allocates a DIFFERENT one, probes the wrong port, declares the VM
-	// unreachable, and auto-boots `charly vm create` into an "already exists" error.
+	// Resolve the extra port forwards alongside ssh, sharing ONE `occupied` set
+	// (seeded with the ssh host port) so an `auto:<guest>` forward can never be
+	// allocated the ssh host port or another forward's port within this create.
+	// Keyed by the DOMAIN IDENTITY (like ssh) so sibling beds sharing one entity
+	// each get their OWN auto-allocated host port — the collision this cutover removes.
+	occupied := map[int]bool{}
+	if sshPort > 0 {
+		occupied[sshPort] = true
+	}
+	resolvedForwards, allocatedForwards, err := resolveVmPortForwards(spec, domainID, occupied)
+	if err != nil {
+		return fmt.Errorf("resolving port forwards: %w", err)
+	}
+	// Persist the auto-allocated ssh port AND the forward allocations NOW so
+	// deploy-add's reachability probe (and every later read) reuses THESE exact
+	// ports. The auto-allocation must be stable across the vm-create → deploy-add
+	// sequence; without persisting here deploy-add re-resolves, allocates DIFFERENT
+	// ports, and the VM is unreachable / the kubeconfig rewrite maps the wrong port.
 	// The ledger key is vm:<domainID> (entity carried as the `vm:` cross-ref), so
-	// the preresolver's resolveVmSshPort(spec, domainID) reads back the SAME entry.
-	if spec.SSH != nil && spec.SSH.PortAuto {
+	// resolveVmSshPort/resolveVmPortForwards(spec, domainID) read back the SAME entry.
+	if (spec.SSH != nil && spec.SSH.PortAuto) || len(allocatedForwards) > 0 {
 		st := &VmDeployState{}
 		if vmState != nil {
 			st = vmState
 		}
-		st.SshPort = sshPort
+		if spec.SSH != nil && spec.SSH.PortAuto {
+			st.SshPort = sshPort
+		}
+		if len(allocatedForwards) > 0 {
+			st.PortForwards = allocatedForwards
+		}
 		if err := hostConfigPersist("vm:"+domainID, entity, st, false); err != nil {
-			return fmt.Errorf("persisting auto-allocated ssh port: %w", err)
+			return fmt.Errorf("persisting auto-allocated ports: %w", err)
 		}
 	}
 	rt := VmRuntimeParams{
@@ -174,11 +191,12 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 		RamMB:             parseRAMtoMB(resolveVmRam(spec)),
 		Cpus:              resolveVmCpus(spec),
 		SshPort:           sshPort,
+		// ExtraPortForwards carries the RESOLVED "<host>:<guest>" forwards (auto
+		// sentinels already allocated host-side); both renderers read ONLY this,
+		// never spec.Network.PortForwards — the spec=intent / rt=resolved rule.
+		ExtraPortForwards: resolvedForwards,
 		VmStateDir:        vmStateDir,
 	}
-	// ExtraPortForwards intentionally empty — spec.Network.PortForwards is
-	// already read by the renderers directly. Populating rt here would
-	// duplicate every entry.
 
 	// Backend dispatch → the in-package engine (RenderDomainXML + defineAndStartDomain / qemu exec).
 	// spec + rt (OVMF/NVRAM/smbios/ports) are fully resolved above; the engine renders + creates.

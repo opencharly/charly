@@ -32,8 +32,11 @@ var k3sServerURLRe = regexp.MustCompile(`(https?://)([^:/\s]+):(\d+)`)
 // the guest-local k3s API port to the host-forwarded port declared on the deploy's VM
 // (network.port_forwards "<host>:<guest>"). No-op when the deploy has no matching VM
 // forward — a bare-metal / already-host-reachable k3s needs no rewrite.
-func rewriteK3sServerToForward(retrievedPath, deployName string) error {
-	forwards := deployVMForwards(deployName)
+func rewriteK3sServerToForward(retrievedPath, entityRef, deployName string) error {
+	forwards, err := deployVMForwards(entityRef, deployName)
+	if err != nil {
+		return err
+	}
 	if len(forwards) == 0 {
 		return nil
 	}
@@ -69,27 +72,73 @@ func rewriteServerPorts(data string, guestToHost map[string]string) string {
 
 // deployVMForwards returns the network.port_forwards of the VM the named deploy runs
 // on (the deploy node's `from:` VM template), or nil when the deploy is not a VM.
-func deployVMForwards(deployName string) []string {
+// deployVMForwards resolves the RESOLVED "<host>:<guest>" forwards for the VM a deploy
+// runs on. The two identities are DISTINCT and must not be conflated (the #65 bug):
+//   - entityRef (the ENTITY-scoped artifact key, e.g. "vm:k3s-vm") resolves the VM SPEC —
+//     one shared k3s cluster per VM; reliable via the "vm:" prefix, no foldMembers dependency.
+//   - deployName (the real per-DEPLOY / domain identity, e.g. "check-k8s-deploy-cluster")
+//     keys the VmState port-forward LEDGER: "vm:"+VmDomainIdentity(deployName) is the EXACT
+//     key the orchestrator persisted under (vm_create_orchestrate.go domainID = the bed
+//     runner's --domain = VmDomainIdentity(deployName)). Keying off entityRef instead was
+//     the mismatch that silently dropped the allocation for every P33 bed (deploy != entity).
+func deployVMForwards(entityRef, deployName string) ([]string, error) {
 	uf, ok, err := LoadUnified(".")
 	if err != nil || !ok || uf == nil {
-		return nil
+		return nil, nil
 	}
-	// deployName is either a "vm:<entity>" reference (the VM-deploy artifact key) or a
+	// entityRef is either a "vm:<entity>" reference (the VM-deploy artifact key) or a
 	// bundle key whose node carries `from: <vm entity>`. Resolve the VM entity either way.
 	vmEntity := ""
-	if e, cut := strings.CutPrefix(deployName, "vm:"); cut {
+	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
 		vmEntity = e
-	} else if node := findBundleNodeByName(uf.Bundle, deployName); node != nil {
+	} else if node := findBundleNodeByName(uf.Bundle, entityRef); node != nil {
 		vmEntity = node.From
 	}
 	if vmEntity == "" {
-		return nil
+		return nil, nil
 	}
 	vm, _ := resolveVmViaPlugin(uf.VM[vmEntity])
 	if vm == nil || vm.Network == nil {
-		return nil
+		return nil, nil
 	}
-	return vm.Network.PortForwards
+	key := "vm:" + vmDomainIdentity(deployName)
+	var alloc map[string]int
+	if entry, ok := loadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
+		alloc = entry.VmState.PortForwards
+	}
+	resolved, rerr := resolveDeployForwards(vm.Network.PortForwards, alloc)
+	if rerr != nil {
+		return nil, fmt.Errorf("deploy %q (vm_state key %q): %w", deployName, key, rerr)
+	}
+	return resolved, nil
+}
+
+// resolveDeployForwards maps authored network.port_forwards entries to concrete
+// "<host>:<guest>" strings: an `auto:<guest>` entry resolves to its persisted
+// auto-allocated host port, and a fixed "<host>:<guest>" passes through unchanged.
+// An `auto:<guest>` with NO persisted allocation is a LOUD ERROR, never a silent drop:
+// this runs only POST-vm-create (K3sPostProvision), where the allocation MUST exist, so a
+// miss means a persist/read key mismatch — surfacing it here turns a confusing downstream
+// `connection refused` into a diagnostic that names the unresolved entry (R1/R4). Pure;
+// unit-tested (k3s_post_test.go).
+func resolveDeployForwards(authored []string, alloc map[string]int) ([]string, error) {
+	out := make([]string, 0, len(authored))
+	for _, pf := range authored {
+		host, guest, ok := strings.Cut(pf, ":")
+		if !ok || guest == "" {
+			continue
+		}
+		if host == "auto" {
+			h, hit := alloc[guest]
+			if !hit || h <= 0 {
+				return nil, fmt.Errorf("auto port_forward %q has no persisted host-port allocation (the vm-create allocation must exist post-create)", pf)
+			}
+			out = append(out, fmt.Sprintf("%d:%s", h, guest))
+			continue
+		}
+		out = append(out, pf)
+	}
+	return out, nil
 }
 
 // findBundleNodeByName locates a deploy node by key across the tree (top-level +
@@ -138,12 +187,15 @@ func sanitizeDeployName(s string) string {
 // No-op when the retrieved kubeconfig path does not exist (e.g. because
 // the candy did not actually include k3s-server, or the artifact
 // retricheck was skipped by --dry-run).
-func K3sPostProvision(deployName string) error {
+// artifactKey is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
+// kubeconfig context — one k3s cluster per VM, reached by several beds); deployName is
+// the real per-deploy (domain) identity the port-forward lookup keys off.
+func K3sPostProvision(artifactKey, deployName string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("resolving home: %w", err)
 	}
-	safe := sanitizeDeployName(deployName)
+	safe := sanitizeDeployName(artifactKey)
 	retrieved := filepath.Join(home, ".cache", "charly", "clusters", safe, "kubeconfig.yaml")
 	if _, err := os.Stat(retrieved); err != nil {
 		// Not a k3s-server deploy, or retricheck was skipped. Nothing to do.
@@ -153,8 +205,10 @@ func K3sPostProvision(deployName string) error {
 	// The retrieved kubeconfig carries k3s's GUEST-local server URL (127.0.0.1:6443);
 	// the host reaches the in-guest API only through the VM's host:guest port-forward.
 	// Rewrite the server to the host-forwarded port so `kubectl`/`kube:` checks work
-	// host-side (without this, kubectl dials 127.0.0.1:6443 → connection refused).
-	if err := rewriteK3sServerToForward(retrieved, deployName); err != nil {
+	// host-side (without this, kubectl dials 127.0.0.1:6443 → connection refused). The
+	// port-forward allocation is keyed by the DEPLOY identity; the entity (artifactKey)
+	// resolves the VM spec.
+	if err := rewriteK3sServerToForward(retrieved, artifactKey, deployName); err != nil {
 		return fmt.Errorf("rewriting k3s kubeconfig server to the forwarded port: %w", err)
 	}
 
@@ -162,7 +216,7 @@ func K3sPostProvision(deployName string) error {
 	if err := mergeKubeconfig(retrieved, contextName); err != nil {
 		return fmt.Errorf("merging kubeconfig into ~/.kube/config: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "k3s cluster %q registered — kubectl --context=%s get nodes\n", deployName, contextName)
+	fmt.Fprintf(os.Stderr, "k3s cluster %q registered — kubectl --context=%s get nodes\n", artifactKey, contextName)
 	return nil
 }
 
