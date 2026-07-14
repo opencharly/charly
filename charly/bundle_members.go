@@ -106,15 +106,40 @@ func validateMembers(uf *UnifiedFile) error {
 			if memberNode == nil {
 				continue
 			}
-			switch memberNode.Target {
-			case "", "pod", "vm", "local", "k8s", "android":
-				// "" defaults to pod; only these target kinds are valid.
-			default:
-				return fmt.Errorf("deploy %q peer %q has unsupported target %q (must be pod, vm, local, k8s, or android)", owner, memberKey, memberNode.Target)
+			// Kind-blind: a peer member's target is valid iff it is a recognized
+			// deploy substrate (the empty target defaults to pod). Dispatched
+			// through the recognition registry — NOT a compiled-in per-kind switch —
+			// because the substrate kinds are plugin-served (C2-substrate), so a new
+			// external deploy substrate is a valid member target without a core edit
+			// (the kernel/plugin boundary law: a validator checks the word is a
+			// recognized kind; the P9 word-switch gate's intended pattern).
+			if !validMemberTarget(memberNode.Target) {
+				return fmt.Errorf("deploy %q peer %q has unsupported target %q (not a recognized deploy substrate; \"\" defaults to pod)", owner, memberKey, memberNode.Target)
 			}
 		}
 	}
 	return nil
+}
+
+// validMemberTarget reports whether target is a valid peer-member deploy target:
+// the empty target (which defaults to pod) or one of the canonical deploy
+// substrates. It consults the canonical deploy-target set (deployTargetWords —
+// the bijection's D-data, tied to spec.ResourceKinds), NOT a compiled-in per-kind
+// switch on the consumer, so the consumer names no concrete kind word (the
+// kernel/plugin boundary law). A new deploy substrate is added to that canonical
+// set once, not to a per-consumer switch. deployTargetWords itself is tracked
+// migration inventory (a per-kind Go slice) with a named K-wave exit, not
+// permanent core; this cutover removes the consumer-side switch only.
+func validMemberTarget(target string) bool {
+	if target == "" {
+		return true
+	}
+	for _, w := range deployTargetWords {
+		if w == target {
+			return true
+		}
+	}
+	return false
 }
 
 // sortedMemberKeys returns the member keys of a node in deterministic order.
