@@ -57,10 +57,10 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	}
 	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
 	// Recurse on the dependency image through the SAME build:box dispatch the CLI uses
-	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-resolve")):
+	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-prep")):
 	// the podman drive lives in the candy now (P8b), so the host cannot build inline. The
 	// in-proc reverse channel makes this re-entrant call cheap (no socket). Reached from the
-	// build-resolve bootstrap pre-pass AND the vm bootstrap path.
+	// build-prep bootstrap pre-pass AND the vm bootstrap path.
 	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
 		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
 	}
@@ -121,7 +121,7 @@ func (c *BuildCmd) Run() error {
 	}
 
 	// Compute the build tag ONCE host-side so the retention activity-lock floor and
-	// the built images (build-resolve's NewGenerator) agree on ONE CalVer —
+	// the built images (build-prep's NewGenerator) agree on ONE CalVer —
 	// ComputeCalVer is clock-derived, so resolving it in two places would diverge.
 	tag := c.Tag
 	if tag == "" {
@@ -140,8 +140,9 @@ func (c *BuildCmd) Run() error {
 	defer func() { _ = buildActivityRelease() }()
 
 	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box); the
-	// host is a RESOLVE/RENDER seam provider (HostBuild("build-resolve")). P8b
-	// reversed the P8 "permanent facade" — the engine's drive now lives in the candy.
+	// host is a PREP + RESOLVE-PROJECT envelope seam provider (HostBuild("build-prep")).
+	// P8b reversed the P8 "permanent facade" — the podman DRIVE lives in the candy; #67 moved the
+	// render DRIVE to sdk/deploykit + plugin-build, so the host no longer renders Containerfiles.
 	if err := dispatchBoxBuild(spec.BuildRequest{
 		Boxes:           c.Boxes,
 		Tag:             tag,
@@ -171,7 +172,7 @@ func (c *BuildCmd) Run() error {
 // pruneAfterBuild runs the post-build retention prune host-side (best-effort,
 // warn-only): old-CalVer image-tag retention (keep_images) + stale build-staging
 // dir cleanup. It reads keep_images from a lightweight project-config load (the
-// full model already rendered in build-resolve; this is a cheap charly.yml read)
+// full model already prepped in build-prep; this is a cheap charly.yml read)
 // and resolves the engine via ResolveRuntime. Runs after the candy build drive
 // (build:box) completes.
 func pruneAfterBuild(dir string) {

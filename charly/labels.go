@@ -17,86 +17,60 @@ import (
 // pointing users to `charly box pull`.
 var ErrImageNotLocal = errors.New("image not found in local storage")
 
-// OCI label key constants (all namespaced under ai.opencharly.)
+// OCI label key constants (all namespaced under ai.opencharly.) — the SINGLE SOURCE lives in
+// sdk/spec/label_consts.go (the build↔deploy wire contract: the deploykit WriteLabels EMITTER
+// + the ExtractMetadata deploy READER share one copy). These const-aliases keep the deploy-side
+// charly readers (ExtractMetadata, config_image, deploy_target_pod, local_image, retention,
+// capabilities — K4 deploy-resolution migration inventory) referencing the unqualified names
+// until they relocate to sdk/deploykit; then this block deletes. NOT a `charly/*_aliases.go`
+// re-export and NOT a kit-mechanism alias (spec is the contract module) — a transitional const
+// alias with a named K4 exit, gate-legal under ZERO-ALIASES.
 const (
-	LabelVersion  = "ai.opencharly.version"
-	LabelBox      = "ai.opencharly.box"
-	LabelRegistry = "ai.opencharly.registry"
-	LabelBootc    = "ai.opencharly.bootc"
-	LabelUID      = "ai.opencharly.uid"
-	LabelGID      = "ai.opencharly.gid"
-	LabelUser     = "ai.opencharly.user"
-	LabelHome     = "ai.opencharly.home"
-	LabelPort     = "ai.opencharly.port"
-	LabelVolume   = "ai.opencharly.volume"
-	LabelAlias    = "ai.opencharly.alias"
-	LabelSecurity = "ai.opencharly.security"
-	LabelNetwork  = "ai.opencharly.network"
-	// Schema v4: LabelTunnel / LabelDNS / LabelAcmeEmail / LabelEngine
-	// removed — these are deployment choices with no image-declaration
-	// meaning. Deploy-time values flow through BundleNode →
-	// BoxMetadata, not through OCI labels.
-	LabelEnv  = "ai.opencharly.env"
-	LabelHook = "ai.opencharly.hook"
-	// LabelVm + LabelLibvirt: removed in the VM hard-cutover. VM specs
-	// now live in vm.yml as `kind: vm` entities; no longer embedded
-	// in container image OCI labels.
-	LabelRoute = "ai.opencharly.route"
-	LabelInit  = "ai.opencharly.init"
-	// LabelInitDef — the build-resolved init definition (the runtime-relevant
-	// subset of the embedded init: vocabulary entry: container entrypoint,
-	// fallback entrypoint, and the in-container service-management surface).
-	// Baked at build time so deploy reads the init contract from the image
-	// itself instead of re-deriving it from a hardcoded registry. Makes the
-	// init system TRUE single-source — including init systems declared ONLY
-	// in the embedded init: vocabulary, which now reach runtime via this label.
-	LabelInitDef        = "ai.opencharly.init_def"
-	LabelEnvCandy       = "ai.opencharly.env_candy"
-	LabelPathAppend     = "ai.opencharly.path_append"
-	LabelPortProto      = "ai.opencharly.port_proto"
-	LabelPortRelay      = "ai.opencharly.port_relay"
-	LabelSkill          = "ai.opencharly.skill"
-	LabelStatus         = "ai.opencharly.status"
-	LabelInfo           = "ai.opencharly.info"
-	LabelCandyVersion   = "ai.opencharly.candy_version"
-	LabelSecret         = "ai.opencharly.secret"
-	LabelPlatformDistro = "ai.opencharly.platform.distro"
-	LabelPlatformFormat = "ai.opencharly.platform.format"
-	LabelBuilderUse     = "ai.opencharly.builder.use"
-	LabelBuilderProvide = "ai.opencharly.builder.provide"
-	LabelDataEntries    = "ai.opencharly.data"
-	LabelDataBox        = "ai.opencharly.data_box"
-	LabelEnvProvide     = "ai.opencharly.env_provide"
-	LabelEnvRequire     = "ai.opencharly.env_require"
-	LabelEnvAccept      = "ai.opencharly.env_accept"
-	LabelSecretAccept   = "ai.opencharly.secret_accept"  // credential-store-backed env vars this image can optionally use
-	LabelSecretRequire  = "ai.opencharly.secret_require" // credential-store-backed env vars this image must have
-	LabelMCPProvide     = "ai.opencharly.mcp_provide"
-	LabelMCPRequire     = "ai.opencharly.mcp_require"
-	LabelMCPAccept      = "ai.opencharly.mcp_accept"
-	// LabelDescription — three-section plan-shaped self-description for
-	// every `kind:` entity the image rolled up. Each section carries one
-	// LabeledDescription per contributing entity (candy/box/deploy).
-	// Authored inline in YAML under `description:` on each kind; collected
-	// via CollectDescriptions following the same base-chain walk as
-	// CollectHooks. Subject to a 256 KiB soft cap with narrative truncation.
-	LabelDescription = "ai.opencharly.description"
-	// LabelService — structured JSON array of CapabilityService (full
-	// per-entry spec, not just names). Source-less deploy (`charly bundle from-box`)
-	// reads this to reconstruct every service's config without the repo.
-	LabelService = "ai.opencharly.service"
-	// LabelShell — three-section JSON shell-init manifest.
-	// Each section (candy/box/deploy) carries an ordered list of
-	// ShellEntry contributions (origin = candy name / "box" / "deploy",
-	// id, generic body, per-shell ByShell map). Source of truth for
-	// `charly box inspect`, `charly bundle from-box`, and the charly.yml
-	// `shell:` overlay merge — same shape as LabelDescription.
-	LabelShell = "ai.opencharly.shell"
-	// LabelCheckLevel — the per-box acceptance-depth rung (none|build|noagent|
-	// agent) authored as BoxConfig.CheckLevel. `charly check run <bed>` reads it
-	// from the built image to gate how deep the bed's acceptance runs. See
-	// check_level.go for the ladder.
-	LabelCheckLevel = "ai.opencharly.check_level"
+	LabelVersion        = spec.LabelVersion
+	LabelBox            = spec.LabelBox
+	LabelRegistry       = spec.LabelRegistry
+	LabelBootc          = spec.LabelBootc
+	LabelUID            = spec.LabelUID
+	LabelGID            = spec.LabelGID
+	LabelUser           = spec.LabelUser
+	LabelHome           = spec.LabelHome
+	LabelPort           = spec.LabelPort
+	LabelVolume         = spec.LabelVolume
+	LabelAlias          = spec.LabelAlias
+	LabelSecurity       = spec.LabelSecurity
+	LabelNetwork        = spec.LabelNetwork
+	LabelEnv            = spec.LabelEnv
+	LabelHook           = spec.LabelHook
+	LabelRoute          = spec.LabelRoute
+	LabelInit           = spec.LabelInit
+	LabelInitDef        = spec.LabelInitDef
+	LabelEnvCandy       = spec.LabelEnvCandy
+	LabelPathAppend     = spec.LabelPathAppend
+	LabelPortProto      = spec.LabelPortProto
+	LabelPortRelay      = spec.LabelPortRelay
+	LabelSkill          = spec.LabelSkill
+	LabelStatus         = spec.LabelStatus
+	LabelInfo           = spec.LabelInfo
+	LabelCandyVersion   = spec.LabelCandyVersion
+	LabelSecret         = spec.LabelSecret
+	LabelPlatformDistro = spec.LabelPlatformDistro
+	LabelPlatformFormat = spec.LabelPlatformFormat
+	LabelBuilderUse     = spec.LabelBuilderUse
+	LabelBuilderProvide = spec.LabelBuilderProvide
+	LabelDataEntries    = spec.LabelDataEntries
+	LabelDataBox        = spec.LabelDataBox
+	LabelEnvProvide     = spec.LabelEnvProvide
+	LabelEnvRequire     = spec.LabelEnvRequire
+	LabelEnvAccept      = spec.LabelEnvAccept
+	LabelSecretAccept   = spec.LabelSecretAccept
+	LabelSecretRequire  = spec.LabelSecretRequire
+	LabelMCPProvide     = spec.LabelMCPProvide
+	LabelMCPRequire     = spec.LabelMCPRequire
+	LabelMCPAccept      = spec.LabelMCPAccept
+	LabelDescription    = spec.LabelDescription
+	LabelService        = spec.LabelService
+	LabelShell          = spec.LabelShell
+	LabelCheckLevel     = spec.LabelCheckLevel
 )
 
 // BoxMetadata + the OCI-label sub-shapes are CUE-sourced in spec (boxmetadata.cue, P2B, #60)
@@ -235,7 +209,7 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	// Tunnel config is a deploy-time concern — read from charly.yml only.
 	// Label is no longer written or read.
 
-	// Env — the label is baked as a JSON OBJECT (writeLabels bakes the image's
+	// Env — the label is baked as a JSON OBJECT (deploykit WriteLabels bakes the image's
 	// spec.Box.Env map). meta.Env is the []string KEY=VALUE form every deploy
 	// consumer expects (ResolveEnvVars, the start/shell deployEnv), so decode the
 	// object into a map and convert via envMapToPairs — the exact inverse of the

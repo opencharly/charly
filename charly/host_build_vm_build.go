@@ -13,7 +13,7 @@ import (
 // `vm build` command forwards its flags via HostBuild("vm-build") and this builder runs the full build
 // in-process (the plugin is compiled-in, so build progress flows to the shared stdout/stderr). Unlike
 // the box-build engine (whose podman DRIVE moved into candy/plugin-build in P8b, leaving core only the
-// build-resolve/merge seams), the vm-disk build engine is not yet externalized. Generic action noun (F11).
+// build-prep/merge seams), the vm-disk build engine is not yet externalized. Generic action noun (F11).
 const vmBuildBuilderKind = "vm-build"
 
 func hostBuildVmBuild(_ context.Context, req spec.VmBuildRequest, _ buildEngineContext) (spec.VmBuildReply, error) {

@@ -89,6 +89,10 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 		return CollectBoxPorts(g.Config, g.Candies, boxName)
 	}
 	dg.ValidateEgress = ValidateEgress
+	// ValidateTextEgress: the rendered-Containerfile text gate (kind "rendered_text", mode
+	// "text") — the deploykit writeContainerfile calls it instead of the bytes ValidateEgress
+	// (#67 render-DRIVE move). Wraps core validateTextEgress.
+	dg.ValidateTextEgress = validateTextEgress
 	// RenderService: the init-cluster service materialization crosses to
 	// candy/plugin-init (OpResolve) + egress-gates host-side. All arg/return types
 	// are spec aliases, so the core func satisfies the seam field directly.
@@ -111,6 +115,17 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg.ResolveDetectionBuilderStage = g.resolveDetectionBuilderStageSeam
 	dg.ResolveExternalBuilderStage = g.resolveExternalBuilderStageSeam
+	// EmitBakedPlugins: the S0 baked-plugin BUILD-side seam — bake each composing
+	// candy's bake_plugin binaries into the final image. The host closure is the
+	// existing emitBakedPlugins (stays core: host-builds plugin binaries). Used by
+	// deploykit.Generator.generateContainerfile (#67 render-DRIVE move).
+	dg.EmitBakedPlugins = g.emitBakedPlugins
+	// CollectBoxVolume: the volume-aggregate seam for data-image label emission.
+	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
+	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
+	dg.CollectBoxVolume = func(boxName, home string) ([]deploykit.VolumeMount, error) {
+		return CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
+	}
 	g.dkGen = dg
 	return dg
 }
