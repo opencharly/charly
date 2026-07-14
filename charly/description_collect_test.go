@@ -42,3 +42,26 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 		t.Errorf("baked plugin_input.file = %v, want /usr/bin/redis-server", step.PluginInput)
 	}
 }
+
+// TestBakeableSteps_StampsIntentDo is the regression guard for the K3-D+ baked-label side-channel:
+// the ai.opencharly.description label must carry the keyword-derived intent_do on every
+// verb-carrying baked step. Moving the validate ENGINE to candy/plugin-box killed the old side
+// effect (validate mutating the shared structs the bake serialized), so bakeableSteps now stamps
+// its own COPY. Without the stamp, baked[0].Op.IntentDo is empty and this test fails.
+func TestBakeableSteps_StampsIntentDo(t *testing.T) {
+	baked := bakeableSteps([]Step{
+		// a plugin: file CHECK step (VerbsSet = ["plugin"]) → intent_do "assert"
+		{Check: "the binary exists", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
+		// a verb-less AGENT-CHECK step → no Op verb, IntentDo stays empty (matches the pre-cutover bake)
+		{AgentCheck: "the dashboard looks populated"},
+	})
+	if len(baked) != 2 {
+		t.Fatalf("bakeableSteps = %d steps, want 2 (check + agent-check both bake)", len(baked))
+	}
+	if got := baked[0].IntentDo; got != string(DoAssert) {
+		t.Errorf("check-step intent_do = %q, want %q (deterministic keyword stamp)", got, DoAssert)
+	}
+	if got := baked[1].IntentDo; got != "" {
+		t.Errorf("verb-less agent-check intent_do = %q, want empty", got)
+	}
+}

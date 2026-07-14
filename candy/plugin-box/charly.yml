@@ -12,7 +12,10 @@ plugin-box:
             the .build/ tree by InvokeProvider'ing the peer build:generate word (candy/plugin-build),
             which drives HostBuild("build-resolve", GenerateOnly); `new` (candy/project/box) calls the
             sdk/kit scaffold engine directly (kit.ScaffoldCandy/ScaffoldProject/AddBox), no core
-            reentry; `validate` and `pkg` reach the hidden core __box-validate / __box-pkg reentries
+            reentry; `validate` fetches the error-TOLERANT resolved-project envelope
+            (HostBuild("validate-project")) and runs the whole per-kind/op rule engine + the deploykit
+            resolution-graph checks IN-PLUGIN over it, merging the host's CUE-conformance / tunable /
+            base⊻from diagnostics for the verdict; `pkg` reaches the hidden core __box-pkg reentry
             over HostBuild("cli"); `inspect` and `list` read the generic spec.ResolvedProject envelope
             (HostBuild("resolved-project")) — inspect's default JSON is snake_case canonical — with the
             deploy-overlay formats (inspect tunnel/bind_mounts) + store-live `list tags` reaching the

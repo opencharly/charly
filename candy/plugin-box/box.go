@@ -15,9 +15,10 @@ import (
 
 // hostClient is the box commands' host coupling: it reaches charly's host process over the
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
-// HostBuild("resolved-project") envelope fetch (inspect/list), or the generic HostBuild("cli")
-// reentry (validate/pkg → the hidden __box-* core commands, and inspect/list's overlay/store residue
-// → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit scaffolding directly).
+// HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
+// envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
+// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, and inspect/list's overlay/store
+// residue → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
@@ -120,32 +121,11 @@ func dispatchGenerate(hc *hostClient, args []string) error {
 
 // --- box validate ---
 
-// validateGrammar is the `charly box validate [--include-disabled]` CLI surface.
+// validateGrammar is the `charly box validate [--include-disabled]` CLI surface. The validate ENGINE
+// itself lives in validate.go (it reads the resolved-project envelope + re-runs the deploykit graph
+// checks); dispatchValidate is defined there.
 type validateGrammar struct {
 	IncludeDisabled bool `long:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
-}
-
-// dispatchValidate reaches the hidden core `__box-validate` reentry over HostBuild("cli"): the
-// validation needs the fully-resolved project the plugin cannot load pre-K1. The subprocess inherits
-// charly's stderr (it renders the ValidationError text itself) and exits 0/1; a non-zero exit surfaces
-// as the command error.
-func dispatchValidate(hc *hostClient, args []string) error {
-	var g validateGrammar
-	if done, err := parseLeaf("validate", &g, args); err != nil || done {
-		return err
-	}
-	argv := []string{"__box-validate"}
-	if g.IncludeDisabled {
-		argv = append(argv, "--include-disabled")
-	}
-	r, err := hc.cli(false, true, argv...)
-	if err != nil {
-		return err
-	}
-	if r.ExitCode != 0 {
-		return fmt.Errorf("charly.yml + candies failed validation")
-	}
-	return nil
 }
 
 // --- box pkg ---

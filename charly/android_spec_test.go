@@ -40,28 +40,9 @@ func TestApkPackageSpec_Defaults(t *testing.T) {
 	}
 }
 
-func TestValidateCandyApk(t *testing.T) {
-	cases := []struct {
-		name    string
-		apks    []ApkPackageSpec
-		wantErr bool
-	}{
-		{"valid-package", []ApkPackageSpec{{Package: "org.fdroid.fdroid", Source: "apk-pure"}}, false},
-		{"valid-committed", []ApkPackageSpec{{Apk: "tests/data/x.apk"}}, false},
-		// package⊕apk one-of + the source enum are now enforced by #CandyApk
-		// (cue_tighten_test.go); only the source⊕apk cross-field rule stays in Go.
-		{"source-on-committed", []ApkPackageSpec{{Apk: "y.apk", Source: "apk-pure"}}, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			errs := &ValidationError{}
-			validateCandyApk("test-layer", tc.apks, errs)
-			if errs.HasErrors() != tc.wantErr {
-				t.Errorf("validateCandyApk(%+v): HasErrors=%v want %v (%v)", tc.apks, errs.HasErrors(), tc.wantErr, errs.Errors)
-			}
-		})
-	}
-}
+// TestValidateCandyApk — the apk⊕source cross-field rule moved with the validate engine to
+// candy/plugin-box (task #60); its coverage now lives in candy/plugin-box/validate_pure_test.go
+// (TestValidateCandyApk, an envelope-unit — a 1:1 helper port over spec.ApkPackageSpec).
 
 // The adb-address parsing (splitAdbAddr) + the per-venue adb-prefix selection
 // (adbScriptPrefix) moved out of core with the goadb-backed install path in the adb →

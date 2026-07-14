@@ -2109,7 +2109,7 @@ check-commands-local:
               command:
                 command: charly clean --dry-run
                 in_container: false
-            - check: charly box new + candy + box + validate + generate render a valid box Containerfile in a scratch project, proving the box command plugin (candy/plugin-box, P15) dispatches its NESTED verbs end-to-end host-side — new via the sdk/kit scaffold engine, validate via the hidden __box-validate reentry, generate via InvokeProvider to the build-generate word then build-resolve
+            - check: charly box new + candy + box + validate + generate render a valid box Containerfile in a scratch project, proving the box command plugin (candy/plugin-box, P15) dispatches its NESTED verbs end-to-end host-side — new via the sdk/kit scaffold engine, validate via the plugin's own validate ENGINE over the HostBuild("validate-project") resolved-project envelope (task #60), generate via InvokeProvider to the build-generate word then build-resolve
               id: box-new-validate-generate
               exit_status: 0
               context:

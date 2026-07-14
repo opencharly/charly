@@ -212,9 +212,6 @@ func initDefRequirementsMet(def *ResolvedInit, caps *AggregatedCandyCaps) bool {
 	return true
 }
 
-// initHasRelayTemplate → deploykit.InitHasRelayTemplate (P8 shim).
-var initHasRelayTemplate = deploykit.InitHasRelayTemplate
-
 // RenderManagementCommand renders a management command template with the given service name.
 func initRenderManagementCommand(def *ResolvedInit, operation, serviceName string) (string, error) {
 	tmplStr, ok := def.ManagementCommands[operation]

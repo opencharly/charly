@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // alias_collect.go holds the alias CORE residue that OUTLIVES the `charly alias …` CLI extraction
@@ -22,11 +24,9 @@ import (
 // aliasNameRe matches valid alias names: starts with alphanumeric, allows dots/underscores/hyphens
 var aliasNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 
-// CollectedAlias represents a resolved alias ready for installation.
-type CollectedAlias struct {
-	Name    string `json:"name"`
-	Command string `json:"command"`
-}
+// CollectedAlias represents a resolved alias ready for installation. CUE-sourced in spec
+// (boxmetadata.cue, P2B) + aliased in-place; carried on BoxMetadata.Alias (ai.opencharly.alias).
+type CollectedAlias = spec.CollectedAlias
 
 // CollectBoxAlias gathers aliases from the box's own candies + box-level config.
 // No base chain traversal — aliases are leaf-box specific.

@@ -144,6 +144,5 @@ type (
 var (
 	keywordOf       = kit.KeywordOf
 	EffectiveStepID = kit.EffectiveStepID
-	stepDoMode      = kit.StepDoMode
 	filterHostVars  = kit.FilterHostVars
 )

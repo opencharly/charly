@@ -149,72 +149,68 @@ var installVerbs = map[string]bool{
 	// "command" again).
 }
 
-// ActsInBuildDeploy reports whether a do:act op with this NON-plugin verb has a real
-// build/deploy install path — a generic OpStep (the install verbs). The verbs that lowered
-// into a typed install step (package/service) are extracted plugin verbs now, handled by
-// opActsInBuildDeploy's TypedStepProvider branch — so no remaining VerbCatalog verb lowers,
-// and this reduces to the installVerbs membership test. Every other verb's act form runs
-// only at runtime (the check Runner's executor), so a build/deploy do:act op of such a verb
-// would be silently dropped by the compiler — the validator rejects it instead (file
-// creation in build/deploy is the write/copy verbs).
-func ActsInBuildDeploy(verb string) bool {
-	return installVerbs[verb]
+// opActsInBuildDeploy reports whether the PLUGIN op c's act form has a real build/deploy install path.
+// The former non-plugin (install-verb) arm was removed with the validate ENGINE (task #60): the ONLY
+// caller left is the validate host-fill (fillValidateWordSets), which always asks about a `plugin:` op —
+// install-verb act-capability now lives in the plugin's own installVerbSet, never here. `plugin: command`
+// is act-capable via the dedicated emitCmd install path (NOT a ProvisionActor); every other plugin verb
+// acts when its registered provider is a ProvisionActor / TypedStepProvider / BuildEmitter, or
+// (standalone, provider not connected) when the parse-time prescan saw a plugin candy declare it.
+func opActsInBuildDeploy(c *Op) bool {
+	if c.Plugin == "command" {
+		return true
+	}
+	// A class:STEP plugin word (F3's external step KIND) lowers to an externalStep that ACTS at DEPLOY
+	// (compileActOp resolve(ClassStep) → externalStep → OpExecute). Recognized via a connected ClassStep
+	// provider OR a post-scan declaration (standalone `charly box validate`, where the step plugin is not
+	// connected) — the step analogue of the verb handling below.
+	if _, ok := providerRegistry.ResolveStep(c.Plugin); ok {
+		return true
+	}
+	if isDeclaredExternalStep(c.Plugin) {
+		return true
+	}
+	prov, ok := providerRegistry.ResolveVerb(c.Plugin)
+	if !ok {
+		// Not connected — the standalone `charly box validate` path, where external plugins are not
+		// built+connected. Trust a verb the parse-time prescan saw a plugin candy declare
+		// (registerDeclaredExternalVerb): it is build-emit-capable until the BUILD (which DOES connect it
+		// via the connect seam) proves otherwise at emitPluginFragment's empty-fragment guard. A BUILTIN
+		// verb always resolves above, so this branch is reached only for a genuinely external,
+		// not-yet-connected verb — never for a runtime-only builtin (which is correctly rejected).
+		return isDeclaredExternalVerb(c.Plugin)
+	}
+	// A ProvisionActor renders an install shell; a TypedStepProvider (service) lowers into a typed
+	// install step; a BuildEmitter (an in-proc build-emit verb) renders a Containerfile fragment via
+	// Invoke(OpEmit). Each is a real build/deploy act path — the same capability whether the plugin is
+	// builtin or external (placement-agnostic).
+	if _, isActor := prov.(ProvisionActor); isActor {
+		return true
+	}
+	if _, isTyped := prov.(TypedStepProvider); isTyped {
+		return true
+	}
+	if _, isEmitter := prov.(BuildEmitter); isEmitter {
+		return true
+	}
+	// A CONNECTED external (out-of-process) verb is build-emit-capable via Invoke(OpEmit); the host
+	// cannot type-assert capability across the process boundary, so it is trusted here and gated at build
+	// by emitPluginFragment's empty-fragment guard.
+	_, isExternal := prov.(*grpcProvider)
+	return isExternal
 }
 
-// opActsInBuildDeploy is the Op-level act-capability test, threading the generic
-// `plugin:` verb: `plugin: command` is the ONE install-task plugin verb — act-capable
-// via the dedicated emitCmd branch in emitTasks/renderOpCommand (preserving the full
-// command build/deploy install path), NOT a ProvisionActor — so it is accepted directly.
-// Every other plugin verb acts in build/deploy only when its registered provider is a
-// ProvisionActor (the act-emit enabler renders RenderProvisionScript at install emit).
-// Every non-plugin verb defers to the verb-keyed ActsInBuildDeploy. verb is the caller's
-// already-computed c.Kind() (avoids recomputation).
-func opActsInBuildDeploy(c *Op, verb string) bool {
-	if verb == "plugin" {
-		if c.Plugin == "command" {
-			return true
-		}
-		// A class:STEP plugin word (F3's external step KIND) lowers to an externalStep that ACTS
-		// at DEPLOY (compileActOp resolve(ClassStep) → externalStep → OpExecute). Recognized via a
-		// connected ClassStep provider OR a post-scan declaration (standalone `charly box validate`,
-		// where the step plugin is not connected) — the step analogue of the verb handling below.
-		if _, ok := providerRegistry.ResolveStep(c.Plugin); ok {
-			return true
-		}
-		if isDeclaredExternalStep(c.Plugin) {
-			return true
-		}
-		prov, ok := providerRegistry.ResolveVerb(c.Plugin)
-		if !ok {
-			// Not connected — the standalone `charly box validate` path, where external
-			// plugins are not built+connected. Trust a verb the parse-time prescan saw a
-			// plugin candy declare (registerDeclaredExternalVerb): it is build-emit-capable
-			// until the BUILD (which DOES connect it via the connect seam) proves otherwise
-			// at emitPluginFragment's empty-fragment guard. A BUILTIN verb always resolves
-			// above, so this branch is reached only for a genuinely external, not-yet-
-			// connected verb — never for a runtime-only builtin (which is correctly rejected).
-			return isDeclaredExternalVerb(c.Plugin)
-		}
-		// A ProvisionActor renders an install shell; a TypedStepProvider (service) lowers
-		// into a typed install step; a BuildEmitter (an in-proc build-emit verb) renders a
-		// Containerfile fragment via Invoke(OpEmit). Each is a real build/deploy act path —
-		// the same capability whether the plugin is builtin or external (placement-agnostic).
-		if _, isActor := prov.(ProvisionActor); isActor {
-			return true
-		}
-		if _, isTyped := prov.(TypedStepProvider); isTyped {
-			return true
-		}
-		if _, isEmitter := prov.(BuildEmitter); isEmitter {
-			return true
-		}
-		// A CONNECTED external (out-of-process) verb is build-emit-capable via Invoke(OpEmit);
-		// the host cannot type-assert capability across the process boundary, so it is trusted
-		// here and gated at build by emitPluginFragment's empty-fragment guard.
-		_, isExternal := prov.(*grpcProvider)
-		return isExternal
+// stampStepIntentDo writes the keyword-derived do-mode onto a verb-carrying step's Op.IntentDo (via
+// the shared kit.StepDoMode derivation). It is the package-main entry the label bake (bakeableSteps)
+// calls so the baked ai.opencharly.description carries intent_do deterministically — formerly a SIDE
+// EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
+// moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
+// logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
+func stampStepIntentDo(s *Step) {
+	if len(s.VerbsSet()) == 0 {
+		return
 	}
-	return ActsInBuildDeploy(verb)
+	s.IntentDo = string(kit.StepDoMode(s))
 }
 
 // EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
