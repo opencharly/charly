@@ -27,7 +27,8 @@ re-verify THIS turn for FULL CLAUDE.md compliance.
   demand. NEVER hand the user a "start a fresh session on task #N" note.
 - Did EVERY failure / warning / anomaly this turn get a proper RCA and a real
   fix per CLAUDE.md (R1)? "flake" / "transient" / "out of scope" / "follow-up"
-  are FORBIDDEN framings (R2) — fix it now, or open its own immediate-next cutover.
+  are FORBIDDEN framings (R2) — fix it now (blocking), or route it to its NAMED
+  thematic batch cutover (the Cutover Sizing Law — never a solo ceremony per small fix).
 - Was the approved plan executed AS WRITTEN (no mid-execution narrow/widen/re-approach;
   plan = CONTRACT, only STOP-and-ask)? Were ALL transitional/legacy/deprecated/dual-mode
   paths deleted BEFORE the R10 acceptance run, so R10 hit the FINAL code? (CLAUDE.md "Hard
