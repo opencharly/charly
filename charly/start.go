@@ -30,247 +30,20 @@ func (c *StartCmd) Run() error {
 	if err := rejectImageRefAsDeployName(c.Box); err != nil {
 		return err
 	}
-
-	// Resource arbitration: starting a pod deploy that claims requires_exclusive
-	// preempts the running holders of that resource (persistent lease —
-	// released by `charly stop`/`charly remove`). No-op when gated by an outer
-	// orchestrator or when this deploy claims nothing exclusive. See
-	// charly/preempt.go.
-	if dc := loadDeployConfigForRead("charly start"); dc != nil {
-		key := deployKey(c.Box, c.Instance)
-		if node, ok := dc.Bundle[key]; ok {
-			// Resource arbitration: an EXCLUSIVE claim (sole use — a VM) preempts
-			// holders + shared pods; a SHARED claim (refcounted — a GPU shared
-			// across pods via CDI) flips the resource into shared mode (GPU ->
-			// nvidia + CDI) BEFORE device detection below, so the quadlet/run
-			// picks the GPU up. Persistent lease (released by stop/remove). See
-			// charly/preempt.go.
-			if _, perr := acquireResourceForClaimant(key, node, false); perr != nil {
-				return perr
-			}
-		}
-	}
-
-	rt, err := ResolveRuntime()
-	if err != nil {
-		return err
-	}
-
-	if rt.RunMode == "quadlet" {
-		return c.runQuadlet(rt)
-	}
-
-	return c.runDirect(rt)
+	// Unified dispatch (the K4 deep-body move): `charly start` routes through ResolveTarget →
+	// LifecycleTarget.Start — a pod reaches the plugin's OpStart body (the podman/systemctl start +
+	// enc/tunnel compose) over F6, with the shared arbiter claim BRACKETED host-side (acquire before
+	// OpStart / release on failure). The direct-mode CLI extras ride podStartOpts into the plan hook.
+	return startViaLifecycle(c.Box, c.Instance, podStartOpts{
+		Env:          c.Env,
+		EnvFile:      c.EnvFile,
+		Port:         c.Port,
+		VolumeFlag:   c.VolumeFlag,
+		Bind:         c.Bind,
+		NoAutoDetect: c.NoAutoDetect,
+	})
 }
 
-func (c *StartCmd) runDirect(rt *ResolvedRuntime) error {
-	var detected DetectedDevices
-	if !c.NoAutoDetect {
-		detected = DetectHostDevices()
-		LogDetectedDevices(detected)
-	}
-
-	engine := rt.RunEngine
-
-	// Ensure NVIDIA CDI specs exist for nested container GPU access
-	if detected.GPU && engine == "podman" {
-		EnsureCDI()
-	}
-
-	// Load charly.yml for volume backing config + later use (env merge,
-	// sidecar check, agent forwarding, metadata overlay).
-	dc := loadDeployConfigForRead("charly start")
-	var deployVolumes []DeployVolumeConfig
-	if overlay, ok := dc.Lookup(c.Box, c.Instance); ok {
-		deployVolumes = overlay.Volume
-	}
-
-	// Resolve the deploy key to its declared image short-name via THE shared
-	// resolver (deploy.go) — the same one charly config / shell / check live use,
-	// so no command diverges when key != image (kind:check beds, Pattern B).
-	// c.Image stays the deploy-KEY for container / quadlet / overlay lookups;
-	// only the image ref uses the resolved name.
-	deployBoxName := resolveDeployBoxName(c.Box, c.Instance)
-	// Resolve from image labels (+ charly.yml overlay). No charly.yml.
-	imageRef := resolveShellImageRef("", deployBoxName, c.Tag)
-	if err := EnsureImage(imageRef, rt); err != nil {
-		return err
-	}
-	meta, err := ExtractMetadata(engine, imageRef)
-	if err != nil {
-		return err
-	}
-	if meta == nil {
-		return fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
-	}
-	engine = ResolveBoxEngineFromMeta(meta, rt.RunEngine)
-	MergeDeployOntoMetadata(meta, dc, c.Box, c.Instance)
-
-	// Sidecars require quadlet mode (pod networking is only available via quadlet)
-	if overlay, ok := dc.Lookup(c.Box, c.Instance); ok && len(overlay.Sidecar) > 0 {
-		return fmt.Errorf("image %s has sidecars configured in charly.yml; use 'charly config %s && charly start %s' (sidecars require quadlet mode)", c.Box, c.Box, c.Box)
-	}
-
-	uid := meta.UID
-	gid := meta.GID
-	home := meta.Home
-	ports := meta.Port
-	security := meta.Security
-	network := meta.Network
-	entrypoint := resolveEntrypointFromMeta(meta)
-
-	cliVolumes := parseVolumeFlagsStandalone(c.VolumeFlag, c.Bind)
-	volumes, bindMounts := ResolveVolumeBacking(c.Box, c.Instance, meta.Volume, mergeVolumeConfigs(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
-
-	envAccepts := meta.EnvAccept
-	envRequires := meta.EnvRequire
-	if meta.Registry != "" {
-		imageRef = resolveShellImageRef(meta.Registry, deployBoxName, c.Tag)
-	}
-
-	// Auto-initialize and mount encrypted volumes if needed
-	if err := ensureEncryptedMounts(c.Box, c.Instance, false); err != nil {
-		return err
-	}
-
-	// Verify bind mounts
-	if err := verifyBindMounts(bindMounts, c.Box); err != nil {
-		return err
-	}
-
-	// Resolve env vars from labels
-	deployEnv := meta.Env
-	var deployEnvFile string
-	startCtrName := containerNameInstance(c.Box, c.Instance)
-	startAccepted := AcceptedEnvSet(envAccepts, envRequires)
-	startGlobalEnv := dc.GlobalEnvForImage(deployKey(c.Box, c.Instance), startCtrName, startAccepted)
-	envVars, err := ResolveEnvVars(startGlobalEnv, deployEnv, deployEnvFile, workspaceBindHost(bindMounts), c.EnvFile, c.Env)
-	if err != nil {
-		return err
-	}
-
-	// Merge auto-detected devices into security config
-	if !security.Privileged {
-		security.Devices = appendUnique(security.Devices, detected.Devices...)
-		if detected.AMDGPU {
-			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
-		}
-	}
-	envVars = appendAutoDetectedEnv(envVars, detected)
-
-	// Resolve network (default to shared "charly" network)
-	resolvedNetwork, netErr := ResolveNetwork(network, engine)
-	if netErr != nil {
-		return netErr
-	}
-
-	// Apply port overrides from --port flags and persist to charly.yml
-	if len(c.Port) > 0 {
-		ports, err = ApplyPortOverrides(ports, c.Port)
-		if err != nil {
-			return err
-		}
-		// SetPorts: true because this branch only runs when len(c.Port)>0
-		// (operator explicitly passed --port flags via charly start). Per
-		// the 2026-05-09 SaveDeployStateInput.SetPorts contract, ports
-		// are written ONLY on explicit operator opt-in.
-		saveDeployState(c.Box, c.Instance, SaveDeployStateInput{
-			Ports:    ports,
-			SetPorts: true,
-		})
-	}
-
-	// Pre-flight port conflict check
-	if conflicts := CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {
-		return fmt.Errorf("port conflicts detected:%s", FormatPortConflicts(conflicts, c.Box))
-	}
-
-	// Inject agent forwarding mounts and env (direct mode only)
-	var deployBox *BundleNode
-	if overlay, ok := dc.Lookup(c.Box, c.Instance); ok {
-		deployBox = &overlay
-	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
-	for _, v := range agentFwd.Volumes {
-		security.Mounts = appendUnique(security.Mounts, v)
-	}
-	envVars = append(envVars, agentFwd.Env...)
-
-	name := containerNameInstance(c.Box, c.Instance)
-	workDir := resolveWorkingDir(volumes, bindMounts, home, c.Box, c.Instance)
-	args := buildStartArgs(engine, imageRef, uid, gid, ports, name, volumes, bindMounts, detected.GPU, rt.BindAddress, envVars, security, entrypoint, workDir, resolvedNetwork)
-
-	cmd := exec.Command(args[0], args[1:]...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s run failed: %w\n%s", EngineBinary(engine), err, strings.TrimSpace(string(output)))
-	}
-
-	containerID := strings.TrimSpace(string(output))
-	if len(containerID) > 12 {
-		containerID = containerID[:12]
-	}
-	fmt.Println(containerID)
-	fmt.Fprintf(os.Stderr, "Started %s as %s\n", name, containerID)
-
-	// Start tunnel if configured (charly.yml-only; labels never carry tunnel).
-	if meta.Tunnel != nil {
-		tc := TunnelConfigFromMetadata(meta)
-		if tc != nil {
-			if err := TunnelStart(*tc); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: tunnel setup failed: %v\n", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (c *StartCmd) runQuadlet(_ *ResolvedRuntime) error {
-	exists, err := quadletExistsInstance(c.Box, c.Instance)
-	if err != nil {
-		return err
-	}
-
-	// Direct-mode deploy (no quadlet, but marker file recorded by
-	// runConfigDirect). Fall through to `podman start charly-<name>` instead
-	// of `systemctl --user start`. Encrypted-volume mounts are skipped
-	// in direct mode (those require systemd-run --scope, see
-	// runConfigDirect's warning path).
-	if !exists && IsDirectDeploy(c.Box, c.Instance) {
-		name := containerNameInstance(c.Box, c.Instance)
-		cmd := exec.Command("podman", "start", name)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("starting %s (direct mode): %w", name, err)
-		}
-		fmt.Fprintf(os.Stderr, "Started %s (direct mode)\n", name)
-		return nil
-	}
-
-	if !exists {
-		return fmt.Errorf("not configured; run 'charly config %s' first", c.Box)
-	}
-
-	// Mount encrypted volumes if needed (runtime concern, not config)
-	if err := ensureEncryptedMounts(c.Box, c.Instance, false); err != nil {
-		return err
-	}
-
-	svc := serviceNameInstance(c.Box, c.Instance)
-	cmd := exec.Command("systemctl", "--user", "start", svc)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("starting %s: %w", svc, err)
-	}
-	fmt.Fprintf(os.Stderr, "Started %s\n", svc)
-	return nil
-}
-
-// hasConfigOverrides returns true if the user passed any config flags that
-// should trigger quadlet regeneration (port maps, env vars, env file).
 // StopCmd stops a running container started by StartCmd
 type StopCmd struct {
 	Box      string `arg:"" help:"Box name or remote ref"`
@@ -280,25 +53,17 @@ type StopCmd struct {
 
 func (c *StopCmd) Run() error {
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
-	// Releasing a persistent exclusive claim restores any holder this deploy
-	// preempted (no-op if no lease / gated by an outer orchestrator).
-	defer releaseResourceClaim(deployKey(c.Box, c.Instance))
 	// Resolve the image name (handle remote refs)
 	boxName := c.Box
 	ref := StripURLScheme(c.Box)
 	if IsRemoteImageRef(ref) {
 		boxName = ParseRemoteRef(ref).Name
 	}
-
-	// Stop tunnel before stopping container (best-effort)
-	stopTunnelForImage(boxName, c.Instance)
-
-	if err := stopPodService(boxName, c.Instance); err != nil {
-		return err
-	}
-
-	stopUnmountIfRequested(c.Unmount, boxName, c.Instance)
-	return nil
+	// Unified dispatch (the K4 deep-body move): `charly stop` routes through LifecycleTarget.Stop —
+	// a pod reaches the plugin's OpStop body (tunnel stop → container stop → enc unmount if
+	// --unmount); the shared arbiter claim is RELEASED host-side by the F6 dispatch after OpStop
+	// (restoring any holder this deploy preempted). --unmount rides the ctx into the plan hook.
+	return stopViaLifecycle(boxName, c.Instance, c.Unmount)
 }
 
 // stopPodService stops a running pod deployment — the quadlet service when
@@ -386,20 +151,6 @@ func startPodService(boxName, instance string) error {
 	}
 	fmt.Fprintf(os.Stderr, "Started %s\n", name)
 	return nil
-}
-
-// stopUnmountIfRequested tears down encrypted-volume FUSE mounts after a
-// successful stop, when the user passed --unmount. Best-effort by design
-// (matches the stopTunnelForImage pattern); failures emit a warning but
-// don't propagate, since the container has already stopped and the user
-// can retry the unmount manually with `charly config unmount <image>`.
-func stopUnmountIfRequested(want bool, boxName, instance string) {
-	if !want {
-		return
-	}
-	if err := encUnmount(boxName, instance, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: encrypted-volume unmount failed: %v\n", err)
-	}
 }
 
 // RestartCmd restarts a service container. In quadlet mode it issues a single

@@ -52,7 +52,7 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 func TestGenerateGrammar_Parse(t *testing.T) {
 	parse := func(args ...string) generateGrammar {
 		var g generateGrammar
-		if err := parseLeaf("generate", &g, args); err != nil {
+		if _, err := parseLeaf("generate", &g, args); err != nil {
 			t.Fatalf("parse %v: %v", args, err)
 		}
 		return g
@@ -104,7 +104,7 @@ func TestNewGrammar_Parse(t *testing.T) {
 // defaults.
 func TestPkgGrammar_Parse(t *testing.T) {
 	var g pkgGrammar
-	if err := parseLeaf("pkg", &g, []string{"rpm", "deb"}); err != nil {
+	if _, err := parseLeaf("pkg", &g, []string{"rpm", "deb"}); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	if !reflect.DeepEqual(g.Format, []string{"rpm", "deb"}) {

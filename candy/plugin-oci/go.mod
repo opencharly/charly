@@ -9,6 +9,7 @@ require (
 
 require (
 	cuelang.org/go v0.16.1 // indirect
+	github.com/alecthomas/kong v1.15.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.1 // indirect
 	github.com/docker/cli v29.0.3+incompatible // indirect

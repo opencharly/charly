@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -31,6 +32,7 @@ type lifecycleParams struct {
 	KeepImage bool            `json:"keep_image"`
 	EngineBin string          `json:"engine_bin"` // host-resolved container engine binary (PostTeardown)
 	Cmd       []string        `json:"cmd"`
+	Plan      json.RawMessage `json:"plan"` // host-resolved spec.PodLifecyclePlan (OpStart/OpStop) — the K4 deep-body move
 }
 
 // isLifecycleOp reports whether op is a substrate-lifecycle Op (vs. the OpExecute deploy walk).
@@ -56,15 +58,15 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	case sdk.OpPrepareVenue:
 		return podPrepareVenue(ctx, exec, p)
 	case sdk.OpStart:
-		return cliOK(podCli(ctx, exec, false, false, "start", p.Name))
+		return podStart(ctx, exec, p)
 	case sdk.OpStop:
-		return cliOK(podCli(ctx, exec, false, false, "stop", p.Name))
+		return podStop(ctx, exec, p)
 	case sdk.OpStatus:
 		return podStatus(ctx, exec, p.Name)
 	case sdk.OpLogs:
 		return podLogs(ctx, exec, p)
 	case sdk.OpShell:
-		return cliOK(podCli(ctx, exec, false, false, append([]string{"shell", p.Name}, p.Cmd...)...))
+		return podExec(ctx, exec, p)
 	case sdk.OpRebuild:
 		return podRebuild(ctx, exec, p)
 	case sdk.OpPostTeardown:
@@ -95,6 +97,131 @@ func podCli(ctx context.Context, exec *sdk.Executor, capture, bestEffort bool, a
 		return r, fmt.Errorf("charly %s: %s", strings.Join(argv, " "), r.Error)
 	}
 	return r, nil
+}
+
+// podStart executes the host-resolved pod START plan (the K4 deep-body move — the former
+// podCli("start") `charly start` reentry, now a real in-plugin body): mount encrypted volumes
+// (InvokeProvider verb:enc, BEFORE the container so it sees the plaintext), start the container
+// (systemctl/podman over the served host executor), then start the tunnel (InvokeProvider
+// verb:tunnel, AFTER — best-effort, matching StartCmd). The host RESOLVED the plan (#59 inventory:
+// image/metadata/overlay/volumes/env/security/ports/network/buildStartArgs + the enc/tunnel inputs)
+// and BRACKETED the arbiter claim around this op (acquire before, release after/on-failure).
+func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
+	var plan spec.PodLifecyclePlan
+	if err := json.Unmarshal(p.Plan, &plan); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod start: decode plan: %w", err)
+	}
+	if len(plan.Enc) > 0 {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod start: mount encrypted volumes: %w", err)
+		}
+	}
+	if err := podContainerStart(ctx, exec, plan); err != nil {
+		return nil, err
+	}
+	if plan.Tunnel != nil {
+		if err := podTunnelOp(ctx, exec, "start", plan.Tunnel); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: tunnel setup failed: %v\n", err)
+		}
+	}
+	return marshalReply(struct{}{})
+}
+
+// podStop executes the host-resolved pod STOP plan (the former podCli("stop") reentry): stop the
+// tunnel first (matching StopCmd's tunnel-before-stop), stop the container (systemctl/engine), then
+// unmount encrypted volumes if `--unmount` was requested. The arbiter release is bracketed
+// host-side by the F6 dispatch (after this op + on the failure path).
+func podStop(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
+	var plan spec.PodLifecyclePlan
+	if err := json.Unmarshal(p.Plan, &plan); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod stop: decode plan: %w", err)
+	}
+	if plan.Tunnel != nil {
+		if err := podTunnelOp(ctx, exec, "stop", plan.Tunnel); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: tunnel teardown failed: %v\n", err)
+		}
+	}
+	if err := podContainerStop(ctx, exec, plan); err != nil {
+		return nil, err
+	}
+	if len(plan.Enc) > 0 {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: encrypted-volume unmount failed: %v\n", err)
+		}
+	}
+	return marshalReply(struct{}{})
+}
+
+// podExec runs a NON-interactive in-container command CAPTURED over the served executor (the K4
+// `charly service` move — an in-container init-mgmt exec, `<engine> exec <ctr> <tool> <op> <svc>`,
+// which the host resolved into p.Cmd). It returns the combined output + the EXACT exit code as a
+// spec.PodExecReply so the host reprints the output (placement-agnostic — an out-of-process plugin's
+// stdout is not charly's) and propagates the exit code exactly. Interactive `charly shell` stays a
+// CORE command (a host-process TTY that cannot ride Invoke-and-reply — F12/#62), so it never reaches
+// here; an empty argv is a defensive error.
+func podExec(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
+	if len(p.Cmd) == 0 {
+		return nil, fmt.Errorf("plugin-deploy-pod shell: interactive shell is a core command (F12/#62), not an F6 op")
+	}
+	stdout, stderr, code, err := exec.RunCapture(ctx, shellJoin(p.Cmd))
+	if err != nil && code == 0 {
+		return nil, fmt.Errorf("plugin-deploy-pod exec %q: %w", strings.Join(p.Cmd, " "), err)
+	}
+	return marshalReply(spec.PodExecReply{Output: stdout + stderr, ExitCode: code})
+}
+
+// podContainerStart runs the resolved container start over the served host executor: quadlet →
+// `systemctl --user start <svc>`; direct-deploy marker → `podman start <ctr>`; direct → the
+// fully-built `podman run -d …` argv. Mirrors StartCmd.runQuadlet / runDirect's exec.
+func podContainerStart(ctx context.Context, exec *sdk.Executor, plan spec.PodLifecyclePlan) error {
+	switch {
+	case plan.Mode == "direct":
+		return execErr(exec, ctx, shellJoin(plan.RunArgv), "start (direct)", plan.ContainerName)
+	case plan.DirectDeploy:
+		return execErr(exec, ctx, "podman start "+kit.ShellQuote(plan.ContainerName), "start (direct-deploy)", plan.ContainerName)
+	default:
+		return execErr(exec, ctx, "systemctl --user start "+kit.ShellQuote(plan.SvcName), "start", plan.SvcName)
+	}
+}
+
+// podContainerStop runs the resolved container stop: quadlet → `systemctl --user stop <svc>` (always
+// via systemctl so podman-stop + Restart=always cannot restart-loop); direct → `<engine> stop <ctr>`.
+func podContainerStop(ctx context.Context, exec *sdk.Executor, plan spec.PodLifecyclePlan) error {
+	if plan.Mode == "quadlet" {
+		return execErr(exec, ctx, "systemctl --user stop "+kit.ShellQuote(plan.SvcName), "stop", plan.SvcName)
+	}
+	return execErr(exec, ctx, plan.EngineBin+" stop "+kit.ShellQuote(plan.ContainerName), "stop", plan.ContainerName)
+}
+
+// podTunnelOp composes verb:tunnel over InvokeProvider with the {plugin_input:{method,config}}
+// envelope verb:tunnel decodes (byte-compatible with the in-core invokeTunnel adapter, R3).
+func podTunnelOp(ctx context.Context, exec *sdk.Executor, method string, cfg *spec.TunnelConfig) error {
+	body, err := json.Marshal(map[string]any{"plugin_input": map[string]any{"method": method, "config": cfg}})
+	if err != nil {
+		return err
+	}
+	_, err = exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil)
+	return err
+}
+
+// shellJoin renders an argv into a single shell-safe command string (each token kit.ShellQuote'd)
+// for the served host executor, which runs a script string rather than an argv (the direct-mode
+// `podman run -d …` path — buildStartArgs produced the argv host-side).
+func shellJoin(argv []string) string {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = kit.ShellQuote(a)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// execErr runs a shell command over the served host executor, wrapping a failure with the op label
+// and target name (mirroring the former StartCmd/StopCmd error text).
+func execErr(exec *sdk.Executor, ctx context.Context, script, label, target string) error {
+	if err := exec.VenueRunSilent(ctx, script); err != nil {
+		return fmt.Errorf("plugin-deploy-pod %s (%s): %w", label, target, err)
+	}
+	return nil
 }
 
 // podPrepareVenue builds the overlay image HOST-SIDE via HostBuild("overlay") and returns a

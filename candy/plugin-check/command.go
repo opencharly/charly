@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -35,15 +34,7 @@ func setCommandContext(ctx context.Context, ex *sdk.Executor) {
 // dispatchCheckCLI kong-parses the pass-through args into the CheckCmd tree and runs the selected leaf.
 func dispatchCheckCLI(args []string) error {
 	var cli CheckCmd
-	parser, err := kong.New(&cli, kong.Name("check"), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run()
+	return sdk.RunInProcCLI("check", &cli, args)
 }
 
 // hostCheckRun asks the host to build the venue + run a check plan via the generic "check-run"

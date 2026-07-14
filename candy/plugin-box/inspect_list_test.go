@@ -104,7 +104,7 @@ func TestInspectDefaultJSON_SnakeCaseCanonical(t *testing.T) {
 // --include-disabled flags (the surface formerly on the core InspectCmd).
 func TestInspectGrammar_Parse(t *testing.T) {
 	var g inspectGrammar
-	if err := parseLeaf("inspect", &g, []string{"fedora", "--format", "ports", "-i", "dev", "--include-disabled"}); err != nil {
+	if _, err := parseLeaf("inspect", &g, []string{"fedora", "--format", "ports", "-i", "dev", "--include-disabled"}); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	if g.Box != "fedora" || g.Format != "ports" || g.Instance != "dev" || !g.IncludeDisabled {

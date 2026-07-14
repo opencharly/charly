@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 )
@@ -43,15 +42,7 @@ func runVmCommand(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, 
 // dispatchVmCLI kong-parses the pass-through args into the VmCmd tree and runs the selected leaf.
 func dispatchVmCLI(args []string) error {
 	var cli VmCmd
-	parser, err := kong.New(&cli, kong.Name("vm"), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run()
+	return sdk.RunInProcCLI("vm", &cli, args)
 }
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.

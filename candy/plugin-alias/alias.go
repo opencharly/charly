@@ -203,15 +203,7 @@ func defaultAliasDir() string {
 // leaf, binding the hostClient so the `add`/`install` handlers can reach the host reverse channel.
 func dispatchAliasCLI(hc *hostClient, args []string) error {
 	var cli AliasCmd
-	parser, err := kong.New(&cli, kong.Name("alias"), kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run(hc)
+	return sdk.RunInProcCLI("alias", &cli, args, kong.Bind(hc))
 }
 
 // --- CLI Commands ---

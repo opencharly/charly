@@ -222,12 +222,45 @@ func (l grpcSubstrateLifecycle) PostTeardown(name string, node *BundleNode, keep
 }
 
 func (l grpcSubstrateLifecycle) Start(ctx context.Context, name string, node *BundleNode) error {
-	_, err := l.lifecycleInvoke(ctx, sdk.OpStart, name, "", node, nil, ShellExecutor{})
+	// A substrate with a start-plan hook (pod, the K4 deep-body move) resolves the
+	// PodLifecyclePlan host-side, threads it to OpStart, and BRACKETS the shared arbiter claim
+	// (acquire before, release on the failure path — pod-scoped by the hook, so a vm that shells
+	// its own `charly vm start` never double-claims). A substrate with no hook (vm) plain-invokes.
+	planHook, hasPlan := lifecycleStartPlanHooks[l.prov.word]
+	if !hasPlan {
+		_, err := l.lifecycleInvoke(ctx, sdk.OpStart, name, "", node, nil, ShellExecutor{})
+		return err
+	}
+	box, instance := parseDeployKey(name)
+	if node != nil {
+		if _, err := acquireResourceForClaimant(name, *node, false); err != nil {
+			return err
+		}
+	}
+	planJSON, err := planHook(ctx, box, instance)
+	if err != nil {
+		releaseResourceClaim(name) // release-on-failure: a plan-resolve error must not leak the claim
+		return err
+	}
+	if _, err = l.lifecycleInvoke(ctx, sdk.OpStart, name, "", node, map[string]any{"plan": planJSON}, ShellExecutor{}); err != nil {
+		releaseResourceClaim(name) // release-on-failure: a failed start must not leak the claim
+	}
 	return err
 }
 
 func (l grpcSubstrateLifecycle) Stop(ctx context.Context, name string, node *BundleNode) error {
-	_, err := l.lifecycleInvoke(ctx, sdk.OpStop, name, "", node, nil, ShellExecutor{})
+	planHook, hasPlan := lifecycleStopPlanHooks[l.prov.word]
+	if !hasPlan {
+		_, err := l.lifecycleInvoke(ctx, sdk.OpStop, name, "", node, nil, ShellExecutor{})
+		return err
+	}
+	box, instance := parseDeployKey(name)
+	planJSON, err := planHook(ctx, box, instance)
+	if err != nil {
+		return err
+	}
+	_, err = l.lifecycleInvoke(ctx, sdk.OpStop, name, "", node, map[string]any{"plan": planJSON}, ShellExecutor{})
+	releaseResourceClaim(name) // release the persistent claim after stop (matches StopCmd's defer)
 	return err
 }
 
@@ -250,9 +283,31 @@ func (l grpcSubstrateLifecycle) Logs(ctx context.Context, name string, node *Bun
 	return err
 }
 
+// Shell drives a NON-interactive in-container exec (the K4 `charly service` move — the host
+// resolved the full `<engine> exec <ctr> <tool> <op> <svc>` argv, cmd). The plugin RunCaptures it
+// over the served executor and returns a spec.PodExecReply {Output, ExitCode}; the host REPRINTS the
+// output (placement-agnostic — an out-of-process plugin's stdout is not charly's) and PROPAGATES a
+// non-zero ExitCode exactly via *sdk.ExitCodeError (main.go maps it to the process exit), preserving
+// the container command's exit code through the passthrough→capture semantics change. Interactive
+// `charly shell` is a CORE command (host-process TTY, F12/#62) and never reaches here.
 func (l grpcSubstrateLifecycle) Shell(ctx context.Context, name string, node *BundleNode, cmd []string) error {
-	_, err := l.lifecycleInvoke(ctx, sdk.OpShell, name, "", node, map[string]any{"cmd": cmd}, ShellExecutor{})
-	return err
+	res, err := l.lifecycleInvoke(ctx, sdk.OpShell, name, "", node, map[string]any{"cmd": cmd}, ShellExecutor{})
+	if err != nil {
+		return err
+	}
+	var reply spec.PodExecReply
+	if res != nil && len(res.JSON) > 0 {
+		if err := json.Unmarshal(res.JSON, &reply); err != nil {
+			return fmt.Errorf("substrate %q shell: decode exec reply: %w", l.prov.word, err)
+		}
+	}
+	if reply.Output != "" {
+		fmt.Print(reply.Output)
+	}
+	if reply.ExitCode != 0 {
+		return &sdk.ExitCodeError{Code: reply.ExitCode}
+	}
+	return nil
 }
 
 func (l grpcSubstrateLifecycle) Rebuild(ctx context.Context, name string, node *BundleNode, opts RebuildOpts) error {

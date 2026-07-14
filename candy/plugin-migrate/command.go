@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -30,13 +31,9 @@ type MigrateCmd struct {
 // refusal MUST fail, not silently pass.
 func runMigrateCLI(args []string) error {
 	var cmd MigrateCmd
-	parser, err := kong.New(&cmd, kong.Name("migrate"),
-		kong.Description("Migrate any opencharly config up to the latest schema CalVer (single idempotent chain — no sub-verbs)"),
-		kong.Exit(func(int) {}))
-	if err != nil {
-		return err
-	}
-	if _, err := parser.Parse(args); err != nil {
+	done, err := sdk.ParseInProcCLI("migrate", &cmd, args,
+		kong.Description("Migrate any opencharly config up to the latest schema CalVer (single idempotent chain — no sub-verbs)"))
+	if err != nil || done {
 		return err
 	}
 
