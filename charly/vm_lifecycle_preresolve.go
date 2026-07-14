@@ -10,6 +10,7 @@ package main
 // registry GENERICALLY (by word, never a "vm" branch), so pod (which registers none) is unaffected.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -42,6 +43,18 @@ func lifecyclePrepareHookFor(word string) (lifecyclePrepareHook, bool) {
 }
 
 var _ = func() bool { registerLifecyclePrepareHook("vm", vmLifecyclePrepare); return true }()
+
+// vmAttachResolver builds the F12 #PodLiveStdioPlan for `charly shell <vm-deploy>` / `charly cmd
+// <vm-deploy>`: the vm's live venue executor is the guest *SSHExecutor (grpcSubstrateLifecycle.Attach
+// resolves it via the vm VenueExecutor), whose RunInteractive wraps the script in `ssh -t <alias>
+// [script]`. So the resolved script is just the in-guest command — the user's cmd joined, or empty for
+// a bare interactive login shell (matching `charly vm ssh <alias>`). tty is immaterial for ssh (`-t`
+// is always allocated on the interactive leg); the shell-vs-cmd distinction is a container concept.
+func vmAttachResolver(_ context.Context, _, _ string, cmd []string, _ bool) (json.RawMessage, error) {
+	return marshalJSON(&spec.PodLiveStdioPlan{Script: strings.Join(cmd, " ")})
+}
+
+var _ = func() bool { registerLifecycleLivePlanHooks("vm", vmAttachResolver, nil); return true }()
 
 // vmLifecyclePrepare resolves the kind:vm entity + ssh coordinates + prior VmDeployState for the vm
 // plugin's OpPrepareVenue. It reproduces the RESOLUTION half of the former vmSubstrateLifecycle.

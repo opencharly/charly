@@ -39,7 +39,8 @@ type lifecycleParams struct {
 func isLifecycleOp(op string) bool {
 	switch op {
 	case sdk.OpPrepareVenue, sdk.OpArtifactKey, sdk.OpPostApply, sdk.OpTeardownExecutor,
-		sdk.OpPostTeardown, sdk.OpStart, sdk.OpStop, sdk.OpStatus, sdk.OpLogs, sdk.OpShell, sdk.OpRebuild:
+		sdk.OpPostTeardown, sdk.OpStart, sdk.OpStop, sdk.OpStatus, sdk.OpLogs, sdk.OpShell,
+		sdk.OpAttach, sdk.OpRebuild:
 		return true
 	}
 	return false
@@ -67,6 +68,8 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return podLogs(ctx, exec, p)
 	case sdk.OpShell:
 		return podExec(ctx, exec, p)
+	case sdk.OpAttach:
+		return podAttach(ctx, exec, p)
 	case sdk.OpRebuild:
 		return podRebuild(ctx, exec, p)
 	case sdk.OpPostTeardown:
@@ -290,21 +293,39 @@ func podStatus(ctx context.Context, exec *sdk.Executor, name string) (*pb.Invoke
 	return marshalReply(map[string]any{"State": state, "Healthy": state == "running", "Details": map[string]string{"deploy": name}})
 }
 
-// podLogs streams/tails the container journal via `charly logs`.
+// podAttach runs the F12 interactive/live-stdio session (`charly shell` / `charly cmd`): the host
+// resolved the venue command into p.Plan (#PodLiveStdioPlan); the plugin runs it over the served host
+// executor via exec.RunInteractive, which inherits the operator's terminal (stdio never crosses the
+// wire — only the script + the exit code). The exit round-trips as spec.PodExecReply.ExitCode so the
+// host propagates it via *sdk.ExitCodeError. Distinct from podExec (OpShell, the #57 `charly service`
+// capture leg). A spawn/signal failure (not a non-zero exit) is a real error.
+func podAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
+	var plan spec.PodLiveStdioPlan
+	if err := json.Unmarshal(p.Plan, &plan); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod attach: decode plan: %w", err)
+	}
+	exit, err := exec.RunInteractive(ctx, plan.Script)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod attach: %w", err)
+	}
+	return marshalReply(spec.PodExecReply{ExitCode: exit})
+}
+
+// podLogs streams/tails the container journal (F12): the host resolved the `<engine> logs`/`journalctl`
+// stream command into p.Plan (#PodLiveStdioPlan); the plugin streams it LIVE to the operator via
+// exec.RunStream (inherited stdout/stderr, host-held). This REPLACES the former podCli("logs") `charly
+// logs` reentry — once `charly logs` routes through here (LifecycleTarget.Logs), that reentry would be
+// an infinite loop.
 func podLogs(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var lopts struct {
-		Follow bool `json:"Follow"`
-		Tail   int  `json:"Tail"`
+	var plan spec.PodLiveStdioPlan
+	if err := json.Unmarshal(p.Plan, &plan); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod logs: decode plan: %w", err)
 	}
-	_ = json.Unmarshal(p.Opts, &lopts)
-	argv := []string{"logs", p.Name}
-	if lopts.Follow {
-		argv = append(argv, "-f")
+	exit, err := exec.RunStream(ctx, plan.Script)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod logs: %w", err)
 	}
-	if lopts.Tail > 0 {
-		argv = append(argv, "-n", fmt.Sprintf("%d", lopts.Tail))
-	}
-	return cliOK(podCli(ctx, exec, false, false, argv...))
+	return marshalReply(spec.PodExecReply{ExitCode: exit})
 }
 
 // podRebuild follows the pod rebuild sequence (image rebuild → check → deploy add → stop → config →
@@ -356,15 +377,6 @@ func podPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 		kit.RemoveImagesByReference(p.EngineBin, p.Name+"-overlay") // best-effort overlay-image drop
 	}
 	return marshalReply(spec.PostTeardownReply{})
-}
-
-// cliOK returns an empty-struct reply, propagating a cli error (Go spreads podCli's
-// (CliReply, error) return straight into these params).
-func cliOK(_ spec.CliReply, err error) (*pb.InvokeReply, error) {
-	if err != nil {
-		return nil, err
-	}
-	return marshalReply(struct{}{})
 }
 
 // marshalReply marshals v into a *pb.InvokeReply.ResultJson.

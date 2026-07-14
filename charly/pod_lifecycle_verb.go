@@ -37,6 +37,14 @@ func dispatchLifecycleTarget(verb, box, instance string) (LifecycleTarget, error
 	node, deployName := resolveLifecycleDeployNode(box, instance)
 	dir, _ := os.Getwd()
 	loadDeployPlugins(dir, deployName, nil)
+	// A bare box with NO deploy entry (an UNCONFIGURED image `charly shell`/`cmd`/`logs` targets — the
+	// former standalone-podman path) synthesizes a {Target:"pod"} node that no tree node references, so
+	// the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the substrate
+	// deploy provider by word (idempotent — a no-op once registered; local-first, network-free) so the
+	// interactive/logs legs work on an unconfigured image, not only on a configured deploy.
+	if node.Target != "" {
+		connectPluginByWord(ClassDeployTarget, node.Target)
+	}
 	target, err := ResolveTarget(node, deployName)
 	if err != nil {
 		return nil, err

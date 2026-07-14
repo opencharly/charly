@@ -93,13 +93,13 @@ func TestSubstrateLifecycle_PrepareVenueDescriptorRoundTrip(t *testing.T) {
 		t.Fatalf("re-materialized executor venue = %q, want local", exec.Venue())
 	}
 
-	// TeardownExecutor returns an empty descriptor → the host keeps its own executor (nil).
-	tex, err := lc.TeardownExecutor("my-lifecycle", nil)
+	// VenueExecutor returns an empty descriptor → the host keeps its own executor (nil).
+	tex, err := lc.VenueExecutor("my-lifecycle", nil)
 	if err != nil {
-		t.Fatalf("TeardownExecutor: %v", err)
+		t.Fatalf("VenueExecutor: %v", err)
 	}
 	if tex != nil {
-		t.Fatalf("TeardownExecutor = %T, want nil (empty descriptor → caller keeps its executor)", tex)
+		t.Fatalf("VenueExecutor = %T, want nil (empty descriptor → caller keeps its executor)", tex)
 	}
 
 	// A lifecycle leg (Start) round-trips host→plugin without error.

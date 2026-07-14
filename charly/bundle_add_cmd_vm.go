@@ -9,7 +9,7 @@ import (
 // sshReverseRunner adapts SSHExecutor to the ReverseRunner interface so
 // reverse_ops.go handlers can run tear-down commands inside the VM
 // without knowing about SSH. externalDeployTarget.Del derives one from the guest
-// SSHExecutor the vm lifecycle hook's TeardownExecutor supplies, so a vm `charly bundle del`
+// SSHExecutor the vm lifecycle hook's VenueExecutor supplies, so a vm `charly bundle del`
 // replays the recorded ReverseOps IN THE GUEST (Δ2).
 type sshReverseRunner struct {
 	exec *SSHExecutor

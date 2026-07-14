@@ -55,11 +55,14 @@ type substrateLifecycle interface {
 	// walk-only idempotent re-apply (matching the prior in-proc VmUnifiedTarget.Update).
 	PostApply(ctx context.Context, name, dir string, node *BundleNode, exec DeployExecutor, opts EmitOpts) error
 
-	// TeardownExecutor returns the DeployExecutor a `charly bundle del` replays the recorded
-	// ReverseOps over — for vm the guest *SSHExecutor against the managed alias (NO boot;
-	// the guest is expected up, and a down guest makes teardown a guest-side no-op). nil →
-	// the caller keeps the ResolveTarget-selected executor (local host:local/remote).
-	TeardownExecutor(name string, node *BundleNode) (DeployExecutor, error)
+	// VenueExecutor returns the live DeployExecutor reaching this running deploy's venue — for vm the
+	// guest *SSHExecutor against the managed alias (NO boot; the guest is expected up, and a down guest
+	// makes the op a guest-side no-op), nil for pod (the caller keeps its ResolveTarget-selected host
+	// executor for local host:local/remote). TWO consumers: `charly bundle del` replays the recorded
+	// ReverseOps over it, AND the F12 Attach leg runs the interactive/live-stdio session over it (vm →
+	// `ssh -t <alias>`). It invokes the wire Op sdk.OpTeardownExecutor — kept under its original name
+	// for wire stability (teardown was merely its FIRST consumer; the method name reflects the contract).
+	VenueExecutor(name string, node *BundleNode) (DeployExecutor, error)
 
 	// PostTeardown runs host cleanup AFTER teardown (vm: RemoveVmSshStanza +
 	// removeVmDeployEntry + ephemeral lifecycle teardown; pod: `charly remove` + drop the
@@ -76,6 +79,11 @@ type substrateLifecycle interface {
 	Status(ctx context.Context, name string, node *BundleNode) (StatusInfo, error)
 	Logs(ctx context.Context, name string, node *BundleNode, opts LogsOpts) error
 	Shell(ctx context.Context, name string, node *BundleNode, cmd []string) error
+	// Attach runs the F12 interactive/live-stdio session (`charly shell` / `charly cmd`) over the
+	// substrate's live venue executor (pod → host ShellExecutor + `podman exec/run -it`; vm → guest
+	// SSHExecutor + `ssh -t`). Distinct from Shell (the #57 `charly service` capture leg). NO arbiter
+	// bracket (an interactive session claims no exclusive resource).
+	Attach(ctx context.Context, name string, node *BundleNode, cmd []string, tty bool) error
 	Rebuild(ctx context.Context, name string, node *BundleNode, opts RebuildOpts) error
 }
 

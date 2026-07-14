@@ -79,7 +79,11 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 	// (the word-scan above proves "hostarbiter" ∉ the universe), and its per-call detail is DATA (the
 	// action string + spec params), never API shape — the F11 contract.
 	assertMethodSet(t, "ExecutorService", pb.ExecutorService_ServiceDesc,
-		"Venue", "RunSystem", "RunUser", "PutFile", "RunCapture", "GetFile", "RunHostStep", "InvokeProvider", "HostBuild", "HostArbiter")
+		"Venue", "RunSystem", "RunUser", "PutFile", "RunCapture", "GetFile", "RunHostStep", "InvokeProvider", "HostBuild", "HostArbiter",
+		// F12 live-stdio legs — class-generic action nouns (the interactive/stream siblings of
+		// RunCapture), never a provider word: RunInteractive drives `charly shell`/`charly cmd`,
+		// RunStream drives `charly logs --follow`.
+		"RunInteractive", "RunStream")
 	assertMethodSet(t, "CheckContextService", pb.CheckContextService_ServiceDesc,
 		"HTTPDo", "AddBackground", "ResolveEndpoint", "ResolveGraphicsEndpoint", "ResolveClusterContext",
 		"ResolveImageLabel")

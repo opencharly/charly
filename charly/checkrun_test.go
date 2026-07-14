@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // fakeExecutor records calls and returns canned results by command-prefix.
@@ -26,6 +27,12 @@ type fakeResponse struct {
 // fakeExecutor implements DeployExecutor (post-2026-04 cutover). Only
 // RunCapture is exercised by the tests below; the other interface methods
 // return zero values so the type still satisfies the interface contract.
+func (f *fakeExecutor) RunInteractive(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
+func (f *fakeExecutor) RunStream(context.Context, string) (int, error) {
+	return -1, spec.ErrNotSupported
+}
 func (f *fakeExecutor) RunCapture(ctx context.Context, cmd string) (string, string, int, error) {
 	f.calls = append(f.calls, cmd)
 	for _, r := range f.responses {

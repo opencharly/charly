@@ -35,13 +35,15 @@ type lifecycleParams struct {
 	Prepare   json.RawMessage `json:"prepare"`
 	KeepImage bool            `json:"keep_image"`
 	Cmd       []string        `json:"cmd"`
+	Plan      json.RawMessage `json:"plan"` // host-resolved spec.PodLiveStdioPlan (F12 OpAttach)
 }
 
 // isLifecycleOp reports whether op is a substrate-lifecycle Op (vs. the OpExecute deploy walk).
 func isLifecycleOp(op string) bool {
 	switch op {
 	case sdk.OpPrepareVenue, sdk.OpArtifactKey, sdk.OpPostApply, sdk.OpTeardownExecutor,
-		sdk.OpPostTeardown, sdk.OpStart, sdk.OpStop, sdk.OpStatus, sdk.OpLogs, sdk.OpShell, sdk.OpRebuild:
+		sdk.OpPostTeardown, sdk.OpStart, sdk.OpStop, sdk.OpStatus, sdk.OpLogs, sdk.OpShell,
+		sdk.OpAttach, sdk.OpRebuild:
 		return true
 	}
 	return false
@@ -84,10 +86,29 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		// `charly vm ssh` keys the connection off the managed ssh alias (charly-<domain>), so it takes
 		// the DOMAIN IDENTITY as its positional — no --domain flag (it resolves no entity spec).
 		return cliOK(vmCli(ctx, exec, false, false, append([]string{"vm", "ssh", domainIdentity(p)}, p.Cmd...)...))
+	case sdk.OpAttach:
+		return vmAttach(ctx, exec, p)
 	case sdk.OpRebuild:
 		return vmRebuild(ctx, exec, p)
 	}
 	return nil, fmt.Errorf("plugin-deploy-vm: unhandled lifecycle op %q", req.GetOp())
+}
+
+// vmAttach runs the F12 interactive session (`charly shell <vm-deploy>`) IN the guest: the host serves
+// the guest *SSHExecutor (via the vm VenueExecutor) and resolved the in-guest command into p.Plan
+// (#PodLiveStdioPlan — empty script ⇒ a bare login shell, `ssh -t <alias>`). The plugin runs it over
+// exec.RunInteractive, whose SSHExecutor leg wraps it in `ssh -t <alias> [script]` with the operator's
+// terminal inherited host-side. The exit round-trips as spec.PodExecReply.ExitCode → *sdk.ExitCodeError.
+func vmAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
+	var plan spec.PodLiveStdioPlan
+	if err := json.Unmarshal(p.Plan, &plan); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm attach: decode plan: %w", err)
+	}
+	exit, err := exec.RunInteractive(ctx, plan.Script)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm attach: %w", err)
+	}
+	return marshalReply(spec.PodExecReply{ExitCode: exit})
 }
 
 // domainIdentity resolves the per-deploy DOMAIN IDENTITY from the deploy name (p.Name) — the token

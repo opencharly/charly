@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,50 +22,15 @@ type LogsCmd struct {
 
 func (c *LogsCmd) Run() error {
 	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
-	rt, err := ResolveRuntime()
+	// `charly logs` routes through the unified LifecycleTarget → OpLogs (F12): the host resolves the
+	// `journalctl`/`<engine> logs` stream command (resolvePodLogsPlan), the owning plugin streams it
+	// LIVE to the operator via exec.RunStream (stdio host-held). The former inline journalctl/podman
+	// logs exec was DELETED — its resolution moved to the host resolver, its stream to the executor leg.
+	lt, err := dispatchLifecycleTarget("logs", c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-
-	boxName := resolveBoxName(c.Box)
-
-	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(boxName, c.Instance)
-		if c.Sidecar != "" {
-			svc = SidecarContainerNameInstance(boxName, c.Instance, c.Sidecar) + ".service"
-		}
-		args := []string{"--user", "-u", svc}
-		if c.Follow {
-			args = append(args, "-f")
-		}
-		cmd := exec.Command("journalctl", args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("journalctl failed: %w", err)
-		}
-		return nil
-	}
-
-	// Resolve per-image engine from charly.yml
-	runEngine := ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
-	engine := EngineBinary(runEngine)
-	name := containerNameInstance(boxName, c.Instance)
-	if c.Sidecar != "" {
-		name = SidecarContainerNameInstance(boxName, c.Instance, c.Sidecar)
-	}
-	args := []string{"logs"}
-	if c.Follow {
-		args = append(args, "-f")
-	}
-	args = append(args, name)
-	cmd := exec.Command(engine, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s logs failed: %w", engine, err)
-	}
-	return nil
+	return lt.Logs(context.Background(), LogsOpts{Follow: c.Follow, Sidecar: c.Sidecar})
 }
 
 // UpdateCmd updates an image (pulls/builds the latest), preserves the
