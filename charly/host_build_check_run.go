@@ -88,8 +88,8 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.Che
 }
 
 // hostCheckRunBox runs a pure-box check: a disposable container built from the image, build-scope
-// steps only (RunModeBox). It is CheckBoxCmd.Run's engine (ExtractMetadata → ImageChain venue →
-// NewRunner → RunPlan) minus the CLI parse + the text/yaml reporters (which live in the plugin).
+// steps only (RunModeBox). It is CheckBoxCmd.Run's engine (ExtractMetadata → checkBoxContainerChain
+// venue → NewRunner → RunPlan) minus the CLI parse + the text/yaml reporters (which live in the plugin).
 // The reply carries []StepResult verbatim so the plugin's kit formatters produce byte-identical
 // output to the former in-core CheckBoxCmd.
 func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
@@ -113,7 +113,14 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 	// deploy/runtime-context steps). No autodetect, no fallback — the mode is explicit.
 	// Mirrors CheckBoxCmd.Run's engine exactly (minus the CLI parse + reporters, which live
 	// in candy/plugin-check), so the reply's []StepResult formats byte-identically.
-	executor := ImageChain(rt.RunEngine, imageRef)
+	// R44 Option A: ONE persistent container + per-step `podman exec` (checkBoxContainerChain),
+	// not a `podman run --rm` per step — O(N)→O(1) container setups so the passwd-setup store
+	// race is minimized; a residual create failure returns an infra error → INFRA exit class.
+	executor, teardown, err := checkBoxContainerChain(rt.RunEngine, imageRef)
+	if err != nil {
+		return kit.CheckRunReply{}, err
+	}
+	defer teardown()
 	resolver := ResolveCheckVarsBuild(meta)
 	env, hasRuntime := resolverEnv(resolver)
 	runner := newCheckRunner(kit.RunnerConfig{
@@ -187,9 +194,15 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
+	// R44 Option A (mirrors hostCheckRunBox): ONE persistent container + `podman exec` per step.
+	executor, teardown, err := checkBoxContainerChain(rt.RunEngine, imageRef)
+	if err != nil {
+		return kit.CheckRunReply{}, err
+	}
+	defer teardown()
 	env, hasRuntime := resolverEnv(ResolveCheckVarsBuild(meta))
 	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:                 ImageChain(rt.RunEngine, imageRef),
+		Exec:                 executor,
 		Mode:                 RunModeBox,
 		Env:                  env,
 		HasRuntime:           hasRuntime,

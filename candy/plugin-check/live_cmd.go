@@ -69,9 +69,6 @@ func (c *CheckLiveCmd) Run() error {
 	if reply.Header != "" {
 		fmt.Fprintln(os.Stderr, reply.Header)
 	}
-	fails := reportSteps(os.Stderr, reply.Steps, c.Format)
-	if fails > 0 {
-		return &CheckFailedError{Failed: fails}
-	}
-	return nil
+	reportSteps(os.Stderr, reply.Steps, c.Format)
+	return failErrorFor(reply.Steps)
 }

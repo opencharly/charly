@@ -23,9 +23,7 @@ const (
 	VenueLocal = kit.VenueLocal
 
 	JumpDockerExec   = kit.JumpDockerExec
-	JumpDockerRun    = kit.JumpDockerRun
 	JumpPodmanExec   = kit.JumpPodmanExec
-	JumpPodmanRun    = kit.JumpPodmanRun
 	JumpSSH          = kit.JumpSSH
 	JumpVirshConsole = kit.JumpVirshConsole
 )

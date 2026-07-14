@@ -61,9 +61,6 @@ func (c *CheckFeatureRunCmd) Run() error {
 	}
 	// Feature run reports to stdout (the former in-core CheckFeatureRunCmd wrote reportSteps to
 	// os.Stdout — box/live write to os.Stderr; preserved here for behaviour-neutrality).
-	fails := reportSteps(os.Stdout, reply.Steps, c.Format)
-	if fails > 0 {
-		return &CheckFailedError{Failed: fails}
-	}
-	return nil
+	reportSteps(os.Stdout, reply.Steps, c.Format)
+	return failErrorFor(reply.Steps)
 }

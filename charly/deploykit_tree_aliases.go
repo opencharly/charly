@@ -25,6 +25,5 @@ var (
 	sortedNestedKeys          = deploykit.SortedNestedKeys
 	rootExecutorForDeployNode = deploykit.RootExecutorForDeployNode
 	ContainerChain            = deploykit.ContainerChain
-	ImageChain                = deploykit.ImageChain
 	ResolveDeployChain        = deploykit.ResolveDeployChain
 )
