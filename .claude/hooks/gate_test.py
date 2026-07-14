@@ -22,8 +22,9 @@ PGATE = os.path.join(HERE, "pre-push-gate.sh")
 sys.path.insert(0, HERE)
 import gitcmd  # noqa: E402
 
-DOCS = "Assisted-by: Claude (documentation reviewed)"
-RUN = "Assisted-by: Claude (fully tested and validated)"
+DOCS = "Assisted-by: Codex (OpenAI GPT-5.6 Sol; documentation reviewed)"
+RUN = "Assisted-by: Codex (OpenAI GPT-5.6 Sol; fully tested and validated)"
+CLAUDE_DOCS = "Assisted-by: Claude Code (Anthropic Claude Opus 4.8; documentation reviewed)"
 
 fails = []
 ran = 0
@@ -58,6 +59,16 @@ def mkrepo(with_changelog=False):
     return d
 
 
+# The scripts are AI-harness PreToolUse gates, not repository Git hooks. A
+# genuinely human commit made through ordinary Git remains trailer-free.
+r = mkrepo()
+open(os.path.join(r, "README.md"), "a").write("human edit\n")
+subprocess.run(["git", "-C", r, "add", "README.md"], capture_output=True)
+p = subprocess.run(["git", "-C", r, "commit", "-qm", "docs: human change"], capture_output=True)
+expect("human git commit: no AI trailer accepted", p.returncode == 0, True)
+shutil.rmtree(r, ignore_errors=True)
+
+
 # --- gitcmd tokenization (the B1 surface: a clean heredoc TOKENIZES) ---------
 def tok_ok(cmd):
     try:
@@ -84,8 +95,14 @@ for label, cmd, want in [
     ("commit: --no-verify AFTER message blocked", f"git commit -m 'x\n\n{DOCS}' --no-verify", "BLOCK"),
     ("commit: -n AFTER message blocked", f"git commit -m 'x\n\n{DOCS}' -n", "BLOCK"),
     ("commit: absent trailer blocked", "git commit -m 'x'", "BLOCK"),
-    ("commit: illegal tier blocked", "git commit -m 'x\n\nAssisted-by: Claude (theoretical suggestion)'", "BLOCK"),
-    ("commit: syntax-check-only tier blocked", "git commit -m 'x\n\nAssisted-by: Claude (syntax check only)'", "BLOCK"),
+    ("commit: Claude Code model-aware trailer allowed", f"git commit -m 'x\n\n{CLAUDE_DOCS}'", "ALLOW"),
+    ("commit: legacy harness-only trailer blocked", "git commit -m 'x\n\nAssisted-by: Claude (documentation reviewed)'", "BLOCK"),
+    ("commit: blank harness blocked", "git commit -m 'x\n\nAssisted-by: (OpenAI GPT-5.6 Sol; documentation reviewed)'", "BLOCK"),
+    ("commit: blank model blocked", "git commit -m 'x\n\nAssisted-by: Codex (; documentation reviewed)'", "BLOCK"),
+    ("commit: illegal tier blocked", "git commit -m 'x\n\nAssisted-by: Codex (OpenAI GPT-5.6 Sol; theoretical suggestion)'", "BLOCK"),
+    ("commit: syntax-check-only tier blocked", "git commit -m 'x\n\nAssisted-by: Codex (OpenAI GPT-5.6 Sol; syntax check only)'", "BLOCK"),
+    ("commit: multiple models same tier allowed", f"git commit -m 'x\n\n{DOCS}\n{CLAUDE_DOCS}'", "ALLOW"),
+    ("commit: multiple models mixed tiers blocked", f"git commit -m 'x\n\n{DOCS}\n{RUN}'", "BLOCK"),
     ("commit: --no-verify INSIDE message allowed", f"git commit -m 'do not --no-verify\n\n{DOCS}'", "ALLOW"),
     ("commit: attached -m with 'a'-trailer not a bypass", f"git commit -m'x\n\n{DOCS}' --amend", "ALLOW"),
     ("commit: -c HEAD~1 (commit's own) allowed", f"git commit -c HEAD~1 -m 'x\n\n{DOCS}'", "ALLOW"),
@@ -93,7 +110,7 @@ for label, cmd, want in [
     ("commit: unresolvable -C var at docs tier -> BLOCK", f'git -C "$P" commit -m \'x\n\n{DOCS}\'', "BLOCK"),
     ("commit: compound && echo done -> ALLOW", f"git commit -m 'x\n\n{DOCS}' && echo done", "ALLOW"),
     ("commit: apostrophe-in-heredoc + illegal tier -> BLOCK (fail closed)",
-     "git commit -F - <<'EOF'\nit's x\n\nAssisted-by: Claude (theoretical suggestion)\nEOF", "BLOCK"),
+     "git commit -F - <<'EOF'\nit's x\n\nAssisted-by: Codex (OpenAI GPT-5.6 Sol; theoretical suggestion)\nEOF", "BLOCK"),
     # Late staging: the hook fires BEFORE the command runs, so anything that stages
     # during the command leaves the gate judging a stale/empty diff. Fail closed.
     ("commit: compound `add && commit` at docs tier -> BLOCK (late staging)",

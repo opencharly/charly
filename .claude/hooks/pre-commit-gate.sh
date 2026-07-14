@@ -6,7 +6,7 @@
 # blocks (exit 2) a commit that:
 #   - bypasses hooks: --no-verify / its -n alias / a core.hooksPath override,
 #   - has a READABLE message (inline -m, a heredoc body, or a -F <file> the gate reads)
-#     with no `Assisted-by: Claude (<tier>)` trailer — OR a message the gate CANNOT read
+#     with no model-aware `Assisted-by: <harness> (<model>; <tier>)` trailer — OR a message the gate CANNOT read
 #     to find the tier (a $(...)/backtick substitution, a piped/unreadable -F, or an
 #     editor message with no -m/-F): the latter fails CLOSED (inline the tier with -m, or
 #     point -F at a readable file),
@@ -44,7 +44,7 @@ esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -B - "$INPUT" "$HERE" <<'PY'
-import json, os, re, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 sys.path.insert(0, sys.argv[2])
 from gitcmd import git_invocations, hooks_path_override, dash_c_dir, mentions_subcommand
 
@@ -54,7 +54,8 @@ except Exception:
     sys.exit(0)
 
 LEGAL = {"fully tested and validated", "analysed on a live system", "documentation reviewed"}
-TIER_RE = re.compile(r'Assisted-by:\s*Claude\s*\(([^)]*)\)')  # the attribution trailer (cmd + -F file)
+ATTRIBUTION_RE = re.compile(
+    r'Assisted-by:\s*([^\n(]+?)\s*\(\s*([^;\n()]+?)\s*;\s*([^\n)]+?)\s*\)')
 CHANGELOG_ENTRY = re.compile(r'^CHANGELOG/[0-9]{4}\.[0-9]{3}\.[0-9]{4}\.md$')
 DOC_PATH = re.compile(r'(?:^|/)(?:CHANGELOG|README|LICENSE|VISION)[^/]*$|\.(?:md|txt)$', re.IGNORECASE)
 # v2 architecture (CLAUDE.md "Core is a PLUGIN HOST" — ZERO-ALIASES / NO-NEW-ALIASES). A
@@ -138,7 +139,7 @@ def scan_commit_args(args):
     """Walk a commit arg span POSITIONALLY, returning (has_no_verify, is_amend,
     has_inline_msg, stages_late, msg_files, reuses_msg). The value of
     -m/--message/-F/--file is CONSUMED, never scanned as a flag — so message text
-    (which always contains 'a' via the mandatory `Assisted-by: Claude` trailer) is
+    (which always contains 'a' via the mandatory model-aware `Assisted-by` trailer) is
     never mistaken for a flag, and a flag AFTER the message (`git commit -m x
     --no-verify`) is still seen. A -F/--file VALUE is CAPTURED into msg_files so the
     tier parser can READ the message file (the #35 fix: an external -F <file> hid the
@@ -188,14 +189,14 @@ def scan_commit_args(args):
     return has_nv, is_amend, has_msg, late, msg_files, reuses
 
 
-def read_file_tiers(msg_files, cmd):
-    """Read the attribution tier from -F/--file message files (the #35 fix). Returns
-    (file_tiers, unreadable). A '-' value is stdin: readable ONLY via a heredoc, whose
+def read_file_attributions(msg_files, cmd):
+    """Read model-aware attribution from -F/--file message files (the #35 fix). Returns
+    (file_attributions, unreadable). A '-' value is stdin: readable ONLY via a heredoc, whose
     body already lives in `cmd` (scanned there) — a PIPED '-' (no `<<`) is unreadable.
     A relative path is resolved against the gate's cwd (best effort; an unresolved or
     non-regular path -> unreadable -> fail CLOSED). Only a regular file is read (capped),
     never a device/FIFO that could block."""
-    file_tiers, unreadable = [], False
+    file_attributions, unreadable = [], False
     for mf in msg_files:
         if mf == "-":
             if "<<" not in cmd:
@@ -211,8 +212,8 @@ def read_file_tiers(msg_files, cmd):
         except OSError:
             unreadable = True
             continue
-        file_tiers += TIER_RE.findall(body)
-    return file_tiers, unreadable
+        file_attributions += ATTRIBUTION_RE.findall(body)
+    return file_attributions, unreadable
 
 
 def resolve_dir(d):
@@ -264,14 +265,20 @@ if any(git_invocations(cmd, verb) for verb in INDEX_MUTATING):
 # external -F <file> previously hid the trailer, so every tier-dependent check silently
 # failed OPEN). What stays UNREADABLE — a `$(...)`/backtick substitution, a piped `-F -`,
 # an unreadable -F path, or an editor message (no -m/-F/heredoc) — fails CLOSED below.
-file_tiers, msg_file_unreadable = read_file_tiers(msg_files, cmd)
-tiers = [t.strip() for t in (TIER_RE.findall(cmd) + file_tiers)]
+file_attributions, msg_file_unreadable = read_file_attributions(msg_files, cmd)
+attributions = ATTRIBUTION_RE.findall(cmd) + file_attributions
+tiers = [tier.strip() for _harness, _model, tier in attributions]
+for harness, model, _tier in attributions:
+    if not harness.strip() or not model.strip():
+        block("AI attribution requires both a harness and a verified model name.")
 for tier in tiers:
     if tier == "syntax check only":
         block('committing at tier "syntax check only" is a CLAUDE.md violation (AI Attribution: '
               'this tier pairs with "do NOT commit" — R10 has not run; STOP and ask).')
     if tier not in LEGAL:
         block('illegal AI-attribution tier "%s". Legal on a commit: %s.' % (tier, sorted(LEGAL)))
+if len(set(tiers)) > 1:
+    block("all AI-attribution lines on one commit must use the same confidence tier.")
 # No tier found and the message is NOT inherited (amend/reuse): either the gate could
 # not READ the message (fail CLOSED) or it read it and the trailer is genuinely ABSENT.
 if not tiers and not is_amend and not reuses_msg:
@@ -282,8 +289,10 @@ if not tiers and not is_amend and not reuses_msg:
               "`$(...)`/backtick substitution, a piped or unreadable `-F` file, or an editor "
               "message (no -m/-F). Inline the trailer with `-m`, or point `-F <path>` at a "
               "readable file, so the tier is scannable (the gate fails CLOSED here, not open).")
-    block("commit message has no `Assisted-by: Claude (<tier>)` trailer (every commit Claude is "
-          "involved in must attribute; docs-only commits use `documentation reviewed`).")
+    block("commit message has no model-aware `Assisted-by: <harness> (<model>; <tier>)` trailer "
+          "(commits initiated by an AI harness must disclose authorship; docs-only commits use "
+          "`documentation reviewed`). A 100% human-authored commit made outside this AI "
+          "PreToolUse gate remains trailer-free.")
 
 
 # --- diff-dependent checks (skipped when the target repo is unresolvable) ----
@@ -434,8 +443,16 @@ def assert_go_lint(repo):
         if (os.sep + "candy" + os.sep) in (root + os.sep):
             env["GOWORK"] = "off"  # a plugin candy lints standalone, exactly as it builds
         try:
-            out = subprocess.run(["golangci-lint", "run"], cwd=root, env=env,
-                                 capture_output=True, text=True, timeout=GO_LINT_TIMEOUT)
+            # Agent sandboxes may expose the user's ~/.cache read-only or with stale
+            # Go cache entries. Isolate both caches per invocation so infrastructure
+            # state cannot masquerade as a source lint finding.
+            with tempfile.TemporaryDirectory(prefix="charly-golint-") as cache_root:
+                env["GOCACHE"] = os.path.join(cache_root, "go-build")
+                env["GOLANGCI_LINT_CACHE"] = os.path.join(cache_root, "golangci-lint")
+                os.makedirs(env["GOCACHE"])
+                os.makedirs(env["GOLANGCI_LINT_CACHE"])
+                out = subprocess.run(["golangci-lint", "run"], cwd=root, env=env,
+                                     capture_output=True, text=True, timeout=GO_LINT_TIMEOUT)
         except subprocess.TimeoutExpired:
             sys.stderr.write("pre-commit-gate NOTE: golangci-lint timed out in %s — skipped "
                              "(the pr-validator remains the gate).\n" % root)
