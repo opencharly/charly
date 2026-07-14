@@ -5,13 +5,13 @@ package box
 //
 //   - TestLevenshteinDistance: a PURE helper. The charly-core copy is deleted with the validate engine;
 //     plugin-box owns the surviving copy, so its unit test lives here (package box).
-//   - TestValidatePkgConfig_ModulesRequirePackages: the "distro.<name>.modules requires packages" rule.
+//   - TestValidatePkgConfig_ModuleRequiresPackages: the "distro.<name>.module requires packages" rule.
 //     A real authored `distro.<name>.module:` produces the TagSection Raw KEY "module" (singular — see
-//     derivePackageSectionsFromCalamares in charly/layers.go), but validatePkgConfig checks Raw["modules"]
-//     (plural), so no LOADABLE fixture ever reaches the rule. The former synthetic host test injected a
-//     Raw["modules"] section directly; this envelope-unit reproduces that exact injection over the
-//     resolved-project envelope so the rule's logic keeps coverage. (The module/modules key mismatch is
-//     flagged in the task report — it is pre-existing behaviour in the moved code, not introduced here.)
+//     derivePackageSectionsFromCalamares in charly/layers.go); validatePkgConfig now checks Raw["module"]
+//     to MATCH (the #71 fix — it previously checked the plural "modules" and so was UNREACHABLE on real
+//     config, only ever matching a hand-built plural key). This envelope-unit injects the REAL Raw KEY
+//     the loader produces, so it exercises the rule exactly as a loadable `module:`-only candy would and
+//     FAILS if the check ever regresses back to the wrong key.
 
 import (
 	"strings"
@@ -42,16 +42,18 @@ func TestLevenshteinDistance(t *testing.T) {
 	}
 }
 
-// TestValidatePkgConfig_ModulesRequirePackages ← charly/validate_test.go TestValidateModulesWithoutPackages.
-// Envelope unit: a candy carrying a format-section Raw["modules"] entry and no packages anywhere must
-// be flagged. Not expressible as a loadable fixture (a real `module:` produces Raw key "module").
-func TestValidatePkgConfig_ModulesRequirePackages(t *testing.T) {
+// TestValidatePkgConfig_ModuleRequiresPackages ← charly/validate_test.go TestValidateModulesWithoutPackages.
+// Envelope unit: a candy carrying a format-section Raw["module"] entry (the SINGULAR key a real authored
+// `distro.<name>.module:` produces) and no packages anywhere must be flagged. The Raw KEY here is exactly
+// what derivePackageSectionsFromCalamares emits for a real candy, so the rule fires on real config — the
+// #71 fix. Using the wrong plural "modules" key would make the rule silently pass (the pre-fix bug).
+func TestValidatePkgConfig_ModuleRequiresPackages(t *testing.T) {
 	rp := &spec.ResolvedProject{
 		CandyModels: map[string]spec.CandyModel{
 			"mylyr": {
 				Name: "mylyr",
 				FormatSections: map[string]spec.PackageSection{
-					"rpm": {FormatName: "rpm", Raw: map[string]any{"modules": []any{"valkey:remi-9.0"}}},
+					"rpm": {FormatName: "rpm", Raw: map[string]any{"module": []any{"valkey:remi-9.0"}}},
 				},
 			},
 		},
@@ -61,8 +63,24 @@ func TestValidatePkgConfig_ModulesRequirePackages(t *testing.T) {
 	e := &vErr{}
 	validatePkgConfig(vc, e)
 	got := strings.Join(e.msgs, "\n")
-	if !strings.Contains(got, "rpm.modules requires packages") {
-		t.Fatalf("want 'rpm.modules requires packages', got: %s", got)
+	if !strings.Contains(got, "rpm.module requires packages") {
+		t.Fatalf("want 'rpm.module requires packages', got: %s", got)
+	}
+
+	// Guard the FIX itself: the OLD plural Raw key must NOT fire the rule (real config never
+	// produces it) — a regression to Raw["modules"] would make this candy validate clean.
+	rpPlural := &spec.ResolvedProject{
+		CandyModels: map[string]spec.CandyModel{
+			"mylyr": {Name: "mylyr", FormatSections: map[string]spec.PackageSection{
+				"rpm": {FormatName: "rpm", Raw: map[string]any{"modules": []any{"valkey:remi-9.0"}}},
+			}},
+		},
+		Candies: map[string]spec.CandyView{"mylyr": {}},
+	}
+	ep := &vErr{}
+	validatePkgConfig(newVctx(rpPlural), ep)
+	if strings.Contains(strings.Join(ep.msgs, "\n"), "requires packages") {
+		t.Fatalf("the plural Raw[\"modules\"] key must NOT fire the rule (it never appears in real config); got: %s", strings.Join(ep.msgs, "\n"))
 	}
 }
 

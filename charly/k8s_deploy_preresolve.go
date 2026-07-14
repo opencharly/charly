@@ -87,9 +87,23 @@ func k8sDeployPreresolve(name, dir string, node *BundleNode, _ []*InstallPlan) (
 	if authored == "" {
 		authored = name
 	}
-	imageRef, err := resolveLocalImageRef(rt.RunEngine, leafName(authored))
-	if err != nil {
-		return nil, fmt.Errorf("deploy %q: resolving image %q: %w", name, authored, err)
+	// Honor a pinned node.Version (the bed-scoped per-run tag #75, or an operator
+	// version pin): use the EXACT <name>:<version> local ref instead of the
+	// store-global short-name→newest-local-CalVer resolution, so concurrent beds
+	// building the same fixture image name never pick each other's build. Mirrors
+	// build_overlay.go's `tag != ""` branch (R3).
+	var imageRef string
+	if node.Version != "" {
+		imageRef = leafName(authored) + ":" + node.Version
+		if !LocalImageExists(rt.RunEngine, imageRef) {
+			return nil, fmt.Errorf("deploy %q: pinned image %q not present in local %s storage", name, imageRef, rt.RunEngine)
+		}
+	} else {
+		resolved, rerr := resolveLocalImageRef(rt.RunEngine, leafName(authored))
+		if rerr != nil {
+			return nil, fmt.Errorf("deploy %q: resolving image %q: %w", name, authored, rerr)
+		}
+		imageRef = resolved
 	}
 	caps, err := ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {

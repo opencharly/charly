@@ -130,6 +130,16 @@ func sortedMemberKeys(members map[string]*BundleNode) []string {
 	return keys
 }
 
+// withMemberTag appends `--tag <imageTag>` to a member deploy argv when imageTag
+// is non-empty (a bed run's per-run tag #75). Empty on the operator bring-up path,
+// where members resolve their images normally. One appender (R3).
+func withMemberTag(args []string, imageTag string) []string {
+	if imageTag == "" {
+		return args
+	}
+	return append(args, "--tag", imageTag)
+}
+
 // bringUpMembers brings up every member of `node` ALONGSIDE the (already-deployed)
 // owner, in deterministic order, on the shared `charly` network. Each member is a
 // folded top-level deploy entry, so bring-up reuses the standard pod pipeline
@@ -140,7 +150,7 @@ func sortedMemberKeys(members map[string]*BundleNode) []string {
 // lifecycle (create + ssh-wait + deploy), a kind:local member is registered via
 // `charly bundle add <member>`. The SAME helper serves the kind:check bed runner
 // and the operator deploy path (R3). Idempotent on an already-running member.
-func bringUpMembers(node *BundleNode) error {
+func bringUpMembers(node *BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
 	}
@@ -177,7 +187,7 @@ func bringUpMembers(node *BundleNode) error {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
 			waitForVmSshReady(memberDomain)
-			if err := runCharlySubcommand("bundle", "add", memberKey, memberNode.From); err != nil {
+			if err := runCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey, memberNode.From}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (vm bundle add): %w", memberKey, err)
 			}
 			// Same nested-local-child gap the isVM bed root closes: plugin-deploy-vm's
@@ -189,14 +199,14 @@ func bringUpMembers(node *BundleNode) error {
 			}
 		case isPodMember(memberNode):
 			for _, step := range [][]string{{"config", memberKey}, {"start", memberKey}} {
-				if err := runCharlySubcommand(step...); err != nil {
+				if err := runCharlySubcommand(withMemberTag(step, imageTag)...); err != nil {
 					return fmt.Errorf("peer %q (%v): %w", memberKey, step, err)
 				}
 			}
 			waitForContainerReady(memberKey)
 		default:
 			// kind:local member — applies candies in place during bundle add.
-			if err := runCharlySubcommand("bundle", "add", memberKey); err != nil {
+			if err := runCharlySubcommand(withMemberTag([]string{"bundle", "add", memberKey}, imageTag)...); err != nil {
 				return fmt.Errorf("peer %q (bundle add): %w", memberKey, err)
 			}
 		}

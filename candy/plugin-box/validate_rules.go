@@ -304,8 +304,13 @@ func validatePkgConfig(vc *vctx, e *vErr) {
 		if copr := buildkit.ToStringSlice(raw["copr"]); len(copr) > 0 && !candyHasPkgs {
 			e.Add("candy %q candy manifest: %s.copr requires packages", name, label)
 		}
-		if modules := buildkit.ToStringSlice(raw["modules"]); len(modules) > 0 && !candyHasPkgs {
-			e.Add("candy %q candy manifest: %s.modules requires packages", name, label)
+		// The authored key is singular `module:` (#Candy `module` → TagSection Raw key
+		// "module" via derivePackageSectionsFromCalamares; sdk spec `Module yaml:"module"`).
+		// Checking Raw["modules"] (plural) made this rule UNREACHABLE on real config — it
+		// only ever matched a hand-built plural key (#71). repo/copr above are already
+		// singular authored keys checked singular; module was the sole mismatch.
+		if modules := buildkit.ToStringSlice(raw["module"]); len(modules) > 0 && !candyHasPkgs {
+			e.Add("candy %q candy manifest: %s.module requires packages", name, label)
 		}
 	}
 	for name := range vc.models {

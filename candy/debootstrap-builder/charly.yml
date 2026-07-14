@@ -1,6 +1,6 @@
 debootstrap-builder:
     candy:
-        version: 2026.144.1443
+        version: 2026.195.0600
         description: |
             Privileged builder toolchain that bootstraps and makes bootable a Debian-family rootfs from scratch
             Tools needed to bootstrap a Debian-family rootfs from scratch via
@@ -27,6 +27,7 @@ debootstrap-builder:
             - util-linux
             - grub-efi-amd64-bin
             - grub-common
+            - grub2-common
             - efibootmgr
             - mount
             - ca-certificates
@@ -44,7 +45,8 @@ debootstrap-builder:
                 file: /usr/bin/qemu-img
                 exists: true
             - check: qemu-img runs and reports its version
-              stdout: qemu-img version
+              stdout:
+                  - contains: qemu-img version
               command: /usr/bin/qemu-img --version
             - check: parted is available to partition the disk image
               file:

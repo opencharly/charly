@@ -48,6 +48,7 @@ type bedSession struct {
 	bed       string
 	node      BundleNode     // resolved once at setup; drives the members/wait ops
 	bedDomain string         // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
+	imageTag  string         // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
 	bedUnlock func() error   // acquireFileLock(".check/<bed>/.lock")
 	domUnlock []func() error // acquireVmDomainLock per bedVmDomains, in acquire order
 	lease     *Lease         // acquireResourceForClaimant
@@ -115,7 +116,7 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if s == nil {
 			return spec.CheckBedReply{}, fmt.Errorf("check-bed members-up: no live session for bed %q", req.Bed)
 		}
-		return spec.CheckBedReply{}, bringUpMembers(&s.node)
+		return spec.CheckBedReply{}, bringUpMembers(&s.node, s.imageTag)
 	case "members-down":
 		s := lookupBedSession(req.Bed)
 		if s == nil {
@@ -194,7 +195,7 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// managed ssh alias (post-P33, keyed by the DEPLOY, not the shared kind:vm entity). Threaded
 	// to the plugin in the reply so its `charly vm create/destroy/start` cli steps pass
 	// --domain <bedDomain> (`vm build` stays entity-scoped); harmless (unused) for non-VM beds.
-	s := &bedSession{bed: req.Bed, node: node, bedDomain: vmDomainIdentity(req.Bed)}
+	s := &bedSession{bed: req.Bed, node: node, bedDomain: vmDomainIdentity(req.Bed), imageTag: bedRunImageTag(req.Bed, calver)}
 	inserted := false
 	defer func() {
 		if !inserted {
@@ -289,7 +290,8 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		Image:          node.Image,  // "" for vm/local/group
 		VMTemplate:     node.From,   // vm bed template (the ENTITY — `charly vm build` builds off this)
 		BedDomain:      s.bedDomain, // per-deploy live domain (`charly vm create/destroy/start … --domain <this>`)
-		LocalRef:       node.From,   // local bed ref
+		ImageTag:       s.imageTag,
+		LocalRef:       node.From, // local bed ref
 		VMDomains:      domains,
 		CheckLiveRefs:  bedCheckLiveRefs(req.Bed, node.Children),
 		ChildKeys:      sortedNestedKeys(node.Children),
@@ -332,6 +334,22 @@ func bedMemberDescriptors(members map[string]*BundleNode) []spec.CheckBedMember 
 		out = append(out, spec.CheckBedMember{Key: key, IsVM: isVmMember(m), Image: m.Image, From: m.From})
 	}
 	return out
+}
+
+// bedRunImageTag is the per-RUN bed-scoped image tag every `charly box build` +
+// deploy step in a bed run passes as --tag: <bed-root-name>-<runCalver>. Keyed by
+// the BED, not per-member — the collision unit is cross-BED (two beds building the
+// same fixture image name from different trees racing the store-global
+// short-name→newest-local-CalVer resolution); within one run the builds are already
+// coordinated and different images sharing one tag string stay distinct name:tag
+// pairs. The tag analogue of vmDomainIdentity (#33 domain=deploy-name), #75. Bed
+// names are lowercase-hyphenated and calver is YYYY.DDD.HHMM — both valid OCI tag
+// chars — so no sanitization is needed.
+func bedRunImageTag(bed, calver string) string {
+	if bed == "" || calver == "" {
+		return ""
+	}
+	return bed + "-" + calver
 }
 
 // bedLocalChildKeys is the HOST-ROOTED (kind:local) subset of a node's nested children, in
