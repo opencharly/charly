@@ -228,18 +228,7 @@ func TestCompileOpSteps_RunCommandLowersToOpStep(t *testing.T) {
 	}
 }
 
-// The validator rejects a build-context run: step whose verb has no build/deploy
-// install path (a pure observe verb like `addr` — a CheckVerbProvider, NOT a
-// ProvisionActor — acts only at runtime) — the compiler would otherwise silently drop
-// it. The run: keyword stamps the act intent. (file IS act-capable in build/deploy now —
-// it is a ProvisionActor like user/mount, rendering touch+chmod at install emit — so it
-// is no longer the example here.)
-func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
-	layers := map[string]*Candy{
-		"l": {Name: "l", plan: []Step{{Run: "reach x", Op: Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80"}, Context: []string{"build"}}}}},
-	}
-	got := runValidateOps(t, &Config{Box: boxMapOf(map[string]BoxConfig{})}, layers)
-	if !strings.Contains(got, "cannot act") {
-		t.Errorf("expected a 'cannot act in build context' rejection, got: %s", got)
-	}
-}
+// The validator's build-context "cannot act" rejection (a run: step whose verb, like `addr`, has no
+// build/deploy install path) moved with the validateOps engine to candy/plugin-box (task #60); it is
+// re-expressed as an on-disk fixture through the real `charly box validate` gate in
+// validate_fixture_test.go (TestValidateOps_RejectsRuntimeOnlyActInBuild).

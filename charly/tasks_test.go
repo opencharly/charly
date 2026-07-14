@@ -643,98 +643,12 @@ func TestEmitVarsEnv_SortedKeys(t *testing.T) {
 }
 
 // --- Validator ---
-
-func TestValidateCandyTasks_CopyRequiresTo(t *testing.T) {
-	layers := map[string]*Candy{
-		"mylyr": {
-			Name: "mylyr",
-			plan: []Step{{Run: "build", Op: Op{Copy: "foo" /* no To */}}},
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyTasks(layers, errs)
-	if !errs.HasErrors() {
-		t.Fatal("expected missing-to error")
-	}
-	if !strings.Contains(errs.Error(), "requires to:") {
-		t.Errorf("error should mention missing to: %v", errs.Error())
-	}
-}
-
-func TestValidateCandyTasks_UnresolvedVar(t *testing.T) {
-	layers := map[string]*Candy{
-		"mylyr": {
-			Name: "mylyr",
-			plan: []Step{{Run: "build", Op: Op{Mkdir: "${UNDEFINED}/foo"}}},
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyTasks(layers, errs)
-	if !errs.HasErrors() {
-		t.Fatal("expected unresolved var error")
-	}
-	if !strings.Contains(errs.Error(), "UNDEFINED") {
-		t.Errorf("error should name the unresolved var: %v", errs.Error())
-	}
-}
-
-func TestValidateCandyTasks_ReservedVarKey(t *testing.T) {
-	layers := map[string]*Candy{
-		"mylyr": {
-			Name: "mylyr",
-			plan: []Step{{Run: "build", Op: cmdOp("true")}},
-			vars: map[string]string{"USER": "ignored"}, // collides with auto-export
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyTasks(layers, errs)
-	if !errs.HasErrors() {
-		t.Fatal("expected reserved-key error")
-	}
-	if !strings.Contains(errs.Error(), "reserved auto-export") {
-		t.Errorf("error should mention reserved auto-export: %v", errs.Error())
-	}
-}
-
-// bad-mode (octal ^0[0-7]{3,4}$) rejection is now a CUE concern (#Op.mode) —
-// see TestCueTightening_RejectsAndAccepts "candy run step bad mode rejected".
-
-func TestValidateCandyTasks_BuildOnlyAll(t *testing.T) {
-	layers := map[string]*Candy{
-		"mylyr": {
-			Name: "mylyr",
-			plan: []Step{{Run: "build", Op: Op{Build: "pixi"}}}, // reserved for future
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyTasks(layers, errs)
-	if !errs.HasErrors() {
-		t.Fatal("expected build-only-all error")
-	}
-}
-
-func TestValidateCandyTasks_HappyPath(t *testing.T) {
-	layers := map[string]*Candy{
-		"mylyr": {
-			Name: "mylyr",
-			vars: map[string]string{"VERSION": "1.0"},
-			plan: []Step{
-				{Run: "build", Op: Op{Mkdir: "/etc/foo", RunAs: "root"}},
-				{Run: "build", Op: Op{Copy: "bar", To: "/etc/foo/bar", Mode: "0644", RunAs: "root"}},
-				{Run: "build", Op: Op{Write: "/etc/baz.conf", Content: "hello", RunAs: "root"}},
-				{Run: "build", Op: Op{Download: "https://x.com/v${VERSION}/app.tar.gz", Extract: "tar.gz", To: "/usr/local/bin", RunAs: "root"}},
-				{Run: "build", Op: Op{Link: "/usr/local/bin/app-current", Target: "/usr/local/bin/app", RunAs: "root"}},
-				{Run: "build", Op: Op{Setcap: "/usr/bin/foo", Caps: "cap_setuid=ep"}},
-				{Run: "build", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hello ${VERSION}"}, RunAs: "${USER}"}},
-			},
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyTasks(layers, errs)
-	if errs.HasErrors() {
-		t.Fatalf("expected no errors on happy path, got:\n%s", errs.Error())
-	}
-}
+//
+// The five former validateCandyTasks host tests (CopyRequiresTo, UnresolvedVar, ReservedVarKey,
+// BuildOnlyAll, HappyPath) moved with the validateCandyTasks rule to candy/plugin-box (task #60).
+// They are re-expressed as on-disk fixtures driven through the real `charly box validate` gate in
+// validate_fixture_test.go (TestValidate_Task*). The bad-mode (octal ^0[0-7]{3,4}$) rejection is a
+// CUE concern (#Op.mode) — see cue_tighten_test.go "candy run step bad mode rejected".
 
 // --- Parity: ensure HasInstallFiles picks up HasTasks ---
 

@@ -56,14 +56,13 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// __box-validate / __box-pkg are the hidden core reentry points behind the COMPILED-IN
-	// candy/plugin-box command:validate / command:pkg words (nested under `box`). The plugin owns
-	// the user-facing `charly box validate` / `charly box pkg` grammar + dispatch and reaches these
-	// over HostBuild("cli") — the validate/pkg data still needs the fully-resolved project the
-	// plugin cannot load pre-K1.
-	// K1-doomed: both die when plugin-box loads the project itself via sdk/loadkit (K1).
-	BoxValidate ValidateCmd `cmd:"" name:"__box-validate" hidden:"" help:"internal: validate charly.yml + candies (reentry behind box validate)"`
-	BoxPkg      BoxPkgCmd   `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
+	// __box-pkg is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pkg
+	// word (nested under `box`): the plugin owns the user-facing `charly box pkg` grammar + dispatch and
+	// reaches this over HostBuild("cli") — the localpkg build needs the host build context the plugin
+	// cannot compute pre-K1. Validation, by contrast, needs no such CLI reentry: the validate ENGINE
+	// lives in plugin-box and dispatches command:validate to the host-side validate-project HostBuild
+	// directly.
+	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
 
 	// __box-inspect-overlay / __box-list-tags are the hidden core reentry points behind the
 	// COMPILED-IN candy/plugin-box command:inspect / command:list words (nested under `box`). The
@@ -110,49 +109,6 @@ type CLI struct {
 	// but zero-value + highest-blast-radius, weakening R9's canonical identity command; operator-decided
 	// to keep core. See the NOTE above the __* internals.)
 	Version VersionCmd `cmd:"" help:"Print computed CalVer tag"`
-}
-
-// ValidateCmd validates charly.yml and candies. The user-facing `charly box validate`
-// grammar now lives in the COMPILED-IN candy/plugin-box (command:validate, nested under box);
-// this struct is registered as the hidden `charly __box-validate` reentry the plugin reaches over
-// HostBuild("cli").
-//
-// K1-doomed: dies when plugin-box loads the project itself via sdk/loadkit (K1).
-type ValidateCmd struct {
-	IncludeDisabled bool `long:"include-disabled" help:"Include boxes with enabled: false in validation (does not modify charly.yml)"`
-}
-
-func (c *ValidateCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return err
-	}
-
-	// Load default build config for RegisterBuildVocabulary + init detection before candy scanning.
-	var defaultInitCfg *InitConfig
-	{
-		distroCfg, _, initCfg, err := LoadDefaultBuildConfig(dir)
-		if err != nil {
-			return fmt.Errorf("loading default build config: %w", err)
-		}
-		RegisterBuildVocabulary(distroCfg)
-		defaultInitCfg = initCfg
-	}
-
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return err
-	}
-
-	// Populate init systems on candies from the embedded build vocabulary
-	PopulateCandyInitSystem(layers, defaultInitCfg)
-
-	return Validate(cfg, layers, dir, ResolveOpts{IncludeDisabled: c.IncludeDisabled})
 }
 
 // VersionCmd prints the computed CalVer tag

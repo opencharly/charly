@@ -44,7 +44,7 @@ func resolvedSidecarFromSpec(s spec.ResolvedSidecar) ResolvedSidecar {
 		rs.Security = *s.Security
 	}
 	for _, v := range s.Volume {
-		rs.Volume = append(rs.Volume, VolumeMount{VolumeName: v.VolumeName, ContainerPath: v.ContainerPath})
+		rs.Volume = append(rs.Volume, VolumeMount(v))
 	}
 	for _, sec := range s.Secret {
 		rs.Secret = append(rs.Secret, CollectedSecret{

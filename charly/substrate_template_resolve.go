@@ -106,23 +106,10 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", OpResolve, req)
 }
 
-// resolveLocals / resolveAndroids project the whole opaque template map into resolved
-// envelopes (a bad entry is skipped, cf. decodePluginKindMap).
-func (uf *UnifiedFile) resolveLocals() map[string]*ResolvedLocal {
-	if uf == nil || len(uf.Local) == 0 {
-		return nil
-	}
-	out := make(map[string]*ResolvedLocal, len(uf.Local))
-	for name, body := range uf.Local {
-		r, err := resolveLocalViaPlugin(body)
-		if err != nil || r == nil {
-			continue
-		}
-		out[name] = r
-	}
-	return out
-}
-
+// resolveAndroids projects the whole opaque android template map into resolved envelopes (a bad
+// entry is skipped, cf. decodePluginKindMap). Its sibling resolveLocals died with the validate ENGINE
+// (task #60 — the host's only caller, validateLocalTemplates, moved to plugin-box, which decodes
+// Templates.Local itself off the resolved-project envelope).
 func (uf *UnifiedFile) resolveAndroids() map[string]*ResolvedAndroid {
 	if uf == nil || len(uf.Android) == 0 {
 		return nil

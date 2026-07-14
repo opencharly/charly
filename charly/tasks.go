@@ -15,7 +15,6 @@ import (
 // validate.go / check / bundle-add / install callers stay unchanged until
 // they relocate.
 var (
-	taskAutoExports      = deploykit.TaskAutoExports
 	taskKnownNames       = deploykit.TaskKnownNames
 	taskUnresolvedRefs   = deploykit.TaskUnresolvedRefs
 	resolveUserSpec      = deploykit.ResolveUserSpec

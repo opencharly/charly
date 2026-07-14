@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -103,6 +102,21 @@ func projectCandyView(c *Candy) spec.CandyView {
 	}
 	v.Volumes = c.Volume()
 	v.Aliases = c.Alias()
+	// capabilities — the per-candy caps the validate ENGINE reads off the envelope (task #60,
+	// ruling a). Filled whenever the candy declares a `capabilities:` block; the validate plugin
+	// re-runs AggregateCandyCapabilities (a boolean OR of PreserveUser over the box's candy order).
+	if c.capabilities != nil {
+		v.Capabilities = &spec.CandyCapabilitiesView{PreserveUser: c.capabilities.PreserveUser}
+	}
+	// the candy's OWN declared plugin block (validatePluginCandy SUBJECT, task #60): the declared
+	// provider capability strings + source, so the validate plugin can check each declared BUILTIN
+	// `<class>:<word>` is compiled in (a member of ResolvedProject.ProviderCapabilities).
+	if c.Plugin != nil {
+		v.PluginSource = c.Plugin.Source
+		for _, cap := range c.Plugin.Providers {
+			v.PluginProviders = append(v.PluginProviders, string(cap))
+		}
+	}
 	return v
 }
 
@@ -112,30 +126,31 @@ func projectCandyView(c *Candy) spec.CandyView {
 // (identity/graph). A pure DATA projection over accessors the *Candy already exposes.
 func projectCandyModel(c *Candy) spec.CandyModel {
 	m := spec.CandyModel{
-		Name:           c.Name,
-		Version:        c.Version,
-		SourceDir:      c.SourceDir,
-		Reboot:         c.Reboot(),
-		Plan:           c.PlanSteps(),
-		RunOps:         c.runOps(),
-		Service:        c.Service(),
-		Extract:        c.Extract(),
-		Data:           c.Data(),
-		Apk:            c.Apk(),
-		TopPackages:    c.TopPackages(),
-		Vars:           c.Vars(),
-		Libvirt:        c.Libvirt(),
-		Engine:         c.Engine(),
-		PortRelayPorts: c.PortRelayPorts,
-		ServiceFiles:   c.ServiceFiles(),
-		Volumes:        c.Volume(),
-		Aliases:        c.Alias(),
-		EnvRequire:     c.EnvRequire(),
-		EnvAccept:      c.EnvAccept(),
-		SecretRequire:  c.SecretRequire(),
-		SecretAccept:   c.SecretAccept(),
-		MCPRequire:     c.MCPRequire(),
-		MCPAccept:      c.MCPAccept(),
+		Name:            c.Name,
+		Version:         c.Version,
+		SourceDir:       c.SourceDir,
+		ExternalBuilder: c.ExternalBuilder,
+		Reboot:          c.Reboot(),
+		Plan:            c.PlanSteps(),
+		RunOps:          c.runOps(),
+		Service:         c.Service(),
+		Extract:         c.Extract(),
+		Data:            c.Data(),
+		Apk:             c.Apk(),
+		TopPackages:     c.TopPackages(),
+		Vars:            c.Vars(),
+		Libvirt:         c.Libvirt(),
+		Engine:          c.Engine(),
+		PortRelayPorts:  c.PortRelayPorts,
+		ServiceFiles:    c.ServiceFiles(),
+		Volumes:         c.Volume(),
+		Aliases:         c.Alias(),
+		EnvRequire:      c.EnvRequire(),
+		EnvAccept:       c.EnvAccept(),
+		SecretRequire:   c.SecretRequire(),
+		SecretAccept:    c.SecretAccept(),
+		MCPRequire:      c.MCPRequire(),
+		MCPAccept:       c.MCPAccept(),
 	}
 	for _, f := range c.LocalPkgFormats() {
 		if m.LocalPkg == nil {
@@ -172,7 +187,13 @@ func projectCandyModel(c *Candy) spec.CandyModel {
 // projectResolvedProject assembles the spec.ResolvedProject from already-loaded resolve-engine
 // outputs — a pure DATA projection, no resolution logic of its own. boxes come from ResolveBox
 // (enabled boxes, sorted), candies from ScanAllCandy (sorted), deploy from the folded uf.Bundle tree.
-func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts) (*spec.ResolvedProject, error) {
+// projectResolvedProject assembles the envelope. When diags is nil it is FAIL-FAST (a per-box
+// ResolveBox failure aborts the whole projection with an error — the resolved-project contract
+// inspect/list rely on). When diags is non-nil it is ERROR-TOLERANT (the validate-project path): a
+// ResolveBox failure appends a spec.Diagnostic and SKIPS that box, so validate runs on a broken
+// project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
+// aggregate empty), so the tolerant branch is confined to the ResolveBox call.
+func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
@@ -187,10 +208,24 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFi
 		}
 		resolved, err := cfg.ResolveBox(name, calver, dir, opts)
 		if err != nil {
-			return nil, fmt.Errorf("resolving box %q: %w", name, err)
+			if diags == nil {
+				return nil, fmt.Errorf("resolving box %q: %w", name, err)
+			}
+			// tolerant (validate): a box that fails to resolve is SILENTLY skipped from the envelope —
+			// matching the former Validate()'s validateBoxDAG "continue"-on-ResolveBox-error. The dedicated
+			// host-natural rules (validateBoxBaseFrom / validateBuildAndDistro / validateBuilderRefs, over
+			// the RAW cfg) report the actual config error exactly as before; emitting a blanket
+			// "resolving box …" diagnostic here OVER-reports vs the pre-cutover verdict (corpus-proven), so
+			// we don't — the box is dropped and the specific rule owns the message.
+			continue
 		}
 		resolvedBoxes[name] = resolved
 		view := projectResolvedBox(resolved)
+		// box-AUTHORED surfaces the validate ENGINE re-validates (task #60): the box entity's own raw
+		// `plan:` (validateOps box-arm) + `alias:` (validateAliases box-arm), read from the authored
+		// BoxConfig (not the resolved box). Distinct from the resolved alias AGGREGATE below.
+		view.Plan = img.Plan
+		view.AuthoredAliases = img.Alias
 		// box-AGGREGATES (charly box inspect --format ports|volumes|aliases|engine): run the existing
 		// cross-candy collectors into the view; a collector error leaves that aggregate empty (a
 		// read-only projection never fails the whole load).
@@ -199,12 +234,12 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFi
 		}
 		if vols, verr := CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
 			for _, vm := range vols {
-				view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount{VolumeName: vm.VolumeName, ContainerPath: vm.ContainerPath})
+				view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount(vm))
 			}
 		}
 		if als, aerr := CollectBoxAlias(cfg, layers, name); aerr == nil {
 			for _, a := range als {
-				view.Aliases = append(view.Aliases, spec.CandyAlias{Name: a.Name, Command: a.Command})
+				view.Aliases = append(view.Aliases, spec.CandyAlias(a))
 			}
 		}
 		view.Engine = ResolveBoxEngine(cfg, layers, name, "")
@@ -361,44 +396,18 @@ func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
 }
 
 // buildResolvedProjectFromDir is the load+project entry the "resolved-project" host-builder wraps and
-// host-side callers use directly. It registers the embedded build vocabulary (so ResolveBox resolves
-// distro/builder reliably, the box-list/validate path), loads the project, and projects it.
+// host-side callers use directly. It loads the project (fail-fast — a load/resolve error aborts) via
+// the shared loadProjectForResolve, then projects it. The error-TOLERANT sibling the validate-project
+// seam uses is buildResolvedProjectTolerant (validate_project_host.go).
 func buildResolvedProjectFromDir(dir string, opts ResolveOpts) (*spec.ResolvedProject, error) {
-	cfg, err := LoadConfig(dir)
-	if errors.Is(err, ErrNoCharlyYml) {
-		// A project-less directory resolves to an EMPTY project, not an error — the same
-		// contract `charly box list boxes` has always honoured (the charly-mcp box.list.boxes tool
-		// runs in CHARLY_PROJECT_DIR before any charly.yml exists, so it must exit 0 empty). Every
-		// list subcommand + inspect then reads an empty envelope naturally.
+	lp, err := loadProjectForResolve(dir, opts, nil)
+	if err != nil {
+		return nil, err
+	}
+	if lp.empty {
 		return &spec.ResolvedProject{}, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	// The build vocabulary is BOTH registered (so ResolveBox resolves distro/builder) AND projected
-	// into the envelope's distro/builder/init members (the validate consumer).
-	distroCfg, builderCfg, initCfg, _ := LoadDefaultBuildConfig(dir)
-	if distroCfg != nil {
-		RegisterBuildVocabulary(distroCfg)
-	}
-	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
-	if err != nil {
-		return nil, err
-	}
-	uf, present, uerr := LoadUnified(dir)
-	if uerr != nil {
-		return nil, uerr
-	}
-	var ufPtr *UnifiedFile
-	version := ""
-	if present {
-		if derr := uf.ApplyDiscover(dir); derr != nil {
-			return nil, derr
-		}
-		ufPtr = uf
-		version = uf.Version
-	}
-	return projectResolvedProject(cfg, layers, ufPtr, distroCfg, builderCfg, initCfg, dir, version, opts)
+	return projectResolvedProject(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, lp.initCfg, dir, lp.version, opts, nil)
 }
 
 // hostBuildResolvedProject is the "resolved-project" host-builder (F11): resolve the project at

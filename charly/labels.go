@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // ErrImageNotLocal is returned when ExtractMetadata is called on an image
@@ -97,152 +99,21 @@ const (
 	LabelCheckLevel = "ai.opencharly.check_level"
 )
 
-// LabelVolumeEntry represents a volume in the label JSON (short name form).
-type LabelVolumeEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
-// LabelRouteEntry represents a traefik route in the label JSON.
-type LabelRouteEntry struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-}
-
-// CapabilityService is the full structured spec of a single service entry
-// baked into an OCI label. Mirrors ServiceEntry's fields plus two origin
-// annotations (Init, Candy) so a source-less consumer can reconstruct
-// everything `charly bundle` needs without the source repo.
-type CapabilityService struct {
-	Name             string            `json:"name"`
-	Scope            string            `json:"scope,omitempty"`
-	Enable           bool              `json:"enable,omitempty"`
-	UsePackaged      string            `json:"use_packaged,omitempty"`
-	Exec             string            `json:"exec,omitempty"`
-	Env              map[string]string `json:"env,omitempty"`
-	Restart          string            `json:"restart,omitempty"`
-	WorkingDirectory string            `json:"working_directory,omitempty"`
-	User             string            `json:"user,omitempty"`
-	After            []string          `json:"after,omitempty"`
-	Before           []string          `json:"before,omitempty"`
-	Stdout           string            `json:"stdout,omitempty"`
-	StopTimeout      string            `json:"stop_timeout,omitempty"`
-	Kind             string            `json:"kind,omitempty"`
-	Events           string            `json:"events,omitempty"`
-	AutoStart        *bool             `json:"auto_start,omitempty"`
-	StartRetries     int               `json:"start_retries,omitempty"`
-	StartSec         int               `json:"start_sec,omitempty"`
-	StopSignal       string            `json:"stop_signal,omitempty"`
-	ExitCode         string            `json:"exit_code,omitempty"`
-	Priority         int               `json:"priority,omitempty"`
-	Init             string            `json:"init,omitempty"`  // which init system owns this entry
-	Candy            string            `json:"candy,omitempty"` // source candy name
-}
-
-// CapabilityInitDef is the runtime-relevant subset of an InitDef baked into
-// the ai.opencharly.init_def OCI label. The build-time init: vocabulary
-// (charly/charly.yml) carries ~20 build-only fields (detection, stage and
-// assembly templates); only these four are consulted at deploy time — the
-// container entrypoint, its fallback, and the in-container service-management
-// surface. Baking them makes the init system TRUE single-source: deploy
-// reads this label instead of re-deriving the contract from a hardcoded
-// registry, so init systems declared only in the vocabulary work at runtime too.
-type CapabilityInitDef struct {
-	Entrypoint         []string          `json:"entrypoint,omitempty"`
-	FallbackEntrypoint []string          `json:"fallback_entrypoint,omitempty"`
-	ManagementTool     string            `json:"management_tool,omitempty"`
-	ManagementCommands map[string]string `json:"management_commands,omitempty"`
-}
-
-// LabelDataEntry represents a data mapping stored in the ai.opencharly.data label.
-type LabelDataEntry struct {
-	Volume  string `json:"volume"`         // target volume name
-	Staging string `json:"staging"`        // path inside image (/data/<volume>/[dest/])
-	Candy   string `json:"candy"`          // source candy name
-	Dest    string `json:"dest,omitempty"` // optional subdirectory within volume
-}
-
-// BoxMetadata is the runtime-relevant config extracted from image labels.
-type BoxMetadata struct {
-	Box       string
-	Version   string // ai.opencharly.version — content-derived EffectiveVersion (highest candy version, or the image's dedicated version:)
-	Registry  string
-	Bootc     bool
-	UID       int
-	GID       int
-	User      string
-	Home      string
-	Port      []string
-	Volume    []VolumeMount
-	Alias     []CollectedAlias
-	Security  SecurityConfig
-	Network   string
-	Tunnel    *TunnelYAML // populated from charly.yml overlay (not labels)
-	DNS       string
-	AcmeEmail string
-	Env       []string
-	Hook      *HooksConfig
-	// Vm / Libvirt: removed in the VM hard-cutover. VM config lives on
-	// `kind: vm` entities in vm.yml (VmSpec / LibvirtDomain), not on
-	// container image OCI labels.
-	Route         []LabelRouteEntry
-	Init          string              // active init system name ("supervisord", "systemd", "")
-	InitDef       *CapabilityInitDef  // build-resolved init contract (LabelInitDef): entrypoint + management surface; deploy reads it label-first
-	Service       []CapabilityService // structured per-entry service specs (LabelService); source-less deploy reads these
-	ServiceNames  []string            // per-init service names (LabelInit companion); used by `charly service status/restart`
-	EnvCandy      map[string]string
-	PathAppend    []string
-	Engine        string
-	PortProto     map[int]string       // container port -> protocol ("http" or "tcp")
-	PortRelay     []int                // ports with socat relay (eth0 -> loopback)
-	Skill         string               // skill documentation URL
-	Status        string               // effective status (working, testing, broken)
-	Info          string               // aggregated status info
-	CandyVersion  map[string]string    // candy name -> CalVer version
-	Secret        []LabelSecretEntry   // secret requirements (metadata only, no values)
-	Distro        []string             // distro identity tags (ai.opencharly.platform.distro)
-	BuildFormat   []string             // package formats installed (ai.opencharly.platform.format)
-	Builder       map[string]string    // format → builder image (ai.opencharly.builder.use)
-	Build         []string             // builder capability: formats this image can build (ai.opencharly.builder.provide)
-	DataEntries   []LabelDataEntry     // data staging entries for deploy-time provisioning
-	DataImage     bool                 // true if this is a data-only image (FROM scratch)
-	EnvProvide    map[string]string    // env vars provided to other containers (service discovery templates)
-	EnvRequire    []EnvDependency      // env vars image must have from the environment
-	EnvAccept     []EnvDependency      // env vars image can optionally use
-	SecretAccept  []EnvDependency      // credential-store-backed env vars image can optionally use
-	SecretRequire []EnvDependency      // credential-store-backed env vars image must have
-	MCPProvide    []MCPServerYAML      // MCP servers provided to other containers (service discovery templates)
-	MCPRequire    []EnvDependency      // MCP servers image must have from the environment
-	MCPAccept     []EnvDependency      // MCP servers image can optionally use
-	Description   *LabelDescriptionSet // three-section plan-shaped self-description (candy/box/deploy)
-	Shell         *LabelShellSet       // three-section (candy/box/deploy) shell-init manifest (2026-05 cutover)
-	CheckLevel    string               // acceptance-depth rung (ai.opencharly.check_level): none|build|noagent|agent
-}
-
-// LabelShellSet is the three-section JSON manifest carried in
-// ai.opencharly.shell. Mirrors LabelDescriptionSet's bucketing — Candy
-// holds per-candy contributions (origin = candy name); Box holds
-// charly.yml-level shell: declarations; Deploy holds deploy-scope
-// defaults baked at build time. The charly.yml `shell:` overlay
-// merges into a separate runtime-only set via MergeDeployShell.
-type LabelShellSet struct {
-	Candy  []ShellEntry `json:"candy,omitempty"`
-	Box    []ShellEntry `json:"box,omitempty"`
-	Deploy []ShellEntry `json:"deploy,omitempty"`
-}
-
-// ShellEntry is one origin's full shell-init contribution. ID is the
-// stable handle for charly.yml overlay keying ("<origin>" or
-// "<origin>:<shell>"). Origin = candy name / "box" / "deploy".
-// Generic body + per-shell ByShell map mirror the in-memory
-// ShellConfig struct.
-type ShellEntry struct {
-	Origin   string                `json:"origin"`
-	ID       string                `json:"id,omitempty"`
-	Generic  *ShellSpec            `json:"generic,omitempty"`
-	ByShell  map[string]*ShellSpec `json:"by_shell,omitempty"`
-	Priority int                   `json:"priority,omitempty"`
-}
+// BoxMetadata + the OCI-label sub-shapes are CUE-sourced in spec (boxmetadata.cue, P2B, #60)
+// and aliased IN-PLACE here (spec is the allowed import; these are NOT collected into an
+// *_aliases.go file, per the ZERO-ALIASES gate). Field docs + the exact JSON wire tags now live
+// on the CUE defs; the ~45 label decoders in ExtractMetadata below still build BoxMetadata
+// field-by-field (BoxMetadata is never whole-marshaled — R8 anchor = these sub-shapes' tags).
+type (
+	LabelVolumeEntry  = spec.LabelVolumeEntry
+	LabelRouteEntry   = spec.LabelRouteEntry
+	CapabilityService = spec.CapabilityService
+	CapabilityInitDef = spec.CapabilityInitDef
+	LabelDataEntry    = spec.LabelDataEntry
+	BoxMetadata       = spec.BoxMetadata
+	LabelShellSet     = spec.LabelShellSet
+	ShellEntry        = spec.ShellEntry
+)
 
 // InspectLabels reads OCI labels from a local image via engine inspect.
 // Package-level var for testability.
@@ -452,12 +323,9 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 		if err := json.Unmarshal([]byte(v), &protos); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", LabelPortProto, err)
 		}
-		meta.PortProto = make(map[int]string)
-		for k, v := range protos {
-			if p, err := strconv.Atoi(k); err == nil {
-				meta.PortProto[p] = v
-			}
-		}
+		// PortProto is now string-keyed (spec reshape, P2B) — the JSON label wire was always a
+		// string-keyed object, so this is a direct copy (the former map[int]string + Atoi is gone).
+		meta.PortProto = protos
 	}
 
 	// Port relay

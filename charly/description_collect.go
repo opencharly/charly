@@ -22,12 +22,23 @@ package main
 func bakeableSteps(plan []Step) []Step {
 	var out []Step
 	for _, s := range plan {
+		bake := false
 		switch {
 		case s.Check != "" || s.AgentCheck != "":
-			out = append(out, s)
+			bake = true
 		case s.Run != "" && opInContext(&s.Op, CtxRuntime):
-			out = append(out, s)
+			bake = true
 		}
+		if !bake {
+			continue
+		}
+		// DELIBERATE collect-time stamp: write the keyword-derived do-mode onto the baked COPY so
+		// the ai.opencharly.description label carries intent_do. This was formerly a side effect of
+		// the in-core validate mutating the shared structs the bake serialized; when the validate
+		// ENGINE moved to candy/plugin-box (K3-D+) it began stamping only its envelope copy, so the
+		// bake must now stamp its own output (verb-less agent-check steps keep an empty IntentDo).
+		stampStepIntentDo(&s)
+		out = append(out, s)
 	}
 	return out
 }

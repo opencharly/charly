@@ -108,23 +108,9 @@ func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 	}
 }
 
-// §J.3 — validation rejects a candy whose plan has no check: step (ADE gate).
-func TestPlanUnify_ValidateRejectsNoCheckStep(t *testing.T) {
-	layers := map[string]*Candy{
-		"x": {
-			Name:        "x",
-			Version:     "2026.001.0001",
-			Description: "a candy with run: but no check:",
-			plan:        []Step{{Run: "install", Op: cmdOp("true")}}, // run only, no check
-		},
-	}
-	errs := &ValidationError{}
-	validateCandyContents(layers, errs)
-	got := strings.Join(errs.Errors, "\n")
-	if !strings.Contains(got, "at least one `check:` step") {
-		t.Fatalf("expected a no-check-step ADE rejection, got: %s", got)
-	}
-}
+// §J.3 — the no-check-step ADE rejection (validateCandyContents) moved with the validate engine to
+// candy/plugin-box (task #60); it is re-expressed as an on-disk fixture through the real
+// `charly box validate` gate in validate_fixture_test.go (TestValidate_RejectsNoCheckStep).
 
 // §J.6 — the `include: <kind>:<name>` candy/box/pod/vm plan-splice arms relocated to
 // candy/plugin-check (the include-splicer now reads the resolved-project envelope, not the core

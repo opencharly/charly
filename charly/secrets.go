@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/spec"
 	"golang.org/x/term"
 )
 
@@ -81,12 +82,9 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 }
 
 // LabelSecretEntry represents a secret requirement in an OCI image label.
-// Only metadata is stored — never the secret value.
-type LabelSecretEntry struct {
-	Name   string `json:"name"`
-	Target string `json:"target"`
-	Env    string `json:"env,omitempty"`
-}
+// Only metadata is stored — never the secret value. CUE-sourced in spec (boxmetadata.cue, P2B)
+// + aliased in-place; carried on BoxMetadata.Secret (ai.opencharly.secret).
+type LabelSecretEntry = spec.LabelSecretEntry
 
 // CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
 // Secret= directive) is a deploykit resolved-runtime type now, aliased in

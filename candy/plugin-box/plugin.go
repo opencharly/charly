@@ -13,9 +13,11 @@
 //     Containerfile tree host-side over HostBuild("build-resolve", GenerateOnly). Zero core reentry.
 //   - command:new — `charly box new candy/project/box`: calls kit.ScaffoldCandy / kit.ScaffoldProject
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
-//   - command:validate — `charly box validate`: reaches the hidden core `__box-validate` reentry over
-//     HostBuild("cli") (the validation needs the fully-resolved project the plugin cannot load
-//     pre-K1).
+//   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
+//     (HostBuild("validate-project") → spec.ValidateProjectReply) and runs the whole per-kind/op rule
+//     ENGINE + the deploykit resolution-graph checks IN-PLUGIN over that envelope, MERGING the host's
+//     CUE-conformance/tunable/base⊻from diagnostics for the verdict (validate.go / validate_rules.go /
+//     validate_graph.go / validate_check.go).
 //   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
 //     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
@@ -37,6 +39,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // calver is the candy's identity CalVer (advertised over Describe).
@@ -63,7 +66,7 @@ func NewMeta() pb.PluginMetaServer {
 
 // CliMain is the OUT-OF-PROCESS command entry — unreachable in the canonical compiled-in placement.
 // The generate/validate/pkg handlers reach the host reverse channel (build:generate over
-// InvokeProvider, __box-validate/__box-pkg over HostBuild("cli")), which is unavailable
+// InvokeProvider, validate-project + __box-pkg over HostBuild), which is unavailable
 // out-of-process, so this errors (like candy/plugin-vm's / candy/plugin-alias's CliMain).
 func CliMain(_ []string) int {
 	fmt.Fprintln(os.Stderr, "charly box: requires compiled-in placement (the command's host reverse channel is unavailable out-of-process)")
@@ -78,28 +81,58 @@ type provider struct{ pb.UnimplementedProviderServer }
 // core `box` command group, so `charly box generate/validate/new/pkg` parse + dispatch here.
 func (provider) CommandParent() string { return "box" }
 
-// Invoke serves each box command's Invoke(OpRun): recover the reverse-channel executor, decode the
-// pass-through args, and dispatch by the reserved command word. In-proc dispatch runs in charly's
-// own process, so the handlers inherit charly's real stdin/stdout/stderr natively.
+// Invoke serves the box commands' Invoke(OpRun) AND the validate capability's structured Invoke(OpValidate):
+//   - OpRun: recover the reverse-channel executor, decode the pass-through args, dispatch by the reserved
+//     command word. In-proc dispatch runs in charly's own process (native stdio).
+//   - OpValidate: the pre-build gate (core generate.go) Invokes the validate capability with a STRUCTURED
+//     op (task #60 (C-refined)); run the engine over the tolerant envelope and RETURN the merged
+//     spec.Diagnostics (no print, no exit) so the build gate consumes them as errors. Named exit K3
+//     (when the build engine becomes plugin-build, this call becomes plugin↔plugin InvokeProvider).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpRun {
-		return nil, fmt.Errorf("box: unsupported op %q (only %q)", req.GetOp(), sdk.OpRun)
-	}
-	word := req.GetReserved()
 	exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 	if err != nil {
-		return nil, fmt.Errorf("box %s: reach host reverse channel: %w", word, err)
+		return nil, fmt.Errorf("box: reach host reverse channel: %w", err)
 	}
-	var in struct {
-		Args []string `json:"args"`
-	}
-	if len(req.GetParamsJson()) > 0 {
-		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
-			return nil, fmt.Errorf("box %s: decode args: %w", word, err)
+	switch req.GetOp() {
+	case sdk.OpRun:
+		word := req.GetReserved()
+		var in struct {
+			Args []string `json:"args"`
 		}
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &in); uerr != nil {
+				return nil, fmt.Errorf("box %s: decode args: %w", word, uerr)
+			}
+		}
+		if rerr := dispatchBoxCommand(&hostClient{ctx: ctx, exec: exec}, word, in.Args); rerr != nil {
+			return nil, rerr
+		}
+		return &pb.InvokeReply{}, nil
+	case sdk.OpValidate:
+		var vreq spec.ValidateProjectRequest
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &vreq); uerr != nil {
+				return nil, fmt.Errorf("box validate op: decode request: %w", uerr)
+			}
+		}
+		dir := vreq.Dir
+		if dir == "" {
+			d, derr := os.Getwd()
+			if derr != nil {
+				return nil, derr
+			}
+			dir = d
+		}
+		diags, verr := runValidateEngine(ctx, exec, dir, vreq.IncludeDisabled)
+		if verr != nil {
+			return nil, verr
+		}
+		out, merr := json.Marshal(diags)
+		if merr != nil {
+			return nil, merr
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	default:
+		return nil, fmt.Errorf("box: unsupported op %q", req.GetOp())
 	}
-	if rerr := dispatchBoxCommand(&hostClient{ctx: ctx, exec: exec}, word, in.Args); rerr != nil {
-		return nil, rerr
-	}
-	return &pb.InvokeReply{}, nil
 }

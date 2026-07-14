@@ -51,7 +51,3 @@ func ResolveBoxLevels(boxes map[string]*ResolvedBox, layers map[string]*Candy) (
 func CandyProvidedByBox(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy) (map[string]bool, error) {
 	return deploykit.CandyProvidedByBox(boxName, boxes, candyModelMap(layers))
 }
-
-func collectAllBoxCandies(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy) []string {
-	return deploykit.CollectAllBoxCandies(boxName, boxes, candyModelMap(layers))
-}

@@ -68,7 +68,7 @@ func (c *InspectOverlayCmd) formatTunnel(cfg *Config, dir string, resolved *Reso
 	if err != nil {
 		return
 	}
-	portProtos := make(map[int]string)
+	portProtos := make(map[string]string)
 	boxPorts, _ := CollectBoxPorts(cfg, layers, c.Box)
 	tc := ResolveTunnelConfig(overlay.Tunnel, c.Box, "", layers, resolved.Candy, portProtos, boxPorts)
 	if tc == nil || len(tc.Ports) == 0 {

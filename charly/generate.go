@@ -158,7 +158,10 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	// Populate init systems on candies from the embedded build vocabulary
 	PopulateCandyInitSystem(layers, defaultInitCfg)
 
-	if err := Validate(cfg, layers, dir, opts); err != nil {
+	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
+	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
+	// lives in core. validateProjectForBuild returns the ValidationError-equivalent on any finding.
+	if err := validateProjectForBuild(dir, opts); err != nil {
 		return nil, err
 	}
 

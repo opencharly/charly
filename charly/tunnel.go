@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -109,9 +110,10 @@ func buildPortMapping(boxPorts []string) map[int]int {
 }
 
 // resolveProto returns the backend scheme for a container port, defaulting to "http".
-func resolveProto(containerPort int, portProtos map[int]string) string {
+// portProtos is string-keyed (the OCI-label wire form, P2B reshape) — index by the port as a string.
+func resolveProto(containerPort int, portProtos map[string]string) string {
 	if portProtos != nil {
-		if pp, ok := portProtos[containerPort]; ok {
+		if pp, ok := portProtos[strconv.Itoa(containerPort)]; ok {
 			return pp
 		}
 	}
@@ -121,7 +123,7 @@ func resolveProto(containerPort int, portProtos map[int]string) string {
 // ResolveTunnelConfig resolves a TunnelYAML into a TunnelConfig with defaults applied.
 // portProtos maps container port -> protocol ("http" or "tcp") from candy PortSpec data.
 // boxPorts is the list of image port mappings (e.g. "18789:18789", "443:18789").
-func ResolveTunnelConfig(t *TunnelYAML, boxName string, dns string, _ map[string]*Candy, _ []string, portProtos map[int]string, boxPorts []string) *TunnelConfig {
+func ResolveTunnelConfig(t *TunnelYAML, boxName string, dns string, _ map[string]*Candy, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
 	if t == nil {
 		return nil
 	}

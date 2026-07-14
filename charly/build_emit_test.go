@@ -108,18 +108,18 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 	if err := providerRegistry.register(stubBuildEmitterVerb{}, "test:stubbuildemit"); err != nil {
 		t.Fatalf("register stub BuildEmitter: %v", err)
 	}
-	if !opActsInBuildDeploy(&Op{Plugin: "stubbuildemit"}, "plugin") {
+	if !opActsInBuildDeploy(&Op{Plugin: "stubbuildemit"}) {
 		t.Fatalf("a connected builtin BuildEmitter must act in build/deploy")
 	}
 	// 2. EXTERNAL placement, standalone validate (provider NOT connected): a
 	// prescan-declared external verb is trusted build-emit-capable.
 	registerDeclaredExternalVerb("stubextemit")
-	if !opActsInBuildDeploy(&Op{Plugin: "stubextemit"}, "plugin") {
+	if !opActsInBuildDeploy(&Op{Plugin: "stubextemit"}) {
 		t.Fatalf("a prescan-declared external verb must validate as build-emit-capable")
 	}
 	// 3. An unknown, undeclared verb is NOT trusted (no blanket accept — a runtime-only
 	// verb mistakenly used in a build step must still be caught).
-	if opActsInBuildDeploy(&Op{Plugin: "totally-unknown-verb-xyz"}, "plugin") {
+	if opActsInBuildDeploy(&Op{Plugin: "totally-unknown-verb-xyz"}) {
 		t.Fatalf("an unknown, undeclared verb must NOT act in build/deploy")
 	}
 }
