@@ -4,6 +4,7 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,7 @@ ran = 0
 
 def gate(script, command, cwd=None):
     result = subprocess.run(
-        ["bash", script],
+        [script],
         input=json.dumps({"tool_input": {"command": command}}),
         capture_output=True,
         text=True,
@@ -58,6 +59,10 @@ def repo(go_module=False):
 
 
 clean = repo()
+expect("commit hook: executable bit set",
+       bool(os.stat(COMMIT_GATE).st_mode & stat.S_IXUSR), True)
+expect("push hook: executable bit set",
+       bool(os.stat(PUSH_GATE).st_mode & stat.S_IXUSR), True)
 for label, command, expected in (
     ("commit: --no-verify blocked", "git commit --no-verify -m x", "BLOCK"),
     ("commit: -n blocked", "git commit -n -m x", "BLOCK"),
