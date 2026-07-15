@@ -8,10 +8,10 @@
 //     a teardown ReverseOp the host records + replays (record-and-replay).
 //   - BUILD leg (OpEmit, F-STEP-EMIT): the plugin DECLARES Emits=true and answers OpEmit with a
 //     spec.EmitReply whose Fragment is a Containerfile RUN. When the step is composed into a POD
-//     overlay (add_candy), the host's OCITarget open external-step arm Invokes this OpEmit and
+//     overlay (add_candy), the host's deploykit.OCITarget open external-step arm Invokes this OpEmit and
 //     splices the fragment verbatim — baking a persistent marker file into the overlay image.
 //     This is a PURE step: the fragment is self-contained (no host build-engine callback), so it
-//     needs no HostBuild round-trip. It proves the OCITarget external-step build-emit arm C1
+//     needs no HostBuild round-trip. It proves the deploykit.OCITarget external-step build-emit arm C1
 //     needs to externalize a step kind whose EmitOCI produces a Containerfile fragment.
 //
 // charly host-builds it + serves it OUT-OF-PROCESS over go-plugin gRPC (LocalTransport), the
@@ -46,7 +46,7 @@ const buildMarkerPath = "/etc/examplestepkind-build-baked"
 
 // opEmit / opExecute mirror charly's op selectors (package main's OpEmit = "emit", OpExecute =
 // "execute"). An external plugin can't import those constants; the host sends opEmit on the
-// BUILD-context Invoke (pod-overlay OCITarget) and opExecute on the DEPLOY-context Invoke.
+// BUILD-context Invoke (pod-overlay deploykit.OCITarget) and opExecute on the DEPLOY-context Invoke.
 const (
 	opEmit    = "emit"
 	opExecute = "execute"
@@ -58,7 +58,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // NewMeta advertises the step:examplestepkind capability WITH its DECLARED StepContract
 // (Scope user, Venue host-native (0), no gate, Emits=true) via sdk.NewMeta → BuildCapabilities
 // — the F3 plugin-declared install-step contract the host carries through the IR and applies
-// via the open default arm. Emits=true (the F-STEP-EMIT flag) tells the pod-overlay OCITarget
+// via the open default arm. Emits=true (the F-STEP-EMIT flag) tells the pod-overlay deploykit.OCITarget
 // the step bakes a build-context fragment.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,

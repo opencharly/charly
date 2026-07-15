@@ -3,19 +3,20 @@ package main
 // deploy_target_unified.go — the canonical DeployTarget interface.
 //
 // The legacy DeployTarget interface in install_plan.go is the 2-method
-// contract (Name + Emit) that the retained BUILD ENGINES (OCITarget, PodDeployTarget)
-// satisfy at the IR-emission level. This file defines the lifecycle-and-management
+// contract (Name + Emit) that the retained BUILD ENGINES (the pod-overlay walker, now
+// sdk/deploykit.OCITarget) satisfy at the IR-emission level. This file defines the lifecycle-and-management
 // contract layered on top: UnifiedDeployTarget with the per-verb methods, plus
 // LifecycleTarget for the live-runtime targets.
 //
 // Every `charly bundle add` / `charly bundle del` / `charly update` dispatches through
 // ResolveTarget (unified_targets.go) → an UnifiedDeployTarget adapter. ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to the generic externalDeployTarget
-// over the executor reverse channel, served by its own out-of-process plugin. The core build
-// engines they once wrapped (PodDeployTarget overlay synthesis; the VM disk build) are now
-// invoked HOST-SIDE from each substrate's registered substrateLifecycle hook (pod/vm) or
-// preresolver (android/k8s). There is no per-kind dispatch switch in the cmd files — the kind
-// lives behind the adapter method.
+// over the executor reverse channel, served by its own out-of-process plugin. The pod-overlay
+// render + the VM disk build that once lived in core are now invoked HOST-SIDE from each
+// substrate's registered substrateLifecycle hook (pod/vm) or preresolver (android/k8s) — the
+// pod-overlay render moved to candy/plugin-deploy-pod (P11c), reached via HostBuild("overlay")
+// prep + HostBuild("step-emit","oci-emit-step") per-step dispatch. There is no per-kind dispatch
+// switch in the cmd files — the kind lives behind the adapter method.
 
 import (
 	"context"

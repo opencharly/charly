@@ -18,7 +18,7 @@ import (
 
 // renderHostPackageCommand renders the host-venue package-install command for a
 // SystemPackagesStep from the format's phase.install.host cell in the embedded vocabulary —
-// the SAME PhaseTemplate + NewInstallContext + RenderTemplate path OCITarget uses for the
+// the SAME PhaseTemplate + NewInstallContext + RenderTemplate path deploykit.OCITarget uses for the
 // container venue (R3). No hardcoded dnf/apt/pacman dispatch: the format selects the
 // template; the command is config-driven.
 //
