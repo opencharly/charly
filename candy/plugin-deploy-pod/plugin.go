@@ -7,11 +7,13 @@
 // served on the broker.
 //
 // Unlike deploy:vm (whose plugin WALKS the plan inside the guest), pod bakes its install
-// steps INTO the image at BUILD time. The host's pod lifecycle hook
-// (pod_deploy_lifecycle.go) builds the overlay container image HOST-SIDE in PrepareVenue
-// (the SAME core OCITarget/Generator build engine, in-process — nothing crosses gRPC, just
-// like vm builds its disk host-side) and the bed runner / `charly start` then configs +
-// starts the container. So there is NO per-step venue walk for pod: this plugin's Invoke
+// steps INTO the image at BUILD time. The pod lifecycle (this plugin's lifecycle.go, M4 + P11c)
+// builds the overlay container image HOST-SIDE in PrepareVenue: HostBuild("overlay") runs the
+// core prep+resolve seam (charly/build_overlay.go) + the candy renders the overlay Containerfile
+// in its OWN code (deploykit.OCITarget walker + the "step-emit"/"oci-emit-step" per-step dispatch
+// — the former in-core render DISSOLVED into the candy by P11c), then runs podman build + the
+// alias tag via the served executor. The bed runner / `charly start` then configs + starts the
+// container. So there is NO per-step venue walk for pod: this plugin's Invoke
 // does NOT call kit.WalkPlans — walking the add_candy steps on the host venue would be
 // WRONG (they are already baked into the overlay image host-side). It returns an EMPTY
 // DeployReply (no teardown reverse ops — pod teardown is `charly remove` + drop overlay
@@ -52,10 +54,11 @@ func NewMeta() pb.PluginMetaServer {
 type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke acknowledges the deploy:pod Apply. The overlay container image was already built
-// HOST-SIDE by the pod lifecycle hook's PrepareVenue (the core OCITarget build engine runs
-// in-process on the host, nothing crosses the process boundary), so there is nothing to
-// walk on a venue here — the plugin returns an EMPTY DeployReply (no reverse ops; pod
-// teardown is `charly remove` + drop overlay, owned by the host hook's PostTeardown).
+// HOST-SIDE by the pod lifecycle's PrepareVenue (the core prep+resolve seam + this candy's own
+// deploykit.OCITarget render run on the host, nothing of the render crosses the process boundary),
+// so there is nothing to walk on a venue here — the plugin returns an EMPTY DeployReply (no
+// reverse ops; pod teardown is `charly remove` + drop overlay, owned by the host hook's
+// PostTeardown).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	// P11 (Q1=(a)): the POD config-WRITE — `charly config` (host) resolves the QuadletConfig + the
 	// target paths and Invokes this to render + write the quadlet/.pod/sidecar/tunnel files.

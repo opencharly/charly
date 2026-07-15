@@ -17,13 +17,13 @@ import (
 // the host-engine kinds via RunHostStep) — so the in-proc per-deploy-step dispatch is gone.
 // The sole remaining in-proc StepProvider consumer is the pod-overlay step dispatch
 // (charly/oci_step_emit.go's ociEmitStep — the host "oci-emit-step" render-seam handler; the
-// OCITarget WALKER itself lives in sdk/deploykit as of P11c, with no in-core instance).
+// deploykit.OCITarget WALKER itself lives in sdk/deploykit as of P11c, with no in-core instance).
 type StepProvider interface {
 	Provider
 	// EmitOCI renders one step's BUILD-venue (pod-overlay Containerfile) fragment. It RETURNS
-	// the fragment (the caller splices it) rather than writing to an OCITarget buffer — the
-	// OCITarget walker now lives in sdk/deploykit (P11c) and the in-core dispatch has no
-	// OCITarget instance, so returning the string decouples the StepProvider from the buffer
+	// the fragment (the caller splices it) rather than writing to an the walker buffer — the
+	// deploykit.OCITarget walker now lives in sdk/deploykit (P11c) and the in-core dispatch has no
+	// deploykit.OCITarget instance, so returning the string decouples the StepProvider from the buffer
 	// (the former t.buf.WriteString). build carries the host-side buildEngineContext (Box for
 	// the plugin verb's distros, etc.) the host reconstructs from the cached overlay Generator.
 	// The fragment includes any trailing newline; an empty return is a no-op (a deploy-only
@@ -58,7 +58,7 @@ func stepProviderFor(kind StepKind) (StepProvider, bool) {
 
 // pluginEmitStepWords maps the builtin InstallStep kinds whose BUILD-emit externalized to the
 // lowercase-hyphenated class:step plugin word that serves their pod-overlay OpEmit
-// (candy/plugin-installstep). These kinds have NO in-proc StepProvider — OCITarget.emitStep routes
+// (candy/plugin-installstep). These kinds have NO in-proc StepProvider — ociEmitStep routes
 // them here, serializing the step VIEW as the OpEmit payload. Their DEPLOY leg is unchanged
 // (sdk/kit.WalkPlans renders them from the same view; reboot's is the host-side guest
 // reboot over RunHostStep → rebootVenueAndWait). apk-install's and reboot's plugin declare

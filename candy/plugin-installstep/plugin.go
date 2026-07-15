@@ -24,7 +24,7 @@
 // / …; system-packages + builder are host-engine kinds driven via RunHostStep →
 // renderHostPackageCommand / runVenueBuilderStep; op is the act-OpStep resolveProvisionScript /
 // renderOpCommand path), which renders them over the executor reverse channel; this plugin serves
-// ONLY OpEmit (the pod-overlay build-emit the host's OCITarget splices).
+// ONLY OpEmit (the pod-overlay build-emit the host's deploykit.OCITarget splices).
 //
 // Placement is free: charly COMPILES this candy IN (listed in charly.yml compiled_plugins:,
 // registered in-process via registerCompiledPlugin), and the SAME provider serves OUT-OF-PROCESS
@@ -103,7 +103,7 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises the class:step capabilities, each with its declared StepContract, via
 // sdk.NewMeta → BuildCapabilities. Only Emits is load-bearing here: the host's pod-overlay
-// OCITarget consults it to decide whether to Invoke OpEmit (true) or skip (false, apk-install /
+// deploykit.OCITarget consults it to decide whether to Invoke OpEmit (true) or skip (false, apk-install /
 // reboot). Scope/Venue/Gate are nominal — these kinds' deploy leg is sdk/kit.WalkPlans, which
 // reads the per-instance view.Scope/Venue computed on the concrete step, so the static contract's
 // Scope/Venue/Gate are never consulted. The HOST-COUPLED system-packages (C1.2) + builder (C1.3) +
@@ -202,7 +202,7 @@ func emitViaHostBuild(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 }
 
 // renderFragment dispatches by step word to the pure per-kind Containerfile renderer. Each render
-// reproduces the former OCITarget.emit<Kind> body verbatim, reading the SAME fields off the view.
+// reproduces the former deploykit.OCITarget.emit<Kind> body verbatim, reading the SAME fields off the view.
 func renderFragment(word string, v spec.InstallStepView) (string, error) {
 	switch word {
 	case wordFile:

@@ -442,7 +442,7 @@ func execLocalPkgInstall(ctx context.Context, exec DeployExecutor, s *LocalPkgIn
 
 // renderLocalPkgImageInstall emits the IMAGE-build install of a candy's
 // `localpkg:` package. It is the ONE place the check-vs-production charly-binary
-// distinction lives (R3 — shared by OCITarget AND generate.go writeCandySteps,
+// distinction lives (R3 — shared by deploykit.OCITarget AND generate.go writeCandySteps,
 // so the two image-build paths can never drift):
 //
 //   - PRODUCTION boxes (devLocalPkg=false) DOWNLOAD the candy's PUBLISHED package

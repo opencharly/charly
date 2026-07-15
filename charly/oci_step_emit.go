@@ -9,7 +9,7 @@ import (
 )
 
 // oci_step_emit.go — the CORE pod-overlay step-emit dispatch, relocated out of
-// build_target_oci.go's OCITarget methods (P11c) into standalone funcs so the OCITarget
+// build_target_oci.go's deploykit.OCITarget methods (P11c) into standalone funcs so the deploykit.OCITarget
 // WALKER can live in sdk/deploykit (the walker delegates here through the "oci-emit-step"
 // render-seam). This is the kind-blind host-side M-mechanism that STAYS core: it resolves
 // each InstallStep kind through the providerRegistry + Invokes the class:step plugin OpEmit
@@ -23,7 +23,7 @@ import (
 
 // ociEmitStep renders ONE InstallStep's pod-overlay Containerfile fragment via the core
 // provider-registry dispatch. It is the single source of truth (R3): the transitional in-core
-// OCITarget.emitStep delegates here, and (after the walker moves to sdk/deploykit) the candy's
+// ociEmitStep delegates here, and (after the walker moves to sdk/deploykit) the candy's
 // deploykit.OCITarget reaches it through the "oci-emit-step" render-seam. The returned fragment
 // has its trailing newline normalized (matching the former per-arm t.buf behaviour); an empty
 // return is a deploy-only / VenueSkip step (records nothing). `build` carries the host-side
@@ -51,15 +51,15 @@ func ociEmitStep(step InstallStep, plan *InstallPlan, distros []string, build bu
 		word := pluginEmitStepWords[step.Kind()]
 		payload, merr := marshalJSON(stepToView(step))
 		if merr != nil {
-			return "", fmt.Errorf("OCITarget: marshal %s step view: %w", step.Kind(), merr)
+			return "", fmt.Errorf("oci-emit-step: marshal %s step view: %w", step.Kind(), merr)
 		}
 		frag, err = ociSpliceClassStepEmit(word, payload, distros, true, build)
 	default:
 		// The ONE remaining in-proc StepProvider kind (ExternalPlugin — a plugin-verb run:
-		// step). EmitOCI returns the fragment (P11c decoupled it from the OCITarget buffer).
+		// step). EmitOCI returns the fragment (P11c decoupled it from the the walker buffer).
 		prov, ok := stepProviderFor(step.Kind())
 		if !ok {
-			return "", fmt.Errorf("OCITarget: unknown step kind %q", step.Kind())
+			return "", fmt.Errorf("oci-emit-step: unknown step kind %q", step.Kind())
 		}
 		frag, err = prov.EmitOCI(step, plan, build)
 	}
@@ -90,7 +90,7 @@ func ociEmitStep(step InstallStep, plan *InstallPlan, distros []string, build bu
 func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allowEmpty bool, build buildEngineContext) (string, error) {
 	prov, ok := providerRegistry.resolve(ClassStep, word)
 	if !ok {
-		return "", fmt.Errorf("OCITarget: class:step provider %q not connected at build time", word)
+		return "", fmt.Errorf("oci-emit-step: class:step provider %q not connected at build time", word)
 	}
 	emits := false
 	if carrier, ok := prov.(stepContractCarrier); ok {

@@ -7,14 +7,14 @@ stepkind-build-consumer:
             Its plan carries a BUILD-context `run:` step `plugin: examplestepkind` — a class:step
             word whose provider (candy/plugin-example-stepkind) DECLARES Emits=true. Composed onto
             a POD via add_candy, the overlay build lowers the run-step to an external step
-            ("external:examplestepkind") whose OCITarget open external-step arm Invokes the
+            ("external:examplestepkind") whose deploykit.OCITarget open external-step arm Invokes the
             plugin's OpEmit and splices the returned Containerfile RUN — baking
             /etc/examplestepkind-build-baked (carrying the payload marker) into the overlay image.
             Compose it WITH candy/plugin-example-stepkind (which provides the examplestepkind
             step); the runtime check below proves the build-emit bake ran inside the deployed
             container.
         plan:
-            - run: at pod-overlay build the examplestepkind step's OpEmit emits a Containerfile RUN baking /etc/examplestepkind-build-baked into the overlay image (proves the OCITarget external-step build-emit arm)
+            - run: at pod-overlay build the examplestepkind step's OpEmit emits a Containerfile RUN baking /etc/examplestepkind-build-baked into the overlay image (proves the deploykit.OCITarget external-step build-emit arm)
               id: stepkind-build-bake
               context:
                 - build

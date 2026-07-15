@@ -41,13 +41,13 @@ func (externalPluginStepProvider) Reserved() string { return string(StepKindExte
 // deploy-only plugin (empty OpEmit fragment) fails loudly at emitPluginFragment's
 // empty-fragment guard, never bakes nothing silently. Returns the fragment (P11c: the
 // StepProvider.EmitOCI signature returns the string the caller splices, decoupling it
-// from the OCITarget buffer that now lives in sdk/deploykit); build.Box supplies the
+// from the the walker buffer that now lives in sdk/deploykit); build.Box supplies the
 // image the plugin verb's distros are read from.
 func (externalPluginStepProvider) EmitOCI(step InstallStep, _ *InstallPlan, build buildEngineContext) (string, error) {
 	s := step.(*ExternalPluginStep)
 	prov, ok := providerRegistry.ResolveVerb(s.Op.Plugin)
 	if !ok {
-		return "", fmt.Errorf("OCITarget: external plugin verb %q is not connected at build time", s.Op.Plugin)
+		return "", fmt.Errorf("oci-emit-step: external plugin verb %q is not connected at build time", s.Op.Plugin)
 	}
 	frag, err := emitPluginFragment(prov, s.Op, build.Box)
 	if err != nil {

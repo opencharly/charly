@@ -18,7 +18,7 @@ import (
 // Every lifecycle Op is Invoked WITH the host's executor over the reverse channel
 // (InvokeWithExecutor), so the plugin — which runs ON the host but out-of-process — can call back
 // HostBuild("overlay"/"cli") + the reverse legs it needs (the compiled-in pod/vm lifecycles used
-// the in-core runOverlayBuild + runCharlySubcommand directly; the externalized plugins reach the
+// the in-core overlay build + runCharlySubcommand directly; the externalized plugins reach the
 // SAME engines through the reverse channel). Most Ops serve a host-local ShellExecutor; PostApply
 // serves the LIVE venue executor (vm's nested pod-in-guest needs the guest). Every Op ships
 // HostEnv{CharlyBin, Home} on op.Env (the plugin's own os.Executable() is the PLUGIN binary, so the
