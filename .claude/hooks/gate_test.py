@@ -95,6 +95,99 @@ if shutil.which("golangci-lint") is not None:
     shutil.rmtree(good, ignore_errors=True)
 
 
+# --- ZERO-ALIASES gate tests (charly superproject shape; no go.mod so the lint
+# gate does not interfere — the alias gate is tested in isolation) ---
+def charly_repo():
+    path = tempfile.mkdtemp(prefix="gate-test-charly-")
+    for args in (("init", "-q"), ("config", "user.email", "t@t"),
+                 ("config", "user.name", "t")):
+        subprocess.run(["git", "-C", path, *args], capture_output=True)
+    os.mkdir(os.path.join(path, "charly"))
+    with open(os.path.join(path, "charly", "foo.go"), "w") as stream:
+        stream.write("package main\n\nfunc main() {}\n")
+    with open(os.path.join(path, "charly", "existing_aliases.go"), "w") as stream:
+        stream.write("package main\n\n// pre-existing alias file\n")
+    subprocess.run(["git", "-C", path, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", path, "commit", "-qm", "initial"], capture_output=True)
+    return path
+
+
+# NEW charly/*_aliases.go file (status A) — the #86 class. File has NO alias line,
+# so the block is purely the new-alias-file check.
+c = charly_repo()
+with open(os.path.join(c, "charly", "deploykit_new_aliases.go"), "w") as stream:
+    stream.write("package main\n\n// a new alias-named file, no alias line inside\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: NEW charly/*_aliases.go file blocked (#86 class)",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+shutil.rmtree(c, ignore_errors=True)
+
+# Explicit `var x = deploykit.Y` declaration-form alias in charly/foo.go.
+c = charly_repo()
+with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\nvar helper = deploykit.SomeFn\nfunc main() {}\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: declaration-form var alias blocked",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+shutil.rmtree(c, ignore_errors=True)
+
+# Explicit `type X = kit.Y` declaration-form alias.
+c = charly_repo()
+with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\ntype Box = kit.Thing\nfunc main() {}\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: declaration-form type alias blocked",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+shutil.rmtree(c, ignore_errors=True)
+
+# Grown (status M) charly/*_aliases.go with a NEW grouped alias line — the #87 class.
+c = charly_repo()
+with open(os.path.join(c, "charly", "existing_aliases.go"), "w") as stream:
+    stream.write("package main\n\nvar (\n    NewAlias = vmshared.VmDomainIdentity\n)\n// pre-existing\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: grouped alias in grown alias file blocked (#87 class)",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "BLOCK")
+shutil.rmtree(c, ignore_errors=True)
+
+# A plain kit CALL is ALLOWED — IMPORT-PURITY's residual-call-site exception; the
+# hook gates only alias FORMS, never a plain call (validator judges IMPORT-PURITY).
+c = charly_repo()
+with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\nfunc main() { _ = kit.Foo() }\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: plain kit CALL allowed (not an alias form)",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+shutil.rmtree(c, ignore_errors=True)
+
+# A plain kit IMPORT is ALLOWED — IMPORT-PURITY is validator-judged, not hook-gated.
+c = charly_repo()
+with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\nimport \"github.com/opencharly/sdk/deploykit\"\n\nfunc main() {}\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: plain kit IMPORT allowed (IMPORT-PURITY is validator-judged)",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+shutil.rmtree(c, ignore_errors=True)
+
+# An alias line OUTSIDE charly/ (e.g. an sdk/plugins submodule leg with no charly/
+# dir) is not gated — fail-open for non-charly repos.
+noc = repo()
+with open(os.path.join(noc, "fake_aliases.go"), "w") as stream:
+    stream.write("package main\n\nvar X = deploykit.Y\n")
+subprocess.run(["git", "-C", noc, "add", "fake_aliases.go"], capture_output=True)
+expect("commit: alias outside charly/ not gated (submodule leg fail-open)",
+       gate(COMMIT_GATE, f"git -C {noc} commit -m x"), "ALLOW")
+shutil.rmtree(noc, ignore_errors=True)
+
+# A clean charly/*.go change with no alias form is allowed.
+c = charly_repo()
+with open(os.path.join(c, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\nfunc main() { println(\"hi\") }\n")
+subprocess.run(["git", "-C", c, "add", "-A"], capture_output=True)
+expect("commit: clean charly change allowed",
+       gate(COMMIT_GATE, f"git -C {c} commit -m x"), "ALLOW")
+shutil.rmtree(c, ignore_errors=True)
+
+
 for label, command, expected in (
     ("push: --force blocked", "git push --force origin feat/x", "BLOCK"),
     ("push: -f blocked", "git push -f origin feat/x", "BLOCK"),
