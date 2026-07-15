@@ -455,10 +455,10 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("resolving ref %q: %w", refStr, err)
 		}
-		// Save c.Tag for compilePlans; restore after.
+		// Save c.Tag for the compile selection; restore after.
 		savedTag := c.Tag
 		c.Tag = tag
-		plans, base, candySet, err = c.compilePlans(ref, cfg, distroCfg, builderCfg, dir)
+		plans, base, candySet, err = c.compileRefSelection(ref, cfg, distroCfg, builderCfg, dir)
 		c.Tag = savedTag
 		if err != nil {
 			return nil, "", nil, err
@@ -466,7 +466,7 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 	}
 
 	// Only host/vm targets use syntheticHostBox / syntheticVmBox (handled
-	// inside compileCandyPlans); pod/k8s resolve the base image context here.
+	// inside compileCandySelection); pod/k8s resolve the base image context here.
 	var baseImg *ResolvedBox
 	if (target == "pod" || target == "k8s") && refStr != "" {
 		if baseResolved, rerr := cfg.ResolveBox(refStr, tag, dir, ResolveOpts{}); rerr == nil {
@@ -486,9 +486,9 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		}
 		var alPlans []*InstallPlan
 		if baseImg != nil {
-			alPlans, _, _, err = c.compileCandyPlansWithContext(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
+			alPlans, _, _, err = c.compileCandySelection(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
 		} else {
-			alPlans, _, _, err = c.compilePlans(alRef, cfg, distroCfg, builderCfg, dir)
+			alPlans, _, _, err = c.compileRefSelection(alRef, cfg, distroCfg, builderCfg, dir)
 		}
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("compiling --add-candy %q: %w", al, err)
@@ -727,23 +727,6 @@ func (c *deployAddCmd) emitOpts() EmitOpts {
 	}
 }
 
-// compilePlans resolves the ref to a candy set and builds plans for
-// each. For image refs: walk the image's candies in topological order.
-// For candy refs: compile a single plan. For remote refs: fetch and
-// proceed (remote fetch is handled by existing EnsureRepoDownloaded).
-func (c *deployAddCmd) compilePlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	if ref.Source == RefSourceRemote && ref.Kind == RefKindBox {
-		return nil, "", nil, fmt.Errorf("remote image refs are not supported by bundle add (ref=%s)", ref.Raw)
-	}
-	if ref.Kind == RefKindBox {
-		return c.compileBoxPlans(ref, cfg, distroCfg, builderCfg, dir)
-	}
-	// Local AND remote candy refs flow here — scanCandiesForRef fetches a
-	// remote `--add-layer @host/org/repo/candy/<name>:ver` (and its deps)
-	// on demand, so deploy add of remote candies is fully automatic.
-	return c.compileCandyPlans(ref, cfg, distroCfg, builderCfg, dir)
-}
-
 // scanCandiesForRef scans the candy set needed to compile `ref`, returning the
 // candy map plus the map KEY for ref. A LOCAL candy ref keys by its short name.
 // A REMOTE ref (`@host/org/repo/candy/<name>:ver`) is fetched + scanned with
@@ -772,43 +755,6 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 	return layers, candyKey, nil
 }
 
-func (c *deployAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	_ = distroCfg
-	_ = builderCfg
-	img, err := cfg.ResolveBox(ref.Name, c.Tag, dir, ResolveOpts{})
-	if err != nil {
-		return nil, "", nil, err
-	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var parent map[string]bool
-	order, err := ResolveCandyOrder(img.Candy, layers, parent)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	hostCtx := c.compileHostContext()
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	for _, candyName := range order {
-		layer := layers[candyName]
-		if layer == nil {
-			continue
-		}
-		p, err := BuildDeployPlan(layer, img, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", candyName, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, img.Name, order, nil
-}
-
 // pruneContainerInitForSystemd drops the `supervisord` candy (the CONTAINER
 // init system) from a resolved DEPLOY candy order when the target is systemd
 // (host / vm). On a systemd target the OS init is the one and only init system
@@ -830,109 +776,6 @@ func pruneContainerInitForSystemd(order []string, hostCtx HostContext) []string 
 		out = append(out, n)
 	}
 	return out
-}
-
-// compileCandyPlansWithContext is the same as compileCandyPlans but uses
-// the provided *ResolvedBox as the compile context (so add_candy for
-// a pod/k8s deployment compile against the base image's distro/user
-// context, not the operator host's).
-func (c *deployAddCmd) compileCandyPlansWithContext(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string, ctx *ResolvedBox) ([]*InstallPlan, string, []string, error) {
-	_ = builderCfg
-	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	order, err := ResolveCandyOrder([]string{candyKey}, layers, nil)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Raw, err)
-	}
-	if distroCfg != nil && ctx.DistroDef == nil {
-		ctx.DistroDef = distroCfg.ResolveDistro(ctx.Distro)
-	}
-	if builderCfg != nil && ctx.BuilderConfig == nil {
-		ctx.BuilderConfig = builderCfg
-	}
-	hostCtx := c.compileHostContext()
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, ctx)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	for _, name := range order {
-		p, err := BuildDeployPlan(layers[name], ctx, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", name, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, ref.Name, order, nil
-}
-
-func (c *deployAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	_ = builderCfg
-	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	// Expand transitive deps — a candy deploy (bare `charly bundle add <candy>`
-	// or `--add-layer <name>`) MUST pull in the candy's `require:` graph in
-	// topological order. Without this, candies whose tasks rely on upstream
-	// binaries (e.g. pre-commit's cargo install needing rust) fail with
-	// "command not found". Remote refs key by their bare ref (scanCandiesForRef).
-	order, err := ResolveCandyOrder([]string{candyKey}, layers, nil)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Name, err)
-	}
-	// Pick the synthetic image template that matches the deploy target so
-	// `${USER}` AND the package format resolve correctly: the guest user +
-	// guest distro/format for any VM target (c.vmEntity, set by dispatchNode
-	// from node.From or the "vm:" prefix), the operator host's for everything
-	// else.
-	var img *ResolvedBox
-	if c.vmEntity != "" {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if body, present := uf.VM[c.vmEntity]; present {
-				if spec, err := resolveVmViaPlugin(body); err == nil && spec != nil {
-					img = syntheticVmBox(spec, distroCfg)
-				}
-			}
-		}
-	}
-	if img == nil {
-		img = syntheticHostBox()
-	}
-	hostCtx := c.compileHostContext()
-	if distroCfg != nil {
-		img.DistroDef = distroCfg.ResolveDistro(img.Distro)
-	}
-	if builderCfg != nil {
-		img.BuilderConfig = builderCfg
-	}
-	// Resolve the synthetic host/VM image's builder map through the SAME
-	// canonical method ResolveBox uses (resolveEffectiveBuilder), so a
-	// local/host deploy onto an Arch/cachyos host auto-selects arch-builder
-	// (distro-keyed) exactly like a built image would — no command-specific
-	// divergence. This path previously seeded from cfg.Defaults.Builder only,
-	// which gave a cachyos host fedora-builder and left the local deploy/execBuilder
-	// with the wrong builder when a candy's install needs cargo/npm/pixi/aur.
-	if cfg != nil {
-		img.Builder = cfg.resolveEffectiveBuilder(img.Name, img.Distro, img.Base, img.IsExternalBase, img.Builder)
-	}
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	for _, name := range order {
-		p, err := BuildDeployPlan(layers[name], img, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", name, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, ref.Name, order, nil
 }
 
 func (c *deployAddCmd) printPlans(plans []*InstallPlan, opts EmitOpts) error {
