@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -35,7 +36,7 @@ type Collector struct {
 // skipped).
 func NewCollector(rt *ResolvedRuntime) (*Collector, error) { //nolint:unparam // error return kept for interface/API stability
 	c := &Collector{rt: rt}
-	if dc, err := LoadBundleConfig(); err != nil {
+	if dc, err := deploykit.LoadBundleConfig(); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: charly.yml has validation errors:\n  %v\n", err)
 		fmt.Fprintln(os.Stderr, "(showing image-label-driven results below; resolve the errors to see charly.yml-driven state)")
 		fmt.Fprintln(os.Stderr, "")

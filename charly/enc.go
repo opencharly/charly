@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -607,7 +608,7 @@ func loadEncryptedVolume(boxName, instance string) ([]DeployVolumeConfig, string
 	// password → indefinite hang waiting for stdin. Surfacing the error
 	// turns that hang into a clean error message with a remediation
 	// hint pointing at `charly migrate`.
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return nil, "", fmt.Errorf("loading deploy config for encrypted volumes: %w", err)
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // ErrNoCharlyYml is the sentinel wrapped by every "no charly.yml found in the
@@ -147,7 +149,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		Name:       name,
 		Version:    img.Version,
 		Status:     resolveStatus(""), // boxes author no status; the effective rung (worst-of-candy-chain) is computed at generate time for the ai.opencharly.status label
-		Info:       descriptionInfo(img.Description),
+		Info:       deploykit.DescriptionInfo(img.Description),
 		CheckLevel: ResolveCheckLevel(img.CheckLevel),
 	}
 

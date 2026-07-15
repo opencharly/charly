@@ -48,7 +48,7 @@ func secretDeclaredOnBox(meta *BoxMetadata) map[string]bool {
 
 // secretDepNames returns the flat list of env var names declared as
 // credential-backed on an image. Used by the config_image.go Run() call
-// site to populate SaveDeployStateInput.SecretNames for the defense-in-depth
+// site to populate deploykit.SaveDeployStateInput.SecretNames for the defense-in-depth
 // scrub in saveDeployState. Returns nil (not an empty slice) when meta has
 // no secret declarations — matches the rest of the omitempty-style API.
 func secretDepNames(meta *BoxMetadata) []string {
@@ -180,7 +180,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 
 	entry.Env = staying
 	dc.Bundle[key] = entry
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		return migrated, fmt.Errorf("persisting cleaned charly.yml after migration: %w (backup at %s)", err, backupPath)
 	}
 	fmt.Fprintf(os.Stderr, "Backed up previous charly.yml to %s (rollback: mv %s %s)\n", backupPath, backupPath, deployConfigPathOrEmpty())

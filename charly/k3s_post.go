@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // k3sServerURLRe matches an `https://<host>:<port>` server URL in a kubeconfig.
@@ -103,7 +105,7 @@ func deployVMForwards(entityRef, deployName string) ([]string, error) {
 	}
 	key := "vm:" + vmDomainIdentity(deployName)
 	var alloc map[string]int
-	if entry, ok := loadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
+	if entry, ok := deploykit.LoadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
 		alloc = entry.VmState.PortForwards
 	}
 	resolved, rerr := resolveDeployForwards(vm.Network.PortForwards, alloc)

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // box_inspect_overlay.go — the hidden `charly __box-inspect-overlay` reentry behind the COMPILED-IN
@@ -42,7 +44,7 @@ func (c *InspectOverlayCmd) Run() error {
 	switch c.Format {
 	case "bind_mounts":
 		// bind_mounts are deploy-time only; show charly.yml volume config.
-		if overlay, ok := loadDeployConfigForRead("charly box inspect bind_mounts").Lookup(c.Box, c.Instance); ok {
+		if overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect bind_mounts").Lookup(c.Box, c.Instance); ok {
 			for _, dv := range overlay.Volume {
 				fmt.Printf("%s\t%s\t%s\t%s\n", dv.Name, dv.Host, dv.Path, dv.Type)
 			}
@@ -60,7 +62,7 @@ func (c *InspectOverlayCmd) Run() error {
 // (deploy-only) — it resolves from BundleNode.Tunnel via charly.yml. Any resolution failure is silently
 // skipped (no tunnel output), matching the prior inline behaviour.
 func (c *InspectOverlayCmd) formatTunnel(cfg *Config, dir string, resolved *ResolvedBox) {
-	overlay, ok := loadDeployConfigForRead("charly box inspect tunnel").Lookup(c.Box, c.Instance)
+	overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect tunnel").Lookup(c.Box, c.Instance)
 	if !ok || overlay.Tunnel == nil {
 		return
 	}

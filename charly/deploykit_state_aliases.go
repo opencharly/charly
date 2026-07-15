@@ -36,12 +36,9 @@ var (
 	rejectImageRefAsDeployName = deploykit.RejectImageRefAsDeployName
 	parseDeployKey             = deploykit.ParseDeployKey
 	findVmDeployNode           = deploykit.FindVmDeployNode
-	dropMappingKey             = deploykit.DropMappingKey
 	MergeBundleNode            = deploykit.MergeBundleNode
 	isAutoVmDeployEntry        = deploykit.IsAutoVmDeployEntry
 	envKey                     = deploykit.EnvKey
-	stripSecretEnvNames        = deploykit.StripSecretEnvNames
-	mergeEnvVars               = deploykit.MergeEnvVars
 	MergeDeployConfigs         = deploykit.MergeDeployConfigs
 	LoadDeployFile             = deploykit.LoadDeployFile
 	RemoveBoxDeploy            = deploykit.RemoveBoxDeploy

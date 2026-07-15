@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -200,7 +201,7 @@ func (c *RemoveCmd) Run() error {
 			purgeDeployArtifacts(engine, boxName, c.Instance)
 		}
 		if !c.KeepDeploy {
-			cleanDeployEntry(boxName, c.Instance)
+			deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
 		}
 		return nil
 	}
@@ -220,7 +221,7 @@ func (c *RemoveCmd) Run() error {
 		purgeDeployArtifacts(engine, boxName, c.Instance)
 	}
 	if !c.KeepDeploy {
-		cleanDeployEntry(boxName, c.Instance)
+		deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
 	}
 	return nil
 }
@@ -305,7 +306,7 @@ func resolveBoxName(box string) string {
 // but not "which sidecars are attached to THIS deploy on THIS host".
 // Returns nil when nothing is attached.
 func resolveSidecarNames(boxName, instance string) []string {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return nil
 	}

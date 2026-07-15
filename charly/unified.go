@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
@@ -1225,7 +1226,7 @@ func populateCandyFromYAML(layer *Candy, ly *CandyYAML) {
 	layer.Version = ly.Version
 	layer.Description = ly.Description
 	layer.Status = ly.Status
-	layer.Info = descriptionInfo(ly.Description)
+	layer.Info = deploykit.DescriptionInfo(ly.Description)
 	layer.Plugin = ly.Plugin
 
 	layer.Require = toCandyRefs(ly.Require)

@@ -4,24 +4,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // MCPProvideEntry is a resolved mcp_provides entry. It lives in sdk/spec (shared with the
 // out-of-process mcp check verb via spec.PodAwareMCPProvides, R3); aliased here for charly's
-// deploy-time provides pipeline. Its GetName/GetSource (in spec) satisfy Named structurally.
+// deploy-time provides pipeline. Its GetName/GetSource (in spec) satisfy deploykit.Named
+// structurally.
 type MCPProvideEntry = spec.MCPProvideEntry
-
-// Named is the interface for provides entries (shared pipeline logic).
-type Named interface {
-	GetName() string
-	GetSource() string
-}
 
 // filterOwnProvides removes entries injected by the given image (self-exclusion).
 // NOTE: No longer used in GlobalEnvForImage (replaced by podAwareEnvProvides).
-// Kept for removeBySource and other callers that need strict exclusion.
-func filterOwnProvides[T Named](entries []T, boxName string) []T {
+// Kept for deploykit.RemoveBySource and other callers that need strict exclusion.
+func filterOwnProvides[T deploykit.Named](entries []T, boxName string) []T {
 	if boxName == "" {
 		return entries
 	}
@@ -42,41 +38,17 @@ func filterOwnProvides[T Named](entries []T, boxName string) []T {
 //
 // `consumerKey` is the charly.yml map key — base image name (e.g. "versa") or
 // image-with-instance (e.g. "versa/ecovoyage"). Using prefix-match here is a
-// bug: `isSameBaseBox("versa/ecovoyage", "versa")` returns true (deletion
+// bug: `deploykit.IsSameBaseBox("versa/ecovoyage", "versa")` returns true (deletion
 // semantics), which would let another instance's env_provides leak into the
 // base consumer's runtime env and trigger a second-order failure when
 // strings.ReplaceAll("charly-versa-ecovoyage", "charly-versa", "localhost") produces
 // the malformed hostname "localhost-ecovoyage". Exact match is correct.
 
-// removeBySource removes all entries injected by the given image.
-// Returns the filtered list and whether anything was removed.
-func removeBySource[T Named](entries []T, boxName string) ([]T, bool) {
-	var result []T
-	removed := false
-	for _, e := range entries {
-		if isSameBaseBox(e.GetSource(), boxName) {
-			removed = true
-		} else {
-			result = append(result, e)
-		}
-	}
-	return result, removed
-}
-
-// removeByExactSource removes entries whose source matches the exact deploy key.
-// Unlike removeBySource, this does not match other instances of the same base image.
-func removeByExactSource[T Named](entries []T, source string) ([]T, bool) {
-	var result []T
-	removed := false
-	for _, e := range entries {
-		if e.GetSource() == source {
-			removed = true
-		} else {
-			result = append(result, e)
-		}
-	}
-	return result, removed
-}
+// removeBySource / removeByExactSource + the Named interface + IsSameBaseBox moved to
+// sdk/deploykit (deploykit.RemoveBySource / deploykit.RemoveByExactSource / deploykit.Named /
+// deploykit.IsSameBaseBox) — shared with the deploy state-model body relocated in K5-Unit-1.
+// filterOwnProvides above uses deploykit.Named; the deploy state clean path
+// (deploykit.CleanDeployEntry) calls deploykit.RemoveBySource/RemoveByExactSource directly.
 
 // podAwareMCPProvides moved to sdk/spec (spec.PodAwareMCPProvides), shared with the
 // out-of-process mcp check verb (R3); see the same rationale as podAwareEnvProvides above.

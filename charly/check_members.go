@@ -33,6 +33,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // hostVar is the unified cross-member address variable. ${HOST:<member>} resolves
@@ -212,7 +214,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *CheckVarRe
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
 	}
-	if dc := loadDeployConfigForRead("charly check live on:"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
 		if entry, ok := dc.Bundle[deployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {

@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/sdk/deploykit"
+
 // EngineBinary returns the binary name for the given engine.
 // The "auto" case should not normally be reached (resolved earlier by kit.DetectEngine),
 // but is handled defensively.
@@ -56,7 +58,7 @@ func ResolveBoxEngineFromDir(dir, boxName, globalEngine string) string {
 // ResolveBoxEngineForDeploy resolves the run engine from charly.yml,
 // falling back to globalEngine. No charly.yml dependency.
 func ResolveBoxEngineForDeploy(boxName, instance, globalEngine string) string {
-	if entry, ok := loadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
+	if entry, ok := deploykit.LoadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
 		return entry.Engine
 	}
 	return globalEngine

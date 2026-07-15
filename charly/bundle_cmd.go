@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,7 +19,7 @@ type deployShowCmd struct {
 }
 
 func (c *deployShowCmd) Run() error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -58,11 +59,16 @@ func (c *deployExportCmd) Run() error {
 
 func (c *deployExportCmd) exportAll() error {
 	dir, _ := os.Getwd()
-	cfg, err := LoadConfigRaw(dir)
+	// #67 keystone (K5-Unit-1): ExportAllBox reads the RESOLVED-PROJECT envelope, not the
+	// live *Config graph. buildResolvedProjectFromDir is the same load+project entry the
+	// "resolved-project" HostBuild seam wraps; it returns an empty envelope for a
+	// project-less dir (no ErrNoCharlyYml propagation) — matching the former
+	// LoadConfigRaw-fail-tolerant behaviour.
+	rp, err := buildResolvedProjectFromDir(dir, ResolveOpts{})
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}
-	dc := ExportAllBox(cfg)
+	dc := deploykit.ExportAllBox(rp)
 	if len(c.Boxes) > 0 {
 		dc = filterDeployBox(dc, c.Boxes)
 	}
@@ -70,7 +76,7 @@ func (c *deployExportCmd) exportAll() error {
 }
 
 func (c *deployExportCmd) exportOverrides() error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -120,7 +126,7 @@ func (c *deployImportCmd) Run() error {
 	// Start with existing or empty
 	var base *BundleConfig
 	if !c.Replace {
-		existing, err := LoadBundleConfig()
+		existing, err := deploykit.LoadBundleConfig()
 		if err != nil {
 			return err
 		}
@@ -141,7 +147,7 @@ func (c *deployImportCmd) Run() error {
 		}
 		// Preserve other images from existing config, replace only the target
 		if !c.Replace {
-			existing, _ := LoadBundleConfig()
+			existing, _ := deploykit.LoadBundleConfig()
 			if existing != nil {
 				existing.Bundle[c.Box] = entry
 				merged = existing
@@ -153,7 +159,7 @@ func (c *deployImportCmd) Run() error {
 		}
 	}
 
-	if err := SaveBundleConfig(merged); err != nil {
+	if err := saveBundleConfigNodeForm(merged); err != nil {
 		return err
 	}
 
@@ -186,7 +192,7 @@ func (c *deployResetCmd) Run() error {
 		return nil
 	}
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -211,7 +217,7 @@ func (c *deployResetCmd) Run() error {
 		return nil
 	}
 
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		return err
 	}
 	fmt.Printf("Removed overrides for %q\n", key)
@@ -222,7 +228,7 @@ func (c *deployResetCmd) Run() error {
 type deployStatusCmd struct{}
 
 func (c *deployStatusCmd) Run() error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
