@@ -15,33 +15,27 @@ import (
 // image into local storage so deploy-mode commands can read its OCI labels).
 //
 // `charly box` is a SHARED command group: the RETAINED verbs below are the core
-// grammar spine (build → plugin-build; merge/labels; feature; the authoring
-// verbs). The generate/validate/new/pkg/inspect/list verbs are contributed as
-// NESTED command providers by the COMPILED-IN candy/plugin-box (each a
-// command:<word> with CommandParent()=="box"), attached into the embedded
-// kong.Plugins below. This mirrors how a compiled-in command holder embeds
-// kong.Plugins for its nested external subcommands.
+// grammar spine (build → plugin-build; merge/labels/feature/reconcile). The
+// generate/validate/new/pkg/inspect/list verbs are contributed as NESTED command
+// providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
+// (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
+// candy/plugin-authoring (P14b) — each a command:<word> with
+// CommandParent()=="box", attached into the embedded kong.Plugins below. This
+// mirrors how a compiled-in command holder embeds kong.Plugins for its nested
+// external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/inspect/list). main() sets this
-	// to collectExternalCommandPlugins()'s nestedByParent["box"] before kong.Parse.
+	// (candy/plugin-box's generate/validate/new/pkg/inspect/list +
+	// candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
+	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
+	// before kong.Parse.
 	kong.Plugins
 
-	Build   BuildCmd      `cmd:"" help:"Build container boxes"`
-	Merge   MergeCmd      `cmd:"" help:"Merge small layers in a built container image"`
-	Pull    BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
-	Labels  BoxLabelsCmd  `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
-	Feature BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
-
-	// Authoring verbs — added so the MCP tool surface (auto-reflected from
-	// Kong) can author a project from scratch over RPC.
-	Set       BoxSetCmd       `cmd:"" help:"Set a value in charly.yml by dot-path (e.g. box.foo.base fedora)"`
-	AddCandy  BoxAddCandyCmd  `cmd:"" name:"add-candy" help:"Append a candy to a box's candy: list (idempotent)"`
-	RmCandy   BoxRmCandyCmd   `cmd:"" name:"rm-candy" help:"Remove a candy from a box's candy: list"`
-	Fetch     BoxFetchCmd     `cmd:"" help:"Pre-prime the remote-repo cache (default: opencharly/charly)"`
-	Refresh   BoxRefreshCmd   `cmd:"" help:"Force re-clone of a remote project repo"`
-	Write     BoxWriteCmd     `cmd:"" help:"Write file contents under the project root (escape hatch for free-form files)"`
-	Cat       BoxCatCmd       `cmd:"" help:"Print file contents from under the project root"`
+	Build     BuildCmd        `cmd:"" help:"Build container boxes"`
+	Merge     MergeCmd        `cmd:"" help:"Merge small layers in a built container image"`
+	Pull      BoxPullCmd      `cmd:"" help:"Pull an image from its registry into local storage"`
+	Labels    BoxLabelsCmd    `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
+	Feature   BoxFeatureCmd   `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 	Reconcile BoxReconcileCmd `cmd:"" help:"Align cross-repo @github candy pins to the newest version (clears resolver newest-wins warnings)"`
 }
 

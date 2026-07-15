@@ -56,6 +56,7 @@ use ./candy/plugin-vm
 use ./candy/plugin-bundle
 use ./candy/plugin-alias
 use ./candy/plugin-box
+use ./candy/plugin-authoring
 use ./candy/plugin-oci
 use ./candy/plugin-status
 use ./candy/plugin-check
