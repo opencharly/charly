@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // StartCmd launches a container with supervisord in the background
@@ -213,8 +215,8 @@ func stopTunnelForImage(boxName, instance string) {
 	if imageRef != "" {
 		meta, metaErr := ExtractMetadata("podman", imageRef)
 		if metaErr == nil && meta != nil {
-			dc := loadDeployConfigForRead("charly start tunnel merge")
-			MergeDeployOntoMetadata(meta, dc, boxName, instance)
+			dc := deploykit.LoadDeployConfigForRead("charly start tunnel merge")
+			deploykit.MergeDeployOntoMetadata(meta, dc, boxName, instance)
 			if meta.Tunnel != nil {
 				tc = TunnelConfigFromMetadata(meta)
 			}

@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestFilterOwnProvidesEnv(t *testing.T) {
@@ -51,7 +53,7 @@ func TestRemoveBySource(t *testing.T) {
 		{Name: "code-search", URL: "http://charly-search:3100/mcp", Source: "search"},
 	}
 
-	got, removed := removeBySource(entries, "jupyter")
+	got, removed := deploykit.RemoveBySource(entries, "jupyter")
 	if !removed {
 		t.Error("removeBySource should report removal")
 	}
@@ -59,12 +61,12 @@ func TestRemoveBySource(t *testing.T) {
 		t.Errorf("removeBySource = %v, want only code-search", got)
 	}
 
-	got2, removed2 := removeBySource(entries, "nonexistent")
+	got2, removed2 := deploykit.RemoveBySource(entries, "nonexistent")
 	if removed2 {
 		t.Error("removeBySource should not report removal for nonexistent source")
 	}
 	if len(got2) != 2 {
-		t.Errorf("removeBySource(nonexistent) should keep all entries, got %d", len(got2))
+		t.Errorf("deploykit.RemoveBySource(nonexistent) should keep all entries, got %d", len(got2))
 	}
 }
 

@@ -492,18 +492,10 @@ func candyStatus(c *Candy) string {
 	return resolveStatus(c.Status)
 }
 
-// descriptionInfo returns the human-facing summary: the FIRST line of the
-// plain-string description (multi-line prose lives in the rest of the string).
-func descriptionInfo(d string) string {
-	d = strings.TrimSpace(d)
-	if d == "" {
-		return ""
-	}
-	if before, _, ok := strings.Cut(d, "\n"); ok {
-		return strings.TrimSpace(before)
-	}
-	return d
-}
+// descriptionInfo moved to sdk/deploykit (deploykit.DescriptionInfo) in K5-Unit-1 —
+// shared with the deploy state-model body (MergeDeployOntoMetadata reads it). charly
+// call sites (config.go / unified.go / host_build_feature.go / render_baked_metadata.go)
+// call deploykit.DescriptionInfo directly.
 
 // statusSeverity returns a numeric severity for status comparison.
 func statusSeverity(s string) int {

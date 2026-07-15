@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestCharlyUpdatePreservesPerHostDeployFields reproduces the operator's scenario
@@ -51,7 +53,7 @@ vm:cachyos-gpu:
 	}
 
 	// Reload and assert NOTHING operator-authored was dropped by the cycle.
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}
@@ -99,7 +101,7 @@ vm:check-cachyos-gpu-vm:
 	if err := removeVmDeployEntry("vm:check-cachyos-gpu-vm"); err != nil {
 		t.Fatalf("removeVmDeployEntry: %v", err)
 	}
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}

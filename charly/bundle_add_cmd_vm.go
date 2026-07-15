@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // sshReverseRunner adapts SSHExecutor to the ReverseRunner interface so
@@ -72,7 +74,7 @@ func resolveVmSshUser(spec *VmSpec) string {
 //   - neither            → 2222.
 func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 	if spec.SSH != nil && spec.SSH.PortAuto {
-		if entry, ok := loadDeployConfigForRead("charly vm ssh-port").LookupKey("vm:" + vmName); ok && entry.VmState != nil && entry.VmState.SshPort > 0 {
+		if entry, ok := deploykit.LoadDeployConfigForRead("charly vm ssh-port").LookupKey("vm:" + vmName); ok && entry.VmState != nil && entry.VmState.SshPort > 0 {
 			return entry.VmState.SshPort, nil
 		}
 		alloc, err := AllocateAutoPorts([]int{22}, nil)
@@ -112,7 +114,7 @@ func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error 
 	defer func() { _ = unlock() }()
 
 	// Load existing charly.yml (or start fresh).
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}
@@ -144,7 +146,7 @@ func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error 
 	entry.VmState = state
 	dc.Bundle[deployName] = entry
 
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // removeVmDeployEntry strips deploy.<deployName> from charly.yml.
@@ -160,7 +162,7 @@ func removeVmDeployEntry(deployName string) error {
 	}
 	defer func() { _ = unlock() }()
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -194,7 +196,7 @@ func removeVmDeployEntry(deployName string) error {
 			dc.Bundle[key] = entry
 		}
 	}
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // vmDeployEntryKeys resolves the per-host charly.yml bundle key(s) a VM teardown

@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestFlattenBundleVenues_StampsAndHoists verifies the loader venue pass:
@@ -161,7 +163,7 @@ func TestResolveBareAgentProvisionedVenue(t *testing.T) {
 // TestOverlayRoundTrip_NestedChildSurvives (Risk 5a) proves the per-host overlay
 // writer round-trips a deployment's NESTED CHILD + derived TARGET even though
 // BundleNode.Children/Target are now yaml:"-" (the writer re-emits them via
-// marshalBundleNodeLegacy → migrateDeployEntity → node-form children). A lossy
+// marshalBundleNode → node-form children). A lossy
 // writer would silently drop the nested child on the next saveDeployState.
 func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	dir := t.TempDir()
@@ -181,11 +183,11 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 			},
 		},
 	}}
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
 
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip): %v", err)
 	}
@@ -233,10 +235,10 @@ func TestOverlayRoundTrip_GroupMembersSurvive(t *testing.T) {
 			},
 		},
 	}}
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip) — a memberless group bed fails validateCheckBeds: %v", err)
 	}
@@ -266,7 +268,7 @@ func TestPersistBedDeployOverrides_GroupBedNotPersisted(t *testing.T) {
 	}
 	persistBedDeployOverrides("check-cross-pod-cdp", groupBed)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay poisoned by persisting a group bed root: %v", err)
 	}

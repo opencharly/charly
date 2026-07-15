@@ -6,19 +6,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestDeployConfigLookup_NilSafe pins the post-2026-05-16 cleanup of
 // the call sites that previously wrote
 //
-//	dc := loadDeployConfigForRead("...")
+//	dc := deploykit.LoadDeployConfigForRead("...")
 //	if dc != nil {
 //	    if entry, ok := dc.Deploy[deployKey(image, instance)]; ok { ... }
 //	}
 //
 // using nil-safe Lookup/LookupKey methods. The contract: nil receiver
 // returns (zero, false) so callers can chain
-// `loadDeployConfigForRead(...).Lookup(image, instance)` without a
+// `deploykit.LoadDeployConfigForRead(...).Lookup(image, instance)` without a
 // separate nil check.
 func TestDeployConfigLookup_NilSafe(t *testing.T) {
 	var dc *BundleConfig // nil
@@ -108,16 +110,16 @@ deploy:
 	initialBytes, _ := os.ReadFile(path)
 
 	// Attempt to write the disposable flag for a brand-new entry. With
-	// the pre-fix code, this would call LoadBundleConfig() → err →
+	// the pre-fix code, this would call deploykit.LoadBundleConfig() → err →
 	// discarded → dc = empty → entry.Disposable = true → SaveBundleConfig
 	// truncates the file. With the post-fix code, the load error
 	// propagates and saveDeployState aborts before any write.
-	saveDeployState("newimage", "", SaveDeployStateInput{
+	deploykit.SaveDeployState("newimage", "", deploykit.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	})
+	}, marshalDeployNode)
 
 	afterBytes, _ := os.ReadFile(path)
 	if !bytes.Equal(initialBytes, afterBytes) {
@@ -147,14 +149,14 @@ existing-deploy:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	saveDeployState("newimage", "", SaveDeployStateInput{
+	deploykit.SaveDeployState("newimage", "", deploykit.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "newimage",
 		Target:        "pod",
-	})
+	}, marshalDeployNode)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after save: %v", err)
 	}
@@ -202,14 +204,14 @@ existing:
 		t.Fatalf("write initial: %v", err)
 	}
 
-	saveDeployState("existing", "", SaveDeployStateInput{
+	deploykit.SaveDeployState("existing", "", deploykit.SaveDeployStateInput{
 		SetDisposable: true,
 		Disposable:    true,
 		Box:           "would-clobber",
 		Target:        "vm",
-	})
+	}, marshalDeployNode)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after save: %v", err)
 	}
@@ -242,7 +244,7 @@ func TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover(t *testing.T) {
 	dc := &BundleConfig{Bundle: map[string]BundleNode{
 		"foo": {Target: "pod", Image: "foo"},
 	}}
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
 	// No .tmp leftovers in the config dir.
@@ -307,12 +309,12 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 
 	// Sanity: the fixture really is rejected by the loader (otherwise the test
 	// would pass vacuously).
-	if _, lerr := LoadBundleConfig(); lerr == nil {
+	if _, lerr := deploykit.LoadBundleConfig(); lerr == nil {
 		t.Fatal("fixture loaded cleanly; expected it to be rejected by the node-form gate")
 	}
 
 	// A write that would otherwise truncate must be REFUSED.
-	err := SaveBundleConfig(&BundleConfig{Bundle: map[string]BundleNode{
+	err := saveBundleConfigNodeForm(&BundleConfig{Bundle: map[string]BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}})
 	if err == nil {
@@ -337,12 +339,12 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if err := SaveBundleConfig(&BundleConfig{Bundle: map[string]BundleNode{
+	if err := saveBundleConfigNodeForm(&BundleConfig{Bundle: map[string]BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}}); err != nil {
 		t.Fatalf("SaveBundleConfig on an absent file should succeed: %v", err)
 	}
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after clean save: %v", err)
 	}
@@ -382,7 +384,7 @@ bare-pod:
 		t.Fatalf("write: %v", err)
 	}
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -417,7 +419,7 @@ bare-pod:
 		t.Error("bare-pod.IsDisposable() returned true for absent disposable field")
 	}
 
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -484,7 +486,7 @@ web-app:
 	if err := removeVmDeployEntry("vm:k3s-vm"); err != nil {
 		t.Fatalf("removeVmDeployEntry(vm:k3s-vm): %v", err)
 	}
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after removal: %v", err)
 	}
@@ -502,7 +504,7 @@ web-app:
 	if err := removeVmDeployEntry("vm:k3s-vm"); err != nil {
 		t.Fatalf("idempotent re-removal of vm:k3s-vm errored: %v", err)
 	}
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after idempotent re-removal: %v", err)
 	}
