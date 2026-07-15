@@ -35,7 +35,7 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-const calver = "2026.182.1200"
+const calver = "2026.196.0600"
 
 // substrateWords is the ONE list of words this provider serves — pod/vm/k8s/local/android.
 var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
@@ -82,7 +82,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // typed map). The op.Params body is deliberately IGNORED — a substrate value cannot be soundly
 // re-decoded from the raw op.Params (host-canonicalized shorthand), which is why the host
 // pre-decodes and threads via op.Env.
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpLoad:
 		return substrateLoad(req)
@@ -100,6 +100,15 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 			return nil, err
 		}
 		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpStatusCollect:
+		// P14a: the substrate COLLECTOR OpStatus. The host's status fan-out
+		// reaches the cleanly-movable collectors (pod live + local) here, by
+		// word (pod/vm/k8s/local/android). vm/k8s/android defer to K5.
+		res, err := statusCollect(ctx, req.GetReserved(), req.GetParamsJson())
+		if err != nil {
+			return nil, err
+		}
+		return &pb.InvokeReply{ResultJson: res.json}, nil
 	default:
 		return nil, fmt.Errorf("substrate kind %q: unsupported op %q", req.GetReserved(), req.GetOp())
 	}

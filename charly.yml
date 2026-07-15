@@ -2062,15 +2062,16 @@ check-commands-app:
     local:
         description: |-
             Minimal kind:local template for the check-commands-local bed — composes the
-            command-only candy/plugin-{clean,settings,candy,box,status} plugins (no install content) so the
-            bed exercises the externalized `charly clean`/`settings`/`candy`/`status` CLIs AND the P15
-            `charly box …` command verbs (generate/validate/new/pkg, nested under the box grammar group)
-            host-side.
+            command-only candy/plugin-{clean,settings,candy,box,authoring,status} plugins (no install
+            content) so the bed exercises the externalized `charly clean`/`settings`/`candy`/`status` CLIs,
+            the P15 `charly box …` build verbs (generate/validate/new/pkg), AND the P14b `charly box …`
+            authoring verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group) host-side.
         candy:
             - plugin-clean
             - plugin-settings
             - plugin-candy
             - plugin-box
+            - plugin-authoring
             - plugin-status
 check-commands-local:
     local:
@@ -2125,7 +2126,17 @@ check-commands-local:
               command:
                 command: charly box pkg --help
                 in_container: false
-            - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam; FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output)
+            - check: charly box authoring verbs (set/add-candy/rm-candy/write/cat) dispatch NESTED under the box grammar group and mutate a scratch project's charly.yml byte-faithfully, proving the authoring command plugin (candy/plugin-authoring, command:set/add-candy/rm-candy/write/cat, P14b) owns the yaml.Node candy-list edits (kit.MappingChild / kit.SaveYAMLNodeFile) + the dot-path writer (kit.SetByDotPath) + the project-rooted file escape hatch (resolveProjectFile) host-side — add-candy appends, rm-candy removes (curl absent after), set writes defaults.registry, write+cat round-trip a file. fetch/refresh stay covered by the Go tests + the golden-parity spike (they reenter core over HostBuild("cli") and hit the network, unsuitable for this bed)
+              id: box-authoring-dispatches
+              exit_status: 0
+              stdout:
+                - contains: 'hi-p14b'
+              context:
+                - runtime
+              command:
+                command: "rm -rf /tmp/charly-p14b-authoringbed && charly box new project /tmp/charly-p14b-authoringbed && charly -C /tmp/charly-p14b-authoringbed box new candy my-candy && charly -C /tmp/charly-p14b-authoringbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && charly -C /tmp/charly-p14b-authoringbed box add-candy my-box curl && charly -C /tmp/charly-p14b-authoringbed box rm-candy my-box curl && ! grep -q '\\- curl' /tmp/charly-p14b-authoringbed/box/my-box/charly.yml && charly -C /tmp/charly-p14b-authoringbed box set defaults.registry p14b-registry && grep -q 'p14b-registry' /tmp/charly-p14b-authoringbed/charly.yml && charly -C /tmp/charly-p14b-authoringbed box write hello.txt --content hi-p14b && charly -C /tmp/charly-p14b-authoringbed box cat hello.txt"
+                in_container: false
+            - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam; FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output). P14b EXTENSION — the bed also composes candy/plugin-authoring and exercises the `charly box` AUTHORING verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group). One step scaffolds a project + box then drives box add-candy/rm-candy (yaml.Node candy-list edits via kit.MappingChild/kit.SaveYAMLNodeFile) + box set (kit.SetByDotPath) + box write/cat (the resolveProjectFile file escape hatch) end-to-end host-side, proving the authoring command plugin OWNS the charly.yml mutation surface with ZERO core reentry (fetch/refresh, which reenter core over HostBuild("cli") + hit the network, stay covered by the Go tests + the golden-parity spike).
               id: status-runs
               exit_status: 0
               stdout:

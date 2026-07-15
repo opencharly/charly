@@ -73,6 +73,18 @@ type CLI struct {
 	BoxInspectOverlay InspectOverlayCmd `cmd:"" name:"__box-inspect-overlay" hidden:"" help:"internal: inspect deploy-overlay formats tunnel/bind_mounts (reentry behind box inspect)"`
 	BoxListTags       ListTagsCmd       `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
 
+	// __box-fetch / __box-refresh are the hidden core reentry points behind the COMPILED-IN
+	// candy/plugin-authoring command:fetch / command:refresh words (nested under `box`, P14b).
+	// The plugin owns the user-facing `charly box fetch/refresh` grammar + dispatch and reaches
+	// these over HostBuild("cli") — the repo resolver (ResolveProjectRepo → EnsureRepoDownloaded)
+	// is host-coupled (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate
+	// auto-migration), which a sdk-only plugin cannot reach.
+	// K5-doomed: both die when ResolveProjectRepo/EnsureRepoDownloaded move into the plugin over
+	// sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue pattern as the
+	// sibling __box-inspect-overlay / __box-list-tags reentries above (K5 seam-death sweep).
+	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
+	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
+
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
 	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
