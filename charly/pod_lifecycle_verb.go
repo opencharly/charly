@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // pod_lifecycle_verb.go — the `charly start` / `charly stop` VERBS routed through the unified
@@ -19,7 +21,7 @@ import (
 // resolveLifecycleDeployNode resolves the deploy node for a start/stop verb from the per-host config.
 func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
 	key := deployKey(box, instance)
-	if dc := loadDeployConfigForRead("charly start/stop"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly start/stop"); dc != nil {
 		if node, ok := dc.Bundle[key]; ok {
 			n := node
 			if n.Target == "" || n.Target == "container" {

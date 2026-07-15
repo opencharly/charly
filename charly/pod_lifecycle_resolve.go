@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -118,7 +119,7 @@ func resolvePodEncEnsure(box, instance string) (spec.RawBody, error) {
 // resolvePodTunnel resolves the tunnel config (charly.yml-only; labels never carry tunnel) the plugin
 // starts/stops, or nil when none is configured. Mirrors the StartCmd.runDirect tunnel branch.
 func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
-	dc := loadDeployConfigForRead("charly start tunnel")
+	dc := deploykit.LoadDeployConfigForRead("charly start tunnel")
 	ctrName := containerNameInstance(box, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef == "" {
@@ -128,7 +129,7 @@ func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 	if err != nil || meta == nil {
 		return nil
 	}
-	MergeDeployOntoMetadata(meta, dc, box, instance)
+	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
 	if meta.Tunnel == nil {
 		return nil
 	}
@@ -201,7 +202,7 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 		if err != nil {
 			return nil, err
 		}
-		saveDeployState(box, instance, SaveDeployStateInput{Ports: ports, SetPorts: true})
+		deploykit.SaveDeployState(box, instance, deploykit.SaveDeployStateInput{Ports: ports, SetPorts: true}, marshalDeployNode)
 	}
 	if conflicts := CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {
 		return nil, fmt.Errorf("port conflicts detected:%s", FormatPortConflicts(conflicts, box))
@@ -316,7 +317,7 @@ func resolvePodRuntimeImage(box, instance, tag string, rt *ResolvedRuntime, noAu
 		EnsureCDI()
 	}
 
-	dc := loadDeployConfigForRead("charly pod runtime image")
+	dc := deploykit.LoadDeployConfigForRead("charly pod runtime image")
 	var deployVolumes []DeployVolumeConfig
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployVolumes = overlay.Volume
@@ -335,7 +336,7 @@ func resolvePodRuntimeImage(box, instance, tag string, rt *ResolvedRuntime, noAu
 		return nil, fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
 	}
 	engine = ResolveBoxEngineFromMeta(meta, rt.RunEngine)
-	MergeDeployOntoMetadata(meta, dc, box, instance)
+	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
 
 	cliVolumes := parseVolumeFlagsStandalone(volumeFlag, bind)
 	volumes, bindMounts := ResolveVolumeBacking(box, instance, meta.Volume, mergeVolumeConfigs(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
@@ -445,7 +446,7 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 	var agentEnv []string
 	if rt, rtErr := ResolveRuntime(); rtErr == nil {
 		var deployBox *BundleNode
-		if overlay, ok := loadDeployConfigForRead("charly cmd").Lookup(box, instance); ok {
+		if overlay, ok := deploykit.LoadDeployConfigForRead("charly cmd").Lookup(box, instance); ok {
 			deployBox = &overlay
 		}
 		hostHome, _ := os.UserHomeDir()

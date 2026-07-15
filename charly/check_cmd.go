@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -98,7 +99,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 			}
 		}
 	}
-	dc := loadDeployConfigForRead("charly check live")
+	dc := deploykit.LoadDeployConfigForRead("charly check live")
 	if dc != nil {
 		if entry, ok := dc.Bundle[deployKey(c.Box, c.Instance)]; ok {
 			localPlan = entry.Plan
@@ -459,7 +460,7 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 			addCandies = entry.AddCandy
 		}
 	}
-	if dc := loadDeployConfigForRead("charly check vm"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly check vm"); dc != nil {
 		if entry, ok := findVmDeployNode(dc.Bundle, c.Box, vmName); ok {
 			localPlan = entry.Plan
 			if entry.VmState != nil {
@@ -851,7 +852,7 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	if node != nil {
 		plan = append(plan, node.Plan...)
 	}
-	if dc := loadDeployConfigForRead("charly check live"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
 		if entry, ok := dc.Bundle[deployKey(image, instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[image]; ok {

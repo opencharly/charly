@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -103,7 +104,7 @@ func resolveTreeRoot(dir string) (map[string]BundleNode, error) {
 	} else if ok && uf != nil {
 		projectDC = uf.ProjectBundleConfig()
 	}
-	localDC, _ := LoadBundleConfig()
+	localDC, _ := deploykit.LoadBundleConfig()
 	merged := MergeDeployConfigs(projectDC, localDC)
 	if merged == nil || merged.Bundle == nil {
 		return nil, nil

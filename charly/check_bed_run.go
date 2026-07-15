@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // bedVmDomains returns the sorted, deduped libvirt domain names (charly-<from>) a bed's
@@ -150,7 +152,7 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 	if nodeTraits(&node).HostRooted || bedExternalInPlace(node.Target) { // local (host-rooted) or in-place external
 		return
 	}
-	saveDeployState(name, "", SaveDeployStateInput{
+	deploykit.SaveDeployState(name, "", deploykit.SaveDeployStateInput{
 		Ports:         node.Port,
 		SetPorts:      len(node.Port) > 0,
 		Volume:        node.Volume,
@@ -170,7 +172,7 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 		Preemptible:       node.Preemptible,
 		RequiresExclusive: node.RequiresExclusive,
 		RequiresShared:    node.RequiresShared,
-	})
+	}, marshalDeployNode)
 }
 
 // deployNestedLocalChildren deploys a VM's nested target:local children via the

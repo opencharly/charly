@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -143,12 +144,12 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 	// Persist the opaque deploy-entry State patch host-side (the plugin cannot touch charly.yml):
 	// pod ships {ResolvedImage}; vm ships {vm_state}. saveDeployState is the generic writer.
 	if len(reply.State) > 0 && !opts.DryRun {
-		var in SaveDeployStateInput
+		var in deploykit.SaveDeployStateInput
 		if err := json.Unmarshal(reply.State, &in); err != nil {
 			return nil, fmt.Errorf("substrate %q prepare-venue: decode state: %w", l.prov.word, err)
 		}
 		boxKey, instKey := parseDeployKey(name)
-		saveDeployState(boxKey, instKey, in)
+		deploykit.SaveDeployState(boxKey, instKey, in, marshalDeployNode)
 	}
 	return venueFromDescriptor(reply.Venue)
 }

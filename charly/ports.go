@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -77,7 +78,7 @@ func CollectBoxPorts(cfg *Config, layers map[string]*Candy, boxName string) ([]s
 }
 
 func SavePortOverride(box, instance string, ports []string) error {
-	dc, err := loadDeployConfigForWrite("SavePortOverride")
+	dc, err := deploykit.LoadDeployConfigForWrite("SavePortOverride")
 	if err != nil {
 		return err
 	}
@@ -87,5 +88,5 @@ func SavePortOverride(box, instance string, ports []string) error {
 	overlay.Port = ports
 	dc.Bundle[key] = overlay
 
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }

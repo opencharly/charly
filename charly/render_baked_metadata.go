@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -314,7 +315,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 		layer := g.Candies[candyName]
 		cs := candyStatus(layer)
 		effectiveStatus = worstStatus(effectiveStatus, cs)
-		if li := descriptionInfo(layer.Description); li != "" && cs != "working" {
+		if li := deploykit.DescriptionInfo(layer.Description); li != "" && cs != "working" {
 			infoParts = append(infoParts, candyName+": "+li)
 		}
 	}

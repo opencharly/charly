@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // VmBuildCmd builds a QCOW2/RAW disk image from a bootc container image.
@@ -128,7 +130,7 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 		return err
 	}
 	var existingState *VmDeployState
-	if e, ok := loadDeployConfigForRead("charly vm build").LookupKey("vm:" + vmName); ok {
+	if e, ok := deploykit.LoadDeployConfigForRead("charly vm build").LookupKey("vm:" + vmName); ok {
 		existingState = e.VmState
 	}
 

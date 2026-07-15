@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -204,7 +205,7 @@ func gatherDeployNodes() map[string]BundleNode {
 	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
 		maps.Copy(out, uf.Bundle)
 	}
-	if dc := loadDeployConfigForRead("charly preempt"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly preempt"); dc != nil {
 		for name, node := range dc.Bundle {
 			out[name] = MergeBundleNode(out[name], node)
 		}

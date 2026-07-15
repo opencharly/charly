@@ -231,6 +231,14 @@ func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, re
 	if img, ok := cfg.BoxConfig(name); ok {
 		view.Plan = img.Plan
 		view.AuthoredAliases = img.Alias
+		// K5-Unit-1 (#67 keystone): the box-AUTHORED deploy-overlay surfaces ExportAllBox reads
+		// off the envelope instead of the live *Config graph. description is the RAW authored
+		// string (Info above is its descriptionInfo first-line summary); env/env_file/security
+		// are the box-authored deploy-overlay defaults. Filled alongside plan/authored_aliases.
+		view.Description = img.Description
+		view.Env = img.Env
+		view.EnvFile = img.EnvFile
+		view.Security = img.Security
 	}
 	if ports, perr := CollectBoxPorts(cfg, layers, name); perr == nil {
 		view.Ports = ports
