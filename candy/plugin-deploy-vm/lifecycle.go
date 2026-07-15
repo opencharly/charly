@@ -374,7 +374,7 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 	if ropts.DryRun {
 		return marshalReply(struct{}{})
 	}
-	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", entity, "--domain", domain) // best-effort (may not exist yet)
+	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", entity, "--domain", domain, "--if-exists")
 	if ropts.RebuildImage {
 		if _, err := vmCli(ctx, exec, false, false, "vm", "build", entity); err != nil {
 			return nil, err
@@ -410,7 +410,7 @@ func vmPostTeardown(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	// leaves the charly.yml entry cleanup to the RemoveEntries below (single owner). Best-effort: a
 	// deploy whose domain is already stopped/gone must not fail the whole teardown (`vm destroy`
 	// hard-errors on an absent domain, and bestEffort swallows it).
-	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", vmEntity(p), "--domain", domain, "--keep-deploy")
+	_, _ = vmCli(ctx, exec, false, true, "vm", "destroy", vmEntity(p), "--domain", domain, "--keep-deploy", "--if-exists")
 
 	if remaining, err := kit.RemoveVmSshStanza(host.Home, kit.VmSshAlias(domain)); err != nil {
 		fmt.Fprintf(os.Stderr, "note: ssh-config stanza cleanup: %v\n", err)

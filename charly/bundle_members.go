@@ -18,8 +18,8 @@ package main
 // codebase.
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"sort"
 )
 
@@ -207,7 +207,7 @@ func bringUpMembers(node *BundleNode, imageTag string) error {
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
 			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
 			memberDomain := vmDomainIdentity(memberKey)
-			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain)
+			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
 			if err := runCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
@@ -239,14 +239,14 @@ func bringUpMembers(node *BundleNode, imageTag string) error {
 	return nil
 }
 
-// tearDownMembers tears down every member of `node` (best-effort, deterministic
-// order) — the companion to bringUpMembers. VM members are `vm destroy`ed, pod
-// members removed + purged, kind:local members reversed via `charly bundle del`.
-// Never fails the owner's teardown.
-func tearDownMembers(node *BundleNode) {
+// tearDownMembers tears down every member of `node` in deterministic order — the companion to
+// bringUpMembers. It attempts every member and returns their joined errors so callers can finish
+// the full cleanup while still failing the owning operation.
+func tearDownMembers(node *BundleNode) error {
 	if node == nil || len(node.Members) == 0 {
-		return
+		return nil
 	}
+	var errs []error
 	for _, memberKey := range sortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
 		var err error
@@ -256,22 +256,19 @@ func tearDownMembers(node *BundleNode) {
 			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
-			err = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey))
-			if delErr := runCharlySubcommand(deployDelArgv(memberKey)...); delErr != nil && err == nil {
-				err = delErr
-			}
+			destroyErr := runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey), "--if-exists")
+			delErr := runCharlySubcommand(deployDelArgv(memberKey)...)
+			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):
 			err = runCharlySubcommand("remove", memberKey, "--purge")
 		default:
 			err = runCharlySubcommand(deployDelArgv(memberKey)...)
 		}
 		if err != nil {
-			// Best-effort teardown never fails the owner's teardown — but a
-			// silent discard once hid a flag-parse abort that leaked the member
-			// (see CHANGELOG/), so surface it as a warning instead of swallowing.
-			fmt.Fprintf(os.Stderr, "warning: peer %q teardown: %v\n", memberKey, err)
+			errs = append(errs, fmt.Errorf("peer %q teardown: %w", memberKey, err))
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // isPodMember reports whether a member node is a CONTAINER-venue (pod) deployment — reading the

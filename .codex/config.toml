@@ -1,0 +1,6 @@
+# OpenCharly's trusted repository is a full development environment. The
+# candybox, disposability rules, approvals, and R0-R10 gates remain its safety
+# boundary; this setting only supplies the filesystem/network capability those
+# workflows require.
+default_permissions = ":danger-full-access"
+approval_policy = "on-request"

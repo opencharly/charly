@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func TestMissingDestroyPolicy(t *testing.T) {
+	if err := missingDestroyError("charly-typo", false); err == nil {
+		t.Fatal("strict operator destroy accepted a missing VM")
+	}
+	if err := missingDestroyError("charly-reconciled", true); err != nil {
+		t.Fatalf("--if-exists rejected an already-absent VM: %v", err)
+	}
+}
+
 // TestDestroyVmDomain_NotFound proves the #69 regression fix: a name with NO libvirt domain AND NO
 // qemu state dir reports torn=false with no error (which VmDestroyCmd.Run turns into a hard "no such
 // VM" non-zero exit) — never a false "Destroyed VM" success. Runs under the REAL HOME on purpose: a

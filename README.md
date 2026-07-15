@@ -804,7 +804,7 @@ not here.
 | Tunnel not appearing on a new instance | Tunnel config is `charly.yml`-only — add manually per instance (`/charly-core:deploy`) |
 | Service built fine but broken in production | `charly check live <image>` runs the baked layer + image + deploy checks (`/charly-check:check`) |
 | `charly vm build` fails: "no kind:vm entity in vm.yml" | Declare a `kind: vm` entity (`/charly-vm:vms-catalog`) |
-| SPICE console blank on cloud_image VM | Known `simpledrm → qxldrmfb` race under UEFI; switch to `firmware: bios` (`/charly-vm:arch`) |
+| SPICE console blank on cloud_image VM | Known `simpledrm → qxldrmfb` race under UEFI; switch to `firmware: bios` (`/charly-vm:arch-cloud-vm`) |
 | `charly bundle add vm:<name>` errors "VM does not exist" | Run `charly vm create <name>` first — VM deploy is not auto-provisioning (`/charly-core:deploy`) |
 | Resolver "referenced at multiple versions" warning | `charly box reconcile` aligns the cross-repo `@github` pins (`/charly-build:reconcile`) |
 | `charly box pull` says "image is not available locally" | `charly box pull` accepts short name + project, fully-qualified ref, or `@github` remote ref. See `/charly-build:pull` |
@@ -836,64 +836,46 @@ substitution, YAML anchors, and execution-order rules.
 gold-standard pattern (`candy/redis/charly.yml`), and the 10
 authoring gotchas.
 
-## Works with Claude Code
+## Works with Claude Code and Codex
 
-OpenCharly works hand-in-hand with
-[Claude Code](https://claude.com/claude-code). The bundled
-[plugins/](plugins/) directory provides skills that teach Claude
-how to compose, build, deploy, and manage your boxes.
-Every candy, every box, every command has a dedicated skill.
+The bundled [plugins/](plugins/) directory provides one skill tree for Claude
+Code and Codex. It teaches either harness how to compose, build, deploy, check,
+and manage boxes. Every candy, box, command, and contributor subsystem has an
+owning skill.
 
-**Quick setup** — add this to your project's `.claude/settings.json`:
-
-```json
-{
-  "enabledPlugins": {
-    "charly-core@charly-plugins": true,
-    "charly-build@charly-plugins": true,
-    "charly-check@charly-plugins": true,
-    "charly-image@charly-plugins": true,
-    "charly-internals@charly-plugins": true,
-    "charly-distros@charly-plugins": true,
-    "charly-infrastructure@charly-plugins": true,
-    "charly-jupyter@charly-plugins": true,
-    "charly-coder@charly-plugins": true
-  },
-  "extraKnownMarketplaces": {
-    "charly-plugins": {
-      "source": { "source": "directory", "path": "./plugins" }
-    }
-  }
-}
+```bash
+./plugins/setup claude                   # full developer mode (default)
+./plugins/setup codex developer
+./plugins/setup codex user               # use and author with Charly
+./plugins/setup codex container coder    # operate one container family
 ```
 
-Representative subset; see `plugins/.claude-plugin/marketplace.json`
-for the full 25-plugin catalog. Clone with submodules to get the
-plugins directory: `git clone --recurse-submodules
-https://github.com/opencharly/charly.git`.
+The repository's committed Claude settings and Codex marketplace select full
+developer mode. Reduced profiles are for consumer repositories that carry the
+plugins repository at `./plugins`. Setup writes project files only and never
+changes `~/.claude`, `~/.codex`, or another user configuration. It does not
+depend on MCP.
 
-**MCP gateway as the universal channel.** `charly mcp serve` exposes
-every `charly` CLI leaf as an MCP tool (Streamable HTTP or stdio), so
-the agent reaches the full build / deploy / test surface over
-RPC. Per-box MCP servers (chrome-devtools-mcp, jupyter-mcp,
-marimo-mcp, charly-mcp) auto-discover via `mcp_provide:` when their
-containers are running.
+Charly's MCP functionality remains available independently: `charly mcp serve`
+exposes the CLI over Streamable HTTP or stdio, and container-provided servers
+such as chrome-devtools-mcp, jupyter-mcp, marimo-mcp, and charly-mcp continue to
+auto-discover through `mcp_provide:`.
 
-**Sub-agents, dynamic workflows, and agent teams.** Beyond skills, the
-project ships Claude Code **sub-agents** (`plugins/internals/agents/`):
+**Agents and workflows.** Beyond skills, the project ships reusable plugin
+agents (`plugins/internals/agents/`):
 executors `check-bed-runner` and `deploy-verifier` that drive the `charly check`
 beds and return verbatim proof, plus enforcers `root-cause-analyzer`,
-`testing-validator`, and `layer-validator`. Two **dynamic workflows**
+`testing-validator`, and `layer-validator`. Claude Code also has dynamic workflows
 (`.claude/workflows/`) fan the work out — `/verify-beds` runs the SHORT
 disposable check beds as part of the R10 gate (deferring long beds to the
 persistent session, refusing host-local ones), `/audit-deploy-configs`
-evaluates your deploy configs — and the same agent definitions reuse as
-**agent-team** teammates. Whether you drive `charly` from the keyboard or hand it to an
-agent, testing and verifying deployments uses the one surface.
+evaluates your deploy configs. Codex uses the same agent roles through native
+subagents and the independent `AGENTS.md` rulebook. Whether you drive `charly`
+from the keyboard or hand it to an agent, verification uses the same surface.
 → `/charly-internals:agents`.
 
 See [VISION.md](VISION.md) for the long-term thesis and direction,
-[CLAUDE.md](CLAUDE.md) for the project's rules and mandates,
+[CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for the independent harness rulebooks,
 [plugins/README.md](plugins/README.md) for the full skill index (usage
 and architecture live in the skills), and this repo's [CHANGELOG/](CHANGELOG/README.md)
 for dated history (one file per CalVer version; by policy, never duplicated here or in skills).
