@@ -1,19 +1,21 @@
 package main
 
 import (
-	"context"
-	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// status_test.go — HOST-side `charly status` collection + probe tests. The
-// render-side tests (cell formatters, table/JSON rendering) moved to
-// candy/plugin-status/render_test.go alongside the code they exercise
-// (status_render.go relocated wholesale, minus formatTunnelSummary which
-// stayed here — a COLLECTION helper, not a render one).
+// status_test.go — HOST-side `charly status` tests for the code that STAYS
+// core after P14a: formatTunnelSummary, parsePortStrings, Collector.lookupDeploy,
+// and the enginekit ContainerSnapshot.HostPortFor data-flow (the enginekit
+// package's own coverage, retained here). The probe Parse tests, the
+// collectPodLive golden, the live-mounts renderer, the quadlet-description
+// parser, the local install-ledger collector, and statusFromState all moved to
+// candy/plugin-substrate/status_test.go alongside the code they exercise (the
+// P14a clean-subset move); the render-side tests live in
+// candy/plugin-status/render_test.go.
 
 // --- formatTunnelSummary (a collection helper — stays host) ---
 
@@ -92,91 +94,6 @@ func TestParsePortStrings(t *testing.T) {
 	}
 }
 
-// --- Probe Snippet/Parse ---
-
-func TestSupervisordProbe_Parse(t *testing.T) {
-	got := supervisordProbe{}.Parse("PRESENT=1\nfoo                              RUNNING   pid 1, uptime 0:01:00\nbar                              FATAL     Exited too quickly\n")
-	if got.Status != "ok" {
-		t.Errorf("status = %q, want ok", got.Status)
-	}
-	if got.Detail != "1/2 running" {
-		t.Errorf("detail = %q, want '1/2 running'", got.Detail)
-	}
-}
-
-func TestSupervisordProbe_NotInstalled(t *testing.T) {
-	got := supervisordProbe{}.Parse("")
-	if got.Status != "-" {
-		t.Errorf("empty stdout should be '-', got %q", got.Status)
-	}
-}
-
-func TestDbusProbe_WithDaemons(t *testing.T) {
-	got := dbusProbe{}.Parse("DBUS=1\nDAEMON=swaync\nDAEMON=mako\n")
-	if got.Status != "ok" {
-		t.Errorf("status = %q", got.Status)
-	}
-	if got.Detail != "notify:swaync,mako" {
-		t.Errorf("detail = %q", got.Detail)
-	}
-}
-
-func TestDbusProbe_NotPresent(t *testing.T) {
-	got := dbusProbe{}.Parse("")
-	if got.Status != "-" {
-		t.Errorf("status = %q, want '-'", got.Status)
-	}
-}
-
-func TestCharlyProbe_Present(t *testing.T) {
-	got := charlyProbe{}.Parse("CHARLY=1\n2026.05.02-1234\n")
-	if got.Status != "ok" || got.Detail != "2026.05.02-1234" {
-		t.Errorf("got %+v", got)
-	}
-}
-
-func TestWlProbe_Mixed(t *testing.T) {
-	got := wlProbe{}.Parse("WL=wtype\nWL=wlrctl\nWL=grim\n")
-	if got.Status != "ok" {
-		t.Errorf("status = %q", got.Status)
-	}
-	if got.Detail != "wtype,wlrctl,grim" {
-		t.Errorf("detail = %q", got.Detail)
-	}
-}
-
-func TestWlProbe_OnlyOneScreenshot(t *testing.T) {
-	got := wlProbe{}.Parse("WL=wtype\nWL=grim\nWL=pixelflux-screenshot\n")
-	if got.Detail != "wtype,grim" {
-		t.Errorf("expected only one screenshot tool, got %q", got.Detail)
-	}
-}
-
-func TestSwayProbe_Outputs(t *testing.T) {
-	body := `[{"name":"HEADLESS-1","current_mode":{"width":1920,"height":1080}}]`
-	got := swayProbe{}.Parse("SWAY=1\n" + body)
-	if got.Status != "ok" {
-		t.Errorf("status = %q", got.Status)
-	}
-	if got.Detail != "HEADLESS-1 1920x1080" {
-		t.Errorf("detail = %q", got.Detail)
-	}
-}
-
-// --- Probe batcher ---
-
-func TestSplitProbeSections(t *testing.T) {
-	stdout := "\n===PROBE:supervisord===\nPRESENT=1\nfoo RUNNING pid 1\n===PROBE_END:supervisord===\n" +
-		"\n===PROBE:dbus===\nDBUS=1\nDAEMON=swaync\n===PROBE_END:dbus===\n"
-	sections := splitProbeSections(stdout)
-	if !strings.Contains(sections["supervisord"], "PRESENT=1") {
-		t.Errorf("supervisord section missing payload: %q", sections["supervisord"])
-	}
-	if !strings.Contains(sections["dbus"], "DAEMON=swaync") {
-		t.Errorf("dbus section missing payload: %q", sections["dbus"])
-	}
-}
-
 // --- Collector lookup helpers ---
 
 func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
@@ -203,53 +120,5 @@ func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
 	dn, ok = c.lookupDeploy("", "", "charly-weird-joined-name")
 	if !ok || len(dn.Port) == 0 {
 		t.Errorf("joined-name lookup failed: ok=%v", ok)
-	}
-}
-
-// --- collectOne uses base image name for image-label fallback ---
-
-func TestCollector_CollectOne_UsesBaseImageForLabels(t *testing.T) {
-	// Smoke check: an empty Collector + a snapshot with Box set should
-	// not panic and should populate Ports from runtime snapshot. Exercising
-	// the full image-label fallback would require mocking
-	// ResolveNewestLocalCalVer/ExtractMetadata; that's covered indirectly
-	// by R10. This test pins the data-flow invariant.
-	c := &Collector{
-		rt:     &ResolvedRuntime{RunMode: "quadlet"},
-		engine: enginekit.NewEngineClient("podman"),
-	}
-	snap := &enginekit.ContainerSnapshot{
-		Name:        "charly-selkies-desktop-w",
-		Box:         "selkies-desktop",
-		Instance:    "w",
-		State:       "running",
-		Ports:       []spec.PortMapping{{HostIP: "127.0.0.1", HostPort: 9240, CtrPort: 9222, Proto: "tcp"}},
-		NetworkMode: "charly",
-	}
-	cs := c.collectOne(context.Background(), snap)
-	if cs.Image != "selkies-desktop" || cs.Instance != "w" {
-		t.Errorf("image/instance not preserved: %q/%q", cs.Image, cs.Instance)
-	}
-	if len(cs.Ports) != 1 || cs.Ports[0].HostPort != 9240 {
-		t.Errorf("runtime ports not surfaced: %+v", cs.Ports)
-	}
-}
-
-// --- statusFromState ---
-
-func TestStatusFromState(t *testing.T) {
-	cases := map[string]string{
-		"running": "running",
-		"exited":  "stopped",
-		"created": "stopped",
-		"paused":  "paused",
-		"dead":    "dead",
-		"":        "stopped",
-		"weird":   "weird",
-	}
-	for in, want := range cases {
-		if got := statusFromState(in); got != want {
-			t.Errorf("statusFromState(%q) = %q, want %q", in, got, want)
-		}
 	}
 }

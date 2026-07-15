@@ -1,0 +1,74 @@
+package substratekind
+
+// status_collect.go — the substrate COLLECTOR OpStatus dispatch. The host's
+// status fan-out (charly/status_collector.go collectFlat) reaches the
+// cleanly-movable collectors (pod live + local, P14a) over the kind provider's
+// Invoke as sdk.OpStatusCollect, dispatched by word (pod/vm/k8s/local/android)
+// — the SAME one-provider-serves-all-5-words shape the C2-substrate kind decode
+// uses. vm/k8s/android are deferred to K5 (their collectors are deploy-cone-
+// coupled); the plugin returns no rows for those words until then. This seam is
+// REUSED at K5 to move the remaining 7 cone-coupled collectors into the plugin.
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
+)
+
+// statusCollect dispatches sdk.OpStatusCollect by the reserved substrate word.
+// req.GetReserved() is the word (pod/vm/k8s/local/android); req.GetParamsJson()
+// is the spec.SubstrateStatusRequest. Returns spec.SubstrateStatusReply as
+// ResultJson.
+func statusCollect(ctx context.Context, word string, reqJSON []byte) (*statusResult, error) {
+	var in spec.SubstrateStatusRequest
+	if len(reqJSON) > 0 {
+		if err := json.Unmarshal(reqJSON, &in); err != nil {
+			return nil, fmt.Errorf("substrate status-collect %q: decode request: %w", word, err)
+		}
+	}
+	switch word {
+	case "pod":
+		reply, err := collectPodStatus(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("substrate status-collect pod: %w", err)
+		}
+		return marshalStatusReply(reply)
+	case "local":
+		reply, err := collectLocalStatus(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("substrate status-collect local: %w", err)
+		}
+		return marshalStatusReply(reply)
+	case "vm", "k8s", "android":
+		// K5-gated: the vm/k8s/android collectors are deploy-cone-coupled
+		// (BundleConfig/UnifiedFile/ResolveDeployChain) and stay host-side
+		// until the deploy-resolution cone fold. Return no rows; the host's
+		// in-proc SubstrateCollector registry still serves them.
+		return marshalStatusReply(spec.SubstrateStatusReply{})
+	default:
+		return nil, fmt.Errorf("substrate status-collect: unsupported word %q", word)
+	}
+}
+
+// statusResult wraps the marshalled reply so the Invoke switch can return it
+// uniformly alongside the kind decode + template resolve legs.
+type statusResult struct {
+	json []byte
+}
+
+func marshalStatusReply(reply spec.SubstrateStatusReply) (*statusResult, error) {
+	out, err := json.Marshal(reply)
+	if err != nil {
+		return nil, fmt.Errorf("substrate status-collect: marshal reply: %w", err)
+	}
+	return &statusResult{json: out}, nil
+}
+
+// OpStatusCollect is the op selector this provider serves for the collector
+// capability (mirrors sdk.OpStatusCollect — re-exported here so status_collect
+// names the op it dispatches without importing the proto package at every
+// call site).
+const OpStatusCollect = sdk.OpStatusCollect

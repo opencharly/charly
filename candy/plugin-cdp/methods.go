@@ -23,8 +23,8 @@ import (
 // (a host-side matcher step does not run for an out-of-process verb). The
 // DevTools HTTP surface (/json), the per-tab CDP WebSocket dispatch, and the deep-query
 // shadow-DOM helper are unchanged, so a bed authored against the in-tree verb passes
-// unchanged. The endpoint is host-pre-resolved (charly/cdp_preresolve.go) — the plugin
-// needs no podman / venue resolution at all.
+// unchanged. The endpoint is host-pre-resolved (charly/check_endpoint_resolve.go, the
+// `cc.ResolveEndpoint` reverse-leg) — the plugin needs no podman / venue resolution at all.
 //
 // Three CLI-only extras did NOT move: `cdp click --vnc`/`--wl` (cross-verb click delivery
 // via VNC/wlrctl — the declarative `cdp: click` keeps its Input.dispatchMouseEvent path),

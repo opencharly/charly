@@ -3,21 +3,22 @@ package main
 import (
 	"context"
 
-	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// CollectOpts is the read-only input every SubstrateCollector receives. It is
-// built once per `charly status` invocation by Collector.All and handed to every
-// registered collector unchanged. Nothing in a collector may mutate it.
+// CollectOpts is the read-only input every in-proc SubstrateCollector receives
+// (the vm/k8s/android collectors that stay host-side until K5). It is built once
+// per `charly status` invocation by collectFlat and handed to every registered
+// collector unchanged. Nothing in a collector may mutate it. The pod + local
+// collectors moved to the substrate plugin (P14a) and no longer use CollectOpts
+// — they receive their inputs over the OpStatusCollect wire request — so
+// CollectOpts carries NO enginekit client (the engine shed from core with them).
 type CollectOpts struct {
-	IncludeAll bool                    // mirrors --all
-	Nested     bool                    // mirrors --nested (live multi-hop probing of nested children + live k8s)
-	Deploy     *BundleConfig           // ~/.config/charly/charly.yml (may be nil)
-	Unified    *UnifiedFile            // charly.yml projection incl. folded kind:check beds (may be nil)
-	Engine     *enginekit.EngineClient // shared podman/docker client
-	Quadlet    string                  // quadlet dir
-	RunMode    string                  // c.rt.RunMode
+	IncludeAll bool          // mirrors --all
+	Nested     bool          // mirrors --nested (live multi-hop probing of nested children + live k8s)
+	Deploy     *BundleConfig // ~/.config/charly/charly.yml (may be nil)
+	Unified    *UnifiedFile  // charly.yml projection incl. folded kind:check beds (may be nil)
+	RunMode    string        // c.rt.RunMode
 }
 
 // SubstrateCollector is implemented once per deployment substrate. Each
