@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -123,7 +124,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 		},
 	}
 	img := &ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
-	plan, err := BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
+	plan, err := deploykit.BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}

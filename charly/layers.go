@@ -197,10 +197,26 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *CandyYAML) {
 	// setRaw records a non-nil extra (repo/copr/options/exclude/module) into a
 	// section's Raw. Within ONE distro level it's a plain assign; cross-level
 	// most-specific-wins is the resolver's job (compileSystemPackageSteps).
+	//
+	// A nil slice wrapped in `any` is `!= nil` under Go interface rules (the
+	// interface carries a non-nil type), so a bare `val != nil` would let a nil
+	// `dp.Copr` through and record `copr: any(nil []string)` — which JSON-marshals
+	// as `null`. The K4-B deploy-compile slice re-hydrates the candy from the
+	// resolved-project envelope (a JSON round-trip), where that `null` comes back
+	// as a bare `nil` interface that the cascade resolver then EXCLUDES — so the
+	// live and re-hydrated paths would disagree on whether the entry is present.
+	// Treating an interface-wrapped nil slice as absent normalizes the opaque
+	// raw-install-context carry-through across the plugin boundary (the entry is
+	// semantically empty either way; the step's typed Copr/Exclude/Module fields
+	// are extracted separately and are unaffected).
 	setRaw := func(raw map[string]any, key string, val any) {
-		if val != nil {
-			raw[key] = val
+		if val == nil {
+			return
 		}
+		if rv := reflect.ValueOf(val); rv.Kind() == reflect.Slice && rv.IsNil() {
+			return
+		}
+		raw[key] = val
 	}
 
 	// Sorted iteration → deterministic regardless of Go map order.

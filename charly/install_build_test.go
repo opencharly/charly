@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestBuildDeployPlan_BuilderPurity_NoPluginRPC is the externalization purity gate (operator
@@ -31,7 +33,7 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 	pre := HostContext{BuilderContext: map[string]builderPreresolved{
 		builderCtxKey("c", "pixi"): {Context: map[string]any{"env_name": "myenv"}, Reverse: wantRev},
 	}}
-	plan, err := BuildDeployPlan(layer, img, pre)
+	plan, err := deploykit.BuildDeployPlan(layer, img, pre)
 	if err != nil {
 		t.Fatalf("BuildDeployPlan (pre-resolved): %v", err)
 	}
@@ -48,7 +50,7 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 
 	// (b) No pre-pass (HostContext{}): the compiler still succeeds with base-only context + nil
 	// teardown — it never dials a plugin (none is connected here), proving purity.
-	plan2, err := BuildDeployPlan(layer, img, HostContext{})
+	plan2, err := deploykit.BuildDeployPlan(layer, img, HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan (no pre-pass): %v", err)
 	}
@@ -77,19 +79,25 @@ func firstBuilderStep(t *testing.T, plan *InstallPlan) *BuilderStep {
 // real YAML via LoadConfig + ScanAllCandyWithConfig) but they catch
 // compile-time regressions that pure unit tests can't.
 
-// compilerTestProjectDir chdirs to the project root (the parent of charly/)
-// and returns a cleanup callback. The compiler tests rely on being able
-// to LoadConfig from charly.yml, which only exists in the project root.
+// compilerTestProjectDir chdirs to the project root (the repo root that owns candy/)
+// and returns a cleanup callback. The compiler tests rely on being able to LoadConfig
+// from the repo-root charly.yml + scan the real candy/ fixtures.
+//
+// The marker is the `candy/` directory (the repo root owns it; the charly/ package dir does
+// NOT). Walking up for the `charly.yml` FILENAME hits the tracked `charly/charly.yml` embedded
+// providers manifest FIRST (it shadows the repo-root charly.yml), so ResolveBox("fedora-coder")
+// then fails and every TestBuildDeployPlan* vacuously SKIPs — the root-cause of the prior
+// vacuous-skip runs. `candy/` disambiguates: only the repo root has it.
 func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam // test helper returns (dir, cleanup); dir kept for symmetry
 	t.Helper()
 	prev, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	// Walk up from current to find the project root (charly.yml marker).
+	// Walk up from current to find the project root (the `candy/` dir marker).
 	dir := prev
-	for range 5 {
-		if _, err := os.Stat(filepath.Join(dir, UnifiedFileName)); err == nil {
+	for range 6 {
+		if info, err := os.Stat(filepath.Join(dir, "candy")); err == nil && info.IsDir() {
 			if err := os.Chdir(dir); err != nil {
 				t.Fatalf("chdir %s: %v", dir, err)
 			}
@@ -97,7 +105,7 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 		}
 		dir = filepath.Dir(dir)
 	}
-	t.Skipf("project root not found walking up from %s; skipping", prev)
+	t.Skipf("project root (candy/) not found walking up from %s; skipping", prev)
 	return "", func() {}
 }
 
@@ -144,7 +152,7 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 		t.Skip("ripgrep layer not present in fixtures")
 	}
 
-	plan, err := BuildDeployPlan(ripgrep, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(ripgrep, img, HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -195,7 +203,7 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 		t.Skip("dev-tools layer not present in fixtures")
 	}
 
-	plan, err := BuildDeployPlan(dt, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(dt, img, HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -234,7 +242,7 @@ func TestBuildDeployPlanPixiCandy(t *testing.T) {
 		t.Skip("pre-commit doesn't have pixi.toml (fixture changed)")
 	}
 
-	plan, err := BuildDeployPlan(pc, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(pc, img, HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -295,7 +303,7 @@ func TestMergePlansOrderingAndID(t *testing.T) {
 		&OpStep{CandyName: "uv", Op: &Op{Download: "https://…"}},
 	}}
 
-	merged := MergePlan([]*InstallPlan{p1, p2}, "fedora-coder", nil)
+	merged := deploykit.MergePlan([]*InstallPlan{p1, p2}, "fedora-coder", nil)
 	if merged.Box != "fedora-coder" {
 		t.Errorf("merged.Box = %q, want fedora-coder", merged.Box)
 	}

@@ -18,12 +18,19 @@ import (
 // real stdin/stdout/stderr/TTY natively — which keeps `charly bundle add`'s interactive prompts and
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
 
-// Invoke handles OpRun for the COMPILED-IN (in-proc) dispatch of command:bundle.
+// Invoke dispatches the COMPILED-IN (in-proc) command:bundle ops: OpRun (the `charly bundle …`
+// CLI pass-through) and OpCompile (the K4-B deploy-compile slice — the host's compileNodePlans
+// computes the per-node selection and Invokes OpCompile; runBundleCompile re-hydrates the
+// resolved-project envelope + loops deploykit.BuildDeployPlan).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	if req.GetOp() != sdk.OpRun {
-		return nil, fmt.Errorf("bundle: unsupported op %q (only %q)", req.GetOp(), sdk.OpRun)
+	switch req.GetOp() {
+	case sdk.OpRun:
+		return runBundleCommand(ctx, req)
+	case sdk.OpCompile:
+		return runBundleCompile(ctx, req)
+	default:
+		return nil, fmt.Errorf("bundle: unsupported op %q", req.GetOp())
 	}
-	return runBundleCommand(ctx, req)
 }
 
 // runBundleCommand serves command:bundle's Invoke(OpRun): recover the executor, decode the
