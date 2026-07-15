@@ -15,10 +15,20 @@ import (
 // candy/plugin-deploy-local / candy/plugin-deploy-vm), whose out-of-process kit.WalkPlans
 // executes every step on the venue (the plugin-renderable kinds via the F2 reverse legs,
 // the host-engine kinds via RunHostStep) — so the in-proc per-deploy-step dispatch is gone.
-// OCITarget (the pod-overlay synthesizer) is the sole remaining in-proc StepProvider consumer.
+// The sole remaining in-proc StepProvider consumer is the pod-overlay step dispatch
+// (charly/oci_step_emit.go's ociEmitStep — the host "oci-emit-step" render-seam handler; the
+// OCITarget WALKER itself lives in sdk/deploykit as of P11c, with no in-core instance).
 type StepProvider interface {
 	Provider
-	EmitOCI(t *OCITarget, step InstallStep, plan *InstallPlan) error
+	// EmitOCI renders one step's BUILD-venue (pod-overlay Containerfile) fragment. It RETURNS
+	// the fragment (the caller splices it) rather than writing to an OCITarget buffer — the
+	// OCITarget walker now lives in sdk/deploykit (P11c) and the in-core dispatch has no
+	// OCITarget instance, so returning the string decouples the StepProvider from the buffer
+	// (the former t.buf.WriteString). build carries the host-side buildEngineContext (Box for
+	// the plugin verb's distros, etc.) the host reconstructs from the cached overlay Generator.
+	// The fragment includes any trailing newline; an empty return is a no-op (a deploy-only
+	// step records nothing).
+	EmitOCI(step InstallStep, plan *InstallPlan, build buildEngineContext) (string, error)
 }
 
 // builtinStepBase supplies the in-proc-only Provider half (Class + a stub Invoke)

@@ -24,11 +24,8 @@ package main
 // same tasks executed, same services configured.
 
 import (
-	"context"
 	"fmt"
 	"strings"
-
-	"github.com/opencharly/sdk"
 )
 
 // OCITarget emits Containerfile directives for an InstallPlan. One
@@ -102,95 +99,26 @@ func (t *OCITarget) emitPlan(plan *InstallPlan, _ EmitOpts) error {
 	return nil
 }
 
-// emitStep dispatches each step to its StepProvider's OCI emitter (the per-kind
-// type-switch is gone — C4). The skip-on-image-build behaviour for apk/reboot,
-// and the localpkg PRODUCTION-vs-checkbed install decision, live on their
-// providers' EmitOCI (step_builtins.go).
+// emitStep dispatches each step to the CORE step-emit dispatch (oci_step_emit.go's ociEmitStep —
+// the single source of truth, R3). The per-kind type-switch + the providerRegistry resolve +
+// the class:step OpEmit splice + the ExternalPlugin StepProvider.EmitOCI ALL live there now (P11c
+// relocation of the dispatch out of OCITarget methods so the OCITarget walker can move to
+// sdk/deploykit). The skip-on-image-build behaviour for apk/reboot, and the localpkg
+// PRODUCTION-vs-checkbed install decision, live on the providers' EmitOCI (step_builtins.go) +
+// the class:step plugin's OpEmit (candy/plugin-installstep) — reached via ociEmitStep.
 func (t *OCITarget) emitStep(step InstallStep, plan *InstallPlan) error {
-	// F-STEP-EMIT: an EXTERNAL (plugin-contributed) step kind ("external:<word>") has no
-	// compiled-in StepProvider registered under its full kind string — its serving provider
-	// is a class:step plugin keyed on the trimmed WORD. The open arm resolves it and bakes its
-	// build-context fragment (Emits=true) via OpEmit, or skips it (Emits=false, a deploy-only
-	// step). This is the BUILD leg that lets C1 externalize a step kind whose EmitOCI produces
-	// a Containerfile fragment; the DEPLOY leg (executeExternalStep) already exists (F3).
-	if isExternalStepKind(step.Kind()) {
-		return t.emitExternalStep(step.(*externalStep), plan)
-	}
-	// C1.1: the seven PURE builtin step kinds' BUILD-emit is served by the compiled-in class:step
-	// plugin candy/plugin-installstep (its OpEmit). Route them by kind→word, passing the compiler's
-	// step VIEW as the opaque payload — the SAME serialization the deploy walk consumes (R3). Their
-	// DEPLOY leg is unchanged: sdk/kit.WalkPlans renders them from that same view. A
-	// legitimately-empty render (empty snippet / no-op service) is allowed (allowEmpty), matching
-	// what the former OCITarget.emit* returned for those instances.
-	if word, ok := pluginEmitStepWords[step.Kind()]; ok {
-		payload, err := marshalJSON(stepToView(step))
-		if err != nil {
-			return fmt.Errorf("OCITarget: marshal %s step view: %w", step.Kind(), err)
-		}
-		return t.spliceClassStepEmit(word, payload, true)
-	}
-	prov, ok := stepProviderFor(step.Kind())
-	if !ok {
-		return fmt.Errorf("OCITarget: unknown step kind %q", step.Kind())
-	}
-	return prov.EmitOCI(t, step, plan)
-}
-
-// emitExternalStep bakes an EXTERNAL (plugin-contributed) step kind's build-context Containerfile
-// fragment (F-STEP-EMIT). An authored external step declaring Emits=true must produce a fragment
-// (allowEmpty=false), unlike the compiler-emitted typed steps above.
-func (t *OCITarget) emitExternalStep(s *externalStep, _ *InstallPlan) error {
-	return t.spliceClassStepEmit(s.Word, s.Payload, false)
-}
-
-// spliceClassStepEmit resolves the class:step provider serving `word`, consults its DECLARED
-// StepContract.Emits, and — when the step emits — Invokes OpEmit with the opaque payload and
-// splices the returned Containerfile fragment verbatim (R3). Shared by the AUTHORED external step
-// (emitExternalStep, F3) and the seven COMPILER-EMITTED typed step kinds whose build-emit
-// externalized to candy/plugin-installstep (emitStep's pluginEmitStepWords route, C1.1). A provider
-// declaring Emits=false is a DEPLOY-ONLY step (no build fragment) and is a no-op on the image build,
-// exactly like ApkInstall/Reboot skip. allowEmpty permits a legitimately-empty fragment from a
-// compiler-emitted step (an authored external step must not return empty).
-//
-// The Invoke ctx carries an IN-PROC reverse channel (the SAME sdk.ContextWithExecutor +
-// executorReverseServer that dispatchBuild threads for the compiled-in build:box plugin, R3),
-// threaded with the box BUILD-ENGINE context (stepEmitBuildContext — the box-resolved DistroDef),
-// so a HOST-COUPLED step can call back HostBuild("step-emit", …) during its OpEmit — the host build
-// ENGINE stays in core (the step-emit seam), the plugin only REQUESTS it. The compiler-emitted
-// system-packages kind (C1.2) takes this path (its build-emit needs DistroDef.Format); a PURE step
-// (file/shell-hook/…) ignores the channel and returns its fragment directly.
-func (t *OCITarget) spliceClassStepEmit(word string, payload []byte, allowEmpty bool) error {
-	prov, ok := providerRegistry.resolve(ClassStep, word)
-	if !ok {
-		return fmt.Errorf("OCITarget: class:step provider %q not connected at build time", word)
-	}
-	emits := false
-	if carrier, ok := prov.(stepContractCarrier); ok {
-		if sc, ok := carrier.declaredStepContract(); ok {
-			emits = sc.Emits
-		}
-	}
-	if !emits {
-		// A deploy-only step (like apk on an image build): recorded, not baked.
-		return nil
-	}
 	var distros []string
 	if t.Box != nil {
 		distros = t.Box.Tags
 	}
-	ctx := sdk.ContextWithExecutor(context.Background(),
-		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{build: t.stepEmitBuildContext()}}))
-	frag, err := invokeOpEmitFragmentOpt(ctx, prov, word, payload, distros, allowEmpty)
+	frag, err := ociEmitStep(step, plan, distros, t.stepEmitBuildContext())
 	if err != nil {
-		return fmt.Errorf("class:step %q build-emit: %w", word, err)
+		return err
 	}
 	if frag == "" {
 		return nil
 	}
 	t.buf.WriteString(frag)
-	if !strings.HasSuffix(frag, "\n") {
-		t.buf.WriteString("\n")
-	}
 	return nil
 }
 
