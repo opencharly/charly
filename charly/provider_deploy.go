@@ -49,10 +49,11 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 //
 // pod is served by candy/plugin-deploy-pod, but unlike vm its plugin WALKS NOTHING: pod bakes
 // its install steps INTO the image at build time, so its substrateLifecycle (the external
-// candy/plugin-deploy-pod, M4) builds the overlay container image HOST-SIDE in PrepareVenue via
-// HostBuild("overlay") → the RETAINED core OCITarget/Generator engine (build_overlay.go) and
-// owns the container lifecycle (config/start/remove + the `charly update` rebuild gate). The
-// plugin's Invoke is a thin acknowledgment; the build engine stays core.
+// candy/plugin-deploy-pod, M4 + P11c) builds the overlay container image HOST-SIDE in PrepareVenue
+// via HostBuild("overlay") → the core prep+resolve seam (build_overlay.go) + the candy's own
+// deploykit.OCITarget render, and owns the container lifecycle (config/start/remove + the `charly
+// update` rebuild gate). The plugin's Invoke is a thin acknowledgment; the prep+resolve stays
+// core, the render is in the candy.
 var externalizedDeploySubstrates = map[string]bool{
 	"android": true,
 	"k8s":     true,

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -53,7 +54,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 		}
 		e := spec.FeatureEntity{Kind: kind, Name: name, Description: desc}
 		if desc != "" || len(plan) > 0 {
-			if s := descriptionInfo(desc); s != "" {
+			if s := deploykit.DescriptionInfo(desc); s != "" {
 				e.Summary = s
 			} else {
 				e.Summary = "(empty)"

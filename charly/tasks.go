@@ -89,6 +89,10 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 		return CollectBoxPorts(g.Config, g.Candies, boxName)
 	}
 	dg.ValidateEgress = ValidateEgress
+	// ValidateTextEgress: the rendered-Containerfile text gate (kind "rendered_text", mode
+	// "text") — the deploykit writeContainerfile calls it instead of the bytes ValidateEgress
+	// (#67 render-DRIVE move). Wraps core validateTextEgress.
+	dg.ValidateTextEgress = validateTextEgress
 	// RenderService: the init-cluster service materialization crosses to
 	// candy/plugin-init (OpResolve) + egress-gates host-side. All arg/return types
 	// are spec aliases, so the core func satisfies the seam field directly.
@@ -111,6 +115,17 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg.ResolveDetectionBuilderStage = g.resolveDetectionBuilderStageSeam
 	dg.ResolveExternalBuilderStage = g.resolveExternalBuilderStageSeam
+	// EmitBakedPlugins: the S0 baked-plugin BUILD-side seam — bake each composing
+	// candy's bake_plugin binaries into the final image. The host closure is the
+	// existing emitBakedPlugins (stays core: host-builds plugin binaries). Used by
+	// deploykit.Generator.generateContainerfile (#67 render-DRIVE move).
+	dg.EmitBakedPlugins = g.emitBakedPlugins
+	// CollectBoxVolume: the volume-aggregate seam for data-image label emission.
+	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
+	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
+	dg.CollectBoxVolume = func(boxName, home string) ([]deploykit.VolumeMount, error) {
+		return CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
+	}
 	g.dkGen = dg
 	return dg
 }
@@ -209,7 +224,7 @@ func emitPluginFragment(prov Provider, op *Op, img *ResolvedBox) (string, error)
 
 // invokeOpEmitFragment is the ONE OpEmit → EmitReply → empty-guard → Fragment path (R3),
 // shared by the build-context VERB emit (emitPluginFragment, via emitTasks) AND the
-// build-context external-STEP emit (OCITarget.emitExternalStep, F-STEP-EMIT). It Invokes
+// build-context external-STEP emit (ociEmitStep, F-STEP-EMIT). It Invokes
 // the provider's OpEmit with the already-marshalled params (a verb's plugin_input, or a
 // step's opaque Payload) and a spec.BuildEnv descriptor, decodes the EmitReply, and returns
 // the Containerfile fragment — failing LOUDLY on an empty fragment (a runtime-/deploy-only
@@ -221,12 +236,12 @@ func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, param
 }
 
 // invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment core shared by the guarding
-// invokeOpEmitFragment and the pod-overlay OCITarget's compiler-emitted-step build-emit (R3).
+// invokeOpEmitFragment and the pod-overlay deploykit.OCITarget's compiler-emitted-step build-emit (R3).
 // allowEmpty controls the empty-fragment guard: false (the default) fails LOUDLY on an empty
 // fragment — a runtime-/deploy-only capability wrongly asked to build-emit; true permits an empty
-// fragment, used by OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
+// fragment, used by deploykit.OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
 // for a given instance (an empty shell snippet, a packaged service with no overrides + enable=false,
-// a custom service with no unit text — exactly the cases the former OCITarget.emit* returned nothing).
+// a custom service with no unit text — exactly the cases the former the former in-core emit* returned nothing).
 func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, params []byte, distros []string, allowEmpty bool) (string, error) {
 	env, err := marshalJSON(spec.BuildEnv{Distros: distros})
 	if err != nil {

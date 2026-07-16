@@ -14,7 +14,7 @@ package main
 // externalPluginStepProvider (StepKindExternalPlugin) lives in plugin_step_external.go.
 
 // EVERY other builtin step kind's BUILD-emit is served by the compiled-in class:step plugin
-// candy/plugin-installstep (served over OpEmit) — NO in-proc StepProvider. OCITarget.emitStep
+// candy/plugin-installstep (served over OpEmit) — NO in-proc StepProvider. ociEmitStep
 // routes them by pluginEmitStepWords (provider_step.go); their DEPLOY leg is unchanged
 // (sdk/kit.WalkPlans renders them from the step view). Two sub-categories:
 //   - The PURE kinds (C1.1 + C1.6) — File, ShellHook, ShellSnippet, ServicePackaged, ServiceCustom,

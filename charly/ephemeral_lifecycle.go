@@ -10,6 +10,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // ephemeral_lifecycle.go — shared lifecycle helpers for ephemeral
@@ -304,7 +306,7 @@ func sanitizeUnitName(s string) string {
 // persistEphemeralRuntime writes the EphemeralHandle into charly.yml's
 // vm_state.ephemeral (or pod_state / k8s_state for those targets).
 func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -329,12 +331,12 @@ func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
 		InstanceName:    h.InstanceName,
 	}
 	dc.Bundle[deployName] = node
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // clearEphemeralRuntime removes the lifecycle metadata at teardown.
 func clearEphemeralRuntime(deployName string) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}
@@ -347,13 +349,13 @@ func clearEphemeralRuntime(deployName string) error {
 	}
 	node.VmState.Ephemeral = nil
 	dc.Bundle[deployName] = node
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // bumpParentChildRefcount adjusts the parent ephemeral's child counter
 // by delta (+1 on nested register, -1 on nested teardown).
 func bumpParentChildRefcount(parentID string, delta int) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}
@@ -369,7 +371,7 @@ func bumpParentChildRefcount(parentID string, delta int) error {
 			node.VmState.Ephemeral.ChildRefcount = 0
 		}
 		dc.Bundle[name] = node
-		return SaveBundleConfig(dc)
+		return saveBundleConfigNodeForm(dc)
 	}
 	return nil
 }
@@ -377,7 +379,7 @@ func bumpParentChildRefcount(parentID string, delta int) error {
 // lookupEphemeralByID scans charly.yml for the ephemeral with the
 // given ID. Used for nested TTL clipping.
 func lookupEphemeralByID(id string) (*EphemeralRuntime, error) {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)
 	}
@@ -397,7 +399,7 @@ func lookupEphemeralByID(id string) (*EphemeralRuntime, error) {
 // set guards against cycles (which would only occur via manual
 // charly.yml editing).
 func teardownChildren(deployName string) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}

@@ -1,0 +1,39 @@
+plugin-authoring:
+    candy:
+        version: 2026.196.0000
+        description: |-
+            The `charly box …` AUTHORING verb handlers — a COMMAND-class charly plugin
+            (github.com/opencharly/sdk), NESTED under the core `box` command group (P14b).
+            `charly box set/add-candy/rm-candy/write/cat` mutate a project's charly.yml directly via
+            sdk/kit (kit.SetByDotPath / kit.MappingChild / kit.SaveYAMLNodeFile — the comment-preserving
+            yaml.Node utilities) + the project-rooted file escape hatch (resolveProjectFile
+            path-traversal guard), with ZERO core reentry. `charly box fetch/refresh` pre-prime /
+            force-re-clone the remote-repo cache by re-running the hidden core `__box-fetch` /
+            `__box-refresh` reentry over the generic HostBuild("cli") reverse channel (the same seam
+            candy/plugin-box's `pkg` verb uses for `__box-pkg`) — the repo resolver is host-coupled
+            (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate auto-migration).
+            COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun) (kong-parse each verb's grammar), so
+            the handlers own charly's real stdio. Placement-invisible (F8): the SAME provider compiles
+            into charly or serves out-of-process.
+        plugin:
+            providers:
+                - command:set
+                - command:add-candy
+                - command:rm-candy
+                - command:fetch
+                - command:refresh
+                - command:write
+                - command:cat
+            source: github.com/opencharly/charly/candy/plugin-authoring
+        plan:
+            - # ADE check: a deterministic build-context check that does NOT depend on the host
+              # reverse channel the `charly box fetch`/`refresh` handlers need (the prescan finds
+              # this candy from the project dir). It mirrors candy/plugin-box / candy/plugin-alias —
+              # a trivial build-context `command` (the built-in command CHECK verb) running `true`.
+              # The full CLI end-to-end (`charly box set/add-candy/rm-candy/write/cat/fetch/refresh`)
+              # is exercised by the live R10 (check-commands-local) + the Go tests.
+              check: the authoring command plugin ships a buildable Go module (go.mod + the provider) the host can compile in; the full `charly box` authoring end-to-end is exercised by the live R10 + the Go tests
+              id: authoring-module-present
+              context:
+                - build
+              command: "true"

@@ -1,4 +1,14 @@
-package main
+package substratekind
+
+// status_probes.go — the live tool-probe set for the POD substrate's OpStatus
+// (P14a: relocated verbatim from charly/status_probes.go). Probe is the union
+// root; HostProbe runs from the operator host (no `podman exec`), GuestProbe
+// runs INSIDE a container (batched into one `podman exec sh -c`). The 7 probes
+// (supervisord/dbus/charly/wl/sway guest; cdp/vnc host) + the batcher
+// (runGuestProbes) + splitProbeSections are self-contained over enginekit +
+// spec — sdk-only — so they move cleanly into the substrate plugin. The
+// devToolsTab decode struct (formerly charly/cdp_preresolve.go, used ONLY by
+// the cdp probe) moved with it — cdp_preresolve.go is deleted.
 
 import (
 	"context"
@@ -232,7 +242,16 @@ func (swayProbe) Parse(stdout string) spec.ToolStatus {
 
 // --- Host probes ---
 
-// devToolsTab is defined in cdp.go and reused here.
+// devToolsTab represents a Chrome DevTools Protocol tab entry. Moved from
+// charly/cdp_preresolve.go (which used it ONLY for this probe); the cdp probe
+// decodes /json into it.
+type devToolsTab struct {
+	ID                   string `json:"id"`
+	Title                string `json:"title"`
+	URL                  string `json:"url"`
+	Type                 string `json:"type"`
+	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+}
 
 type cdpProbe struct{}
 
@@ -255,7 +274,7 @@ func (cdpProbe) ProbeHost(ctx context.Context, snap *enginekit.ContainerSnapshot
 	if err != nil {
 		return ts
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // probe best-effort; a close error does not affect the decoded result
 	var tabs []devToolsTab
 	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {
 		return ts

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -18,7 +19,7 @@ import (
 const podDisposableBuilderKind = "pod-disposable"
 
 func hostBuildPodDisposable(_ context.Context, req spec.PodDisposableRequest, _ buildEngineContext) (spec.PodDisposableReply, error) {
-	cfg, err := LoadBundleConfig()
+	cfg, err := deploykit.LoadBundleConfig()
 	if err != nil || cfg == nil {
 		// A missing/unreadable per-host overlay means the sandbox has no entry: not disposable,
 		// not an error (the harness then skips its fresh-per-run restart) — the same graceful

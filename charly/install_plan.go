@@ -8,7 +8,7 @@ package main
 // into the generator. The IR defined here lifts the walk into structured
 // data so the same plan can be consumed by:
 //
-//   - OCITarget        → deploy-mode pod-overlay (add_candy) Containerfile emission (charly bundle add <name>)
+//   - deploykit.OCITarget        → deploy-mode pod-overlay (add_candy) Containerfile emission (charly bundle add <name>)
 //   - ContainerDeploy  → deploy-mode overlay + quadlet (charly bundle add <name>)
 //   - the local deploy target → deploy-mode host execution (charly bundle add host)
 //
@@ -140,7 +140,7 @@ type ReverseOp = spec.ReverseOp
 // ---------------------------------------------------------------------------
 
 // InstallStep is the common interface every concrete step implements.
-// Consumers (OCITarget / the local deploy target) switch on Kind() to dispatch
+// Consumers (deploykit.OCITarget / the local deploy target) switch on Kind() to dispatch
 // to the right rendering or execution path.
 // InstallStep is the polymorphic InstallPlan step interface, homed in sdk/spec
 // (with the IR enums it returns + the InstallPlan container that holds
@@ -168,10 +168,10 @@ type stepContract struct {
 	Gate  Gate
 	// Emits is the F-STEP-EMIT flag: the step produces a build-context Containerfile
 	// FRAGMENT (the serving plugin answers Invoke(OpEmit) → spec.EmitReply.Fragment).
-	// The pod-overlay OCITarget consults it via the open external-step arm — Emits=true →
+	// The pod-overlay deploykit.OCITarget consults it via the open external-step arm — Emits=true →
 	// bake the fragment; Emits=false → skip (a deploy-only external step, like apk on an
 	// image build). Advisory for the DEPLOY leg (executeExternalStep ignores it); load-bearing
-	// for the BUILD leg (OCITarget.emitExternalStep).
+	// for the BUILD leg (ociEmitStep).
 	Emits bool
 }
 

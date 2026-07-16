@@ -24,8 +24,11 @@ plugin-installstep:
             renderOpCommand path; reboot is the host-side guest reboot via RunHostStep →
             rebootVenueAndWait, driven only on a rebootable VM venue); this plugin serves ONLY OpEmit.
             The C1.1–C1.6 externalization of the builtin InstallStep build-emit COMPLETES the
-            13-step externalization: the build leg moves out of charly's OCITarget.emit* methods into
-            this plugin, the deploy leg is unchanged, and every InstallStep kind is now plugin-served
+            13-step externalization: the build leg (OpEmit) is served by THIS plugin — it emits the
+            Containerfile fragment directly over the reverse channel (the build-emit no longer passes
+            through any in-core engine; the former core render was dissolved across P8b/P11c into
+            candy/plugin-build + candy/plugin-deploy-pod via sdk/deploykit.OCITarget), the deploy leg
+            is unchanged, and every InstallStep kind is now plugin-served
             (12 via this candy; ExternalPlugin via its own class:step plugin dispatch). Its Go lives
             in this candy's own module (NewProvider/NewMeta + a cmd/serve out-of-process shim),
             compiled INTO charly via charly.yml compiled_plugins:.

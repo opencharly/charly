@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // ReapOrphansCmd finds and cleans up orphaned ephemeral deployments —
@@ -19,7 +21,7 @@ import (
 type ReapOrphansCmd struct{}
 
 func (c *ReapOrphansCmd) Run() error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}

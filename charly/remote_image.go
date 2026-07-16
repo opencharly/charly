@@ -80,7 +80,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error {
 	// The generate+build both run inside buildCmd.Run() now that box build dispatches through the
 	// compiled-in candy/plugin-build DRIVE (build:box) — which resolves + renders the .build/ tree
-	// host-side over the build-resolve seam, then drives podman — from ctx.CacheDir after the chdir
+	// host-side over the build-prep seam, then drives podman — from ctx.CacheDir after the chdir
 	// below. A standalone NewGenerator+Generate preflight here would be redundant work whose .build/
 	// output the candy build drive immediately regenerates.
 	buildCmd := &BuildCmd{

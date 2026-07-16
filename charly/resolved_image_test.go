@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestResolveDeployRefPrefersPersistedOverlay guards the add_candy-on-pod
@@ -28,11 +30,11 @@ func TestResolveDeployRefPrefersPersistedOverlay(t *testing.T) {
 	t.Cleanup(func() { DeployConfigPath = origPath })
 
 	// Persist the overlay ref exactly as PrepareVenue does.
-	saveDeployState("check-addcandy-pod", "", SaveDeployStateInput{
+	deploykit.SaveDeployState("check-addcandy-pod", "", deploykit.SaveDeployStateInput{
 		Box:           "check-pod",
 		Target:        "pod",
 		ResolvedImage: overlayRef,
-	})
+	}, marshalDeployNode)
 
 	// Round-trip: the new helper reads it back from the per-host config.
 	if got := resolveDeployResolvedImage("check-addcandy-pod", ""); got != overlayRef {

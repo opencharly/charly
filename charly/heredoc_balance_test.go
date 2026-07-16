@@ -96,7 +96,7 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 // repo-file write (`CHARLY_REPO`) and the packaged-service drop-in
 // (`CHARLY_DROPIN`).
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
-	tgt := &OCITarget{}
+	tgt := ociTestTarget(buildEngineContext{})
 	plan := &InstallPlan{Candy: "demo", Steps: []InstallStep{
 		&RepoChangeStep{
 			Format:  "rpm",
@@ -122,5 +122,5 @@ func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	if !strings.Contains(out, "<<'CHARLY_DROPIN'") {
 		t.Errorf("expected CHARLY_DROPIN opener in OCI output:\n%s", out)
 	}
-	assertBalancedHeredoc(t, "OCITarget.Emit", out)
+	assertBalancedHeredoc(t, "deploykit.OCITarget.Emit", out)
 }

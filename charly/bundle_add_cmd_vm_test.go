@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // saveVmDeployState must serialize the load→modify→save of the shared per-host
@@ -39,7 +41,7 @@ func TestSaveVmDeployState_ConcurrentWritersAllSurvive(t *testing.T) {
 		}
 	}
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("final load: %v", err)
 	}
@@ -77,7 +79,7 @@ func TestSaveVmDeployState_LockReleasedBetweenCalls(t *testing.T) {
 	if err := saveVmDeployState("vm:two", "", &VmDeployState{SshPort: 2202}); err != nil {
 		t.Fatalf("second write (lock not released?): %v", err)
 	}
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -114,7 +116,7 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 	}
 
 	// The write must carry the `vm:` cross-ref — the linkage teardown needs.
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after seed: %v", err)
 	}
@@ -132,7 +134,7 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 		t.Fatalf("removeVmDeployEntry: %v", err)
 	}
 
-	got, err := LoadBundleConfig()
+	got, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after teardown: %v", err)
 	}

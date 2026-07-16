@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -109,7 +110,7 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 
 	// Prior runtime state (instance-id, ssh_port, disk path) for the plugin's port idempotency.
 	var state *VmDeployState
-	if dc := loadDeployConfigForRead("charly bundle add vm"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly bundle add vm"); dc != nil {
 		if entry, exists := dc.Bundle[name]; exists && entry.VmState != nil {
 			state = entry.VmState
 		}
@@ -173,7 +174,7 @@ var _ = func() bool { registerLifecyclePostTeardownHook("vm", vmLifecyclePostTea
 // timers + libvirt snapshot refcounts — un-importable by the plugin). The ssh-config stanza + the
 // charly.yml entry removal are the plugin's job (kit.RemoveVmSshStanza + PostTeardownReply.RemoveEntries).
 func vmLifecyclePostTeardown(name string, node *BundleNode) error {
-	if dcNode, ok := loadDeployConfigForRead("vm ephemeral-teardown").LookupKey(name); ok && dcNode.IsEphemeral() {
+	if dcNode, ok := deploykit.LoadDeployConfigForRead("vm ephemeral-teardown").LookupKey(name); ok && dcNode.IsEphemeral() {
 		return TeardownEphemeralLifecycle(&dcNode, name)
 	}
 	return nil

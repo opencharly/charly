@@ -4,47 +4,40 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk/spec"
 )
 
-// build_resolve_host.go — the HOST-SIDE resolve/render SEAM behind the compiled-in
-// candy/plugin-build DRIVE (P8b). P8 kept the whole box-build engine host-side
-// behind HostBuild("image") — the "permanent facade"; P8b REVERSES that: the
-// podman DRIVE (build loop, per-image lock, push, merge gate) moved INTO the
-// candy, and the host is now a pure RESOLVE/RENDER seam provider reached via
-// HostBuild("build-resolve").
+// build_resolve_host.go — the HOST-SIDE build-prep SEAM behind the compiled-in
+// candy/plugin-build DRIVE (#67 render-DRIVE move). The podman DRIVE (build loop,
+// per-image lock, push, merge gate) lives in candy/plugin-build; the host is a
+// pure PREP + RESOLVE-PROJECT envelope provider reached via HostBuild("build-prep").
 //
 // What STAYS host-side and rides this seam is exactly what a candy importing only
 // sdk cannot do: the LOADER (NewGenerator → LoadConfig/ScanAllCandy/Validate/
-// ResolveAllBox — a kernel M/B Mechanism + P6's plugin), the Containerfile RENDER
-// (deploykit over the core runtime Candy graph, kept core by the P2 decision), the
-// privileged builder-bootstrap (deep ResolvedBox + PacstrapDef, shared with the VM
-// bootstrap path R3), and the builder-image ensure. hostBuildBuildResolve runs all
-// of that and returns the SERIALIZABLE drive-model (order/levels + per-box
-// descriptors + resolved tunables) the candy's podman drive consumes.
-//
-// generate.go / OCITarget / intermediates / layers therefore stay core PINNED BY
-// the loader Mechanism + the P2 runtime-Candy decision — a documented boundary-law
-// placement RE-JUDGED at P15/P16 after the loader-residue fold, never a silent keep.
+// ResolveAllBox — a kernel M/B Mechanism), the build PREP (cleanStaleBuildDirs,
+// MkdirAll, writeContextIgnore, createRemoteCandyCopies — host fs operations), the
+// render-prep (fill build-render caches on ResolvedBox by reading the live graph),
+// the resolved-project ENVELOPE projection (with caches), the privileged
+// builder-bootstrap, and the builder-image ensure. The Containerfile RENDER itself
+// moved to deploykit.Generator (sdk/deploykit/generate.go) — plugin-build builds
+// the Generator from the envelope + runs Generate.
 //
 // The build-ACTIVITY lock (retention floor) + the post-build retention prune are
-// NOT here — they wrap the whole build in BuildCmd.Run host-side
-// (BuildCmd.Run computes the tag once + threads it here as req.Tag so the
-// activity-lock tag matches the built images). The PER-IMAGE build lock moved to
-// the candy (kit.AcquireImageBuildLock) so distinct leaves still fan out in
-// parallel while a shared intermediate builds cold once.
+// NOT here — they wrap the whole build in BuildCmd.Run host-side.
 
-// hostBuildBuildResolve is the "build-resolve" host-builder: it reconstructs the
-// project from req.Dir (NewGenerator), renders the .build/ Containerfile tree
-// (gen.Generate), and — for a real build (req.GenerateOnly == false) — resolves the
-// engine/platform/tunables, runs the privileged builder-bootstrap for every
-// builder-based image in the build set up-front, and assembles the per-box drive
-// descriptors. GenerateOnly (the `charly box generate` path) renders + returns the
-// written Containerfile paths WITHOUT any build prep.
+// hostBuildBuildResolve is the "build-prep" host-builder: it reconstructs the
+// project from req.Dir (NewGenerator), runs the build prep (cleanStaleBuildDirs,
+// MkdirAll, writeContextIgnore, createRemoteCandyCopies), runs render-prep (fills
+// build-render caches on ResolvedBox), resolves the build order, and projects the
+// resolved-project envelope (with caches). The reply carries the envelope + the
+// drive-model (order/levels + per-box descriptors + resolved tunables). The
+// Containerfile RENDER is NOT done here — plugin-build renders via deploykit.Generator.
+// For GenerateOnly, plugin-build renders + writes the Containerfiles + returns the
+// paths; for a real build, plugin-build renders + pipes to podman.
+//
+//nolint:gocyclo // build-prep orchestrator — the linear prep sequence (fs prep, render-prep, order, envelope projection, build-prep) over the build-prep seam; one branch per prep step.
 func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ buildEngineContext) (spec.BuildResolveReply, error) {
 	dir := req.Dir
 	if dir == "" {
@@ -74,18 +67,75 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
 	gen.DevLocalPkg = c.DevLocalPkg
-	if err := gen.Generate(); err != nil {
-		return spec.BuildResolveReply{Error: errString(fmt.Errorf("generating build files: %w", err))}, nil
+	// Cache the live Generator for the render-seam host-builder (#67): plugin-build's
+	// deploykit.Generator render calls back via HostBuild("render-seam") for each
+	// host-coupled seam (RenderService, builder resolves, ValidateEgress, …); those
+	// reach the core funcs through THIS gen (gen.Boxes/gen.Candies/gen.Config/gen.Dir).
+	// One gen per dir per process — build-prep is the first HostBuild, so the cache is
+	// populated before any render-seam call.
+	renderGenCache.Store(dir, gen)
+
+	// --- build prep (host-side fs operations; plugin-build does NOT do these) ---
+	if err := gen.cleanStaleBuildDirs(); err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("cleaning stale build dirs: %w", err))}, nil
+	}
+	if err := os.MkdirAll(gen.BuildDir, 0755); err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("creating .build directory: %w", err))}, nil
+	}
+	if err := gen.writeContextIgnore(); err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("writing context ignore files: %w", err))}, nil
+	}
+	if err := gen.createRemoteCandyCopies(); err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("creating remote candy symlinks: %w", err))}, nil
 	}
 
-	// generate-only: return the written Containerfile paths, no build prep.
-	if req.GenerateOnly {
-		written := make([]string, 0, len(gen.Containerfiles))
-		for name := range gen.Containerfiles {
-			written = append(written, filepath.Join(dir, ".build", name, "Containerfile"))
+	// --- render-prep: fill build-render caches on every box ---
+	if err := renderPrepAll(gen); err != nil {
+		return spec.BuildResolveReply{Error: errString(err)}, nil
+	}
+
+	// --- resolve user context (in order, parents first) ---
+	order, err := ResolveBoxOrder(gen.Boxes, gen.Candies)
+	if err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("resolving box order: %w", err))}, nil
+	}
+	if len(gen.RequestedBoxes) > 0 {
+		order, err = filterBox(order, gen.RequestedBoxes, gen.Boxes)
+		if err != nil {
+			return spec.BuildResolveReply{Error: errString(fmt.Errorf("scoping generation to requested boxes: %w", err))}, nil
 		}
-		sort.Strings(written)
-		return spec.BuildResolveReply{Written: written}, nil
+	}
+	for _, name := range order {
+		gen.resolveUserContext(gen.Boxes[name])
+	}
+
+	// --- project the resolved-project envelope (with build-render caches) ---
+	// Load the project via loadProjectForResolve to get the uf (deploy tree, templates,
+	// agent bodies) + the build-vocab configs the projector needs. Use the Generator's
+	// pre-resolved boxes (with caches) as the preResolvedBoxes so the caches survive.
+	lp, err := loadProjectForResolve(dir, boxResolveOpts(boxes, c.IncludeDisabled), nil)
+	if err != nil {
+		return spec.BuildResolveReply{Error: errString(fmt.Errorf("loading project for envelope: %w", err))}, nil
+	}
+	var rp *spec.ResolvedProject
+	if !lp.empty {
+		rp, err = projectResolvedProjectWithBoxes(lp.cfg, lp.layers, lp.uf, lp.distroCfg, lp.builderCfg, gen.InitConfig, dir, lp.version, boxResolveOpts(boxes, c.IncludeDisabled), nil, gen.Boxes)
+		if err != nil {
+			return spec.BuildResolveReply{Error: errString(fmt.Errorf("projecting resolved-project envelope: %w", err))}, nil
+		}
+		// Fill the build-render-only project-level fields (#67).
+		rp.GlobalOrder = gen.GlobalOrder
+		rp.ExternalizedBuilders = externalizedBuilders
+	} else {
+		rp = &spec.ResolvedProject{}
+	}
+
+	// generate-only: return the envelope + order so plugin-build can render.
+	if req.GenerateOnly {
+		return spec.BuildResolveReply{
+			ResolvedProject: rp,
+			Order:           order,
+		}, nil
 	}
 
 	// --- build prep (host-side; the candy drives the podman build/push/merge) ---
@@ -109,24 +159,14 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 
 	// Resolve the build order: filtered → sequential Order; full → level-parallel
 	// Levels. Exactly ONE is set (mirrors buildImages' two branches).
-	var order []string
 	var levels [][]string
 	if len(c.Boxes) > 0 {
-		ord, err := ResolveBoxOrder(gen.Boxes, gen.Candies)
-		if err != nil {
-			return spec.BuildResolveReply{Error: errString(err)}, nil
-		}
-		ord, err = filterBox(ord, c.Boxes, gen.Boxes)
-		if err != nil {
-			return spec.BuildResolveReply{Error: errString(err)}, nil
-		}
-		order = ord
+		// order already resolved above
 	} else {
-		lvls, err := ResolveBoxLevels(gen.Boxes, gen.Candies)
+		levels, err = ResolveBoxLevels(gen.Boxes, gen.Candies)
 		if err != nil {
 			return spec.BuildResolveReply{Error: errString(err)}, nil
 		}
-		levels = lvls
 	}
 
 	// The full build set (flattened) — the images the candy will build AND the
@@ -138,12 +178,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		}
 	}
 
-	// Privileged builder-bootstrap for every `from: builder:` image in the set:
-	// runPrivilegedBootstrap produces .build/<image>/<builder>.tar.gz the
-	// Containerfile ADDs. Done host-side up-front (deep ResolvedBox + PacstrapDef +
-	// ensureBuilderImageBuilt, which now recurses through dispatchBoxBuild → the
-	// candy) so the candy's podman build finds every tarball; each bootstrap is
-	// self-contained, so order-independent.
+	// Privileged builder-bootstrap for every `from: builder:` image in the set.
 	for _, name := range buildSet {
 		img := gen.Boxes[name]
 		if img != nil && strings.HasPrefix(img.From, "builder:") {
@@ -153,7 +188,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		}
 	}
 
-	// Per-box drive descriptors.
+	// Per-box drive descriptors (NO Containerfile content — plugin-build renders).
 	descriptors := make([]spec.BuildResolveBox, 0, len(buildSet))
 	for _, name := range buildSet {
 		img := gen.Boxes[name]
@@ -161,16 +196,12 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 			continue
 		}
 		d := spec.BuildResolveBox{
-			Name:          name,
-			FullTag:       img.FullTag,
-			Containerfile: gen.Containerfiles[name],
-			Registry:      img.Registry,
-			Platforms:     img.Platforms,
-			MergeAuto:     img.Merge != nil && img.Merge.Auto,
+			Name:      name,
+			FullTag:   img.FullTag,
+			Registry:  img.Registry,
+			Platforms: img.Platforms,
+			MergeAuto: img.Merge != nil && img.Merge.Auto,
 		}
-		// Carry the per-box merge knobs (box config) — the candy's ref-based merge
-		// (InvokeProvider(verb:oci)) can't re-resolve the box, so it passes these
-		// through; 0 → plugin defaults (matching MergeCmd.runOne's box-config lookup).
 		if img.Merge != nil {
 			d.MergeMaxMB = int64(img.Merge.MaxMB)
 			d.MergeMaxTotalMB = int64(img.Merge.MaxTotalMB)
@@ -179,16 +210,17 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 	}
 
 	return spec.BuildResolveReply{
-		Engine:     engine,
-		EngineName: rt.BuildEngine,
-		Platform:   platform,
-		Order:      order,
-		Levels:     levels,
-		Boxes:      descriptors,
-		Jobs:       int64(resolveBuildJobs(c)),
-		PodmanJobs: int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
-		Cache:      c.Cache,
-		KeepImages: int64(resolveIntPtr(def.KeepImages, nil, keepImagesFallback)),
+		Engine:          engine,
+		EngineName:      rt.BuildEngine,
+		Platform:        platform,
+		Order:           order,
+		Levels:          levels,
+		Boxes:           descriptors,
+		Jobs:            int64(resolveBuildJobs(c)),
+		PodmanJobs:      int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
+		Cache:           c.Cache,
+		KeepImages:      int64(resolveIntPtr(def.KeepImages, nil, keepImagesFallback)),
+		ResolvedProject: rp,
 	}, nil
 }
 
@@ -201,11 +233,11 @@ func resolveBuildJobs(c *BuildCmd) int {
 	return c.Jobs
 }
 
-// Register the build-resolve host-builder at package-var init (before any init(),
+// Register the build-prep host-builder at package-var init (before any init(),
 // like the image/containerfiles/overlay builders it replaces on the CLI path).
-// "build-resolve" is a CLASS-GENERIC action noun (mirrors config-resolve/vm-build,
+// "build-prep" is a CLASS-GENERIC action noun (mirrors config-resolve/vm-build,
 // never a provider word — the F11 uniform-API gate).
 var _ = func() bool {
-	registerHostBuilder("build-resolve", typedHostBuilder("build-resolve", hostBuildBuildResolve))
+	registerHostBuilder("build-prep", typedHostBuilder("build-prep", hostBuildBuildResolve))
 	return true
 }()

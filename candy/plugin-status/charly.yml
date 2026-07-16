@@ -42,8 +42,9 @@ plugin-status:
             Invoke(OpRun) with the threaded in-proc reverse channel), so NewMeta advertises
             command:status while the served CUE schema carries no plugin_input (the args are
             plain CLI tokens). The overlay's byte-parity is proven by the candy's OWN
-            overlay_golden_test.go; the host collection engine's parity by the HOST
-            TestStatusCollectGoldenParity (charly/status_golden_test.go).
+            overlay_golden_test.go; the host collection engine's parity by the plugin's
+            TestCollectPodLiveGolden (candy/plugin-substrate/status_test.go) — the relocated
+            pod-live transform golden (P14a, moved from charly/status_golden_test.go).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-status
             providers:

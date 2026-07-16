@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestPersistBedDeployOverrides_SkipsLocalBed pins the bed-infra fix for the
@@ -39,7 +41,7 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 		Lifecycle:  "dev",
 	})
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay unloadable after local-bed persist (it should have been SKIPPED): %v", err)
 	}
@@ -55,7 +57,7 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 		Target: "pod",
 		Image:  "pod-deploy-x",
 	})
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after pod-bed persist: %v", err)
 	}
@@ -101,7 +103,7 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 		Preemptible: &PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
 	})
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload per-host overlay: %v", err)
 	}

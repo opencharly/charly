@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -305,7 +306,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	}
 
 	// Apply charly.yml overrides onto label metadata
-	dc := loadDeployConfigForRead("charly config")
+	dc := deploykit.LoadDeployConfigForRead("charly config")
 
 	// One-time migration: move any plaintext credentials that live in
 	// charly.yml's env: list from the legacy -e flow into the credential
@@ -351,7 +352,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 			if !SameStringSlice(overlay.ResolvedPort, resolved) {
 				overlay.ResolvedPort = resolved
 				dc.Bundle[key] = overlay
-				if saveErr := SaveBundleConfig(dc); saveErr != nil {
+				if saveErr := saveBundleConfigNodeForm(dc); saveErr != nil {
 					return fmt.Errorf("saving resolved_port: %w", saveErr)
 				}
 				fmt.Fprintf(os.Stderr, "Resolved ports for %s: %s\n",
@@ -360,7 +361,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 		}
 	}
 
-	MergeDeployOntoMetadata(meta, dc, c.Box, c.Instance)
+	deploykit.MergeDeployOntoMetadata(meta, dc, c.Box, c.Instance)
 
 	uid, gid := meta.UID, meta.GID
 	ports := meta.Port
@@ -439,7 +440,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 		}
 	}
 	// Reload deploy config after injection to pick up newly injected provides
-	dc = loadDeployConfigForRead("charly config reload-after-inject")
+	dc = deploykit.LoadDeployConfigForRead("charly config reload-after-inject")
 
 	// Resolve SSH key if --ssh-key was provided
 	if c.SshKey != "" {
@@ -618,7 +619,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	// `meta.Port` value, since `ports` is computed from image labels
 	// merged with charly.yml — an idempotent recompute, not an explicit
 	// operator decision to set ports.
-	saveDeployState(c.Box, c.Instance, SaveDeployStateInput{
+	deploykit.SaveDeployState(c.Box, c.Instance, deploykit.SaveDeployStateInput{
 		Ports:       ports,
 		SetPorts:    len(c.Port) > 0,
 		Env:         envPairsToMap(c.Env),
@@ -643,7 +644,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 		// deploy_add_cmd.go.
 		Box:    deployBoxName,
 		Target: "pod",
-	})
+	}, marshalDeployNode)
 
 	// Direct mode: skip quadlet+systemctl and run podman directly. Used
 	// in nested environments (harness sandbox pods, supervisord-only containers,
@@ -748,7 +749,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	}
 
 	// Reload deploy config after saveDeployState wrote the volumes
-	dc = loadDeployConfigForRead("charly config reload-after-volumes")
+	dc = deploykit.LoadDeployConfigForRead("charly config reload-after-volumes")
 
 	// Provision data from image staging (/data/) into the image's volumes
 	// (both bind mounts and named volumes — provisionData dispatches on kind).
@@ -820,7 +821,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 					}
 				}
 				dc.Bundle[deployKey(c.Box, c.Instance)] = imgDeploy
-				if err := SaveBundleConfig(dc); err != nil {
+				if err := saveBundleConfigNodeForm(dc); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: could not save data seeded state to charly.yml: %v\n", err)
 				}
 				fmt.Fprintf(os.Stderr, "Provisioned data for %d volume(s)\n", seeded)
@@ -861,7 +862,7 @@ skipDataProvision:
 
 	// Warn about missing mcp_requires servers
 	if len(meta.MCPRequire) > 0 {
-		dc := loadDeployConfigForRead("charly config mcp_requires check")
+		dc := deploykit.LoadDeployConfigForRead("charly config mcp_requires check")
 		var mcpServers []MCPProvideEntry
 		if dc != nil && dc.Provides != nil {
 			mcpServers = spec.PodAwareMCPProvides(dc.Provides.MCP, deployKey(c.Box, c.Instance), containerNameInstance(c.Box, c.Instance))
@@ -1249,7 +1250,7 @@ func (c *BoxConfigSetupCmd) persistResourceCaps(dc **BundleConfig) error {
 		entry.Security.Cpus = c.Cpus
 	}
 	(*dc).Bundle[key] = entry
-	return SaveBundleConfig(*dc)
+	return saveBundleConfigNodeForm(*dc)
 }
 
 // parseVolumeEnv parses CHARLY_VOLUMES_<IMAGE> env var into DeployVolumeConfig.
@@ -1298,7 +1299,7 @@ func injectEnvProvides(boxName, instance string, envProvides map[string]string, 
 		return false, nil
 	}
 
-	dc, err := loadDeployConfigForWrite("injectEnvProvides")
+	dc, err := deploykit.LoadDeployConfigForWrite("injectEnvProvides")
 	if err != nil {
 		return false, err
 	}
@@ -1345,7 +1346,7 @@ func injectEnvProvides(boxName, instance string, envProvides map[string]string, 
 	}
 
 	if changed {
-		if err := SaveBundleConfig(dc); err != nil {
+		if err := saveBundleConfigNodeForm(dc); err != nil {
 			return false, fmt.Errorf("saving deploy config: %w", err)
 		}
 	}
@@ -1362,7 +1363,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []MCPServerYAML, po
 		return false, nil
 	}
 
-	dc, err := loadDeployConfigForWrite("injectMCPProvides")
+	dc, err := deploykit.LoadDeployConfigForWrite("injectMCPProvides")
 	if err != nil {
 		return false, err
 	}
@@ -1427,7 +1428,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []MCPServerYAML, po
 	}
 
 	if changed {
-		if err := SaveBundleConfig(dc); err != nil {
+		if err := saveBundleConfigNodeForm(dc); err != nil {
 			return false, fmt.Errorf("saving deploy config: %w", err)
 		}
 	}
@@ -1545,7 +1546,7 @@ func checkMissingSecretRequires(boxName string, requires []EnvDependency, resolu
 //
 //nolint:gocyclo // per-deploy quadlet-rewrite loop; each step (load metadata → merge deploy config → resolve env → rewrite quadlet) is a peer; extraction needs unwieldy param passing
 func updateAllDeployedQuadlets(rt *ResolvedRuntime, skipBox string) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return nil
 	}
@@ -1599,7 +1600,7 @@ func updateAllDeployedQuadlets(rt *ResolvedRuntime, skipBox string) error {
 		// Apply charly.yml overrides (instance-aware). Key by the deploy-key
 		// base (boxName from parseDeployKey), not meta.Box — a bed /
 		// Pattern-B entry carries a key distinct from its baked image label.
-		MergeDeployOntoMetadata(meta, dc, boxName, instance)
+		deploykit.MergeDeployOntoMetadata(meta, dc, boxName, instance)
 
 		// Resolve env vars with updated global env. Pass deployKey so an
 		// instance's quadlet doesn't pick up another instance's provides.

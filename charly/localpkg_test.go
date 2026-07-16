@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -123,7 +124,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 		},
 	}
 	img := &ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
-	plan, err := BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
+	plan, err := deploykit.BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -152,20 +153,20 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 }
 
 // TestOCITargetLocalPkgNilContractEmitsNothing proves a localpkg step with NO LocalPkg
-// contract (LocalPkg==nil — a distro with no localpkg-capable format) renders nothing at
-// image build. Post-C1.4 the build-emit routes through the FULL plugin chain
-// (emitStep → pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → spliceClassStepEmit →
+// contract (LocalPkg==nil — a distro with no localpkg-capable format) renders nothing at image
+// build. Post-C1.4 the build-emit routes through the FULL plugin chain (ociEmitStep →
+// pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → spliceClassStepEmit →
 // candy/plugin-installstep OpEmit → emitViaHostBuild → HostBuild("step-emit") →
 // stepEmitLocalPkgInstall → renderLocalPkgImageInstall), which returns "" for a nil LocalPkg —
-// so emitStep succeeds and emits nothing.
+// so ociEmitStep succeeds and returns nothing.
 func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
-	tgt := &OCITarget{}
 	step := &LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
-	if err := tgt.emitStep(step, &InstallPlan{}); err != nil {
-		t.Fatalf("OCITarget.emitStep(LocalPkgInstallStep, nil LocalPkg) = %v, want nil", err)
+	frag, err := ociEmitStep(step, &InstallPlan{}, nil, buildEngineContext{})
+	if err != nil {
+		t.Fatalf("ociEmitStep(LocalPkgInstallStep, nil LocalPkg) = %v, want nil", err)
 	}
-	if tgt.buf.Len() != 0 {
-		t.Errorf("OCITarget emitted %q for a nil-LocalPkg localpkg step; should emit nothing", tgt.buf.String())
+	if frag != "" {
+		t.Errorf("ociEmitStep emitted %q for a nil-LocalPkg localpkg step; should emit nothing", frag)
 	}
 }
 

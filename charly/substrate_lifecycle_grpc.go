@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -17,7 +18,7 @@ import (
 // Every lifecycle Op is Invoked WITH the host's executor over the reverse channel
 // (InvokeWithExecutor), so the plugin — which runs ON the host but out-of-process — can call back
 // HostBuild("overlay"/"cli") + the reverse legs it needs (the compiled-in pod/vm lifecycles used
-// the in-core runOverlayBuild + runCharlySubcommand directly; the externalized plugins reach the
+// the in-core overlay build + runCharlySubcommand directly; the externalized plugins reach the
 // SAME engines through the reverse channel). Most Ops serve a host-local ShellExecutor; PostApply
 // serves the LIVE venue executor (vm's nested pod-in-guest needs the guest). Every Op ships
 // HostEnv{CharlyBin, Home} on op.Env (the plugin's own os.Executable() is the PLUGIN binary, so the
@@ -143,12 +144,12 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 	// Persist the opaque deploy-entry State patch host-side (the plugin cannot touch charly.yml):
 	// pod ships {ResolvedImage}; vm ships {vm_state}. saveDeployState is the generic writer.
 	if len(reply.State) > 0 && !opts.DryRun {
-		var in SaveDeployStateInput
+		var in deploykit.SaveDeployStateInput
 		if err := json.Unmarshal(reply.State, &in); err != nil {
 			return nil, fmt.Errorf("substrate %q prepare-venue: decode state: %w", l.prov.word, err)
 		}
 		boxKey, instKey := parseDeployKey(name)
-		saveDeployState(boxKey, instKey, in)
+		deploykit.SaveDeployState(boxKey, instKey, in, marshalDeployNode)
 	}
 	return venueFromDescriptor(reply.Venue)
 }

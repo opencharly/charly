@@ -4,9 +4,10 @@ package main
 //
 // UnifiedDeployTarget/LifecycleTarget via externalDeployTarget (the out-of-process
 // substrate adapter — ALL FIVE substrates local/vm/pod/k8s/android externalized), and the
-// ResolveTarget dispatcher. There are no in-proc UnifiedDeployTarget adapters left; the core
-// build engines they once wrapped (PodDeployTarget overlay synthesis, the VM disk build)
-// are now invoked host-side from each substrate's lifecycle hook.
+// ResolveTarget dispatcher. There are no in-proc UnifiedDeployTarget adapters left; the
+// pod-overlay render + the VM disk build that once lived in core are now invoked host-side
+// from each substrate's lifecycle hook — the pod-overlay render moved to candy/plugin-deploy-pod
+// (P11c), reached via HostBuild("overlay") prep + the "step-emit"/"oci-emit-step" per-step dispatch.
 //
 // Each adapter wraps an existing legacy target via struct embedding.
 // Methods on the adapter take precedence over inherited legacy methods
@@ -108,11 +109,12 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 // over the E3b reverse channel. Unlike vm, pod's plugin WALKS NOTHING: pod bakes its install
 // steps INTO the image at build time, so its substrateLifecycle (the external
 // candy/plugin-deploy-pod, M4) builds the overlay container image HOST-SIDE in PrepareVenue
-// via HostBuild("overlay") → the RETAINED core
-// OCITarget/Generator engine, in-process — like vm builds its disk host-side) and owns the
-// container lifecycle (config/start/remove + the `charly update` rebuild gate). PodDeployTarget
-// (deploy_target_pod.go) is RETAINED as that core overlay-build engine; only the adapter +
-// the in-proc dedicated deploy provider were deleted.
+// via HostBuild("overlay") → the core prep+resolve seam (build_overlay.go) + the candy's own
+// render (deploykit.OCITarget walker + the "step-emit"/"oci-emit-step" per-step dispatch —
+// P11c dissolved the former in-core overlay render into the candy), like vm builds its disk
+// host-side) and owns the container lifecycle (config/start/remove + the `charly update`
+// rebuild gate). The former in-core pod overlay target struct is GONE (moved to the candy);
+// only the adapter + the in-proc dedicated deploy provider were deleted.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

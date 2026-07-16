@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -248,7 +249,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		return kit.CheckRunReply{NoSteps: true}, nil
 	}
 	var deployOverlay *BundleNode
-	if dc := loadDeployConfigForRead("charly check feature run"); dc != nil {
+	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
 		if entry, ok := dc.Bundle[deployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {

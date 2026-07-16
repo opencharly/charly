@@ -11,9 +11,10 @@ plugin-example-stepkind:
             dispatches the step's OpExecute over the E3b reverse channel — where it writes a venue
             marker and returns a teardown ReverseOp the host records + replays (record-and-replay).
             BUILD leg (OpEmit, F-STEP-EMIT): the plugin declares Emits=true and answers OpEmit with
-            a Containerfile RUN fragment; composed into a pod overlay (add_candy), the host's
-            OCITarget open external-step arm splices it — baking /etc/examplestepkind-build-baked
-            into the overlay image. The step-class companion of the verb-class
+            a Containerfile RUN fragment; composed into a pod overlay (add_candy), the candy's
+            deploykit.OCITarget open external-step arm (dispatched host-side via the step-emit
+            host-builder) splices it — baking /etc/examplestepkind-build-baked into the overlay
+            image. The step-class companion of the verb-class
             candy/plugin-example-external and the deploy-class candy/plugin-example-deploy.
         plugin:
             providers:

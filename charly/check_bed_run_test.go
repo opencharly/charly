@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -128,7 +129,7 @@ ollama:
 	}
 	persistBedDeployOverrides("check-cachyos-ollama-pod", bed)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after seed: %v", err)
 	}

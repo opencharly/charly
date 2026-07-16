@@ -135,9 +135,9 @@ func (v *VMCollector) enrichFromDeploy(cs *spec.DeploymentStatus, entity string,
 
 // vmStatusFromDomainState normalises libvirt domain-state vocabulary (as
 // rendered by domainStateString) to the unified `charly status` status vocabulary
-// shared with the pod substrate (statusFromState). running/paused pass through;
-// every powered-off / transitional libvirt state collapses to a single
-// "stopped" or its closest unified equivalent.
+// shared with the pod substrate (spec.StatusFromState, the single-sourced mapper
+// in sdk/spec). running/paused pass through; every powered-off / transitional
+// libvirt state collapses to a single "stopped" or its closest unified equivalent.
 func vmStatusFromDomainState(state string) string {
 	switch state {
 	case "running":
