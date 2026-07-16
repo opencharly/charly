@@ -188,6 +188,88 @@ expect("commit: clean charly change allowed",
 shutil.rmtree(c, ignore_errors=True)
 
 
+# --- ZERO-ALIASES merge-commit awareness --------------------------------------
+# A behind-branch MERGE stages, relative to HEAD (the FIRST parent), everything
+# the incoming branch brought in — including gofmt-REALIGNED (not new) alias
+# survivors. Those must NOT trip the gate; only an alias present in NEITHER parent
+# (a genuine new alias, incl. one invented while resolving a conflict) must block.
+def git_q(path, *args):
+    return subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+
+
+def charly_merge_base():
+    """A charly superproject with a base commit on branch 'trunk' carrying a
+    tab-indented grouped alias line, plus a 'feat' branch forked from it."""
+    path = tempfile.mkdtemp(prefix="gate-test-merge-")
+    git_q(path, "init", "-q", "-b", "trunk")
+    git_q(path, "config", "user.email", "t@t")
+    git_q(path, "config", "user.name", "t")
+    os.mkdir(os.path.join(path, "charly"))
+    with open(os.path.join(path, "charly", "foo.go"), "w") as stream:
+        stream.write("package main\n\nfunc main() {}\n")
+    with open(os.path.join(path, "charly", "existing_aliases.go"), "w") as stream:
+        stream.write("package main\n\nvar (\n\tKeptAlias = vmshared.Foo\n)\n")
+    git_q(path, "add", "-A")
+    git_q(path, "commit", "-qm", "base")
+    git_q(path, "branch", "feat")
+    return path
+
+
+# Case 1 (must ALLOW): trunk gofmt-REALIGNS the alias line (tab -> 4 spaces); feat
+# makes an unrelated change; merging trunk stages the realigned line as '+', but it
+# is present in the incoming parent -> a survivor, not a new alias.
+m = charly_merge_base()
+with open(os.path.join(m, "charly", "existing_aliases.go"), "w") as stream:
+    stream.write("package main\n\nvar (\n    KeptAlias = vmshared.Foo\n)\n")
+git_q(m, "commit", "-qam", "trunk realign")
+git_q(m, "checkout", "-q", "feat")
+with open(os.path.join(m, "charly", "foo.go"), "w") as stream:
+    stream.write("package main\n\nfunc main() { println(\"feat\") }\n")
+git_q(m, "commit", "-qam", "feat change")
+git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+expect("commit: merge-in realigned alias survivor allowed",
+       gate(COMMIT_GATE, f"git -C {m} commit -m x"), "ALLOW")
+shutil.rmtree(m, ignore_errors=True)
+
+
+# Case 2 (must BLOCK): during a merge, a GENUINELY new alias line (present in
+# neither parent) is introduced -> still caught.
+m = charly_merge_base()
+with open(os.path.join(m, "charly", "foo.go"), "w") as stream:  # trunk: unrelated change
+    stream.write("package main\n\nfunc main() { println(\"trunk\") }\n")
+git_q(m, "commit", "-qam", "trunk change")
+git_q(m, "checkout", "-q", "feat")
+with open(os.path.join(m, "charly", "bar.go"), "w") as stream:  # feat: unrelated new file
+    stream.write("package main\n")
+git_q(m, "add", "-A")
+git_q(m, "commit", "-qm", "feat change")
+git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+with open(os.path.join(m, "charly", "existing_aliases.go"), "w") as stream:  # inject a new alias
+    stream.write("package main\n\nvar (\n\tKeptAlias = vmshared.Foo\n\tBrandNew = kit.Sym\n)\n")
+git_q(m, "add", "charly/existing_aliases.go")
+expect("commit: genuinely-new alias during a merge still blocked",
+       gate(COMMIT_GATE, f"git -C {m} commit -m x"), "BLOCK")
+shutil.rmtree(m, ignore_errors=True)
+
+
+# Case 3 (must ALLOW): a NEW charly/*_aliases.go FILE the merge carried in from the
+# incoming parent (already vetted on its own landing) is not re-flagged.
+m = charly_merge_base()
+with open(os.path.join(m, "charly", "trunk_new_aliases.go"), "w") as stream:  # trunk adds it
+    stream.write("package main\n\n// added on trunk\n")
+git_q(m, "add", "-A")
+git_q(m, "commit", "-qm", "trunk adds alias file")
+git_q(m, "checkout", "-q", "feat")
+with open(os.path.join(m, "charly", "bar.go"), "w") as stream:  # feat: unrelated new file
+    stream.write("package main\n")
+git_q(m, "add", "-A")
+git_q(m, "commit", "-qm", "feat change")
+git_q(m, "merge", "--no-commit", "--no-ff", "trunk")  # clean 3-way; pauses pre-commit
+expect("commit: merge-in new alias FILE survivor allowed",
+       gate(COMMIT_GATE, f"git -C {m} commit -m x"), "ALLOW")
+shutil.rmtree(m, ignore_errors=True)
+
+
 for label, command, expected in (
     ("push: --force blocked", "git push --force origin feat/x", "BLOCK"),
     ("push: -f blocked", "git push -f origin feat/x", "BLOCK"),
