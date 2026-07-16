@@ -149,11 +149,65 @@ ALIAS_DECL_GROUPED = re.compile(r'^\+\s+\w+\s*=\s*' + _KITS + r'\.\w+\s*(?:$|//)
 ALIASES_FILE = re.compile(r'(?:^|/)charly/.*_aliases\.go')
 
 
+def merge_parent_shas(repo):
+    """The 2nd+ parent commit-ish of an IN-PROGRESS merge, else [].
+
+    A `git commit` that completes a merge (a conflict resolution, or an explicit
+    `--no-commit` merge) records MERGE_HEAD naming the incoming parent(s). The
+    staged diff (`git diff --cached`) compares ONLY against HEAD — the FIRST
+    parent — so every file/line the merge pulls in from an incoming parent looks
+    freshly 'added'. These SHAs let the gate tell a genuine addition (present in
+    NEITHER parent) from a survivor merged in from an incoming parent (present in
+    one). Empty on a normal commit, so the gate's non-merge behaviour is
+    byte-for-byte unchanged."""
+    out = git(["rev-parse", "MERGE_HEAD"], repo)
+    if not out:
+        return []
+    return [s for s in (line.strip() for line in out.splitlines()) if s]
+
+
+def blob_lines(repo, commitish, path):
+    """The set of raw lines of `path` at `commitish` (empty if the path is absent)."""
+    out = git(["show", "%s:%s" % (commitish, path)], repo)
+    if out is None:
+        return set()
+    return set(out.splitlines())
+
+
+def path_present(repo, shas, path):
+    """True if `path` exists at ANY of the given commit-ish (a merge survivor)."""
+    for sha in shas:
+        if git(["cat-file", "-e", "%s:%s" % (sha, path)], repo) is not None:
+            return True
+    return False
+
+
 def alias_gate(repo):
     base = os.path.abspath(repo or os.getcwd())
     if not os.path.isdir(os.path.join(base, "charly")):
         return  # not a charly superproject (e.g. an sdk/plugins submodule leg) — fail open
-    # 1. A NEW charly/*_aliases.go file (status A) — absolute, no exception.
+    # Merge-commit awareness: when the commit completes a merge, a file/line the
+    # merge pulled in from an incoming parent is NOT branch-introduced and must
+    # not be flagged (main's gofmt-realigned survivors trip the raw staged diff).
+    # Only a GENUINE addition — present in the merge result but in NEITHER parent
+    # (a new alias, or one invented during conflict resolution) — is caught.
+    # merge_shas is empty on a normal commit, so that path is unchanged.
+    merge_shas = merge_parent_shas(repo)
+    parent_lines = {}  # path -> union of the path's lines across all incoming parents
+
+    def merged_in_line(path, content):
+        if not merge_shas or path is None:
+            return False
+        if path not in parent_lines:
+            lines = set()
+            for sha in merge_shas:
+                lines |= blob_lines(repo, sha, path)
+            parent_lines[path] = lines
+        return content in parent_lines[path]
+
+    # 1. A NEW charly/*_aliases.go file (status A) — absolute, no exception,
+    #    UNLESS the merge carried it in from an incoming parent (already vetted
+    #    on that parent's own landing).
     status = git(["diff", "--cached", "--name-status", "--no-renames", "--", "charly/*.go"], repo)
     new_alias_files = []
     if status:
@@ -162,13 +216,16 @@ def alias_gate(repo):
             st = parts[0][:1] if parts else ""
             path = parts[-1] if len(parts) > 1 else (parts[0] if parts else "")
             if st == "A" and ALIASES_FILE.search(path):
+                if merge_shas and path_present(repo, merge_shas, path):
+                    continue  # merged in from an incoming parent, not branch-added
                 new_alias_files.append(path)
     if new_alias_files:
         block("ZERO-ALIASES: a NEW charly/*_aliases.go file is staged (%s). Alias files have "
               "NO migration exception — an alias is a mislocated call site; move the consumer "
               "into its owning plugin instead of re-exporting. See CLAUDE.md 'The kernel/plugin "
               "boundary law' + the ZERO-ALIASES standing rule." % ", ".join(new_alias_files))
-    # 2. Declaration-form kit-alias lines in the staged charly/*.go diff.
+    # 2. Declaration-form kit-alias lines in the staged charly/*.go diff — again
+    #    skipping any line the merge carried in from an incoming parent.
     diff = git(["diff", "--cached", "-U0", "--no-renames", "--", "charly/*.go"], repo)
     if not diff:
         return
@@ -180,11 +237,16 @@ def alias_gate(repo):
             continue
         if not line.startswith("+") or line.startswith("+++"):
             continue
+        content = line[1:]  # the raw added line, sans the diff '+' marker
         if ALIAS_DECL_EXPLICIT.search(line):
+            if merged_in_line(cur_path, content):
+                continue  # survivor from an incoming merge parent, not a new alias
             block("ZERO-ALIASES: a declaration-form kit-alias line is staged in charly/ (%s). "
                   "Move the consumer into its owning plugin; never re-export a mechanism-kit "
                   "symbol (an alias is a mislocated call site). See CLAUDE.md." % line.strip()[:120])
         if cur_path and ALIASES_FILE.search(cur_path) and ALIAS_DECL_GROUPED.search(line):
+            if merged_in_line(cur_path, content):
+                continue  # survivor from an incoming merge parent, not a new alias
             block("ZERO-ALIASES: a grouped kit-alias line is staged in %s (%s). Alias files have "
                   "no exception — move the consumer, do not grow the alias file. See CLAUDE.md."
                   % (cur_path, line.strip()[:120]))
