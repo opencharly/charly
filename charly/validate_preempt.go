@@ -65,17 +65,6 @@ func ValidatePreemptibleOnNode(name string, node *spec.BundleNode, errs *Validat
 	}
 }
 
-// ValidatePreemptibleAcrossDeploy validates every node in a charly.yml config
-// (the operator-deploy load path). Accumulates into errs.
-func ValidatePreemptibleAcrossDeploy(dc *BundleConfig, errs *ValidationError) {
-	if dc == nil {
-		return
-	}
-	for name, node := range dc.Bundle {
-		ValidatePreemptibleOnNode(name, &node, errs)
-	}
-}
-
 // validatePreemptibleUnified validates preemptible/requires_exclusive across a
 // unified project's deploy map (which includes folded kind:check beds),
 // returning the first batch of errors for the LoadUnified hard-fail path.
