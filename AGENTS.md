@@ -20,6 +20,15 @@ Work from the superproject root. Run submodule Git through literal
 `git -C <absolute-path>` commands; never root a worker in a submodule. Use this
 dispatcher and `plugins/README.md` to discover every applicable skill.
 
+The project-local Codex hook emits this requirement at session start and before
+every supported tool call. Current Codex `PreToolUse` hooks can add context but
+cannot deny a tool call, so the hook is a deterministic guardrail rather than a
+claim of mechanical enforcement. Do not bypass it or rely on user-scoped
+configuration: this repository's checked-in `AGENTS.md`, `.codex/`, and owning
+skills are the durable Codex control plane. A tool action before admission is an
+R0 violation: stop, run the root-cause-analyzer process, then re-derive every
+conclusion after the required skills are loaded.
+
 ## Skill Dispatcher
 
 Consult this table BEFORE the first tool call of every task; when several rows match, load ALL their skills in ONE message (parallel `Skill` calls).
@@ -352,12 +361,29 @@ Use a separate Codex agent thread wherever a skill requires a teammate,
 executor, RCA, or independent validator. The author orchestrates; it never
 impersonates the validator.
 
-A fresh no-fork PR validator has one bootstrap exception: it may use read-only
-filesystem reads to preload the protected-main rulebooks, its validator spec,
-and matching on-disk skills before any shell/Git/GitHub/candidate action. Its
-worktree must already be at protected `main`. This is policy discovery only,
-not validation; after it completes, R0 applies to every action without
-exception.
+A fresh no-fork PR validator starts only after its skills-loaded parent has
+provisioned its protected-main worktree with
+`task agent:prepare-validator-worktree ROOT=<absolute-root> BASE=<full-origin-main-SHA> WORKTREE=<absolute-empty-path>`.
+The provisioner creates the detached tree, initializes every recursive gitlink,
+proves the pinned HEAD and both checked-in harness profiles, and emits the
+immutable handoff ledger. The validator receives that literal path and ledger;
+it must never create, initialize, repair, or substitute submodules itself.
+After its final verdict, the parent removes this disposable tree with
+`git worktree remove --force <path>`; recursive submodules require Git's
+explicit force form for this owned cleanup.
+
+Only after that ledger succeeds may the fresh validator use read-only filesystem
+reads to preload protected-main rulebooks, its validator spec, and matching
+on-disk skills before any shell/Git/GitHub/candidate action. This is policy
+discovery only, not validation; after it completes, R0 applies without exception.
+Missing provisioning is INVALID and requires an RCA plus a newly provisioned,
+fresh no-fork validator—not a fallback to global/user skills.
+
+For a submodule-repository PR, the handoff records the superproject protected
+policy SHA separately from the target repository's protected base SHA and PR
+head SHA. They are different Git object namespaces and must never be compared
+as a stale-base test; drive the target only with literal `git -C <absolute>`
+and `gh --repo <owner>/<repo>` operations.
 
 Preserve valid evidence and invalidate only the conclusion touched by a
 failure. Do not discard completed analysis, verified repository facts, passing

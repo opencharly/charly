@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/scripts/codex-r0-hook.py\"",
+            "timeout": 30,
+            "statusMessage": "Loading OpenCharly R0 admission"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/scripts/codex-r0-hook.py\"",
+            "timeout": 30,
+            "statusMessage": "Checking OpenCharly R0 admission"
+          }
+        ]
+      }
+    ]
+  }
+}

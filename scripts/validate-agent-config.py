@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import json
 import subprocess
 import sys
 import tempfile
@@ -84,6 +85,62 @@ def self_test() -> None:
         assert names == {"keep.md", "new.md"}
 
 
+def validate_validator_bootstrap(root: pathlib.Path, errors: list[str]) -> None:
+    """Fail before a validator spawn when tracked policy gitlinks are absent."""
+    validator = root / "plugins/internals/agents/pr-validator.md"
+    if not validator.is_file():
+        errors.append(
+            "validator bootstrap is unready: initialize recursive submodules with "
+            "task agent:prepare-validator-worktree before spawning a validator"
+        )
+
+
+def validate_codex_r0_hooks(root: pathlib.Path, errors: list[str]) -> None:
+    """Keep the repository-level Codex R0 guardrail present and executable."""
+    hook_path = root / ".codex/hooks.json"
+    hook_script = root / "scripts/codex-r0-hook.py"
+    if not hook_path.is_file():
+        errors.append("Codex R0 hook configuration is missing")
+        return
+    if not hook_script.is_file():
+        errors.append("Codex R0 hook script is missing")
+        return
+    try:
+        hooks = json.loads(hook_path.read_text()).get("hooks", {})
+    except json.JSONDecodeError as error:
+        errors.append(f"Codex R0 hook configuration is invalid JSON: {error}")
+        return
+    for event in ("SessionStart", "PreToolUse"):
+        entries = hooks.get(event, [])
+        if not any(
+            "scripts/codex-r0-hook.py" in hook.get("command", "")
+            for entry in entries
+            for hook in entry.get("hooks", [])
+        ):
+            errors.append(f"Codex R0 hook configuration lacks {event} coverage")
+
+    def invoke(event: str) -> dict[str, object]:
+        result = subprocess.run(
+            [sys.executable, str(hook_script)],
+            input=json.dumps({"hook_event_name": event}),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return json.loads(result.stdout)
+
+    try:
+        started = invoke("SessionStart")
+        context = started["hookSpecificOutput"]["additionalContext"]
+        if "R0" not in context:
+            errors.append("Codex SessionStart hook does not provide R0 admission context")
+        pre_tool = invoke("PreToolUse")
+        if "R0" not in pre_tool.get("systemMessage", ""):
+            errors.append("Codex PreToolUse hook does not provide an R0 warning")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as error:
+        errors.append(f"Codex R0 hook is not executable: {error}")
+
+
 def main() -> int:
     # The canonical validation command owns its meta-test. Keeping this inside the validator avoids
     # ad-hoc gate assemblers guessing a separate test filename and silently omitting parser coverage.
@@ -96,6 +153,8 @@ def main() -> int:
     claude = claude_path.read_text()
     codex = codex_path.read_text()
     errors: list[str] = []
+    validate_validator_bootstrap(ROOT, errors)
+    validate_codex_r0_hooks(ROOT, errors)
 
     claude_rows = dispatcher(claude_path)
     codex_rows = dispatcher(codex_path)
