@@ -10,7 +10,11 @@ import (
 )
 
 func TestPluginBuildEnvKeepsVCSStampingReadOnly(t *testing.T) {
-	env := pluginBuildEnv([]string{"HOME=/tmp/home", "GOWORK=wrong", "GIT_OPTIONAL_LOCKS=1"})
+	srcDir, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := pluginBuildEnv([]string{"HOME=/tmp/home", "GOWORK=wrong", "GIT_OPTIONAL_LOCKS=1"}, srcDir)
 	joined := strings.Join(env, "\n")
 	if strings.Contains(joined, "GOWORK=wrong") || strings.Contains(joined, "GIT_OPTIONAL_LOCKS=1") {
 		t.Fatalf("plugin build environment retained conflicting settings:\n%s", joined)

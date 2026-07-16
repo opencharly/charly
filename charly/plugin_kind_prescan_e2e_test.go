@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,6 +51,7 @@ my-example-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	initFixtureGit(t, dir)
 
 	// The whole F4 path: prescan recognizes examplekind → connectDeclaredKindPlugins builds +
 	// connects it (re-entrancy-guarded) → normalizeNodeInto/runPluginKind decodes the body.
@@ -108,6 +110,7 @@ bad-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	initFixtureGit(t, dir)
 
 	_, _, err = LoadUnified(dir)
 	if err == nil {
@@ -124,6 +127,14 @@ func pluginKindKeys(uf *UnifiedFile) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func initFixtureGit(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "init", "-q", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("initialize fixture git worktree: %v\n%s", err, out)
+	}
 }
 
 // copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's

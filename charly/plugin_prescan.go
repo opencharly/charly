@@ -28,6 +28,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -173,6 +174,11 @@ func declaredKindWords() []string {
 // single-threaded per load; the flag rides declaredDeployMu for safety.
 var inKindConnectPassFlag bool
 
+// declaredKindConnectErr retains the actual host build/connect failure for a
+// declared external kind. The normalizer still permits read-only discovery of
+// unrelated nodes, but its mandatory warning must carry the actionable cause.
+var declaredKindConnectErr = map[string]error{}
+
 func inKindConnectPass() bool {
 	declaredDeployMu.RLock()
 	defer declaredDeployMu.RUnlock()
@@ -183,6 +189,20 @@ func setKindConnectPass(v bool) {
 	declaredDeployMu.Lock()
 	inKindConnectPassFlag = v
 	declaredDeployMu.Unlock()
+}
+
+func declaredKindConnectError(word string) error {
+	declaredDeployMu.RLock()
+	defer declaredDeployMu.RUnlock()
+	return declaredKindConnectErr[word]
+}
+
+func recordDeclaredKindConnectError(need map[string]struct{}, err error) {
+	declaredDeployMu.Lock()
+	defer declaredDeployMu.Unlock()
+	for word := range need {
+		declaredKindConnectErr[word] = err
+	}
 }
 
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
@@ -215,13 +235,23 @@ func connectDeclaredKindPlugins(dir string) {
 	defer setKindConnectPass(false)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
+		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
 		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
 	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
 	if err != nil {
+		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
 		return
 	}
-	_ = loadProjectPlugins(context.Background(), candyMap, need)
+	if err := loadProjectPlugins(context.Background(), candyMap, need); err != nil {
+		recordDeclaredKindConnectError(need, err)
+		return
+	}
+	declaredDeployMu.Lock()
+	for word := range need {
+		delete(declaredKindConnectErr, word)
+	}
+	declaredDeployMu.Unlock()
 }
 
 // recognizedDeploySubstrate reports whether word names a deploy substrate the

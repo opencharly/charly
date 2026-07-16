@@ -207,9 +207,14 @@ type ReportSummary struct {
 // Seam-driven subprocess helpers
 // ---------------------------------------------------------------------------
 
-// findCharlyForCheck returns the path to the charly binary the harness re-invokes.
-// Prefers os.Executable() so the harness's own build is used.
+// findCharlyForCheck returns the host charly binary the harness re-invokes.
+// LocalTransport stamps CHARLY_BIN with its host executable; an out-of-process
+// check plugin's own executable is the provider binary, not the CLI that must
+// drive the next check phase.
 func findCharlyForCheck() string {
+	if bin := os.Getenv("CHARLY_BIN"); bin != "" {
+		return bin
+	}
 	if exe, err := os.Executable(); err == nil && exe != "" {
 		return exe
 	}
