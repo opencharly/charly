@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
 	"testing"
@@ -128,7 +129,7 @@ func TestGenerateInitFragments(t *testing.T) {
 				Name:        "svc",
 				InitSystems: map[string]bool{"supervisord": true},
 				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
-				service: []ServiceEntry{
+				service: []spec.ServiceEntry{
 					{Name: "svc", Exec: "svc serve"},
 				},
 			},
@@ -136,7 +137,7 @@ func TestGenerateInitFragments(t *testing.T) {
 				Name:        "other",
 				InitSystems: map[string]bool{"supervisord": true},
 				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
-				service: []ServiceEntry{
+				service: []spec.ServiceEntry{
 					{Name: "other", Exec: "other run"},
 				},
 			},
@@ -202,7 +203,7 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 				plan:           []Step{{Run: "build", Op: cmdOp("true")}},
 				PortRelayPorts: []int{9222},
 				InitSystems:    map[string]bool{"supervisord": true},
-				service: []ServiceEntry{
+				service: []spec.ServiceEntry{
 					{Name: "chrome", Exec: "chrome"},
 				},
 			},
@@ -293,7 +294,7 @@ func TestRenderRelayTemplate(t *testing.T) {
 func TestRpmTemplateWithModules(t *testing.T) {
 	fedora := testDistroDef("fedora")
 	rpm := fedora.Format["rpm"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: rpm.CacheMount,
 		Packages:    []string{"valkey"},
 		Modules:     []string{"valkey:remi-9.0"},
@@ -320,7 +321,7 @@ func TestRpmTemplateWithModules(t *testing.T) {
 func TestPacTemplateBasic(t *testing.T) {
 	arch := testDistroDef("arch")
 	pac := arch.Format["pac"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: pac.CacheMount,
 		Packages:    []string{"neovim", "ripgrep"},
 	}
@@ -342,7 +343,7 @@ func TestPacTemplateBasic(t *testing.T) {
 func TestAurInstallTemplate(t *testing.T) {
 	arch := testDistroDef("arch")
 	aur := arch.Format["aur"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: aur.CacheMount,
 		StageName:   "my-tool-aur-build",
 	}

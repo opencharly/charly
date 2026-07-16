@@ -177,7 +177,7 @@ func (g *Generator) resolveExternalBuilderStageSeam(word, candyName string, img 
 // returning its C10 InlineFragment (or a per-failure error, byte-preserved). The
 // builder-emit cluster (ensureBuildersConnected + registry ResolveBuilder +
 // resolveBuilderStage) is registry-coupled and stays core.
-func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *BuilderDef, ctx *BuildStageContext, img *ResolvedBox) (string, error) {
+func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *BuilderDef, ctx *spec.BuildStageContext, img *ResolvedBox) (string, error) {
 	layer := g.Candies[candyName]
 	if err := ensureBuildersConnected(context.Background(), g.Config, g.Dir, []string{bName}); err != nil {
 		return "", fmt.Errorf("candy %q: connect inline builder %q: %w", candyName, bName, err)

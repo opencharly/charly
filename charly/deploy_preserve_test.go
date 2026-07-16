@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,7 +167,7 @@ func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
 		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
 	}}
 	perHost := &BundleConfig{Bundle: map[string]BundleNode{
-		"cachyos-gpu": {Preemptible: &PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
+		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
 	}}
 	for _, tc := range []struct {
 		name    string

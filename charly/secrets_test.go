@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"slices"
 	"strings"
@@ -338,10 +339,10 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 	}
 
 	meta := &BoxMetadata{
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ROUTEA", Description: "override", Key: "charly/api-key/routea"},
 			{Name: "TEST_CHARLY_CRED_ROUTEB", Description: "default"},
 		},
@@ -431,10 +432,10 @@ func TestCollectCandySecretAcceptsMissingRequired(t *testing.T) {
 	withIsolatedCredentialStore(t) // empty store
 
 	meta := &BoxMetadata{
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_OPT", Description: "optional"},
 		},
 	}
@@ -485,7 +486,7 @@ func TestCollectCandySecretAcceptsEnvOverride(t *testing.T) {
 	t.Setenv("TEST_CHARLY_CRED_IMPORTED", "from-env-synthetic")
 
 	meta := &BoxMetadata{
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_IMPORTED", Description: "opt", Key: "charly/api-key/imported"},
 		},
 	}
@@ -523,10 +524,10 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		Secret: []LabelSecretEntry{
 			{Name: "webui-secret-key", Target: "/run/secrets/webui_secret_key", Env: "WEBUI_SECRET_KEY"},
 		},
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ADMIN_PASSWORD", Description: "synthetic admin password"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ROUTEA", Description: "synthetic optional", Key: "charly/api-key/routea"},
 		},
 	}

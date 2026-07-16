@@ -56,7 +56,7 @@ func TestCoexistSwitch_CompiledInSkipsOutOfProcess(t *testing.T) {
 	if _, ok := providerRegistry.ResolveVerb("externalprobe"); !ok {
 		t.Fatal("externalprobe must be compiled in (plugins_generated.go) for this test")
 	}
-	decl := &CandyPluginDecl{
+	decl := &spec.Plugin{
 		Source:    "github.com/opencharly/charly/candy/plugin-example-external",
 		Providers: []spec.PluginCapability{"verb:externalprobe"},
 	}

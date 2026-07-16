@@ -33,15 +33,15 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 // declaring a registered builtin verb validates; one naming an unregistered
 // builtin or a malformed capability fails.
 func TestValidatePluginCandy(t *testing.T) {
-	ok := &CandyPluginDecl{Source: "builtin", Providers: []spec.PluginCapability{"verb:exampleprobe"}}
+	ok := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"verb:exampleprobe"}}
 	if issues := validatePluginCandy("ex", ok); len(issues) != 0 {
 		t.Fatalf("registered builtin should validate, got %v", issues)
 	}
-	bad := &CandyPluginDecl{Source: "builtin", Providers: []spec.PluginCapability{"verb:nonexistent"}}
+	bad := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"verb:nonexistent"}}
 	if len(validatePluginCandy("bad", bad)) == 0 {
 		t.Fatalf("unregistered builtin provider should fail validation")
 	}
-	mal := &CandyPluginDecl{Source: "builtin", Providers: []spec.PluginCapability{"notacapability"}}
+	mal := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"notacapability"}}
 	if len(validatePluginCandy("mal", mal)) == 0 {
 		t.Fatalf("malformed capability should fail validation")
 	}

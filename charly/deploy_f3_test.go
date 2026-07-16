@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -100,7 +101,7 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 	persistBedDeployOverrides("preempt-holder", BundleNode{
 		Target:      "pod",
 		Image:       "check-pod",
-		Preemptible: &PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
+		Preemptible: &spec.PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
 	})
 
 	dc, err := deploykit.LoadBundleConfig()

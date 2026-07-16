@@ -31,7 +31,7 @@ type (
 // RenderService renders a ServiceEntry into a RenderedService via candy/plugin-init.
 // (Transitional: the typed initDef is marshalled to the plugin; the init config goes
 // fully opaque in F's finalize step.)
-func RenderService(entry *ServiceEntry, def *ResolvedInit, ctx ServiceRenderContext) (*RenderedService, error) {
+func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRenderContext) (*RenderedService, error) {
 	if entry == nil {
 		return nil, fmt.Errorf("RenderService: nil entry")
 	}
@@ -57,7 +57,7 @@ func RenderService(entry *ServiceEntry, def *ResolvedInit, ctx ServiceRenderCont
 // (a pure ServiceEntry projection — NO init-system knowledge). The plugin renders
 // its templates against this; the packaged/drop-in branch decisions are precomputed
 // here (PackagedUnit, RenderDropin) so the plugin renders from the ctx alone.
-func buildServiceRenderContext(entry *ServiceEntry, ctx ServiceRenderContext) ServiceRenderContext {
+func buildServiceRenderContext(entry *spec.ServiceEntry, ctx ServiceRenderContext) ServiceRenderContext {
 	ctx.Name = entry.Name
 	ctx.Scope = entry.EffectiveScope()
 	ctx.PackagedUnit = entry.UsePackaged

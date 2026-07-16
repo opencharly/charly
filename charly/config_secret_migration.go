@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
 	"time"
@@ -71,7 +72,7 @@ func secretDepNames(meta *BoxMetadata) []string {
 // otherwise the default (charly/secret, dep.Name) is returned. The format is
 // enforced by validateSecretDeps at build time, so this is purely a
 // structural split — no validation is re-run here.
-func secretKeyForDep(dep EnvDependency) (service, key string) {
+func secretKeyForDep(dep spec.EnvDependency) (service, key string) {
 	if dep.Key != "" {
 		// Key format validated: ^charly/<service>/<key>$ — the service is
 		// everything before the final "/", the key is the last segment.
@@ -148,7 +149,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 
 	// Build a lookup from dep name → full EnvDependency so we can honor any
 	// `key:` override on the candy declaration.
-	depByName := map[string]EnvDependency{}
+	depByName := map[string]spec.EnvDependency{}
 	for _, dep := range meta.SecretRequire {
 		depByName[dep.Name] = dep
 	}
@@ -210,7 +211,7 @@ func scrubSecretCLIEnv(cliEnv []string, meta *BoxMetadata) ([]string, int) {
 		return cliEnv, 0
 	}
 
-	depByName := map[string]EnvDependency{}
+	depByName := map[string]spec.EnvDependency{}
 	if meta != nil {
 		for _, dep := range meta.SecretRequire {
 			depByName[dep.Name] = dep

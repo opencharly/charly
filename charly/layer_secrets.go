@@ -20,6 +20,7 @@ package main
 // Set is visible to the second caller's ResolveCredential.
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"maps"
 	"strings"
 )
@@ -40,7 +41,7 @@ import (
 // fallback per credential_store.go DefaultCredentialStore); the second
 // caller's ResolveCredential reads the persisted value. All callers in
 // one process share the cached singleton.
-func ensureCandySecret(dep EnvDependency, required bool) (val, source string) {
+func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source string) {
 	service, key := "charly/secret", dep.Name
 	if dep.Key != "" {
 		if idx := strings.LastIndex(dep.Key, "/"); idx > 0 {

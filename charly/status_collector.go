@@ -324,7 +324,7 @@ func parsePortStrings(ports []string) []spec.PortMapping {
 // string by the time it reaches a renderer), so it lives here — beside its
 // sole caller, enrichOne — rather than in the command:status candy's pure
 // render.go, which formats only already-resolved strings.
-func formatTunnelSummary(t *TunnelYAML) string {
+func formatTunnelSummary(t *spec.TunnelYAML) string {
 	if t == nil {
 		return ""
 	}

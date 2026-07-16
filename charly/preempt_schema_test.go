@@ -14,7 +14,7 @@ func TestBundleNode_PreemptibleOrthogonal(t *testing.T) {
 	tru := true
 	both := BundleNode{
 		Disposable:  &tru,
-		Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}},
+		Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}},
 	}
 	if !both.IsDisposable() {
 		t.Error("explicit disposable: true should be disposable")
@@ -24,7 +24,7 @@ func TestBundleNode_PreemptibleOrthogonal(t *testing.T) {
 	}
 
 	// Preemptible does NOT make a node disposable.
-	holderOnly := BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}}}
+	holderOnly := BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}}
 	if holderOnly.IsDisposable() {
 		t.Error("preemptible must not imply disposable")
 	}
@@ -36,7 +36,7 @@ func TestBundleNode_PreemptibleOrthogonal(t *testing.T) {
 	}
 
 	// Empty holds → not preemptible.
-	empty := BundleNode{Preemptible: &PreemptibleConfig{}}
+	empty := BundleNode{Preemptible: &spec.PreemptibleConfig{}}
 	if empty.IsPreemptible() {
 		t.Error("preemptible with no holds must not count as preemptible")
 	}
@@ -91,7 +91,7 @@ func TestValidatePreemptibleOnNode(t *testing.T) {
 	}{
 		{
 			name: "valid holder",
-			node: BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}}},
+			node: BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}},
 		},
 		{
 			name: "valid claimant",
@@ -99,19 +99,19 @@ func TestValidatePreemptibleOnNode(t *testing.T) {
 		},
 		{
 			name:     "empty holds",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{}},
+			node:     BundleNode{Preemptible: &spec.PreemptibleConfig{}},
 			wantErr:  true,
 			contains: "must list at least one",
 		},
 		{
 			name:     "bad stop",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
+			node:     BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
 			wantErr:  true,
 			contains: "not supported",
 		},
 		{
 			name:     "bad restore",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
+			node:     BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
 			wantErr:  true,
 			contains: "is invalid",
 		},
@@ -124,7 +124,7 @@ func TestValidatePreemptibleOnNode(t *testing.T) {
 		{
 			name: "self-contention",
 			node: BundleNode{
-				Preemptible:       &PreemptibleConfig{Holds: []string{"gpu"}},
+				Preemptible:       &spec.PreemptibleConfig{Holds: []string{"gpu"}},
 				RequiresExclusive: []string{"gpu"},
 			},
 			wantErr:  true,

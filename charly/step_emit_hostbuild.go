@@ -185,7 +185,7 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 	// the box-build path and the plugin's OpResolve use, R3); a custom one via its vocabulary
 	// install_template.
 	if bDef.Inline {
-		ctx := &BuildStageContext{
+		ctx := &spec.BuildStageContext{
 			LayerStage:  layer.Name,
 			UID:         build.Box.UID,
 			GID:         build.Box.GID,

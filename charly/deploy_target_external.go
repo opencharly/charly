@@ -531,7 +531,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 		if fd == nil || strings.TrimSpace(fd.UninstallTemplate) == "" {
 			return ""
 		}
-		ctx := &InstallContext{Packages: append([]string(nil), packages...)}
+		ctx := &spec.InstallContext{Packages: append([]string(nil), packages...)}
 		rendered, err := RenderTemplate(format+"-uninstall", fd.UninstallTemplate, ctx)
 		if err != nil {
 			return ""

@@ -134,9 +134,9 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		IncludedCandy: []CandyRef{{Raw: "gnupg"}},
 	}
 	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
-	candy.mcpProvides = []MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
+	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
 	candy.portSpecs = []PortSpec{{Port: 9000, Protocol: "tcp"}}
-	candy.service = []ServiceEntry{{Name: "charly-daemon"}}
+	candy.service = []spec.ServiceEntry{{Name: "charly-daemon"}}
 
 	rp := &spec.ResolvedProject{
 		Version: "2026.100.0000",

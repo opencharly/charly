@@ -131,11 +131,11 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 // (builtins resolve through the registry, not this not-connected map).
 func TestRegisterExternalVerbsFromCandies(t *testing.T) {
 	candies := map[string]*Candy{
-		"ext-plugin": {Plugin: &CandyPluginDecl{
+		"ext-plugin": {Plugin: &spec.Plugin{
 			Source:    "github.com/opencharly/charly/candy/ext-plugin",
 			Providers: []spec.PluginCapability{"verb:extverbfromcandy"},
 		}},
-		"builtin-plugin": {Plugin: &CandyPluginDecl{
+		"builtin-plugin": {Plugin: &spec.Plugin{
 			Source:    "builtin",
 			Providers: []spec.PluginCapability{"verb:builtinverbfromcandy"},
 		}},
@@ -171,20 +171,20 @@ func TestPluginAlreadyConnected_Idempotent(t *testing.T) {
 		t.Fatalf("register stub: %v", err)
 	}
 	// 1. Same source → already connected (the second load is skipped, no duplicate).
-	connected, err := pluginAlreadyConnected("idem-plugin", &CandyPluginDecl{
+	connected, err := pluginAlreadyConnected("idem-plugin", &spec.Plugin{
 		Source: src, Providers: []spec.PluginCapability{"verb:idemverb"},
 	})
 	if err != nil || !connected {
 		t.Fatalf("a same-source re-load must be idempotent: connected=%v err=%v", connected, err)
 	}
 	// 2. Different source, same word → genuine bijection collision (errors, not skipped).
-	if _, err := pluginAlreadyConnected("other-plugin", &CandyPluginDecl{
+	if _, err := pluginAlreadyConnected("other-plugin", &spec.Plugin{
 		Source: "github.com/other/repo", Providers: []spec.PluginCapability{"verb:idemverb"},
 	}); err == nil {
 		t.Fatalf("a different-source collision on the same word must error, not skip")
 	}
 	// 3. Unregistered word → not connected (proceeds to a real load).
-	if connected, err := pluginAlreadyConnected("fresh-plugin", &CandyPluginDecl{
+	if connected, err := pluginAlreadyConnected("fresh-plugin", &spec.Plugin{
 		Source: src, Providers: []spec.PluginCapability{"verb:neverregistered-idem"},
 	}); err != nil || connected {
 		t.Fatalf("an unregistered plugin must not be reported connected: connected=%v err=%v", connected, err)
