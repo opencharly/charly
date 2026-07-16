@@ -107,26 +107,6 @@ func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error 
 	return buildCmd.Run()
 }
 
-// ContainerName returns the container name for a remote image.
-func (ctx *RemoteImageContext) ContainerName() string {
-	return containerName(ctx.BoxName)
-}
-
-// CollectVolumes collects volumes for the remote image.
-func (ctx *RemoteImageContext) CollectVolumes() ([]VolumeMount, error) {
-	return CollectBoxVolume(
-		ctx.Config, ctx.Candies, ctx.BoxName,
-		ctx.Resolved.Home,
-		nil,
-	)
-}
-
-// RemoteContainerName returns the container name for a remote ref.
-func RemoteContainerName(ref string) string {
-	parsed := ParseRemoteRef(ref)
-	return containerName(parsed.Name)
-}
-
 // StripURLScheme removes http:// or https:// from a remote ref if present.
 func StripURLScheme(ref string) string {
 	ref = strings.TrimPrefix(ref, "https://")
