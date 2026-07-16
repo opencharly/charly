@@ -81,7 +81,6 @@ var (
 	vmDiskDir                      = vmshared.VmDiskDir
 	vmDomainIdentity               = vmshared.VmDomainIdentity
 	killQemuByPID                  = vmshared.KillQemuByPID
-	libvirtSessionSocket           = vmshared.LibvirtSessionSocket
 	libvirtSessionSocketWithProbes = vmshared.LibvirtSessionSocketWithProbes
 )
 
