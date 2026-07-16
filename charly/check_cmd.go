@@ -86,7 +86,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	// happens to be running.
 	dir, _ := os.Getwd()
 	var localPlan, projectPlan []spec.Step
-	var deployOverlay *BundleNode
+	var deployOverlay *spec.BundleNode
 	var projectCfg *Config
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
@@ -170,7 +170,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 
 // resolveNestedNode walks a dotted path through the Nested tree rooted at
 // the top-level deployment, returning the leaf BundleNode.
-func resolveNestedNode(roots map[string]BundleNode, path string) *BundleNode {
+func resolveNestedNode(roots map[string]spec.BundleNode, path string) *spec.BundleNode {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
 		return nil
@@ -390,7 +390,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 // resolveVmTarget resolves the VM check request (c.Box) to its kind:vm entity
 // name, an optional nested-leaf node (for a dotted "parent.child" path), and the
 // VmSpec.
-func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string, nestedLeaf *BundleNode, spec *VmSpec) {
+func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string, nestedLeaf *spec.BundleNode, spec *VmSpec) {
 	// Schema v4: c.Box may be
 	//   (a) a kind:vm entity name directly (e.g. "arch"),
 	//   (b) a kind:deployment name with target:vm (e.g. "arch-vm") whose
@@ -429,7 +429,7 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string
 // loadVmCheckPlans aggregates the VM deployment's check plan from the project
 // and per-machine deploy sources plus add_candy deploy-scope steps, returning
 // the merged plan and the SSH user/port (possibly overridden by local VmState).
-func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int) {
+func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int) {
 	outUser, outPort = user, port
 	// Two deploy sources for VMs:
 	//   - project-level: charly.yml / charly.yml `deployments.images["vm:<name>"]`
@@ -669,8 +669,8 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	//     OWN target (e.g. `local`) is surfaced + its plugin auto-injected;
 	//   - a single-process tree deploy (a pod root walked in one process, its nested children
 	//     of a DIFFERENT substrate) — the recursion surfaces every child's substrate word.
-	var visit func(n *BundleNode)
-	visit = func(n *BundleNode) {
+	var visit func(n *spec.BundleNode)
+	visit = func(n *spec.BundleNode) {
 		if n == nil {
 			return
 		}
@@ -728,7 +728,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
 // add <root>.<child>`. Returns false when any segment is absent.
-func resolveDeployNodeByPath(tree map[string]BundleNode, name string) (*BundleNode, bool) {
+func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {
@@ -766,7 +766,7 @@ func (c *CheckLiveCmd) checkLiveLocal() (liveResult, error) {
 	// Resolve the target node (leaf for a dotted path; the entry otherwise)
 	// and the root-segment node (whose host: selects the chain's root venue).
 	dotted := strings.Contains(c.Box, ".")
-	var node, rootNode *BundleNode
+	var node, rootNode *spec.BundleNode
 	if uf.Bundle != nil {
 		if dotted {
 			node = resolveNestedNode(uf.Bundle, c.Box)
@@ -822,7 +822,7 @@ func (c *CheckLiveCmd) checkLiveLocal() (liveResult, error) {
 // `charly bundle add <local> --verify` (the local deploy target) so the two surfaces
 // source + run probes identically (R3). Host-context vars only (no
 // HOST_PORT:<N> / CONTAINER_IP). Returns the failure count.
-func checkLocalDeployScope(dir string, node *BundleNode, image, instance, _ string, _ []string, exec DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
+func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
 	results, hadPlan, err := runLocalDeployScopePlan(dir, node, image, instance, exec)
 	if err != nil {
 		return 0, err
@@ -843,7 +843,7 @@ func checkLocalDeployScope(dir string, node *BundleNode, image, instance, _ stri
 // only (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown the pre-P12
 // local path discarded (design §6): the ssh -L forwards a VM-peer subject opens are torn down
 // after the plan run, exactly as checkLiveVM/checkLiveGroup already do.
-func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance string, exec DeployExecutor) (results []StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
+func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec DeployExecutor) (results []StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
 	var plan []spec.Step
 	if node != nil && strings.TrimSpace(node.From) != "" {
 		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {

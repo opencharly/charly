@@ -163,10 +163,10 @@ cachyos-gpu:
 // committed project profile (no preemptible) merged with the per-host overlay
 // (preemptible) must keep the per-host flag, regardless of merge order.
 func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]BundleNode{
+	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
 	}}
-	perHost := &BundleConfig{Bundle: map[string]BundleNode{
+	perHost := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
 	}}
 	for _, tc := range []struct {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -19,7 +20,7 @@ import (
 // Target=pod + the box/instance to resolve the plan).
 
 // resolveLifecycleDeployNode resolves the deploy node for a start/stop verb from the per-host config.
-func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
+func resolveLifecycleDeployNode(box, instance string) (*spec.BundleNode, string) {
 	key := deployKey(box, instance)
 	if dc := deploykit.LoadDeployConfigForRead("charly start/stop"); dc != nil {
 		if node, ok := dc.Bundle[key]; ok {
@@ -30,7 +31,7 @@ func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
 			return &n, key
 		}
 	}
-	return &BundleNode{Target: "pod"}, key
+	return &spec.BundleNode{Target: "pod"}, key
 }
 
 // dispatchLifecycleTarget resolves the deploy → its LifecycleTarget (connecting external substrate

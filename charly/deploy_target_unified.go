@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 )
 
 // DeployContext carries everything an Add needs from the generic
@@ -34,7 +35,7 @@ import (
 type DeployContext struct {
 	// Node is the dispatch-merged BundleNode. nil for a ref-based
 	// deploy with no charly.yml entry (e.g. `charly bundle add host ./x.yml`).
-	Node *BundleNode
+	Node *spec.BundleNode
 
 	// Name is the deploy key (the bed key / charly.yml map key, e.g.
 	// "check-k3s-vm"). Distinct from the kind:vm entity name (node.From).

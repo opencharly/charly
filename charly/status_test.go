@@ -99,7 +99,7 @@ func TestParsePortStrings(t *testing.T) {
 func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
 	c := &Collector{
 		deploy: &BundleConfig{
-			Bundle: map[string]BundleNode{
+			Bundle: map[string]spec.BundleNode{
 				"selkies-desktop":      {Port: []string{"3000:3000"}},
 				"selkies-desktop/work": {Port: []string{"3001:3000"}, Tunnel: &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{All: true}}},
 				"weird-joined-name":    {Port: []string{"7777:7777"}},

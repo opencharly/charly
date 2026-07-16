@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -11,14 +12,14 @@ import (
 // deploy_node_test.go — tests for BundleNode tree walking and
 // dotted-path resolution.
 
-func makeTree() map[string]BundleNode {
-	return map[string]BundleNode{
+func makeTree() map[string]spec.BundleNode {
+	return map[string]spec.BundleNode{
 		"stack": {
 			Target: "container",
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"web": {
 					Target: "container",
-					Children: map[string]*BundleNode{
+					Children: map[string]*spec.BundleNode{
 						"db": {Target: "host"},
 					},
 				},
@@ -36,7 +37,7 @@ func TestWalkPreOrder_RootThenChildren(t *testing.T) {
 	tree := makeTree()
 	root := tree["stack"]
 	var paths []string
-	err := bundleWalkPreOrder(&root, "stack", func(path string, node *BundleNode) error {
+	err := bundleWalkPreOrder(&root, "stack", func(path string, node *spec.BundleNode) error {
 		paths = append(paths, path)
 		return nil
 	})
@@ -53,7 +54,7 @@ func TestWalkPostOrder_ChildrenThenRoot(t *testing.T) {
 	tree := makeTree()
 	root := tree["stack"]
 	var paths []string
-	err := deploykit.BundleWalkPostOrder(&root, "stack", func(path string, node *BundleNode) error {
+	err := deploykit.BundleWalkPostOrder(&root, "stack", func(path string, node *spec.BundleNode) error {
 		paths = append(paths, path)
 		return nil
 	})
@@ -109,7 +110,7 @@ func TestResolveNodePath_MalformedDots(t *testing.T) {
 }
 
 func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
-	deploy := map[string]BundleNode{
+	deploy := map[string]spec.BundleNode{
 		"bad.name": {Target: "host"},
 	}
 	err := validateDeploymentTree(deploy)
@@ -122,7 +123,7 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 }
 
 func TestSortedChildKeys_Deterministic(t *testing.T) {
-	kids := map[string]*BundleNode{"z": {}, "a": {}, "m": {}}
+	kids := map[string]*spec.BundleNode{"z": {}, "a": {}, "m": {}}
 	got := sortedNestedKeys(kids)
 	if !equalSlices(got, []string{"a", "m", "z"}) {
 		t.Errorf("got %v, want [a m z]", got)
@@ -130,11 +131,11 @@ func TestSortedChildKeys_Deterministic(t *testing.T) {
 }
 
 func TestHasChildren(t *testing.T) {
-	empty := &BundleNode{}
+	empty := &spec.BundleNode{}
 	if empty.HasChildren() {
 		t.Error("empty node should not report HasChildren")
 	}
-	withKids := &BundleNode{Children: map[string]*BundleNode{"k": {}}}
+	withKids := &spec.BundleNode{Children: map[string]*spec.BundleNode{"k": {}}}
 	if !withKids.HasChildren() {
 		t.Error("node with children should report HasChildren")
 	}
@@ -151,7 +152,7 @@ func TestHasChildren(t *testing.T) {
 // in the 2026-05 cross-kind name reuse cutover; the entry itself relocated to
 // the opencharly/distro-cachyos submodule in the 2026-05 CachyOS migration).
 func TestMergeDeployConfigsLocalCutoverFields(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]BundleNode{
+	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"charly-cachyos": {
 			Target:  "local",
 			From:    "charly-cachyos",
@@ -175,7 +176,7 @@ func TestMergeDeployConfigsLocalCutoverFields(t *testing.T) {
 		t.Errorf("SSHArgs field lost: got %v", got.SSHArgs)
 	}
 	// Per-machine overlay wins on collision (mirrors Host's behavior).
-	overlay := &BundleConfig{Bundle: map[string]BundleNode{
+	overlay := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"charly-cachyos": {From: "ci-runner", User: "bob", SSHArgs: []string{"-o", "ProxyJump=bastion"}},
 	}}
 	merged = MergeDeployConfigs(project, overlay)
@@ -227,7 +228,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	storage := []DeployStorage{{Name: "s"}}
 	probes := &DeployProbes{}
 
-	src := BundleNode{
+	src := spec.BundleNode{
 		ResolvedPort:    rp,
 		Description:     desc,
 		Secret:          sec,
@@ -248,7 +249,7 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		Ram:             "16G",
 		DiskSize:        "40G",
 	}
-	cfg := &BundleConfig{Bundle: map[string]BundleNode{"x": src}}
+	cfg := &BundleConfig{Bundle: map[string]spec.BundleNode{"x": src}}
 	merged := MergeDeployConfigs(cfg, nil)
 	got := merged.Bundle["x"]
 

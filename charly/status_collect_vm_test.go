@@ -84,7 +84,7 @@ func TestVMCollector_Collect(t *testing.T) {
 				{Name: "charly-cachyos-gpu", State: "running"},
 			},
 			deploy: &BundleConfig{
-				Bundle: map[string]BundleNode{
+				Bundle: map[string]spec.BundleNode{
 					"vm:cachyos-gpu": {
 						Target:  "vm",
 						From:    "cachyos-gpu",
@@ -109,7 +109,7 @@ func TestVMCollector_Collect(t *testing.T) {
 				{Name: "charly-k3s-vm", State: "running"},
 			},
 			deploy: &BundleConfig{
-				Bundle: map[string]BundleNode{
+				Bundle: map[string]spec.BundleNode{
 					// deploy KEY (check-k3s-vm) != vm entity (k3s-vm).
 					"check-k3s-vm": {
 						Target:  "vm",

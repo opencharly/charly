@@ -98,8 +98,8 @@ type UnifiedFile struct {
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
 	// the canonical singular surface; the wrapper's `Provides` migrates
 	// to UnifiedFile root (next field).
-	Bundle   map[string]BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
-	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Bundle   map[string]spec.BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
+	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
 	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
@@ -212,9 +212,9 @@ type InlineCandy struct {
 // root level. The type definition is kept (not deleted) because
 // migrate_unified.go still references it for legacy migration history.
 type DeploymentsSection struct {
-	Defaults *BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
-	Box      map[string]BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
+	Defaults *spec.BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Box      map[string]spec.BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
 }
 
 // -----------------------------------------------------------------------------
@@ -361,7 +361,7 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 //
 // Errors include the offending path so the user sees exactly which entry needs
 // to be fixed.
-func validateDeploymentTree(deploy map[string]BundleNode) error {
+func validateDeploymentTree(deploy map[string]spec.BundleNode) error {
 	if deploy == nil {
 		return nil
 	}
@@ -396,7 +396,7 @@ func validateDeploymentTree(deploy map[string]BundleNode) error {
 // affected deploy and injects the field, inferring the value from
 // the deploy key (`<base>` for `<base>/<instance>` keys; the key
 // itself otherwise).
-func validateDeployRequiresBox(deploy map[string]BundleNode) error {
+func validateDeployRequiresBox(deploy map[string]spec.BundleNode) error {
 	for name, node := range deploy {
 		// An iterate: benchmark (the former kind:score) composes its scored
 		// subject via plan `include:` steps + the iterate.sandbox, NOT a single
@@ -437,7 +437,7 @@ func validateDeployRequiresBox(deploy map[string]BundleNode) error {
 	return nil
 }
 
-func validateDeploymentChildren(path string, node *BundleNode) error {
+func validateDeploymentChildren(path string, node *spec.BundleNode) error {
 	if node == nil || len(node.Children) == 0 {
 		return nil
 	}
@@ -635,12 +635,12 @@ func mergePluginKindsMap(dst *map[string]map[string]json.RawMessage, src map[str
 // Field-singular cutover: replaces the legacy mergeDeployments which
 // took *DeploymentsSection wrappers. Provides now lives at UnifiedFile
 // root and is merged separately by mergeUnified.
-func mergeDeployMaps(dst *map[string]BundleNode, src map[string]BundleNode) {
+func mergeDeployMaps(dst *map[string]spec.BundleNode, src map[string]spec.BundleNode) {
 	if len(src) == 0 {
 		return
 	}
 	if *dst == nil {
-		*dst = make(map[string]BundleNode)
+		*dst = make(map[string]spec.BundleNode)
 	}
 	for k, v := range src {
 		if _, exists := (*dst)[k]; !exists {
@@ -655,11 +655,11 @@ func mergeDeployMaps(dst *map[string]BundleNode, src map[string]BundleNode) {
 // bundles in the Bundle map. Members are instruments (brought up alongside a
 // driver), never standalone beds. Single enumeration source for
 // `charly check run <bed>` (and the /verify-beds fan-out).
-func (uf *UnifiedFile) CheckBeds() map[string]BundleNode {
+func (uf *UnifiedFile) CheckBeds() map[string]spec.BundleNode {
 	if uf == nil {
 		return nil
 	}
-	beds := map[string]BundleNode{}
+	beds := map[string]spec.BundleNode{}
 	for name, node := range uf.Bundle {
 		if node.IsDisposable() && node.MemberOf == "" {
 			beds[name] = node
@@ -787,7 +787,7 @@ func validateAndroidDevices(uf *UnifiedFile) error {
 //   - the bed's plan: carries at least one `check:` step (the scored success
 //     criteria — an include: step's checks expand at collect time, so a plan of
 //     pure include: steps without a single direct check: is rejected here).
-func validateIterateBed(uf *UnifiedFile, name string, node *BundleNode) error {
+func validateIterateBed(uf *UnifiedFile, name string, node *spec.BundleNode) error {
 	it := node.Iterate
 	agents := uf.PluginKinds["agent"] // agent is a plugin kind; opaque name-keyed catalog
 	for _, a := range it.Agent {

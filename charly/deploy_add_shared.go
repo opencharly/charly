@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"maps"
 	"os"
 	"strings"
@@ -84,7 +85,7 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) {
 // to RetrieveCandyArtifacts so rewrite rules like ${K3S_KUBECONFIG_SERVER}
 // resolve to the declared value rather than a literal placeholder. The
 // node is the dispatch-merged BundleNode (never re-read from disk).
-func buildArtifactEnv(secretEnv map[string]string, node *BundleNode) map[string]string {
+func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[string]string {
 	env := make(map[string]string, len(secretEnv))
 	maps.Copy(env, secretEnv)
 	if node != nil {
@@ -126,7 +127,7 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList
 // ordering). Consumes the merged node — does NOT re-read charly.yml.
 // Registration failure is logged (not fatal), matching the prior run*
 // behavior; the returned error is always nil today but kept for symmetry.
-func registerEphemeralIfMarked(node *BundleNode, name string) {
+func registerEphemeralIfMarked(node *spec.BundleNode, name string) {
 	if node == nil || !node.IsEphemeral() {
 		return
 	}

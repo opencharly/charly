@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,7 +70,7 @@ func TestMergeRawTemplateMap(t *testing.T) {
 func TestValidateCheckBeds_Android(t *testing.T) {
 	// android bed without an android: ref → error.
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", Disposable: new(true)},
 		},
 	}
@@ -79,7 +80,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 
 	// android bed referencing an undefined device → error.
 	uf2 := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", From: "ghost", Disposable: new(true)},
 		},
 	}
@@ -90,7 +91,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 	// android bed referencing a defined device → ok.
 	uf3 := &UnifiedFile{
 		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", From: "dev", Disposable: new(true)},
 		},
 	}

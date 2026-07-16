@@ -69,7 +69,7 @@ func buildStatusRootsTree(opts CollectOpts, nested bool) []spec.StatusNestedNode
 // order the former claimFlatRow tried them (dotted path first, then the
 // flattened NestedContainerName) so the candy's claim logic needs no core
 // knowledge of which shape wins.
-func buildStatusChildNodes(parentPath string, parentNode *BundleNode, rawRoots map[string]BundleNode, nested bool) []*spec.StatusNestedNode {
+func buildStatusChildNodes(parentPath string, parentNode *spec.BundleNode, rawRoots map[string]spec.BundleNode, nested bool) []*spec.StatusNestedNode {
 	if !parentNode.HasChildren() {
 		return nil
 	}
@@ -108,7 +108,7 @@ func buildStatusChildNodes(parentPath string, parentNode *BundleNode, rawRoots m
 // chain construction reuses ResolveDeployChain — the SAME primitive `charly bundle
 // add` and `charly check live parent.child` use (R3); there is no bespoke nested
 // dial here.
-func probeNestedChildLive(childPath string, roots map[string]BundleNode) string {
+func probeNestedChildLive(childPath string, roots map[string]spec.BundleNode) string {
 	leaf, chain, err := ResolveDeployChain(roots, childPath, nil)
 	if err != nil || chain == nil || leaf == nil {
 		return "unreachable"
@@ -125,7 +125,7 @@ func probeNestedChildLive(childPath string, roots map[string]BundleNode) string 
 // nestedChildKind maps a nested node's target to the SubstrateKind used for
 // the row's KIND cell. classifyTarget normalizes empty/legacy spellings, so
 // pod / vm / k8s / local / android all resolve to their canonical kind.
-func nestedChildKind(child *BundleNode) spec.SubstrateKind {
+func nestedChildKind(child *spec.BundleNode) spec.SubstrateKind {
 	switch classifyTarget(child) {
 	case "vm":
 		return spec.SubstrateVM
@@ -145,7 +145,7 @@ func nestedChildKind(child *BundleNode) spec.SubstrateKind {
 // Bundle map. Mirrors resolveTreeRoot's merge precedence
 // (project then local overlay) but operates on the ALREADY-LOADED configs in
 // opts — buildStatusRootsTree must not re-read disk or re-run LoadUnified.
-func mergedNestedRoots(opts CollectOpts) map[string]BundleNode {
+func mergedNestedRoots(opts CollectOpts) map[string]spec.BundleNode {
 	var project *BundleConfig
 	if opts.Unified != nil {
 		project = opts.Unified.ProjectBundleConfig()
@@ -159,7 +159,7 @@ func mergedNestedRoots(opts CollectOpts) map[string]BundleNode {
 
 // sortedRootKeys returns deploy-tree root keys in deterministic order so the
 // tree-builder walks children in stable order across runs.
-func sortedRootKeys(roots map[string]BundleNode) []string {
+func sortedRootKeys(roots map[string]spec.BundleNode) []string {
 	keys := make([]string, 0, len(roots))
 	for k := range roots {
 		keys = append(keys, k)

@@ -211,7 +211,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *CheckVarRe
 	}
 	dir, _ := os.Getwd()
 	var projectCfg *Config
-	var deployOverlay *BundleNode
+	var deployOverlay *spec.BundleNode
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
 	}

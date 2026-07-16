@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 
 	"github.com/opencharly/sdk/kit"
@@ -152,7 +153,7 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 //   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
 //   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
 //     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
-func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
+func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("no deployment %q; run `charly bundle list`", name)
 	}

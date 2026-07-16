@@ -63,7 +63,7 @@ func hostEnvJSON() json.RawMessage {
 // marshalDeployOpParams marshals the common (name, dir, node, extra) args for a host→plugin deploy
 // Op (the lifecycle Ops + the preresolver, R3). node is marshalled as the canonical BundleNode JSON
 // so the plugin sees the SAME node the host decoded.
-func marshalDeployOpParams(name, dir string, node *BundleNode, extra map[string]any) (json.RawMessage, error) {
+func marshalDeployOpParams(name, dir string, node *spec.BundleNode, extra map[string]any) (json.RawMessage, error) {
 	params := map[string]any{"name": name}
 	if dir != "" {
 		params["dir"] = dir
@@ -85,7 +85,7 @@ func marshalDeployOpParams(name, dir string, node *BundleNode, extra map[string]
 // executor over the reverse channel (so the plugin's HostBuild("overlay"/"cli") + reverse legs
 // reach the host). The context may carry live overlay-build inputs (PrepareVenue), re-threaded by
 // InvokeWithExecutor onto the reverse server.
-func (l grpcSubstrateLifecycle) lifecycleInvoke(ctx context.Context, op, name, dir string, node *BundleNode, extra map[string]any, exec DeployExecutor) (*Result, error) {
+func (l grpcSubstrateLifecycle) lifecycleInvoke(ctx context.Context, op, name, dir string, node *spec.BundleNode, extra map[string]any, exec DeployExecutor) (*Result, error) {
 	pj, err := marshalDeployOpParams(name, dir, node, extra)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func lifecycleOptsFrom(opts EmitOpts) spec.LifecycleOpts {
 	}
 }
 
-func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir string, node *BundleNode, plans []*InstallPlan, opts EmitOpts) (DeployExecutor, error) {
+func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir string, node *spec.BundleNode, plans []*InstallPlan, opts EmitOpts) (DeployExecutor, error) {
 	// Attach the LIVE overlay-build inputs to the ctx — InvokeWithExecutor re-threads them onto the
 	// reverse server so a HostBuild("overlay") re-attaches the rich plans/parent-venue host-side.
 	ctx = withOverlayBuildInputs(ctx, &overlayBuildInputs{plans: plans, parentExec: opts.ParentExec, parentNode: opts.ParentNode})
@@ -154,7 +154,7 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 	return venueFromDescriptor(reply.Venue)
 }
 
-func (l grpcSubstrateLifecycle) ArtifactKey(name string, node *BundleNode) string {
+func (l grpcSubstrateLifecycle) ArtifactKey(name string, node *spec.BundleNode) string {
 	res, err := l.lifecycleInvoke(context.Background(), sdk.OpArtifactKey, name, "", node, nil, ShellExecutor{})
 	if err != nil || len(res.JSON) == 0 {
 		return "" // best-effort: caller keys by the deploy name on empty
@@ -168,7 +168,7 @@ func (l grpcSubstrateLifecycle) ArtifactKey(name string, node *BundleNode) strin
 	return out.Key
 }
 
-func (l grpcSubstrateLifecycle) PostApply(ctx context.Context, name, dir string, node *BundleNode, exec DeployExecutor, opts EmitOpts) error {
+func (l grpcSubstrateLifecycle) PostApply(ctx context.Context, name, dir string, node *spec.BundleNode, exec DeployExecutor, opts EmitOpts) error {
 	// PostApply serves the LIVE venue executor (vm's nested pod-in-guest walks the guest); a host
 	// ShellExecutor when the caller has no live venue (pod, whose PostApply is a no-op).
 	if exec == nil {
@@ -178,7 +178,7 @@ func (l grpcSubstrateLifecycle) PostApply(ctx context.Context, name, dir string,
 	return err
 }
 
-func (l grpcSubstrateLifecycle) VenueExecutor(name string, node *BundleNode) (DeployExecutor, error) {
+func (l grpcSubstrateLifecycle) VenueExecutor(name string, node *spec.BundleNode) (DeployExecutor, error) {
 	res, err := l.lifecycleInvoke(context.Background(), sdk.OpTeardownExecutor, name, "", node, nil, ShellExecutor{})
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func (l grpcSubstrateLifecycle) VenueExecutor(name string, node *BundleNode) (De
 	return venueFromDescriptor(d)
 }
 
-func (l grpcSubstrateLifecycle) PostTeardown(name string, node *BundleNode, keepImage bool) error {
+func (l grpcSubstrateLifecycle) PostTeardown(name string, node *spec.BundleNode, keepImage bool) error {
 	// Host-side substrate cleanup the plugin cannot do (vm: ephemeral-lifecycle teardown — systemd
 	// timers + libvirt snapshot refcounts). Consulted GENERICALLY by word (pod registers none).
 	if hook, ok := lifecyclePostTeardownHookFor(l.prov.word); ok {
@@ -222,7 +222,7 @@ func (l grpcSubstrateLifecycle) PostTeardown(name string, node *BundleNode, keep
 	return nil
 }
 
-func (l grpcSubstrateLifecycle) Start(ctx context.Context, name string, node *BundleNode) error {
+func (l grpcSubstrateLifecycle) Start(ctx context.Context, name string, node *spec.BundleNode) error {
 	// A substrate with a start-plan hook (pod, the K4 deep-body move) resolves the
 	// PodLifecyclePlan host-side, threads it to OpStart, and BRACKETS the shared arbiter claim
 	// (acquire before, release on the failure path — pod-scoped by the hook, so a vm that shells
@@ -249,7 +249,7 @@ func (l grpcSubstrateLifecycle) Start(ctx context.Context, name string, node *Bu
 	return err
 }
 
-func (l grpcSubstrateLifecycle) Stop(ctx context.Context, name string, node *BundleNode) error {
+func (l grpcSubstrateLifecycle) Stop(ctx context.Context, name string, node *spec.BundleNode) error {
 	planHook, hasPlan := lifecycleStopPlanHooks[l.prov.word]
 	if !hasPlan {
 		_, err := l.lifecycleInvoke(ctx, sdk.OpStop, name, "", node, nil, ShellExecutor{})
@@ -265,7 +265,7 @@ func (l grpcSubstrateLifecycle) Stop(ctx context.Context, name string, node *Bun
 	return err
 }
 
-func (l grpcSubstrateLifecycle) Status(ctx context.Context, name string, node *BundleNode) (StatusInfo, error) {
+func (l grpcSubstrateLifecycle) Status(ctx context.Context, name string, node *spec.BundleNode) (StatusInfo, error) {
 	res, err := l.lifecycleInvoke(ctx, sdk.OpStatus, name, "", node, nil, ShellExecutor{})
 	if err != nil {
 		return StatusInfo{}, err
@@ -279,7 +279,7 @@ func (l grpcSubstrateLifecycle) Status(ctx context.Context, name string, node *B
 	return si, nil
 }
 
-func (l grpcSubstrateLifecycle) Logs(ctx context.Context, name string, node *BundleNode, opts LogsOpts) error {
+func (l grpcSubstrateLifecycle) Logs(ctx context.Context, name string, node *spec.BundleNode, opts LogsOpts) error {
 	// A substrate with a logs plan resolver (pod, F12) resolves the #PodLiveStdioPlan host-side (the
 	// `<engine> logs`/`journalctl` stream command) and threads it so the plugin streams it via
 	// exec.RunStream — killing the former podCli("logs") `charly logs` reentry (an infinite loop once
@@ -307,7 +307,7 @@ func (l grpcSubstrateLifecycle) Logs(ctx context.Context, name string, node *Bun
 // to OpAttach; the plugin decodes it and calls exec.RunInteractive (stdio host-held, never crosses the
 // wire). NO arbiter bracket — an interactive session claims no exclusive resource. A non-zero exit
 // round-trips as spec.PodExecReply.ExitCode → *sdk.ExitCodeError (main.go maps it to the process exit).
-func (l grpcSubstrateLifecycle) Attach(ctx context.Context, name string, node *BundleNode, cmd []string, tty bool) error {
+func (l grpcSubstrateLifecycle) Attach(ctx context.Context, name string, node *spec.BundleNode, cmd []string, tty bool) error {
 	planHook, ok := lifecycleAttachPlanHooks[l.prov.word]
 	if !ok {
 		return fmt.Errorf("substrate %q: interactive attach not supported", l.prov.word)
@@ -344,7 +344,7 @@ func (l grpcSubstrateLifecycle) Attach(ctx context.Context, name string, node *B
 // non-zero ExitCode exactly via *sdk.ExitCodeError (main.go maps it to the process exit), preserving
 // the container command's exit code through the passthrough→capture semantics change. Interactive
 // `charly shell` is a CORE command (host-process TTY, F12/#62) and never reaches here.
-func (l grpcSubstrateLifecycle) Shell(ctx context.Context, name string, node *BundleNode, cmd []string) error {
+func (l grpcSubstrateLifecycle) Shell(ctx context.Context, name string, node *spec.BundleNode, cmd []string) error {
 	res, err := l.lifecycleInvoke(ctx, sdk.OpShell, name, "", node, map[string]any{"cmd": cmd}, ShellExecutor{})
 	if err != nil {
 		return err
@@ -364,7 +364,7 @@ func (l grpcSubstrateLifecycle) Shell(ctx context.Context, name string, node *Bu
 	return nil
 }
 
-func (l grpcSubstrateLifecycle) Rebuild(ctx context.Context, name string, node *BundleNode, opts RebuildOpts) error {
+func (l grpcSubstrateLifecycle) Rebuild(ctx context.Context, name string, node *spec.BundleNode, opts RebuildOpts) error {
 	_, err := l.lifecycleInvoke(ctx, sdk.OpRebuild, name, "", node, map[string]any{"opts": opts}, ShellExecutor{})
 	return err
 }

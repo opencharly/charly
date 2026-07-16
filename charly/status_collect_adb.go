@@ -62,7 +62,7 @@ func (a *AndroidCollector) Collect(ctx context.Context, opts CollectOpts) ([]spe
 // locate the in-pod parent container for a nested device.
 type androidDeployNode struct {
 	path string
-	node BundleNode
+	node spec.BundleNode
 }
 
 // collectAndroidDeployNodes is the SINGLE enumeration of every `target: android`
@@ -79,7 +79,7 @@ func collectAndroidDeployNodes(opts CollectOpts) []androidDeployNode {
 	var out []androidDeployNode
 	for _, name := range sortedDeployKeys(merged.Bundle) {
 		root := merged.Bundle[name]
-		_ = bundleWalkPreOrder(&root, name, func(path string, node *BundleNode) error {
+		_ = bundleWalkPreOrder(&root, name, func(path string, node *spec.BundleNode) error {
 			if node != nil && node.Target == "android" {
 				out = append(out, androidDeployNode{path: path, node: *node})
 			}
@@ -100,7 +100,7 @@ func unifiedDeployConfig(uf *UnifiedFile) *BundleConfig {
 
 // sortedDeployKeys returns the deploy map keys in name order so the android
 // table is deterministic across runs.
-func sortedDeployKeys(m map[string]BundleNode) []string {
+func sortedDeployKeys(m map[string]spec.BundleNode) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

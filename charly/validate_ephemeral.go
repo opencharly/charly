@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"time"
 )
@@ -23,7 +24,7 @@ import (
 //   - ephemeral block: ttl is parseable (or empty for default 1h).
 //   - ephemeral block: naming_pattern is parseable as Go template.
 //   - effective ttl > 0 (rejects "0s" or negative values).
-func ValidateEphemeralOnNode(name string, node *BundleNode, errs *ValidationError) {
+func ValidateEphemeralOnNode(name string, node *spec.BundleNode, errs *ValidationError) {
 	if node == nil {
 		return
 	}

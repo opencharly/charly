@@ -23,7 +23,7 @@ import (
 //   - preemptible.restore must be "always" or "on-success".
 //   - requires_exclusive entries must be non-empty strings.
 //   - a node may not both hold and require the SAME token (self-contention).
-func ValidatePreemptibleOnNode(name string, node *BundleNode, errs *ValidationError) {
+func ValidatePreemptibleOnNode(name string, node *spec.BundleNode, errs *ValidationError) {
 	if node == nil {
 		return
 	}

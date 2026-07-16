@@ -24,7 +24,7 @@ import (
 // lifecyclePrepareHook resolves the host-side DATA a substrate's OpPrepareVenue needs but cannot
 // derive. Registered per substrate word at package-var init (like registerDeployPreresolver); the
 // proxy consults it by word and threads the JSON under the "prepare" params key.
-type lifecyclePrepareHook func(name, dir string, node *BundleNode) (json.RawMessage, error)
+type lifecyclePrepareHook func(name, dir string, node *spec.BundleNode) (json.RawMessage, error)
 
 var lifecyclePrepareHooks = map[string]lifecyclePrepareHook{}
 
@@ -62,7 +62,7 @@ var _ = func() bool { registerLifecycleLivePlanHooks("vm", vmAttachResolver, nil
 // PrepareVenue (entity, spec.Vm, ssh user/port, state dir, prior state) + runs the one host-side
 // Add-time side effect it cannot delegate (registerEphemeralIfMarked). The ACTIONS (ssh-config
 // stanza, auto-boot, guest waits, charly delivery) are the plugin's job now.
-func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, error) {
+func vmLifecyclePrepare(name, dir string, node *spec.BundleNode) (json.RawMessage, error) {
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
@@ -149,7 +149,7 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 
 // lifecyclePostTeardownHook runs host-side substrate cleanup AFTER the plugin's OpPostTeardown that
 // the plugin cannot do (it uses core-only machinery). Registered per word; the proxy consults it.
-type lifecyclePostTeardownHook func(name string, node *BundleNode) error
+type lifecyclePostTeardownHook func(name string, node *spec.BundleNode) error
 
 var lifecyclePostTeardownHooks = map[string]lifecyclePostTeardownHook{}
 
@@ -173,7 +173,7 @@ var _ = func() bool { registerLifecyclePostTeardownHook("vm", vmLifecyclePostTea
 // vmLifecyclePostTeardown runs the vm ephemeral-lifecycle teardown host-side (systemd transient
 // timers + libvirt snapshot refcounts — un-importable by the plugin). The ssh-config stanza + the
 // charly.yml entry removal are the plugin's job (kit.RemoveVmSshStanza + PostTeardownReply.RemoveEntries).
-func vmLifecyclePostTeardown(name string, node *BundleNode) error {
+func vmLifecyclePostTeardown(name string, node *spec.BundleNode) error {
 	if dcNode, ok := deploykit.LoadDeployConfigForRead("vm ephemeral-teardown").LookupKey(name); ok && dcNode.IsEphemeral() {
 		return TeardownEphemeralLifecycle(&dcNode, name)
 	}
@@ -185,7 +185,7 @@ func vmLifecyclePostTeardown(name string, node *BundleNode) error {
 // → vm: k3s-vm); falls back to stripping a legacy "vm:<name>" deploy-key prefix, then to the leaf of
 // a nested dotted path (stack.myvm → myvm). Relocated here from the deleted vm_deploy_lifecycle.go
 // (the last surviving consumer is this preresolver + the del path).
-func vmEntityForAdd(node *BundleNode, name string) (string, error) {
+func vmEntityForAdd(node *spec.BundleNode, name string) (string, error) {
 	if node != nil && node.From != "" {
 		return node.From, nil
 	}

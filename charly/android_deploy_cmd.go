@@ -12,6 +12,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 )
 
@@ -109,7 +110,7 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 // the host); image devices target an in-pod emulator (apkeep in-pod). For a
 // nested deploy (dotted path), the in-pod container is the PARENT pod
 // (charly-<flat-parent-path>); for a top-level deploy it resolves by image name.
-func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) (AndroidDevice, error) {
+func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path string) (AndroidDevice, error) {
 	serial := spec.EffectiveSerial()
 
 	// Remote/physical endpoint — host-side apkeep + goadb.
@@ -170,7 +171,7 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) 
 // the image-device branch uses (R3). The parent pod is derived from the deploy
 // path (path[:lastDot]), exactly like the image branch. Returns addr unchanged
 // when it carries no ${HOST_PORT:N} reference (a literal host:port endpoint).
-func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, error) {
+func resolveAndroidHostPortRef(addr, path string, node *spec.BundleNode) (string, error) {
 	const marker = "${HOST_PORT:"
 	before, after, ok := strings.Cut(addr, marker)
 	if !ok {

@@ -109,7 +109,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []spec
 // bucket's runner, then runs each step — appending verdicts to out and
 // recording them in verdictByID. Split out of RunCheckLive, which keeps the
 // outer pod-grouping loop.
-func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
+func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]spec.BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
 	pod := bucket[0].step.Venue
 
 	var ephemeralCleanup func(bool)
@@ -347,7 +347,7 @@ func skippedStepScore(e scoredStep, pod, blockedBy string) spec.StepScore {
 }
 
 // resolveScoringChain returns the DeployExecutor chain that reaches `pod`.
-func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecutor, error) {
+func resolveScoringChain(roots map[string]spec.BundleNode, pod string) (DeployExecutor, error) {
 	if strings.Contains(pod, ".") && roots != nil {
 		_, chain, err := ResolveDeployChain(roots, pod, ShellExecutor{})
 		if err == nil {
@@ -380,7 +380,7 @@ func RenderPlanYAML(plan []spec.Step) string {
 
 // isEphemeralDeploy reports whether the named pod resolves to a charly.yml
 // entry marked ephemeral.
-func isEphemeralDeploy(roots map[string]BundleNode, pod string) bool {
+func isEphemeralDeploy(roots map[string]spec.BundleNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
@@ -395,11 +395,11 @@ func isEphemeralDeploy(roots map[string]BundleNode, pod string) bool {
 
 // ephemeralKeepOnFailure returns the keep_on_failure flag from the named
 // ephemeral deploy's lifetime block.
-func ephemeralKeepOnFailure(roots map[string]BundleNode, pod string) bool {
+func ephemeralKeepOnFailure(roots map[string]spec.BundleNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
-	resolve := func(node *BundleNode) bool {
+	resolve := func(node *spec.BundleNode) bool {
 		if node == nil || node.Ephemeral == nil {
 			return false
 		}

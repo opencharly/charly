@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"sort"
 )
@@ -38,7 +39,7 @@ func foldMembers(uf *UnifiedFile) error {
 	// a collision between two owners' members is reported deterministically.
 	type pendingMember struct {
 		key        string
-		node       BundleNode
+		node       spec.BundleNode
 		owner      string
 		disposable bool
 	}
@@ -143,7 +144,7 @@ func validMemberTarget(target string) bool {
 }
 
 // sortedMemberKeys returns the member keys of a node in deterministic order.
-func sortedMemberKeys(members map[string]*BundleNode) []string {
+func sortedMemberKeys(members map[string]*spec.BundleNode) []string {
 	if len(members) == 0 {
 		return nil
 	}
@@ -175,7 +176,7 @@ func withMemberTag(args []string, imageTag string) []string {
 // lifecycle (create + ssh-wait + deploy), a kind:local member is registered via
 // `charly bundle add <member>`. The SAME helper serves the kind:check bed runner
 // and the operator deploy path (R3). Idempotent on an already-running member.
-func bringUpMembers(node *BundleNode, imageTag string) error {
+func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
 	}
@@ -243,7 +244,7 @@ func bringUpMembers(node *BundleNode, imageTag string) error {
 // order) — the companion to bringUpMembers. VM members are `vm destroy`ed, pod
 // members removed + purged, kind:local members reversed via `charly bundle del`.
 // Never fails the owner's teardown.
-func tearDownMembers(node *BundleNode) {
+func tearDownMembers(node *spec.BundleNode) {
 	if node == nil || len(node.Members) == 0 {
 		return
 	}
@@ -277,13 +278,13 @@ func tearDownMembers(node *BundleNode) {
 // isPodMember reports whether a member node is a CONTAINER-venue (pod) deployment — reading the
 // stamped descent trait (P9), never the substrate kind word (an empty target resolves to the pod
 // default via nodeTraits). Pod members go through config+start; other venues through deploy add.
-func isPodMember(node *BundleNode) bool {
+func isPodMember(node *spec.BundleNode) bool {
 	return node != nil && nodeTraits(node).Venue == "container"
 }
 
 // isVmMember reports whether a folded group member is an SSH-venue (vm) substrate (P9 trait, not
 // the kind word), so the group bed builds its disk (vm build) and brings it up via the libvirt
 // lifecycle (vm create + ssh-wait) rather than the pod/local path.
-func isVmMember(node *BundleNode) bool {
+func isVmMember(node *spec.BundleNode) bool {
 	return node != nil && nodeTraits(node).Venue == "ssh"
 }

@@ -13,7 +13,7 @@ import (
 // ResolveTarget — the legacy-alias normalization + the dispatch switch are gone (C3).
 type DeployTargetProvider interface {
 	Provider
-	ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error)
+	ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, error)
 }
 
 // deployTargetWords is the canonical deploy-target set (the cross-ref-inferred

@@ -108,12 +108,12 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	// (buildBundleNodeInto), so the entity participates in deploy/check exactly like a builtin
 	// pod/group/candy. A FLAT kind (F4) lands its opaque body in uf.PluginKinds, unchanged.
 	if structural {
-		var dn BundleNode
+		var dn spec.BundleNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: structural kind %q reply decode: %w", gn.name, gn.disc, err)
 		}
 		if uf.Bundle == nil {
-			uf.Bundle = map[string]BundleNode{}
+			uf.Bundle = map[string]spec.BundleNode{}
 		}
 		uf.Bundle[gn.name] = dn
 		return nil
@@ -189,7 +189,7 @@ func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		return fmt.Errorf("node %q: substrate kind %q: %w", gn.name, gn.disc, err)
 	}
 	if deployShape {
-		var dn BundleNode
+		var dn spec.BundleNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: substrate deploy reply decode: %w", gn.name, err)
 		}

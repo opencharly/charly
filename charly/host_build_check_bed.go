@@ -46,12 +46,12 @@ const checkBedBuilderKind = "check-bed"
 // bedSession holds the live host handles a bed run owns across its HostBuild ops.
 type bedSession struct {
 	bed       string
-	node      BundleNode     // resolved once at setup; drives the members/wait ops
-	bedDomain string         // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
-	imageTag  string         // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
-	bedUnlock func() error   // acquireFileLock(".check/<bed>/.lock")
-	domUnlock []func() error // acquireVmDomainLock per bedVmDomains, in acquire order
-	lease     *Lease         // acquireResourceForClaimant
+	node      spec.BundleNode // resolved once at setup; drives the members/wait ops
+	bedDomain string          // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
+	imageTag  string          // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
+	bedUnlock func() error    // acquireFileLock(".check/<bed>/.lock")
+	domUnlock []func() error  // acquireVmDomainLock per bedVmDomains, in acquire order
+	lease     *Lease          // acquireResourceForClaimant
 
 	// env restore state
 	repoOvSet bool   // this session set CHARLY_REPO_OVERRIDE
@@ -323,7 +323,7 @@ func bedSessionTeardown(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 // box, BEFORE the members-up op deploys them). Deterministic order (sortedMemberKeys). A vm member's
 // From is the kind:vm ENTITY (build/spec source, entity-scoped — NOT --domain); the per-deploy member
 // domain (vmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
-func bedMemberDescriptors(members map[string]*BundleNode) []spec.CheckBedMember {
+func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
 	keys := sortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
@@ -356,7 +356,7 @@ func bedRunImageTag(bed, calver string) string {
 // sortedNestedKeys order — the set a VM root deploys host-side (mirroring deployNestedLocalChildren:
 // a VM's nested CONTAINER children are deployed in-guest by plugin-deploy-vm's PostApply, so a
 // host-side re-deploy would be wrong).
-func bedLocalChildKeys(children map[string]*BundleNode) []string {
+func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
 	for _, childKey := range sortedNestedKeys(children) {
 		child := children[childKey]

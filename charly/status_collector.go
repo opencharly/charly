@@ -250,9 +250,9 @@ func (c *Collector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 // lookupDeploy resolves the charly.yml entry for one image+instance. Tries
 // the canonical deployKey() shape first, then a few legacy fallbacks for
 // bed-rolled keys (joined container name minus charly- prefix).
-func (c *Collector) lookupDeploy(box, instance, joinedContainerName string) (BundleNode, bool) {
+func (c *Collector) lookupDeploy(box, instance, joinedContainerName string) (spec.BundleNode, bool) {
 	if c.deploy == nil || c.deploy.Bundle == nil {
-		return BundleNode{}, false
+		return spec.BundleNode{}, false
 	}
 	if box != "" {
 		if dn, ok := c.deploy.Bundle[deployKey(box, instance)]; ok {
@@ -266,7 +266,7 @@ func (c *Collector) lookupDeploy(box, instance, joinedContainerName string) (Bun
 	if dn, ok := c.deploy.Bundle[stripped]; ok {
 		return dn, true
 	}
-	return BundleNode{}, false
+	return spec.BundleNode{}, false
 }
 
 // resolveSystemdState consults systemctl + the quadlet dir to decide whether

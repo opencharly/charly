@@ -809,7 +809,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 			// Update charly.yml with seeded state
 			if seeded > 0 {
 				if dc == nil {
-					dc = &BundleConfig{Bundle: make(map[string]BundleNode)}
+					dc = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 				}
 				imgDeploy := dc.Bundle[deployKey(c.Box, c.Instance)]
 				for i := range imgDeploy.Volume {
@@ -1227,10 +1227,10 @@ func (c *BoxConfigSetupCmd) persistResourceCaps(dc **BundleConfig) error {
 		return nil
 	}
 	if *dc == nil {
-		*dc = &BundleConfig{Bundle: make(map[string]BundleNode)}
+		*dc = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	}
 	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]BundleNode)
+		(*dc).Bundle = make(map[string]spec.BundleNode)
 	}
 	key := deployKey(c.Box, c.Instance)
 	entry := (*dc).Bundle[key]

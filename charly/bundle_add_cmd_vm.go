@@ -123,12 +123,12 @@ func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) e
 		dc = &BundleConfig{}
 	}
 	if dc.Bundle == nil {
-		dc.Bundle = map[string]BundleNode{}
+		dc.Bundle = map[string]spec.BundleNode{}
 	}
 
 	entry, exists := dc.Bundle[deployName]
 	if !exists {
-		entry = BundleNode{}
+		entry = spec.BundleNode{}
 	}
 	entry.Target = "vm"
 	// Persist the `vm:` cross-ref so the per-host entry is a well-formed bundle

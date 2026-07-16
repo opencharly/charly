@@ -155,7 +155,7 @@ func (c *deployAddCmd) Run() error {
 	//   charly bundle add openclaw-stack.web.db  — v2 subtree
 	targetPath := c.Name
 	tree, _ := resolveTreeRoot(dir)
-	var rootNode *BundleNode
+	var rootNode *spec.BundleNode
 	var resolvedPath string
 	// parentExec is the executor chain derived from any ANCESTORS the
 	// dotted path walks through. Without this, `charly bundle add a.b.c`
@@ -205,7 +205,7 @@ func (c *deployAddCmd) Run() error {
 		return c.dispatchNode(resolvedPath, rootNode, parentExec, dir)
 	}
 
-	if err := WalkDeploymentTree(resolvedPath, rootNode, parentExec, func(path string, node *BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
+	if err := WalkDeploymentTree(resolvedPath, rootNode, parentExec, func(path string, node *spec.BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
 		if err := c.dispatchNode(path, node, parentExec, dir); err != nil {
 			return nil, err
 		}
@@ -240,7 +240,7 @@ func (c *deployAddCmd) Run() error {
 // parentExec is the DeployExecutor of the enclosing environment; nil
 // at the root. Non-nil means "this node is a child of something" —
 // its target composes a NestedExecutor over parentExec.
-func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec DeployExecutor, dir string) error {
+func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec DeployExecutor, dir string) error {
 	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node, parentExec)
 	if err != nil {
 		return err
@@ -336,7 +336,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 	// classified target so `charly bundle add host ./x.yml` still resolves.
 	resolveNode := node
 	if resolveNode == nil {
-		resolveNode = &BundleNode{Target: target}
+		resolveNode = &spec.BundleNode{Target: target}
 	}
 
 	utgt, err := ResolveTarget(resolveNode, deployName)
@@ -363,7 +363,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 // CLI flags. On the root this matches the pre-v2 behavior; on children the
 // fields come from the child node (not c.Name's top-level entry). Returns an
 // error only when neither a <ref> nor a charly.yml entry resolves a ref.
-func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parentExec DeployExecutor) (EmitOpts, string, []string, string, error) {
+func (c *deployAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode, parentExec DeployExecutor) (EmitOpts, string, []string, string, error) {
 	opts := c.emitOpts()
 	opts.ParentExec = parentExec
 	opts.Path = path
@@ -412,7 +412,7 @@ func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parent
 // precedence is CLI > deployment > template — because InstallOptsConfig.ApplyTo
 // is fill-empty, so applying the template's opts after the deployment's leaves
 // the deployment's values intact and only fills the gaps.
-func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies []string, opts EmitOpts) ([]string, EmitOpts, error) {
+func resolveNodeTemplate(target, path, dir string, node *spec.BundleNode, addCandies []string, opts EmitOpts) ([]string, EmitOpts, error) {
 	if target == "local" && node != nil && node.From != "" {
 		tmpl, ferr := findLocalSpec(dir, node.From)
 		if ferr != nil {
@@ -520,7 +520,7 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 // is the hint: literal `host` → host target; anything else → pod.
 // The legacy `vm:<name>` name-prefix heuristic was removed — VM
 // deploys are now always tree-backed with explicit target:vm.
-func classifyNodeTarget(node *BundleNode, path string) string {
+func classifyNodeTarget(node *spec.BundleNode, path string) string {
 	if node != nil && node.Target != "" {
 		return node.Target
 	}
@@ -543,7 +543,7 @@ func pathLeaf(path string) string {
 // it supplies the current node's flattened container name (derived from the
 // dotted path) for a container target, hops through vmChildExecutor for a vm
 // child, and otherwise shares the parent executor.
-func deriveChildExecutorForPath(path string, node *BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
+func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
 	}
@@ -670,12 +670,12 @@ func (c *deployDelCmd) Run() error {
 // direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
 // loudly, instead of being silently synthesized into a pod del that tears down
 // nothing and then fails with a misleading "unknown target pod".
-func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
+func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 	if c.Name == "host" {
-		return &BundleNode{Target: "local"}, "local", nil
+		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
 	if strings.HasPrefix(c.Name, "vm:") {
-		return &BundleNode{Target: "vm"}, "vm", nil
+		return &spec.BundleNode{Target: "vm"}, "vm", nil
 	}
 	if cwd, _ := os.Getwd(); cwd != "" {
 		if tree, _ := resolveTreeRoot(cwd); tree != nil {
@@ -686,7 +686,7 @@ func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
 		}
 	}
 	if podDeploymentArtifactExists(c.Name) {
-		return &BundleNode{Target: "pod"}, "pod", nil
+		return &spec.BundleNode{Target: "pod"}, "pod", nil
 	}
 	return nil, "", fmt.Errorf("no such deployment %q — run `charly bundle list` to see "+
 		"deployments (a VM deploy is torn down as `charly bundle del vm:%s`)", c.Name, c.Name)
@@ -883,7 +883,7 @@ func syntheticHostBox() *ResolvedBox {
 // the "vm:<name>" deploy-key prefix (the CLI `charly bundle add vm:<name>` form).
 // This is the single signal the candy compiler uses to pick syntheticVmBox
 // over syntheticHostBox — the prefix alone missed bed/target:vm deploys.
-func resolveVmEntity(deployName string, node *BundleNode) string {
+func resolveVmEntity(deployName string, node *spec.BundleNode) string {
 	if node != nil && node.From != "" {
 		return node.From
 	}

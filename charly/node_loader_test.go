@@ -147,14 +147,14 @@ func boxMapOf(m map[string]spec.BoxConfig) boxMap {
 	}
 	return out
 }
-func deployKeys(m map[string]BundleNode) []string {
+func deployKeys(m map[string]spec.BundleNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
 	return out
 }
-func deployKeys2(m map[string]*BundleNode) []string {
+func deployKeys2(m map[string]*spec.BundleNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

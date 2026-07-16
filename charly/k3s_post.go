@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -145,7 +146,7 @@ func resolveDeployForwards(authored []string, alloc map[string]int) ([]string, e
 
 // findBundleNodeByName locates a deploy node by key across the tree (top-level +
 // nested children + peer members).
-func findBundleNodeByName(bundle map[string]BundleNode, name string) *BundleNode {
+func findBundleNodeByName(bundle map[string]spec.BundleNode, name string) *spec.BundleNode {
 	for k := range bundle {
 		n := bundle[k]
 		if k == name {
@@ -161,7 +162,7 @@ func findBundleNodeByName(bundle map[string]BundleNode, name string) *BundleNode
 	return nil
 }
 
-func findBundleNodePtrByName(m map[string]*BundleNode, name string) *BundleNode {
+func findBundleNodePtrByName(m map[string]*spec.BundleNode, name string) *spec.BundleNode {
 	for k, n := range m {
 		if k == name {
 			return n

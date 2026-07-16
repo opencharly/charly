@@ -143,7 +143,7 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		Boxes:   map[string]spec.ResolvedBoxView{"demo": projectResolvedBox(fullResolvedBoxFixture())},
 		Candies: map[string]spec.CandyView{"charly": projectCandyView(candy)},
 	}
-	bundle := map[string]BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
+	bundle := map[string]spec.BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
 	for k, v := range bundle {
 		node := v
 		if rp.Deploy == nil {
