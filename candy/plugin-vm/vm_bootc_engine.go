@@ -1,4 +1,4 @@
-package main
+package vm
 
 import (
 	"fmt"
@@ -6,6 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+// vm_bootc_engine.go — the bootc-VM disk-build engine (P8b-rest: ported from
+// charly/vm_bootc_install.go). resolveBootcImageRef stays HOST-SIDE (it needs
+// resolveLocalImageRef's cfg.Box + local podman-storage inspection, a core-only
+// Mechanism) — the host resolves it into spec.VmBuildReply.BootcImageRef and this engine
+// takes the PRE-RESOLVED ref directly.
 
 // BootcVMResult mirrors CloudImageBuildResult / BootstrapVMResult.
 type BootcVMResult struct {
@@ -16,39 +22,19 @@ type BootcVMResult struct {
 	CloudInitDigest string
 }
 
-// resolveBootcImageRef maps a bootc source.image to a concrete OCI ref.
-//
-// A full ref (containing "/", e.g. "quay.io/fedora/fedora-bootc:43" or a
-// pinned "…@sha256:…") passes through unchanged — bootc may pull it from a
-// registry. An internal kind:image short name (e.g. "fedora-bootc") resolves
-// against local podman storage to its newest CalVer tag via the shared
-// resolveLocalImageRef: charly is CalVer-only, so there is NO `:latest` fallback —
-// the bootc image must be built first (`charly box build <name>`), which is
-// surfaced as an actionable error when it is missing.
-func resolveBootcImageRef(engine, image string) (string, error) {
-	if strings.Contains(image, "/") {
-		return image, nil
-	}
-	resolved, err := resolveLocalImageRef(engine, image)
-	if err != nil {
-		return "", fmt.Errorf("resolving bootc image %q: %w (build it first with `charly box build %s`)", image, err, image)
-	}
-	return resolved, nil
-}
-
-// BuildBootcVM creates a fresh VM disk by running `bootc install
-// to-disk` inside a privileged container that hosts the referenced
-// kind:image entry. Replaces the Task-21 stub at vm_build.go:198.
-//
-// The bootc image carries its own kernel + initramfs + bootloader
-// integration, so this path skips EmitDiskBuildScript (no chroot
-// grub-install needed). It uses RunPrivileged for the privileged
-// container and qemu-img convert raw → qcow2 (handled by bootc).
+// BuildBootcVM creates a fresh VM disk by running `bootc install to-disk` inside a
+// privileged container that hosts the referenced kind:image entry. The bootc image
+// carries its own kernel + initramfs + bootloader integration, so this path skips
+// EmitDiskBuildScript (no chroot grub-install needed). It uses RunPrivileged for the
+// privileged container and qemu-img convert raw → qcow2 (handled by bootc). imageRef is
+// the PRE-RESOLVED bootc image ref (host-resolved via resolveBootcImageRef — a full ref
+// passes through, an internal kind:image short name resolves to its newest local CalVer
+// tag, never `:latest`).
 func BuildBootcVM(
 	spec *VmSpec,
 	outputDir, vmStateDir string,
 	existingState *VmDeployState,
-	engine string,
+	imageRef string,
 ) (BootcVMResult, error) {
 	if spec.Source.Kind != "bootc" {
 		return BootcVMResult{}, fmt.Errorf("BuildBootcVM called with source.kind=%q (expected bootc)", spec.Source.Kind)
@@ -68,16 +54,8 @@ func BuildBootcVM(
 		rootfs = "ext4"
 	}
 
-	// Resolve the bootc image ref (full ref → as-is; internal short name →
-	// newest local CalVer tag; NO `:latest` fallback — see resolveBootcImageRef).
-	imageRef, err := resolveBootcImageRef(engine, spec.Source.Box)
-	if err != nil {
-		return BootcVMResult{}, err
-	}
-
-	// Render bootc install script. We allocate the raw disk on the host,
-	// bind-mount it into the container, and let bootc write to /dev/loopX
-	// via a loop device the container creates.
+	// Render bootc install script. We allocate the raw disk on the host, bind-mount it into
+	// the container, and let bootc write to /dev/loopX via a loop device the container creates.
 	rawHost := filepath.Join(outputDir, "disk.raw")
 	qcowHost := filepath.Join(outputDir, "disk.qcow2")
 	rootSizeFlag := ""
