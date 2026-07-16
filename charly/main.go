@@ -226,7 +226,7 @@ func main() {
 
 	// Stale-binary guardrail: if cwd is inside an opencharly source tree
 	// AND the source tree has .go files newer than this binary, abort
-	// with a clear error pointing at `task build:charly`. See
+	// with a clear error pointing at `task build:binary`. See
 	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
 	// the 2026-05-09 cuda-cudnn cache-mount incident).
 	CheckBinaryFreshness(ctx.Command())

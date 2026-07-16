@@ -108,7 +108,7 @@ func CheckBinaryFreshness(verbPath string) {
 	fmt.Fprintf(os.Stderr, "miscompilation — e.g. the 2026-05-09 cuda-cudnn incident burned\n")
 	fmt.Fprintf(os.Stderr, "90 minutes re-downloading 462 MiB because /usr/bin/charly predated\n")
 	fmt.Fprintf(os.Stderr, "the cache-mount fix at commit 230c5d4.\n\n")
-	fmt.Fprintf(os.Stderr, "Fix:    cd %s && task build:charly\n", sourceRoot)
+	fmt.Fprintf(os.Stderr, "Fix:    cd %s && task build:binary   (then use ./bin/charly)\n", sourceRoot)
 	fmt.Fprintf(os.Stderr, "Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1   (NOT recommended)\n")
 	os.Exit(1)
 }
