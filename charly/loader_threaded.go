@@ -6,12 +6,14 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// loader_threaded.go — the host side of the unified-config loader seam (P6/K1). It holds the
-// registered per-document PARSER (activeLoaderParser) and builds the registry-derived
-// kind-recognition snapshot (loaderThreaded) the parse consults instead of querying the provider
-// registry directly (boundary law clause D). The seam CONTRACT types (spec.DocParser / spec.Threaded)
-// live in sdk/spec so neither the host nor the loader plugin imports the other; the WALK mechanism
-// (loaderkit.Walk) is reached through the single loader_driver.go import.
+// loader_threaded.go — the host side of the unified-config loader seam (P6/K1/#46). It holds the
+// registered per-document PARSER (activeLoaderParser), the registered whole-project WALKER
+// (activeProjectWalker), and builds the registry-derived kind-recognition snapshot (loaderThreaded)
+// the parse consults instead of querying the provider registry directly (boundary law clause D).
+// The seam CONTRACT types (spec.DocParser / spec.Threaded / spec.WalkSeams / spec.ProjectWalker)
+// live in sdk/spec so neither the host nor the loader plugin imports the other — charly core
+// imports NEITHER loaderkit NOR any other sdk mechanism kit; the WALK mechanism (loaderkit.Walk) is
+// reached exclusively through the compiled-in loader plugin's typed ProjectWalker, resolved here.
 
 // activeLoaderParser is the registered config-front-end PARSE — the spec.DocParser of the
 // compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). There
@@ -21,13 +23,54 @@ import (
 var activeLoaderParser spec.DocParser
 
 // requireLoaderParser returns the registered parser or FATALs with a clear message. Every parse
-// site (the Walk driver + the box-validate node-form parse + the layers candy scan) goes through
-// it, so a missing loader plugin fails loudly and identically everywhere.
+// site (the walk driver below + the box-validate node-form parse + the layers candy scan) goes
+// through it, so a missing loader plugin fails loudly and identically everywhere.
 func requireLoaderParser() spec.DocParser {
 	if activeLoaderParser == nil {
 		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
 	}
 	return activeLoaderParser
+}
+
+// activeProjectWalker is the registered whole-project WALK — the spec.ProjectWalker of the
+// compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). No
+// in-core fallback, mirroring activeLoaderParser: a nil walker means the loader plugin was not
+// compiled in — a FATAL, never a silent fallback (requireProjectWalker).
+var activeProjectWalker spec.ProjectWalker
+
+// requireProjectWalker returns the registered walker or FATALs with a clear message.
+func requireProjectWalker() spec.ProjectWalker {
+	if activeProjectWalker == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeProjectWalker
+}
+
+// hostWalkProject runs the kind-blind whole-project WALK via the registered loader plugin,
+// returning its generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml
+// bytes; the seams are the six kind-blind host primitives the walk consults instead of the
+// provider registry directly (boundary law clause D). This is the SOLE call site that reaches the
+// loader plugin's WalkProject — charly core builds the seams from its own host functions but never
+// imports sdk/loaderkit to drive the walk itself.
+func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
+	seams := spec.WalkSeams{
+		Parser: requireLoaderParser(),
+		// Boundary: the depth-0 parse pre-scan + connect-declared-kind-plugins registry side effects
+		// (prescanDeclaredPluginWords + connectDeclaredKindPlugins), run at the root file AND each
+		// namespace root before that boundary's documents parse.
+		Boundary: func(bdir string, data []byte) error {
+			prescanDeclaredPluginWords(data, bdir)
+			connectDeclaredKindPlugins(bdir)
+			return nil
+		},
+		Threaded:     loaderThreaded,
+		ResolveRef:   canonicalRef,
+		GateDoc:      validateNodeDocCUE,
+		RepoIdentity: nsRepoIdentity,
+	}
+	// Seed the root's own repo identity so a transitive self-import cycle-breaks to the in-progress
+	// root (the importing project's namespace pins win — ns_identity.go).
+	return requireProjectWalker().WalkProject(dir, rootData, rootRepoIdentity(dir), seams)
 }
 
 // loaderThreaded builds the spec.Threaded snapshot: the recognized kind / deploy-substrate words
