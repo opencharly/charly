@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ func fullResolvedBoxFixture() *ResolvedBox {
 		GID:                   1000,
 		Home:                  "/home/user",
 		UserAdopted:           true,
-		Merge:                 &MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
+		Merge:                 &vmshared.MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
 		Builder:               BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
 		BuilderCapabilities:   []string{"pixi"},
 		Auto:                  true,

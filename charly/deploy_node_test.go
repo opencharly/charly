@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 
@@ -218,14 +219,14 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	tr := true
 	rp := []string{"32718:2718"}
 	desc := "testing"
-	sec := []DeploySecretConfig{{Name: "test"}}
+	sec := []vmshared.DeploySecretConfig{{Name: "test"}}
 	sd := map[string]json.RawMessage{"side": json.RawMessage(`{"image":"img"}`)}
 	shl := []DeployShellOverlay{{ID: "x"}}
 	k8s := &K8sDeployConfig{Namespace: "test-ns"}
-	res := &DeployResources{}
-	exp := &DeployExpose{Host: "example.com", TLS: true}
-	storage := []DeployStorage{{Name: "s"}}
-	probes := &DeployProbes{}
+	res := &vmshared.DeployResources{}
+	exp := &vmshared.DeployExpose{Host: "example.com", TLS: true}
+	storage := []vmshared.DeployStorage{{Name: "s"}}
+	probes := &vmshared.DeployProbes{}
 
 	src := BundleNode{
 		ResolvedPort:    rp,

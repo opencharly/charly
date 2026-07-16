@@ -34,7 +34,7 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	cfg := &RuntimeConfig{
-		Engine:  EngineConfig{Build: "podman", Run: "docker"},
+		Engine:  kit.EngineConfig{Build: "podman", Run: "docker"},
 		RunMode: "quadlet",
 	}
 	if err := SaveRuntimeConfig(cfg); err != nil {
@@ -101,7 +101,7 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
-	cfg := &RuntimeConfig{Engine: EngineConfig{Build: "podman"}}
+	cfg := &RuntimeConfig{Engine: kit.EngineConfig{Build: "podman"}}
 	if err := SaveRuntimeConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +313,7 @@ func TestResolveValue(t *testing.T) {
 		{"", "", "docker", "docker"},
 	}
 	for _, tt := range tests {
-		got := ResolveValue(tt.env, tt.cfg, tt.def)
+		got := kit.ResolveValue(tt.env, tt.cfg, tt.def)
 		if got != tt.want {
 			t.Errorf("ResolveValue(%q, %q, %q) = %q, want %q", tt.env, tt.cfg, tt.def, got, tt.want)
 		}
@@ -525,7 +525,7 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 // TestDetectRunMode_NonPodmanEngine — runEngine != "podman" is always
 // "direct" regardless of systemd state.
 func TestDetectRunMode_NonPodmanEngine(t *testing.T) {
-	if got := detectRunMode("docker"); got != "direct" {
+	if got := kit.DetectRunMode("docker"); got != "direct" {
 		t.Errorf("detectRunMode(docker) = %q, want direct", got)
 	}
 }
@@ -540,7 +540,7 @@ func TestSystemdUserAvailable_EmptyXDG(t *testing.T) {
 	defer func() { kit.SystemdUserRuntimeDir = orig }()
 	kit.SystemdUserRuntimeDir = func() string { return dir }
 
-	if SystemdUserAvailable() {
+	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with empty XDG_RUNTIME_DIR; want false")
 	}
 }
@@ -555,7 +555,7 @@ func TestSystemdUserAvailable_DirMissing(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "definitely-not-a-systemd-dir")
 	kit.SystemdUserRuntimeDir = func() string { return missing }
 
-	if SystemdUserAvailable() {
+	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with missing /run/user/<uid>/systemd; want false")
 	}
 }
@@ -574,7 +574,7 @@ func TestSystemdUserAvailable_DirIsFile(t *testing.T) {
 	defer func() { kit.SystemdUserRuntimeDir = orig }()
 	kit.SystemdUserRuntimeDir = func() string { return filePath }
 
-	if SystemdUserAvailable() {
+	if kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = true with regular file at probed path; want false")
 	}
 }
@@ -594,7 +594,7 @@ func TestSystemdUserAvailable_AllPresent(t *testing.T) {
 	defer func() { kit.SystemdUserRuntimeDir = orig }()
 	kit.SystemdUserRuntimeDir = func() string { return dirPath }
 
-	if !SystemdUserAvailable() {
+	if !kit.SystemdUserAvailable() {
 		t.Error("SystemdUserAvailable() = false with all signals present; want true")
 	}
 }

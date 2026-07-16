@@ -6,7 +6,7 @@
 // OWNS THE DRIVE, RESOLVES + MERGES OVER HostBuild. The heavy loader/render RESOLVE (NewGenerator
 // → Generate → the privileged builder-bootstrap → the builder-image ensure) and the layer MERGE
 // stay HOST-SIDE, reached over the F10 HostBuild reverse channel: Invoke marshals a
-// spec.BuildResolveRequest and calls HostBuild("build-resolve", …), receiving a
+// spec.BuildResolveRequest and calls HostBuild("build-prep", …), receiving a
 // spec.BuildResolveReply drive-model (engine/platform/order/levels/per-image descriptors +
 // resolved tunables). The candy then runs podman directly — building each image (Containerfile
 // piped over stdin), gating the post-build inline layer merge on the box's MergeAuto via
