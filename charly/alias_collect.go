@@ -11,15 +11,28 @@ import (
 // (the command itself moved to candy/plugin-alias, command:alias). These are NOT the command — each
 // is a distinct kernel mechanism the command extraction does not touch, owned by its own cutover:
 //
-//   - CollectBoxAlias / CollectedAlias — the BUILD-TIME collector: generate.go bakes the resolved
-//     alias set into the image's ai.opencharly.alias OCI label, and labels.go carries it on
-//     BoxMetadata.Alias (the OCI-label contract). The projector (resolved_project_host.go) runs it
-//     into the ResolvedBoxView box-aggregate `charly box inspect --format aliases` prints.
-//   - aliasNameRe — the LOAD-TIME validation regex (validate.go rejects malformed alias names).
+//   - CollectBoxAlias / CollectedAlias — the BUILD-TIME collector: render_baked_metadata.go (the
+//     Generator/build-engine helper that bakes OCI labels) bakes the resolved alias set into the
+//     image's ai.opencharly.alias OCI label, and labels.go carries it on BoxMetadata.Alias (the
+//     OCI-label contract). The projector (resolved_project_host.go) runs it into the
+//     ResolvedBoxView box-aggregate `charly box inspect --format aliases` prints.
+//   - aliasNameRe — a LOAD-TIME validation regex. NOT consumed anywhere in charly/core (P14-rest
+//     trace, 2026-07 found no live call site outside its own test) — candy/plugin-box's own
+//     validate_rules.go carries an independent copy that IS wired into `charly box validate`
+//     (the box-authoring validation externalization already moved the enforcement there without
+//     sweeping this now-orphaned core copy). Flagged for a follow-up dead-code batch rather than
+//     removed here (out of this cutover's doc-only scope; removing it would also drop
+//     alias_collect_test.go's TestAliasNameRegex pattern-regression coverage unless mirrored into
+//     the plugin first).
 //
 // The `charly box list aliases` enumeration moved into candy/plugin-box (it reads the CandyView.Aliases
 // off the resolved-project envelope). The `charly alias` command reads the BAKED label (via `charly box
 // labels … --format alias`) and owns the wrapper-script logic; it shares none of the code below.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K3/K1 — CollectBoxAlias is a
+// build-time collector consumed from render_baked_metadata.go (build-cone, K3) and
+// resolved_project_host.go (loader-cone, K1). Moves with whichever of those waves lands the
+// consumer, not in isolation (P14-rest trace, 2026-07).
 
 // aliasNameRe matches valid alias names: starts with alphanumeric, allows dots/underscores/hyphens
 var aliasNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)

@@ -24,6 +24,11 @@ import (
 // The Collector itself holds NO enginekit client — the live pod collection
 // (podman snapshot + probes) moved to the plugin, shedding the enginekit
 // import from this file.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the orchestration
+// (collectFlat/Single) is deploy-cone-coupled (BundleConfig/UnifiedFile), same as the
+// remaining status_collect_{vm,k8s,adb}.go/status_nested.go/status_reap.go files
+// (P14-rest trace, 2026-07; see status_substrate.go for the full rationale).
 type Collector struct {
 	rt      *ResolvedRuntime
 	quadlet string

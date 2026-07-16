@@ -7,6 +7,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 (deploy-cone-coupled;
+// see status_substrate.go / CollectOpts for the full rationale, P14-rest trace, 2026-07).
+//
 // AndroidCollector is the kind:android SubstrateCollector. It enumerates every
 // declared `target: android` deploy node (top-level AND nested under a pod) from
 // the merged deploy set (charly.yml's folded kind:check beds + ~/.config/charly/

@@ -15,8 +15,8 @@ import (
 // image into local storage so deploy-mode commands can read its OCI labels).
 //
 // `charly box` is a SHARED command group: the RETAINED verbs below are the core
-// grammar spine (build → plugin-build; merge/labels/feature/reconcile). The
-// generate/validate/new/pkg/inspect/list verbs are contributed as NESTED command
+// grammar spine (build → plugin-build; merge/feature/reconcile). The
+// generate/validate/new/pkg/inspect/list/labels verbs are contributed as NESTED command
 // providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
 // (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
 // candy/plugin-authoring (P14b) — each a command:<word> with
@@ -25,7 +25,7 @@ import (
 // external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/inspect/list +
+	// (candy/plugin-box's generate/validate/new/pkg/inspect/list/labels +
 	// candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
 	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
 	// before kong.Parse.
@@ -34,10 +34,16 @@ type BoxCmd struct {
 	Build     BuildCmd        `cmd:"" help:"Build container boxes"`
 	Merge     MergeCmd        `cmd:"" help:"Merge small layers in a built container image"`
 	Pull      BoxPullCmd      `cmd:"" help:"Pull an image from its registry into local storage"`
-	Labels    BoxLabelsCmd    `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
 	Feature   BoxFeatureCmd   `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 	Reconcile BoxReconcileCmd `cmd:"" help:"Align cross-repo @github candy pins to the newest version (clears resolver newest-wins warnings)"`
 }
+
+// MIGRATION INVENTORY (north-star §4.4): the RETAINED verbs above (build/merge/pull/feature/
+// reconcile) are UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go
+// knows zero verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
+// externalizes (mirroring generate/validate/new/pkg/inspect/list/labels above, P14-rest trace,
+// 2026-07): merge.go and box_labels_cmd.go/pkg_cmd.go already document their own UNTIL-K5/K1
+// notes; build/pull/feature/reconcile are the remaining residue in this struct.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three
