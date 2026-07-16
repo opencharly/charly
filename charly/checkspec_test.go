@@ -14,30 +14,30 @@ import (
 func TestCheck_Kind(t *testing.T) {
 	tests := []struct {
 		name    string
-		check   Op
+		check   spec.Op
 		wantKey string
 		wantErr string // substring
 	}{
 		// `file` is NO LONGER a verb — it left #OpVerb in the file→plugin extraction and
 		// is now `plugin: file` + #FileInput. A bare Op has no File field, so the file
 		// CHECK is the generic plugin verb.
-		{"file-as-plugin", Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis"}}, "plugin", ""},
+		{"file-as-plugin", spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis"}}, "plugin", ""},
 		// `package` is NO LONGER a verb — it left #OpVerb in the package→plugin
 		// extraction and is now `plugin: package` + #PackageInput. A bare Op has no
 		// Package field, so the package CHECK is the generic plugin verb.
-		{"package-as-plugin", Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "plugin", ""},
+		{"package-as-plugin", spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "plugin", ""},
 		// `service` is NO LONGER a verb — it left #OpVerb in the service→plugin
 		// extraction and is now `plugin: service` + #ServiceInput. A bare Op has no
 		// Service field, so the service CHECK is the generic plugin verb.
-		{"service-as-plugin", Op{Plugin: "service", PluginInput: map[string]any{"service": "redis"}}, "plugin", ""},
+		{"service-as-plugin", spec.Op{Plugin: "service", PluginInput: map[string]any{"service": "redis"}}, "plugin", ""},
 		// `command` is NO LONGER a verb — it left #OpVerb in the command→plugin
 		// extraction and is now a shared #Op modifier (wl/libvirt argv). A bare
 		// Op.Command therefore yields NO verb; the command CHECK is `plugin: command`.
-		{"command-modifier-not-verb", Op{Command: "redis-cli ping"}, "", "no verb"},
-		{"command-as-plugin", Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}}, "plugin", ""},
-		{"plugin", Op{Plugin: "matching"}, "plugin", ""},
-		{"none", Op{}, "", "no verb"},
-		{"two", Op{Copy: "/x", Mkdir: "/tmp/d"}, "", "multiple verbs"},
+		{"command-modifier-not-verb", spec.Op{Command: "redis-cli ping"}, "", "no verb"},
+		{"command-as-plugin", spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}}, "plugin", ""},
+		{"plugin", spec.Op{Plugin: "matching"}, "plugin", ""},
+		{"none", spec.Op{}, "", "no verb"},
+		{"two", spec.Op{Copy: "/x", Mkdir: "/tmp/d"}, "", "multiple verbs"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestCheck_UnmarshalYAMLList(t *testing.T) {
     in_container: false
   stdout: PONG
 `
-	var got []Op
+	var got []spec.Op
 	if err := decodeViaCUEForTest(t, src, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestCheck_ExpandVars(t *testing.T) {
 	// file is now a plugin verb; its path + owner ride plugin_input. opExpandVars walks the
 	// PluginInput map (kit.ExpandAnyVars), so ${HOME} / ${MISSING} resolve there exactly as they
 	// did when file/owner were base #Op string fields. Command stays an #Op modifier.
-	c := Op{
+	c := spec.Op{
 		Plugin: "file",
 		PluginInput: map[string]any{
 			"file":  "${HOME}/.redis",
@@ -344,7 +344,7 @@ func TestMatcherList_BareScalarDefaultsToEquals(t *testing.T) {
 command: echo PONG
 stdout: PONG
 `
-	var c Op
+	var c spec.Op
 	if err := decodeViaCUEForTest(t, yamlSrc, &c); err != nil {
 		t.Fatalf("yaml unmarshal: %v", err)
 	}

@@ -228,8 +228,8 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 	gen := &Generator{BuildDir: dir, Candies: map[string]*Candy{"mytool": {Name: "mytool"}}}
 	tgt := ociTestTarget(buildEngineContext{Generator: gen, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
 	plan := &InstallPlan{Candy: "mytool", Steps: []InstallStep{
-		&OpStep{Op: &Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
-		&OpStep{Op: &Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
+		&OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
+		&OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
 	}}
 	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)

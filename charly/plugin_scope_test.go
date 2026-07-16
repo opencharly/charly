@@ -27,7 +27,7 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	candies := map[string]*Candy{
 		// A consumer candy whose run-step references the examplestep verb (the build-emit leg).
 		"examplestep-consumer": {Name: "examplestep-consumer", plan: []spec.Step{
-			{Run: "bake at build", Op: Op{Plugin: "examplestep"}},
+			{Run: "bake at build", Op: spec.Op{Plugin: "examplestep"}},
 		}},
 		// A consumer candy that selects an external builder via external_builder.
 		"examplebuilder-consumer": {Name: "examplebuilder-consumer", ExternalBuilder: "examplebuilder"},
@@ -43,7 +43,7 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	// A box whose baked plan authors a plugin check verb directly (boxverb) — the
 	// box-plan reference site (a baked plan runs at check live).
 	boxes := boxMapOf(map[string]spec.BoxConfig{
-		"some-box": {Plan: []spec.Step{{Check: "probe via boxverb", Op: Op{Plugin: "boxverb"}}}},
+		"some-box": {Plan: []spec.Step{{Check: "probe via boxverb", Op: spec.Op{Plugin: "boxverb"}}}},
 	})
 	// The deploy node's OWN references (deployNodePluginContext output): the inline
 	// `spice` bed-plan verb (its plugin came via add_candy) + the external deploy
@@ -89,7 +89,7 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 func TestCollectReferencedPluginWords_ClassAgnostic(t *testing.T) {
 	// `shared` is referenced as a verb in a candy plan; a plugin provides it as a STEP.
 	candies := map[string]*Candy{
-		"consumer": {Name: "consumer", plan: []spec.Step{{Run: "use shared", Op: Op{Plugin: "shared"}}}},
+		"consumer": {Name: "consumer", plan: []spec.Step{{Run: "use shared", Op: spec.Op{Plugin: "shared"}}}},
 	}
 	refs := collectReferencedPluginWords(candies, nil, nil)
 	stepProvider := &spec.Plugin{Source: "github.com/x/s", Providers: []spec.PluginCapability{"step:shared"}}

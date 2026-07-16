@@ -116,7 +116,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// --- Test: host-side file check on the probe marker passes (no plugin call). ---
-	if err := tgt.Test(ctx, []Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
+	if err := tgt.Test(ctx, []spec.Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
 		t.Fatalf("Test (probe marker present): %v", err)
 	}
 

@@ -120,7 +120,7 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 		Name:     "charly",
 		localpkg: map[string]string{"pac": "pkg/arch"},
 		plan: []spec.Step{
-			{Run: "build", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
+			{Run: "build", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
 		},
 	}
 	img := &ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}

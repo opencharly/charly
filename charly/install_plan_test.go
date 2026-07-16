@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -168,7 +169,7 @@ func TestTaskStepCmdGate(t *testing.T) {
 		t.Errorf("root cmd gate = %v, want allow-root-tasks", got)
 	}
 	// root structured task (mkdir) is NOT gated
-	s = &OpStep{ResolvedUser: "root", Op: &Op{Mkdir: "/etc/foo"}}
+	s = &OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}}
 	if got := s.RequiresGate(); got != GateNone {
 		t.Errorf("root mkdir gate = %v, want none", got)
 	}
@@ -266,8 +267,8 @@ func TestInstallPlanStepsByVenue(t *testing.T) {
 		Steps: []InstallStep{
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"a"}},
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"b"}},
-			&OpStep{ResolvedUser: "root", Op: &Op{Mkdir: "/etc/foo"}},
-			&OpStep{ResolvedUser: "1000:1000", Op: &Op{Mkdir: "$HOME/bin"}},
+			&OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}},
+			&OpStep{ResolvedUser: "1000:1000", Op: &spec.Op{Mkdir: "$HOME/bin"}},
 			&BuilderStep{Builder: "pixi"},
 		},
 	}

@@ -33,13 +33,13 @@ const testdataDir = "testdata"
 // plugin_input.command (the exec string), with the matchers exit_status/stdout/stderr
 // staying on the step Op. The returned Op is plain — callers set any extra fields
 // (RunAs/Context/ID/Stdout/Cache/Env) on it directly.
-func cmdOp(command string) Op {
-	return Op{Plugin: "command", PluginInput: map[string]any{"command": command}}
+func cmdOp(command string) spec.Op {
+	return spec.Op{Plugin: "command", PluginInput: map[string]any{"command": command}}
 }
 
 // cmdOpP is the *Op form of cmdOp, for call sites that need an addressable Op
 // (e.g. &Op{Command: ...} became cmdOpP(...) in the command→plugin extraction).
-func cmdOpP(command string) *Op {
+func cmdOpP(command string) *spec.Op {
 	o := cmdOp(command)
 	return &o
 }

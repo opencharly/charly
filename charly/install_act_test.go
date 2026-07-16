@@ -14,7 +14,7 @@ import (
 // DROP them — that is exactly what this verb's TypedStepProvider exists to prevent. The
 // keyword (run:) supplies the act intent the deleted Op.Do axis used to carry.
 func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{
 		Plugin:      "package",
 		PluginInput: map[string]any{"package": "redis"},
 	}}}}
@@ -65,9 +65,9 @@ func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
 	dir := t.TempDir()
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir}
-	op := Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
+	op := spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []Op{op}, dir, ".build/test-img"); err != nil {
+	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{op}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -88,7 +88,7 @@ func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
 // OpStep (the path the other extracted state-provision verbs take) would DROP them — that
 // is exactly what this verb's TypedStepProvider exists to prevent.
 func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: spec.Op{
 		Plugin:      "service",
 		PluginInput: map[string]any{"service": "sshd"},
 	}}}}
@@ -134,7 +134,7 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 // preserves end-to-end (compileActOp → ServicePackagedStep → candy/plugin-installstep
 // service-packaged OpEmit, the C1.1-externalized build-emit).
 func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: spec.Op{
 		Plugin:      "service",
 		PluginInput: map[string]any{"service": "sshd"},
 		Context:     []string{"build"},
@@ -159,7 +159,7 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 // the deploy walk would route to an OpExecute the build-emit-only step plugin cannot serve. Proves
 // verb-first precedence in compileActOp.
 func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
-	layer := &Candy{Name: "check-local-layer", plan: []spec.Step{{Run: "drop the marker", Op: Op{
+	layer := &Candy{Name: "check-local-layer", plan: []spec.Step{{Run: "drop the marker", Op: spec.Op{
 		Plugin:      "file",
 		PluginInput: map[string]any{"file": "/etc/check-local-marker", "exists": true},
 		Context:     []string{"deploy"},
@@ -185,8 +185,8 @@ func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 // the same plan does NOT (it is a runtime probe, not an install step).
 func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
 	layer := &Candy{Name: "x", plan: []spec.Step{
-		{Run: "install vim", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "vim"}, Context: []string{"build"}}},
-		{Check: "vim present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/vim", "exists": true}}}, // a check: step → not folded
+		{Run: "install vim", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "vim"}, Context: []string{"build"}}},
+		{Check: "vim present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/vim", "exists": true}}}, // a check: step → not folded
 	}}
 	steps := compileOpSteps(layer, testResolvedBox())
 	pkgCount := 0
@@ -204,7 +204,7 @@ func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
 // plan — the check Runner executes it live, so folding would double-run.
 func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
 	layer := &Candy{Name: "x", plan: []spec.Step{
-		{Run: "run", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, Context: []string{"runtime"}}},
+		{Run: "run", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, Context: []string{"runtime"}}},
 	}}
 	if steps := compileOpSteps(layer, testResolvedBox()); len(steps) != 0 {
 		t.Fatalf("runtime-only run: step must not be folded into the build plan, got %d steps", len(steps))
@@ -214,7 +214,7 @@ func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
 // A run: command step (the install timeline; the former task: list) lowers to an
 // OpStep — it must NOT be dropped, and the run-as user drives scope.
 func TestCompileOpSteps_RunCommandLowersToOpStep(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "run cmd", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, RunAs: "root"}}}}
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "run cmd", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, RunAs: "root"}}}}
 	steps := compileOpSteps(layer, testResolvedBox())
 	if len(steps) != 1 {
 		t.Fatalf("run: command dropped: %d steps", len(steps))

@@ -762,8 +762,8 @@ func (l *Candy) HasApk() bool     { return len(l.apk) > 0 }
 // install timeline (build/deploy context). A runtime-only run: step is
 // plan-runtime provisioning the check Runner executes, not the build, so it
 // is excluded. check:/agent-*/include: steps are never install ops.
-func (l *Candy) runOps() []Op {
-	var out []Op
+func (l *Candy) runOps() []spec.Op {
+	var out []spec.Op
 	for i := range l.plan {
 		step := &l.plan[i]
 		kw, err := step.StepKind()

@@ -51,7 +51,7 @@ func TestRunner_PerProbeNeverHang(t *testing.T) {
 	// a tight per-probe bound for the test
 	r := newCheckRunner(kit.RunnerConfig{Exec: be, Mode: RunModeLive, Env: map[string]string{}, ProbeTimeout: 100 * time.Millisecond})
 
-	checks := []Op{
+	checks := []spec.Op{
 		{Plugin: "command", PluginInput: map[string]any{"command": "WEDGEPROBE check"}},                      // wedges → must be cancelled at ProbeTimeout
 		{Plugin: "command", PluginInput: map[string]any{"command": "echo healthy"}, Stdout: matcherEq("ok")}, // must still run after the wedge
 	}
@@ -95,7 +95,7 @@ func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := r.ProbeNeverHang(&Op{Timeout: tc.timeout})
+			got := r.ProbeNeverHang(&spec.Op{Timeout: tc.timeout})
 			if got != tc.want {
 				t.Errorf("ProbeNeverHang(timeout=%q) = %s, want %s", tc.timeout, got, tc.want)
 			}
@@ -106,7 +106,7 @@ func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
 	// readinessPerAttemptFallback when no readiness config is loaded. (The bare
 	// kit.NewRunner zero-value fallback is a kit-internal defensive const the host path
 	// never hits, since newCheckRunner always sets ProbeTimeout from the readiness table.)
-	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&Op{}); got != readinessPerAttemptFallback {
+	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&spec.Op{}); got != readinessPerAttemptFallback {
 		t.Errorf("newCheckRunner default: got %s, want readiness floor %s", got, readinessPerAttemptFallback)
 	}
 }

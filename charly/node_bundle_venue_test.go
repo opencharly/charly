@@ -20,7 +20,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 					Target:           "pod",
 					AgentProvisioned: true,
 					Plan: []spec.Step{
-						{Check: "marker present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
+						{Check: "marker present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
 					},
 				},
 			},
@@ -30,7 +30,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 			Target: "pod",
 			Image:  "web",
 			Plan: []spec.Step{
-				{Check: "web serves marker", Op: Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
+				{Check: "web serves marker", Op: spec.Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
 			},
 			Children: map[string]*spec.BundleNode{
 				"migrate": {

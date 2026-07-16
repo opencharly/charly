@@ -17,8 +17,8 @@ func TestRunCheckLive_PureCycleEmitsFailVerdictsNoPropagation(t *testing.T) {
 	// venue is loader-derived (yaml:"-") from tree position; this in-package test
 	// sets it directly to stand in for the flatten pass.
 	plan := []spec.Step{
-		{Check: "a", Op: Op{ID: "a", Venue: "test-pod", DependsOn: []string{"b"}, Plugin: "file", PluginInput: map[string]any{"file": "/a"}}},
-		{Check: "b", Op: Op{ID: "b", Venue: "test-pod", DependsOn: []string{"a"}, Plugin: "file", PluginInput: map[string]any{"file": "/b"}}},
+		{Check: "a", Op: spec.Op{ID: "a", Venue: "test-pod", DependsOn: []string{"b"}, Plugin: "file", PluginInput: map[string]any{"file": "/a"}}},
+		{Check: "b", Op: spec.Op{ID: "b", Venue: "test-pod", DependsOn: []string{"a"}, Plugin: "file", PluginInput: map[string]any{"file": "/b"}}},
 	}
 	res, err := RunCheckLive(context.Background(), "", "test-score", plan)
 	if err != nil {

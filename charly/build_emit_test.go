@@ -33,7 +33,7 @@ func (stubEmitVerb) Invoke(_ context.Context, op *Operation) (*Result, error) {
 // plugin execution) extracts the fragment — placement-agnostic, since the stub is reached
 // through the SAME Provider.Invoke an external grpcProvider implements.
 func TestEmitPluginFragment_BuildTimeOpEmit(t *testing.T) {
-	op := &Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
+	op := &spec.Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
 	img := &ResolvedBox{Tags: []string{"fedora:43", "fedora"}}
 	frag, err := emitPluginFragment(stubEmitVerb{}, op, img)
 	if err != nil {
@@ -108,18 +108,18 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 	if err := providerRegistry.register(stubBuildEmitterVerb{}, "test:stubbuildemit"); err != nil {
 		t.Fatalf("register stub BuildEmitter: %v", err)
 	}
-	if !opActsInBuildDeploy(&Op{Plugin: "stubbuildemit"}) {
+	if !opActsInBuildDeploy(&spec.Op{Plugin: "stubbuildemit"}) {
 		t.Fatalf("a connected builtin BuildEmitter must act in build/deploy")
 	}
 	// 2. EXTERNAL placement, standalone validate (provider NOT connected): a
 	// prescan-declared external verb is trusted build-emit-capable.
 	registerDeclaredExternalVerb("stubextemit")
-	if !opActsInBuildDeploy(&Op{Plugin: "stubextemit"}) {
+	if !opActsInBuildDeploy(&spec.Op{Plugin: "stubextemit"}) {
 		t.Fatalf("a prescan-declared external verb must validate as build-emit-capable")
 	}
 	// 3. An unknown, undeclared verb is NOT trusted (no blanket accept — a runtime-only
 	// verb mistakenly used in a build step must still be caught).
-	if opActsInBuildDeploy(&Op{Plugin: "totally-unknown-verb-xyz"}) {
+	if opActsInBuildDeploy(&spec.Op{Plugin: "totally-unknown-verb-xyz"}) {
 		t.Fatalf("an unknown, undeclared verb must NOT act in build/deploy")
 	}
 }

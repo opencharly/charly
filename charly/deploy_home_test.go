@@ -91,7 +91,7 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 		&ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm-global"}, PathAdd: []string{"{{.Home}}/bin"}},
 		&ShellSnippetStep{Snippet: "export X={{.Home}}/y", Destination: "{{.Home}}/.bashrc", PathAppend: []string{"{{.Home}}/bin"}},
 		&FileStep{Dest: "{{.Home}}/.config/foo"},
-		&OpStep{Op: &Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
+		&OpStep{Op: &spec.Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
 	}}
 	planResolveHome(plan, "/home/cachy")
 

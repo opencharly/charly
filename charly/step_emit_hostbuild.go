@@ -325,7 +325,7 @@ func stepEmitOp(req spec.StepEmitRequest, build buildEngineContext) (string, err
 		return "", fmt.Errorf("task emit: candy %q not found", s.CandyName)
 	}
 	var b strings.Builder
-	if _, err := build.Generator.emitTasks(&b, layer, build.Box, []Op{*s.Op}, build.ImageBuildDir, build.ContextRelPrefix); err != nil {
+	if _, err := build.Generator.emitTasks(&b, layer, build.Box, []spec.Op{*s.Op}, build.ImageBuildDir, build.ContextRelPrefix); err != nil {
 		return "", err
 	}
 	return b.String(), nil

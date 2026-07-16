@@ -14,7 +14,7 @@ import (
 func TestRunPluginVerb_Dispatch(t *testing.T) {
 	r := hostVerbResolverFor(nil, RunModeBox)
 
-	op := &Op{Plugin: "exampleprobe", PluginInput: map[string]any{"marker": "unit-marker"}}
+	op := &spec.Op{Plugin: "exampleprobe", PluginInput: map[string]any{"marker": "unit-marker"}}
 	res := r.runPluginVerb(context.Background(), op)
 	if res.Status != TestPass {
 		t.Fatalf("exampleprobe status=%v msg=%q, want pass", res.Status, res.Message)
@@ -23,7 +23,7 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 		t.Fatalf("exampleprobe message=%q, want unit-marker (plugin_input round-trip)", res.Message)
 	}
 
-	miss := r.runPluginVerb(context.Background(), &Op{Plugin: "nonexistent-verb"})
+	miss := r.runPluginVerb(context.Background(), &spec.Op{Plugin: "nonexistent-verb"})
 	if miss.Status != TestFail {
 		t.Fatalf("unregistered plugin verb status=%v, want fail", miss.Status)
 	}

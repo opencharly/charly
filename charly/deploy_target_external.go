@@ -556,7 +556,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 // Test runs the deploy-scope checks against the host venue. The plugin is NOT
 // involved — the checks are in-proc CheckVerbProviders run against t.exec, the
 // SAME runUnifiedTargetChecks path the host/pod/vm targets use (R3).
-func (t *externalDeployTarget) Test(ctx context.Context, checks []Op, opts TestOpts) error {
+func (t *externalDeployTarget) Test(ctx context.Context, checks []spec.Op, opts TestOpts) error {
 	return runUnifiedTargetChecks(ctx, t.exec, t.Kind(), t.name, checks, opts)
 }
 

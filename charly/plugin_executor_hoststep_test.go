@@ -73,7 +73,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// plugin-renderable) routes to the OpStep arm, which loudly rejects it: a
 		// plugin-renderable OpStep must be executed by the plugin via RunSystem/RunUser, not
 		// routed to RunHostStep. Proves the OpStep arm was taken (vs the default arm).
-		rep := call(t, &OpStep{CandyName: "x", Op: &Op{Command: "true"}}, EmitOpts{})
+		rep := call(t, &OpStep{CandyName: "x", Op: &spec.Op{Command: "true"}}, EmitOpts{})
 		if !strings.Contains(rep.GetError(), "not act-capable") {
 			t.Fatalf("act-op arm: want a 'not act-capable' rejection, got %q", rep.GetError())
 		}
@@ -83,7 +83,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// An ExternalPluginStep whose verb is not connected (no plugin loaded in the unit
 		// test) routes to executeExternalPluginStep, which errors "verb is not connected at
 		// deploy time" — proving the ExternalPlugin arm was taken (vs the default arm).
-		rep := call(t, &ExternalPluginStep{CandyName: "x", Op: &Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": "m"}}}, EmitOpts{})
+		rep := call(t, &ExternalPluginStep{CandyName: "x", Op: &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": "m"}}}, EmitOpts{})
 		if !strings.Contains(rep.GetError(), "not connected") {
 			t.Fatalf("external-plugin arm: want a 'not connected' error, got %q", rep.GetError())
 		}

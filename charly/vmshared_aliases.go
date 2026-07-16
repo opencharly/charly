@@ -53,7 +53,6 @@ type (
 	LibvirtHostdev         = vmshared.LibvirtHostdev
 	LocalPkgDef            = vmshared.LocalPkgDef
 	MergeConfig            = vmshared.MergeConfig
-	Op                     = vmshared.Op
 	OvmfPaths              = vmshared.OvmfPaths
 	PacstrapDef            = vmshared.PacstrapDef
 	PacstrapRepo           = vmshared.PacstrapRepo

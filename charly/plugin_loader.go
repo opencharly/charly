@@ -589,7 +589,7 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra
 	// plan, and their plugins must load at BOTH the device deploy and check-live. This MIRRORS the
 	// op.Kind() surfacing deployNodePluginContext already does for the deploy NODE's plan (R3).
 	// Over-load safe: a builtin verb's candy is already registered; a non-plugin verb has no candy.
-	addStep := func(op *Op) {
+	addStep := func(op *spec.Op) {
 		add(op.Plugin)
 		if v, err := op.Kind(); err == nil {
 			add(v)

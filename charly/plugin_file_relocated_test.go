@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestRelocatedFileVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "if [ -e", stdout: "exists=1|regular file|644|root|root\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"file": "/etc/hostname", "exists": true, "mode": "644", "owner": "root", "filetype": "file"}})
+		&spec.Op{PluginInput: map[string]any{"file": "/etc/hostname", "exists": true, "mode": "644", "owner": "root", "filetype": "file"}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +35,7 @@ func TestRelocatedFileVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("file provider does not implement ProvisionActor (multi-role adapter missing): %T", prov)
 	}
 	script, ok := pa.RenderProvisionScript(
-		&Op{PluginInput: map[string]any{"file": "/etc/motd", "mode": "644"}, Content: "hello"}, nil)
+		&spec.Op{PluginInput: map[string]any{"file": "/etc/motd", "mode": "644"}, Content: "hello"}, nil)
 	if !ok || !strings.Contains(script, "/etc/motd") || !strings.Contains(script, "chmod") {
 		t.Fatalf("act: want a file-creation script, got ok=%v %q", ok, script)
 	}

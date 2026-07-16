@@ -18,7 +18,7 @@ import (
 func TestPlanUnify_CheckStepRuns(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []spec.Step{{Check: "the marker resolves", Op: Op{
+		Plan: []spec.Step{{Check: "the marker resolves", Op: spec.Op{
 			Plugin:      "matching",
 			PluginInput: map[string]any{"matching": "charly-marker", "contains": map[string]any{"contains": "charly-marker"}},
 		}}},
@@ -42,7 +42,7 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 		Origin: "candy:x",
 		Plan: []spec.Step{
 			{Run: "mutate the world", Op: cmdOp("echo should-not-run")},
-			{Check: "the marker resolves", Op: Op{
+			{Check: "the marker resolves", Op: spec.Op{
 				Plugin:      "matching",
 				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
 			}},
@@ -78,11 +78,11 @@ func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 		Origin: "candy:x",
 		Plan: []spec.Step{
 			{Run: "pip install /ctx/pkg", Op: cmdOp("false")}, // would FAIL if executed
-			{Check: "the marker resolves", Op: Op{
+			{Check: "the marker resolves", Op: spec.Op{
 				Plugin:      "matching",
 				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
 			}},
-			{AgentRun: "an agent drives the UI", Op: Op{}}, // agent step, NOT a deterministic install
+			{AgentRun: "an agent drives the UI", Op: spec.Op{}}, // agent step, NOT a deterministic install
 		},
 	}}}
 	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, SkipDeterministicRun: true}) // the `charly check feature run` (ADE acceptance) mode
@@ -123,7 +123,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
 	steps := compileOpSteps(layer, testResolvedBox())
 
 	var sp *SystemPackagesStep

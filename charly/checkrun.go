@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -101,14 +102,14 @@ func resolverEnv(res *CheckVarResolver) (map[string]string, bool) {
 // Result helpers
 // ---------------------------------------------------------------------------
 
-func passf(c *Op, msg string) CheckResult {
+func passf(c *spec.Op, msg string) CheckResult {
 	return CheckResult{Op: c, Status: TestPass, Message: msg}
 }
 
-func failf(c *Op, format string, args ...any) CheckResult {
+func failf(c *spec.Op, format string, args ...any) CheckResult {
 	return CheckResult{Op: c, Status: TestFail, Message: fmt.Sprintf(format, args...)}
 }
 
-func skipf(c *Op, msg string) CheckResult {
+func skipf(c *spec.Op, msg string) CheckResult {
 	return CheckResult{Op: c, Status: TestSkip, Message: msg}
 }

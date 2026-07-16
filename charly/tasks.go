@@ -199,7 +199,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 
 // emitTasks → deploykit.Generator.EmitTasks (P8 shim). Core resolves the render
 // state via toDeploykit() (seams wired) and delegates the byte-producing emit.
-func (g *Generator) emitTasks(b *strings.Builder, layer *Candy, img *ResolvedBox, ops []Op, buildDir, contextRelPrefix string) (string, error) {
+func (g *Generator) emitTasks(b *strings.Builder, layer *Candy, img *ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
 	return g.toDeploykit().EmitTasks(b, layer, img, ops, buildDir, contextRelPrefix)
 }
 
@@ -210,7 +210,7 @@ func (g *Generator) emitTasks(b *strings.Builder, layer *Candy, img *ResolvedBox
 // op.Params and a spec.BuildEnv descriptor as op.Env, and returns a spec.EmitReply
 // whose Fragment is spliced verbatim into the generated Containerfile. The build-time
 // half of the operator-authorized build-time plugin execution.
-func emitPluginFragment(prov Provider, op *Op, img *ResolvedBox) (string, error) {
+func emitPluginFragment(prov Provider, op *spec.Op, img *ResolvedBox) (string, error) {
 	params, err := marshalJSON(op.PluginInput)
 	if err != nil {
 		return "", fmt.Errorf("marshal plugin_input: %w", err)

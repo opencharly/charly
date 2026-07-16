@@ -17,7 +17,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 			Name:        "redis",
 			Description: "redis store",
 			plan: []spec.Step{
-				{Check: "the redis binary exists", Op: Op{
+				{Check: "the redis binary exists", Op: spec.Op{
 					ID:          "redis-binary",
 					Plugin:      "file",
 					PluginInput: map[string]any{"file": "/usr/bin/redis-server", "exists": true},
@@ -54,7 +54,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 func TestBakeableSteps_StampsIntentDo(t *testing.T) {
 	baked := bakeableSteps([]spec.Step{
 		// a plugin: file CHECK step (VerbsSet = ["plugin"]) → intent_do "assert"
-		{Check: "the binary exists", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
+		{Check: "the binary exists", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
 		// a verb-less AGENT-CHECK step → no Op verb, IntentDo stays empty (matches the pre-cutover bake)
 		{AgentCheck: "the dashboard looks populated"},
 	})
