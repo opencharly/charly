@@ -352,6 +352,13 @@ Use a separate Codex agent thread wherever a skill requires a teammate,
 executor, RCA, or independent validator. The author orchestrates; it never
 impersonates the validator.
 
+A fresh no-fork PR validator has one bootstrap exception: it may use read-only
+filesystem reads to preload the protected-main rulebooks, its validator spec,
+and matching on-disk skills before any shell/Git/GitHub/candidate action. Its
+worktree must already be at protected `main`. This is policy discovery only,
+not validation; after it completes, R0 applies to every action without
+exception.
+
 Preserve valid evidence and invalidate only the conclusion touched by a
 failure. Do not discard completed analysis, verified repository facts, passing
 checks, or an unchanged candidate merely because an agent made a process error
