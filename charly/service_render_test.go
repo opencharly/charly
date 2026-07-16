@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 )

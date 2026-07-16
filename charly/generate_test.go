@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"strings"
 	"testing"
