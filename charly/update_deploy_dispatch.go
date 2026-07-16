@@ -88,7 +88,9 @@ func (c *UpdateCmd) dispatchByDeployTarget() error {
 	// external deploy SUBSTRATE (the E3-deploy externalDeployTarget) resolves its
 	// grpcProvider for the rebuild — the SAME loadDeployPlugins bundle add / bundle
 	// del use (R3).
-	loadDeployPlugins(dir, deployName, nil)
+	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
+		return err
+	}
 
 	// UNIFIED dispatch — charly update for EVERY kind routes through the SAME
 	// ResolveTarget → LifecycleTarget.Rebuild path; there is no per-kind update
