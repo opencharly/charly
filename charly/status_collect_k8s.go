@@ -103,13 +103,11 @@ func (k *K8sCollector) Collect(ctx context.Context, opts CollectOpts) ([]spec.De
 }
 
 // k8sTreeRoot returns <cwd>/.opencharly/k8s — the canonical root that
-// defaultK8sOutputDir (deploy_add_cmd_k8s.go) emits Kustomize trees under.
+// defaultK8sOutputDir (k8s_generate.go) emits Kustomize trees under. A THIRD
+// copy of the identical cwd+.opencharly/k8s join, found while folding the
+// other two (R3): unified onto the shared helper instead of left standing.
 func k8sTreeRoot() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(cwd, ".opencharly", "k8s"), nil
+	return defaultK8sOutputDir()
 }
 
 // k8sDeployEntries returns the names of every target:k8s deploy in the folded
