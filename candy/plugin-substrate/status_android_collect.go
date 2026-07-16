@@ -365,8 +365,12 @@ func remoteRefName(box string) string {
 
 // containerRunning checks if a container with the given name is currently
 // running. Ported from charly/shell.go's defaultContainerRunning (plain
-// podman/docker inspect — no sdk blocker at all).
-func containerRunning(engine, name string) bool {
+// podman/docker inspect — no sdk blocker at all). A package-level swappable
+// var (mirrors status_vm.go's libvirtSessionAvailable/listLibvirtCharlyDomains)
+// so a test can stub it and never touch the real podman/docker socket.
+var containerRunning = defaultContainerRunning
+
+func defaultContainerRunning(engine, name string) bool {
 	cmd := exec.Command(engine, "container", "inspect", "--format", "{{.State.Running}}", name)
 	out, err := cmd.Output()
 	if err != nil {

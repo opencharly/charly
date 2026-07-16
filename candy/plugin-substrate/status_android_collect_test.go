@@ -25,16 +25,25 @@ func androidTemplateBody(t *testing.T, box, adbHost, serial string) spec.RawBody
 	return body
 }
 
-// androidBedResolvedProject builds a synthetic resolved-project mirroring the
-// check-android-emulator-pod bed: a target:pod root with two nested
-// target:android children (an in-pod image device + a remote adb endpoint
-// device), plus the matching kind:android templates. Used to drive the pure
-// enumeration paths hermetically (no live adb / podman / reverse channel).
+// androidBedResolvedProjectPodKey is a TEST-ONLY deploy name (never a real committed bed) — a
+// synthetic fixture must never reuse a real bed name like check-android-emulator-pod: on a host
+// where that bed is actually deployed, a non-stubbed live probe keyed by the real name would
+// observe the REAL container and silently corrupt the test's "absent" expectation (the exact
+// defect TestCollectAndroidStatus_Rows hit: it also stubs containerRunning below, so this rename
+// is belt-and-suspenders, not the sole fix).
+const androidBedResolvedProjectPodKey = "test-fixture-android"
+
+// androidBedResolvedProject builds a synthetic resolved-project mirroring the shape of a real
+// android bed (check-android-emulator-pod): a target:pod root with two nested target:android
+// children (an in-pod image device + a remote adb endpoint device), plus the matching
+// kind:android templates. Used to drive the pure enumeration paths hermetically (no live adb /
+// podman / reverse channel) — its deploy key is deliberately TEST-ONLY (see
+// androidBedResolvedProjectPodKey), never a real bed name.
 func androidBedResolvedProject(t *testing.T) *spec.ResolvedProject {
 	t.Helper()
 	return &spec.ResolvedProject{
 		Deploy: map[string]*spec.Deploy{
-			"check-android-emulator-pod": {
+			androidBedResolvedProjectPodKey: {
 				Target: "pod",
 				Image:  "android-emulator",
 				Children: map[string]*spec.Deploy{
@@ -53,6 +62,20 @@ func androidBedResolvedProject(t *testing.T) *spec.ResolvedProject {
 	}
 }
 
+// withStubContainerRunning swaps the package-level containerRunning var for the duration of fn,
+// forcing every call to return `running` and restoring the original afterwards — mirrors
+// status_vm_test.go's withMockLibvirtDomains pattern. So a test never touches the real
+// podman/docker socket and never depends on host state (the root cause of the
+// TestCollectAndroidStatus_Rows nondeterminism: it called the REAL containerRunning, so a live
+// check-android-emulator-pod deployment on the host flipped its "absent" expectation to "running").
+func withStubContainerRunning(t *testing.T, running bool, fn func()) {
+	t.Helper()
+	prev := containerRunning
+	containerRunning = func(string, string) bool { return running }
+	defer func() { containerRunning = prev }()
+	fn()
+}
+
 func TestCollectAndroidDeployNodes_EnumeratesNestedByDottedPath(t *testing.T) {
 	rp := androidBedResolvedProject(t)
 	nodes := collectAndroidDeployNodes(rp, nil)
@@ -61,7 +84,10 @@ func TestCollectAndroidDeployNodes_EnumeratesNestedByDottedPath(t *testing.T) {
 	}
 	paths := []string{nodes[0].path, nodes[1].path}
 	sort.Strings(paths)
-	want := []string{"check-android-emulator-pod.device", "check-android-emulator-pod.device-net"}
+	want := []string{
+		androidBedResolvedProjectPodKey + ".device",
+		androidBedResolvedProjectPodKey + ".device-net",
+	}
 	for i := range want {
 		if paths[i] != want[i] {
 			t.Errorf("path[%d] = %q, want %q", i, paths[i], want[i])
@@ -152,14 +178,18 @@ func TestCollectAndroidOne_UndeclaredDevice(t *testing.T) {
 	}
 }
 
-// collectAndroidStatus over the bed resolved-project produces one row per
-// nested device: the in-pod device is "absent" (its emulator pod isn't
-// running in the test environment, so resolveAndroidDevice's containerRunning
-// check fails), and the endpoint device is "declared". Runs fully
-// hermetically (no live podman, no reverse channel needed — resolved-project
-// is passed directly rather than fetched via HostBuild in this unit test;
-// the HostBuild fetch itself is proven by the k8s live-smoke-test precedent
-// and re-exercised by the R10 bed roster).
+// collectAndroidStatus over the bed resolved-project produces one row per nested device: the
+// in-pod device is "absent" (containerRunning is stubbed false), and the endpoint device is
+// "declared". Runs fully hermetically: containerRunning is stubbed (withStubContainerRunning) so
+// this NEVER touches the real podman/docker socket regardless of host state, and the fixture's
+// deploy key is TEST-ONLY (androidBedResolvedProjectPodKey — never a real committed bed name), so
+// it can never collide with an actually-deployed check-android-emulator-pod bed. Prior to this fix
+// the test called the REAL containerRunning against the REAL bed name, so it nondeterministically
+// failed whenever that bed was actually running on the host (got "running" instead of "absent") —
+// a genuine test-isolation defect, not a flake (R1). No reverse channel needed either —
+// resolved-project is passed directly rather than fetched via HostBuild in this unit test; the
+// HostBuild fetch itself is proven by the k8s live-smoke-test precedent and re-exercised by the
+// R10 bed roster.
 func TestCollectAndroidStatus_Rows(t *testing.T) {
 	rp := androidBedResolvedProject(t)
 	nodes := collectAndroidDeployNodes(rp, nil)
@@ -167,23 +197,25 @@ func TestCollectAndroidStatus_Rows(t *testing.T) {
 		t.Fatalf("setup: got %d nodes, want 2", len(nodes))
 	}
 	wantStatus := map[string]string{
-		"check-android-emulator-pod.device":     "absent",
-		"check-android-emulator-pod.device-net": "declared",
+		androidBedResolvedProjectPodKey + ".device":     "absent",
+		androidBedResolvedProjectPodKey + ".device-net": "declared",
 	}
-	for _, n := range nodes {
-		row := collectAndroidOne(context.Background(), rp, n, "")
-		if row.Kind != spec.SubstrateAndroid || row.Source != "adb" {
-			t.Errorf("row kind/source = %q/%q, want android/adb", row.Kind, row.Source)
+	withStubContainerRunning(t, false, func() {
+		for _, n := range nodes {
+			row := collectAndroidOne(context.Background(), rp, n, "")
+			if row.Kind != spec.SubstrateAndroid || row.Source != "adb" {
+				t.Errorf("row kind/source = %q/%q, want android/adb", row.Kind, row.Source)
+			}
+			want, ok := wantStatus[row.Image]
+			if !ok {
+				t.Errorf("unexpected row path %q", row.Image)
+				continue
+			}
+			if row.Status != want {
+				t.Errorf("row %q Status = %q, want %q", row.Image, row.Status, want)
+			}
 		}
-		want, ok := wantStatus[row.Image]
-		if !ok {
-			t.Errorf("unexpected row path %q", row.Image)
-			continue
-		}
-		if row.Status != want {
-			t.Errorf("row %q Status = %q, want %q", row.Image, row.Status, want)
-		}
-	}
+	})
 }
 
 func TestRemoteRefName(t *testing.T) {
