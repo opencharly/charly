@@ -102,6 +102,12 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	if dp, ok := srv.(spec.DocParser); ok {
 		activeLoaderParser = dp
 	}
+	// The SAME compiled-in loader plugin (#46) ALSO exposes the typed whole-project WALK via
+	// spec.ProjectWalker — wire it as the active walk mechanism so hostWalkProject dispatches
+	// through it (no wire envelope), instead of charly core importing sdk/loaderkit directly.
+	if pw, ok := srv.(spec.ProjectWalker); ok {
+		activeProjectWalker = pw
+	}
 	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —
 	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download
 	// through it (no wire envelope). See candy/plugin-refs.

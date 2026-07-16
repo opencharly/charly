@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 )
@@ -60,7 +61,7 @@ func withRaw(ri *ResolvedInit) *ResolvedInit {
 func testSystemdInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "systemctl",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			ServiceTemplate:    testSystemdServiceTemplate,
 			UnitPathTemplate:   testSystemdUnitPathTemplate,
 			DropinTemplate:     testSystemdDropinTemplate,
@@ -73,7 +74,7 @@ func testSystemdInitDef() *ResolvedInit {
 func testSupervisordInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "supervisorctl",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			ServiceTemplate:  testSupervisordServiceTemplate,
 			UnitPathTemplate: `/etc/supervisord.d/{{.Candy}}-{{.Name}}.conf`,
 			SupportsPackaged: false,

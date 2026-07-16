@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 
@@ -91,8 +92,8 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 		Format: map[string]*FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
-				Phases: &PhaseSet{
-					Install: &PhaseTemplates{
+				Phases: &vmshared.PhaseSet{
+					Install: &vmshared.PhaseTemplates{
 						Container: "RUN new-install {{join .Packages \" \"}}\n",
 					},
 				},
@@ -261,7 +262,7 @@ func TestOCITargetSkipsVenueSkip(t *testing.T) {
 func TestOCITargetEmitRepoChange(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
 	plan := &InstallPlan{Candy: "rpmfusion", Steps: []InstallStep{
-		&RepoChangeStep{
+		&deploykit.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/rpmfusion-free.repo",
 			Content: "[rpmfusion-free]\nname=test",

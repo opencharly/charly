@@ -35,15 +35,9 @@ type (
 )
 
 var (
-	SharedCacheMount      = buildkit.SharedCacheMount
-	OwnedCacheMount       = buildkit.OwnedCacheMount
-	RenderCacheMounts     = buildkit.RenderCacheMounts
-	RenderCacheMountsAuto = buildkit.RenderCacheMountsAuto
-	RenderTemplate        = buildkit.RenderTemplate
-	NewInstallContext     = buildkit.NewInstallContext
-	wrapDistroDef         = buildkit.WrapDistroDef
-	distroTagChain        = buildkit.DistroTagChain
-	templateFuncs         = buildkit.TemplateFuncs
-	toStringSlice         = buildkit.ToStringSlice
-	toMapSlice            = buildkit.ToMapSlice
+	RenderTemplate    = buildkit.RenderTemplate
+	NewInstallContext = buildkit.NewInstallContext
+	wrapDistroDef     = buildkit.WrapDistroDef
+	distroTagChain    = buildkit.DistroTagChain
+	templateFuncs     = buildkit.TemplateFuncs
 )

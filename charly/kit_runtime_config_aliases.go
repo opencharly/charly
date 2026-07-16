@@ -9,8 +9,6 @@ import "github.com/opencharly/sdk/kit"
 
 type (
 	RuntimeConfig   = kit.RuntimeConfig
-	RuntimeVmConfig = kit.RuntimeVmConfig
-	EngineConfig    = kit.EngineConfig
 	ResolvedRuntime = kit.ResolvedRuntime
 )
 
@@ -18,11 +16,7 @@ var (
 	LoadRuntimeConfig           = kit.LoadRuntimeConfig
 	SaveRuntimeConfig           = kit.SaveRuntimeConfig
 	ResolveRuntime              = kit.ResolveRuntime
-	ResolveValue                = kit.ResolveValue
-	SystemdUserAvailable        = kit.SystemdUserAvailable
-	SystemdUserRuntimeDir       = kit.SystemdUserRuntimeDir
 	expandHostHome              = kit.ExpandHostHome
-	detectRunMode               = kit.DetectRunMode
 	resolveEncryptedStoragePath = kit.ResolveEncryptedStoragePath
 	resolveVolumesPath          = kit.ResolveVolumesPath
 	RuntimeConfigPath           = kit.RuntimeConfigPath

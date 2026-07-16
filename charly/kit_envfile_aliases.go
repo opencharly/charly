@@ -8,9 +8,6 @@ import "github.com/opencharly/sdk/kit"
 var (
 	DotenvLoaded      = kit.DotenvLoaded
 	LoadProcessDotenv = kit.LoadProcessDotenv
-	ParseEnvFile      = kit.ParseEnvFile
-	ParseEnvBytes     = kit.ParseEnvBytes
-	LoadWorkspaceEnv  = kit.LoadWorkspaceEnv
 	ResolveEnvVars    = kit.ResolveEnvVars
 	enrichNoProxy     = kit.EnrichNoProxy
 )

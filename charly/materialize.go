@@ -6,50 +6,27 @@ import (
 	"path/filepath"
 
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
-// loader_driver.go — the SINGLE charly-core file that imports sdk/loaderkit (the WALK mechanism).
+// materialize.go — the registry-coupled MATERIALIZE + root-wins MERGE half of project loading
+// (#46). K1 split LoadUnified into two halves at a kind-blind seam: the kind-blind WALK+PARSE
+// (import queue + discover + namespaced-import mounts + per-document parse) is reached via the
+// registered loader plugin's spec.ProjectWalker (hostWalkProject, loader_threaded.go) and returns a
+// generic spec.LoadedProject; THIS file replays the host's decode→materialize→merge over that
+// envelope, reconstructing the typed *UnifiedFile exactly as the former inline loadUnifiedInto did.
 //
-// K1 split LoadUnified into two halves at a kind-blind seam: the kind-blind WALK+PARSE (import
-// queue + discover + namespaced-import mounts + per-document parse) is loaderkit.Walk, which
-// returns a generic spec.LoadedProject; the registry-coupled MATERIALIZE + root-wins MERGE stays
-// host (it decodes each kind via the provider registry — boundary law). This file is the join:
-// hostWalkProject builds the WalkSeams (the six kind-blind host primitives the walk needs) and
-// calls loaderkit.Walk; materializeLoadedProject replays the host's decode→materialize→merge over
-// the returned envelope, reconstructing the typed *UnifiedFile exactly as the former inline
-// loadUnifiedInto did.
-//
-// MIGRATION IMPORT (P16 gate-b): this direct core→loaderkit import is the K1-proper inventory
-// residual — it dies at the K5 "OpLoad-envelope" unit, when the host's own project load routes
-// through candy/plugin-loader's OpLoad (returning spec.LoadedProject) via the provider registry
-// like every other capability, and no charly-core file imports loaderkit. Keep it to THIS one file.
-
-// hostWalkProject runs the kind-blind loader WALK over the project rooted at dir, returning its
-// generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml bytes; the seams
-// are the six kind-blind host primitives the walk consults instead of the provider registry.
-func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
-	seams := loaderkit.WalkSeams{
-		Parser: requireLoaderParser(),
-		// Boundary: the depth-0 parse pre-scan + connect-declared-kind-plugins registry side effects
-		// (prescanDeclaredPluginWords + connectDeclaredKindPlugins), run at the root file AND each
-		// namespace root before that boundary's documents parse.
-		Boundary: func(bdir string, data []byte) error {
-			prescanDeclaredPluginWords(data, bdir)
-			connectDeclaredKindPlugins(bdir)
-			return nil
-		},
-		Threaded:     loaderThreaded,
-		ResolveRef:   canonicalRef,
-		GateDoc:      validateNodeDocCUE,
-		RepoIdentity: nsRepoIdentity,
-	}
-	// Seed the root's own repo identity so a transitive self-import cycle-breaks to the in-progress
-	// root (the importing project's namespace pins win — ns_identity.go).
-	return loaderkit.Walk(dir, rootData, rootRepoIdentity(dir), seams)
-}
+// WHY THIS STAYS CORE (the kernel/plugin boundary law, CLAUDE.md "The kernel/plugin boundary law"):
+// the MATERIALIZE is the kind-decode DISPATCH — clause (M), one of the four kind-blind Mechanisms
+// the boundary law permits to live in `charly/` (plugin loading, prescan-dispatch, the kind-decode
+// MATERIALIZE, and the wire broker; every OTHER kind-blind mechanism — parse/render/resolve/walk/
+// engine — belongs to an sdk kit consumed by plugins). It dispatches PURELY by WORD against the
+// provider registry (`materializeProject` → `normalizeNodeInto` → the reserved-word table in
+// `reserved_registry.go`), never branching on a concrete kind in a compiled-in switch, so it never
+// becomes an "incomplete seam" the boundary law would flag. This is why K1 deliberately split the
+// WALK (a plugin-owned Mechanism, sdk/loaderkit, reached via ProjectWalker) from the MATERIALIZE
+// (a core-owned Mechanism, this file) at exactly this seam, rather than moving both out together.
 
 // materializeLoadedProject replays the host's MATERIALIZE + root-wins MERGE over a walk envelope,
 // reconstructing the typed *UnifiedFile identically to the former inline loadUnifiedInto:

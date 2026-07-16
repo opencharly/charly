@@ -1,18 +1,21 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/vmshared"
+	"testing"
+)
 
 func TestAndroidSpec_IsEndpoint(t *testing.T) {
 	img := &AndroidSpec{Box: "android-emulator"}
 	if img.IsEndpoint() {
 		t.Error("image-source device should not be an endpoint")
 	}
-	ep := &AndroidSpec{Adb: &AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}
+	ep := &AndroidSpec{Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}
 	if !ep.IsEndpoint() {
 		t.Error("adb-source device should be an endpoint")
 	}
 	// Adb present but empty host = not an endpoint.
-	if (&AndroidSpec{Adb: &AndroidAdbEndpoint{}}).IsEndpoint() {
+	if (&AndroidSpec{Adb: &vmshared.AndroidAdbEndpoint{}}).IsEndpoint() {
 		t.Error("empty adb host should not count as an endpoint")
 	}
 }
