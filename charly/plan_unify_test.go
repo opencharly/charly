@@ -7,16 +7,18 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
 
 // §J.1 — a check: step runs and reports its verdict through RunPlan.
 func TestPlanUnify_CheckStepRuns(t *testing.T) {
-	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+	set := &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{
 		Origin: "candy:x",
 		Plan: []spec.Step{{Check: "the marker resolves", Op: spec.Op{
 			Plugin:      "matching",
@@ -38,7 +40,7 @@ func TestPlanUnify_CheckStepRuns(t *testing.T) {
 
 // §J.2 — VerifyOnly mode skips run: (mutating) steps and runs check: steps.
 func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
-	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+	set := &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{
 		Origin: "candy:x",
 		Plan: []spec.Step{
 			{Run: "mutate the world", Op: cmdOp("echo should-not-run")},
@@ -74,7 +76,7 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 // jupyter-mcp `pip install --no-deps /ctx/jupyter_mcp` step failed against the
 // live pod (/ctx exists only during image-build).
 func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
-	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+	set := &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{
 		Origin: "candy:x",
 		Plan: []spec.Step{
 			{Run: "pip install /ctx/pkg", Op: cmdOp("false")}, // would FAIL if executed
@@ -124,11 +126,11 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
 	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 
-	var sp *SystemPackagesStep
+	var sp *deploykit.SystemPackagesStep
 	for _, s := range steps {
-		if v, ok := s.(*SystemPackagesStep); ok {
+		if v, ok := s.(*deploykit.SystemPackagesStep); ok {
 			sp = v
 		}
 	}
@@ -136,7 +138,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 		t.Fatalf("run: package step did not lower to a SystemPackagesStep: %#v", steps)
 	}
 	rev := sp.Reverse()
-	if len(rev) != 1 || rev[0].Kind != ReverseOpPackageRemove {
+	if len(rev) != 1 || rev[0].Kind != spec.ReverseOpPackageRemove {
 		t.Fatalf("lowered install step does not reverse to package-remove (charly bundle del): %+v", rev)
 	}
 }

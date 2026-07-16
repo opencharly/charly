@@ -83,7 +83,7 @@ func SavePortOverride(box, instance string, ports []string) error {
 		return err
 	}
 
-	key := deployKey(box, instance)
+	key := deploykit.DeployKey(box, instance)
 	overlay := dc.Bundle[key]
 	overlay.Port = ports
 	dc.Bundle[key] = overlay

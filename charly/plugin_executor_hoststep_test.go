@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -20,9 +21,9 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	srv := &executorReverseServer{exec: &recordingExec{homeReturn: "/home/test"}}
 	ctx := context.Background()
 
-	call := func(t *testing.T, step InstallStep, opts EmitOpts) *pb.HostStepReply {
+	call := func(t *testing.T, step spec.InstallStep, opts deploykit.EmitOpts) *pb.HostStepReply {
 		t.Helper()
-		stepJSON, err := json.Marshal(stepToView(step))
+		stepJSON, err := json.Marshal(deploykit.StepToView(step))
 		if err != nil {
 			t.Fatalf("marshal step view: %v", err)
 		}
@@ -38,7 +39,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// A builder with no LocalPkg + nil BuilderDef has no host build cell; under
 		// --skip-incompatible runVenueBuilderStep returns nil — proving the Builder arm
 		// was taken (the default arm would have errored "not a host-engine step").
-		rep := call(t, &BuilderStep{Builder: "npm", CandyName: "x"}, EmitOpts{SkipIncompatible: true})
+		rep := call(t, &deploykit.BuilderStep{Builder: "npm", CandyName: "x"}, deploykit.EmitOpts{SkipIncompatible: true})
 		if rep.GetError() != "" {
 			t.Fatalf("builder arm: unexpected error: %s", rep.GetError())
 		}
@@ -51,7 +52,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	t.Run("localpkg arm", func(t *testing.T) {
 		// A LocalPkgInstallStep with nil LocalPkg is a clean skip in execLocalPkgInstall —
 		// proving the LocalPkgInstall arm was taken (no error, vs the default arm's error).
-		rep := call(t, &LocalPkgInstallStep{CandyName: "charly", PkgbuildRef: "pkg/arch", Format: "pac"}, EmitOpts{})
+		rep := call(t, &deploykit.LocalPkgInstallStep{CandyName: "charly", PkgbuildRef: "pkg/arch", Format: "pac"}, deploykit.EmitOpts{})
 		if rep.GetError() != "" {
 			t.Fatalf("localpkg arm: unexpected error: %s", rep.GetError())
 		}
@@ -62,7 +63,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// the test server's zero buildEngineContext has no DistroCfg, so the render errors
 		// "no distro config for format" — proving the SystemPackages arm was taken (and tried
 		// the DistroCfg render), NOT the default "not a host-engine step" arm.
-		rep := call(t, &SystemPackagesStep{Format: "pac", Phase: PhaseInstall, Packages: []string{"ripgrep"}}, EmitOpts{})
+		rep := call(t, &deploykit.SystemPackagesStep{Format: "pac", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}}, deploykit.EmitOpts{})
 		if !strings.Contains(rep.GetError(), "no distro config") {
 			t.Fatalf("system-packages arm: want a 'no distro config' render error, got %q", rep.GetError())
 		}
@@ -73,7 +74,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// plugin-renderable) routes to the OpStep arm, which loudly rejects it: a
 		// plugin-renderable OpStep must be executed by the plugin via RunSystem/RunUser, not
 		// routed to RunHostStep. Proves the OpStep arm was taken (vs the default arm).
-		rep := call(t, &OpStep{CandyName: "x", Op: &spec.Op{Command: "true"}}, EmitOpts{})
+		rep := call(t, &deploykit.OpStep{CandyName: "x", Op: &spec.Op{Command: "true"}}, deploykit.EmitOpts{})
 		if !strings.Contains(rep.GetError(), "not act-capable") {
 			t.Fatalf("act-op arm: want a 'not act-capable' rejection, got %q", rep.GetError())
 		}
@@ -83,7 +84,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 		// An ExternalPluginStep whose verb is not connected (no plugin loaded in the unit
 		// test) routes to executeExternalPluginStep, which errors "verb is not connected at
 		// deploy time" — proving the ExternalPlugin arm was taken (vs the default arm).
-		rep := call(t, &ExternalPluginStep{CandyName: "x", Op: &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": "m"}}}, EmitOpts{})
+		rep := call(t, &deploykit.ExternalPluginStep{CandyName: "x", Op: &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": "m"}}}, deploykit.EmitOpts{})
 		if !strings.Contains(rep.GetError(), "not connected") {
 			t.Fatalf("external-plugin arm: want a 'not connected' error, got %q", rep.GetError())
 		}
@@ -92,7 +93,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	t.Run("plugin-renderable kind rejected by default arm", func(t *testing.T) {
 		// A FileStep IS plugin-renderable — the plugin must execute it itself via PutFile.
 		// RunHostStep rejects it loudly via the default arm.
-		rep := call(t, &FileStep{Source: "/tmp/src", Dest: "/etc/x", CandyName: "x"}, EmitOpts{})
+		rep := call(t, &deploykit.FileStep{Source: "/tmp/src", Dest: "/etc/x", CandyName: "x"}, deploykit.EmitOpts{})
 		if !strings.Contains(rep.GetError(), "not a host-engine step") {
 			t.Fatalf("plugin-renderable kind: want a 'not a host-engine step' error, got %q", rep.GetError())
 		}

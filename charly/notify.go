@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // sendVenueNotification sends a desktop notification on the venue (container /
@@ -15,7 +18,7 @@ import (
 // candy/plugin-dbus, which also drives the bus via gdbus — never godbus. charly's core
 // links no godbus at all; the Secret Service keyring lives out-of-process in
 // candy/plugin-secrets.)
-func sendVenueNotification(ex DeployExecutor, title, body string) {
+func sendVenueNotification(ex deploykit.DeployExecutor, title, body string) {
 	if venueHasTool(ex, "gdbus") {
 		gdbusCmd := fmt.Sprintf(
 			`export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/tmp/dbus-session}" && `+
@@ -24,7 +27,7 @@ func sendVenueNotification(ex DeployExecutor, title, body string) {
 				`--object-path=/org/freedesktop/Notifications `+
 				`--method=org.freedesktop.Notifications.Notify `+
 				`"charly" 0 "" %s %s "[]" "{}" -- -1`,
-			shellQuote(title), shellQuote(body))
+			kit.ShellQuote(title), kit.ShellQuote(body))
 		_ = venueRunSilent(ex, gdbusCmd) // best-effort
 		return
 	}

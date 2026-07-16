@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -144,7 +145,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 
 	// Hand-built fedora ResolvedBox (the compile target — a real builder config + fedora distro so
 	// the pixi builder step resolves for pre-commit; mirrors the K4-B RDD spike).
-	imgOld := &ResolvedBox{
+	imgOld := &buildkit.ResolvedBox{
 		Name:             "k4b-parity",
 		EffectiveVersion: "2026.001.0001",
 		Base:             "quay.io/fedora/fedora:43",
@@ -163,7 +164,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	imgOld.DistroDef = distroCfg.ResolveDistro(imgOld.Distro)
 
 	boxView := projectResolvedBox(imgOld)
-	hostCtx := HostContext{}
+	hostCtx := deploykit.HostContext{}
 	hostCtxJSON, err := json.Marshal(hostCtx)
 	if err != nil {
 		t.Fatalf("marshal host context: %v", err)
@@ -279,7 +280,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	})
 }
 
-func planCandyNames(plans []*InstallPlan) []string {
+func planCandyNames(plans []*deploykit.InstallPlan) []string {
 	out := make([]string, 0, len(plans))
 	for _, p := range plans {
 		out = append(out, p.Candy)

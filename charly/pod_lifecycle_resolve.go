@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -29,7 +30,7 @@ import (
 // that leg — the common plain-pod case). opts carries the direct-mode CLI extras (--env/--port/
 // --volume/--bind + auto-detect) `charly start` accepts; the quadlet path ignores them.
 func resolvePodStartPlan(box, instance string, opts podStartOpts) (*spec.PodLifecyclePlan, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ type podStartOpts struct {
 // resolvePodStartQuadlet resolves the quadlet-mode start plan (the deployed/bed path): the plugin
 // runs `systemctl --user start <svc>` (or `podman start <ctr>` for a direct-deploy marker) + mounts
 // encrypted volumes. Mirrors StartCmd.runQuadlet.
-func resolvePodStartQuadlet(box, instance string, rt *ResolvedRuntime) (*spec.PodLifecyclePlan, error) {
+func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spec.PodLifecyclePlan, error) {
 	exists, err := quadletExistsInstance(box, instance)
 	if err != nil {
 		return nil, err
@@ -65,9 +66,9 @@ func resolvePodStartQuadlet(box, instance string, rt *ResolvedRuntime) (*spec.Po
 	plan := &spec.PodLifecyclePlan{
 		Mode:          "quadlet",
 		SvcName:       serviceNameInstance(box, instance),
-		ContainerName: containerNameInstance(box, instance),
+		ContainerName: kit.ContainerNameInstance(box, instance),
 		DirectDeploy:  directDeploy,
-		EngineBin:     EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
+		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 	}
 	// Encrypted-volume mounts are skipped in direct-deploy mode (those require
 	// systemd-run --scope; matches runConfigDirect's warning path).
@@ -120,7 +121,7 @@ func resolvePodEncEnsure(box, instance string) (spec.RawBody, error) {
 // starts/stops, or nil when none is configured. Mirrors the StartCmd.runDirect tunnel branch.
 func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 	dc := deploykit.LoadDeployConfigForRead("charly start tunnel")
-	ctrName := containerNameInstance(box, instance)
+	ctrName := kit.ContainerNameInstance(box, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef == "" {
 		return nil
@@ -142,7 +143,7 @@ func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 // instead of running it, and threads the enc-ensure + tunnel legs the plugin composes (the mount +
 // tunnel-start EFFECTS move to the plugin; the RESOLUTION stays here). The sidecar-in-direct-mode
 // rejection is preserved (sidecars require quadlet).
-func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podStartOpts) (*spec.PodLifecyclePlan, error) {
+func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts podStartOpts) (*spec.PodLifecyclePlan, error) {
 	img, err := resolvePodRuntimeImage(box, instance, "", rt, opts.NoAutoDetect, opts.VolumeFlag, opts.Bind)
 	if err != nil {
 		return nil, err
@@ -176,10 +177,10 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 	}
 
 	deployEnv := meta.Env
-	startCtrName := containerNameInstance(box, instance)
+	startCtrName := kit.ContainerNameInstance(box, instance)
 	startAccepted := AcceptedEnvSet(envAccepts, envRequires)
-	startGlobalEnv := dc.GlobalEnvForImage(deployKey(box, instance), startCtrName, startAccepted)
-	envVars, err := ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
+	startGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), startCtrName, startAccepted)
+	envVars, err := kit.ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +193,7 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 	}
 	envVars = appendAutoDetectedEnv(envVars, detected)
 
-	resolvedNetwork, netErr := ResolveNetwork(network, engine)
+	resolvedNetwork, netErr := kit.ResolveNetwork(network, engine)
 	if netErr != nil {
 		return nil, netErr
 	}
@@ -212,21 +213,21 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 	for _, v := range agentFwd.Volumes {
 		security.Mounts = appendUnique(security.Mounts, v)
 	}
 	envVars = append(envVars, agentFwd.Env...)
 
-	name := containerNameInstance(box, instance)
-	workDir := resolveWorkingDir(volumes, bindMounts, home, box, instance)
+	name := kit.ContainerNameInstance(box, instance)
+	workDir := deploykit.ResolveWorkingDir(volumes, bindMounts, home, box, instance)
 	argv := buildStartArgs(engine, imageRef, uid, gid, ports, name, volumes, bindMounts, detected.GPU, rt.BindAddress, envVars, security, entrypoint, workDir, resolvedNetwork)
 
 	return &spec.PodLifecyclePlan{
 		Mode:          "direct",
 		ContainerName: name,
 		RunArgv:       argv,
-		EngineBin:     EngineBinary(engine),
+		EngineBin:     kit.EngineBinary(engine),
 		Enc:           enc,
 		Tunnel:        resolvePodTunnel(box, instance),
 	}, nil
@@ -236,15 +237,15 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 // resolved unit/container + (optionally) the tunnel-stop + enc-unmount legs the plugin composes.
 // Mirrors StopCmd.Run (minus the arbiter release, which the F6 dispatch brackets host-side).
 func resolvePodStopPlan(box, instance string, unmount bool) (*spec.PodLifecyclePlan, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, err
 	}
 	quadletActive, _ := quadletExistsInstance(box, instance)
 	plan := &spec.PodLifecyclePlan{
-		ContainerName: containerNameInstance(box, instance),
+		ContainerName: kit.ContainerNameInstance(box, instance),
 		SvcName:       serviceNameInstance(box, instance),
-		EngineBin:     EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
+		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 		Unmount:       unmount,
 		Tunnel:        resolvePodTunnel(box, instance),
 	}
@@ -266,7 +267,7 @@ func resolvePodStopPlan(box, instance string, unmount bool) (*spec.PodLifecycleP
 // resolvePodEncUnmount builds the spec.EncExecInput (unmount) the plugin InvokeProviders verb:enc
 // with on `charly stop --unmount`, or nil when no encrypted volume is configured. Mirrors encUnmount.
 func resolvePodEncUnmount(box, instance string) (spec.RawBody, error) {
-	plan, err := encPlanFor(box, instance, "", deployStorageDir(box, instance))
+	plan, err := encPlanFor(box, instance, "", deploykit.DeployStorageDir(box, instance))
 	if err != nil || len(plan) == 0 {
 		return nil, nil
 	}
@@ -296,9 +297,9 @@ type podRuntimeImage struct {
 	engine     string
 	imageRef   string
 	meta       *BoxMetadata
-	dc         *BundleConfig
-	volumes    []VolumeMount
-	bindMounts []ResolvedBindMount
+	dc         *deploykit.BundleConfig
+	volumes    []deploykit.VolumeMount
+	bindMounts []deploykit.ResolvedBindMount
 }
 
 // resolvePodRuntimeImage resolves the pod's runtime image context — the identical HEAD both
@@ -306,7 +307,7 @@ type podRuntimeImage struct {
 // device detection + CDI, the deploy overlay, the image ref (EnsureImage + metadata + engine-from-meta
 // + deploy overlay merge), and the volume backing. The divergent tails (start: enc/ports/tunnel/
 // buildStartArgs; shell: the running-exec vs ephemeral-run branch) stay in each caller.
-func resolvePodRuntimeImage(box, instance, tag string, rt *ResolvedRuntime, noAutoDetect bool, volumeFlag, bind []string) (*podRuntimeImage, error) {
+func resolvePodRuntimeImage(box, instance, tag string, rt *kit.ResolvedRuntime, noAutoDetect bool, volumeFlag, bind []string) (*podRuntimeImage, error) {
 	var detected DetectedDevices
 	if !noAutoDetect {
 		detected = DetectHostDevices()
@@ -339,7 +340,7 @@ func resolvePodRuntimeImage(box, instance, tag string, rt *ResolvedRuntime, noAu
 	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
 
 	cliVolumes := parseVolumeFlagsStandalone(volumeFlag, bind)
-	volumes, bindMounts := ResolveVolumeBacking(box, instance, meta.Volume, mergeVolumeConfigs(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
+	volumes, bindMounts := deploykit.ResolveVolumeBacking(box, instance, meta.Volume, mergeVolumeConfigs(deployVolumes, cliVolumes), meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
 	if meta.Registry != "" {
 		imageRef = resolveShellImageRef(meta.Registry, deployBoxName, tag)
 	}
@@ -364,7 +365,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	forceTTY = opts.ForceTTY // buildShellArgs/buildExecArgs + hostAttachScript read this global (relocated from ShellCmd.Run)
 	command := strings.Join(cmd, " ")
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, err
 	}
@@ -378,10 +379,10 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	uid, gid, home := meta.UID, meta.GID, meta.Home
 	ports, security, network := meta.Port, meta.Security, meta.Network
 
-	shellCtrName := containerNameInstance(box, instance)
+	shellCtrName := kit.ContainerNameInstance(box, instance)
 	shellAccepted := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
-	shellGlobalEnv := dc.GlobalEnvForImage(deployKey(box, instance), shellCtrName, shellAccepted)
-	envVars, err := ResolveEnvVars(shellGlobalEnv, meta.Env, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
+	shellGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), shellCtrName, shellAccepted)
+	envVars, err := kit.ResolveEnvVars(shellGlobalEnv, meta.Env, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
 		return nil, err
 	}
@@ -390,13 +391,13 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 
-	name := containerNameInstance(box, instance)
+	name := kit.ContainerNameInstance(box, instance)
 	// Running container → exec into it (env-only; can't add volumes/devices to a running container).
 	if containerRunning(engine, name) {
 		execEnv := append(slices.Clone(envVars), agentFwd.Env...)
-		workDir := resolveWorkingDir(volumes, bindMounts, home, box, instance)
+		workDir := deploykit.ResolveWorkingDir(volumes, bindMounts, home, box, instance)
 		argv := buildExecArgs(engine, name, uid, gid, command, execEnv, workDir)
 		return &spec.PodLiveStdioPlan{Script: hostAttachScript(argv)}, nil
 	}
@@ -416,11 +417,11 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 		security.Mounts = appendUnique(security.Mounts, v)
 	}
 	envVars = append(envVars, agentFwd.Env...)
-	resolvedNetwork, err := ResolveNetwork(network, engine)
+	resolvedNetwork, err := kit.ResolveNetwork(network, engine)
 	if err != nil {
 		return nil, err
 	}
-	workDir := resolveWorkingDir(volumes, bindMounts, home, box, instance)
+	workDir := deploykit.ResolveWorkingDir(volumes, bindMounts, home, box, instance)
 	argv := buildShellArgs(engine, imageRef, uid, gid, ports, volumes, bindMounts, detected.GPU, command, rt.BindAddress, envVars, security, workDir, resolvedNetwork)
 	return &spec.PodLiveStdioPlan{Script: hostAttachScript(argv)}, nil
 }
@@ -444,13 +445,13 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 	// Agent-forwarding env vars for exec (host user's home as the GPG socket default; the sockets are
 	// already mounted — this only affects env). Best-effort, exactly as CmdCmd.Run did.
 	var agentEnv []string
-	if rt, rtErr := ResolveRuntime(); rtErr == nil {
+	if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
 		var deployBox *spec.BundleNode
 		if overlay, ok := deploykit.LoadDeployConfigForRead("charly cmd").Lookup(box, instance); ok {
 			deployBox = &overlay
 		}
 		hostHome, _ := os.UserHomeDir()
-		agentFwd := ResolveAgentForwarding(rt, deployBox, hostHome)
+		agentFwd := kit.ResolveAgentForwarding(rt, deployBox, hostHome)
 		agentEnv = agentFwd.Env
 	}
 
@@ -466,7 +467,7 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 // N]`; container mode → `<engine> logs [-f] [--tail N] <ctr>` (or the named sidecar). Relocated from
 // the former LogsCmd.Run; the plugin streams it via exec.RunStream (killing the podCli("logs") reentry).
 func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdioPlan, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, err
 	}
@@ -487,8 +488,8 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 		return &spec.PodLiveStdioPlan{Script: shellQuoteArgs(argv)}, nil
 	}
 
-	engine := EngineBinary(ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
-	name := containerNameInstance(boxName, instance)
+	engine := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
+	name := kit.ContainerNameInstance(boxName, instance)
 	if opts.Sidecar != "" {
 		name = SidecarContainerNameInstance(boxName, instance, opts.Sidecar)
 	}
@@ -516,8 +517,8 @@ func hostAttachScript(argv []string) string {
 }
 
 // buildShellArgs constructs the `<engine> run --rm -it|-i …` argument list (relocated from shell.go).
-func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volumes []VolumeMount, bindMounts []ResolvedBindMount, gpu bool, command string, bindAddr string, envVars []string, security SecurityConfig, workingDir string, network ...string) []string {
-	binary := EngineBinary(engine)
+func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, command string, bindAddr string, envVars []string, security SecurityConfig, workingDir string, network ...string) []string {
+	binary := kit.EngineBinary(engine)
 	interactive := "-i"
 	if forceTTY || isTerminal() {
 		interactive = "-it"
@@ -531,11 +532,11 @@ func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volum
 		args = append(args, "--network", network[0])
 	}
 	if gpu {
-		args = append(args, GPURunArgs(engine)...)
+		args = append(args, kit.GPURunArgs(engine)...)
 	}
 	args = append(args, SecurityArgs(security)...)
 	for _, port := range ports {
-		args = append(args, "-p", localizePort(port, bindAddr))
+		args = append(args, "-p", deploykit.LocalizePort(port, bindAddr))
 	}
 	for _, vol := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", vol.VolumeName, vol.ContainerPath))
@@ -566,7 +567,7 @@ func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volum
 // buildExecArgs constructs the `<engine> exec -it|-i …` list for attaching to a running container
 // (relocated from shell.go).
 func buildExecArgs(engine, name string, uid, gid int, command string, envVars []string, workingDir string) []string {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	interactive := "-i"
 	if forceTTY || isTerminal() {
 		interactive = "-it"

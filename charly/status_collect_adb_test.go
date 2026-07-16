@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/vmshared"
 	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -110,7 +112,7 @@ func TestCollectAndroidDeployNodes_DeployYamlWinsPerKey(t *testing.T) {
 		Bundle:  map[string]spec.BundleNode{"phone": {Target: "android", From: "dev"}},
 	}
 	// deploy.yml flips "phone" to a pod target — the android node must disappear.
-	local := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	local := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"phone": {Target: "pod", Image: "x"},
 	}}
 	nodes := collectAndroidDeployNodes(CollectOpts{Unified: uf, Deploy: local})

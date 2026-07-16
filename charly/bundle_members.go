@@ -20,8 +20,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"sort"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // foldMembers copies every deploy node's `peer:` entries into the Bundle map as

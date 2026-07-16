@@ -16,10 +16,11 @@ package main
 //                                  No duplicate test here (R3).
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestBoxBaseFromXOR_RejectsConflict proves a box authoring BOTH base: and from:

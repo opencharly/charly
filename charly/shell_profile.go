@@ -34,6 +34,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // ShellKind classifies the user's login shell.
@@ -235,3 +237,6 @@ func markersForTag(marker string) (begin, end string) {
 
 // markersForTag's remaining consumer is host_infra_test.go; the managed-block
 // stripping itself moved to kit.RemoveManagedBlockAt (kit/profile.go) in P4.
+
+// EnvdDir is exported (used across deploy code); thin wrapper over the kit copy.
+func EnvdDir(hostHome string) string { return kit.EnvdDir(hostHome) }

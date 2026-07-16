@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,7 +36,7 @@ func entityBodyMapping(gn *genericNode) (*yaml.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	if mappingRoot(clone) == nil {
+	if kit.MappingRoot(clone) == nil {
 		return nil, fmt.Errorf("node %q: %q value must be a mapping", gn.name, gn.disc)
 	}
 	return clone, nil

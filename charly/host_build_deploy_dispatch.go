@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -64,7 +66,7 @@ func hostBuildDeployTreeResolve(_ context.Context, req spec.DeployTreeResolveReq
 	}
 	reply := spec.DeployTreeResolveReply{Tree: pointerizeTree(tree)}
 	if tree != nil {
-		if rootNode, _, nodeErr := ResolveNodePath(tree, req.Path); nodeErr == nil && rootNode != nil {
+		if rootNode, _, nodeErr := deploykit.ResolveNodePath(tree, req.Path); nodeErr == nil && rootNode != nil {
 			reply.RootVenueSSH = nodeTraits(rootNode).Venue == "ssh"
 		}
 	}
@@ -97,7 +99,7 @@ func hostBuildDeployNodeDispatch(_ context.Context, req spec.DeployNodeDispatchR
 		return spec.DeployNodeDispatchReply{}, err
 	}
 
-	var parentExec DeployExecutor
+	var parentExec deploykit.DeployExecutor
 	for i, anc := range req.AncestorNodes {
 		a := anc
 		next, derr := deriveChildExecutorForPath(req.AncestorPaths[i], &a, parentExec)
@@ -154,11 +156,11 @@ func hostBuildDeployDelResolve(_ context.Context, req spec.DeployDelResolveReque
 // the wire — a programmatic teardown needing a specific runner is resolved host-side, matching
 // the OLD host_build_deploy_del.go's contract).
 func hostBuildDeployNodeDelDispatch(ctx context.Context, req spec.DeployNodeDelDispatchRequest, _ buildEngineContext) (spec.DeployNodeDelDispatchReply, error) {
-	paths, err := DefaultLedgerPaths()
+	paths, err := kit.DefaultLedgerPaths()
 	if err != nil {
 		return spec.DeployNodeDelDispatchReply{}, err
 	}
-	lock, err := AcquireLedgerLock(paths)
+	lock, err := kit.AcquireLedgerLock(paths)
 	if err != nil {
 		return spec.DeployNodeDelDispatchReply{}, err
 	}

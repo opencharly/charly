@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"gopkg.in/yaml.v3"
@@ -30,14 +32,14 @@ func (c *deployShowCmd) Run() error {
 	}
 
 	if c.Box != "" {
-		key := deployKey(c.Box, c.Instance)
+		key := deploykit.DeployKey(c.Box, c.Instance)
 		entry, ok := dc.Bundle[key]
 		if !ok {
 			fmt.Printf("No overrides for box %q\n", key)
 			return nil
 		}
 		// Print just this image's config
-		out := &BundleConfig{Bundle: map[string]spec.BundleNode{key: entry}}
+		out := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{key: entry}}
 		return marshalToStdout(out)
 	}
 
@@ -91,7 +93,7 @@ func (c *deployExportCmd) exportOverrides() error {
 	return c.output(dc)
 }
 
-func (c *deployExportCmd) output(dc *BundleConfig) error {
+func (c *deployExportCmd) output(dc *deploykit.BundleConfig) error {
 	if c.Output != "" {
 		data, err := yaml.Marshal(dc)
 		if err != nil {
@@ -115,9 +117,9 @@ type deployImportCmd struct {
 
 func (c *deployImportCmd) Run() error {
 	// Load input files
-	var inputs []*BundleConfig
+	var inputs []*deploykit.BundleConfig
 	for _, f := range c.Files {
-		dc, err := LoadDeployFile(f)
+		dc, err := deploykit.LoadDeployFile(f)
 		if err != nil {
 			return err
 		}
@@ -125,7 +127,7 @@ func (c *deployImportCmd) Run() error {
 	}
 
 	// Start with existing or empty
-	var base *BundleConfig
+	var base *deploykit.BundleConfig
 	if !c.Replace {
 		existing, err := deploykit.LoadBundleConfig()
 		if err != nil {
@@ -134,11 +136,11 @@ func (c *deployImportCmd) Run() error {
 		base = existing
 	}
 	if base == nil {
-		base = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
+		base = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	}
 
 	// Merge input files left-to-right
-	merged := MergeDeployConfigs(append([]*BundleConfig{base}, inputs...)...)
+	merged := deploykit.MergeDeployConfigs(append([]*deploykit.BundleConfig{base}, inputs...)...)
 
 	// Filter to single image if requested
 	if c.Box != "" {
@@ -153,10 +155,10 @@ func (c *deployImportCmd) Run() error {
 				existing.Bundle[c.Box] = entry
 				merged = existing
 			} else {
-				merged = &BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
+				merged = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
 			}
 		} else {
-			merged = &BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
+			merged = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
 		}
 	}
 
@@ -202,13 +204,13 @@ func (c *deployResetCmd) Run() error {
 		return nil
 	}
 
-	key := deployKey(c.Box, c.Instance)
+	key := deploykit.DeployKey(c.Box, c.Instance)
 	if _, ok := dc.Bundle[key]; !ok {
 		fmt.Printf("No overrides for box %q\n", key)
 		return nil
 	}
 
-	RemoveBoxDeploy(dc, key)
+	deploykit.RemoveBoxDeploy(dc, key)
 
 	if len(dc.Bundle) == 0 {
 		// No images left — remove the file
@@ -258,8 +260,8 @@ func (c *deployStatusCmd) Run() error {
 	stemToDeploy := make(map[string]string) // quadlet stem → deploy key
 	if dc != nil {
 		for key := range dc.Bundle {
-			img, inst := parseDeployKey(key)
-			stem := strings.TrimPrefix(containerNameInstance(img, inst), "charly-")
+			img, inst := deploykit.ParseDeployKey(key)
+			stem := strings.TrimPrefix(kit.ContainerNameInstance(img, inst), "charly-")
 			deployToStem[key] = stem
 			stemToDeploy[stem] = key
 		}
@@ -290,7 +292,7 @@ func (c *deployStatusCmd) Run() error {
 
 // --- helpers ---
 
-func marshalToStdout(dc *BundleConfig) error {
+func marshalToStdout(dc *deploykit.BundleConfig) error {
 	data, err := yaml.Marshal(dc)
 	if err != nil {
 		return err
@@ -299,8 +301,8 @@ func marshalToStdout(dc *BundleConfig) error {
 	return nil
 }
 
-func filterDeployBox(dc *BundleConfig, names []string) *BundleConfig {
-	filtered := &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
+func filterDeployBox(dc *deploykit.BundleConfig, names []string) *deploykit.BundleConfig {
+	filtered := &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	for _, name := range names {
 		if entry, ok := dc.Bundle[name]; ok {
 			filtered.Bundle[name] = entry

@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // canonicalIntermediates serializes a resolved box map into a stable,
@@ -13,7 +16,7 @@ import (
 // intermediate's identity (and thus its Containerfile + FROM SHA). Two runs of
 // ComputeIntermediates that produce the same canonical string are guaranteed to
 // emit identical build artifacts.
-func canonicalIntermediates(m map[string]*ResolvedBox) string {
+func canonicalIntermediates(m map[string]*buildkit.ResolvedBox) string {
 	lines := make([]string, 0, len(m))
 	for name, img := range m {
 		lines = append(lines, fmt.Sprintf("%s|base=%s|candy=%v|builds=%v|distro=%v|auto=%v",
@@ -35,19 +38,19 @@ func canonicalIntermediates(m map[string]*ResolvedBox) string {
 // (Fix A), and the two external bases share a short name ("img") so their
 // auto-intermediates collide and the `-2` suffix assignment depends on
 // sibling-group processing order (Fix B).
-func determinismFixture() (map[string]*ResolvedBox, map[string]*Candy, *Config) {
+func determinismFixture() (map[string]*buildkit.ResolvedBox, map[string]*Candy, *Config) {
 	layers := map[string]*Candy{
 		"core":   {Name: "core", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"shared": {Name: "shared", Require: toCandyRefs([]string{"core"}), HasPixiToml: true},
-		"leafA":  {Name: "leafA", Require: toCandyRefs([]string{"shared"}), HasPixiToml: true},
-		"leafB":  {Name: "leafB", Require: toCandyRefs([]string{"shared"}), HasPackageJson: true},
+		"shared": {Name: "shared", Require: deploykit.ToCandyRefs([]string{"core"}), HasPixiToml: true},
+		"leafA":  {Name: "leafA", Require: deploykit.ToCandyRefs([]string{"shared"}), HasPixiToml: true},
+		"leafB":  {Name: "leafB", Require: deploykit.ToCandyRefs([]string{"shared"}), HasPackageJson: true},
 		// Conflicting-authored-order pair: list [x, y] vs [y, x].
 		"x": {Name: "x", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"y": {Name: "y", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	mk := func(name, base string, candy []string, builds BuildFormats, distro []string) *ResolvedBox {
-		return &ResolvedBox{
+	mk := func(name, base string, candy []string, builds BuildFormats, distro []string) *buildkit.ResolvedBox {
+		return &buildkit.ResolvedBox{
 			Name: name, Base: base, IsExternalBase: true,
 			Candy: candy, Tag: "v1", Registry: "r",
 			FullTag: "r/" + name + ":v1", Pkg: "rpm",
@@ -57,7 +60,7 @@ func determinismFixture() (map[string]*ResolvedBox, map[string]*Candy, *Config) 
 	// Two external bases that SHORTEN to the same name ("img") so their
 	// branch-point auto-intermediates ("img-shared") collide → -2 suffix order
 	// is sibling-group-order sensitive.
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		// base A group: shared → {leafA, leafB}, consumers carry different formats
 		"a-one": mk("a-one", "reg-a/img:1", []string{"leafA", "x", "y"}, BuildFormats{"pac", "aur"}, []string{"arch"}),
 		"a-two": mk("a-two", "reg-a/img:1", []string{"leafB", "y", "x"}, BuildFormats{"pac", "x264"}, []string{"arch", "arch-extra"}),

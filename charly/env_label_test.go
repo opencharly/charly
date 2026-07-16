@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExtractMetadata_EnvObjectLabel proves the ai.opencharly.env label — baked
@@ -16,9 +18,9 @@ func TestExtractMetadata_EnvObjectLabel(t *testing.T) {
 	defer func() { InspectLabels = orig }()
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
-			LabelVersion: "2026.001.0000",
-			LabelBox:     "env-image",
-			LabelEnv:     `{"EMULATOR_NAME":"charly_avd_36","EMULATOR_API_LEVEL":"36","EMULATOR_DEVICE":"pixel_9a"}`,
+			spec.LabelVersion: "2026.001.0000",
+			spec.LabelBox:     "env-image",
+			spec.LabelEnv:     `{"EMULATOR_NAME":"charly_avd_36","EMULATOR_API_LEVEL":"36","EMULATOR_DEVICE":"pixel_9a"}`,
 		}, nil
 	}
 	meta, err := ExtractMetadata("podman", "env-image")
@@ -36,7 +38,7 @@ func TestExtractMetadata_EnvAbsent(t *testing.T) {
 	orig := InspectLabels
 	defer func() { InspectLabels = orig }()
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
-		return map[string]string{LabelVersion: "2026.001.0000", LabelBox: "no-env"}, nil
+		return map[string]string{spec.LabelVersion: "2026.001.0000", spec.LabelBox: "no-env"}, nil
 	}
 	meta, err := ExtractMetadata("podman", "no-env")
 	if err != nil {

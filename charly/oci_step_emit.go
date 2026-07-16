@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // oci_step_emit.go — the CORE pod-overlay step-emit dispatch, relocated out of
@@ -28,18 +30,18 @@ import (
 // has its trailing newline normalized (matching the former per-arm t.buf behaviour); an empty
 // return is a deploy-only / VenueSkip step (records nothing). `build` carries the host-side
 // buildEngineContext the host-coupled step-emitters (system-packages/builder/local-pkg/op) need.
-func ociEmitStep(step InstallStep, plan *InstallPlan, distros []string, build buildEngineContext) (string, error) {
+func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []string, build buildEngineContext) (string, error) {
 	var (
 		frag string
 		err  error
 	)
 	switch {
-	case isExternalStepKind(step.Kind()):
+	case deploykit.IsExternalStepKind(step.Kind()):
 		// F-STEP-EMIT: an authored external step ("external:<word>") — its serving provider is a
 		// class:step plugin keyed on the trimmed word; OpEmit bakes its build-context fragment
 		// (Emits=true) or is a no-op (Emits=false, deploy-only). allowEmpty=false: an authored
 		// external step MUST produce a fragment.
-		s := step.(*externalStep)
+		s := step.(*deploykit.ExternalStep)
 		frag, err = ociSpliceClassStepEmit(s.Word, s.Payload, distros, false, build)
 	case pluginEmitStepWords[step.Kind()] != "":
 		// C1.1–C1.6: the 12 compiler-emitted kinds whose build-emit externalized to the
@@ -49,7 +51,7 @@ func ociEmitStep(step InstallStep, plan *InstallPlan, distros []string, build bu
 		// render (empty snippet / no-op service) is tolerated; a no-op-emit kind (apk/reboot,
 		// Emits=false) is skipped inside ociSpliceClassStepEmit.
 		word := pluginEmitStepWords[step.Kind()]
-		payload, merr := marshalJSON(stepToView(step))
+		payload, merr := marshalJSON(deploykit.StepToView(step))
 		if merr != nil {
 			return "", fmt.Errorf("oci-emit-step: marshal %s step view: %w", step.Kind(), merr)
 		}

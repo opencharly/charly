@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // Tests for renderBuilderScript — the bash scripts that run inside builder
@@ -16,7 +18,7 @@ import (
 // `name` loaded from the project's real charly.yml (plus the embedded default
 // build vocabulary), so renderBuilderScript renders the actual
 // phase.install.host cell.
-func builderStepWithDef(t *testing.T, name string, raw map[string]any) *BuilderStep {
+func builderStepWithDef(t *testing.T, name string, raw map[string]any) *deploykit.BuilderStep {
 	t.Helper()
 	_, bc, _, err := LoadBuildConfigForBox(repoRootDir(t))
 	if err != nil {
@@ -26,7 +28,7 @@ func builderStepWithDef(t *testing.T, name string, raw map[string]any) *BuilderS
 	if bDef == nil {
 		t.Fatalf("builder %q not defined in charly.yml", name)
 	}
-	return &BuilderStep{Builder: name, CandyName: "test-layer", BuilderDef: bDef, RawStageContext: raw}
+	return &deploykit.BuilderStep{Builder: name, CandyName: "test-layer", BuilderDef: bDef, RawStageContext: raw}
 }
 
 func TestRenderPixiScript(t *testing.T) {
@@ -107,7 +109,7 @@ func TestRenderAurScriptPackages(t *testing.T) {
 func TestRenderBuilderScriptUnknownBuilder(t *testing.T) {
 	// A BuilderStep with no resolved BuilderDef (synthetic / unknown builder)
 	// has no host cell to render → error.
-	s := &BuilderStep{Builder: "nonexistent"}
+	s := &deploykit.BuilderStep{Builder: "nonexistent"}
 	if _, err := renderBuilderScript(s, "/home/user"); err == nil {
 		t.Fatalf("expected error for builder with no BuilderDef")
 	}

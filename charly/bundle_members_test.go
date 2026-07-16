@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
-	"github.com/opencharly/sdk/spec"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/alecthomas/kong"
 )

@@ -5,12 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -312,7 +313,7 @@ func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
 		return err
 	}
 	if dc == nil {
-		dc = &BundleConfig{Bundle: map[string]spec.BundleNode{}}
+		dc = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{}}
 	}
 	node, ok := dc.Bundle[deployName]
 	if !ok {
@@ -415,7 +416,7 @@ func teardownChildren(deployName string) error {
 	return teardownChildrenRec(dc, parentID, visited)
 }
 
-func teardownChildrenRec(dc *BundleConfig, parentID string, visited map[string]bool) error {
+func teardownChildrenRec(dc *deploykit.BundleConfig, parentID string, visited map[string]bool) error {
 	var toDel []string
 	for name, node := range dc.Bundle {
 		if visited[name] {

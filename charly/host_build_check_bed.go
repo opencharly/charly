@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -297,13 +299,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		ImageTag:       s.imageTag,
 		LocalRef:       node.From, // local bed ref
 		VMDomains:      domains,
-		CheckLiveRefs:  bedCheckLiveRefs(req.Bed, node.Children),
-		ChildKeys:      sortedNestedKeys(node.Children),
+		CheckLiveRefs:  deploykit.BedCheckLiveRefs(req.Bed, node.Children),
+		ChildKeys:      deploykit.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
-		RunBuild:       CheckLevelReaches(level, CheckLevelBuild),
-		RunRuntime:     CheckLevelReaches(level, CheckLevelNoAgent),
-		RunAgent:       CheckLevelReaches(level, CheckLevelAgent),
+		RunBuild:       kit.CheckLevelReaches(level, kit.CheckLevelBuild),
+		RunRuntime:     kit.CheckLevelReaches(level, kit.CheckLevelNoAgent),
+		RunAgent:       kit.CheckLevelReaches(level, kit.CheckLevelAgent),
 	}, nil
 }
 
@@ -362,7 +364,7 @@ func bedRunImageTag(bed, calver string) string {
 // host-side re-deploy would be wrong).
 func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
-	for _, childKey := range sortedNestedKeys(children) {
+	for _, childKey := range deploykit.SortedNestedKeys(children) {
 		child := children[childKey]
 		if child != nil && nodeTraits(child).HostRooted { // local (host-rooted shell venue)
 			out = append(out, childKey)

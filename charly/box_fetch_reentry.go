@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // box_fetch_reentry.go — the hidden `charly __box-fetch` / `__box-refresh` core reentry points
@@ -55,13 +57,13 @@ func (c *BoxRefreshCmd) Run() error {
 	}
 	repoPath, version := normalizeRepoSpec(spec)
 	if version == "" {
-		branch, err := GitDefaultBranch(RepoGitURL(repoPath))
+		branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
 		if err != nil {
 			return fmt.Errorf("resolving default branch for %s: %w", repoPath, err)
 		}
 		version = branch
 	}
-	cachePath, err := RepoCachePath(repoPath, version)
+	cachePath, err := kit.RepoCachePath(repoPath, version)
 	if err != nil {
 		return err
 	}

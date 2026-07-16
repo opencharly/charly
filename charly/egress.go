@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // egressValidate resolves the egress plugin and runs one OpValidate. mode ∈
@@ -68,6 +70,10 @@ func ValidateEgressValue(kind, label string, v any) error {
 func validateTextEgress(label, text string) error {
 	return egressValidate("rendered_text", label, "text", text)
 }
+
+// Inject charly's egress-schema validation into the ledger's record-write path
+// (sdk/kit has no egress subsystem — it calls the kit.ValidateRecord seam).
+func init() { kit.ValidateRecord = ValidateEgressValue }
 
 // ValidateXMLEgress validates a rendered XML artifact (the libvirt domain XML); the plugin
 // koala-decodes it best-effort (a decode failure defers to libvirt's authoritative gate).

@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // nvidiaReport builds a synthetic VFIOReport with one NVIDIA GPU (vendor

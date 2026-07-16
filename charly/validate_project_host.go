@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -43,8 +44,8 @@ type loadedProject struct {
 	cfg        *Config
 	layers     map[string]*Candy
 	uf         *UnifiedFile // nil when absent or its load/discover errored
-	distroCfg  *DistroConfig
-	builderCfg *BuilderConfig
+	distroCfg  *buildkit.DistroConfig
+	builderCfg *buildkit.BuilderConfig
 	initCfg    *InitConfig
 	version    string
 	empty      bool

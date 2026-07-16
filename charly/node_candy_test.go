@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
 )

@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
@@ -38,7 +39,7 @@ const scoredPlanOrigin = "plan"
 func scoredSteps(plan []spec.Step) []scoredStep {
 	out := make([]scoredStep, len(plan))
 	for i := range plan {
-		out[i] = scoredStep{id: EffectiveStepID(&plan[i], scoredPlanOrigin, i), step: plan[i]}
+		out[i] = scoredStep{id: kit.EffectiveStepID(&plan[i], scoredPlanOrigin, i), step: plan[i]}
 	}
 	return out
 }
@@ -92,7 +93,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []spec
 			ID:            e.id,
 			Origin:        "pod:" + e.step.Venue,
 			Text:          e.step.KeywordText(),
-			Tag:           EffectiveTags(e.step.Tag),
+			Tag:           kit.EffectiveTags(e.step.Tag),
 			Status:        "fail",
 			SkippedReason: "cycle: step is part of a depends_on cycle",
 		})
@@ -188,7 +189,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 					ID:     e.id,
 					Origin: "pod:" + pod,
 					Text:   e.step.KeywordText(),
-					Tag:    EffectiveTags(e.step.Tag),
+					Tag:    kit.EffectiveTags(e.step.Tag),
 					Status: "fail",
 				})
 				out.Summary.Total++
@@ -199,7 +200,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		}
 
 		// Run the single step via RunPlan against the bucket's runner.
-		set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+		set := &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{
 			Origin: "pod:" + pod,
 			Plan:   []spec.Step{e.step},
 		}}}
@@ -215,8 +216,8 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 			ID:      e.id,
 			Origin:  "pod:" + pod,
 			Text:    e.step.KeywordText(),
-			Tag:     EffectiveTags(e.step.Tag),
-			Keyword: string(keywordOf(&e.step)),
+			Tag:     kit.EffectiveTags(e.step.Tag),
+			Keyword: string(kit.KeywordOf(&e.step)),
 			Status:  status,
 		}
 		if len(results) > 0 {
@@ -340,16 +341,16 @@ func skippedStepScore(e scoredStep, pod, blockedBy string) spec.StepScore {
 		ID:            e.id,
 		Origin:        "pod:" + pod,
 		Text:          e.step.KeywordText(),
-		Tag:           EffectiveTags(e.step.Tag),
+		Tag:           kit.EffectiveTags(e.step.Tag),
 		Status:        "skipped",
 		SkippedReason: "dep-unmet: " + blockedBy,
 	}
 }
 
 // resolveScoringChain returns the DeployExecutor chain that reaches `pod`.
-func resolveScoringChain(roots map[string]spec.BundleNode, pod string) (DeployExecutor, error) {
+func resolveScoringChain(roots map[string]spec.BundleNode, pod string) (deploykit.DeployExecutor, error) {
 	if strings.Contains(pod, ".") && roots != nil {
-		_, chain, err := ResolveDeployChain(roots, pod, ShellExecutor{})
+		_, chain, err := deploykit.ResolveDeployChain(roots, pod, kit.ShellExecutor{})
 		if err == nil {
 			return chain, nil
 		}
@@ -357,10 +358,10 @@ func resolveScoringChain(roots map[string]spec.BundleNode, pod string) (DeployEx
 	}
 	if roots != nil {
 		if node, ok := roots[pod]; ok && node.Descent != nil && node.Descent.HostRooted {
-			return rootExecutorForDeployNode(&node)
+			return deploykit.RootExecutorForDeployNode(&node)
 		}
 	}
-	return ContainerChain("podman", "charly-"+pod), nil
+	return deploykit.ContainerChain("podman", "charly-"+pod), nil
 }
 
 // RenderPlanYAML returns the plan rendered as a YAML block for ${PLAN}.
@@ -387,7 +388,7 @@ func isEphemeralDeploy(roots map[string]spec.BundleNode, pod string) bool {
 	if node, ok := roots[pod]; ok {
 		return node.IsEphemeral()
 	}
-	if node, _, err := ResolveNodePath(roots, pod); err == nil && node != nil {
+	if node, _, err := deploykit.ResolveNodePath(roots, pod); err == nil && node != nil {
 		return node.IsEphemeral()
 	}
 	return false
@@ -408,7 +409,7 @@ func ephemeralKeepOnFailure(roots map[string]spec.BundleNode, pod string) bool {
 	if node, ok := roots[pod]; ok {
 		return resolve(&node)
 	}
-	if node, _, err := ResolveNodePath(roots, pod); err == nil {
+	if node, _, err := deploykit.ResolveNodePath(roots, pod); err == nil {
 		return resolve(node)
 	}
 	return false

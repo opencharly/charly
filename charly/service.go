@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // ServiceCmd manages services inside a running container
@@ -85,14 +87,14 @@ func (c *ServiceRestartCmd) Run() error {
 
 // resolveServiceInit resolves the container, engine, and init system for service management.
 func resolveServiceInit(box, instance string) (engine, containerName string, initDef *ResolvedInit, err error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", "", nil, err
 	}
 	boxName := resolveBoxName(box)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = EngineBinary(runEngine)
-	containerName = containerNameInstance(boxName, instance)
+	engine = kit.EngineBinary(runEngine)
+	containerName = kit.ContainerNameInstance(boxName, instance)
 	if !containerRunning(engine, containerName) {
 		return "", "", nil, fmt.Errorf("container %s is not running", containerName)
 	}
@@ -119,9 +121,81 @@ func resolveServiceInit(box, instance string) (engine, containerName string, ini
 	return engine, containerName, initDef, nil
 }
 
-// wellKnownInitDefs + resolveInitDefFromMeta MOVED to sdk/kit (K4 lane B — shared between this
-// file's continued core use and candy/plugin-deploy-pod's pod_lifecycle_resolve.go move); see
-// kit_aliases.go's resolveInitDefFromMeta = kit.ResolveInitDefFromMeta.
+// wellKnownInitDefs is the legacy fallback for pre-init_def-label images — the build-resolved init
+// contract now travels in the ai.opencharly.init_def label, so resolveInitDefFromMeta /
+// resolveEntrypointFromMeta read it label-first and only consult this table when meta.InitDef is
+// absent. Because the build-resolved def now travels in the label, init systems declared ONLY in
+// the embedded init: vocabulary (charly/charly.yml) work at runtime too — they no longer need an
+// entry here. This table is frozen at the two init systems that predate the label; do NOT add new
+// ones (declare them in the vocabulary instead, where they bake into the label).
+var wellKnownInitDefs = map[string]*ResolvedInit{
+	"supervisord": {
+		Entrypoint:     []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"},
+		ManagementTool: "supervisorctl",
+		ManagementCommands: map[string]string{
+			"status":  "status",
+			"start":   "start {{.Service}}",
+			"stop":    "stop {{.Service}}",
+			"restart": "restart {{.Service}}",
+		},
+	},
+	"systemd": {
+		// Systemd-on-bootc boots via VM init; container has no entrypoint.
+		Entrypoint:     nil,
+		ManagementTool: "systemctl",
+		ManagementCommands: map[string]string{
+			"status":  "--user status {{.Service}}",
+			"start":   "--user start {{.Service}}",
+			"stop":    "--user stop {{.Service}}",
+			"restart": "--user restart {{.Service}}",
+		},
+	},
+}
+
+// resolveEntrypointFromMeta determines the entrypoint from image metadata (runtime mode).
+// Label-first: the build-resolved init contract is baked into the
+// ai.opencharly.init_def label (meta.InitDef), so any init system declared in
+// the embedded `init:` vocabulary — including custom ones — now reaches
+// runtime. wellKnownInitDefs is consulted only for pre-init_def-label images
+// (built before the label existed; their labels cannot be re-baked). Shared by
+// config_image.go/pod_lifecycle_resolve.go (the pod-deploy subsystem, K4).
+func resolveEntrypointFromMeta(meta *BoxMetadata) []string {
+	if meta.Init == "" {
+		return []string{"sleep", "infinity"}
+	}
+	if meta.InitDef != nil {
+		// The baked entrypoint is authoritative. An empty entrypoint means
+		// the container boots via the image's own init (systemd-on-bootc),
+		// exactly as the legacy registry encoded — fall through to the
+		// image default rather than overriding with sleep infinity.
+		return meta.InitDef.Entrypoint
+	}
+	if def, ok := wellKnownInitDefs[meta.Init]; ok {
+		return def.Entrypoint
+	}
+	return []string{"sleep", "infinity"}
+}
+
+// resolveInitDefFromMeta returns the init contract for management-command
+// rendering. Label-first: the build-resolved def is baked into the
+// ai.opencharly.init_def label, so any vocabulary-declared init
+// system — including custom ones — resolves at runtime. Falls back to
+// wellKnownInitDefs only for pre-init_def-label images (built before the
+// label existed). Shared by config_image.go/pod_lifecycle_resolve.go (K4).
+func resolveInitDefFromMeta(meta *BoxMetadata) (*ResolvedInit, error) {
+	if meta.InitDef != nil {
+		return &ResolvedInit{
+			Entrypoint:         meta.InitDef.Entrypoint,
+			FallbackEntrypoint: meta.InitDef.FallbackEntrypoint,
+			ManagementTool:     meta.InitDef.ManagementTool,
+			ManagementCommands: meta.InitDef.ManagementCommands,
+		}, nil
+	}
+	if def, ok := wellKnownInitDefs[meta.Init]; ok {
+		return def, nil
+	}
+	return nil, fmt.Errorf("unknown init system %q; cannot determine management commands (image predates the ai.opencharly.init_def label — rebuild it to bake the init contract)", meta.Init)
+}
 
 // execInitCommand runs a service-management command INSIDE the container (the K4 deep-body move).
 // The HOST resolves the full `<engine> exec <container> <tool> <op> [svc]` argv from the image's baked

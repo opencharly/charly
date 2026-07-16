@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -72,9 +73,53 @@ func tunnelConfigPath(name string) (string, error) {
 	return filepath.Join(dir, name+".yml"), nil
 }
 
-// parseHostPorts/buildPortMapping/resolveProto MOVED to sdk/kit (K4 lane B — shared between
-// ResolveTunnelConfig below and candy/plugin-deploy-pod's pod_lifecycle_resolve.go quadlet-mode
-// move); see kit_aliases.go's parseHostPorts/buildPortMapping/resolveProto = kit.*.
+// parseHostPorts extracts host-side ports from image port mappings via the
+// canonical ParsePortMapping. Unparseable entries are reported on stderr —
+// silent skipping was the root cause of an unrelated bug where tunnel rules
+// vanished without a diagnostic. Shared by ResolveTunnelConfig below and
+// candy/plugin-deploy-pod's pod_lifecycle_resolve.go (the pod-deploy subsystem, K4).
+func parseHostPorts(boxPorts []string) []int {
+	var result []int
+	for _, mapping := range boxPorts {
+		p, ok := ParsePortMapping(mapping)
+		if !ok {
+			fmt.Fprintf(os.Stderr,
+				"Warning: ignoring unparseable port mapping %q (expected forms: \"P\", \"H:C\", \"IP:H:C\")\n",
+				mapping)
+			continue
+		}
+		result = append(result, p.Host)
+	}
+	return result
+}
+
+// buildPortMapping builds a host→container port map from image port mappings.
+// Same loud-failure policy as parseHostPorts — see comment above.
+func buildPortMapping(boxPorts []string) map[int]int {
+	m := make(map[int]int, len(boxPorts))
+	for _, mapping := range boxPorts {
+		p, ok := ParsePortMapping(mapping)
+		if !ok {
+			fmt.Fprintf(os.Stderr,
+				"Warning: ignoring unparseable port mapping %q (expected forms: \"P\", \"H:C\", \"IP:H:C\")\n",
+				mapping)
+			continue
+		}
+		m[p.Host] = p.Container
+	}
+	return m
+}
+
+// resolveProto returns the backend scheme for a container port, defaulting to "http".
+// portProtos is string-keyed (the OCI-label wire form, P2B reshape) — index by the port as a string.
+func resolveProto(containerPort int, portProtos map[string]string) string {
+	if portProtos != nil {
+		if pp, ok := portProtos[strconv.Itoa(containerPort)]; ok {
+			return pp
+		}
+	}
+	return "http"
+}
 
 // ResolveTunnelConfig resolves a TunnelYAML into a TunnelConfig with defaults applied.
 // portProtos maps container port -> protocol ("http" or "tcp") from candy PortSpec data.
@@ -152,7 +197,81 @@ func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[s
 	return cfg
 }
 
-// TunnelConfigFromMetadata MOVED to sdk/kit (K4 lane B — shared between start.go/config_image.go
-// continued core use and candy/plugin-deploy-pod pod_lifecycle_resolve.go quadlet-mode move); see
-// kit_aliases.go's TunnelConfigFromMetadata = kit.TunnelConfigFromMetadata.
+// TunnelConfigFromMetadata creates a TunnelConfig from image label metadata.
+// Unlike ResolveTunnelConfig, this doesn't need candy access since the tunnel
+// configuration is already stored in the label. Shared by start.go/config_image.go/
+// pod_lifecycle_resolve.go (the pod-deploy subsystem, K4).
+func TunnelConfigFromMetadata(meta *BoxMetadata) *TunnelConfig {
+	if meta == nil || meta.Tunnel == nil {
+		return nil
+	}
+
+	t := meta.Tunnel
+	cfg := &TunnelConfig{
+		Provider: t.Provider,
+		BoxName:  meta.Box,
+	}
+
+	hostPorts := parseHostPorts(meta.Port)
+	hostToContainer := buildPortMapping(meta.Port)
+
+	// Determine public set
+	publicSet := make(map[int]bool)
+	publicHostnames := make(map[int]string)
+	if t.Public.All {
+		for _, p := range hostPorts {
+			publicSet[p] = true
+		}
+	}
+	for _, p := range t.Public.Ports {
+		publicSet[p] = true
+	}
+	for p, h := range t.Public.PortMap {
+		publicSet[p] = true
+		publicHostnames[p] = h
+	}
+
+	// Determine private set
+	privateSet := make(map[int]bool)
+	if t.Private.All {
+		for _, p := range hostPorts {
+			if !publicSet[p] {
+				privateSet[p] = true
+			}
+		}
+	}
+	for _, p := range t.Private.Ports {
+		privateSet[p] = true
+	}
+
+	// Build TunnelPort slice
+	for _, hp := range hostPorts {
+		if !publicSet[hp] && !privateSet[hp] {
+			continue
+		}
+		cp := hp
+		if c, ok := hostToContainer[hp]; ok {
+			cp = c
+		}
+		proto := resolveProto(cp, meta.PortProto)
+		cfg.Ports = append(cfg.Ports, TunnelPort{
+			Port:        hp,
+			BackendPort: hp,
+			Protocol:    proto,
+			Public:      publicSet[hp],
+			Hostname:    publicHostnames[hp],
+		})
+	}
+
+	// Cloudflare defaults
+	if cfg.Provider == "cloudflare" {
+		cfg.TunnelName = t.Tunnel
+		if cfg.TunnelName == "" {
+			cfg.TunnelName = "charly-" + meta.Box
+		}
+		cfg.Hostname = meta.DNS
+	}
+
+	return cfg
+}
 

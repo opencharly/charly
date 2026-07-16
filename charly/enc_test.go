@@ -30,14 +30,14 @@ func TestIsEncryptedInitialized(t *testing.T) {
 func TestHasEncryptedBindMounts(t *testing.T) {
 	tests := []struct {
 		name   string
-		mounts []ResolvedBindMount
+		mounts []deploykit.ResolvedBindMount
 		want   bool
 	}{
 		{"nil", nil, false},
-		{"empty", []ResolvedBindMount{}, false},
-		{"plain only", []ResolvedBindMount{{Encrypted: false}}, false},
-		{"encrypted", []ResolvedBindMount{{Encrypted: true}}, true},
-		{"mixed", []ResolvedBindMount{{Encrypted: false}, {Encrypted: true}}, true},
+		{"empty", []deploykit.ResolvedBindMount{}, false},
+		{"plain only", []deploykit.ResolvedBindMount{{Encrypted: false}}, false},
+		{"encrypted", []deploykit.ResolvedBindMount{{Encrypted: true}}, true},
+		{"mixed", []deploykit.ResolvedBindMount{{Encrypted: false}, {Encrypted: true}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestCryptoServiceFilename(t *testing.T) {
 }
 
 func TestVerifyBindMountsPlainDirMissing(t *testing.T) {
-	mounts := []ResolvedBindMount{
+	mounts := []deploykit.ResolvedBindMount{
 		{Name: "data", HostPath: "/nonexistent/path", ContPath: "/home/user/.myapp", Encrypted: false},
 	}
 	err := verifyBindMounts(mounts, "myapp")
@@ -82,7 +82,7 @@ func TestVerifyBindMountsPlainDirMissing(t *testing.T) {
 
 func TestVerifyBindMountsPlainDirExists(t *testing.T) {
 	dir := t.TempDir()
-	mounts := []ResolvedBindMount{
+	mounts := []deploykit.ResolvedBindMount{
 		{Name: "data", HostPath: dir, ContPath: "/home/user/.myapp", Encrypted: false},
 	}
 	err := verifyBindMounts(mounts, "myapp")
@@ -97,7 +97,7 @@ func TestVerifyBindMountsEncryptedNotMounted(t *testing.T) {
 	isEncryptedMounted = func(plainDir string) bool { return false }
 	defer func() { isEncryptedMounted = orig }()
 
-	mounts := []ResolvedBindMount{
+	mounts := []deploykit.ResolvedBindMount{
 		{Name: "secrets", HostPath: "/tmp/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 	}
 	err := verifyBindMounts(mounts, "myapp")
@@ -118,7 +118,7 @@ func TestVerifyBindMountsEncryptedMounted(t *testing.T) {
 	isEncryptedMounted = func(plainDir string) bool { return true }
 	defer func() { isEncryptedMounted = orig }()
 
-	mounts := []ResolvedBindMount{
+	mounts := []deploykit.ResolvedBindMount{
 		{Name: "secrets", HostPath: "/tmp/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 	}
 	err := verifyBindMounts(mounts, "myapp")
@@ -131,17 +131,17 @@ func TestVerifyBindMountsEncryptedMounted(t *testing.T) {
 // Volume backing is now a deploy-time concern (see deploy_test.go TestResolveVolumeBacking*).
 
 func TestQuadletWithBindMounts(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "myapp",
 		ImageRef:    "ghcr.io/test/myapp:latest",
 		Home:        "/home/user/project",
 		BindAddress: "127.0.0.1",
-		BindMounts: []ResolvedBindMount{
+		BindMounts: []deploykit.ResolvedBindMount{
 			{Name: "data", HostPath: "/home/user/data", ContPath: "/home/user/.myapp", Encrypted: false},
 		},
 	}
 
-	got := generateQuadlet(cfg)
+	got := deploykit.GenerateQuadlet(cfg)
 
 	if !strings.Contains(got, "Volume=/home/user/data:/home/user/.myapp") {
 		t.Errorf("expected Volume for bind mount, got:\n%s", got)
@@ -153,12 +153,12 @@ func TestQuadletWithBindMounts(t *testing.T) {
 }
 
 func TestQuadletWithEncryptedBindMountsKeyring(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "myapp",
 		ImageRef:    "ghcr.io/test/myapp:latest",
 		Home:        "/home/user/project",
 		BindAddress: "127.0.0.1",
-		BindMounts: []ResolvedBindMount{
+		BindMounts: []deploykit.ResolvedBindMount{
 			{Name: "secrets", HostPath: "/data/enc/charly-myapp-secrets/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 		},
 		CharlyBin:       "/usr/local/bin/charly",
@@ -166,7 +166,7 @@ func TestQuadletWithEncryptedBindMountsKeyring(t *testing.T) {
 		KeyringBackend:  true,
 	}
 
-	got := generateQuadlet(cfg)
+	got := deploykit.GenerateQuadlet(cfg)
 
 	// ExecStartPre mounts encrypted volumes before container starts
 	if !strings.Contains(got, "ExecStartPre=/usr/local/bin/charly config mount myapp") {
@@ -186,12 +186,12 @@ func TestQuadletWithEncryptedBindMountsKeyring(t *testing.T) {
 }
 
 func TestQuadletWithEncryptedBindMountsNonKeyring(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "myapp",
 		ImageRef:    "ghcr.io/test/myapp:latest",
 		Home:        "/home/user/project",
 		BindAddress: "127.0.0.1",
-		BindMounts: []ResolvedBindMount{
+		BindMounts: []deploykit.ResolvedBindMount{
 			{Name: "secrets", HostPath: "/data/enc/charly-myapp-secrets/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 		},
 		CharlyBin:       "/usr/local/bin/charly",
@@ -199,7 +199,7 @@ func TestQuadletWithEncryptedBindMountsNonKeyring(t *testing.T) {
 		KeyringBackend:  false, // config (non-keyring) backend
 	}
 
-	got := generateQuadlet(cfg)
+	got := deploykit.GenerateQuadlet(cfg)
 
 	// ExecStartPre still present as safety guard
 	if !strings.Contains(got, "ExecStartPre=/usr/local/bin/charly config mount myapp") {
@@ -216,14 +216,14 @@ func TestQuadletWithEncryptedBindMountsNonKeyring(t *testing.T) {
 }
 
 func TestQuadletWithoutEncryptedMounts(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "myapp",
 		ImageRef:    "ghcr.io/test/myapp:latest",
 		Home:        "/home/user/project",
 		BindAddress: "127.0.0.1",
 	}
 
-	got := generateQuadlet(cfg)
+	got := deploykit.GenerateQuadlet(cfg)
 
 	// No encrypted mounts: no ExecStartPre
 	if strings.Contains(got, "ExecStartPre=") {
@@ -241,7 +241,7 @@ func TestQuadletWithoutEncryptedMounts(t *testing.T) {
 
 func TestBuildShellArgsWithBindMounts(t *testing.T) {
 	withTerminal(t, true)
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "data", HostPath: "/home/user/data", ContPath: "/home/user/.myapp"},
 	}
 	args := buildShellArgs("docker", "myapp:latest", 1000, 1000, nil, nil, bindMounts, false, "", "127.0.0.1", nil, SecurityConfig{}, "/workspace")
@@ -266,7 +266,7 @@ func TestBuildShellArgsWithBindMounts(t *testing.T) {
 
 func TestBuildShellArgsWithBindMountsPodman(t *testing.T) {
 	withTerminal(t, true)
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "data", HostPath: "/home/user/data", ContPath: "/home/user/.myapp"},
 	}
 	args := buildShellArgs("podman", "myapp:latest", 1000, 1000, nil, nil, bindMounts, false, "", "127.0.0.1", nil, SecurityConfig{}, "/workspace")
@@ -278,7 +278,7 @@ func TestBuildShellArgsWithBindMountsPodman(t *testing.T) {
 }
 
 func TestBuildStartArgsWithBindMounts(t *testing.T) {
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "secrets", HostPath: "/enc/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 	}
 	args := buildStartArgs("docker", "myapp:latest", 1000, 1000, nil, "charly-myapp", nil, bindMounts, false, "127.0.0.1", nil, SecurityConfig{}, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")
@@ -302,7 +302,7 @@ func TestBuildStartArgsWithBindMounts(t *testing.T) {
 }
 
 func TestBuildStartArgsWithBindMountsPodman(t *testing.T) {
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "secrets", HostPath: "/enc/plain", ContPath: "/home/user/.secrets", Encrypted: true},
 	}
 	args := buildStartArgs("podman", "myapp:latest", 1000, 1000, nil, "charly-myapp", nil, bindMounts, false, "127.0.0.1", nil, SecurityConfig{}, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")

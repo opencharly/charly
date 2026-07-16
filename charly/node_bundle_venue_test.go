@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -121,15 +123,15 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 	}
 	const dotted = "nested-check-vm.inner-app-pod.nested-redis-pod"
 
-	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), dotted, ShellExecutor{})
+	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), dotted, kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("ResolveDeployChain(%q): %v", dotted, err)
 	}
 	if leaf == nil {
 		t.Fatalf("ResolveDeployChain(%q): nil leaf", dotted)
 	}
-	if classifyTarget(leaf) != "pod" {
-		t.Errorf("leaf target = %q, want pod", classifyTarget(leaf))
+	if deploykit.ClassifyTarget(leaf) != "pod" {
+		t.Errorf("leaf target = %q, want pod", deploykit.ClassifyTarget(leaf))
 	}
 	if chain == nil {
 		t.Fatalf("ResolveDeployChain(%q): nil chain", dotted)
@@ -171,7 +173,7 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	disposable := true
-	dc := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"myapp": {
 			Target:     "pod",
 			Image:      "web",
@@ -196,8 +198,8 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	if !ok {
 		t.Fatalf("round-trip lost the deploy entry myapp; got entries %v", bundleKeysOf(dc2.Bundle))
 	}
-	if classifyTarget(&got) != "pod" {
-		t.Errorf("round-trip target = %q, want pod (re-derived)", classifyTarget(&got))
+	if deploykit.ClassifyTarget(&got) != "pod" {
+		t.Errorf("round-trip target = %q, want pod (re-derived)", deploykit.ClassifyTarget(&got))
 	}
 	if got.Image != "web" {
 		t.Errorf("round-trip box = %q, want web", got.Image)
@@ -206,8 +208,8 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	if !ok {
 		t.Fatalf("round-trip LOST nested child %q (lossy overlay writer) — got children %v", "inner", childKeysOf(got.Children))
 	}
-	if classifyTarget(inner) != "pod" {
-		t.Errorf("nested child target = %q, want pod", classifyTarget(inner))
+	if deploykit.ClassifyTarget(inner) != "pod" {
+		t.Errorf("nested child target = %q, want pod", deploykit.ClassifyTarget(inner))
 	}
 	if inner.Image != "db" {
 		t.Errorf("nested child box = %q, want db", inner.Image)
@@ -226,7 +228,7 @@ func TestOverlayRoundTrip_GroupMembersSurvive(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	disposable := true
-	dc := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"shop": {
 			Target:     "", // GROUP — no workload cross-ref
 			Disposable: &disposable,

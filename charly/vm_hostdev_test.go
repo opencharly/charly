@@ -1,9 +1,11 @@
 package main
 
 import (
+	"testing"
+
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
-	"testing"
 )
 
 // TestVmHostdevCount pins the nil-safety contract of the VM_HOSTDEV_COUNT
@@ -36,7 +38,7 @@ func TestVmHostdevCount(t *testing.T) {
 // resolves only against a live VM deployment, so a scope:"build" check must be
 // barred from referencing it (validate_check.go enforces this via IsRuntimeOnlyVar).
 func TestVmHostdevCountIsRuntimeOnly(t *testing.T) {
-	if !IsRuntimeOnlyVar("VM_HOSTDEV_COUNT") {
+	if !kit.IsRuntimeOnlyVar("VM_HOSTDEV_COUNT") {
 		t.Error("VM_HOSTDEV_COUNT must be runtime-only so build-scope checks cannot reference it")
 	}
 }

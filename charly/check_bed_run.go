@@ -18,11 +18,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -82,12 +84,12 @@ func acquireVmDomainLock(domain string) (func() error, error) {
 // image, so they always run at the default rung.
 func bedCheckLevel(uf *UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
-		return DefaultCheckLevel
+		return kit.DefaultCheckLevel
 	}
 	if bc, _, ok := uf.ProjectConfig().resolveBoxRef(node.Image); ok {
-		return ResolveCheckLevel(bc.CheckLevel)
+		return kit.ResolveCheckLevel(bc.CheckLevel)
 	}
-	return DefaultCheckLevel
+	return kit.DefaultCheckLevel
 }
 
 // bedExternalInPlace reports whether a bed ROOT's substrate is an EXTERNAL deploy substrate
@@ -190,7 +192,7 @@ func persistBedDeployOverrides(name string, node spec.BundleNode) {
 // wraps it in a recorded step(); a member shells out directly), so that is the
 // injected apply func.
 func deployNestedLocalChildren(parent string, children map[string]*spec.BundleNode, apply func(childKey, dotted string) error) error {
-	for _, childKey := range sortedNestedKeys(children) {
+	for _, childKey := range deploykit.SortedNestedKeys(children) {
 		child := children[childKey]
 		if child == nil || !nodeTraits(child).HostRooted { // local (host-rooted shell venue) only
 			continue // container/vm children handled in-guest by plugin-deploy-vm's PostApply
@@ -214,7 +216,7 @@ func deployNestedLocalChildren(parent string, children map[string]*spec.BundleNo
 // cloud-init settles. domainID is the per-deploy DOMAIN IDENTITY (the bed/member deploy name), not
 // the shared kind:vm entity — the alias the create path published.
 func waitForVmSshReady(domainID string) {
-	gate := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 5}
+	gate := &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 5}
 	ctx := context.Background()
 	if err := gate.WaitForSSH(ctx); err != nil {
 		return

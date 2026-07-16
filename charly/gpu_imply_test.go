@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"slices"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // withDetectGPU swaps the package-level DetectGPU probe for the duration of a

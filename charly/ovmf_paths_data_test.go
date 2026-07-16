@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"testing"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestOvmfPathsFromEmbedded is the drift-guard: ovmfCandidatesForDistro returns

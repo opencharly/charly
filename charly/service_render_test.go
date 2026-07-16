@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // Tests for service_render.go.
@@ -85,13 +87,13 @@ func testSupervisordInitDef() *ResolvedInit {
 
 func TestRenderServiceCustomSystemd(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:    "ollama",
-		Exec:    "/usr/bin/ollama serve",
-		Env:     map[string]string{"OLLAMA_HOST": "0.0.0.0:11434"},
-		Restart: "always",
-		After:   []string{"network.target"},
-		Scope:   "system",
-		Enable:  true,
+		Name:       "ollama",
+		Exec:       "/usr/bin/ollama serve",
+		Env:        map[string]string{"OLLAMA_HOST": "0.0.0.0:11434"},
+		Restart:    "always",
+		After:      []string{"network.target"},
+		Scope: "system",
+		Enable:     true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:         "ollama",
@@ -126,13 +128,13 @@ func TestRenderServiceCustomSystemd(t *testing.T) {
 // early user-manager start (where the Wayland display doesn't yet exist).
 func TestRenderServiceWantedBy(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:     "session-capture",
-		Exec:     "/usr/bin/session-capture",
-		Restart:  "always",
-		Scope:    "user",
-		Enable:   true,
-		After:    []string{"graphical-session.target"},
-		WantedBy: []string{"graphical-session.target"},
+		Name:       "session-capture",
+		Exec:       "/usr/bin/session-capture",
+		Restart:    "always",
+		Scope: "user",
+		Enable:     true,
+		After:      []string{"graphical-session.target"},
+		WantedBy:   []string{"graphical-session.target"},
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "session-capture",
@@ -156,16 +158,16 @@ func TestRenderServiceWantedBy(t *testing.T) {
 // substitute the real destination home at emit — not the build host's home.
 func TestRenderServiceHomePortabilityToken(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:   "selkies",
-		Exec:   "python3 %(ENV_HOME)s/.local/bin/selkies-capture-server",
-		Env:    map[string]string{"SELKIES_DATA": "$HOME/.config/selkies"},
-		Scope:  "user",
-		Enable: true,
+		Name:       "selkies",
+		Exec:       "python3 %(ENV_HOME)s/.local/bin/selkies-capture-server",
+		Env:        map[string]string{"SELKIES_DATA": "$HOME/.config/selkies"},
+		Scope: "user",
+		Enable:     true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "selkies",
-		Home:        HomeToken, // compiler defers for host/vm
-		UserUnitDir: HomeToken + "/.config/systemd/user",
+		Home:        deploykit.HomeToken,
+		UserUnitDir: deploykit.HomeToken + "/.config/systemd/user",
 	})
 	if err != nil {
 		t.Fatalf("RenderService: %v", err)
@@ -186,11 +188,11 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 
 	// Emit-time resolution: a ServiceCustomStep carrying that text resolves to
 	// the real guest home, not the operator's.
-	plan := &InstallPlan{Steps: []InstallStep{
-		&ServiceCustomStep{Name: "charly-selkies-selkies", UnitText: rendered.UnitText, UnitPath: rendered.UnitPath, TargetScope: ScopeUser},
+	plan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
+		&deploykit.ServiceCustomStep{Name: "charly-selkies-selkies", UnitText: rendered.UnitText, UnitPath: rendered.UnitPath, TargetScope: spec.ScopeUser},
 	}}
-	planResolveHome(plan, "/home/cachy")
-	cs := plan.Steps[0].(*ServiceCustomStep)
+	deploykit.ResolveHome(plan, "/home/cachy")
+	cs := plan.Steps[0].(*deploykit.ServiceCustomStep)
 	if !strings.Contains(cs.UnitText, "ExecStart=python3 /home/cachy/.local/bin/selkies-capture-server") {
 		t.Errorf("ResolveHome did not substitute the unit ExecStart; got:\n%s", cs.UnitText)
 	}
@@ -207,7 +209,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 		Name:        "postgresql",
 		UsePackaged: "postgresql.service",
 		Enable:      true,
-		Scope:       "system",
+		Scope:  "system",
 		Overrides: &ServiceOverrides{
 			Env: map[string]string{"PGDATA": "/var/lib/postgresql/data"},
 		},
@@ -269,10 +271,10 @@ func TestRenderServiceCustomSupervisord(t *testing.T) {
 
 func TestRenderServiceUserScope(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:   "x",
-		Exec:   "/bin/true",
-		Scope:  "user",
-		Enable: true,
+		Name:       "x",
+		Exec:       "/bin/true",
+		Scope: "user",
+		Enable:     true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "x",

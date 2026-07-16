@@ -30,15 +30,15 @@ import (
 //
 // Returns kit.ErrImageNotLocal (wrapped with the ref) only when ALL three
 // tiers fail.
-func EnsureImage(imageRef string, rt *ResolvedRuntime) error {
-	if LocalImageExists(rt.RunEngine, imageRef) {
+func EnsureImage(imageRef string, rt *kit.ResolvedRuntime) error {
+	if kit.LocalImageExists(rt.RunEngine, imageRef) {
 		return nil
 	}
 
 	// Cross-engine transfer first when applicable: it's faster than a
 	// network pull and works offline.
-	if rt.BuildEngine != rt.RunEngine && LocalImageExists(rt.BuildEngine, imageRef) {
-		return TransferImage(rt.BuildEngine, rt.RunEngine, imageRef)
+	if rt.BuildEngine != rt.RunEngine && kit.LocalImageExists(rt.BuildEngine, imageRef) {
+		return kit.TransferImage(rt.BuildEngine, rt.RunEngine, imageRef)
 	}
 
 	// Generic ensure: pull, fall back to local build for project

@@ -30,10 +30,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -115,7 +116,7 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // filterHostVars returns the subset of unresolved variable keys that are
 // cross-member ${HOST:…} vars. runOne FAILS a check that references any of these
 // filterHostVars (the ${HOST:…} unresolved-var filter) moved to sdk/kit (planspec.go) with the
-// plan walk that consumes it; charly/kit_aliases.go binds the package-main name.
+// plan walk that consumes it; package main references it directly as kit.FilterHostVars.
 // closeHostCleanups / collectHostRefs / splitHostKey (P12a follow-up) moved to
 // sdk/kit (hostrefs.go) alongside it — all pure over spec.Op / kit.HostVar, with
 // zero core state; this file's callers (resolveHostVarsForChecks, resolveHostVars,
@@ -132,8 +133,8 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // connects to the driver's endpoint (via their out-of-process plugins). ${HOST:<member>}
 // addressing of the SUBJECT rides in via RunnerConfig.HostVars (the kit.Runner.EffectiveEnv
 // overlay), independent of which venue is active.
-func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, DeployExecutor, error) {
-	return func(target string) (*kit.CheckVarResolver, DeployExecutor, error) {
+func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
+	return func(target string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
 		venue, err := resolveCheckVenue(target, instance)
 		if err != nil {
 			return nil, nil, err
@@ -159,7 +160,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 		projectCfg = uf.ProjectConfig()
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(name, instance)]; ok {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry

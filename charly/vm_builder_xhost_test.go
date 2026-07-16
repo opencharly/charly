@@ -4,19 +4,21 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // D3: builder-image resolution order — override > compiled step, hard-error when
 // none resolves (the dead resolver-fallback tier was removed in C5). builderStepImage
 // is the venue-agnostic free helper shared by the VM target + the F3 build channel (R3).
 func TestResolveBuilderImage(t *testing.T) {
-	if img, _ := builderStepImage(&BuilderStep{Builder: "npm", BuilderImage: "from-step"}, EmitOpts{BuilderImageOverride: "from-override"}); img != "from-override" {
+	if img, _ := builderStepImage(&deploykit.BuilderStep{Builder: "npm", BuilderImage: "from-step"}, deploykit.EmitOpts{BuilderImageOverride: "from-override"}); img != "from-override" {
 		t.Errorf("override should win, got %q", img)
 	}
-	if img, _ := builderStepImage(&BuilderStep{Builder: "npm", BuilderImage: "from-step"}, EmitOpts{}); img != "from-step" {
+	if img, _ := builderStepImage(&deploykit.BuilderStep{Builder: "npm", BuilderImage: "from-step"}, deploykit.EmitOpts{}); img != "from-step" {
 		t.Errorf("compiled step image should win, got %q", img)
 	}
-	if _, err := builderStepImage(&BuilderStep{Builder: "npm", CandyName: "claude-code"}, EmitOpts{}); err == nil {
+	if _, err := builderStepImage(&deploykit.BuilderStep{Builder: "npm", CandyName: "claude-code"}, deploykit.EmitOpts{}); err == nil {
 		t.Error("no image resolvable → expected error")
 	}
 }
@@ -34,8 +36,8 @@ func TestRunVenueBuilderStepRoutesHomeBuilders(t *testing.T) {
 		t.Fatalf("LoadBuildConfigForBox: %v", err)
 	}
 	for _, b := range []string{"npm", "pixi", "cargo"} {
-		s := &BuilderStep{Builder: b, CandyName: "x", CandyDir: "/tmp/x", BuilderDef: bc.Builder[b], BuilderImage: "test-builder:latest"}
-		if err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, EmitOpts{DryRun: true}); err != nil {
+		s := &deploykit.BuilderStep{Builder: b, CandyName: "x", CandyDir: "/tmp/x", BuilderDef: bc.Builder[b], BuilderImage: "test-builder:latest"}
+		if err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, deploykit.EmitOpts{DryRun: true}); err != nil {
 			t.Errorf("runVenueBuilderStep(%s) dry-run routed to home-artifact builder errored: %v", b, err)
 		}
 	}
@@ -46,12 +48,12 @@ func TestRunVenueBuilderStepRoutesHomeBuilders(t *testing.T) {
 // cell. Routing is by output shape (no LocalPkg → home-artifact path; no host
 // cell there → unsupported), not a hardcoded builder-name list.
 func TestRunVenueBuilderStepUnknown(t *testing.T) {
-	s := &BuilderStep{Builder: "bogus", CandyName: "x"}
+	s := &deploykit.BuilderStep{Builder: "bogus", CandyName: "x"}
 
-	if err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, EmitOpts{SkipIncompatible: true}); err != nil {
+	if err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, deploykit.EmitOpts{SkipIncompatible: true}); err != nil {
 		t.Errorf("unknown builder with --skip-incompatible should be skipped, got %v", err)
 	}
-	err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, EmitOpts{})
+	err := runVenueBuilderStep(context.Background(), &recordingExec{}, "", buildEngineContext{}, s, deploykit.EmitOpts{})
 	if err == nil || !strings.Contains(err.Error(), "phase.install.host") {
 		t.Errorf("unknown builder without skip should error pointing at the missing host cell, got %v", err)
 	}

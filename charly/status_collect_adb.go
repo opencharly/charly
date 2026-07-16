@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -75,14 +76,14 @@ type androidDeployNode struct {
 // MergeDeployConfigs(projectDC, localDC) precedence — then pre-order walks every
 // root so nested devices are discovered with their full dotted path.
 func collectAndroidDeployNodes(opts CollectOpts) []androidDeployNode {
-	merged := MergeDeployConfigs(unifiedDeployConfig(opts.Unified), opts.Deploy)
+	merged := deploykit.MergeDeployConfigs(unifiedDeployConfig(opts.Unified), opts.Deploy)
 	if merged == nil || merged.Bundle == nil {
 		return nil
 	}
 	var out []androidDeployNode
 	for _, name := range sortedDeployKeys(merged.Bundle) {
 		root := merged.Bundle[name]
-		_ = bundleWalkPreOrder(&root, name, func(path string, node *spec.BundleNode) error {
+		_ = deploykit.BundleWalkPreOrder(&root, name, func(path string, node *spec.BundleNode) error {
 			if node != nil && node.Target == "android" {
 				out = append(out, androidDeployNode{path: path, node: *node})
 			}
@@ -94,7 +95,7 @@ func collectAndroidDeployNodes(opts CollectOpts) []androidDeployNode {
 
 // unifiedDeployConfig projects a UnifiedFile to its BundleConfig (folded
 // kind:check beds included) or nil when the file is absent.
-func unifiedDeployConfig(uf *UnifiedFile) *BundleConfig {
+func unifiedDeployConfig(uf *UnifiedFile) *deploykit.BundleConfig {
 	if uf == nil {
 		return nil
 	}

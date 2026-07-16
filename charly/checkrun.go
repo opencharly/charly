@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -85,8 +86,8 @@ func newHostVerbResolver(kr *kit.Runner) *hostVerbResolver {
 // every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;
 // a nil/absent exec yields nil. Used by the host verb dispatch, which needs the full
 // DeployExecutor surface (Venue/PutFile/GetFile) the reverse channel serves.
-func deployExecOf(kr *kit.Runner) DeployExecutor {
-	if e, ok := kr.Exec().(DeployExecutor); ok {
+func deployExecOf(kr *kit.Runner) deploykit.DeployExecutor {
+	if e, ok := kr.Exec().(deploykit.DeployExecutor); ok {
 		return e
 	}
 	return nil

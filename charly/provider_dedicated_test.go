@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+)
 
 // TestExternalizedBuilders_NoInProcProvider proves the four detection-builders (cargo/npm/pixi/aur)
 // are EXTERNAL out-of-process plugin candies with NO compiled-in BuilderProvider — the builder
@@ -58,7 +62,7 @@ func TestDedicatedProviders_BulkStepResolveAndAbsent(t *testing.T) {
 		return false
 	}
 
-	for _, kind := range allStepKinds {
+	for _, kind := range deploykit.AllStepKinds {
 		// The 12 plugin-served kinds' build-emit externalized to candy/plugin-installstep: NO in-proc
 		// StepProvider; served by a compiled-in class:step plugin (lowercase word, StepContract).
 		if word, isPlugin := pluginEmitStepWords[kind]; isPlugin {

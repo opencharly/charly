@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // The check_level capability label must round-trip: emitted from BoxConfig at build
 // (normalized via ResolveCheckLevel, now kit-sourced), parsed back into BoxMetadata at deploy.
@@ -12,9 +16,9 @@ func TestExtractMetadata_CheckLevel(t *testing.T) {
 
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
-			LabelVersion:    "1",
-			LabelBox:        "x",
-			LabelCheckLevel: "agent",
+			spec.LabelVersion:    "1",
+			spec.LabelBox:        "x",
+			spec.LabelCheckLevel: "agent",
 		}, nil
 	}
 	meta, err := ExtractMetadata("podman", "x")

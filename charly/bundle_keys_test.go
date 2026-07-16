@@ -1,12 +1,16 @@
 package main
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/opencharly/sdk/deploykit"
+)
 
 // bundleKeys returns the sorted deploy names of a BundleConfig — a shared test
 // helper used across the deploy-save / substrate / venue tests. It previously
 // co-lived in a migration test file that the migration-baseline reset removed;
 // re-homed here since it is a generic BundleConfig helper, not migration-specific.
-func bundleKeys(dc *BundleConfig) []string {
+func bundleKeys(dc *deploykit.BundleConfig) []string {
 	if dc == nil {
 		return nil
 	}

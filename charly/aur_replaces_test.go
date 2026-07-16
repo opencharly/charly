@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestStringSliceFromYAML covers the three input shapes the helper
@@ -28,7 +30,7 @@ func TestStringSliceFromYAML(t *testing.T) {
 		{"map", map[string]any{"x": 1}, nil, false},
 	}
 	for _, c := range cases {
-		got, ok := stringSliceFromYAML(c.in)
+		got, ok := deploykit.StringSliceFromYAML(c.in)
 		if ok != c.ok {
 			t.Errorf("%s: ok = %v, want %v", c.name, ok, c.ok)
 			continue
@@ -47,7 +49,7 @@ func TestStringSliceFromYAML(t *testing.T) {
 // RawStageContext map. End-to-end shape: yaml-decoded list →
 // stringSliceFromYAML → ctx["replaces"] → extractStringSlice.
 func TestExtractStringSlice_AurReplacesShape(t *testing.T) {
-	repls, ok := stringSliceFromYAML([]any{"code", "code-features"})
+	repls, ok := deploykit.StringSliceFromYAML([]any{"code", "code-features"})
 	if !ok {
 		t.Fatal("stringSliceFromYAML rejected expected shape")
 	}
@@ -57,13 +59,13 @@ func TestExtractStringSlice_AurReplacesShape(t *testing.T) {
 		"packages": []string{"visual-studio-code-bin"},
 		"replaces": repls,
 	}
-	got := extractStringSlice(ctx, "replaces")
+	got := deploykit.ExtractStringSlice(ctx, "replaces")
 	want := []string{"code", "code-features"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("extractStringSlice replaces: got %v, want %v", got, want)
 	}
 	// Absent key returns empty.
-	if got := extractStringSlice(ctx, "absent-key"); len(got) != 0 {
+	if got := deploykit.ExtractStringSlice(ctx, "absent-key"); len(got) != 0 {
 		t.Errorf("absent key: got %v, want []", got)
 	}
 }

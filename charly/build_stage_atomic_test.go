@@ -4,13 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestAtomicWriteFile_WriteOverwriteMode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "Containerfile")
 
-	if err := atomicWriteFile(path, []byte("first"), 0o644); err != nil {
+	if err := kit.AtomicWriteFile(path, []byte("first"), 0o644); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "first" {
@@ -18,7 +20,7 @@ func TestAtomicWriteFile_WriteOverwriteMode(t *testing.T) {
 	}
 	// Overwrite atomically (the concurrent-shared-base case writes identical
 	// content; here we prove a content change also lands cleanly).
-	if err := atomicWriteFile(path, []byte("second"), 0o600); err != nil {
+	if err := kit.AtomicWriteFile(path, []byte("second"), 0o600); err != nil {
 		t.Fatalf("overwrite: %v", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "second" {
@@ -45,7 +47,7 @@ func TestInstallDirAtomic_CreateThenSwap(t *testing.T) {
 	// CREATE: final absent → plain rename installs tmp1.
 	tmp1 := filepath.Join(root, ".tmp1")
 	mustMkdirWith(t, tmp1, "candyA", "v1")
-	if err := installDirAtomic(tmp1, final); err != nil {
+	if err := kit.InstallDirAtomic(tmp1, final); err != nil {
 		t.Fatalf("create install: %v", err)
 	}
 	if got := readFileIn(t, final, "candyA"); got != "v1" {
@@ -59,7 +61,7 @@ func TestInstallDirAtomic_CreateThenSwap(t *testing.T) {
 	// the old content (now under tmp2) is removed.
 	tmp2 := filepath.Join(root, ".tmp2")
 	mustMkdirWith(t, tmp2, "candyA", "v2")
-	if err := installDirAtomic(tmp2, final); err != nil {
+	if err := kit.InstallDirAtomic(tmp2, final); err != nil {
 		t.Fatalf("swap install: %v", err)
 	}
 	if got := readFileIn(t, final, "candyA"); got != "v2" {

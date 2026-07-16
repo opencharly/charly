@@ -13,10 +13,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // ensureScoreImages collects every image identifier the iterate plan's

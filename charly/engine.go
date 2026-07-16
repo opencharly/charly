@@ -1,5 +1,10 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+)
+
 // engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
@@ -42,7 +47,7 @@ func ResolveBoxEngine(cfg *Config, layers map[string]*Candy, boxName string, glo
 
 // ImageRuntime returns a copy of rt with RunEngine adjusted for the given image.
 // If imageEngine is empty or matches the existing RunEngine, returns the original runtime.
-func ImageRuntime(rt *ResolvedRuntime, imageEngine string) *ResolvedRuntime {
+func ImageRuntime(rt *kit.ResolvedRuntime, imageEngine string) *kit.ResolvedRuntime {
 	if imageEngine == "" || imageEngine == rt.RunEngine {
 		return rt
 	}
@@ -65,6 +70,23 @@ func ResolveBoxEngineFromDir(dir, boxName, globalEngine string) string {
 	return ResolveBoxEngine(cfg, layers, boxName, globalEngine)
 }
 
-// ResolveBoxEngineForDeploy / ResolveBoxEngineFromMeta MOVED to sdk/deploykit (K4 lane B — shared
-// between this file's remaining callers and candy/plugin-deploy-pod's pod_lifecycle_resolve.go
-// quadlet-mode move); see deploykit_pod_aliases.go.
+// ResolveBoxEngineForDeploy resolves the run engine from the per-host deploy config,
+// falling back to globalEngine. No charly.yml (project) dependency. Shared by
+// commands.go/container.go/preempt.go/service.go/start.go/config_image.go/
+// status_collector.go/volume_cp_tags_cmd.go/pod_lifecycle_resolve.go (the pod-deploy
+// subsystem, K4).
+func ResolveBoxEngineForDeploy(boxName, instance, globalEngine string) string {
+	if entry, ok := deploykit.LoadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
+		return entry.Engine
+	}
+	return globalEngine
+}
+
+// ResolveBoxEngineFromMeta returns the engine from image metadata labels,
+// falling back to globalEngine if not set.
+func ResolveBoxEngineFromMeta(meta *BoxMetadata, globalEngine string) string {
+	if meta != nil && meta.Engine != "" {
+		return meta.Engine
+	}
+	return globalEngine
+}

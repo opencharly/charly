@@ -18,10 +18,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // dispatchByDeployTarget resolves c.Box as a charly.yml entry and
@@ -43,8 +45,8 @@ import (
 // paths (`a.b.c`) still walk. Mirrors the composition `charly start` uses via
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
 func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
-	key := deployKey(image, instance)
-	node, _, err := ResolveNodePath(tree, key)
+	key := deploykit.DeployKey(image, instance)
+	node, _, err := deploykit.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
 	}
@@ -158,7 +160,7 @@ func noteUpdateDisposability(node *spec.BundleNode, image, instance string) {
 	if node == nil || node.IsDisposable() {
 		return
 	}
-	key := deployKey(image, instance)
+	key := deploykit.DeployKey(image, instance)
 	lifecycle := node.Lifecycle
 	if lifecycle == "" {
 		lifecycle = "(unset)"

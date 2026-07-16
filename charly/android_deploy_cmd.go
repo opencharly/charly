@@ -12,8 +12,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -146,8 +147,8 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path str
 	if i := strings.LastIndexByte(path, '.'); i >= 0 {
 		// Nested under a pod — the emulator runs in the PARENT pod container.
 		parent := path[:i]
-		container = "charly-" + NestedContainerName(parent)
-		engine = EngineBinary(engine)
+		container = "charly-" + kit.NestedContainerName(parent)
+		engine = kit.EngineBinary(engine)
 		if !containerRunning(engine, container) {
 			return AndroidDevice{}, fmt.Errorf("parent pod container %s is not running (start it before deploying the android device)", container)
 		}
@@ -196,8 +197,8 @@ func resolveAndroidHostPortRef(addr, path string, node *spec.BundleNode) (string
 	if node != nil && node.Engine == "docker" {
 		engine = "docker"
 	}
-	engine = EngineBinary(engine)
-	container := "charly-" + NestedContainerName(path[:i])
+	engine = kit.EngineBinary(engine)
+	container := "charly-" + kit.NestedContainerName(path[:i])
 	if !containerRunning(engine, container) {
 		return "", fmt.Errorf("parent pod container %s is not running (start it before deploying the android endpoint device)", container)
 	}

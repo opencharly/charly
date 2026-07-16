@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // The rename target MUST equal the live struct's yaml tag — otherwise the

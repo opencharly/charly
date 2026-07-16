@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -118,13 +119,13 @@ func hostBuildVmBuild(_ context.Context, req spec.VmBuildRequest, _ buildEngineC
 		return spec.VmBuildReply{}, err
 	}
 
-	rt, rtErr := ResolveRuntime()
+	rt, rtErr := kit.ResolveRuntime()
 	if rtErr != nil {
 		return spec.VmBuildReply{}, rtErr
 	}
 	engine := "podman"
 	if rt != nil {
-		engine = EngineBinary(rt.RunEngine)
+		engine = kit.EngineBinary(rt.RunEngine)
 	}
 
 	outputDir, err := filepath.Abs(vmDiskDir(boxName))
@@ -221,7 +222,7 @@ func resolveBootcImageRef(engine, image string) (string, error) {
 // (charly/charly.yml). Mirrors the loader path `charly box build` uses for the same data —
 // bootstrap VM builds need the distro.<name>.pacstrap and .bootloader templates plus the
 // matching builder.<name> bootstrap template.
-func loadBuildYmlSections() (*DistroConfig, *BuilderConfig, error) {
+func loadBuildYmlSections() (*buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return nil, nil, err

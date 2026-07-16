@@ -101,9 +101,10 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		}
 		return &pb.InvokeReply{ResultJson: out}, nil
 	case sdk.OpStatusCollect:
-		// P14a: the substrate COLLECTOR OpStatus. The host's status fan-out
-		// reaches the cleanly-movable collectors (pod live + local) here, by
-		// word (pod/vm/k8s/local/android). vm/k8s/android defer to K5.
+		// P14a + K5: the substrate COLLECTOR OpStatus. The host's status
+		// fan-out reaches the cleanly-movable collectors (pod live + local,
+		// vm, k8s) here, by word (pod/vm/k8s/local/android). android alone
+		// still defers (it merges PROJECT + PER-MACHINE deploy config).
 		res, err := statusCollect(ctx, req.GetReserved(), req.GetParamsJson())
 		if err != nil {
 			return nil, err

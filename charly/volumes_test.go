@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCollectImageVolumesSimple(t *testing.T) {
@@ -25,7 +27,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
 
-	want := []VolumeMount{
+	want := []deploykit.VolumeMount{
 		{VolumeName: "charly-myapp-data", ContainerPath: "/home/user/.myapp"},
 	}
 	if !reflect.DeepEqual(mounts, want) {
@@ -59,7 +61,7 @@ func TestCollectImageVolumesChain(t *testing.T) {
 	}
 
 	// Should have volumes from both child and base image candies
-	want := []VolumeMount{
+	want := []deploykit.VolumeMount{
 		{VolumeName: "charly-child-data", ContainerPath: "/home/user/.app"},
 		{VolumeName: "charly-child-models", ContainerPath: "/home/user/.models"},
 	}
@@ -143,7 +145,7 @@ func TestExpandHome(t *testing.T) {
 }
 
 func TestSortVolumeMounts(t *testing.T) {
-	mounts := []VolumeMount{
+	mounts := []deploykit.VolumeMount{
 		{VolumeName: "charly-app-z", ContainerPath: "/z"},
 		{VolumeName: "charly-app-a", ContainerPath: "/a"},
 		{VolumeName: "charly-app-m", ContainerPath: "/m"},

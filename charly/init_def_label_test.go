@@ -61,8 +61,8 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	var b strings.Builder
 	deploykit.NewRenderGenerator().WriteLabels(&b, bakedMeta, "round-trip")
 	emitted := b.String()
-	if !strings.Contains(emitted, LabelInitDef) || !strings.Contains(emitted, string(payload)) {
-		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", LabelInitDef, payload, emitted)
+	if !strings.Contains(emitted, spec.LabelInitDef) || !strings.Contains(emitted, string(payload)) {
+		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", spec.LabelInitDef, payload, emitted)
 	}
 
 	// Parse path: ExtractMetadata reads the label value podman returns (raw JSON).
@@ -70,10 +70,10 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	defer func() { InspectLabels = orig }()
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
-			LabelVersion: "2026.001.0000",
-			LabelBox:     "round-trip",
-			LabelInit:    "supervisord",
-			LabelInitDef: string(payload),
+			spec.LabelVersion: "2026.001.0000",
+			spec.LabelBox:     "round-trip",
+			spec.LabelInit:    "supervisord",
+			spec.LabelInitDef: string(payload),
 		}, nil
 	}
 	meta, err := ExtractMetadata("podman", "round-trip")
@@ -158,11 +158,9 @@ func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
 // limitation is gone. Both the entrypoint and the management surface come
 // from meta.InitDef even though "myinit" has no registry entry.
 func TestInitDefLabel_CustomInitAtRuntime(t *testing.T) {
-	// Precondition: "myinit" is not one of the two frozen legacy entries
-	// (supervisord/systemd) in sdk/kit/entrypoint.go's wellKnownInitDefs table —
-	// that table is documented there as frozen (K4 lane B: moved out of
-	// charly/service.go, so it's no longer reachable from this package to
-	// assert against directly).
+	if _, ok := wellKnownInitDefs["myinit"]; ok {
+		t.Fatal("precondition: myinit must NOT be a well-known init")
+	}
 	meta := &BoxMetadata{
 		Init: "myinit",
 		InitDef: &CapabilityInitDef{

@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedInterfaceVerb_DispatchesViaKit proves the `interface` check verb —
