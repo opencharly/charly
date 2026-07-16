@@ -56,24 +56,27 @@ func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string
 // the bundle-add path uses — so bundle add / bundle del / charly update all connect a
 // deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
 // turns the pre-scanned placeholder word into a connected grpcProvider that
-// ResolveTarget can route to. Best-effort: a build/connect failure is a warning, then
-// the dispatch fails loudly at ResolveTarget / runPluginVerb rather than silently
-// mis-deploying.
-func loadDeployPlugins(dir, deployName string, extraAddCandy []string) {
+// ResolveTarget can route to. Discovery and build/connect failures retain their original cause and
+// abort dispatch; warning-and-continue used to mask a failed build as a downstream missing provider.
+func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	cfg, cerr := LoadConfig(dir)
 	if cerr != nil {
-		return
+		return fmt.Errorf("load plugin configuration: %w", cerr)
 	}
 	addCandy, refWords := deployNodePluginContext(dir, deployName)
 	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: extra})
-	if scanErr != nil || candyMap == nil {
-		return
+	if scanErr != nil {
+		return fmt.Errorf("scan deploy plugins: %w", scanErr)
+	}
+	if candyMap == nil {
+		return nil
 	}
 	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
 	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
-		fmt.Fprintf(os.Stderr, "warning: plugin load: %v\n", perr)
+		return fmt.Errorf("load deploy plugins: %w", perr)
 	}
+	return nil
 }
 
 // buildArtifactEnv composes the env used for candy-artifact path
