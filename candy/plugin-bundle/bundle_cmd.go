@@ -8,14 +8,16 @@ import (
 )
 
 // bundle_cmd.go — the command:bundle CLI GRAMMAR (P13). The `charly bundle …` Kong tree
-// moved OUT of charly core into this plugin candy; the deploy ORCHESTRATION stayed core
-// behind the deploy-add / deploy-del / deploy-from-box / deploy-config host-build seams
-// (mirroring how the box-build engine stayed core behind HostBuild("image") in P8 and the
-// VM-disk engine behind HostBuild("vm-build") in P10). Every leaf here is THIN: it carries
-// the authored Kong flags and forwards them, as the matching sdk/spec wire request, to its
-// seam via hostDeploySeam — the host reconstructs the core orchestration struct and runs
-// its Run() logic VERBATIM. The lone exception is `path`, which resolves entirely plugin-side
-// via kit.DefaultDeployConfigPath (no host state needed, so no seam).
+// moved OUT of charly core into this plugin candy. `add`/`del`'s dispatch CONTROL FLOW moved
+// out too (K4 lane A, dispatch.go) — they call runDeployAdd/runDeployDel, which own the
+// target-path resolve + tree walk and reach the host only for the narrow deploy-tree-resolve /
+// deploy-node-dispatch / deploy-members-bring-up / deploy-del-resolve / deploy-node-del-dispatch
+// seams (RDD-spike-proven). `from-box`/the config-management leaves (show/export/import/reset/
+// status) are UNCHANGED — still THIN forwards to their host-build seam via hostDeploySeam, which
+// runs the core orchestration struct VERBATIM (mirroring how the box-build engine stayed core
+// behind HostBuild("image") in P8 and the VM-disk engine behind HostBuild("vm-build") in P10).
+// `path` resolves entirely plugin-side via kit.DefaultDeployConfigPath (no host state needed, so
+// no seam).
 
 // BundleCmd is the `charly bundle …` command group — the CLI grammar the compiled-in
 // command:bundle plugin contributes to charly's Kong tree (dispatched in-proc via
@@ -34,8 +36,8 @@ type BundleCmd struct {
 	Status BundleStatusCmd `cmd:"" help:"Show sync status between charly.yml and quadlet files"`
 }
 
-// BundleAddCmd is the `charly bundle add <name> [<ref>]` grammar; it forwards to the
-// deploy-add host-build seam, which runs the core add orchestration VERBATIM.
+// BundleAddCmd is the `charly bundle add <name> [<ref>]` grammar; its Run() (dispatch.go)
+// owns the tree-walk control flow, reaching the host via the per-node dispatch seam.
 type BundleAddCmd struct {
 	Name string `arg:"" help:"Deploy name ('host' for local system; any other string is a container deploy name)"`
 	Ref  string `arg:"" optional:"" help:"Box or candy reference (local name, ./path.yml, or github.com/org/repo[/box/<n>|/candy/<n>][@ref])"`
@@ -65,31 +67,14 @@ type BundleAddCmd struct {
 }
 
 func (c *BundleAddCmd) Run() error {
-	return hostDeploySeam("deploy-add", spec.DeployAddRequest{
-		Name:             c.Name,
-		Ref:              c.Ref,
-		AddCandy:         c.AddCandy,
-		Tag:              c.Tag,
-		DryRun:           c.DryRun,
-		NodeOnly:         c.NodeOnly,
-		Format:           c.Format,
-		Pull:             c.Pull,
-		Verify:           c.Verify,
-		WithServices:     c.WithServices,
-		AllowRepoChanges: c.AllowRepoChanges,
-		AllowRootTasks:   c.AllowRootTasks,
-		SkipIncompatible: c.SkipIncompatible,
-		BuilderImage:     c.BuilderImage,
-		AssumeYes:        c.AssumeYes,
-		Disposable:       c.Disposable,
-		Lifecycle:        c.Lifecycle,
-	})
+	return runDeployAdd(c)
 }
 
-// BundleDelCmd is the `charly bundle del <name>` grammar; it forwards to the deploy-del
-// host-build seam. The AssumeYes field renders as `--assume-yes` (Kong derives the long
-// name from the FIELD; the `long:"yes"` tag is a no-op in the separate-tag form) with `-y`
-// as the short form — the exact contract charly/bundle_add_cmd.go::deployDelArgv relies on.
+// BundleDelCmd is the `charly bundle del <name>` grammar; its Run() (dispatch.go) resolves the
+// target then reaches the host via the del-resolve + del-dispatch seams. The AssumeYes field
+// renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
+// a no-op in the separate-tag form) with `-y` as the short form — the exact contract
+// charly/bundle_add_cmd.go::deployDelArgv relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
@@ -101,14 +86,7 @@ type BundleDelCmd struct {
 }
 
 func (c *BundleDelCmd) Run() error {
-	return hostDeploySeam("deploy-del", spec.DeployDelRequest{
-		Name:            c.Name,
-		AssumeYes:       c.AssumeYes,
-		KeepRepoChanges: c.KeepRepoChanges,
-		KeepServices:    c.KeepServices,
-		KeepImage:       c.KeepImage,
-		DryRun:          c.DryRun,
-	})
+	return runDeployDel(c)
 }
 
 // BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar; it forwards to the
