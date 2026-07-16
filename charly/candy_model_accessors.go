@@ -8,12 +8,17 @@ import (
 )
 
 // candy_model_accessors.go — field accessors on the runtime Candy so it satisfies
-// deploykit.CandyModel, the read-only interface the deploy-plan compiler
-// (BuildDeployPlan, moved to sdk/deploykit in P4) reads a candy through. The
-// compiler depends on the abstraction, so the Candy struct + its tests STAY in
-// charly (boundary law: kernel depends on an interface, the concrete kind
-// implements it). Exported-field accessors use a Get* name to avoid colliding with
-// the same-named struct field.
+// deploykit.CandyModel, the read-only interface EVERY consumer (the deploy-plan
+// compiler, the build-render engine in sdk/deploykit + candy/plugin-build, the
+// graph_shim/intermediates_shim pure helpers) reads a candy through — none of
+// them need the concrete *Candy type, only this interface (K3 confirmed this
+// empirically: CandyModel is already fully data-shaped and consumed plugin-side
+// today). What keeps the CONCRETE Candy struct + its construction in charly is
+// NOT "the compiler depends on an interface" (an interface never pins its
+// implementer's location) — it's that ScanCandy/scanCandy/parseCandyYAML (the
+// construction path) call the loader (LoadUnified/requireLoaderParser/buildCandy),
+// a genuine core Mechanism. Exported-field accessors use a Get* name to avoid
+// colliding with the same-named struct field.
 
 func (l *Candy) GetName() string         { return l.Name }
 func (l *Candy) GetSourceDir() string    { return l.SourceDir }
