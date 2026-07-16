@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -110,17 +109,7 @@ func (c *CheckBoxCmd) Run() error {
 // swallowed as a pass. A run with BOTH classes surfaces as checks-failed (2) — a real check
 // failure dominates. Keyed on the kit infra marker (kit.IsContainerInfraResult).
 func failErrorFor(results []kit.StepResult) error {
-	checkFails, infraFails := 0, 0
-	for i := range results {
-		if results[i].Result.Status != kit.StatusFail {
-			continue
-		}
-		if kit.IsContainerInfraResult(results[i].Result.Message) {
-			infraFails++
-		} else {
-			checkFails++
-		}
-	}
+	checkFails, infraFails := kit.ClassifyStepFailures(results)
 	if checkFails > 0 {
 		return &CheckFailedError{Failed: checkFails}
 	}
@@ -132,20 +121,10 @@ func failErrorFor(results []kit.StepResult) error {
 }
 
 // reportSteps writes results in the requested format (the pass/fail tallying + exit
-// classification is failErrorFor's, R44). It reuses the kit formatters (FormatStepResults*),
-// so the externalized output is byte-identical to the former in-core path (R3 — one formatter
-// set, both consumers).
+// classification is failErrorFor's, R44). It delegates to kit.ReportStepResults (P12a
+// follow-up: dedupes what was a byte-identical format-selection switch duplicated here AND in
+// charly/check_feature_run.go, R3), so the externalized output stays byte-identical to the
+// former in-core path.
 func reportSteps(w io.Writer, results []kit.StepResult, format string) {
-	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "json":
-		_ = kit.FormatStepResultsJSON(w, results)
-	case "tap":
-		kit.FormatStepResultsTAP(w, results)
-	case "junit":
-		_ = kit.FormatStepResultsJUnit(w, results)
-	default:
-		kit.FormatStepResultsText(w, results)
-	}
-	// The pass/fail tallying moved to failErrorFor (which splits check-fails from
-	// container-setup INFRA fails, R44) — reportSteps is now formatting-only.
+	kit.ReportStepResults(w, results, format)
 }

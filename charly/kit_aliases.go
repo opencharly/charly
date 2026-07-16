@@ -121,11 +121,12 @@ const (
 // kit.ExpandTestVars directly. kit.ExpandOpVars (formerly aliased here as opExpandVars) has
 // no charly/ caller at all, test or production; the binding was removed rather than kept as a
 // caller-less export. Aliasing a name only a test uses would itself be a caller-less-in-
-// production export.
+// production export. collectAnyStrings (formerly aliased here) lost its sole caller when
+// check_members.go's collectHostRefs moved to kit.CollectHostRefs (P12a follow-up), which
+// calls kit.CollectAnyStrings directly — the binding was removed rather than kept caller-less.
 var (
-	TestVarRefs       = kit.TestVarRefs
-	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
-	collectAnyStrings = kit.CollectAnyStrings
+	TestVarRefs      = kit.TestVarRefs
+	IsRuntimeOnlyVar = kit.IsRuntimeOnlyVar
 )
 
 // --- the check-engine PLAN WALK (P5): the RunOne/RunPlan/runUnit loop + its result model

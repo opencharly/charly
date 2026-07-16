@@ -27,6 +27,15 @@
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
 //     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
 //
+// NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
+// REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
+// process init, because the provider registry's uniqueness key is provKey(class, word) alone
+// (provider_registry.go) with NO CommandParent component, and candy/plugin-feature already owns
+// the TOP-LEVEL {command, feature} word (`charly feature list/pending/validate`). See
+// charly/check_feature_run.go for the retained in-core BoxFeatureCmd/BoxFeatureRunCmd and the
+// full finding (routed to P12b: either rename the nested word, breaking CLI parity, or make the
+// registry key CommandParent-aware, a cross-cutting core change).
+//
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio natively. It imports ONLY the sdk module, never charly core.
 package box

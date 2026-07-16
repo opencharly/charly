@@ -247,7 +247,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		}
 		ephemeralCleanup(bucketFailed)
 	}
-	closeHostCleanups(hostCleanups)
+	kit.CloseHostCleanups(hostCleanups)
 }
 
 // topoSortScored orders scored steps by depends_on (id-keyed), returning the

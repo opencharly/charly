@@ -17,6 +17,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // SshCmd is the top-level `charly ssh` command group.
@@ -133,7 +135,7 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 		} else {
 			sockPath = ep.SocketPath
 		}
-		ln, err := unixToTcpBridge(sockPath)
+		ln, err := kit.UnixToTCPBridge(sockPath)
 		if err != nil {
 			if tunnel != nil {
 				_ = tunnel.Close()

@@ -110,7 +110,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 		}
 	}
 	// Project bundle plan + per-host overlay (local replaces project by id via
-	// MergeDeployDescriptions' merge rules), mirroring loadVmCheckPlans.
+	// kit.MergeDeployDescriptions' merge rules), mirroring loadVmCheckPlans.
 	overlayPlan := append(append([]Step(nil), projectPlan...), localPlan...)
 
 	// Resolve the deploy key → declared image short-name via THE shared resolver
@@ -125,7 +125,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	if err != nil {
 		return liveResult{}, err
 	}
-	set := MergeDeployDescriptions(meta.Description, overlayPlan, c.Box)
+	set := kit.MergeDeployDescriptions(meta.Description, overlayPlan, c.Box)
 	if set == nil || set.IsEmpty() {
 		return liveResult{NoPlan: true}, nil
 	}
@@ -147,7 +147,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 			hostCleanups = append(hostCleanups, cl...)
 		}
 	}
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:           ContainerChain(engine, containerName),
 		Mode:           RunModeLive,
@@ -358,10 +358,10 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	// and local (checkLiveLocal) paths already do (R3). Without
 	// it, a VM bed whose check drives a peer (e.g. check-cross-vm-http: a local
 	// host-driver curls the guest via ${HOST}'s ssh -L forward) leaves
-	// ${HOST} unresolved → the check FAILS "peer unreachable". closeHostCleanups
+	// ${HOST} unresolved → the check FAILS "peer unreachable". kit.CloseHostCleanups
 	// tears down any ssh -L forwards at run end.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, c.Instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	// Box stays the deploy/bed name (container + DEPLOY_NAME identity); VmName is the
 	// per-deploy DOMAIN IDENTITY (the deploy/bed key → vmDomainIdentity → charly-<domainID>,
 	// the live libvirt domain — NOT the shared kind:vm entity). The operator-side
@@ -441,7 +441,7 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 	// `target: vm` + `vm: <c.Box>` resolves to the same VM.
 	// This is what makes `charly check live <deploy-name>` work for beds like
 	// `arch-vm` that don't carry the legacy `vm:` prefix in the key.
-	// Merge by id (local replaces project); same rules as MergeDeployDescriptions.
+	// Merge by id (local replaces project); same rules as kit.MergeDeployDescriptions.
 	// Resolve the VM's deploy entry via THE shared findVmDeployNode (deploy.go)
 	// — the same lookup `charly bundle add` uses — by deploy NAME (c.Box) first,
 	// then the vm entity (vmName). Keying by name first means a bed whose key
@@ -882,7 +882,7 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	// the pre-P12 local path discarded them, so a local subject driving a VM peer via
 	// ${HOST:<member>:<port>} leaked the forward.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:           exec,
 		Mode:           RunModeLive,
@@ -937,7 +937,7 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 	// venueResolver performs the per-step swap; ${HOST:<member>} addresses
 	// resolve through resolveHostVarsForSteps, whose ssh -L cleanups are deferred here.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, c.Instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:           ShellExecutor{},
 		Mode:           RunModeLive,
