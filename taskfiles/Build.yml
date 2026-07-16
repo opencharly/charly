@@ -34,8 +34,13 @@ tasks:
         cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
       - cp bin/charly candy/charly/bin/charly
 
+  # Solo/bootstrap use only — never run this on a host with in-flight multi-teammate
+  # work: it WRITES to $HOME, and if $HOME/.local/bin precedes a native-package
+  # install location (e.g. /usr/bin) in $PATH, it SHADOWS the system `charly` for
+  # this user, silently changing which binary any bare-`$PATH` invocation (a
+  # `local: {host: local}` deploy step, another session, a script) resolves to.
   install-portable:
-    desc: Force portable install to $HOME/.local/bin/charly (overrides distro detection)
+    desc: 'Force portable install to $HOME/.local/bin/charly (solo/bootstrap use only — can shadow the system charly if $HOME/.local/bin precedes /usr/bin in $PATH)'
     dir: "{{.ROOT_DIR}}"
     deps: [binary]
     cmds:

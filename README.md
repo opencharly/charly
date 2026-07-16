@@ -308,17 +308,18 @@ schema, the `kind:` discriminators, or the singular field names) convert in one
 shot with `charly migrate` — a single idempotent chain to the latest CalVer
 schema. See `/charly-build:migrate`.
 
-For a personal `charly` on your `$PATH` (still per-checkout, not shared):
+For a personal `charly` on your `$PATH` — solo/bootstrap use only, never on a
+host with in-flight multi-teammate work:
 
 ```bash
 task build:install-portable   # copies ./bin/charly to $HOME/.local/bin/charly
 ```
 
-Caution: if `$HOME/.local/bin` precedes a native-package install location (e.g.
-`/usr/bin`) in your `$PATH`, this SHADOWS the system `charly` for your user —
-fine on a single-developer machine, but worth knowing on a shared host where
-other processes (a teammate's session, a script) expect the system package's
-`charly` to resolve from a bare `$PATH` lookup.
+This WRITES to `$HOME`. If `$HOME/.local/bin` precedes a native-package install
+location (e.g. `/usr/bin`) in your `$PATH`, it SHADOWS the system `charly` for
+your user — fine on a single-developer machine, but on a shared host it
+silently changes which binary any bare-`$PATH` lookup resolves to (another
+session, a script, a `local: {host: local}` deploy step).
 
 **Native packages** (for END USERS who want `charly` on the host system —
 not the development workflow above):
