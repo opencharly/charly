@@ -15,16 +15,48 @@ func TestPluginBuildEnvKeepsVCSStampingReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := pluginBuildEnv([]string{"HOME=/tmp/home", "GOWORK=wrong", "GIT_OPTIONAL_LOCKS=1"}, srcDir)
+	env := pluginBuildEnv([]string{
+		"HOME=/fixture/home",
+		"GOWORK=wrong",
+		"GIT_OPTIONAL_LOCKS=1",
+		"GIT_DIR=/inherited/.git",
+		"GIT_WORK_TREE=/inherited",
+		"PWD=/inherited",
+	}, srcDir)
 	joined := strings.Join(env, "\n")
-	if strings.Contains(joined, "GOWORK=wrong") || strings.Contains(joined, "GIT_OPTIONAL_LOCKS=1") {
+	if strings.Contains(joined, "GOWORK=wrong") || strings.Contains(joined, "GIT_OPTIONAL_LOCKS=1") || strings.Contains(joined, "/inherited") {
 		t.Fatalf("plugin build environment retained conflicting settings:\n%s", joined)
 	}
 	if !strings.Contains(joined, "GOWORK=off") || !strings.Contains(joined, "GIT_OPTIONAL_LOCKS=0") {
 		t.Fatalf("plugin build environment is missing its isolation settings:\n%s", joined)
 	}
 	if strings.Contains(joined, "GOFLAGS=-buildvcs=false") {
-		t.Fatal("plugin build disabled VCS stamping")
+		t.Fatal("plugin build environment disabled VCS stamping")
+	}
+	if !strings.Contains(joined, "PWD="+srcDir) {
+		t.Fatalf("plugin build environment did not bind the real source worktree:\n%s", joined)
+	}
+	if !pluginSourceHasGitRevision(srcDir, env) {
+		t.Fatal("real source worktree was not classified as VCS-stampable")
+	}
+}
+
+func TestPluginBuildEnvNoGitSourceDoesNotInheritGitIdentity(t *testing.T) {
+	srcDir := t.TempDir()
+	env := pluginBuildEnv([]string{
+		"GIT_DIR=/inherited/.git",
+		"GIT_WORK_TREE=/inherited",
+		"PWD=/inherited",
+	}, srcDir)
+	joined := strings.Join(env, "\n")
+	if strings.Contains(joined, "GIT_DIR=") || strings.Contains(joined, "GIT_WORK_TREE=") || strings.Contains(joined, "/inherited") {
+		t.Fatalf("non-Git source inherited a Git identity:\n%s", joined)
+	}
+	if !strings.Contains(joined, "PWD="+srcDir) {
+		t.Fatalf("non-Git source did not receive its own working directory:\n%s", joined)
+	}
+	if pluginSourceHasGitRevision(srcDir, env) {
+		t.Fatal("non-Git source was incorrectly classified as VCS-stampable")
 	}
 }
 

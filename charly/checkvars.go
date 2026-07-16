@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -111,6 +112,26 @@ type CheckVarResolver struct {
 	HasRuntime bool
 }
 
+// currentCharlyExecutable is the executable that owns this check run. Keeping
+// it injectable lets the resolver contract prove that host-side plan commands
+// use the active binary rather than whatever a stale PATH happens to select.
+var currentCharlyExecutable = os.Executable
+
+// newRuntimeCheckVarResolver adds runtime facts that belong to the running
+// Charly process itself, then records whether the target runtime was available.
+// CHARLY_BIN is deliberately never synthesized from PATH: an unavailable
+// executable leaves the variable unresolved instead of silently selecting an
+// unrelated installed Charly.
+func newRuntimeCheckVarResolver(env map[string]string, hasRuntime bool) *CheckVarResolver {
+	if env == nil {
+		env = map[string]string{}
+	}
+	if path, err := currentCharlyExecutable(); err == nil && strings.TrimSpace(path) != "" {
+		env["CHARLY_BIN"] = path
+	}
+	return &CheckVarResolver{Env: env, HasRuntime: hasRuntime}
+}
+
 // ResolveCheckVarsBuild builds a variable map for build-time tests (no running
 // container). Only BoxMetadata-derived vars are populated.
 func ResolveCheckVarsBuild(meta *BoxMetadata) *CheckVarResolver {
@@ -141,11 +162,11 @@ func ResolveCheckVarsRuntime(meta *BoxMetadata, deploy *BundleNode, engine, depl
 
 	inspection, err := InspectContainer(engine, containerName)
 	if err != nil {
-		return &CheckVarResolver{Env: env, HasRuntime: false}, err
+		return newRuntimeCheckVarResolver(env, false), err
 	}
 
 	mergeRuntimeVars(env, meta, inspection, deployName, instance)
-	return &CheckVarResolver{Env: env, HasRuntime: true}, nil
+	return newRuntimeCheckVarResolver(env, true), nil
 }
 
 // buildTimeVars populates the BoxMetadata-derived subset of the variable

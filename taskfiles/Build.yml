@@ -24,6 +24,7 @@ tasks:
       # binary's `charly version` so the pacman package can never disagree.
       - task: build-stamped
       - cp bin/charly candy/charly/bin/charly
+      - task: test-provenance
       - task: install
 
   install:
@@ -160,12 +161,13 @@ tasks:
       - echo "Installed to $HOME/.local/bin/charly"
 
   binary:
-    desc: Build the charly binary to bin/charly (CalVer-stamped; NO host install)
+    desc: Build and provenance-verify charly to bin/charly (NO host install)
     dir: "{{.ROOT_DIR}}"
     cmds:
       - mkdir -p bin candy/charly/bin
       - task: build-stamped
       - cp bin/charly candy/charly/bin/charly
+      - task: test-provenance
 
   build-stamped:
     internal: true
@@ -173,20 +175,23 @@ tasks:
     cmds:
       - |
         CALVER=$(bash pkg/arch/calver.sh)
-        GIT_DIR=$(git rev-parse --absolute-git-dir)
-        GIT_WORK_TREE=$(git rev-parse --show-toplevel)
+        REVISION=$(git rev-parse HEAD)
+        COMMIT_TIME=$(git show -s --format=%cI HEAD)
+        MODIFIED=false
+        git diff-index --quiet HEAD -- || MODIFIED=true
         cd charly
-        GIT_OPTIONAL_LOCKS=0 GIT_DIR="$GIT_DIR" GIT_WORK_TREE="$GIT_WORK_TREE" go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+        go build -ldflags "-X main.BuildCalVer=${CALVER} -X main.BuildRevision=${REVISION} -X main.BuildCommitTime=${COMMIT_TIME} -X main.BuildModified=${MODIFIED}" -o ../bin/charly .
 
-  test-build-vcs-stamp:
-    desc: Verify a linked-worktree build retains Go VCS stamping
+  test-provenance:
+    desc: Verify the explicit provenance of the current worktree binary
     dir: "{{.ROOT_DIR}}"
     cmds:
-      - task: build-stamped
       - |
         revision=$(git rev-parse HEAD)
-        go version -m bin/charly | grep -Eq '^[[:space:]]*build[[:space:]]+vcs=git$'
-        go version -m bin/charly | grep -Eq "^[[:space:]]*build[[:space:]]+vcs.revision=${revision}$"
+        commit_time=$(git show -s --format=%cI HEAD)
+        modified=false
+        git diff-index --quiet HEAD -- || modified=true
+        bin/charly version --json | python3 -c 'import json, sys; actual = json.load(sys.stdin); expected = {"calver": sys.argv[1], "revision": sys.argv[2], "commit_time": sys.argv[3], "modified": sys.argv[4] == "true"}; assert actual == expected, f"provenance mismatch: {actual!r} != {expected!r}"' "$(bash pkg/arch/calver.sh)" "$revision" "$commit_time" "$modified"
 
   # Release-artifact builds — thin wrappers over `charly box pkg`, which builds each
   # native package distro-natively (in a podman container) via the SAME embedded

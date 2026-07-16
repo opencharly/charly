@@ -305,7 +305,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		// "${DEPLOY_NAME}" instead of hard-coding the bed's cluster name.
 		"DEPLOY_NAME": sanitizeDeployName("vm:" + vmName),
 	}
-	resolver := &CheckVarResolver{Env: env, HasRuntime: true}
+	resolver := newRuntimeCheckVarResolver(env, true)
 
 	// Nested-in-VM POD leaf: delegate the pod's check to the guest `charly`. FROM
 	// THE GUEST the nested pod is a DIRECT pod — guest-local podman, ports on
@@ -865,12 +865,12 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	if herr != nil || home == "" {
 		home = os.Getenv("HOME")
 	}
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := newRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    image,
 		"INSTANCE": instance,
 		"USER":     user,
 		"HOME":     home,
-	}, HasRuntime: true}
+	}, true)
 
 	if len(plan) == 0 {
 		return nil, false, nil
@@ -919,10 +919,10 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 	}
 	header := fmt.Sprintf("Group bed: %s [%d sibling member(s); venue-dispatched, no root container]", c.Box, len(entry.Members))
 
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := newRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    c.Box,
 		"INSTANCE": c.Instance,
-	}, HasRuntime: true}
+	}, true)
 	// Set the runner identity AND load the OUT-OF-PROCESS plugin candies the bed's
 	// flattened plan REFERENCES — a cdp:/spice:/… verb authored under a member. A group
 	// bed has no single image, so the load keys on the BED NAME (its flattened,

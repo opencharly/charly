@@ -334,7 +334,7 @@ adds the user to the `docker` and `libvirt` groups automatically.
 **From source:**
 
 ```bash
-cd charly && go build -o ../bin/charly .
+task build:binary
 ```
 
 ## Quickstart

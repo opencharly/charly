@@ -713,7 +713,7 @@ debian:
                         set -e
                         SUPER=$(cd {{.SrcDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
                         # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
                         # `charly doctor`/`clean`/`vm` and the other welded commands resolve
@@ -954,7 +954,7 @@ fedora:
                         set -e
                         SUPER=$(cd {{.SrcDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
                         # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
                         # `charly doctor`/`clean`/`vm` and the other welded commands resolve

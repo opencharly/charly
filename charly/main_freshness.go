@@ -145,11 +145,11 @@ func isFreshnessSafeVerb(verbPath string) bool {
 }
 
 // CheckBinaryStamped refuses to run the disposable-bed RUNNER (`charly check run <bed>`) when the
-// executing binary reports an UNSTAMPED version ("unknown"), pointing at `task build:binary`. It is
-// the version-identity analog of CheckBinaryFreshness: a plain `go build -o bin/charly ./charly`
-// leaves BuildCalVer empty → CharlyVersion()=="unknown", and the bed runner then fails MINUTES later
-// inside an eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all key off the
-// version) — or passes vacuously. This makes the precondition mechanical instead of a behavioral
+// executing binary lacks complete build provenance, pointing at `task build:binary`. It is the
+// version-identity analog of CheckBinaryFreshness: a plain `go build -o bin/charly ./charly`
+// leaves the task-injected provenance absent, and the bed runner then fails MINUTES later inside an
+// eval-VM plan step (image tags, plugin-cache keys, and bed stamp assertions all key off the version)
+// — or passes vacuously. This makes the precondition mechanical instead of a behavioral
 // "remember to task build:binary" rule the gate defect twice slipped past (R4: a precondition, never a
 // retry). Scope is ONLY `charly check run`: ctx.Command() collapses the whole check family to "check"
 // (the subcommand is a passthrough arg), so "run" is read from os.Args; check box/live and every other
@@ -159,7 +159,7 @@ func CheckBinaryStamped(verbPath string) {
 		return
 	}
 	binPath, _ := os.Executable()
-	fmt.Fprintf(os.Stderr, `charly: error: refusing to run "check run" with an UNSTAMPED binary (version "unknown")
+	fmt.Fprintf(os.Stderr, `charly: error: refusing to run "check run" with incomplete binary provenance
 
   running:  %s
 
@@ -168,7 +168,7 @@ image tags, plugin-cache keys, and bed stamp assertions, so a bed run against an
 unstamped binary fails minutes later inside a plan step (or passes vacuously) — the
 twice-recurred gate defect.
 
-Fix:    task build:binary                        # stamps the CalVer identity
+Fix:    task build:binary                        # stamps and verifies Charly provenance
 Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1      (NOT recommended)
 `, binPath)
 	os.Exit(1)
@@ -199,7 +199,8 @@ func shouldRefuseUnstamped(verbPath string) bool {
 	if commandPathKey(verbPath) != "check" || !checkSubcommandIsRun() {
 		return false
 	}
-	return CharlyVersion() == "unknown"
+	_, complete := CurrentBuildProvenance()
+	return !complete
 }
 
 // findCharlySourceRoot walks up from start looking for a directory that

@@ -11,8 +11,11 @@ import (
 // every real invocation — the live-regression bug). Refuse iff `check run` + unstamped + bypass unset.
 func TestShouldRefuseUnstamped(t *testing.T) {
 	savedArgs := os.Args
-	savedVer := BuildCalVer
-	defer func() { os.Args = savedArgs; BuildCalVer = savedVer }()
+	savedCalVer, savedRevision, savedCommitTime, savedModified := BuildCalVer, BuildRevision, BuildCommitTime, BuildModified
+	defer func() {
+		os.Args = savedArgs
+		BuildCalVer, BuildRevision, BuildCommitTime, BuildModified = savedCalVer, savedRevision, savedCommitTime, savedModified
+	}()
 	t.Setenv("CHARLY_SKIP_FRESHNESS_CHECK", "") // bypass OFF
 
 	cases := []struct {
@@ -31,6 +34,13 @@ func TestShouldRefuseUnstamped(t *testing.T) {
 	for _, c := range cases {
 		os.Args = c.args
 		BuildCalVer = c.calver
+		if c.calver == "" {
+			BuildRevision, BuildCommitTime, BuildModified = "", "", ""
+		} else {
+			BuildRevision = "0123456789abcdef"
+			BuildCommitTime = "2026-06-03T09:43:00+00:00"
+			BuildModified = "false"
+		}
 		if got := shouldRefuseUnstamped(c.verb); got != c.want {
 			t.Errorf("%s: shouldRefuseUnstamped(%q) = %v, want %v", c.name, c.verb, got, c.want)
 		}
@@ -38,7 +48,7 @@ func TestShouldRefuseUnstamped(t *testing.T) {
 
 	// The bypass short-circuits even the refuse case.
 	os.Args = []string{"charly", "check", "run", "b"}
-	BuildCalVer = ""
+	BuildCalVer, BuildRevision, BuildCommitTime, BuildModified = "", "", "", ""
 	t.Setenv("CHARLY_SKIP_FRESHNESS_CHECK", "1")
 	if shouldRefuseUnstamped("check <args>") {
 		t.Error("CHARLY_SKIP_FRESHNESS_CHECK=1 must disable the refusal")
@@ -73,15 +83,20 @@ func TestCheckSubcommandIsRun(t *testing.T) {
 // TestVersionCmd_UnstampedReturnsError proves `charly version` exits non-zero (returns an error) on an
 // UNSTAMPED binary so scripts can gate on it, and stays clean (nil) when stamped (#74).
 func TestVersionCmd_UnstampedReturnsError(t *testing.T) {
-	saved := BuildCalVer
-	defer func() { BuildCalVer = saved }()
+	savedCalVer, savedRevision, savedCommitTime, savedModified := BuildCalVer, BuildRevision, BuildCommitTime, BuildModified
+	defer func() {
+		BuildCalVer, BuildRevision, BuildCommitTime, BuildModified = savedCalVer, savedRevision, savedCommitTime, savedModified
+	}()
 
 	BuildCalVer = "2026.154.0943"
+	BuildRevision = "0123456789abcdef"
+	BuildCommitTime = "2026-06-03T09:43:00+00:00"
+	BuildModified = "false"
 	if err := (&VersionCmd{}).Run(); err != nil {
-		t.Errorf("stamped VersionCmd.Run() = %v, want nil", err)
+		t.Errorf("provenance-complete VersionCmd.Run() = %v, want nil", err)
 	}
-	BuildCalVer = ""
+	BuildCalVer, BuildRevision, BuildCommitTime, BuildModified = "", "", "", ""
 	if err := (&VersionCmd{}).Run(); err == nil {
-		t.Error("unstamped VersionCmd.Run() = nil, want a non-nil error (scripts gate on the non-zero exit)")
+		t.Error("incomplete VersionCmd.Run() = nil, want a non-nil error (scripts gate on the non-zero exit)")
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,6 +39,7 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
+	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -51,8 +51,6 @@ my-example-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	initFixtureGit(t, dir)
-
 	// The whole F4 path: prescan recognizes examplekind → connectDeclaredKindPlugins builds +
 	// connects it (re-entrancy-guarded) → normalizeNodeInto/runPluginKind decodes the body.
 	uf, _, err := LoadUnified(dir)
@@ -99,6 +97,7 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
+	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -110,8 +109,6 @@ bad-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	initFixtureGit(t, dir)
-
 	_, _, err = LoadUnified(dir)
 	if err == nil {
 		t.Fatal("LoadUnified must FAIL when the kind's OpValidate rejects the body (Diagnostics error)")
@@ -129,11 +126,10 @@ func pluginKindKeys(uf *UnifiedFile) []string {
 	return out
 }
 
-func initFixtureGit(t *testing.T, dir string) {
+func requireUnversionedSource(t *testing.T, dir string) {
 	t.Helper()
-	cmd := exec.Command("git", "init", "-q", dir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("initialize fixture git worktree: %v\n%s", err, out)
+	if pluginSourceHasGitRevision(dir, pluginBuildEnv(os.Environ(), dir)) {
+		t.Fatal("staged candy must remain an unversioned source fixture")
 	}
 }
 

@@ -55,6 +55,34 @@ func TestResolveTestVarsBuild_Nil(t *testing.T) {
 	}
 }
 
+// Host-side runtime plans must invoke the binary that started the check. In
+// particular, they must not fall back to a potentially stale `charly` found on
+// PATH (the R10 local-command failure this guards).
+func TestRuntimeCheckVarResolver_UsesActiveCharlyBinary(t *testing.T) {
+	orig := currentCharlyExecutable
+	t.Cleanup(func() { currentCharlyExecutable = orig })
+	currentCharlyExecutable = func() (string, error) { return "/worktree/bin/charly", nil }
+
+	r := newRuntimeCheckVarResolver(map[string]string{"IMAGE": "test"}, true)
+	if got := r.Env["CHARLY_BIN"]; got != "/worktree/bin/charly" {
+		t.Fatalf("CHARLY_BIN = %q, want active worktree binary", got)
+	}
+	if !r.HasRuntime {
+		t.Fatal("runtime resolver lost runtime state")
+	}
+}
+
+func TestRuntimeCheckVarResolver_DoesNotFallBackToPath(t *testing.T) {
+	orig := currentCharlyExecutable
+	t.Cleanup(func() { currentCharlyExecutable = orig })
+	currentCharlyExecutable = func() (string, error) { return "", errStub("unavailable") }
+
+	r := newRuntimeCheckVarResolver(nil, true)
+	if _, ok := r.Env["CHARLY_BIN"]; ok {
+		t.Fatal("CHARLY_BIN must remain unresolved when the active executable is unavailable")
+	}
+}
+
 // Exercises the full runtime path with a swapped InspectContainer. Confirms
 // each variable category: container name/IP, HOST_PORT mapping, VOLUME_PATH
 // (both named-volume and bind-mount lookup paths), and ENV_<NAME>.

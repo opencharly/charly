@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -120,20 +121,25 @@ type CLI struct {
 	// deliberate value/risk EXCEPTION — NOT unfixable: RDD 2026-07-01 proved externalizing is feasible
 	// but zero-value + highest-blast-radius, weakening R9's canonical identity command; operator-decided
 	// to keep core. See the NOTE above the __* internals.)
-	Version VersionCmd `cmd:"" help:"Print computed CalVer tag"`
+	Version VersionCmd `cmd:"" help:"Print stamped CalVer or complete build provenance"`
 }
 
-// VersionCmd prints the computed CalVer tag
-type VersionCmd struct{}
+// VersionCmd prints the stamped binary identity.
+type VersionCmd struct {
+	JSON bool `long:"json" help:"Print complete build provenance as JSON"`
+}
 
 func (c *VersionCmd) Run() error {
-	// The BINARY's identity (stamped at build time), NOT the wall clock.
-	v := CharlyVersion()
-	fmt.Println(v)
-	if v == "unknown" {
-		// A non-zero exit lets scripts gate on an UNSTAMPED binary (build with
-		// `task build:binary`); the version is still printed to stdout above (#74).
-		return fmt.Errorf("unstamped binary (version %q) — build with `task build:binary`", v)
+	provenance, complete := CurrentBuildProvenance()
+	if c.JSON {
+		if err := json.NewEncoder(os.Stdout).Encode(provenance); err != nil {
+			return err
+		}
+	} else {
+		fmt.Println(CharlyVersion())
+	}
+	if !complete {
+		return fmt.Errorf("incomplete binary provenance — build with `task build:binary`")
 	}
 	return nil
 }

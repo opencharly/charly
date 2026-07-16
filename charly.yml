@@ -207,6 +207,9 @@ eval-host-vm:
                 - sudo
                 - go
                 - git
+                # The check-local-vm delivery plan uses rsync over the managed
+                # SSH alias; rsync must be declared at both endpoints.
+                - rsync
             runcmd:
                 # The check-local bed delivers the pruned project to this path; the guest
                 # charly resolves it via CHARLY_PROJECT_DIR (`charly --host` strips -C, and
@@ -437,12 +440,12 @@ check-k3s-vm:
                 namespace: default
                 name: kubernetes
               context: [runtime]
-            - check: command=/tmp/charly-build/charly version || charly version
+            - check: command=/tmp/charly-build/charly version || ${CHARLY_BIN} version
               id: kv-charly-version
               stdout: {matches: "[0-9]{4}\\.[0-9]+"}
               context: [runtime]
               command:
-                command: "/tmp/charly-build/charly version || charly version"
+                command: "/tmp/charly-build/charly version || ${CHARLY_BIN} version"
                 in_container: false
             - agent-check: agent-check
               id: kv-matching
@@ -455,7 +458,7 @@ check-k3s-vm:
               context:
                 - runtime
               command:
-                command: charly status --json
+                command: ${CHARLY_BIN} status --json
                 in_container: false
 # check-k8s-deploy-app — the check-k8s-deploy bed's target:k8s WORKLOAD fixture.
 # A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
@@ -608,7 +611,7 @@ check-sidecar-pod:
               context:
                 - runtime
               command:
-                command: charly status --json
+                command: ${CHARLY_BIN} status --json
                 in_container: false
             - check: charly service status reprints the in-container supervisorctl output — the keepalive program RUNNING — proving the K4 service move (charly service → LifecycleTarget.Shell → the pod plugin's OpShell captured exec) carries the container command's output back through the host. A swallowing capture bug yields EMPTY output and FAILS this step; the host-resolved `<engine> exec <ctr> supervisorctl status` argv is executed IN the pod plugin over the served executor, not by core.
               id: service-status-output-present
@@ -619,21 +622,21 @@ check-sidecar-pod:
               context:
                 - runtime
               command:
-                command: charly service status check-sidecar-pod
+                command: ${CHARLY_BIN} service status check-sidecar-pod
                 in_container: false
             - run: stop the pod through the K4 deep-body STOP path (charly stop → LifecycleTarget.Stop → the pod plugin's podStop over F6, with the arbiter release bracket)
               exit_status: 0
               context:
                 - runtime
               command:
-                command: charly stop check-sidecar-pod
+                command: ${CHARLY_BIN} stop check-sidecar-pod
                 in_container: false
             - run: start the pod again through the K4 deep-body START path (charly start → LifecycleTarget.Start → the pod plugin's podStart over F6, with the arbiter acquire bracket)
               exit_status: 0
               context:
                 - runtime
               command:
-                command: charly start check-sidecar-pod
+                command: ${CHARLY_BIN} start check-sidecar-pod
                 in_container: false
             - check: after the explicit stop→start cycle the pod is running again — the BOTH-DIRECTIONS coverage that would FAIL without the K4 deep-body start/stop move (a broken lifecycle dispatch leaves the pod down after stop, or never restarts it)
               id: sidecar-pod-restarted
@@ -644,7 +647,7 @@ check-sidecar-pod:
               context:
                 - runtime
               command:
-                command: charly status --json
+                command: ${CHARLY_BIN} status --json
                 in_container: false
 # check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
@@ -712,7 +715,7 @@ check-local-vm:
               exit_status: 0
               command:
                 in_container: false
-                command: charly --host charly-check-local-vm check run check-local
+                command: ${CHARLY_BIN} --host charly-check-local-vm check run check-local
 # =============================================================================
 # check-builder-vm — dedicated builder-DEPLOY-leg bed (added with the C1.3 Builder
 # build-emit externalization), MOVED off the operator's workstation into the disposable
@@ -1805,7 +1808,7 @@ check-udev-local:
               context:
                 - runtime
               command:
-                command: charly udev generate
+                command: ${CHARLY_BIN} udev generate
                 in_container: false
             - check: command=charly udev status exits 0 and reports device + rule status (GPU-less graceful)
               id: udev-status-runs
@@ -1816,7 +1819,7 @@ check-udev-local:
               context:
                 - runtime
               command:
-                command: charly udev status
+                command: ${CHARLY_BIN} udev status
                 in_container: false
 # =================================================================
 # check-preempt-local — R10 witness for the externalized `charly preempt` COMMAND
@@ -1861,7 +1864,7 @@ check-preempt-local:
               context:
                 - runtime
               command:
-                command: charly preempt status
+                command: ${CHARLY_BIN} preempt status
                 in_container: false
 # =================================================================
 # check-migrate-local — R10 witness for the externalized config-schema MIGRATION ENGINE
@@ -1896,7 +1899,7 @@ check-migrate-local:
               context:
                 - runtime
               command:
-                command: 'd=$(mktemp -d); printf "version: 2026.186.2323\n" > "$d/charly.yml"; charly migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
+                command: 'd=$(mktemp -d); printf "version: 2026.186.2323\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
                 in_container: false
             - check: charly migrate --dry-run touches nothing (exit 0, prints the dry-run trailer)
               id: migrate-dry-run-noop
@@ -1906,7 +1909,7 @@ check-migrate-local:
               context:
                 - runtime
               command:
-                command: 'd=$(mktemp -d); printf "version: 2026.174.1100\n" > "$d/charly.yml"; charly migrate --dir "$d" --project-only --dry-run; rc=$?; rm -rf "$d"; exit $rc'
+                command: 'd=$(mktemp -d); printf "version: 2026.174.1100\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only --dry-run; rc=$?; rm -rf "$d"; exit $rc'
                 in_container: false
             - check: a below-floor config is refused (exit 1, "predates the supported floor")
               id: migrate-below-floor-refused
@@ -1916,7 +1919,7 @@ check-migrate-local:
               context:
                 - runtime
               command:
-                command: 'd=$(mktemp -d); printf "version: 2026.001.0000\n" > "$d/charly.yml"; charly migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
+                command: 'd=$(mktemp -d); printf "version: 2026.001.0000\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
                 in_container: false
 # =================================================================
 # check-feature-local — R10 witness for the externalized `charly feature` COMMAND
@@ -1962,7 +1965,7 @@ check-feature-local:
               context:
                 - runtime
               command:
-                command: charly feature list candy
+                command: ${CHARLY_BIN} feature list candy
                 in_container: false
 # =================================================================
 # check-agent-local — R10 witness for the agent de-type (Cutover E). The AI-CLI
@@ -2037,7 +2040,7 @@ check-doctor-local:
               context:
                 - runtime
               command:
-                command: charly doctor
+                command: ${CHARLY_BIN} doctor
                 in_container: false
 # =================================================================
 # check-commands-local — R10 witness for cutover C15's THREE remaining externalized COMMANDs + P15's command:box verbs
@@ -2094,7 +2097,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: charly settings list
+                command: ${CHARLY_BIN} settings list
                 in_container: false
             - check: command=charly candy --help exits 0 (proving the externalized candy command resolves + dispatches its own set/add-{rpm,deb,pac,aur} grammar without mutating any candy manifest)
               id: candy-help-runs
@@ -2102,7 +2105,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: charly candy --help
+                command: ${CHARLY_BIN} candy --help
                 in_container: false
             - check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized clean command owns the report + reaches the shared retention engine over the "retention" HostBuild seam, touching nothing)
               id: clean-dry-run-runs
@@ -2112,7 +2115,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: charly clean --dry-run
+                command: ${CHARLY_BIN} clean --dry-run
                 in_container: false
             - check: charly box new + candy + box + validate + generate render a valid box Containerfile in a scratch project, proving the box command plugin (candy/plugin-box, P15) dispatches its NESTED verbs end-to-end host-side — new via the sdk/kit scaffold engine, validate via the plugin's own validate ENGINE over the HostBuild("validate-project") resolved-project envelope (task #60), generate via InvokeProvider to the build-generate word then build-resolve
               id: box-new-validate-generate
@@ -2120,7 +2123,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: "rm -rf /tmp/charly-p15-boxbed && charly box new project /tmp/charly-p15-boxbed && charly -C /tmp/charly-p15-boxbed box new candy my-candy && charly -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && charly -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && charly -C /tmp/charly-p15-boxbed box validate && charly -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
+                command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
                 in_container: false
             - check: charly box pkg --help exits 0, proving the box command plugin pkg verb is registered and dispatches as a NESTED command under the box grammar group (candy/plugin-box, P15)
               id: box-pkg-dispatches
@@ -2128,7 +2131,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: charly box pkg --help
+                command: ${CHARLY_BIN} box pkg --help
                 in_container: false
             - check: charly box authoring verbs (set/add-candy/rm-candy/write/cat) dispatch NESTED under the box grammar group and mutate a scratch project's charly.yml byte-faithfully, proving the authoring command plugin (candy/plugin-authoring, command:set/add-candy/rm-candy/write/cat, P14b) owns the yaml.Node candy-list edits (kit.MappingChild / kit.SaveYAMLNodeFile) + the dot-path writer (kit.SetByDotPath) + the project-rooted file escape hatch (resolveProjectFile) host-side — add-candy appends, rm-candy removes (curl absent after), set writes defaults.registry, write+cat round-trip a file. fetch/refresh stay covered by the Go tests + the golden-parity spike (they reenter core over HostBuild("cli") and hit the network, unsuitable for this bed)
               id: box-authoring-dispatches
@@ -2138,7 +2141,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: "rm -rf /tmp/charly-p14b-authoringbed && charly box new project /tmp/charly-p14b-authoringbed && charly -C /tmp/charly-p14b-authoringbed box new candy my-candy && charly -C /tmp/charly-p14b-authoringbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && charly -C /tmp/charly-p14b-authoringbed box add-candy my-box curl && charly -C /tmp/charly-p14b-authoringbed box rm-candy my-box curl && ! grep -q '\\- curl' /tmp/charly-p14b-authoringbed/box/my-box/charly.yml && charly -C /tmp/charly-p14b-authoringbed box set defaults.registry p14b-registry && grep -q 'p14b-registry' /tmp/charly-p14b-authoringbed/charly.yml && charly -C /tmp/charly-p14b-authoringbed box write hello.txt --content hi-p14b && charly -C /tmp/charly-p14b-authoringbed box cat hello.txt"
+                command: "rm -rf /tmp/charly-p14b-authoringbed && ${CHARLY_BIN} box new project /tmp/charly-p14b-authoringbed && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box new box my-box --base quay.io/fedora/fedora:43 --candies my-candy && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box add-candy my-box curl && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box rm-candy my-box curl && ! grep -q '\\- curl' /tmp/charly-p14b-authoringbed/box/my-box/charly.yml && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box set defaults.registry p14b-registry && grep -q 'p14b-registry' /tmp/charly-p14b-authoringbed/charly.yml && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box write hello.txt --content hi-p14b && ${CHARLY_BIN} -C /tmp/charly-p14b-authoringbed box cat hello.txt"
                 in_container: false
             - check: charly status exits 0 (table render) AND charly status --json exits 0 emitting a JSON array — proving the externalized status command (candy/plugin-status, command:status, P14a) OWNS the render + the PURE nested overlay and reaches the collectors over the "status-substrate" HostBuild seam; FAILS if the externalization broke (unknown-command / seam failure → non-zero exit, or non-array output). P14b EXTENSION — the bed also composes candy/plugin-authoring and exercises the `charly box` AUTHORING verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group). One step scaffolds a project + box then drives box add-candy/rm-candy (yaml.Node candy-list edits via kit.MappingChild/kit.SaveYAMLNodeFile) + box set (kit.SetByDotPath) + box write/cat (the resolveProjectFile file escape hatch) end-to-end host-side, proving the authoring command plugin OWNS the charly.yml mutation surface with ZERO core reentry (fetch/refresh, which reenter core over HostBuild("cli") + hit the network, stay covered by the Go tests + the golden-parity spike).
               id: status-runs
@@ -2148,7 +2151,7 @@ check-commands-local:
               context:
                 - runtime
               command:
-                command: "charly status >/dev/null && charly status --json"
+                command: "${CHARLY_BIN} status >/dev/null && ${CHARLY_BIN} status --json"
                 in_container: false
 # =================================================================
 # check-gpu-local — R10 witness for cutover C11's externalized GPU/VFIO HOST-DETECTION
@@ -2195,7 +2198,7 @@ check-gpu-local:
               context:
                 - runtime
               command:
-                command: charly vm gpu status
+                command: ${CHARLY_BIN} vm gpu status
                 in_container: false
             - check: command=charly vm gpu list exits 0 (proving DetectVFIO dispatches through the compiled-in verb:gpu plugin on a GPU-less-or-iGPU host)
               id: gpu-list-runs
@@ -2203,5 +2206,5 @@ check-gpu-local:
               context:
                 - runtime
               command:
-                command: charly vm gpu list
+                command: ${CHARLY_BIN} vm gpu list
                 in_container: false

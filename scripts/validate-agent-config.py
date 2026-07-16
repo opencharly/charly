@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
-import tempfile
 import tomllib
 
 
@@ -15,6 +17,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILL_REF = re.compile(
     r"/charly-([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)(?![A-Za-z0-9_-])"
 )
+GITLINK_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
+BARE_ROOT_GO_GATE = re.compile(r"(?m)^\s*(?:`)?go (?:test|vet|build) \./\.\.\.(?:`)?\s*$")
+GitRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def dispatcher(path: pathlib.Path) -> list[tuple[str, ...]]:
@@ -30,6 +35,19 @@ def dispatcher(path: pathlib.Path) -> list[tuple[str, ...]]:
         if refs:
             rows.append(refs)
     return rows
+
+
+def current_markdown_names(
+    records: bytes, path_is_file: Callable[[str], bool]
+) -> list[str]:
+    """Decode `git ls-files -z` output without creating a fixture repository."""
+    names = {record.decode() for record in records.split(b"\0") if record}
+    return sorted(name for name in names if path_is_file(name))
+
+
+def task_dry_plan_contains(stdout: str, stderr: str, command: str) -> bool:
+    """Check Task's compiled plan regardless of its documented output stream."""
+    return command in f"{stdout}\n{stderr}"
 
 
 def current_markdown(repository: pathlib.Path) -> list[pathlib.Path]:
@@ -49,12 +67,214 @@ def current_markdown(repository: pathlib.Path) -> list[pathlib.Path]:
         check=True,
         capture_output=True,
     )
-    paths = {
-        repository / raw.decode()
-        for raw in result.stdout.split(b"\0")
-        if raw
-    }
-    return sorted(path for path in paths if path.is_file())
+    names = current_markdown_names(
+        result.stdout, lambda name: (repository / name).is_file()
+    )
+    return [repository / name for name in names]
+
+
+def plugins_gitlink_commit(output: str) -> str | None:
+    """Return the tracked plugins gitlink commit from `git ls-files --stage`."""
+    entry, separator, path = output.strip().partition("\t")
+    fields = entry.split()
+    if (
+        not separator
+        or path != "plugins"
+        or len(fields) != 3
+        or fields[0] != "160000"
+        or not GITLINK_COMMIT.fullmatch(fields[1])
+    ):
+        return None
+    return fields[1]
+
+
+def plugins_setup_prerequisite(
+    root: pathlib.Path,
+    *,
+    run: GitRunner = subprocess.run,
+    path_is_file: Callable[[pathlib.Path], bool] = pathlib.Path.is_file,
+    path_is_executable: Callable[[pathlib.Path], bool] = lambda path: os.access(
+        path, os.X_OK
+    ),
+) -> tuple[pathlib.Path | None, str | None]:
+    """Require the checked-out plugins tree before using its developer checker."""
+    plugins = root / "plugins"
+    try:
+        recorded = run(
+            ["git", "-C", str(root), "ls-files", "--stage", "--", "plugins"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        return None, f"cannot read the recorded plugins gitlink: {error}"
+    expected = plugins_gitlink_commit(recorded)
+    if expected is None:
+        return None, "superproject does not record a valid plugins gitlink"
+    try:
+        toplevel = pathlib.Path(
+            run(
+                ["git", "-C", str(plugins), "rev-parse", "--show-toplevel"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        )
+        superproject = pathlib.Path(
+            run(
+                [
+                    "git",
+                    "-C",
+                    str(plugins),
+                    "rev-parse",
+                    "--show-superproject-working-tree",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        return None, f"plugins checkout is unavailable: {error}"
+    if toplevel.resolve() != plugins.resolve() or superproject.resolve() != root.resolve():
+        return None, (
+            "plugins submodule checkout is absent or uninitialized; run "
+            "git submodule update --init --recursive"
+        )
+    try:
+        actual = run(
+            ["git", "-C", str(plugins), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        return None, f"plugins checkout is unavailable: {error}"
+    if actual != expected:
+        return None, (
+            "plugins checkout does not match the recorded gitlink "
+            f"(expected {expected}, found {actual or 'none'})"
+        )
+    setup = plugins / "setup"
+    if not path_is_file(setup) or not path_is_executable(setup):
+        return None, f"plugins developer checker is missing or not executable: {setup}"
+    return setup, None
+
+
+def validate_developer_profiles(root: pathlib.Path, errors: list[str]) -> None:
+    """Run committed dual-harness developer-profile checks when available."""
+    setup, prerequisite_error = plugins_setup_prerequisite(root)
+    if prerequisite_error:
+        errors.append(f"project developer profile cannot be checked: {prerequisite_error}")
+        return
+    assert setup is not None
+    for harness in ("claude", "codex"):
+        try:
+            result = subprocess.run(
+                [str(setup), harness, "--check", "developer"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as error:
+            errors.append(f"{harness} developer profile check could not start: {error}")
+            continue
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip()
+            errors.append(f"{harness} project is not in full developer mode: {detail}")
+
+
+def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
+    """Require the executable, module-aware core Go command contract."""
+    taskfile = root / "Taskfile.yml"
+    try:
+        taskfile_text = taskfile.read_text()
+    except OSError as error:
+        errors.append(f"core Go gate task is unreadable: {error}")
+        return
+    required_root_task_terms = (
+        "verify:go-core:",
+        "cd charly && go test ./...",
+        "cd charly && go vet ./...",
+        "task build:binary",
+    )
+    for term in required_root_task_terms:
+        if term not in taskfile_text:
+            errors.append(f"core Go gate task lacks required command: {term!r}")
+
+    try:
+        task_list = subprocess.run(
+            ["task", "--list", "--json"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        errors.append(f"core Go gate cannot resolve Task includes: {error}")
+        return
+    if task_list.returncode:
+        detail = (task_list.stderr or task_list.stdout).strip()
+        errors.append(f"core Go gate cannot resolve Task includes: {detail}")
+        return
+    try:
+        tasks = json.loads(task_list.stdout).get("tasks", [])
+    except (json.JSONDecodeError, AttributeError) as error:
+        errors.append(f"core Go gate returned invalid Task task list: {error}")
+        return
+
+    provenance_task = next(
+        (
+            task
+            for task in tasks
+            if isinstance(task, dict) and task.get("name") == "build:test-provenance"
+        ),
+        None,
+    )
+    expected_taskfile = root / "taskfiles" / "Build.yml"
+    taskfile_path = (
+        provenance_task.get("location", {}).get("taskfile")
+        if isinstance(provenance_task, dict)
+        else None
+    )
+    if not provenance_task:
+        errors.append("core Go gate lacks resolved build:test-provenance task")
+    elif not isinstance(taskfile_path, str):
+        errors.append("core Go provenance task has no resolved taskfile location")
+    elif pathlib.Path(taskfile_path).resolve() != expected_taskfile.resolve():
+        errors.append(
+            "core Go provenance task must be owned by taskfiles/Build.yml, "
+            f"not {taskfile_path!r}"
+        )
+    else:
+        dry_plan = subprocess.run(
+            ["task", "--dry", "build:test-provenance"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if dry_plan.returncode:
+            detail = (dry_plan.stderr or dry_plan.stdout).strip()
+            errors.append(f"core Go provenance task cannot compile: {detail}")
+        elif not task_dry_plan_contains(
+            dry_plan.stdout, dry_plan.stderr, "bin/charly version --json"
+        ):
+            errors.append(
+                "core Go provenance task lacks the JSON binary provenance check"
+            )
+
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        path = root / name
+        try:
+            text = path.read_text()
+        except OSError as error:
+            errors.append(f"core Go gate policy is unreadable: {error}")
+            continue
+        if "task verify:go-core" not in text:
+            errors.append(f"{name} does not name the core Go gate task")
+        if BARE_ROOT_GO_GATE.search(text):
+            errors.append(f"{name} contains a bare superproject Go ./... gate")
 
 
 def self_test() -> None:
@@ -69,25 +289,84 @@ def self_test() -> None:
         ("ollama", "not-a-real-skill"),
     ]
     assert not SKILL_REF.findall("/charly-internals:strict-policy_bad")
+    records = b"keep.md\0old.md\0new.md\0"
+    names = current_markdown_names(records, {"keep.md", "new.md"}.__contains__)
+    assert names == ["keep.md", "new.md"]
+    assert task_dry_plan_contains("", "bin/charly version --json", "version --json")
+    assert not task_dry_plan_contains("task: no-op", "", "version --json")
+    expected = "a" * 40
 
-    with tempfile.TemporaryDirectory() as temporary:
-        repository = pathlib.Path(temporary)
-        subprocess.run(["git", "-C", temporary, "init", "-q"], check=True)
-        (repository / "keep.md").write_text("keep\n")
-        (repository / "old.md").write_text("old\n")
-        subprocess.run(
-            ["git", "-C", temporary, "add", "keep.md", "old.md"], check=True
-        )
-        (repository / "old.md").unlink()
-        (repository / "new.md").write_text("new\n")
-        names = {path.name for path in current_markdown(repository)}
-        assert names == {"keep.md", "new.md"}
+    def successful_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        output = f"160000 {expected} 0\tplugins\n"
+        if command[-1] == "--show-toplevel":
+            output = "/project/plugins\n"
+        elif command[-1] == "--show-superproject-working-tree":
+            output = "/project\n"
+        elif command[-1] == "HEAD":
+            output = f"{expected}\n"
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    setup, error = plugins_setup_prerequisite(
+        pathlib.Path("/project"),
+        run=successful_git,
+        path_is_file=lambda path: path.name == "setup",
+        path_is_executable=lambda path: path.name == "setup",
+    )
+    assert error is None and setup == pathlib.Path("/project/plugins/setup")
+
+    def mismatched_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        output = f"160000 {expected} 0\tplugins\n"
+        if command[-1] == "--show-toplevel":
+            output = "/project/plugins\n"
+        elif command[-1] == "--show-superproject-working-tree":
+            output = "/project\n"
+        elif command[-1] == "HEAD":
+            output = f"{'b' * 40}\n"
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    _, error = plugins_setup_prerequisite(pathlib.Path("/project"), run=mismatched_git)
+    assert error and "does not match" in error
+
+    def uninitialized_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        output = f"160000 {expected} 0\tplugins\n"
+        if command[-1] == "--show-toplevel":
+            output = "/project\n"
+        elif command[-1] == "--show-superproject-working-tree":
+            output = "\n"
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    _, error = plugins_setup_prerequisite(
+        pathlib.Path("/project"), run=uninitialized_git
+    )
+    assert error and "absent or uninitialized" in error
+    _, error = plugins_setup_prerequisite(
+        pathlib.Path("/project"),
+        run=successful_git,
+        path_is_file=lambda path: False,
+    )
+    assert error and "missing or not executable" in error
+
+    def unavailable_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise OSError("unavailable")
+
+    _, error = plugins_setup_prerequisite(pathlib.Path("/project"), run=unavailable_git)
+    assert error and "cannot read" in error
+    assert BARE_ROOT_GO_GATE.search("go test ./...\n")
+    assert not BARE_ROOT_GO_GATE.search("go test ./..\n")
+    assert not BARE_ROOT_GO_GATE.search("cd charly && go test ./...\n")
 
 
 def validate_codex_project_agents(root: pathlib.Path, errors: list[str]) -> None:
     """Validate the project-scoped Codex configuration and validator role."""
     config_path = root / ".codex/config.toml"
     validator_path = root / ".codex/agents/pr-validator.toml"
+    validator_check_path = root / "scripts/validate-agent-config.py"
     try:
         config = tomllib.loads(config_path.read_text())
     except (OSError, tomllib.TOMLDecodeError) as error:
@@ -120,6 +399,23 @@ def validate_codex_project_agents(root: pathlib.Path, errors: list[str]) -> None
     for phrase in required:
         if phrase not in instructions:
             errors.append(f"Codex pr-validator role lacks required instruction: {phrase}")
+    try:
+        validator_check = validator_check_path.read_text()
+    except OSError as error:
+        errors.append(f"Codex validator check is unreadable: {error}")
+    else:
+        forbidden_validator_setup = (
+            ("temp" + "file", "host temporary storage"),
+            ("Temporary" + "Directory(", "a temporary workspace"),
+            ("mk" + "dtemp(", "a temporary workspace"),
+            ("mk" + "stemp(", "a temporary workspace"),
+        )
+        for marker, description in forbidden_validator_setup:
+            if marker in validator_check:
+                errors.append(
+                    "Codex validator check creates forbidden "
+                    f"{description}: {marker!r}"
+                )
 
 
 def main() -> int:
@@ -205,16 +501,8 @@ def main() -> int:
                         f"{path.relative_to(ROOT)} references missing /charly-{plugin}:{name}"
                     )
 
-    for harness in ("claude", "codex"):
-        result = subprocess.run(
-            [str(ROOT / "plugins/setup"), harness, "--check", "developer"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode:
-            detail = (result.stderr or result.stdout).strip()
-            errors.append(f"{harness} project is not in full developer mode: {detail}")
+    validate_developer_profiles(ROOT, errors)
+    validate_core_go_gate(ROOT, errors)
 
     if errors:
         print("agent configuration validation failed:", file=sys.stderr)
