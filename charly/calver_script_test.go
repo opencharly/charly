@@ -11,7 +11,7 @@ import (
 // TestCalverScriptDeterministic locks the build-time version-stamp invariant:
 // pkg/arch/calver.sh derives the CalVer ONLY from the HEAD commit date, so EVERY
 // binary built from one commit reports the IDENTICAL `charly version` — a dirty
-// working-tree `task build:charly`, the clean git+file:// makepkg clone, an AUR
+// working-tree `task build:binary`, the clean git+file:// makepkg clone, an AUR
 // build. The single source of truth (charly_calver) is shared by taskfiles/Build.yml
 // and the PKGBUILD's pkgver()+build(); this test guards the bash side that the Go
 // CharlyVersion()/ComputeCalVerAt path (version_test.go) cannot reach.
@@ -74,7 +74,7 @@ func TestCalverScriptDeterministic(t *testing.T) {
 		t.Fatalf("clean tree: charly_calver = %q, want %q", got, want)
 	}
 	// Dirty the tree by MODIFYING A TRACKED file — an unstaged tracked change,
-	// exactly the shape of a dev `task build:charly` over edited charly/*.go that the old
+	// exactly the shape of a dev `task build:binary` over edited charly/*.go that the old
 	// wall-clock branch detected (`git diff --quiet` → false) and stamped with the
 	// clock. The deterministic rule keeps the HEAD commit date. (An *untracked*
 	// file would NOT trip the old `git diff`, so it is not a valid guard input.)

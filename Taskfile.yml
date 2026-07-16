@@ -25,7 +25,7 @@ tasks:
   push:
     desc: Build all enabled images and push to ghcr.io/opencharly
     cmds:
-      - task: build:charly
+      - task: build:binary
       - |
         if ! gh auth status -h github.com 2>&1 | grep -q 'write:packages'; then
           echo "ERROR: gh token missing 'write:packages' scope. Run:"

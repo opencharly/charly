@@ -241,7 +241,7 @@ func gateSchemaVersion(root, version string) error {
 		// Written for a NEWER schema than this binary understands; `charly migrate`
 		// only moves forward to THIS binary's HEAD, so the binary itself is behind.
 		return fmt.Errorf(
-			"%s: config schema %s is newer than this charly supports (max %s). Update charly (reinstall the latest opencharly package, or run 'task build:charly' from a fresh checkout)",
+			"%s: config schema %s is newer than this charly supports (max %s). Update charly (reinstall the latest opencharly package, or run 'task build:binary' from a fresh checkout and use ./bin/charly)",
 			root, version, LatestSchemaVersion(),
 		)
 	case !verOK || fileVer.Less(LatestSchemaVersion()):
