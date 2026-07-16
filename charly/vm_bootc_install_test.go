@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestResolveBootcImageRef_FullRefPassthrough proves a full OCI ref (one
@@ -31,7 +33,7 @@ func TestResolveBootcImageRef_FullRefPassthrough(t *testing.T) {
 // (charly is CalVer-only), so bootc would fail to find it deep inside the
 // privileged container.
 func TestResolveBootcImageRef_ShortNameResolvesToCalVer(t *testing.T) {
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/fedora-bootc:2026.145.0900"},
 			Labels: map[string]string{LabelBox: "fedora-bootc", LabelVersion: "2026.145.0900"},
@@ -54,7 +56,7 @@ func TestResolveBootcImageRef_ShortNameResolvesToCalVer(t *testing.T) {
 // instead of silently fabricating a `:latest` ref that bootc would then fail to
 // pull.
 func TestResolveBootcImageRef_ShortNameNotBuilt(t *testing.T) {
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/something-else:2026.145.0900"},
 			Labels: map[string]string{LabelBox: "something-else"},

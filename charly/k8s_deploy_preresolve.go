@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -99,7 +100,7 @@ func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*InstallPl
 			return nil, fmt.Errorf("deploy %q: pinned image %q not present in local %s storage", name, imageRef, rt.RunEngine)
 		}
 	} else {
-		resolved, rerr := resolveLocalImageRef(rt.RunEngine, leafName(authored))
+		resolved, rerr := kit.ResolveLocalImageRef(rt.RunEngine, leafName(authored))
 		if rerr != nil {
 			return nil, fmt.Errorf("deploy %q: resolving image %q: %w", name, authored, rerr)
 		}

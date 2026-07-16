@@ -2,20 +2,20 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// ErrImageNotLocal is returned when ExtractMetadata is called on an image
+// ErrImageNotLocal (P12a: promoted to sdk/kit/local_image.go, referenced here as
+// kit.ErrImageNotLocal) is returned when ExtractMetadata is called on an image
 // that is not present in the engine's local storage. Deploy-mode commands
 // unwrap this sentinel at the error boundary to render a recommendation
 // pointing users to `charly box pull`.
-var ErrImageNotLocal = errors.New("image not found in local storage")
 
 // OCI label key constants (all namespaced under ai.opencharly.) — the SINGLE SOURCE lives in
 // sdk/spec/label_consts.go (the build↔deploy wire contract: the deploykit WriteLabels EMITTER
@@ -115,14 +115,14 @@ func defaultInspectLabels(engine, imageRef string) (map[string]string, error) {
 
 // ExtractMetadata reads OCI labels from a local image and returns parsed BoxMetadata.
 // Returns nil if the image has no ai.opencharly labels.
-// Returns ErrImageNotLocal wrapped with the image ref if the image is not in local storage.
+// Returns kit.ErrImageNotLocal wrapped with the image ref if the image is not in local storage.
 //
 //nolint:gocyclo // uniform extraction of ~40 OCI labels (exists→unmarshal→store); flat form is the clearest representation
 func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	labels, err := InspectLabels(engine, imageRef)
 	if err != nil {
 		if !LocalImageExists(engine, imageRef) {
-			return nil, fmt.Errorf("%w: %s", ErrImageNotLocal, imageRef)
+			return nil, fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 		}
 		return nil, err
 	}

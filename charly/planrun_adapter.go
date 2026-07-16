@@ -84,7 +84,7 @@ func (hostPlanGrammar) ContextsLabel(op *spec.Op) string {
 	return fmt.Sprintf("%v", opEffectiveContexts(op))
 }
 
-// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *CheckVarResolver +
+// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *kit.CheckVarResolver +
 // DeployExecutor) to the kit.VenueResolver seam (venue → kit.Executor + env + hasRuntime) the
 // runner's per-step SwapVenue drives. It always returns a non-nil env map so SwapVenue swaps the
 // engine env for the driver venue (matching the former "always swap the resolver" behaviour: a

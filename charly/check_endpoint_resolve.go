@@ -105,7 +105,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 	// bridgeSocket exposes a UNIX socket as a local TCP listener for the TCP-only RFB client
 	// (vnc), registering the listener for teardown. Only vnc needs it; spice dials the socket.
 	bridgeSocket := func(socketPath string) (string, error) {
-		br, berr := unixToTcpBridge(socketPath)
+		br, berr := kit.UnixToTCPBridge(socketPath)
 		if berr != nil {
 			return "", berr
 		}

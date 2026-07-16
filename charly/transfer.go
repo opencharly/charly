@@ -4,7 +4,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/kit"
 )
+
+// transfer.go — cross-engine image transfer + the generic "ensure present" fallback chain.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
+// resolution → deploykit + the deploy/bundle plugins). Both consumers —
+// pod_lifecycle_resolve.go and config_image.go — are deploy-cone files (P14-rest
+// trace, 2026-07); EnsureImage/loadProjectCfgFromCwd move together with them.
 
 // EnsureImage ensures the image is available in the run engine's local store.
 // Three-tier fallback (each step independent):
@@ -19,7 +28,7 @@ import (
 //     BuilderRun, the check preflight, and `charly box pull` all go
 //     through (see charly/ensure_image.go).
 //
-// Returns ErrImageNotLocal (wrapped with the ref) only when ALL three
+// Returns kit.ErrImageNotLocal (wrapped with the ref) only when ALL three
 // tiers fail.
 func EnsureImage(imageRef string, rt *ResolvedRuntime) error {
 	if LocalImageExists(rt.RunEngine, imageRef) {
@@ -40,7 +49,7 @@ func EnsureImage(imageRef string, rt *ResolvedRuntime) error {
 		return nil
 	}
 
-	return fmt.Errorf("%w: %s", ErrImageNotLocal, imageRef)
+	return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 }
 
 // loadProjectCfgFromCwd returns the project config + dir when the

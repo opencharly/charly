@@ -23,14 +23,16 @@ var (
 
 // --- the tag-expression filter surface (`--tag` / `--tag-exclude`), which lives ONCE in
 // kit so a plugin candy can filter a plan by tag with the SAME grammar the check engine
-// uses. Core's call sites (planTagFilter, RunPlan, EffectiveTags) are unchanged.
+// uses. Core's call sites are check_feature_run.go's validateTagExpr (syntax-check only —
+// kit.RunPlan applies no tag filter, a confirmed non-blocking gap, P12a) + EffectiveTags.
 //
-// Only what core actually CALLS is aliased. kit.NormalizeTag and kit.CombineTagFilters are
-// part of the kit surface a plugin candy uses, but core reaches neither: normalizeTag's only
-// callers (EffectiveTags + the lexer) moved to kit with it, and CombineTagFilters is a CLI
-// composition helper core does not invoke. Aliasing them here would be dead code. ---
-type TagExpr = kit.TagExpr
-
+// Only what core actually CALLS is aliased. kit.TagExpr (the parsed-expression TYPE) has
+// no remaining core caller (P12a: its sole caller, planTagFilter's *TagExpr return, was
+// itself dead — R1/unparam) and is NOT aliased here — a plugin candy reaches it directly
+// via kit.TagExpr. kit.NormalizeTag and kit.CombineTagFilters are part of the kit surface a
+// plugin candy uses, but core reaches neither: normalizeTag's only callers (EffectiveTags +
+// the lexer) moved to kit with it, and CombineTagFilters is a CLI composition helper core
+// does not invoke. Aliasing any of these here would be dead code. ---
 var (
 	ParseTagExpr  = kit.ParseTagExpr
 	EffectiveTags = kit.EffectiveTags
@@ -119,11 +121,12 @@ const (
 // kit.ExpandTestVars directly. kit.ExpandOpVars (formerly aliased here as opExpandVars) has
 // no charly/ caller at all, test or production; the binding was removed rather than kept as a
 // caller-less export. Aliasing a name only a test uses would itself be a caller-less-in-
-// production export.
+// production export. collectAnyStrings (formerly aliased here) lost its sole caller when
+// check_members.go's collectHostRefs moved to kit.CollectHostRefs (P12a follow-up), which
+// calls kit.CollectAnyStrings directly — the binding was removed rather than kept caller-less.
 var (
-	TestVarRefs       = kit.TestVarRefs
-	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
-	collectAnyStrings = kit.CollectAnyStrings
+	TestVarRefs      = kit.TestVarRefs
+	IsRuntimeOnlyVar = kit.IsRuntimeOnlyVar
 )
 
 // --- the check-engine PLAN WALK (P5): the RunOne/RunPlan/runUnit loop + its result model
@@ -132,12 +135,15 @@ var (
 // driver (planrun_adapter.go); the grammar the walk consults (VerbCatalog) + the verb dispatch
 // (the provider registry) stay in core behind the kit.PlanContext / kit.VerbResolver seams.
 // Only what core actually CALLS is aliased — StepID (the function) has no core caller (only the
-// StepResult.StepID field), so it is not aliased. ---
+// StepResult.StepID field), so it is not aliased. StepResult itself IS aliased (P12a: was
+// description_run.go's sole remaining declaration before that file's dissolution — kit.RunPlan
+// is now called directly at every site). ---
 type (
 	LabeledDescription  = kit.LabeledDescription
 	LabelDescriptionSet = kit.LabelDescriptionSet
 	GraderRequest       = kit.GraderRequest
 	StepGrader          = kit.StepGrader
+	StepResult          = kit.StepResult
 )
 
 var (

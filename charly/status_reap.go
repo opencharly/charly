@@ -10,6 +10,9 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 )
 
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — BundleConfig-coupled
+// (see status_substrate.go / CollectOpts for the full rationale, P14-rest trace, 2026-07).
+//
 // ReapOrphansCmd finds and cleans up orphaned ephemeral deployments —
 // entries whose charly.yml ledger says "active" but whose underlying engine
 // resource (libvirt domain, podman container, k8s namespace) is gone. Lifted

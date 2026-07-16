@@ -250,7 +250,7 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 			}},
 		}},
 	}
-	res := RunPlan(context.Background(), r, set, nil, false)
+	res := kit.RunPlan(context.Background(), r, set, false)
 	if len(res) != 1 {
 		t.Fatalf("want 1 step result, got %d", len(res))
 	}

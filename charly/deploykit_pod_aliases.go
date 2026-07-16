@@ -31,5 +31,4 @@ var (
 	ipcModeBlocksShmSize  = deploykit.IpcModeBlocksShmSize
 	localizePort          = deploykit.LocalizePort
 	resolveWorkingDir     = deploykit.ResolveWorkingDir
-	BareVolumeName        = deploykit.BareVolumeName
 )

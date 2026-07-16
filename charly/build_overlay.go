@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -137,7 +138,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	case tag != "":
 		baseRef = base + ":" + tag
 	default:
-		if resolved, rerr := ResolveNewestLocalCalVer("podman", base); rerr == nil && resolved != "" {
+		if resolved, rerr := kit.ResolveNewestLocalCalVer("podman", base); rerr == nil && resolved != "" {
 			baseRef = resolved
 		} else {
 			baseRef = base

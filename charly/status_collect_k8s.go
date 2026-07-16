@@ -8,6 +8,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 (deploy-cone-coupled;
+// see status_substrate.go / CollectOpts for the full rationale, P14-rest trace, 2026-07).
+//
 // K8sCollector is the kubernetes SubstrateCollector. It surfaces every
 // declared `target: k8s` deployment (from the folded charly.yml Deploy
 // map) as one DeploymentStatus row, reporting whether its Kustomize tree has

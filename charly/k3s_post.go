@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // k3sServerURLRe matches an `https://<host>:<port>` server URL in a kubeconfig.
@@ -177,15 +178,6 @@ func findBundleNodePtrByName(m map[string]*spec.BundleNode, name string) *spec.B
 	return nil
 }
 
-// sanitizeDeployName turns a deploy name like "vm:arch" or "stack.web.db"
-// into a shell-safe, path-safe, kubeconfig-context-safe identifier.
-// Colons and dots are replaced with dashes; that keeps the semantics
-// identifiable ("vm:arch" → "vm-arch") without breaking file paths.
-func sanitizeDeployName(s string) string {
-	r := strings.NewReplacer(":", "-", ".", "-", "/", "-")
-	return r.Replace(s)
-}
-
 // K3sPostProvision runs the post-provision steps for a k3s-server deploy.
 // No-op when the retrieved kubeconfig path does not exist (e.g. because
 // the candy did not actually include k3s-server, or the artifact
@@ -198,7 +190,7 @@ func K3sPostProvision(artifactKey, deployName string) error {
 	if err != nil {
 		return fmt.Errorf("resolving home: %w", err)
 	}
-	safe := sanitizeDeployName(artifactKey)
+	safe := kit.SanitizeDeployName(artifactKey)
 	retrieved := filepath.Join(home, ".cache", "charly", "clusters", safe, "kubeconfig.yaml")
 	if _, err := os.Stat(retrieved); err != nil {
 		// Not a k3s-server deploy, or retricheck was skipped. Nothing to do.

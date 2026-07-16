@@ -10,6 +10,10 @@ import (
 
 // status_nested.go — the HOST tree-builder for `charly status`'s nested overlay.
 //
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — ResolveDeployChain/
+// NestedExecutor + BundleConfig-coupled (see status_substrate.go / CollectOpts for the
+// full rationale, P14-rest trace, 2026-07).
+//
 // The PURE fold (claim a declared child's flat row → inherit its real data →
 // drop it from the top level; synthesize a "declared"/Source="nested" row when
 // no flat match exists; live-probe under --nested) moved to the command:status

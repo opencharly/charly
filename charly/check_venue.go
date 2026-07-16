@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // CheckEndpoint is a host-reachable TCP address for a port that lives inside the
@@ -65,23 +67,7 @@ func containerPublishedAddr(engine, containerName string, port int) (string, err
 		}
 		return "", fmt.Errorf("no port mapping found for %d in %s", port, containerName)
 	}
-	return parsePublishedPort(string(out), port)
-}
-
-// parsePublishedPort parses `<engine> port` output (one "ip:port" per line,
-// IPv4 + IPv6) into a single host-reachable "127.0.0.1:port", normalizing
-// 0.0.0.0 / [::]. Pure (unit-tested) — shared by every port-protocol venue.
-func parsePublishedPort(output string, port int) (string, error) {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return "", fmt.Errorf("no port mapping found for %d", port)
-	}
-	hostPort := strings.TrimSpace(lines[0])
-	hostPort = strings.Replace(hostPort, "0.0.0.0", "127.0.0.1", 1)
-	if after, ok := strings.CutPrefix(hostPort, "[::]:"); ok {
-		hostPort = "127.0.0.1:" + after
-	}
-	return hostPort, nil
+	return kit.ParsePublishedPort(string(out), port)
 }
 
 // sshForwardEndpoint opens a `ssh -NT -L 127.0.0.1:<rand>:127.0.0.1:<port>`

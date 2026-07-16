@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -209,7 +210,7 @@ func resolveBootcImageRef(engine, image string) (string, error) {
 	if strings.Contains(image, "/") {
 		return image, nil
 	}
-	resolved, err := resolveLocalImageRef(engine, image)
+	resolved, err := kit.ResolveLocalImageRef(engine, image)
 	if err != nil {
 		return "", fmt.Errorf("resolving bootc image %q: %w (build it first with `charly box build %s`)", image, err, image)
 	}

@@ -48,6 +48,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // EnsureImagePresent is the canonical helper. Every command that
@@ -121,7 +123,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 		if cfg != nil {
 			if resolved, err := cfg.ResolveBox(short, "", projectDir, ResolveOpts{}); err == nil {
 				produced := resolveShellImageRef(resolved.Registry, resolved.Name, "")
-				if produced != "" && produced != image && looksLikeFullRef(image) {
+				if produced != "" && produced != image && kit.LooksLikeFullRef(image) {
 					if terr := podmanTagAlias(ctx, produced, image); terr != nil {
 						fmt.Fprintf(os.Stderr, "ensure-image: warning: tag alias %s -> %s failed: %v\n", produced, image, terr)
 					}
@@ -156,7 +158,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if IsRemoteImageRef(stripped) {
 		return image, nil
 	}
-	if looksLikeFullRef(image) {
+	if kit.LooksLikeFullRef(image) {
 		return image, nil
 	}
 	if cfg == nil {

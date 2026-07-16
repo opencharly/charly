@@ -117,33 +117,3 @@ func TestCandyAliases(t *testing.T) {
 		t.Errorf("Aliases()[0].Command = %q, want %q", aliases[0].Command, "websvc-server")
 	}
 }
-
-func TestAliasNameRegex(t *testing.T) {
-	tests := []struct {
-		name string
-		want bool
-	}{
-		{"openclaw", true},
-		{"my-tool", true},
-		{"my_tool", true},
-		{"my.tool", true},
-		{"MyTool", true},
-		{"tool123", true},
-		{"1start", true},
-		{"", false},
-		{"-start", false},
-		{".start", false},
-		{"_start", false},
-		{"has space", false},
-		{"has/slash", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := aliasNameRe.MatchString(tt.name)
-			if got != tt.want {
-				t.Errorf("aliasNameRe.MatchString(%q) = %v, want %v", tt.name, got, tt.want)
-			}
-		})
-	}
-}

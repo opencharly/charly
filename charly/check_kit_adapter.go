@@ -26,10 +26,10 @@ func (c hostCheckContext) Exec() kit.Executor         { return c.h.kr.Exec() }
 func (c hostCheckContext) DialTimeout() time.Duration { return c.h.kr.DialTimeout() }
 
 // HTTPDo issues the request from the host (in-process) via the SHARED host HTTP-do path
-// (doHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
+// (kit.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
 // derived from the engine's base client.
 func (c hostCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
-	return doHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
+	return kit.DoHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
 }
 func (c hostCheckContext) Box() string           { return c.h.kr.Box() }
 func (c hostCheckContext) Instance() string      { return c.h.kr.Instance() }

@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -52,7 +53,7 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	if strings.Contains(builderRef, "/") {
 		return builderRef, nil
 	}
-	if resolved, err := resolveLocalImageRef(engine, builderRef); err == nil {
+	if resolved, err := kit.ResolveLocalImageRef(engine, builderRef); err == nil {
 		return resolved, nil
 	}
 	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
@@ -64,7 +65,7 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
 		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
 	}
-	resolved, err := resolveLocalImageRef(engine, builderRef)
+	resolved, err := kit.ResolveLocalImageRef(engine, builderRef)
 	if err != nil {
 		return "", fmt.Errorf("builder image %q still not found after auto-build: %w", builderRef, err)
 	}

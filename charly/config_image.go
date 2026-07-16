@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -396,7 +397,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 	// non-registry tag, so looksLikeFullRef can't protect it). R3: the same
 	// resolveDeployResolvedImage gate guards both consume sites.
 	usingResolvedOverlay := resolveDeployResolvedImage(c.Box, c.Instance) == imageRef && imageRef != ""
-	if meta.Registry != "" && !looksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
+	if meta.Registry != "" && !kit.LooksLikeFullRef(imageRef) && c.ExplicitRef == "" && !usingResolvedOverlay {
 		imageRef = resolveShellImageRef(meta.Registry, deployBoxName, c.Tag)
 	}
 
@@ -764,7 +765,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 			if !strings.Contains(dataRef, ":") {
 				// Short name without tag — resolve to newest local CalVer
 				// (charly is CalVer-only; no `:latest` fallback).
-				if resolved, err := ResolveNewestLocalCalVer(dataEngine, dataRef); err == nil && resolved != "" {
+				if resolved, err := kit.ResolveNewestLocalCalVer(dataEngine, dataRef); err == nil && resolved != "" {
 					dataRef = resolved
 				}
 			}

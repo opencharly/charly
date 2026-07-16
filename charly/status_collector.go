@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,6 +25,11 @@ import (
 // The Collector itself holds NO enginekit client — the live pod collection
 // (podman snapshot + probes) moved to the plugin, shedding the enginekit
 // import from this file.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the orchestration
+// (collectFlat/Single) is deploy-cone-coupled (BundleConfig/UnifiedFile), same as the
+// remaining status_collect_{vm,k8s,adb}.go/status_nested.go/status_reap.go files
+// (P14-rest trace, 2026-07; see status_substrate.go for the full rationale).
 type Collector struct {
 	rt      *ResolvedRuntime
 	quadlet string
@@ -227,7 +233,7 @@ func (c *Collector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 	// that had no published ports). Use the BASE image name from the row,
 	// not the joined container name.
 	if (len(cs.Ports) == 0 || len(cs.Volumes) == 0 || cs.Network == "") && cs.Image != "" {
-		ref, _ := ResolveNewestLocalCalVer(bin, cs.Image)
+		ref, _ := kit.ResolveNewestLocalCalVer(bin, cs.Image)
 		if ref != "" {
 			if meta, _ := ExtractMetadata(bin, ref); meta != nil {
 				if len(cs.Ports) == 0 {
