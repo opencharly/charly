@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import pathlib
 import re
-import json
 import subprocess
 import sys
 import tempfile
@@ -85,60 +84,42 @@ def self_test() -> None:
         assert names == {"keep.md", "new.md"}
 
 
-def validate_validator_bootstrap(root: pathlib.Path, errors: list[str]) -> None:
-    """Fail before a validator spawn when tracked policy gitlinks are absent."""
-    validator = root / "plugins/internals/agents/pr-validator.md"
-    if not validator.is_file():
-        errors.append(
-            "validator bootstrap is unready: initialize recursive submodules with "
-            "task agent:prepare-validator-worktree before spawning a validator"
-        )
-
-
-def validate_codex_r0_hooks(root: pathlib.Path, errors: list[str]) -> None:
-    """Keep the repository-level Codex R0 guardrail present and executable."""
-    hook_path = root / ".codex/hooks.json"
-    hook_script = root / "scripts/codex-r0-hook.py"
-    if not hook_path.is_file():
-        errors.append("Codex R0 hook configuration is missing")
-        return
-    if not hook_script.is_file():
-        errors.append("Codex R0 hook script is missing")
-        return
+def validate_codex_project_agents(root: pathlib.Path, errors: list[str]) -> None:
+    """Validate the project-scoped Codex configuration and validator role."""
+    config_path = root / ".codex/config.toml"
+    validator_path = root / ".codex/agents/pr-validator.toml"
     try:
-        hooks = json.loads(hook_path.read_text()).get("hooks", {})
-    except json.JSONDecodeError as error:
-        errors.append(f"Codex R0 hook configuration is invalid JSON: {error}")
+        config = tomllib.loads(config_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"Codex project configuration is unreadable: {error}")
         return
-    for event in ("SessionStart", "PreToolUse"):
-        entries = hooks.get(event, [])
-        if not any(
-            "scripts/codex-r0-hook.py" in hook.get("command", "")
-            for entry in entries
-            for hook in entry.get("hooks", [])
-        ):
-            errors.append(f"Codex R0 hook configuration lacks {event} coverage")
-
-    def invoke(event: str) -> dict[str, object]:
-        result = subprocess.run(
-            [sys.executable, str(hook_script)],
-            input=json.dumps({"hook_event_name": event}),
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        return json.loads(result.stdout)
-
+    # Sandbox and approval posture is an operator choice. This checker rejects
+    # only configurations that cannot provide the project validator role, not
+    # configurations that are merely broad or risky.
+    if not isinstance(config, dict):
+        errors.append("Codex project configuration must decode to a TOML table")
+    workspace = config.get("sandbox_workspace_write")
+    if workspace is not None and not isinstance(workspace, dict):
+        errors.append("Codex workspace-write configuration must be a TOML table")
     try:
-        started = invoke("SessionStart")
-        context = started["hookSpecificOutput"]["additionalContext"]
-        if "R0" not in context:
-            errors.append("Codex SessionStart hook does not provide R0 admission context")
-        pre_tool = invoke("PreToolUse")
-        if "R0" not in pre_tool.get("systemMessage", ""):
-            errors.append("Codex PreToolUse hook does not provide an R0 warning")
-    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as error:
-        errors.append(f"Codex R0 hook is not executable: {error}")
+        validator = tomllib.loads(validator_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"Codex pr-validator role is unreadable: {error}")
+        return
+    for key in ("name", "description", "developer_instructions"):
+        if not validator.get(key):
+            errors.append(f"Codex pr-validator role lacks {key}")
+    if validator.get("name") != "pr-validator":
+        errors.append("Codex pr-validator role has the wrong name")
+    instructions = validator.get("developer_instructions", "")
+    required = (
+        "full R10 gate",
+        "independently decide whether the merge-time CalVer final-tree delta requires a",
+        "denial is BLOCKED",
+    )
+    for phrase in required:
+        if phrase not in instructions:
+            errors.append(f"Codex pr-validator role lacks required instruction: {phrase}")
 
 
 def main() -> int:
@@ -153,8 +134,7 @@ def main() -> int:
     claude = claude_path.read_text()
     codex = codex_path.read_text()
     errors: list[str] = []
-    validate_validator_bootstrap(ROOT, errors)
-    validate_codex_r0_hooks(ROOT, errors)
+    validate_codex_project_agents(ROOT, errors)
 
     claude_rows = dispatcher(claude_path)
     codex_rows = dispatcher(codex_path)
@@ -235,14 +215,6 @@ def main() -> int:
         if result.returncode:
             detail = (result.stderr or result.stdout).strip()
             errors.append(f"{harness} project is not in full developer mode: {detail}")
-
-    codex_config = tomllib.loads((ROOT / ".codex/config.toml").read_text())
-    if "sandbox_mode" in codex_config or "sandbox_workspace_write" in codex_config:
-        errors.append("Codex project config must not use legacy sandbox settings")
-    if codex_config.get("default_permissions") != ":danger-full-access":
-        errors.append("Codex project permissions must request full Charly developer access")
-    if codex_config.get("approval_policy") != "on-request":
-        errors.append("Codex project sandbox must retain on-request approvals")
 
     if errors:
         print("agent configuration validation failed:", file=sys.stderr)

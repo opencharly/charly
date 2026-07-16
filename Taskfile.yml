@@ -17,13 +17,6 @@ includes:
     dir: "{{.ROOT_DIR}}"
 
 tasks:
-  agent:prepare-validator-worktree:
-    desc: Provision a pinned, recursively initialized protected-main validator worktree
-    requires:
-      vars: [ROOT, BASE, WORKTREE]
-    cmds:
-      - python3 scripts/prepare-validator-worktree.py --root '{{.ROOT}}' --base '{{.BASE}}' --worktree '{{.WORKTREE}}'
-
   default:
     desc: Show available tasks
     cmds:

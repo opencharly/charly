@@ -205,6 +205,24 @@ func recordDeclaredKindConnectError(need map[string]struct{}, err error) {
 	}
 }
 
+// finalizeDeclaredKindConnections clears a retained cause only after the exact
+// declared word has registered. A later namespace boundary can legitimately
+// scan no matching plugin candy and make loadProjectPlugins return nil; that is
+// not a successful connection and must never erase the earlier causal error.
+func finalizeDeclaredKindConnections(need map[string]struct{}) {
+	declaredDeployMu.Lock()
+	defer declaredDeployMu.Unlock()
+	for word := range need {
+		if _, connected := providerRegistry.ResolveKind(word); connected {
+			delete(declaredKindConnectErr, word)
+			continue
+		}
+		if _, recorded := declaredKindConnectErr[word]; !recorded {
+			declaredKindConnectErr[word] = fmt.Errorf("declared kind provider %q did not register during load", word)
+		}
+	}
+}
+
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
 // project's declared external KIND words (F4), so a `kind: <plugin-word>` entity decodes via
 // runPluginKind during load. Called at the walk's Boundary seam AFTER the prescan and BEFORE the
@@ -247,11 +265,7 @@ func connectDeclaredKindPlugins(dir string) {
 		recordDeclaredKindConnectError(need, err)
 		return
 	}
-	declaredDeployMu.Lock()
-	for word := range need {
-		delete(declaredKindConnectErr, word)
-	}
-	declaredDeployMu.Unlock()
+	finalizeDeclaredKindConnections(need)
 }
 
 // recognizedDeploySubstrate reports whether word names a deploy substrate the
