@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 )
 
 // CheckVerbProvider is the typed in-process form of a check-verb Provider: it
@@ -17,7 +18,7 @@ import (
 // form), so the dispatch only ever deals with in-proc CheckVerbProviders here.
 type CheckVerbProvider interface {
 	Provider
-	RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult
+	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult
 }
 
 // The EXTERNAL-CHARLY-VERBS kube/adb/appium/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are
@@ -36,7 +37,7 @@ type CheckVerbProvider interface {
 // implement it; runProvisionAct resolves the verb and type-asserts ProvisionActor —
 // the per-verb act switch is gone (C1b).
 type ProvisionActor interface {
-	RenderProvisionScript(op *Op, distros []string) (string, bool)
+	RenderProvisionScript(op *spec.Op, distros []string) (string, bool)
 }
 
 // TypedStepProvider is the do:act half of a verb provider whose build/deploy install
@@ -54,7 +55,7 @@ type ProvisionActor interface {
 type TypedStepProvider interface {
 	Provider
 	LowersTo() StepKind
-	ConstructStep(op *Op, layer CandyModel, img *ResolvedBox) InstallStep
+	ConstructStep(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep
 }
 
 // BuildEmitter is the build-context act half of a verb provider that renders its

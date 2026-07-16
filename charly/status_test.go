@@ -22,14 +22,14 @@ import (
 func TestFormatTunnelSummary(t *testing.T) {
 	tests := []struct {
 		name string
-		in   *TunnelYAML
+		in   *spec.TunnelYAML
 		want string
 	}{
 		{"nil", nil, ""},
-		{"tailscale all", &TunnelYAML{Provider: "tailscale", Private: PortScope{All: true}}, "tailscale (all ports)"},
-		{"cloudflare all", &TunnelYAML{Provider: "cloudflare", Public: PortScope{All: true}}, "cloudflare (all ports)"},
-		{"provider only", &TunnelYAML{Provider: "tailscale"}, "tailscale"},
-		{"explicit ports", &TunnelYAML{Provider: "tailscale", Private: PortScope{Ports: []int{8080, 9000}}}, "tailscale (ports 8080,9000)"},
+		{"tailscale all", &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{All: true}}, "tailscale (all ports)"},
+		{"cloudflare all", &spec.TunnelYAML{Provider: "cloudflare", Public: spec.PortScope{All: true}}, "cloudflare (all ports)"},
+		{"provider only", &spec.TunnelYAML{Provider: "tailscale"}, "tailscale"},
+		{"explicit ports", &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{Ports: []int{8080, 9000}}}, "tailscale (ports 8080,9000)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,9 +99,9 @@ func TestParsePortStrings(t *testing.T) {
 func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
 	c := &Collector{
 		deploy: &BundleConfig{
-			Bundle: map[string]BundleNode{
+			Bundle: map[string]spec.BundleNode{
 				"selkies-desktop":      {Port: []string{"3000:3000"}},
-				"selkies-desktop/work": {Port: []string{"3001:3000"}, Tunnel: &TunnelYAML{Provider: "tailscale", Private: PortScope{All: true}}},
+				"selkies-desktop/work": {Port: []string{"3001:3000"}, Tunnel: &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{All: true}}},
 				"weird-joined-name":    {Port: []string{"7777:7777"}},
 			},
 		},

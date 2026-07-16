@@ -214,7 +214,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 			switch {
 			case ook && head.Less(ocv):
 				return false, fmt.Errorf(
-					"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:charly` from a fresh checkout)",
+					"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:binary` from a fresh checkout and use ./bin/charly)",
 					ctx.HostDeployPath, oraw, head)
 			case ook && ocv == head:
 				// overlay already current
@@ -231,7 +231,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 	switch {
 	case ok && head.Less(fileVer):
 		return false, fmt.Errorf(
-			"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:charly` from a fresh checkout)",
+			"%s: schema %s is newer than this charly supports (max %s) — update charly (reinstall the latest opencharly package, or `task build:binary` from a fresh checkout and use ./bin/charly)",
 			rootPath, ver, head)
 	case ok && fileVer == head:
 		if !overlayLags {

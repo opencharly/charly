@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"slices"
 
 	"github.com/opencharly/sdk/kit"
@@ -156,7 +157,7 @@ var installVerbs = map[string]bool{
 // is act-capable via the dedicated emitCmd install path (NOT a ProvisionActor); every other plugin verb
 // acts when its registered provider is a ProvisionActor / TypedStepProvider / BuildEmitter, or
 // (standalone, provider not connected) when the parse-time prescan saw a plugin candy declare it.
-func opActsInBuildDeploy(c *Op) bool {
+func opActsInBuildDeploy(c *spec.Op) bool {
 	if c.Plugin == "command" {
 		return true
 	}
@@ -206,7 +207,7 @@ func opActsInBuildDeploy(c *Op) bool {
 // EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
 // moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
 // logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
-func stampStepIntentDo(s *Step) {
+func stampStepIntentDo(s *spec.Step) {
 	if len(s.VerbsSet()) == 0 {
 		return
 	}
@@ -216,7 +217,7 @@ func stampStepIntentDo(s *Step) {
 // EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
 // wins (set by the enclosing Step at run/collect time), else the verb's
 // VerbCatalog default, else DoAssert.
-func opEffectiveDo(c *Op) DoMode {
+func opEffectiveDo(c *spec.Op) DoMode {
 	switch DoMode(c.IntentDo) {
 	case DoAct, DoAssert, DoInstruct:
 		return DoMode(c.IntentDo)
@@ -232,7 +233,7 @@ func opEffectiveDo(c *Op) DoMode {
 
 // EffectiveContexts returns the op's resolved execution contexts: an explicit
 // Context wins, else the verb's VerbCatalog default, else nil.
-func opEffectiveContexts(c *Op) []ExecContext {
+func opEffectiveContexts(c *spec.Op) []ExecContext {
 	if len(c.Context) > 0 {
 		out := make([]ExecContext, 0, len(c.Context))
 		for _, s := range c.Context {
@@ -249,6 +250,6 @@ func opEffectiveContexts(c *Op) []ExecContext {
 }
 
 // InContext reports whether the op is legal in ctx per its effective contexts.
-func opInContext(c *Op, ctx ExecContext) bool {
+func opInContext(c *spec.Op, ctx ExecContext) bool {
 	return slices.Contains(opEffectiveContexts(c), ctx)
 }

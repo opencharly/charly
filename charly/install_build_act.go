@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"maps"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -8,7 +9,7 @@ import (
 
 func init() { deploykit.CompileActOp = compileActOp }
 
-func compileActOp(op *Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func compileActOp(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	verb, err := op.Kind()
 	if err != nil {
 		return nil

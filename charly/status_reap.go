@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 
@@ -62,7 +63,7 @@ func (c *ReapOrphansCmd) Run() error {
 // underlying resource is still alive. Best-effort across targets — false
 // negatives are OK (we just skip reaping that entry); false positives are
 // bad (we'd nuke a still-running resource), so the checks lean conservative.
-func ephemeralUnderlyingResourceAlive(name string, node BundleNode) bool {
+func ephemeralUnderlyingResourceAlive(name string, node spec.BundleNode) bool {
 	switch node.Target {
 	case "vm":
 		domName := "charly-" + node.From

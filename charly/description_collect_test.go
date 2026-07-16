@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // TestCollectDescriptions_BakesPluginFileCheck is the main-repo equivalent of the
 // box/fedora "confirm a migrated plugin: file check baked into the ai.opencharly.description
@@ -13,8 +16,8 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 		"redis": {
 			Name:        "redis",
 			Description: "redis store",
-			plan: []Step{
-				{Check: "the redis binary exists", Op: Op{
+			plan: []spec.Step{
+				{Check: "the redis binary exists", Op: spec.Op{
 					ID:          "redis-binary",
 					Plugin:      "file",
 					PluginInput: map[string]any{"file": "/usr/bin/redis-server", "exists": true},
@@ -22,7 +25,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 			},
 		},
 	}
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{
 		"redis-box": {Candy: []string{"redis"}},
 	})}
 
@@ -49,9 +52,9 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 // effect (validate mutating the shared structs the bake serialized), so bakeableSteps now stamps
 // its own COPY. Without the stamp, baked[0].Op.IntentDo is empty and this test fails.
 func TestBakeableSteps_StampsIntentDo(t *testing.T) {
-	baked := bakeableSteps([]Step{
+	baked := bakeableSteps([]spec.Step{
 		// a plugin: file CHECK step (VerbsSet = ["plugin"]) → intent_do "assert"
-		{Check: "the binary exists", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
+		{Check: "the binary exists", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
 		// a verb-less AGENT-CHECK step → no Op verb, IntentDo stays empty (matches the pre-cutover bake)
 		{AgentCheck: "the dashboard looks populated"},
 	})

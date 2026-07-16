@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"slices"
 	"testing"
 )
@@ -18,7 +19,7 @@ func withDetectGPU(t *testing.T, present bool) {
 // gpuPodNode is a plain pod deploy that declares NO resource claim — the
 // untracked GPU-consumer case from the RCA (auto-detected `--device
 // nvidia.com/gpu=all`, no requires_shared).
-func gpuPodNode() BundleNode { return BundleNode{Target: "pod"} }
+func gpuPodNode() spec.BundleNode { return spec.BundleNode{Target: "pod"} }
 
 // I1. A GPU-device node (host presents nvidia) implies requires_shared:[nvidia-gpu];
 // a non-GPU node implies nothing — the core of the auto-claim fix.
@@ -54,12 +55,12 @@ func TestImpliedGPUShared_NoTokenWithoutResourceConfig(t *testing.T) {
 // when host auto-detection is momentarily false (card consumer regardless).
 func TestImpliedGPUShared_SecurityDevicesSignal(t *testing.T) {
 	withDetectGPU(t, false)
-	node := BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"/dev/nvidia0"}}}
+	node := spec.BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"/dev/nvidia0"}}}
 	if tok := impliedGPUSharedToken(node, gpuResources()); tok != "nvidia-gpu" {
 		t.Fatalf("a node listing /dev/nvidia0 must imply the token, got %q", tok)
 	}
 	// The CDI device name is the other accepted form.
-	node2 := BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
+	node2 := spec.BundleNode{Target: "pod", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
 	if tok := impliedGPUSharedToken(node2, gpuResources()); tok != "nvidia-gpu" {
 		t.Fatalf("a node listing nvidia.com/gpu must imply the token, got %q", tok)
 	}
@@ -83,11 +84,11 @@ func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
 	withDetectGPU(t, true) // host HAS a GPU
 	res := gpuResources()
 	// A local command deploy with NO explicit nvidia device → NOT a GPU consumer (pod-gated).
-	if tok := impliedGPUSharedToken(BundleNode{Target: "local"}, res); tok != "" {
+	if tok := impliedGPUSharedToken(spec.BundleNode{Target: "local"}, res); tok != "" {
 		t.Fatalf("a local command deploy on a GPU host must NOT imply the nvidia-gpu token, got %q", tok)
 	}
 	// The explicit-device path survives for a local deploy that really lists the nvidia device.
-	explicit := BundleNode{Target: "local", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
+	explicit := spec.BundleNode{Target: "local", Security: &SecurityConfig{Devices: []string{"nvidia.com/gpu=all"}}}
 	if tok := impliedGPUSharedToken(explicit, res); tok != "nvidia-gpu" {
 		t.Fatalf("a local deploy explicitly listing the nvidia device MUST imply the token, got %q", tok)
 	}
@@ -104,7 +105,7 @@ func TestImpliedGPUShared_LocalDeployNotImpliedOnGPUHost(t *testing.T) {
 func TestImpliedGPUShared_GroupRootNotImpliedOnGPUHost(t *testing.T) {
 	withDetectGPU(t, true) // host HAS a GPU
 	res := gpuResources()
-	group := BundleNode{Members: map[string]*BundleNode{"preempt-taker": {Target: "pod"}}} // Target "" + members → IsGroup()
+	group := spec.BundleNode{Members: map[string]*spec.BundleNode{"preempt-taker": {Target: "pod"}}} // Target "" + members → IsGroup()
 	if !group.IsGroup() {
 		t.Fatalf("test fixture must be a group (Target=='' && members>0)")
 	}
@@ -150,7 +151,9 @@ func gpuResources() map[string]*ResolvedResource {
 }
 
 // sharedNode / claimantNode build a pod deploy declaring a SHARED / EXCLUSIVE claim.
-func sharedNode(tokens []string) BundleNode { return BundleNode{Target: "pod", RequiresShared: tokens} }
-func claimantNode(tokens []string) BundleNode {
-	return BundleNode{Target: "pod", RequiresExclusive: tokens}
+func sharedNode(tokens []string) spec.BundleNode {
+	return spec.BundleNode{Target: "pod", RequiresShared: tokens}
+}
+func claimantNode(tokens []string) spec.BundleNode {
+	return spec.BundleNode{Target: "pod", RequiresExclusive: tokens}
 }

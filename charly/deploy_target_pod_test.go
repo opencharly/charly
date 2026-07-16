@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	build := buildEngineContext{Generator: gen, Box: &ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 
-	op := &Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}
+	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}
 	plan := &InstallPlan{Candy: "marker", Steps: []InstallStep{&OpStep{Op: op, CandyName: "marker", ResolvedUser: "root"}}}
 	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
 		t.Fatalf("overlay emit: %v", err)

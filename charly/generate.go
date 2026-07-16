@@ -459,7 +459,7 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *ResolvedB
 // buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
 // buildStageContext → deploykit.Generator.BuildStageContext (P8 shim). Used by the
 // host resolveInlineBuilderSeam (the render-seam reverse leg, #67).
-func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *BuildStageContext {
+func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *spec.BuildStageContext {
 	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
 }
 

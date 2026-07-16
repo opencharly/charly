@@ -206,25 +206,25 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 
 	// Env requires / accepts.
-	meta.EnvRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.EnvRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasEnvRequires() {
 			return l.EnvRequire(), true
 		}
 		return nil, false
 	})
-	meta.EnvAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.EnvAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasEnvAccepts() {
 			return l.EnvAccept(), true
 		}
 		return nil, false
 	})
-	meta.SecretRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.SecretRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasSecretRequires() {
 			return l.SecretRequire(), true
 		}
 		return nil, false
 	})
-	meta.SecretAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.SecretAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasSecretAccepts() {
 			return l.SecretAccept(), true
 		}
@@ -232,7 +232,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	})
 
 	// MCP provides (dedup by name, sorted).
-	mcpProvidesMap := make(map[string]MCPServerYAML)
+	mcpProvidesMap := make(map[string]spec.MCPServerYAML)
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
 		if layer.HasMCPProvides() {
@@ -247,7 +247,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 			names = append(names, name)
 		}
 		sortStrings(names)
-		mcpProvides := make([]MCPServerYAML, 0, len(names))
+		mcpProvides := make([]spec.MCPServerYAML, 0, len(names))
 		for _, name := range names {
 			mcpProvides = append(mcpProvides, mcpProvidesMap[name])
 		}
@@ -255,13 +255,13 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 
 	// MCP requires / accepts.
-	meta.MCPRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.MCPRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasMCPRequires() {
 			return l.MCPRequire(), true
 		}
 		return nil, false
 	})
-	meta.MCPAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]EnvDependency, bool) {
+	meta.MCPAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
 		if l.HasMCPAccepts() {
 			return l.MCPAccept(), true
 		}
@@ -399,8 +399,8 @@ func collectedAliasesToLabel(aliases []CollectedAlias) []spec.CollectedAlias {
 
 // sortedEnvDepsFromCandies collects per-candy env-dependency lists (dedup by name, last wins) and
 // returns them sorted — the former writeLabels envRequires/accepts/mcp blocks (via sortedEnvDeps).
-func sortedEnvDepsFromCandies(layers map[string]*Candy, candyOrder []string, pick func(*Candy) ([]EnvDependency, bool)) []EnvDependency {
-	m := make(map[string]EnvDependency)
+func sortedEnvDepsFromCandies(layers map[string]*Candy, candyOrder []string, pick func(*Candy) ([]spec.EnvDependency, bool)) []spec.EnvDependency {
+	m := make(map[string]spec.EnvDependency)
 	for _, candyName := range candyOrder {
 		layer := layers[candyName]
 		if deps, ok := pick(layer); ok {

@@ -10,7 +10,7 @@ import (
 // wiring: it regenerates plugins_generated.go + go.work from charly.yml's
 // `compiled_plugins:` and asserts the committed files match byte-for-byte. It fails if
 // someone hand-edits a generated file, or changes compiled_plugins without re-running
-// `task build:charly` (which runs pluginsgen). Mirrors spec.TestGenReproducible for
+// `task build:binary` (which runs pluginsgen). Mirrors spec.TestGenReproducible for
 // the CUE-gen path.
 func TestPluginsGenReproducible(t *testing.T) {
 	root := filepath.Join("..", "..", "..") // charly/internal/pluginsgen -> repo root
@@ -30,7 +30,7 @@ func TestPluginsGenReproducible(t *testing.T) {
 			t.Fatalf("read committed %s: %v", tc.rel, err)
 		}
 		if string(committed) != string(tc.got) {
-			t.Errorf("%s is stale — re-run `task build:charly` (pluginsgen) and commit it.\n--- committed ---\n%s\n--- regenerated ---\n%s",
+			t.Errorf("%s is stale — re-run `task build:binary` (pluginsgen) and commit it.\n--- committed ---\n%s\n--- regenerated ---\n%s",
 				tc.rel, committed, tc.got)
 		}
 	}

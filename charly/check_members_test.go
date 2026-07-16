@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"sort"
 	"testing"
@@ -29,7 +30,7 @@ func TestSplitHostKey(t *testing.T) {
 // TestCollectHostRefs scans every check string field for ${HOST:…} refs and
 // returns exactly those (not other parameterized vars like ${HOST_PORT}).
 func TestCollectHostRefs(t *testing.T) {
-	checks := []Op{
+	checks := []spec.Op{
 		{Plugin: "cdp", PluginInput: map[string]any{"method": "open", "url": "http://${HOST:web}:8080"}},
 		{Plugin: "command", PluginInput: map[string]any{"command": "curl http://${HOST:web:8080}/health"}},
 		// addr/http are plugin verbs now — their refs live in plugin_input (collectHostRefs
@@ -112,12 +113,12 @@ func TestRunOne_UnresolvedHostVarFails(t *testing.T) {
 	// directly (it implements kit.PlanContext), so a one-op Run exercises the same
 	// var-resolution gate.
 	hostCheck := cmdOpP("curl -fsS http://${HOST:absent:80}/")
-	if res := r.Run(context.Background(), []Op{*hostCheck})[0]; res.Status != TestFail {
+	if res := r.Run(context.Background(), []spec.Op{*hostCheck})[0]; res.Status != TestFail {
 		t.Errorf("unresolved ${HOST:…} → status %v (%q), want TestFail", res.Status, res.Message)
 	}
 	// A non-host unresolved var is a legitimate SKIP (input genuinely N/A here).
 	otherCheck := cmdOpP("echo ${SOME_UNSET_VAR}")
-	if res := r.Run(context.Background(), []Op{*otherCheck})[0]; res.Status != TestSkip {
+	if res := r.Run(context.Background(), []spec.Op{*otherCheck})[0]; res.Status != TestSkip {
 		t.Errorf("unresolved non-host var → status %v (%q), want TestSkip", res.Status, res.Message)
 	}
 }

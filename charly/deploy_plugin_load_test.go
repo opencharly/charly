@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -46,12 +47,12 @@ func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
 // deployNodePluginContext surfaced no plugin words for the nested child and its substrate
 // word never loaded its provider (the "unknown target local" regression).
 func TestResolveDeployNodeByPath(t *testing.T) {
-	tree := map[string]BundleNode{
+	tree := map[string]spec.BundleNode{
 		"check-arch-vm": {
 			Target: "vm",
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"arch-host": {Target: "local"},
-				"web":       {Target: "pod", Children: map[string]*BundleNode{"db": {Target: "pod"}}},
+				"web":       {Target: "pod", Children: map[string]*spec.BundleNode{"db": {Target: "pod"}}},
 			},
 		},
 		"pod-bed": {Target: "pod"},

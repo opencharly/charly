@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"net"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +20,7 @@ func TestRunner_Package(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "rpm -q 'redis'", stdout: "INSTALLED", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
 		})
 		if res[0].Status != TestPass {
@@ -32,7 +33,7 @@ func TestRunner_Package(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "rpm -q 'redis'", stdout: "ABSENT", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
 		})
 		if res[0].Status != TestFail {
@@ -46,7 +47,7 @@ func TestRunner_Package(t *testing.T) {
 			{matchPrefix: "rpm -q 'redis' >/dev/null", stdout: "INSTALLED", exit: 0},
 			{matchPrefix: "rpm -q --qf '%{VERSION}", stdout: "7.0.5\n", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "version": []any{"7.0.5", "7.0.6"}}},
 		})
 		if res[0].Status != TestPass {
@@ -65,7 +66,7 @@ func TestRunner_Service(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "supervisorctl status 'jupyter'", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "service", PluginInput: map[string]any{"service": "jupyter", "running": true}},
 		})
 		if res[0].Status != TestPass {
@@ -78,7 +79,7 @@ func TestRunner_Service(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "supervisorctl status 'jupyter'", exit: 1},
 		}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "service", PluginInput: map[string]any{"service": "jupyter", "running": true}},
 		})
 		if res[0].Status != TestFail {
@@ -95,7 +96,7 @@ func TestRunner_ProcessPlugin(t *testing.T) {
 	t.Run("running", func(t *testing.T) {
 		r, fake := newFakeRunner(t, RunModeLive)
 		fake.responses = []fakeResponse{{matchPrefix: "pgrep -x 'redis-server'", exit: 0}}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "process", PluginInput: map[string]any{"process": "redis-server"}},
 		})
 		if res[0].Status != TestPass {
@@ -105,7 +106,7 @@ func TestRunner_ProcessPlugin(t *testing.T) {
 	t.Run("expected absent", func(t *testing.T) {
 		r, fake := newFakeRunner(t, RunModeLive)
 		fake.responses = []fakeResponse{{matchPrefix: "pgrep -x 'worm'", exit: 1}}
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "process", PluginInput: map[string]any{"process": "worm", "running": false}},
 		})
 		if res[0].Status != TestPass {
@@ -121,7 +122,7 @@ func TestRunner_ProcessPlugin(t *testing.T) {
 func TestRunner_DNSPlugin(t *testing.T) {
 	t.Run("resolvable localhost", func(t *testing.T) {
 		r, _ := newFakeRunner(t, RunModeLive)
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "dns", PluginInput: map[string]any{"dns": "localhost"}},
 		})
 		if res[0].Status != TestPass {
@@ -130,7 +131,7 @@ func TestRunner_DNSPlugin(t *testing.T) {
 	})
 	t.Run("unresolvable as expected", func(t *testing.T) {
 		r, _ := newFakeRunner(t, RunModeLive)
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "dns", PluginInput: map[string]any{"dns": "this-host-will-never-exist.invalid", "resolvable": false}},
 		})
 		if res[0].Status != TestPass {
@@ -147,7 +148,7 @@ func TestRunner_User(t *testing.T) {
 	fake.responses = []fakeResponse{
 		{matchPrefix: "getent passwd 'alice'", stdout: "alice:x:1000:1000:Alice:/home/alice:/bin/bash\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "user", PluginInput: map[string]any{"user": "alice", "uid": 1000, "home": "/home/alice"}},
 	})
 	if res[0].Status != TestPass {
@@ -160,7 +161,7 @@ func TestRunner_User_UIDMismatch(t *testing.T) {
 	fake.responses = []fakeResponse{
 		{matchPrefix: "getent passwd 'alice'", stdout: "alice:x:1500:1500:Alice:/home/alice:/bin/bash\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "user", PluginInput: map[string]any{"user": "alice", "uid": 1000}},
 	})
 	if res[0].Status != TestFail {
@@ -176,7 +177,7 @@ func TestRunner_Group(t *testing.T) {
 	fake.responses = []fakeResponse{
 		{matchPrefix: "getent group 'docker'", stdout: "docker:x:999:alice,bob\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "docker", "gid": 999}},
 	})
 	if res[0].Status != TestPass {
@@ -193,7 +194,7 @@ func TestRunner_Interface(t *testing.T) {
 		{matchPrefix: "ip -o addr show 'eth0'", stdout: "2: eth0 inet 10.0.0.5/24\n", exit: 0},
 		{matchPrefix: "ip -o link show 'eth0'", stdout: "1500\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "interface", PluginInput: map[string]any{"interface": "eth0", "mtu": 1500, "addrs": []any{"10.0.0.5/24"}}},
 	})
 	if res[0].Status != TestPass {
@@ -210,7 +211,7 @@ func TestRunner_KernelParam(t *testing.T) {
 	fake.responses = []fakeResponse{
 		{matchPrefix: "cat '/proc/sys/net/ipv4/ip_forward'", stdout: "1\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "net.ipv4.ip_forward", "value": "1"}},
 	})
 	if res[0].Status != TestPass {
@@ -227,7 +228,7 @@ func TestRunner_Mount(t *testing.T) {
 		{matchPrefix: "findmnt -n -o SOURCE,FSTYPE,OPTIONS '/data'",
 			stdout: "/dev/sda1 ext4 rw,relatime\n", exit: 0},
 	}
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "mount", PluginInput: map[string]any{"mount": "/data", "filesystem": "ext4", "mount_source": "/dev/sda1"}},
 	})
 	if res[0].Status != TestPass {
@@ -245,7 +246,7 @@ func TestRunner_Addr(t *testing.T) {
 	u := strings.TrimPrefix(srv.URL, "http://")
 
 	r, _ := newFakeRunner(t, RunModeLive)
-	res := r.Run(context.Background(), []Op{{Plugin: "addr", PluginInput: map[string]any{"addr": u}}})
+	res := r.Run(context.Background(), []spec.Op{{Plugin: "addr", PluginInput: map[string]any{"addr": u}}})
 	if res[0].Status != TestPass {
 		t.Errorf("expected reachable, got %+v", res[0])
 	}
@@ -257,7 +258,7 @@ func TestRunner_Addr(t *testing.T) {
 	}
 	addr := l.Addr().String()
 	_ = l.Close() // free the port
-	res = r.Run(context.Background(), []Op{
+	res = r.Run(context.Background(), []spec.Op{
 		{Plugin: "addr", PluginInput: map[string]any{"addr": addr, "reachable": false}},
 	})
 	if res[0].Status != TestPass {
@@ -269,7 +270,7 @@ func TestRunner_Addr(t *testing.T) {
 // plugin unit dispatched through the provider registry (TestMain loads its schema).
 func TestRunner_MatchingPlugin(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeLive)
-	res := r.Run(context.Background(), []Op{
+	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "matching", PluginInput: map[string]any{
 			"matching": "hello world",
 			"contains": map[string]any{"contains": "world"},

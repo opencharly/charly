@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,7 +85,7 @@ type UnifiedFile struct {
 	// ProjectBuilderConfig / ProjectInitConfig. The binary-embedded default vocabulary
 	// merges UNDER a project's own entries via the generic root-wins mergePluginKindsMap
 	// (applyEmbeddedDefaults). See unified.go Distros()/Builders()/Inits().
-	Defaults BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Defaults spec.BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 	// Field-singular cutover (2026-05): legacy plural `Images yaml:"images"`
 	// deleted; the singular `Box yaml:"box"` is the canonical surface.
 	// Box is the generic kind-keyed IMAGE map (P6): name → opaque marshaled BoxConfig; consumers
@@ -97,8 +98,8 @@ type UnifiedFile struct {
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
 	// the canonical singular surface; the wrapper's `Provides` migrates
 	// to UnifiedFile root (next field).
-	Bundle   map[string]BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
-	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Bundle   map[string]spec.BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
+	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
 	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
@@ -177,7 +178,7 @@ type UnifiedFile struct {
 	// Namespaces holds child namespaces mounted by namespaced `import:`
 	// entries (alias → fully-resolved isolated UnifiedFile). NOT authored
 	// directly and NOT flat-merged into the root maps — populated by
-	// materializeLoadedProject (loader_driver.go) from the walk's namespace
+	// materializeLoadedProject (materialize.go) from the walk's namespace
 	// mounts. Entries are referenced qualified, e.g.
 	// `base: cachyos.cachyos` resolves `cachyos` in Namespaces, then its
 	// Box["cachyos"]. Bare refs inside a namespace resolve within that
@@ -195,8 +196,8 @@ type UnifiedFile struct {
 // existing scanCandy (no schema change), OR the inline body defines the candy
 // (same fields as the candy manifest, flattened via yaml:",inline").
 type InlineCandy struct {
-	From      string `yaml:"from,omitempty" json:"from,omitempty"`
-	CandyYAML `yaml:",inline"`
+	From           string `yaml:"from,omitempty" json:"from,omitempty"`
+	spec.CandyYAML `yaml:",inline"`
 	// Manifest carries the discovery manifest filename for a `From:` directory
 	// so ProjectCandies→scanCandy reads the right file. Not YAML-authored; carried
 	// through the opaque candy-map fold (P6) via JSON, hence exported + json-tagged.
@@ -211,9 +212,9 @@ type InlineCandy struct {
 // root level. The type definition is kept (not deleted) because
 // migrate_unified.go still references it for legacy migration history.
 type DeploymentsSection struct {
-	Defaults *BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-	Provides *ProvidesConfig       `yaml:"provides,omitempty" json:"provides,omitempty"`
-	Box      map[string]BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
+	Defaults *spec.BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Box      map[string]spec.BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
 }
 
 // -----------------------------------------------------------------------------
@@ -241,7 +242,7 @@ func gateSchemaVersion(root, version string) error {
 		// Written for a NEWER schema than this binary understands; `charly migrate`
 		// only moves forward to THIS binary's HEAD, so the binary itself is behind.
 		return fmt.Errorf(
-			"%s: config schema %s is newer than this charly supports (max %s). Update charly (reinstall the latest opencharly package, or run 'task build:charly' from a fresh checkout)",
+			"%s: config schema %s is newer than this charly supports (max %s). Update charly (reinstall the latest opencharly package, or run 'task build:binary' from a fresh checkout and use ./bin/charly)",
 			root, version, LatestSchemaVersion(),
 		)
 	case !verOK || fileVer.Less(LatestSchemaVersion()):
@@ -282,16 +283,18 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 		}
 		rootData = data
 	}
-	// THE KIND-BLIND WALK (sdk/loaderkit): import queue + discover + namespaced-import mounts +
-	// per-document parse → a generic spec.LoadedProject. No materialize, no merge — those are the
-	// registry-coupled host half below (boundary law). The root's repo-identity cycle-break seed +
-	// the six kind-blind host seams live in hostWalkProject (loader_driver.go).
+	// THE KIND-BLIND WALK (sdk/loaderkit, reached exclusively via the registered loader plugin's
+	// spec.ProjectWalker — charly core imports no sdk mechanism kit, #46): import queue + discover +
+	// namespaced-import mounts + per-document parse → a generic spec.LoadedProject. No materialize,
+	// no merge — those are the registry-coupled host half below (boundary law). The root's
+	// repo-identity cycle-break seed + the six kind-blind host seams live in hostWalkProject
+	// (loader_threaded.go).
 	lp, err := hostWalkProject(dir, rootData)
 	if err != nil {
 		return nil, true, err
 	}
 	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *UnifiedFile, exactly as
-	// the former inline loadUnifiedInto did (materializeLoadedProject, loader_driver.go).
+	// the former inline loadUnifiedInto did (materializeLoadedProject, materialize.go).
 	merged := &UnifiedFile{}
 	if err := materializeLoadedProject(&lp, merged, map[int64]*UnifiedFile{}); err != nil {
 		return nil, true, err
@@ -360,7 +363,7 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 //
 // Errors include the offending path so the user sees exactly which entry needs
 // to be fixed.
-func validateDeploymentTree(deploy map[string]BundleNode) error {
+func validateDeploymentTree(deploy map[string]spec.BundleNode) error {
 	if deploy == nil {
 		return nil
 	}
@@ -395,7 +398,7 @@ func validateDeploymentTree(deploy map[string]BundleNode) error {
 // affected deploy and injects the field, inferring the value from
 // the deploy key (`<base>` for `<base>/<instance>` keys; the key
 // itself otherwise).
-func validateDeployRequiresBox(deploy map[string]BundleNode) error {
+func validateDeployRequiresBox(deploy map[string]spec.BundleNode) error {
 	for name, node := range deploy {
 		// An iterate: benchmark (the former kind:score) composes its scored
 		// subject via plan `include:` steps + the iterate.sandbox, NOT a single
@@ -436,7 +439,7 @@ func validateDeployRequiresBox(deploy map[string]BundleNode) error {
 	return nil
 }
 
-func validateDeploymentChildren(path string, node *BundleNode) error {
+func validateDeploymentChildren(path string, node *spec.BundleNode) error {
 	if node == nil || len(node.Children) == 0 {
 		return nil
 	}
@@ -634,12 +637,12 @@ func mergePluginKindsMap(dst *map[string]map[string]json.RawMessage, src map[str
 // Field-singular cutover: replaces the legacy mergeDeployments which
 // took *DeploymentsSection wrappers. Provides now lives at UnifiedFile
 // root and is merged separately by mergeUnified.
-func mergeDeployMaps(dst *map[string]BundleNode, src map[string]BundleNode) {
+func mergeDeployMaps(dst *map[string]spec.BundleNode, src map[string]spec.BundleNode) {
 	if len(src) == 0 {
 		return
 	}
 	if *dst == nil {
-		*dst = make(map[string]BundleNode)
+		*dst = make(map[string]spec.BundleNode)
 	}
 	for k, v := range src {
 		if _, exists := (*dst)[k]; !exists {
@@ -654,11 +657,11 @@ func mergeDeployMaps(dst *map[string]BundleNode, src map[string]BundleNode) {
 // bundles in the Bundle map. Members are instruments (brought up alongside a
 // driver), never standalone beds. Single enumeration source for
 // `charly check run <bed>` (and the /verify-beds fan-out).
-func (uf *UnifiedFile) CheckBeds() map[string]BundleNode {
+func (uf *UnifiedFile) CheckBeds() map[string]spec.BundleNode {
 	if uf == nil {
 		return nil
 	}
-	beds := map[string]BundleNode{}
+	beds := map[string]spec.BundleNode{}
 	for name, node := range uf.Bundle {
 		if node.IsDisposable() && node.MemberOf == "" {
 			beds[name] = node
@@ -786,7 +789,7 @@ func validateAndroidDevices(uf *UnifiedFile) error {
 //   - the bed's plan: carries at least one `check:` step (the scored success
 //     criteria — an include: step's checks expand at collect time, so a plan of
 //     pure include: steps without a single direct check: is rejected here).
-func validateIterateBed(uf *UnifiedFile, name string, node *BundleNode) error {
+func validateIterateBed(uf *UnifiedFile, name string, node *spec.BundleNode) error {
 	it := node.Iterate
 	agents := uf.PluginKinds["agent"] // agent is a plugin kind; opaque name-keyed catalog
 	for _, a := range it.Agent {
@@ -811,7 +814,7 @@ func validateIterateBed(uf *UnifiedFile, name string, node *BundleNode) error {
 
 // mergeBoxConfig preserves dst's already-set fields and fills only the
 // zero-valued ones from src. Used for merging Defaults blocks from includes.
-func mergeBoxConfig(dst, src *BoxConfig) {
+func mergeBoxConfig(dst, src *spec.BoxConfig) {
 	if src == nil || dst == nil {
 		return
 	}
@@ -974,7 +977,7 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 				return fmt.Errorf("%s: %w", target, gerr)
 			}
 			// The SAME per-node discovered-fold the LoadUnified walk path uses
-			// (materializeDiscoveredNode, loader_driver.go) — a LAYER candy registers a lazy
+			// (materializeDiscoveredNode, materialize.go) — a LAYER candy registers a lazy
 			// `From:` reference (explicit entry wins), every other kind materializes inline. R3:
 			// one discovered-node handler for both the walk path and this candy-scan path.
 			if err := materializeDiscoveredNode(gn, dir, rootDir, manifest, uf); err != nil {
@@ -1030,7 +1033,7 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 // (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
 // consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
 // are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
-func (uf *UnifiedFile) Distros() map[string]*DistroDef {
+func (uf *UnifiedFile) Distros() map[string]*spec.ResolvedDistro {
 	return uf.resolveDistros()
 }
 
@@ -1222,7 +1225,7 @@ func synthesizeInlineCandy(name string, il *InlineCandy, rootDir string) *Candy 
 // inline path silently dropped artifacts/capabilities/requiresCapabilities/
 // shell and the unexported description.) The caller is responsible for the
 // install-file filesystem probes (HasPixiToml etc.) against SourceDir.
-func populateCandyFromYAML(layer *Candy, ly *CandyYAML) {
+func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 	layer.Version = ly.Version
 	layer.Description = ly.Description
 	layer.Status = ly.Status
@@ -1269,7 +1272,7 @@ func populateCandyFromYAML(layer *Candy, ly *CandyYAML) {
 	}
 	if len(ly.Port) > 0 {
 		layer.ports = make([]string, len(ly.Port))
-		layer.portSpecs = make([]PortSpec, len(ly.Port))
+		layer.portSpecs = make([]spec.PortSpec, len(ly.Port))
 		for i, p := range ly.Port {
 			if p.Protocol == "udp" {
 				layer.ports[i] = fmt.Sprintf("%d/udp", p.Port)

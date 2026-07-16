@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +31,7 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 		{``, "", "", false},
 	}
 	for _, tc := range tests {
-		k, v, ok := splitOsReleaseLine(tc.line)
+		k, v, ok := vmshared.SplitOsReleaseLine(tc.line)
 		if k != tc.k || v != tc.v || ok != tc.ok {
 			t.Errorf("splitOsReleaseLine(%q) = (%q, %q, %v); want (%q, %q, %v)",
 				tc.line, k, v, ok, tc.k, tc.v, tc.ok)
@@ -39,22 +41,22 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 
 func TestHostDistroTagsAndFormatHint(t *testing.T) {
 	tests := []struct {
-		hd      *HostDistro
+		hd      *vmshared.HostDistro
 		wantTag string
 		wantFmt string
 	}{
 		{
-			hd:      &HostDistro{ID: "fedora", VersionID: "43"},
+			hd:      &vmshared.HostDistro{ID: "fedora", VersionID: "43"},
 			wantTag: "fedora:43",
 			wantFmt: "rpm",
 		},
 		{
-			hd:      &HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
+			hd:      &vmshared.HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
 			wantTag: "ubuntu:24.04",
 			wantFmt: "deb",
 		},
 		{
-			hd:      &HostDistro{ID: "arch"},
+			hd:      &vmshared.HostDistro{ID: "arch"},
 			wantTag: "arch",
 			wantFmt: "pac",
 		},
@@ -79,7 +81,7 @@ func TestParseGlibcVersion(t *testing.T) {
 		"":                                          "",
 	}
 	for in, want := range tests {
-		if got := parseGlibcVersion(in); got != want {
+		if got := vmshared.ParseGlibcVersion(in); got != want {
 			t.Errorf("parseGlibcVersion(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -99,7 +101,7 @@ func TestCompareGlibc(t *testing.T) {
 		{"2.39", "", 0},
 	}
 	for _, tc := range tests {
-		if got := CompareGlibc(tc.a, tc.b); got != tc.want {
+		if got := vmshared.CompareGlibc(tc.a, tc.b); got != tc.want {
 			t.Errorf("CompareGlibc(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}
@@ -148,7 +150,7 @@ func TestLedgerRefcount(t *testing.T) {
 	if err := AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
 		t.Fatal(err)
 	}
-	rec, _ := ReadCandyRecord(paths, "ripgrep")
+	rec, _ := kit.ReadCandyRecord(paths, "ripgrep")
 	if len(rec.DeployedBy) != 2 {
 		t.Errorf("DeployedBy = %v, want 2 entries", rec.DeployedBy)
 	}
@@ -161,7 +163,7 @@ func TestLedgerRefcount(t *testing.T) {
 	if shouldRemove {
 		t.Errorf("shouldRemove=true after removing one of two deployers")
 	}
-	rec, _ = ReadCandyRecord(paths, "ripgrep")
+	rec, _ = kit.ReadCandyRecord(paths, "ripgrep")
 	if len(rec.DeployedBy) != 1 || rec.DeployedBy[0] != "deploy-B" {
 		t.Errorf("after decrement: %v", rec.DeployedBy)
 	}
@@ -206,7 +208,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 			"PIXI_CACHE_DIR": "/home/user/.cache/charly/pixi",
 		},
 	}
-	args := BuildBuilderRunArgs(opts)
+	args := kit.BuildBuilderRunArgs(opts)
 	want := []string{
 		"run", "--rm",
 		"--pull=never", // EnsureImagePresent has already handled the pull/build; suppress podman's auto-pull.
@@ -323,7 +325,7 @@ func TestRenderManagedBlockStrip(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("sh", "-c", renderManagedBlockStrip(path, "mycandy")).CombinedOutput(); err != nil {
+	if out, err := exec.Command("sh", "-c", kit.RenderManagedBlockStrip(path, "mycandy")).CombinedOutput(); err != nil {
 		t.Fatalf("strip script failed: %v\n%s", err, out)
 	}
 	got, _ := os.ReadFile(path)
@@ -443,7 +445,7 @@ func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
 		HostHome:     "/home/user",
 		RunAsRoot:    true,
 	}
-	args := BuildBuilderRunArgs(opts)
+	args := kit.BuildBuilderRunArgs(opts)
 	full := strings.Join(args, " ")
 	if !strings.Contains(full, "--user 0:0") {
 		t.Errorf("RunAsRoot did not emit --user 0:0; got: %s", full)

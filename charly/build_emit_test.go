@@ -33,7 +33,7 @@ func (stubEmitVerb) Invoke(_ context.Context, op *Operation) (*Result, error) {
 // plugin execution) extracts the fragment — placement-agnostic, since the stub is reached
 // through the SAME Provider.Invoke an external grpcProvider implements.
 func TestEmitPluginFragment_BuildTimeOpEmit(t *testing.T) {
-	op := &Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
+	op := &spec.Op{Plugin: "stubemit", PluginInput: map[string]any{"marker": "stubemit-baked"}}
 	img := &ResolvedBox{Tags: []string{"fedora:43", "fedora"}}
 	frag, err := emitPluginFragment(stubEmitVerb{}, op, img)
 	if err != nil {
@@ -108,18 +108,18 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 	if err := providerRegistry.register(stubBuildEmitterVerb{}, "test:stubbuildemit"); err != nil {
 		t.Fatalf("register stub BuildEmitter: %v", err)
 	}
-	if !opActsInBuildDeploy(&Op{Plugin: "stubbuildemit"}) {
+	if !opActsInBuildDeploy(&spec.Op{Plugin: "stubbuildemit"}) {
 		t.Fatalf("a connected builtin BuildEmitter must act in build/deploy")
 	}
 	// 2. EXTERNAL placement, standalone validate (provider NOT connected): a
 	// prescan-declared external verb is trusted build-emit-capable.
 	registerDeclaredExternalVerb("stubextemit")
-	if !opActsInBuildDeploy(&Op{Plugin: "stubextemit"}) {
+	if !opActsInBuildDeploy(&spec.Op{Plugin: "stubextemit"}) {
 		t.Fatalf("a prescan-declared external verb must validate as build-emit-capable")
 	}
 	// 3. An unknown, undeclared verb is NOT trusted (no blanket accept — a runtime-only
 	// verb mistakenly used in a build step must still be caught).
-	if opActsInBuildDeploy(&Op{Plugin: "totally-unknown-verb-xyz"}) {
+	if opActsInBuildDeploy(&spec.Op{Plugin: "totally-unknown-verb-xyz"}) {
 		t.Fatalf("an unknown, undeclared verb must NOT act in build/deploy")
 	}
 }
@@ -131,11 +131,11 @@ func TestOpActsInBuildDeploy_PlacementAgnosticBuildEmit(t *testing.T) {
 // (builtins resolve through the registry, not this not-connected map).
 func TestRegisterExternalVerbsFromCandies(t *testing.T) {
 	candies := map[string]*Candy{
-		"ext-plugin": {Plugin: &CandyPluginDecl{
+		"ext-plugin": {Plugin: &spec.Plugin{
 			Source:    "github.com/opencharly/charly/candy/ext-plugin",
 			Providers: []spec.PluginCapability{"verb:extverbfromcandy"},
 		}},
-		"builtin-plugin": {Plugin: &CandyPluginDecl{
+		"builtin-plugin": {Plugin: &spec.Plugin{
 			Source:    "builtin",
 			Providers: []spec.PluginCapability{"verb:builtinverbfromcandy"},
 		}},
@@ -171,20 +171,20 @@ func TestPluginAlreadyConnected_Idempotent(t *testing.T) {
 		t.Fatalf("register stub: %v", err)
 	}
 	// 1. Same source → already connected (the second load is skipped, no duplicate).
-	connected, err := pluginAlreadyConnected("idem-plugin", &CandyPluginDecl{
+	connected, err := pluginAlreadyConnected("idem-plugin", &spec.Plugin{
 		Source: src, Providers: []spec.PluginCapability{"verb:idemverb"},
 	})
 	if err != nil || !connected {
 		t.Fatalf("a same-source re-load must be idempotent: connected=%v err=%v", connected, err)
 	}
 	// 2. Different source, same word → genuine bijection collision (errors, not skipped).
-	if _, err := pluginAlreadyConnected("other-plugin", &CandyPluginDecl{
+	if _, err := pluginAlreadyConnected("other-plugin", &spec.Plugin{
 		Source: "github.com/other/repo", Providers: []spec.PluginCapability{"verb:idemverb"},
 	}); err == nil {
 		t.Fatalf("a different-source collision on the same word must error, not skip")
 	}
 	// 3. Unregistered word → not connected (proceeds to a real load).
-	if connected, err := pluginAlreadyConnected("fresh-plugin", &CandyPluginDecl{
+	if connected, err := pluginAlreadyConnected("fresh-plugin", &spec.Plugin{
 		Source: src, Providers: []spec.PluginCapability{"verb:neverregistered-idem"},
 	}); err != nil || connected {
 		t.Fatalf("an unregistered plugin must not be reported connected: connected=%v err=%v", connected, err)

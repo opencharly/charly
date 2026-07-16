@@ -51,7 +51,7 @@ func deployTraitsFor(word string) *spec.DeployTraits {
 // effectiveTarget returns the node's substrate word for trait resolution — node.Target with an
 // empty target defaulted to "pod" (the loader's empty→pod default, classifyTarget). Used by
 // nodeTraits to resolve traits for a synthetic node whose descent was never stamped.
-func effectiveTarget(node *BundleNode) string {
+func effectiveTarget(node *spec.BundleNode) string {
 	if node == nil || node.Target == "" {
 		return "pod"
 	}
@@ -63,7 +63,7 @@ func effectiveTarget(node *BundleNode) string {
 // image_context / leaf_only), instead of switching on the substrate kind word (the boundary law).
 // A loaded node carries a stamped node.Descent; a synthetic node (built outside the loader, e.g.
 // classifyTarget) has none, so its traits are resolved on the fly from the registry. Never nil.
-func nodeTraits(node *BundleNode) *spec.DescentDescriptor {
+func nodeTraits(node *spec.BundleNode) *spec.DescentDescriptor {
 	if node != nil && node.Descent != nil {
 		return node.Descent
 	}
@@ -97,7 +97,7 @@ func stampBundleDescents(uf *UnifiedFile) {
 // the merged UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.
-func resolveTreeRoot(dir string) (map[string]BundleNode, error) {
+func resolveTreeRoot(dir string) (map[string]spec.BundleNode, error) {
 	var projectDC *BundleConfig
 	if uf, ok, err := LoadUnified(dir); err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"net"
 	"os"
 	"os/exec"
@@ -329,9 +330,9 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 // external deploy to the host path for BOTH the declarative `charly check live`
 // and the interactive `charly check <verb>`, instead of the pod/container path
 // (which would fail at resolveContainer with "container ... is not running").
-func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
+func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	if uf == nil || uf.Bundle == nil {
-		return BundleNode{}, false
+		return spec.BundleNode{}, false
 	}
 	root := name
 	if idx := strings.Index(name, "."); idx > 0 {
@@ -354,5 +355,5 @@ func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
 			return entry, true
 		}
 	}
-	return BundleNode{}, false
+	return spec.BundleNode{}, false
 }

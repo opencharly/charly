@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
@@ -165,8 +166,8 @@ func TestResolveImageNotFound(t *testing.T) {
 // authored in charly.yml never reaches the generator.
 func TestMergeBoxConfig_BuildTunables(t *testing.T) {
 	// dst empty → fills from src (the path that dropped these fields).
-	dst := &BoxConfig{}
-	src := &BoxConfig{
+	dst := &spec.BoxConfig{}
+	src := &spec.BoxConfig{
 		Jobs:          new(4),
 		PodmanJobs:    new(0),
 		PodmanJobsCap: new(8),
@@ -199,8 +200,8 @@ func TestMergeBoxConfig_BuildTunables(t *testing.T) {
 	}
 
 	// dst already set → src must NOT override (per-field "dst wins if set").
-	dst2 := &BoxConfig{Jobs: new(2), Cache: "registry"}
-	mergeBoxConfig(dst2, &BoxConfig{Jobs: new(9), Cache: "image"})
+	dst2 := &spec.BoxConfig{Jobs: new(2), Cache: "registry"}
+	mergeBoxConfig(dst2, &spec.BoxConfig{Jobs: new(9), Cache: "image"})
 	if dst2.Jobs == nil || *dst2.Jobs != 2 {
 		t.Errorf("dst Jobs should win, got %v", dst2.Jobs)
 	}
@@ -239,13 +240,13 @@ func TestImageNames(t *testing.T) {
 
 func TestResolveImageBuilders(t *testing.T) {
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry:  "ghcr.io/test",
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 			Builder:   BuilderMap{"pixi": "default-builder", "npm": "default-builder"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"default-builder": {Candy: []string{}},
 			"custom-builder":  {Candy: []string{}},
 			"uses-default":    {Candy: []string{}},
@@ -277,8 +278,8 @@ func TestResolveImageBuilders(t *testing.T) {
 
 	// No defaults.builder → empty
 	cfg2 := &Config{
-		Defaults: BoxConfig{Build: BuildFormats{"rpm"}, Platforms: []string{"linux/amd64"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Platforms: []string{"linux/amd64"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"app": {Candy: []string{}},
 		}),
 	}
@@ -292,12 +293,12 @@ func TestResolveImageBuilders(t *testing.T) {
 
 	// Self-reference filtered out
 	cfg3 := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 			Builder:   BuilderMap{"pixi": "my-builder"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"my-builder": {Candy: []string{}},
 		}),
 	}
@@ -311,8 +312,8 @@ func TestResolveImageBuilders(t *testing.T) {
 
 	// Inheritance from base image
 	cfg4 := &Config{
-		Defaults: BoxConfig{Build: BuildFormats{"pac"}, Platforms: []string{"linux/amd64"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}, Platforms: []string{"linux/amd64"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base-img":    {Build: BuildFormats{"pac"}, Candy: []string{}, Builder: BuilderMap{"aur": "aur-builder"}},
 			"aur-builder": {Candy: []string{}},
 			"child-img":   {Base: "base-img", Candy: []string{}},
@@ -331,7 +332,7 @@ func TestResolveImageBuilders(t *testing.T) {
 // candy in its base chain (boxes no longer declare ports), deduped by container
 // port, sorted ascending, with the /udp suffix preserved.
 func TestCollectBoxPorts(t *testing.T) {
-	mk := func(name string, specs ...PortSpec) *Candy {
+	mk := func(name string, specs ...spec.PortSpec) *Candy {
 		l := &Candy{Name: name}
 		l.portSpecs = specs
 		for _, s := range specs {
@@ -344,15 +345,15 @@ func TestCollectBoxPorts(t *testing.T) {
 		return l
 	}
 	layers := map[string]*Candy{
-		"sshd":     mk("sshd", PortSpec{Port: 2222, Protocol: "tcp"}),
-		"web":      mk("web", PortSpec{Port: 3000, Protocol: "https+insecure"}),
-		"cdp":      mk("cdp", PortSpec{Port: 9222}),
-		"udp-svc":  mk("udp-svc", PortSpec{Port: 47998, Protocol: "udp"}),
-		"web-dup":  mk("web-dup", PortSpec{Port: 3000}), // duplicate container port → deduped
+		"sshd":     mk("sshd", spec.PortSpec{Port: 2222, Protocol: "tcp"}),
+		"web":      mk("web", spec.PortSpec{Port: 3000, Protocol: "https+insecure"}),
+		"cdp":      mk("cdp", spec.PortSpec{Port: 9222}),
+		"udp-svc":  mk("udp-svc", spec.PortSpec{Port: 47998, Protocol: "udp"}),
+		"web-dup":  mk("web-dup", spec.PortSpec{Port: 3000}), // duplicate container port → deduped
 		"no-ports": mk("no-ports"),
 	}
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			// child inherits the base box's candy ports
 			"base":  {Candy: []string{"sshd", "web"}},
 			"child": {Base: "base", Candy: []string{"cdp", "udp-svc", "web-dup", "no-ports"}},
@@ -510,12 +511,12 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 	// Tests that distro: tags propagate through the entire base chain,
 	// not just the immediate parent.
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry:  "ghcr.io/test",
 			Build:     BuildFormats{"rpm"},
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			// Level 0: defines distro
 			"fedora": {
 				Base:   "quay.io/fedora/fedora:43",
@@ -567,11 +568,11 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 func TestResolveImageBuildBaseChain(t *testing.T) {
 	// Tests that build: formats propagate through the base chain.
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry:  "ghcr.io/test",
 			Platforms: []string{"linux/amd64"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			// Level 0: defines build
 			"arch": {
 				Base:  "docker.io/library/archlinux:latest",

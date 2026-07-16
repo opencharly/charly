@@ -8,7 +8,6 @@ import "github.com/opencharly/sdk/kit"
 // core's call sites unchanged after refs_git.go + the cache-path helpers moved to kit.
 var (
 	RepoGitURL       = kit.RepoGitURL
-	GitClone         = kit.GitClone
 	GitDefaultBranch = kit.GitDefaultBranch
 	GitLatestTag     = kit.GitLatestTag
 	compareSemver    = kit.CompareSemver

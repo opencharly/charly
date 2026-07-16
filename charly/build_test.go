@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"reflect"
 	"strings"
 	"testing"
@@ -135,7 +136,7 @@ func TestHostPlatform(t *testing.T) {
 // (GPGME "No data" on SigLevel=Never repos); (3) non-microarch / empty inputs
 // stay clean (no spurious [options], no regression for arch-pacstrap).
 func TestRenderPacstrapExtraConf(t *testing.T) {
-	cachyos := &PacstrapDef{ExtraRepos: []PacstrapRepo{
+	cachyos := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "cachyos-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
@@ -160,7 +161,7 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 	}
 
 	// Plain (non-microarch) repo without SigLevel → repo block, no [options].
-	plain := &PacstrapDef{ExtraRepos: []PacstrapRepo{
+	plain := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
 	}}
 	got = renderPacstrapExtraConf(plain)

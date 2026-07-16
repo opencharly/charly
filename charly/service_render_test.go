@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 )
@@ -60,7 +62,7 @@ func withRaw(ri *ResolvedInit) *ResolvedInit {
 func testSystemdInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "systemctl",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			ServiceTemplate:    testSystemdServiceTemplate,
 			UnitPathTemplate:   testSystemdUnitPathTemplate,
 			DropinTemplate:     testSystemdDropinTemplate,
@@ -73,7 +75,7 @@ func testSystemdInitDef() *ResolvedInit {
 func testSupervisordInitDef() *ResolvedInit {
 	return withRaw(&ResolvedInit{
 		ManagementTool: "supervisorctl",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			ServiceTemplate:  testSupervisordServiceTemplate,
 			UnitPathTemplate: `/etc/supervisord.d/{{.Candy}}-{{.Name}}.conf`,
 			SupportsPackaged: false,
@@ -82,7 +84,7 @@ func testSupervisordInitDef() *ResolvedInit {
 }
 
 func TestRenderServiceCustomSystemd(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:    "ollama",
 		Exec:    "/usr/bin/ollama serve",
 		Env:     map[string]string{"OLLAMA_HOST": "0.0.0.0:11434"},
@@ -123,7 +125,7 @@ func TestRenderServiceCustomSystemd(t *testing.T) {
 // graphical-session-scoped service is pulled WITH the logged-in session, not at
 // early user-manager start (where the Wayland display doesn't yet exist).
 func TestRenderServiceWantedBy(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:     "session-capture",
 		Exec:     "/usr/bin/session-capture",
 		Restart:  "always",
@@ -153,7 +155,7 @@ func TestRenderServiceWantedBy(t *testing.T) {
 // both spellings resolve to the token so InstallPlan.ResolveHome can
 // substitute the real destination home at emit — not the build host's home.
 func TestRenderServiceHomePortabilityToken(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:   "selkies",
 		Exec:   "python3 %(ENV_HOME)s/.local/bin/selkies-capture-server",
 		Env:    map[string]string{"SELKIES_DATA": "$HOME/.config/selkies"},
@@ -201,7 +203,7 @@ func TestRenderServiceHomePortabilityToken(t *testing.T) {
 }
 
 func TestRenderServicePackagedWithOverrides(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:        "postgresql",
 		UsePackaged: "postgresql.service",
 		Enable:      true,
@@ -230,7 +232,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 }
 
 func TestRenderServicePackagedOnSupervisordRefuses(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:        "postgresql",
 		UsePackaged: "postgresql.service",
 		Enable:      true,
@@ -245,7 +247,7 @@ func TestRenderServicePackagedOnSupervisordRefuses(t *testing.T) {
 }
 
 func TestRenderServiceCustomSupervisord(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:    "ollama",
 		Exec:    "/usr/bin/ollama serve",
 		Restart: "always",
@@ -266,7 +268,7 @@ func TestRenderServiceCustomSupervisord(t *testing.T) {
 }
 
 func TestRenderServiceUserScope(t *testing.T) {
-	entry := &ServiceEntry{
+	entry := &spec.ServiceEntry{
 		Name:   "x",
 		Exec:   "/bin/true",
 		Scope:  "user",
@@ -289,25 +291,25 @@ func TestRenderServiceUserScope(t *testing.T) {
 }
 
 func TestServiceEntryIsPackaged(t *testing.T) {
-	packaged := &ServiceEntry{UsePackaged: "foo.service"}
-	custom := &ServiceEntry{Exec: "/bin/foo"}
+	packaged := &spec.ServiceEntry{UsePackaged: "foo.service"}
+	custom := &spec.ServiceEntry{Exec: "/bin/foo"}
 	if !packaged.IsPackaged() {
 		t.Errorf("packaged entry should return IsPackaged=true")
 	}
 	if custom.IsPackaged() {
 		t.Errorf("custom entry should return IsPackaged=false")
 	}
-	var nilEntry *ServiceEntry
+	var nilEntry *spec.ServiceEntry
 	if nilEntry.IsPackaged() {
 		t.Errorf("nil entry should return IsPackaged=false")
 	}
 }
 
 func TestServiceEntryEffectiveScope(t *testing.T) {
-	if got := (&ServiceEntry{}).EffectiveScope(); got != "system" {
+	if got := (&spec.ServiceEntry{}).EffectiveScope(); got != "system" {
 		t.Errorf("default scope = %q, want system", got)
 	}
-	if got := (&ServiceEntry{Scope: "user"}).EffectiveScope(); got != "user" {
+	if got := (&spec.ServiceEntry{Scope: "user"}).EffectiveScope(); got != "user" {
 		t.Errorf("explicit user scope = %q", got)
 	}
 }

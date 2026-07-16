@@ -1,36 +1,36 @@
-package main
+package vm
 
 import (
 	"bytes"
 	"fmt"
 	"text/template"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
-// DiskLayout describes a partitioned VM disk to be built inside a
-// privileged container by EmitDiskBuildScript. Used by both the
-// pacstrap/debootstrap VM-bootstrap path and the bootc-VM install
-// path (where the bootloader is provided by `bootc install` rather
-// than by chroot grub-install).
+// vm_disk_layout.go — the partitioned-disk script emitter (P8b-rest: ported verbatim from
+// charly/vm_disk_builder.go; pure text/template rendering, zero core dependency).
+
+// DiskLayout describes a partitioned VM disk to be built inside a privileged container by
+// EmitDiskBuildScript. Used by both the pacstrap/debootstrap VM-bootstrap path and the
+// bootc-VM install path (where the bootloader is provided by `bootc install` rather than by
+// chroot grub-install).
 type DiskLayout struct {
-	// SizeBytesOrSuffix is the size to allocate for the raw disk file
-	// (e.g. "20G", "10240M", "536870912"). Forwarded verbatim to
-	// `truncate -s`.
+	// SizeBytesOrSuffix is the size to allocate for the raw disk file (e.g. "20G", "10240M",
+	// "536870912"). Forwarded verbatim to `truncate -s`.
 	SizeBytesOrSuffix string
-	// Rootfs selects the root partition filesystem: "ext4" (default),
-	// "xfs", or "btrfs".
+	// Rootfs selects the root partition filesystem: "ext4" (default), "xfs", or "btrfs".
 	Rootfs string
 	// EspSizeMib sizes the EFI System Partition (FAT32). Default 512.
 	EspSizeMib int
-	// Mnt is the absolute path inside the container where the root
-	// partition gets mounted (default /mnt). Bootloader install
-	// templates render against this.
+	// Mnt is the absolute path inside the container where the root partition gets mounted
+	// (default /mnt). Bootloader install templates render against this.
 	Mnt string
 }
 
-// diskBuildScriptTmpl renders the partition + format + mount sequence
-// for a fresh VM disk. The caller appends the rootfs install + chroot
-// commands after `# >>> install rootfs <<<` and before the
-// finalization (`# <<< install rootfs >>>`) markers.
+// diskBuildScriptTmpl renders the partition + format + mount sequence for a fresh VM disk. The
+// caller appends the rootfs install + chroot commands after `# >>> install rootfs <<<` and
+// before the finalization (`# <<< install rootfs >>>`) markers.
 //
 // Layout (matches the standard Debian/Ubuntu installer layout):
 //
@@ -44,8 +44,8 @@ type DiskLayout struct {
 //	{{.Mnt}}/boot/efi     — ESP mounted (FAT32). Only EFI binaries
 //	                        (BOOTX64.EFI, grubx64.efi) live here.
 //
-// The script unmounts and detaches the loop device on exit (trap),
-// then `qemu-img convert` produces /out/disk.qcow2.
+// The script unmounts and detaches the loop device on exit (trap), then `qemu-img convert`
+// produces /out/disk.qcow2.
 const diskBuildScriptTmpl = `set -euo pipefail
 mkdir -p /out
 RAW=/out/disk.raw
@@ -71,9 +71,9 @@ mount "${LOOP}p1" {{.Mnt}}/boot/efi
 # >>> install rootfs <<<
 `
 
-// diskBuildFinalizeTmpl renders the unmount + qcow2 conversion tail.
-// Combined with diskBuildScriptTmpl + caller-supplied install body to
-// form the full bash body passed to RunPrivileged.
+// diskBuildFinalizeTmpl renders the unmount + qcow2 conversion tail. Combined with
+// diskBuildScriptTmpl + caller-supplied install body to form the full bash body passed to
+// RunPrivileged.
 const diskBuildFinalizeTmpl = `# <<< install rootfs >>>
 sync
 umount {{.Mnt}}/boot/efi
@@ -84,10 +84,9 @@ qemu-img convert -O qcow2 "$RAW" /out/disk.qcow2
 rm -f "$RAW"
 `
 
-// EmitDiskBuildScript renders the prelude (partition + format + mount)
-// and finalize (unmount + qcow2 convert) halves of a privileged VM
-// disk-build script. The caller stitches them around its own rootfs
-// install body. Returns (prelude, finalize) on success.
+// EmitDiskBuildScript renders the prelude (partition + format + mount) and finalize (unmount +
+// qcow2 convert) halves of a privileged VM disk-build script. The caller stitches them around
+// its own rootfs install body. Returns (prelude, finalize) on success.
 func EmitDiskBuildScript(layout DiskLayout) (string, string, error) {
 	if layout.Rootfs == "" {
 		layout.Rootfs = "ext4"
@@ -134,7 +133,7 @@ func EmitDiskBuildScript(layout DiskLayout) (string, string, error) {
 }
 
 func renderTmpl(name, tmpl string, ctx any) (string, error) {
-	t, err := template.New(name).Funcs(templateFuncs).Parse(tmpl)
+	t, err := template.New(name).Funcs(buildkit.TemplateFuncs).Parse(tmpl)
 	if err != nil {
 		return "", err
 	}

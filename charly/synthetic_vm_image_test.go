@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
@@ -15,7 +16,7 @@ import (
 //
 // Without the fix every row below would resolve Pkg="pac" and FAIL.
 func TestSyntheticVmImageDistroFormat(t *testing.T) {
-	distroCfg := &DistroConfig{Distro: map[string]*DistroDef{
+	distroCfg := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true}, // pulls arch package sections
 		"debian":  {Format: map[string]*FormatDef{"deb": {}}},
@@ -106,14 +107,14 @@ func TestResolveVmEntity(t *testing.T) {
 	cases := []struct {
 		name       string
 		deployName string
-		node       *BundleNode
+		node       *spec.BundleNode
 		want       string
 	}{
-		{"bed via node.vm (the bug)", "check-fedora-vm", &BundleNode{From: "fedora-vm"}, "fedora-vm"},
-		{"deploy.yml target:vm via node.vm", "my-guest", &BundleNode{Target: "vm", From: "arch"}, "arch"},
+		{"bed via node.vm (the bug)", "check-fedora-vm", &spec.BundleNode{From: "fedora-vm"}, "fedora-vm"},
+		{"deploy.yml target:vm via node.vm", "my-guest", &spec.BundleNode{Target: "vm", From: "arch"}, "arch"},
 		{"cli vm: prefix, no node", "vm:arch", nil, "arch"},
-		{"node.vm wins over prefix", "vm:ignored", &BundleNode{From: "real-vm"}, "real-vm"},
-		{"non-vm deploy -> empty", "my-pod", &BundleNode{}, ""},
+		{"node.vm wins over prefix", "vm:ignored", &spec.BundleNode{From: "real-vm"}, "real-vm"},
+		{"non-vm deploy -> empty", "my-pod", &spec.BundleNode{}, ""},
 		{"nil node, non-prefixed -> empty", "some-pod", nil, ""},
 	}
 	for _, tc := range cases {
@@ -128,7 +129,7 @@ func TestResolveVmEntity(t *testing.T) {
 // TestSyntheticVmImageRootFallback: a bootc VM with no SSH user resolves to
 // the root branch (System scope, /root home), unchanged by the distro fix.
 func TestSyntheticVmImageRootFallback(t *testing.T) {
-	distroCfg := &DistroConfig{Distro: map[string]*DistroDef{
+	distroCfg := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {Format: map[string]*FormatDef{"rpm": {}}},
 	}}
 	img := syntheticVmBox(&VmSpec{Source: VmSource{Kind: "bootc"}}, distroCfg)

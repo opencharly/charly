@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,7 +31,7 @@ import (
 // VM(s) occupy — the bed's own vm target plus any group-member vm targets. This is the
 // unit of exclusive host contention two DISTINCT beds can collide on (the per-domain lock
 // in the check-bed session seam serializes them).
-func bedVmDomains(name string, node BundleNode) []string {
+func bedVmDomains(name string, node spec.BundleNode) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(domainID string) {
@@ -79,7 +80,7 @@ func acquireVmDomainLock(domain string) (func() error, error) {
 // bedCheckLevel resolves the acceptance-depth rung for a bed from its box's
 // authored check_level (none → DefaultCheckLevel). VM / local beds carry no box
 // image, so they always run at the default rung.
-func bedCheckLevel(uf *UnifiedFile, node BundleNode) string {
+func bedCheckLevel(uf *UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
 		return DefaultCheckLevel
 	}
@@ -127,7 +128,7 @@ func bedExternalInPlace(target string) bool {
 // logic; `charly config`'s own SetPorts-gated save then leaves the seeded port
 // untouched (it passes no `-p`). saveDeployState's per-field guards make
 // unset bed fields no-ops, so this is safe for beds that declare only a subset.
-func persistBedDeployOverrides(name string, node BundleNode) {
+func persistBedDeployOverrides(name string, node spec.BundleNode) {
 	// A GROUP bed (boxless root + sibling Members — the §3 cross-deployment
 	// shape) has NO root deployment to seed: its members each carry their own
 	// port/volume/env overrides (bringUpMembers persists every member), and the
@@ -188,7 +189,7 @@ func persistBedDeployOverrides(name string, node BundleNode) {
 // VM-member branch. They differ only in how a child deploy is executed (the root
 // wraps it in a recorded step(); a member shells out directly), so that is the
 // injected apply func.
-func deployNestedLocalChildren(parent string, children map[string]*BundleNode, apply func(childKey, dotted string) error) error {
+func deployNestedLocalChildren(parent string, children map[string]*spec.BundleNode, apply func(childKey, dotted string) error) error {
 	for _, childKey := range sortedNestedKeys(children) {
 		child := children[childKey]
 		if child == nil || !nodeTraits(child).HostRooted { // local (host-rooted shell venue) only

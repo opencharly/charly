@@ -248,7 +248,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
 		return kit.CheckRunReply{NoSteps: true}, nil
 	}
-	var deployOverlay *BundleNode
+	var deployOverlay *spec.BundleNode
 	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
 		if entry, ok := dc.Bundle[deployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry

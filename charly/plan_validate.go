@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ import (
 //   - run/check steps carry exactly one Op verb; agent-* steps carry none
 //
 // Returns a list of human-readable error strings (empty if OK).
-func validatePlanSteps(desc string, plan []Step, eid string) []string {
+func validatePlanSteps(desc string, plan []spec.Step, eid string) []string {
 	var errs []string
 	if strings.TrimSpace(desc) == "" {
 		errs = append(errs, fmt.Sprintf("%s: description is empty", eid))

@@ -10,7 +10,7 @@
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
-//     Containerfile tree host-side over HostBuild("build-resolve", GenerateOnly). Zero core reentry.
+//     Containerfile tree host-side over HostBuild("build-prep", GenerateOnly). Zero core reentry.
 //   - command:new — `charly box new candy/project/box`: calls kit.ScaffoldCandy / kit.ScaffoldProject
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
@@ -13,14 +14,14 @@ import (
 // expander entry (or a lost UnmarshalJSON) would reintroduce the check-cross-vm-http
 // regression.
 func TestLibvirtListeners_OpaqueNotExpander(t *testing.T) {
-	if !implementsJSONUnmarshaler(reflect.TypeOf(LibvirtGraphicsListeners{})) {
+	if !implementsJSONUnmarshaler(reflect.TypeOf(spec.LibvirtGraphicsListeners{})) {
 		t.Fatal("LibvirtGraphicsListeners must implement json.Unmarshaler (the opaque-decode path)")
 	}
-	if _, ok := cueShorthandExpanders[reflect.TypeOf(LibvirtGraphicsListeners{})]; ok {
+	if _, ok := cueShorthandExpanders[reflect.TypeOf(spec.LibvirtGraphicsListeners{})]; ok {
 		t.Fatal("LibvirtGraphicsListeners must NOT be in cueShorthandExpanders — its UnmarshalJSON serves both read paths")
 	}
 	// The scalar shorthand the vm web-vm bed uses decodes on the JSON (opaque) path.
-	var ll LibvirtGraphicsListeners
+	var ll spec.LibvirtGraphicsListeners
 	if err := json.Unmarshal([]byte(`"127.0.0.1"`), &ll); err != nil {
 		t.Fatalf("scalar listen shorthand must decode on the opaque path: %v", err)
 	}

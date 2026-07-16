@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -23,7 +25,7 @@ func TestSystemPackagesStepScopeVenueGate(t *testing.T) {
 		},
 		{
 			name:     "prepare phase with repos needs allow-repo-changes",
-			step:     &SystemPackagesStep{Format: "rpm", Phase: PhasePrepare, Repos: []RepoSpec{{}}},
+			step:     &SystemPackagesStep{Format: "rpm", Phase: PhasePrepare, Repos: []deploykit.RepoSpec{{}}},
 			wantGate: GateAllowRepoChanges,
 		},
 		{
@@ -168,7 +170,7 @@ func TestTaskStepCmdGate(t *testing.T) {
 		t.Errorf("root cmd gate = %v, want allow-root-tasks", got)
 	}
 	// root structured task (mkdir) is NOT gated
-	s = &OpStep{ResolvedUser: "root", Op: &Op{Mkdir: "/etc/foo"}}
+	s = &OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}}
 	if got := s.RequiresGate(); got != GateNone {
 		t.Errorf("root mkdir gate = %v, want none", got)
 	}
@@ -191,7 +193,7 @@ func TestPathIsSystemScoped(t *testing.T) {
 		"":                        false,
 	}
 	for path, want := range tests {
-		if got := pathIsSystemScoped(path); got != want {
+		if got := deploykit.PathIsSystemScoped(path); got != want {
 			t.Errorf("pathIsSystemScoped(%q) = %v, want %v", path, got, want)
 		}
 	}
@@ -243,7 +245,7 @@ func TestShellHookStep(t *testing.T) {
 }
 
 func TestRepoChangeStep(t *testing.T) {
-	s := &RepoChangeStep{
+	s := &deploykit.RepoChangeStep{
 		Format:    "rpm",
 		File:      "/etc/yum.repos.d/rpmfusion-free.repo",
 		Content:   "[rpmfusion-free]\n...",
@@ -266,8 +268,8 @@ func TestInstallPlanStepsByVenue(t *testing.T) {
 		Steps: []InstallStep{
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"a"}},
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"b"}},
-			&OpStep{ResolvedUser: "root", Op: &Op{Mkdir: "/etc/foo"}},
-			&OpStep{ResolvedUser: "1000:1000", Op: &Op{Mkdir: "$HOME/bin"}},
+			&OpStep{ResolvedUser: "root", Op: &spec.Op{Mkdir: "/etc/foo"}},
+			&OpStep{ResolvedUser: "1000:1000", Op: &spec.Op{Mkdir: "$HOME/bin"}},
 			&BuilderStep{Builder: "pixi"},
 		},
 	}
@@ -309,7 +311,7 @@ func TestGateEnabledMatrix(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := GateEnabled(tc.gate, tc.opts); got != tc.want {
+			if got := deploykit.GateEnabled(tc.gate, tc.opts); got != tc.want {
 				t.Errorf("GateEnabled(%v, %+v) = %v, want %v", tc.gate, tc.opts, got, tc.want)
 			}
 		})

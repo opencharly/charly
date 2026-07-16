@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // serviceEntryAppliesToDistro is the render-time filter that lets ONE candy
 // carry per-distro-DIVERGENT service entries (the modular virtqemud.socket +
@@ -28,7 +31,7 @@ func TestServiceEntryAppliesToDistro(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			entry := &ServiceEntry{Name: "x", Distro: tc.entry}
+			entry := &spec.ServiceEntry{Name: "x", Distro: tc.entry}
 			if got := serviceEntryAppliesToDistro(entry, tc.distros); got != tc.want {
 				t.Fatalf("serviceEntryAppliesToDistro(%v, %v) = %v, want %v", tc.entry, tc.distros, got, tc.want)
 			}
@@ -38,8 +41,8 @@ func TestServiceEntryAppliesToDistro(t *testing.T) {
 
 // virtualizationServiceEntries mirrors the real candy/virtualization service:
 // list — the modular Fedora/Arch daemons + the monolithic Debian/Ubuntu one.
-func virtualizationServiceEntries() []ServiceEntry {
-	return []ServiceEntry{
+func virtualizationServiceEntries() []spec.ServiceEntry {
+	return []spec.ServiceEntry{
 		{Name: "virtqemud", UsePackaged: "virtqemud.socket", Distro: []string{"fedora", "arch"}, Enable: true, Scope: "system"},
 		{Name: "virtqemud", Exec: "/usr/sbin/virtqemud --timeout 0", Distro: []string{"fedora", "arch"}, Enable: true, Scope: "system"},
 		{Name: "virtnetworkd", UsePackaged: "virtnetworkd.socket", Distro: []string{"fedora", "arch"}, Enable: true, Scope: "system"},

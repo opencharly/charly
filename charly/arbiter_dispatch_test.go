@@ -31,7 +31,7 @@ func TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces(t *testing.T) {
 	t.Setenv(envPreemptLeaseHeld, "")
 
 	claimant := "check-preempt-arbiter-pod"
-	node := BundleNode{Target: "pod", RequiresExclusive: []string{"test-lock"}}
+	node := spec.BundleNode{Target: "pod", RequiresExclusive: []string{"test-lock"}}
 
 	// The runner's bed-arbiter path: acquire an exclusive claim for the bed. A SELECTOR-LESS
 	// token (no resource: gpu def) → applyMode SKIPS the device flip (ZERO GPU) but the lease is

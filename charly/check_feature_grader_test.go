@@ -137,7 +137,7 @@ func proseAgentSet() *LabelDescriptionSet {
 		Candy: []LabeledDescription{{
 			Origin:      "candy:x",
 			Description: "the gizmo works",
-			Plan:        []Step{{AgentCheck: "the gizmo responds"}},
+			Plan:        []spec.Step{{AgentCheck: "the gizmo responds"}},
 		}},
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +77,7 @@ func TestResolveAgentForwarding_DeployOverride(t *testing.T) {
 		ForwardSshAgent: true,
 	}
 	f := false
-	deploy := &BundleNode{
+	deploy := &spec.BundleNode{
 		ForwardGpgAgent: &f,
 		ForwardSshAgent: &f,
 	}

@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"regexp"
 	"strings"
@@ -41,7 +42,7 @@ import (
 // `<base>/<inst>` entry, plain names still resolve, and dotted nested
 // paths (`a.b.c`) still walk. Mirrors the composition `charly start` uses via
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
-func resolveUpdateDeployNode(tree map[string]BundleNode, image, instance string) (*BundleNode, error) {
+func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
 	key := deployKey(image, instance)
 	node, _, err := ResolveNodePath(tree, key)
 	if err != nil || node == nil {
@@ -153,7 +154,7 @@ func extractQuadletImageLine(path string) (string, error) {
 // Cross-kind name reuse is permitted, so the user-facing key includes the
 // instance suffix when present (the deployKey form matches charly.yml + what the
 // operator typed).
-func noteUpdateDisposability(node *BundleNode, image, instance string) {
+func noteUpdateDisposability(node *spec.BundleNode, image, instance string) {
 	if node == nil || node.IsDisposable() {
 		return
 	}

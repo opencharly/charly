@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,7 +68,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
-	routed, err := ResolveTarget(&BundleNode{Target: "exampledeploy"}, "e3deploy")
+	routed, err := ResolveTarget(&spec.BundleNode{Target: "exampledeploy"}, "e3deploy")
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}
@@ -106,7 +108,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if rec.Target != "exampledeploy" {
 		t.Fatalf("deploy record target = %q, want %q (must NOT be \"host\" — would collide with the local deploy target.Del's scan)", rec.Target, "exampledeploy")
 	}
-	crec, err := ReadCandyRecord(paths, "plugin-example-deploy")
+	crec, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec == nil {
 		t.Fatalf("Add did not write the candy record: crec=%v err=%v", crec, err)
 	}
@@ -115,7 +117,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// --- Test: host-side file check on the probe marker passes (no plugin call). ---
-	if err := tgt.Test(ctx, []Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
+	if err := tgt.Test(ctx, []spec.Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
 		t.Fatalf("Test (probe marker present): %v", err)
 	}
 
@@ -124,7 +126,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 	mustExist(t, probe, "Update lost the probe marker")
-	crec2, err := ReadCandyRecord(paths, "plugin-example-deploy")
+	crec2, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec2 == nil || len(crec2.ReverseOps) != 1 {
 		t.Fatalf("Update must keep exactly ONE reverse op (idempotent), got %+v err=%v", crec2, err)
 	}
@@ -138,7 +140,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if rec, _ := ReadDeployRecord(paths, tgt.deployID()); rec != nil {
 		t.Fatal("Del did not delete the deploy record")
 	}
-	if crec, _ := ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
+	if crec, _ := kit.ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
 		t.Fatal("Del did not delete the candy record")
 	}
 }

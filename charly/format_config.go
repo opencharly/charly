@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/buildkit"
 )
@@ -31,9 +32,9 @@ var (
 // BuildFile is the on-disk schema of build.yml — three optional top-level
 // sections that map directly onto DistroConfig/BuilderConfig/InitConfig.
 type BuildFile struct {
-	Distro  map[string]*DistroDef    `yaml:"distro" json:"distro"`
-	Builder map[string]*BuilderDef   `yaml:"builder" json:"builder"`
-	Init    map[string]*ResolvedInit `yaml:"init" json:"init"`
+	Distro  map[string]*spec.ResolvedDistro `yaml:"distro" json:"distro"`
+	Builder map[string]*BuilderDef          `yaml:"builder" json:"builder"`
+	Init    map[string]*ResolvedInit        `yaml:"init" json:"init"`
 }
 
 // LoadBuildConfigForBox loads distro, builder, and init configs for the

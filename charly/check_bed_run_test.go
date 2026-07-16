@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 // NOT a bed.
 func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"sample-pod-bed":   {Target: "pod", Image: "sample-image", Disposable: new(true)},
 			"sample-vm-bed":    {Target: "vm", From: "sample-vm", Disposable: new(true)},
 			"sample-local-bed": {Target: "local", From: "sample-local", Disposable: new(true)},
@@ -35,7 +36,7 @@ func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 // TestValidateCheckBeds_TargetEnum asserts an unsupported target is rejected.
 func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-weird": {Target: "k8s", Disposable: new(true)},
 		},
 	}
@@ -49,7 +50,7 @@ func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 // entity is undefined is rejected, and that a defined entity passes.
 func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	missing := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -58,7 +59,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	}
 	ok := &UnifiedFile{
 		VM: rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -71,7 +72,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 // local: template is undefined is rejected, and that a defined one passes.
 func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	missing := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
@@ -80,7 +81,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	}
 	ok := &UnifiedFile{
 		Local: rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
@@ -120,7 +121,7 @@ ollama:
 
 	// A bed whose key differs from its image and whose port remaps off the
 	// image default — exactly the check-cachyos-ollama-pod shape.
-	bed := BundleNode{
+	bed := spec.BundleNode{
 		Target:     "pod",
 		Image:      "ollama",
 		Port:       []string{"45434:11434"},
@@ -163,7 +164,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 		t.Fatalf("flat bed: got %v, want [check-pod]", got)
 	}
 	// Nested bed: substrate first, then each child as a sorted dotted path.
-	nested := map[string]*BundleNode{
+	nested := map[string]*spec.BundleNode{
 		"selkies-kde": {Target: "pod"},
 		"cuda-pod":    {Target: "pod"},
 	}
@@ -189,7 +190,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	// still does. This is the check-coverage gate for the e740430 defect: a hop
 	// for an android child wrongly resolved to a non-existent
 	// `charly-<parent>.device` container, failing every nested pod→android bed's R10.
-	androidNested := map[string]*BundleNode{
+	androidNested := map[string]*spec.BundleNode{
 		"web":    {Target: "pod"},
 		"device": {Target: "android"},
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -13,7 +14,7 @@ import (
 // A node may not claim a resource BOTH exclusively and shared (the arbiter dispatches on one or
 // the other; the driver modes are mutually exclusive).
 func TestValidate_BothExclusiveAndShared_Errors(t *testing.T) {
-	node := BundleNode{
+	node := spec.BundleNode{
 		RequiresExclusive: []string{"nvidia-gpu"},
 		RequiresShared:    []string{"nvidia-gpu"},
 	}
@@ -33,13 +34,13 @@ func TestDeployNodeSharesGPU(t *testing.T) {
 	}
 	cases := []struct {
 		name string
-		node BundleNode
+		node spec.BundleNode
 		want bool
 	}{
-		{"gpu-backed shared token", BundleNode{RequiresShared: []string{"nvidia-gpu"}}, true},
-		{"selector-less shared token", BundleNode{RequiresShared: []string{"abstract"}}, false},
-		{"no shared claim", BundleNode{}, false},
-		{"exclusive is not shared", BundleNode{RequiresExclusive: []string{"nvidia-gpu"}}, false},
+		{"gpu-backed shared token", spec.BundleNode{RequiresShared: []string{"nvidia-gpu"}}, true},
+		{"selector-less shared token", spec.BundleNode{RequiresShared: []string{"abstract"}}, false},
+		{"no shared claim", spec.BundleNode{}, false},
+		{"exclusive is not shared", spec.BundleNode{RequiresExclusive: []string{"nvidia-gpu"}}, false},
 	}
 	for _, tc := range cases {
 		if got := deployNodeSharesGPU(tc.node, resources); got != tc.want {

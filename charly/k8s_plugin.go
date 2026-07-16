@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 )
 
 // k8s_plugin.go — the host-side invoker that routes charly's k3s kubeconfig-merge
@@ -23,7 +24,7 @@ import (
 // (like InspectContainer) so the deploy callers stay
 // unit-testable without a live plugin. Mirrors invokeVerbProvider's Operation
 // envelope + pluginCheckResult decode (R3).
-var invokeKubePlugin = func(op *Op) (string, error) {
+var invokeKubePlugin = func(op *spec.Op) (string, error) {
 	// connectPluginByWord (not a bare ResolveVerb): lazily build-connects candy/plugin-kube if the
 	// deploy path has not already (the generic host-adapter seam, F7) — strictly stronger than the
 	// prior resolve-only, which failed outside the deploy loader.
@@ -31,7 +32,7 @@ var invokeKubePlugin = func(op *Op) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("kube plugin not loaded — the deploy must compose candy/plugin-kube (its provider serves the clientcmd-backed kubeconfig merge); k3s-server requires it")
 	}
-	pr, err := invokeTyped[*Op, pluginCheckResult](context.Background(), prov, "kube", OpRun, op)
+	pr, err := invokeTyped[*spec.Op, pluginCheckResult](context.Background(), prov, "kube", OpRun, op)
 	if err != nil {
 		return "", fmt.Errorf("kube plugin: %w", err)
 	}

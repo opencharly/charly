@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -44,7 +45,7 @@ func runModeName(m RunMode) string {
 
 // snapshotCheckEnv captures the serializable invocation context for a verb
 // provider call.
-func snapshotCheckEnv(kr *kit.Runner, _ *Op) *CheckEnv {
+func snapshotCheckEnv(kr *kit.Runner, _ *spec.Op) *CheckEnv {
 	// Box is the verb's TARGET name across the wire. For a VM deployment it must be the per-deploy
 	// DOMAIN IDENTITY (VmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
@@ -76,7 +77,7 @@ type pluginCheckResult struct {
 // (built-in OR out-of-tree, transport-invisible). This is the permanent plugin
 // fall-through the foundation cutover (C0) adds; the built-in verb switch above is
 // migrated into the registry in C1.
-func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *Op) CheckResult {
+func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) CheckResult {
 	word := c.Plugin
 	res := CheckResult{Verb: "plugin"}
 	// connectBakedPlugin (not a bare ResolveVerb) so a BAKED verb plugin resolves
@@ -134,7 +135,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *Op) CheckResult
 // OUT-OF-PROCESS, not a CheckVerbProvider): an external verb reads the FULL Op it is
 // handed here (params_json), so a verb's params stay authored in #Op with NO migration
 // when its implementation moves out-of-tree. The caller sets res.Verb.
-func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *Op) CheckResult {
+func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *spec.Op) CheckResult {
 	res := CheckResult{}
 	// Resolve a relative committed-APK path (appium: install-app, `apk: ./tests/data/…`)
 	// against the ORIGINATING candy's source tree HOST-side, BEFORE marshaling — an

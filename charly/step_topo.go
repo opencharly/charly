@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // step_topo.go — the step-level dependency helper the check runner uses to
 // short-circuit a step whose declared deps have not passed.
 //
@@ -11,7 +15,7 @@ package main
 // firstUnmetDepStep returns the first dep id in s.DependsOn whose verdict is
 // anything other than "pass" (or that is unknown / not yet run). Returns "" if
 // every dep passed (or the step has no deps).
-func firstUnmetDepStep(s Step, verdictByID map[string]string) string {
+func firstUnmetDepStep(s spec.Step, verdictByID map[string]string) string {
 	for _, dep := range s.DependsOn {
 		v, ok := verdictByID[dep]
 		if !ok || v != "pass" {

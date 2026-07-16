@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // P8: charly *Candy accessors that satisfy the deploykit.CandyModel render-delta
 // methods (the build-mode graph/render surface the relocated render engine reads
 // through the interface). The three method-backed members (HasContent,
@@ -21,4 +25,4 @@ func (l *Candy) GetSubPathPrefix() string     { return l.SubPathPrefix }
 func (l *Candy) RelayPorts() []int { return l.PortRelayPorts }
 
 // RunOps exports the plan→build-op lowering for the deploykit render (CandyModel).
-func (l *Candy) RunOps() []Op { return l.runOps() }
+func (l *Candy) RunOps() []spec.Op { return l.runOps() }

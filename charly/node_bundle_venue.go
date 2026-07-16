@@ -21,7 +21,10 @@ package main
 // A direct step under a pure GROUP root (no workload container) is a hard
 // error — a group has no venue of its own; place the step under a member.
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/opencharly/sdk/spec"
+)
 
 // flattenBundleVenues stamps venue + hoists plan steps for every top-level
 // bundle in uf. Idempotent on an already-flattened tree (members/children have
@@ -45,7 +48,7 @@ func flattenBundleVenues(uf *UnifiedFile) error {
 
 // flattenBundleOne flattens a single top-level bundle tree rooted at `root`
 // (named rootName) in place.
-func flattenBundleOne(root *BundleNode, rootName string) error {
+func flattenBundleOne(root *spec.BundleNode, rootName string) error {
 	// 1. Root's OWN direct steps run on the root's own venue (its container /
 	//    host). A pure GROUP root (no cross-ref → empty Target) has no container,
 	//    so a direct scored/run step there has nowhere to run.
@@ -73,7 +76,7 @@ func flattenBundleOne(root *BundleNode, rootName string) error {
 // plan), and recurses into node's nested children (dotted) and any sub-members
 // (bare). venuePath is the dotted address that resolveScoringChain /
 // ResolveDeployChain resolve.
-func hoistVenueSubtree(root, node *BundleNode, venuePath string) {
+func hoistVenueSubtree(root, node *spec.BundleNode, venuePath string) {
 	if node == nil {
 		return
 	}
@@ -102,8 +105,8 @@ func venueIsAgentProvisioned(uf *UnifiedFile, venue string) bool {
 	if uf == nil || venue == "" {
 		return false
 	}
-	var walk func(n *BundleNode) bool
-	walk = func(n *BundleNode) bool {
+	var walk func(n *spec.BundleNode) bool
+	walk = func(n *spec.BundleNode) bool {
 		if n == nil {
 			return false
 		}

@@ -76,7 +76,7 @@ func filterOwnProvides[T deploykit.Named](entries []T, boxName string) []T {
 
 // AcceptedEnvSet builds a set of env var names from env_accepts and env_requires declarations.
 // Used to filter which env_provides vars get injected into a consumer.
-func AcceptedEnvSet(accepts, requires []EnvDependency) map[string]bool {
+func AcceptedEnvSet(accepts, requires []spec.EnvDependency) map[string]bool {
 	m := make(map[string]bool, len(accepts)+len(requires))
 	for _, dep := range accepts {
 		m[dep.Name] = true

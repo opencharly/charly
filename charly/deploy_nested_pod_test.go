@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 func TestDeriveDeploymentName(t *testing.T) {
 	cases := []struct{ ref, want string }{
@@ -30,17 +33,17 @@ func TestDeriveDeploymentName(t *testing.T) {
 // end-to-end consumption proof is the live `charly check live cachyos-gpu.selkies-kde`
 // R10.
 func TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]BundleNode{
+	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {
 			Target: "vm",
 			From:   "cachyos-gpu",
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"selkies-kde": {Target: "pod", Image: "selkies-kde-nvidia"},
 			},
 		},
 	}}
 	// Operator per-host overlay: per-host field set, NO nested: block.
-	operator := &BundleConfig{Bundle: map[string]BundleNode{
+	operator := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {
 			Target:    "vm",
 			From:      "cachyos-gpu",

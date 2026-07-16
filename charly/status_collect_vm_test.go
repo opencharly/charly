@@ -84,11 +84,11 @@ func TestVMCollector_Collect(t *testing.T) {
 				{Name: "charly-cachyos-gpu", State: "running"},
 			},
 			deploy: &BundleConfig{
-				Bundle: map[string]BundleNode{
+				Bundle: map[string]spec.BundleNode{
 					"vm:cachyos-gpu": {
 						Target:  "vm",
 						From:    "cachyos-gpu",
-						VmState: &VmDeployState{SshPort: 12228, SshUser: "cachy", Backend: "libvirt"},
+						VmState: &spec.VmDeployState{SshPort: 12228, SshUser: "cachy", Backend: "libvirt"},
 					},
 				},
 			},
@@ -109,12 +109,12 @@ func TestVMCollector_Collect(t *testing.T) {
 				{Name: "charly-k3s-vm", State: "running"},
 			},
 			deploy: &BundleConfig{
-				Bundle: map[string]BundleNode{
+				Bundle: map[string]spec.BundleNode{
 					// deploy KEY (check-k3s-vm) != vm entity (k3s-vm).
 					"check-k3s-vm": {
 						Target:  "vm",
 						From:    "k3s-vm",
-						VmState: &VmDeployState{SshPort: 2225, SshUser: "arch"},
+						VmState: &spec.VmDeployState{SshPort: 2225, SshUser: "arch"},
 					},
 				},
 			},

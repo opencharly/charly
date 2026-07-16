@@ -1,20 +1,22 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"reflect"
 	"testing"
 )
 
 func TestCollectImageAliases(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
 			Name:    "svc",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			aliases: []AliasYAML{{Name: "svc-cli", Command: "svc-cli-bin"}},
 		},
 	}
@@ -32,17 +34,17 @@ func TestCollectImageAliases(t *testing.T) {
 
 func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
-				Alias: []AliasConfig{{Name: "svc-cli", Command: "custom-cmd"}},
+				Alias: []vmshared.AliasConfig{{Name: "svc-cli", Command: "custom-cmd"}},
 			},
 		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
 			Name:    "svc",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			aliases: []AliasYAML{{Name: "svc-cli", Command: "svc-cli-bin"}},
 		},
 	}
@@ -62,17 +64,17 @@ func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 
 func TestCollectImageAliasesDefaultCommand(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
-				Alias: []AliasConfig{{Name: "mycli"}}, // no command
+				Alias: []vmshared.AliasConfig{{Name: "mycli"}}, // no command
 			},
 		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
 			Name: "svc",
-			plan: []Step{{Run: "build", Op: cmdOp("true")}},
+			plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		},
 	}
 
