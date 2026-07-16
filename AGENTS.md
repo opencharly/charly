@@ -281,7 +281,12 @@ After R10 passes:
 4. A fresh independent PR validator reloads protected policy, derives the
    change class, personally runs the full gate, and issues the verdict.
 5. Only PASS may post the required status, generate the merge-time CalVer,
-   squash-merge, tag, and delete the branch/worktree.
+   squash-merge, tag, and delete the branch/worktree. After the CalVer push,
+   it freezes the remote head SHA: final R10 evidence and status must name that
+   exact SHA, it re-fetches immediately before landing, and uses
+   `gh pr merge --match-head-commit <SHA>`. A changed head, a new anomaly/RCA,
+   or a still-running bed revokes PASS; append the root fix, rerun complete R10,
+   and start another fresh validator.
 6. After any `main` advance, update sibling PRs and run a risk-proportional
    delta re-gate. Divergent submodule lineage requires a disposable RDD proof,
    never descendant-wins guessing.
