@@ -1,17 +1,19 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // testResolvedBox returns a ResolvedBox suitable for feeding the
 // task emitters. Uses fedora (rpm) by default with UID/GID 1000.
-func testResolvedBox() *ResolvedBox {
-	return &ResolvedBox{
+func testResolvedBox() *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Name:         "test-img",
 		User:         "user",
 		UID:          1000,

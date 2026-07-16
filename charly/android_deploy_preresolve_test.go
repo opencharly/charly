@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -80,8 +81,8 @@ func TestCollectAndroidInstalls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plans := []*InstallPlan{{
-		Steps: []InstallStep{&ApkInstallStep{
+	plans := []*deploykit.InstallPlan{{
+		Steps: []spec.InstallStep{&deploykit.ApkInstallStep{
 			CandyName: "android-apidemos",
 			CandyDir:  candyDir,
 			Packages: []ApkPackageSpec{
@@ -106,7 +107,7 @@ func TestCollectAndroidInstalls(t *testing.T) {
 	}
 
 	// A relative committed-APK that cannot be anchored is a HARD ERROR (no silent pass).
-	bad := []*InstallPlan{{Steps: []InstallStep{&ApkInstallStep{
+	bad := []*deploykit.InstallPlan{{Steps: []spec.InstallStep{&deploykit.ApkInstallStep{
 		CandyName: "x", CandyDir: "", Packages: []ApkPackageSpec{{Apk: "rel/missing.apk"}},
 	}}}}
 	if _, err := collectAndroidInstalls(bad); err == nil {

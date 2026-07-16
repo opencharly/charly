@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -31,7 +32,7 @@ import (
 // (in-proc), so the reverse server carries no venue executor — HostBuild("resolved-project") needs
 // only the host build-engine context (which hostBuildResolvedProject ignores, reading req.Dir),
 // exactly like dispatchBuild's in-proc reverse channel.
-func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*InstallPlan, error) {
+func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*deploykit.InstallPlan, error) {
 	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
 	if !ok {
 		return nil, fmt.Errorf("compile: command:bundle provider not loaded (candy/plugin-bundle must be compiled in via compiled_plugins:)")
@@ -57,7 +58,7 @@ func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*Insta
 	if err := json.Unmarshal(reply.PlansJSON, &views); err != nil {
 		return nil, fmt.Errorf("compile: decode plans: %w", err)
 	}
-	plans := make([]*InstallPlan, 0, len(views))
+	plans := make([]*deploykit.InstallPlan, 0, len(views))
 	for _, v := range views {
 		p, err := deploykit.PlanFromView(v)
 		if err != nil {
@@ -71,7 +72,7 @@ func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*Insta
 // compileSelectionViaPlugin is the ONE per-unit helper: project the resolved box, marshal the
 // host-side HostContext, build the DeployCompileRequest, and re-materialize the plans. tag is the
 // image CalVer pin (for the plan Version field when the candy carries no version).
-func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.ResolvedBoxView, order []string, hostCtx HostContext, tag string) ([]*InstallPlan, error) {
+func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.ResolvedBoxView, order []string, hostCtx deploykit.HostContext, tag string) ([]*deploykit.InstallPlan, error) {
 	hostCtxJSON, err := json.Marshal(hostCtx)
 	if err != nil {
 		return nil, fmt.Errorf("compile: marshal host context: %w", err)
@@ -89,7 +90,7 @@ func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.Resolv
 // OLD compilePlans. Remote image refs are unsupported (unchanged). base/candySet are computed
 // host-side (the host overrides base for candy refs to ref.Name, matching the OLD semantics — the
 // plugin returns Base=boxView.Name, but candy-ref units keep ref.Name).
-func (c *deployAddCmd) compileRefSelection(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileRefSelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
 	if ref.Source == RefSourceRemote && ref.Kind == RefKindBox {
 		return nil, "", nil, fmt.Errorf("remote image refs are not supported by bundle add (ref=%s)", ref.Raw)
 	}
@@ -103,7 +104,7 @@ func (c *deployAddCmd) compileRefSelection(ref *DeployRef, cfg *Config, distroCf
 // topological order, prune for systemd, preresolve builders, then compile via the plugin. The
 // plugin receives only the NON-nil candies (the OLD loop skipped layers[name]==nil); candySet is
 // the FULL systemd-pruned order (the OLD return value), preserving deployID/overlay provenance.
-func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
 	_ = distroCfg
 	_ = builderCfg
 	img, err := cfg.ResolveBox(ref.Name, c.Tag, dir, ResolveOpts{})
@@ -141,7 +142,7 @@ func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCf
 // picking the synthetic host/VM image template) and compileCandyPlansWithContext (ctx!=nil, an
 // add_candy compiled against a pod/k8s base image's context). base is ref.Name for BOTH (the OLD
 // return value), NOT the plugin's reply Base (which is boxView.Name).
-func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string, ctx *ResolvedBox) ([]*InstallPlan, string, []string, error) {
+func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string, ctx *buildkit.ResolvedBox) ([]*deploykit.InstallPlan, string, []string, error) {
 	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
 	if err != nil {
 		return nil, "", nil, err
@@ -150,7 +151,7 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Raw, err)
 	}
-	var img *ResolvedBox
+	var img *buildkit.ResolvedBox
 	if ctx != nil {
 		// add_candy on a pod/k8s deploy: compile against the base image's context.
 		img = ctx

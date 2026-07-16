@@ -9,6 +9,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"

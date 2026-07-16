@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCollectSecretsFromLabels(t *testing.T) {
@@ -38,7 +40,7 @@ func TestCollectSecretsFromLabels(t *testing.T) {
 }
 
 func TestSecretArgs(t *testing.T) {
-	secrets := []CollectedSecret{
+	secrets := []deploykit.CollectedSecret{
 		{Name: "charly-img-pass", Target: "/run/secrets/pass"},
 		{Name: "charly-img-user", Target: "/run/secrets/user"},
 	}
@@ -55,17 +57,17 @@ func TestSecretArgs(t *testing.T) {
 }
 
 func TestQuadletSecretDirectives(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "test-img",
 		ImageRef: "ghcr.io/test/test-img:latest",
 		Home:     "/tmp",
-		Secrets: []CollectedSecret{
+		Secrets: []deploykit.CollectedSecret{
 			{Name: "charly-test-img-api-key", Target: "/run/secrets/api_key"},
 			{Name: "charly-test-img-db-pass", Target: "/run/secrets/db_pass"},
 		},
 	}
 
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !strings.Contains(content, "Secret=charly-test-img-api-key,target=/run/secrets/api_key") {
 		t.Error("missing Secret= directive for api-key")
 	}
@@ -92,13 +94,13 @@ func TestQuadletSecretDirectives(t *testing.T) {
 // refactor that adds an ExecStartPre or rehydrates the value as an
 // Environment= line will fail this test.
 func TestQuadletSecretEnvDirectives(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "openwebui",
 		ImageRef: "ghcr.io/opencharly/openwebui:latest",
 		UID:      1000,
 		GID:      1000,
 		Env:      []string{"WEBUI_URL=http://localhost:8080"},
-		Secrets: []CollectedSecret{
+		Secrets: []deploykit.CollectedSecret{
 			{
 				Name:           "charly-openwebui-openrouter-api-key",
 				Env:            "OPENROUTER_API_KEY",
@@ -118,7 +120,7 @@ func TestQuadletSecretEnvDirectives(t *testing.T) {
 		},
 	}
 
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 
 	// Positive: the Secret= directives for both credential-backed secrets
 	// must be present. These are what podman uses to inject the decrypted
@@ -243,7 +245,7 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 		t.Fatalf("Set charly/secret/TEST_CHARLY_CRED_ROUTEA_KEY: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Name:           "charly-openwebui-test-charly-cred-routea-key",
 		Env:            "TEST_CHARLY_CRED_ROUTEA_KEY",
 		SecretName:     "TEST_CHARLY_CRED_ROUTEA_KEY",
@@ -276,7 +278,7 @@ func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 		t.Fatalf("Set default path: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Env:            "TEST_CHARLY_CRED_ROUTEB_KEY",
 		SecretName:     "TEST_CHARLY_CRED_ROUTEB_KEY",
 		Service:        "charly/api-key",
@@ -302,7 +304,7 @@ func TestResolveSecretValueLegacyChainUnchanged(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Name:       "charly-immich-db-password",
 		Env:        "DB_PASSWORD",
 		SecretName: "db-password",
@@ -363,7 +365,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 
 	// Find the override entry and verify Service/Key were parsed from the
 	// `key: charly/api-key/routea` override.
-	var routea *CollectedSecret
+	var routea *deploykit.CollectedSecret
 	for i, cs := range collected {
 		if cs.Env == "TEST_CHARLY_CRED_ROUTEA" {
 			routea = &collected[i]
@@ -384,7 +386,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 	}
 
 	// Find the default-path entry and verify default Service/Key applied.
-	var routeb *CollectedSecret
+	var routeb *deploykit.CollectedSecret
 	for i, cs := range collected {
 		if cs.Env == "TEST_CHARLY_CRED_ROUTEB" {
 			routeb = &collected[i]
@@ -552,7 +554,7 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		t.Fatalf("merged has %d entries, want 3", len(merged))
 	}
 
-	byEnv := map[string]CollectedSecret{}
+	byEnv := map[string]deploykit.CollectedSecret{}
 	for _, cs := range merged {
 		byEnv[cs.Env] = cs
 	}

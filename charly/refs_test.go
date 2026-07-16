@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
-	"github.com/opencharly/sdk/spec"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCandyRef(t *testing.T) {
@@ -23,7 +26,7 @@ func TestCandyRef(t *testing.T) {
 		{"@github.com/org/repo/layers/cuda", "github.com/org/repo/layers/cuda", "", true},
 	}
 	for _, tt := range tests {
-		r := CandyRef{Raw: tt.raw}
+		r := deploykit.CandyRef{Raw: tt.raw}
 		if got := r.Bare(); got != tt.bare {
 			t.Errorf("CandyRef{%q}.Bare() = %q, want %q", tt.raw, got, tt.bare)
 		}
@@ -36,7 +39,7 @@ func TestCandyRef(t *testing.T) {
 	}
 	// A resolved sibling key overrides Bare() but leaves Raw (and thus the
 	// transitive-fetch view) intact.
-	r := CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
+	r := deploykit.CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
 	if r.Bare() != "github.com/org/repo/layers/ffmpeg" {
 		t.Errorf("resolved Bare() = %q", r.Bare())
 	}
@@ -114,7 +117,7 @@ func TestStripVersion(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		gotRef, gotVer := StripVersion(tt.ref)
+		gotRef, gotVer := deploykit.StripVersion(tt.ref)
 		if gotRef != tt.wantRef || gotVer != tt.wantVer {
 			t.Errorf("StripVersion(%q) = (%q, %q), want (%q, %q)", tt.ref, gotRef, gotVer, tt.wantRef, tt.wantVer)
 		}
@@ -133,7 +136,7 @@ func TestBareRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := BareRef(tt.ref)
+		got := deploykit.BareRef(tt.ref)
 		if got != tt.want {
 			t.Errorf("BareRef(%q) = %q, want %q", tt.ref, got, tt.want)
 		}
@@ -182,7 +185,7 @@ func TestIsRemoteCandyRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := IsRemoteCandyRef(tt.ref)
+		got := deploykit.IsRemoteCandyRef(tt.ref)
 		if got != tt.want {
 			t.Errorf("IsRemoteCandyRef(%q) = %v, want %v", tt.ref, got, tt.want)
 		}
@@ -304,8 +307,8 @@ func TestCollectRemoteRefs(t *testing.T) {
 		}),
 	}
 	layers := map[string]*Candy{
-		"pixi": {Name: "pixi", Require: toCandyRefs([]string{})},
-		"my-layer": {Name: "my-layer", Require: toCandyRefs([]string{
+		"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})},
+		"my-layer": {Name: "my-layer", Require: deploykit.ToCandyRefs([]string{
 			"@github.com/myorg/service-layers/layers/svc:v2.0.0",
 		})},
 	}
@@ -341,7 +344,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	// An image config that references NOTHING remote — proves the add_candy ref is
 	// collected via ExtraCandyRefs, not via any image-closure edge.
 	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
-	layers := map[string]*Candy{"pixi": {Name: "pixi", Require: toCandyRefs([]string{})}}
+	layers := map[string]*Candy{"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})}}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
 	opts := ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
@@ -361,8 +364,8 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if got.Version != "v2026.174.0425" {
 		t.Errorf("plugin-spice download version = %q, want %q", got.Version, "v2026.174.0425")
 	}
-	if !slices.Contains(got.Refs, BareRef(pluginRef)) {
-		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, BareRef(pluginRef))
+	if !slices.Contains(got.Refs, deploykit.BareRef(pluginRef)) {
+		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, deploykit.BareRef(pluginRef))
 	}
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
@@ -486,7 +489,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	// builder edge was actually followed (it was absent before the fix, because
 	// the raw per-image img.Builder these images carry is empty).
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Builder: BuilderMap{"pixi": "charly.fedora-builder"}},
+		Defaults: spec.BoxConfig{Builder: buildkit.BuilderMap{"pixi": "charly.fedora-builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"bazzite": {
 				Base:  "ghcr.io/ublue-os/bazzite:stable", // external base
@@ -546,7 +549,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 		}),
 	}
 	layers := map[string]*Candy{
-		"local": {Name: "local", Version: "2026.001.0001", Require: toCandyRefs([]string{
+		"local": {Name: "local", Version: "2026.001.0001", Require: deploykit.ToCandyRefs([]string{
 			"@github.com/org/repo/layers/cuda:v1.0.0",
 		})},
 	}

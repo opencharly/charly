@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -14,7 +15,7 @@ func TestEnrichVmRow(t *testing.T) {
 	cases := []struct {
 		name      string
 		row       spec.DeploymentStatus
-		deploy    *BundleConfig
+		deploy    *deploykit.BundleConfig
 		wantNet   string
 		wantPorts []spec.PortMapping
 	}{
@@ -25,7 +26,7 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "enriched from target:vm deploy vm_state",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "cachyos-gpu"},
-			deploy: &BundleConfig{
+			deploy: &deploykit.BundleConfig{
 				Bundle: map[string]spec.BundleNode{
 					"vm:cachyos-gpu": {
 						Target:  "vm",
@@ -39,7 +40,7 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "bed whose deploy key differs from vm entity is matched",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "k3s-vm"},
-			deploy: &BundleConfig{
+			deploy: &deploykit.BundleConfig{
 				Bundle: map[string]spec.BundleNode{
 					// deploy KEY (check-k3s-vm) != vm entity (k3s-vm).
 					"check-k3s-vm": {
@@ -54,7 +55,7 @@ func TestEnrichVmRow(t *testing.T) {
 		{
 			name: "network filled from deploy entry with no vm_state",
 			row:  spec.DeploymentStatus{Kind: spec.SubstrateVM, Image: "arch"},
-			deploy: &BundleConfig{
+			deploy: &deploykit.BundleConfig{
 				Bundle: map[string]spec.BundleNode{
 					"arch": {Target: "vm", From: "arch", Network: "bridge0"},
 				},

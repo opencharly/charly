@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +10,10 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
@@ -98,7 +101,7 @@ var (
 // never from a Go constant. Safe to call repeatedly; a nil
 // config clears the caches (the shape guard then fails open — no false
 // positives).
-func RegisterBuildVocabulary(dc *DistroConfig) {
+func RegisterBuildVocabulary(dc *buildkit.DistroConfig) {
 	candyYAMLFormatNames = make(map[string]bool)
 	candyYAMLDistroNames = make(map[string]bool)
 	if dc == nil {
@@ -152,15 +155,15 @@ func RegisterBuildVocabulary(dc *DistroConfig) {
 //	distro.debian-13.*       → tagSections["debian:13"]   (dash → colon)
 //	distro."debian,ubuntu".* → tagSections["debian"] + tagSections["ubuntu"]
 func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
-	layer.topPackages = PackageNames(ly.Package)
+	layer.topPackages = spec.PackageNames(ly.Package)
 
-	ensureTag := func(tagKey string) *TagPkgConfig {
+	ensureTag := func(tagKey string) *deploykit.TagPkgConfig {
 		if layer.tagSections == nil {
-			layer.tagSections = map[string]*TagPkgConfig{}
+			layer.tagSections = map[string]*deploykit.TagPkgConfig{}
 		}
 		cfg := layer.tagSections[tagKey]
 		if cfg == nil {
-			cfg = &TagPkgConfig{Raw: map[string]any{}}
+			cfg = &deploykit.TagPkgConfig{Raw: map[string]any{}}
 			layer.tagSections[tagKey] = cfg
 		}
 		if cfg.Raw == nil {
@@ -168,13 +171,13 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 		}
 		return cfg
 	}
-	ensureFormat := func(fmtName string) *PackageSection {
+	ensureFormat := func(fmtName string) *deploykit.PackageSection {
 		if layer.formatSections == nil {
-			layer.formatSections = map[string]*PackageSection{}
+			layer.formatSections = map[string]*deploykit.PackageSection{}
 		}
 		ps := layer.formatSections[fmtName]
 		if ps == nil {
-			ps = &PackageSection{FormatName: fmtName, Raw: map[string]any{}}
+			ps = &deploykit.PackageSection{FormatName: fmtName, Raw: map[string]any{}}
 			layer.formatSections[fmtName] = ps
 		}
 		if ps.Raw == nil {
@@ -225,7 +228,7 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 	for k := range ly.Distro {
 		distroKeys = append(distroKeys, k)
 	}
-	sortStrings(distroKeys)
+	kit.SortStrings(distroKeys)
 
 	for _, distroKey := range distroKeys {
 		dp := ly.Distro[distroKey]
@@ -254,7 +257,7 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 			// `pac:` family key is matched via img.Pkg, a bare `debian:` via
 			// img.Distro, a typo matches nothing and contributes nothing.
 			cfg := ensureTag(tagKey)
-			addPackages(&cfg.Package, PackageNames(dp.Package))
+			addPackages(&cfg.Package, spec.PackageNames(dp.Package))
 			cfg.Raw["package"] = cfg.Package
 			setRaw(cfg.Raw, "repo", dp.Repo)
 			setRaw(cfg.Raw, "copr", dp.Copr)
@@ -270,7 +273,7 @@ func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 			// validator flags an aur block placed under a non-pac distro.
 			if dp.AUR != nil {
 				aurPS := ensureFormat("aur")
-				addPackages(&aurPS.Packages, PackageNames(dp.AUR.Package))
+				addPackages(&aurPS.Packages, spec.PackageNames(dp.AUR.Package))
 				aurPS.Raw["package"] = aurPS.Packages
 				setRaw(aurPS.Raw, "options", dp.AUR.Options)
 				setRaw(aurPS.Raw, "replaces", dp.AUR.Replaces)
@@ -318,9 +321,9 @@ type Candy struct {
 	// map-key form (.Bare()) and pinned version (.Version()) are derived. One
 	// list per concern — no parallel bare/raw arrays (the duplication that
 	// split version off the ref and enabled the silent version-collision bug).
-	Require       []CandyRef // require: deps (ordering + resolution)
-	IncludedCandy []CandyRef // candy: composition refs (splicing)
-	BakePlugin    []CandyRef // bake_plugin: out-of-tree plugin candies whose pre-built provider binary is baked into composing images (generate.go emitBakedPlugins)
+	Require       []deploykit.CandyRef // require: deps (ordering + resolution)
+	IncludedCandy []deploykit.CandyRef // candy: composition refs (splicing)
+	BakePlugin    []deploykit.CandyRef // bake_plugin: out-of-tree plugin candies whose pre-built provider binary is baked into composing images (generate.go emitBakedPlugins)
 
 	// Remote candy metadata
 	Remote        bool   // true if from a remote repo
@@ -328,13 +331,13 @@ type Candy struct {
 	SubPathPrefix string // e.g. "candy/" — parent directory within the repo for sibling resolution
 
 	// Pre-populated from the candy manifest
-	formatSections  map[string]*PackageSection // generic format sections (only `aur` now — the secondary AUR build format)
-	tagSections     map[string]*TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
-	topPackages     []string                   // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
+	formatSections  map[string]*deploykit.PackageSection // generic format sections (only `aur` now — the secondary AUR build format)
+	tagSections     map[string]*deploykit.TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
+	topPackages     []string                             // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
 	ports           []string
 	portSpecs       []spec.PortSpec // full PortSpec data with protocol info
-	envConfig       *EnvConfig
-	route           *RouteConfig
+	envConfig       *kit.EnvConfig
+	route           *deploykit.RouteConfig
 	serviceFiles    []string            // paths to *.service files in candy dir (systemd user-level, file_copy model)
 	service         []spec.ServiceEntry // unified service: list (the only service schema)
 	volumes         []VolumeYAML
@@ -666,7 +669,7 @@ func scanCandy(path, name, manifest string) (*Candy, error) {
 		manifest = UnifiedFileName
 	}
 	yamlPath := filepath.Join(path, manifest)
-	if fileExists(yamlPath) {
+	if kit.FileExists(yamlPath) {
 		parsed, err := parseCandyYAML(yamlPath)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", manifest, err)
@@ -680,13 +683,13 @@ func scanCandy(path, name, manifest string) (*Candy, error) {
 	layer.SourceDir = path
 
 	// Check for install files (anchored at SourceDir — honors `directory:`)
-	layer.HasPixiToml = fileExists(filepath.Join(layer.SourceDir, "pixi.toml"))
-	layer.HasPyprojectToml = fileExists(filepath.Join(layer.SourceDir, "pyproject.toml"))
-	layer.HasEnvironmentYml = fileExists(filepath.Join(layer.SourceDir, "environment.yml"))
-	layer.HasPackageJson = fileExists(filepath.Join(layer.SourceDir, "package.json"))
-	layer.HasCargoToml = fileExists(filepath.Join(layer.SourceDir, "Cargo.toml"))
-	layer.HasSrcDir = dirExists(filepath.Join(layer.SourceDir, "src"))
-	layer.HasPixiLock = fileExists(filepath.Join(layer.SourceDir, "pixi.lock"))
+	layer.HasPixiToml = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.toml"))
+	layer.HasPyprojectToml = kit.FileExists(filepath.Join(layer.SourceDir, "pyproject.toml"))
+	layer.HasEnvironmentYml = kit.FileExists(filepath.Join(layer.SourceDir, "environment.yml"))
+	layer.HasPackageJson = kit.FileExists(filepath.Join(layer.SourceDir, "package.json"))
+	layer.HasCargoToml = kit.FileExists(filepath.Join(layer.SourceDir, "Cargo.toml"))
+	layer.HasSrcDir = kit.DirExists(filepath.Join(layer.SourceDir, "src"))
+	layer.HasPixiLock = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.lock"))
 
 	// Scan for systemd service files (init system detection happens in PopulateCandyInitSystem)
 	svcFiles, _ := filepath.Glob(filepath.Join(layer.SourceDir, "*.service"))
@@ -771,7 +774,7 @@ func (l *Candy) runOps() []spec.Op {
 			continue
 		}
 		op := step.Op
-		if opInContext(&op, CtxRuntime) && !opInContext(&op, CtxBuild) && !opInContext(&op, CtxDeploy) {
+		if opInContext(&op, deploykit.CtxRuntime) && !opInContext(&op, deploykit.CtxBuild) && !opInContext(&op, deploykit.CtxDeploy) {
 			continue
 		}
 		out = append(out, op)
@@ -795,7 +798,7 @@ func (l *Candy) LocalPkgFormats() []string {
 	for f := range l.localpkg {
 		out = append(out, f)
 	}
-	sortStrings(out)
+	kit.SortStrings(out)
 	return out
 }
 
@@ -840,7 +843,7 @@ func (l *Candy) PixiManifest() string {
 }
 
 // FormatSection returns the generic package section for a format, or nil.
-func (l *Candy) FormatSection(name string) *PackageSection {
+func (l *Candy) FormatSection(name string) *deploykit.PackageSection {
 	if l.formatSections == nil {
 		return nil
 	}
@@ -858,7 +861,7 @@ func (l *Candy) HasFormatPackages() bool {
 }
 
 // TagSection returns the tag-based package config for the given tag, or nil.
-func (l *Candy) TagSection(tag string) *TagPkgConfig {
+func (l *Candy) TagSection(tag string) *deploykit.TagPkgConfig {
 	if l.tagSections == nil {
 		return nil
 	}
@@ -873,7 +876,7 @@ func (l *Candy) TagSection(tag string) *TagPkgConfig {
 func (l *Candy) TopPackages() []string { return l.topPackages }
 
 // EnvConfig returns the environment config (pre-populated from the candy manifest)
-func (l *Candy) EnvConfig() (*EnvConfig, error) { //nolint:unparam // error return kept for interface/API stability
+func (l *Candy) EnvConfig() (*kit.EnvConfig, error) { //nolint:unparam // error return kept for interface/API stability
 	if l.envConfig != nil {
 		return l.envConfig, nil
 	}
@@ -967,7 +970,7 @@ func PopulateCandyInitSystem(layers map[string]*Candy, initCfg *InitConfig) {
 }
 
 // Route returns the route config (pre-populated from the candy manifest)
-func (l *Candy) Route() (*RouteConfig, error) { //nolint:unparam // error return kept for interface/API stability
+func (l *Candy) Route() (*deploykit.RouteConfig, error) { //nolint:unparam // error return kept for interface/API stability
 	if l.route != nil {
 		return l.route, nil
 	}
@@ -980,7 +983,7 @@ func CandyNames(layers map[string]*Candy) []string {
 	for name := range layers {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	kit.SortStrings(names)
 	return names
 }
 
@@ -1087,34 +1090,6 @@ func (l *Candy) Engine() string {
 // Alias returns the alias declarations (pre-populated from the candy manifest)
 func (l *Candy) Alias() []AliasYAML {
 	return l.aliases
-}
-
-// NeedsGit returns true if the pixi manifest contains git-based dependencies
-func (l *Candy) NeedsGit() bool {
-	manifest := l.PixiManifest()
-	if manifest == "" {
-		return false
-	}
-	data, err := os.ReadFile(filepath.Join(l.SourceDir, manifest))
-	if err != nil {
-		return false
-	}
-	content := string(data)
-	// Check for PyPI git+ format and pixi { git = "..." } format
-	return strings.Contains(content, "git+") || strings.Contains(content, "{ git =")
-}
-
-// HasPypiDeps returns true if the pixi manifest has PyPI dependencies
-func (l *Candy) HasPypiDeps() bool {
-	manifest := l.PixiManifest()
-	if manifest == "" {
-		return false
-	}
-	data, err := os.ReadFile(filepath.Join(l.SourceDir, manifest))
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(data), "[pypi-dependencies]")
 }
 
 // ScanRemoteCandy scans specific candies from a downloaded remote repository.
@@ -1250,7 +1225,7 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 				if b, ok := defaultBranches[repo]; ok {
 					ver = b
 				} else {
-					b, err := GitDefaultBranch(RepoGitURL(repo))
+					b, err := kit.GitDefaultBranch(kit.RepoGitURL(repo))
 					if err != nil {
 						return fmt.Errorf("resolving default branch for %s: %w", repo, err)
 					}
@@ -1310,7 +1285,7 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 				// Enqueue this materialization's transitive deps. A plain-name dep
 				// is a same-repo sibling at the SAME git tag; an @-ref dep carries
 				// its own pinned repo/git-tag.
-				enqueueDep := func(dep CandyRef) error {
+				enqueueDep := func(dep deploykit.CandyRef) error {
 					if dep.IsRemote() {
 						p := ParseRemoteRef(dep.Raw)
 						return enqueue(p.RepoPath, p.Version, dep.Bare())
@@ -1372,7 +1347,7 @@ func pickCandyVersion(bareRef string, cands []candyCandidate) candyCandidate {
 	for _, c := range cands[1:] {
 		if kit.CompareCalVer(c.version, best.version) > 0 {
 			best = c // newer per-entity version
-		} else if c.version == best.version && compareSemver(c.gitTag, best.gitTag) > 0 {
+		} else if c.version == best.version && kit.CompareSemver(c.gitTag, best.gitTag) > 0 {
 			best = c // same per-entity version: prefer the newest git tag
 		}
 	}

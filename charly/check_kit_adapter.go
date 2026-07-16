@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"time"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
@@ -94,21 +97,21 @@ type kitVerbActStepAdapter struct {
 	sp kit.StepProvider
 }
 
-func (a kitVerbActStepAdapter) LowersTo() StepKind {
+func (a kitVerbActStepAdapter) LowersTo() spec.StepKind {
 	return kitStepKindToCharly(a.sp.StepKind())
 }
 
-func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
 	return materializeStep(a.sp.ConstructStepDescriptor(op), op, layer, img)
 }
 
 // kitStepKindToCharly maps the kit's StepKindName to charly's internal StepKind enum.
-func kitStepKindToCharly(k kit.StepKindName) StepKind {
+func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
 	switch k {
 	case kit.StepKindServicePackaged:
-		return StepKindServicePackaged
+		return spec.StepKindServicePackaged
 	case kit.StepKindSystemPackages:
-		return StepKindSystemPackages
+		return spec.StepKindSystemPackages
 	}
 	panic("kitStepKindToCharly: unknown kit step kind " + string(k))
 }
@@ -117,13 +120,13 @@ func kitStepKindToCharly(k kit.StepKindName) StepKind {
 // kit.StepDescriptor, computing the package-main-only inputs (the run-as-resolved scope,
 // the candy name) that the candy cannot. The load-bearing Reverse() lives on the built
 // step (package main), unchanged from the typed builtin verb's ConstructStep.
-func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
 	userDir, _ := resolveUserSpec(op.RunAs, img)
 	switch {
 	case desc.ServicePackaged != nil:
-		return &ServicePackagedStep{
+		return &deploykit.ServicePackagedStep{
 			Unit:        desc.ServicePackaged.Unit,
-			TargetScope: opStepScope(userDir),
+			TargetScope: deploykit.OpStepScope(userDir),
 			Enable:      desc.ServicePackaged.Enable,
 			CandyName:   layer.GetName(),
 		}
@@ -131,10 +134,10 @@ func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer CandyModel, img
 		// Repos/Copr/Options come from the top-level package cascade
 		// (compileSystemPackageSteps), NOT a per-op run: {package} step — match the
 		// pre-extraction lowering (Format + PhaseInstall + the cross-distro-resolved name).
-		return &SystemPackagesStep{
-			Format:   img.Pkg,
-			Phase:    PhaseInstall,
-			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
+		return &deploykit.SystemPackagesStep{
+			Format:     img.Pkg,
+			Phase: spec.PhaseInstall,
+			Packages:   []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
 		}
 	default:
 		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.GetName())

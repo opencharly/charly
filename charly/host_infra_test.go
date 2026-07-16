@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // Tests for the four Task-9 host-infra files.
@@ -109,10 +111,10 @@ func TestCompareGlibc(t *testing.T) {
 
 // ---------------- install_ledger.go ----------------
 
-func withTempLedger(t *testing.T) *LedgerPaths {
+func withTempLedger(t *testing.T) *kit.LedgerPaths {
 	t.Helper()
 	root := t.TempDir()
-	return &LedgerPaths{
+	return &kit.LedgerPaths{
 		Root:     root,
 		Deploys:  filepath.Join(root, "deploys"),
 		Candies:  filepath.Join(root, "layers"),
@@ -122,17 +124,17 @@ func withTempLedger(t *testing.T) *LedgerPaths {
 
 func TestLedgerRoundTrip(t *testing.T) {
 	paths := withTempLedger(t)
-	rec := &DeployRecord{
+	rec := &kit.DeployRecord{
 		DeployID:   "abc123",
 		Image:      "fedora-coder",
 		Target:     "host",
 		Candy:      []string{"ripgrep", "uv"},
 		DeployedAt: "2026-04-21T00:00:00Z",
 	}
-	if err := WriteDeployRecord(paths, rec); err != nil {
+	if err := kit.WriteDeployRecord(paths, rec); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got, err := ReadDeployRecord(paths, "abc123")
+	got, err := kit.ReadDeployRecord(paths, "abc123")
 	if err != nil || got == nil {
 		t.Fatalf("read: %v / %+v", err, got)
 	}
@@ -144,10 +146,10 @@ func TestLedgerRoundTrip(t *testing.T) {
 func TestLedgerRefcount(t *testing.T) {
 	paths := withTempLedger(t)
 	// Deploy A and B both include ripgrep.
-	if err := AddCandyDeployment(paths, "ripgrep", "deploy-A", nil); err != nil {
+	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-A", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
+	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
 		t.Fatal(err)
 	}
 	rec, _ := kit.ReadCandyRecord(paths, "ripgrep")
@@ -156,7 +158,7 @@ func TestLedgerRefcount(t *testing.T) {
 	}
 
 	// Remove A — ripgrep stays.
-	_, shouldRemove, err := RemoveCandyDeployment(paths, "ripgrep", "deploy-A")
+	_, shouldRemove, err := kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +171,7 @@ func TestLedgerRefcount(t *testing.T) {
 	}
 
 	// Remove B — ripgrep should fully teardown.
-	_, shouldRemove, err = RemoveCandyDeployment(paths, "ripgrep", "deploy-B")
+	_, shouldRemove, err = kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-B")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +182,7 @@ func TestLedgerRefcount(t *testing.T) {
 
 func TestLedgerFlock(t *testing.T) {
 	paths := withTempLedger(t)
-	lock, err := AcquireLedgerLock(paths)
+	lock, err := kit.AcquireLedgerLock(paths)
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
@@ -197,7 +199,7 @@ func TestLedgerFlock(t *testing.T) {
 // ---------------- builder_run.go ----------------
 
 func TestBuildBuilderRunArgs(t *testing.T) {
-	opts := BuilderRunOpts{
+	opts := deploykit.BuilderRunOpts{
 		BuilderImage: "fedora-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",
@@ -242,7 +244,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 
 func TestBuilderRunDryRun(t *testing.T) {
 	// DryRun should return nil, nil without actually exec'ing.
-	out, err := BuilderRun(context.Background(), BuilderRunOpts{
+	out, err := kit.BuilderRun(context.Background(), deploykit.BuilderRunOpts{
 		BuilderImage: "fedora-builder",
 		DryRun:       true,
 		ScriptBody:   "echo hi",
@@ -302,7 +304,7 @@ func TestRemoveManagedBlockAt(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemoveManagedBlockAt(path, "mycandy"); err != nil {
+	if err := kit.RemoveManagedBlockAt(path, "mycandy"); err != nil {
 		t.Fatalf("RemoveManagedBlockAt: %v", err)
 	}
 	got, _ := os.ReadFile(path)
@@ -439,7 +441,7 @@ func TestShQuoteEnv(t *testing.T) {
 // subordinate uid that doesn't match the bind-mount owner and writes
 // fail with EACCES.
 func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
-	opts := BuilderRunOpts{
+	opts := deploykit.BuilderRunOpts{
 		BuilderImage: "arch-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",

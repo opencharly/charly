@@ -24,8 +24,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -36,7 +38,7 @@ import (
 // no-executor and the summary errors; nodeName is the deploy identifier. Shared
 // by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
 // kind/name labels (R3).
-func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
+func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
 	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
 	for _, id := range opts.OnlyIDs {
 		onlyIDs[id] = true
@@ -184,7 +186,7 @@ func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, err
 	// the substrate. android/k8s carry no host: field, so they resolve to ShellExecutor
 	// (the host venue) — unchanged from the prior hardcoded ShellExecutor{}.
 	if gp, ok := prov.(*grpcProvider); ok {
-		exec, perr := rootExecutorForDeployNode(node)
+		exec, perr := deploykit.RootExecutorForDeployNode(node)
 		if perr != nil {
 			return nil, fmt.Errorf("deployment %q: %w", name, perr)
 		}

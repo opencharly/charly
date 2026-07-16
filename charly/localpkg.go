@@ -37,6 +37,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // localPkgGuestStage is the staging dir on the deploy target where the built
@@ -135,7 +140,7 @@ func resolveLocalPkgDir(ref, candyDir, projectDir, sentinel string) string {
 //
 // The temp dir is registered for sweep but deliberately NOT defer-removed: the
 // caller owns the package files until install completes.
-func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, opts EmitOpts) ([]string, error) {
+func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, opts deploykit.EmitOpts) ([]string, error) {
 	if lp == nil {
 		return nil, fmt.Errorf("buildLocalPkgOnHost: nil LocalPkgDef")
 	}
@@ -146,7 +151,7 @@ func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, op
 	// (The "fatal: invalid reference: origin/HEAD" failure once blamed on this
 	// race is the detached-sdk-HEAD PKGBUILD source issue — deterministic and
 	// lock-independent; see CHANGELOG.)
-	releaseLock, err := acquireLocalPkgBuildLock(srcDir)
+	releaseLock, err := kit.AcquireLocalPkgBuildLock(srcDir)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +162,7 @@ func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, op
 	}
 	RegisterTempCleanup(pkgDest)
 
-	buildCmd, err := RenderTemplate("localpkg-build", lp.BuildTemplate, localPkgBuildContext{
+	buildCmd, err := buildkit.RenderTemplate("localpkg-build", lp.BuildTemplate, localPkgBuildContext{
 		SrcDir:  srcDir,
 		PkgDest: pkgDest,
 	})
@@ -209,7 +214,7 @@ func buildLocalPkgOnHost(ctx context.Context, lp *LocalPkgDef, srcDir string, op
 //
 // The staging tmpdir is registered for sweep but deliberately NOT defer-removed:
 // the caller owns the returned package files until install completes.
-func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, builderImage string, packages []string, candyDir string, cfg *Config, projectDir string, opts EmitOpts) ([]string, error) {
+func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, builderImage string, packages []string, candyDir string, cfg *Config, projectDir string, opts deploykit.EmitOpts) ([]string, error) {
 	if len(packages) == 0 {
 		return nil, nil
 	}
@@ -232,12 +237,12 @@ func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, bu
 	// Synthetic BuilderStep — the SAME shape compileBuilderSteps produces, so
 	// renderBuilderScript renders the identical build flow for this builder from
 	// its phase.install.host cell (config-driven).
-	step := &BuilderStep{
+	step := &deploykit.BuilderStep{
 		Builder:         lp.DepBuilder,
 		BuilderImage:    builderImage,
 		BuilderDef:      bDef,
 		CandyDir:        candyDir,
-		Phase:           PhaseInstall,
+		Phase:      spec.PhaseInstall,
 		RawStageContext: map[string]any{"packages": packages},
 	}
 
@@ -254,12 +259,12 @@ func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, bu
 	if err != nil {
 		return nil, fmt.Errorf("UserHomeDir: %w", err)
 	}
-	bindMounts, err := UserScopeBindMounts(hostHome)
+	bindMounts, err := kit.UserScopeBindMounts(hostHome)
 	if err != nil {
 		return nil, err
 	}
 	bindMounts["/tmp/aur-pkgs"] = hostStage
-	envVars := UserScopeEnv(hostHome)
+	envVars := kit.UserScopeEnv(hostHome)
 
 	// renderBuilderScript runs AS ROOT inside the builder (RunAsRoot=true): for
 	// aur it writes the NOPASSWD-wheel sudoers, adds `user` to wheel, then
@@ -283,7 +288,7 @@ func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, bu
 		"# host-readable for the subsequent transfer+install leg.\n" +
 		"chown -R 0:0 /tmp/aur-pkgs/\n"
 
-	out, err := BuilderRun(opts.ContextOrDefault(), BuilderRunOpts{
+	out, err := kit.BuilderRun(opts.ContextOrDefault(), deploykit.BuilderRunOpts{
 		BuilderImage: builderImage,
 		CandyDir:     step.CandyDir,
 		ScriptBody:   wrappedScript,
@@ -327,7 +332,7 @@ func buildDepPkgsOnHost(_ context.Context, lp *LocalPkgDef, bDef *BuilderDef, bu
 // The staging dir is cleared before transfer so a re-run replaces stale content
 // idempotently; the format's install command (e.g. `pacman -U`) is expected to
 // be the upgrade form, so re-installing the same or a newer build never errors.
-func transferAndInstallPkgs(ctx context.Context, exec DeployExecutor, lp *LocalPkgDef, pkgFiles []string, opts EmitOpts) error {
+func transferAndInstallPkgs(ctx context.Context, exec deploykit.DeployExecutor, lp *LocalPkgDef, pkgFiles []string, opts deploykit.EmitOpts) error {
 	if lp == nil {
 		return fmt.Errorf("transferAndInstallPkgs: nil LocalPkgDef")
 	}
@@ -335,7 +340,7 @@ func transferAndInstallPkgs(ctx context.Context, exec DeployExecutor, lp *LocalP
 		return fmt.Errorf("transferAndInstallPkgs: no package files to install")
 	}
 
-	install, err := RenderTemplate("localpkg-install", lp.InstallTemplate, localPkgInstallContext{
+	install, err := buildkit.RenderTemplate("localpkg-install", lp.InstallTemplate, localPkgInstallContext{
 		StageDir: localPkgGuestStage,
 		Glob:     lp.PkgGlob,
 	})
@@ -384,7 +389,7 @@ func transferAndInstallPkgs(ctx context.Context, exec DeployExecutor, lp *LocalP
 // venue-accurate for both targets (R3). DryRun assumes true so the planner shows
 // the build+install it WOULD do. A nil LocalPkgDef, empty probe, probe error, or
 // non-matching venue returns false: charly never assumes a target can take a package.
-func venueHasPkgManager(ctx context.Context, exec DeployExecutor, lp *LocalPkgDef, opts EmitOpts) bool {
+func venueHasPkgManager(ctx context.Context, exec deploykit.DeployExecutor, lp *LocalPkgDef, opts deploykit.EmitOpts) bool {
 	if lp == nil || strings.TrimSpace(lp.Probe) == "" {
 		return false
 	}
@@ -407,7 +412,7 @@ func venueHasPkgManager(ctx context.Context, exec DeployExecutor, lp *LocalPkgDe
 // (the candy's own curl/COPY task covers it).
 //
 // venueName is used only for log lines (e.g. "host", "vm:cachyos-gpu").
-func execLocalPkgInstall(ctx context.Context, exec DeployExecutor, s *LocalPkgInstallStep, supported bool, venueName string, opts EmitOpts) error {
+func execLocalPkgInstall(ctx context.Context, exec deploykit.DeployExecutor, s *deploykit.LocalPkgInstallStep, supported bool, venueName string, opts deploykit.EmitOpts) error {
 	if s.LocalPkg == nil {
 		fmt.Fprintf(os.Stderr, "%s skip: localpkg %s (candy=%s) — target distro declares no localpkg-capable package format; the candy's curl/COPY task installs it instead\n",
 			venueName, s.PkgbuildRef, s.CandyName)
@@ -459,12 +464,12 @@ func execLocalPkgInstall(ctx context.Context, exec DeployExecutor, s *LocalPkgIn
 // dnf install / apt-get install), so the toolchain is OS-tracked either way.
 // Returns "" (no directive) when the format declares no localpkg contract (the
 // candy's own task: install is the fallback).
-func renderLocalPkgImageInstall(s *LocalPkgInstallStep, devLocalPkg bool, imageDir, boxName string) (string, error) {
+func renderLocalPkgImageInstall(s *deploykit.LocalPkgInstallStep, devLocalPkg bool, imageDir, boxName string) (string, error) {
 	lp := s.LocalPkg
 	if lp == nil {
 		return "", nil
 	}
-	install, err := RenderTemplate("localpkg-install", lp.InstallTemplate, localPkgInstallContext{
+	install, err := buildkit.RenderTemplate("localpkg-install", lp.InstallTemplate, localPkgInstallContext{
 		StageDir: localPkgGuestStage,
 		Glob:     lp.PkgGlob,
 	})
@@ -500,13 +505,13 @@ func renderLocalPkgImageInstall(s *LocalPkgInstallStep, devLocalPkg bool, imageD
 // reaches), and emit a COPY + the same dep-resolving install the download path
 // runs. A missing source dir is a HARD ERROR — an check bed that cannot build the
 // in-development package must fail loudly, never silently fall back to a release.
-func renderLocalPkgImageDevInstall(s *LocalPkgInstallStep, install, imageDir, boxName string) (string, error) {
+func renderLocalPkgImageDevInstall(s *deploykit.LocalPkgInstallStep, install, imageDir, boxName string) (string, error) {
 	lp := s.LocalPkg
 	srcDir := resolveLocalPkgDir(s.PkgbuildRef, s.CandyDir, s.ProjectDir, lp.SourceSentinel)
 	if srcDir == "" {
 		return "", fmt.Errorf("dev-local-pkg: cannot locate the %s localpkg source (%q) for candy %q — a disposable check bed must build the in-development package from local source", s.Format, s.PkgbuildRef, s.CandyName)
 	}
-	pkgFiles, err := buildLocalPkgOnHost(context.Background(), lp, srcDir, EmitOpts{})
+	pkgFiles, err := buildLocalPkgOnHost(context.Background(), lp, srcDir, deploykit.EmitOpts{})
 	if err != nil {
 		return "", fmt.Errorf("dev-local-pkg: building %s package for candy %q from %s: %w", s.Format, s.CandyName, srcDir, err)
 	}
@@ -542,7 +547,7 @@ func renderLocalPkgImageDevInstall(s *LocalPkgInstallStep, install, imageDir, bo
 			return "", fmt.Errorf("dev-local-pkg: staging package %s: %w", filepath.Base(pf), err)
 		}
 	}
-	if err := installDirAtomic(tmpStage, stageDir); err != nil {
+	if err := kit.InstallDirAtomic(tmpStage, stageDir); err != nil {
 		return "", fmt.Errorf("dev-local-pkg: installing stage dir %s: %w", stageDir, err)
 	}
 	// COPY the staged package(s) into the image stage dir, then install via the

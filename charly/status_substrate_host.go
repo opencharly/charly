@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -22,7 +23,7 @@ const statusSubstrateBuilderKind = "status-substrate"
 // runs the full multi-substrate fan-out (collectFlat) and pre-resolves the declared nested tree
 // (buildStatusRootsTree) — the candy's PURE overlay folds Rows+Roots without any core type.
 func hostBuildStatusSubstrate(ctx context.Context, req spec.StatusSubstrateRequest, _ buildEngineContext) (spec.StatusSubstrateReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: resolve runtime: %w", err)
 	}

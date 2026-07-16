@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -38,7 +39,7 @@ func TestWalkPreOrder_RootThenChildren(t *testing.T) {
 	tree := makeTree()
 	root := tree["stack"]
 	var paths []string
-	err := bundleWalkPreOrder(&root, "stack", func(path string, node *spec.BundleNode) error {
+	err := deploykit.BundleWalkPreOrder(&root, "stack", func(path string, node *spec.BundleNode) error {
 		paths = append(paths, path)
 		return nil
 	})
@@ -70,7 +71,7 @@ func TestWalkPostOrder_ChildrenThenRoot(t *testing.T) {
 
 func TestResolveNodePath_FindsNested(t *testing.T) {
 	tree := makeTree()
-	node, ancestors, err := ResolveNodePath(tree, "stack.web.db")
+	node, ancestors, err := deploykit.ResolveNodePath(tree, "stack.web.db")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestResolveNodePath_FindsNested(t *testing.T) {
 
 func TestResolveNodePath_MissingSegment(t *testing.T) {
 	tree := makeTree()
-	_, _, err := ResolveNodePath(tree, "stack.missing.db")
+	_, _, err := deploykit.ResolveNodePath(tree, "stack.missing.db")
 	if err == nil {
 		t.Fatal("expected error for missing segment")
 	}
@@ -95,7 +96,7 @@ func TestResolveNodePath_MissingSegment(t *testing.T) {
 
 func TestResolveNodePath_EmptyPath(t *testing.T) {
 	tree := makeTree()
-	_, _, err := ResolveNodePath(tree, "")
+	_, _, err := deploykit.ResolveNodePath(tree, "")
 	if err == nil {
 		t.Fatal("expected error for empty path")
 	}
@@ -104,7 +105,7 @@ func TestResolveNodePath_EmptyPath(t *testing.T) {
 func TestResolveNodePath_MalformedDots(t *testing.T) {
 	tree := makeTree()
 	for _, bad := range []string{"stack.", ".stack", "stack..web"} {
-		if _, _, err := ResolveNodePath(tree, bad); err == nil {
+		if _, _, err := deploykit.ResolveNodePath(tree, bad); err == nil {
 			t.Errorf("expected error for malformed path %q", bad)
 		}
 	}
@@ -125,7 +126,7 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 
 func TestSortedChildKeys_Deterministic(t *testing.T) {
 	kids := map[string]*spec.BundleNode{"z": {}, "a": {}, "m": {}}
-	got := sortedNestedKeys(kids)
+	got := deploykit.SortedNestedKeys(kids)
 	if !equalSlices(got, []string{"a", "m", "z"}) {
 		t.Errorf("got %v, want [a m z]", got)
 	}
@@ -153,7 +154,7 @@ func TestHasChildren(t *testing.T) {
 // in the 2026-05 cross-kind name reuse cutover; the entry itself relocated to
 // the opencharly/distro-cachyos submodule in the 2026-05 CachyOS migration).
 func TestMergeDeployConfigsLocalCutoverFields(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	project := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"charly-cachyos": {
 			Target:  "local",
 			From:    "charly-cachyos",
@@ -162,7 +163,7 @@ func TestMergeDeployConfigsLocalCutoverFields(t *testing.T) {
 			SSHArgs: []string{"-o", "ServerAliveInterval=30"},
 		},
 	}}
-	merged := MergeDeployConfigs(project, nil)
+	merged := deploykit.MergeDeployConfigs(project, nil)
 	got, ok := merged.Bundle["charly-cachyos"]
 	if !ok {
 		t.Fatal("charly-cachyos dropped by MergeDeployConfigs")
@@ -177,10 +178,10 @@ func TestMergeDeployConfigsLocalCutoverFields(t *testing.T) {
 		t.Errorf("SSHArgs field lost: got %v", got.SSHArgs)
 	}
 	// Per-machine overlay wins on collision (mirrors Host's behavior).
-	overlay := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	overlay := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"charly-cachyos": {From: "ci-runner", User: "bob", SSHArgs: []string{"-o", "ProxyJump=bastion"}},
 	}}
-	merged = MergeDeployConfigs(project, overlay)
+	merged = deploykit.MergeDeployConfigs(project, overlay)
 	got = merged.Bundle["charly-cachyos"]
 	if got.From != "ci-runner" {
 		t.Errorf("overlay Local should win: got %q", got.From)
@@ -250,8 +251,8 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		Ram:             "16G",
 		DiskSize:        "40G",
 	}
-	cfg := &BundleConfig{Bundle: map[string]spec.BundleNode{"x": src}}
-	merged := MergeDeployConfigs(cfg, nil)
+	cfg := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{"x": src}}
+	merged := deploykit.MergeDeployConfigs(cfg, nil)
 	got := merged.Bundle["x"]
 
 	checks := []struct {

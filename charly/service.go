@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // ServiceCmd manages services inside a running container
@@ -85,14 +87,14 @@ func (c *ServiceRestartCmd) Run() error {
 
 // resolveServiceInit resolves the container, engine, and init system for service management.
 func resolveServiceInit(box, instance string) (engine, containerName string, initDef *ResolvedInit, err error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", "", nil, err
 	}
 	boxName := resolveBoxName(box)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = EngineBinary(runEngine)
-	containerName = containerNameInstance(boxName, instance)
+	engine = kit.EngineBinary(runEngine)
+	containerName = kit.ContainerNameInstance(boxName, instance)
 	if !containerRunning(engine, containerName) {
 		return "", "", nil, fmt.Errorf("container %s is not running", containerName)
 	}

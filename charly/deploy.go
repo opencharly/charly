@@ -32,7 +32,7 @@ func resolveDeployKeyToBox(key, instance string) string {
 	}
 	// User-side first.
 	if dc := deploykit.LoadDeployConfigForRead("resolveDeployKeyToBox"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(key, instance)]; ok && entry.Image != "" {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(key, instance)]; ok && entry.Image != "" {
 			return entry.Image
 		}
 		if entry, ok := dc.Bundle[key]; ok && entry.Image != "" {
@@ -65,7 +65,7 @@ func resolveDeployResolvedImage(key, instance string) string {
 		return ""
 	}
 	if dc := deploykit.LoadDeployConfigForRead("resolveDeployResolvedImage"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(key, instance)]; ok && entry.ResolvedImage != "" {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(key, instance)]; ok && entry.ResolvedImage != "" {
 			return entry.ResolvedImage
 		}
 		if entry, ok := dc.Bundle[key]; ok && entry.ResolvedImage != "" {

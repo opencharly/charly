@@ -108,11 +108,11 @@ func stepEmitSystemPackages(req spec.StepEmitRequest, build buildEngineContext) 
 			return "", fmt.Errorf("decode SystemPackages step view: %w", err)
 		}
 	}
-	step, err := stepFromView(view)
+	step, err := deploykit.StepFromView(view)
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*SystemPackagesStep)
+	s, ok := step.(*deploykit.SystemPackagesStep)
 	if !ok {
 		return "", fmt.Errorf("step-emit system-packages: view kind %q is not a SystemPackagesStep", view.Kind)
 	}
@@ -149,11 +149,11 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 			return "", fmt.Errorf("decode Builder step view: %w", err)
 		}
 	}
-	step, err := stepFromView(view)
+	step, err := deploykit.StepFromView(view)
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*BuilderStep)
+	s, ok := step.(*deploykit.BuilderStep)
 	if !ok {
 		return "", fmt.Errorf("step-emit builder: view kind %q is not a BuilderStep", view.Kind)
 	}
@@ -198,7 +198,7 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 			}
 			return fmt.Sprintf("USER %d\n", build.Box.UID) + reply.InlineFragment, nil
 		}
-		rendered, err := RenderTemplate(s.Builder+"-inline", bDef.InstallTemplate, ctx)
+		rendered, err := buildkit.RenderTemplate(s.Builder+"-inline", bDef.InstallTemplate, ctx)
 		if err != nil {
 			return "", fmt.Errorf("inline builder %s: %w", s.Builder, err)
 		}
@@ -261,11 +261,11 @@ func stepEmitLocalPkgInstall(req spec.StepEmitRequest, build buildEngineContext)
 			return "", fmt.Errorf("decode LocalPkgInstall step view: %w", err)
 		}
 	}
-	step, err := stepFromView(view)
+	step, err := deploykit.StepFromView(view)
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*LocalPkgInstallStep)
+	s, ok := step.(*deploykit.LocalPkgInstallStep)
 	if !ok {
 		return "", fmt.Errorf("step-emit local-pkg-install: view kind %q is not a LocalPkgInstallStep", view.Kind)
 	}
@@ -308,11 +308,11 @@ func stepEmitOp(req spec.StepEmitRequest, build buildEngineContext) (string, err
 			return "", fmt.Errorf("decode Op step view: %w", err)
 		}
 	}
-	step, err := stepFromView(view)
+	step, err := deploykit.StepFromView(view)
 	if err != nil {
 		return "", err
 	}
-	s, ok := step.(*OpStep)
+	s, ok := step.(*deploykit.OpStep)
 	if !ok {
 		return "", fmt.Errorf("step-emit op: view kind %q is not an OpStep", view.Kind)
 	}
@@ -361,7 +361,7 @@ func stepEmitOCIEmitStep(req spec.StepEmitRequest, build buildEngineContext) (st
 			return "", fmt.Errorf("decode oci-emit-step params: %w", err)
 		}
 	}
-	step, err := stepFromView(p.StepView)
+	step, err := deploykit.StepFromView(p.StepView)
 	if err != nil {
 		return "", fmt.Errorf("oci-emit-step: reconstruct step: %w", err)
 	}

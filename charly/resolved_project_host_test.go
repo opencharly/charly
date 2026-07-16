@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -27,8 +30,8 @@ func canonKey(s string) string { return strings.ToLower(strings.ReplaceAll(s, "_
 // non-zero value, plus the InitSystem json:"-" cache set — so the completeness test proves (a) every
 // field `charly box inspect` serializes survives the projection and (b) the host-only compute caches
 // are DROPPED (InitSystem is the flagged judgment call: it is json:"-", so inspect never emits it).
-func fullResolvedBoxFixture() *ResolvedBox {
-	return &ResolvedBox{
+func fullResolvedBoxFixture() *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Name:                  "demo",
 		Version:               "2026.100.0001",
 		EffectiveVersion:      "2026.100.0002",
@@ -52,7 +55,7 @@ func fullResolvedBoxFixture() *ResolvedBox {
 		Home:                  "/home/user",
 		UserAdopted:           true,
 		Merge:                 &vmshared.MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
-		Builder:               BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
+		Builder:               buildkit.BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
 		BuilderCapabilities:   []string{"pixi"},
 		Auto:                  true,
 		Network:               "host",
@@ -131,8 +134,8 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		Info:          "the charly toolchain",
 		Remote:        true,
 		RepoPath:      "github.com/opencharly/charly",
-		Require:       []CandyRef{{Raw: "base"}},
-		IncludedCandy: []CandyRef{{Raw: "gnupg"}},
+		Require:       []deploykit.CandyRef{{Raw: "base"}},
+		IncludedCandy: []deploykit.CandyRef{{Raw: "gnupg"}},
 	}
 	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
 	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}

@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedPackageVerb_DispatchesViaKit proves the THREE-role `package` verb —
@@ -45,16 +48,16 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("package provider does not implement TypedStepProvider: %T", prov)
 	}
-	if sp.LowersTo() != StepKindSystemPackages {
+	if sp.LowersTo() != spec.StepKindSystemPackages {
 		t.Fatalf("LowersTo = %v, want StepKindSystemPackages", sp.LowersTo())
 	}
 	op := &spec.Op{PluginInput: map[string]any{"package": "openssh", "package_map": map[string]any{"fedora": "openssh-server"}}}
-	step := sp.ConstructStep(op, &Candy{Name: "net"}, &ResolvedBox{Pkg: "rpm", Tags: []string{"fedora:43", "fedora"}})
-	sps, ok := step.(*SystemPackagesStep)
+	step := sp.ConstructStep(op, &Candy{Name: "net"}, &buildkit.ResolvedBox{Pkg: "rpm", Tags: []string{"fedora:43", "fedora"}})
+	sps, ok := step.(*deploykit.SystemPackagesStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *SystemPackagesStep", step)
 	}
-	if sps.Format != "rpm" || sps.Phase != PhaseInstall || len(sps.Packages) != 1 || sps.Packages[0] != "openssh-server" {
+	if sps.Format != "rpm" || sps.Phase != spec.PhaseInstall || len(sps.Packages) != 1 || sps.Packages[0] != "openssh-server" {
 		t.Fatalf("SystemPackagesStep = %+v, want Format=rpm Phase=Install Packages=[openssh-server] (cross-distro map applied)", sps)
 	}
 }

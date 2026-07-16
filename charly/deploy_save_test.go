@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -24,7 +25,7 @@ import (
 // `deploykit.LoadDeployConfigForRead(...).Lookup(image, instance)` without a
 // separate nil check.
 func TestDeployConfigLookup_NilSafe(t *testing.T) {
-	var dc *BundleConfig // nil
+	var dc *deploykit.BundleConfig // nil
 	if entry, ok := dc.Lookup("foo", ""); ok {
 		t.Errorf("Lookup on nil dc returned ok=true entry=%+v; want (zero, false)", entry)
 	}
@@ -38,7 +39,7 @@ func TestDeployConfigLookup_NilSafe(t *testing.T) {
 // nil deploy map return (zero, false). Instance form is keyed via
 // deployKey (image/instance); LookupKey takes the raw deploy.yml key.
 func TestDeployConfigLookup_PresentAndAbsent(t *testing.T) {
-	dc := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"foo":       {Target: "pod", Image: "foo"},
 		"foo/inst1": {Target: "pod", Image: "foo"},
 		"vm:arch":   {Target: "vm"},
@@ -67,7 +68,7 @@ func TestDeployConfigLookup_PresentAndAbsent(t *testing.T) {
 	}
 
 	// Empty / nil-map dc returns (zero, false).
-	emptyDc := &BundleConfig{}
+	emptyDc := &deploykit.BundleConfig{}
 	if entry, ok := emptyDc.Lookup("foo", ""); ok {
 		t.Errorf("Lookup on empty dc returned ok=true entry=%+v", entry)
 	}
@@ -242,7 +243,7 @@ func TestSaveBundleConfig_AtomicWriteLeavesNoTempLeftover(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	dc := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"foo": {Target: "pod", Image: "foo"},
 	}}
 	if err := saveBundleConfigNodeForm(dc); err != nil {
@@ -315,7 +316,7 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 	}
 
 	// A write that would otherwise truncate must be REFUSED.
-	err := saveBundleConfigNodeForm(&BundleConfig{Bundle: map[string]spec.BundleNode{
+	err := saveBundleConfigNodeForm(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}})
 	if err == nil {
@@ -340,7 +341,7 @@ func TestSaveBundleConfig_RefusesToClobberUnloadableConfig(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if err := saveBundleConfigNodeForm(&BundleConfig{Bundle: map[string]spec.BundleNode{
+	if err := saveBundleConfigNodeForm(&deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"new-entry": {Target: "pod", Image: "new-entry"},
 	}}); err != nil {
 		t.Fatalf("SaveBundleConfig on an absent file should succeed: %v", err)

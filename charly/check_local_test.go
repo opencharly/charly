@@ -1,8 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // These tests pin the target-dispatch unification for local deploys: every
@@ -14,29 +17,29 @@ import (
 
 func TestRootExecutorForDeployNode(t *testing.T) {
 	// nil node → host shell.
-	if e, err := rootExecutorForDeployNode(nil); err != nil {
+	if e, err := deploykit.RootExecutorForDeployNode(nil); err != nil {
 		t.Fatalf("nil node: %v", err)
-	} else if _, ok := e.(ShellExecutor); !ok {
+	} else if _, ok := e.(kit.ShellExecutor); !ok {
 		t.Errorf("nil node → %T, want ShellExecutor", e)
 	}
 
 	// host: "" and host: "local" → host shell.
 	for _, host := range []string{"", "local"} {
-		e, err := rootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
+		e, err := deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: host})
 		if err != nil {
 			t.Fatalf("host=%q: %v", host, err)
 		}
-		if _, ok := e.(ShellExecutor); !ok {
+		if _, ok := e.(kit.ShellExecutor); !ok {
 			t.Errorf("host=%q → %T, want ShellExecutor", host, e)
 		}
 	}
 
 	// host: "user@box" → SSH with the inline user.
-	e, err := rootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
+	e, err := deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "alice@box"})
 	if err != nil {
 		t.Fatalf("user@box: %v", err)
 	}
-	ssh, ok := e.(*SSHExecutor)
+	ssh, ok := e.(*kit.SSHExecutor)
 	if !ok {
 		t.Fatalf("user@box → %T, want *SSHExecutor", e)
 	}
@@ -45,11 +48,11 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "box" + user: "u" → SSH with the node.User (Ansible-style override).
-	e, err = rootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
+	e, err = deploykit.RootExecutorForDeployNode(&spec.BundleNode{Target: "local", Host: "box", User: "u"})
 	if err != nil {
 		t.Fatalf("box+user: %v", err)
 	}
-	ssh, ok = e.(*SSHExecutor)
+	ssh, ok = e.(*kit.SSHExecutor)
 	if !ok {
 		t.Fatalf("box+user → %T, want *SSHExecutor", e)
 	}
@@ -65,14 +68,14 @@ func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	roots := map[string]spec.BundleNode{
 		"workstation": {Target: "local"},
 	}
-	node, chain, err := ResolveDeployChain(stampTestDescents(roots), "workstation", ShellExecutor{})
+	node, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "workstation", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("local node must resolve without error: %v", err)
 	}
 	if node == nil || node.Target != "local" {
 		t.Fatalf("resolved node = %+v, want Target=local", node)
 	}
-	if _, ok := chain.(ShellExecutor); !ok {
+	if _, ok := chain.(kit.ShellExecutor); !ok {
 		t.Errorf("local node added a hop: chain = %T, want ShellExecutor (no hop)", chain)
 	}
 }
@@ -89,7 +92,7 @@ func TestResolveScoringChain_Local(t *testing.T) {
 	if err != nil {
 		t.Fatalf("local bed: %v", err)
 	}
-	if _, ok := exec.(ShellExecutor); !ok {
+	if _, ok := exec.(kit.ShellExecutor); !ok {
 		t.Errorf("local bed → %T, want ShellExecutor (host venue, not a container)", exec)
 	}
 	// A pod target still routes to a container chain (no regression).
@@ -97,7 +100,7 @@ func TestResolveScoringChain_Local(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pod bed: %v", err)
 	}
-	if _, ok := exec.(*NestedExecutor); !ok {
+	if _, ok := exec.(*kit.NestedExecutor); !ok {
 		t.Errorf("pod bed → %T, want *NestedExecutor (container chain)", exec)
 	}
 }

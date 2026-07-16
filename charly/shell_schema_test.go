@@ -6,9 +6,12 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
 )
@@ -86,17 +89,17 @@ func TestResolveShellSpec_SelectionRule(t *testing.T) {
 		Fish: &ShellSpec{Init: "direnv hook fish | source"},
 	}
 	// fish: per-shell override wins, no substitution.
-	_, body, _, ok := resolveShellSpec(cfg, "fish")
+	_, body, _, ok := deploykit.ResolveShellSpec(cfg, "fish")
 	if !ok || body != "direnv hook fish | source" {
 		t.Errorf("fish selection: ok=%v body=%q", ok, body)
 	}
 	// bash: falls back to generic, ${SHELL_NAME} → bash.
-	_, body, _, ok = resolveShellSpec(cfg, "bash")
+	_, body, _, ok = deploykit.ResolveShellSpec(cfg, "bash")
 	if !ok || !strings.Contains(body, "direnv hook bash") {
 		t.Errorf("bash selection: ok=%v body=%q", ok, body)
 	}
 	// Candy with no shell: returns false for any shell.
-	_, _, _, ok = resolveShellSpec(nil, "bash")
+	_, _, _, ok = deploykit.ResolveShellSpec(nil, "bash")
 	if ok {
 		t.Error("nil cfg should yield !ok")
 	}
@@ -105,7 +108,7 @@ func TestResolveShellSpec_SelectionRule(t *testing.T) {
 // TestShellSnippetStep_ReverseOps — UseDropin=true reverses via
 // rm-file-* per scope; UseDropin=false reverses via remove-managed-block.
 func TestShellSnippetStep_ReverseOps(t *testing.T) {
-	dropin := &ShellSnippetStep{
+	dropin := &deploykit.ShellSnippetStep{
 		CandyName:   "direnv",
 		Shell:       "fish",
 		Snippet:     "direnv hook fish | source\n",
@@ -114,11 +117,11 @@ func TestShellSnippetStep_ReverseOps(t *testing.T) {
 		UseDropin:   true,
 	}
 	ops := dropin.Reverse()
-	if len(ops) != 1 || ops[0].Kind != ReverseOpRmFileUser {
+	if len(ops) != 1 || ops[0].Kind != spec.ReverseOpRmFileUser {
 		t.Errorf("dropin Reverse: %+v", ops)
 	}
 
-	managed := &ShellSnippetStep{
+	managed := &deploykit.ShellSnippetStep{
 		CandyName:   "direnv",
 		Shell:       "bash",
 		Snippet:     `check "$(direnv hook bash)"`,
@@ -127,7 +130,7 @@ func TestShellSnippetStep_ReverseOps(t *testing.T) {
 		UseDropin:   false,
 	}
 	ops = managed.Reverse()
-	if len(ops) != 1 || ops[0].Kind != ReverseOpRemoveManaged {
+	if len(ops) != 1 || ops[0].Kind != spec.ReverseOpRemoveManaged {
 		t.Errorf("managed Reverse: %+v", ops)
 	}
 	if ops[0].Extra["marker"] != "direnv" {
@@ -217,7 +220,7 @@ func TestMergeDeployShell_SkipDropsBakedEntry(t *testing.T) {
 // TestExecutor_ResolveHome_Local — ShellExecutor.ResolveHome returns
 // $HOME for empty user and a sensible value for an explicit user.
 func TestExecutor_ResolveHome_Local(t *testing.T) {
-	exec := ShellExecutor{}
+	exec := kit.ShellExecutor{}
 	home, err := exec.ResolveHome(context.Background(), "")
 	if err != nil {
 		t.Fatalf("ResolveHome empty user: %v", err)
@@ -326,12 +329,12 @@ func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 // get POSIX export PATH.
 func TestAppendShellPathLines_FishSyntax(t *testing.T) {
 	body := `check "$(direnv hook bash)"`
-	got := appendShellPathLines(body, []string{"~/.local/bin"}, "fish", "/home/u")
+	got := deploykit.AppendShellPathLines(body, []string{"~/.local/bin"}, "fish", "/home/u")
 	if !strings.Contains(got, "fish_add_path") {
 		t.Errorf("fish should use fish_add_path: %q", got)
 	}
 
-	got2 := appendShellPathLines(body, []string{"~/.local/bin"}, "bash", "/home/u")
+	got2 := deploykit.AppendShellPathLines(body, []string{"~/.local/bin"}, "bash", "/home/u")
 	if !strings.Contains(got2, "export PATH=") {
 		t.Errorf("bash should use POSIX export: %q", got2)
 	}

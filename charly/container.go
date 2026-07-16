@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // resolveContainer resolves engine + container name, verifying the container is running.
@@ -12,14 +14,14 @@ func resolveContainer(box, instance string) (engine, name string, err error) {
 	if box == "." {
 		return "", "", nil
 	}
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", "", err
 	}
 	boxName := resolveBoxName(box)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = EngineBinary(runEngine)
-	name = containerNameInstance(boxName, instance)
+	engine = kit.EngineBinary(runEngine)
+	name = kit.ContainerNameInstance(boxName, instance)
 	if !containerRunning(engine, name) {
 		return "", "", fmt.Errorf("container %s is not running", name)
 	}

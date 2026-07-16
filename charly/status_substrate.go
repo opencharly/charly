@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/sdk/deploykit"
+
 // CollectOpts is the read-only input a `charly status` invocation threads
 // through its host-side machinery: the deploy-cone data the nested-overlay
 // tree builder (status_nested.go's buildStatusRootsTree, a SEPARATE
@@ -13,9 +15,9 @@ package main
 // for themselves. CollectOpts carries NO enginekit client (the engine shed
 // from core with them).
 type CollectOpts struct {
-	IncludeAll bool          // mirrors --all
-	Nested     bool          // mirrors --nested (live multi-hop probing of nested children + live k8s)
-	Deploy     *BundleConfig // ~/.config/charly/charly.yml (may be nil)
-	Unified    *UnifiedFile  // charly.yml projection incl. folded kind:check beds (may be nil)
-	RunMode    string        // c.rt.RunMode
+	IncludeAll bool                    // mirrors --all
+	Nested     bool                    // mirrors --nested (live multi-hop probing of nested children + live k8s)
+	Deploy     *deploykit.BundleConfig // ~/.config/charly/charly.yml (may be nil)
+	Unified    *UnifiedFile            // charly.yml projection incl. folded kind:check beds (may be nil)
+	RunMode    string                  // c.rt.RunMode
 }

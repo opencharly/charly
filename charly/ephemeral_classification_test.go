@@ -1,9 +1,10 @@
 package main
 
 import (
+	"testing"
+
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
-	"testing"
 )
 
 // TestBundleNode_LifecycleAloneDoesNotAuthorize verifies the

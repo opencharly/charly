@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -55,7 +56,7 @@ func snapshotCheckEnv(kr *kit.Runner, _ *spec.Op) *CheckEnv {
 	// The container name is meaningful only for a live (non-box) run with a real box —
 	// the same condition under which a live-container verb runs at all.
 	if kr.Mode() != RunModeBox && kr.Box() != "" && kr.Box() != "." {
-		ce.ContainerName = containerNameInstance(resolveBoxName(kr.Box()), kr.Instance())
+		ce.ContainerName = kit.ContainerNameInstance(resolveBoxName(kr.Box()), kr.Instance())
 	}
 	if de := deployExecOf(kr); de != nil {
 		ce.Venue = de.Venue()

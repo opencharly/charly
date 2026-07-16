@@ -1,11 +1,14 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // deploy_target_pod_test.go — guards the pod-overlay BUILD path's host-side invariants after the
@@ -41,12 +44,12 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 	gen := &Generator{Dir: ctxRoot, Candies: map[string]*Candy{"marker": {Name: "marker"}}}
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
 	// build dir (the invariant hostBuildOverlay's prep sets + caches for the step-emit emitter).
-	build := buildEngineContext{Generator: gen, Box: &ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
+	build := buildEngineContext{Generator: gen, Box: &buildkit.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 
 	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}
-	plan := &InstallPlan{Candy: "marker", Steps: []InstallStep{&OpStep{Op: op, CandyName: "marker", ResolvedUser: "root"}}}
-	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
+	plan := &deploykit.InstallPlan{Candy: "marker", Steps: []spec.InstallStep{&deploykit.OpStep{Op: op, CandyName: "marker", ResolvedUser: "root"}}}
+	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("overlay emit: %v", err)
 	}
 

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestBoxConfigSetupCmd_DirectModeAllowed — the 2026-04-27 cutover
@@ -22,9 +24,9 @@ func TestBoxConfigSetupCmd_DirectModeAllowed(t *testing.T) {
 	// the validity of) the operator's real ~/.config/charly/charly.yml.
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
@@ -48,9 +50,9 @@ func TestBoxConfigRemoveCmd_DirectModeAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yml")
 
-	orig := RuntimeConfigPath
-	defer func() { RuntimeConfigPath = orig }()
-	RuntimeConfigPath = func() (string, error) { return configPath, nil }
+	orig := kit.RuntimeConfigPath
+	defer func() { kit.RuntimeConfigPath = orig }()
+	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")

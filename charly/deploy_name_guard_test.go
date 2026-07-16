@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // A tagged registry image ref used AS a deploy name produces a charly.yml key with registry-host
@@ -17,7 +19,7 @@ func TestRejectImageRefAsDeployName(t *testing.T) {
 		"ghcr.io/org/img:v1",
 	}
 	for _, r := range reject {
-		if err := rejectImageRefAsDeployName(r); err == nil {
+		if err := deploykit.RejectImageRefAsDeployName(r); err == nil {
 			t.Errorf("rejectImageRefAsDeployName(%q) = nil; want a fail-fast error", r)
 		} else if !strings.Contains(err.Error(), "charly bundle add") {
 			t.Errorf("rejectImageRefAsDeployName(%q) error missing the `bundle add` guidance: %v", r, err)
@@ -33,7 +35,7 @@ func TestRejectImageRefAsDeployName(t *testing.T) {
 		"redis/prod",                              // Pattern A base/instance
 	}
 	for _, a := range allow {
-		if err := rejectImageRefAsDeployName(a); err != nil {
+		if err := deploykit.RejectImageRefAsDeployName(a); err != nil {
 			t.Errorf("rejectImageRefAsDeployName(%q) = %v; want nil (not a tagged registry image ref)", a, err)
 		}
 	}

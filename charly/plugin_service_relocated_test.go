@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedServiceVerb_DispatchesViaKit proves the THREE-role `service` verb —
@@ -45,11 +48,11 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("service provider does not implement TypedStepProvider (multi-role step adapter missing): %T", prov)
 	}
-	if sp.LowersTo() != StepKindServicePackaged {
+	if sp.LowersTo() != spec.StepKindServicePackaged {
 		t.Fatalf("LowersTo = %v, want StepKindServicePackaged", sp.LowersTo())
 	}
-	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, &Candy{Name: "mylayer"}, &ResolvedBox{})
-	sps, ok := step.(*ServicePackagedStep)
+	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, &Candy{Name: "mylayer"}, &buildkit.ResolvedBox{})
+	sps, ok := step.(*deploykit.ServicePackagedStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *ServicePackagedStep", step)
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/opencharly/sdk/kit"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -178,7 +179,7 @@ var startLibvirtUserSession = func() {
 // (charly/preempt.go) so the holder-restart path runs the exact same lifecycle
 // code as `charly vm start`.
 func startVM(box, instance string) error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
@@ -237,7 +238,7 @@ func startVM(box, instance string) error {
 // resource arbiter (charly/preempt.go), which always calls it with force=false
 // so a preempted holder is gracefully shut down and remains restartable.
 func stopVM(box, instance string, force bool) error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -36,7 +38,7 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 		switch {
 		case s.Check != "" || s.AgentCheck != "":
 			bake = true
-		case s.Run != "" && opInContext(&s.Op, CtxRuntime):
+		case s.Run != "" && opInContext(&s.Op, deploykit.CtxRuntime):
 			bake = true
 		}
 		if !bake {
@@ -54,8 +56,8 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 }
 
 // CollectDescriptions returns nil if every section is empty.
-func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *LabelDescriptionSet {
-	set := &LabelDescriptionSet{}
+func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *kit.LabelDescriptionSet {
+	set := &kit.LabelDescriptionSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 	for _, candyName := range allCandyNames {
@@ -67,7 +69,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 		if layer.Description == "" && len(baked) == 0 {
 			continue
 		}
-		set.Candy = append(set.Candy, LabeledDescription{
+		set.Candy = append(set.Candy, kit.LabeledDescription{
 			Origin:      "candy:" + candyName,
 			Description: layer.Description,
 			Plan:        baked,
@@ -78,7 +80,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 	if img, ok := cfg.BoxConfig(boxName); ok {
 		baked := bakeableSteps(img.Plan)
 		if img.Description != "" || len(baked) > 0 {
-			set.Box = append(set.Box, LabeledDescription{
+			set.Box = append(set.Box, kit.LabeledDescription{
 				Origin:      "box:" + boxName,
 				Description: img.Description,
 				Plan:        baked,

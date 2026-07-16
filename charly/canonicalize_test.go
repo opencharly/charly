@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -30,7 +31,7 @@ func TestCanonicalizeDeployArg(t *testing.T) {
 		{"empty", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gotImage, gotInst := canonicalizeDeployArg(tc.arg, tc.instance)
+			gotImage, gotInst := deploykit.CanonicalizeDeployArg(tc.arg, tc.instance)
 			if gotImage != tc.wantImage || gotInst != tc.wantInst {
 				t.Errorf("canonicalizeDeployArg(%q, %q) = (%q, %q), want (%q, %q)",
 					tc.arg, tc.instance, gotImage, gotInst, tc.wantImage, tc.wantInst)
@@ -92,7 +93,7 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 	// allocated / pinned host:container mapping charly config computed). The merge
 	// applies the entry resolved BY DEPLOY KEY — never a sibling's, never the
 	// image-label container ports.
-	dc := &BundleConfig{
+	dc := &deploykit.BundleConfig{
 		Bundle: map[string]spec.BundleNode{
 			"ollama":                   {ResolvedPort: []string{"11434:11434"}},
 			"check-cachyos-ollama-pod": {Image: "ollama", ResolvedPort: []string{"45434:11434"}},
@@ -134,7 +135,7 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 func TestMergeDeployOntoMetadata_VolumesScopedToDeployKey(t *testing.T) {
 	const vol = "charly-immich-ml-pgdata"
 	mk := func() *BoxMetadata {
-		return &BoxMetadata{Box: "immich-ml", Volume: []VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
+		return &BoxMetadata{Box: "immich-ml", Volume: []deploykit.VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
 	}
 	for _, tc := range []struct {
 		name       string

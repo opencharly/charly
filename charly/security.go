@@ -3,6 +3,8 @@ package main
 import (
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // CollectSecurity merges security configs from all candies in an image,
@@ -149,7 +151,7 @@ func appendUnique(dst []string, items ...string) []string {
 // when running in the {host} IPC Namespace". Same logic applies to
 // the quadlet generator's ShmSize= directive elsewhere.
 func SecurityArgs(sec SecurityConfig) []string {
-	emitShmSize := sec.ShmSize != "" && !ipcModeBlocksShmSize(sec.IpcMode)
+	emitShmSize := sec.ShmSize != "" && !deploykit.IpcModeBlocksShmSize(sec.IpcMode)
 	if sec.Privileged {
 		args := []string{"--privileged"}
 		// Pass security_opt even when privileged — nested containers need

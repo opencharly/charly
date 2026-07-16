@@ -32,16 +32,16 @@ import (
 // concerns are separate future cutovers — P14-rest trace, 2026-07; see
 // status_substrate.go for the CollectOpts rationale).
 type Collector struct {
-	rt      *ResolvedRuntime
+	rt      *kit.ResolvedRuntime
 	quadlet string
-	deploy  *BundleConfig
+	deploy  *deploykit.BundleConfig
 	unified *UnifiedFile // best-effort charly.yml projection (may be nil)
 }
 
 // NewCollector wires up the runtime + cached deploy + quadlet dir. charly.yml
 // validation failures degrade gracefully (a stderr warning, deploy lookups
 // skipped).
-func NewCollector(rt *ResolvedRuntime) (*Collector, error) { //nolint:unparam // error return kept for interface/API stability
+func NewCollector(rt *kit.ResolvedRuntime) (*Collector, error) { //nolint:unparam // error return kept for interface/API stability
 	c := &Collector{rt: rt}
 	if dc, err := deploykit.LoadBundleConfig(); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: charly.yml has validation errors:\n  %v\n", err)
@@ -114,7 +114,7 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 		if results[i].Kind != results[j].Kind {
 			return results[i].Kind < results[j].Kind
 		}
-		return deployKey(results[i].Image, results[i].Instance) < deployKey(results[j].Image, results[j].Instance)
+		return deploykit.DeployKey(results[i].Image, results[i].Instance) < deploykit.DeployKey(results[j].Image, results[j].Instance)
 	})
 	return results, opts, nil
 }
@@ -277,7 +277,7 @@ func (c *Collector) lookupDeploy(box, instance, joinedContainerName string) (spe
 		return spec.BundleNode{}, false
 	}
 	if box != "" {
-		if dn, ok := c.deploy.Bundle[deployKey(box, instance)]; ok {
+		if dn, ok := c.deploy.Bundle[deploykit.DeployKey(box, instance)]; ok {
 			return dn, true
 		}
 		if dn, ok := c.deploy.Bundle[box]; ok && instance == "" {

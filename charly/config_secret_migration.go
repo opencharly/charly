@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // This file implements the two pre-resolution helpers for the credential-
@@ -104,7 +106,7 @@ func secretKeyForDep(dep spec.EnvDependency) (service, key string) {
 // This is idempotent: running it a second time on a now-clean charly.yml is
 // a no-op. Running it on a host that never had plaintext credentials is a
 // no-op.
-func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, instance string) (int, error) {
+func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *BoxMetadata, image, instance string) (int, error) {
 	if dc == nil || dc.Bundle == nil {
 		return 0, nil
 	}
@@ -113,7 +115,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 		return 0, nil
 	}
 
-	key := deployKey(image, instance)
+	key := deploykit.DeployKey(image, instance)
 	entry, ok := dc.Bundle[key]
 	if !ok || len(entry.Env) == 0 {
 		return 0, nil

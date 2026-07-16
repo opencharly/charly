@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"net"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // package plugin verb — installed-present, version match, and absent-as-expected paths.

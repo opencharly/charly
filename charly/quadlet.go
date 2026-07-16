@@ -2,8 +2,8 @@
 // config-WRITE MECHANISM (GenerateQuadlet + its [Unit]/[Container]/[Service]/
 // [Install] emitters + the QuadletConfig/CollectedSecret/ResolvedBindMount/
 // ResolvedSidecar resolved-runtime types + the pure size/port/tunnel helpers, and
-// the cloudflare tunnel-unit emitter) relocated to sdk/deploykit
-// (deploykit_pod_aliases.go re-points the package-main call sites). What stays here
+// the cloudflare tunnel-unit emitter) relocated to sdk/deploykit — package main
+// references these directly as deploykit.X. What stays here
 // is host-I/O: the on-disk quadlet/systemd path + filename helpers.
 package main
 
@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // quadletDir returns the user-level quadlet directory.
@@ -33,22 +35,22 @@ func systemdUserDir() (string, error) {
 
 // quadletFilename returns the quadlet filename for an image.
 func quadletFilename(boxName string) string {
-	return containerName(boxName) + ".container"
+	return kit.ContainerName(boxName) + ".container"
 }
 
 // quadletFilenameInstance returns the quadlet filename for an image with optional instance.
 func quadletFilenameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".container"
+	return kit.ContainerNameInstance(boxName, instance) + ".container"
 }
 
 // serviceName returns the systemd service name for an image.
 func serviceName(boxName string) string {
-	return containerName(boxName) + ".service"
+	return kit.ContainerName(boxName) + ".service"
 }
 
 // serviceNameInstance returns the systemd service name for an image with optional instance.
 func serviceNameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".service"
+	return kit.ContainerNameInstance(boxName, instance) + ".service"
 }
 
 // quadletExists checks whether a .container file exists for the given image.

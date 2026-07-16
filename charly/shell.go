@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -27,7 +28,7 @@ func defaultIsTerminal() bool {
 var containerRunning = defaultContainerRunning
 
 func defaultContainerRunning(engine, name string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	cmd := exec.Command(binary, "container", "inspect",
 		"--format", "{{.State.Running}}", name)
 	out, err := cmd.Output()
@@ -41,7 +42,7 @@ func defaultContainerRunning(engine, name string) bool {
 // storage, RUNNING OR STOPPED (unlike containerRunning, which is false for a stopped container). A
 // bare `container inspect` succeeds for any existing container, so its exit status is the signal.
 var containerExists = func(engine, name string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
@@ -70,7 +71,7 @@ func (c *ShellCmd) Run() error {
 	if IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
 	}
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
 	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
 	// venue command (resolvePodShellPlan, #59 inventory), the owning plugin runs it over the served

@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestLoadUnified_AndroidNodeForm verifies a unified node-form `android` entity

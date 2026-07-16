@@ -1,15 +1,18 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"maps"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
 
 func init() { deploykit.CompileActOp = compileActOp }
 
-func compileActOp(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
 	verb, err := op.Kind()
 	if err != nil {
 		return nil
@@ -47,7 +50,7 @@ func compileActOp(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 			// (emitTasks `case "plugin"`) stays the box-build seam; this is the
 			// DEPLOY-context (Local/VM) + pod-overlay (OCI) leg.
 			if _, ok := prov.(executorInvoker); ok {
-				return &ExternalPluginStep{
+				return &deploykit.ExternalPluginStep{
 					Op:           op,
 					CandyName:    layer.GetName(),
 					ResolvedUser: userDir,
@@ -70,7 +73,7 @@ func compileActOp(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 			if carrier, ok := sp.(stepContractCarrier); ok {
 				if sc, ok := carrier.declaredStepContract(); ok {
 					payload, _ := marshalJSON(op.PluginInput)
-					return &externalStep{
+					return &deploykit.ExternalStep{
 						Word:      op.Plugin,
 						ScopeV:    sc.Scope,
 						VenueV:    sc.Venue,
@@ -94,9 +97,9 @@ func compileActOp(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	}
 	var resolvedTo string
 	if op.To != "" {
-		resolvedTo = ExpandPath(op.To, HomeToken)
+		resolvedTo = kit.ExpandPath(op.To, deploykit.HomeToken)
 	}
-	return &OpStep{
+	return &deploykit.OpStep{
 		Op:           op,
 		CandyName:    layer.GetName(),
 		CandyDir:     layer.GetSourceDir(),

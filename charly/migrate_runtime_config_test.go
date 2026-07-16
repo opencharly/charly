@@ -5,10 +5,11 @@ package main
 // gate was removed at the migration-baseline reset.
 
 import (
-	"github.com/opencharly/sdk/kit"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestLoadRuntimeConfig_CleanConfigOK(t *testing.T) {
@@ -19,7 +20,7 @@ func TestLoadRuntimeConfig_CleanConfigOK(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte("secret_backend: keyring\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadRuntimeConfig(); err != nil {
+	if _, err := kit.LoadRuntimeConfig(); err != nil {
 		t.Fatalf("clean config should load, got: %v", err)
 	}
 }

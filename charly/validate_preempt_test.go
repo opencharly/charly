@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_preempt_test.go — core-side tests for the preempt helpers that STAY in core after the

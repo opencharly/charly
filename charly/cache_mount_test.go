@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/buildkit"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // TestSharedCacheMount_StableID locks in the format that makes BuildKit
