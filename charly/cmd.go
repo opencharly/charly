@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // CmdCmd runs a single command in a running container with optional notification.
@@ -16,7 +18,7 @@ type CmdCmd struct {
 }
 
 func (c *CmdCmd) Run() error {
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
 	// Resolve the target container up-front for the completion notification (the venue whose session
 	// bus the desktop notify drives, and the running-container gate). The exec itself routes through
@@ -49,7 +51,7 @@ func (c *CmdCmd) Run() error {
 		if runErr != nil {
 			status = "failed"
 		}
-		sendVenueNotification(ContainerChain(engine, name),
+		sendVenueNotification(deploykit.ContainerChain(engine, name),
 			fmt.Sprintf("charly: command %s", status),
 			fmt.Sprintf("%s (%s)", c.Command, elapsed))
 	}

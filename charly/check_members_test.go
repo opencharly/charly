@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -49,7 +50,7 @@ func TestEffectiveEnv_NoHostVarsReturnsBase(t *testing.T) {
 // build-scope check can't reference it.
 func TestIsRuntimeOnlyVar_Host(t *testing.T) {
 	for _, key := range []string{"HOST:web", "HOST:web:8080"} {
-		if !IsRuntimeOnlyVar(key) {
+		if !kit.IsRuntimeOnlyVar(key) {
 			t.Errorf("%q should be runtime-only", key)
 		}
 	}
@@ -58,12 +59,12 @@ func TestIsRuntimeOnlyVar_Host(t *testing.T) {
 // TestFilterHostVars: only ${HOST:…} keys are selected — the ones whose
 // unresolution must FAIL (not skip) a check. ${HOST_PORT} (a distinct var) is NOT.
 func TestFilterHostVars(t *testing.T) {
-	got := filterHostVars([]string{"HOST:web:8080", "HOST_PORT:8080", "HOST:web", "USER"})
+	got := kit.FilterHostVars([]string{"HOST:web:8080", "HOST_PORT:8080", "HOST:web", "USER"})
 	want := []string{"HOST:web:8080", "HOST:web"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("filterHostVars = %v, want %v", got, want)
 	}
-	if got := filterHostVars([]string{"HOST_PORT:8080", "USER"}); len(got) != 0 {
+	if got := kit.FilterHostVars([]string{"HOST_PORT:8080", "USER"}); len(got) != 0 {
 		t.Errorf("filterHostVars with no host vars = %v, want empty", got)
 	}
 }

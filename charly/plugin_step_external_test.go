@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalPluginStep_Derivations proves the IR derivations of the new step kind
@@ -16,29 +20,29 @@ import (
 // because the teardown ops are recorded DYNAMICALLY from the OpExecute reply.
 func TestExternalPluginStep_Derivations(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
-	rootStep := &ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
-	if rootStep.Kind() != StepKindExternalPlugin {
-		t.Fatalf("Kind = %q, want %q", rootStep.Kind(), StepKindExternalPlugin)
+	rootStep := &deploykit.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
+	if rootStep.Kind() != spec.StepKindExternalPlugin {
+		t.Fatalf("Kind = %q, want %q", rootStep.Kind(), spec.StepKindExternalPlugin)
 	}
-	if rootStep.Venue() != VenueHostNative {
+	if rootStep.Venue() != spec.VenueHostNative {
 		t.Fatalf("Venue = %v, want VenueHostNative", rootStep.Venue())
 	}
-	if rootStep.RequiresGate() != GateNone {
+	if rootStep.RequiresGate() != spec.GateNone {
 		t.Fatalf("RequiresGate = %v, want GateNone", rootStep.RequiresGate())
 	}
 	if rootStep.Reverse() != nil {
 		t.Fatalf("Reverse = %v, want nil (teardown ops are recorded from the OpExecute reply)", rootStep.Reverse())
 	}
-	if rootStep.Scope() != ScopeSystem {
+	if rootStep.Scope() != spec.ScopeSystem {
 		t.Fatalf("Scope(root) = %v, want ScopeSystem", rootStep.Scope())
 	}
-	userStep := &ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
-	if userStep.Scope() != ScopeUser {
+	userStep := &deploykit.ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
+	if userStep.Scope() != spec.ScopeUser {
 		t.Fatalf("Scope(1000:1000) = %v, want ScopeUser", userStep.Scope())
 	}
 
 	// The step kind has a registered StepProvider (the dedicated-builtin bijection).
-	if _, ok := stepProviderFor(StepKindExternalPlugin); !ok {
+	if _, ok := stepProviderFor(spec.StepKindExternalPlugin); !ok {
 		t.Fatal("StepKindExternalPlugin has no registered StepProvider (registerDedicatedBuiltin not wired)")
 	}
 }
@@ -107,9 +111,9 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	// 3. The routing seam: compileActOp lowers a `run: plugin: examplestep` op whose
 	//    provider is an external grpcProvider to an ExternalPluginStep (not an OpStep).
 	layer := &Candy{Name: "examplestep-deploy-consumer"}
-	img := &ResolvedBox{Tags: []string{"fedora"}}
+	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
 	step := compileActOp(op, layer, img)
-	eps, ok := step.(*ExternalPluginStep)
+	eps, ok := step.(*deploykit.ExternalPluginStep)
 	if !ok {
 		t.Fatalf("compileActOp routed external plugin verb to %T, want *ExternalPluginStep", step)
 	}
@@ -121,14 +125,14 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 
 	// 4. Execute the step over the E3b reverse channel via the local ShellExecutor
 	//    (RunUser → bash -lc, no sudo) so the plugin's marker write runs for real.
-	plan := &InstallPlan{Candy: layer.Name}
-	reply, err := executeExternalPluginStep(ctx, eps, plan, ShellExecutor{}, buildEngineContext{})
+	plan := &deploykit.InstallPlan{Candy: layer.Name}
+	reply, err := executeExternalPluginStep(ctx, eps, plan, kit.ShellExecutor{}, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("executeExternalPluginStep: %v", err)
 	}
 	mustExist(t, applied, "OpExecute did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "OpExecute did not write the probe marker over the reverse channel")
-	if len(reply.ReverseOps) != 1 || reply.ReverseOps[0].Kind != ReverseOpPluginScript {
+	if len(reply.ReverseOps) != 1 || reply.ReverseOps[0].Kind != spec.ReverseOpPluginScript {
 		t.Fatalf("reply reverse ops = %+v, want exactly one plugin-script op (recorded for teardown)", reply.ReverseOps)
 	}
 	if reply.Record.Candy != "plugin-example-step" {
@@ -138,7 +142,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	// 5. Teardown: replaying the recorded plugin-script reverse op removes the markers
 	//    (record-and-replay — the `charly bundle del` contract). Local runner (nil
 	//    Runner → local bash, user scope, no sudo).
-	runReverseOps(reply.ReverseOps, &hostReverseExec{})
+	kit.RunReverseOps(reply.ReverseOps, &hostReverseExec{})
 	mustNotExist(t, probe, "reverse op replay did not remove the probe marker")
 	mustNotExist(t, applied, "reverse op replay did not remove the applied marker")
 }

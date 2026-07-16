@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -54,8 +57,8 @@ type ProvisionActor interface {
 // (opActsInBuildDeploy) even though it is not a ProvisionActor.
 type TypedStepProvider interface {
 	Provider
-	LowersTo() StepKind
-	ConstructStep(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep
+	LowersTo() spec.StepKind
+	ConstructStep(op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep
 }
 
 // BuildEmitter is the build-context act half of a verb provider that renders its

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -101,7 +102,7 @@ func TestCueBox_Corpus(t *testing.T) {
 			if gn.disc != "candy" || gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
 				continue
 			}
-			if mapValue(gn.discValue, "base") == nil && mapValue(gn.discValue, "from") == nil {
+			if kit.MapValue(gn.discValue, "base") == nil && kit.MapValue(gn.discValue, "from") == nil {
 				continue // a layer fragment, not an image — validated as #Candy elsewhere
 			}
 			b, merr := yaml.Marshal(gn.discValue)

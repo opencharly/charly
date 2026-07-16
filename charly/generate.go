@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,7 +26,7 @@ type Generator struct {
 	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
 	InitConfig     *InitConfig
 	Tag            string
-	Boxes          map[string]*ResolvedBox
+	Boxes          map[string]*buildkit.ResolvedBox
 	BuildDir       string
 	Containerfiles map[string]string // cached content per image (used by charly build to pipe via stdin)
 	GlobalOrder    []string          // popularity-weighted global candy order for cache optimization
@@ -64,7 +66,7 @@ func (g *Generator) globalOrderForBox(imageCandies []string, parentCandies map[s
 }
 
 // resolveUserContext detects existing user in base image or uses configured values
-func (g *Generator) resolveUserContext(img *ResolvedBox) {
+func (g *Generator) resolveUserContext(img *buildkit.ResolvedBox) {
 	if !img.IsExternalBase {
 		// Internal base - inherit from parent, but respect explicit overrides
 		parentImg := g.Boxes[img.Base]
@@ -304,7 +306,7 @@ func (g *Generator) writeContextIgnore() error {
 			b.WriteString(p)
 			b.WriteByte('\n')
 		}
-		if err := atomicWriteFile(filepath.Join(g.Dir, name), []byte(b.String()), 0o644); err != nil {
+		if err := kit.AtomicWriteFile(filepath.Join(g.Dir, name), []byte(b.String()), 0o644); err != nil {
 			return fmt.Errorf("writing %s: %w", name, err)
 		}
 	}
@@ -318,7 +320,7 @@ func (g *Generator) writeContextIgnore() error {
 // provider's OpResolve, and returns the decoded reply UNVALIDATED — the caller enforces the
 // emptiness rule appropriate to its path (external_builder + detection multi-stage require a
 // non-empty Stage; the inline cargo path requires a non-empty InlineFragment).
-func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	params, err := marshalJSON(in)
 	if err != nil {
@@ -345,7 +347,7 @@ func resolveBuilderStage(prov Provider, word string, in spec.BuilderResolveInput
 // out-of-tree builder renders a self-contained stage that reads none of the detection fields),
 // then requires a non-empty Stage (a mis-selected word producing no build-context builder fails
 // LOUDLY). Shares the OpResolve Invoke with the detection path via resolveBuilderStage (R3).
-func resolveExternalBuilder(prov Provider, word, candyName string, img *ResolvedBox) (spec.BuilderResolveReply, error) {
+func resolveExternalBuilder(prov Provider, word, candyName string, img *buildkit.ResolvedBox) (spec.BuilderResolveReply, error) {
 	var zero spec.BuilderResolveReply
 	reply, err := resolveBuilderStage(prov, word, spec.BuilderResolveInput{Candy: candyName}, img)
 	if err != nil {
@@ -452,14 +454,14 @@ func (g *Generator) generateInitFragments(boxName, initName string, def *Resolve
 
 // collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
 // Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
-func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *ResolvedBox) []*EnvConfig {
+func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }
 
 // buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
 // buildStageContext → deploykit.Generator.BuildStageContext (P8 shim). Used by the
 // host resolveInlineBuilderSeam (the render-seam reverse leg, #67).
-func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *ResolvedBox, builderRef string) *spec.BuildStageContext {
+func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *buildkit.ResolvedBox, builderRef string) *spec.BuildStageContext {
 	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
 }
 
@@ -566,7 +568,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := installDirAtomic(tmp, filepath.Join(candyRoot, candyStageDirName(layer))); err != nil {
+		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, candyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}

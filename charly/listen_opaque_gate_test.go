@@ -2,9 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestLibvirtListeners_OpaqueNotExpander locks the P1.4 fix: LibvirtGraphicsListeners

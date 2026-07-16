@@ -9,14 +9,14 @@ import (
 )
 
 func TestFilterOwnProvidesEnv(t *testing.T) {
-	entries := []EnvProvideEntry{
+	entries := []deploykit.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-ollama:11434", Source: "ollama"},
 		{Name: "PGHOST", Value: "charly-postgresql", Source: "postgresql"},
 		{Name: "CUSTOM", Value: "val", Source: "myimage"},
 	}
 
 	got := filterOwnProvides(entries, "ollama")
-	want := []EnvProvideEntry{
+	want := []deploykit.EnvProvideEntry{
 		{Name: "PGHOST", Value: "charly-postgresql", Source: "postgresql"},
 		{Name: "CUSTOM", Value: "val", Source: "myimage"},
 	}
@@ -223,13 +223,13 @@ func TestPortMapFromMappings(t *testing.T) {
 }
 
 func TestPodAwareEnvProvides(t *testing.T) {
-	entries := []EnvProvideEntry{
+	entries := []deploykit.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-combined:11434", Source: "combined-image"},
 		{Name: "PGHOST", Value: "charly-postgresql", Source: "postgresql-image"},
 	}
 
 	// Pod case: consumer IS the combined-image — own entries resolve to localhost
-	got := podAwareEnvProvides(entries, "combined-image", "charly-combined")
+	got := deploykit.PodAwareEnvProvides(entries, "combined-image", "charly-combined")
 	if len(got) != 2 {
 		t.Fatalf("podAwareEnvProvides should return 2 entries, got %d", len(got))
 	}
@@ -245,12 +245,12 @@ func TestPodAwareEnvProvides(t *testing.T) {
 
 func TestPodAwareEnvProvidesLocalPrecedence(t *testing.T) {
 	// Both local and remote provide the same env var name
-	entries := []EnvProvideEntry{
+	entries := []deploykit.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-combined:11434", Source: "combined-image"},
 		{Name: "OLLAMA_HOST", Value: "http://charly-standalone:11434", Source: "standalone"},
 	}
 
-	got := podAwareEnvProvides(entries, "combined-image", "charly-combined")
+	got := deploykit.PodAwareEnvProvides(entries, "combined-image", "charly-combined")
 	if len(got) != 1 {
 		t.Fatalf("podAwareEnvProvides with name conflict: got %d entries, want 1 (local wins)", len(got))
 	}
@@ -261,11 +261,11 @@ func TestPodAwareEnvProvidesLocalPrecedence(t *testing.T) {
 
 func TestPodAwareEnvProvidesCrossContainer(t *testing.T) {
 	// Consumer is a different image — all entries are remote
-	entries := []EnvProvideEntry{
+	entries := []deploykit.EnvProvideEntry{
 		{Name: "OLLAMA_HOST", Value: "http://charly-ollama:11434", Source: "ollama-image"},
 	}
 
-	got := podAwareEnvProvides(entries, "hermes-image", "charly-hermes")
+	got := deploykit.PodAwareEnvProvides(entries, "hermes-image", "charly-hermes")
 	if len(got) != 1 {
 		t.Fatalf("cross-container: got %d entries, want 1", len(got))
 	}

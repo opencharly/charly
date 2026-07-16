@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -138,7 +139,7 @@ func vmLifecyclePrepare(name, dir string, node *spec.BundleNode) (json.RawMessag
 		VM:             vmSpec,
 		SSHUser:        resolveVmSshUser(vmSpec),
 		SSHPort:        sshPort,
-		Alias:          VmSshAlias(domainID),
+		Alias:          kit.VmSshAlias(domainID),
 		SSHKeyPath:     filepath.Join(stateDir, "id_ed25519"),
 		KnownHostsPath: filepath.Join(stateDir, "known_hosts"),
 		StateDir:       stateDir,

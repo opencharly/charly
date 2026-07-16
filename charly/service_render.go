@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -78,7 +79,7 @@ func buildServiceRenderContext(entry *spec.ServiceEntry, ctx ServiceRenderContex
 	if ctx.Home != "" {
 		homify := func(s string) string {
 			s = strings.ReplaceAll(s, "%(ENV_HOME)s", ctx.Home)
-			return ExpandPath(s, ctx.Home)
+			return kit.ExpandPath(s, ctx.Home)
 		}
 		ctx.Exec = homify(ctx.Exec)
 		ctx.WorkingDirectory = homify(ctx.WorkingDirectory)

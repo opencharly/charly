@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -160,7 +161,7 @@ ollama:
 // only [name], so a nested selkies-kde pod was deployed but never evaluated.
 func TestBedCheckLiveRefs(t *testing.T) {
 	// Flat bed: just the substrate (identical to the prior behavior).
-	if got := bedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
+	if got := deploykit.BedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
 		t.Fatalf("flat bed: got %v, want [check-pod]", got)
 	}
 	// Nested bed: substrate first, then each child as a sorted dotted path.
@@ -168,7 +169,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 		"selkies-kde": {Target: "pod"},
 		"cuda-pod":    {Target: "pod"},
 	}
-	got := bedCheckLiveRefs("check-cachyos-gpu-vm", nested)
+	got := deploykit.BedCheckLiveRefs("check-cachyos-gpu-vm", nested)
 	want := []string{
 		"check-cachyos-gpu-vm",
 		"check-cachyos-gpu-vm.cuda-pod", // sorted before selkies-kde
@@ -199,7 +200,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	for _, c := range androidNested {
 		kit.StampDescent(c, deployTraitsFor)
 	}
-	gotA := bedCheckLiveRefs("check-android-emulator-pod", androidNested)
+	gotA := deploykit.BedCheckLiveRefs("check-android-emulator-pod", androidNested)
 	wantA := []string{
 		"check-android-emulator-pod",
 		"check-android-emulator-pod.web", // pod child kept; android "device" omitted

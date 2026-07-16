@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/kit"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -45,10 +46,10 @@ func TestExternalDeploy_FillsPackageRemoveUninstallCmdOnRecord(t *testing.T) {
 	reply := spec.DeployReply{
 		Record: spec.DeployReplyRecord{Candy: "chrome", Version: "2026.1.1"},
 		ReverseOps: []spec.ReverseOp{{
-			Kind:    spec.ReverseOpPackageRemove,
-			Format:  "pac",
-			Targets: []string{"google-chrome"},
-			Scope:   spec.ScopeSystem,
+			Kind:       spec.ReverseOpPackageRemove,
+			Format:     "pac",
+			Targets:    []string{"google-chrome"},
+			Scope: spec.ScopeSystem,
 			// UninstallCmd intentionally empty — the exact latent-drop condition.
 		}},
 	}

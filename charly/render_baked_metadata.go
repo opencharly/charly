@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -136,7 +137,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 					e := &layer.Service()[i]
 					capServices = append(capServices, spec.CapabilityService{
 						Name:             e.Name,
-						Scope:            e.EffectiveScope(),
+						Scope:       e.EffectiveScope(),
 						Enable:           e.Enable,
 						UsePackaged:      e.UsePackaged,
 						Exec:             e.Exec,
@@ -246,7 +247,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 		for name := range mcpProvidesMap {
 			names = append(names, name)
 		}
-		sortStrings(names)
+		kit.SortStrings(names)
 		mcpProvides := make([]spec.MCPServerYAML, 0, len(names))
 		for _, name := range names {
 			mcpProvides = append(mcpProvides, mcpProvidesMap[name])
@@ -283,7 +284,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	meta.Route = routes
 
 	// Candy env vars: merged from all candies + builder runtime contributions.
-	var envConfigs []*EnvConfig
+	var envConfigs []*kit.EnvConfig
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
 		if layer.envConfig != nil {
@@ -292,7 +293,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 	envConfigs = append(envConfigs, g.collectBuilderRuntimeEnv(candyOrder, img)...)
 	if len(envConfigs) > 0 {
-		merged := MergeEnvConfigs(envConfigs)
+		merged := kit.MergeEnvConfigs(envConfigs)
 		if len(merged.Vars) > 0 {
 			meta.EnvCandy = merged.Vars
 		}
@@ -320,7 +321,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 		}
 	}
 	meta.Status = resolveStatus(effectiveStatus)
-	meta.CheckLevel = ResolveCheckLevel(img.CheckLevel)
+	meta.CheckLevel = kit.ResolveCheckLevel(img.CheckLevel)
 	if len(infoParts) > 0 {
 		meta.Info = strings.ReplaceAll(strings.Join(infoParts, "; "), "\n", " ")
 	}

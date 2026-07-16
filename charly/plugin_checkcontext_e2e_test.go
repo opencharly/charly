@@ -3,13 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestKitVerbOutOfProcess_HTTPDoEndToEnd proves the FULL F2 CheckContextService reverse
@@ -78,7 +80,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		}
 		out, iErr := gp.InvokeWithExecutor(ctx,
 			&Operation{Reserved: "http", Op: OpRun, Params: params, Env: envJSON},
-			ShellExecutor{}, buildEngineContext{}, false, cc)
+			kit.ShellExecutor{}, buildEngineContext{}, false, cc)
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)
 		}

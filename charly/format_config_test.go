@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestLoadDistroConfigFromFile(t *testing.T) {
@@ -240,7 +242,7 @@ func TestDnfConfigParse(t *testing.T) {
 // it declares none, and its own Dnf wins when set — same per-field merge as
 // the other DistroDef sub-blocks (BaseUser, Pacstrap, …).
 func TestDnfConfigInherit(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
+	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {
 			Bootstrap: vmshared.BootstrapDef{InstallCmd: "dnf install -y"},
 			Dnf:       &vmshared.DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
@@ -314,7 +316,7 @@ func TestDistroConfigFindFormat(t *testing.T) {
 			t.Errorf("FindFormat(%q) = nil, want a FormatDef", f)
 			continue
 		}
-		if formatPhaseTemplate(fd, PhaseInstall, VenueHostNative) == "" {
+		if formatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			t.Errorf("format %q has no phase.install.host cell", f)
 		}
 		if fd.UninstallTemplate == "" {

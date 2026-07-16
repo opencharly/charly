@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -35,7 +36,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		}
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.ConfigResolveReply{}, err
 	}

@@ -19,11 +19,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"

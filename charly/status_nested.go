@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -95,7 +97,7 @@ func buildStatusChildNodes(parentPath string, parentNode *spec.BundleNode, rawRo
 			Path:        childPath,
 			Kind:        nestedChildKind(child),
 			HasChildren: child.HasChildren(),
-			MatchKeys:   []string{childPath, NestedContainerName(childPath)},
+			MatchKeys:   []string{childPath, kit.NestedContainerName(childPath)},
 			Children:    buildStatusChildNodes(childPath, child, rawRoots, nested),
 		}
 		if nested {
@@ -113,7 +115,7 @@ func buildStatusChildNodes(parentPath string, parentNode *spec.BundleNode, rawRo
 // add` and `charly check live parent.child` use (R3); there is no bespoke nested
 // dial here.
 func probeNestedChildLive(childPath string, roots map[string]spec.BundleNode) string {
-	leaf, chain, err := ResolveDeployChain(roots, childPath, nil)
+	leaf, chain, err := deploykit.ResolveDeployChain(roots, childPath, nil)
 	if err != nil || chain == nil || leaf == nil {
 		return "unreachable"
 	}
@@ -130,7 +132,7 @@ func probeNestedChildLive(childPath string, roots map[string]spec.BundleNode) st
 // the row's KIND cell. classifyTarget normalizes empty/legacy spellings, so
 // pod / vm / k8s / local / android all resolve to their canonical kind.
 func nestedChildKind(child *spec.BundleNode) spec.SubstrateKind {
-	switch classifyTarget(child) {
+	switch deploykit.ClassifyTarget(child) {
 	case "vm":
 		return spec.SubstrateVM
 	case "k8s":
@@ -150,11 +152,11 @@ func nestedChildKind(child *spec.BundleNode) spec.SubstrateKind {
 // (project then local overlay) but operates on the ALREADY-LOADED configs in
 // opts — buildStatusRootsTree must not re-read disk or re-run LoadUnified.
 func mergedNestedRoots(opts CollectOpts) map[string]spec.BundleNode {
-	var project *BundleConfig
+	var project *deploykit.BundleConfig
 	if opts.Unified != nil {
 		project = opts.Unified.ProjectBundleConfig()
 	}
-	merged := MergeDeployConfigs(project, opts.Deploy)
+	merged := deploykit.MergeDeployConfigs(project, opts.Deploy)
 	if merged == nil {
 		return nil
 	}

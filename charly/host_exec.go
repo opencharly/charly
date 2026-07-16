@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"golang.org/x/term"
 )
 
@@ -82,7 +83,7 @@ func resolveHostAlias(h string) (string, error) {
 		return h, nil
 	}
 	// Try alias lookup.
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		// Fall back to raw — let ssh resolve via ~/.ssh/config.
 		return h, nil

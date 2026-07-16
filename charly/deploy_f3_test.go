@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )

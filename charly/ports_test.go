@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 func TestParseHostPort(t *testing.T) {
@@ -176,7 +178,7 @@ func TestLocalizePort_PreservesIPv4Prefix(t *testing.T) {
 		{"53:53/udp", "127.0.0.1", "127.0.0.1:53:53/udp"},
 	}
 	for _, tt := range tests {
-		got := localizePort(tt.input, tt.bindAddr)
+		got := deploykit.LocalizePort(tt.input, tt.bindAddr)
 		if got != tt.want {
 			t.Errorf("localizePort(%q, %q) = %q, want %q", tt.input, tt.bindAddr, got, tt.want)
 		}

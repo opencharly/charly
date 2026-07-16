@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestCollectDescriptions_BakesPluginFileCheck is the main-repo equivalent of the

@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestDeriveDeploymentName(t *testing.T) {
@@ -33,7 +35,7 @@ func TestDeriveDeploymentName(t *testing.T) {
 // end-to-end consumption proof is the live `charly check live cachyos-gpu.selkies-kde`
 // R10.
 func TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	project := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {
 			Target: "vm",
 			From:   "cachyos-gpu",
@@ -43,7 +45,7 @@ func TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay(t *testing.T) {
 		},
 	}}
 	// Operator per-host overlay: per-host field set, NO nested: block.
-	operator := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	operator := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {
 			Target:    "vm",
 			From:      "cachyos-gpu",
@@ -51,7 +53,7 @@ func TestMergeDeployConfigs_VMNestedSurvivesNestedlessOverlay(t *testing.T) {
 		},
 	}}
 
-	merged := MergeDeployConfigs(project, operator)
+	merged := deploykit.MergeDeployConfigs(project, operator)
 	node := merged.Bundle["cachyos-gpu"]
 
 	// The operator overlay's non-zero field won (proves the overlay DID merge,

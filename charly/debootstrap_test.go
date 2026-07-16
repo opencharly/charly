@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // TestDebootstrapDef_YamlParse verifies the new fields added to DebootstrapDef
@@ -32,7 +34,7 @@ distro:
           suite: trixie-security
           components: "main"
 `
-	var dc DistroConfig
+	var dc buildkit.DistroConfig
 	if err := decodeViaCUEForTest(t, yamlText, &dc); err != nil {
 		t.Fatalf("unmarshaling debootstrap distro: %v", err)
 	}
@@ -97,7 +99,7 @@ distro:
       components: "main universe"
       base_package: [linux-image-generic]
 `
-	var dc DistroConfig
+	var dc buildkit.DistroConfig
 	if err := decodeViaCUEForTest(t, yamlText, &dc); err != nil {
 		t.Fatalf("unmarshaling: %v", err)
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -17,11 +18,11 @@ import (
 // HostBuild("resolved-project")) — so CollectOpts carries NO enginekit client
 // (the engine shed from core with them).
 type CollectOpts struct {
-	IncludeAll bool          // mirrors --all
-	Nested     bool          // mirrors --nested (live multi-hop probing of nested children + live k8s)
-	Deploy     *BundleConfig // ~/.config/charly/charly.yml (may be nil)
-	Unified    *UnifiedFile  // charly.yml projection incl. folded kind:check beds (may be nil)
-	RunMode    string        // c.rt.RunMode
+	IncludeAll bool                    // mirrors --all
+	Nested     bool                    // mirrors --nested (live multi-hop probing of nested children + live k8s)
+	Deploy     *deploykit.BundleConfig // ~/.config/charly/charly.yml (may be nil)
+	Unified    *UnifiedFile            // charly.yml projection incl. folded kind:check beds (may be nil)
+	RunMode    string                  // c.rt.RunMode
 }
 
 // SubstrateCollector is implemented once per deployment substrate. Each

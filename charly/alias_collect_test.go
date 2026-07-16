@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestCollectImageAliases(t *testing.T) {

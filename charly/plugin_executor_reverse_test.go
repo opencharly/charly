@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/opencharly/sdk/deploykit"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -18,7 +19,7 @@ import (
 // Venue calls to the live executor. The embedded nil DeployExecutor satisfies the
 // methods executorReverseServer never calls.
 type reverseFakeExec struct {
-	DeployExecutor
+	deploykit.DeployExecutor
 	lastSystem, lastUser string
 
 	// PutFile capture: the bytes the server materialized + the placement args.
@@ -29,11 +30,11 @@ type reverseFakeExec struct {
 }
 
 func (r *reverseFakeExec) Venue() string { return "fake-venue" }
-func (r *reverseFakeExec) RunSystem(_ context.Context, s string, _ EmitOpts) error {
+func (r *reverseFakeExec) RunSystem(_ context.Context, s string, _ deploykit.EmitOpts) error {
 	r.lastSystem = s
 	return nil
 }
-func (r *reverseFakeExec) RunUser(_ context.Context, s string, _ EmitOpts) error {
+func (r *reverseFakeExec) RunUser(_ context.Context, s string, _ deploykit.EmitOpts) error {
 	r.lastUser = s
 	return nil
 }
@@ -41,7 +42,7 @@ func (r *reverseFakeExec) RunUser(_ context.Context, s string, _ EmitOpts) error
 // PutFile reads back the host temp file the reverse server materialized from the
 // wire-carried bytes, so the test can assert the content + placement args survived the
 // RPC and reached the live executor.
-func (r *reverseFakeExec) PutFile(_ context.Context, localPath, remotePath string, mode uint32, ownerRoot bool, _ EmitOpts) error {
+func (r *reverseFakeExec) PutFile(_ context.Context, localPath, remotePath string, mode uint32, ownerRoot bool, _ deploykit.EmitOpts) error {
 	b, err := os.ReadFile(localPath)
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 )
 
 // CLI defines the command-line interface structure
@@ -156,7 +157,7 @@ func main() {
 	// Load project .env into process environment before any config resolution.
 	// Real env vars take precedence over .env values.
 	if dir, err := os.Getwd(); err == nil {
-		if err := LoadProcessDotenv(dir); err != nil {
+		if err := kit.LoadProcessDotenv(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: loading .env: %v\n", err)
 		}
 	}

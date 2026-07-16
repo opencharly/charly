@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"golang.org/x/term"
 )
@@ -87,8 +89,8 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 type LabelSecretEntry = spec.LabelSecretEntry
 
 // CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
-// Secret= directive) is a deploykit resolved-runtime type now, aliased in
-// deploykit_pod_aliases.go — it moved to sdk/deploykit with the pod config-write
+// Secret= directive) is a deploykit resolved-runtime type now, referenced directly
+// as deploykit.CollectedSecret — it moved to sdk/deploykit with the pod config-write
 // mechanism (P11). Service/Key/RotateOnConfig are populated by CollectCandySecretAccepts
 // for credential-store-backed secrets (secret_accepts / secret_requires); zero for
 // candy-owned secrets (the CollectSecretsFromLabels path). Service/Key override the
@@ -126,7 +128,7 @@ func ListProvisionedSecretNames(engineBin, boxName string) []string {
 // candy-owned auto-generated secret gets a NEW random value on refresh;
 // services that persisted the old value (an initialized database) must be
 // re-initialized by the operator.
-func ApplySecretRefresh(secrets []CollectedSecret, refresh []string) ([]CollectedSecret, []string) {
+func ApplySecretRefresh(secrets []deploykit.CollectedSecret, refresh []string) ([]deploykit.CollectedSecret, []string) {
 	if len(refresh) == 0 {
 		return secrets, nil
 	}
@@ -159,10 +161,10 @@ func ApplySecretRefresh(secrets []CollectedSecret, refresh []string) ([]Collecte
 }
 
 // CollectSecretsFromLabels reconstructs secrets from image label metadata.
-func CollectSecretsFromLabels(boxName string, labelSecrets []LabelSecretEntry) []CollectedSecret {
-	secrets := make([]CollectedSecret, 0, len(labelSecrets))
+func CollectSecretsFromLabels(boxName string, labelSecrets []LabelSecretEntry) []deploykit.CollectedSecret {
+	secrets := make([]deploykit.CollectedSecret, 0, len(labelSecrets))
 	for _, ls := range labelSecrets {
-		secrets = append(secrets, CollectedSecret{
+		secrets = append(secrets, deploykit.CollectedSecret{
 			Name:       "charly-" + boxName + "-" + ls.Name,
 			Target:     ls.Target,
 			Env:        ls.Env,
@@ -174,7 +176,7 @@ func CollectSecretsFromLabels(boxName string, labelSecrets []LabelSecretEntry) [
 
 // ProvisionPodmanSecrets creates podman secrets from the credential store.
 // Returns the secrets that were successfully provisioned and any that fell back to env vars.
-func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []CollectedSecret, autoGenerate bool) (provisioned []CollectedSecret, fallbackEnv []string, err error) { //nolint:unparam // error return kept for interface/API stability
+func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deploykit.CollectedSecret, autoGenerate bool) (provisioned []deploykit.CollectedSecret, fallbackEnv []string, err error) { //nolint:unparam // error return kept for interface/API stability
 	if engine == "docker" {
 		fmt.Fprintln(os.Stderr, "NOTE: Docker secrets require Swarm mode (not available).")
 		fmt.Fprintln(os.Stderr, "Falling back to environment variable injection for secrets.")
@@ -294,7 +296,7 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []Collecte
 }
 
 // SecretArgs returns --secret flags for container run (direct mode).
-func SecretArgs(secrets []CollectedSecret) []string {
+func SecretArgs(secrets []deploykit.CollectedSecret) []string {
 	args := make([]string, 0, 2*len(secrets))
 	for _, s := range secrets {
 		args = append(args, "--secret", fmt.Sprintf("%s,target=%s", s.Name, s.Target))
@@ -313,7 +315,7 @@ func SecretArgs(secrets []CollectedSecret) []string {
 //
 // When Service/Key are unset, the default chain (used by candy-owned secrets)
 // applies: env var → charly/secret/<podman-name> → charly/secret/<bare-secret-name>.
-func resolveSecretValue(s CollectedSecret, boxName, instance string) (value, source string) {
+func resolveSecretValue(s deploykit.CollectedSecret, boxName, instance string) (value, source string) {
 	// Explicit override from CollectCandySecretAccepts: query exactly once at
 	// (Service, Key), allowing the Env var to win via ResolveCredential's
 	// env-first chain.
@@ -379,7 +381,7 @@ type SecretResolution struct {
 // This function does NOT touch the podman secret store — that's the job of
 // ProvisionPodmanSecrets. It only reads from the credential store. No network
 // calls, no filesystem mutations, safe to run speculatively.
-func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (collected []CollectedSecret, resolutions []SecretResolution) {
+func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
 	if meta == nil {
 		return nil, nil
 	}
@@ -399,7 +401,7 @@ func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (col
 			}
 		}
 
-		cs := CollectedSecret{
+		cs := deploykit.CollectedSecret{
 			Name:           "charly-" + boxName + "-" + envVarNameToPodmanSecretSlug(dep.Name),
 			Target:         "", // type=env directive doesn't use Target
 			Env:            dep.Name,
@@ -477,7 +479,7 @@ func credKeyForSecret(boxName, instance string) string {
 
 // podmanSecretExists checks whether a podman secret with the given name already exists.
 func podmanSecretExists(engine, name string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	cmd := exec.Command(binary, "secret", "inspect", name)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -486,7 +488,7 @@ func podmanSecretExists(engine, name string) bool {
 
 // ensurePodmanSecret creates or replaces a podman secret.
 func ensurePodmanSecret(engine, name, value string) error {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	// Remove existing secret (ignore error if doesn't exist)
 	rmCmd := exec.Command(binary, "secret", "rm", name)
 	rmCmd.Stderr = nil
@@ -502,8 +504,8 @@ func ensurePodmanSecret(engine, name, value string) error {
 }
 
 // RemovePodmanSecrets removes podman secrets for an image (best-effort).
-func RemovePodmanSecrets(engine string, secrets []CollectedSecret) {
-	binary := EngineBinary(engine)
+func RemovePodmanSecrets(engine string, secrets []deploykit.CollectedSecret) {
+	binary := kit.EngineBinary(engine)
 	for _, s := range secrets {
 		cmd := exec.Command(binary, "secret", "rm", s.Name)
 		cmd.Stderr = nil

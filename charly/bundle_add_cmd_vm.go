@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -15,15 +17,15 @@ import (
 // SSHExecutor the vm lifecycle hook's VenueExecutor supplies, so a vm `charly bundle del`
 // replays the recorded ReverseOps IN THE GUEST (Δ2).
 type sshReverseRunner struct {
-	exec *SSHExecutor
+	exec *kit.SSHExecutor
 }
 
 func (r *sshReverseRunner) RunSystem(script string) error {
-	return r.exec.RunSystem(context.Background(), script, EmitOpts{})
+	return r.exec.RunSystem(context.Background(), script, deploykit.EmitOpts{})
 }
 
 func (r *sshReverseRunner) RunUser(script string) error {
-	return r.exec.RunUser(context.Background(), script, EmitOpts{})
+	return r.exec.RunUser(context.Background(), script, deploykit.EmitOpts{})
 }
 
 // vmNameFromDeployName extracts the VM entity name from a deploy-key
@@ -120,7 +122,7 @@ func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) e
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}
 	if dc == nil {
-		dc = &BundleConfig{}
+		dc = &deploykit.BundleConfig{}
 	}
 	if dc.Bundle == nil {
 		dc.Bundle = map[string]spec.BundleNode{}
@@ -191,7 +193,7 @@ func removeVmDeployEntry(deployName string) error {
 	for _, key := range keys {
 		entry := dc.Bundle[key]
 		entry.VmState = nil
-		if isAutoVmDeployEntry(entry) {
+		if deploykit.IsAutoVmDeployEntry(entry) {
 			delete(dc.Bundle, key)
 		} else {
 			dc.Bundle[key] = entry
@@ -218,7 +220,7 @@ func removeVmDeployEntry(deployName string) error {
 // literal deployName key AND — when deployName is "vm:<X>" — every bundle whose `vm:` cross-ref
 // names <X>. Because domain identities are unique and never equal an entity a sibling shares, the
 // From-scan can no longer over-match sibling beds during a deploy teardown.
-func vmDeployEntryKeys(dc *BundleConfig, deployName string) []string {
+func vmDeployEntryKeys(dc *deploykit.BundleConfig, deployName string) []string {
 	var keys []string
 	seen := map[string]bool{}
 	add := func(k string) {

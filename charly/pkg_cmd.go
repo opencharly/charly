@@ -16,6 +16,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // BoxPkgCmd builds native package artifacts for a candy's localpkg sources. The user-facing
@@ -70,7 +74,7 @@ func (c *BoxPkgCmd) Run() error {
 		return fmt.Errorf("creating output dir %s: %w", outDir, err)
 	}
 
-	ctx := EmitOpts{}.ContextOrDefault()
+	ctx := deploykit.EmitOpts{}.ContextOrDefault()
 	for _, format := range formats {
 		src := lyr.LocalPkg(format)
 		if src == "" {
@@ -85,7 +89,7 @@ func (c *BoxPkgCmd) Run() error {
 			return fmt.Errorf("package source %q for format %q not found (sentinel %q)", src, format, lp.SourceSentinel)
 		}
 		fmt.Fprintf(os.Stderr, "Building %s package for candy %q from %s\n", format, c.Candy, srcDir)
-		files, err := buildLocalPkgOnHost(ctx, lp, srcDir, EmitOpts{})
+		files, err := buildLocalPkgOnHost(ctx, lp, srcDir, deploykit.EmitOpts{})
 		if err != nil {
 			return fmt.Errorf("building %s package: %w", format, err)
 		}
@@ -104,7 +108,7 @@ func (c *BoxPkgCmd) Run() error {
 // local_pkg block for the given package format, returning its contract. The
 // per-format build/install/glob/sentinel all come from this config — the only
 // distro knowledge lives in the embedded build vocabulary (charly/charly.yml), never here.
-func lookupLocalPkgDef(dc *DistroConfig, format string) *LocalPkgDef {
+func lookupLocalPkgDef(dc *buildkit.DistroConfig, format string) *LocalPkgDef {
 	if dc == nil {
 		return nil
 	}
@@ -112,7 +116,7 @@ func lookupLocalPkgDef(dc *DistroConfig, format string) *LocalPkgDef {
 	for name := range dc.Distro {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	kit.SortStrings(names)
 	for _, name := range names {
 		if fn, lp := dc.Distro[name].LocalPkgFormat(format); lp != nil && fn == format {
 			return lp

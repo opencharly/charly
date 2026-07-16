@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -20,19 +22,19 @@ import (
 // AND succeed with base-only context when none is supplied. The reverse-op derivation that moved
 // out-of-process is covered by plugin/kit/builder_test.go.
 func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Name: "purity",
 		Home: "/home/u",
-		BuilderConfig: &BuilderConfig{Builder: map[string]*BuilderDef{
+		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
 			"pixi": {DetectFiles: []string{"pixi.toml"}},
 		}},
 	}
 	layer := &Candy{Name: "c", HasPixiToml: true}
 
 	// (a) Pre-resolved by the (simulated) pre-pass: the compiler must read it verbatim — no RPC.
-	wantRev := []ReverseOp{{Kind: ReverseOpPixiEnvRemove, Targets: []string{"myenv"}, Scope: ScopeUser, Extra: map[string]string{"layer": "c"}}}
-	pre := HostContext{BuilderContext: map[string]builderPreresolved{
-		builderCtxKey("c", "pixi"): {Context: map[string]any{"env_name": "myenv"}, Reverse: wantRev},
+	wantRev := []spec.ReverseOp{{Kind: spec.ReverseOpPixiEnvRemove, Targets: []string{"myenv"}, Scope: spec.ScopeUser, Extra: map[string]string{"layer": "c"}}}
+	pre := deploykit.HostContext{BuilderContext: map[string]deploykit.BuilderPreresolved{
+		deploykit.BuilderCtxKey("c", "pixi"): {Context: map[string]any{"env_name": "myenv"}, Reverse: wantRev},
 	}}
 	plan, err := deploykit.BuildDeployPlan(layer, img, pre)
 	if err != nil {
@@ -45,13 +47,13 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 	if bs.RawStageContext["builder"] != "pixi" || bs.RawStageContext["layer"] != "c" {
 		t.Fatalf("base context lost: %+v", bs.RawStageContext)
 	}
-	if len(bs.Reverse()) != 1 || bs.Reverse()[0].Kind != ReverseOpPixiEnvRemove {
+	if len(bs.Reverse()) != 1 || bs.Reverse()[0].Kind != spec.ReverseOpPixiEnvRemove {
 		t.Fatalf("Reverse() = %+v, want the pre-resolved [pixi-env-remove]", bs.Reverse())
 	}
 
 	// (b) No pre-pass (HostContext{}): the compiler still succeeds with base-only context + nil
 	// teardown — it never dials a plugin (none is connected here), proving purity.
-	plan2, err := deploykit.BuildDeployPlan(layer, img, HostContext{})
+	plan2, err := deploykit.BuildDeployPlan(layer, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan (no pre-pass): %v", err)
 	}
@@ -64,14 +66,14 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 	}
 }
 
-func firstBuilderStep(t *testing.T, plan *InstallPlan) *BuilderStep {
+func firstBuilderStep(t *testing.T, plan *deploykit.InstallPlan) *deploykit.BuilderStep {
 	t.Helper()
 	for _, s := range plan.Steps {
-		if bs, ok := s.(*BuilderStep); ok {
+		if bs, ok := s.(*deploykit.BuilderStep); ok {
 			return bs
 		}
 	}
-	t.Fatalf("no BuilderStep in plan: %s", DescribePlan(plan))
+	t.Fatalf("no BuilderStep in plan: %s", deploykit.DescribePlan(plan))
 	return nil
 }
 
@@ -114,7 +116,7 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 // resolves the "fedora-coder" image. Returns nil, nil if fixtures can't
 // load (used to gracefully skip in CI environments that might not have
 // the fixture candies present).
-func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *ResolvedBox, map[string]*Candy) {
+func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.ResolvedBox, map[string]*Candy) {
 	t.Helper()
 	dir, _ := os.Getwd()
 	cfg, err := LoadConfig(dir)
@@ -153,7 +155,7 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 		t.Skip("ripgrep layer not present in fixtures")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(ripgrep, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(ripgrep, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -164,15 +166,15 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 
 	// ripgrep is a pure rpm: package candy — expect exactly one
 	// SystemPackagesStep at PhaseInstall with the ripgrep package.
-	var pkgSteps []*SystemPackagesStep
+	var pkgSteps []*deploykit.SystemPackagesStep
 	for _, s := range plan.Steps {
-		if sp, ok := s.(*SystemPackagesStep); ok {
+		if sp, ok := s.(*deploykit.SystemPackagesStep); ok {
 			pkgSteps = append(pkgSteps, sp)
 		}
 	}
 	if len(pkgSteps) != 1 {
 		t.Fatalf("expected 1 SystemPackagesStep, got %d; full plan: %s",
-			len(pkgSteps), DescribePlan(plan))
+			len(pkgSteps), deploykit.DescribePlan(plan))
 	}
 	if pkgSteps[0].Format != "rpm" {
 		t.Errorf("pkg format = %q, want rpm", pkgSteps[0].Format)
@@ -183,13 +185,13 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 	}
 
 	// Install-phase pkg step must be ungated.
-	if got := pkgSteps[0].RequiresGate(); got != GateNone {
+	if got := pkgSteps[0].RequiresGate(); got != spec.GateNone {
 		t.Errorf("install phase gate = %v, want none", got)
 	}
 
 	// Reverse op should uninstall ripgrep.
 	ops := pkgSteps[0].Reverse()
-	if len(ops) != 1 || ops[0].Kind != ReverseOpPackageRemove {
+	if len(ops) != 1 || ops[0].Kind != spec.ReverseOpPackageRemove {
 		t.Errorf("Reverse ops = %+v, want [package-remove]", ops)
 	}
 }
@@ -204,7 +206,7 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 		t.Skip("dev-tools layer not present in fixtures")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(dt, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(dt, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -213,19 +215,19 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 	var pkgCount, taskCount int
 	for _, s := range plan.Steps {
 		switch s.(type) {
-		case *SystemPackagesStep:
+		case *deploykit.SystemPackagesStep:
 			pkgCount++
-		case *OpStep:
+		case *deploykit.OpStep:
 			taskCount++
 		}
 	}
 	if pkgCount < 1 {
 		t.Errorf("expected ≥1 SystemPackagesStep, got %d; plan: %s",
-			pkgCount, DescribePlan(plan))
+			pkgCount, deploykit.DescribePlan(plan))
 	}
 	if taskCount < 1 {
 		t.Errorf("expected ≥1 OpStep, got %d; plan: %s",
-			taskCount, DescribePlan(plan))
+			taskCount, deploykit.DescribePlan(plan))
 	}
 }
 
@@ -243,51 +245,51 @@ func TestBuildDeployPlanPixiCandy(t *testing.T) {
 		t.Skip("pre-commit doesn't have pixi.toml (fixture changed)")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(pc, img, HostContext{})
+	plan, err := deploykit.BuildDeployPlan(pc, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
 
-	var builders []*BuilderStep
+	var builders []*deploykit.BuilderStep
 	for _, s := range plan.Steps {
-		if bs, ok := s.(*BuilderStep); ok {
+		if bs, ok := s.(*deploykit.BuilderStep); ok {
 			builders = append(builders, bs)
 		}
 	}
 	if len(builders) == 0 {
 		t.Fatalf("expected a BuilderStep for pixi, got none; plan: %s",
-			DescribePlan(plan))
+			deploykit.DescribePlan(plan))
 	}
 	foundPixi := false
 	for _, b := range builders {
 		if b.Builder == "pixi" {
 			foundPixi = true
-			if b.Venue() != VenueContainerBuilder {
+			if b.Venue() != spec.VenueContainerBuilder {
 				t.Errorf("pixi builder venue = %v, want container-builder", b.Venue())
 			}
-			if b.Scope() != ScopeUser {
+			if b.Scope() != spec.ScopeUser {
 				t.Errorf("pixi builder scope = %v, want user", b.Scope())
 			}
 		}
 	}
 	if !foundPixi {
-		t.Errorf("no pixi BuilderStep in plan; plan: %s", DescribePlan(plan))
+		t.Errorf("no pixi BuilderStep in plan; plan: %s", deploykit.DescribePlan(plan))
 	}
 }
 
 func TestComputeDeployIDDeterminism(t *testing.T) {
-	a := computeDeployID("fedora-coder", []string{"ripgrep", "uv"}, nil)
-	b := computeDeployID("fedora-coder", []string{"ripgrep", "uv"}, nil)
+	a := deploykit.ComputeDeployID("fedora-coder", []string{"ripgrep", "uv"}, nil)
+	b := deploykit.ComputeDeployID("fedora-coder", []string{"ripgrep", "uv"}, nil)
 	if a != b {
 		t.Errorf("deploy ID not deterministic: %s vs %s", a, b)
 	}
 	// Reordering candies changes the ID (candy order matters for reproducibility).
-	c := computeDeployID("fedora-coder", []string{"uv", "ripgrep"}, nil)
+	c := deploykit.ComputeDeployID("fedora-coder", []string{"uv", "ripgrep"}, nil)
 	if a == c {
 		t.Errorf("expected different IDs for different candy orders, both got %s", a)
 	}
 	// Adding an overlay changes the ID.
-	d := computeDeployID("fedora-coder", []string{"ripgrep", "uv"}, []string{"my-extras"})
+	d := deploykit.ComputeDeployID("fedora-coder", []string{"ripgrep", "uv"}, []string{"my-extras"})
 	if a == d {
 		t.Errorf("expected different IDs with add_candies, both got %s", a)
 	}
@@ -297,14 +299,14 @@ func TestComputeDeployIDDeterminism(t *testing.T) {
 }
 
 func TestMergePlansOrderingAndID(t *testing.T) {
-	p1 := &InstallPlan{Candy: "ripgrep", Distro: "fedora:43", Steps: []InstallStep{
-		&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"ripgrep"}},
+	p1 := &deploykit.InstallPlan{Candy: "ripgrep", Distro: "fedora:43", Steps: []spec.InstallStep{
+		&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall, Packages: []string{"ripgrep"}},
 	}}
-	p2 := &InstallPlan{Candy: "uv", Distro: "fedora:43", Steps: []InstallStep{
-		&OpStep{CandyName: "uv", Op: &spec.Op{Download: "https://…"}},
+	p2 := &deploykit.InstallPlan{Candy: "uv", Distro: "fedora:43", Steps: []spec.InstallStep{
+		&deploykit.OpStep{CandyName: "uv", Op: &spec.Op{Download: "https://…"}},
 	}}
 
-	merged := deploykit.MergePlan([]*InstallPlan{p1, p2}, "fedora-coder", nil)
+	merged := deploykit.MergePlan([]*deploykit.InstallPlan{p1, p2}, "fedora-coder", nil)
 	if merged.Box != "fedora-coder" {
 		t.Errorf("merged.Box = %q, want fedora-coder", merged.Box)
 	}
@@ -328,24 +330,24 @@ func TestEnsureServiceSuffix(t *testing.T) {
 		"":                   "",
 	}
 	for in, want := range tests {
-		if got := ensureServiceSuffix(in); got != want {
+		if got := deploykit.EnsureServiceSuffix(in); got != want {
 			t.Errorf("ensureServiceSuffix(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
 func TestDescribePlanSummary(t *testing.T) {
-	p := &InstallPlan{
+	p := &deploykit.InstallPlan{
 		Candy:  "x",
 		Box:    "y",
 		Distro: "z",
-		Steps: []InstallStep{
-			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall},
-			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall},
-			&OpStep{Op: &spec.Op{Mkdir: "/x"}},
+		Steps: []spec.InstallStep{
+			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
+			&deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhaseInstall},
+			&deploykit.OpStep{Op: &spec.Op{Mkdir: "/x"}},
 		},
 	}
-	out := DescribePlan(p)
+	out := deploykit.DescribePlan(p)
 	if !strings.Contains(out, "candy=x") {
 		t.Errorf("missing candy name in description: %s", out)
 	}
@@ -371,7 +373,7 @@ func TestBuildSystemPackagesStepRepos(t *testing.T) {
 			"url":  "https://pkgs.tailscale.com/stable/debian",
 		}},
 	}
-	step := buildSystemPackagesStep("deb", PhaseInstall, []string{"tailscale"}, raw, nil)
+	step := deploykit.BuildSystemPackagesStep("deb", spec.PhaseInstall, []string{"tailscale"}, raw, nil)
 	if len(step.Repos) != 1 {
 		t.Fatalf("step.Repos len = %d, want 1 (repo-key/type mismatch left it empty)", len(step.Repos))
 	}

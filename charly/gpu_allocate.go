@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // gpu_allocate.go — the core-side GPU-resource PREREQ + host-probe helpers that

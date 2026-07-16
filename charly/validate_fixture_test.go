@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_fixture_test.go — the (c') converted-test infrastructure (task #60): the validate ENGINE
@@ -1453,7 +1455,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 	cfg := &Config{
 		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
-			"myimg": {Candy: []string{"pixi"}, Builder: BuilderMap{"pixi": "myimg"}},
+			"myimg": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "myimg"}},
 		}),
 	}
 	errs := &ValidationError{}
@@ -1467,7 +1469,7 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 // image inheriting defaults.builder that points to itself is NOT an error.
 func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
 		}),
@@ -1484,7 +1486,7 @@ func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
 	cfg := &Config{
 		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
-			"app": {Candy: []string{"pixi"}, Builder: BuilderMap{"pixi": "nonexistent"}},
+			"app": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "nonexistent"}},
 		}),
 	}
 	errs := &ValidationError{}

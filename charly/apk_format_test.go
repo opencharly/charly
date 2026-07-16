@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -21,7 +23,7 @@ import (
 // compiles to nothing.
 func TestCompileApkStep(t *testing.T) {
 	none := &Candy{Name: "no-apk"}
-	if step := compileApkStep(none); step != nil {
+	if step := deploykit.CompileApkStep(none); step != nil {
 		t.Errorf("candy with no apk: should compile to nil step, got %T", step)
 	}
 
@@ -30,16 +32,16 @@ func TestCompileApkStep(t *testing.T) {
 		{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 		{Apk: "tests/data/x.apk"},
 	}
-	step := compileApkStep(l)
+	step := deploykit.CompileApkStep(l)
 	if step == nil {
 		t.Fatal("compileApkStep returned nil for a candy with apk: entries")
 	}
-	apk, ok := step.(*ApkInstallStep)
+	apk, ok := step.(*deploykit.ApkInstallStep)
 	if !ok {
 		t.Fatalf("compileApkStep returned %T, want *ApkInstallStep", step)
 	}
-	if apk.Kind() != StepKindApkInstall {
-		t.Errorf("Kind() = %q, want %q", apk.Kind(), StepKindApkInstall)
+	if apk.Kind() != spec.StepKindApkInstall {
+		t.Errorf("Kind() = %q, want %q", apk.Kind(), spec.StepKindApkInstall)
 	}
 	if len(apk.Packages) != 2 {
 		t.Errorf("Packages len = %d, want 2", len(apk.Packages))
@@ -56,11 +58,11 @@ func TestCompileApkStep(t *testing.T) {
 // at build time): ociEmitStep routes ApkInstallStep through spliceClassStepEmit, which sees the
 // step's Emits=false contract + returns "" — so the dispatch emits nothing.
 func TestOCITargetSkipsApkInstall(t *testing.T) {
-	step := &ApkInstallStep{
+	step := &deploykit.ApkInstallStep{
 		Packages:  []ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
 		CandyName: "test-apps",
 	}
-	frag, err := ociEmitStep(step, &InstallPlan{}, nil, buildEngineContext{})
+	frag, err := ociEmitStep(step, &deploykit.InstallPlan{}, nil, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("ociEmitStep(ApkInstallStep) = %v, want nil (skip)", err)
 	}
@@ -241,8 +243,8 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 
 	// resolveCheckApk errors before any subprocess; Box satisfies the image-context guard.
 	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, Box: "android-emulator", CandyScanErr: errors.New("scan-sentinel-boom")})
-	set := &LabelDescriptionSet{
-		Candy: []LabeledDescription{{
+	set := &kit.LabelDescriptionSet{
+		Candy: []kit.LabeledDescription{{
 			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",
 			Description: "android apps install",
 			Plan: []spec.Step{{

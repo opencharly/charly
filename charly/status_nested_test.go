@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -108,7 +109,7 @@ func TestBuildStatusRootsTree_DeclaredChildren(t *testing.T) {
 			t.Errorf("child %q Kind = %q, want %q", key, c.Kind, spec.SubstrateAndroid)
 		}
 		wantPath := parent + "." + key
-		wantMatchKeys := []string{wantPath, NestedContainerName(wantPath)}
+		wantMatchKeys := []string{wantPath, kit.NestedContainerName(wantPath)}
 		if len(c.MatchKeys) != 2 || c.MatchKeys[0] != wantMatchKeys[0] || c.MatchKeys[1] != wantMatchKeys[1] {
 			t.Errorf("child %q MatchKeys = %v, want %v", key, c.MatchKeys, wantMatchKeys)
 		}
@@ -157,7 +158,7 @@ func TestBuildStatusRootsTree_MatchKeysOrderVmPod(t *testing.T) {
 		t.Errorf("web child = %+v, want Key=web Kind=pod", web)
 	}
 	wantDotted := parent + ".web"
-	wantFlat := NestedContainerName(wantDotted)
+	wantFlat := kit.NestedContainerName(wantDotted)
 	if len(web.MatchKeys) != 2 || web.MatchKeys[0] != wantDotted || web.MatchKeys[1] != wantFlat {
 		t.Errorf("web.MatchKeys = %v, want [%q, %q]", web.MatchKeys, wantDotted, wantFlat)
 	}

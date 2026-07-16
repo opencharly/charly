@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
@@ -41,13 +42,13 @@ func testPacDistroDef() *spec.ResolvedDistro {
 // the config-driven LocalPkg; a candy with no source for the target format, or a
 // distro with no localpkg-capable format, compiles to nothing.
 func TestCompileLocalPkgStep(t *testing.T) {
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Name:      "charly-host",
 		Pkg:       "pac",
 		DistroDef: testPacDistroDef(),
 		Builder:   map[string]string{"aur": "ghcr.io/opencharly/arch-builder:latest"},
 	}
-	hostCtx := HostContext{MachineVenue: true, Distro: "arch"}
+	hostCtx := deploykit.HostContext{MachineVenue: true, Distro: "arch"}
 
 	// A candy with no localpkg entry for the target format → nil.
 	if step := deploykit.CompileLocalPkgStep(&Candy{Name: "no-pkg"}, img, hostCtx); step != nil {
@@ -60,7 +61,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	if step == nil {
 		t.Fatal("compileLocalPkgStep returned nil for a candy with a pac localpkg source")
 	}
-	pkg, ok := step.(*LocalPkgInstallStep)
+	pkg, ok := step.(*deploykit.LocalPkgInstallStep)
 	if !ok {
 		t.Fatalf("compileLocalPkgStep returned %T, want *LocalPkgInstallStep", step)
 	}
@@ -76,15 +77,15 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Same candy on an rpm distro → picks the rpm source from the map.
-	rpmImg := &ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{
+	rpmImg := &buildkit.ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{
 		"rpm": {LocalPkg: &LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
-	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
+	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*deploykit.LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
 		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
-	noFmt := deploykit.CompileLocalPkgStep(l, &ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
+	noFmt := deploykit.CompileLocalPkgStep(l, &buildkit.ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
 	if noFmt != nil {
 		t.Errorf("distro without a localpkg-capable format should compile to nil, got %#v", noFmt)
 	}
@@ -93,17 +94,17 @@ func TestCompileLocalPkgStep(t *testing.T) {
 // TestLocalPkgInstallStepIR exercises the IR contract: kind, scope (system),
 // venue (host-native), gate (none), reverse (no ledger ops — like apk).
 func TestLocalPkgInstallStepIR(t *testing.T) {
-	s := &LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
-	if s.Kind() != StepKindLocalPkgInstall {
-		t.Errorf("Kind() = %q, want %q", s.Kind(), StepKindLocalPkgInstall)
+	s := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
+	if s.Kind() != spec.StepKindLocalPkgInstall {
+		t.Errorf("Kind() = %q, want %q", s.Kind(), spec.StepKindLocalPkgInstall)
 	}
-	if s.Scope() != ScopeSystem {
+	if s.Scope() != spec.ScopeSystem {
 		t.Errorf("Scope() = %v, want ScopeSystem", s.Scope())
 	}
-	if s.Venue() != VenueHostNative {
+	if s.Venue() != spec.VenueHostNative {
 		t.Errorf("Venue() = %v, want VenueHostNative", s.Venue())
 	}
-	if s.RequiresGate() != GateNone {
+	if s.RequiresGate() != spec.GateNone {
 		t.Errorf("RequiresGate() = %v, want GateNone", s.RequiresGate())
 	}
 	if s.Reverse() != nil {
@@ -123,19 +124,19 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 			{Run: "build", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
 		},
 	}
-	img := &ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
-	plan, err := deploykit.BuildDeployPlan(l, img, HostContext{MachineVenue: true, Distro: "arch"})
+	img := &buildkit.ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
+	plan, err := deploykit.BuildDeployPlan(l, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
 	pkgIdx, taskIdx := -1, -1
 	for i, step := range plan.Steps {
 		switch step.(type) {
-		case *LocalPkgInstallStep:
+		case *deploykit.LocalPkgInstallStep:
 			if pkgIdx < 0 {
 				pkgIdx = i
 			}
-		case *OpStep:
+		case *deploykit.OpStep:
 			if taskIdx < 0 {
 				taskIdx = i
 			}
@@ -160,8 +161,8 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 // stepEmitLocalPkgInstall → renderLocalPkgImageInstall), which returns "" for a nil LocalPkg —
 // so ociEmitStep succeeds and returns nothing.
 func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
-	step := &LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
-	frag, err := ociEmitStep(step, &InstallPlan{}, nil, buildEngineContext{})
+	step := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly"}
+	frag, err := ociEmitStep(step, &deploykit.InstallPlan{}, nil, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("ociEmitStep(LocalPkgInstallStep, nil LocalPkg) = %v, want nil", err)
 	}
@@ -278,22 +279,22 @@ type localPkgRecExec struct {
 }
 
 func (e *localPkgRecExec) Venue() string { return "localpkg-rec://test" }
-func (e *localPkgRecExec) RunSystem(_ context.Context, script string, _ EmitOpts) error {
+func (e *localPkgRecExec) RunSystem(_ context.Context, script string, _ deploykit.EmitOpts) error {
 	e.systemScripts = append(e.systemScripts, script)
 	return nil
 }
-func (e *localPkgRecExec) RunUser(_ context.Context, script string, _ EmitOpts) error {
+func (e *localPkgRecExec) RunUser(_ context.Context, script string, _ deploykit.EmitOpts) error {
 	e.userScripts = append(e.userScripts, script)
 	return nil
 }
-func (e *localPkgRecExec) RunBuilder(context.Context, BuilderRunOpts) ([]byte, error) {
+func (e *localPkgRecExec) RunBuilder(context.Context, deploykit.BuilderRunOpts) ([]byte, error) {
 	return nil, nil
 }
-func (e *localPkgRecExec) PutFile(_ context.Context, _, remotePath string, _ uint32, _ bool, _ EmitOpts) error {
+func (e *localPkgRecExec) PutFile(_ context.Context, _, remotePath string, _ uint32, _ bool, _ deploykit.EmitOpts) error {
 	e.putDests = append(e.putDests, remotePath)
 	return nil
 }
-func (e *localPkgRecExec) GetFile(context.Context, string, bool, EmitOpts) ([]byte, error) {
+func (e *localPkgRecExec) GetFile(context.Context, string, bool, deploykit.EmitOpts) ([]byte, error) {
 	return nil, nil
 }
 func (e *localPkgRecExec) RunInteractive(context.Context, string) (int, error) {
@@ -320,19 +321,19 @@ func (e *localPkgRecExec) ResolveHome(context.Context, string) (string, error) {
 func TestVenueHasPkgManager(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	yes := &localPkgRecExec{probeYes: true}
-	if !venueHasPkgManager(context.Background(), yes, lp, EmitOpts{}) {
+	if !venueHasPkgManager(context.Background(), yes, lp, deploykit.EmitOpts{}) {
 		t.Error("venue reporting the package manager present should gate true")
 	}
 	no := &localPkgRecExec{probeYes: false}
-	if venueHasPkgManager(context.Background(), no, lp, EmitOpts{}) {
+	if venueHasPkgManager(context.Background(), no, lp, deploykit.EmitOpts{}) {
 		t.Error("venue without the package manager should gate false")
 	}
 	// DryRun assumes true regardless of the probe (planner shows what it WOULD do).
-	if !venueHasPkgManager(context.Background(), no, lp, EmitOpts{DryRun: true}) {
+	if !venueHasPkgManager(context.Background(), no, lp, deploykit.EmitOpts{DryRun: true}) {
 		t.Error("DryRun should assume the package manager present")
 	}
 	// Nil LocalPkgDef → false even on DryRun (no format config = nothing to do).
-	if venueHasPkgManager(context.Background(), yes, nil, EmitOpts{DryRun: true}) {
+	if venueHasPkgManager(context.Background(), yes, nil, deploykit.EmitOpts{DryRun: true}) {
 		t.Error("nil LocalPkgDef should gate false")
 	}
 }
@@ -342,8 +343,8 @@ func TestVenueHasPkgManager(t *testing.T) {
 // installs it instead.
 func TestExecLocalPkgInstall_SkipsUnsupported(t *testing.T) {
 	exec := &localPkgRecExec{}
-	s := &LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly", ProjectDir: t.TempDir(), Format: "pac", LocalPkg: testPacLocalPkgDef()}
-	if err := execLocalPkgInstall(context.Background(), exec, s, false /* supported */, "host", EmitOpts{}); err != nil {
+	s := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly", ProjectDir: t.TempDir(), Format: "pac", LocalPkg: testPacLocalPkgDef()}
+	if err := execLocalPkgInstall(context.Background(), exec, s, false /* supported */, "host", deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("unsupported venue should be a clean no-op, got %v", err)
 	}
 	if len(exec.systemScripts) != 0 || len(exec.putDests) != 0 {
@@ -356,8 +357,8 @@ func TestExecLocalPkgInstall_SkipsUnsupported(t *testing.T) {
 // no-op even when the venue is reported supported.
 func TestExecLocalPkgInstall_SkipsNilLocalPkg(t *testing.T) {
 	exec := &localPkgRecExec{}
-	s := &LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly", ProjectDir: t.TempDir()} // LocalPkg nil
-	if err := execLocalPkgInstall(context.Background(), exec, s, true, "host", EmitOpts{}); err != nil {
+	s := &deploykit.LocalPkgInstallStep{PkgbuildRef: "pkg/arch", CandyName: "charly", ProjectDir: t.TempDir()} // LocalPkg nil
+	if err := execLocalPkgInstall(context.Background(), exec, s, true, "host", deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("nil LocalPkg should be a clean no-op, got %v", err)
 	}
 	if len(exec.systemScripts) != 0 || len(exec.putDests) != 0 {
@@ -370,8 +371,8 @@ func TestExecLocalPkgInstall_SkipsNilLocalPkg(t *testing.T) {
 // task) — not an error that aborts the deploy.
 func TestExecLocalPkgInstall_SkipsMissingSource(t *testing.T) {
 	exec := &localPkgRecExec{}
-	s := &LocalPkgInstallStep{PkgbuildRef: "no/such/source", CandyName: "charly", ProjectDir: t.TempDir(), Format: "pac", LocalPkg: testPacLocalPkgDef()}
-	if err := execLocalPkgInstall(context.Background(), exec, s, true /* supported */, "host", EmitOpts{}); err != nil {
+	s := &deploykit.LocalPkgInstallStep{PkgbuildRef: "no/such/source", CandyName: "charly", ProjectDir: t.TempDir(), Format: "pac", LocalPkg: testPacLocalPkgDef()}
+	if err := execLocalPkgInstall(context.Background(), exec, s, true /* supported */, "host", deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("missing source should be a clean no-op, got %v", err)
 	}
 	if len(exec.systemScripts) != 0 || len(exec.putDests) != 0 {
@@ -386,7 +387,7 @@ func TestTransferAndInstallPkgs(t *testing.T) {
 	exec := &localPkgRecExec{}
 	lp := testPacLocalPkgDef()
 	pkgs := []string{"/tmp/build/opencharly-git-2026.155.0001-1-x86_64.pkg.tar.zst"}
-	if err := transferAndInstallPkgs(context.Background(), exec, lp, pkgs, EmitOpts{}); err != nil {
+	if err := transferAndInstallPkgs(context.Background(), exec, lp, pkgs, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("transferAndInstallPkgs: %v", err)
 	}
 	if len(exec.putDests) != 1 || !strings.HasPrefix(exec.putDests[0], localPkgGuestStage) {
@@ -398,11 +399,11 @@ func TestTransferAndInstallPkgs(t *testing.T) {
 		t.Errorf("install command = %v, want rendered %q", exec.systemScripts, wantCmd)
 	}
 	// No packages → error (caller bug, never a silent skip).
-	if err := transferAndInstallPkgs(context.Background(), exec, lp, nil, EmitOpts{}); err == nil {
+	if err := transferAndInstallPkgs(context.Background(), exec, lp, nil, deploykit.EmitOpts{}); err == nil {
 		t.Error("transferAndInstallPkgs(nil pkgs) should error")
 	}
 	// Nil LocalPkgDef → error.
-	if err := transferAndInstallPkgs(context.Background(), exec, nil, pkgs, EmitOpts{}); err == nil {
+	if err := transferAndInstallPkgs(context.Background(), exec, nil, pkgs, deploykit.EmitOpts{}); err == nil {
 		t.Error("transferAndInstallPkgs(nil LocalPkgDef) should error")
 	}
 }
@@ -413,16 +414,16 @@ func TestTransferAndInstallPkgs(t *testing.T) {
 func TestBuildLocalPkgOnHost_DryRunAndEmpty(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	// DryRun: renders the template (proving config-driven) but never runs it.
-	if pkgs, err := buildLocalPkgOnHost(context.Background(), lp, "/src/pkg/arch", EmitOpts{DryRun: true}); err != nil || pkgs != nil {
+	if pkgs, err := buildLocalPkgOnHost(context.Background(), lp, "/src/pkg/arch", deploykit.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
 		t.Errorf("dry-run = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// Nil LocalPkgDef → error.
-	if _, err := buildLocalPkgOnHost(context.Background(), nil, "/src", EmitOpts{DryRun: true}); err == nil {
+	if _, err := buildLocalPkgOnHost(context.Background(), nil, "/src", deploykit.EmitOpts{DryRun: true}); err == nil {
 		t.Error("buildLocalPkgOnHost(nil) should error")
 	}
 	// Empty build template → error (config missing build_template).
 	empty := &LocalPkgDef{PkgGlob: "*.pkg.tar.zst"}
-	if _, err := buildLocalPkgOnHost(context.Background(), empty, "/src", EmitOpts{DryRun: true}); err == nil {
+	if _, err := buildLocalPkgOnHost(context.Background(), empty, "/src", deploykit.EmitOpts{DryRun: true}); err == nil {
 		t.Error("empty build_template should error")
 	}
 }
@@ -442,19 +443,19 @@ func TestBuildDepPkgsOnHost_EmptyAndDryRun(t *testing.T) {
 		t.Fatal("aur builder not defined in build.yml")
 	}
 	// Empty packages: pure no-op regardless of builder/dryrun — never shells out.
-	if pkgs, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "", nil, "", nil, "", EmitOpts{}); err != nil || pkgs != nil {
+	if pkgs, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "", nil, "", nil, "", deploykit.EmitOpts{}); err != nil || pkgs != nil {
 		t.Errorf("empty packages = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// DryRun with packages + builder + def: no build, no error.
-	if pkgs, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, "", EmitOpts{DryRun: true}); err != nil || pkgs != nil {
+	if pkgs, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, "", deploykit.EmitOpts{DryRun: true}); err != nil || pkgs != nil {
 		t.Errorf("dry-run = (%v, %v), want (nil, nil)", pkgs, err)
 	}
 	// Packages but no builder image (live): hard error, never a silent drop.
-	if _, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "", []string{"cloudflared-bin"}, "", nil, "", EmitOpts{}); err == nil {
+	if _, err := buildDepPkgsOnHost(context.Background(), lp, aurDef, "", []string{"cloudflared-bin"}, "", nil, "", deploykit.EmitOpts{}); err == nil {
 		t.Error("buildDepPkgsOnHost with packages but no builder image should error")
 	}
 	// Packages + image but nil builder def: hard error.
-	if _, err := buildDepPkgsOnHost(context.Background(), lp, nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, "", EmitOpts{}); err == nil {
+	if _, err := buildDepPkgsOnHost(context.Background(), lp, nil, "arch-builder:latest", []string{"cloudflared-bin"}, "", nil, "", deploykit.EmitOpts{}); err == nil {
 		t.Error("buildDepPkgsOnHost with nil builder def should error")
 	}
 }
@@ -531,7 +532,7 @@ func repoRootDir(t *testing.T) string {
 func TestRenderLocalPkgImageInstall_ProductionDownloadsRelease(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
-	s := &LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp}
+	s := &deploykit.LocalPkgInstallStep{CandyName: "charly", Format: "pac", LocalPkg: lp}
 	got, err := renderLocalPkgImageInstall(s, false, "", "")
 	if err != nil {
 		t.Fatalf("production render: %v", err)
@@ -554,7 +555,7 @@ func TestRenderLocalPkgImageInstall_ProductionDownloadsRelease(t *testing.T) {
 func TestRenderLocalPkgImageInstall_DevMissingSourceHardErrors(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://example.com/opencharly-${ARCH}.pkg.tar.zst"
-	s := &LocalPkgInstallStep{
+	s := &deploykit.LocalPkgInstallStep{
 		CandyName:   "charly",
 		Format:      "pac",
 		PkgbuildRef: "pkg/arch",

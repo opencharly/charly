@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -39,8 +41,8 @@ const overlayBuilderKind = "overlay"
 // HostBuild("overlay") receives them re-attached host-side by the reverse server (the proxy's
 // PrepareVenue set them on the Invoke ctx).
 type overlayBuildInputs struct {
-	plans      []*InstallPlan
-	parentExec DeployExecutor
+	plans      []*deploykit.InstallPlan
+	parentExec deploykit.DeployExecutor
 	parentNode *spec.BundleNode
 }
 
@@ -90,8 +92,8 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// drives the candy's served executor (the host already threads it onto the candy's Invoke ctx),
 	// and the parent node's bind-mount volumes are carried as ParentVolumes so the candy's
 	// translateHostPathToVenue maps host paths → venue paths for the nested podman build.
-	var plans []*InstallPlan
-	var parentExec DeployExecutor
+	var plans []*deploykit.InstallPlan
+	var parentExec deploykit.DeployExecutor
 	var parentNode *spec.BundleNode
 	if in := overlayBuildInputsFrom(ctx); in != nil {
 		plans = in.plans
@@ -120,7 +122,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// (ExtraCandyRefs) so the OpStep build-emit's candyByName resolves each add_candy candy BY NAME.
 	overlayCandies := collectOverlayCandies(plans)
 	gen, _ := NewGenerator(dir, tag, ResolveOpts{ExtraCandyRefs: overlayCandies})
-	var resolvedImg *ResolvedBox
+	var resolvedImg *buildkit.ResolvedBox
 	if gen != nil && gen.Boxes != nil {
 		resolvedImg = gen.Boxes[base]
 	}
@@ -147,7 +149,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 
 	deployName := req.DeployName
 	if strings.Contains(deployName, ".") {
-		deployName = NestedContainerName(deployName)
+		deployName = kit.NestedContainerName(deployName)
 	}
 
 	if _, _, serr := prepareCandySecrets(plans, dir); serr != nil {
@@ -245,7 +247,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		if p == nil {
 			continue
 		}
-		plansView = append(plansView, planWireView(p))
+		plansView = append(plansView, deploykit.WireView(p))
 	}
 
 	// Cache the overlay buildEngineContext for the "oci-emit-step" step-emitter. The candy's
@@ -258,7 +260,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// COPY prefix resolves, matching the full build's contextRelPrefix = buildDir convention).
 	overlayBuildDir := filepath.Join(".build", "overlay-"+deployName)
 	build := buildEngineContext{
-		DistroCfg:        wrapDistroDef(podDistroDef),
+		DistroCfg:        buildkit.WrapDistroDef(podDistroDef),
 		Generator:        gen,
 		BuilderConfig:    builderCfg,
 		Box:              resolvedImg,
@@ -344,7 +346,7 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 // it cannot import charly core (R3 — cross-module reuse is fine; the two modules cannot import
 // each other). Used by the overlay prep (hostBuildOverlay) to scope the Generator's ExtraCandyRefs
 // + to read each overlay candy's Security() core-side.
-func collectOverlayCandies(plans []*InstallPlan) []string {
+func collectOverlayCandies(plans []*deploykit.InstallPlan) []string {
 	seen := make(map[string]bool)
 	var out []string
 	for _, p := range plans {

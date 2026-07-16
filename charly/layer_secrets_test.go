@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // setupIsolatedConfigStore wires a test-isolated in-memory credential store (the real

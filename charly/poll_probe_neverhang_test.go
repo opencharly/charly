@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"

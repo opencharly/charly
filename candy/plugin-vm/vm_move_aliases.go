@@ -9,9 +9,10 @@ import (
 )
 
 // vm_move_aliases.go — package-vm bindings for the shared types the VM CLI handlers (moved out of
-// charly core, P10) reference by their core short names. Same identity core used via its own alias
-// surface (charly/vmshared_aliases.go / buildkit_aliases.go): the shared model lives ONCE in
-// sdk/vmshared + sdk/buildkit; these keep the moved handlers compiling unchanged.
+// charly core, P10) reference by their core short names. charly core reaches the same identities
+// directly as vmshared.X/buildkit.X now (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go; only
+// charly/vmshared_aliases.go remains, itself K4/K5 dissolving inventory): the shared model lives
+// ONCE in sdk/vmshared + sdk/buildkit; these keep the moved handlers compiling unchanged.
 type (
 	VmDeployState = vmshared.VmDeployState
 	DistroDef     = vmshared.DistroDef

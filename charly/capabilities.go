@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // -----------------------------------------------------------------------------
@@ -34,90 +36,89 @@ type Capabilities = BoxMetadata
 // below and breaks the build.
 var CapabilityLabelMap = map[string]string{
 	// Identity
-	"Box":          LabelBox,
-	"Version":      LabelVersion,
-	"Registry":     LabelRegistry,
-	"Bootc":        LabelBootc,
-	"Status":       LabelStatus,
-	"Info":         LabelInfo,
-	"CandyVersion": LabelCandyVersion,
+	"Box":          spec.LabelBox,
+	"Version":      spec.LabelVersion,
+	"Registry":     spec.LabelRegistry,
+	"Bootc":        spec.LabelBootc,
+	"Status":       spec.LabelStatus,
+	"Info":         spec.LabelInfo,
+	"CandyVersion": spec.LabelCandyVersion,
 
 	// Account
-	"UID":  LabelUID,
-	"GID":  LabelGID,
-	"User": LabelUser,
-	"Home": LabelHome,
+	"UID":  spec.LabelUID,
+	"GID":  spec.LabelGID,
+	"User": spec.LabelUser,
+	"Home": spec.LabelHome,
 
 	// Ports / volumes / aliases / routes
-	"Port":      LabelPort,
-	"PortProto": LabelPortProto,
-	"PortRelay": LabelPortRelay,
-	"Volume":    LabelVolume,
-	"Alias":     LabelAlias,
-	"Route":     LabelRoute,
+	"Port":      spec.LabelPort,
+	"PortProto": spec.LabelPortProto,
+	"PortRelay": spec.LabelPortRelay,
+	"Volume":    spec.LabelVolume,
+	"Alias":     spec.LabelAlias,
+	"Route":     spec.LabelRoute,
 
 	// Security
-	"Security": LabelSecurity,
+	"Security": spec.LabelSecurity,
 
 	// Networking — image-declared network mode. Tunnel / DNS / AcmeEmail
 	// moved to BundleNode in schema v4 (deployment choices, no
 	// image-declaration meaning).
-	"Network": LabelNetwork,
+	"Network": spec.LabelNetwork,
 
 	// Env / vars
-	"Env":        LabelEnv,
-	"EnvCandy":   LabelEnvCandy,
-	"PathAppend": LabelPathAppend,
+	"Env":        spec.LabelEnv,
+	"EnvCandy":   spec.LabelEnvCandy,
+	"PathAppend": spec.LabelPathAppend,
 
 	// Init — auto-detected from candies (see init_config.go ResolveInitSystem).
 	// Engine moved to BundleNode in schema v4 (deploy-host choice).
-	"Init":         LabelInit,
-	"InitDef":      LabelInitDef, // build-resolved init contract (entrypoint + management surface); read label-first at deploy
-	"Service":      LabelService,
-	"ServiceNames": LabelInit, // per-init active names; baked alongside the init label
+	"Init":         spec.LabelInit,
+	"InitDef":      spec.LabelInitDef,
+	"Service":      spec.LabelService,
+	"ServiceNames": spec.LabelInit,
 
 	// Distro + build formats + builder provides
-	"Distro":      LabelPlatformDistro,
-	"BuildFormat": LabelPlatformFormat,
-	"Builder":     LabelBuilderUse,
-	"Build":       LabelBuilderProvide,
+	"Distro":      spec.LabelPlatformDistro,
+	"BuildFormat": spec.LabelPlatformFormat,
+	"Builder":     spec.LabelBuilderUse,
+	"Build":       spec.LabelBuilderProvide,
 
 	// Hooks
-	"Hook": LabelHook,
-	// Vm / Libvirt removed in the VM hard-cutover (see labels.go).
+	"Hook": spec.LabelHook,
 
 	// Skills (doc pointer)
-	"Skill": LabelSkill,
+	"Skill": spec.LabelSkill,
 
 	// Data seeding
-	"DataEntries": LabelDataEntries,
-	"DataImage":   LabelDataBox,
+	"DataEntries": spec.LabelDataEntries,
+	"DataImage":   spec.LabelDataBox,
 
 	// Env / secret / MCP dependency graph
-	"EnvProvide":    LabelEnvProvide,
-	"EnvRequire":    LabelEnvRequire,
-	"EnvAccept":     LabelEnvAccept,
-	"SecretAccept":  LabelSecretAccept,
-	"SecretRequire": LabelSecretRequire,
-	"Secret":        LabelSecret,
-	"MCPProvide":    LabelMCPProvide,
-	"MCPRequire":    LabelMCPRequire,
-	"MCPAccept":     LabelMCPAccept,
+	"EnvProvide":    spec.LabelEnvProvide,
+	"EnvRequire":    spec.LabelEnvRequire,
+	"EnvAccept":     spec.LabelEnvAccept,
+	"SecretAccept":  spec.LabelSecretAccept,
+	"SecretRequire": spec.LabelSecretRequire,
+	"Secret":        spec.LabelSecret,
+	"MCPProvide":    spec.LabelMCPProvide,
+	"MCPRequire":    spec.LabelMCPRequire,
+	"MCPAccept":     spec.LabelMCPAccept,
 
 	// plan-shaped self-description — three-section (candy/box/deploy)
 	// LabelDescriptionSet. The description label set is additive; the
 	// Info/Status fields remain on BoxMetadata alongside it.
-	"Description": LabelDescription,
+	"Description": spec.LabelDescription,
 
 	// Shell-init manifest — three-section (candy/box/deploy) per-shell
 	// rc-snippet contributions. 2026-05 cutover. Read by `charly box
 	// inspect`, `charly bundle from-box`, and the charly.yml `shell:`
 	// overlay merge in MergeDeployShell.
-	"Shell": LabelShell,
+	"Shell": spec.LabelShell,
 
 	// Acceptance-depth rung (none|build|noagent|agent) gating how deep
 	// `charly check run <bed>` drives this box. See check_level.go.
-	"CheckLevel": LabelCheckLevel,
+	"CheckLevel": spec.LabelCheckLevel,
 }
 
 // deployOnlyCapabilityFields are BoxMetadata fields that are NOT baked

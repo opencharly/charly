@@ -1,9 +1,12 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -13,7 +16,7 @@ import (
 // source a compiled-in kit verb's RunVerb and the host provision/plugin helpers consume. In
 // production newCheckRunner builds one internally; a unit test dispatching a single verb (or a
 // host helper directly) wants the resolver.
-func hostVerbResolverFor(exec DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
+func hostVerbResolverFor(exec deploykit.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
 	return newHostVerbResolver(kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros}))
 }
 
@@ -45,7 +48,7 @@ func cmdOpP(command string) *spec.Op {
 }
 
 // testDistroConfig returns the default DistroConfig from testdata fixtures for tests.
-func testDistroConfig() *DistroConfig {
+func testDistroConfig() *buildkit.DistroConfig {
 	distroCfg, _, _, err := LoadBuildConfigForBox(testdataDir)
 	if err != nil {
 		panic("failed to load distro config from testdata: " + err.Error())
@@ -60,7 +63,7 @@ func testDistroDef(tags ...string) *spec.ResolvedDistro {
 }
 
 // testBuilderCfg returns the default BuilderConfig from testdata fixtures for tests.
-func testBuilderCfg() *BuilderConfig {
+func testBuilderCfg() *buildkit.BuilderConfig {
 	_, builderCfg, _, err := LoadBuildConfigForBox(testdataDir)
 	if err != nil {
 		panic("failed to load builder config from testdata: " + err.Error())

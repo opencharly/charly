@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv is the
@@ -19,9 +21,9 @@ func TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv(t *testing.T) {
 			"jupyter": {Name: "jupyter", HasPixiToml: true},
 		},
 	}
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
-		BuilderConfig: &BuilderConfig{
+		BuilderConfig: &buildkit.BuilderConfig{
 			Builder: map[string]*BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml", "pyproject.toml"},
@@ -54,9 +56,9 @@ func TestCollectBuilderRuntimeEnv_NotTriggered(t *testing.T) {
 			"chrome": {Name: "chrome"}, // no pixi.toml, no pyproject.toml
 		},
 	}
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
-		BuilderConfig: &BuilderConfig{
+		BuilderConfig: &buildkit.BuilderConfig{
 			Builder: map[string]*BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml"},
@@ -85,9 +87,9 @@ func TestCollectBuilderRuntimeEnv_MultipleCandies(t *testing.T) {
 			"c": {Name: "c", HasPixiToml: true},
 		},
 	}
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Home: "/home/user",
-		BuilderConfig: &BuilderConfig{
+		BuilderConfig: &buildkit.BuilderConfig{
 			Builder: map[string]*BuilderDef{
 				"pixi": {
 					DetectFiles:       []string{"pixi.toml"},
@@ -107,7 +109,7 @@ func TestCollectBuilderRuntimeEnv_MultipleCandies(t *testing.T) {
 // BuilderConfig nil. Don't panic.
 func TestCollectBuilderRuntimeEnv_NilBuilderConfig(t *testing.T) {
 	g := &Generator{Candies: map[string]*Candy{"x": {Name: "x", HasPixiToml: true}}}
-	img := &ResolvedBox{Home: "/home/user", BuilderConfig: nil}
+	img := &buildkit.ResolvedBox{Home: "/home/user", BuilderConfig: nil}
 	got := g.collectBuilderRuntimeEnv([]string{"x"}, img)
 	if got != nil {
 		t.Errorf("expected nil when BuilderConfig is nil, got %v", got)
@@ -300,7 +302,7 @@ func TestRpmTemplateWithModules(t *testing.T) {
 		Packages:    []string{"valkey"},
 		Modules:     []string{"valkey:remi-9.0"},
 	}
-	out, err := RenderTemplate("rpm-test", rpm.InstallTemplate, ctx)
+	out, err := buildkit.RenderTemplate("rpm-test", rpm.InstallTemplate, ctx)
 	if err != nil {
 		t.Fatalf("render error: %v", err)
 	}
@@ -326,7 +328,7 @@ func TestPacTemplateBasic(t *testing.T) {
 		CacheMounts: pac.CacheMount,
 		Packages:    []string{"neovim", "ripgrep"},
 	}
-	out, err := RenderTemplate("pac-test", pac.InstallTemplate, ctx)
+	out, err := buildkit.RenderTemplate("pac-test", pac.InstallTemplate, ctx)
 	if err != nil {
 		t.Fatalf("render error: %v", err)
 	}
@@ -348,7 +350,7 @@ func TestAurInstallTemplate(t *testing.T) {
 		CacheMounts: aur.CacheMount,
 		StageName:   "my-tool-aur-build",
 	}
-	out, err := RenderTemplate("aur-install-test", aur.InstallTemplate, ctx)
+	out, err := buildkit.RenderTemplate("aur-install-test", aur.InstallTemplate, ctx)
 	if err != nil {
 		t.Fatalf("render error: %v", err)
 	}

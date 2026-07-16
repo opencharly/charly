@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestPluginDispatch_InvokeProviderAndHostBuild proves the F10 reverse legs END-TO-END on real
@@ -68,7 +70,7 @@ func TestPluginDispatch_InvokeProviderAndHostBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Drive A WITH a reverse channel (ShellExecutor) so the broker serves the F10 RPCs.
-	res, err := gpA.InvokeWithExecutor(ctx, &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, ShellExecutor{}, buildEngineContext{}, false, nil)
+	res, err := gpA.InvokeWithExecutor(ctx, &Operation{Reserved: "exampledispatch", Op: OpRun, Params: params}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
 		t.Fatalf("InvokeWithExecutor A: %v", err)
 	}

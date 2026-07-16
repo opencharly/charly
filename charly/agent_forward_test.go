@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestResolveSSHAgentForward(t *testing.T) {
@@ -57,7 +59,7 @@ func TestResolveSSHAgentForward_NonexistentSocket(t *testing.T) {
 }
 
 func TestResolveAgentForwarding_Disabled(t *testing.T) {
-	rt := &ResolvedRuntime{
+	rt := &kit.ResolvedRuntime{
 		ForwardGpgAgent: false,
 		ForwardSshAgent: false,
 	}
@@ -72,7 +74,7 @@ func TestResolveAgentForwarding_Disabled(t *testing.T) {
 
 func TestResolveAgentForwarding_DeployOverride(t *testing.T) {
 	// Global: enabled. Deploy: disabled.
-	rt := &ResolvedRuntime{
+	rt := &kit.ResolvedRuntime{
 		ForwardGpgAgent: true,
 		ForwardSshAgent: true,
 	}

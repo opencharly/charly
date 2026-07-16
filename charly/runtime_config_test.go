@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/kit"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestLoadRuntimeConfig_Missing(t *testing.T) {
@@ -16,7 +17,7 @@ func TestLoadRuntimeConfig_Missing(t *testing.T) {
 		return filepath.Join(t.TempDir(), "nonexistent", "config.yml"), nil
 	}
 
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		t.Fatalf("expected nil error for missing config, got: %v", err)
 	}
@@ -33,15 +34,15 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	defer func() { kit.RuntimeConfigPath = orig }()
 	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
-	cfg := &RuntimeConfig{
+	cfg := &kit.RuntimeConfig{
 		Engine:  kit.EngineConfig{Build: "podman", Run: "docker"},
 		RunMode: "quadlet",
 	}
-	if err := SaveRuntimeConfig(cfg); err != nil {
+	if err := kit.SaveRuntimeConfig(cfg); err != nil {
 		t.Fatalf("SaveRuntimeConfig() error: %v", err)
 	}
 
-	loaded, err := LoadRuntimeConfig()
+	loaded, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		t.Fatalf("LoadRuntimeConfig() error: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestResolveRuntime_Defaults(t *testing.T) {
 		_ = os.Unsetenv(key)
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -101,8 +102,8 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	kit.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
-	cfg := &RuntimeConfig{Engine: kit.EngineConfig{Build: "podman"}}
-	if err := SaveRuntimeConfig(cfg); err != nil {
+	cfg := &kit.RuntimeConfig{Engine: kit.EngineConfig{Build: "podman"}}
+	if err := kit.SaveRuntimeConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +114,7 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
-	_, err := ResolveRuntime()
+	_, err := kit.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid engine")
 	}
@@ -154,7 +155,7 @@ func TestResolveRuntime_InvalidRunMode(t *testing.T) {
 	_ = os.Setenv("CHARLY_RUN_MODE", "swarm")
 	defer os.Unsetenv("CHARLY_RUN_MODE") //nolint:errcheck
 
-	_, err := ResolveRuntime()
+	_, err := kit.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid run_mode")
 	}
@@ -231,7 +232,7 @@ func TestResetConfigValue_All(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, _ := LoadRuntimeConfig()
+	cfg, _ := kit.LoadRuntimeConfig()
 	if cfg.Engine.Build != "" || cfg.RunMode != "" {
 		t.Errorf("after full reset, config should be empty, got %+v", cfg)
 	}
@@ -395,7 +396,7 @@ func TestAutoEnable_EnvOverridesConfig(t *testing.T) {
 	_ = os.Setenv("CHARLY_AUTO_ENABLE", "true")
 	defer os.Unsetenv("CHARLY_AUTO_ENABLE") //nolint:errcheck
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestAutoEnable_EnvValue1(t *testing.T) {
 	_ = os.Setenv("CHARLY_AUTO_ENABLE", "1")
 	defer os.Unsetenv("CHARLY_AUTO_ENABLE") //nolint:errcheck
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -492,7 +493,7 @@ func TestBindAddress_EnvOverridesConfig(t *testing.T) {
 	_ = os.Setenv("CHARLY_BIND_ADDRESS", "0.0.0.0")
 	defer os.Unsetenv("CHARLY_BIND_ADDRESS") //nolint:errcheck
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
@@ -516,7 +517,7 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 	_ = os.Setenv("CHARLY_BIND_ADDRESS", "10.0.0.1")
 	defer os.Unsetenv("CHARLY_BIND_ADDRESS") //nolint:errcheck
 
-	_, err := ResolveRuntime()
+	_, err := kit.ResolveRuntime()
 	if err == nil {
 		t.Error("expected error for invalid bind_address")
 	}

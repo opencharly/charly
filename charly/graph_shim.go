@@ -9,7 +9,10 @@ package main
 // code in charly core. CycleError is aliased so step_topo.go / validate.go
 // keep working after charly/graph.go is deleted.
 
-import "github.com/opencharly/sdk/deploykit"
+import (
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+)
 
 // CycleError is the shared circular-dependency error, homed in deploykit now.
 type CycleError = deploykit.CycleError
@@ -32,22 +35,22 @@ func ResolveCandyOrder(requested []string, layers map[string]*Candy, parentCandi
 	return deploykit.ResolveCandyOrder(requested, candyModelMap(layers), parentCandies)
 }
 
-func BoxNeedsBuilder(img *ResolvedBox, boxes map[string]*ResolvedBox, layers map[string]*Candy) bool {
+func BoxNeedsBuilder(img *buildkit.ResolvedBox, boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) bool {
 	return deploykit.BoxNeedsBuilder(img, boxes, candyModelMap(layers))
 }
 
-func boxDirectDeps(name string, img *ResolvedBox, boxes map[string]*ResolvedBox, includeFormatBuilders bool) []string {
+func boxDirectDeps(name string, img *buildkit.ResolvedBox, boxes map[string]*buildkit.ResolvedBox, includeFormatBuilders bool) []string {
 	return deploykit.BoxDirectDeps(name, img, boxes, includeFormatBuilders)
 }
 
-func ResolveBoxOrder(boxes map[string]*ResolvedBox, layers map[string]*Candy) ([]string, error) {
+func ResolveBoxOrder(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) ([]string, error) {
 	return deploykit.ResolveBoxOrder(boxes, candyModelMap(layers))
 }
 
-func ResolveBoxLevels(boxes map[string]*ResolvedBox, layers map[string]*Candy) ([][]string, error) {
+func ResolveBoxLevels(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) ([][]string, error) {
 	return deploykit.ResolveBoxLevels(boxes, candyModelMap(layers))
 }
 
-func CandyProvidedByBox(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy) (map[string]bool, error) {
+func CandyProvidedByBox(boxName string, boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) (map[string]bool, error) {
 	return deploykit.CandyProvidedByBox(boxName, boxes, candyModelMap(layers))
 }

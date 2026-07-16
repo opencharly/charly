@@ -65,7 +65,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 	// For short names we resolve to a registry ref first; for full
 	// refs the input is already the storage key.
 	if ref, _ := resolveImageRefForEnsure(image, cfg, projectDir); ref != "" {
-		if LocalImageExists("podman", ref) {
+		if kit.LocalImageExists("podman", ref) {
 			fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", ref)
 			return nil
 		}
@@ -92,7 +92,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 	if IsRemoteImageRef(stripped) {
 		if rctx, err := ResolveRemoteImage(stripped, ""); err == nil {
 			fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
-			rt, rerr := ResolveRuntime()
+			rt, rerr := kit.ResolveRuntime()
 			if rerr == nil {
 				if berr := rctx.BuildImage(rt, ""); berr == nil {
 					return nil

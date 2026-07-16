@@ -6,13 +6,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // GetConfigValue returns the value for a dot-notation key from the config file.
 //
 //nolint:gocyclo // flat dispatch over config keys + dynamic hosts./vnc.password subkeys; uniform getter
 func GetConfigValue(key string) (string, error) {
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return "", err
 	}
@@ -114,7 +116,7 @@ func SetConfigValue(key, value string) error {
 	switch key {
 	case "engine.build", "engine.run":
 		if value != "auto" {
-			if err := ValidateEngine(value, key); err != nil {
+			if err := kit.ValidateEngine(value, key); err != nil {
 				return fmt.Errorf("%s must be \"auto\", \"docker\", or \"podman\", got %q", key, value)
 			}
 		}
@@ -123,7 +125,7 @@ func SetConfigValue(key, value string) error {
 			return fmt.Errorf("engine.rootful must be \"auto\", \"machine\", \"sudo\", or \"native\", got %q", value)
 		}
 	case "run_mode":
-		if err := ValidateRunMode(value); err != nil {
+		if err := kit.ValidateRunMode(value); err != nil {
 			return err
 		}
 	case "auto_enable":
@@ -131,7 +133,7 @@ func SetConfigValue(key, value string) error {
 			return fmt.Errorf("auto_enable must be \"true\" or \"false\", got %q", value)
 		}
 	case "bind_address":
-		if err := ValidateBindAddress(value); err != nil {
+		if err := kit.ValidateBindAddress(value); err != nil {
 			return err
 		}
 	case "encrypted_storage_path":
@@ -189,7 +191,7 @@ func SetConfigValue(key, value string) error {
 		return fmt.Errorf("unknown config key %q (valid: engine.build, engine.run, engine.rootful, run_mode, auto_enable, bind_address, encrypted_storage_path, secret_backend, forward_gpg_agent, forward_ssh_agent, hosts.<alias>, vm.backend, vm.disk_size, vm.root_size, vm.ram, vm.cpus, vm.rootfs, vm.transport, vnc.password.<image>)", key)
 	}
 
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return err
 	}
@@ -258,7 +260,7 @@ func SetConfigValue(key, value string) error {
 		}
 	}
 
-	return SaveRuntimeConfig(cfg)
+	return kit.SaveRuntimeConfig(cfg)
 }
 
 // ResetConfigValue removes a key from the config file (reverts to default).
@@ -266,10 +268,10 @@ func SetConfigValue(key, value string) error {
 func ResetConfigValue(key string) error {
 	if key == "" {
 		// Reset entire config
-		return SaveRuntimeConfig(&RuntimeConfig{})
+		return kit.SaveRuntimeConfig(&kit.RuntimeConfig{})
 	}
 
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func ResetConfigValue(key string) error {
 		return fmt.Errorf("unknown config key %q (valid: engine.build, engine.run, engine.rootful, run_mode, auto_enable, bind_address, encrypted_storage_path, secret_backend, forward_gpg_agent, forward_ssh_agent, hosts.<alias>, vm.backend, vm.disk_size, vm.root_size, vm.ram, vm.cpus, vm.rootfs, vm.transport, vnc.password.<image>)", key)
 	}
 
-	return SaveRuntimeConfig(cfg)
+	return kit.SaveRuntimeConfig(cfg)
 }
 
 // configKeySource describes where a config value comes from.
@@ -342,7 +344,7 @@ type configKeySource struct {
 
 // ListConfigValues returns all config keys with their resolved values and sources.
 func ListConfigValues() ([]configKeySource, error) {
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +353,7 @@ func ListConfigValues() ([]configKeySource, error) {
 		envVal := os.Getenv(envName)
 		if envVal != "" {
 			source := "env (" + envName + ")"
-			if DotenvLoaded(envName) {
+			if kit.DotenvLoaded(envName) {
 				source = "env (.env)"
 			}
 			return configKeySource{Key: key, Value: envVal, Source: source}
@@ -371,7 +373,7 @@ func ListConfigValues() ([]configKeySource, error) {
 				resolved = "true"
 			}
 			source := "env (CHARLY_AUTO_ENABLE)"
-			if DotenvLoaded("CHARLY_AUTO_ENABLE") {
+			if kit.DotenvLoaded("CHARLY_AUTO_ENABLE") {
 				source = "env (.env)"
 			}
 			return configKeySource{Key: "auto_enable", Value: resolved, Source: source}
@@ -395,7 +397,7 @@ func ListConfigValues() ([]configKeySource, error) {
 				val = "true"
 			}
 			source := "env (" + envName + ")"
-			if DotenvLoaded(envName) {
+			if kit.DotenvLoaded(envName) {
 				source = "env (.env)"
 			}
 			return configKeySource{Key: key, Value: val, Source: source}
@@ -411,15 +413,15 @@ func ListConfigValues() ([]configKeySource, error) {
 	}
 
 	// Resolve path defaults
-	defaultStoragePath := resolveEncryptedStoragePath("", "")
-	defaultVolumesPath := resolveVolumesPath("", "")
+	defaultStoragePath := kit.ResolveEncryptedStoragePath("", "")
+	defaultVolumesPath := kit.ResolveVolumesPath("", "")
 
 	// Resolve vm.cpus separately since it's an int
 	vmCpusEntry := func() configKeySource {
 		envVal := os.Getenv("CHARLY_VM_CPUS")
 		if envVal != "" {
 			source := "env (CHARLY_VM_CPUS)"
-			if DotenvLoaded("CHARLY_VM_CPUS") {
+			if kit.DotenvLoaded("CHARLY_VM_CPUS") {
 				source = "env (.env)"
 			}
 			return configKeySource{Key: "vm.cpus", Value: envVal, Source: source}

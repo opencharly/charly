@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestResolveBootcImageRef_FullRefPassthrough proves a full OCI ref (one
@@ -36,7 +37,7 @@ func TestResolveBootcImageRef_ShortNameResolvesToCalVer(t *testing.T) {
 	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/fedora-bootc:2026.145.0900"},
-			Labels: map[string]string{LabelBox: "fedora-bootc", LabelVersion: "2026.145.0900"},
+			Labels: map[string]string{spec.LabelBox: "fedora-bootc", spec.LabelVersion: "2026.145.0900"},
 		},
 	})
 	got, err := resolveBootcImageRef("podman", "fedora-bootc")
@@ -59,7 +60,7 @@ func TestResolveBootcImageRef_ShortNameNotBuilt(t *testing.T) {
 	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/something-else:2026.145.0900"},
-			Labels: map[string]string{LabelBox: "something-else"},
+			Labels: map[string]string{spec.LabelBox: "something-else"},
 		},
 	})
 	_, err := resolveBootcImageRef("podman", "fedora-bootc")

@@ -5,6 +5,9 @@ import (
 	"maps"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // intermediates.go — the HOST-COUPLED half of the auto-intermediate-image
@@ -21,14 +24,14 @@ import (
 // builds prefix tries of relative candy sequences within each sibling group,
 // creates intermediates at branching points, and returns updated images map.
 // User-defined images always take priority over auto-intermediates.
-func ComputeIntermediates(boxes map[string]*ResolvedBox, layers map[string]*Candy, cfg *Config, tag string) (map[string]*ResolvedBox, error) {
+func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy, cfg *Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
 	globalOrder, err := GlobalCandyOrder(boxes, layers)
 	if err != nil {
 		return nil, fmt.Errorf("computing global candy order: %w", err)
 	}
 
 	// Copy all existing images
-	result := make(map[string]*ResolvedBox)
+	result := make(map[string]*buildkit.ResolvedBox)
 	for name, img := range boxes {
 		cp := *img
 		result[name] = &cp
@@ -128,8 +131,8 @@ func ComputeIntermediates(boxes map[string]*ResolvedBox, layers map[string]*Cand
 // branch points. The uid is the shared UID of this sibling group; it flows
 // through walkTrieScoped into createIntermediate so the emitted ENV PATH
 // references the correct HOME for this group's user context.
-func processSiblingGroup(parentName string, uid, defaultUID int, children []string, result, origBoxes map[string]*ResolvedBox, layers map[string]*Candy, cfg *Config, tag string, globalOrder []string, pixiBound map[string]bool) error {
-	sortStrings(children)
+func processSiblingGroup(parentName string, uid, defaultUID int, children []string, result, origBoxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy, cfg *Config, tag string, globalOrder []string, pixiBound map[string]bool) error {
+	kit.SortStrings(children)
 
 	// Get candies provided by parent
 	parentProvided := make(map[string]bool)
@@ -163,7 +166,7 @@ func processSiblingGroup(parentName string, uid, defaultUID int, children []stri
 // User-defined images at branch points are reused as intermediates without rebasing.
 // uid + defaultUID propagate from the sibling group so auto-intermediates
 // inherit the right user context and get UID-suffixed names when needed.
-func walkTrieScoped(node *trieNode, parentName string, uid, defaultUID int, result map[string]*ResolvedBox, origBoxes map[string]*ResolvedBox, layers map[string]*Candy, cfg *Config, tag string, globalOrder []string, pixiBound map[string]bool) error {
+func walkTrieScoped(node *trieNode, parentName string, uid, defaultUID int, result map[string]*buildkit.ResolvedBox, origBoxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy, cfg *Config, tag string, globalOrder []string, pixiBound map[string]bool) error {
 	for _, childCandyName := range sortedKeys(node.Children) {
 		child := node.Children[childCandyName]
 
@@ -232,7 +235,7 @@ func walkTrieScoped(node *trieNode, parentName string, uid, defaultUID int, resu
 // at the same trie position get distinct OCI tags (otherwise they'd collide
 // and one group's HOME-baked ENV would poison the other).
 // Appends -2, -3 etc. to avoid conflicts with existing or already-created images.
-func pickAutoName(pathCandies []string, parentName string, uid, defaultUID int, result, origBoxes map[string]*ResolvedBox) string {
+func pickAutoName(pathCandies []string, parentName string, uid, defaultUID int, result, origBoxes map[string]*buildkit.ResolvedBox) string {
 	lastCandy := pathCandies[len(pathCandies)-1]
 	// Remote candy keys are fully-qualified paths
 	// ("github.com/opencharly/charly/candy/pixi"); reduce to the short
@@ -274,7 +277,7 @@ func pickAutoName(pathCandies []string, parentName string, uid, defaultUID int, 
 // uid is the sibling group's UID — it determines the intermediate's User/GID/Home
 // so HOME-relative env/path_append expansion matches the children that will
 // inherit from this intermediate.
-func createIntermediate(name, parentName string, uid int, pathCandies []string, consumerBoxes []string, result map[string]*ResolvedBox, origBoxes map[string]*ResolvedBox, cfg *Config, tag string, layers map[string]*Candy, globalOrder []string, pixiBound map[string]bool) {
+func createIntermediate(name, parentName string, uid int, pathCandies []string, consumerBoxes []string, result map[string]*buildkit.ResolvedBox, origBoxes map[string]*buildkit.ResolvedBox, cfg *Config, tag string, layers map[string]*Candy, globalOrder []string, pixiBound map[string]bool) {
 	ownCandies := computeOwnCandies(parentName, pathCandies, result, layers, globalOrder, pixiBound)
 
 	isExternalBase := false
@@ -375,7 +378,7 @@ func createIntermediate(name, parentName string, uid int, pathCandies []string, 
 	// the correct context-local builder (`arch-builder`), so consumer-wins is what
 	// lets the hoisted AUR candy (chrome's google-chrome) find its builder instead
 	// of failing with "needs builder aur but no builders.aur configured".
-	builderMap := make(BuilderMap)
+	builderMap := make(buildkit.BuilderMap)
 	maps.Copy(builderMap, cfg.Defaults.Builder)
 	// Distro-keyed default — the SAME mechanism ResolveBox /
 	// resolveEffectiveBuilder use: a cachyos/Arch intermediate seeds
@@ -397,7 +400,7 @@ func createIntermediate(name, parentName string, uid int, pathCandies []string, 
 		maps.Copy(builderMap, c.Builder)
 	}
 
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Name:           name,
 		Base:           parentName,
 		IsExternalBase: isExternalBase,

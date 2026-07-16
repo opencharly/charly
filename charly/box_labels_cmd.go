@@ -27,7 +27,7 @@ type BoxLabelsCmd struct {
 }
 
 func (c *BoxLabelsCmd) Run() error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func (c *BoxLabelsCmd) Run() error {
 	}
 	labels, err := InspectLabels(rt.RunEngine, imageRef)
 	if err != nil {
-		if !LocalImageExists(rt.RunEngine, imageRef) {
+		if !kit.LocalImageExists(rt.RunEngine, imageRef) {
 			return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 		}
 		return err

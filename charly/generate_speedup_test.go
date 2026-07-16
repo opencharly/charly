@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestWriteContextIgnore verifies the generated .containerignore /

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"testing"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestAndroidSpec_IsEndpoint(t *testing.T) {

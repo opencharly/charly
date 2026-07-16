@@ -61,8 +61,8 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	var b strings.Builder
 	deploykit.NewRenderGenerator().WriteLabels(&b, bakedMeta, "round-trip")
 	emitted := b.String()
-	if !strings.Contains(emitted, LabelInitDef) || !strings.Contains(emitted, string(payload)) {
-		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", LabelInitDef, payload, emitted)
+	if !strings.Contains(emitted, spec.LabelInitDef) || !strings.Contains(emitted, string(payload)) {
+		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", spec.LabelInitDef, payload, emitted)
 	}
 
 	// Parse path: ExtractMetadata reads the label value podman returns (raw JSON).
@@ -70,10 +70,10 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	defer func() { InspectLabels = orig }()
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
-			LabelVersion: "2026.001.0000",
-			LabelBox:     "round-trip",
-			LabelInit:    "supervisord",
-			LabelInitDef: string(payload),
+			spec.LabelVersion: "2026.001.0000",
+			spec.LabelBox:     "round-trip",
+			spec.LabelInit:    "supervisord",
+			spec.LabelInitDef: string(payload),
 		}, nil
 	}
 	meta, err := ExtractMetadata("podman", "round-trip")

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -31,7 +33,7 @@ const resolvedProjectBuilderKind = "resolved-project"
 // (json.MarshalIndent(*ResolvedBox)), in declaration order. The 6 json:"-" host-only compute caches
 // are DROPPED — they are re-derivable by a resolving plugin (or reached via RunHostStep), never wire
 // data (S-K5 verdict, the design key).
-func projectResolvedBox(b *ResolvedBox) spec.ResolvedBoxView {
+func projectResolvedBox(b *buildkit.ResolvedBox) spec.ResolvedBoxView {
 	v := spec.ResolvedBoxView{
 		Name:                  b.Name,
 		Version:               b.Version,
@@ -215,7 +217,7 @@ func projectCandyModel(c *Candy) spec.CandyModel {
 // ResolveBox failure appends a spec.Diagnostic and SKIPS that box, so validate runs on a broken
 // project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
 // aggregate empty), so the tolerant branch is confined to the ResolveBox call.
-func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
 }
 
@@ -227,7 +229,7 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFi
 // buildBakedMetadata already used the same collectors for every gen.Box. A collector error
 // leaves that aggregate empty (a read-only projection never fails the whole load). Shared by
 // the pre-resolved (build-prep), fresh-resolve (validate), and auto-intermediate passes (R3).
-func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, resolved *ResolvedBox, view *spec.ResolvedBoxView) {
+func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, resolved *buildkit.ResolvedBox, view *spec.ResolvedBoxView) {
 	if img, ok := cfg.BoxConfig(name); ok {
 		view.Plan = img.Plan
 		view.AuthoredAliases = img.Alias
@@ -263,11 +265,11 @@ func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, re
 // on the ResolvedBoxView. When nil (the validate/inspect path), boxes are resolved fresh.
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *DistroConfig, builderCfg *BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*ResolvedBox) (*spec.ResolvedProject, error) {
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
-	resolvedBoxes := map[string]*ResolvedBox{}
+	resolvedBoxes := map[string]*buildkit.ResolvedBox{}
 	for _, name := range cfg.allBoxNames() {
 		img, ok := cfg.BoxConfig(name)
 		if !ok {
@@ -426,7 +428,7 @@ func fillBoxPlans(cfg *Config, layers map[string]*Candy, prefix string, out map[
 			continue
 		}
 		var steps []spec.Step
-		for _, sec := range [][]LabeledDescription{set.Candy, set.Box, set.Deploy} {
+		for _, sec := range [][]kit.LabeledDescription{set.Candy, set.Box, set.Deploy} {
 			for _, ld := range sec {
 				steps = append(steps, ld.Plan...)
 			}

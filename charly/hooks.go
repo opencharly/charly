@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // CollectHooks collects and concatenates hooks from all candies in a box's candy chain.
@@ -66,7 +68,7 @@ func RunHook(engine, containerName, hookScript string, envVars []string) error {
 func removeVolumes(engine, boxName, instance string) {
 	// Same per-deploy prefix the create side uses (deployVolumePrefix), so purge
 	// removes exactly this deploy's volumes and never a same-image sibling's.
-	prefix := deployVolumePrefix(boxName, instance)
+	prefix := deploykit.DeployVolumePrefix(boxName, instance)
 
 	out, err := exec.Command(engine, "volume", "ls", "--format", "{{.Name}}", "--filter", "name="+prefix).Output()
 	if err != nil {

@@ -4,18 +4,19 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 )
 
 // builderTestImg builds a ResolvedBox carrying the four externalized builders in its BuilderConfig
 // (pixi/npm/cargo by detect-file, aur by detect-config) with the given build formats — the gate the
 // scoping fix turns on.
-func builderTestImg(buildFormats ...string) *ResolvedBox {
-	return &ResolvedBox{
+func builderTestImg(buildFormats ...string) *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Name:         "t",
 		Home:         "/home/u",
 		BuildFormats: buildFormats,
-		BuilderConfig: &BuilderConfig{Builder: map[string]*BuilderDef{
+		BuilderConfig: &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
 			"pixi":  {DetectFiles: []string{"pixi.toml"}},
 			"npm":   {DetectFiles: []string{"package.json"}},
 			"cargo": {DetectFiles: []string{"Cargo.toml"}},
@@ -26,7 +27,7 @@ func builderTestImg(buildFormats ...string) *ResolvedBox {
 
 func aurCandy(name string, pkgs ...string) *Candy {
 	c := &Candy{Name: name}
-	c.formatSections = map[string]*PackageSection{"aur": {FormatName: "aur", Packages: pkgs}}
+	c.formatSections = map[string]*deploykit.PackageSection{"aur": {FormatName: "aur", Packages: pkgs}}
 	return c
 }
 
@@ -67,7 +68,7 @@ func TestDetectExternalizedBuilders_ScopedAndDistroGated(t *testing.T) {
 	}
 
 	// (5) No BuilderConfig (e.g. a synthetic compile context) → nil, never a panic.
-	if got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, candyModelMap(pixiOnly), externalizedBuilders, &ResolvedBox{Name: "x"}); got != nil {
+	if got := deploykit.DetectExternalizedBuilders([]string{"jupyter"}, candyModelMap(pixiOnly), externalizedBuilders, &buildkit.ResolvedBox{Name: "x"}); got != nil {
 		t.Fatalf("nil BuilderConfig surfaced %v, want nil", got)
 	}
 }

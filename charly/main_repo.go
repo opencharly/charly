@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // DefaultProjectRepo is the repo --repo defaults to when the spec is the
@@ -53,7 +55,7 @@ func ResolveProjectRepo(spec string) (string, error) {
 		return "", fmt.Errorf("invalid --repo spec %q", spec)
 	}
 	if version == "" {
-		branch, err := GitDefaultBranch(RepoGitURL(repoPath))
+		branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
 		if err != nil {
 			return "", fmt.Errorf("resolving default branch for %s: %w", repoPath, err)
 		}

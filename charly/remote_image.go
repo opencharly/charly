@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an
@@ -23,7 +26,7 @@ type RemoteImageContext struct {
 	Ref      ParsedRef
 	CacheDir string
 	Config   *Config
-	Resolved *ResolvedBox
+	Resolved *buildkit.ResolvedBox
 	Candies  map[string]*Candy
 	ImageRef string // registry/name:tag for pull
 	BoxName  string // short name (e.g. "openclaw-browser")
@@ -39,8 +42,8 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	version := parsed.Version
 	if version == "" {
-		repoURL := RepoGitURL(parsed.RepoPath)
-		tag, err := GitLatestTag(repoURL)
+		repoURL := kit.RepoGitURL(parsed.RepoPath)
+		tag, err := kit.GitLatestTag(repoURL)
 		if err != nil {
 			return nil, fmt.Errorf("resolving latest version for %s: %w", parsed.RepoPath, err)
 		}
@@ -88,7 +91,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 }
 
 // BuildImage builds the image locally from the cached source.
-func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error {
+func (ctx *RemoteImageContext) BuildImage(_ *kit.ResolvedRuntime, tag string) error {
 	// The generate+build both run inside buildCmd.Run() now that box build dispatches through the
 	// compiled-in candy/plugin-build DRIVE (build:box) — which resolves + renders the .build/ tree
 	// host-side over the build-prep seam, then drives podman — from ctx.CacheDir after the chdir
