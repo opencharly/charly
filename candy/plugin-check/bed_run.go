@@ -193,14 +193,14 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			}
 		}
 		logPath := filepath.Join(d.LogDir, stepName+".log")
-		if writeErr := os.WriteFile(logPath, []byte(reply.Stdout), 0o644); writeErr != nil {
+		if writeErr := os.WriteFile(logPath, []byte(cliStepLog(reply)), 0o644); writeErr != nil {
 			fmt.Fprintf(os.Stderr, "charly check run %s: writing %s: %v\n", name, logPath, writeErr)
 		}
 		if cerr != nil {
 			return cerr
 		}
 		if reply.ExitCode != 0 {
-			return fmt.Errorf("%s exited %d", stepName, reply.ExitCode)
+			return fmt.Errorf("%s exited %d: %s", stepName, reply.ExitCode, reply.Error)
 		}
 		return nil
 	}
@@ -561,6 +561,17 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		return res, fmt.Errorf("bed %s: one or more steps failed", name)
 	}
 	return res, nil
+}
+
+func cliStepLog(reply spec.CliReply) string {
+	output := reply.Stdout
+	if reply.Error == "" {
+		return output
+	}
+	if output != "" && output[len(output)-1] != '\n' {
+		output += "\n"
+	}
+	return output + reply.Error + "\n"
 }
 
 // printDebugRetentionNotice tells the operator that a FAILED bed was left running for

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
@@ -87,7 +88,14 @@ func TestHolderStart_DepartedHolderIsNoOp(t *testing.T) {
 	if holderExists(addr) {
 		t.Fatalf("test precondition: holder %q must not exist", addr.Name)
 	}
-	if err := holderStart(addr); err != nil {
-		t.Fatalf("holderStart on a DEPARTED holder must be a no-op success (else its lease strands forever); got: %v", err)
+	var startErr error
+	stderr := captureStderr(t, func() {
+		startErr = holderStart(addr)
+	})
+	if startErr != nil {
+		t.Fatalf("holderStart on a DEPARTED holder must be a no-op success (else its lease strands forever); got: %v", startErr)
+	}
+	if !strings.Contains(stderr, "has departed") {
+		t.Fatalf("stderr = %q, want departed-holder diagnostic", stderr)
 	}
 }

@@ -44,9 +44,15 @@ func TestResolveSSHAgentForward_Missing(t *testing.T) {
 
 func TestResolveSSHAgentForward_NonexistentSocket(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", "/nonexistent/agent.sock")
-	_, _, ok := resolveSSHAgentForward()
+	var ok bool
+	stderr := captureStderr(t, func() {
+		_, _, ok = resolveSSHAgentForward()
+	})
 	if ok {
 		t.Error("expected ok=false with nonexistent socket path")
+	}
+	if !strings.Contains(stderr, "does not exist, skipping SSH agent forwarding") {
+		t.Fatalf("stderr = %q, want missing-socket diagnostic", stderr)
 	}
 }
 
