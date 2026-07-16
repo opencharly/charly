@@ -285,3 +285,16 @@ func isPodMember(node *spec.BundleNode) bool {
 func isVmMember(node *spec.BundleNode) bool {
 	return node != nil && nodeTraits(node).Venue == "ssh"
 }
+
+// sortedDeployKeys returns a Bundle map's keys in deterministic (name) order.
+// K5: relocated from the deleted status_collect_adb.go — a generic Bundle-map
+// helper with no android-specific logic, shared by this file's own owner-walk
+// and node_bundle_venue.go's venue walk (R3, one shared abstraction).
+func sortedDeployKeys(m map[string]spec.BundleNode) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
