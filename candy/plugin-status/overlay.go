@@ -15,7 +15,7 @@ import (
 // Preserved EXACTLY:
 //   - claim → inherit the flat row's real data + provenance → drop the claimed row from the top
 //     level (dedup), so a declared nested child that ALSO surfaced as its own flat top-level row
-//     (a nested-pod's flattened charly-<seg1_seg2> container, or an AndroidCollector row at its
+//     (a nested-pod's flattened charly-<seg1_seg2> container, or an android-substrate row at its
 //     dotted path) appears exactly once, under its parent.
 //   - synthesize a "declared"/Source="nested" row when no flat match exists.
 //   - a declared parent with NO flat row attaches nothing (no phantom parent row).

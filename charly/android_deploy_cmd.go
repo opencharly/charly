@@ -5,10 +5,15 @@ package main
 // `target: android` is an EXTERNAL deploy substrate served out-of-process by
 // candy/plugin-adb (deploy:android — see android_deploy_preresolve.go). These
 // helpers resolve a kind:android DEVICE (an in-pod emulator or a remote adb
-// endpoint) to its adb endpoint host-side WITHOUT goadb (engine inspect only), and
-// are shared by the deploy:android preresolver AND the `charly status`
-// AndroidCollector (R3). The goadb wire talk + the app install/uninstall live in
-// candy/plugin-adb; this file does only device-endpoint resolution.
+// endpoint) to its adb endpoint host-side WITHOUT goadb (engine inspect only)
+// for the deploy:android preresolver. The `charly status` android collector
+// (K5: candy/plugin-substrate/status_android_collect.go) used to share this
+// exact code as the in-core AndroidCollector; it now carries its OWN
+// plugin-local re-implementation of the same resolution LOGIC (a plugin
+// cannot import charly/ types), so this is no longer literally shared code —
+// it is the deploy-time consumer alone. The goadb wire talk + the app
+// install/uninstall live in candy/plugin-adb; this file does only
+// device-endpoint resolution.
 
 import (
 	"fmt"
@@ -106,6 +111,27 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 		return nil
 	}
 	return lookupAndroidSpec(uf, name)
+}
+
+// lookupAndroidSpec resolves a kind:android device by name from the unified
+// config (K5: relocated from the deleted status_collect_adb.go — the status
+// collector's own android lookup moved to
+// candy/plugin-substrate/status_android_collect.go's androidSpecFor, which
+// resolves against the resolved-project envelope instead of *UnifiedFile;
+// this copy is the SEPARATE deploy-time consumer, findAndroidSpec above).
+func lookupAndroidSpec(uf *UnifiedFile, name string) *ResolvedAndroid {
+	if uf == nil || uf.Android == nil || name == "" {
+		return nil
+	}
+	body, ok := uf.Android[name]
+	if !ok {
+		return nil
+	}
+	r, err := resolveAndroidViaPlugin(body)
+	if err != nil {
+		return nil
+	}
+	return r
 }
 
 // resolveAndroidDevice builds the AndroidDevice install handle from the spec

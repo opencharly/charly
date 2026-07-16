@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
@@ -18,19 +16,21 @@ import (
 
 // Collector orchestrates one charly-status invocation. Loop-invariant work
 // (charly.yml load, quadlet dir lookup, runtime resolution) happens once at
-// construction. The pod + local + vm + k8s substrate collectors live in the
-// substrate plugin (candy/plugin-substrate's OpStatusCollect, P14a + K5) and
-// are reached over the kind-provider Invoke; only the android collector stays
-// host-side (deploy-cone-coupled: it merges PROJECT + PER-MACHINE config) in
-// the in-proc SubstrateCollector registry. The Collector itself holds NO
-// enginekit client — the live pod collection (podman snapshot + probes)
-// moved to the plugin, shedding the enginekit import from this file.
+// construction. ALL FIVE substrate collectors (pod/local/vm/k8s/android) now
+// live in the substrate plugin (candy/plugin-substrate's OpStatusCollect,
+// P14a + K5) and are reached over the kind-provider Invoke — the in-proc
+// SubstrateCollector registry this Collector once fanned out to has no
+// registrants left and was deleted (status_substrate.go now holds only the
+// CollectOpts data-carrier). The Collector itself holds NO enginekit client —
+// the live pod collection (podman snapshot + probes) moved to the plugin,
+// shedding the enginekit import from this file.
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the remaining
-// orchestration (collectFlat/Single's android arm + the vm-row enrichment) is
+// orchestration (collectFlat's pod/vm deploy-enrichment calls, Single) is
 // deploy-cone-coupled (BundleConfig/UnifiedFile), same as the remaining
-// status_collect_adb.go/status_nested.go/status_reap.go files (P14-rest
-// trace, 2026-07; see status_substrate.go for the full rationale).
+// status_nested.go/status_reap.go files (their own switch-on-target-word
+// concerns are separate future cutovers — P14-rest trace, 2026-07; see
+// status_substrate.go for the CollectOpts rationale).
 type Collector struct {
 	rt      *kit.ResolvedRuntime
 	quadlet string
@@ -65,17 +65,23 @@ func NewCollector(rt *kit.ResolvedRuntime) (*Collector, error) { //nolint:unpara
 }
 
 // collectFlat collects status across every deployment substrate (pod / vm / k8s
-// / local / android). android alone fans out via the in-proc SubstrateCollector
-// registry (K5-gated, deploy-cone-coupled); pod + local + vm + k8s fan out via
-// the substrate plugin's OpStatusCollect (P14a + K5), the pod + vm rows then
-// host-enriched. The result is sorted by (Kind, deployKey) — the FLAT fan-out ONLY, stopping
-// BEFORE the nested overlay (the overlay is the command:status candy's PURE
-// fold; the host pre-resolves the declared tree separately via
-// buildStatusRootsTree). Returns the resolved CollectOpts too, so the caller
-// (hostBuildStatusSubstrate) can feed it to buildStatusRootsTree.
+// / local / android) — ALL 5 words now fan out via the substrate plugin's
+// OpStatusCollect (P14a + K5; the in-proc SubstrateCollector registry this
+// once used for the deploy-cone-coupled substrates has no registrants left
+// and was deleted). The plugin returns LIVE rows; the host applies the
+// deploy enrichment to the pod + vm rows only (local/k8s/android rows are
+// final — each collector's whole collection is deploy-tree-derived inside
+// the plugin itself via HostBuild("resolved-project") + (for android)
+// deploykit.LoadBundleConfig()). The result is sorted by (Kind, deployKey) —
+// the FLAT fan-out ONLY, stopping BEFORE the nested overlay (the overlay is
+// the command:status candy's PURE fold; the host pre-resolves the declared
+// tree separately via buildStatusRootsTree). Returns the resolved CollectOpts
+// too, so the caller (hostBuildStatusSubstrate) can feed it to
+// buildStatusRootsTree.
 //
-// A collector returning an error logs a WARNING to stderr and contributes no
-// rows (graceful degradation) — it NEVER aborts the whole command.
+// A plugin word returning an error logs a WARNING to stderr and contributes
+// no rows (graceful degradation, via collectSubstrate) — it NEVER aborts the
+// whole command.
 func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([]spec.DeploymentStatus, CollectOpts, error) { //nolint:unparam // error return kept for interface/API stability
 	opts := CollectOpts{
 		IncludeAll: includeAll,
@@ -85,63 +91,23 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 		RunMode:    c.rt.RunMode,
 	}
 
-	// android via the in-proc SubstrateCollector registry (K5-gated).
-	var collectors []SubstrateCollector
-	for _, f := range substrateFactories {
-		sc := f(c)
-		if sc.Available(opts) {
-			collectors = append(collectors, sc)
-		}
-	}
-	perKind := make([][]spec.DeploymentStatus, len(collectors))
-	workers := max(runtime.NumCPU()*2, 4)
-	if workers > len(collectors) {
-		workers = len(collectors)
-	}
-	if workers < 1 {
-		workers = 1
-	}
-	sem := make(chan struct{}, workers)
-	var wg sync.WaitGroup
-	for i, sc := range collectors {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(i int, sc SubstrateCollector) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			rows, err := sc.Collect(ctx, opts)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: charly status: %s collector: %v\n", sc.Kind(), err)
-				return
-			}
-			perKind[i] = rows
-		}(i, sc)
-	}
-	wg.Wait()
-
-	var results []spec.DeploymentStatus
-	for _, rows := range perKind {
-		results = append(results, rows...)
-	}
-
-	// pod + local + vm + k8s via the substrate plugin's OpStatusCollect (P14a
-	// + K5). The plugin returns LIVE rows; the host applies the deploy
-	// enrichment to the pod + vm rows (local + k8s rows are final — no
-	// separate deploy enrichment: k8s's whole collection is deploy-tree-
-	// derived inside the plugin itself via HostBuild("resolved-project")).
 	localRows := c.collectSubstrate(ctx, "local", opts)
-	results = append(results, localRows...)
 	k8sRows := c.collectSubstrate(ctx, "k8s", opts)
-	results = append(results, k8sRows...)
+	androidRows := c.collectSubstrate(ctx, "android", opts)
 	vmRows := c.collectSubstrate(ctx, "vm", opts)
 	for i := range vmRows {
 		c.enrichVmRow(&vmRows[i], opts)
 	}
-	results = append(results, vmRows...)
 	podRows := c.collectSubstrate(ctx, "pod", opts)
 	for i := range podRows {
 		c.enrichOne(&podRows[i], c.rt.RunEngine)
 	}
+
+	results := make([]spec.DeploymentStatus, 0, len(localRows)+len(k8sRows)+len(androidRows)+len(vmRows)+len(podRows))
+	results = append(results, localRows...)
+	results = append(results, k8sRows...)
+	results = append(results, androidRows...)
+	results = append(results, vmRows...)
 	results = append(results, podRows...)
 
 	sort.SliceStable(results, func(i, j int) bool {
@@ -154,7 +120,7 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 }
 
 // collectSubstrate reaches the substrate plugin's OpStatusCollect for one word
-// (pod/local/vm/k8s) over the compiled-in kind-provider Invoke. A resolve miss
+// (pod/local/vm/k8s/android) over the compiled-in kind-provider Invoke. A resolve miss
 // or invoke error degrades gracefully: a stderr WARNING + zero rows, never
 // aborting the command (mirrors the in-proc collectors' graceful-degradation).
 // The ctx carries an in-proc reverse-channel executor (mirrors

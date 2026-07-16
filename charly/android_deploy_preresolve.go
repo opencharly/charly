@@ -10,8 +10,10 @@ package main
 // the project's apk: candy specs — that needs host context. This preresolver does the
 // host half and ships the result in DeployVenue.Substrate (a spec.AndroidDeployVenue):
 //
-//   - resolve the kind:android device → adb endpoint (resolveAndroidDevice, the SAME
-//     helper the `charly status` AndroidCollector uses — R3);
+//   - resolve the kind:android device → adb endpoint (resolveAndroidDevice —
+//     candy/plugin-substrate's K5 status collector carries its own plugin-local
+//     copy of this SAME resolution logic, since a plugin cannot import charly/
+//     types; the two are no longer literally one shared function);
 //   - collect the apk install specs from the deploy's COMPILED plans (each apk: candy
 //     compiled to an ApkInstallStep), rewriting committed-APK relative paths to
 //     ABSOLUTE host paths the plugin reads;
