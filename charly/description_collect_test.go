@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // TestCollectDescriptions_BakesPluginFileCheck is the main-repo equivalent of the
 // box/fedora "confirm a migrated plugin: file check baked into the ai.opencharly.description
@@ -22,7 +25,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 			},
 		},
 	}
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{
 		"redis-box": {Candy: []string{"redis"}},
 	})}
 

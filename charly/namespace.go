@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"sort"
 	"strings"
 )
@@ -61,17 +62,17 @@ func leafName(ref string) string {
 // resolveBoxRef resolves a (possibly qualified) box name to its BoxConfig
 // and the Config (namespace context) it lives in. Bare names resolve in c;
 // `ns.name` descends into c.Namespaces[ns] recursively.
-func (c *Config) resolveBoxRef(ref string) (BoxConfig, *Config, bool) {
+func (c *Config) resolveBoxRef(ref string) (spec.BoxConfig, *Config, bool) {
 	if ns, rest, ok := splitNamespaceRef(ref); ok {
 		sub, ok := c.Namespaces[ns]
 		if !ok {
-			return BoxConfig{}, nil, false
+			return spec.BoxConfig{}, nil, false
 		}
 		return sub.resolveBoxRef(rest)
 	}
 	img, ok := c.BoxConfig(ref)
 	if !ok {
-		return BoxConfig{}, nil, false
+		return spec.BoxConfig{}, nil, false
 	}
 	return img, c, true
 }

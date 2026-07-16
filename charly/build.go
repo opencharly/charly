@@ -267,7 +267,7 @@ func (c *BuildCmd) checkRemoteRefsAndPivot() (bool, string, error) {
 // resolveBuildTunables fills the build-speed knobs (Jobs / PodmanJobs /
 // PodmanJobsCap / Cache) from project defaults: when the CLI flag / env layer
 // left them unset. A named fallback applies later if config is silent too.
-func (c *BuildCmd) resolveBuildTunables(def BoxConfig) {
+func (c *BuildCmd) resolveBuildTunables(def spec.BoxConfig) {
 	if c.Jobs == 0 {
 		c.Jobs = resolveIntPtr(def.Jobs, nil, 0)
 	}

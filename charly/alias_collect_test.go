@@ -1,13 +1,14 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
 
 func TestCollectImageAliases(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
@@ -32,7 +33,7 @@ func TestCollectImageAliases(t *testing.T) {
 
 func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
 				Alias: []AliasConfig{{Name: "svc-cli", Command: "custom-cmd"}},
@@ -62,7 +63,7 @@ func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 
 func TestCollectImageAliasesDefaultCommand(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
 				Alias: []AliasConfig{{Name: "mycli"}}, // no command

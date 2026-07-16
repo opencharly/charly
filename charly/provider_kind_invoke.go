@@ -219,7 +219,7 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	image := candyIsImage(gn)
 	var env spec.StructuralKindLoadEnv
 	if image {
-		var b BoxConfig
+		var b spec.BoxConfig
 		if err := decodeNodeValue(gn, &b); err != nil {
 			return fmt.Errorf("node %q: decode image: %w", gn.name, err)
 		}
@@ -240,7 +240,7 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		return fmt.Errorf("node %q: candy kind: %w", gn.name, err)
 	}
 	if image {
-		var b BoxConfig
+		var b spec.BoxConfig
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", gn.name, err)
 		}

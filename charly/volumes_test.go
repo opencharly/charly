@@ -1,13 +1,14 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
 
 func TestCollectImageVolumesSimple(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
@@ -34,7 +35,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 
 func TestCollectImageVolumesChain(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"app"}},
 		}),
@@ -69,7 +70,7 @@ func TestCollectImageVolumesChain(t *testing.T) {
 
 func TestCollectImageVolumesDedup(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"override"}},
 		}),
@@ -103,7 +104,7 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 
 func TestCollectImageVolumesNoVolumes(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base": {Candy: []string{"plain"}},
 		}),
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestCollectLibvirtSnippets(t *testing.T) {
 	// hard-cutover; box-level raw snippets now live on the paired
 	// kind:vm entity's spec.libvirt.snippets:).
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"test-image": {
 				Candy: []string{"layer-a", "layer-b"},
 			},
@@ -81,7 +82,7 @@ func TestCollectLibvirtSnippets(t *testing.T) {
 }
 
 func TestCollectLibvirtSnippets_NonexistentImage(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{})}
 	layers := map[string]*Candy{}
 	snippets := CollectLibvirtSnippets(cfg, layers, "nonexistent")
 	if snippets != nil {

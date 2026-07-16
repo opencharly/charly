@@ -22,7 +22,6 @@ type (
 	BaseUserDef            = vmshared.BaseUserDef
 	BootloaderDef          = vmshared.BootloaderDef
 	BootstrapDef           = vmshared.BootstrapDef
-	BoxConfig              = vmshared.BoxConfig
 	BuilderDef             = vmshared.BuilderDef
 	BundleNode             = vmshared.BundleNode
 	CacheMountDef          = vmshared.CacheMountDef

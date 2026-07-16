@@ -164,8 +164,8 @@ func TestComputeIntermediates_NoBranching(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box:      boxMapOf(map[string]BoxConfig{"app": {Candy: []string{"python"}}}),
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box:      boxMapOf(map[string]spec.BoxConfig{"app": {Candy: []string{"python"}}}),
 	}
 
 	result, err := ComputeIntermediates(images, layers, cfg, "v1")
@@ -212,8 +212,8 @@ func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"fedora": {Candy: []string{}},
 			"app1":   {Base: "fedora", Candy: []string{"python", "testapi"}},
 			"app2":   {Base: "fedora", Candy: []string{"nodejs"}},
@@ -273,8 +273,8 @@ func TestComputeIntermediates_SharedPrefix(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"fedora":      {Candy: []string{}},
 			"fedora-test": {Base: "fedora", Candy: []string{"testapi"}},
 			"openclaw":    {Base: "fedora", Candy: []string{"openclaw"}},
@@ -340,8 +340,8 @@ func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"fedora": {Candy: []string{}},
 			"app1":   {Base: "fedora", Candy: []string{"pixi"}},
 			"app2":   {Base: "fedora", Candy: []string{"nodejs"}},
@@ -453,8 +453,8 @@ func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":     {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":      {Candy: []string{}},
 			"fedora-test": {Base: "fedora", Candy: []string{"traefik", "testapi"}},
@@ -587,8 +587,8 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":      {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":       {Candy: []string{}},
 			"nvidia":       {Base: "fedora", Candy: []string{"cuda"}},
@@ -736,8 +736,8 @@ func TestComputeIntermediates_UserImageAtBranchPoint(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"fedora": {Candy: []string{}},
 			"svbase": {Base: "fedora", Candy: []string{"supervisord"}},
 			"app1":   {Base: "svbase", Candy: []string{"testapi"}},
@@ -833,8 +833,8 @@ func TestComputeIntermediates_UserImageAsBranchIntermediate(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base": {Candy: []string{}},
 			"mid":  {Base: "base", Candy: []string{"B"}},
 			"app1": {Base: "base", Candy: []string{"C"}},
@@ -936,13 +936,13 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry:  "r",
 			Build:     BuildFormats{"rpm"},
 			Builder:   BuilderMap{"pixi": "builder", "npm": "builder"},
 			Platforms: []string{"linux/amd64", "linux/arm64"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
 			"fedora":  {Candy: []string{}},
 			"nvidia":  {Base: "fedora", Candy: []string{"cuda"}, Platforms: []string{"linux/amd64"}},
@@ -1108,8 +1108,8 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":             {Candy: []string{"pixi"}},
 			"fedora":              {Candy: []string{}},
 			"nvidia":              {Base: "fedora", Candy: []string{"cuda"}},
@@ -1217,12 +1217,12 @@ func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 	// Defaults explicitly use rpm to prove the fix: parent arch must
 	// win over these defaults in the auto-intermediate.
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry: "r",
 			Distro:   []string{"fedora"},
 			Build:    BuildFormats{"rpm"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"fedora":   {Candy: []string{}},
 			"arch":     {Base: "ext:arch", Candy: []string{}},
 			"arch-a-b": {Base: "arch", Candy: []string{"a", "b"}},
@@ -1306,12 +1306,12 @@ func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Defaults: BoxConfig{
+		Defaults: spec.BoxConfig{
 			Registry: "r",
 			Distro:   []string{"fedora"},
 			Build:    BuildFormats{"rpm"},
 		},
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"cachyos":     {Base: "ext:cachyos", Candy: []string{}},
 			"cachyos-a-b": {Base: "cachyos", Candy: []string{"a", "b"}},
 			"cachyos-a-c": {Base: "cachyos", Candy: []string{"a", "c"}},

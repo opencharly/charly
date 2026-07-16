@@ -85,7 +85,7 @@ type UnifiedFile struct {
 	// ProjectBuilderConfig / ProjectInitConfig. The binary-embedded default vocabulary
 	// merges UNDER a project's own entries via the generic root-wins mergePluginKindsMap
 	// (applyEmbeddedDefaults). See unified.go Distros()/Builders()/Inits().
-	Defaults BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Defaults spec.BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 	// Field-singular cutover (2026-05): legacy plural `Images yaml:"images"`
 	// deleted; the singular `Box yaml:"box"` is the canonical surface.
 	// Box is the generic kind-keyed IMAGE map (P6): name → opaque marshaled BoxConfig; consumers
@@ -812,7 +812,7 @@ func validateIterateBed(uf *UnifiedFile, name string, node *BundleNode) error {
 
 // mergeBoxConfig preserves dst's already-set fields and fills only the
 // zero-valued ones from src. Used for merging Defaults blocks from includes.
-func mergeBoxConfig(dst, src *BoxConfig) {
+func mergeBoxConfig(dst, src *spec.BoxConfig) {
 	if src == nil || dst == nil {
 		return
 	}

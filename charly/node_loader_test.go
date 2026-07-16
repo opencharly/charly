@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,7 +140,7 @@ func boxKeys(m boxMap) []string {
 // boxMapOf folds typed BoxConfig test literals into the generic image map — the
 // test-construction analog of the loader's encodeBox (P6 map-killing). Tests author
 // readable typed boxes; this marshals each opaque exactly as the loader stores them.
-func boxMapOf(m map[string]BoxConfig) boxMap {
+func boxMapOf(m map[string]spec.BoxConfig) boxMap {
 	out := make(boxMap, len(m))
 	for k, v := range m {
 		out[k] = encodeBox(v)

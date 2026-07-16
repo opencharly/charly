@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // TestBuildableShortName_NamespacedRef proves ensure-image's build fallback
 // resolves a QUALIFIED (namespaced) image ref directly: `fedora.fedora-builder`
@@ -10,9 +13,9 @@ import "testing"
 // buildable short-name match" (the check-builder-vm failure mode).
 func TestBuildableShortName_NamespacedRef(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{"root-image": {}}),
+		Box: boxMapOf(map[string]spec.BoxConfig{"root-image": {}}),
 		Namespaces: map[string]*Config{
-			"fedora": {Box: boxMapOf(map[string]BoxConfig{"fedora-builder": {}})},
+			"fedora": {Box: boxMapOf(map[string]spec.BoxConfig{"fedora-builder": {}})},
 		},
 	}
 

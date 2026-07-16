@@ -42,7 +42,7 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	}
 	// A box whose baked plan authors a plugin check verb directly (boxverb) — the
 	// box-plan reference site (a baked plan runs at check live).
-	boxes := boxMapOf(map[string]BoxConfig{
+	boxes := boxMapOf(map[string]spec.BoxConfig{
 		"some-box": {Plan: []Step{{Check: "probe via boxverb", Op: Op{Plugin: "boxverb"}}}},
 	})
 	// The deploy node's OWN references (deployNodePluginContext output): the inline
