@@ -8,14 +8,13 @@ package main
 // a CLI" descriptor) — it never imports the concrete `agent` kind.
 //
 // The `charly check list-agent` table printer + the harness's version-capture helpers
-// live in the compiled-in command:check plugin (candy/plugin-check) with the rest of the
-// `charly check` CLI + AI-harness. The host keeps only resolveAgentViaPlugin (the
-// grader-catalog resolution the `charly box feature run` grader path needs) plus the
-// version-parse helpers.
+// (VersionResult/ParseAgentTimeout) live in the compiled-in command:check plugin
+// (candy/plugin-check/agent.go) with the rest of the `charly check` CLI + AI-harness.
+// The host keeps only resolveAgentViaPlugin — the grader-catalog resolution the
+// `charly box feature run` grader path needs.
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -35,34 +34,4 @@ func resolveAgentViaPlugin(bodies map[string]json.RawMessage, name string) (*spe
 		return nil, "", err
 	}
 	return reply.Spec, reply.Name, nil
-}
-
-// ---------------------------------------------------------------------------
-// Version capture
-// ---------------------------------------------------------------------------
-
-// VersionResult is the captured outcome of one `version_command:` run. On success,
-// Stdout is the trimmed first line of stdout. On failure, Stdout is empty and Error
-// is non-empty (e.g. "exit status 127: command not found").
-type VersionResult struct {
-	Stdout string `yaml:"stdout,omitempty" json:"stdout,omitempty"`
-	Error  string `yaml:"error,omitempty"  json:"error,omitempty"`
-}
-
-// String renders the version for the result file's agent_version: block.
-func (v VersionResult) String() string {
-	if v.Error != "" {
-		return "error: " + v.Error
-	}
-	return v.Stdout
-}
-
-// ParseAgentTimeout parses a resolved Duration field (Timeout / progress_*). Empty
-// (the default) returns 0 — "no wall-clock cap"; callers branch on `dur == 0` to
-// skip context.WithTimeout entirely so the plateau bound governs.
-func ParseAgentTimeout(s spec.Duration) (time.Duration, error) {
-	if s == "" {
-		return 0, nil
-	}
-	return time.ParseDuration(s)
 }
