@@ -21,10 +21,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
 )
@@ -216,11 +218,11 @@ func expandPortSpecNode(node *yaml.Node) error {
 			port = after
 		}
 	}
-	portNode := scalarNode(port)
+	portNode := kit.ScalarNode(port)
 	portNode.Tag = "!!int"
 	*node = *mappingNodes(
 		"port", portNode,
-		"protocol", scalarNode(proto),
+		"protocol", kit.ScalarNode(proto),
 	)
 	return nil
 }
@@ -244,12 +246,12 @@ func expandTunnelNode(node *yaml.Node) error {
 	if node.Kind != yaml.ScalarNode {
 		return nil
 	}
-	kv := []any{"provider", scalarNode(node.Value)}
+	kv := []any{"provider", kit.ScalarNode(node.Value)}
 	switch node.Value {
 	case "tailscale":
-		kv = append(kv, "private", scalarNode("all"))
+		kv = append(kv, "private", kit.ScalarNode("all"))
 	case "cloudflare":
-		kv = append(kv, "public", scalarNode("all"))
+		kv = append(kv, "public", kit.ScalarNode("all"))
 	}
 	*node = *mappingNodes(kv...)
 	return nil
@@ -271,11 +273,11 @@ func mappingNodes(kv ...any) *yaml.Node {
 		var vn *yaml.Node
 		switch v := kv[i+1].(type) {
 		case string:
-			vn = scalarNode(v)
+			vn = kit.ScalarNode(v)
 		case *yaml.Node:
 			vn = v
 		}
-		m.Content = append(m.Content, scalarNode(k), vn)
+		m.Content = append(m.Content, kit.ScalarNode(k), vn)
 	}
 	return m
 }

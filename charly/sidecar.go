@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -38,16 +40,16 @@ func resolveSidecarsViaPlugin(in spec.SidecarResolveInput) (spec.SidecarResolveR
 
 // resolvedSidecarFromSpec adapts one plugin-resolved spec.ResolvedSidecar into the
 // host's ResolvedSidecar (the quadlet-gen shape).
-func resolvedSidecarFromSpec(s spec.ResolvedSidecar) ResolvedSidecar {
-	rs := ResolvedSidecar{Name: s.Name, Image: s.Image, Env: s.Env}
+func resolvedSidecarFromSpec(s spec.ResolvedSidecar) deploykit.ResolvedSidecar {
+	rs := deploykit.ResolvedSidecar{Name: s.Name, Image: s.Image, Env: s.Env}
 	if s.Security != nil {
 		rs.Security = *s.Security
 	}
 	for _, v := range s.Volume {
-		rs.Volume = append(rs.Volume, VolumeMount(v))
+		rs.Volume = append(rs.Volume, deploykit.VolumeMount(v))
 	}
 	for _, sec := range s.Secret {
-		rs.Secret = append(rs.Secret, CollectedSecret{
+		rs.Secret = append(rs.Secret, deploykit.CollectedSecret{
 			Name:       sec.Name,
 			Env:        sec.Env,
 			HostEnv:    sec.HostEnv,
@@ -72,7 +74,7 @@ func embeddedSidecarBodies() (map[string]json.RawMessage, error) {
 // sidecarTemplatesOf returns the project-root sidecar templates carried by a deploy
 // config (nil-safe), as OPAQUE bodies. These extend/override the embedded set inside
 // the sidecar plugin's OpResolve.
-func sidecarTemplatesOf(dc *BundleConfig) map[string]json.RawMessage {
+func sidecarTemplatesOf(dc *deploykit.BundleConfig) map[string]json.RawMessage {
 	if dc == nil {
 		return nil
 	}
@@ -82,19 +84,19 @@ func sidecarTemplatesOf(dc *BundleConfig) map[string]json.RawMessage {
 // --- Naming helpers ---
 
 func SidecarContainerName(boxName, sidecarName string) string {
-	return containerName(boxName) + "-" + sidecarName
+	return kit.ContainerName(boxName) + "-" + sidecarName
 }
 
 func SidecarContainerNameInstance(boxName, instance, sidecarName string) string {
-	return containerNameInstance(boxName, instance) + "-" + sidecarName
+	return kit.ContainerNameInstance(boxName, instance) + "-" + sidecarName
 }
 
 func PodName(boxName string) string {
-	return containerName(boxName)
+	return kit.ContainerName(boxName)
 }
 
 func PodNameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance)
+	return kit.ContainerNameInstance(boxName, instance)
 }
 
 // findPodSidecarQuadlets returns the .container quadlets in qdir that belong

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -146,11 +147,11 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		return spec.BuildResolveReply{Error: errString(fmt.Errorf("refreshing charly binary: %w", err))}, nil
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(err)}, nil
 	}
-	engine := EngineBinary(rt.BuildEngine)
+	engine := kit.EngineBinary(rt.BuildEngine)
 
 	platform := c.Platform
 	if platform == "" && !c.Push {

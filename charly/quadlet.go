@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // quadletDir returns the user-level quadlet directory.
@@ -33,22 +35,22 @@ func systemdUserDir() (string, error) {
 
 // quadletFilename returns the quadlet filename for an image.
 func quadletFilename(boxName string) string {
-	return containerName(boxName) + ".container"
+	return kit.ContainerName(boxName) + ".container"
 }
 
 // quadletFilenameInstance returns the quadlet filename for an image with optional instance.
 func quadletFilenameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".container"
+	return kit.ContainerNameInstance(boxName, instance) + ".container"
 }
 
 // serviceName returns the systemd service name for an image.
 func serviceName(boxName string) string {
-	return containerName(boxName) + ".service"
+	return kit.ContainerName(boxName) + ".service"
 }
 
 // serviceNameInstance returns the systemd service name for an image with optional instance.
 func serviceNameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".service"
+	return kit.ContainerNameInstance(boxName, instance) + ".service"
 }
 
 // quadletExists checks whether a .container file exists for the given image.

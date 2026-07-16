@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalDeployPlugin_ReverseChannelEndToEnd proves the FULL external deploy
@@ -82,13 +84,13 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	//    the recorded teardown run for real without a sudo prompt.
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	root := t.TempDir()
-	paths := &LedgerPaths{
+	paths := &kit.LedgerPaths{
 		Root:     root,
 		Deploys:  filepath.Join(root, "deploys"),
 		Candies:  filepath.Join(root, "layers"),
 		LockFile: filepath.Join(root, ".lock"),
 	}
-	tgt := &externalDeployTarget{name: name, prov: gp, exec: ShellExecutor{}, paths: paths}
+	tgt := &externalDeployTarget{name: name, prov: gp, exec: kit.ShellExecutor{}, paths: paths}
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")
@@ -96,12 +98,12 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	// --- Add: reverse channel applies both markers; host records the ledger. ---
-	if err := tgt.Add(ctx, nil, nil, EmitOpts{}); err != nil {
+	if err := tgt.Add(ctx, nil, nil, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	mustExist(t, applied, "Add did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "Add did not write the probe marker over the reverse channel")
-	rec, err := ReadDeployRecord(paths, tgt.deployID())
+	rec, err := kit.ReadDeployRecord(paths, tgt.deployID())
 	if err != nil || rec == nil {
 		t.Fatalf("Add did not write the deploy record: rec=%v err=%v", rec, err)
 	}
@@ -112,7 +114,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err != nil || crec == nil {
 		t.Fatalf("Add did not write the candy record: crec=%v err=%v", crec, err)
 	}
-	if len(crec.ReverseOps) != 1 || crec.ReverseOps[0].Kind != ReverseOpPluginScript {
+	if len(crec.ReverseOps) != 1 || crec.ReverseOps[0].Kind != spec.ReverseOpPluginScript {
 		t.Fatalf("candy record reverse ops = %+v, want exactly one plugin-script op", crec.ReverseOps)
 	}
 
@@ -137,7 +139,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	mustNotExist(t, probe, "Del did not remove the probe marker (reverse op not replayed)")
 	mustNotExist(t, applied, "Del did not remove the applied marker (reverse op not replayed)")
-	if rec, _ := ReadDeployRecord(paths, tgt.deployID()); rec != nil {
+	if rec, _ := kit.ReadDeployRecord(paths, tgt.deployID()); rec != nil {
 		t.Fatal("Del did not delete the deploy record")
 	}
 	if crec, _ := kit.ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {

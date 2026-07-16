@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestNoOvTokensInSource asserts the ov→charly rebrand left NO `OV_` token in
@@ -82,7 +83,7 @@ func assertBalancedHeredoc(t *testing.T, label, out string) {
 // TestRenderTaskCommand_WriteHeredocBalanced covers the deploy-path `write:`
 // task command (`install -m … <<'CHARLY_WRITE' … CHARLY_WRITE`).
 func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
-	cmd, err := renderOpCommand(&OpStep{
+	cmd, err := renderOpCommand(&deploykit.OpStep{
 		Op: &spec.Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
 	})
 	if err != nil {
@@ -99,22 +100,22 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 // (`CHARLY_DROPIN`).
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
-	plan := &InstallPlan{Candy: "demo", Steps: []InstallStep{
+	plan := &deploykit.InstallPlan{Candy: "demo", Steps: []spec.InstallStep{
 		&deploykit.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/demo.repo",
 			Content: "[demo]\nname=demo\n",
 		},
-		&ServicePackagedStep{
+		&deploykit.ServicePackagedStep{
 			Unit:          "demo.service",
-			TargetScope:   ScopeSystem,
+			TargetScope:   spec.ScopeSystem,
 			Enable:        true,
 			OverridesText: "[Service]\nLimitNOFILE=65536\n",
 			OverridesPath: "/etc/systemd/system/demo.service.d/override.conf",
 			CandyName:     "demo",
 		},
 	}}
-	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	out := tgt.String()

@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // CharlyNetworkName is the shared bridge network used by all charly containers.
@@ -17,7 +19,7 @@ const CharlyNetworkName = "charly"
 var EnsureCharlyNetwork = defaultEnsureCharlyNetwork
 
 func defaultEnsureCharlyNetwork(engine string) error {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	// The shared bridge needs a working EXTERNAL DNS upstream so containers can
 	// resolve registries / git remotes / MCP fallbacks. On a rootless-podman +
 	// systemd-resolved host, /etc/resolv.conf is the 127.0.0.53 stub —
@@ -69,7 +71,7 @@ func defaultEnsureCharlyNetwork(engine string) error {
 // isPodmanEngine reports whether the resolved engine binary is podman (the only
 // engine whose bridge DNS we tune; docker's daemon handles container DNS itself).
 func isPodmanEngine(engine string) bool {
-	return strings.Contains(strings.ToLower(EngineBinary(engine)), "podman")
+	return strings.Contains(strings.ToLower(kit.EngineBinary(engine)), "podman")
 }
 
 // hostUpstreamDNSServers returns the host's REAL upstream DNS resolvers, so the

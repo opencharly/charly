@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,7 +31,7 @@ type BoxReconcileCmd struct {
 // manifests under the discovered box/ and candy/ directories carry the rest.
 func reconcileCandidateFiles(dir string) []string {
 	seen := map[string]struct{}{}
-	if p := filepath.Join(dir, UnifiedFileName); fileExists(p) {
+	if p := filepath.Join(dir, UnifiedFileName); kit.FileExists(p) {
 		seen[filepath.Clean(p)] = struct{}{}
 	}
 	// Scan every YAML under the discovered box/ and candy/ directories. A
@@ -46,7 +48,7 @@ func reconcileCandidateFiles(dir string) []string {
 				return nil
 			}
 			if info.IsDir() {
-				if isGitSubmoduleDir(p, root) {
+				if kit.IsGitSubmoduleDir(p, root) {
 					return filepath.SkipDir
 				}
 				return nil
@@ -61,7 +63,7 @@ func reconcileCandidateFiles(dir string) []string {
 	for p := range seen {
 		out = append(out, p)
 	}
-	sortStrings(out)
+	kit.SortStrings(out)
 	return out
 }
 
@@ -103,7 +105,7 @@ func (c *BoxReconcileCmd) Run() error {
 		}
 		roots[f] = &root
 		walkScalars(&root, func(s *yaml.Node) {
-			if !IsRemoteCandyRef(s.Value) {
+			if !deploykit.IsRemoteCandyRef(s.Value) {
 				return
 			}
 			p := ParseRemoteRef(s.Value)
@@ -138,7 +140,7 @@ func (c *BoxReconcileCmd) Run() error {
 		root := roots[f]
 		fileChanged := false
 		walkScalars(root, func(s *yaml.Node) {
-			if !IsRemoteCandyRef(s.Value) {
+			if !deploykit.IsRemoteCandyRef(s.Value) {
 				return
 			}
 			p := ParseRemoteRef(s.Value)
@@ -149,7 +151,7 @@ func (c *BoxReconcileCmd) Run() error {
 			if p.Version == want {
 				return
 			}
-			stripped, _ := StripVersion(s.Value)
+			stripped, _ := deploykit.StripVersion(s.Value)
 			newRef := stripped + ":" + want
 			rewrites = append(rewrites, rewrite{filepath.Base(f), s.Value, newRef})
 			if !c.DryRun {
@@ -197,7 +199,7 @@ func (c *BoxReconcileCmd) Run() error {
 // targetVersion picks the version every pin of repo should align to.
 func (c *BoxReconcileCmd) targetVersion(repo string, vers map[string]bool) (string, error) {
 	if c.Remote {
-		latest, err := GitLatestTag(RepoGitURL(repo))
+		latest, err := kit.GitLatestTag(kit.RepoGitURL(repo))
 		if err != nil {
 			return "", fmt.Errorf("resolving newest remote tag for %s: %w", repo, err)
 		}
@@ -209,7 +211,7 @@ func (c *BoxReconcileCmd) targetVersion(repo string, vers map[string]bool) (stri
 	// Newest already-referenced version (CalVer/semver via compareSemver).
 	newest := ""
 	for v := range vers {
-		if newest == "" || compareSemver(v, newest) > 0 {
+		if newest == "" || kit.CompareSemver(v, newest) > 0 {
 			newest = v
 		}
 	}

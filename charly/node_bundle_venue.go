@@ -23,6 +23,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -65,7 +67,7 @@ func flattenBundleOne(root *spec.BundleNode, rootName string) error {
 	for _, mName := range sortedMemberKeys(root.Members) {
 		hoistVenueSubtree(root, root.Members[mName], mName)
 	}
-	for _, cName := range sortedNestedKeys(root.Children) {
+	for _, cName := range deploykit.SortedNestedKeys(root.Children) {
 		hoistVenueSubtree(root, root.Children[cName], rootName+"."+cName)
 	}
 	return nil
@@ -86,7 +88,7 @@ func hoistVenueSubtree(root, node *spec.BundleNode, venuePath string) {
 		root.Plan = append(root.Plan, s)
 	}
 	node.Plan = nil
-	for _, cName := range sortedNestedKeys(node.Children) {
+	for _, cName := range deploykit.SortedNestedKeys(node.Children) {
 		hoistVenueSubtree(root, node.Children[cName], venuePath+"."+cName)
 	}
 	// A member that is itself a group can carry sibling members — addressed

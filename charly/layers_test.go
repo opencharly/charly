@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
 )

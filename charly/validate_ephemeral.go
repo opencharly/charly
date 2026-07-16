@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_ephemeral.go — validation rules for the ephemeral / clone /
@@ -104,7 +106,7 @@ func ValidateImportedSource(name string, src *VmSource, errs *ValidationError) {
 // ValidateEphemeralAcrossDeploy aggregates ephemeral / naming /
 // imported validation across an entire BundleConfig. Called from the
 // top-level Validate path.
-func ValidateEphemeralAcrossDeploy(dc *BundleConfig, errs *ValidationError) {
+func ValidateEphemeralAcrossDeploy(dc *deploykit.BundleConfig, errs *ValidationError) {
 	if dc == nil {
 		return
 	}

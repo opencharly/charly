@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Retention fallbacks — used ONLY when defaults.keep_images / keep_check_runs are
@@ -33,13 +34,13 @@ func defaultContainerImageRefs(engine string) (ids map[string]bool, refs map[str
 	// Parse JSON, not a Go-template `--format`: podman's `{{.ImageID}}` template
 	// panics (slice bounds [:12] length 0) when any container has an empty image
 	// ID. The raw JSON field handles that gracefully.
-	out, e := exec.Command(EngineBinary(engine), "ps", "-a", "--format", "json").Output()
+	out, e := exec.Command(kit.EngineBinary(engine), "ps", "-a", "--format", "json").Output()
 	if e != nil {
-		return ids, refs, fmt.Errorf("listing containers via %s: %w", EngineBinary(engine), e)
+		return ids, refs, fmt.Errorf("listing containers via %s: %w", kit.EngineBinary(engine), e)
 	}
 	var rows []map[string]any
 	if e := json.Unmarshal(out, &rows); e != nil {
-		return ids, refs, fmt.Errorf("parsing %s ps output: %w", EngineBinary(engine), e)
+		return ids, refs, fmt.Errorf("parsing %s ps output: %w", kit.EngineBinary(engine), e)
 	}
 	for _, r := range rows {
 		if v, ok := r["ImageID"].(string); ok {
@@ -78,7 +79,7 @@ func imageInUse(im kit.LocalImageInfo, ids, refs map[string]bool) bool {
 // imageLabelCalVer parses the image's ai.opencharly.version label (the
 // content-derived EffectiveVersion) — the PRIMARY retention ordering key.
 func imageLabelCalVer(im kit.LocalImageInfo) (CalVer, bool) {
-	return ParseCalVer(im.Labels[LabelVersion])
+	return ParseCalVer(im.Labels[spec.LabelVersion])
 }
 
 // pruneImagesByRetention keeps the newest keepN build TAGS per
@@ -124,7 +125,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	groups := map[string][]imageTagInfo{}
 	seenRef := map[string]bool{}
 	for _, im := range imgs {
-		short := im.Labels[LabelBox]
+		short := im.Labels[spec.LabelBox]
 		if short == "" {
 			continue
 		}
@@ -287,7 +288,7 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 			// survive; it also refuses an image still held by a build /
 			// "external" container our InUse pre-check can't see — the
 			// safety backstop. Silent skip — in-use retention is expected.
-			if err := exec.Command(EngineBinary(engine), "rmi", c.Ref).Run(); err != nil {
+			if err := exec.Command(kit.EngineBinary(engine), "rmi", c.Ref).Run(); err != nil {
 				continue
 			}
 			if c.ID != "" {
@@ -310,7 +311,7 @@ func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
 	if _, _, live := liveBuildFloor(); live > 0 {
 		return nil, nil // never delete images while any build is in flight
 	}
-	out, err := exec.Command(EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
+	out, err := exec.Command(kit.EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("listing dangling images: %w", err)
 	}
@@ -320,14 +321,14 @@ func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
 	}
 	var removed []string
 	for _, im := range imgs {
-		if im.Labels[LabelBox] == "" {
+		if im.Labels[spec.LabelBox] == "" {
 			continue // not charly-built
 		}
 		if dryRun {
 			removed = append(removed, im.ID)
 			continue
 		}
-		if err := exec.Command(EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
+		if err := exec.Command(kit.EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
 			continue // parent of a kept image / in use — expected, keep
 		}
 		removed = append(removed, im.ID)

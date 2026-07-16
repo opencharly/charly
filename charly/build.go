@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -183,8 +184,8 @@ func pruneAfterBuild(dir string) {
 	}
 	keep := resolveIntPtr(cfg.Defaults.KeepImages, nil, keepImagesFallback)
 	if keep > 0 {
-		if rt, rtErr := ResolveRuntime(); rtErr == nil {
-			engine := EngineBinary(rt.BuildEngine)
+		if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
+			engine := kit.EngineBinary(rt.BuildEngine)
 			if removed, err := pruneImagesByRetention(engine, keep, false); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
 			} else if len(removed) > 0 {
@@ -356,7 +357,7 @@ func renderRuntimePacmanConf(p *PacstrapDef) (string, error) {
 	return b.String(), nil
 }
 
-func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *ResolvedBox) error {
+func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *buildkit.ResolvedBox) error {
 	if !strings.HasPrefix(img.From, "builder:") {
 		return nil
 	}
@@ -473,7 +474,7 @@ func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *Reso
 // build path (the box config `from: builder:<name>` consumers). Same dispatch
 // rules: Pacstrap.BasePackages for pacstrap-flavored, Debootstrap.BasePackages
 // for debootstrap-flavored.
-func bootstrapPackagesForBox(img *ResolvedBox) []string {
+func bootstrapPackagesForBox(img *buildkit.ResolvedBox) []string {
 	if img.DistroDef == nil {
 		return nil
 	}
@@ -622,7 +623,7 @@ func (c *BuildCmd) buildRemote(ref string) error {
 
 // filterBox filters the build order to only include the requested images
 // and their dependencies.
-func filterBox(order []string, requested []string, boxes map[string]*ResolvedBox) ([]string, error) {
+func filterBox(order []string, requested []string, boxes map[string]*buildkit.ResolvedBox) ([]string, error) {
 	// Validate requested images exist
 	for _, name := range requested {
 		if _, ok := boxes[name]; !ok {
@@ -670,7 +671,7 @@ func filterBox(order []string, requested []string, boxes map[string]*ResolvedBox
 // CLI behaviour into the image. Skipped (with a one-line warning) when
 // `go` is not on PATH, so an end-user with a packaged charly install does
 // not see a hard error.
-func ensureCharlyBinaryFresh(dir string, boxes map[string]*ResolvedBox, requested []string) error {
+func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox, requested []string) error {
 	in := requested
 	if len(in) == 0 {
 		in = make([]string, 0, len(boxes))

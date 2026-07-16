@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -59,7 +60,7 @@ func candyModelByLeaf(candies map[string]*Candy, leaf string) deploykit.CandyMod
 // renderSeamGenBox loads the cached Generator + the named box for a render-seam method.
 // Returns a non-nil errReply (for the caller to return) if either is missing — the shared
 // load+guard boilerplate of every box-coupled render-seam method (R3).
-func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *ResolvedBox, errReply *spec.RenderSeamReply) {
+func renderSeamGenBox(dir, boxName, method string) (gen *Generator, img *buildkit.ResolvedBox, errReply *spec.RenderSeamReply) {
 	gen = loadRenderGen(dir)
 	if gen == nil {
 		return nil, nil, &spec.RenderSeamReply{Error: fmt.Sprintf("render-seam %s: no generator for dir %q", method, dir)}
@@ -168,7 +169,7 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		if cm == nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: candy %q not found", req.Method, p.CandyName)
 		}
-		step := deploykit.CompileLocalPkgStep(cm, img, HostContext{})
+		step := deploykit.CompileLocalPkgStep(cm, img, deploykit.HostContext{})
 		if step == nil {
 			return spec.RenderSeamReply{Result: []byte("{}")}, nil
 		}

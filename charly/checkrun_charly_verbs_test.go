@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -57,11 +58,11 @@ func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
 	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/jupyter:latest"},
-			Labels: map[string]string{LabelBox: "jupyter"},
+			Labels: map[string]string{spec.LabelBox: "jupyter"},
 		},
 		{
 			Names:  []string{"ghcr.io/opencharly/filebrowser:latest"},
-			Labels: map[string]string{LabelBox: "filebrowser"},
+			Labels: map[string]string{spec.LabelBox: "filebrowser"},
 		},
 	})
 	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
@@ -96,7 +97,7 @@ func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 		},
 		{
 			Names:  []string{"ghcr.io/opencharly/jupyter:v2"},
-			Labels: map[string]string{LabelBox: "jupyter"},
+			Labels: map[string]string{spec.LabelBox: "jupyter"},
 		},
 	})
 	got, err := kit.ResolveLocalImageRef("podman", "jupyter")

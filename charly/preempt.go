@@ -16,6 +16,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -207,7 +208,7 @@ func gatherDeployNodes() map[string]spec.BundleNode {
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly preempt"); dc != nil {
 		for name, node := range dc.Bundle {
-			out[name] = MergeBundleNode(out[name], node)
+			out[name] = deploykit.MergeBundleNode(out[name], node)
 		}
 	}
 	return out
@@ -238,7 +239,7 @@ func lookupVMClaimant(vmEntity string) (string, spec.BundleNode, bool) {
 }
 
 func holderAddrFor(name string, node spec.BundleNode) holderAddr {
-	base, instance := parseDeployKey(name)
+	base, instance := deploykit.ParseDeployKey(name)
 	target := node.Target
 	if target == "" {
 		target = "pod"
@@ -304,10 +305,10 @@ func holderExists(addr holderAddr) bool {
 		return true
 	}
 	engine := "podman"
-	if rt, err := ResolveRuntime(); err == nil {
-		engine = EngineBinary(ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
+	if rt, err := kit.ResolveRuntime(); err == nil {
+		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
 	}
-	return exec.Command(engine, "container", "exists", containerNameInstance(addr.Base, addr.Instance)).Run() == nil
+	return exec.Command(engine, "container", "exists", kit.ContainerNameInstance(addr.Base, addr.Instance)).Run() == nil
 }
 
 // waitStoppedHost polls until the holder is no longer running (its resource is released), via
@@ -360,10 +361,10 @@ func podIsRunning(base, instance string) bool {
 		return strings.TrimSpace(string(out)) == "active"
 	}
 	engine := "podman"
-	if rt, err := ResolveRuntime(); err == nil {
-		engine = EngineBinary(ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
+	if rt, err := kit.ResolveRuntime(); err == nil {
+		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
 	}
-	name := containerNameInstance(base, instance)
+	name := kit.ContainerNameInstance(base, instance)
 	out, err := exec.Command(engine, "inspect", "--format", "{{.State.Running}}", name).CombinedOutput()
 	if err != nil {
 		return false

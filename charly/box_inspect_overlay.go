@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 )
 
@@ -61,7 +62,7 @@ func (c *InspectOverlayCmd) Run() error {
 // formatTunnel prints the deploy-time tunnel config for the box. Tunnel lives off BoxConfig/ResolvedBox
 // (deploy-only) — it resolves from BundleNode.Tunnel via charly.yml. Any resolution failure is silently
 // skipped (no tunnel output), matching the prior inline behaviour.
-func (c *InspectOverlayCmd) formatTunnel(cfg *Config, dir string, resolved *ResolvedBox) {
+func (c *InspectOverlayCmd) formatTunnel(cfg *Config, dir string, resolved *buildkit.ResolvedBox) {
 	overlay, ok := deploykit.LoadDeployConfigForRead("charly box inspect tunnel").Lookup(c.Box, c.Instance)
 	if !ok || overlay.Tunnel == nil {
 		return

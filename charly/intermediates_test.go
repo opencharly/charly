@@ -1,21 +1,25 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestGlobalCandyOrder_PopularityTieBreaking(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":    {Name: "pixi", Require: nil},
 		"nodejs":  {Name: "nodejs", Require: nil},
-		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"})},
-		"testapi": {Name: "testapi", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"python":  {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"})},
+		"testapi": {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
 
 	// pixi is used by 2 images, nodejs by 1
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"a": {Name: "a", Base: "ext:1", IsExternalBase: true, Candy: []string{"pixi", "python", "testapi"}},
 		"b": {Name: "b", Base: "ext:1", IsExternalBase: true, Candy: []string{"pixi", "nodejs"}},
 	}
@@ -47,10 +51,10 @@ func TestGlobalCandyOrder_PopularityTieBreaking(t *testing.T) {
 func TestGlobalCandyOrder_RespectsDependencies(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":   {Name: "pixi", Require: nil},
-		"python": {Name: "python", Require: toCandyRefs([]string{"pixi"})},
+		"python": {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"})},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"a": {Name: "a", Base: "ext:1", IsExternalBase: true, Candy: []string{"python"}},
 	}
 
@@ -80,7 +84,7 @@ func TestGlobalCandyOrder_RespectsAuthoredListOrder(t *testing.T) {
 		"build-toolchain": {Name: "build-toolchain"},
 		"pixi":            {Name: "pixi"},
 	}
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora-builder": {Name: "fedora-builder", Base: "ext:1", IsExternalBase: true, Candy: []string{"rpmfusion", "build-toolchain"}},
 		"arch-builder":   {Name: "arch-builder", Base: "ext:2", IsExternalBase: true, Candy: []string{"build-toolchain", "pixi"}},
 	}
@@ -111,7 +115,7 @@ func TestGlobalCandyOrder_ConflictingListOrderFallsBack(t *testing.T) {
 		"x": {Name: "x"},
 		"y": {Name: "y"},
 	}
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"a": {Name: "a", Base: "ext:1", IsExternalBase: true, Candy: []string{"x", "y"}},
 		"b": {Name: "b", Base: "ext:2", IsExternalBase: true, Candy: []string{"y", "x"}},
 	}
@@ -128,12 +132,12 @@ func TestGlobalCandyOrder_ConflictingListOrderFallsBack(t *testing.T) {
 func TestAbsoluteCandySequence_WithInternalBase(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":    {Name: "pixi", Require: nil},
-		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"})},
+		"python":  {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"})},
 		"nodejs":  {Name: "nodejs", Require: nil},
-		"testapi": {Name: "testapi", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"testapi": {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"base": {Name: "base", Base: "ext:1", IsExternalBase: true, Candy: []string{"pixi"}},
 		"app":  {Name: "app", Base: "base", IsExternalBase: false, Candy: []string{"python", "testapi"}},
 	}
@@ -152,10 +156,10 @@ func TestAbsoluteCandySequence_WithInternalBase(t *testing.T) {
 func TestComputeIntermediates_NoBranching(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":   {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python": {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"python": {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"app": {
 			Name: "app", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{"python"}, Tag: "v1", Registry: "r",
@@ -188,12 +192,12 @@ func TestComputeIntermediates_NoBranching(t *testing.T) {
 func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":    {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"python":  {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"nodejs":  {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"testapi": {Name: "testapi", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"testapi": {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
@@ -248,13 +252,13 @@ func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 func TestComputeIntermediates_SharedPrefix(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
-		"testapi":     {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"openclaw":    {Name: "openclaw", Require: toCandyRefs([]string{"supervisord"}), HasPackageJson: true},
+		"python":      {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord": {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
+		"testapi":     {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"supervisord"}), HasPixiToml: true},
+		"openclaw":    {Name: "openclaw", Require: deploykit.ToCandyRefs([]string{"supervisord"}), HasPackageJson: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
@@ -321,7 +325,7 @@ func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 		"nodejs": {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
@@ -371,12 +375,12 @@ func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 func TestImageNeedsBuilder(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":    {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"python":  {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"nodejs":  {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"tooling": {Name: "tooling", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name: "builder", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{"pixi", "nodejs", "tooling"},
@@ -421,15 +425,15 @@ func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":            {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"nodejs":          {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":          {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord":     {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"python":          {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord":     {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"testapi":         {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"openclaw":        {Name: "openclaw", Require: toCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
+		"testapi":         {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"supervisord"}), HasPixiToml: true},
+		"traefik":         {Name: "traefik", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"openclaw":        {Name: "openclaw", Require: deploykit.ToCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name: "builder", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{"pixi", "nodejs", "build-toolchain"}, Tag: "v1", Registry: "r",
@@ -438,22 +442,22 @@ func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 		"fedora": {
 			Name: "fedora", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
-			FullTag: "r/fedora:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/fedora:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"fedora-test": {
 			Name: "fedora-test", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"traefik", "testapi"}, Tag: "v1", Registry: "r",
-			FullTag: "r/fedora-test:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/fedora-test:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"openclaw": {
 			Name: "openclaw", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"openclaw"}, Tag: "v1", Registry: "r",
-			FullTag: "r/openclaw:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/openclaw:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":     {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":      {Candy: []string{}},
@@ -514,21 +518,21 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 	layers := map[string]*Candy{
 		"pixi":            {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"nodejs":          {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":          {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord":     {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"python":          {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord":     {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"cuda":            {Name: "cuda", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python-ml":       {Name: "python-ml", Require: toCandyRefs([]string{"pixi", "cuda"}), HasPixiToml: true},
-		"jupyter":         {Name: "jupyter", Require: toCandyRefs([]string{"python-ml", "supervisord"}), HasPixiToml: true},
-		"comfyui":         {Name: "comfyui", Require: toCandyRefs([]string{"python-ml", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"ollama":          {Name: "ollama", Require: toCandyRefs([]string{"cuda", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"openclaw":        {Name: "openclaw", Require: toCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
-		"testapi":         {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"github-runner":   {Name: "github-runner", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"python-ml":       {Name: "python-ml", Require: deploykit.ToCandyRefs([]string{"pixi", "cuda"}), HasPixiToml: true},
+		"jupyter":         {Name: "jupyter", Require: deploykit.ToCandyRefs([]string{"python-ml", "supervisord"}), HasPixiToml: true},
+		"comfyui":         {Name: "comfyui", Require: deploykit.ToCandyRefs([]string{"python-ml", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"ollama":          {Name: "ollama", Require: deploykit.ToCandyRefs([]string{"cuda", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"openclaw":        {Name: "openclaw", Require: deploykit.ToCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
+		"testapi":         {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"supervisord"}), HasPixiToml: true},
+		"traefik":         {Name: "traefik", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"github-runner":   {Name: "github-runner", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name: "builder", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{"pixi", "nodejs", "build-toolchain"}, Tag: "v1", Registry: "r",
@@ -537,57 +541,57 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 		"fedora": {
 			Name: "fedora", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
-			FullTag: "r/fedora:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/fedora:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"nvidia": {
 			Name: "nvidia", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"cuda"}, Tag: "v1", Registry: "r",
-			FullTag: "r/nvidia:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/nvidia:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"python-ml": {
 			Name: "python-ml", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"python-ml"}, Tag: "v1", Registry: "r",
-			FullTag: "r/python-ml:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/python-ml:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"jupyter": {
 			Name: "jupyter", Base: "python-ml", IsExternalBase: false,
 			Candy: []string{"jupyter"}, Tag: "v1", Registry: "r",
-			FullTag: "r/jupyter:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/jupyter:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"comfyui": {
 			Name: "comfyui", Base: "python-ml", IsExternalBase: false,
 			Candy: []string{"comfyui"}, Tag: "v1", Registry: "r",
-			FullTag: "r/comfyui:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/comfyui:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"ollama": {
 			Name: "ollama", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"ollama"}, Tag: "v1", Registry: "r",
-			FullTag: "r/ollama:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/ollama:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"gpu-gateway": {
 			Name: "gpu-gateway", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"openclaw", "ollama"}, Tag: "v1", Registry: "r",
-			FullTag: "r/gpu-gateway:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/gpu-gateway:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"fedora-test": {
 			Name: "fedora-test", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"traefik", "testapi"}, Tag: "v1", Registry: "r",
-			FullTag: "r/fedora-test:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/fedora-test:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"openclaw": {
 			Name: "openclaw", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"openclaw"}, Tag: "v1", Registry: "r",
-			FullTag: "r/openclaw:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/openclaw:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"githubrunner": {
 			Name: "githubrunner", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"github-runner"}, Tag: "v1", Registry: "r",
-			FullTag: "r/githubrunner:v1", Pkg: "rpm", Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			FullTag: "r/githubrunner:v1", Pkg: "rpm", Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":      {Candy: []string{"pixi", "nodejs", "build-toolchain"}},
 			"fedora":       {Candy: []string{}},
@@ -615,7 +619,7 @@ func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 		for n := range result {
 			names = append(names, n)
 		}
-		sortStrings(names)
+		kit.SortStrings(names)
 		return names
 	}() {
 		img := result[name]
@@ -705,13 +709,13 @@ func TestComputeIntermediates_UserImageAtBranchPoint(t *testing.T) {
 	// It should be reused as the intermediate, not duplicated.
 	layers := map[string]*Candy{
 		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
-		"testapi":     {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"webapp":      {Name: "webapp", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"python":      {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord": {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
+		"testapi":     {Name: "testapi", Require: deploykit.ToCandyRefs([]string{"supervisord"}), HasPixiToml: true},
+		"webapp":      {Name: "webapp", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
@@ -807,12 +811,12 @@ func TestComputeIntermediates_UserImageAsBranchIntermediate(t *testing.T) {
 	// as the intermediate without creating a duplicate.
 	layers := map[string]*Candy{
 		"A": {Name: "A", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"B": {Name: "B", Require: toCandyRefs([]string{"A"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"C": {Name: "C", Require: toCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"D": {Name: "D", Require: toCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"B": {Name: "B", Require: deploykit.ToCandyRefs([]string{"A"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"C": {Name: "C", Require: deploykit.ToCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"D": {Name: "D", Require: deploykit.ToCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"base": {
 			Name: "base", Base: "ext:1", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r", FullTag: "r/base:v1", Pkg: "rpm",
@@ -899,19 +903,19 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 	// nvidia is amd64-only; nvidia-supervisord should also be amd64-only.
 	layers := map[string]*Candy{
 		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"python":      {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord": {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 		"cuda":        {Name: "cuda", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"appA":        {Name: "appA", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"appB":        {Name: "appB", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"appA":        {Name: "appA", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"appB":        {Name: "appB", Require: deploykit.ToCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r", FullTag: "r/fedora:v1",
 			Pkg: "rpm", Platforms: []string{"linux/amd64", "linux/arm64"},
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"builder": {
 			Name: "builder", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
@@ -921,17 +925,17 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 		"nvidia": {
 			Name: "nvidia", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"cuda"}, Tag: "v1", Registry: "r", FullTag: "r/nvidia:v1",
-			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"appA": {
 			Name: "appA", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"appA"}, Tag: "v1", Registry: "r", FullTag: "r/appA:v1",
-			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"appB": {
 			Name: "appB", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"appB"}, Tag: "v1", Registry: "r", FullTag: "r/appB:v1",
-			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Pkg: "rpm", Platforms: []string{"linux/amd64"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
@@ -939,7 +943,7 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 		Defaults: spec.BoxConfig{
 			Registry:  "r",
 			Build:     BuildFormats{"rpm"},
-			Builder:   BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder:   buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 			Platforms: []string{"linux/amd64", "linux/arm64"},
 		},
 		Box: boxMapOf(map[string]spec.BoxConfig{
@@ -1003,13 +1007,13 @@ func TestPixiBoundCandies(t *testing.T) {
 		"unsloth":   {Name: "unsloth", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"jupyter-ml": {
 			Name: "jupyter-ml", HasPixiToml: true, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
-			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
+			IncludedCandy: deploykit.ToCandyRefs([]string{"llama-cpp", "unsloth"}),
+			Require:       deploykit.ToCandyRefs([]string{"cuda", "supervisord"}),
 		},
 		"unsloth-studio": {
 			Name: "unsloth-studio", HasPixiToml: true,
-			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
-			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
+			IncludedCandy: deploykit.ToCandyRefs([]string{"llama-cpp", "unsloth"}),
+			Require:       deploykit.ToCandyRefs([]string{"cuda", "supervisord"}),
 		},
 		"cuda":        {Name: "cuda", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"supervisord": {Name: "supervisord", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
@@ -1052,24 +1056,24 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 		"notebook-finetuning": {Name: "notebook-finetuning"},
 		"jupyter-ml": {
 			Name: "jupyter-ml", HasPixiToml: true, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
-			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
+			IncludedCandy: deploykit.ToCandyRefs([]string{"llama-cpp", "unsloth"}),
+			Require:       deploykit.ToCandyRefs([]string{"cuda", "supervisord"}),
 			portSpecs:     []spec.PortSpec{{Port: 8080}},
 		},
 		"unsloth-studio": {
 			Name: "unsloth-studio", HasPixiToml: true,
-			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
-			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
+			IncludedCandy: deploykit.ToCandyRefs([]string{"llama-cpp", "unsloth"}),
+			Require:       deploykit.ToCandyRefs([]string{"cuda", "supervisord"}),
 			portSpecs:     []spec.PortSpec{{Port: 8080}},
 		},
 		"agent-forwarding": {Name: "agent-forwarding", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"cuda":             {Name: "cuda", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"pixi":             {Name: "pixi", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":           {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"supervisord":      {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
+		"python":           {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"}), HasPixiToml: true},
+		"supervisord":      {Name: "supervisord", Require: deploykit.ToCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name: "builder", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{"pixi"}, Tag: "v1", Registry: "r",
@@ -1079,36 +1083,36 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 			Name: "fedora", Base: "quay.io/fedora/fedora:43", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
 			FullTag: "r/fedora:v1", Pkg: "rpm",
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"nvidia": {
 			Name: "nvidia", Base: "fedora", IsExternalBase: false,
 			Candy: []string{"cuda"}, Tag: "v1", Registry: "r",
 			FullTag: "r/nvidia:v1", Pkg: "rpm",
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"jupyter-ml": {
 			Name: "jupyter-ml", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"agent-forwarding", "jupyter-ml", "notebook-templates", "dbus", "charly"},
 			Tag:   "v1", Registry: "r", FullTag: "r/jupyter-ml:v1", Pkg: "rpm",
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"jupyter-ml-notebook": {
 			Name: "jupyter-ml-notebook", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"agent-forwarding", "jupyter-ml", "notebook-templates", "notebook-finetuning", "dbus", "charly"},
 			Tag:   "v1", Registry: "r", FullTag: "r/jupyter-ml-notebook:v1", Pkg: "rpm",
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"unsloth-studio": {
 			Name: "unsloth-studio", Base: "nvidia", IsExternalBase: false,
 			Candy: []string{"agent-forwarding", "unsloth-studio", "notebook-finetuning", "dbus", "charly"},
 			Tag:   "v1", Registry: "r", FullTag: "r/unsloth-studio:v1", Pkg: "rpm",
-			Builder: BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
 	cfg := &Config{
-		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Defaults: spec.BoxConfig{Registry: "r", Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder":             {Candy: []string{"pixi"}},
 			"fedora":              {Candy: []string{}},
@@ -1130,7 +1134,7 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 		for n := range result {
 			names = append(names, n)
 		}
-		sortStrings(names)
+		kit.SortStrings(names)
 		return names
 	}() {
 		img := result[name]
@@ -1185,7 +1189,7 @@ func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 		"c": {Name: "c", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name: "fedora", Base: "ext:fedora", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
@@ -1236,7 +1240,7 @@ func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 	}
 
 	// Find the auto-intermediate that contains candy "a" rooted at arch.
-	var archInter *ResolvedBox
+	var archInter *buildkit.ResolvedBox
 	for _, img := range result {
 		if !img.Auto {
 			continue
@@ -1282,14 +1286,14 @@ func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 		"c": {Name: "c", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"cachyos": {
 			Name: "cachyos", Base: "ext:cachyos", IsExternalBase: true,
 			Candy: []string{}, Tag: "v1", Registry: "r",
 			FullTag: "r/cachyos:v1", Pkg: "pac",
 			Distro:       []string{"cachyos", "arch"},
 			BuildFormats: []string{"pac"},
-			Builder:      BuilderMap{"aur": "arch-builder"},
+			Builder:      buildkit.BuilderMap{"aur": "arch-builder"},
 		},
 		"cachyos-a-b": {
 			Name: "cachyos-a-b", Base: "cachyos", IsExternalBase: false,
@@ -1324,7 +1328,7 @@ func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 	}
 
 	// Find the auto-intermediate that hoists candy "a" rooted at cachyos.
-	var inter *ResolvedBox
+	var inter *buildkit.ResolvedBox
 	for _, img := range result {
 		if img.Auto && img.Base == "cachyos" {
 			inter = img
@@ -1354,7 +1358,7 @@ func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 	}
 }
 
-func resultNames(m map[string]*ResolvedBox) []string {
+func resultNames(m map[string]*buildkit.ResolvedBox) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

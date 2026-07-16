@@ -98,14 +98,14 @@ func stampBundleDescents(uf *UnifiedFile) {
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.
 func resolveTreeRoot(dir string) (map[string]spec.BundleNode, error) {
-	var projectDC *BundleConfig
+	var projectDC *deploykit.BundleConfig
 	if uf, ok, err := LoadUnified(dir); err != nil {
 		return nil, err
 	} else if ok && uf != nil {
 		projectDC = uf.ProjectBundleConfig()
 	}
 	localDC, _ := deploykit.LoadBundleConfig()
-	merged := MergeDeployConfigs(projectDC, localDC)
+	merged := deploykit.MergeDeployConfigs(projectDC, localDC)
 	if merged == nil || merged.Bundle == nil {
 		return nil, nil
 	}

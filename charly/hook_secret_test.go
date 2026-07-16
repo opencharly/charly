@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestResolveHookSecretEnv verifies that credential-backed secret_accept /

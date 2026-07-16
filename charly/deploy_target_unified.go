@@ -20,6 +20,9 @@ package main
 
 import (
 	"context"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -48,8 +51,8 @@ type DeployContext struct {
 	// dispatchNode (loadConfigForDeploy). Reused by each Add so the
 	// construction matches what dispatchNode compiled plans against.
 	Cfg        *Config
-	DistroCfg  *DistroConfig
-	BuilderCfg *BuilderConfig
+	DistroCfg  *buildkit.DistroConfig
+	BuilderCfg *buildkit.BuilderConfig
 
 	// Base is the resolved primary base — the image name for pod/k8s,
 	// or the deploy path for target-only kinds (local/vm/android).
@@ -80,14 +83,14 @@ type UnifiedDeployTarget interface {
 	// is also the sole plumbing point for the `inside:` cross-ref
 	// (a target=host deployment with inside: arch-vm resolves its
 	// executor as NestedExecutor(ResolveTarget(arch-vm).Executor())).
-	Executor() DeployExecutor
+	Executor() deploykit.DeployExecutor
 
 	// Add applies the given plans to the target. Equivalent to
 	// `charly bundle add <name>`. Idempotent: re-applying the same plan
 	// is safe. dctx carries the dispatch-merged node + loaded configs;
 	// the adapter constructs its live embedded target from it (never
 	// re-reading the node from disk — see DeployContext).
-	Add(ctx context.Context, dctx *DeployContext, plans []*InstallPlan, opts EmitOpts) error
+	Add(ctx context.Context, dctx *DeployContext, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error
 
 	// Del reverses every candy currently recorded for this target
 	// and removes the deploy record. Equivalent to `charly bundle del
@@ -104,7 +107,7 @@ type UnifiedDeployTarget interface {
 	// candy set and the plan set derived from fresh charly.yml.
 	// Equivalent to `charly bundle update <name>` (new command; today's
 	// `charly update` is image-focused and will be separate).
-	Update(ctx context.Context, plans []*InstallPlan, opts UpdateOpts) error
+	Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error
 }
 
 // LifecycleTarget extends UnifiedDeployTarget for live-runtime targets

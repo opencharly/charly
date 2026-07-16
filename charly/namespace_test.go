@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestImportList_Unmarshal covers the mixed-shape import list: bare strings
@@ -284,11 +287,11 @@ fedora:
 	}
 }
 
-func keysOf(m map[string]*ResolvedBox) []string {
+func keysOf(m map[string]*buildkit.ResolvedBox) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
 		ks = append(ks, k)
 	}
-	sortStrings(ks)
+	kit.SortStrings(ks)
 	return ks
 }

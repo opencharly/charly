@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // The dumpsys-window focus extraction (parseCurrentFocus) + the `adb current-focus` /
@@ -16,7 +18,7 @@ import (
 // the rest of the heredoc-delivered script.
 func TestWrapContainerCommand(t *testing.T) {
 	script := "adb shell dumpsys window > /tmp/f\necho done"
-	got := wrapContainerCommand(script)
+	got := kit.WrapContainerCommand(script)
 	want := "{ adb shell dumpsys window > /tmp/f\necho done\n} </dev/null"
 	if got != want {
 		t.Errorf("wrapContainerCommand()\n got=%q\nwant=%q", got, want)

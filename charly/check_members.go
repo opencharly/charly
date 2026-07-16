@@ -30,10 +30,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -132,8 +133,8 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // connects to the driver's endpoint (via their out-of-process plugins). ${HOST:<member>}
 // addressing of the SUBJECT rides in via RunnerConfig.HostVars (the kit.Runner.EffectiveEnv
 // overlay), independent of which venue is active.
-func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, DeployExecutor, error) {
-	return func(target string) (*kit.CheckVarResolver, DeployExecutor, error) {
+func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
+	return func(target string) (*kit.CheckVarResolver, deploykit.DeployExecutor, error) {
 		venue, err := resolveCheckVenue(target, instance)
 		if err != nil {
 			return nil, nil, err
@@ -159,7 +160,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 		projectCfg = uf.ProjectConfig()
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check live on:"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(name, instance)]; ok {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(name, instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[name]; ok {
 			deployOverlay = &entry

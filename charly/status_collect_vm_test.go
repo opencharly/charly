@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -44,7 +45,7 @@ func TestVMCollector_Collect(t *testing.T) {
 	cases := []struct {
 		name    string
 		domains []domainInfo
-		deploy  *BundleConfig
+		deploy  *deploykit.BundleConfig
 		want    []spec.DeploymentStatus
 	}{
 		{
@@ -83,7 +84,7 @@ func TestVMCollector_Collect(t *testing.T) {
 			domains: []domainInfo{
 				{Name: "charly-cachyos-gpu", State: "running"},
 			},
-			deploy: &BundleConfig{
+			deploy: &deploykit.BundleConfig{
 				Bundle: map[string]spec.BundleNode{
 					"vm:cachyos-gpu": {
 						Target:  "vm",
@@ -108,7 +109,7 @@ func TestVMCollector_Collect(t *testing.T) {
 			domains: []domainInfo{
 				{Name: "charly-k3s-vm", State: "running"},
 			},
-			deploy: &BundleConfig{
+			deploy: &deploykit.BundleConfig{
 				Bundle: map[string]spec.BundleNode{
 					// deploy KEY (check-k3s-vm) != vm entity (k3s-vm).
 					"check-k3s-vm": {

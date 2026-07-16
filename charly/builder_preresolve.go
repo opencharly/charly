@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -45,7 +46,7 @@ import (
 // externalized plugin) is skipped — collectBuilderContext gives it base-only context. An
 // externalized builder that cannot be connected fails LOUDLY (R4 — never a silent incomplete
 // teardown).
-func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]*Candy, img *ResolvedBox) (map[string]builderPreresolved, error) {
+func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]*Candy, img *buildkit.ResolvedBox) (map[string]deploykit.BuilderPreresolved, error) {
 	needed := deploykit.DetectExternalizedBuilders(order, candyModelMap(layers), externalizedBuilders, img)
 	if len(needed) == 0 {
 		return nil, nil
@@ -54,7 +55,7 @@ func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, ord
 		return nil, err
 	}
 
-	var out map[string]builderPreresolved
+	var out map[string]deploykit.BuilderPreresolved
 	for _, candyName := range order {
 		layer := layers[candyName]
 		if layer == nil {
@@ -62,7 +63,7 @@ func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, ord
 		}
 		for _, bName := range needed {
 			bDef := img.BuilderConfig.Builder[bName]
-			if bDef == nil || !candyNeedsBuilderStep(layer, bDef) {
+			if bDef == nil || !deploykit.CandyNeedsBuilderStep(layer, bDef) {
 				continue
 			}
 			prov, ok := providerRegistry.ResolveBuilder(bName)
@@ -78,9 +79,9 @@ func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, ord
 				return nil, fmt.Errorf("candy %q: builder %q reverse: %w", candyName, bName, err)
 			}
 			if out == nil {
-				out = map[string]builderPreresolved{}
+				out = map[string]deploykit.BuilderPreresolved{}
 			}
-			out[builderCtxKey(layer.Name, bName)] = builderPreresolved{Context: collected, Reverse: reverse}
+			out[deploykit.BuilderCtxKey(layer.Name, bName)] = deploykit.BuilderPreresolved{Context: collected, Reverse: reverse}
 		}
 	}
 	return out, nil
@@ -143,13 +144,13 @@ func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words
 // builder-specific stage-context keys. The host fills the generic descriptor it can derive
 // without builder-specific knowledge: the candy/builder/home always, plus the builder's
 // detect-config package section (Packages/Replaces) used today only by aur.
-func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer *Candy, bDef *BuilderDef, img *ResolvedBox) (map[string]any, error) {
+func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer *Candy, bDef *BuilderDef, img *buildkit.ResolvedBox) (map[string]any, error) {
 	in := spec.BuilderCollectInput{Candy: layer.Name, Builder: word, Home: img.Home}
 	if bDef.DetectConfig != "" {
 		if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
 			in.Packages = append([]string(nil), sec.Packages...)
 			if raw, ok := sec.Raw["replaces"]; ok {
-				if list, ok := stringSliceFromYAML(raw); ok {
+				if list, ok := deploykit.StringSliceFromYAML(raw); ok {
 					in.Replaces = list
 				}
 			}
@@ -172,7 +173,7 @@ func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer
 
 // invokeBuilderReverse Invokes the builder plugin's OpReverse with the resolved stage context,
 // returning the teardown ops the host stashes on BuilderStep.PreResolvedReverse.
-func invokeBuilderReverse(ctx context.Context, prov Provider, word, candy string, stageContext map[string]any) ([]ReverseOp, error) {
+func invokeBuilderReverse(ctx context.Context, prov Provider, word, candy string, stageContext map[string]any) ([]spec.ReverseOp, error) {
 	params, err := marshalJSON(spec.BuilderReverseInput{Candy: candy, Builder: word, Context: stageContext})
 	if err != nil {
 		return nil, fmt.Errorf("marshal reverse input: %w", err)

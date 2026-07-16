@@ -66,7 +66,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 				step := plan[i]
 				e.Steps = append(e.Steps, spec.FeatureStep{
 					Index:   i,
-					Keyword: string(keywordOf(&step)),
+					Keyword: string(kit.KeywordOf(&step)),
 					Text:    step.KeywordText(),
 					IsAgent: step.IsAgent(),
 					IsCheck: step.Check != "" || step.AgentCheck != "",

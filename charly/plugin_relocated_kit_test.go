@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // relocatedVerbCase is one sub-case of a relocated-kit-verb dispatch test: a fakeExecutor

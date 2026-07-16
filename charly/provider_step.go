@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // StepProvider is the typed in-process form of an InstallStep Provider: it emits one step
@@ -28,7 +31,7 @@ type StepProvider interface {
 	// the plugin verb's distros, etc.) the host reconstructs from the cached overlay Generator.
 	// The fragment includes any trailing newline; an empty return is a no-op (a deploy-only
 	// step records nothing).
-	EmitOCI(step InstallStep, plan *InstallPlan, build buildEngineContext) (string, error)
+	EmitOCI(step spec.InstallStep, plan *deploykit.InstallPlan, build buildEngineContext) (string, error)
 }
 
 // builtinStepBase supplies the in-proc-only Provider half (Class + a stub Invoke)
@@ -41,7 +44,7 @@ func (builtinStepBase) Invoke(context.Context, *Operation) (*Result, error) {
 }
 
 // stepProviderFor resolves an InstallStep kind to its StepProvider.
-func stepProviderFor(kind StepKind) (StepProvider, bool) {
+func stepProviderFor(kind spec.StepKind) (StepProvider, bool) {
 	prov, ok := providerRegistry.ResolveStep(string(kind))
 	if !ok {
 		return nil, false
@@ -78,19 +81,19 @@ func stepProviderFor(kind StepKind) (StepProvider, bool) {
 //     RICHEST Generator.emitTasks per-verb render pipeline — COPY staging + op coalescing). See
 //     charly/step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder,
 //     stepEmitLocalPkgInstall, stepEmitOp).
-var pluginEmitStepWords = map[StepKind]string{
-	StepKindFile:            "file",
-	StepKindShellHook:       "shell-hook",
-	StepKindShellSnippet:    "shell-snippet",
-	StepKindServicePackaged: "service-packaged",
-	StepKindServiceCustom:   "service-custom",
-	StepKindRepoChange:      "repo-change",
-	StepKindApkInstall:      "apk-install",
-	StepKindReboot:          "reboot",
-	StepKindSystemPackages:  "system-packages",
-	StepKindBuilder:         "builder",
-	StepKindLocalPkgInstall: "local-pkg-install",
-	StepKindOp:              "op",
+var pluginEmitStepWords = map[spec.StepKind]string{
+	spec.StepKindFile:            "file",
+	spec.StepKindShellHook:       "shell-hook",
+	spec.StepKindShellSnippet:    "shell-snippet",
+	spec.StepKindServicePackaged: "service-packaged",
+	spec.StepKindServiceCustom:   "service-custom",
+	spec.StepKindRepoChange:      "repo-change",
+	spec.StepKindApkInstall:      "apk-install",
+	spec.StepKindReboot:          "reboot",
+	spec.StepKindSystemPackages:  "system-packages",
+	spec.StepKindBuilder:         "builder",
+	spec.StepKindLocalPkgInstall: "local-pkg-install",
+	spec.StepKindOp:              "op",
 }
 
 // checkStepProviderBijection asserts every InstallStep kind is SERVED. A kind in
@@ -101,7 +104,7 @@ var pluginEmitStepWords = map[StepKind]string{
 // checkVerbProviderBijection relies on).
 func checkStepProviderBijection() error {
 	var missing []string
-	for _, k := range allStepKinds {
+	for _, k := range deploykit.AllStepKinds {
 		if word, isPlugin := pluginEmitStepWords[k]; isPlugin {
 			p, ok := providerRegistry.resolve(ClassStep, word)
 			if !ok {

@@ -3,6 +3,9 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestBuildStartArgs(t *testing.T) {
@@ -50,7 +53,7 @@ func TestBuildStartArgsWithPorts(t *testing.T) {
 }
 
 func TestBuildStartArgsWithVolumes(t *testing.T) {
-	volumes := []VolumeMount{
+	volumes := []deploykit.VolumeMount{
 		{VolumeName: "charly-ollama-models", ContainerPath: "/home/user/.ollama/models"},
 	}
 	args := buildStartArgs("docker", "ghcr.io/opencharly/ollama:latest", 1000, 1000, nil, "charly-ollama", volumes, nil, false, "127.0.0.1", nil, SecurityConfig{}, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")
@@ -107,7 +110,7 @@ func TestContainerName(t *testing.T) {
 		{"ubuntu", "charly-ubuntu"},
 	}
 	for _, tt := range tests {
-		got := containerName(tt.image)
+		got := kit.ContainerName(tt.image)
 		if got != tt.want {
 			t.Errorf("containerName(%q) = %q, want %q", tt.image, got, tt.want)
 		}
@@ -125,7 +128,7 @@ func TestContainerNameInstance(t *testing.T) {
 		{"ollama", "gpu2", "charly-ollama-gpu2"},
 	}
 	for _, tt := range tests {
-		got := containerNameInstance(tt.image, tt.instance)
+		got := kit.ContainerNameInstance(tt.image, tt.instance)
 		if got != tt.want {
 			t.Errorf("containerNameInstance(%q, %q) = %q, want %q", tt.image, tt.instance, got, tt.want)
 		}

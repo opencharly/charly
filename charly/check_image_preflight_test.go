@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestResolveImageRefForEnsure_RemoteRef — `@github.com/...`

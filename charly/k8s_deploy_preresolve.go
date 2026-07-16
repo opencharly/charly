@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -46,7 +47,7 @@ var _ = func() bool {
 // overlay path. node may be nil (the Update path carries no DeployContext) — it
 // then re-resolves the deploy node from the tree by name. plans is unused: k8s does
 // NOT consume the InstallPlan IR (GenerateK8sKustomize reads caps + node + cluster).
-func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*InstallPlan) (json.RawMessage, error) {
+func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*deploykit.InstallPlan) (json.RawMessage, error) {
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
@@ -80,7 +81,7 @@ func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*InstallPl
 	// namespace, resolveLocalImageRef label-matches the local build) so BOTH
 	// ExtractMetadata AND the generated Deployment's container image name the real
 	// pulled/built image — never the bare authored ref ExtractMetadata can't find.
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, fmt.Errorf("deploy %q: resolving runtime: %w", name, err)
 	}
@@ -96,7 +97,7 @@ func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*InstallPl
 	var imageRef string
 	if node.Version != "" {
 		imageRef = leafName(authored) + ":" + node.Version
-		if !LocalImageExists(rt.RunEngine, imageRef) {
+		if !kit.LocalImageExists(rt.RunEngine, imageRef) {
 			return nil, fmt.Errorf("deploy %q: pinned image %q not present in local %s storage", name, imageRef, rt.RunEngine)
 		}
 	} else {

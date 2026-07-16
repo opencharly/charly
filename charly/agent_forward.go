@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // AgentForwardMounts holds the resolved bind mounts and env vars needed to
@@ -24,7 +26,7 @@ type AgentForwardMounts struct {
 //
 // Graceful degradation: logs warnings to stderr for missing sockets but
 // never returns errors — missing agents are silently skipped.
-func ResolveAgentForwarding(rt *ResolvedRuntime, deploy *spec.BundleNode, containerHome string) AgentForwardMounts {
+func ResolveAgentForwarding(rt *kit.ResolvedRuntime, deploy *spec.BundleNode, containerHome string) AgentForwardMounts {
 	var result AgentForwardMounts
 
 	// SSH agent forwarding

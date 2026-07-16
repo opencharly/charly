@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"slices"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -41,7 +43,7 @@ const (
 // act-mode op needs an explicit `uninstall:` or is reversed via plan
 // teardown (live verbs) — enforced in validation.
 type VerbSpec struct {
-	Contexts   []ExecContext
+	Contexts   []deploykit.ExecContext
 	DefaultDo  DoMode
 	Reversible bool
 	// LowersTo is gone — the ONLY verbs that lowered into a typed install step
@@ -52,13 +54,13 @@ type VerbSpec struct {
 }
 
 // HasContext reports whether the verb is legal in ctx.
-func (s VerbSpec) HasContext(ctx ExecContext) bool {
+func (s VerbSpec) HasContext(ctx deploykit.ExecContext) bool {
 	return slices.Contains(s.Contexts, ctx)
 }
 
 var (
-	ctxBuildDeploy        = []ExecContext{CtxBuild, CtxDeploy}
-	ctxBuildDeployRuntime = []ExecContext{CtxBuild, CtxDeploy, CtxRuntime}
+	ctxBuildDeploy        = []deploykit.ExecContext{deploykit.CtxBuild, deploykit.CtxDeploy}
+	ctxBuildDeployRuntime = []deploykit.ExecContext{deploykit.CtxBuild, deploykit.CtxDeploy, deploykit.CtxRuntime}
 )
 
 // VerbCatalog is the single source of truth for every verb's legality, default
@@ -233,11 +235,11 @@ func opEffectiveDo(c *spec.Op) DoMode {
 
 // EffectiveContexts returns the op's resolved execution contexts: an explicit
 // Context wins, else the verb's VerbCatalog default, else nil.
-func opEffectiveContexts(c *spec.Op) []ExecContext {
+func opEffectiveContexts(c *spec.Op) []deploykit.ExecContext {
 	if len(c.Context) > 0 {
-		out := make([]ExecContext, 0, len(c.Context))
+		out := make([]deploykit.ExecContext, 0, len(c.Context))
 		for _, s := range c.Context {
-			out = append(out, ExecContext(s))
+			out = append(out, deploykit.ExecContext(s))
 		}
 		return out
 	}
@@ -250,6 +252,10 @@ func opEffectiveContexts(c *spec.Op) []ExecContext {
 }
 
 // InContext reports whether the op is legal in ctx per its effective contexts.
-func opInContext(c *spec.Op, ctx ExecContext) bool {
+func opInContext(c *spec.Op, ctx deploykit.ExecContext) bool {
 	return slices.Contains(opEffectiveContexts(c), ctx)
 }
+
+// Inject the VerbCatalog-coupled op-context classifier into deploykit's swappable seam
+// (deploykit itself holds no VerbCatalog — that vocabulary is core, reserved_registry.go).
+func init() { deploykit.OpInContext = opInContext }

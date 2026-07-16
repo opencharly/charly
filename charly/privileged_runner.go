@@ -8,6 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // PrivilegedRun describes a single privileged-container invocation:
@@ -113,7 +117,7 @@ func RunPrivileged(p PrivilegedRun) error {
 	// R3, so the next bootstrap-builder consumer doesn't trip the same
 	// gap. Surfaced by the 2026-05 cachyos cutover.
 	if useSudo {
-		if err := TransferToRootful(p.Image); err != nil {
+		if err := kit.TransferToRootful(p.Image); err != nil {
 			if hostStaging != "" {
 				_ = os.RemoveAll(hostStaging)
 			}
@@ -172,7 +176,7 @@ func copyFileBytes(src, dst string) error {
 // charly settings (typically auto|machine|sudo|native). Errors are non-fatal
 // — caller should fall back to plain `podman` invocation.
 func readEngineRootful() (string, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", err
 	}
@@ -183,12 +187,12 @@ func readEngineRootful() (string, error) {
 // bootstrap builder against a render context. The template's available
 // fields are documented at the call site (charly/build.go runPrivilegedBuilders).
 func renderBootstrapScript(builder *BuilderDef, ctx any) (string, error) {
-	tmpl := builderPhaseTemplate(builder, PhaseInstall, VenueContainerBuilder)
+	tmpl := builderPhaseTemplate(builder, spec.PhaseInstall, spec.VenueContainerBuilder)
 	if tmpl == "" {
 		return "", fmt.Errorf("builder has no phase.install.container template")
 	}
 	var buf bytes.Buffer
-	t, err := template.New("bootstrap-script").Funcs(templateFuncs).Parse(tmpl)
+	t, err := template.New("bootstrap-script").Funcs(buildkit.TemplateFuncs).Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("parsing bootstrap script template: %w", err)
 	}

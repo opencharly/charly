@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/enginekit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -98,7 +99,7 @@ func TestParsePortStrings(t *testing.T) {
 
 func TestCollector_LookupDeploy_KeyShapes(t *testing.T) {
 	c := &Collector{
-		deploy: &BundleConfig{
+		deploy: &deploykit.BundleConfig{
 			Bundle: map[string]spec.BundleNode{
 				"selkies-desktop":      {Port: []string{"3000:3000"}},
 				"selkies-desktop/work": {Port: []string{"3001:3000"}, Tunnel: &spec.TunnelYAML{Provider: "tailscale", Private: spec.PortScope{All: true}}},

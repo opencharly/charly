@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // The E3 perf go/no-go gate, locked as a test (CLAUDE.md RDD; the

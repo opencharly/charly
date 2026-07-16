@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // Tests for the new PhaseSet / PhaseTemplates lookup added for the
@@ -16,13 +18,13 @@ func TestFormatDefPhaseTemplateLegacyFallback(t *testing.T) {
 	f := &FormatDef{InstallTemplate: "RUN dnf install -y {{.Packages}}"}
 
 	// (install, container) falls back to InstallTemplate.
-	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != f.InstallTemplate {
+	if got := formatPhaseTemplate(f, spec.PhaseInstall, spec.VenueContainerBuilder); got != f.InstallTemplate {
 		t.Errorf("legacy fallback for (install, container) = %q, want %q", got, f.InstallTemplate)
 	}
 	// All other phase/venue combinations return "" (no legacy equivalent).
-	for _, p := range []Phase{PhasePrepare, PhaseInstall, PhaseCleanup} {
-		for _, v := range []Venue{VenueHostNative, VenueContainerBuilder} {
-			if p == PhaseInstall && v == VenueContainerBuilder {
+	for _, p := range []spec.Phase{spec.PhasePrepare, spec.PhaseInstall, spec.PhaseCleanup} {
+		for _, v := range []spec.Venue{spec.VenueHostNative, spec.VenueContainerBuilder} {
+			if p == spec.PhaseInstall && v == spec.VenueContainerBuilder {
 				continue
 			}
 			if got := formatPhaseTemplate(f, p, v); got != "" {
@@ -48,29 +50,29 @@ func TestFormatDefPhaseTemplateNewPathPreferred(t *testing.T) {
 	}
 
 	// New path wins over legacy for (install, container).
-	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != "RUN new-container" {
+	if got := formatPhaseTemplate(f, spec.PhaseInstall, spec.VenueContainerBuilder); got != "RUN new-container" {
 		t.Errorf("(install, container) = %q, want RUN new-container", got)
 	}
 	// Host rendering comes from new path (no legacy equivalent).
-	if got := formatPhaseTemplate(f, PhaseInstall, VenueHostNative); got != "new-host" {
+	if got := formatPhaseTemplate(f, spec.PhaseInstall, spec.VenueHostNative); got != "new-host" {
 		t.Errorf("(install, host) = %q, want new-host", got)
 	}
 	// Prepare is only in new path.
-	if got := formatPhaseTemplate(f, PhasePrepare, VenueContainerBuilder); got != "RUN prepare-container" {
+	if got := formatPhaseTemplate(f, spec.PhasePrepare, spec.VenueContainerBuilder); got != "RUN prepare-container" {
 		t.Errorf("(prepare, container) = %q", got)
 	}
-	if got := formatPhaseTemplate(f, PhasePrepare, VenueHostNative); got != "prepare-host" {
+	if got := formatPhaseTemplate(f, spec.PhasePrepare, spec.VenueHostNative); got != "prepare-host" {
 		t.Errorf("(prepare, host) = %q", got)
 	}
 	// Cleanup phase is nil in PhaseSet → empty return.
-	if got := formatPhaseTemplate(f, PhaseCleanup, VenueContainerBuilder); got != "" {
+	if got := formatPhaseTemplate(f, spec.PhaseCleanup, spec.VenueContainerBuilder); got != "" {
 		t.Errorf("(cleanup, container) = %q, want empty", got)
 	}
 }
 
 func TestFormatDefPhaseTemplateNilSafe(t *testing.T) {
 	var f *FormatDef
-	if got := formatPhaseTemplate(f, PhaseInstall, VenueContainerBuilder); got != "" {
+	if got := formatPhaseTemplate(f, spec.PhaseInstall, spec.VenueContainerBuilder); got != "" {
 		t.Errorf("nil FormatDef lookup = %q, want empty", got)
 	}
 }
@@ -78,17 +80,17 @@ func TestFormatDefPhaseTemplateNilSafe(t *testing.T) {
 func TestBuilderDefPhaseTemplateLegacyFallbacks(t *testing.T) {
 	// Inline builder → falls back to InstallTemplate.
 	inline := &BuilderDef{Inline: true, InstallTemplate: "RUN cargo install"}
-	if got := builderPhaseTemplate(inline, PhaseInstall, VenueContainerBuilder); got != inline.InstallTemplate {
+	if got := builderPhaseTemplate(inline, spec.PhaseInstall, spec.VenueContainerBuilder); got != inline.InstallTemplate {
 		t.Errorf("inline builder fallback = %q, want %q", got, inline.InstallTemplate)
 	}
 	// A non-inline builder without phases → empty for both venues: multi-stage
 	// builders render via their plugin's OpResolve, not this fallback (the former
 	// in-core stage template is gone, C10).
 	multi := &BuilderDef{}
-	if got := builderPhaseTemplate(multi, PhaseInstall, VenueContainerBuilder); got != "" {
+	if got := builderPhaseTemplate(multi, spec.PhaseInstall, spec.VenueContainerBuilder); got != "" {
 		t.Errorf("multi-stage container fallback = %q, want empty", got)
 	}
-	if got := builderPhaseTemplate(multi, PhaseInstall, VenueHostNative); got != "" {
+	if got := builderPhaseTemplate(multi, spec.PhaseInstall, spec.VenueHostNative); got != "" {
 		t.Errorf("host-venue legacy = %q, want empty", got)
 	}
 }

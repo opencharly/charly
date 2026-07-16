@@ -12,6 +12,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // resolveSidecarContainer resolves the engine + container name of a deploy's
@@ -19,13 +21,13 @@ import (
 // `charly cmd --sidecar` / `charly logs --sidecar` / `charly cp --sidecar`
 // address, since the app-container resolver cannot reach it.
 func resolveSidecarContainer(box, instance, sidecar string) (engine, name string, err error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", "", err
 	}
 	boxName := resolveBoxName(box)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = EngineBinary(runEngine)
+	engine = kit.EngineBinary(runEngine)
 	name = SidecarContainerNameInstance(boxName, instance, sidecar)
 	if !containerRunning(engine, name) {
 		return "", "", fmt.Errorf("sidecar container %s is not running", name)
@@ -48,13 +50,13 @@ type VolumeListCmd struct {
 }
 
 func (c *VolumeListCmd) Run() error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
 	boxName := resolveBoxName(c.Box)
-	bin := EngineBinary(ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
-	prefix := containerNameInstance(boxName, c.Instance) + "-"
+	bin := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
+	prefix := kit.ContainerNameInstance(boxName, c.Instance) + "-"
 	out, err := exec.Command(bin, "volume", "ls", "--format", "{{.Name}}").Output()
 	if err != nil {
 		return fmt.Errorf("listing volumes: %w", err)
@@ -93,15 +95,15 @@ type VolumeResetCmd struct {
 }
 
 func (c *VolumeResetCmd) Run() error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
 	boxName := resolveBoxName(c.Box)
-	bin := EngineBinary(ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
+	bin := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
 	full := c.Name
 	if !strings.HasPrefix(full, "charly-") {
-		full = containerNameInstance(boxName, c.Instance) + "-" + c.Name
+		full = kit.ContainerNameInstance(boxName, c.Instance) + "-" + c.Name
 	}
 	if out, err := exec.Command(bin, "volume", "rm", full).CombinedOutput(); err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -165,7 +167,7 @@ type ListTagsCmd struct {
 }
 
 func (c *ListTagsCmd) Run() error {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
@@ -236,7 +238,7 @@ func invalidateImageTags(engine, glob string, dryRun bool) ([]string, error) {
 				removed = append(removed, t.Ref)
 				continue
 			}
-			if err := exec.Command(EngineBinary(engine), "rmi", t.Ref).Run(); err != nil {
+			if err := exec.Command(kit.EngineBinary(engine), "rmi", t.Ref).Run(); err != nil {
 				continue // in-use backstop — engine refuses, same as retention
 			}
 			removed = append(removed, t.Ref)

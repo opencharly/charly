@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -45,7 +46,7 @@ func hostBuildSettings(_ context.Context, req spec.SettingsRequest, _ buildEngin
 		}
 		return spec.SettingsReply{}, nil
 	case "path":
-		path, err := RuntimeConfigPath()
+		path, err := kit.RuntimeConfigPath()
 		if err != nil {
 			return spec.SettingsReply{Error: err.Error()}, nil
 		}
@@ -64,7 +65,7 @@ func resolveSettingsGet(key string) (string, error) {
 	}
 	switch key {
 	case "engine.build", "engine.run", "engine.rootful":
-		if rt, err := ResolveRuntime(); err == nil {
+		if rt, err := kit.ResolveRuntime(); err == nil {
 			switch key {
 			case "engine.build":
 				return rt.BuildEngine, nil

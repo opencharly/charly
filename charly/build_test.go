@@ -1,14 +1,16 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestFilterImages(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name:           "fedora",
 			IsExternalBase: true,
@@ -38,7 +40,7 @@ func TestFilterImages(t *testing.T) {
 }
 
 func TestFilterImagesUnknown(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {Name: "fedora", IsExternalBase: true},
 	}
 	_, err := filterBox([]string{"fedora"}, []string{"nonexistent"}, images)
@@ -48,7 +50,7 @@ func TestFilterImagesUnknown(t *testing.T) {
 }
 
 func TestFilterImagesIncludesBuilder(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name:           "builder",
 			IsExternalBase: true,
@@ -56,13 +58,13 @@ func TestFilterImagesIncludesBuilder(t *testing.T) {
 		"fedora": {
 			Name:           "fedora",
 			IsExternalBase: true,
-			Builder:        BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"app": {
 			Name:           "app",
 			Base:           "fedora",
 			IsExternalBase: false,
-			Builder:        BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
@@ -87,7 +89,7 @@ func TestFilterImagesIncludesBootstrapBuilder(t *testing.T) {
 	// `charly update --build versa` path silently skipped scheduling
 	// cachyos-pacstrap-builder, and runPrivilegedBootstrap then hard-failed
 	// at resolveLocalImageRef with "build the bootstrap_builder_image first".
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"arch": {
 			Name:           "arch",
 			IsExternalBase: true,

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -70,9 +72,9 @@ func (hostPlanGrammar) EffectiveDo(op *spec.Op) kit.DoMode { return opEffectiveD
 // InContext reports whether op is legal in the run's active context: runtime=true → the live
 // (runtime) context, runtime=false → the box (build) context.
 func (hostPlanGrammar) InContext(op *spec.Op, runtime bool) bool {
-	wantCtx := CtxBuild
+	wantCtx := deploykit.CtxBuild
 	if runtime {
-		wantCtx = CtxRuntime
+		wantCtx = deploykit.CtxRuntime
 	}
 	return opInContext(op, wantCtx)
 }

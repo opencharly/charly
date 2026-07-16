@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestResolveDeployRefPrefersPersistedOverlay guards the add_candy-on-pod
@@ -42,9 +43,9 @@ func TestResolveDeployRefPrefersPersistedOverlay(t *testing.T) {
 	}
 
 	// resolveDeployRef prefers the persisted overlay over the base-name resolution.
-	origExists := LocalImageExists
-	LocalImageExists = func(_, ref string) bool { return ref == overlayRef }
-	t.Cleanup(func() { LocalImageExists = origExists })
+	origExists := kit.LocalImageExists
+	kit.LocalImageExists = func(_, ref string) bool { return ref == overlayRef }
+	t.Cleanup(func() { kit.LocalImageExists = origExists })
 
 	c := &BoxConfigSetupCmd{Box: "check-addcandy-pod"}
 	_, imageRef := c.resolveDeployRef()

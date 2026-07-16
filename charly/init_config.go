@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"path/filepath"
 	"slices"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -44,7 +47,7 @@ func (ic *InitConfig) DetectCandyInit(ly *spec.CandyYAML, candyPath string) []st
 			result = append(result, initName)
 		}
 	}
-	sortStrings(result)
+	kit.SortStrings(result)
 	return result
 }
 
@@ -107,7 +110,7 @@ func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []s
 
 	caps, _ := AggregateCandyCapabilities(layers, candyOrder)
 	if caps == nil {
-		caps = &AggregatedCandyCaps{Provided: map[string]bool{}}
+		caps = &buildkit.AggregatedCandyCaps{Provided: map[string]bool{}}
 	}
 
 	// Auto-detect: find the init system that candies trigger
@@ -166,7 +169,7 @@ func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) 
 
 	caps, _ := AggregateCandyCapabilities(layers, candyOrder)
 	if caps == nil {
-		caps = &AggregatedCandyCaps{Provided: map[string]bool{}}
+		caps = &buildkit.AggregatedCandyCaps{Provided: map[string]bool{}}
 	}
 
 	result := make(map[string]*ResolvedInit)
@@ -198,7 +201,7 @@ func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) 
 
 // initDefRequirementsMet reports whether the init definition's
 // RequiresCapabilities are all present in the aggregated caps.
-func initDefRequirementsMet(def *ResolvedInit, caps *AggregatedCandyCaps) bool {
+func initDefRequirementsMet(def *ResolvedInit, caps *buildkit.AggregatedCandyCaps) bool {
 	if def == nil || len(def.RequiresCapability) == 0 {
 		return true
 	}
@@ -220,7 +223,7 @@ func initRenderManagementCommand(def *ResolvedInit, operation, serviceName strin
 		return "", fmt.Errorf("init system %q has no management command for %q", def.ManagementTool, operation)
 	}
 	ctx := ServiceCommandContext{Service: serviceName}
-	return RenderTemplate("mgmt-"+operation, tmplStr, ctx)
+	return buildkit.RenderTemplate("mgmt-"+operation, tmplStr, ctx)
 }
 
 // --- Loading ---
@@ -236,7 +239,7 @@ func (ic *InitConfig) InitNames() []string {
 	for name := range ic.Init {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	kit.SortStrings(names)
 	return names
 }
 

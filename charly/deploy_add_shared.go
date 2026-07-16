@@ -15,10 +15,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"maps"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -32,7 +34,7 @@ import (
 // Shared by the external substrate apply path AND each lifecycle hook's PrepareVenue
 // (vm: before the in-guest walk; pod: before the host-side overlay build) — the paths that
 // previously each ran CandyForPlan + ResolveSecretForCandy + InjectSecretsIntoPlans inline.
-func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string]string, error) {
+func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]*Candy, map[string]string, error) {
 	candyList, err := CandyForPlan(plans, dir, nil)
 	if err != nil {
 		return nil, nil, err
@@ -111,7 +113,7 @@ func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[st
 // Shared by the local deploy target.Add / the vm deploy's Add path. artifactKey is
 // ENTITY-scoped (the artifact retrieve dir + the shared per-VM k3s cluster cache/context);
 // deployName is the real per-deploy (domain) identity the k3s port-forward lookup keys off.
-func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts EmitOpts) error {
+func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts deploykit.EmitOpts) error {
 	if opts.DryRun {
 		return nil
 	}

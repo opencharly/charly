@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -291,7 +292,7 @@ func resolveSecretBackend() string {
 	if v := os.Getenv("CHARLY_SECRET_BACKEND"); v != "" {
 		return v
 	}
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return "auto"
 	}

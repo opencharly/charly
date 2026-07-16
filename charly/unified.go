@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -99,7 +101,7 @@ type UnifiedFile struct {
 	// the canonical singular surface; the wrapper's `Provides` migrates
 	// to UnifiedFile root (next field).
 	Bundle   map[string]spec.BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
-	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides *deploykit.ProvidesConfig  `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
 	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
@@ -213,7 +215,7 @@ type InlineCandy struct {
 // migrate_unified.go still references it for legacy migration history.
 type DeploymentsSection struct {
 	Defaults *spec.BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-	Provides *ProvidesConfig            `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides *deploykit.ProvidesConfig  `yaml:"provides,omitempty" json:"provides,omitempty"`
 	Box      map[string]spec.BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
 }
 
@@ -256,7 +258,7 @@ func gateSchemaVersion(root, version string) error {
 
 func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 	root := filepath.Join(dir, UnifiedFileName)
-	if !fileExists(root) {
+	if !kit.FileExists(root) {
 		return nil, false, nil
 	}
 	// F9 BOOTSTRAP PHASE: invoke bootstrap-phase plugins on the RAW root config bytes FIRST — before
@@ -274,7 +276,7 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 		var vdoc yaml.Node
 		if yaml.Unmarshal(data, &vdoc) == nil {
 			ver := ""
-			if vn := mapValue(mappingRoot(&vdoc), "version"); vn != nil {
+			if vn := kit.MapValue(kit.MappingRoot(&vdoc), "version"); vn != nil {
 				ver = vn.Value
 			}
 			if err := gateSchemaVersion(root, ver); err != nil {
@@ -483,7 +485,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 		parsed := ParseRemoteRef(ref)
 		version := parsed.Version
 		if version == "" {
-			branch, e := GitDefaultBranch(RepoGitURL(parsed.RepoPath))
+			branch, e := kit.GitDefaultBranch(kit.RepoGitURL(parsed.RepoPath))
 			if e != nil {
 				return "", "", fmt.Errorf("resolving default branch for %s: %w", parsed.RepoPath, e)
 			}
@@ -1094,23 +1096,23 @@ func decodePluginKindMap[T any](uf *UnifiedFile, kind string) map[string]*T {
 
 // ProjectDistroConfig returns the *DistroConfig equivalent (distro: section), decoding
 // the build vocabulary from the distro plugin kind (uf.PluginKinds via Distros()).
-func (uf *UnifiedFile) ProjectDistroConfig() *DistroConfig {
+func (uf *UnifiedFile) ProjectDistroConfig() *buildkit.DistroConfig {
 	distros := uf.Distros()
 	if len(distros) == 0 {
 		return nil
 	}
-	return &DistroConfig{Distro: distros}
+	return &buildkit.DistroConfig{Distro: distros}
 }
 
 // ProjectBuilderConfig returns the *BuilderConfig equivalent (builders: section),
 // decoding the build vocabulary from the builder plugin kind (uf.PluginKinds via
 // Builders()).
-func (uf *UnifiedFile) ProjectBuilderConfig() *BuilderConfig {
+func (uf *UnifiedFile) ProjectBuilderConfig() *buildkit.BuilderConfig {
 	builders := uf.Builders()
 	if len(builders) == 0 {
 		return nil
 	}
-	return &BuilderConfig{Builder: builders}
+	return &buildkit.BuilderConfig{Builder: builders}
 }
 
 // ProjectInitConfig returns the *InitConfig equivalent (inits: section), decoding the
@@ -1126,7 +1128,7 @@ func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
 // ProjectBundleConfig returns the *BundleConfig equivalent (deployments: section
 // of the authored file, independent of any per-machine ~/.config/charly/charly.yml
 // which remains loaded separately by LoadBundleConfig).
-func (uf *UnifiedFile) ProjectBundleConfig() *BundleConfig {
+func (uf *UnifiedFile) ProjectBundleConfig() *deploykit.BundleConfig {
 	if uf == nil {
 		return nil
 	}
@@ -1134,7 +1136,7 @@ func (uf *UnifiedFile) ProjectBundleConfig() *BundleConfig {
 	if len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0 {
 		return nil
 	}
-	return &BundleConfig{
+	return &deploykit.BundleConfig{
 		Provides: uf.Provides,
 		Bundle:   uf.Bundle,
 		Sidecar:  sidecars,
@@ -1204,13 +1206,13 @@ func synthesizeInlineCandy(name string, il *InlineCandy, rootDir string) *Candy 
 	// can be factored out alongside Part G's refactor.
 	populateCandyFromYAML(layer, &il.CandyYAML)
 	// Install-file detection against SourceDir.
-	layer.HasPixiToml = fileExists(filepath.Join(layer.SourceDir, "pixi.toml"))
-	layer.HasPyprojectToml = fileExists(filepath.Join(layer.SourceDir, "pyproject.toml"))
-	layer.HasEnvironmentYml = fileExists(filepath.Join(layer.SourceDir, "environment.yml"))
-	layer.HasPackageJson = fileExists(filepath.Join(layer.SourceDir, "package.json"))
-	layer.HasCargoToml = fileExists(filepath.Join(layer.SourceDir, "Cargo.toml"))
-	layer.HasSrcDir = dirExists(filepath.Join(layer.SourceDir, "src"))
-	layer.HasPixiLock = fileExists(filepath.Join(layer.SourceDir, "pixi.lock"))
+	layer.HasPixiToml = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.toml"))
+	layer.HasPyprojectToml = kit.FileExists(filepath.Join(layer.SourceDir, "pyproject.toml"))
+	layer.HasEnvironmentYml = kit.FileExists(filepath.Join(layer.SourceDir, "environment.yml"))
+	layer.HasPackageJson = kit.FileExists(filepath.Join(layer.SourceDir, "package.json"))
+	layer.HasCargoToml = kit.FileExists(filepath.Join(layer.SourceDir, "Cargo.toml"))
+	layer.HasSrcDir = kit.DirExists(filepath.Join(layer.SourceDir, "src"))
+	layer.HasPixiLock = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.lock"))
 	svcFiles, _ := filepath.Glob(filepath.Join(layer.SourceDir, "*.service"))
 	if len(svcFiles) > 0 {
 		layer.serviceFiles = svcFiles
@@ -1232,9 +1234,9 @@ func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 	layer.Info = deploykit.DescriptionInfo(ly.Description)
 	layer.Plugin = ly.Plugin
 
-	layer.Require = toCandyRefs(ly.Require)
-	layer.IncludedCandy = toCandyRefs(ly.Candy)
-	layer.BakePlugin = toCandyRefs(ly.BakePlugin)
+	layer.Require = deploykit.ToCandyRefs(ly.Require)
+	layer.IncludedCandy = deploykit.ToCandyRefs(ly.Candy)
+	layer.BakePlugin = deploykit.ToCandyRefs(ly.BakePlugin)
 
 	// `bake_plugin: <ref>` IMPLIES `require: <ref>`. A baked plugin candy is
 	// host-built and COPYed into every composing image (generate.go
@@ -1287,10 +1289,10 @@ func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 		if env == nil {
 			env = make(map[string]string)
 		}
-		layer.envConfig = &EnvConfig{Vars: env, PathAppend: ly.PathAppend}
+		layer.envConfig = &kit.EnvConfig{Vars: env, PathAppend: ly.PathAppend}
 	}
 	if ly.Route != nil {
-		layer.route = &RouteConfig{Host: ly.Route.Host, Port: fmt.Sprintf("%d", ly.Route.Port)}
+		layer.route = &deploykit.RouteConfig{Host: ly.Route.Host, Port: fmt.Sprintf("%d", ly.Route.Port)}
 	}
 	layer.volumes = ly.Volume
 	layer.aliases = ly.Alias

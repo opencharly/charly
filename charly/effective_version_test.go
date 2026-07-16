@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestComputeEffectiveVersions covers the image-version derivation that feeds
@@ -16,7 +18,7 @@ func TestComputeEffectiveVersions(t *testing.T) {
 		"a": {Name: "a", Version: "2026.100.0000"},
 		"b": {Name: "b", Version: "2026.200.0000"}, // newest candy
 	}
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		// dedicated version wins over the (newer) candy versions.
 		"dedicated": {Name: "dedicated", Version: "2026.050.0000", Candy: []string{"a", "b"}, IsExternalBase: true, Base: "quay.io/x:1"},
 		// no dedicated version -> highest candy version (b = 2026.200.0000).
@@ -45,7 +47,7 @@ func TestComputeEffectiveVersions(t *testing.T) {
 
 	// A candy bump propagates to a deriving image's identity.
 	layers["b"].Version = "2026.400.0000"
-	g2 := &Generator{Boxes: map[string]*ResolvedBox{
+	g2 := &Generator{Boxes: map[string]*buildkit.ResolvedBox{
 		"derived": {Name: "derived", Candy: []string{"a", "b"}, IsExternalBase: true, Base: "quay.io/x:1"},
 	}, Candies: layers}
 	if err := g2.computeEffectiveVersions(); err != nil {
@@ -57,7 +59,7 @@ func TestComputeEffectiveVersions(t *testing.T) {
 
 	// Hard error: candyless external-base image with no version (no fallback).
 	gErr := &Generator{
-		Boxes:   map[string]*ResolvedBox{"orphan": {Name: "orphan", IsExternalBase: true, Base: "quay.io/x:1"}},
+		Boxes:   map[string]*buildkit.ResolvedBox{"orphan": {Name: "orphan", IsExternalBase: true, Base: "quay.io/x:1"}},
 		Candies: map[string]*Candy{},
 	}
 	if err := gErr.computeEffectiveVersions(); err == nil {
@@ -96,7 +98,7 @@ func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 		"consumer-candy": consumer,
 		"plugin-baked":   plugin,
 	}
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		// An image composing ONLY the consumer candy. Its EffectiveVersion must
 		// reflect the baked plugin's (higher) version, reached via the implied require.
 		"img": {Name: "img", Candy: []string{"consumer-candy"}, IsExternalBase: true, Base: "quay.io/x:1"},
@@ -111,7 +113,7 @@ func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 
 	// Bumping the baked plugin's version bumps the composing image's identity.
 	plugin.Version = "2026.300.0000"
-	g2 := &Generator{Boxes: map[string]*ResolvedBox{
+	g2 := &Generator{Boxes: map[string]*buildkit.ResolvedBox{
 		"img": {Name: "img", Candy: []string{"consumer-candy"}, IsExternalBase: true, Base: "quay.io/x:1"},
 	}, Candies: layers}
 	if err := g2.computeEffectiveVersions(); err != nil {

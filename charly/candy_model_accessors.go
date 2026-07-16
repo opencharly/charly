@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // candy_model_accessors.go — field accessors on the runtime Candy so it satisfies
@@ -35,6 +37,6 @@ func (l *Candy) HasFile(filename string) bool {
 	case "Cargo.toml":
 		return l.HasCargoToml
 	default:
-		return fileExists(filepath.Join(l.SourceDir, filename))
+		return kit.FileExists(filepath.Join(l.SourceDir, filename))
 	}
 }

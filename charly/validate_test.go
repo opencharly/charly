@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_test.go — after the validate ENGINE moved to candy/plugin-box (task #60), this file keeps

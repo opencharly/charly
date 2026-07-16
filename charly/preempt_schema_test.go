@@ -59,8 +59,8 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if deploykit.PreemptEffectiveStop(listForm.Preemptible) != spec.PreemptStopShutdown {
 		t.Errorf("default stop = %q, want shutdown", deploykit.PreemptEffectiveStop(listForm.Preemptible))
 	}
-	if preemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
-		t.Errorf("default restore = %q, want always", preemptEffectiveRestore(listForm.Preemptible))
+	if deploykit.PreemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
+		t.Errorf("default restore = %q, want always", deploykit.PreemptEffectiveRestore(listForm.Preemptible))
 	}
 
 	// Block form.
@@ -69,8 +69,8 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if err := decodeViaCUEForTest(t, blockYAML, &blockForm); err != nil {
 		t.Fatalf("block unmarshal: %v", err)
 	}
-	if preemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
-		t.Errorf("block restore = %q, want on-success", preemptEffectiveRestore(blockForm.Preemptible))
+	if deploykit.PreemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
+		t.Errorf("block restore = %q, want on-success", deploykit.PreemptEffectiveRestore(blockForm.Preemptible))
 	}
 
 	// Scalar (e.g. `preemptible: true`) is rejected — a holder must name what

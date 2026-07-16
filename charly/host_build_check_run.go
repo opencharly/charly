@@ -94,7 +94,7 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.Che
 // The reply carries []StepResult verbatim so the plugin's kit formatters produce byte-identical
 // output to the former in-core CheckBoxCmd.
 func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -176,7 +176,7 @@ func hostCheckRunFeatureBox(_ context.Context, req spec.CheckRunRequest) (kit.Ch
 // against a disposable container, deterministic steps only (SkipDeterministicRun skips the
 // build-time install run: steps). Shared by the atom arm and the CLI shell (BoxFeatureRunCmd).
 func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -253,7 +253,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	}
 	var deployOverlay *spec.BundleNode
 	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(req.Name, req.Instance)]; ok {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {
 			deployOverlay = &entry
@@ -270,7 +270,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	}
 	rctx := resolveCheckRunnerContext(req.Name, dir, projectCfg)
 	env, hasRuntime := resolverEnv(resolver)
-	var grader StepGrader
+	var grader kit.StepGrader
 	if !req.NoAgent {
 		ai, aerr := resolveGraderAgent(dir, req.Agent)
 		if aerr != nil {
@@ -279,7 +279,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		grader = &kit.AgentGrader{Agent: ai, Target: req.Name, Instance: req.Instance, Timeout: req.Timeout}
 	}
 	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:                 ContainerChain(engine, containerName),
+		Exec:                 deploykit.ContainerChain(engine, containerName),
 		Mode:                 RunModeLive,
 		Env:                  env,
 		HasRuntime:           hasRuntime,

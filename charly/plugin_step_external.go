@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -25,14 +26,14 @@ import (
 // builtin (command + the ProvisionActor verbs) stays on the OpStep path. Mirrors the
 // build-context BuildEmitter marker interface (provider_verb.go).
 type executorInvoker interface {
-	InvokeWithExecutor(ctx context.Context, op *Operation, exec DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
+	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
 
 // externalPluginStepProvider is the StepKindExternalPlugin StepProvider. Each Emit*
 // picks the right Invoke op for its venue, placement-agnostic above the registry.
 type externalPluginStepProvider struct{ builtinStepBase }
 
-func (externalPluginStepProvider) Reserved() string { return string(StepKindExternalPlugin) }
+func (externalPluginStepProvider) Reserved() string { return string(spec.StepKindExternalPlugin) }
 
 // EmitOCI is the BUILD venue (image build / pod-overlay Containerfile): an external
 // plugin verb bakes its build-context output via Invoke(OpEmit) through the SHARED
@@ -43,8 +44,8 @@ func (externalPluginStepProvider) Reserved() string { return string(StepKindExte
 // StepProvider.EmitOCI signature returns the string the caller splices, decoupling it
 // from the the walker buffer that now lives in sdk/deploykit); build.Box supplies the
 // image the plugin verb's distros are read from.
-func (externalPluginStepProvider) EmitOCI(step InstallStep, _ *InstallPlan, build buildEngineContext) (string, error) {
-	s := step.(*ExternalPluginStep)
+func (externalPluginStepProvider) EmitOCI(step spec.InstallStep, _ *deploykit.InstallPlan, build buildEngineContext) (string, error) {
+	s := step.(*deploykit.ExternalPluginStep)
 	prov, ok := providerRegistry.ResolveVerb(s.Op.Plugin)
 	if !ok {
 		return "", fmt.Errorf("oci-emit-step: external plugin verb %q is not connected at build time", s.Op.Plugin)
@@ -73,7 +74,7 @@ func (externalPluginStepProvider) EmitOCI(step InstallStep, _ *InstallPlan, buil
 // effect on the real venue. The reverse channel is NOT rebootable here (a nested verb-step
 // never reboots the venue; only a RebootStep on a vm deploy does). Reached from the host's
 // RunHostStep when a deploy plugin walks an ExternalPluginStep (the nested reverse channel).
-func executeExternalPluginStep(ctx context.Context, s *ExternalPluginStep, plan *InstallPlan, exec DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
+func executeExternalPluginStep(ctx context.Context, s *deploykit.ExternalPluginStep, plan *deploykit.InstallPlan, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
 	var zero spec.DeployReply
 	prov, ok := providerRegistry.ResolveVerb(s.Op.Plugin)
 	if !ok {
@@ -99,7 +100,7 @@ func executeExternalPluginStep(ctx context.Context, s *ExternalPluginStep, plan 
 // plugin_input), the provider is resolved by ClassStep and the OpExecute params are the step's
 // OPAQUE Payload verbatim. Shares invokeStepExecute (R3); the reply's ReverseOps are recorded
 // by the caller (dynamic teardown).
-func executeExternalStep(ctx context.Context, s *externalStep, plan *InstallPlan, exec DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
+func executeExternalStep(ctx context.Context, s *deploykit.ExternalStep, plan *deploykit.InstallPlan, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
 	var zero spec.DeployReply
 	prov, ok := providerRegistry.resolve(ClassStep, s.Word)
 	if !ok {
@@ -117,7 +118,7 @@ func executeExternalStep(ctx context.Context, s *externalStep, plan *InstallPlan
 // with the opaque params + a venue descriptor, and decodes the DeployReply (its ReverseOps the
 // caller records). Used by executeExternalPluginStep (verb-step) AND executeExternalStep
 // (plugin-contributed step kind).
-func invokeStepExecute(ctx context.Context, word string, inv executorInvoker, params []byte, venueName string, exec DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
+func invokeStepExecute(ctx context.Context, word string, inv executorInvoker, params []byte, venueName string, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
 	var zero spec.DeployReply
 	env, err := marshalJSON(spec.DeployVenue{DeployName: venueName})
 	if err != nil {
@@ -141,7 +142,7 @@ func invokeStepExecute(ctx context.Context, word string, inv executorInvoker, pa
 // identity (box name, else single-candy name, else the deploy-id hash) — the analogue
 // of the externalDeployTarget passing its deploy name, so a plugin can derive a
 // deterministic per-deploy scratch location.
-func externalStepVenueName(plan *InstallPlan) string {
+func externalStepVenueName(plan *deploykit.InstallPlan) string {
 	switch {
 	case plan == nil:
 		return ""

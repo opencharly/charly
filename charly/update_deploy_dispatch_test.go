@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestResolveUpdateDeployNode guards the 2026-05 fix for `charly update <base>

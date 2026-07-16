@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -128,7 +129,7 @@ func (c *MergeCmd) runOne(cfg *Config, boxName string) error {
 	imageRef := resolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
 
 	// Resolve build engine for save/load
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}

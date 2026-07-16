@@ -23,6 +23,8 @@ package main
 import (
 	"gopkg.in/yaml.v3"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -59,7 +61,7 @@ func marshalBundleNode(node *spec.Deploy) (*yaml.Node, error) {
 
 	content := &yaml.Node{Kind: yaml.MappingNode}
 	value := &yaml.Node{Kind: yaml.MappingNode}
-	content.Content = append(content.Content, scalarNode(disc), value)
+	content.Content = append(content.Content, kit.ScalarNode(disc), value)
 	// Copy ONLY the inline fields — skip the structural keys handled specially: target (→
 	// the discriminator), nested/peer (→ recursive child nodes), descent (loader-derived,
 	// never persisted), name (the map key, never a body field). Plan steps get resugared.
@@ -82,12 +84,12 @@ func marshalBundleNode(node *spec.Deploy) (*yaml.Node, error) {
 		if len(m) == 0 {
 			return nil
 		}
-		for _, k := range sortedNestedKeys(m) {
+		for _, k := range deploykit.SortedNestedKeys(m) {
 			child, cerr := marshalBundleNode(m[k])
 			if cerr != nil {
 				return cerr
 			}
-			content.Content = append(content.Content, scalarNode(k), child)
+			content.Content = append(content.Content, kit.ScalarNode(k), child)
 		}
 		return nil
 	}
@@ -125,9 +127,9 @@ func bundleDiscForEntity(body *yaml.Node) string {
 		// image-backed pod as a group writes its pod-only resolved_port under `group:`, which
 		// #GroupInput rejects at the next load (the 2026-07 `charly config <image-ref>` config
 		// corruption). A truly targetless deploy (members only, no workload) stays a group.
-		if findMappingValue(body, "image") != nil ||
-			findMappingValue(body, "resolved_port") != nil ||
-			findMappingValue(body, "port") != nil {
+		if kit.FindMappingValue(body, "image") != nil ||
+			kit.FindMappingValue(body, "resolved_port") != nil ||
+			kit.FindMappingValue(body, "port") != nil {
 			return "pod"
 		}
 		return "group"
@@ -138,7 +140,7 @@ func bundleDiscForEntity(body *yaml.Node) string {
 
 // scalarFieldValue returns the scalar value of key in m, or "" when absent / non-scalar.
 func scalarFieldValue(m *yaml.Node, key string) string {
-	if v := findMappingValue(m, key); v != nil && v.Kind == yaml.ScalarNode {
+	if v := kit.FindMappingValue(m, key); v != nil && v.Kind == yaml.ScalarNode {
 		return v.Value
 	}
 	return ""

@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // newVenueTestUF builds a small UnifiedFile covering every venue class the
@@ -123,7 +125,7 @@ func TestResolveCheckVenueLocalDot(t *testing.T) {
 	if v.Kind != "host" {
 		t.Errorf("resolveCheckVenue(\".\").Kind = %q, want host", v.Kind)
 	}
-	if _, ok := v.Exec.(ShellExecutor); !ok {
+	if _, ok := v.Exec.(kit.ShellExecutor); !ok {
 		t.Errorf("resolveCheckVenue(\".\").Exec = %T, want ShellExecutor", v.Exec)
 	}
 	if v.IsContainer() {

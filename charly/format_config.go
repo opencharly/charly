@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/buildkit"
@@ -43,7 +44,7 @@ type BuildFile struct {
 //
 // The init section is optional: projects without an `inits:` block return a
 // nil *InitConfig (no init system, no entrypoint beyond the base image default).
-func LoadBuildConfigForBox(dir string) (*DistroConfig, *BuilderConfig, *InitConfig, error) {
+func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
@@ -55,6 +56,6 @@ func LoadBuildConfigForBox(dir string) (*DistroConfig, *BuilderConfig, *InitConf
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.
-func LoadDefaultBuildConfig(dir string) (*DistroConfig, *BuilderConfig, *InitConfig, error) {
+func LoadDefaultBuildConfig(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
 	return LoadBuildConfigForBox(dir)
 }

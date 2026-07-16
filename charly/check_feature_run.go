@@ -36,6 +36,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -44,7 +45,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // stepFailCount returns how many steps ended in a fail verdict.
-func stepFailCount(results []StepResult) int {
+func stepFailCount(results []kit.StepResult) int {
 	n := 0
 	for _, r := range results {
 		if r.Result.Status == TestFail {
@@ -56,16 +57,16 @@ func stepFailCount(results []StepResult) int {
 
 // reportSteps writes results in the requested format and returns the fail
 // count. Reuses the FormatStepResults* reporters (kit.FormatStepResults*, aliased in kit_aliases.go).
-func reportSteps(w io.Writer, results []StepResult, format string) int {
+func reportSteps(w io.Writer, results []kit.StepResult, format string) int {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "json":
-		_ = FormatStepResultsJSON(w, results)
+		_ = kit.FormatStepResultsJSON(w, results)
 	case "tap":
-		FormatStepResultsTAP(w, results)
+		kit.FormatStepResultsTAP(w, results)
 	case "junit":
-		_ = FormatStepResultsJUnit(w, results)
+		_ = kit.FormatStepResultsJUnit(w, results)
 	default:
-		FormatStepResultsText(w, results)
+		kit.FormatStepResultsText(w, results)
 	}
 	return stepFailCount(results)
 }
@@ -101,7 +102,7 @@ func validateTagExpr(tag string) error {
 	if strings.TrimSpace(tag) == "" {
 		return nil
 	}
-	_, err := ParseTagExpr(tag)
+	_, err := kit.ParseTagExpr(tag)
 	return err
 }
 

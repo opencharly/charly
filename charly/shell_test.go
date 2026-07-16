@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 func withTerminal(t *testing.T, tty bool) {
@@ -82,7 +84,7 @@ func TestBuildShellArgsWithSinglePort(t *testing.T) {
 
 func TestBuildShellArgsWithVolumes(t *testing.T) {
 	withTerminal(t, true)
-	volumes := []VolumeMount{
+	volumes := []deploykit.VolumeMount{
 		{VolumeName: "charly-openclaw-data", ContainerPath: "/home/user/.openclaw"},
 	}
 	args := buildShellArgs("docker", "ghcr.io/opencharly/openclaw:latest", 1000, 1000, nil, volumes, nil, false, "", "127.0.0.1", nil, SecurityConfig{}, "/workspace")
@@ -158,7 +160,7 @@ func TestLocalizePort(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.bindAddr+"/"+tt.input, func(t *testing.T) {
-			got := localizePort(tt.input, tt.bindAddr)
+			got := deploykit.LocalizePort(tt.input, tt.bindAddr)
 			if got != tt.want {
 				t.Errorf("localizePort(%q, %q) = %q, want %q", tt.input, tt.bindAddr, got, tt.want)
 			}

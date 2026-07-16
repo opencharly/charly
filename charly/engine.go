@@ -1,6 +1,9 @@
 package main
 
-import "github.com/opencharly/sdk/deploykit"
+import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+)
 
 // engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
 //
@@ -44,7 +47,7 @@ func ResolveBoxEngine(cfg *Config, layers map[string]*Candy, boxName string, glo
 
 // ImageRuntime returns a copy of rt with RunEngine adjusted for the given image.
 // If imageEngine is empty or matches the existing RunEngine, returns the original runtime.
-func ImageRuntime(rt *ResolvedRuntime, imageEngine string) *ResolvedRuntime {
+func ImageRuntime(rt *kit.ResolvedRuntime, imageEngine string) *kit.ResolvedRuntime {
 	if imageEngine == "" || imageEngine == rt.RunEngine {
 		return rt
 	}

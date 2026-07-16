@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 func TestCanonicalLabelKey_ExpandsShorthand(t *testing.T) {
@@ -34,17 +36,17 @@ func TestSortedLabelKeys_FiltersToContractUnlessAll(t *testing.T) {
 }
 
 func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
-	base := []CollectedSecret{
+	base := []deploykit.CollectedSecret{
 		{Name: "charly-app-db-password", SecretName: "db-password"},
 		{Name: "charly-app-api-key", SecretName: "api-key"},
 	}
 
-	out, unmatched := ApplySecretRefresh(append([]CollectedSecret(nil), base...), nil)
+	out, unmatched := ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), nil)
 	if len(unmatched) != 0 || out[0].RotateOnConfig || out[1].RotateOnConfig {
 		t.Fatal("no-op refresh must not rotate or report unmatched")
 	}
 
-	out, unmatched = ApplySecretRefresh(append([]CollectedSecret(nil), base...), []string{"db-password", "nope"})
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"db-password", "nope"})
 	if !out[0].RotateOnConfig || out[1].RotateOnConfig {
 		t.Errorf("named refresh rotated wrong set: %+v", out)
 	}
@@ -52,7 +54,7 @@ func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
 		t.Errorf("unmatched = %v, want [nope]", unmatched)
 	}
 
-	out, unmatched = ApplySecretRefresh(append([]CollectedSecret(nil), base...), []string{"all"})
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"all"})
 	if !out[0].RotateOnConfig || !out[1].RotateOnConfig || len(unmatched) != 0 {
 		t.Errorf("'all' refresh must rotate everything: %+v unmatched=%v", out, unmatched)
 	}

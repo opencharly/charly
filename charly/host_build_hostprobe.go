@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -35,7 +36,7 @@ func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEng
 			}
 		}
 		if engine != "" {
-			reply.GPUFlags = GPURunArgs(engine)
+			reply.GPUFlags = kit.GPURunArgs(engine)
 		}
 	}
 	reply.AMDGPU = DetectAMDGPU()
@@ -78,7 +79,7 @@ func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEng
 	reply.DistroFamilyMap = distroFamilyMap
 
 	// Core-owned config path (the plugin stats it for the permissions check).
-	if p, err := RuntimeConfigPath(); err == nil {
+	if p, err := kit.RuntimeConfigPath(); err == nil {
 		reply.ConfigPath = p
 	}
 

@@ -3,6 +3,8 @@ package main
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); aliased in
@@ -12,7 +14,7 @@ import (
 // full box chain (box → base → base's base) and collecting volume
 // declarations from all candies. Volumes are deduplicated by name (first
 // declaration wins — outermost box takes priority).
-func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, home string, excludeNames map[string]bool) ([]VolumeMount, error) {
+func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
 	// Collect all candy names from the box chain (outermost first) via the
 	// shared base-chain walk; propagate a resolution error as before.
 	allCandyNames, err := cfg.boxCandyChain(layers, boxName)
@@ -22,7 +24,7 @@ func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, hom
 
 	// Collect volumes, dedup by name (first wins), skip excluded names
 	seen := make(map[string]bool)
-	var mounts []VolumeMount
+	var mounts []deploykit.VolumeMount
 	for _, candyName := range allCandyNames {
 		layer, ok := layers[candyName]
 		if !ok || !layer.HasVolumes() {
@@ -33,7 +35,7 @@ func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, hom
 				continue
 			}
 			seen[vol.Name] = true
-			mounts = append(mounts, VolumeMount{
+			mounts = append(mounts, deploykit.VolumeMount{
 				VolumeName:    "charly-" + boxName + "-" + vol.Name,
 				ContainerPath: expandHome(vol.Path, home),
 			})
@@ -63,7 +65,7 @@ func expandHome(path, home string) string {
 // no longer needed.
 
 // workspaceBindHost returns the host path of the "workspace" bind mount, or "".
-func workspaceBindHost(bindMounts []ResolvedBindMount) string {
+func workspaceBindHost(bindMounts []deploykit.ResolvedBindMount) string {
 	for _, bm := range bindMounts {
 		if bm.Name == "workspace" {
 			return bm.HostPath
@@ -146,7 +148,7 @@ func mergeVolumeConfigs(base, overrides []DeployVolumeConfig) []DeployVolumeConf
 }
 
 // sortVolumeMounts sorts volume mounts by name for deterministic output
-func sortVolumeMounts(mounts []VolumeMount) {
+func sortVolumeMounts(mounts []deploykit.VolumeMount) {
 	for i := 0; i < len(mounts)-1; i++ {
 		for j := i + 1; j < len(mounts); j++ {
 			if mounts[i].VolumeName > mounts[j].VolumeName {

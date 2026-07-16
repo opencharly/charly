@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Ensures Kind() returns the correct verb for each single-verb Check and
@@ -321,7 +322,7 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 // Verifies the extended ${NAME[:arg]} regex does not regress plain ${NAME}
 // references (backward compatibility with deploykit.TaskVarRefPattern consumers).
 func TestTestVarRefPattern_BackwardCompatible(t *testing.T) {
-	got := TestVarRefs("${HOME}/x ${USER}")
+	got := kit.TestVarRefs("${HOME}/x ${USER}")
 	want := []string{"HOME", "USER"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -366,7 +367,7 @@ stdout: PONG
 // DEPLOY_NAME is deploy-scope (resolved only against a live deployment), so a
 // build-scope check referencing it must be rejected by the validator.
 func TestIsRuntimeOnlyVar_DeployName(t *testing.T) {
-	if !IsRuntimeOnlyVar("DEPLOY_NAME") {
+	if !kit.IsRuntimeOnlyVar("DEPLOY_NAME") {
 		t.Error("DEPLOY_NAME must be runtime-only")
 	}
 }

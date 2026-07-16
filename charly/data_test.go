@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // recordedCall captures a single stubbed exec invocation for later assertion.
@@ -134,7 +136,7 @@ func TestProvisionDataBindOnly_InitialEmpty(t *testing.T) {
 	fake := installFakeRunner(t)
 	hostDir := t.TempDir()
 	meta := makeJupyterMeta(false)
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "workspace", HostPath: hostDir, ContPath: "/workspace"},
 	}
 
@@ -168,7 +170,7 @@ func TestProvisionDataBindOnly_InitialNonEmpty(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	meta := makeJupyterMeta(false)
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "workspace", HostPath: hostDir},
 	}
 
@@ -191,7 +193,7 @@ func TestProvisionDataBindOnly_Merge(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	meta := makeJupyterMeta(false)
-	bindMounts := []ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
+	bindMounts := []deploykit.ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
 
 	n, err := provisionData("podman", "jupyter-img", meta, bindMounts, nil, "jupyter", "", DataProvisionMerge)
 	if err != nil {
@@ -221,7 +223,7 @@ func TestProvisionDataNamedOnly_InitialEmpty(t *testing.T) {
 	}
 
 	meta := makeJupyterMeta(false)
-	namedVolumes := []VolumeMount{
+	namedVolumes := []deploykit.VolumeMount{
 		{VolumeName: "charly-jupyter-workspace", ContainerPath: "/workspace"},
 	}
 
@@ -259,7 +261,7 @@ func TestProvisionDataNamedOnly_InitialNonEmpty(t *testing.T) {
 	}
 
 	meta := makeJupyterMeta(false)
-	namedVolumes := []VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
+	namedVolumes := []deploykit.VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
 
 	n, err := provisionData("podman", "jupyter-img", meta, nil, namedVolumes, "jupyter", "", DataProvisionInitial)
 	if err != nil {
@@ -276,7 +278,7 @@ func TestProvisionDataNamedOnly_InitialNonEmpty(t *testing.T) {
 func TestProvisionDataNamedOnly_Merge(t *testing.T) {
 	fake := installFakeRunner(t)
 	meta := makeJupyterMeta(false)
-	namedVolumes := []VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
+	namedVolumes := []deploykit.VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
 
 	n, err := provisionData("podman", "jupyter-img", meta, nil, namedVolumes, "jupyter", "", DataProvisionMerge)
 	if err != nil {
@@ -311,10 +313,10 @@ func TestProvisionDataMixed(t *testing.T) {
 			{Volume: "models", Staging: "/data/models/", Candy: "b"},
 		},
 	}
-	bindMounts := []ResolvedBindMount{
+	bindMounts := []deploykit.ResolvedBindMount{
 		{Name: "workspace", HostPath: bindDir},
 	}
-	namedVolumes := []VolumeMount{
+	namedVolumes := []deploykit.VolumeMount{
 		{VolumeName: "charly-multi-models"},
 	}
 
@@ -368,7 +370,7 @@ func TestProvisionDataUnknownVolumeWarns(t *testing.T) {
 			{Volume: "typo-name", Staging: "/data/typo/", Candy: "notebook-templates"},
 		},
 	}
-	bindMounts := []ResolvedBindMount{{Name: "workspace", HostPath: t.TempDir()}}
+	bindMounts := []deploykit.ResolvedBindMount{{Name: "workspace", HostPath: t.TempDir()}}
 
 	n, err := provisionData("podman", "jupyter-img", meta, bindMounts, nil, "jupyter", "", DataProvisionInitial)
 	_ = w.Close()
@@ -404,7 +406,7 @@ func TestProvisionDataScratchImageNamedVolume(t *testing.T) {
 		return nil
 	}
 	meta := makeJupyterMeta(true) // DataImage = true
-	namedVolumes := []VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
+	namedVolumes := []deploykit.VolumeMount{{VolumeName: "charly-jupyter-workspace"}}
 
 	n, err := provisionData("podman", "scratch-data-img", meta, nil, namedVolumes, "jupyter", "", DataProvisionMerge)
 	if err != nil {
@@ -441,7 +443,7 @@ func TestProvisionDataScratchImageBindMount(t *testing.T) {
 	fake := installFakeRunner(t)
 	hostDir := t.TempDir()
 	meta := makeJupyterMeta(true)
-	bindMounts := []ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
+	bindMounts := []deploykit.ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
 
 	n, err := provisionData("podman", "scratch-data-img", meta, bindMounts, nil, "jupyter", "", DataProvisionInitial)
 	if err != nil {
@@ -491,7 +493,7 @@ func TestProvisionDataEntryDestSubdir(t *testing.T) {
 			},
 		},
 	}
-	bindMounts := []ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
+	bindMounts := []deploykit.ResolvedBindMount{{Name: "workspace", HostPath: hostDir}}
 
 	n, err := provisionData("podman", "jupyter-img", meta, bindMounts, nil, "jupyter", "", DataProvisionInitial)
 	if err != nil {

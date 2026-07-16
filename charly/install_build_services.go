@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func init() { deploykit.CompileServiceSteps = compileServiceSteps }
 
-func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext) []InstallStep {
-	var out []InstallStep
+func compileServiceSteps(layer deploykit.CandyModel, img *buildkit.ResolvedBox, hostCtx deploykit.HostContext) []spec.InstallStep {
+	var out []spec.InstallStep
 	initIsSystemd := hostCtx.MachineVenue
-	distros := serviceRenderDistros(img, hostCtx)
+	distros := deploykit.ServiceRenderDistros(img, hostCtx)
 
 	// Detect mixed-entry pairs: which names have a use_packaged form? Only
 	// entries that APPLY to this target's distro count — a Fedora/Arch-only
@@ -20,7 +22,7 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 	// name (see serviceEntryAppliesToDistro).
 	namesWithPackaged := map[string]bool{}
 	for i := range layer.Service() {
-		if layer.Service()[i].IsPackaged() && serviceEntryAppliesToDistro(&layer.Service()[i], distros) {
+		if layer.Service()[i].IsPackaged() && deploykit.ServiceEntryAppliesToDistro(&layer.Service()[i], distros) {
 			namesWithPackaged[layer.Service()[i].Name] = true
 		}
 	}
@@ -60,7 +62,7 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 		// the service-side instance of the VM $HOME bug.)
 		svcHome := img.Home
 		if hostCtx.MachineVenue {
-			svcHome = HomeToken
+			svcHome = deploykit.HomeToken
 		}
 		if svcHome != "" {
 			renderCtx.Home = svcHome
@@ -73,12 +75,12 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 		entry := &layer.Service()[i]
 		// Per-distro filter: an entry with a distro: list renders only on the
 		// named distros (see serviceEntryAppliesToDistro).
-		if !serviceEntryAppliesToDistro(entry, distros) {
+		if !deploykit.ServiceEntryAppliesToDistro(entry, distros) {
 			continue
 		}
-		scope := ScopeSystem
+		scope := spec.ScopeSystem
 		if entry.EffectiveScope() == "user" {
-			scope = ScopeUser
+			scope = spec.ScopeUser
 		}
 
 		if entry.IsPackaged() {
@@ -86,8 +88,8 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 			if !initIsSystemd {
 				continue
 			}
-			out = append(out, &ServicePackagedStep{
-				Unit:        ensureServiceSuffix(entry.UsePackaged),
+			out = append(out, &deploykit.ServicePackagedStep{
+				Unit:        deploykit.EnsureServiceSuffix(entry.UsePackaged),
 				TargetScope: scope,
 				Enable:      entry.Enable,
 				CandyName:   layer.GetName(),
@@ -102,7 +104,7 @@ func compileServiceSteps(layer CandyModel, img *ResolvedBox, hostCtx HostContext
 			continue
 		}
 
-		step := &ServiceCustomStep{
+		step := &deploykit.ServiceCustomStep{
 			Name:        fmt.Sprintf("charly-%s-%s", layer.GetName(), entry.Name),
 			TargetScope: scope,
 			Enable:      entry.Enable,

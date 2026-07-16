@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -113,7 +114,7 @@ func (v *VMCollector) enrichFromDeploy(cs *spec.DeploymentStatus, entity string,
 	if opts.Deploy == nil || opts.Deploy.Bundle == nil {
 		return
 	}
-	node, ok := findVmDeployNode(opts.Deploy.Bundle, entity, entity)
+	node, ok := deploykit.FindVmDeployNode(opts.Deploy.Bundle, entity, entity)
 	if !ok {
 		return
 	}

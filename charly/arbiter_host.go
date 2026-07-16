@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/enginekit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -87,7 +89,7 @@ func (h *arbiterHostServer) gather() []spec.HolderDescriptor {
 			Name:    name,
 			Holds:   node.PreemptionHolds(),
 			Addr:    holderAddrFor(name, node),
-			Restore: preemptEffectiveRestore(node.Preemptible),
+			Restore: deploykit.PreemptEffectiveRestore(node.Preemptible),
 		})
 	}
 	return out
@@ -125,7 +127,7 @@ func (h *arbiterHostServer) stopAndWait(addr spec.HolderAddr) error {
 // `charly-` prefix stripped off; `Base` = that name reconstructs the same container for the stop
 // seam (stopPodService(Base,"") -> charly-<Base>), for both plain and instance deploys.
 func (h *arbiterHostServer) gpuCDIHolders() []spec.HolderAddr {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil
 	}

@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/opencharly/sdk/spec"
 	"maps"
 	"slices"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -119,7 +122,7 @@ func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
 }
 
 // ResolveBox resolves a single box's configuration by applying defaults
-func (c *Config) ResolveBox(name string, calverTag string, dir string, opts ResolveOpts) (*ResolvedBox, error) {
+func (c *Config) ResolveBox(name string, calverTag string, dir string, opts ResolveOpts) (*buildkit.ResolvedBox, error) {
 	// Namespace-aware entry: a qualified name (e.g. `charly.arch-builder`,
 	// `cachyos.cachyos`) resolves inside the Config of the namespace that
 	// owns it, where its base:/builder: refs are relative. This mirrors
@@ -146,12 +149,12 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		return nil, fmt.Errorf("image %q is disabled (pass --include-disabled to operate on it without flipping authored config)", name)
 	}
 
-	resolved := &ResolvedBox{
+	resolved := &buildkit.ResolvedBox{
 		Name:       name,
 		Version:    img.Version,
 		Status:     resolveStatus(""), // boxes author no status; the effective rung (worst-of-candy-chain) is computed at generate time for the ai.opencharly.status label
 		Info:       deploykit.DescriptionInfo(img.Description),
-		CheckLevel: ResolveCheckLevel(img.CheckLevel),
+		CheckLevel: kit.ResolveCheckLevel(img.CheckLevel),
 	}
 
 	if err := c.resolveBase(resolved, img, name); err != nil {
@@ -182,7 +185,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 	// Strip @ prefix and :version suffixes — candy map keys use bare refs
 	resolved.Candy = make([]string, len(img.Candy))
 	for i, ref := range img.Candy {
-		resolved.Candy[i] = BareRef(ref)
+		resolved.Candy[i] = deploykit.BareRef(ref)
 	}
 
 	// Ports are NOT resolved here — they are inherited from the candy chain
@@ -320,7 +323,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 
 // resolveBase resolves a box's base image (from-builder, data-image, or
 // base:/defaults chain) and sets IsExternalBase. Split out of ResolveBox.
-func (c *Config) resolveBase(resolved *ResolvedBox, img spec.BoxConfig, name string) error {
+func (c *Config) resolveBase(resolved *buildkit.ResolvedBox, img spec.BoxConfig, name string) error {
 	// `from: builder:<name>` — non-registry base via a kind: bootstrap
 	// builder. Mutually exclusive with base:; pre-build phase produces
 	// a rootfs tarball, generator emits FROM scratch + ADD.
@@ -359,7 +362,7 @@ func (c *Config) resolveBase(resolved *ResolvedBox, img spec.BoxConfig, name str
 
 // resolvePlatforms resolves a box's target platforms
 // (image -> defaults -> linux/amd64+arm64). Split out of ResolveBox.
-func (c *Config) resolvePlatforms(resolved *ResolvedBox, img spec.BoxConfig) {
+func (c *Config) resolvePlatforms(resolved *buildkit.ResolvedBox, img spec.BoxConfig) {
 	resolved.Platforms = img.Platforms
 	if len(resolved.Platforms) == 0 {
 		resolved.Platforms = c.Defaults.Platforms
@@ -371,7 +374,7 @@ func (c *Config) resolvePlatforms(resolved *ResolvedBox, img spec.BoxConfig) {
 
 // resolveTag resolves a box's tag (image -> defaults -> "auto"), substituting
 // the computed calver when "auto". Split out of ResolveBox.
-func (c *Config) resolveTag(resolved *ResolvedBox, img spec.BoxConfig, calverTag string) {
+func (c *Config) resolveTag(resolved *buildkit.ResolvedBox, img spec.BoxConfig, calverTag string) {
 	resolved.Tag = img.Tag
 	if resolved.Tag == "" {
 		resolved.Tag = c.Defaults.Tag
@@ -387,7 +390,7 @@ func (c *Config) resolveTag(resolved *ResolvedBox, img spec.BoxConfig, calverTag
 
 // resolveDistro resolves a box's distro tags
 // (image -> base-chain walk -> defaults). Split out of ResolveBox.
-func (c *Config) resolveDistro(resolved *ResolvedBox, img spec.BoxConfig) {
+func (c *Config) resolveDistro(resolved *buildkit.ResolvedBox, img spec.BoxConfig) {
 	resolved.Distro = img.Distro
 	if len(resolved.Distro) == 0 {
 		resolved.Distro = c.walkBaseChainDistro(resolved.Base)
@@ -400,7 +403,7 @@ func (c *Config) resolveDistro(resolved *ResolvedBox, img spec.BoxConfig) {
 // resolveBuild resolves a box's build formats (image -> base-chain walk ->
 // defaults; required unless a data image) and the primary cache-mount format.
 // Split out of ResolveBox.
-func (c *Config) resolveBuild(resolved *ResolvedBox, img spec.BoxConfig, name string) error {
+func (c *Config) resolveBuild(resolved *buildkit.ResolvedBox, img spec.BoxConfig, name string) error {
 	buildFmts := img.Build
 	if len(buildFmts) == 0 {
 		buildFmts = c.walkBaseChainBuild(resolved.Base)
@@ -422,8 +425,8 @@ func (c *Config) resolveBuild(resolved *ResolvedBox, img spec.BoxConfig, name st
 // extends the working set to images marked enabled: false (the build verb's
 // `--include-disabled` flag flips this for one-off operational rebuilds
 // without modifying authored config).
-func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (map[string]*ResolvedBox, error) {
-	resolved := make(map[string]*ResolvedBox)
+func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (map[string]*buildkit.ResolvedBox, error) {
+	resolved := make(map[string]*buildkit.ResolvedBox)
 	for _, name := range c.allBoxNames() {
 		img, _ := c.BoxConfig(name)
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
@@ -477,7 +480,7 @@ func (c *Config) BoxNames() []string {
 		names = append(names, name)
 	}
 	// Sort for deterministic output
-	sortStrings(names)
+	kit.SortStrings(names)
 	return names
 }
 
@@ -517,8 +520,8 @@ func resolveIntPtr(value, fallback *int, defaultVal int) int {
 // remote-ref FETCH walk (effectiveBuilderForBox → CollectRemoteRefsOpts) — so
 // the resolution can never drift between commands and the fetch set stays in
 // lockstep with the resolve set.
-func (c *Config) resolveEffectiveBuilder(name string, distro []string, base string, isExternalBase bool, imgBuilder BuilderMap) BuilderMap {
-	out := make(BuilderMap)
+func (c *Config) resolveEffectiveBuilder(name string, distro []string, base string, isExternalBase bool, imgBuilder buildkit.BuilderMap) buildkit.BuilderMap {
+	out := make(buildkit.BuilderMap)
 	maps.Copy(out, c.Defaults.Builder)
 	maps.Copy(out, c.distroBuilderMap(distro))
 	if !isExternalBase {
@@ -555,7 +558,7 @@ func (c *Config) resolveEffectiveBuilder(name string, distro []string, base stri
 // default (whose per-image map is empty — e.g. bazzite/aurora -> charly.fedora-builder),
 // surfacing as "unknown layer" at generate time. Routing through this keeps the
 // FETCH set's builder edges in lockstep with the RESOLVE set's (resolveNamespacedBases).
-func (c *Config) effectiveBuilderForBox(name string, img spec.BoxConfig) BuilderMap {
+func (c *Config) effectiveBuilderForBox(name string, img spec.BoxConfig) buildkit.BuilderMap {
 	base := "scratch"
 	isExternalBase := true
 	if img.From == "" && !img.DataImage {
@@ -596,7 +599,7 @@ func (c *Config) effectiveBuilderForBox(name string, img spec.BoxConfig) Builder
 // that actually declare a non-empty builder map are considered. Root-image
 // iteration is name-sorted so the result is deterministic when more than one
 // image shares a distro tag.
-func (c *Config) distroBuilderMap(distroTags []string) BuilderMap {
+func (c *Config) distroBuilderMap(distroTags []string) buildkit.BuilderMap {
 	if len(distroTags) == 0 {
 		return nil
 	}

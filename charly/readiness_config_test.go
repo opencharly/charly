@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestReadinessConfig_ResolveDefaults(t *testing.T) {

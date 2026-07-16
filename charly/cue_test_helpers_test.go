@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +34,7 @@ func candyBodyGuardErr(body string) error {
 	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
 		return err
 	}
-	m := mappingRoot(&doc)
+	m := kit.MappingRoot(&doc)
 	if m == nil {
 		return nil
 	}

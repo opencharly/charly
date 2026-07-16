@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 )
 
@@ -17,7 +18,7 @@ import (
 // (record/dbus — and wl when it externalizes) drives over the E3b broker. Backed by a real
 // ShellExecutor (host venue).
 func TestExecutorReverse_CaptureAndGetFile(t *testing.T) {
-	srv := &executorReverseServer{exec: ShellExecutor{}}
+	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
 	ctx := context.Background()
 
 	rep, err := srv.RunCapture(ctx, &pb.RunRequest{Script: "echo hello; echo oops >&2; exit 3"})

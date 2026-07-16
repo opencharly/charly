@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -163,21 +164,21 @@ cachyos-gpu:
 // committed project profile (no preemptible) merged with the per-host overlay
 // (preemptible) must keep the per-host flag, regardless of merge order.
 func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	project := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
 	}}
-	perHost := &BundleConfig{Bundle: map[string]spec.BundleNode{
+	perHost := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
 	}}
 	for _, tc := range []struct {
 		name    string
-		configs []*BundleConfig
+		configs []*deploykit.BundleConfig
 	}{
-		{"project then per-host", []*BundleConfig{project, perHost}},
-		{"per-host then project", []*BundleConfig{perHost, project}},
+		{"project then per-host", []*deploykit.BundleConfig{project, perHost}},
+		{"per-host then project", []*deploykit.BundleConfig{perHost, project}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			merged := MergeDeployConfigs(tc.configs...)
+			merged := deploykit.MergeDeployConfigs(tc.configs...)
 			node := merged.Bundle["cachyos-gpu"]
 			if node.Preemptible == nil || len(node.Preemptible.Holds) != 1 {
 				t.Errorf("merge DROPPED per-host preemptible: got %+v", node.Preemptible)
