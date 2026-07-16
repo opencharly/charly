@@ -139,7 +139,7 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 		Context:     []string{"build"},
 	}}}}
 	steps := compileOpSteps(layer, testResolvedBox())
-	tgt := &OCITarget{}
+	tgt := ociTestTarget(buildEngineContext{})
 	plan := &InstallPlan{Candy: "x", Steps: steps}
 	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)

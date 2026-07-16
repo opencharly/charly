@@ -51,19 +51,20 @@ func TestCompileApkStep(t *testing.T) {
 	}
 }
 
-// TestOCITargetSkipsApkInstall proves apk installs are SKIPPED at image-build
-// (there is no device at build time) — emitStep returns nil and emits nothing.
+// TestOCITargetSkipsApkInstall proves apk installs are SKIPPED at image-build (there is no device
+// at build time): ociEmitStep routes ApkInstallStep through spliceClassStepEmit, which sees the
+// step's Emits=false contract + returns "" — so the dispatch emits nothing.
 func TestOCITargetSkipsApkInstall(t *testing.T) {
-	tgt := &OCITarget{}
 	step := &ApkInstallStep{
 		Packages:  []ApkPackageSpec{{Package: "org.fdroid.fdroid"}},
 		CandyName: "test-apps",
 	}
-	if err := tgt.emitStep(step, &InstallPlan{}); err != nil {
-		t.Fatalf("OCITarget.emitStep(ApkInstallStep) = %v, want nil (skip)", err)
+	frag, err := ociEmitStep(step, &InstallPlan{}, nil, buildEngineContext{})
+	if err != nil {
+		t.Fatalf("ociEmitStep(ApkInstallStep) = %v, want nil (skip)", err)
 	}
-	if tgt.buf.Len() != 0 {
-		t.Errorf("OCITarget emitted %q for an apk step; should emit nothing", tgt.buf.String())
+	if frag != "" {
+		t.Errorf("ociEmitStep emitted %q for an apk step; should emit nothing", frag)
 	}
 }
 

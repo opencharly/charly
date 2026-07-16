@@ -198,7 +198,7 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 }
 
 // The OCI pod-overlay OpStep build-emit (C1.5) routes the RAW plugin act op through the FULL
-// step-emit chain: OpStep → OCITarget.Emit → emitStep → pluginEmitStepWords[Op]="op" →
+// step-emit chain: OpStep → deploykit.OCITarget.Emit → emitStep → pluginEmitStepWords[Op]="op" →
 // spliceClassStepEmit("op") → candy/plugin-installstep OpEmit → emitViaHostBuild →
 // HostBuild("step-emit",{Word:"op"}) → stepEmitOp → Generator.emitTasks `case "plugin"`. This proves
 // the pod-overlay build and the box build still share the ONE `case "plugin"` seam (no pre-conversion)
@@ -207,13 +207,13 @@ func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
 	dir := t.TempDir()
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir, Candies: map[string]*Candy{"lyr": layer}}
-	tgt := &OCITarget{Generator: g, Box: testResolvedBox(), BuildDir: dir, ContextRelPrefix: ".build/test-img"}
+	tgt := ociTestTarget(buildEngineContext{Generator: g, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
 	plan := &InstallPlan{Candy: "lyr", Steps: []InstallStep{&OpStep{Op: &op, CandyName: "lyr"}}}
 	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
-	out := tgt.buf.String()
+	out := tgt.String()
 	for _, want := range []string{"RUN", "groupadd", "checkgrp", "4242"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("OpStep build-emit Containerfile = %q, want substring %q", out, want)

@@ -10,10 +10,21 @@ plugin-deploy-pod:
             (OpExecute) with the deployment's InstallPlan VIEWS + a venue descriptor and the
             host's executor served on the broker. Unlike deploy:vm (whose plugin WALKS the
             plan inside the guest), pod bakes its install steps INTO the image at BUILD time:
-            the host's pod lifecycle hook (pod_deploy_lifecycle.go) builds the overlay
-            container image HOST-SIDE in PrepareVenue (the SAME core OCITarget/Generator
-            build engine, in-process — nothing crosses gRPC, exactly as vm builds its disk
-            host-side), and the bed runner / `charly start` configs + starts the container.
+            the host's pod lifecycle hook (pod_deploy_lifecycle.go) drives the overlay
+            container image build in PrepareVenue — but P11c DISSOLVED the render OUT of
+            charly core INTO this candy: the host prep (hostBuildOverlay) returns the
+            OverlayBuildReply envelope (ResolvedProject + Plans + base-image metadata +
+            per-overlay-candy security + parent bind-mount volumes), and the candy imports
+            sdk/deploykit+buildkit+kit DIRECTLY (IMPORT-PURITY, ZERO-ALIASES), constructs the
+            deploykit.Generator itself (the shared NewRenderGeneratorFromProject helper — the
+            SAME source candy/plugin-build uses, R3), renders the overlay Containerfile in its
+            own code, and runs podman build + the deploy-name alias tag via its served host
+            executor. Each per-step Containerfile fragment is rendered HOST-SIDE over the
+            generic "step-emit" host-builder (deploykit.OCITarget.EmitStepOp →
+            HostBuild("step-emit","oci-emit-step",…) → the host's ociEmitStep, byte-identical to
+            the former in-core emitStep) — so the render lives in the candy while each step
+            fragment crosses the reverse channel. The bed runner / `charly start` configs +
+            starts the container.
             So there is NO per-step venue walk for pod: this plugin's Invoke does NOT call
             kit.WalkPlans — it returns an EMPTY DeployReply (pod teardown is `charly remove` +
             drop overlay images, owned by the host lifecycle hook's PostTeardown). The

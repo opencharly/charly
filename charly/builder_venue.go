@@ -45,7 +45,7 @@ type buildEngineContext struct {
 	DistroCfg *DistroConfig
 
 	// The following are populated ONLY by the pod-overlay BUILD-emit path
-	// (OCITarget.stepEmitBuildContext), so the HOST-COUPLED Builder step-emitter
+	// (the buildEngineContext), so the HOST-COUPLED Builder step-emitter
 	// (stepEmitBuilder, step_emit_hostbuild.go) can render a multi-stage / inline builder
 	// via the SAME buildStageContext + RenderTemplate pipeline the box build uses (R3, the
 	// C1.3 relocation of the Builder build-emit onto the step-emit seam), and the HOST-COUPLED
@@ -57,16 +57,16 @@ type buildEngineContext struct {
 	Generator     *Generator
 	BuilderConfig *BuilderConfig
 	Box           *ResolvedBox
-	// ImageBuildDir is the OCITarget's per-image (pod-overlay) build dir — the imageDir the
+	// ImageBuildDir is the per-image (pod-overlay) build dir — the imageDir the
 	// dev-mode localpkg build-emit stages a locally-built package into
-	// (renderLocalPkgImageDevInstall). It is OCITarget.BuildDir, NOT Generator.BuildDir (the
+	// (renderLocalPkgImageDevInstall). It is buildEngineContext.ImageBuildDir, NOT Generator.BuildDir (the
 	// overlay build dir differs from the project .build root). Zero for every deploy-leg context.
 	ImageBuildDir string
-	// ContextRelPrefix is the OCITarget's build-context-relative prefix for staged inline
+	// ContextRelPrefix is the build-context-relative prefix for staged inline
 	// content — the datum the HOST-COUPLED Op step-emitter (stepEmitOp, step_emit_hostbuild.go)
 	// passes to Generator.emitTasks so a write: op stages its content-addressed COPY source
 	// under the correct .build/<image>/_inline path (the C1.5 relocation of the OpStep build-emit
-	// onto the step-emit seam). It is OCITarget.ContextRelPrefix. Zero for every deploy-leg context.
+	// onto the step-emit seam). It is buildEngineContext.ContextRelPrefix. Zero for every deploy-leg context.
 	ContextRelPrefix string
 }
 

@@ -224,7 +224,7 @@ func emitPluginFragment(prov Provider, op *Op, img *ResolvedBox) (string, error)
 
 // invokeOpEmitFragment is the ONE OpEmit → EmitReply → empty-guard → Fragment path (R3),
 // shared by the build-context VERB emit (emitPluginFragment, via emitTasks) AND the
-// build-context external-STEP emit (OCITarget.emitExternalStep, F-STEP-EMIT). It Invokes
+// build-context external-STEP emit (ociEmitStep, F-STEP-EMIT). It Invokes
 // the provider's OpEmit with the already-marshalled params (a verb's plugin_input, or a
 // step's opaque Payload) and a spec.BuildEnv descriptor, decodes the EmitReply, and returns
 // the Containerfile fragment — failing LOUDLY on an empty fragment (a runtime-/deploy-only
@@ -236,12 +236,12 @@ func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, param
 }
 
 // invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment core shared by the guarding
-// invokeOpEmitFragment and the pod-overlay OCITarget's compiler-emitted-step build-emit (R3).
+// invokeOpEmitFragment and the pod-overlay deploykit.OCITarget's compiler-emitted-step build-emit (R3).
 // allowEmpty controls the empty-fragment guard: false (the default) fails LOUDLY on an empty
 // fragment — a runtime-/deploy-only capability wrongly asked to build-emit; true permits an empty
-// fragment, used by OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
+// fragment, used by deploykit.OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
 // for a given instance (an empty shell snippet, a packaged service with no overrides + enable=false,
-// a custom service with no unit text — exactly the cases the former OCITarget.emit* returned nothing).
+// a custom service with no unit text — exactly the cases the former the former in-core emit* returned nothing).
 func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, params []byte, distros []string, allowEmpty bool) (string, error) {
 	env, err := marshalJSON(spec.BuildEnv{Distros: distros})
 	if err != nil {
