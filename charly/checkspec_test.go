@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
@@ -236,7 +237,7 @@ func TestCheck_ExpandVars(t *testing.T) {
 		"HOME":           "/home/user",
 		"HOST_PORT:6379": "16379",
 	}
-	missing := opExpandVars(&c, env)
+	missing := kit.ExpandOpVars(&c, env)
 
 	if got := c.PluginInput["file"]; got != "/home/user/.redis" {
 		t.Errorf("plugin_input.file = %q", got)

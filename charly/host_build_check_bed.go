@@ -122,8 +122,7 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if s == nil {
 			return spec.CheckBedReply{}, fmt.Errorf("check-bed members-down: no live session for bed %q", req.Bed)
 		}
-		tearDownMembers(&s.node)
-		return spec.CheckBedReply{}, nil
+		return spec.CheckBedReply{}, tearDownMembers(&s.node)
 	case "wait-ready":
 		s := lookupBedSession(req.Bed)
 		if s == nil {

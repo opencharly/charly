@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
 	"slices"
 	"strings"
@@ -241,11 +242,11 @@ func TestDnfConfigParse(t *testing.T) {
 func TestDnfConfigInherit(t *testing.T) {
 	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {
-			Bootstrap: BootstrapDef{InstallCmd: "dnf install -y"},
-			Dnf:       &DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
+			Bootstrap: vmshared.BootstrapDef{InstallCmd: "dnf install -y"},
+			Dnf:       &vmshared.DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
 		},
-		"fedora-child":  {Inherits: "fedora"},                                           // no own Dnf → inherits
-		"fedora-child2": {Inherits: "fedora", Dnf: &DnfConfig{MaxParallelDownloads: 3}}, // own Dnf wins
+		"fedora-child":  {Inherits: "fedora"},                                                    // no own Dnf → inherits
+		"fedora-child2": {Inherits: "fedora", Dnf: &vmshared.DnfConfig{MaxParallelDownloads: 3}}, // own Dnf wins
 	}}
 
 	got := dc.ResolveDistro([]string{"fedora-child"})
@@ -289,12 +290,12 @@ func TestFormatForDistroID(t *testing.T) {
 		"arch": "pac", "cachyos": "pac", "endeavouros": "pac", "unknown-distro": "",
 	}
 	for id, want := range cases {
-		if got := formatForDistroID(id); got != want {
+		if got := vmshared.FormatForDistroID(id); got != want {
 			t.Errorf("formatForDistroID(%q) = %q, want %q", id, got, want)
 		}
 	}
 	// FormatHint walks ID then ID_LIKE through the same table.
-	hd := &HostDistro{ID: "weird", IDLike: []string{"arch"}}
+	hd := &vmshared.HostDistro{ID: "weird", IDLike: []string{"arch"}}
 	if got := hd.FormatHint(); got != "pac" {
 		t.Errorf("FormatHint via ID_LIKE = %q, want pac", got)
 	}

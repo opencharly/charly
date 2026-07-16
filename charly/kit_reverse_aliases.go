@@ -21,8 +21,7 @@ var (
 
 	// RemoveManagedBlockAt is kit/profile's file-level managed-block remover, used
 	// by the reverse-managed-block teardown (kit) + host_infra_test.go.
-	RemoveManagedBlockAt    = kit.RemoveManagedBlockAt
-	renderManagedBlockStrip = kit.RenderManagedBlockStrip
+	RemoveManagedBlockAt = kit.RemoveManagedBlockAt
 )
 
 // deployDelCmd satisfies kit.ReverseExecutor via thin wrappers — keeps the

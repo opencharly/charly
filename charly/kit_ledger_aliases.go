@@ -13,10 +13,8 @@ const ledgerSchemaVersion = kit.LedgerSchemaVersion
 
 type (
 	LedgerPaths  = kit.LedgerPaths
-	LedgerLock   = kit.LedgerLock
 	DeployRecord = kit.DeployRecord
 	CandyRecord  = kit.CandyRecord
-	StepRecord   = kit.StepRecord
 )
 
 var (
@@ -24,8 +22,6 @@ var (
 	AcquireLedgerLock     = kit.AcquireLedgerLock
 	WriteDeployRecord     = kit.WriteDeployRecord
 	ReadDeployRecord      = kit.ReadDeployRecord
-	WriteCandyRecord      = kit.WriteCandyRecord
-	ReadCandyRecord       = kit.ReadCandyRecord
 	DeleteDeployRecord    = kit.DeleteDeployRecord
 	DeleteCandyRecord     = kit.DeleteCandyRecord
 	AddCandyDeployment    = kit.AddCandyDeployment

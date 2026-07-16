@@ -16,6 +16,7 @@ package main
 //                                  No duplicate test here (R3).
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
@@ -65,10 +66,10 @@ func TestAndroidDeviceXOR(t *testing.T) {
 		spec   AndroidSpec
 		reject bool
 	}{
-		{"box+adb (both) rejected", AndroidSpec{Box: "android-emulator", Adb: &AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, true},
+		{"box+adb (both) rejected", AndroidSpec{Box: "android-emulator", Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, true},
 		{"neither rejected", AndroidSpec{Device: "pixel_9a"}, true},
 		{"box only ok", AndroidSpec{Box: "android-emulator"}, false},
-		{"adb only ok", AndroidSpec{Adb: &AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, false},
+		{"adb only ok", AndroidSpec{Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:5037"}}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -86,7 +87,7 @@ func TestAndroidDeviceXOR(t *testing.T) {
 	}
 
 	// Friendly-message spot-checks (both directions name their failure).
-	both := &UnifiedFile{Android: rawTemplateMap(map[string]*AndroidSpec{"d": {Box: "e", Adb: &AndroidAdbEndpoint{Host: "h:1"}}})}
+	both := &UnifiedFile{Android: rawTemplateMap(map[string]*AndroidSpec{"d": {Box: "e", Adb: &vmshared.AndroidAdbEndpoint{Host: "h:1"}}})}
 	if err := validateAndroidDevices(both); err == nil || !strings.Contains(err.Error(), "both box: and adb:") {
 		t.Errorf("both-source error message: %v", err)
 	}

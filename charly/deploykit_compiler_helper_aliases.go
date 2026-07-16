@@ -8,7 +8,6 @@ import "github.com/opencharly/sdk/deploykit"
 
 var (
 	candyNeedsBuilderStep       = deploykit.CandyNeedsBuilderStep
-	compileLocalPkgStep         = deploykit.CompileLocalPkgStep
 	serviceEntryAppliesToDistro = deploykit.ServiceEntryAppliesToDistro
 	serviceRenderDistros        = deploykit.ServiceRenderDistros
 	stringSliceFromYAML         = deploykit.StringSliceFromYAML

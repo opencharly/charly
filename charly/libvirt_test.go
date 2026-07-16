@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
 	"testing"
 )
@@ -21,7 +22,7 @@ func TestValidateLibvirtSnippet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateLibvirtSnippet(tt.snippet)
+			err := vmshared.ValidateLibvirtSnippet(tt.snippet)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateLibvirtSnippet(%q) error = %v, wantErr %v", tt.snippet, err, tt.wantErr)
 			}
@@ -45,7 +46,7 @@ func TestIsDeviceElement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.snippet[:20], func(t *testing.T) {
-			got := isDeviceElement(tt.snippet)
+			got := vmshared.IsDeviceElement(tt.snippet)
 			if got != tt.isDevice {
 				t.Errorf("isDeviceElement(%q) = %v, want %v", tt.snippet, got, tt.isDevice)
 			}

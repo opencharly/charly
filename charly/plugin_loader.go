@@ -292,7 +292,11 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	}
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", binTmp, target)
 	cmd.Dir = srcDir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	// Go's VCS stamping asks Git for repository status. Multiple different plugin builds run in
+	// parallel and therefore hold different binary locks, but their Git probes share one index.
+	// Disable Git's optional index refresh/write for this read-only status operation: stamping stays
+	// enabled, while concurrent builds cannot contend on shared mutable index state.
+	cmd.Env = pluginBuildEnv(os.Environ())
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
 		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
@@ -302,6 +306,17 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
 	}
 	return bin, nil
+}
+
+func pluginBuildEnv(base []string) []string {
+	env := make([]string, 0, len(base)+2)
+	for _, entry := range base {
+		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_OPTIONAL_LOCKS=") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0")
 }
 
 // bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a

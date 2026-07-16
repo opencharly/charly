@@ -11,7 +11,10 @@ Before reading source, running repository commands, delegating, planning a
 change, or editing, load every skill selected by the dispatcher below. Use a
 registered Codex skill when available; otherwise read the corresponding
 `plugins/<plugin>/skills/<name>/SKILL.md` completely. Load all matches, then
-act. Missing registration never makes a skill optional.
+act. The committed full-developer profile exposes those canonical directories
+through `.agents/skills` symlinks, so a fresh trusted session discovers them
+without a user install or a copied second skill tree. Missing registration
+never makes a skill optional; it means the checked-in Codex profile is broken.
 
 Work from the superproject root. Run submodule Git through literal
 `git -C <absolute-path>` commands; never root a worker in a submodule. Use this
@@ -66,9 +69,9 @@ Consult this table BEFORE the first tool call of every task; when several rows m
 | **— Orientation: "what does candy X do?" / "what's in box X?" —** | |
 | Pod apps, language runtimes, infrastructure services, CLI utilities / the `charly` binary | `/charly-<family>:<name>` — families: `jupyter`, `coder`, `selkies`, `openclaw`, `versa`, `ollama`, `openwebui`, `comfyui`, `immich`, `hermes`, `filebrowser` (pod apps); `languages` (python, python-ml, pixi); `infrastructure` (postgresql, redis, k3s, traefik, supervisord, tailscale, gocryptfs, virtualization, dbus-layer, tmux-layer, …); `tools` (ripgrep, himalaya, whisper, charly, …) |
 | Base distros / GPU runtime | `/charly-distros:<name>` (arch, fedora, debian, ubuntu, cachyos, nvidia, cuda, rocm, …) |
-| CachyOS images / `cachyos*` / `charly-cachyos` workstation profile / `box/cachyos` submodule | `/charly-distros:cachyos` + `/charly-vm:cachyos` + `/charly-local:charly-cachyos` |
-| Debian images / `debian*` / `box/debian` submodule | `/charly-distros:debian` + `/charly-distros:debian-builder` + `/charly-distros:debian-debootstrap` + `/charly-coder:debian-coder` + `/charly-vm:debian` |
-| Ubuntu images / `ubuntu*` / `box/ubuntu` submodule | `/charly-distros:ubuntu` + `/charly-distros:ubuntu-builder` + `/charly-distros:ubuntu-debootstrap` + `/charly-coder:ubuntu-coder` + `/charly-vm:ubuntu` |
+| CachyOS images / `cachyos*` / `charly-cachyos` workstation profile / `box/cachyos` submodule | `/charly-distros:cachyos` + `/charly-vm:cachyos-bootstrap-vm` + `/charly-local:charly-cachyos` |
+| Debian images / `debian*` / `box/debian` submodule | `/charly-distros:debian` + `/charly-distros:debian-builder` + `/charly-distros:debian-debootstrap` + `/charly-coder:debian-coder` + `/charly-vm:debian-debootstrap-vm` |
+| Ubuntu images / `ubuntu*` / `box/ubuntu` submodule | `/charly-distros:ubuntu` + `/charly-distros:ubuntu-builder` + `/charly-distros:ubuntu-debootstrap` + `/charly-coder:ubuntu-coder` + `/charly-vm:ubuntu-debootstrap-vm` |
 | Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`) | `/charly-distros:fedora` + `/charly-distros:fedora-builder` + `/charly-distros:fedora-nonfree` + `/charly-coder:fedora-coder` + `/charly-distros:charly-fedora` + `/charly-distros:fedora-test` + `/charly-distros:nvidia` |
 | **— Agents & skills —** | |
 | Sub-agents / dynamic workflows / agent teams / agent-lifecycle or commit-push gate hooks | `/charly-internals:agents` |
@@ -240,6 +243,22 @@ Every concurrency issue is reproduced under load and root-fixed. Never
 serialize a parallel contract to hide a race. Use transient container stores,
 resource-token arbitration, auto-allocated ports, tolerant shared-tree walks,
 persistent ownership of long beds, and never force-kill a running roster.
+Runtime plugin builds remain VCS-stamped. Their concurrent Git status probes
+must be read-only (`GIT_OPTIONAL_LOCKS=0`); never disable stamping, retry the
+build, or globally serialize independent plugins. A plugin discovery or build
+failure is returned at its source and never downgraded to a warning that later
+looks like a missing provider.
+
+Bind R10 evidence to the exact run directories returned by the current launch;
+never recursively scan a retained `.check/<bed>` root and attribute historical
+logs to the newest candidate. Capture process exit codes and require recorded,
+failing final cleanup steps, including `cleanup-members` for targetless groups.
+
+Strict operator commands and idempotent reconciliation are separate contracts.
+`charly vm destroy` fails for an absent VM; internal expected-absence cleanup
+passes `--if-exists`, which succeeds silently but still reconciles all managed
+metadata. Never discard a strict-command error as the implementation of
+idempotency.
 
 ## Hard cutovers and execution
 
@@ -293,6 +312,34 @@ Changes requested stay on the same PR with append-only commits. Close and
 replace only work that cannot land at all. Never bypass branch protection,
 merge with admin/force, push directly to `main`, rewrite pushed history, or
 move/delete a release tag.
+
+## Codex project configuration
+
+All persistent Codex configuration for OpenCharly is repository-scoped. Never
+edit `~/.codex`, redirect `CODEX_HOME`, create an alternate home, or manufacture
+alternate Go, module, or build caches to make a command pass.
+
+Create substantial Codex work as a linked Git worktree from current protected
+`origin/main`; leave the operator's root checkout and unrelated dirty state
+untouched. Verify `HEAD`, merge-base, and `origin/main` before implementation
+and refresh them again before PR landing. Build only the stamped worktree-local
+binary with `task build:binary`. Tests use the host's existing normal Go caches;
+never create a per-worktree `GOCACHE` or `GOMODCACHE`.
+
+The trusted repository's `.codex/config.toml` requests Codex's current
+`:danger-full-access` developer permission profile with on-request approvals.
+That project default supplies the Git-worktree, network, container, VM, and
+libvirt capability required by normal Charly development; it does not weaken
+R0, R1-R10, disposability, branch protection, or outward-action approvals.
+
+The active session is authoritative. Managed requirements can override a
+project default, and configuration changes apply only to a new trusted session.
+Check the active profile before Git mutation, builds, or R10 beds. If policy
+withholds a required capability, request the exact scoped approval for the
+owning `git`, `gh`, or `charly` command or stop and report the boundary. Never
+compensate with direct Podman, Docker, virsh, or systemd operations against
+Charly-managed resources. The `charly` CLI is the only operational interface;
+its generated state is cleaned through the owning `charly` command.
 
 ## Codex teammates and validation
 

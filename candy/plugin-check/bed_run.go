@@ -277,24 +277,31 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	}
 
 	// cleanup tears the disposable bed's DEPLOYED TARGET down (suppressed by --keep).
-	// Used on the happy-path tear-down; the session's locks/lease/env are released by
-	// the teardown defer regardless.
-	cleanup := func() {
+	// Runtime and member cleanup are independently recorded, and either failure fails the bed; the
+	// session's locks/lease/env are still released by the teardown defer on every path.
+	cleanup := func() error {
 		if opts.Keep {
-			return
+			return nil
 		}
+		var targetErr error
 		switch {
 		case d.IsVM:
-			_ = step("cleanup", "vm", "destroy", d.VMTemplate, "--domain", d.BedDomain)
+			targetErr = step("cleanup", "vm", "destroy", d.VMTemplate, "--domain", d.BedDomain, "--if-exists")
 		case d.IsGroup:
 			// A targetless group has NO root container — members-down is the whole teardown.
 		case d.IsExternal:
-			_ = step("cleanup", "bundle", "del", name)
+			targetErr = step("cleanup", "bundle", "del", name)
 		default:
-			_ = step("cleanup", "remove", name, "--purge")
+			targetErr = step("cleanup", "remove", name, "--purge")
 		}
-		// Tear down any sibling members the bed brought up. Best-effort.
-		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-down", Bed: name})
+		membersErr := phase("cleanup-members", func() error {
+			_, err := bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-down", Bed: name})
+			return err
+		})
+		if targetErr != nil {
+			return targetErr
+		}
+		return membersErr
 	}
 
 	// deployed flips true once the bed's target actually exists (after deploy-add).
@@ -369,7 +376,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// shared kind:vm entity (VMTemplate) — #33/P33. `vm build` builds the shared
 		// base off the ENTITY; every `charly vm …` that touches THIS domain passes
 		// --domain <BedDomain>.
-		bestEffort("vm", "destroy", d.VMTemplate, "--domain", d.BedDomain)
+		bestEffort("vm", "destroy", d.VMTemplate, "--domain", d.BedDomain, "--if-exists")
 		if err := step("vm-build", "vm", "build", d.VMTemplate); err != nil {
 			return fail("vm build %s: %w", d.VMTemplate, err)
 		}
@@ -494,7 +501,12 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 				return fail("rebuild member image %s (%s): %w", m.Key, m.Image, err)
 			}
 		}
-		_, _ = bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-down", Bed: name})
+		if err := phase("rebuild-members-down", func() error {
+			_, e := bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-down", Bed: name})
+			return e
+		}); err != nil {
+			return fail("tear down members for fresh rebuild of %s: %w", name, err)
+		}
 		if d.RunRuntime {
 			if err := phase("re-bring-up-members", func() error {
 				_, e := bedHostBuild(ex, ctx, spec.CheckBedRequest{Op: "members-up", Bed: name})
@@ -539,8 +551,10 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		}
 	}
 
-	// Step 6: tear down (suppressed by --keep). Errors recorded but don't fail the run.
-	cleanup()
+	// Step 6: tear down (suppressed by --keep). Cleanup is part of the acceptance contract.
+	if err := cleanup(); err != nil {
+		return fail("clean up %s: %w", name, err)
+	}
 
 	writeBedSummary(d.LogDir, res)
 	if !res.OK {

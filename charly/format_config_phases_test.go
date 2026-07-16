@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/vmshared"
+	"testing"
+)
 
 // Tests for the new PhaseSet / PhaseTemplates lookup added for the
 // BuildTarget refactor (Task 4). Verifies (a) fallback to legacy
@@ -32,12 +35,12 @@ func TestFormatDefPhaseTemplateLegacyFallback(t *testing.T) {
 func TestFormatDefPhaseTemplateNewPathPreferred(t *testing.T) {
 	f := &FormatDef{
 		InstallTemplate: "RUN legacy",
-		Phases: &PhaseSet{
-			Install: &PhaseTemplates{
+		Phases: &vmshared.PhaseSet{
+			Install: &vmshared.PhaseTemplates{
 				Container: "RUN new-container",
 				Host:      "new-host",
 			},
-			Prepare: &PhaseTemplates{
+			Prepare: &vmshared.PhaseTemplates{
 				Container: "RUN prepare-container",
 				Host:      "prepare-host",
 			},

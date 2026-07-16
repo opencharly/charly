@@ -50,13 +50,13 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	hostCtx := HostContext{MachineVenue: true, Distro: "arch"}
 
 	// A candy with no localpkg entry for the target format → nil.
-	if step := compileLocalPkgStep(&Candy{Name: "no-pkg"}, img, hostCtx); step != nil {
+	if step := deploykit.CompileLocalPkgStep(&Candy{Name: "no-pkg"}, img, hostCtx); step != nil {
 		t.Errorf("candy with no localpkg: should compile to nil, got %T", step)
 	}
 
 	// The charly candy's per-format map: pac resolves to pkg/arch.
 	l := &Candy{Name: "charly", SourceDir: "/layers/charly", localpkg: map[string]string{"pac": "pkg/arch", "rpm": "pkg/fedora", "deb": "pkg/debian"}}
-	step := compileLocalPkgStep(l, img, hostCtx)
+	step := deploykit.CompileLocalPkgStep(l, img, hostCtx)
 	if step == nil {
 		t.Fatal("compileLocalPkgStep returned nil for a candy with a pac localpkg source")
 	}
@@ -79,12 +79,12 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	rpmImg := &ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{
 		"rpm": {LocalPkg: &LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
-	if rs, ok := compileLocalPkgStep(l, rpmImg, hostCtx).(*LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
-		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", compileLocalPkgStep(l, rpmImg, hostCtx))
+	if rs, ok := deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx).(*LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
+		t.Errorf("rpm distro should pick pkg/fedora via the format map, got %#v", deploykit.CompileLocalPkgStep(l, rpmImg, hostCtx))
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
-	noFmt := compileLocalPkgStep(l, &ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
+	noFmt := deploykit.CompileLocalPkgStep(l, &ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
 	if noFmt != nil {
 		t.Errorf("distro without a localpkg-capable format should compile to nil, got %#v", noFmt)
 	}

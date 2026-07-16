@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/vmshared"
 	"sort"
 	"testing"
 
@@ -17,7 +18,7 @@ func androidBedUnified() *UnifiedFile {
 	return &UnifiedFile{
 		Android: rawTemplateMap(map[string]*AndroidSpec{
 			"pixel9a-36":       {Box: "android-emulator"},
-			"pixel9a-endpoint": {Adb: &AndroidAdbEndpoint{Host: "127.0.0.1:1"}, Serial: "emulator-5554"},
+			"pixel9a-endpoint": {Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:1"}, Serial: "emulator-5554"},
 		}),
 		Bundle: map[string]spec.BundleNode{
 			"check-android-emulator-pod": {
@@ -90,7 +91,7 @@ func TestCollectAndroidDeployNodes_EnumeratesNestedByDottedPath(t *testing.T) {
 // the bare deploy key as its path.
 func TestCollectAndroidDeployNodes_TopLevel(t *testing.T) {
 	uf := &UnifiedFile{
-		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Adb: &AndroidAdbEndpoint{Host: "h:1"}}}),
+		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Adb: &vmshared.AndroidAdbEndpoint{Host: "h:1"}}}),
 		Bundle: map[string]spec.BundleNode{
 			"phone": {Target: "android", From: "dev"},
 		},
@@ -105,7 +106,7 @@ func TestCollectAndroidDeployNodes_TopLevel(t *testing.T) {
 // resolveTreeRoot's MergeDeployConfigs(projectDC, localDC) precedence).
 func TestCollectAndroidDeployNodes_DeployYamlWinsPerKey(t *testing.T) {
 	uf := &UnifiedFile{
-		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Adb: &AndroidAdbEndpoint{Host: "h:1"}}}),
+		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Adb: &vmshared.AndroidAdbEndpoint{Host: "h:1"}}}),
 		Bundle:  map[string]spec.BundleNode{"phone": {Target: "android", From: "dev"}},
 	}
 	// deploy.yml flips "phone" to a pod target — the android node must disappear.
@@ -133,7 +134,7 @@ func TestAndroidCollector_CollectOneEndpointDeclared(t *testing.T) {
 		RunMode: "quadlet",
 		Unified: &UnifiedFile{
 			Android: rawTemplateMap(map[string]*AndroidSpec{
-				"dev": {Adb: &AndroidAdbEndpoint{Host: "127.0.0.1:1"}, Serial: "emulator-5554"},
+				"dev": {Adb: &vmshared.AndroidAdbEndpoint{Host: "127.0.0.1:1"}, Serial: "emulator-5554"},
 			}),
 		},
 	}

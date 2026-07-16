@@ -8,15 +8,9 @@ package main
 
 import "github.com/opencharly/sdk/deploykit"
 
-type (
-	DeployTreePhase   = deploykit.DeployTreePhase
-	DeployTreeVisitor = deploykit.DeployTreeVisitor
-)
+type ()
 
-const (
-	DeployTreePhaseAdd = deploykit.DeployTreePhaseAdd
-	DeployTreePhaseDel = deploykit.DeployTreePhaseDel
-)
+const ()
 
 var (
 	WalkDeploymentTree        = deploykit.WalkDeploymentTree

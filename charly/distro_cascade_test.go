@@ -1,7 +1,9 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"reflect"
 	"testing"
 
@@ -211,7 +213,7 @@ distro:
     repo: [{name: r, suite: from-version}]
 `)
 	step := pkgStep(t, compileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), HostContext{}))
-	repos := toMapSlice(step.RawInstallContext["repo"])
+	repos := buildkit.ToMapSlice(step.RawInstallContext["repo"])
 	if len(repos) != 1 || repos[0]["suite"] != "from-version" {
 		t.Errorf("most-specific repo must win: got %v, want suite=from-version", repos)
 	}
@@ -237,10 +239,10 @@ distro:
 		l := deriveCandy(t, body)
 		deb := pkgStep(t, compileSystemPackageSteps(l, debImg("debian:13", "debian"), HostContext{}))
 		ubu := pkgStep(t, compileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), HostContext{}))
-		if s := toMapSlice(deb.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "trixie" {
+		if s := buildkit.ToMapSlice(deb.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "trixie" {
 			t.Fatalf("iter %d: debian must resolve trixie, got %v", i, s)
 		}
-		if s := toMapSlice(ubu.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "noble" {
+		if s := buildkit.ToMapSlice(ubu.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "noble" {
 			t.Fatalf("iter %d: ubuntu must resolve noble, got %v", i, s)
 		}
 	}
@@ -294,9 +296,9 @@ func TestDistroTagChain(t *testing.T) {
 
 func TestDistroDefVersionInherits(t *testing.T) {
 	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"debian": {Version: "13", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
-		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
-		"cachy":  {Inherits: "debian", Bootstrap: BootstrapDef{InstallCmd: "apt"}}, // no own version
+		"debian": {Version: "13", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
+		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
+		"cachy":  {Inherits: "debian", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}}, // no own version
 	}}
 	if v := dc.ResolveInherits(dc.Distro["ubuntu"], 10).Version; v != "24.04" {
 		t.Errorf("ubuntu version = %q, want 24.04 (child wins)", v)

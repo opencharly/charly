@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
@@ -148,7 +149,7 @@ func TestGenerateInitFragments(t *testing.T) {
 	supervisordDef := withRaw(&ResolvedInit{
 		Model:       "fragment_assembly",
 		FragmentDir: "supervisor",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			SupportsPackaged: false,
 			ServiceTemplate:  "[program:{{.Name}}]\ncommand={{.Exec}}\n",
 		},
@@ -213,7 +214,7 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 	supervisordDef := withRaw(&ResolvedInit{
 		Model:       "fragment_assembly",
 		FragmentDir: "supervisor",
-		ServiceSchema: &ServiceSchemaDef{
+		ServiceSchema: &vmshared.ServiceSchemaDef{
 			SupportsPackaged: false,
 			ServiceTemplate:  "[program:{{.Name}}]\ncommand={{.Exec}}\n",
 		},

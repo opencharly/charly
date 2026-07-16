@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
@@ -170,11 +171,11 @@ func TestCandyPacTool(t *testing.T) {
 		t.Error("pac-tool should have no pac format section (distro.arch → tag section)")
 	}
 	// Test raw fields accessible for templates
-	repos := toMapSlice(arch.Raw["repo"])
+	repos := buildkit.ToMapSlice(arch.Raw["repo"])
 	if len(repos) != 1 {
 		t.Errorf("arch repos count = %d, want 1", len(repos))
 	}
-	options := toStringSlice(arch.Raw["options"])
+	options := buildkit.ToStringSlice(arch.Raw["options"])
 	if !reflect.DeepEqual(options, []string{"--needed"}) {
 		t.Errorf("arch options = %v, want [--needed]", options)
 	}

@@ -3,7 +3,13 @@ package tunnelverb
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/opencharly/charly/candy/plugin-tunnel/params"
@@ -144,4 +150,79 @@ func TestTunnelPlan_ExpectMatch(t *testing.T) {
 	if r := tunnelPlan(params.TunnelConfig{Provider: "bogus"}, nil); r.Status != "fail" {
 		t.Errorf("unknown provider: status=%q, want fail", r.Status)
 	}
+}
+
+// TestCloudflareTunnelStop_AlreadyGonePID proves the #55 teardown-robustness demotion: a
+// recorded PID that is already gone (a prior stop already ran, cloudflared exited on its
+// own, or this is a second/double teardown) is a benign, already-achieved end state — not
+// a warning. Exercises the REAL syscall.Kill/ESRCH path against a genuinely-reaped PID
+// (spawn a real child, wait for it to exit so the PID is actually free) rather than a mock,
+// so it proves the OS-level classification, not just the Go branch.
+func TestCloudflareTunnelStop_AlreadyGonePID(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	const name = "charly-test-already-gone"
+	pidPath, err := tunnelPIDPath(name)
+	if err != nil {
+		t.Fatalf("tunnelPIDPath: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// Spawn and reap a real process so its PID is genuinely gone (not merely
+	// unallocated) — the same ESRCH signature a dead cloudflared PID produces.
+	cmd := exec.Command("true")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("spawning throwaway process: %v", err)
+	}
+	deadPID := cmd.Process.Pid
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("reaping throwaway process: %v", err)
+	}
+
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(deadPID)), 0600); err != nil {
+		t.Fatalf("writing pid file: %v", err)
+	}
+
+	stderr := captureStderr(t, func() {
+		if err := cloudflareTunnelStop(params.TunnelConfig{TunnelName: name}); err != nil {
+			t.Errorf("cloudflareTunnelStop(already-gone PID): unexpected error: %v", err)
+		}
+	})
+
+	if strings.Contains(stderr, "Warning:") {
+		t.Errorf("cloudflareTunnelStop(already-gone PID): stderr still reports a Warning, want a demoted note:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "note:") || !strings.Contains(stderr, "already stopped") {
+		t.Errorf("cloudflareTunnelStop(already-gone PID): stderr = %q, want a note: ... already stopped message", stderr)
+	}
+	if _, statErr := os.Stat(pidPath); !os.IsNotExist(statErr) {
+		t.Errorf("cloudflareTunnelStop(already-gone PID): pid file %s still present after teardown", pidPath)
+	}
+}
+
+// captureStderr redirects os.Stderr for the duration of fn and returns everything written
+// to it. fn runs synchronously; the pipe is drained after fn returns and stderr restored
+// even on failure.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("closing pipe writer: %v", err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("reading captured stderr: %v", err)
+	}
+	return string(out)
 }

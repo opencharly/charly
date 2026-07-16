@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"testing"
 )
 
@@ -28,14 +29,14 @@ func TestBundleNode_EphemeralImpliesDisposable(t *testing.T) {
 		{
 			name: "ephemeral block-form implies disposable",
 			node: spec.BundleNode{
-				Ephemeral: &EphemeralLifetime{TTL: "30m"},
+				Ephemeral: &vmshared.EphemeralLifetime{TTL: "30m"},
 			},
 			want: true,
 		},
 		{
 			name: "ephemeral with all defaults still implies disposable",
 			node: spec.BundleNode{
-				Ephemeral: &EphemeralLifetime{},
+				Ephemeral: &vmshared.EphemeralLifetime{},
 			},
 			want: true,
 		},
@@ -68,8 +69,8 @@ func TestBundleNode_IsEphemeral(t *testing.T) {
 		want bool
 	}{
 		{name: "no block", node: spec.BundleNode{}, want: false},
-		{name: "block with ttl", node: spec.BundleNode{Ephemeral: &EphemeralLifetime{TTL: "1h"}}, want: true},
-		{name: "block with empty fields", node: spec.BundleNode{Ephemeral: &EphemeralLifetime{}}, want: true},
+		{name: "block with ttl", node: spec.BundleNode{Ephemeral: &vmshared.EphemeralLifetime{TTL: "1h"}}, want: true},
+		{name: "block with empty fields", node: spec.BundleNode{Ephemeral: &vmshared.EphemeralLifetime{}}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,14 +85,14 @@ func TestBundleNode_IsEphemeral(t *testing.T) {
 func TestEphemeralLifetime_EffectiveTTL(t *testing.T) {
 	tests := []struct {
 		name string
-		eph  *EphemeralLifetime
+		eph  *vmshared.EphemeralLifetime
 		want string
 	}{
 		{name: "nil → 0", eph: nil, want: "0s"},
-		{name: "empty → default 1h", eph: &EphemeralLifetime{}, want: "1h0m0s"},
-		{name: "30m parses", eph: &EphemeralLifetime{TTL: "30m"}, want: "30m0s"},
-		{name: "invalid → default", eph: &EphemeralLifetime{TTL: "not-a-duration"}, want: "1h0m0s"},
-		{name: "negative → default", eph: &EphemeralLifetime{TTL: "-5m"}, want: "1h0m0s"},
+		{name: "empty → default 1h", eph: &vmshared.EphemeralLifetime{}, want: "1h0m0s"},
+		{name: "30m parses", eph: &vmshared.EphemeralLifetime{TTL: "30m"}, want: "30m0s"},
+		{name: "invalid → default", eph: &vmshared.EphemeralLifetime{TTL: "not-a-duration"}, want: "1h0m0s"},
+		{name: "negative → default", eph: &vmshared.EphemeralLifetime{TTL: "-5m"}, want: "1h0m0s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,14 +107,14 @@ func TestEphemeralLifetime_EffectiveTTL(t *testing.T) {
 // TestEphemeralLifetime_EffectiveNamingPattern covers the default fall-through.
 func TestEphemeralLifetime_EffectiveNamingPattern(t *testing.T) {
 	defaultPat := "{{.Source}}-eph-{{.UUID6}}"
-	if got := (*EphemeralLifetime)(nil).EffectiveNamingPattern(); got != defaultPat {
+	if got := (*vmshared.EphemeralLifetime)(nil).EffectiveNamingPattern(); got != defaultPat {
 		t.Errorf("nil.EffectiveNamingPattern() = %q, want %q", got, defaultPat)
 	}
-	if got := (&EphemeralLifetime{}).EffectiveNamingPattern(); got != defaultPat {
+	if got := (&vmshared.EphemeralLifetime{}).EffectiveNamingPattern(); got != defaultPat {
 		t.Errorf("empty.EffectiveNamingPattern() = %q, want %q", got, defaultPat)
 	}
 	custom := "test-{{.UUID6}}"
-	if got := (&EphemeralLifetime{NamingPattern: custom}).EffectiveNamingPattern(); got != custom {
+	if got := (&vmshared.EphemeralLifetime{NamingPattern: custom}).EffectiveNamingPattern(); got != custom {
 		t.Errorf("custom.EffectiveNamingPattern() = %q, want %q", got, custom)
 	}
 }

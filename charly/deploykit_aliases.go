@@ -9,9 +9,6 @@ package main
 import "github.com/opencharly/sdk/deploykit"
 
 type (
-	RepoSpec            = deploykit.RepoSpec
-	CacheMountSpec      = deploykit.CacheMountSpec
-	ArtifactRef         = deploykit.ArtifactRef
 	SystemPackagesStep  = deploykit.SystemPackagesStep
 	BuilderStep         = deploykit.BuilderStep
 	OpStep              = deploykit.OpStep
@@ -20,7 +17,6 @@ type (
 	ServiceCustomStep   = deploykit.ServiceCustomStep
 	ShellHookStep       = deploykit.ShellHookStep
 	ShellSnippetStep    = deploykit.ShellSnippetStep
-	RepoChangeStep      = deploykit.RepoChangeStep
 	ApkInstallStep      = deploykit.ApkInstallStep
 	LocalPkgInstallStep = deploykit.LocalPkgInstallStep
 	RebootStep          = deploykit.RebootStep
@@ -30,7 +26,6 @@ type (
 
 var (
 	opStepScope        = deploykit.OpStepScope
-	pathIsSystemScoped = deploykit.PathIsSystemScoped
 	isExternalStepKind = deploykit.IsExternalStepKind
 	stepToView         = deploykit.StepToView
 	stepFromView       = deploykit.StepFromView
@@ -38,12 +33,14 @@ var (
 )
 
 // InstallPlan IR container + deploy-target/executor surface (P4): the InstallPlan
-// struct + its methods (wireView/ResolveHome/StepsByVenue), StepBatch, EmitOpts,
-// DeployTarget iface, DeployExecutor iface, BuilderRunOpts, and the HomeToken/
-// scopeFromName/GateEnabled/extractStringSlice helpers live in sdk/deploykit now.
+// struct + its methods (wireView/ResolveHome/StepsByVenue), EmitOpts, DeployTarget
+// iface, DeployExecutor iface, BuilderRunOpts, and the HomeToken/scopeFromName/
+// extractStringSlice helpers live in sdk/deploykit now. StepBatch and GateEnabled
+// also live there but have no charly/ non-test consumer — read as
+// deploykit.StepBatch / deploykit.GateEnabled where needed (install_plan_test.go
+// uses the latter).
 type (
 	InstallPlan    = deploykit.InstallPlan
-	StepBatch      = deploykit.StepBatch
 	EmitOpts       = deploykit.EmitOpts
 	DeployTarget   = deploykit.DeployTarget
 	DeployExecutor = deploykit.DeployExecutor
@@ -54,7 +51,6 @@ const HomeToken = deploykit.HomeToken
 
 var (
 	scopeFromName      = deploykit.ScopeFromName
-	GateEnabled        = deploykit.GateEnabled
 	extractStringSlice = deploykit.ExtractStringSlice
 
 	// InstallPlan's home-resolution + wire-projection are deploykit FREE FUNCTIONS

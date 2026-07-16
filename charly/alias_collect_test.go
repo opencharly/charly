@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
@@ -36,7 +37,7 @@ func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
-				Alias: []AliasConfig{{Name: "svc-cli", Command: "custom-cmd"}},
+				Alias: []vmshared.AliasConfig{{Name: "svc-cli", Command: "custom-cmd"}},
 			},
 		}),
 	}
@@ -66,7 +67,7 @@ func TestCollectImageAliasesDefaultCommand(t *testing.T) {
 		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{"svc"},
-				Alias: []AliasConfig{{Name: "mycli"}}, // no command
+				Alias: []vmshared.AliasConfig{{Name: "mycli"}}, // no command
 			},
 		}),
 	}

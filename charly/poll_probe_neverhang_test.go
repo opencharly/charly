@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/vmshared"
 	"strings"
 	"testing"
 	"time"
@@ -106,8 +107,8 @@ func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
 	// readinessPerAttemptFallback when no readiness config is loaded. (The bare
 	// kit.NewRunner zero-value fallback is a kit-internal defensive const the host path
 	// never hits, since newCheckRunner always sets ProbeTimeout from the readiness table.)
-	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&spec.Op{}); got != readinessPerAttemptFallback {
-		t.Errorf("newCheckRunner default: got %s, want readiness floor %s", got, readinessPerAttemptFallback)
+	if got := newCheckRunner(kit.RunnerConfig{}).ProbeNeverHang(&spec.Op{}); got != vmshared.ReadinessPerAttemptFallback {
+		t.Errorf("newCheckRunner default: got %s, want readiness floor %s", got, vmshared.ReadinessPerAttemptFallback)
 	}
 }
 
@@ -116,24 +117,24 @@ func TestRunner_ProbeNeverHang_HonorsAuthorTimeout(t *testing.T) {
 // single-probe per-attempt — the poll.go half of the load-robustness fix.
 func TestResolvedReadiness_PerAttemptHeavyForPollHeavy(t *testing.T) {
 	var rr ResolvedReadiness // zero value → all fallback constants
-	if rr.PerAttemptFor(PollHeavy) != readinessPerAttemptHeavyFallback {
-		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(PollHeavy), readinessPerAttemptHeavyFallback)
+	if rr.PerAttemptFor(vmshared.PollHeavy) != vmshared.ReadinessPerAttemptHeavyFallback {
+		t.Fatalf("perAttemptHeavy fallback = %s, want %s", rr.PerAttemptFor(vmshared.PollHeavy), vmshared.ReadinessPerAttemptHeavyFallback)
 	}
-	for _, class := range []PollClass{PollLocal, PollRemote} {
+	for _, class := range []vmshared.PollClass{PollLocal, PollRemote} {
 		if got := rr.WaitCapped("x", class, 0).PerAttempt; got != rr.PerAttemptFor(PollLocal) {
 			t.Errorf("WaitCapped(class=%d).PerAttempt = %s, want single-probe %s", class, got, rr.PerAttemptFor(PollLocal))
 		}
 	}
-	if got := rr.WaitCapped("x", PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(PollHeavy) {
-		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(PollHeavy))
+	if got := rr.WaitCapped("x", vmshared.PollHeavy, 0).PerAttempt; got != rr.PerAttemptFor(vmshared.PollHeavy) {
+		t.Errorf("WaitCapped(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(vmshared.PollHeavy))
 	}
-	if got := rr.Wait("x", PollHeavy).PerAttempt; got != rr.PerAttemptFor(PollHeavy) {
-		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(PollHeavy))
+	if got := rr.Wait("x", vmshared.PollHeavy).PerAttempt; got != rr.PerAttemptFor(vmshared.PollHeavy) {
+		t.Errorf("Wait(PollHeavy).PerAttempt = %s, want heavy %s", got, rr.PerAttemptFor(vmshared.PollHeavy))
 	}
 	// The heavy bound must be generously larger than the single-probe one — the
 	// whole point is to stop the 120s mid-pass guillotine.
-	if rr.PerAttemptFor(PollHeavy) <= rr.PerAttemptFor(PollLocal) {
-		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(PollHeavy), rr.PerAttemptFor(PollLocal))
+	if rr.PerAttemptFor(vmshared.PollHeavy) <= rr.PerAttemptFor(PollLocal) {
+		t.Errorf("perAttemptHeavy (%s) must be > perAttempt (%s)", rr.PerAttemptFor(vmshared.PollHeavy), rr.PerAttemptFor(PollLocal))
 	}
 }
 
