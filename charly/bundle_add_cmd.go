@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -144,7 +145,9 @@ func (c *deployAddCmd) Run() error {
 	// update — adds THIS deploy's add_candy: candies (+ any CLI --add-candy) to the scan
 	// (the image-closure scan never reaches them), so a deploy that add_candy's an
 	// out-of-tree plugin candy would otherwise leave its grpcProvider unloaded (R3).
-	loadDeployPlugins(dir, c.Name, c.AddCandy)
+	if err := loadDeployPlugins(dir, c.Name, c.AddCandy); err != nil {
+		return err
+	}
 
 	// Resolve the named root + any dotted-path subtree the user
 	// targeted. Supports three call shapes:
@@ -615,7 +618,9 @@ func (c *deployDelCmd) Run() error {
 	// grpcProvider for teardown — the SAME loadDeployPlugins bundle add / charly
 	// update use (R3). Best-effort; the dispatch fails loudly if still unresolved.
 	if cwd, _ := os.Getwd(); cwd != "" {
-		loadDeployPlugins(cwd, c.Name, nil)
+		if err := loadDeployPlugins(cwd, c.Name, nil); err != nil {
+			return err
+		}
 	}
 
 	// Build the gate-flag-bearing adapter. Del's signature is uniform
@@ -644,14 +649,16 @@ func (c *deployDelCmd) Run() error {
 	// Tear down any sibling members (companion deployments) FIRST — the reverse
 	// of bringUpMembers (root up → members up; members down → root down). Best-effort
 	// + the SAME helper the bed runner uses (R3). Skipped on a dry-run.
+	var memberErr error
 	if !c.DryRun {
-		tearDownMembers(node)
+		memberErr = tearDownMembers(node)
 	}
 
-	return utgt.Del(context.Background(), DelOpts{
+	targetErr := utgt.Del(context.Background(), DelOpts{
 		DryRun:    c.DryRun,
 		AssumeYes: c.AssumeYes,
 	})
+	return errors.Join(memberErr, targetErr)
 }
 
 // resolveDelNode resolves the BundleNode + canonical kind for a

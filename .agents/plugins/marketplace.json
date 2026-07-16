@@ -1,0 +1,308 @@
+{
+  "name": "charly-plugins",
+  "interface": {
+    "displayName": "OpenCharly"
+  },
+  "plugins": [
+    {
+      "name": "charly-core",
+      "source": {
+        "source": "local",
+        "path": "./plugins/core"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "commands"
+    },
+    {
+      "name": "charly-build",
+      "source": {
+        "source": "local",
+        "path": "./plugins/build"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "commands"
+    },
+    {
+      "name": "charly-check",
+      "source": {
+        "source": "local",
+        "path": "./plugins/check"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "commands"
+    },
+    {
+      "name": "charly-automation",
+      "source": {
+        "source": "local",
+        "path": "./plugins/automation"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "commands"
+    },
+    {
+      "name": "charly-image",
+      "source": {
+        "source": "local",
+        "path": "./plugins/image"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "kind"
+    },
+    {
+      "name": "charly-vm",
+      "source": {
+        "source": "local",
+        "path": "./plugins/vm"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "kind"
+    },
+    {
+      "name": "charly-kubernetes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/kubernetes"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "kind"
+    },
+    {
+      "name": "charly-local",
+      "source": {
+        "source": "local",
+        "path": "./plugins/local"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "kind"
+    },
+    {
+      "name": "charly-pod",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pod"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "kind"
+    },
+    {
+      "name": "charly-internals",
+      "source": {
+        "source": "local",
+        "path": "./plugins/internals"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "development"
+    },
+    {
+      "name": "charly-distros",
+      "source": {
+        "source": "local",
+        "path": "./plugins/distros"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-languages",
+      "source": {
+        "source": "local",
+        "path": "./plugins/languages"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-infrastructure",
+      "source": {
+        "source": "local",
+        "path": "./plugins/infrastructure"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-tools",
+      "source": {
+        "source": "local",
+        "path": "./plugins/tools"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-jupyter",
+      "source": {
+        "source": "local",
+        "path": "./plugins/jupyter"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-coder",
+      "source": {
+        "source": "local",
+        "path": "./plugins/coder"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-selkies",
+      "source": {
+        "source": "local",
+        "path": "./plugins/selkies"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-openclaw",
+      "source": {
+        "source": "local",
+        "path": "./plugins/openclaw"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-versa",
+      "source": {
+        "source": "local",
+        "path": "./plugins/versa"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-ollama",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ollama"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-openwebui",
+      "source": {
+        "source": "local",
+        "path": "./plugins/openwebui"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-comfyui",
+      "source": {
+        "source": "local",
+        "path": "./plugins/comfyui"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-immich",
+      "source": {
+        "source": "local",
+        "path": "./plugins/immich"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-hermes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/hermes"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    },
+    {
+      "name": "charly-filebrowser",
+      "source": {
+        "source": "local",
+        "path": "./plugins/filebrowser"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "images"
+    }
+  ]
+}

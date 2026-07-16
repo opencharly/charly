@@ -38,7 +38,9 @@ func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
 func dispatchLifecycleTarget(verb, box, instance string) (LifecycleTarget, error) {
 	node, deployName := resolveLifecycleDeployNode(box, instance)
 	dir, _ := os.Getwd()
-	loadDeployPlugins(dir, deployName, nil)
+	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
+		return nil, err
+	}
 	// A bare box with NO deploy entry (an UNCONFIGURED image `charly shell`/`cmd`/`logs` targets — the
 	// former standalone-podman path) synthesizes a {Target:"pod"} node that no tree node references, so
 	// the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the substrate

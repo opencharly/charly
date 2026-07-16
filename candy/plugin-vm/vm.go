@@ -361,6 +361,7 @@ type VmDestroyCmd struct {
 	Domain     string `long:"domain" help:"Per-deploy domain identity (destroy charly-<domain>, keyed by the DEPLOY not the entity); absent for a direct destroy (domain = entity)."`
 	Disk       bool   `long:"disk" help:"Also delete the QCOW2 disk image"`
 	KeepDeploy bool   `long:"keep-deploy" help:"Keep the charly.yml vm:<name> entry (default: remove it, like 'charly remove' for pods)"`
+	IfExists   bool   `long:"if-exists" help:"Succeed silently when the domain is already absent, while still cleaning managed metadata"`
 }
 
 // vmHolder probes which backend ACTUALLY holds the VM domain named `name`, authoritatively — the
@@ -522,11 +523,15 @@ func (c *VmDestroyCmd) Run() error {
 		return err
 	}
 	if !torn {
-		// No domain in EITHER backend — a genuinely-absent target must FAIL, never report a false
-		// "Destroyed VM" success (#69 regression: destroy-nonexistent exits non-zero).
-		return fmt.Errorf("no such VM %q: no libvirt domain and no qemu state — nothing destroyed", name)
+		// A direct operator destroy remains strict so a typo cannot false-succeed (#69). Internal
+		// reconcilers explicitly opt into idempotent cleanup with --if-exists; they must continue
+		// through the metadata cleanup below even when the runtime resource is already absent.
+		if !c.IfExists {
+			return missingDestroyError(name, c.IfExists)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Destroyed VM %s\n", name)
 	}
-	fmt.Fprintf(os.Stderr, "Destroyed VM %s\n", name)
 
 	// Remove any boot-autostart user unit (the inverse of ensureBootAutostartPrereqs),
 	// so a destroyed VM doesn't leave a unit that fails at boot. Idempotent.
@@ -574,6 +579,13 @@ func (c *VmDestroyCmd) Run() error {
 	}
 
 	return nil
+}
+
+func missingDestroyError(name string, ifExists bool) error {
+	if ifExists {
+		return nil
+	}
+	return fmt.Errorf("no such VM %q: no libvirt domain and no qemu state — nothing destroyed", name)
 }
 
 // --- VmListCmd ---

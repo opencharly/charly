@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"reflect"
 	"strings"
@@ -192,7 +193,9 @@ func TestTearDownMembers_RoutingAndOrder(t *testing.T) {
 		"zeta-pod":   {Target: "pod"},
 		"alpha-host": {Target: "local"},
 	}}
-	tearDownMembers(node)
+	if err := tearDownMembers(node); err != nil {
+		t.Fatalf("tearDownMembers: %v", err)
+	}
 	want := [][]string{
 		deployDelArgv("alpha-host"),       // sorted first; non-pod → deploy del --assume-yes (unattended)
 		{"remove", "zeta-pod", "--purge"}, // pod → remove --purge
@@ -208,9 +211,36 @@ func TestTearDownMembers_NoMembersNoop(t *testing.T) {
 	defer func() { runCharlySubcommand = orig }()
 	called := false
 	runCharlySubcommand = func(args ...string) error { called = true; return nil }
-	tearDownMembers(&BundleNode{})
+	if err := tearDownMembers(&BundleNode{}); err != nil {
+		t.Fatalf("tearDownMembers(empty): %v", err)
+	}
 	if called {
 		t.Errorf("tearDownMembers ran a subcommand for a node with no members")
+	}
+}
+
+func TestTearDownMembers_AttemptsAllAndReturnsJoinedErrors(t *testing.T) {
+	orig := runCharlySubcommand
+	defer func() { runCharlySubcommand = orig }()
+	firstErr := errors.New("first teardown failed")
+	secondErr := errors.New("second teardown failed")
+	var calls [][]string
+	runCharlySubcommand = func(args ...string) error {
+		calls = append(calls, args)
+		if len(calls) == 1 {
+			return firstErr
+		}
+		return secondErr
+	}
+	err := tearDownMembers(&BundleNode{Members: map[string]*BundleNode{
+		"a-local": {Target: "local"},
+		"b-pod":   {Target: "pod"},
+	}})
+	if !errors.Is(err, firstErr) || !errors.Is(err, secondErr) {
+		t.Fatalf("tearDownMembers error = %v, want both member failures", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("tearDownMembers stopped early: calls = %v", calls)
 	}
 }
 
