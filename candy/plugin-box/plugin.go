@@ -4,9 +4,9 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves SIX command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/inspect/list` parse + dispatch here while the retained
-// core BoxCmd verbs — build/merge/labels/feature/the authoring verbs — stay in core):
+// It serves SEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/inspect/list/labels` parse + dispatch here while the
+// retained core BoxCmd verbs — build/merge/feature/reconcile/the authoring verbs — stay in core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
@@ -26,6 +26,9 @@
 //     the hidden core `__box-inspect-overlay`. See inspect_list.go.
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
 //     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
+//   - command:labels — `charly box labels <ref>`: reaches the hidden core `__box-labels` reentry over
+//     HostBuild("cli") (ResolveRuntime/resolveLocalImageRef/InspectLabels are host container-storage
+//     probes, the SAME reentry shape as pkg/inspect-overlay/list-tags, P14-rest).
 //
 // NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
 // REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
@@ -55,7 +58,7 @@ import (
 const calver = "2026.194.0000"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels"}
 
 // NewProvider returns the box command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.

@@ -58,6 +58,8 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchInspect(hc, args)
 	case "list":
 		return dispatchList(hc, args)
+	case "labels":
+		return dispatchLabels(hc, args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}
@@ -153,6 +155,43 @@ func dispatchPkg(hc *hostClient, args []string) error {
 	}
 	if r.ExitCode != 0 {
 		return fmt.Errorf("box pkg failed (exit %d)", r.ExitCode)
+	}
+	return nil
+}
+
+// --- box labels ---
+
+// labelsGrammar is the `charly box labels <image> [--format] [--all]` CLI surface — mirrors
+// charly/box_labels_cmd.go's BoxLabelsCmd field-for-field (the hidden reentry decodes the
+// SAME flags).
+type labelsGrammar struct {
+	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage; never reads charly.yml)"`
+	Format string `name:"format" help:"Print only this label's raw value — a full key, or the ai.opencharly.<key> shorthand (e.g. 'init'); exits non-zero when the label is absent"`
+	All    bool   `name:"all" help:"Print every label, not just the ai.opencharly.* contract"`
+}
+
+// dispatchLabels reaches the hidden core `__box-labels` reentry over HostBuild("cli"):
+// ResolveRuntime/resolveLocalImageRef/InspectLabels are host container-storage probes the plugin
+// cannot compute pre-K1 (the same reentry shape as `pkg`). The subprocess inherits charly's
+// stdio (it prints the labels / raw value) and exits 0/1/ErrImageNotLocal's exit code.
+func dispatchLabels(hc *hostClient, args []string) error {
+	var g labelsGrammar
+	if done, err := parseLeaf("labels", &g, args); err != nil || done {
+		return err
+	}
+	argv := []string{"__box-labels", g.Image}
+	if g.Format != "" {
+		argv = append(argv, "--format", g.Format)
+	}
+	if g.All {
+		argv = append(argv, "--all")
+	}
+	r, err := hc.cli(false, true, argv...)
+	if err != nil {
+		return err
+	}
+	if r.ExitCode != 0 {
+		return fmt.Errorf("box labels failed (exit %d)", r.ExitCode)
 	}
 	return nil
 }

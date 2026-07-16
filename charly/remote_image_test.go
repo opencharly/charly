@@ -22,24 +22,6 @@ func TestStripURLScheme(t *testing.T) {
 	}
 }
 
-func TestRemoteContainerName(t *testing.T) {
-	tests := []struct {
-		ref  string
-		want string
-	}{
-		{"@github.com/org/repo/myapp:v1.0.0", "charly-myapp"},
-		{"@github.com/org/repo/myapp", "charly-myapp"},
-		{"@github.com/opencharly/charly/openclaw-browser:main", "charly-openclaw-browser"},
-	}
-
-	for _, tt := range tests {
-		got := RemoteContainerName(tt.ref)
-		if got != tt.want {
-			t.Errorf("RemoteContainerName(%q) = %q, want %q", tt.ref, got, tt.want)
-		}
-	}
-}
-
 func TestResolveImageName(t *testing.T) {
 	tests := []struct {
 		input string

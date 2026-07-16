@@ -8,11 +8,18 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// BoxLabelsCmd implements `charly box labels <ref>` — print a BUILT image
-// ref's OCI labels (the ai.opencharly.* capability contract) straight from
-// local container storage. This is the charly-native artifact-label probe
-// behind CLAUDE.md R8: an empty or missing capability label is a FAILURE,
-// and probing it never needs an ad-hoc `podman inspect`.
+// BoxLabelsCmd is the hidden `charly __box-labels` reentry behind the COMPILED-IN
+// candy/plugin-box command:labels word (nested under `box`, P14-rest): the plugin owns the
+// user-facing `charly box labels` grammar + dispatch and reaches this over HostBuild("cli") —
+// ResolveRuntime/resolveLocalImageRef/InspectLabels are core-coupled host-storage probes (the
+// SAME pkg/inspect-overlay/list-tags/fetch/refresh reentry shape, R3). It prints a BUILT image
+// ref's OCI labels (the ai.opencharly.* capability contract) straight from local container
+// storage — the charly-native artifact-label probe behind CLAUDE.md R8: an empty or missing
+// capability label is a FAILURE, and probing it never needs an ad-hoc `podman inspect`.
+//
+// K5-doomed: dies when ResolveRuntime/resolveLocalImageRef/InspectLabels' host-storage reads move
+// into the plugin over sdk kits (the config-resolve seam family collapse) — the same tracked
+// residue as the sibling __box-inspect-overlay/__box-list-tags/__box-fetch/__box-refresh reentries.
 type BoxLabelsCmd struct {
 	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage; never reads charly.yml)"`
 	Format string `name:"format" help:"Print only this label's raw value — a full key, or the ai.opencharly.<key> shorthand (e.g. 'init'); exits non-zero when the label is absent"`

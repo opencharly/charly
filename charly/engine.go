@@ -2,6 +2,18 @@ package main
 
 import "github.com/opencharly/sdk/deploykit"
 
+// engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
+// resolution → deploykit + the deploy/bundle plugins). It is heavily cross-cone
+// coupled today — ResolveBoxEngine* / ImageRuntime are consumed from
+// commands.go, container.go, pod_lifecycle_resolve.go, preempt.go,
+// resolved_project_host.go, service.go, start.go, config_image.go,
+// status_collector.go, volume_cp_tags_cmd.go (P14-rest trace, 2026-07) — none
+// of which are movable in isolation without also relocating those consumers.
+// Stays core until the K4 deploy-cone wave moves the whole consumer set
+// together; a unilateral move of this file alone would strand its callers.
+
 // EngineBinary returns the binary name for the given engine.
 // The "auto" case should not normally be reached (resolved earlier by kit.DetectEngine),
 // but is handled defensively.
