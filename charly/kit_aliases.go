@@ -151,3 +151,31 @@ var (
 	EffectiveStepID = kit.EffectiveStepID
 	filterHostVars  = kit.FilterHostVars
 )
+
+// --- K4 lane B: the network / agent-forward / entrypoint resolution mechanisms, relocated
+// to sdk/kit (pod_lifecycle_resolve.go's move to candy/plugin-deploy-pod); config_image.go and
+// service.go are the remaining core callers (group 3, not moving yet). ---
+type AgentForwardMounts = kit.AgentForwardMounts
+
+var (
+	ResolveNetwork            = kit.ResolveNetwork
+	ResolveAgentForwarding    = kit.ResolveAgentForwarding
+	resolveEntrypointFromMeta = kit.ResolveEntrypointFromMeta
+	resolveInitDefFromMeta    = kit.ResolveInitDefFromMeta
+	appendUnique              = kit.AppendUnique
+
+	// parseHostPorts/buildPortMapping/resolveProto/TunnelConfigFromMetadata — K4 lane B:
+	// relocated to sdk/kit (shared between charly/tunnel.go's ResolveTunnelConfig and
+	// candy/plugin-deploy-pod's pod_lifecycle_resolve.go quadlet-mode move).
+	parseHostPorts            = kit.ParseHostPorts
+	buildPortMapping          = kit.BuildPortMapping
+	resolveProto              = kit.ResolveProto
+	TunnelConfigFromMetadata  = kit.TunnelConfigFromMetadata
+
+	// directDeployMarkerPath/IsDirectDeploy — K4 lane B: relocated to sdk/kit (shared between
+	// config_image.go's writeDirectDeployMarker and candy/plugin-deploy-pod's
+	// pod_lifecycle_resolve.go quadlet-mode move). DirectDeployMarkerDir has no charly-core
+	// caller (only used internally by kit.DirectDeployMarkerPath) so it is not aliased here.
+	directDeployMarkerPath = kit.DirectDeployMarkerPath
+	IsDirectDeploy         = kit.IsDirectDeploy
+)

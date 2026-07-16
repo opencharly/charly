@@ -230,70 +230,9 @@ func stopTunnelForImage(boxName, instance string) {
 	}
 }
 
-// buildStartArgs constructs the container run argument list for a detached service.
-// entrypoint is the init system command (e.g., ["supervisord", "-n", "-c", "/etc/supervisord.conf"])
-// or the fallback (e.g., ["sleep", "infinity"]).
-func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []VolumeMount, bindMounts []ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
-	binary := EngineBinary(engine)
-	args := []string{
-		binary, "run", "-d", "--rm",
-		"--name", name,
-		"-w", workingDir,
-	}
-	if len(network) > 0 && network[0] != "" {
-		args = append(args, "--network", network[0])
-	}
-	if gpu {
-		args = append(args, GPURunArgs(engine)...)
-	}
-	args = append(args, SecurityArgs(security)...)
-	for _, port := range ports {
-		args = append(args, "-p", localizePort(port, bindAddr))
-	}
-	for _, vol := range volumes {
-		args = append(args, "-v", fmt.Sprintf("%s:%s", vol.VolumeName, vol.ContainerPath))
-	}
-	for _, bm := range bindMounts {
-		args = append(args, "-v", fmt.Sprintf("%s:%s", bm.HostPath, bm.ContPath))
-	}
-	for _, m := range security.Mounts {
-		if after, ok := strings.CutPrefix(m, "tmpfs:"); ok {
-			// tmpfs:/path:options → --tmpfs /path:options
-			args = append(args, "--tmpfs", after)
-		} else {
-			args = append(args, "-v", m)
-		}
-	}
-	if engine == "podman" && len(bindMounts) > 0 {
-		args = append(args, fmt.Sprintf("--userns=keep-id:uid=%d,gid=%d", uid, gid))
-	}
-	for _, e := range envVars {
-		args = append(args, "-e", e)
-	}
-	args = append(args, imageRef)
-	args = append(args, entrypoint...)
-	return args
-}
+// buildStartArgs MOVED to sdk/deploykit as BuildStartArgs (K4 lane B — the direct-mode `charly
+// start` argv builder now lives with pod_lifecycle_resolve.go's move to candy/plugin-deploy-pod;
+// charly core no longer calls it — config_image.go renders quadlet units instead).
 
-// resolveEntrypointFromMeta determines the entrypoint from image metadata (runtime mode).
-// Label-first: the build-resolved init contract is baked into the
-// ai.opencharly.init_def label (meta.InitDef), so any init system declared in
-// the embedded `init:` vocabulary — including custom ones — now reaches
-// runtime. wellKnownInitDefs is consulted only for pre-init_def-label images
-// (built before the label existed; their labels cannot be re-baked).
-func resolveEntrypointFromMeta(meta *BoxMetadata) []string {
-	if meta.Init == "" {
-		return []string{"sleep", "infinity"}
-	}
-	if meta.InitDef != nil {
-		// The baked entrypoint is authoritative. An empty entrypoint means
-		// the container boots via the image's own init (systemd-on-bootc),
-		// exactly as the legacy registry encoded — fall through to the
-		// image default rather than overriding with sleep infinity.
-		return meta.InitDef.Entrypoint
-	}
-	if def, ok := wellKnownInitDefs[meta.Init]; ok {
-		return def.Entrypoint
-	}
-	return []string{"sleep", "infinity"}
-}
+// resolveEntrypointFromMeta MOVED to sdk/kit (K4 lane B); see kit_aliases.go's
+// resolveEntrypointFromMeta = kit.ResolveEntrypointFromMeta.

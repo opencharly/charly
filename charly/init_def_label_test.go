@@ -158,9 +158,11 @@ func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
 // limitation is gone. Both the entrypoint and the management surface come
 // from meta.InitDef even though "myinit" has no registry entry.
 func TestInitDefLabel_CustomInitAtRuntime(t *testing.T) {
-	if _, ok := wellKnownInitDefs["myinit"]; ok {
-		t.Fatal("precondition: myinit must NOT be a well-known init")
-	}
+	// Precondition: "myinit" is not one of the two frozen legacy entries
+	// (supervisord/systemd) in sdk/kit/entrypoint.go's wellKnownInitDefs table —
+	// that table is documented there as frozen (K4 lane B: moved out of
+	// charly/service.go, so it's no longer reachable from this package to
+	// assert against directly).
 	meta := &BoxMetadata{
 		Init: "myinit",
 		InitDef: &CapabilityInitDef{

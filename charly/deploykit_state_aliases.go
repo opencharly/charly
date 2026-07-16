@@ -27,7 +27,6 @@ type (
 var (
 	bundleWalkPreOrder         = deploykit.BundleWalkPreOrder
 	ResolveNodePath            = deploykit.ResolveNodePath
-	splitDottedPath            = deploykit.SplitDottedPath
 	bedCheckLiveRefs           = deploykit.BedCheckLiveRefs
 	preemptEffectiveRestore    = deploykit.PreemptEffectiveRestore
 	installOptsApplyTo         = deploykit.InstallOptsApplyTo

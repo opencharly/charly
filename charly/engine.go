@@ -1,7 +1,5 @@
 package main
 
-import "github.com/opencharly/sdk/deploykit"
-
 // engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
@@ -67,22 +65,6 @@ func ResolveBoxEngineFromDir(dir, boxName, globalEngine string) string {
 	return ResolveBoxEngine(cfg, layers, boxName, globalEngine)
 }
 
-// ResolveBoxEngineForDeploy resolves the run engine from charly.yml,
-// falling back to globalEngine. No charly.yml dependency.
-func ResolveBoxEngineForDeploy(boxName, instance, globalEngine string) string {
-	if entry, ok := deploykit.LoadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
-		return entry.Engine
-	}
-	return globalEngine
-}
-
-// ResolveBoxEngineFromMeta returns the engine from image metadata labels,
-// falling back to globalEngine if not set.
-func ResolveBoxEngineFromMeta(meta *BoxMetadata, globalEngine string) string {
-	if meta != nil && meta.Engine != "" {
-		return meta.Engine
-	}
-	return globalEngine
-}
-
-// GPURunArgs returns the engine-specific CLI arguments for GPU passthrough.
+// ResolveBoxEngineForDeploy / ResolveBoxEngineFromMeta MOVED to sdk/deploykit (K4 lane B — shared
+// between this file's remaining callers and candy/plugin-deploy-pod's pod_lifecycle_resolve.go
+// quadlet-mode move); see deploykit_pod_aliases.go.

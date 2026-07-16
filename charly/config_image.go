@@ -886,37 +886,9 @@ type directDeployMarker struct {
 	CreatedUTC    string `json:"created_utc"`
 }
 
-// directDeployMarkerDir returns ~/.config/charly/direct/, the registry
-// directory for direct-mode deploys (the equivalent of
-// ~/.config/containers/systemd/ for quadlet deploys).
-func directDeployMarkerDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolving user home: %w", err)
-	}
-	return filepath.Join(home, ".config", "charly", "direct"), nil
-}
-
-// directDeployMarkerPath returns the marker JSON path for a deploy.
-func directDeployMarkerPath(box, instance string) (string, error) {
-	dir, err := directDeployMarkerDir()
-	if err != nil {
-		return "", err
-	}
-	name := containerNameInstance(box, instance)
-	return filepath.Join(dir, name+".json"), nil
-}
-
-// IsDirectDeploy reports whether the named deploy was created in
-// direct mode (i.e. has a marker file). Used by lifecycle commands.
-func IsDirectDeploy(box, instance string) bool {
-	path, err := directDeployMarkerPath(box, instance)
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(path)
-	return err == nil
-}
+// directDeployMarkerDir/directDeployMarkerPath/IsDirectDeploy MOVED to sdk/kit (K4 lane B — shared
+// between writeDirectDeployMarker below and candy/plugin-deploy-pod's pod_lifecycle_resolve.go
+// quadlet-mode move); see kit_aliases.go.
 
 // writeDirectDeployMarker persists the marker JSON.
 func writeDirectDeployMarker(m directDeployMarker) error {

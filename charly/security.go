@@ -124,97 +124,13 @@ func CollectSecurity(cfg *Config, layers map[string]*Candy, boxName string) Secu
 	return merged
 }
 
-// appendUnique appends items to a slice, skipping duplicates.
-func appendUnique(dst []string, items ...string) []string {
-	seen := make(map[string]bool, len(dst))
-	for _, v := range dst {
-		seen[v] = true
-	}
-	for _, v := range items {
-		if !seen[v] {
-			dst = append(dst, v)
-			seen[v] = true
-		}
-	}
-	return dst
-}
+// appendUnique MOVED to sdk/kit (K4 lane B — shared between devices.go/config_image.go's
+// continued core use and candy/plugin-deploy-pod's pod_lifecycle_resolve.go move); see
+// kit_aliases.go's appendUnique = kit.AppendUnique.
 
-// SecurityArgs returns the container run arguments for the given security config.
-//
-// Note on the ShmSize+IpcMode interaction: podman rejects `--shm-size`
-// when the IPC namespace is shared with the host (`--ipc=host`)
-// because the host's /dev/shm is shared in-kernel and sized by the
-// host kernel; an explicit shm-size on the container makes no sense
-// in that case and yields a runtime error like "cannot set shmsize
-// when running in the {host} IPC Namespace". Same logic applies to
-// the quadlet generator's ShmSize= directive elsewhere.
-func SecurityArgs(sec SecurityConfig) []string {
-	emitShmSize := sec.ShmSize != "" && !ipcModeBlocksShmSize(sec.IpcMode)
-	if sec.Privileged {
-		args := []string{"--privileged"}
-		// Pass security_opt even when privileged — nested containers need
-		// explicit label=disable and seccomp=unconfined since --privileged
-		// alone doesn't propagate through container nesting levels.
-		for _, opt := range sec.SecurityOpt {
-			args = append(args, "--security-opt", opt)
-		}
-		if sec.CgroupNS != "" {
-			args = append(args, "--cgroupns", sec.CgroupNS)
-		}
-		if sec.IpcMode != "" {
-			args = append(args, "--ipc", sec.IpcMode)
-		}
-		if emitShmSize {
-			args = append(args, "--shm-size", sec.ShmSize)
-		}
-		args = append(args, resourceCapArgs(sec)...)
-		return args
-	}
-	var args []string
-	for _, cap := range sec.CapAdd {
-		args = append(args, "--cap-add", cap)
-	}
-	for _, dev := range sec.Devices {
-		args = append(args, "--device", dev)
-	}
-	for _, opt := range sec.SecurityOpt {
-		args = append(args, "--security-opt", opt)
-	}
-	for _, group := range sec.GroupAdd {
-		args = append(args, "--group-add", group)
-	}
-	if sec.CgroupNS != "" {
-		args = append(args, "--cgroupns", sec.CgroupNS)
-	}
-	if sec.IpcMode != "" {
-		args = append(args, "--ipc", sec.IpcMode)
-	}
-	if emitShmSize {
-		args = append(args, "--shm-size", sec.ShmSize)
-	}
-	args = append(args, resourceCapArgs(sec)...)
-	return args
-}
-
-// resourceCapArgs returns the podman run flags for memory and CPU caps.
-// Emitted identically in both the privileged and non-privileged branches
-// of SecurityArgs because privileged containers still need resource limits.
-func resourceCapArgs(sec SecurityConfig) []string {
-	var args []string
-	if sec.MemoryMax != "" {
-		args = append(args, "--memory", sec.MemoryMax)
-	}
-	if sec.MemoryHigh != "" {
-		args = append(args, "--memory-reservation", sec.MemoryHigh)
-	}
-	if sec.MemorySwapMax != "" {
-		args = append(args, "--memory-swap", sec.MemorySwapMax)
-	}
-	if sec.Cpus != "" {
-		args = append(args, "--cpus", sec.Cpus)
-	}
-	return args
-}
+// SecurityArgs/resourceCapArgs MOVED to sdk/deploykit (K4 lane B — shared between
+// config_image.go's continued core use and candy/plugin-deploy-pod's pod_lifecycle_resolve.go
+// move); see deploykit_pod_aliases.go's SecurityArgs = deploykit.SecurityArgs.
 
 // parseShmBytes parses a size string like "256m", "1g", "1024" into bytes.
 func parseShmBytes(s string) int64 {

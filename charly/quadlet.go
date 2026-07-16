@@ -3,72 +3,9 @@
 // [Install] emitters + the QuadletConfig/CollectedSecret/ResolvedBindMount/
 // ResolvedSidecar resolved-runtime types + the pure size/port/tunnel helpers, and
 // the cloudflare tunnel-unit emitter) relocated to sdk/deploykit
-// (deploykit_pod_aliases.go re-points the package-main call sites). What stays here
-// is host-I/O: the on-disk quadlet/systemd path + filename helpers.
+// (deploykit_pod_aliases.go re-points the package-main call sites). The on-disk
+// quadlet/systemd path + filename helpers (quadletDir/quadletFilename*/serviceName*/
+// quadletExists*) MOVED to sdk/deploykit too (K4 lane B — shared with
+// candy/plugin-deploy-pod's pod_lifecycle_resolve.go quadlet-mode move); see
+// deploykit_pod_aliases.go's aliases.
 package main
-
-import (
-	"fmt"
-	"os"
-	"path/filepath"
-)
-
-// quadletDir returns the user-level quadlet directory.
-func quadletDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("determining home directory: %w", err)
-	}
-	return filepath.Join(home, ".config", "containers", "systemd"), nil
-}
-
-// systemdUserDir returns the user-level systemd unit directory (~/.config/systemd/user/).
-func systemdUserDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("determining home directory: %w", err)
-	}
-	return filepath.Join(home, ".config", "systemd", "user"), nil
-}
-
-// quadletFilename returns the quadlet filename for an image.
-func quadletFilename(boxName string) string {
-	return containerName(boxName) + ".container"
-}
-
-// quadletFilenameInstance returns the quadlet filename for an image with optional instance.
-func quadletFilenameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".container"
-}
-
-// serviceName returns the systemd service name for an image.
-func serviceName(boxName string) string {
-	return containerName(boxName) + ".service"
-}
-
-// serviceNameInstance returns the systemd service name for an image with optional instance.
-func serviceNameInstance(boxName, instance string) string {
-	return containerNameInstance(boxName, instance) + ".service"
-}
-
-// quadletExists checks whether a .container file exists for the given image.
-func quadletExists(boxName string) (bool, error) {
-	return quadletExistsInstance(boxName, "")
-}
-
-// quadletExistsInstance checks whether a .container file exists for the given image/instance.
-func quadletExistsInstance(boxName, instance string) (bool, error) {
-	qdir, err := quadletDir()
-	if err != nil {
-		return false, err
-	}
-	qpath := filepath.Join(qdir, quadletFilenameInstance(boxName, instance))
-	_, err = os.Stat(qpath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}

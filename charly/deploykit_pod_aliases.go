@@ -31,4 +31,33 @@ var (
 	ipcModeBlocksShmSize  = deploykit.IpcModeBlocksShmSize
 	localizePort          = deploykit.LocalizePort
 	resolveWorkingDir     = deploykit.ResolveWorkingDir
+
+	// SecurityArgs/provisionData/buildStartArgs — K4 lane B: relocated to deploykit
+	// (pod_lifecycle_resolve.go's move); config_image.go/start.go are the remaining core
+	// callers (group 3, not moving yet).
+	SecurityArgs   = deploykit.SecurityArgs
+	provisionData  = deploykit.ProvisionData
+	buildStartArgs = deploykit.BuildStartArgs
+
+	// ResolveBoxEngineForDeploy/ResolveBoxEngineFromMeta — K4 lane B: relocated to deploykit
+	// (pod_lifecycle_resolve.go's quadlet-mode move); ResolveBoxEngine/ResolveBoxEngineFromDir
+	// (which need *Config/*Candy/LoadConfig) stay in charly/engine.go.
+	ResolveBoxEngineForDeploy = deploykit.ResolveBoxEngineForDeploy
+	ResolveBoxEngineFromMeta  = deploykit.ResolveBoxEngineFromMeta
+
+	// The on-disk quadlet/systemd path + filename helpers — K4 lane B: relocated to deploykit
+	// (pod_lifecycle_resolve.go's quadlet-mode move); quadlet.go documents the residual split.
+	quadletDir              = deploykit.QuadletDir
+	systemdUserDir          = deploykit.SystemdUserDir
+	quadletFilename         = deploykit.QuadletFilename
+	quadletFilenameInstance = deploykit.QuadletFilenameInstance
+	serviceName             = deploykit.ServiceName
+	serviceNameInstance     = deploykit.ServiceNameInstance
+	quadletExists           = deploykit.QuadletExists
+	quadletExistsInstance   = deploykit.QuadletExistsInstance
+)
+
+const (
+	DataProvisionInitial = deploykit.DataProvisionInitial
+	DataProvisionForce   = deploykit.DataProvisionForce
 )
