@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,8 +103,8 @@ var KnownVmSourceKinds = []string{"cloud_image", "bootc", "bootstrap"}
 // runVmSpecBuild handles `charly vm build <vm-name>` where <vm-name>
 // matches a kind:vm entity. Dispatches on source.kind to the appropriate
 // per-kind builder (BuildCloudImage / BuildBootcVM / BuildBootstrapVM).
-func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRuntime) error {
-	fmt.Fprintf(os.Stderr, "Building VM %q (source.kind=%s)\n", vmName, spec.Source.Kind)
+func (c *VmBuildCmd) runVmSpecBuild(vmName string, vmSpec *VmSpec, rt *ResolvedRuntime) error {
+	fmt.Fprintf(os.Stderr, "Building VM %q (source.kind=%s)\n", vmName, vmSpec.Source.Kind)
 
 	outputDir, err := filepath.Abs(vmDiskDir(vmName))
 	if err != nil {
@@ -129,14 +130,14 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 	if err := os.MkdirAll(vmStateDir, 0o755); err != nil {
 		return err
 	}
-	var existingState *VmDeployState
+	var existingState *spec.VmDeployState
 	if e, ok := deploykit.LoadDeployConfigForRead("charly vm build").LookupKey("vm:" + vmName); ok {
 		existingState = e.VmState
 	}
 
-	switch spec.Source.Kind {
+	switch vmSpec.Source.Kind {
 	case "cloud_image":
-		res, err := BuildCloudImage(spec, outputDir, vmStateDir, existingState, c.Force)
+		res, err := BuildCloudImage(vmSpec, outputDir, vmStateDir, existingState, c.Force)
 		if err != nil {
 			return err
 		}
@@ -146,7 +147,7 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 		return nil
 
 	case "bootc":
-		res, err := BuildBootcVM(spec, outputDir, vmStateDir, existingState, rt.BuildEngine)
+		res, err := BuildBootcVM(vmSpec, outputDir, vmStateDir, existingState, rt.BuildEngine)
 		if err != nil {
 			return err
 		}
@@ -164,7 +165,7 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 		if err != nil {
 			return fmt.Errorf("loading builder/distro sections from the embedded build vocabulary: %w", err)
 		}
-		res, err := BuildBootstrapVM(spec, outputDir, vmStateDir, existingState, distroCfg, builderCfg)
+		res, err := BuildBootstrapVM(vmSpec, outputDir, vmStateDir, existingState, distroCfg, builderCfg)
 		if err != nil {
 			return err
 		}
@@ -175,7 +176,7 @@ func (c *VmBuildCmd) runVmSpecBuild(vmName string, spec *VmSpec, rt *ResolvedRun
 		return nil
 
 	default:
-		return fmt.Errorf("vm %q: unsupported source.kind %q (want one of %s)", vmName, spec.Source.Kind, strings.Join(KnownVmSourceKinds, ", "))
+		return fmt.Errorf("vm %q: unsupported source.kind %q (want one of %s)", vmName, vmSpec.Source.Kind, strings.Join(KnownVmSourceKinds, ", "))
 	}
 }
 

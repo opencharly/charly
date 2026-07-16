@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"strings"
@@ -318,7 +319,7 @@ func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
 		node = BundleNode{}
 	}
 	if node.VmState == nil {
-		node.VmState = &VmDeployState{}
+		node.VmState = &spec.VmDeployState{}
 	}
 	node.VmState.Ephemeral = &EphemeralRuntime{
 		ID:              h.ID,

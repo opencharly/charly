@@ -49,7 +49,7 @@ vm:cachyos-gpu:
 	if err := removeVmDeployEntry("vm:cachyos-gpu"); err != nil {
 		t.Fatalf("removeVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
+	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
 		t.Fatalf("saveVmDeployState (create leg): %v", err)
 	}
 

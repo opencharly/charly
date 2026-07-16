@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 
@@ -22,8 +23,8 @@ func deriveCandy(t *testing.T, body string) *Candy {
 	if root == nil {
 		t.Fatalf("test candy body is not a mapping")
 	}
-	var ly CandyYAML
-	if err := decodeEntityViaCUE(root, reflect.TypeOf(CandyYAML{}), &ly, "test-candy"); err != nil {
+	var ly spec.CandyYAML
+	if err := decodeEntityViaCUE(root, reflect.TypeOf(spec.CandyYAML{}), &ly, "test-candy"); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	layer := &Candy{Name: "t"}
@@ -37,7 +38,7 @@ func debImg(chain ...string) *ResolvedBox {
 	return &ResolvedBox{
 		Pkg:       "deb",
 		Distro:    chain,
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{"deb": {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"deb": {}}},
 	}
 }
 
@@ -63,7 +64,7 @@ func fmtImg(format string, chain ...string) *ResolvedBox {
 	return &ResolvedBox{
 		Pkg:       format,
 		Distro:    chain,
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{format: {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{format: {}}},
 	}
 }
 
@@ -255,7 +256,7 @@ distro:
     package: [vim]
 `)
 	img := &ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"},
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{"rpm": {}}}}
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}
 	step := pkgStep(t, compileSystemPackageSteps(l, img, HostContext{}))
 	if !reflect.DeepEqual(step.Packages, []string{"vim"}) {
 		t.Errorf("fedora bare reach: packages = %v, want [vim]", step.Packages)
@@ -292,7 +293,7 @@ func TestDistroTagChain(t *testing.T) {
 }
 
 func TestDistroDefVersionInherits(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
+	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"debian": {Version: "13", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
 		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
 		"cachy":  {Inherits: "debian", Bootstrap: BootstrapDef{InstallCmd: "apt"}}, // no own version
@@ -313,7 +314,7 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // while a distro that only sets inherits: (ubuntu → debian) does NOT pull the
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
+	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
 		"debian":  {Format: map[string]*FormatDef{"deb": {}}},

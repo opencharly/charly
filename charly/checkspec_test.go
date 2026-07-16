@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
@@ -168,7 +169,7 @@ func TestCheck_UnmarshalYAMLList(t *testing.T) {
 // Verifies Matcher decodes scalar, sequence, and single-key map forms.
 func TestMatcher_UnmarshalYAML(t *testing.T) {
 	type wrap struct {
-		M []Matcher `yaml:"m"`
+		M []spec.Matcher `yaml:"m"`
 	}
 	src := `
 m:
@@ -212,7 +213,7 @@ m:
 // Rejects a matcher map with more than one operator key.
 func TestMatcher_RejectsMultiKey(t *testing.T) {
 	src := `{equals: 1, contains: [2]}`
-	var m Matcher
+	var m spec.Matcher
 	if err := decodeViaCUEForTest(t, src, &m); err == nil {
 		t.Fatal("expected error for multi-key matcher map, got nil")
 	}
@@ -259,17 +260,17 @@ func TestMatcher_UnmarshalJSON_Shorthand(t *testing.T) {
 	cases := []struct {
 		name  string
 		input string
-		want  Matcher
+		want  spec.Matcher
 	}{
-		{"scalar string", `"OK"`, Matcher{Op: "equals", Value: "OK"}},
-		{"scalar number", `42`, Matcher{Op: "equals", Value: float64(42)}},
-		{"scalar bool", `true`, Matcher{Op: "equals", Value: true}},
-		{"canonical map", `{"op":"contains","value":"ready"}`, Matcher{Op: "contains", Value: "ready"}},
-		{"operator map", `{"matches":"^OK$"}`, Matcher{Op: "matches", Value: "^OK$"}},
+		{"scalar string", `"OK"`, spec.Matcher{Op: "equals", Value: "OK"}},
+		{"scalar number", `42`, spec.Matcher{Op: "equals", Value: float64(42)}},
+		{"scalar bool", `true`, spec.Matcher{Op: "equals", Value: true}},
+		{"canonical map", `{"op":"contains","value":"ready"}`, spec.Matcher{Op: "contains", Value: "ready"}},
+		{"operator map", `{"matches":"^OK$"}`, spec.Matcher{Op: "matches", Value: "^OK$"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var m Matcher
+			var m spec.Matcher
 			if err := json.Unmarshal([]byte(tc.input), &m); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
@@ -299,7 +300,7 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var ml MatcherList
+			var ml spec.MatcherList
 			if err := json.Unmarshal([]byte(tc.input), &ml); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}

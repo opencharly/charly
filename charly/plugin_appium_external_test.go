@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,7 +122,7 @@ func TestAppiumOpCrossesWireWithMatchers(t *testing.T) {
 	op := &Op{
 		Plugin:      "appium",
 		PluginInput: map[string]any{"method": "status"},
-		Stdout:      MatcherList{{Op: "contains", Value: `"ready":true`}},
+		Stdout:      spec.MatcherList{{Op: "contains", Value: `"ready":true`}},
 	}
 	params, err := json.Marshal(op) // the host's marshalJSON(c)
 	if err != nil {

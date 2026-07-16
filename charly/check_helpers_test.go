@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 
@@ -53,7 +54,7 @@ func testDistroConfig() *DistroConfig {
 }
 
 // testDistroDef returns the resolved DistroDef for the given distro tags.
-func testDistroDef(tags ...string) *DistroDef {
+func testDistroDef(tags ...string) *spec.ResolvedDistro {
 	dc := testDistroConfig()
 	return dc.ResolveDistro(tags)
 }

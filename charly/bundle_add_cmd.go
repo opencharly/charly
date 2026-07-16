@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"maps"
 	"os"
 	"path/filepath"
@@ -956,7 +957,7 @@ func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
 }
 
 // resolveDistroDef returns the DistroDef for a given distro tag.
-func resolveDistroDef(cfg *DistroConfig, distroTag string) *DistroDef {
+func resolveDistroDef(cfg *DistroConfig, distroTag string) *spec.ResolvedDistro {
 	if cfg == nil || distroTag == "" {
 		return nil
 	}

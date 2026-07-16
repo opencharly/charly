@@ -247,7 +247,7 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		uf.SetBox(gn.name, b)
 		return nil
 	}
-	var c CandyYAML
+	var c spec.CandyYAML
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", gn.name, err)
 	}

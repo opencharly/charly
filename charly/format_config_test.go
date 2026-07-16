@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"slices"
 	"strings"
 	"testing"
@@ -222,7 +223,7 @@ func TestLoadBuildConfigForImageFallback(t *testing.T) {
 }
 
 func TestDnfConfigParse(t *testing.T) {
-	var d DistroDef
+	var d spec.ResolvedDistro
 	if err := decodeViaCUEForTest(t, "dnf:\n  max_parallel_downloads: 10\n  fastestmirror: true\n", &d); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -238,7 +239,7 @@ func TestDnfConfigParse(t *testing.T) {
 // it declares none, and its own Dnf wins when set — same per-field merge as
 // the other DistroDef sub-blocks (BaseUser, Pacstrap, …).
 func TestDnfConfigInherit(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
+	dc := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {
 			Bootstrap: BootstrapDef{InstallCmd: "dnf install -y"},
 			Dnf:       &DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
@@ -264,18 +265,18 @@ func TestDnfConfigInherit(t *testing.T) {
 // TestDistroDefPrimaryFormat proves PrimaryFormat returns the base format
 // (rpm/deb/pac), skipping the secondary `aur` builder format, deterministically.
 func TestDistroDefPrimaryFormat(t *testing.T) {
-	arch := &DistroDef{Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}}
+	arch := &spec.ResolvedDistro{Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}}
 	if got := arch.PrimaryFormat(); got != "pac" {
 		t.Errorf("arch PrimaryFormat = %q, want pac (aur is secondary)", got)
 	}
-	fedora := &DistroDef{Format: map[string]*FormatDef{"rpm": {}}}
+	fedora := &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}
 	if got := fedora.PrimaryFormat(); got != "rpm" {
 		t.Errorf("fedora PrimaryFormat = %q, want rpm", got)
 	}
-	if got := (&DistroDef{Format: map[string]*FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
+	if got := (&spec.ResolvedDistro{Format: map[string]*FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
 		t.Errorf("aur-only PrimaryFormat = %q, want empty (no base format)", got)
 	}
-	if got := (*DistroDef)(nil).PrimaryFormat(); got != "" {
+	if got := (*spec.ResolvedDistro)(nil).PrimaryFormat(); got != "" {
 		t.Errorf("nil PrimaryFormat = %q, want empty", got)
 	}
 }

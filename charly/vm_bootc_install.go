@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,32 +46,32 @@ func resolveBootcImageRef(engine, image string) (string, error) {
 // grub-install needed). It uses RunPrivileged for the privileged
 // container and qemu-img convert raw → qcow2 (handled by bootc).
 func BuildBootcVM(
-	spec *VmSpec,
+	vmSpec *VmSpec,
 	outputDir, vmStateDir string,
-	existingState *VmDeployState,
+	existingState *spec.VmDeployState,
 	engine string,
 ) (BootcVMResult, error) {
-	if spec.Source.Kind != "bootc" {
-		return BootcVMResult{}, fmt.Errorf("BuildBootcVM called with source.kind=%q (expected bootc)", spec.Source.Kind)
+	if vmSpec.Source.Kind != "bootc" {
+		return BootcVMResult{}, fmt.Errorf("BuildBootcVM called with source.kind=%q (expected bootc)", vmSpec.Source.Kind)
 	}
-	if spec.Source.Box == "" {
+	if vmSpec.Source.Box == "" {
 		return BootcVMResult{}, fmt.Errorf("source.box is required for bootc VMs")
 	}
-	if spec.DiskSize == "" {
+	if vmSpec.DiskSize == "" {
 		return BootcVMResult{}, fmt.Errorf("disk_size is required for bootc VMs")
 	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return BootcVMResult{}, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	rootfs := spec.Source.Rootfs
+	rootfs := vmSpec.Source.Rootfs
 	if rootfs == "" {
 		rootfs = "ext4"
 	}
 
 	// Resolve the bootc image ref (full ref → as-is; internal short name →
 	// newest local CalVer tag; NO `:latest` fallback — see resolveBootcImageRef).
-	imageRef, err := resolveBootcImageRef(engine, spec.Source.Box)
+	imageRef, err := resolveBootcImageRef(engine, vmSpec.Source.Box)
 	if err != nil {
 		return BootcVMResult{}, err
 	}
@@ -81,12 +82,12 @@ func BuildBootcVM(
 	rawHost := filepath.Join(outputDir, "disk.raw")
 	qcowHost := filepath.Join(outputDir, "disk.qcow2")
 	rootSizeFlag := ""
-	if spec.Source.RootSize != "" {
-		rootSizeFlag = fmt.Sprintf(" --root-size %s", spec.Source.RootSize)
+	if vmSpec.Source.RootSize != "" {
+		rootSizeFlag = fmt.Sprintf(" --root-size %s", vmSpec.Source.RootSize)
 	}
 	kargFlag := ""
-	if strings.TrimSpace(spec.Source.KernelArgs) != "" {
-		kargFlag = fmt.Sprintf(" --karg %q", spec.Source.KernelArgs)
+	if strings.TrimSpace(vmSpec.Source.KernelArgs) != "" {
+		kargFlag = fmt.Sprintf(" --karg %q", vmSpec.Source.KernelArgs)
 	}
 	script := fmt.Sprintf(`set -euo pipefail
 truncate -s %s /out/disk.raw
@@ -101,7 +102,7 @@ losetup -d "$LOOP"
 trap - EXIT
 qemu-img convert -O qcow2 /out/disk.raw /out/disk.qcow2
 rm -f /out/disk.raw
-`, spec.DiskSize, rootfs, rootSizeFlag, kargFlag)
+`, vmSpec.DiskSize, rootfs, rootSizeFlag, kargFlag)
 
 	if err := RunPrivileged(PrivilegedRun{
 		Image:      imageRef,
@@ -116,9 +117,9 @@ rm -f /out/disk.raw
 	res := BootcVMResult{
 		DiskPath: qcowHost,
 	}
-	if spec.CloudInit != nil {
+	if vmSpec.CloudInit != nil {
 		seedPath := filepath.Join(outputDir, "seed.iso")
-		if err := RegenerateSeedISO(spec, seedPath, vmStateDir, existingState); err != nil {
+		if err := RegenerateSeedISO(vmSpec, seedPath, vmStateDir, existingState); err != nil {
 			return BootcVMResult{}, fmt.Errorf("rendering cloud-init seed ISO: %w", err)
 		}
 		res.SeedIsoPath = seedPath

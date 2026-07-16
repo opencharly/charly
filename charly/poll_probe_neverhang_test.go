@@ -76,7 +76,7 @@ func TestRunner_PerProbeNeverHang(t *testing.T) {
 }
 
 // matcherEq builds a MatcherList asserting equality, mirroring the scalar YAML form.
-func matcherEq(s string) MatcherList { return MatcherList{{Op: "equals", Value: s}} }
+func matcherEq(s string) spec.MatcherList { return spec.MatcherList{{Op: "equals", Value: s}} }
 
 // TestRunner_ProbeNeverHang_HonorsAuthorTimeout: the per-probe ceiling is the
 // floor (ProbeTimeout) unless the author declared a LONGER timeout:, which must

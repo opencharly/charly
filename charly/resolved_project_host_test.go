@@ -135,7 +135,7 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 	}
 	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
 	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
-	candy.portSpecs = []PortSpec{{Port: 9000, Protocol: "tcp"}}
+	candy.portSpecs = []spec.PortSpec{{Port: 9000, Protocol: "tcp"}}
 	candy.service = []spec.ServiceEntry{{Name: "charly-daemon"}}
 
 	rp := &spec.ResolvedProject{

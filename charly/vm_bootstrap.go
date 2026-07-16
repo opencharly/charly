@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,40 +43,40 @@ const bootstrapRootfsExtractTar = `tar -C /mnt --xattrs --xattrs-include='*' --a
 // Mirrors BuildCloudImage in shape so callers in vm_build.go can swap
 // implementations behind the source.kind discriminator.
 func BuildBootstrapVM(
-	spec *VmSpec,
+	vmSpec *VmSpec,
 	outputDir, vmStateDir string,
-	existingState *VmDeployState,
+	existingState *spec.VmDeployState,
 	distroCfg *DistroConfig,
 	builderCfg *BuilderConfig,
 ) (BootstrapVMResult, error) {
-	if spec.Source.Kind != "bootstrap" {
-		return BootstrapVMResult{}, fmt.Errorf("BuildBootstrapVM called with source.kind=%q (expected bootstrap)", spec.Source.Kind)
+	if vmSpec.Source.Kind != "bootstrap" {
+		return BootstrapVMResult{}, fmt.Errorf("BuildBootstrapVM called with source.kind=%q (expected bootstrap)", vmSpec.Source.Kind)
 	}
 	if builderCfg == nil || builderCfg.Builder == nil {
-		return BootstrapVMResult{}, fmt.Errorf("the builder: section of the embedded vocabulary (charly/charly.yml) is empty; cannot resolve %q", spec.Source.Builder)
+		return BootstrapVMResult{}, fmt.Errorf("the builder: section of the embedded vocabulary (charly/charly.yml) is empty; cannot resolve %q", vmSpec.Source.Builder)
 	}
-	builder, ok := builderCfg.Builder[spec.Source.Builder]
+	builder, ok := builderCfg.Builder[vmSpec.Source.Builder]
 	if !ok {
-		return BootstrapVMResult{}, fmt.Errorf("builder %q not declared in the embedded build vocabulary (charly/charly.yml)", spec.Source.Builder)
+		return BootstrapVMResult{}, fmt.Errorf("builder %q not declared in the embedded build vocabulary (charly/charly.yml)", vmSpec.Source.Builder)
 	}
 	if !builder.IsBootstrap() {
-		return BootstrapVMResult{}, fmt.Errorf("builder %q is not kind: bootstrap", spec.Source.Builder)
+		return BootstrapVMResult{}, fmt.Errorf("builder %q is not kind: bootstrap", vmSpec.Source.Builder)
 	}
 	if distroCfg == nil {
-		return BootstrapVMResult{}, fmt.Errorf("the distro: section of the embedded vocabulary (charly/charly.yml) is empty; cannot resolve %q", spec.Source.Distro)
+		return BootstrapVMResult{}, fmt.Errorf("the distro: section of the embedded vocabulary (charly/charly.yml) is empty; cannot resolve %q", vmSpec.Source.Distro)
 	}
-	distro, ok := distroCfg.Distro[spec.Source.Distro]
+	distro, ok := distroCfg.Distro[vmSpec.Source.Distro]
 	if !ok {
-		return BootstrapVMResult{}, fmt.Errorf("distro %q not declared in the embedded build vocabulary (charly/charly.yml)", spec.Source.Distro)
+		return BootstrapVMResult{}, fmt.Errorf("distro %q not declared in the embedded build vocabulary (charly/charly.yml)", vmSpec.Source.Distro)
 	}
 	distro = distroCfg.ResolveInherits(distro, 10)
 	if distro.Bootloader == nil {
-		return BootstrapVMResult{}, fmt.Errorf("distro %q has no bootloader: block in the embedded build vocabulary (charly/charly.yml) (required for VM bootstrap)", spec.Source.Distro)
+		return BootstrapVMResult{}, fmt.Errorf("distro %q has no bootloader: block in the embedded build vocabulary (charly/charly.yml) (required for VM bootstrap)", vmSpec.Source.Distro)
 	}
-	if spec.Source.BuilderImage == "" {
+	if vmSpec.Source.BuilderImage == "" {
 		return BootstrapVMResult{}, fmt.Errorf("source.builder_image is required for bootstrap VMs")
 	}
-	if spec.DiskSize == "" {
+	if vmSpec.DiskSize == "" {
 		return BootstrapVMResult{}, fmt.Errorf("disk_size is required for bootstrap VMs")
 	}
 
@@ -87,25 +88,25 @@ func BuildBootstrapVM(
 		return BootstrapVMResult{}, fmt.Errorf("creating build dir: %w", err)
 	}
 
-	rootfsTar, builderRef, err := buildBootstrapRootfs(spec, builder, distro, buildDir)
+	rootfsTar, builderRef, err := buildBootstrapRootfs(vmSpec, builder, distro, buildDir)
 	if err != nil {
 		return BootstrapVMResult{}, err
 	}
 
-	diskPath, err := buildBootstrapDisk(spec, distro, builderRef, rootfsTar, outputDir)
+	diskPath, err := buildBootstrapDisk(vmSpec, distro, builderRef, rootfsTar, outputDir)
 	if err != nil {
 		return BootstrapVMResult{}, err
 	}
 
-	return buildBootstrapSeedISO(spec, diskPath, rootfsTar, outputDir, vmStateDir, existingState)
+	return buildBootstrapSeedISO(vmSpec, diskPath, rootfsTar, outputDir, vmStateDir, existingState)
 }
 
 // buildBootstrapRootfs runs Step 1: bootstrap a rootfs.tar.gz via the
 // privileged builder. Returns the rootfs tarball path and the resolved
 // (auto-built) builder image ref reused by the disk-build step.
-func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, buildDir string) (string, string, error) {
+func buildBootstrapRootfs(vmSpec *VmSpec, builder *BuilderDef, distro *spec.ResolvedDistro, buildDir string) (string, string, error) {
 	rootfsCtx := struct {
-		Distro            *DistroDef
+		Distro            *spec.ResolvedDistro
 		Packages          []string
 		ExtraPacmanConf   string
 		RuntimePacmanConf string
@@ -114,9 +115,9 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 		Variant           string
 	}{
 		Distro:   distro,
-		Packages: append(append([]string{}, baseBootstrapPackages(distro)...), spec.Source.Package...),
-		Arch:     spec.Source.BootstrapArch,
-		Variant:  spec.Source.BootstrapVariant,
+		Packages: append(append([]string{}, baseBootstrapPackages(distro)...), vmSpec.Source.Package...),
+		Arch:     vmSpec.Source.BootstrapArch,
+		Variant:  vmSpec.Source.BootstrapVariant,
 	}
 	// Inject CachyOS / other distro-specific repo blocks (+ Architecture for
 	// microarch repos, + per-repo SigLevel) into pacman.conf inside the
@@ -165,7 +166,7 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 	// pull from registries that don't have the build.
 	// Resolve + auto-build the bootstrap builder image on demand (fully
 	// automatic — no manual `charly box build <builder>` prerequisite).
-	builderRef := spec.Source.BuilderImage
+	builderRef := vmSpec.Source.BuilderImage
 	rt, _ := ResolveRuntime()
 	engine := "podman"
 	if rt != nil {
@@ -181,7 +182,7 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 		OutputPath: output,
 		OutputDest: rootfsTar,
 	}); err != nil {
-		return "", "", fmt.Errorf("running bootstrap builder %q: %w", spec.Source.Builder, err)
+		return "", "", fmt.Errorf("running bootstrap builder %q: %w", vmSpec.Source.Builder, err)
 	}
 	return rootfsTar, builderRef, nil
 }
@@ -189,13 +190,13 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 // buildBootstrapDisk runs Step 2: partition + format the disk, extract the
 // rootfs, and run the distro bootloader install inside the privileged builder.
 // Returns the qcow2 disk path.
-func buildBootstrapDisk(spec *VmSpec, distro *DistroDef, builderRef, rootfsTar, outputDir string) (string, error) {
-	rootfsKind := spec.Source.Rootfs
+func buildBootstrapDisk(vmSpec *VmSpec, distro *spec.ResolvedDistro, builderRef, rootfsTar, outputDir string) (string, error) {
+	rootfsKind := vmSpec.Source.Rootfs
 	if rootfsKind == "" {
 		rootfsKind = "ext4"
 	}
 	prelude, finalize, err := EmitDiskBuildScript(DiskLayout{
-		SizeBytesOrSuffix: spec.DiskSize,
+		SizeBytesOrSuffix: vmSpec.DiskSize,
 		Rootfs:            rootfsKind,
 		Mnt:               "/mnt",
 	})
@@ -203,10 +204,10 @@ func buildBootstrapDisk(spec *VmSpec, distro *DistroDef, builderRef, rootfsTar, 
 		return "", fmt.Errorf("emitting disk build script: %w", err)
 	}
 	sshUser := ""
-	if spec.SSH != nil {
-		sshUser = spec.SSH.User
+	if vmSpec.SSH != nil {
+		sshUser = vmSpec.SSH.User
 	}
-	bootloaderScript, err := renderBootloaderScript(distro, "/mnt", spec.Source.KernelArgs, rootfsKind, sshUser)
+	bootloaderScript, err := renderBootloaderScript(distro, "/mnt", vmSpec.Source.KernelArgs, rootfsKind, sshUser)
 	if err != nil {
 		return "", fmt.Errorf("rendering bootloader script: %w", err)
 	}
@@ -230,13 +231,13 @@ func buildBootstrapDisk(spec *VmSpec, distro *DistroDef, builderRef, rootfsTar, 
 // buildBootstrapSeedISO runs Step 3: render the cloud-init seed ISO when
 // spec.CloudInit is set and assemble the BootstrapVMResult (including the
 // rootfs tarball hash for traceability).
-func buildBootstrapSeedISO(spec *VmSpec, diskPath, rootfsTar, outputDir, vmStateDir string, existingState *VmDeployState) (BootstrapVMResult, error) {
+func buildBootstrapSeedISO(vmSpec *VmSpec, diskPath, rootfsTar, outputDir, vmStateDir string, existingState *spec.VmDeployState) (BootstrapVMResult, error) {
 	res := BootstrapVMResult{
 		DiskPath: diskPath,
 	}
-	if spec.CloudInit != nil {
+	if vmSpec.CloudInit != nil {
 		seedPath := filepath.Join(outputDir, "seed.iso")
-		if err := RegenerateSeedISO(spec, seedPath, vmStateDir, existingState); err != nil {
+		if err := RegenerateSeedISO(vmSpec, seedPath, vmStateDir, existingState); err != nil {
 			return BootstrapVMResult{}, fmt.Errorf("rendering cloud-init seed ISO: %w", err)
 		}
 		res.SeedIsoPath = seedPath
@@ -265,7 +266,7 @@ func buildBootstrapSeedISO(spec *VmSpec, diskPath, rootfsTar, outputDir, vmState
 //     debootstrap's --variant + --include come from
 //     d.Debootstrap.{Variant,IncludePackages} read directly from the
 //     template; only stage-2 reads from .Packages.
-func baseBootstrapPackages(d *DistroDef) []string {
+func baseBootstrapPackages(d *spec.ResolvedDistro) []string {
 	if d == nil {
 		return nil
 	}
@@ -288,7 +289,7 @@ func baseBootstrapPackages(d *DistroDef) []string {
 // so the kernel boots with `console=ttyS0` etc. and serial output
 // reaches the host's QEMU console (otherwise VMs boot to a black-hole
 // console with no diagnostic visibility).
-func renderBootloaderScript(d *DistroDef, mnt, kernelArgs, rootfs, sshUser string) (string, error) {
+func renderBootloaderScript(d *spec.ResolvedDistro, mnt, kernelArgs, rootfs, sshUser string) (string, error) {
 	if d == nil || d.Bootloader == nil {
 		return "", fmt.Errorf("no bootloader: declared on distro")
 	}

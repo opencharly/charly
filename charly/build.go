@@ -402,7 +402,7 @@ func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *Reso
 	}
 
 	ctx := struct {
-		Distro            *DistroDef
+		Distro            *spec.ResolvedDistro
 		Packages          []string
 		ExtraPacmanConf   string
 		RuntimePacmanConf string

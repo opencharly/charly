@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,17 +110,17 @@ type CloudImageBuildResult struct {
 // N concurrent beds sharing this entity (serialized on the caller's per-entity build flock) build it
 // ONCE and the rest reuse it — never rewriting a base a live per-domain overlay backs onto (P33).
 func BuildCloudImage(
-	spec *VmSpec,
+	vmSpec *VmSpec,
 	outputDir, vmStateDir string,
-	existingState *VmDeployState,
+	existingState *spec.VmDeployState,
 	force bool,
 ) (CloudImageBuildResult, error) {
-	if spec.Source.Kind != "cloud_image" {
-		return CloudImageBuildResult{}, fmt.Errorf("BuildCloudImage called with source.kind=%q (expected cloud_image)", spec.Source.Kind)
+	if vmSpec.Source.Kind != "cloud_image" {
+		return CloudImageBuildResult{}, fmt.Errorf("BuildCloudImage called with source.kind=%q (expected cloud_image)", vmSpec.Source.Kind)
 	}
 
 	// --- Step 1: Fetch base qcow2. ---
-	fetched, err := FetchQcow2(spec.Source)
+	fetched, err := FetchQcow2(vmSpec.Source)
 	if err != nil {
 		return CloudImageBuildResult{}, fmt.Errorf("fetch qcow2: %w", err)
 	}
@@ -136,7 +137,7 @@ func BuildCloudImage(
 	// disk_size/url) or --force is set. A fresh base is left untouched so a live per-domain overlay
 	// that already backs onto it is never mutated. The seed ISO below is cheap + non-hazardous and
 	// is always (re)rendered so a vm.yml cloud_init edit still takes effect.
-	sig := vmBuildStamp{BaseSHA256: fetched.SHA256, DiskSize: spec.DiskSize, SourceURL: spec.Source.URL}
+	sig := vmBuildStamp{BaseSHA256: fetched.SHA256, DiskSize: vmSpec.DiskSize, SourceURL: vmSpec.Source.URL}
 	if !force && diskBaseFresh(outputDir, diskPath, sig) {
 		fmt.Fprintf(os.Stderr, "Base disk %s is content-fresh (base sha256=%s) — skipping rebuild\n", diskPath, fetched.SHA256)
 	} else {
@@ -145,8 +146,8 @@ func BuildCloudImage(
 			return CloudImageBuildResult{}, err
 		}
 		// --- Step 3: Grow disk to requested size. ---
-		if spec.DiskSize != "" {
-			if err := qemuImgResize(diskPath, spec.DiskSize); err != nil {
+		if vmSpec.DiskSize != "" {
+			if err := qemuImgResize(diskPath, vmSpec.DiskSize); err != nil {
 				return CloudImageBuildResult{}, err
 			}
 		}
@@ -164,16 +165,16 @@ func BuildCloudImage(
 		instanceID = newUUID4()
 	}
 
-	_, cloudInitEnabled := ResolveKeyInjectionChannels(spec)
+	_, cloudInitEnabled := ResolveKeyInjectionChannels(vmSpec)
 
-	pubKey, err := resolveSSHPubKeyForSpec(spec, vmStateDir)
+	pubKey, err := resolveSSHPubKeyForSpec(vmSpec, vmStateDir)
 	if err != nil {
 		return CloudImageBuildResult{}, fmt.Errorf("resolving ssh pubkey: %w", err)
 	}
 
 	hostname := ""
-	if spec.CloudInit != nil {
-		hostname = spec.CloudInit.Hostname
+	if vmSpec.CloudInit != nil {
+		hostname = vmSpec.CloudInit.Hostname
 	}
 
 	rt := CloudInitRuntimeParams{
@@ -184,7 +185,7 @@ func BuildCloudImage(
 	}
 
 	// --- Step 5: Render cloud-init. ---
-	userData, metaData, networkConfig, err := RenderCloudInit(spec, rt)
+	userData, metaData, networkConfig, err := RenderCloudInit(vmSpec, rt)
 	if err != nil {
 		return CloudImageBuildResult{}, fmt.Errorf("rendering cloud-init: %w", err)
 	}
@@ -214,12 +215,12 @@ func BuildCloudImage(
 // VmDeployState.InstanceID when supplied so cloud-init still treats the
 // VM as the same instance (first-boot directives re-fire per instance-id
 // change, which callers may or may not want).
-func RegenerateSeedISO(spec *VmSpec, seedPath, vmStateDir string, existingState *VmDeployState) error {
+func RegenerateSeedISO(vmSpec *VmSpec, seedPath, vmStateDir string, existingState *spec.VmDeployState) error {
 	// Source-kind agnostic: any VM with a non-nil cloud_init: block gets a
 	// seed ISO. Cloud_image and bootstrap-VM both consume cloud-init via
 	// the NoCloud datasource; bootc-VM optionally does too when its image
 	// includes the cloud-init candy.
-	if spec.CloudInit == nil {
+	if vmSpec.CloudInit == nil {
 		return nil
 	}
 
@@ -229,14 +230,14 @@ func RegenerateSeedISO(spec *VmSpec, seedPath, vmStateDir string, existingState 
 	} else {
 		instanceID = newUUID4()
 	}
-	_, cloudInitEnabled := ResolveKeyInjectionChannels(spec)
-	pubKey, err := resolveSSHPubKeyForSpec(spec, vmStateDir)
+	_, cloudInitEnabled := ResolveKeyInjectionChannels(vmSpec)
+	pubKey, err := resolveSSHPubKeyForSpec(vmSpec, vmStateDir)
 	if err != nil {
 		return fmt.Errorf("resolving ssh pubkey: %w", err)
 	}
 	hostname := ""
-	if spec.CloudInit != nil {
-		hostname = spec.CloudInit.Hostname
+	if vmSpec.CloudInit != nil {
+		hostname = vmSpec.CloudInit.Hostname
 	}
 	rt := CloudInitRuntimeParams{
 		SSHPublicKey:          pubKey,
@@ -244,7 +245,7 @@ func RegenerateSeedISO(spec *VmSpec, seedPath, vmStateDir string, existingState 
 		Hostname:              hostname,
 		InjectKeyViaCloudInit: cloudInitEnabled,
 	}
-	userData, metaData, networkConfig, err := RenderCloudInit(spec, rt)
+	userData, metaData, networkConfig, err := RenderCloudInit(vmSpec, rt)
 	if err != nil {
 		return fmt.Errorf("rendering cloud-init: %w", err)
 	}

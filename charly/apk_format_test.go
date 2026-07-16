@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,7 @@ func TestOCITargetSkipsApkInstall(t *testing.T) {
 // TestPopulateCandyApk verifies the candy manifest `apk:` field flows through the
 // populator onto the resolved Candy.
 func TestPopulateCandyApk(t *testing.T) {
-	ly := &CandyYAML{
+	ly := &spec.CandyYAML{
 		Apk: []ApkPackageSpec{
 			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 		},

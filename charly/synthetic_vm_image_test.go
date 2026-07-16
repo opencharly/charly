@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
@@ -15,7 +16,7 @@ import (
 //
 // Without the fix every row below would resolve Pkg="pac" and FAIL.
 func TestSyntheticVmImageDistroFormat(t *testing.T) {
-	distroCfg := &DistroConfig{Distro: map[string]*DistroDef{
+	distroCfg := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true}, // pulls arch package sections
 		"debian":  {Format: map[string]*FormatDef{"deb": {}}},
@@ -128,7 +129,7 @@ func TestResolveVmEntity(t *testing.T) {
 // TestSyntheticVmImageRootFallback: a bootc VM with no SSH user resolves to
 // the root branch (System scope, /root home), unchanged by the distro fix.
 func TestSyntheticVmImageRootFallback(t *testing.T) {
-	distroCfg := &DistroConfig{Distro: map[string]*DistroDef{
+	distroCfg := &DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {Format: map[string]*FormatDef{"rpm": {}}},
 	}}
 	img := syntheticVmBox(&VmSpec{Source: VmSource{Kind: "bootc"}}, distroCfg)

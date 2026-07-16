@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strings"
 	"testing"
@@ -331,7 +332,7 @@ func TestResolveImageBuilders(t *testing.T) {
 // candy in its base chain (boxes no longer declare ports), deduped by container
 // port, sorted ascending, with the /udp suffix preserved.
 func TestCollectBoxPorts(t *testing.T) {
-	mk := func(name string, specs ...PortSpec) *Candy {
+	mk := func(name string, specs ...spec.PortSpec) *Candy {
 		l := &Candy{Name: name}
 		l.portSpecs = specs
 		for _, s := range specs {
@@ -344,11 +345,11 @@ func TestCollectBoxPorts(t *testing.T) {
 		return l
 	}
 	layers := map[string]*Candy{
-		"sshd":     mk("sshd", PortSpec{Port: 2222, Protocol: "tcp"}),
-		"web":      mk("web", PortSpec{Port: 3000, Protocol: "https+insecure"}),
-		"cdp":      mk("cdp", PortSpec{Port: 9222}),
-		"udp-svc":  mk("udp-svc", PortSpec{Port: 47998, Protocol: "udp"}),
-		"web-dup":  mk("web-dup", PortSpec{Port: 3000}), // duplicate container port → deduped
+		"sshd":     mk("sshd", spec.PortSpec{Port: 2222, Protocol: "tcp"}),
+		"web":      mk("web", spec.PortSpec{Port: 3000, Protocol: "https+insecure"}),
+		"cdp":      mk("cdp", spec.PortSpec{Port: 9222}),
+		"udp-svc":  mk("udp-svc", spec.PortSpec{Port: 47998, Protocol: "udp"}),
+		"web-dup":  mk("web-dup", spec.PortSpec{Port: 3000}), // duplicate container port → deduped
 		"no-ports": mk("no-ports"),
 	}
 	cfg := &Config{

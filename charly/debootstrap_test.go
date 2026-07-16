@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -129,7 +130,7 @@ distro:
 // Previously this returned nil and the stage-2 package set was silently
 // dropped on the floor.
 func TestBaseBootstrapPackages_DebootstrapDispatch(t *testing.T) {
-	d := &DistroDef{
+	d := &spec.ResolvedDistro{
 		Debootstrap: &DebootstrapDef{
 			Suite:        "trixie",
 			Mirror:       "http://deb.debian.org/debian",
@@ -145,7 +146,7 @@ func TestBaseBootstrapPackages_DebootstrapDispatch(t *testing.T) {
 // TestBaseBootstrapPackages_PacstrapStillWorks ensures the pacstrap branch is
 // untouched by the debootstrap wiring.
 func TestBaseBootstrapPackages_PacstrapStillWorks(t *testing.T) {
-	d := &DistroDef{
+	d := &spec.ResolvedDistro{
 		Pacstrap: &PacstrapDef{
 			BasePackages: []string{"base", "linux", "openssh"},
 		},
@@ -161,7 +162,7 @@ func TestBaseBootstrapPackages_NilDistro(t *testing.T) {
 	if got := baseBootstrapPackages(nil); got != nil {
 		t.Errorf("nil distro should yield nil, got %v", got)
 	}
-	if got := baseBootstrapPackages(&DistroDef{}); got != nil {
+	if got := baseBootstrapPackages(&spec.ResolvedDistro{}); got != nil {
 		t.Errorf("empty distro should yield nil, got %v", got)
 	}
 }

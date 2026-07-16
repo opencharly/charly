@@ -109,7 +109,7 @@ func vmLifecyclePrepare(name, dir string, node *BundleNode) (json.RawMessage, er
 	registerEphemeralIfMarked(node, name)
 
 	// Prior runtime state (instance-id, ssh_port, disk path) for the plugin's port idempotency.
-	var state *VmDeployState
+	var state *spec.VmDeployState
 	if dc := deploykit.LoadDeployConfigForRead("charly bundle add vm"); dc != nil {
 		if entry, exists := dc.Bundle[name]; exists && entry.VmState != nil {
 			state = entry.VmState

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 )
@@ -1053,13 +1054,13 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 			Name: "jupyter-ml", HasPixiToml: true, plan: []Step{{Run: "build", Op: cmdOp("true")}},
 			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
-			portSpecs:     []PortSpec{{Port: 8080}},
+			portSpecs:     []spec.PortSpec{{Port: 8080}},
 		},
 		"unsloth-studio": {
 			Name: "unsloth-studio", HasPixiToml: true,
 			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
-			portSpecs:     []PortSpec{{Port: 8080}},
+			portSpecs:     []spec.PortSpec{{Port: 8080}},
 		},
 		"agent-forwarding": {Name: "agent-forwarding", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
 		"cuda":             {Name: "cuda", plan: []Step{{Run: "build", Op: cmdOp("true")}}},

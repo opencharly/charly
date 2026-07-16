@@ -161,7 +161,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 			{matchPrefix: "redis-cli ping", stdout: "PONG\n", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}},
+			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -174,7 +174,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 			{matchPrefix: "status", stdout: "ready ok running", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "status"}, Stdout: MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}},
+			{Plugin: "command", PluginInput: map[string]any{"command": "status"}, Stdout: spec.MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -198,7 +198,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 			{matchPrefix: "uptime", stdout: "load average: 0.12 0.34 0.56\n", exit: 0},
 		}
 		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "uptime"}, Stdout: MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}},
+			{Plugin: "command", PluginInput: map[string]any{"command": "uptime"}, Stdout: spec.MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -223,7 +223,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 		}
 		r := newCheckRunner(kit.RunnerConfig{Exec: fake, Mode: RunModeLive, Env: map[string]string{"HOST_PORT:6379": "16379"}})
 		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}},
+			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v. fake calls: %v", res[0], fake.calls)

@@ -151,7 +151,7 @@ func RegisterBuildVocabulary(dc *DistroConfig) {
 //	distro.arch.*            → tagSections["arch"]   (+ any .aur.* → formatSections["aur"])
 //	distro.debian-13.*       → tagSections["debian:13"]   (dash → colon)
 //	distro."debian,ubuntu".* → tagSections["debian"] + tagSections["ubuntu"]
-func derivePackageSectionsFromCalamares(layer *Candy, ly *CandyYAML) {
+func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 	layer.topPackages = PackageNames(ly.Package)
 
 	ensureTag := func(tagKey string) *TagPkgConfig {
@@ -332,7 +332,7 @@ type Candy struct {
 	tagSections     map[string]*TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
 	topPackages     []string                   // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
 	ports           []string
-	portSpecs       []PortSpec // full PortSpec data with protocol info
+	portSpecs       []spec.PortSpec // full PortSpec data with protocol info
 	envConfig       *EnvConfig
 	route           *RouteConfig
 	serviceFiles    []string            // paths to *.service files in candy dir (systemd user-level, file_copy model)
@@ -438,7 +438,7 @@ func legacyScanCandiesDir(dir string) (map[string]*Candy, error) {
 //   - `candy:` + other top-level keys → error (ambiguous shape).
 //   - Multi-document stream → error (the candy manifest is not a bundle file).
 //   - Flat form (no `candy:` wrapper) → error with migration hint.
-func parseCandyYAML(path string) (*CandyYAML, error) {
+func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -447,7 +447,7 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 	// Empty / comment-only guard.
 	trimmed := strings.TrimSpace(string(data))
 	if trimmed == "" {
-		return &CandyYAML{}, nil
+		return &spec.CandyYAML{}, nil
 	}
 
 	// Parse the stream down to its single top-level mapping node (or nil for an
@@ -457,7 +457,7 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 		return nil, err
 	}
 	if inner == nil {
-		return &CandyYAML{}, nil
+		return &spec.CandyYAML{}, nil
 	}
 
 	// Unified node-form: a single name-first node `<name>: {candy: …, <children>}`.
@@ -520,8 +520,8 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 		// regex/enums) runs at `charly box validate` (validateCandyManifestCUE) on
 		// the AUTHORED form — not at load, where it would reject minimal in-tree
 		// fixtures and slow the hot path. See cue-loader-switch-design.
-		var ly CandyYAML
-		if err := decodeEntityViaCUE(body, reflect.TypeOf(CandyYAML{}), &ly, path); err != nil {
+		var ly spec.CandyYAML
+		if err := decodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
 			return nil, err
 		}
 		return &ly, nil
@@ -661,7 +661,7 @@ func scanCandy(path, name, manifest string) (*Candy, error) {
 
 	// Parse the candy manifest FIRST so `directory:` can redirect the anchor
 	// used by install-file detection and service-file globbing below.
-	var ly *CandyYAML
+	var ly *spec.CandyYAML
 	if manifest == "" {
 		manifest = UnifiedFileName
 	}
@@ -889,7 +889,7 @@ func (l *Candy) Port() ([]string, error) { //nolint:unparam // error return kept
 }
 
 // PortSpecs returns the port specs with protocol info (pre-populated from the candy manifest)
-func (l *Candy) PortSpecs() []PortSpec {
+func (l *Candy) PortSpecs() []spec.PortSpec {
 	return l.portSpecs
 }
 

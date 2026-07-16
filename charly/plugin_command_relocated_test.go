@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestRelocatedCommandVerb_DispatchesViaKit(t *testing.T) {
 	// Host-side foreground: real `sh -c 'echo …'` with a stdout contains matcher → pass.
 	res2 := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
 		&Op{PluginInput: map[string]any{"command": "echo charly-cmd-ok", "from_host": true},
-			Stdout: MatcherList{{Op: "contains", Value: "charly-cmd-ok"}}})
+			Stdout: spec.MatcherList{{Op: "contains", Value: "charly-cmd-ok"}}})
 	if res2.Status != TestPass {
 		t.Fatalf("host-foreground: want pass, got %v: %s", res2.Status, res2.Message)
 	}

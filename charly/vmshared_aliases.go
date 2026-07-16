@@ -28,7 +28,6 @@ type (
 	CacheMountDef          = vmshared.CacheMountDef
 	CandyArtifact          = vmshared.CandyArtifact
 	CandyCapabilities      = vmshared.CandyCapabilities
-	CandyYAML              = vmshared.CandyYAML
 	CloudInitRuntimeParams = vmshared.CloudInitRuntimeParams
 	CredentialMount        = vmshared.CredentialMount
 	DataYAML               = vmshared.DataYAML
@@ -40,7 +39,6 @@ type (
 	DeployShellOverlay     = vmshared.DeployShellOverlay
 	DeployStorage          = vmshared.DeployStorage
 	DeployVolumeConfig     = vmshared.DeployVolumeConfig
-	DistroDef              = vmshared.DistroDef
 	DistroPackages         = vmshared.DistroPackages
 	DnfConfig              = vmshared.DnfConfig
 	EphemeralLifetime      = vmshared.EphemeralLifetime
@@ -56,8 +54,6 @@ type (
 	LibvirtFilesystem      = vmshared.LibvirtFilesystem
 	LibvirtHostdev         = vmshared.LibvirtHostdev
 	LocalPkgDef            = vmshared.LocalPkgDef
-	Matcher                = vmshared.Matcher
-	MatcherList            = vmshared.MatcherList
 	MergeConfig            = vmshared.MergeConfig
 	Op                     = vmshared.Op
 	OvmfPaths              = vmshared.OvmfPaths
@@ -66,7 +62,6 @@ type (
 	PhaseSet               = vmshared.PhaseSet
 	PhaseTemplates         = vmshared.PhaseTemplates
 	PollClass              = vmshared.PollClass
-	PortSpec               = vmshared.PortSpec
 	ReadinessConfig        = vmshared.ReadinessConfig
 	ResolvedReadiness      = vmshared.ResolvedReadiness
 	PollCondition          = vmshared.PollCondition
@@ -84,7 +79,6 @@ type (
 	StepKeyword            = vmshared.StepKeyword
 	VmCharlyInstall        = vmshared.VmCharlyInstall
 	VmCloudInit            = vmshared.VmCloudInit
-	VmDeployState          = vmshared.VmDeployState
 	VmKeyInjectionResolved = vmshared.VmKeyInjectionResolved
 	VmNetwork              = vmshared.VmNetwork
 	VmRuntimeParams        = vmshared.VmRuntimeParams

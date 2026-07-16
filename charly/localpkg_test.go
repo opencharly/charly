@@ -28,8 +28,8 @@ func testPacLocalPkgDef() *LocalPkgDef {
 
 // testPacDistroDef returns a DistroDef whose `pac` format carries the localpkg
 // contract — so compileLocalPkgStep resolves it the way it would from build.yml.
-func testPacDistroDef() *DistroDef {
-	return &DistroDef{
+func testPacDistroDef() *spec.ResolvedDistro {
+	return &spec.ResolvedDistro{
 		Format: map[string]*FormatDef{
 			"pac": {LocalPkg: testPacLocalPkgDef()},
 		},
@@ -76,7 +76,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Same candy on an rpm distro → picks the rpm source from the map.
-	rpmImg := &ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &DistroDef{Format: map[string]*FormatDef{
+	rpmImg := &ResolvedBox{Name: "charly-fedora", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{
 		"rpm": {LocalPkg: &LocalPkgDef{PkgGlob: "*.rpm", SourceSentinel: "*.spec", BuildTemplate: "x", InstallTemplate: "dnf install -y {{.StageDir}}/{{.Glob}}", Probe: "command -v dnf"}},
 	}}}
 	if rs, ok := compileLocalPkgStep(l, rpmImg, hostCtx).(*LocalPkgInstallStep); !ok || rs.Format != "rpm" || rs.PkgbuildRef != "pkg/fedora" {
@@ -84,7 +84,7 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	}
 
 	// Distro with a format but NO localpkg block → nil (no native package).
-	noFmt := compileLocalPkgStep(l, &ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &DistroDef{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
+	noFmt := compileLocalPkgStep(l, &ResolvedBox{Name: "charly-x", Pkg: "rpm", DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}, hostCtx)
 	if noFmt != nil {
 		t.Errorf("distro without a localpkg-capable format should compile to nil, got %#v", noFmt)
 	}

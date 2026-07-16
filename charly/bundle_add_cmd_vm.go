@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -96,7 +97,7 @@ func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 // it is persisted as the entry's `vm:` cross-ref so a bundle-keyed entry (a
 // kind:check VM bed, whose deploy key e.g. `check-k3s-vm` differs from
 // `vm:<entity>`) carries the linkage teardown needs to find + remove it.
-func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error {
+func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) error {
 	// Serialize the load→modify→save against concurrent charly processes — the
 	// SAME blocking deploy-config lock saveDeployState / cleanDeployEntry use
 	// (filelock.go). Without it two parallel `charly vm create` persist-auto-port

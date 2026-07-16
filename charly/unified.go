@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -195,8 +196,8 @@ type UnifiedFile struct {
 // existing scanCandy (no schema change), OR the inline body defines the candy
 // (same fields as the candy manifest, flattened via yaml:",inline").
 type InlineCandy struct {
-	From      string `yaml:"from,omitempty" json:"from,omitempty"`
-	CandyYAML `yaml:",inline"`
+	From           string `yaml:"from,omitempty" json:"from,omitempty"`
+	spec.CandyYAML `yaml:",inline"`
 	// Manifest carries the discovery manifest filename for a `From:` directory
 	// so ProjectCandies→scanCandy reads the right file. Not YAML-authored; carried
 	// through the opaque candy-map fold (P6) via JSON, hence exported + json-tagged.
@@ -1030,7 +1031,7 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 // (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
 // consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
 // are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
-func (uf *UnifiedFile) Distros() map[string]*DistroDef {
+func (uf *UnifiedFile) Distros() map[string]*spec.ResolvedDistro {
 	return uf.resolveDistros()
 }
 
@@ -1222,7 +1223,7 @@ func synthesizeInlineCandy(name string, il *InlineCandy, rootDir string) *Candy 
 // inline path silently dropped artifacts/capabilities/requiresCapabilities/
 // shell and the unexported description.) The caller is responsible for the
 // install-file filesystem probes (HasPixiToml etc.) against SourceDir.
-func populateCandyFromYAML(layer *Candy, ly *CandyYAML) {
+func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 	layer.Version = ly.Version
 	layer.Description = ly.Description
 	layer.Status = ly.Status
@@ -1269,7 +1270,7 @@ func populateCandyFromYAML(layer *Candy, ly *CandyYAML) {
 	}
 	if len(ly.Port) > 0 {
 		layer.ports = make([]string, len(ly.Port))
-		layer.portSpecs = make([]PortSpec, len(ly.Port))
+		layer.portSpecs = make([]spec.PortSpec, len(ly.Port))
 		for i, p := range ly.Port {
 			if p.Protocol == "udp" {
 				layer.ports[i] = fmt.Sprintf("%d/udp", p.Port)

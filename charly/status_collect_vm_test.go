@@ -88,7 +88,7 @@ func TestVMCollector_Collect(t *testing.T) {
 					"vm:cachyos-gpu": {
 						Target:  "vm",
 						From:    "cachyos-gpu",
-						VmState: &VmDeployState{SshPort: 12228, SshUser: "cachy", Backend: "libvirt"},
+						VmState: &spec.VmDeployState{SshPort: 12228, SshUser: "cachy", Backend: "libvirt"},
 					},
 				},
 			},
@@ -114,7 +114,7 @@ func TestVMCollector_Collect(t *testing.T) {
 					"check-k3s-vm": {
 						Target:  "vm",
 						From:    "k3s-vm",
-						VmState: &VmDeployState{SshPort: 2225, SshUser: "arch"},
+						VmState: &spec.VmDeployState{SshPort: 2225, SshUser: "arch"},
 					},
 				},
 			},

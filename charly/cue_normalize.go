@@ -36,7 +36,7 @@ type shorthandExpander func(node *yaml.Node) error
 // canonicalizes its shorthand wire forms. Keyed by the value type (not pointer).
 var cueShorthandExpanders = map[reflect.Type]shorthandExpander{
 	reflect.TypeOf(spec.PackageItem{}):       expandPackageItemNode,
-	reflect.TypeOf(PortSpec{}):               expandPortSpecNode,
+	reflect.TypeOf(spec.PortSpec{}):          expandPortSpecNode,
 	reflect.TypeOf(spec.PreemptibleConfig{}): expandPreemptibleNode,
 	reflect.TypeOf(spec.TunnelYAML{}):        expandTunnelNode,
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -30,7 +31,7 @@ func TestSaveVmDeployState_ConcurrentWritersAllSurvive(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			name := fmt.Sprintf("vm:e%02d", i)
-			errs[i] = saveVmDeployState(name, "", &VmDeployState{SshPort: 3000 + i, Backend: "auto"})
+			errs[i] = saveVmDeployState(name, "", &spec.VmDeployState{SshPort: 3000 + i, Backend: "auto"})
 		}(i)
 	}
 	wg.Wait()
@@ -70,13 +71,13 @@ func TestSaveVmDeployState_LockReleasedBetweenCalls(t *testing.T) {
 	DeployConfigPath = func() (string, error) { return overlay, nil }
 	t.Cleanup(func() { DeployConfigPath = orig })
 
-	if err := saveVmDeployState("vm:one", "", &VmDeployState{SshPort: 2201}); err != nil {
+	if err := saveVmDeployState("vm:one", "", &spec.VmDeployState{SshPort: 2201}); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 	// If the first call leaked the lock, this blocking acquire inside the second
 	// call would hang the test (a self-deadlock surfaces as a timeout, never a
 	// silent pass).
-	if err := saveVmDeployState("vm:two", "", &VmDeployState{SshPort: 2202}); err != nil {
+	if err := saveVmDeployState("vm:two", "", &spec.VmDeployState{SshPort: 2202}); err != nil {
 		t.Fatalf("second write (lock not released?): %v", err)
 	}
 	dc, err := deploykit.LoadBundleConfig()
@@ -107,11 +108,11 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 
 	// Seed through the REAL write path under the bundle/bed key (dctx.Name) with
 	// the resolved VM entity — exactly how the vm lifecycle hook PrepareVenue persists it.
-	if err := saveVmDeployState("check-k3s-vm", "k3s-vm", &VmDeployState{SshPort: 40161, Backend: "auto"}); err != nil {
+	if err := saveVmDeployState("check-k3s-vm", "k3s-vm", &spec.VmDeployState{SshPort: 40161, Backend: "auto"}); err != nil {
 		t.Fatalf("seed write: %v", err)
 	}
 	// An UNRELATED VM bundle that must survive the k3s-vm teardown (no over-match).
-	if err := saveVmDeployState("check-other-vm", "other-vm", &VmDeployState{SshPort: 40162, Backend: "auto"}); err != nil {
+	if err := saveVmDeployState("check-other-vm", "other-vm", &spec.VmDeployState{SshPort: 40162, Backend: "auto"}); err != nil {
 		t.Fatalf("seed unrelated: %v", err)
 	}
 

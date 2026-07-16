@@ -125,7 +125,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	}
 
 	// DistroDef from the BASE IMAGE's distro (its package format), not the operator host's.
-	var podDistroDef *DistroDef
+	var podDistroDef *spec.ResolvedDistro
 	if resolvedImg != nil && len(resolvedImg.Distro) > 0 {
 		podDistroDef = resolveDistroDef(distroCfg, resolvedImg.Distro[0])
 	} else {

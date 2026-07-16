@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func TestResolveDeployChain_VmFlat(t *testing.T) {
 	roots := map[string]BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
@@ -75,7 +76,7 @@ func TestResolveDeployChain_VmInnerPod(t *testing.T) {
 	roots := map[string]BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
@@ -120,7 +121,7 @@ func TestResolveDeployChain_ThreeDeep(t *testing.T) {
 	roots := map[string]BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
@@ -171,7 +172,7 @@ func TestResolveDeployChain_UnknownNestedChild(t *testing.T) {
 	roots := map[string]BundleNode{
 		"vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
