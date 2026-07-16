@@ -18,18 +18,19 @@ import (
 
 // Collector orchestrates one charly-status invocation. Loop-invariant work
 // (charly.yml load, quadlet dir lookup, runtime resolution) happens once at
-// construction. The pod + local substrate collectors live in the substrate
-// plugin (candy/plugin-substrate's OpStatusCollect, P14a) and are reached over
-// the kind-provider Invoke; the vm/k8s/android collectors stay host-side
-// (deploy-cone-coupled, K5-gated) in the in-proc SubstrateCollector registry.
-// The Collector itself holds NO enginekit client — the live pod collection
-// (podman snapshot + probes) moved to the plugin, shedding the enginekit
-// import from this file.
+// construction. The pod + local + vm + k8s substrate collectors live in the
+// substrate plugin (candy/plugin-substrate's OpStatusCollect, P14a + K5) and
+// are reached over the kind-provider Invoke; only the android collector stays
+// host-side (deploy-cone-coupled: it merges PROJECT + PER-MACHINE config) in
+// the in-proc SubstrateCollector registry. The Collector itself holds NO
+// enginekit client — the live pod collection (podman snapshot + probes)
+// moved to the plugin, shedding the enginekit import from this file.
 //
-// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the orchestration
-// (collectFlat/Single) is deploy-cone-coupled (BundleConfig/UnifiedFile), same as the
-// remaining status_collect_{vm,k8s,adb}.go/status_nested.go/status_reap.go files
-// (P14-rest trace, 2026-07; see status_substrate.go for the full rationale).
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the remaining
+// orchestration (collectFlat/Single's android arm + the vm-row enrichment) is
+// deploy-cone-coupled (BundleConfig/UnifiedFile), same as the remaining
+// status_collect_adb.go/status_nested.go/status_reap.go files (P14-rest
+// trace, 2026-07; see status_substrate.go for the full rationale).
 type Collector struct {
 	rt      *kit.ResolvedRuntime
 	quadlet string
@@ -64,10 +65,10 @@ func NewCollector(rt *kit.ResolvedRuntime) (*Collector, error) { //nolint:unpara
 }
 
 // collectFlat collects status across every deployment substrate (pod / vm / k8s
-// / local / android). vm/k8s/android fan out via the in-proc SubstrateCollector
-// registry (K5-gated, deploy-cone-coupled); pod + local fan out via the
-// substrate plugin's OpStatusCollect (P14a), the pod rows then host-enriched.
-// The result is sorted by (Kind, deployKey) — the FLAT fan-out ONLY, stopping
+// / local / android). android alone fans out via the in-proc SubstrateCollector
+// registry (K5-gated, deploy-cone-coupled); pod + local + vm + k8s fan out via
+// the substrate plugin's OpStatusCollect (P14a + K5), the pod + vm rows then
+// host-enriched. The result is sorted by (Kind, deployKey) — the FLAT fan-out ONLY, stopping
 // BEFORE the nested overlay (the overlay is the command:status candy's PURE
 // fold; the host pre-resolves the declared tree separately via
 // buildStatusRootsTree). Returns the resolved CollectOpts too, so the caller
@@ -84,7 +85,7 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 		RunMode:    c.rt.RunMode,
 	}
 
-	// vm/k8s/android via the in-proc SubstrateCollector registry (K5-gated).
+	// android via the in-proc SubstrateCollector registry (K5-gated).
 	var collectors []SubstrateCollector
 	for _, f := range substrateFactories {
 		sc := f(c)
@@ -123,11 +124,20 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 		results = append(results, rows...)
 	}
 
-	// pod + local via the substrate plugin's OpStatusCollect (P14a). The plugin
-	// returns LIVE rows; the host applies the deploy enrichment to the pod rows
-	// (the local rows are final — no deploy enrichment).
+	// pod + local + vm + k8s via the substrate plugin's OpStatusCollect (P14a
+	// + K5). The plugin returns LIVE rows; the host applies the deploy
+	// enrichment to the pod + vm rows (local + k8s rows are final — no
+	// separate deploy enrichment: k8s's whole collection is deploy-tree-
+	// derived inside the plugin itself via HostBuild("resolved-project")).
 	localRows := c.collectSubstrate(ctx, "local", opts)
 	results = append(results, localRows...)
+	k8sRows := c.collectSubstrate(ctx, "k8s", opts)
+	results = append(results, k8sRows...)
+	vmRows := c.collectSubstrate(ctx, "vm", opts)
+	for i := range vmRows {
+		c.enrichVmRow(&vmRows[i], opts)
+	}
+	results = append(results, vmRows...)
 	podRows := c.collectSubstrate(ctx, "pod", opts)
 	for i := range podRows {
 		c.enrichOne(&podRows[i], c.rt.RunEngine)
@@ -144,9 +154,13 @@ func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([
 }
 
 // collectSubstrate reaches the substrate plugin's OpStatusCollect for one word
-// (pod/local) over the compiled-in kind-provider Invoke. A resolve miss or
-// invoke error degrades gracefully: a stderr WARNING + zero rows, never
+// (pod/local/vm/k8s) over the compiled-in kind-provider Invoke. A resolve miss
+// or invoke error degrades gracefully: a stderr WARNING + zero rows, never
 // aborting the command (mirrors the in-proc collectors' graceful-degradation).
+// The ctx carries an in-proc reverse-channel executor (mirrors
+// bundle_compile_seam.go's compileViaPlugin) so the vm/k8s arms can reach
+// HostBuild("resolved-project") / InvokeProvider("verb","libvirt",...) for
+// themselves; pod/local ignore it.
 func (c *Collector) collectSubstrate(ctx context.Context, word string, opts CollectOpts) []spec.DeploymentStatus {
 	req := spec.SubstrateStatusRequest{
 		IncludeAll: opts.IncludeAll,
@@ -159,6 +173,7 @@ func (c *Collector) collectSubstrate(ctx context.Context, word string, opts Coll
 		fmt.Fprintf(os.Stderr, "WARNING: charly status: %s collector: substrate plugin (kind:%s) not registered\n", word, word)
 		return nil
 	}
+	ctx = sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
 	reply, err := invokeTyped[spec.SubstrateStatusRequest, spec.SubstrateStatusReply](ctx, prov, word, sdk.OpStatusCollect, req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: charly status: %s collector: %v\n", word, err)
@@ -250,6 +265,41 @@ func (c *Collector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 				}
 			}
 		}
+	}
+}
+
+// enrichVmRow fills network/backend detail from the matching target:vm deploy
+// entry's vm_state (~/.config/charly/charly.yml) when one exists (K5:
+// relocated from the former VMCollector.enrichFromDeploy). cs.Image already
+// carries the libvirt-domain-derived entity name (the substrate plugin
+// strips the charly- prefix) — the SAME name deploykit.FindVmDeployNode
+// matches by deploy NAME first, then by vm: cross-ref. Absence of a deploy
+// entry is normal: the libvirt domain still shows with Source:libvirt and no
+// enrichment.
+func (c *Collector) enrichVmRow(cs *spec.DeploymentStatus, opts CollectOpts) {
+	if opts.Deploy == nil || opts.Deploy.Bundle == nil {
+		return
+	}
+	node, ok := deploykit.FindVmDeployNode(opts.Deploy.Bundle, cs.Image, cs.Image)
+	if !ok {
+		return
+	}
+	if node.Network != "" {
+		cs.Network = node.Network
+	}
+	state := node.VmState
+	if state == nil {
+		return
+	}
+	// Surface the guest SSH endpoint as a host->guest:22 port mapping so the
+	// PORTS column reflects how an operator reaches the VM. This is the live
+	// truth recorded by the vm lifecycle hook's PrepareVenue on first apply.
+	if state.SshPort > 0 {
+		cs.Ports = append(cs.Ports, spec.PortMapping{
+			HostPort: state.SshPort,
+			CtrPort:  22,
+			Proto:    "tcp",
+		})
 	}
 }
 

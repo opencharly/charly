@@ -2,12 +2,13 @@ package substratekind
 
 // status_collect.go — the substrate COLLECTOR OpStatus dispatch. The host's
 // status fan-out (charly/status_collector.go collectFlat) reaches the
-// cleanly-movable collectors (pod live + local, P14a) over the kind provider's
-// Invoke as sdk.OpStatusCollect, dispatched by word (pod/vm/k8s/local/android)
-// — the SAME one-provider-serves-all-5-words shape the C2-substrate kind decode
-// uses. vm/k8s/android are deferred to K5 (their collectors are deploy-cone-
-// coupled); the plugin returns no rows for those words until then. This seam is
-// REUSED at K5 to move the remaining 7 cone-coupled collectors into the plugin.
+// cleanly-movable collectors (pod live + local, P14a; vm + k8s, K5) over the
+// kind provider's Invoke as sdk.OpStatusCollect, dispatched by word
+// (pod/vm/k8s/local/android) — the SAME one-provider-serves-all-5-words shape
+// the C2-substrate kind decode uses. android alone is still deferred (its
+// collector merges PROJECT + PER-MACHINE deploy config, a slightly deeper
+// deploy-cone coupling than vm/k8s needed); the plugin returns no rows for
+// that word until its own fold.
 
 import (
 	"context"
@@ -42,11 +43,23 @@ func statusCollect(ctx context.Context, word string, reqJSON []byte) (*statusRes
 			return nil, fmt.Errorf("substrate status-collect local: %w", err)
 		}
 		return marshalStatusReply(reply)
-	case "vm", "k8s", "android":
-		// K5-gated: the vm/k8s/android collectors are deploy-cone-coupled
-		// (BundleConfig/UnifiedFile/ResolveDeployChain) and stay host-side
-		// until the deploy-resolution cone fold. Return no rows; the host's
-		// in-proc SubstrateCollector registry still serves them.
+	case "vm":
+		reply, err := collectVmStatus(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("substrate status-collect vm: %w", err)
+		}
+		return marshalStatusReply(reply)
+	case "k8s":
+		reply, err := collectK8sStatus(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("substrate status-collect k8s: %w", err)
+		}
+		return marshalStatusReply(reply)
+	case "android":
+		// K5-gated: the android collector is deploy-cone-coupled
+		// (BundleConfig/UnifiedFile + a merge of project + per-machine
+		// config) and stays host-side until its own fold. Return no rows;
+		// the host's in-proc SubstrateCollector registry still serves it.
 		return marshalStatusReply(spec.SubstrateStatusReply{})
 	default:
 		return nil, fmt.Errorf("substrate status-collect: unsupported word %q", word)

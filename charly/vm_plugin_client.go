@@ -43,13 +43,6 @@ type vmResolveResult struct {
 	TunnelTarget string              `json:"tunnel_target"`
 }
 
-// domainInfo decodes one entry from the plugin's list-domains reply (the plugin marshals its own
-// domainInfo by field name; json.Unmarshal matches Name/State case-insensitively).
-type domainInfo struct {
-	Name  string
-	State string
-}
-
 // invokeVmPlugin RPCs the out-of-process vm plugin for an internal VM-resolution op
 // (domain-state / list-domains / resolve-spice / resolve-vnc) and returns the decoded JSON
 // result. ok=false when the plugin is absent (graceful degrade) or the call errored.

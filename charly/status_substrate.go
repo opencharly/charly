@@ -8,12 +8,15 @@ import (
 )
 
 // CollectOpts is the read-only input every in-proc SubstrateCollector receives
-// (the vm/k8s/android collectors that stay host-side until K5). It is built once
+// (only the android collector remains — it stays host-side until its own fold,
+// since it merges PROJECT + PER-MACHINE deploy config). It is built once
 // per `charly status` invocation by collectFlat and handed to every registered
-// collector unchanged. Nothing in a collector may mutate it. The pod + local
-// collectors moved to the substrate plugin (P14a) and no longer use CollectOpts
-// — they receive their inputs over the OpStatusCollect wire request — so
-// CollectOpts carries NO enginekit client (the engine shed from core with them).
+// collector unchanged. Nothing in a collector may mutate it. The pod + local +
+// vm + k8s collectors moved to the substrate plugin (P14a + K5) and no longer
+// use CollectOpts — they receive their inputs over the OpStatusCollect wire
+// request (the k8s collector further re-hydrates its own deploy-tree view via
+// HostBuild("resolved-project")) — so CollectOpts carries NO enginekit client
+// (the engine shed from core with them).
 type CollectOpts struct {
 	IncludeAll bool                    // mirrors --all
 	Nested     bool                    // mirrors --nested (live multi-hop probing of nested children + live k8s)

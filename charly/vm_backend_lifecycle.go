@@ -22,9 +22,11 @@ import (
 // plugin; these shared helpers stay because non-CLI core consumers still call
 // them: the config-resolve seam (host_build_config_resolve.go), the resource
 // arbiter (preempt.go — startVM/stopVM/vmDir), the sibling-member + bed runners
-// (bundle_members.go / check_bed_run.go — startLibvirtUserSession), the deploy
-// status collector (status_collect_vm.go — resolveVmBackend), and the container
-// SSH-key helpers (config_image.go / vm_cloud_image.go).
+// (bundle_members.go / check_bed_run.go — startLibvirtUserSession), and the
+// container SSH-key helpers (config_image.go / vm_cloud_image.go). The K5 vm
+// status collector (candy/plugin-substrate/status_vm.go) does NOT call
+// resolveVmBackend — it reaches candy/plugin-vm's verb:libvirt directly over
+// InvokeProvider and gates on vmshared.LibvirtSessionSocket() instead.
 
 // vmName returns the VM name for an image and optional instance.
 func vmName(box, instance string) string {
