@@ -91,9 +91,10 @@ k3s-vm:
     vm:
         source:
             kind: cloud_image
-            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            url: https://geo.mirror.pkgbuild.com/images/v20260701.551070/Arch-Linux-x86_64-cloudimg-20260701.551070.qcow2
             checksum:
                 type: sha256
+                value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
         backend: libvirt
         disk_size: 20G
@@ -149,9 +150,10 @@ eval-vm:
     vm:
         source:
             kind: cloud_image
-            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            url: https://geo.mirror.pkgbuild.com/images/v20260701.551070/Arch-Linux-x86_64-cloudimg-20260701.551070.qcow2
             checksum:
                 type: sha256
+                value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
         backend: libvirt
         disk_size: 20G
@@ -185,9 +187,10 @@ eval-host-vm:
     vm:
         source:
             kind: cloud_image
-            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            url: https://geo.mirror.pkgbuild.com/images/v20260701.551070/Arch-Linux-x86_64-cloudimg-20260701.551070.qcow2
             checksum:
                 type: sha256
+                value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
         backend: libvirt
         disk_size: 20G
@@ -215,9 +218,10 @@ charly-vm:
     vm:
         source:
             kind: cloud_image
-            url: https://fastly.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+            url: https://geo.mirror.pkgbuild.com/images/v20260701.551070/Arch-Linux-x86_64-cloudimg-20260701.551070.qcow2
             checksum:
                 type: sha256
+                value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
         backend: libvirt
         disk_size: 20G

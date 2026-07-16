@@ -22,9 +22,7 @@ tasks:
       # same stamp, so the `charly` layer (and every image/VM baking it) ships a
       # self-identifying binary, and the PKGBUILD's pkgver() reads this same
       # binary's `charly version` so the pacman package can never disagree.
-      - |
-        CALVER=$(bash pkg/arch/calver.sh)
-        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+      - task: build-stamped
       - cp bin/charly candy/charly/bin/charly
       - task: install
 
@@ -166,10 +164,29 @@ tasks:
     dir: "{{.ROOT_DIR}}"
     cmds:
       - mkdir -p bin candy/charly/bin
+      - task: build-stamped
+      - cp bin/charly candy/charly/bin/charly
+
+  build-stamped:
+    internal: true
+    dir: "{{.ROOT_DIR}}"
+    cmds:
       - |
         CALVER=$(bash pkg/arch/calver.sh)
-        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
-      - cp bin/charly candy/charly/bin/charly
+        GIT_DIR=$(git rev-parse --absolute-git-dir)
+        GIT_WORK_TREE=$(git rev-parse --show-toplevel)
+        cd charly
+        GIT_OPTIONAL_LOCKS=0 GIT_DIR="$GIT_DIR" GIT_WORK_TREE="$GIT_WORK_TREE" go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+
+  test-build-vcs-stamp:
+    desc: Verify a linked-worktree build retains Go VCS stamping
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - task: build-stamped
+      - |
+        revision=$(git rev-parse HEAD)
+        go version -m bin/charly | grep -Eq '^[[:space:]]*build[[:space:]]+vcs=git$'
+        go version -m bin/charly | grep -Eq "^[[:space:]]*build[[:space:]]+vcs.revision=${revision}$"
 
   # Release-artifact builds — thin wrappers over `charly box pkg`, which builds each
   # native package distro-natively (in a podman container) via the SAME embedded

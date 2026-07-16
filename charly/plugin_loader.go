@@ -295,7 +295,7 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// parallel and therefore hold different binary locks, but their Git probes share one index.
 	// Disable Git's optional index refresh/write for this read-only status operation: stamping stays
 	// enabled, while concurrent builds cannot contend on shared mutable index state.
-	cmd.Env = pluginBuildEnv(os.Environ())
+	cmd.Env = pluginBuildEnv(os.Environ(), srcDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
 		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
@@ -307,15 +307,24 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	return bin, nil
 }
 
-func pluginBuildEnv(base []string) []string {
-	env := make([]string, 0, len(base)+2)
+func pluginBuildEnv(base []string, srcDir string) []string {
+	env := make([]string, 0, len(base)+4)
 	for _, entry := range base {
-		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_OPTIONAL_LOCKS=") {
+		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_OPTIONAL_LOCKS=") || strings.HasPrefix(entry, "GIT_DIR=") || strings.HasPrefix(entry, "GIT_WORK_TREE=") {
 			continue
 		}
 		env = append(env, entry)
 	}
-	return append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0")
+	env = append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0")
+	gitDir, err := exec.Command("git", "-C", srcDir, "rev-parse", "--absolute-git-dir").Output()
+	if err != nil {
+		return env
+	}
+	workTree, err := exec.Command("git", "-C", srcDir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return env
+	}
+	return append(env, "GIT_DIR="+strings.TrimSpace(string(gitDir)), "GIT_WORK_TREE="+strings.TrimSpace(string(workTree)))
 }
 
 // bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a
