@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -126,7 +127,7 @@ func ResolveCheckVarsBuild(meta *BoxMetadata) *CheckVarResolver {
 // On inspect failure the function still returns a resolver with the
 // build-time portion populated; HasRuntime is false and runtime-only vars
 // will be unresolved downstream.
-func ResolveCheckVarsRuntime(meta *BoxMetadata, deploy *BundleNode, engine, deployName, containerName, instance string) (*CheckVarResolver, error) {
+func ResolveCheckVarsRuntime(meta *BoxMetadata, deploy *spec.BundleNode, engine, deployName, containerName, instance string) (*CheckVarResolver, error) {
 	_ = deploy // reserved for future per-deploy overrides; instance now arrives explicitly
 	env := buildTimeVars(meta, instance)
 

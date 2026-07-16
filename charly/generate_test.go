@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"strings"
@@ -123,21 +124,21 @@ func TestGenerateInitFragments(t *testing.T) {
 		Candies: map[string]*Candy{
 			"python": {
 				Name: "python",
-				plan: []Step{{Run: "build", Op: cmdOp("true")}},
+				plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			},
 			"svc": {
 				Name:        "svc",
 				InitSystems: map[string]bool{"supervisord": true},
-				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
-				service: []ServiceEntry{
+				plan:        []spec.Step{{Run: "build", Op: cmdOp("true")}},
+				service: []spec.ServiceEntry{
 					{Name: "svc", Exec: "svc serve"},
 				},
 			},
 			"other": {
 				Name:        "other",
 				InitSystems: map[string]bool{"supervisord": true},
-				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
-				service: []ServiceEntry{
+				plan:        []spec.Step{{Run: "build", Op: cmdOp("true")}},
+				service: []spec.ServiceEntry{
 					{Name: "other", Exec: "other run"},
 				},
 			},
@@ -196,14 +197,14 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 		Candies: map[string]*Candy{
 			"socat": {
 				Name: "socat",
-				plan: []Step{{Run: "build", Op: cmdOp("true")}},
+				plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			},
 			"chrome": {
 				Name:           "chrome",
-				plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+				plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 				PortRelayPorts: []int{9222},
 				InitSystems:    map[string]bool{"supervisord": true},
-				service: []ServiceEntry{
+				service: []spec.ServiceEntry{
 					{Name: "chrome", Exec: "chrome"},
 				},
 			},
@@ -294,7 +295,7 @@ func TestRenderRelayTemplate(t *testing.T) {
 func TestRpmTemplateWithModules(t *testing.T) {
 	fedora := testDistroDef("fedora")
 	rpm := fedora.Format["rpm"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: rpm.CacheMount,
 		Packages:    []string{"valkey"},
 		Modules:     []string{"valkey:remi-9.0"},
@@ -321,7 +322,7 @@ func TestRpmTemplateWithModules(t *testing.T) {
 func TestPacTemplateBasic(t *testing.T) {
 	arch := testDistroDef("arch")
 	pac := arch.Format["pac"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: pac.CacheMount,
 		Packages:    []string{"neovim", "ripgrep"},
 	}
@@ -343,7 +344,7 @@ func TestPacTemplateBasic(t *testing.T) {
 func TestAurInstallTemplate(t *testing.T) {
 	arch := testDistroDef("arch")
 	aur := arch.Format["aur"]
-	ctx := &InstallContext{
+	ctx := &spec.InstallContext{
 		CacheMounts: aur.CacheMount,
 		StageName:   "my-tool-aur-build",
 	}

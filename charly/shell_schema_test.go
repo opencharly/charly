@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ path_append:
   - "~/.local/bin"
 priority: 10
 `)
-	var cfg ShellConfig
+	var cfg spec.Shell
 	if err := yaml.Unmarshal(src, &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -54,7 +55,7 @@ fish:
   init: |
     direnv hook fish | source
 `)
-	var cfg ShellConfig
+	var cfg spec.Shell
 	if err := decodeViaCUEForTest(t, string(src), &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestShellConfig_RejectsUnknownShell(t *testing.T) {
 // TestResolveShellSpec_SelectionRule — per-shell wins over generic;
 // ${SHELL_NAME} substituted only when falling back to generic.
 func TestResolveShellSpec_SelectionRule(t *testing.T) {
-	cfg := &ShellConfig{
+	cfg := &spec.Shell{
 		Init: `check "$(direnv hook ${SHELL_NAME})"`,
 		Fish: &ShellSpec{Init: "direnv hook fish | source"},
 	}

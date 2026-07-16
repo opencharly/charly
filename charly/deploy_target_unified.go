@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 )
 
 // DeployContext carries everything an Add needs from the generic
@@ -34,7 +35,7 @@ import (
 type DeployContext struct {
 	// Node is the dispatch-merged BundleNode. nil for a ref-based
 	// deploy with no charly.yml entry (e.g. `charly bundle add host ./x.yml`).
-	Node *BundleNode
+	Node *spec.BundleNode
 
 	// Name is the deploy key (the bed key / charly.yml map key, e.g.
 	// "check-k3s-vm"). Distinct from the kind:vm entity name (node.From).
@@ -97,7 +98,7 @@ type UnifiedDeployTarget interface {
 	// Test runs the given deploy-scope checks against the live
 	// target. Equivalent to `charly check live <name>`. Returns nil only if
 	// every non-skipped check passes.
-	Test(ctx context.Context, checks []Op, opts TestOpts) error
+	Test(ctx context.Context, checks []spec.Op, opts TestOpts) error
 
 	// Update re-applies the plan diff between the currently-recorded
 	// candy set and the plan set derived from fresh charly.yml.

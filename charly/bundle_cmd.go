@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"strings"
 
@@ -36,7 +37,7 @@ func (c *deployShowCmd) Run() error {
 			return nil
 		}
 		// Print just this image's config
-		out := &BundleConfig{Bundle: map[string]BundleNode{key: entry}}
+		out := &BundleConfig{Bundle: map[string]spec.BundleNode{key: entry}}
 		return marshalToStdout(out)
 	}
 
@@ -133,7 +134,7 @@ func (c *deployImportCmd) Run() error {
 		base = existing
 	}
 	if base == nil {
-		base = &BundleConfig{Bundle: make(map[string]BundleNode)}
+		base = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	}
 
 	// Merge input files left-to-right
@@ -152,10 +153,10 @@ func (c *deployImportCmd) Run() error {
 				existing.Bundle[c.Box] = entry
 				merged = existing
 			} else {
-				merged = &BundleConfig{Bundle: map[string]BundleNode{c.Box: entry}}
+				merged = &BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
 			}
 		} else {
-			merged = &BundleConfig{Bundle: map[string]BundleNode{c.Box: entry}}
+			merged = &BundleConfig{Bundle: map[string]spec.BundleNode{c.Box: entry}}
 		}
 	}
 
@@ -299,7 +300,7 @@ func marshalToStdout(dc *BundleConfig) error {
 }
 
 func filterDeployBox(dc *BundleConfig, names []string) *BundleConfig {
-	filtered := &BundleConfig{Bundle: make(map[string]BundleNode)}
+	filtered := &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	for _, name := range names {
 		if entry, ok := dc.Bundle[name]; ok {
 			filtered.Bundle[name] = entry

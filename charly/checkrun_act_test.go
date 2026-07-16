@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -13,7 +14,7 @@ import (
 //
 // actScriptForTest resolves a verb to its provider and renders the
 // act script via ProvisionActor — the same path runProvisionAct takes (C1b).
-func actScriptForTest(op *Op, verb string, distros []string) (string, bool) {
+func actScriptForTest(op *spec.Op, verb string, distros []string) (string, bool) {
 	prov, ok := providerRegistry.ResolveVerb(verb)
 	if !ok {
 		return "", false
@@ -28,7 +29,7 @@ func actScriptForTest(op *Op, verb string, distros []string) (string, bool) {
 func TestRenderProvisionScript(t *testing.T) {
 	cases := []struct {
 		name     string
-		op       Op
+		op       spec.Op
 		verb     string
 		wantOK   bool
 		contains string
@@ -37,22 +38,22 @@ func TestRenderProvisionScript(t *testing.T) {
 		// timeline lowers into a typed SystemPackagesStep / ServicePackagedStep (compileActOp),
 		// but each ALSO keeps a ProvisionActor for the runtime/box-build live-act path, which
 		// decodes plugin_input.
-		{"package", Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "package", true, "install"},
-		{"service", Op{Plugin: "service", PluginInput: map[string]any{"service": "sshd"}}, "service", true, "enable --now"},
+		{"package", spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "package", true, "install"},
+		{"service", spec.Op{Plugin: "service", PluginInput: map[string]any{"service": "sshd"}}, "service", true, "enable --now"},
 		// file is an extracted state-provision verb: a builtin plugin unit whose provider is a
 		// ProvisionActor reading plugin_input (file/mode) + the SHARED content off the step Op.
-		{"file-content", Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/x.conf", "mode": "0644"}, Content: "hi\n"}, "file", true, "chmod '0644'"},
+		{"file-content", spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/x.conf", "mode": "0644"}, Content: "hi\n"}, "file", true, "chmod '0644'"},
 		// unix_group / user / kernel-param / mount are extracted state-provision verbs:
 		// builtin plugin units whose providers are ProvisionActors reading plugin_input (not
 		// the removed Op.UnixGroup/User/KernelParam/Mount/… fields).
-		{"unix_group", Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "devs"}}, "unix_group", true, "groupadd"},
-		{"user", Op{Plugin: "user", PluginInput: map[string]any{"user": "bob"}}, "user", true, "useradd"},
-		{"kernel-param", Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}}, "kernel-param", true, "sysctl -w 'vm.swappiness'='10'"},
-		{"mount", Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}}, "mount", true, "mount -t 'ext4' '/dev/sdb1' '/mnt/data'"},
+		{"unix_group", spec.Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "devs"}}, "unix_group", true, "groupadd"},
+		{"user", spec.Op{Plugin: "user", PluginInput: map[string]any{"user": "bob"}}, "user", true, "useradd"},
+		{"kernel-param", spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}}, "kernel-param", true, "sysctl -w 'vm.swappiness'='10'"},
+		{"mount", spec.Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}}, "mount", true, "mount -t 'ext4' '/dev/sdb1' '/mnt/data'"},
 		// An observe-only verb has no act form → ok=false (falls to the probe handler).
 		// addr is now a builtin plugin verb (authored plugin: addr + plugin_input); its
 		// provider is a CheckVerbProvider, not a ProvisionActor, so it still has no act form.
-		{"addr-observe", Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80", "reachable": true}}, "addr", false, ""},
+		{"addr-observe", spec.Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80", "reachable": true}}, "addr", false, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -78,7 +79,7 @@ func TestRunProvisionActDispatch(t *testing.T) {
 	// now the generic plugin: file (Kind()=plugin → Op.Plugin=file resolves the provider).
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "mkdir", exit: 0}}}
 	r := hostVerbResolverFor(fe, RunModeLive)
-	res, ok := r.runProvisionAct(ctx, &Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/x"}}, "file")
+	res, ok := r.runProvisionAct(ctx, &spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/x"}}, "file")
 	if !ok {
 		t.Fatalf("runProvisionAct(file) ok=false, want true (file is a ProvisionActor)")
 	}
@@ -91,19 +92,19 @@ func TestRunProvisionActDispatch(t *testing.T) {
 
 	// addr has no act form → ok=false (caller falls through to the probe handler). addr is
 	// now a builtin plugin verb; its CheckVerbProvider is not a ProvisionActor.
-	if _, ok := r.runProvisionAct(ctx, &Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80"}}, "addr"); ok {
+	if _, ok := r.runProvisionAct(ctx, &spec.Op{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:80"}}, "addr"); ok {
 		t.Fatalf("runProvisionAct(addr) ok=true, want false (no act form)")
 	}
 
 	// An unknown verb (no provider) → ok=false.
-	if _, ok := r.runProvisionAct(ctx, &Op{}, "no-such-verb"); ok {
+	if _, ok := r.runProvisionAct(ctx, &spec.Op{}, "no-such-verb"); ok {
 		t.Fatalf("runProvisionAct(unknown) ok=true, want false")
 	}
 
 	// Non-zero exit → fail.
 	feFail := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "mkdir", exit: 1, stderr: "boom"}}}
 	rFail := hostVerbResolverFor(feFail, RunModeLive)
-	res2, ok := rFail.runProvisionAct(ctx, &Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/y"}}, "file")
+	res2, ok := rFail.runProvisionAct(ctx, &spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/tmp/y"}}, "file")
 	if !ok || res2.Status != TestFail {
 		t.Fatalf("runProvisionAct(file, exit 1) = (status=%v, ok=%v), want (TestFail, true)", res2.Status, ok)
 	}

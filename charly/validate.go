@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"slices"
@@ -193,7 +194,7 @@ func isNodeFormFile(data []byte) bool {
 // boxEntityWireYAML marshals a resolved BoxConfig back to the authored `box:`
 // wire form (a kind-keyed document), injecting the map-key name that BoxConfig
 // does not itself carry, so it can be CUE-ingested and validated against #Box.
-func boxEntityWireYAML(name string, box BoxConfig) ([]byte, error) {
+func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 	raw, err := yaml.Marshal(box)
 	if err != nil {
 		return nil, err
@@ -268,7 +269,7 @@ var validBuildCacheModes = map[string]bool{
 // defaults; values are validated wherever they appear so a typo surfaces at
 // `charly box validate` rather than silently mis-driving a build.
 func validateBuildTunables(cfg *Config, errs *ValidationError) {
-	check := func(name string, ic BoxConfig) {
+	check := func(name string, ic spec.BoxConfig) {
 		if ic.Jobs != nil && *ic.Jobs < 1 {
 			errs.Add("%s: jobs must be >= 1, got %d", name, *ic.Jobs)
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestRelocatedMountVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "findmnt", stdout: "proc proc rw,nosuid\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"mount": "/proc", "filesystem": "proc"}})
+		&spec.Op{PluginInput: map[string]any{"mount": "/proc", "filesystem": "proc"}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +35,7 @@ func TestRelocatedMountVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("mount provider does not implement ProvisionActor (multi-role adapter missing): %T", prov)
 	}
 	script, ok := pa.RenderProvisionScript(
-		&Op{PluginInput: map[string]any{"mount": "/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}}, nil)
+		&spec.Op{PluginInput: map[string]any{"mount": "/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}}, nil)
 	if !ok || !strings.Contains(script, "mount") || !strings.Contains(script, "/dev/sdb1") {
 		t.Fatalf("act: want a findmnt||mount script, got ok=%v %q", ok, script)
 	}

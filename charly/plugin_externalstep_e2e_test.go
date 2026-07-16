@@ -72,7 +72,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// class:step grpcProvider declaring a StepContract lowers to an externalStep carrying the
 	// DECLARED contract + the opaque payload (NOT an OpStep / ExternalPluginStep). Using the
 	// compiled step (not a hand-built one) proves the FULL authoring → compile → wire path.
-	op := &Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
+	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
 	routed := compileActOp(op, &Candy{Name: "plugin-example-stepkind"}, &ResolvedBox{Tags: []string{"fedora"}})
 	step, ok := routed.(*externalStep)
 	if !ok {

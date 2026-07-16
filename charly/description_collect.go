@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // description_collect.go — collect the baked `plan:` view for the
 // ai.opencharly.description OCI label.
 //
@@ -19,8 +23,8 @@ package main
 
 // bakeableSteps returns the subset of a plan that belongs in the runtime
 // descriptor label per the bake rule above.
-func bakeableSteps(plan []Step) []Step {
-	var out []Step
+func bakeableSteps(plan []spec.Step) []spec.Step {
+	var out []spec.Step
 	for _, s := range plan {
 		bake := false
 		switch {
@@ -87,7 +91,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 // the same step id is replaced by the local one; otherwise the local step is
 // appended. This is the per-host override surface for acceptance steps
 // (charly.yml deploy entries). If localPlan is empty, returns baked unchanged.
-func MergeDeployDescriptions(baked *LabelDescriptionSet, localPlan []Step, originName string) *LabelDescriptionSet {
+func MergeDeployDescriptions(baked *LabelDescriptionSet, localPlan []spec.Step, originName string) *LabelDescriptionSet {
 	if len(localPlan) == 0 {
 		return baked
 	}
@@ -106,7 +110,7 @@ func MergeDeployDescriptions(baked *LabelDescriptionSet, localPlan []Step, origi
 			}
 		}
 	}
-	var fresh []Step
+	var fresh []spec.Step
 	for _, st := range localPlan {
 		if id := st.ID; id != "" {
 			if l, ok := locByID[id]; ok {

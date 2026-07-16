@@ -59,7 +59,7 @@ func TestOCITargetEmitShellHook(t *testing.T) {
 
 func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
-	distro := &DistroDef{
+	distro := &spec.ResolvedDistro{
 		Format: map[string]*FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN dnf install -y {{join .Packages \" \"}}\n",
@@ -88,7 +88,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 
 func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	// Both legacy and new path set; new path must win.
-	distro := &DistroDef{
+	distro := &spec.ResolvedDistro{
 		Format: map[string]*FormatDef{
 			"rpm": {
 				InstallTemplate: "RUN legacy-install\n",
@@ -229,8 +229,8 @@ func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 	gen := &Generator{BuildDir: dir, Candies: map[string]*Candy{"mytool": {Name: "mytool"}}}
 	tgt := ociTestTarget(buildEngineContext{Generator: gen, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
 	plan := &InstallPlan{Candy: "mytool", Steps: []InstallStep{
-		&OpStep{Op: &Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
-		&OpStep{Op: &Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
+		&OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
+		&OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},
 	}}
 	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)

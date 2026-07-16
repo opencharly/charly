@@ -60,7 +60,7 @@ var _ = func() bool {
 // node may be nil (the Update path carries no DeployContext) — it then re-resolves
 // the deploy node from the tree by name (the node-free re-resolution every node-free
 // deploy lifecycle method uses).
-func androidDeployPreresolve(name, dir string, node *BundleNode, plans []*InstallPlan) (json.RawMessage, error) {
+func androidDeployPreresolve(name, dir string, node *spec.BundleNode, plans []*InstallPlan) (json.RawMessage, error) {
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd

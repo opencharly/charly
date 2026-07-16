@@ -40,7 +40,7 @@ const overlayBuilderKind = "overlay"
 type overlayBuildInputs struct {
 	plans      []*InstallPlan
 	parentExec DeployExecutor
-	parentNode *BundleNode
+	parentNode *spec.BundleNode
 }
 
 type overlayBuildInputsKey struct{}
@@ -91,7 +91,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// translateHostPathToVenue maps host paths → venue paths for the nested podman build.
 	var plans []*InstallPlan
 	var parentExec DeployExecutor
-	var parentNode *BundleNode
+	var parentNode *spec.BundleNode
 	if in := overlayBuildInputsFrom(ctx); in != nil {
 		plans = in.plans
 		parentExec = in.parentExec
@@ -125,7 +125,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	}
 
 	// DistroDef from the BASE IMAGE's distro (its package format), not the operator host's.
-	var podDistroDef *DistroDef
+	var podDistroDef *spec.ResolvedDistro
 	if resolvedImg != nil && len(resolvedImg.Distro) > 0 {
 		podDistroDef = resolveDistroDef(distroCfg, resolvedImg.Distro[0])
 	} else {
@@ -295,7 +295,7 @@ var _ = func() bool {
 
 // podDeployEngine returns the container engine for a pod deploy node — node.Engine when set, else
 // "podman" (the default). Used by the overlay-image teardown.
-func podDeployEngine(node *BundleNode) string {
+func podDeployEngine(node *spec.BundleNode) string {
 	if node != nil && node.Engine != "" {
 		return node.Engine
 	}

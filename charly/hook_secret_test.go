@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // TestResolveHookSecretEnv verifies that credential-backed secret_accept /
 // secret_require values are surfaced as NAME=value entries for lifecycle hooks
@@ -14,7 +17,7 @@ func TestResolveHookSecretEnv(t *testing.T) {
 
 	// A secret whose value resolves (here via the env-first chain) is surfaced.
 	t.Setenv("CHARLY_TEST_HOOK_TOKEN", "tok-abc-123")
-	meta := &BoxMetadata{SecretAccept: []EnvDependency{{Name: "CHARLY_TEST_HOOK_TOKEN"}}}
+	meta := &BoxMetadata{SecretAccept: []spec.EnvDependency{{Name: "CHARLY_TEST_HOOK_TOKEN"}}}
 	got := resolveHookSecretEnv("img", "", meta)
 	want := "CHARLY_TEST_HOOK_TOKEN=tok-abc-123"
 	found := false
@@ -28,7 +31,7 @@ func TestResolveHookSecretEnv(t *testing.T) {
 	}
 
 	// An unresolved secret is omitted entirely (never a leaked empty NAME=).
-	meta2 := &BoxMetadata{SecretAccept: []EnvDependency{{Name: "CHARLY_TEST_HOOK_UNSET_XYZZY"}}}
+	meta2 := &BoxMetadata{SecretAccept: []spec.EnvDependency{{Name: "CHARLY_TEST_HOOK_UNSET_XYZZY"}}}
 	if got := resolveHookSecretEnv("img", "", meta2); len(got) != 0 {
 		t.Fatalf("unresolved secret must be omitted, got %v", got)
 	}

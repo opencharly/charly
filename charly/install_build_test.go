@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"slices"
@@ -300,7 +301,7 @@ func TestMergePlansOrderingAndID(t *testing.T) {
 		&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall, Packages: []string{"ripgrep"}},
 	}}
 	p2 := &InstallPlan{Candy: "uv", Distro: "fedora:43", Steps: []InstallStep{
-		&OpStep{CandyName: "uv", Op: &Op{Download: "https://…"}},
+		&OpStep{CandyName: "uv", Op: &spec.Op{Download: "https://…"}},
 	}}
 
 	merged := deploykit.MergePlan([]*InstallPlan{p1, p2}, "fedora-coder", nil)
@@ -341,7 +342,7 @@ func TestDescribePlanSummary(t *testing.T) {
 		Steps: []InstallStep{
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall},
 			&SystemPackagesStep{Format: "rpm", Phase: PhaseInstall},
-			&OpStep{Op: &Op{Mkdir: "/x"}},
+			&OpStep{Op: &spec.Op{Mkdir: "/x"}},
 		},
 	}
 	out := DescribePlan(p)

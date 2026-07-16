@@ -47,7 +47,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 	f := strings.ToLower(strings.TrimSpace(filter))
 
 	var ents []spec.FeatureEntity
-	add := func(kind, name, desc string, plan []Step) {
+	add := func(kind, name, desc string, plan []spec.Step) {
 		eid := kind + ":" + name
 		if f != "" && f != eid && f != kind {
 			return
