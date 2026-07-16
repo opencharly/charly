@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -81,7 +83,7 @@ func assertBalancedHeredoc(t *testing.T, label, out string) {
 // task command (`install -m … <<'CHARLY_WRITE' … CHARLY_WRITE`).
 func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 	cmd, err := renderOpCommand(&OpStep{
-		Op: &Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
+		Op: &spec.Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
 	})
 	if err != nil {
 		t.Fatalf("renderTaskCommand: %v", err)
@@ -98,7 +100,7 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
 	plan := &InstallPlan{Candy: "demo", Steps: []InstallStep{
-		&RepoChangeStep{
+		&deploykit.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/demo.repo",
 			Content: "[demo]\nname=demo\n",

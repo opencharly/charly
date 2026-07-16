@@ -23,11 +23,11 @@ import (
 // tree-builder must leave alone (no root emitted for a childless entry).
 func nestedUnified() *UnifiedFile {
 	return &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-android-emulator-pod": {
 				Target: "pod",
 				Image:  "android-emulator",
-				Children: map[string]*BundleNode{
+				Children: map[string]*spec.BundleNode{
 					"device":     {Target: "android", From: "pixel9a-36", AddCandy: []string{"android-test-apps"}},
 					"device-net": {Target: "android", From: "pixel9a-endpoint", AddCandy: []string{"android-apidemos"}},
 				},
@@ -129,11 +129,11 @@ func TestBuildStatusRootsTree_DeclaredChildren(t *testing.T) {
 func TestBuildStatusRootsTree_MatchKeysOrderVmPod(t *testing.T) {
 	const parent = "stack-vm"
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			parent: {
 				Target: "vm",
 				From:   "stack-vm",
-				Children: map[string]*BundleNode{
+				Children: map[string]*spec.BundleNode{
 					"web": {Target: "pod", Image: "nginx"},
 				},
 			},

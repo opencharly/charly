@@ -21,7 +21,7 @@ providers:
     builder: []
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
-# `task build:charly` before `go build`) to emit charly/plugins_generated.go (one
+# `task build:binary` before `go build`) to emit charly/plugins_generated.go (one
 # registerCompiledPlugin() call per entry) + the repo-root go.work (a `use` directive
 # per entry, so `go build ./charly` resolves the candy imports). A plugin candy NOT
 # listed here still loads OUT-OF-PROCESS over gRPC when a plan references its word

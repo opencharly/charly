@@ -27,36 +27,6 @@ func TestCharlyVersion(t *testing.T) {
 	}
 }
 
-func TestCurrentBuildProvenance(t *testing.T) {
-	savedCalVer, savedRevision, savedCommitTime, savedModified := BuildCalVer, BuildRevision, BuildCommitTime, BuildModified
-	t.Cleanup(func() {
-		BuildCalVer, BuildRevision, BuildCommitTime, BuildModified = savedCalVer, savedRevision, savedCommitTime, savedModified
-	})
-
-	BuildCalVer = "2026.154.0943"
-	BuildRevision = "0123456789abcdef"
-	BuildCommitTime = "2026-06-03T09:43:00+00:00"
-	BuildModified = "false"
-	got, ok := CurrentBuildProvenance()
-	if !ok {
-		t.Fatal("explicit build provenance was not accepted")
-	}
-	want := BuildProvenance{
-		CalVer:     "2026.154.0943",
-		Revision:   "0123456789abcdef",
-		CommitTime: "2026-06-03T09:43:00+00:00",
-		Modified:   false,
-	}
-	if got != want {
-		t.Fatalf("CurrentBuildProvenance() = %+v, want %+v", got, want)
-	}
-
-	BuildModified = "unknown"
-	if _, ok := CurrentBuildProvenance(); ok {
-		t.Fatal("invalid modified state was accepted as complete provenance")
-	}
-}
-
 func TestComputeCalVerAt(t *testing.T) {
 	tests := []struct {
 		name     string

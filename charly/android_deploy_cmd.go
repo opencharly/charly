@@ -12,7 +12,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // AndroidDevice is a resolved install target — enough for the deploy:android
@@ -53,7 +56,7 @@ const adbServerPort = 5037
 // the deploy:android plugin consumes. Used by resolveAndroidDevice for the in-pod /
 // nested device.
 func adbAddrForContainer(engine, containerName string) (string, error) {
-	insp, err := InspectContainer(engine, containerName)
+	insp, err := kit.InspectContainer(engine, containerName)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", containerName, err)
 	}
@@ -72,7 +75,7 @@ func adbAddrForContainer(engine, containerName string) (string, error) {
 // emits the protocol-suffixed form. Relocated from the deleted charly/adb.go — it
 // is pure engine-inspect arithmetic (no goadb), shared by adbAddrForContainer and
 // resolveAndroidHostPortRef's nested ${HOST_PORT:N} resolution (R3).
-func findHostPort(insp *ContainerInspection, containerPort int) (int, error) {
+func findHostPort(insp *kit.ContainerInspection, containerPort int) (int, error) {
 	// Host-networked containers expose the container port AS the host port.
 	if insp.IsHostNetworked() {
 		return containerPort, nil
@@ -109,7 +112,7 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 // the host); image devices target an in-pod emulator (apkeep in-pod). For a
 // nested deploy (dotted path), the in-pod container is the PARENT pod
 // (charly-<flat-parent-path>); for a top-level deploy it resolves by image name.
-func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) (AndroidDevice, error) {
+func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path string) (AndroidDevice, error) {
 	serial := spec.EffectiveSerial()
 
 	// Remote/physical endpoint — host-side apkeep + goadb.
@@ -170,7 +173,7 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) 
 // the image-device branch uses (R3). The parent pod is derived from the deploy
 // path (path[:lastDot]), exactly like the image branch. Returns addr unchanged
 // when it carries no ${HOST_PORT:N} reference (a literal host:port endpoint).
-func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, error) {
+func resolveAndroidHostPortRef(addr, path string, node *spec.BundleNode) (string, error) {
 	const marker = "${HOST_PORT:"
 	before, after, ok := strings.Cut(addr, marker)
 	if !ok {
@@ -198,7 +201,7 @@ func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, err
 	if !containerRunning(engine, container) {
 		return "", fmt.Errorf("parent pod container %s is not running (start it before deploying the android endpoint device)", container)
 	}
-	insp, err := InspectContainer(engine, container)
+	insp, err := kit.InspectContainer(engine, container)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", container, err)
 	}

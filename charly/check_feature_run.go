@@ -11,7 +11,18 @@ package main
 // feature run` leaf — which stays in the box grammar (image.go) — plus the helpers
 // both the box leaf and the deploy-scope engine share: reportSteps / stepFailCount
 // (step formatting), resolveGraderAgent (the kind:agent catalog resolution the
-// grader needs), and planTagFilter (the --tag parser).
+// grader needs), and validateTagExpr (the --tag syntax check).
+//
+// P12a follow-up ATTEMPTED moving BoxFeatureCmd/BoxFeatureRunCmd to candy/plugin-box
+// as a 7th `box`-nested command word (CommandParent()=="box") — mirroring
+// generate/validate/new/pkg/inspect/list — and REVERTED it: nesting a second
+// "feature" word under `box` panics RegisterBuiltinPluginUnit at process init,
+// because the provider registry's uniqueness key is provKey(class, word) alone
+// (provider_registry.go), with NO CommandParent component, and candy/plugin-feature
+// already owns the TOP-LEVEL {command, feature} word (`charly feature
+// list/pending/validate`). This leaf stays in core until P12b resolves the
+// collision (rename the nested word — breaks CLI parity — or make the registry
+// key CommandParent-aware, a cross-cutting core change).
 //
 //   - `charly box feature run <image>` — BUILD scope. Disposable container
 //     (podman run --rm per check); deterministic steps only. A prose-only step
@@ -78,12 +89,20 @@ func resolveGraderAgent(dir, name string) (*spec.AgentExecSpec, error) {
 	return ai, nil
 }
 
-// planTagFilter parses an optional --tag expression into a TagExpr.
-func planTagFilter(tag string) (*TagExpr, error) {
+// validateTagExpr syntax-checks an optional --tag expression (rejecting a malformed
+// one). It does NOT apply the parsed expression as a step filter: kit.RunPlan (the
+// walk both hostFeatureBox and hostFeatureLive drive, since the P12a architecture
+// fold) takes no tag-filter parameter and walks every step unconditionally — a
+// confirmed, RCA'd, non-blocking gap (per-tag filtering was never wired past this
+// parse), routed to the next check-correctness thematic batch. Named + shaped for
+// what it actually does now (was planTagFilter, whose *TagExpr return had no live
+// caller once every RunPlan call site dropped the filter arg — R1/unparam).
+func validateTagExpr(tag string) error {
 	if strings.TrimSpace(tag) == "" {
-		return nil, nil
+		return nil
 	}
-	return ParseTagExpr(tag)
+	_, err := ParseTagExpr(tag)
+	return err
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"time"
 
 	"github.com/opencharly/sdk/kit"
@@ -25,10 +26,10 @@ func (c hostCheckContext) Exec() kit.Executor         { return c.h.kr.Exec() }
 func (c hostCheckContext) DialTimeout() time.Duration { return c.h.kr.DialTimeout() }
 
 // HTTPDo issues the request from the host (in-process) via the SHARED host HTTP-do path
-// (doHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
+// (kit.DoHTTPRequest — the SAME builder the out-of-process CheckContextService.HTTPDo uses, R3),
 // derived from the engine's base client.
 func (c hostCheckContext) HTTPDo(ctx context.Context, req kit.HTTPRequest) (kit.HTTPResponse, error) {
-	return doHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
+	return kit.DoHTTPRequest(ctx, c.h.kr.HTTPClient(), req)
 }
 func (c hostCheckContext) Box() string           { return c.h.kr.Box() }
 func (c hostCheckContext) Instance() string      { return c.h.kr.Instance() }
@@ -54,7 +55,7 @@ type kitVerbAdapter struct {
 
 func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
 
-func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult {
+func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult {
 	res := a.kv.RunVerb(ctx, hostCheckContext{h: h}, op)
 	return CheckResult{
 		Op:      op,
@@ -76,7 +77,7 @@ type kitVerbActAdapter struct {
 	pa kit.ProvisionActor
 }
 
-func (a kitVerbActAdapter) RenderProvisionScript(op *Op, distros []string) (string, bool) {
+func (a kitVerbActAdapter) RenderProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	return a.pa.RenderProvisionScript(op, distros)
 }
 
@@ -97,7 +98,7 @@ func (a kitVerbActStepAdapter) LowersTo() StepKind {
 	return kitStepKindToCharly(a.sp.StepKind())
 }
 
-func (a kitVerbActStepAdapter) ConstructStep(op *Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	return materializeStep(a.sp.ConstructStepDescriptor(op), op, layer, img)
 }
 
@@ -116,7 +117,7 @@ func kitStepKindToCharly(k kit.StepKindName) StepKind {
 // kit.StepDescriptor, computing the package-main-only inputs (the run-as-resolved scope,
 // the candy name) that the candy cannot. The load-bearing Reverse() lives on the built
 // step (package main), unchanged from the typed builtin verb's ConstructStep.
-func materializeStep(desc kit.StepDescriptor, op *Op, layer CandyModel, img *ResolvedBox) InstallStep {
+func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer CandyModel, img *ResolvedBox) InstallStep {
 	userDir, _ := resolveUserSpec(op.RunAs, img)
 	switch {
 	case desc.ServicePackaged != nil:

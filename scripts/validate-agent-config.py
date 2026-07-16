@@ -186,21 +186,20 @@ def validate_developer_profiles(root: pathlib.Path, errors: list[str]) -> None:
 
 def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
     """Require the executable, module-aware core Go command contract."""
-    taskfile = root / "Taskfile.yml"
+    buildfile = root / "taskfiles" / "Build.yml"
     try:
-        taskfile_text = taskfile.read_text()
+        build_text = buildfile.read_text()
     except OSError as error:
-        errors.append(f"core Go gate task is unreadable: {error}")
+        errors.append(f"core Go gate build file is unreadable: {error}")
         return
-    required_root_task_terms = (
-        "verify:go-core:",
-        "cd charly && go test ./...",
-        "cd charly && go vet ./...",
-        "task build:binary",
+    required_build_terms = (
+        "binary:",
+        "main.BuildCalVer",
+        "-o ../bin/charly",
     )
-    for term in required_root_task_terms:
-        if term not in taskfile_text:
-            errors.append(f"core Go gate task lacks required command: {term!r}")
+    for term in required_build_terms:
+        if term not in build_text:
+            errors.append(f"core Go build gate lacks required content: {term!r}")
 
     try:
         task_list = subprocess.run(
@@ -223,32 +222,32 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
         errors.append(f"core Go gate returned invalid Task task list: {error}")
         return
 
-    provenance_task = next(
+    binary_task = next(
         (
             task
             for task in tasks
-            if isinstance(task, dict) and task.get("name") == "build:test-provenance"
+            if isinstance(task, dict) and task.get("name") == "build:binary"
         ),
         None,
     )
     expected_taskfile = root / "taskfiles" / "Build.yml"
     taskfile_path = (
-        provenance_task.get("location", {}).get("taskfile")
-        if isinstance(provenance_task, dict)
+        binary_task.get("location", {}).get("taskfile")
+        if isinstance(binary_task, dict)
         else None
     )
-    if not provenance_task:
-        errors.append("core Go gate lacks resolved build:test-provenance task")
+    if not binary_task:
+        errors.append("core Go gate lacks resolved build:binary task")
     elif not isinstance(taskfile_path, str):
-        errors.append("core Go provenance task has no resolved taskfile location")
+        errors.append("core Go build task has no resolved taskfile location")
     elif pathlib.Path(taskfile_path).resolve() != expected_taskfile.resolve():
         errors.append(
-            "core Go provenance task must be owned by taskfiles/Build.yml, "
+            "core Go build task must be owned by taskfiles/Build.yml, "
             f"not {taskfile_path!r}"
         )
     else:
         dry_plan = subprocess.run(
-            ["task", "--dry", "build:test-provenance"],
+            ["task", "--dry", "build:binary"],
             cwd=root,
             check=False,
             capture_output=True,
@@ -256,12 +255,12 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
         )
         if dry_plan.returncode:
             detail = (dry_plan.stderr or dry_plan.stdout).strip()
-            errors.append(f"core Go provenance task cannot compile: {detail}")
+            errors.append(f"core Go build task cannot compile: {detail}")
         elif not task_dry_plan_contains(
-            dry_plan.stdout, dry_plan.stderr, "bin/charly version --json"
+            dry_plan.stdout, dry_plan.stderr, "main.BuildCalVer"
         ):
             errors.append(
-                "core Go provenance task lacks the JSON binary provenance check"
+                "core Go build task lacks the CalVer stamp"
             )
 
     for name in ("CLAUDE.md", "AGENTS.md"):
@@ -271,8 +270,8 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
         except OSError as error:
             errors.append(f"core Go gate policy is unreadable: {error}")
             continue
-        if "task verify:go-core" not in text:
-            errors.append(f"{name} does not name the core Go gate task")
+        if "task build:binary" not in text:
+            errors.append(f"{name} does not name the core Go build gate task")
         if BARE_ROOT_GO_GATE.search(text):
             errors.append(f"{name} contains a bare superproject Go ./... gate")
 
@@ -292,8 +291,8 @@ def self_test() -> None:
     records = b"keep.md\0old.md\0new.md\0"
     names = current_markdown_names(records, {"keep.md", "new.md"}.__contains__)
     assert names == ["keep.md", "new.md"]
-    assert task_dry_plan_contains("", "bin/charly version --json", "version --json")
-    assert not task_dry_plan_contains("task: no-op", "", "version --json")
+    assert task_dry_plan_contains("", "go build -ldflags -X main.BuildCalVer", "main.BuildCalVer")
+    assert not task_dry_plan_contains("task: no-op", "", "main.BuildCalVer")
     expected = "a" * 40
 
     def successful_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:

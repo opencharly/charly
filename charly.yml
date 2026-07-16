@@ -207,8 +207,12 @@ eval-host-vm:
                 - sudo
                 - go
                 - git
-                # The check-local-vm delivery plan uses rsync over the managed
-                # SSH alias; rsync must be declared at both endpoints.
+                # rsync: the check-local-vm bed's "guest-project-delivered" step
+                # rsyncs the pruned check-local closure into this guest over SSH —
+                # the REMOTE end needs rsync too, not just the host. Latent gap: a
+                # long-lived cached qcow2 happened to carry rsync from some prior
+                # state, so this was never exercised on a genuinely fresh disk
+                # until an operator-authorized disk purge exposed it (R9).
                 - rsync
             runcmd:
                 # The check-local bed delivers the pruned project to this path; the guest

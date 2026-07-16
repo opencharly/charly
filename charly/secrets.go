@@ -384,7 +384,7 @@ func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (col
 		return nil, nil
 	}
 
-	resolveOne := func(dep EnvDependency, required bool) {
+	resolveOne := func(dep spec.EnvDependency, required bool) {
 		// Parse the optional Key override (<service>/<key> form, validated
 		// at build time by validateSecretDeps). Default is charly/secret/<name>.
 		service := "charly/secret"

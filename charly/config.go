@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"maps"
 	"slices"
 
@@ -24,8 +25,8 @@ func noCharlyYmlErr(dir string) error {
 
 // Config represents the charly.yml configuration projection
 type Config struct {
-	Defaults BoxConfig `yaml:"defaults" json:"defaults"`
-	Box      boxMap    `yaml:"box" json:"box"`
+	Defaults spec.BoxConfig `yaml:"defaults" json:"defaults"`
+	Box      boxMap         `yaml:"box" json:"box"`
 	// Local carries kind:local templates so remote-ref collection +
 	// validation walk their candy: lists symmetrically with box candy
 	// lists (kind:local templates compose remote @-ref candies too). Populated
@@ -319,7 +320,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 
 // resolveBase resolves a box's base image (from-builder, data-image, or
 // base:/defaults chain) and sets IsExternalBase. Split out of ResolveBox.
-func (c *Config) resolveBase(resolved *ResolvedBox, img BoxConfig, name string) error {
+func (c *Config) resolveBase(resolved *ResolvedBox, img spec.BoxConfig, name string) error {
 	// `from: builder:<name>` — non-registry base via a kind: bootstrap
 	// builder. Mutually exclusive with base:; pre-build phase produces
 	// a rootfs tarball, generator emits FROM scratch + ADD.
@@ -358,7 +359,7 @@ func (c *Config) resolveBase(resolved *ResolvedBox, img BoxConfig, name string) 
 
 // resolvePlatforms resolves a box's target platforms
 // (image -> defaults -> linux/amd64+arm64). Split out of ResolveBox.
-func (c *Config) resolvePlatforms(resolved *ResolvedBox, img BoxConfig) {
+func (c *Config) resolvePlatforms(resolved *ResolvedBox, img spec.BoxConfig) {
 	resolved.Platforms = img.Platforms
 	if len(resolved.Platforms) == 0 {
 		resolved.Platforms = c.Defaults.Platforms
@@ -370,7 +371,7 @@ func (c *Config) resolvePlatforms(resolved *ResolvedBox, img BoxConfig) {
 
 // resolveTag resolves a box's tag (image -> defaults -> "auto"), substituting
 // the computed calver when "auto". Split out of ResolveBox.
-func (c *Config) resolveTag(resolved *ResolvedBox, img BoxConfig, calverTag string) {
+func (c *Config) resolveTag(resolved *ResolvedBox, img spec.BoxConfig, calverTag string) {
 	resolved.Tag = img.Tag
 	if resolved.Tag == "" {
 		resolved.Tag = c.Defaults.Tag
@@ -386,7 +387,7 @@ func (c *Config) resolveTag(resolved *ResolvedBox, img BoxConfig, calverTag stri
 
 // resolveDistro resolves a box's distro tags
 // (image -> base-chain walk -> defaults). Split out of ResolveBox.
-func (c *Config) resolveDistro(resolved *ResolvedBox, img BoxConfig) {
+func (c *Config) resolveDistro(resolved *ResolvedBox, img spec.BoxConfig) {
 	resolved.Distro = img.Distro
 	if len(resolved.Distro) == 0 {
 		resolved.Distro = c.walkBaseChainDistro(resolved.Base)
@@ -399,7 +400,7 @@ func (c *Config) resolveDistro(resolved *ResolvedBox, img BoxConfig) {
 // resolveBuild resolves a box's build formats (image -> base-chain walk ->
 // defaults; required unless a data image) and the primary cache-mount format.
 // Split out of ResolveBox.
-func (c *Config) resolveBuild(resolved *ResolvedBox, img BoxConfig, name string) error {
+func (c *Config) resolveBuild(resolved *ResolvedBox, img spec.BoxConfig, name string) error {
 	buildFmts := img.Build
 	if len(buildFmts) == 0 {
 		buildFmts = c.walkBaseChainBuild(resolved.Base)
@@ -554,7 +555,7 @@ func (c *Config) resolveEffectiveBuilder(name string, distro []string, base stri
 // default (whose per-image map is empty — e.g. bazzite/aurora -> charly.fedora-builder),
 // surfacing as "unknown layer" at generate time. Routing through this keeps the
 // FETCH set's builder edges in lockstep with the RESOLVE set's (resolveNamespacedBases).
-func (c *Config) effectiveBuilderForBox(name string, img BoxConfig) BuilderMap {
+func (c *Config) effectiveBuilderForBox(name string, img spec.BoxConfig) BuilderMap {
 	base := "scratch"
 	isExternalBase := true
 	if img.From == "" && !img.DataImage {
@@ -677,7 +678,7 @@ func (c *Config) walkBaseChainBuild(baseName string) []string {
 // for a base reached across an import boundary, e.g. `cachyos.cachyos`).
 type baseChainNode struct {
 	Name string
-	Img  BoxConfig
+	Img  spec.BoxConfig
 }
 
 // walkBaseChain walks boxName's ROOT-INTERNAL base-image chain and returns

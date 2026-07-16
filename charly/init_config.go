@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"path/filepath"
 	"slices"
 
@@ -33,7 +34,7 @@ type ServiceCommandContext struct {
 
 // DetectCandyInit returns which init system names a candy triggers,
 // based on its candy manifest fields and file patterns.
-func (ic *InitConfig) DetectCandyInit(ly *CandyYAML, candyPath string) []string {
+func (ic *InitConfig) DetectCandyInit(ly *spec.CandyYAML, candyPath string) []string {
 	if ic == nil {
 		return nil
 	}
@@ -50,7 +51,7 @@ func (ic *InitConfig) DetectCandyInit(ly *CandyYAML, candyPath string) []string 
 // detectsInit checks if a candy matches an init system's detection criteria.
 // Schema-driven: iterates the unified service: list + per-entry init routing
 // (IsPackaged → ServiceSchema.SupportsPackaged; custom exec → ServiceSchema.ServiceTemplate).
-func detectsInit(def *ResolvedInit, ly *CandyYAML, candyPath string) bool {
+func detectsInit(def *ResolvedInit, ly *spec.CandyYAML, candyPath string) bool {
 	if ly == nil {
 		return false
 	}

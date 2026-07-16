@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -26,7 +27,19 @@ const cliBuilderKind = "cli"
 // rides CliReply.Error unless BestEffort. The context is unused (an interactive leg must not be
 // deadlined — the host TTY owns its lifetime, like the operator running the command directly).
 func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) (spec.CliReply, error) {
-	cmd := exec.Command(os.Args[0], req.Argv...)
+	executable, err := os.Executable()
+	if err != nil {
+		return spec.CliReply{ExitCode: -1, Error: fmt.Sprintf("resolve charly executable: %v", err)}, nil
+	}
+	executable, err = filepath.Abs(executable)
+	if err != nil {
+		return spec.CliReply{ExitCode: -1, Error: fmt.Sprintf("resolve absolute charly executable path: %v", err)}, nil
+	}
+	return runCliSubcommand(executable, req), nil
+}
+
+func runCliSubcommand(executable string, req spec.CliRequest) spec.CliReply {
+	cmd := exec.Command(executable, req.Argv...)
 	cmd.Stdin = os.Stdin
 	var reply spec.CliReply
 	if req.Capture {
@@ -50,7 +63,7 @@ func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) 
 		err := cmd.Run()
 		reply.ExitCode, reply.Error = cliExitResult(err, req.BestEffort)
 	}
-	return reply, nil
+	return reply
 }
 
 // cliExitResult maps an exec error to (exitCode, errString): clean → (0, ""); non-zero exit →

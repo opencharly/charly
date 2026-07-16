@@ -2,35 +2,41 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // --- §F resolveLocalImageRef tests ---
 
-// withLocalImages swaps ListLocalImages for the duration of the test.
-func withLocalImages(t *testing.T, images []LocalImageInfo) {
+// withLocalImages swaps kit.ListLocalImages for the duration of the test.
+func withLocalImages(t *testing.T, images []kit.LocalImageInfo) {
 	t.Helper()
-	orig := ListLocalImages
-	ListLocalImages = func(engine string) ([]LocalImageInfo, error) {
+	orig := kit.ListLocalImages
+	kit.ListLocalImages = func(engine string) ([]kit.LocalImageInfo, error) {
 		return images, nil
 	}
-	t.Cleanup(func() { ListLocalImages = orig })
+	t.Cleanup(func() { kit.ListLocalImages = orig })
 }
 
-// withLocalImageExists swaps LocalImageExists for the duration of the test.
+// withLocalImageExists swaps kit.LocalImageExists for the duration of the test.
+// P12a: kit.ResolveLocalImageRef (moved from charly's resolveLocalImageRef) reads
+// kit's OWN LocalImageExists var, not core's `LocalImageExists = kit.LocalImageExists`
+// alias (a value-copy at init, not a live reference) — swap the one the callee reads.
 func withLocalImageExists(t *testing.T, match func(engine, ref string) bool) {
 	t.Helper()
-	orig := LocalImageExists
-	LocalImageExists = match
-	t.Cleanup(func() { LocalImageExists = orig })
+	orig := kit.LocalImageExists
+	kit.LocalImageExists = match
+	t.Cleanup(func() { kit.LocalImageExists = orig })
 }
 
 func TestResolveLocalImageRef_FullRefPresent(t *testing.T) {
 	withLocalImageExists(t, func(engine, ref string) bool {
 		return ref == "ghcr.io/opencharly/jupyter:latest"
 	})
-	got, err := resolveLocalImageRef("podman", "ghcr.io/opencharly/jupyter:latest")
+	got, err := kit.ResolveLocalImageRef("podman", "ghcr.io/opencharly/jupyter:latest")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,14 +47,14 @@ func TestResolveLocalImageRef_FullRefPresent(t *testing.T) {
 
 func TestResolveLocalImageRef_FullRefAbsent(t *testing.T) {
 	withLocalImageExists(t, func(engine, ref string) bool { return false })
-	_, err := resolveLocalImageRef("podman", "ghcr.io/acme/missing:latest")
+	_, err := kit.ResolveLocalImageRef("podman", "ghcr.io/acme/missing:latest")
 	if err == nil || !strings.Contains(err.Error(), "image not found in local storage") {
-		t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 	}
 }
 
 func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/opencharly/jupyter:latest"},
 			Labels: map[string]string{LabelBox: "jupyter"},
@@ -58,7 +64,7 @@ func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
 			Labels: map[string]string{LabelBox: "filebrowser"},
 		},
 	})
-	got, err := resolveLocalImageRef("podman", "jupyter")
+	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,10 +75,10 @@ func TestResolveLocalImageRef_ShortNameLabelMatch(t *testing.T) {
 
 func TestResolveLocalImageRef_ShortNameNameMatchFallback(t *testing.T) {
 	// No charly label → falls back to repo-name trailing component match.
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{Names: []string{"ghcr.io/someone-else/jupyter:latest"}},
 	})
-	got, err := resolveLocalImageRef("podman", "jupyter")
+	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,7 +89,7 @@ func TestResolveLocalImageRef_ShortNameNameMatchFallback(t *testing.T) {
 
 func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 	// Both a label-matched image AND a name-matched image exist; label wins.
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{
 			Names:  []string{"ghcr.io/someone-else/jupyter:latest"},
 			Labels: map[string]string{}, // name-only
@@ -93,7 +99,7 @@ func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 			Labels: map[string]string{LabelBox: "jupyter"},
 		},
 	})
-	got, err := resolveLocalImageRef("podman", "jupyter")
+	got, err := kit.ResolveLocalImageRef("podman", "jupyter")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,23 +109,23 @@ func TestResolveLocalImageRef_ShortNameLabelPreferredOverName(t *testing.T) {
 }
 
 func TestResolveLocalImageRef_ShortNameAmbiguousError(t *testing.T) {
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{Names: []string{"ghcr.io/one/jupyter:latest"}},
 		{Names: []string{"ghcr.io/two/jupyter:latest"}},
 	})
-	_, err := resolveLocalImageRef("podman", "jupyter")
+	_, err := kit.ResolveLocalImageRef("podman", "jupyter")
 	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("expected ambiguous error, got: %v", err)
 	}
 }
 
 func TestResolveLocalImageRef_ShortNameNoMatch(t *testing.T) {
-	withLocalImages(t, []LocalImageInfo{
+	withLocalImages(t, []kit.LocalImageInfo{
 		{Names: []string{"ghcr.io/opencharly/jupyter:latest"}},
 	})
-	_, err := resolveLocalImageRef("podman", "filebrowser")
+	_, err := kit.ResolveLocalImageRef("podman", "filebrowser")
 	if err == nil || !strings.Contains(err.Error(), "image not found in local storage") {
-		t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 	}
 }
 
@@ -131,7 +137,7 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	// the live-verb externalization (the generic `plugin` verb itself is
 	// context-permissive) — a wl step authors context: [runtime], exactly as the
 	// real candies do.
-	res := r.Run(context.Background(), []Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
+	res := r.Run(context.Background(), []spec.Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
 	if len(res) != 1 || res[0].Status != TestSkip {
 		t.Fatalf("expected skip under RunModeBox, got %+v", res[0])
 	}
@@ -159,16 +165,16 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 func TestCheckKind_NewVerbsDispatched(t *testing.T) {
 	cases := []struct {
 		name string
-		c    Op
+		c    spec.Op
 		verb string
 	}{
-		{"cdp", Op{Plugin: "cdp", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"wl", Op{Plugin: "wl", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x"}}, "plugin"},
-		{"dbus", Op{Plugin: "dbus", PluginInput: map[string]any{"method": "list"}}, "plugin"},
-		{"vnc", Op{Plugin: "vnc", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"record", Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}}, "plugin"},
-		{"spice", Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"libvirt", Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}}, "plugin"},
+		{"cdp", spec.Op{Plugin: "cdp", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"wl", spec.Op{Plugin: "wl", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x"}}, "plugin"},
+		{"dbus", spec.Op{Plugin: "dbus", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"vnc", spec.Op{Plugin: "vnc", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"record", spec.Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"spice", spec.Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"libvirt", spec.Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}}, "plugin"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -183,28 +189,8 @@ func TestCheckKind_NewVerbsDispatched(t *testing.T) {
 	}
 }
 
-// --- shortNameMatchesRef edge cases ---
-
-func TestShortNameMatchesRef(t *testing.T) {
-	cases := []struct {
-		fullRef string
-		short   string
-		want    bool
-	}{
-		{"ghcr.io/opencharly/jupyter:latest", "jupyter", true},
-		{"ghcr.io/opencharly/jupyter", "jupyter", true}, // no tag
-		{"localhost/jupyter:v2", "jupyter", true},
-		{"jupyter:latest", "jupyter", true}, // no registry
-		{"ghcr.io/opencharly/jupyter:latest", "filebrowser", false},
-		{"ghcr.io/opencharly/something-jupyter:latest", "jupyter", false}, // not a trailing match
-	}
-	for _, tc := range cases {
-		got := shortNameMatchesRef(tc.fullRef, tc.short)
-		if got != tc.want {
-			t.Errorf("shortNameMatchesRef(%q, %q) = %v, want %v", tc.fullRef, tc.short, got, tc.want)
-		}
-	}
-}
+// TestShortNameMatchesRef moved to sdk/kit/local_image_test.go (P12a) — it tests
+// kit's unexported shortNameMatchesRef, relocated with the rest of local_image.go.
 
 // TestPosKubeRaw_JsonFlagThreaded was removed in the kube → external-plugin
 // dep-shed: posKubeRaw (the `charly check kube raw` argv builder) left charly's core

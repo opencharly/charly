@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk/kit"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml (or, in the
@@ -15,8 +16,8 @@ import (
 // image into local storage so deploy-mode commands can read its OCI labels).
 //
 // `charly box` is a SHARED command group: the RETAINED verbs below are the core
-// grammar spine (build → plugin-build; merge/labels/feature/reconcile). The
-// generate/validate/new/pkg/inspect/list verbs are contributed as NESTED command
+// grammar spine (build → plugin-build; merge/feature/reconcile). The
+// generate/validate/new/pkg/inspect/list/labels verbs are contributed as NESTED command
 // providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
 // (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
 // candy/plugin-authoring (P14b) — each a command:<word> with
@@ -25,7 +26,7 @@ import (
 // external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/inspect/list +
+	// (candy/plugin-box's generate/validate/new/pkg/inspect/list/labels +
 	// candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
 	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
 	// before kong.Parse.
@@ -34,10 +35,16 @@ type BoxCmd struct {
 	Build     BuildCmd        `cmd:"" help:"Build container boxes"`
 	Merge     MergeCmd        `cmd:"" help:"Merge small layers in a built container image"`
 	Pull      BoxPullCmd      `cmd:"" help:"Pull an image from its registry into local storage"`
-	Labels    BoxLabelsCmd    `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
 	Feature   BoxFeatureCmd   `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 	Reconcile BoxReconcileCmd `cmd:"" help:"Align cross-repo @github candy pins to the newest version (clears resolver newest-wins warnings)"`
 }
+
+// MIGRATION INVENTORY (north-star §4.4): the RETAINED verbs above (build/merge/pull/feature/
+// reconcile) are UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go
+// knows zero verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
+// externalizes (mirroring generate/validate/new/pkg/inspect/list/labels above, P14-rest trace,
+// 2026-07): merge.go and box_labels_cmd.go/pkg_cmd.go already document their own UNTIL-K5/K1
+// notes; build/pull/feature/reconcile are the remaining residue in this struct.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three
@@ -66,7 +73,7 @@ func (c *BoxPullCmd) Run() error {
 		// Tag override: only meaningful for short-name input. Resolve
 		// the canonical short-name ref FIRST so the build-fallback
 		// path picks up the requested tag.
-		if !looksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
+		if !kit.LooksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}
@@ -81,34 +88,24 @@ func (c *BoxPullCmd) Run() error {
 	return EnsureImagePresent(context.Background(), c.Box, cfg, dir)
 }
 
-// looksLikeFullRef returns true if the image ref contains a registry segment
-// (a "/" before any ":") — e.g. "ghcr.io/org/name:tag" — so it can be pulled
-// without charly.yml resolution.
-func looksLikeFullRef(ref string) bool {
-	if strings.HasPrefix(ref, "@") {
-		return false
-	}
-	slash := strings.Index(ref, "/")
-	if slash < 0 {
-		return false
-	}
-	colon := strings.Index(ref, ":")
-	return colon < 0 || slash < colon
-}
+// kit.LooksLikeFullRef (P12a: relocated to sdk/kit/local_image.go — it had 4
+// core callers beyond this file, R3 single-source) returns true if the image
+// ref contains a registry segment (a "/" before any ":") — e.g.
+// "ghcr.io/org/name:tag" — so it can be pulled without charly.yml resolution.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
-// when the underlying cause is a missing local image (ErrImageNotLocal).
+// when the underlying cause is a missing local image (kit.ErrImageNotLocal).
 // Called from main() just before FatalIfErrorf so the exit path still passes
 // through Kong's standard error rendering.
 func FormatCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, ErrImageNotLocal) {
+	if errors.Is(err, kit.ErrImageNotLocal) {
 		// ExtractMetadata wraps as "image not found in local storage: <ref>";
 		// pull out the ref so we can render the recommendation.
 		msg := err.Error()
-		ref := strings.TrimPrefix(msg, ErrImageNotLocal.Error()+": ")
+		ref := strings.TrimPrefix(msg, kit.ErrImageNotLocal.Error()+": ")
 		return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
 	}
 	return err

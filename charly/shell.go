@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // isTerminal reports whether stdout is connected to a terminal.
@@ -111,7 +113,7 @@ func resolveShellImageRef(registry, name, tag string) string {
 		// Try local CalVer resolution. Best-effort: if nothing local
 		// matches, fall back to a tagless ref so the engine's own
 		// resolution path can error with its canonical message.
-		if resolved, err := ResolveNewestLocalCalVer("podman", name); err == nil && resolved != "" {
+		if resolved, err := kit.ResolveNewestLocalCalVer("podman", name); err == nil && resolved != "" {
 			return resolved
 		}
 		if registry != "" {

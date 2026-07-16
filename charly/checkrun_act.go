@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 )
 
@@ -43,7 +44,7 @@ import (
 // action verb whose handler already acts, a pure observe verb, or a non-act plugin) — the
 // runtime caller then falls through to the normal dispatch; an emit caller turns it into a
 // hard error (a run: step naming a non-act verb has no build/deploy install path).
-func resolveProvisionScript(op *Op, distros []string) (string, bool) {
+func resolveProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	word, err := op.Kind()
 	if err != nil {
 		return "", false
@@ -67,7 +68,7 @@ func resolveProvisionScript(op *Op, distros []string) (string, bool) {
 // provision renderer (an action verb whose handler already acts, or a pure
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
-func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (CheckResult, bool) {
 	script, ok := resolveProvisionScript(c, h.kr.Distros())
 	if !ok {
 		return CheckResult{}, false

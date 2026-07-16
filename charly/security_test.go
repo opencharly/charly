@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"slices"
 	"testing"
@@ -258,7 +259,7 @@ func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"test": {Candy: []string{"big", "small"}},
 		}),
 	}
@@ -283,7 +284,7 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"heavy": {
 				Candy:    []string{"chrome"},
 				Security: &SecurityConfig{MemoryMax: "16g"},

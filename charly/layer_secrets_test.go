@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ func TestEnsureCandySecret_PresentInStore(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	dep := EnvDependency{Name: "EXISTING_TOKEN"}
+	dep := spec.EnvDependency{Name: "EXISTING_TOKEN"}
 	val, source := ensureCandySecret(dep, true)
 
 	if val != "preset-value" {
@@ -39,7 +40,7 @@ func TestEnsureCandySecret_PresentInStore(t *testing.T) {
 func TestEnsureCandySecret_RequiredMissingAutoGenerates(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	dep := EnvDependency{Name: "K3S_CLUSTER_TOKEN"}
+	dep := spec.EnvDependency{Name: "K3S_CLUSTER_TOKEN"}
 	val, source := ensureCandySecret(dep, true)
 
 	if source != "auto-generated" {
@@ -76,7 +77,7 @@ func TestEnsureCandySecret_RequiredMissingAutoGenerates(t *testing.T) {
 func TestEnsureCandySecret_IdempotentAcrossCalls(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	dep := EnvDependency{Name: "SHARED_TOKEN"}
+	dep := spec.EnvDependency{Name: "SHARED_TOKEN"}
 
 	// First call — auto-generates + persists.
 	val1, source1 := ensureCandySecret(dep, true)
@@ -100,7 +101,7 @@ func TestEnsureCandySecret_IdempotentAcrossCalls(t *testing.T) {
 func TestEnsureCandySecret_OptionalMissingReturnsEmpty(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	dep := EnvDependency{Name: "OPTIONAL_KEY"}
+	dep := spec.EnvDependency{Name: "OPTIONAL_KEY"}
 	val, source := ensureCandySecret(dep, false)
 
 	if val != "" {
@@ -123,7 +124,7 @@ func TestEnsureCandySecret_OptionalMissingReturnsEmpty(t *testing.T) {
 func TestEnsureCandySecret_CustomKeyRoutesToOverride(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	dep := EnvDependency{
+	dep := spec.EnvDependency{
 		Name: "MY_VAR_NAME",
 		Key:  "charly/api-key/openrouter",
 	}
@@ -151,7 +152,7 @@ func TestResolveCandySecrets_RequiredAutoGen(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
 	layer := &Candy{
-		secretRequires: []EnvDependency{
+		secretRequires: []spec.EnvDependency{
 			{Name: "K3S_CLUSTER_TOKEN"},
 		},
 	}
@@ -172,7 +173,7 @@ func TestResolveCandySecrets_OptionalDefaultFallback(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
 	layer := &Candy{
-		secretAccepts: []EnvDependency{
+		secretAccepts: []spec.EnvDependency{
 			{Name: "OPTIONAL_VAR", Default: "fallback-value"},
 		},
 	}
@@ -190,10 +191,10 @@ func TestResolveSecretsForCandies_TwoCandiesSameSecret(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
 	server := &Candy{
-		secretRequires: []EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
+		secretRequires: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
 	}
 	agent := &Candy{
-		secretRequires: []EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
+		secretRequires: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
 	}
 	env := ResolveSecretForCandy([]*Candy{server, agent})
 

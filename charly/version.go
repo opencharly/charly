@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"runtime/debug"
 	"time"
 
 	"github.com/opencharly/sdk/kit"
@@ -21,55 +20,6 @@ import (
 // comparison is a RELIABLE freshness signal (a content checksum tells you
 // "different" but never "newer" — useless for deciding which charly to keep).
 var BuildCalVer string
-
-// BuildRevision, BuildCommitTime, and BuildModified are explicit Charly
-// provenance fields injected by the canonical build task. Go 1.26 does not
-// discover a linked worktree's .git gitdir file for its own build-info VCS
-// fields, so Charly must carry a portable provenance contract of its own.
-var (
-	BuildRevision   string
-	BuildCommitTime string
-	BuildModified   string
-)
-
-// BuildProvenance is the complete source identity of a built Charly binary.
-// JSON output from `charly version --json` is the stable R9 verification
-// boundary; plain `charly version` remains the CalVer-only compatibility form.
-type BuildProvenance struct {
-	CalVer     string `json:"calver"`
-	Revision   string `json:"revision"`
-	CommitTime string `json:"commit_time"`
-	Modified   bool   `json:"modified"`
-}
-
-// CurrentBuildProvenance returns explicit task-injected provenance when
-// available, falling back to standard Go build settings for source trees whose
-// toolchain does supply them (for example a packaged, non-worktree clone).
-func CurrentBuildProvenance() (BuildProvenance, bool) {
-	if BuildCalVer != "" && BuildRevision != "" && BuildCommitTime != "" && (BuildModified == "true" || BuildModified == "false") {
-		return BuildProvenance{
-			CalVer:     BuildCalVer,
-			Revision:   BuildRevision,
-			CommitTime: BuildCommitTime,
-			Modified:   BuildModified == "true",
-		}, true
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		values := map[string]string{}
-		for _, setting := range info.Settings {
-			values[setting.Key] = setting.Value
-		}
-		if BuildCalVer != "" && values["vcs"] == "git" && values["vcs.revision"] != "" && values["vcs.time"] != "" && (values["vcs.modified"] == "true" || values["vcs.modified"] == "false") {
-			return BuildProvenance{
-				CalVer:     BuildCalVer,
-				Revision:   values["vcs.revision"],
-				CommitTime: values["vcs.time"],
-				Modified:   values["vcs.modified"] == "true",
-			}, true
-		}
-	}
-	return BuildProvenance{}, false
-}
 
 // CharlyVersion returns the CalVer identity of this `charly` binary. It is the stamped
 // BuildCalVer when present; otherwise "unknown" (an unstamped dev/test build —

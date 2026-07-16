@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,7 @@ func TestOCITargetSkipsApkInstall(t *testing.T) {
 // TestPopulateCandyApk verifies the candy manifest `apk:` field flows through the
 // populator onto the resolved Candy.
 func TestPopulateCandyApk(t *testing.T) {
-	ly := &CandyYAML{
+	ly := &spec.CandyYAML{
 		Apk: []ApkPackageSpec{
 			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 		},
@@ -244,12 +245,12 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 		Candy: []LabeledDescription{{
 			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",
 			Description: "android apps install",
-			Plan: []Step{{
-				Op: Op{ID: "adb-install-apidemos", Plugin: "adb", PluginInput: map[string]any{"method": "install", "apk": "./tests/data/ApiDemos-debug.apk"}, Context: []string{"runtime"}},
+			Plan: []spec.Step{{
+				Op: spec.Op{ID: "adb-install-apidemos", Plugin: "adb", PluginInput: map[string]any{"method": "install", "apk": "./tests/data/ApiDemos-debug.apk"}, Context: []string{"runtime"}},
 			}},
 		}},
 	}
-	res := RunPlan(context.Background(), r, set, nil, false)
+	res := kit.RunPlan(context.Background(), r, set, false)
 	if len(res) != 1 {
 		t.Fatalf("want 1 step result, got %d", len(res))
 	}

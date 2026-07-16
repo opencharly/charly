@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,13 +27,13 @@ import (
 // probe and the shell-snippet destination table (deploykit.CompileShellSnippetSteps).
 
 // sortedEnvDeps returns a deterministic slice from a name-keyed map, sorted by Name.
-func sortedEnvDeps(m map[string]EnvDependency) []EnvDependency {
+func sortedEnvDeps(m map[string]spec.EnvDependency) []spec.EnvDependency {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	out := make([]EnvDependency, 0, len(m))
+	out := make([]spec.EnvDependency, 0, len(m))
 	for _, k := range keys {
 		out = append(out, m[k])
 	}
@@ -150,7 +151,7 @@ func RegisterBuildVocabulary(dc *DistroConfig) {
 //	distro.arch.*            → tagSections["arch"]   (+ any .aur.* → formatSections["aur"])
 //	distro.debian-13.*       → tagSections["debian:13"]   (dash → colon)
 //	distro."debian,ubuntu".* → tagSections["debian"] + tagSections["ubuntu"]
-func derivePackageSectionsFromCalamares(layer *Candy, ly *CandyYAML) {
+func derivePackageSectionsFromCalamares(layer *Candy, ly *spec.CandyYAML) {
 	layer.topPackages = PackageNames(ly.Package)
 
 	ensureTag := func(tagKey string) *TagPkgConfig {
@@ -293,7 +294,7 @@ type Candy struct {
 	// Plugin is the candy's `plugin:` block (nil = an ordinary candy). Its presence
 	// makes the candy a PLUGIN — it provides reserved-word Providers (built-in or
 	// out-of-tree). See provider.go / validatePluginCandy.
-	Plugin *CandyPluginDecl
+	Plugin *spec.Plugin
 	Info   string // the description's first line — summary shown in listings
 	// Parse-time filesystem-probe caches: each caches a single fileExists /
 	// dirExists check against SourceDir performed once at scan time. These stay
@@ -331,11 +332,11 @@ type Candy struct {
 	tagSections     map[string]*TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
 	topPackages     []string                   // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
 	ports           []string
-	portSpecs       []PortSpec // full PortSpec data with protocol info
+	portSpecs       []spec.PortSpec // full PortSpec data with protocol info
 	envConfig       *EnvConfig
 	route           *RouteConfig
-	serviceFiles    []string       // paths to *.service files in candy dir (systemd user-level, file_copy model)
-	service         []ServiceEntry // unified service: list (the only service schema)
+	serviceFiles    []string            // paths to *.service files in candy dir (systemd user-level, file_copy model)
+	service         []spec.ServiceEntry // unified service: list (the only service schema)
 	volumes         []VolumeYAML
 	aliases         []AliasYAML
 	extract         []ExtractYAML
@@ -344,23 +345,23 @@ type Candy struct {
 	libvirt         []string
 	hooks           *HooksConfig
 	secrets         []SecretYAML
-	envProvides     map[string]string // env vars provided to other containers (service discovery)
-	envRequires     []EnvDependency   // env vars this candy must have
-	envAccepts      []EnvDependency   // env vars this candy can optionally use
-	secretAccepts   []EnvDependency   // credential-store-backed env vars this candy can optionally use
-	secretRequires  []EnvDependency   // credential-store-backed env vars this candy must have
-	mcpProvides     []MCPServerYAML   // MCP servers provided to other containers
-	mcpRequires     []EnvDependency   // MCP servers this candy must have
-	mcpAccepts      []EnvDependency   // MCP servers this candy can optionally use
-	engine          string            // required run engine from the candy manifest ("docker", "podman", or "")
-	vars            map[string]string // candy-local variables (from the candy manifest vars:)
-	apk             []ApkPackageSpec  // Android apps to install on a kind:android device (from the candy manifest apk:)
-	localpkg        map[string]string // per-format native-package source dirs (pac/rpm/deb → dir) from the candy manifest localpkg:
-	reboot          bool              // reboot the deploy target after this candy (from the candy manifest reboot:)
-	ExternalBuilder string            // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see deploykit EmitExternalBuilderStages
-	plan            []Step            // unified ordered plan (from the candy manifest plan:): run:/check:/agent-*/include:
-	artifacts       []CandyArtifact   // files to retrieve after setup (from the candy manifest artifacts:)
-	shell           *ShellConfig      // shell-init declarations (from the candy manifest shell:)
+	envProvides     map[string]string    // env vars provided to other containers (service discovery)
+	envRequires     []spec.EnvDependency // env vars this candy must have
+	envAccepts      []spec.EnvDependency // env vars this candy can optionally use
+	secretAccepts   []spec.EnvDependency // credential-store-backed env vars this candy can optionally use
+	secretRequires  []spec.EnvDependency // credential-store-backed env vars this candy must have
+	mcpProvides     []spec.MCPServerYAML // MCP servers provided to other containers
+	mcpRequires     []spec.EnvDependency // MCP servers this candy must have
+	mcpAccepts      []spec.EnvDependency // MCP servers this candy can optionally use
+	engine          string               // required run engine from the candy manifest ("docker", "podman", or "")
+	vars            map[string]string    // candy-local variables (from the candy manifest vars:)
+	apk             []ApkPackageSpec     // Android apps to install on a kind:android device (from the candy manifest apk:)
+	localpkg        map[string]string    // per-format native-package source dirs (pac/rpm/deb → dir) from the candy manifest localpkg:
+	reboot          bool                 // reboot the deploy target after this candy (from the candy manifest reboot:)
+	ExternalBuilder string               // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see deploykit EmitExternalBuilderStages
+	plan            []spec.Step          // unified ordered plan (from the candy manifest plan:): run:/check:/agent-*/include:
+	artifacts       []CandyArtifact      // files to retrieve after setup (from the candy manifest artifacts:)
+	shell           *spec.Shell          // shell-init declarations (from the candy manifest shell:)
 
 	// Candy-contributed image-level facts (capabilities: block in the candy manifest)
 	// and cross-candy requirement declarations (requires_capabilities:).
@@ -437,7 +438,7 @@ func legacyScanCandiesDir(dir string) (map[string]*Candy, error) {
 //   - `candy:` + other top-level keys → error (ambiguous shape).
 //   - Multi-document stream → error (the candy manifest is not a bundle file).
 //   - Flat form (no `candy:` wrapper) → error with migration hint.
-func parseCandyYAML(path string) (*CandyYAML, error) {
+func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -446,7 +447,7 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 	// Empty / comment-only guard.
 	trimmed := strings.TrimSpace(string(data))
 	if trimmed == "" {
-		return &CandyYAML{}, nil
+		return &spec.CandyYAML{}, nil
 	}
 
 	// Parse the stream down to its single top-level mapping node (or nil for an
@@ -456,7 +457,7 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 		return nil, err
 	}
 	if inner == nil {
-		return &CandyYAML{}, nil
+		return &spec.CandyYAML{}, nil
 	}
 
 	// Unified node-form: a single name-first node `<name>: {candy: …, <children>}`.
@@ -519,8 +520,8 @@ func parseCandyYAML(path string) (*CandyYAML, error) {
 		// regex/enums) runs at `charly box validate` (validateCandyManifestCUE) on
 		// the AUTHORED form — not at load, where it would reject minimal in-tree
 		// fixtures and slow the hot path. See cue-loader-switch-design.
-		var ly CandyYAML
-		if err := decodeEntityViaCUE(body, reflect.TypeOf(CandyYAML{}), &ly, path); err != nil {
+		var ly spec.CandyYAML
+		if err := decodeEntityViaCUE(body, reflect.TypeOf(spec.CandyYAML{}), &ly, path); err != nil {
 			return nil, err
 		}
 		return &ly, nil
@@ -660,7 +661,7 @@ func scanCandy(path, name, manifest string) (*Candy, error) {
 
 	// Parse the candy manifest FIRST so `directory:` can redirect the anchor
 	// used by install-file detection and service-file globbing below.
-	var ly *CandyYAML
+	var ly *spec.CandyYAML
 	if manifest == "" {
 		manifest = UnifiedFileName
 	}
@@ -761,12 +762,12 @@ func (l *Candy) HasApk() bool     { return len(l.apk) > 0 }
 // install timeline (build/deploy context). A runtime-only run: step is
 // plan-runtime provisioning the check Runner executes, not the build, so it
 // is excluded. check:/agent-*/include: steps are never install ops.
-func (l *Candy) runOps() []Op {
-	var out []Op
+func (l *Candy) runOps() []spec.Op {
+	var out []spec.Op
 	for i := range l.plan {
 		step := &l.plan[i]
 		kw, err := step.StepKind()
-		if err != nil || kw != KwRun {
+		if err != nil || kw != kit.KwRun {
 			continue
 		}
 		op := step.Op
@@ -888,7 +889,7 @@ func (l *Candy) Port() ([]string, error) { //nolint:unparam // error return kept
 }
 
 // PortSpecs returns the port specs with protocol info (pre-populated from the candy manifest)
-func (l *Candy) PortSpecs() []PortSpec {
+func (l *Candy) PortSpecs() []spec.PortSpec {
 	return l.portSpecs
 }
 
@@ -896,7 +897,7 @@ func (l *Candy) PortSpecs() []PortSpec {
 // This is the only service schema — legacy raw-INI and system_services: are
 // retired entirely. External candies that still have the legacy forms must run
 // `charly migrate`.
-func (l *Candy) Service() []ServiceEntry {
+func (l *Candy) Service() []spec.ServiceEntry {
 	return l.service
 }
 
@@ -1018,7 +1019,7 @@ func (l *Candy) Hooks() *HooksConfig {
 // path_append, path, priority) plus per-shell sub-blocks (bash/zsh/fish/
 // sh) in ByShell. Selection rule applied at install time — see
 // deploykit.CompileShellSnippetSteps in sdk/deploykit/install_build.go.
-func (l *Candy) Shell() *ShellConfig {
+func (l *Candy) Shell() *spec.Shell {
 	return l.shell
 }
 
@@ -1039,12 +1040,12 @@ func (l *Candy) EnvProvides() map[string]string {
 }
 
 // EnvRequires returns env vars this candy must have from the environment (pre-populated from the candy manifest)
-func (l *Candy) EnvRequire() []EnvDependency {
+func (l *Candy) EnvRequire() []spec.EnvDependency {
 	return l.envRequires
 }
 
 // EnvAccepts returns env vars this candy can optionally use (pre-populated from the candy manifest)
-func (l *Candy) EnvAccept() []EnvDependency {
+func (l *Candy) EnvAccept() []spec.EnvDependency {
 	return l.envAccepts
 }
 
@@ -1052,29 +1053,29 @@ func (l *Candy) EnvAccept() []EnvDependency {
 // These entries flow through the credential store → podman secret → Secret=type=env quadlet
 // directive pipeline, never touching plaintext charly.yml or quadlet Environment= lines.
 // Pre-populated from the candy manifest.
-func (l *Candy) SecretAccept() []EnvDependency {
+func (l *Candy) SecretAccept() []spec.EnvDependency {
 	return l.secretAccepts
 }
 
 // SecretRequires returns credential-store-backed env vars this candy MUST have.
 // Missing entries cause charly config to hard-fail with actionable remediation.
 // Pre-populated from the candy manifest.
-func (l *Candy) SecretRequire() []EnvDependency {
+func (l *Candy) SecretRequire() []spec.EnvDependency {
 	return l.secretRequires
 }
 
 // MCPProvides returns MCP servers this candy provides to other containers (pre-populated from the candy manifest)
-func (l *Candy) MCPProvide() []MCPServerYAML {
+func (l *Candy) MCPProvide() []spec.MCPServerYAML {
 	return l.mcpProvides
 }
 
 // MCPRequires returns MCP servers this candy must have from the environment (pre-populated from the candy manifest)
-func (l *Candy) MCPRequire() []EnvDependency {
+func (l *Candy) MCPRequire() []spec.EnvDependency {
 	return l.mcpRequires
 }
 
 // MCPAccepts returns MCP servers this candy can optionally use (pre-populated from the candy manifest)
-func (l *Candy) MCPAccept() []EnvDependency {
+func (l *Candy) MCPAccept() []spec.EnvDependency {
 	return l.mcpAccepts
 }
 
@@ -1369,7 +1370,7 @@ type candyCandidate struct {
 func pickCandyVersion(bareRef string, cands []candyCandidate) candyCandidate {
 	best := cands[0]
 	for _, c := range cands[1:] {
-		if compareCalVer(c.version, best.version) > 0 {
+		if kit.CompareCalVer(c.version, best.version) > 0 {
 			best = c // newer per-entity version
 		} else if c.version == best.version && compareSemver(c.gitTag, best.gitTag) > 0 {
 			best = c // same per-entity version: prefer the newest git tag

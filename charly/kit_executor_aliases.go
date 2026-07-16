@@ -13,26 +13,20 @@ type (
 	ShellExecutor  = kit.ShellExecutor
 	SSHExecutor    = kit.SSHExecutor
 	NestedExecutor = kit.NestedExecutor
-	JumpKind       = kit.JumpKind
 	NestedJump     = kit.NestedJump
 )
 
 var NestedContainerName = kit.NestedContainerName
 
 const (
-	VenueLocal = kit.VenueLocal
-
-	JumpDockerExec   = kit.JumpDockerExec
-	JumpPodmanExec   = kit.JumpPodmanExec
-	JumpSSH          = kit.JumpSSH
-	JumpVirshConsole = kit.JumpVirshConsole
+	JumpDockerExec = kit.JumpDockerExec
+	JumpPodmanExec = kit.JumpPodmanExec
 )
 
 var (
 	BuilderRun          = kit.BuilderRun
 	UserScopeBindMounts = kit.UserScopeBindMounts
 	UserScopeEnv        = kit.UserScopeEnv
-	BuildBuilderRunArgs = kit.BuildBuilderRunArgs
 
 	// runCaptureCmd is kit's shared "run + capture stdout/stderr/exit" exec helper,
 	// used by charly's commands.go alongside the executors.

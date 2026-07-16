@@ -289,53 +289,60 @@ VMs from a terminal inside the browser-accessible candybox desktop — uid 1000,
 
 ## Install
 
-**Recommended — Go install** (requires Go 1.25.3+):
-
-```bash
-go install github.com/opencharly/charly/charly@latest
-```
-
-This puts `charly` in your `$GOPATH/bin`. Create an `charly.yml` and
-a `candy/` directory and you're done. Legacy projects (predating
-the unified schema, the `kind:` discriminators, or the singular
-field names) convert in one shot with `charly migrate` — a single
-idempotent chain to the latest CalVer schema. See `/charly-build:migrate`.
-
-**Full project bootstrap** (to build boxes from this repo):
+**Development — the one workflow, per checkout** (requires Go 1.26+ and
+[go-task](https://taskfile.dev)):
 
 ```bash
 git clone --recurse-submodules https://github.com/opencharly/charly.git
-cd opencharly
-task build:charly         # on Arch: delegates to makepkg -si; elsewhere: portable install to ~/.local/bin/charly
-charly box build        # build everything
+cd charly
+task build:binary       # builds ./bin/charly (CalVer-stamped) — NEVER installs to the host
+./bin/charly box build  # build everything
 ```
 
-**Arch / CachyOS / Manjaro** — install system-wide via `pacman`, building this
-repo's bundled `opencharly-git` PKGBUILD (it is LOCAL-ONLY — NOT published to the
-AUR):
+Every invocation against THIS checkout uses `./bin/charly` — there is no
+system-wide dev install. Working from several checkouts or worktrees? Each gets
+its own `task build:binary` and its own `./bin/charly`; nothing is shared
+between them. Create your own `charly.yml` and a `candy/` directory in any
+project directory and you're done. Legacy projects (predating the unified
+schema, the `kind:` discriminators, or the singular field names) convert in one
+shot with `charly migrate` — a single idempotent chain to the latest CalVer
+schema. See `/charly-build:migrate`.
+
+For a personal `charly` on your `$PATH` — solo/bootstrap use only, never on a
+host with in-flight multi-teammate work:
 
 ```bash
-cd pkg/arch && makepkg -si     # build + pacman-install opencharly-git from this repo
-# or, equivalently, from the repo root:
-task build:charly                  # pre-installs the AUR-only deps via your AUR helper, then runs makepkg -sefi in pkg/arch
+task build:install-portable   # copies ./bin/charly to $HOME/.local/bin/charly
 ```
 
-The PKGBUILD `pkgver()` derives the same CalVer
-(`YYYY.DDD.HHMM`) `charly version` prints, so `pacman -Q opencharly-git`
-and `charly version` always agree. `depends=` covers the full runtime
-surface — `podman`/`docker`/`fuse-overlayfs`/`slirp4netns` for
-rootless containers, `qemu-full`/`libvirt`/`edk2-ovmf`/`swtpm` for
-`charly vm`, `gnupg`/`pinentry`/`libsecret`/`gocryptfs`/`tailscale` for
-secrets/encrypted volumes/tunnels, `go-task` so `task build:charly`
-works from any fresh checkout. The pacman post-install hook enables
-`docker.service` / `tailscaled.service` / `virtqemud.socket` and
-adds the user to the `docker` and `libvirt` groups automatically.
+This WRITES to `$HOME`. If `$HOME/.local/bin` precedes a native-package install
+location (e.g. `/usr/bin`) in your `$PATH`, it SHADOWS the system `charly` for
+your user — fine on a single-developer machine, but on a shared host it
+silently changes which binary any bare-`$PATH` lookup resolves to (another
+session, a script, a `local: {host: local}` deploy step).
 
-**From source:**
+**Native packages** (for END USERS who want `charly` on the host system —
+not the development workflow above):
 
 ```bash
-task build:binary
+task build:pkg:arch && sudo pacman -U dist/*.pkg.tar.zst      # Arch / CachyOS / Manjaro
+task build:pkg:fedora && sudo dnf install dist/*.rpm          # Fedora
+task build:pkg:debian && sudo apt install ./dist/*.deb        # Debian / Ubuntu
 ```
+
+Each `pkg:*` task drives `charly box pkg`, which builds the repo's bundled
+native-package sources (`pkg/arch`'s `opencharly-git` PKGBUILD is LOCAL-ONLY —
+NOT published to the AUR; `pkg/fedora`/`pkg/debian` analogously) into a plain
+artifact under `dist/` — the system-wide install step is always an explicit,
+separate command, never a side effect of building. The Arch PKGBUILD's
+`pkgver()` derives the same CalVer (`YYYY.DDD.HHMM`) `charly version` prints, so
+`pacman -Q opencharly-git` and `charly version` always agree; its `depends=`
+covers the full runtime surface — `podman`/`fuse-overlayfs`/`slirp4netns` for
+rootless containers, `qemu-full`/`libvirt`/`edk2-ovmf`/`swtpm` for `charly vm`,
+`gnupg`/`pinentry`/`gocryptfs`/`tailscale` for secrets/encrypted
+volumes/tunnels — and its post-install hook enables `docker.service` /
+`tailscaled.service` / `virtqemud.socket` and adds the user to the `docker` and
+`libvirt` groups automatically.
 
 ## Quickstart
 

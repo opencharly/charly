@@ -1,6 +1,13 @@
-package main
+package check
 
 import "testing"
+
+// Ported from the now-deleted charly/agent_config_test.go (P12a dead-code sweep):
+// charly/agent_config.go's VersionResult/ParseAgentTimeout were a byte-identical,
+// zero-production-caller duplicate of this package's own copies (agent.go) and were
+// deleted outright rather than folded — this is the one live copy's test coverage,
+// mirroring the aliasNameRe port pattern this same wave-2 cutover already used for
+// candy/plugin-box/validate_rules.go.
 
 func TestVersionResultString(t *testing.T) {
 	v := VersionResult{Stdout: "claude 0.1.2"}
@@ -13,7 +20,7 @@ func TestVersionResultString(t *testing.T) {
 	}
 }
 
-func TestParseAITimeout(t *testing.T) {
+func TestParseAgentTimeout(t *testing.T) {
 	// Empty timeout → 0 (no wall-clock cap). check_loop branches on `dur == 0` and
 	// uses context.WithCancel instead of WithTimeout, honoring the "Take all the
 	// time you need" prompt promise; plateau detection is the loop bound.

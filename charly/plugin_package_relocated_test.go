@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "rpm -q", stdout: "INSTALLED", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "fedora"),
-		&Op{PluginInput: map[string]any{"package": "bash", "installed": true}})
+		&spec.Op{PluginInput: map[string]any{"package": "bash", "installed": true}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +35,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("package provider does not implement ProvisionActor: %T", prov)
 	}
-	script, ok := pa.RenderProvisionScript(&Op{PluginInput: map[string]any{"package": "bash"}}, []string{"fedora"})
+	script, ok := pa.RenderProvisionScript(&spec.Op{PluginInput: map[string]any{"package": "bash"}}, []string{"fedora"})
 	if !ok || !strings.Contains(script, "dnf install") || !strings.Contains(script, "pacman -S") {
 		t.Fatalf("act: want an install shell, got ok=%v %q", ok, script)
 	}
@@ -47,7 +48,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	if sp.LowersTo() != StepKindSystemPackages {
 		t.Fatalf("LowersTo = %v, want StepKindSystemPackages", sp.LowersTo())
 	}
-	op := &Op{PluginInput: map[string]any{"package": "openssh", "package_map": map[string]any{"fedora": "openssh-server"}}}
+	op := &spec.Op{PluginInput: map[string]any{"package": "openssh", "package_map": map[string]any{"fedora": "openssh-server"}}}
 	step := sp.ConstructStep(op, &Candy{Name: "net"}, &ResolvedBox{Pkg: "rpm", Tags: []string{"fedora:43", "fedora"}})
 	sps, ok := step.(*SystemPackagesStep)
 	if !ok {
@@ -72,7 +73,7 @@ func TestPackageVerb_InfraFailureNotContentFalse(t *testing.T) {
 	cv := prov.(CheckVerbProvider)
 	run := func(fe *fakeExecutor, wantInstalled bool) CheckResult {
 		return cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "arch"),
-			&Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
+			&spec.Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
 	}
 
 	// Genuine absent: probe printed ABSENT, exit 0. installed:false → pass.

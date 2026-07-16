@@ -9,6 +9,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 (deploy-cone-coupled;
+// see status_substrate.go / CollectOpts for the full rationale, P14-rest trace, 2026-07).
+//
 // VMCollector is the libvirt SubstrateCollector. It lists charly-* libvirt
 // domains via listCharlyDomains(), maps each domain to a DeploymentStatus
 // stamped Kind=SubstrateVM, Source="libvirt", and enriches the row from the

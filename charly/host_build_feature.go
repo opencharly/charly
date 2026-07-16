@@ -7,15 +7,18 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // host_build_feature.go — the generic "feature" F10 host-builder. The externalized `charly feature`
 // command plugin (candy/plugin-feature) OWNS the list/pending/validate grammar + output and asks the
 // host to enumerate the project's plans via Executor.HostBuild("feature", spec.FeatureRequest{...}).
-// The unified LOADER (LoadConfig / ScanCandy — the kernel), the Step plan model, and validatePlanSteps
-// (shared with `charly box validate`, R3) STAY core, reached via this generic action noun (F11). The
-// seam returns plain enumerated DATA — the plugin does all the formatting/verdict/exit-code logic.
+// The unified LOADER (LoadConfig / ScanCandy — the kernel) and the Step plan model STAY core, reached
+// via this generic action noun (F11). kit.ValidatePlanSteps (P12a: relocated to sdk/kit — it is invoked
+// by BOTH this seam AND `charly box validate`, so it lives where both reach it without a core→plugin
+// import, R3) is called here, not defined here. The seam returns plain enumerated DATA — the plugin
+// does all the formatting/verdict/exit-code logic.
 const featureBuilderKind = "feature"
 
 func hostBuildFeature(_ context.Context, req spec.FeatureRequest, _ buildEngineContext) (spec.FeatureReply, error) {
@@ -47,7 +50,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 	f := strings.ToLower(strings.TrimSpace(filter))
 
 	var ents []spec.FeatureEntity
-	add := func(kind, name, desc string, plan []Step) {
+	add := func(kind, name, desc string, plan []spec.Step) {
 		eid := kind + ":" + name
 		if f != "" && f != eid && f != kind {
 			return
@@ -69,7 +72,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 					IsCheck: step.Check != "" || step.AgentCheck != "",
 				})
 			}
-			e.ValidationErrors = validatePlanSteps(desc, plan, eid)
+			e.ValidationErrors = kit.ValidatePlanSteps(desc, plan, eid)
 		}
 		ents = append(ents, e)
 	}

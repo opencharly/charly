@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // TestComputeEffectiveVersions covers the image-version derivation that feeds
 // the content-stable ai.opencharly.version label: a dedicated version: wins;
@@ -74,7 +77,7 @@ func TestComputeEffectiveVersions(t *testing.T) {
 func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 	// The consumer candy declares ONLY bake_plugin (no explicit require:).
 	consumer := &Candy{Name: "consumer-candy"}
-	populateCandyFromYAML(consumer, &CandyYAML{
+	populateCandyFromYAML(consumer, &spec.CandyYAML{
 		Version:    "2026.100.0000", // lower than the baked plugin below
 		BakePlugin: []string{"plugin-baked"},
 	})
@@ -121,7 +124,7 @@ func TestBakePluginImpliesRequire_FeedsEffectiveVersion(t *testing.T) {
 	// Declaring BOTH bake_plugin and an explicit require of the same ref does not
 	// double-add (the redundant case the cutover removes from candy/charly-mcp).
 	both := &Candy{Name: "both"}
-	populateCandyFromYAML(both, &CandyYAML{
+	populateCandyFromYAML(both, &spec.CandyYAML{
 		Version:    "2026.100.0000",
 		Require:    []string{"plugin-baked"},
 		BakePlugin: []string{"plugin-baked"},

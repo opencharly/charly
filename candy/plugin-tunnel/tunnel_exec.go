@@ -13,6 +13,7 @@ package tunnelverb
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -366,10 +367,18 @@ func cloudflareTunnelStop(cfg params.TunnelConfig) error {
 		return fmt.Errorf("invalid PID in %s: %w", pidPath, err)
 	}
 
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not signal PID %d: %v\n", pid, err)
-	} else {
+	switch err := syscall.Kill(pid, syscall.SIGTERM); {
+	case err == nil:
 		fmt.Fprintf(os.Stderr, "Stopped cloudflared tunnel %s (PID %d)\n", name, pid)
+	case errors.Is(err, syscall.ESRCH):
+		// Benign: the recorded PID is already gone (a prior stop already succeeded, the
+		// process exited on its own, or this is a second/double teardown run) — the
+		// intent ("make sure the tunnel is stopped") is already satisfied. Not a
+		// warning: labeling an already-achieved end state a "warning" trains readers
+		// to skim past real ones.
+		fmt.Fprintf(os.Stderr, "note: cloudflared tunnel %s (PID %d) already stopped\n", name, pid)
+	default:
+		fmt.Fprintf(os.Stderr, "Warning: could not signal PID %d: %v\n", pid, err)
 	}
 
 	_ = os.Remove(pidPath)

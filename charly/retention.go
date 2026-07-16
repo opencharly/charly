@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // Retention fallbacks — used ONLY when defaults.keep_images / keep_check_runs are
@@ -22,7 +24,7 @@ const (
 
 // listContainerImageRefs returns the set of image IDs and image refs currently
 // referenced by ANY container (running or stopped, incl. quadlet-managed
-// deploys). Package-level var for testability (same pattern as ListLocalImages).
+// deploys). Package-level var for testability (same pattern as kit.ListLocalImages).
 var listContainerImageRefs = defaultContainerImageRefs
 
 func defaultContainerImageRefs(engine string) (ids map[string]bool, refs map[string]bool, err error) {
@@ -58,7 +60,7 @@ func normImageID(s string) string { return strings.TrimPrefix(strings.TrimSpace(
 
 // imageInUse reports whether the candidate image is referenced by any container,
 // by ID (prefix-tolerant: 12-char vs 64-char) or by any of its tags.
-func imageInUse(im LocalImageInfo, ids, refs map[string]bool) bool {
+func imageInUse(im kit.LocalImageInfo, ids, refs map[string]bool) bool {
 	cid := normImageID(im.ID)
 	for id := range ids {
 		if cid != "" && id != "" && (strings.HasPrefix(cid, id) || strings.HasPrefix(id, cid)) {
@@ -75,7 +77,7 @@ func imageInUse(im LocalImageInfo, ids, refs map[string]bool) bool {
 
 // imageLabelCalVer parses the image's ai.opencharly.version label (the
 // content-derived EffectiveVersion) — the PRIMARY retention ordering key.
-func imageLabelCalVer(im LocalImageInfo) (CalVer, bool) {
+func imageLabelCalVer(im kit.LocalImageInfo) (CalVer, bool) {
 	return ParseCalVer(im.Labels[LabelVersion])
 }
 
@@ -111,7 +113,7 @@ type imageTagInfo struct {
 // (label-CalVer primary, build-tag CalVer tiebreaker; undatable tags last).
 // Non-charly images (no label) never appear.
 func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
-	imgs, err := ListLocalImages(engine)
+	imgs, err := kit.ListLocalImages(engine)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +135,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 				continue
 			}
 			seenRef[ref] = true
-			tcv, okT := ParseCalVer(extractCalVerTag(ref))
+			tcv, okT := ParseCalVer(kit.ExtractCalVerTag(ref))
 			groups[short] = append(groups[short], imageTagInfo{
 				Ref: ref, ID: normImageID(im.ID), LabelCalVer: lcv, OkLabel: okL,
 				TagCalVer: tcv, OkTag: okT, InUse: inUse,
@@ -158,7 +160,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 }
 
 // liveBuildFloor is a package-level var for testability — the same seam
-// ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
+// kit.ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
 // build-activity lock dir (~/.cache/charly/locks/builds, shared across every
 // worktree on the host), so a retention test that does NOT stub it is
 // non-deterministic: a concurrent build in ANOTHER process holds a lock, the
@@ -312,7 +314,7 @@ func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing dangling images: %w", err)
 	}
-	imgs, err := parseLocalImagesJSON(out)
+	imgs, err := kit.ParseLocalImagesJSON(out)
 	if err != nil {
 		return nil, err
 	}

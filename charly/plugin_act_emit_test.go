@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 )
@@ -17,7 +18,7 @@ import (
 func unixGroupActStep() *OpStep {
 	gid := 4242
 	return &OpStep{
-		Op:        &Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": gid}},
+		Op:        &spec.Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": gid}},
 		CandyName: "lyr",
 	}
 }
@@ -40,7 +41,7 @@ func TestRenderOpCommand_PluginAct_UnixGroup(t *testing.T) {
 // build/deploy install path — renderOpCommand errors loudly rather than silently dropping
 // the step (R4: no silent drop).
 func TestRenderOpCommand_PluginAct_NotActCapable(t *testing.T) {
-	s := &OpStep{Op: &Op{Plugin: "process", PluginInput: map[string]any{"process": "bash"}}}
+	s := &OpStep{Op: &spec.Op{Plugin: "process", PluginInput: map[string]any{"process": "bash"}}}
 	if _, err := renderOpCommand(s); err == nil {
 		t.Fatalf("renderOpCommand(plugin: process) err=nil, want a not-act-capable error")
 	}
@@ -48,8 +49,8 @@ func TestRenderOpCommand_PluginAct_NotActCapable(t *testing.T) {
 
 // rawUnixGroupOp is the RAW plan op the box build walks straight into emitTasks —
 // Plugin set, NO pre-conversion (the actual shipping shape, not an OpStep wrapper).
-func rawUnixGroupOp() Op {
-	return Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": 4242}}
+func rawUnixGroupOp() spec.Op {
+	return spec.Op{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "checkgrp", "gid": 4242}}
 }
 
 // emitTasks IS the real box-build emit path (writeCandySteps → g.emitTasks walks the
@@ -63,7 +64,7 @@ func TestEmitTasks_PluginAct_UnixGroup(t *testing.T) {
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -79,8 +80,8 @@ func TestEmitTasks_PluginAct_UnixGroup(t *testing.T) {
 
 // rawFileRunOp is the RAW plan op the box build walks straight into emitTasks for a
 // run: file step — Plugin set, file/mode in plugin_input, content a SHARED #Op modifier.
-func rawFileRunOp() Op {
-	return Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/app/seed.conf", "mode": "0600"}, Content: "hello"}
+func rawFileRunOp() spec.Op {
+	return spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/app/seed.conf", "mode": "0600"}, Content: "hello"}
 }
 
 // TestEmitTasks_PluginAct_File is the main-repo equivalent of the box/fedora check-pod
@@ -95,7 +96,7 @@ func TestEmitTasks_PluginAct_File(t *testing.T) {
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -120,7 +121,7 @@ func TestEmitTasks_PluginAct_File(t *testing.T) {
 // renderOpCommand turns a plugin: user run-Op into the idempotent useradd shell.
 func TestRenderOpCommand_PluginAct_User(t *testing.T) {
 	s := &OpStep{
-		Op:        &Op{Plugin: "user", PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc"}},
+		Op:        &spec.Op{Plugin: "user", PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc"}},
 		CandyName: "lyr",
 	}
 	cmd, err := renderOpCommand(s)
@@ -137,7 +138,7 @@ func TestRenderOpCommand_PluginAct_User(t *testing.T) {
 // renderOpCommand turns a plugin: mount run-Op into the idempotent mount shell.
 func TestRenderOpCommand_PluginAct_Mount(t *testing.T) {
 	s := &OpStep{
-		Op:        &Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}},
+		Op:        &spec.Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}},
 		CandyName: "lyr",
 	}
 	cmd, err := renderOpCommand(s)
@@ -156,7 +157,7 @@ func TestRenderOpCommand_PluginAct_Mount(t *testing.T) {
 // (candy/plugin-kernel-param, resolved through the registry as a kit.ProvisionActor).
 func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
 	s := &OpStep{
-		Op:        &Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}},
+		Op:        &spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}},
 		CandyName: "lyr",
 	}
 	cmd, err := renderOpCommand(s)
@@ -171,8 +172,8 @@ func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
 }
 
 // rawKernelParamOp is the RAW plan op the box build walks straight into emitTasks.
-func rawKernelParamOp() Op {
-	return Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}}
+func rawKernelParamOp() spec.Op {
+	return spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}}
 }
 
 // emitTasks (the REAL box-build emit path) must render a RAW plugin: kernel-param run-Op
@@ -183,7 +184,7 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()

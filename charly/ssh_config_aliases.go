@@ -9,12 +9,6 @@ import "github.com/opencharly/sdk/kit"
 type VmSshStanza = kit.VmSshStanza
 
 var (
-	VmSshAlias             = kit.VmSshAlias
-	WriteVmSshStanza       = kit.WriteVmSshStanza
-	EnsureSshConfigInclude = kit.EnsureSshConfigInclude
-	RemoveVmSshStanza      = kit.RemoveVmSshStanza
-	RemoveSshConfigInclude = kit.RemoveSshConfigInclude
-	ListVmSshAliases       = kit.ListVmSshAliases
-	SshFragmentPath        = kit.SshFragmentPath
-	SshConfigPath          = kit.SshConfigPath
+	VmSshAlias        = kit.VmSshAlias
+	RemoveVmSshStanza = kit.RemoveVmSshStanza
 )

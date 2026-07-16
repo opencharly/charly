@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestEnsureImage(t *testing.T) {
@@ -27,8 +29,8 @@ func TestEnsureImage(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, ErrImageNotLocal) {
-			t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 		}
 		if !strings.Contains(err.Error(), "myimage:latest") {
 			t.Errorf("expected error to name the missing image, got: %v", err)
@@ -52,8 +54,8 @@ func TestEnsureImage(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, ErrImageNotLocal) {
-			t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 		}
 	})
 

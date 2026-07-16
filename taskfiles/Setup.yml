@@ -4,4 +4,4 @@ tasks:
   all:
     desc: Full setup (first time after clone)
     cmds:
-      - task: :build:charly
+      - task: :build:binary

@@ -6,6 +6,17 @@ import (
 	"strings"
 )
 
+// remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an
+// OCI-registry concern despite the filename; the actual go-containerregistry engine lives in
+// candy/plugin-oci) into a full build/run context: clone/cache the repo, load its charly.yml,
+// resolve the box, scan its candies, and (BuildImage) build it.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1/K3 — the repo-fetch/cache
+// machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1),
+// and BuildImage's delegation to BuildCmd is build-cone (K3). Consumers span both cones —
+// build.go, commands.go, ensure_image.go, image.go, shell.go, start.go, config_image.go
+// (P14-rest trace, 2026-07) — so this moves together with the loader/build waves, not alone.
+
 // RemoteImageContext holds the resolved state of a remote image reference.
 // It contains everything needed to pull/build and run the image.
 type RemoteImageContext struct {
@@ -94,26 +105,6 @@ func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error 
 	defer os.Chdir(origDir) //nolint:errcheck
 
 	return buildCmd.Run()
-}
-
-// ContainerName returns the container name for a remote image.
-func (ctx *RemoteImageContext) ContainerName() string {
-	return containerName(ctx.BoxName)
-}
-
-// CollectVolumes collects volumes for the remote image.
-func (ctx *RemoteImageContext) CollectVolumes() ([]VolumeMount, error) {
-	return CollectBoxVolume(
-		ctx.Config, ctx.Candies, ctx.BoxName,
-		ctx.Resolved.Home,
-		nil,
-	)
-}
-
-// RemoteContainerName returns the container name for a remote ref.
-func RemoteContainerName(ref string) string {
-	parsed := ParseRemoteRef(ref)
-	return containerName(parsed.Name)
 }
 
 // StripURLScheme removes http:// or https:// from a remote ref if present.

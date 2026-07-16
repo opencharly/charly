@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 // Tests for renderDownloadScript — the host-side download executor.
 
 func TestDownloadScriptPlain(t *testing.T) {
-	task := &Op{
+	task := &spec.Op{
 		Download: "https://example.com/binary",
 		To:       "/usr/local/bin/foo",
 		Mode:     "0755",
@@ -29,7 +30,7 @@ func TestDownloadScriptPlain(t *testing.T) {
 }
 
 func TestDownloadScriptTarGzWithStrip(t *testing.T) {
-	task := &Op{
+	task := &spec.Op{
 		Download:        "https://example.com/x.tar.gz",
 		To:              "/usr/local/bin",
 		Extract:         "tar.gz",
@@ -55,7 +56,7 @@ func TestDownloadScriptAutoDetectExtract(t *testing.T) {
 		"https://example.com/install.sh": "chmod +x",
 	}
 	for url, sentinel := range tests {
-		task := &Op{Download: url, To: "/tmp/out"}
+		task := &spec.Op{Download: url, To: "/tmp/out"}
 		out := kit.RenderDownloadScript(task, nil)
 		if !strings.Contains(out, sentinel) {
 			t.Errorf("URL %q: expected %q, got:\n%s", url, sentinel, out)
@@ -64,7 +65,7 @@ func TestDownloadScriptAutoDetectExtract(t *testing.T) {
 }
 
 func TestDownloadScriptEnvVars(t *testing.T) {
-	task := &Op{
+	task := &spec.Op{
 		Download: "https://example.com/install.sh",
 		To:       "/tmp/x",
 		Extract:  "sh",
@@ -83,7 +84,7 @@ func TestDownloadScriptEnvVars(t *testing.T) {
 }
 
 func TestDownloadScriptInclude(t *testing.T) {
-	task := &Op{
+	task := &spec.Op{
 		Download:       "https://example.com/bundle.tar.gz",
 		To:             "/opt/bundle",
 		Extract:        "tar.gz",
@@ -99,7 +100,7 @@ func TestDownloadScriptInclude(t *testing.T) {
 }
 
 func TestDownloadScriptTmpCleanup(t *testing.T) {
-	task := &Op{Download: "https://example.com/x.tar.gz", To: "/tmp/out"}
+	task := &spec.Op{Download: "https://example.com/x.tar.gz", To: "/tmp/out"}
 	out := kit.RenderDownloadScript(task, nil)
 	if !strings.Contains(out, `trap 'rm -rf "$ovtmp"' EXIT`) {
 		t.Errorf("missing tmp cleanup trap: %s", out)

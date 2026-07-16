@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -17,17 +18,17 @@ import (
 func TestPlanUnify_CheckStepRuns(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{{Check: "the marker resolves", Op: Op{
+		Plan: []spec.Step{{Check: "the marker resolves", Op: spec.Op{
 			Plugin:      "matching",
 			PluginInput: map[string]any{"matching": "charly-marker", "contains": map[string]any{"contains": "charly-marker"}},
 		}}},
 	}}}
 	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive})
-	res := RunPlan(context.Background(), r, set, nil, false)
+	res := kit.RunPlan(context.Background(), r, set, false)
 	if len(res) != 1 {
 		t.Fatalf("want 1 step result, got %d", len(res))
 	}
-	if res[0].Keyword != string(KwCheck) {
+	if res[0].Keyword != string(kit.KwCheck) {
 		t.Errorf("keyword = %q, want check", res[0].Keyword)
 	}
 	if res[0].Result.Status != TestPass {
@@ -39,28 +40,28 @@ func TestPlanUnify_CheckStepRuns(t *testing.T) {
 func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{
+		Plan: []spec.Step{
 			{Run: "mutate the world", Op: cmdOp("echo should-not-run")},
-			{Check: "the marker resolves", Op: Op{
+			{Check: "the marker resolves", Op: spec.Op{
 				Plugin:      "matching",
 				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
 			}},
 		},
 	}}}
 	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, VerifyOnly: true})
-	res := RunPlan(context.Background(), r, set, nil, false)
+	res := kit.RunPlan(context.Background(), r, set, false)
 	if len(res) != 2 {
 		t.Fatalf("want 2 step results, got %d", len(res))
 	}
 	// The run: step is skipped (not executed) under verify-only.
-	if res[0].Keyword != string(KwRun) || res[0].Result.Status != TestSkip {
+	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != TestSkip {
 		t.Errorf("run: step should be skipped under VerifyOnly, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
 	}
 	if !strings.Contains(res[0].Result.Message, "verify-only") {
 		t.Errorf("skip reason should name verify-only, got %q", res[0].Result.Message)
 	}
 	// The check: step still runs and passes.
-	if res[1].Keyword != string(KwCheck) || res[1].Result.Status != TestPass {
+	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != TestPass {
 		t.Errorf("check: step should run under VerifyOnly, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
 	}
 }
@@ -75,29 +76,29 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{
+		Plan: []spec.Step{
 			{Run: "pip install /ctx/pkg", Op: cmdOp("false")}, // would FAIL if executed
-			{Check: "the marker resolves", Op: Op{
+			{Check: "the marker resolves", Op: spec.Op{
 				Plugin:      "matching",
 				PluginInput: map[string]any{"matching": "m", "contains": map[string]any{"contains": "m"}},
 			}},
-			{AgentRun: "an agent drives the UI", Op: Op{}}, // agent step, NOT a deterministic install
+			{AgentRun: "an agent drives the UI", Op: spec.Op{}}, // agent step, NOT a deterministic install
 		},
 	}}}
 	r := newCheckRunner(kit.RunnerConfig{Mode: RunModeLive, SkipDeterministicRun: true}) // the `charly check feature run` (ADE acceptance) mode
-	res := RunPlan(context.Background(), r, set, nil, false)
+	res := kit.RunPlan(context.Background(), r, set, false)
 	if len(res) != 3 {
 		t.Fatalf("want 3 step results, got %d", len(res))
 	}
 	// The deterministic run: install step is skipped (would FAIL with `false` if executed).
-	if res[0].Keyword != string(KwRun) || res[0].Result.Status != TestSkip {
+	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != TestSkip {
 		t.Errorf("run: install step should be skipped under SkipDeterministicRun, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
 	}
 	if !strings.Contains(res[0].Result.Message, "install-timeline") {
 		t.Errorf("skip reason should name the install-timeline, got %q", res[0].Result.Message)
 	}
 	// The check: step still runs and passes.
-	if res[1].Keyword != string(KwCheck) || res[1].Result.Status != TestPass {
+	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != TestPass {
 		t.Errorf("check: step should run, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
 	}
 	// agent-run: is NOT skipped as a deterministic install step — it reaches the
@@ -122,7 +123,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
-	layer := &Candy{Name: "x", plan: []Step{{Run: "install redis", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
 	steps := compileOpSteps(layer, testResolvedBox())
 
 	var sp *SystemPackagesStep

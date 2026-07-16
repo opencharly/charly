@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // DataProvisionMode controls how provisionData copies files.
@@ -122,7 +124,7 @@ func provisionData(engine string, imageRef string, meta *BoxMetadata,
 	// instance deploy.
 	targets := make(map[string]seedTarget, len(bindMounts)+len(namedVolumes))
 	for _, nv := range namedVolumes {
-		bare := BareVolumeName(nv.VolumeName, deployName, instance)
+		bare := kit.BareVolumeName(nv.VolumeName, deployName, instance)
 		targets[bare] = seedTarget{
 			bareName:    bare,
 			kind:        seedKindNamed,

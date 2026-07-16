@@ -8,6 +8,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 (deploy-cone-coupled;
+// see status_substrate.go / CollectOpts for the full rationale, P14-rest trace, 2026-07).
+//
 // K8sCollector is the kubernetes SubstrateCollector. It surfaces every
 // declared `target: k8s` deployment (from the folded charly.yml Deploy
 // map) as one DeploymentStatus row, reporting whether its Kustomize tree has
@@ -129,7 +132,7 @@ func k8sDeployEntries(uf *UnifiedFile) []string {
 // k8sImageRef resolves the image a k8s deploy runs, mirroring the k8s deploy
 // preresolver (k8s_deploy_preresolve.go): the node's explicit Box, falling back
 // to the deploy name.
-func k8sImageRef(name string, node BundleNode) string {
+func k8sImageRef(name string, node spec.BundleNode) string {
 	if node.Image != "" {
 		return node.Image
 	}
@@ -138,7 +141,7 @@ func k8sImageRef(name string, node BundleNode) string {
 
 // k8sSpecFor resolves the kind:k8s template referenced by node.From from the
 // unified projection. Nil when unreferenced or absent.
-func k8sSpecFor(uf *UnifiedFile, node BundleNode) *ResolvedK8s {
+func k8sSpecFor(uf *UnifiedFile, node spec.BundleNode) *ResolvedK8s {
 	if uf == nil || uf.K8s == nil || node.From == "" {
 		return nil
 	}

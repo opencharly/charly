@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"os/exec"
 	"strings"
@@ -90,7 +91,7 @@ type EphemeralHandle struct {
 //
 // Returns the handle that should be passed to TeardownEphemeralLifecycle
 // at deploy del time.
-func RegisterEphemeralLifecycle(node *BundleNode, deployName string) (*EphemeralHandle, error) {
+func RegisterEphemeralLifecycle(node *spec.BundleNode, deployName string) (*EphemeralHandle, error) {
 	if node == nil || !node.IsEphemeral() {
 		return nil, fmt.Errorf("RegisterEphemeralLifecycle: node %q is not marked ephemeral", deployName)
 	}
@@ -162,7 +163,7 @@ func RegisterEphemeralLifecycle(node *BundleNode, deployName string) (*Ephemeral
 //  3. Decrement snapshot refcount (vm-target only).
 //  4. Decrement parent's child-refcount (nested case).
 //  5. Clear EphemeralRuntime from charly.yml.
-func TeardownEphemeralLifecycle(node *BundleNode, deployName string) error {
+func TeardownEphemeralLifecycle(node *spec.BundleNode, deployName string) error {
 	if node == nil || !node.IsEphemeral() {
 		return fmt.Errorf("TeardownEphemeralLifecycle: node %q is not marked ephemeral", deployName)
 	}
@@ -198,7 +199,7 @@ func TeardownEphemeralLifecycle(node *BundleNode, deployName string) error {
 
 // effectiveTTL computes the TTL for a deploy, clipping to the parent
 // ephemeral's remaining TTL when nested. parentID may be empty.
-func effectiveTTL(node *BundleNode, parentID string) (time.Duration, error) {
+func effectiveTTL(node *spec.BundleNode, parentID string) (time.Duration, error) {
 	declared := node.Ephemeral.EffectiveTTL()
 	if parentID == "" {
 		return declared, nil
@@ -311,14 +312,14 @@ func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
 		return err
 	}
 	if dc == nil {
-		dc = &BundleConfig{Bundle: map[string]BundleNode{}}
+		dc = &BundleConfig{Bundle: map[string]spec.BundleNode{}}
 	}
 	node, ok := dc.Bundle[deployName]
 	if !ok {
-		node = BundleNode{}
+		node = spec.BundleNode{}
 	}
 	if node.VmState == nil {
-		node.VmState = &VmDeployState{}
+		node.VmState = &spec.VmDeployState{}
 	}
 	node.VmState.Ephemeral = &EphemeralRuntime{
 		ID:              h.ID,

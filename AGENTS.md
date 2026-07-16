@@ -198,13 +198,14 @@ depends on it.
 - **R8 — Preserve emitted artifacts.** Validate labels, plans, configs,
   schemas, generated files, and other user-visible output at their actual
   boundary.
-- **R9 — Binary equals source.** Build the provenance-verified worktree-local
-  binary with `task build:binary`, invoke it through that worktree's `bin`, and
-  verify dependency/gitlink consistency. `bin/charly version --json` must name
-  the CalVer, exact revision, commit time, and modified state selected at build
-  time. Do not use `go version -m` VCS fields as a linked-worktree gate: this
-  Go toolchain does not discover a worktree `.git` gitdir file. Never install a
-  shared binary from a worktree.
+- **R9 — Binary equals source.** Build the CalVer-stamped worktree-local binary
+  with `task build:binary`, invoke it through that worktree's `bin`, and verify
+  dependency/gitlink consistency. `bin/charly version` must name the CalVer
+  selected at build time; the stale-binary freshness guard refuses heavy verbs
+  whenever a `charly/*.go` source is newer than the built binary, so a stale
+  binary can never masquerade as the fix under test. Every runtime OS dependency
+  lives in `pkg/arch/PKGBUILD` `depends=`. Never install a shared binary from a
+  worktree.
 - **R10 — Fresh disposable proof.** On the final committed tree, run the exact
   gate selected by `/charly-check:check`. Runtime changes require a complete
   fresh rebuild and live execution on every affected explicit
@@ -215,16 +216,16 @@ depends on it.
 Any rule violation forbids commit. Fix it and rerun the full gate, or stop and
 ask the operator. A lower confidence tier never legalizes a violation.
 
-The core Go gate is `task verify:go-core`, invoked from the superproject. It
-runs `go test ./...` and `go vet ./...` from `charly/`, where the workspace
-selects the core module, then builds and verifies the provenance-complete
-worktree-local binary with `task build:binary`. Never run bare `go test`, `go vet`, or `go build ./...`
-from the superproject: it is not itself a Go module.
+The core Go gate runs `go test ./...` and `go vet ./...` from `charly/` (where
+the workspace selects the core module), then builds the CalVer-stamped
+worktree-local binary with `task build:binary` and confirms `bin/charly version`.
+Never run bare `go test`, `go vet`, or `go build ./...` from the superproject: it
+is not itself a Go module.
 
 A successful aggregate Task exit is not sufficient evidence if its transcript
 omits declared commands. Preserve terminal proof for the test, vet, and stamped
-build/provenance steps individually (using the exact commands in this task when
-necessary); an incomplete transcript is an R1 evidence failure, not a pass.
+build steps individually (using the exact commands in this task when necessary);
+an incomplete transcript is an R1 evidence failure, not a pass.
 
 ## Architecture
 
@@ -367,7 +368,7 @@ and exercises the disposable candybox that supplies the full execution surface.
 Create substantial Codex work as a linked Git worktree from current protected
 `origin/main`; leave the operator's root checkout and unrelated dirty state
 untouched. Verify `HEAD`, merge-base, and `origin/main` before implementation
-and refresh them again before PR landing. Build only the provenance-verified
+and refresh them again before PR landing. Build only the CalVer-stamped
 worktree-local binary with `task build:binary`. Tests use the host's existing normal Go caches;
 never create a per-worktree `GOCACHE` or `GOMODCACHE`.
 

@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -45,7 +46,7 @@ var _ = func() bool {
 // overlay path. node may be nil (the Update path carries no DeployContext) — it
 // then re-resolves the deploy node from the tree by name. plans is unused: k8s does
 // NOT consume the InstallPlan IR (GenerateK8sKustomize reads caps + node + cluster).
-func k8sDeployPreresolve(name, dir string, node *BundleNode, _ []*InstallPlan) (json.RawMessage, error) {
+func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*InstallPlan) (json.RawMessage, error) {
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
@@ -99,7 +100,7 @@ func k8sDeployPreresolve(name, dir string, node *BundleNode, _ []*InstallPlan) (
 			return nil, fmt.Errorf("deploy %q: pinned image %q not present in local %s storage", name, imageRef, rt.RunEngine)
 		}
 	} else {
-		resolved, rerr := resolveLocalImageRef(rt.RunEngine, leafName(authored))
+		resolved, rerr := kit.ResolveLocalImageRef(rt.RunEngine, leafName(authored))
 		if rerr != nil {
 			return nil, fmt.Errorf("deploy %q: resolving image %q: %w", name, authored, rerr)
 		}

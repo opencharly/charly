@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +49,7 @@ vm:cachyos-gpu:
 	if err := removeVmDeployEntry("vm:cachyos-gpu"); err != nil {
 		t.Fatalf("removeVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
+	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
 		t.Fatalf("saveVmDeployState (create leg): %v", err)
 	}
 
@@ -162,11 +163,11 @@ cachyos-gpu:
 // committed project profile (no preemptible) merged with the per-host overlay
 // (preemptible) must keep the per-host flag, regardless of merge order.
 func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]BundleNode{
+	project := &BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
 	}}
-	perHost := &BundleConfig{Bundle: map[string]BundleNode{
-		"cachyos-gpu": {Preemptible: &PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
+	perHost := &BundleConfig{Bundle: map[string]spec.BundleNode{
+		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
 	}}
 	for _, tc := range []struct {
 		name    string

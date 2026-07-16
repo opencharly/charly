@@ -41,7 +41,7 @@ type externalDeployTarget struct {
 	// registered lifecycle hook (vm) needs it to resolve its kind:vm entity for the
 	// host-side lifecycle (start/stop/rebuild/teardown bookkeeping). nil for a ref-based
 	// deploy with no charly.yml entry.
-	node *BundleNode
+	node *spec.BundleNode
 
 	// nodeOnly mirrors `charly bundle add --node-only`: when true, Add does NOT run the
 	// substrate's PostApply (vm: skip the nested target:pod children — the caller deploys
@@ -113,7 +113,7 @@ func (t *externalDeployTarget) deployID() string {
 // local/vm targets use (R3). All are no-ops for a deployment whose candies declare neither
 // (the android/k8s/example substrates), so the path stays generic.
 func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*InstallPlan, opts EmitOpts) error {
-	var node *BundleNode
+	var node *spec.BundleNode
 	var dir string
 	if dctx != nil {
 		node = dctx.Node
@@ -226,7 +226,7 @@ func (t *externalDeployTarget) Update(ctx context.Context, plans []*InstallPlan,
 // venue (with any substrate-specific preresolved payload), Invoke the provider with the
 // host executor on the broker, decode the reply, and (unless DryRun) persist the teardown
 // ops + record to the ledger.
-func (t *externalDeployTarget) apply(ctx context.Context, node *BundleNode, dir string, plans []*InstallPlan, opts EmitOpts) error {
+func (t *externalDeployTarget) apply(ctx context.Context, node *spec.BundleNode, dir string, plans []*InstallPlan, opts EmitOpts) error {
 	dryRun := opts.DryRun
 	// Substrate venue preparation (Design A): a substrate with a registered lifecycle hook
 	// (vm) runs its host-side preflight (boot the domain, WaitForSSH/CloudInit, charly-in-
@@ -531,7 +531,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 		if fd == nil || strings.TrimSpace(fd.UninstallTemplate) == "" {
 			return ""
 		}
-		ctx := &InstallContext{Packages: append([]string(nil), packages...)}
+		ctx := &spec.InstallContext{Packages: append([]string(nil), packages...)}
 		rendered, err := RenderTemplate(format+"-uninstall", fd.UninstallTemplate, ctx)
 		if err != nil {
 			return ""
@@ -556,7 +556,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 // Test runs the deploy-scope checks against the host venue. The plugin is NOT
 // involved — the checks are in-proc CheckVerbProviders run against t.exec, the
 // SAME runUnifiedTargetChecks path the host/pod/vm targets use (R3).
-func (t *externalDeployTarget) Test(ctx context.Context, checks []Op, opts TestOpts) error {
+func (t *externalDeployTarget) Test(ctx context.Context, checks []spec.Op, opts TestOpts) error {
 	return runUnifiedTargetChecks(ctx, t.exec, t.Kind(), t.name, checks, opts)
 }
 

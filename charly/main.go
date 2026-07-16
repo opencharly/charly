@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -86,6 +85,13 @@ type CLI struct {
 	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
 	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
 
+	// __box-labels is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
+	// command:labels word (nested under `box`, P14-rest). The plugin owns the user-facing
+	// `charly box labels` grammar + dispatch and reaches this over HostBuild("cli") — the SAME
+	// tracked-residue shape as the sibling __box-pkg/__box-inspect-overlay/__box-list-tags/
+	// __box-fetch/__box-refresh reentries above.
+	BoxLabels BoxLabelsCmd `cmd:"" name:"__box-labels" hidden:"" help:"internal: print a built image's OCI labels (reentry behind box labels)"`
+
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
 	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
@@ -121,25 +127,20 @@ type CLI struct {
 	// deliberate value/risk EXCEPTION — NOT unfixable: RDD 2026-07-01 proved externalizing is feasible
 	// but zero-value + highest-blast-radius, weakening R9's canonical identity command; operator-decided
 	// to keep core. See the NOTE above the __* internals.)
-	Version VersionCmd `cmd:"" help:"Print stamped CalVer or complete build provenance"`
+	Version VersionCmd `cmd:"" help:"Print computed CalVer tag"`
 }
 
-// VersionCmd prints the stamped binary identity.
-type VersionCmd struct {
-	JSON bool `long:"json" help:"Print complete build provenance as JSON"`
-}
+// VersionCmd prints the computed CalVer tag
+type VersionCmd struct{}
 
 func (c *VersionCmd) Run() error {
-	provenance, complete := CurrentBuildProvenance()
-	if c.JSON {
-		if err := json.NewEncoder(os.Stdout).Encode(provenance); err != nil {
-			return err
-		}
-	} else {
-		fmt.Println(CharlyVersion())
-	}
-	if !complete {
-		return fmt.Errorf("incomplete binary provenance — build with `task build:binary`")
+	// The BINARY's identity (stamped at build time), NOT the wall clock.
+	v := CharlyVersion()
+	fmt.Println(v)
+	if v == "unknown" {
+		// A non-zero exit lets scripts gate on an UNSTAMPED binary (build with
+		// `task build:binary`); the version is still printed to stdout above (#74).
+		return fmt.Errorf("unstamped binary (version %q) — build with `task build:binary`", v)
 	}
 	return nil
 }
@@ -232,7 +233,7 @@ func main() {
 
 	// Stale-binary guardrail: if cwd is inside an opencharly source tree
 	// AND the source tree has .go files newer than this binary, abort
-	// with a clear error pointing at `task build:charly`. See
+	// with a clear error pointing at `task build:binary`. See
 	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
 	// the 2026-05-09 cuda-cudnn cache-mount incident).
 	CheckBinaryFreshness(ctx.Command())
