@@ -123,12 +123,12 @@ func TestGenerateInitFragments(t *testing.T) {
 		Candies: map[string]*Candy{
 			"python": {
 				Name: "python",
-				plan: []Step{{Run: "build", Op: cmdOp("true")}},
+				plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			},
 			"svc": {
 				Name:        "svc",
 				InitSystems: map[string]bool{"supervisord": true},
-				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
+				plan:        []spec.Step{{Run: "build", Op: cmdOp("true")}},
 				service: []spec.ServiceEntry{
 					{Name: "svc", Exec: "svc serve"},
 				},
@@ -136,7 +136,7 @@ func TestGenerateInitFragments(t *testing.T) {
 			"other": {
 				Name:        "other",
 				InitSystems: map[string]bool{"supervisord": true},
-				plan:        []Step{{Run: "build", Op: cmdOp("true")}},
+				plan:        []spec.Step{{Run: "build", Op: cmdOp("true")}},
 				service: []spec.ServiceEntry{
 					{Name: "other", Exec: "other run"},
 				},
@@ -196,11 +196,11 @@ func TestGenerateRelayInitFragments(t *testing.T) {
 		Candies: map[string]*Candy{
 			"socat": {
 				Name: "socat",
-				plan: []Step{{Run: "build", Op: cmdOp("true")}},
+				plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			},
 			"chrome": {
 				Name:           "chrome",
-				plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+				plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 				PortRelayPorts: []int{9222},
 				InitSystems:    map[string]bool{"supervisord": true},
 				service: []spec.ServiceEntry{

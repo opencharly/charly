@@ -90,7 +90,7 @@ func TestValidateIterateBed_RejectsUnknownAgent(t *testing.T) {
 
 	good := &BundleNode{
 		Iterate: &spec.Iterate{Agent: []string{"claude"}, Sandbox: "check-sandbox"},
-		Plan:    []Step{{Check: "the service responds"}},
+		Plan:    []spec.Step{{Check: "the service responds"}},
 	}
 	if err := validateIterateBed(uf, "bed", good); err != nil {
 		t.Fatalf("known agent 'claude' was rejected: %v", err)
@@ -98,7 +98,7 @@ func TestValidateIterateBed_RejectsUnknownAgent(t *testing.T) {
 
 	bad := &BundleNode{
 		Iterate: &spec.Iterate{Agent: []string{"ghost"}, Sandbox: "check-sandbox"},
-		Plan:    []Step{{Check: "the service responds"}},
+		Plan:    []spec.Step{{Check: "the service responds"}},
 	}
 	err := validateIterateBed(uf, "bed", bad)
 	if err == nil || !strings.Contains(err.Error(), "is not defined in the agent: catalog") {

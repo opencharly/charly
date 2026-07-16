@@ -30,6 +30,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"strconv"
 	"strings"
@@ -59,7 +60,7 @@ func resolveHostVarsForChecks(checks []Op, instance string) (map[string]string, 
 
 // resolveHostVarsForSteps is the plan-step counterpart (harness / iterate / feature-run /
 // live-plan paths), flattening every step's embedded Op.
-func resolveHostVarsForSteps(plan []Step, instance string) (map[string]string, []func()) {
+func resolveHostVarsForSteps(plan []spec.Step, instance string) (map[string]string, []func()) {
 	checks := make([]Op, 0, len(plan))
 	for _, st := range plan {
 		checks = append(checks, st.Op)

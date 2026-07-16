@@ -74,7 +74,6 @@ type (
 	SnapshotEntry          = vmshared.SnapshotEntry
 	SnapshotRegistry       = vmshared.SnapshotRegistry
 	SSHTunnel              = sshx.SSHTunnel
-	Step                   = vmshared.Step
 	StepKeyword            = vmshared.StepKeyword
 	VmCharlyInstall        = vmshared.VmCharlyInstall
 	VmCloudInit            = vmshared.VmCloudInit

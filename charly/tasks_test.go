@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -653,7 +654,7 @@ func TestEmitVarsEnv_SortedKeys(t *testing.T) {
 // --- Parity: ensure HasInstallFiles picks up HasTasks ---
 
 func TestCandy_HasInstallFiles_IncludesTasks(t *testing.T) {
-	l := &Candy{plan: []Step{{Run: "build", Op: cmdOp("true")}}}
+	l := &Candy{plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}
 	if !l.HasInstallFiles() {
 		t.Error("HasInstallFiles() should be true when HasTasks is true")
 	}

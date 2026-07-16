@@ -151,7 +151,7 @@ func TestAbsoluteCandySequence_WithInternalBase(t *testing.T) {
 
 func TestComputeIntermediates_NoBranching(t *testing.T) {
 	layers := map[string]*Candy{
-		"pixi":   {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":   {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python": {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 	}
 
@@ -187,9 +187,9 @@ func TestComputeIntermediates_NoBranching(t *testing.T) {
 
 func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 	layers := map[string]*Candy{
-		"pixi":    {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":    {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"nodejs":  {Name: "nodejs", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"nodejs":  {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"testapi": {Name: "testapi", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
 
@@ -247,7 +247,7 @@ func TestComputeIntermediates_SimpleBranch(t *testing.T) {
 
 func TestComputeIntermediates_SharedPrefix(t *testing.T) {
 	layers := map[string]*Candy{
-		"pixi":        {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
 		"testapi":     {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
@@ -317,8 +317,8 @@ func TestComputeIntermediates_SharedPrefix(t *testing.T) {
 
 func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 	layers := map[string]*Candy{
-		"pixi":   {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"nodejs": {Name: "nodejs", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":   {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"nodejs": {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -370,10 +370,10 @@ func TestComputeIntermediates_ExistingImageReuse(t *testing.T) {
 
 func TestImageNeedsBuilder(t *testing.T) {
 	layers := map[string]*Candy{
-		"pixi":    {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":    {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":  {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
-		"nodejs":  {Name: "nodejs", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"tooling": {Name: "tooling", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"nodejs":  {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"tooling": {Name: "tooling", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -419,13 +419,13 @@ func TestImageNeedsBuilder(t *testing.T) {
 func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 	// Simplified version of the actual charly.yml setup
 	layers := map[string]*Candy{
-		"pixi":            {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"nodejs":          {Name: "nodejs", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":            {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"nodejs":          {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":          {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord":     {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
-		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"testapi":         {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"openclaw":        {Name: "openclaw", Require: toCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
 	}
 
@@ -512,20 +512,20 @@ func TestComputeIntermediates_RealisticConfig(t *testing.T) {
 func TestComputeIntermediates_NvidiaScenario(t *testing.T) {
 	// Mirror the actual nvidia/python-ml/jupyter/comfyui/ollama config
 	layers := map[string]*Candy{
-		"pixi":            {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"nodejs":          {Name: "nodejs", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":            {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"nodejs":          {Name: "nodejs", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":          {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord":     {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
-		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"cuda":            {Name: "cuda", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"build-toolchain": {Name: "build-toolchain", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"cuda":            {Name: "cuda", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python-ml":       {Name: "python-ml", Require: toCandyRefs([]string{"pixi", "cuda"}), HasPixiToml: true},
 		"jupyter":         {Name: "jupyter", Require: toCandyRefs([]string{"python-ml", "supervisord"}), HasPixiToml: true},
-		"comfyui":         {Name: "comfyui", Require: toCandyRefs([]string{"python-ml", "supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"ollama":          {Name: "ollama", Require: toCandyRefs([]string{"cuda", "supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"comfyui":         {Name: "comfyui", Require: toCandyRefs([]string{"python-ml", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"ollama":          {Name: "ollama", Require: toCandyRefs([]string{"cuda", "supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"openclaw":        {Name: "openclaw", Require: toCandyRefs([]string{"supervisord", "nodejs"}), HasPackageJson: true},
 		"testapi":         {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"github-runner":   {Name: "github-runner", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"traefik":         {Name: "traefik", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"github-runner":   {Name: "github-runner", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -704,11 +704,11 @@ func TestComputeIntermediates_UserImageAtBranchPoint(t *testing.T) {
 	// User defines an image that sits exactly at the shared prefix branch point.
 	// It should be reused as the intermediate, not duplicated.
 	layers := map[string]*Candy{
-		"pixi":        {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
 		"testapi":     {Name: "testapi", Require: toCandyRefs([]string{"supervisord"}), HasPixiToml: true},
-		"webapp":      {Name: "webapp", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"webapp":      {Name: "webapp", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -806,10 +806,10 @@ func TestComputeIntermediates_UserImageAsBranchIntermediate(t *testing.T) {
 	// and has children in the same sibling group. The algorithm should reuse it
 	// as the intermediate without creating a duplicate.
 	layers := map[string]*Candy{
-		"A": {Name: "A", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"B": {Name: "B", Require: toCandyRefs([]string{"A"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"C": {Name: "C", Require: toCandyRefs([]string{"B"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"D": {Name: "D", Require: toCandyRefs([]string{"B"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"A": {Name: "A", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"B": {Name: "B", Require: toCandyRefs([]string{"A"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"C": {Name: "C", Require: toCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"D": {Name: "D", Require: toCandyRefs([]string{"B"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -898,12 +898,12 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 	// Parent with restricted platforms should propagate to auto-intermediates.
 	// nvidia is amd64-only; nvidia-supervisord should also be amd64-only.
 	layers := map[string]*Candy{
-		"pixi":        {Name: "pixi", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":        {Name: "pixi", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":      {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord": {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
-		"cuda":        {Name: "cuda", Require: nil, plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"appA":        {Name: "appA", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"appB":        {Name: "appB", Require: toCandyRefs([]string{"supervisord"}), plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"cuda":        {Name: "cuda", Require: nil, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"appA":        {Name: "appA", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"appB":        {Name: "appB", Require: toCandyRefs([]string{"supervisord"}), plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -999,10 +999,10 @@ func TestComputeIntermediates_PlatformInheritance(t *testing.T) {
 
 func TestPixiBoundCandies(t *testing.T) {
 	layers := map[string]*Candy{
-		"llama-cpp": {Name: "llama-cpp", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"unsloth":   {Name: "unsloth", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"llama-cpp": {Name: "llama-cpp", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"unsloth":   {Name: "unsloth", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"jupyter-ml": {
-			Name: "jupyter-ml", HasPixiToml: true, plan: []Step{{Run: "build", Op: cmdOp("true")}},
+			Name: "jupyter-ml", HasPixiToml: true, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
 		},
@@ -1011,8 +1011,8 @@ func TestPixiBoundCandies(t *testing.T) {
 			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
 		},
-		"cuda":        {Name: "cuda", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"supervisord": {Name: "supervisord", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"cuda":        {Name: "cuda", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"supervisord": {Name: "supervisord", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	bound := pixiBoundCandies(layers)
@@ -1044,14 +1044,14 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 	// The intermediate generator must NOT extract unsloth into an intermediate
 	// because it needs the pixi environment from the final image.
 	layers := map[string]*Candy{
-		"dbus":                {Name: "dbus", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"charly":              {Name: "charly", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"llama-cpp":           {Name: "llama-cpp", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"unsloth":             {Name: "unsloth", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"dbus":                {Name: "dbus", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"charly":              {Name: "charly", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"llama-cpp":           {Name: "llama-cpp", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"unsloth":             {Name: "unsloth", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"notebook-templates":  {Name: "notebook-templates"},
 		"notebook-finetuning": {Name: "notebook-finetuning"},
 		"jupyter-ml": {
-			Name: "jupyter-ml", HasPixiToml: true, plan: []Step{{Run: "build", Op: cmdOp("true")}},
+			Name: "jupyter-ml", HasPixiToml: true, plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			IncludedCandy: toCandyRefs([]string{"llama-cpp", "unsloth"}),
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
 			portSpecs:     []spec.PortSpec{{Port: 8080}},
@@ -1062,9 +1062,9 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 			Require:       toCandyRefs([]string{"cuda", "supervisord"}),
 			portSpecs:     []spec.PortSpec{{Port: 8080}},
 		},
-		"agent-forwarding": {Name: "agent-forwarding", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"cuda":             {Name: "cuda", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"pixi":             {Name: "pixi", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"agent-forwarding": {Name: "agent-forwarding", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"cuda":             {Name: "cuda", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"pixi":             {Name: "pixi", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 		"python":           {Name: "python", Require: toCandyRefs([]string{"pixi"}), HasPixiToml: true},
 		"supervisord":      {Name: "supervisord", Require: toCandyRefs([]string{"python"}), HasPixiToml: true},
 	}
@@ -1180,9 +1180,9 @@ func TestComputeIntermediates_PixiBoundNotExtracted(t *testing.T) {
 // through to defaults. See root cause in charly/intermediates.go createIntermediate.
 func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 	layers := map[string]*Candy{
-		"a": {Name: "a", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"b": {Name: "b", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"c": {Name: "c", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"a": {Name: "a", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"b": {Name: "b", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"c": {Name: "c", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{
@@ -1277,9 +1277,9 @@ func TestComputeIntermediates_InheritDistroFromParent(t *testing.T) {
 // formats with every consuming descendant's, parent's primary format first.
 func TestComputeIntermediates_UnionChildBuildFormats(t *testing.T) {
 	layers := map[string]*Candy{
-		"a": {Name: "a", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"b": {Name: "b", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
-		"c": {Name: "c", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"a": {Name: "a", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"b": {Name: "b", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+		"c": {Name: "c", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	images := map[string]*ResolvedBox{

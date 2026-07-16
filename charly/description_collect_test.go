@@ -16,7 +16,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 		"redis": {
 			Name:        "redis",
 			Description: "redis store",
-			plan: []Step{
+			plan: []spec.Step{
 				{Check: "the redis binary exists", Op: Op{
 					ID:          "redis-binary",
 					Plugin:      "file",
@@ -52,7 +52,7 @@ func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
 // effect (validate mutating the shared structs the bake serialized), so bakeableSteps now stamps
 // its own COPY. Without the stamp, baked[0].Op.IntentDo is empty and this test fails.
 func TestBakeableSteps_StampsIntentDo(t *testing.T) {
-	baked := bakeableSteps([]Step{
+	baked := bakeableSteps([]spec.Step{
 		// a plugin: file CHECK step (VerbsSet = ["plugin"]) → intent_do "assert"
 		{Check: "the binary exists", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/x", "exists": true}}},
 		// a verb-less AGENT-CHECK step → no Op verb, IntentDo stays empty (matches the pre-cutover bake)

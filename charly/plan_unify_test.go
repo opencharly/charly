@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -17,7 +18,7 @@ import (
 func TestPlanUnify_CheckStepRuns(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{{Check: "the marker resolves", Op: Op{
+		Plan: []spec.Step{{Check: "the marker resolves", Op: Op{
 			Plugin:      "matching",
 			PluginInput: map[string]any{"matching": "charly-marker", "contains": map[string]any{"contains": "charly-marker"}},
 		}}},
@@ -39,7 +40,7 @@ func TestPlanUnify_CheckStepRuns(t *testing.T) {
 func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{
+		Plan: []spec.Step{
 			{Run: "mutate the world", Op: cmdOp("echo should-not-run")},
 			{Check: "the marker resolves", Op: Op{
 				Plugin:      "matching",
@@ -75,7 +76,7 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 	set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 		Origin: "candy:x",
-		Plan: []Step{
+		Plan: []spec.Step{
 			{Run: "pip install /ctx/pkg", Op: cmdOp("false")}, // would FAIL if executed
 			{Check: "the marker resolves", Op: Op{
 				Plugin:      "matching",
@@ -122,7 +123,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
-	layer := &Candy{Name: "x", plan: []Step{{Run: "install redis", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
 	steps := compileOpSteps(layer, testResolvedBox())
 
 	var sp *SystemPackagesStep

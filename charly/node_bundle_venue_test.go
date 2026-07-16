@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -18,7 +19,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 				"os": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Plan: []Step{
+					Plan: []spec.Step{
 						{Check: "marker present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
 					},
 				},
@@ -28,14 +29,14 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 		"cross": {
 			Target: "pod",
 			Image:  "web",
-			Plan: []Step{
+			Plan: []spec.Step{
 				{Check: "web serves marker", Op: Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
 			},
 			Children: map[string]*BundleNode{
 				"migrate": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Plan: []Step{
+					Plan: []spec.Step{
 						{Check: "migration ran", Op: cmdOp("test -f /done")},
 					},
 				},
@@ -83,7 +84,7 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 	uf := &UnifiedFile{Bundle: map[string]BundleNode{
 		"grp": {
 			Target: "", // group, but carries a direct step → illegal
-			Plan: []Step{
+			Plan: []spec.Step{
 				{Check: "stray", Op: cmdOp("true")},
 			},
 		},

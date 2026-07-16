@@ -245,7 +245,7 @@ func TestRunPlan_StampsStepOrigin(t *testing.T) {
 		Candy: []LabeledDescription{{
 			Origin:      "candy:github.com/owner/repo/candy/android-emulator-layer",
 			Description: "android apps install",
-			Plan: []Step{{
+			Plan: []spec.Step{{
 				Op: Op{ID: "adb-install-apidemos", Plugin: "adb", PluginInput: map[string]any{"method": "install", "apk": "./tests/data/ApiDemos-debug.apk"}, Context: []string{"runtime"}},
 			}},
 		}},

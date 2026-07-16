@@ -27,7 +27,7 @@ import (
 // stay consistent across live scoring regardless of the topo/bucket execution reorder.
 type scoredStep struct {
 	id   string
-	step Step
+	step spec.Step
 }
 
 // scoredPlanOrigin is the fixed origin used to derive step ids so that
@@ -35,7 +35,7 @@ type scoredStep struct {
 const scoredPlanOrigin = "plan"
 
 // scoredSteps wraps a plan with stable ids by declaration order.
-func scoredSteps(plan []Step) []scoredStep {
+func scoredSteps(plan []spec.Step) []scoredStep {
 	out := make([]scoredStep, len(plan))
 	for i := range plan {
 		out[i] = scoredStep{id: EffectiveStepID(&plan[i], scoredPlanOrigin, i), step: plan[i]}
@@ -45,13 +45,13 @@ func scoredSteps(plan []Step) []scoredStep {
 
 // isScored reports whether a step is a scored success criterion (check: or
 // agent-check:).
-func isScored(s Step) bool { return s.Check != "" || s.AgentCheck != "" }
+func isScored(s spec.Step) bool { return s.Check != "" || s.AgentCheck != "" }
 
 // RunCheckLive scores `plan` against the live containers its check:/agent-check:
 // steps target via Op.Pod. Returns the spec.CheckRunResults wire shape the
 // plugin scorer (candy/plugin-check) consumes unchanged. `deployment` is
 // legacy/unused; `scoreName` labels the run.
-func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step) (*spec.CheckRunResults, error) {
+func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []spec.Step) (*spec.CheckRunResults, error) {
 	_ = deployment
 
 	if len(plan) == 0 {
@@ -201,7 +201,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		// Run the single step via RunPlan against the bucket's runner.
 		set := &LabelDescriptionSet{Candy: []LabeledDescription{{
 			Origin: "pod:" + pod,
-			Plan:   []Step{e.step},
+			Plan:   []spec.Step{e.step},
 		}}}
 		results := RunPlan(ctx, runner, set, nil, false)
 		if !isScored(e.step) {
@@ -326,8 +326,8 @@ func groupScoredByPod(sorted []scoredStep) [][]scoredStep {
 	return buckets
 }
 
-func bucketSteps(b []scoredStep) []Step {
-	out := make([]Step, len(b))
+func bucketSteps(b []scoredStep) []spec.Step {
+	out := make([]spec.Step, len(b))
 	for i, e := range b {
 		out[i] = e.step
 	}
@@ -364,7 +364,7 @@ func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecuto
 }
 
 // RenderPlanYAML returns the plan rendered as a YAML block for ${PLAN}.
-func RenderPlanYAML(plan []Step) string {
+func RenderPlanYAML(plan []spec.Step) string {
 	if len(plan) == 0 {
 		return ""
 	}

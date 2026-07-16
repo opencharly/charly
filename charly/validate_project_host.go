@@ -227,7 +227,7 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 			rp.ActCapableVerbs = append(rp.ActCapableVerbs, w)
 		}
 	}
-	scanPlan := func(plan []Step) {
+	scanPlan := func(plan []spec.Step) {
 		for i := range plan {
 			op := &plan[i].Op
 			if len(op.VerbsSet()) == 0 {

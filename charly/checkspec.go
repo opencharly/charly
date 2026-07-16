@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"slices"
 
 	"github.com/opencharly/sdk/kit"
@@ -206,7 +207,7 @@ func opActsInBuildDeploy(c *Op) bool {
 // EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
 // moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
 // logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
-func stampStepIntentDo(s *Step) {
+func stampStepIntentDo(s *spec.Step) {
 	if len(s.VerbsSet()) == 0 {
 		return
 	}

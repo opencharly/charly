@@ -475,7 +475,7 @@ func TestCandyPortRelay(t *testing.T) {
 	// Test direct struct construction (no testdata file needed)
 	layer := &Candy{
 		Name:           "chrome",
-		plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222},
 		ports:          []string{"9222"},
 		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}},
@@ -493,7 +493,7 @@ func TestCandyPortRelay(t *testing.T) {
 func TestCandyPortRelayNone(t *testing.T) {
 	layer := &Candy{
 		Name: "basic",
-		plan: []Step{{Run: "build", Op: cmdOp("true")}},
+		plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 	}
 
 	if len(layer.PortRelayPorts) != 0 {
@@ -504,7 +504,7 @@ func TestCandyPortRelayNone(t *testing.T) {
 func TestCandyPortRelayMultiple(t *testing.T) {
 	layer := &Candy{
 		Name:           "multi",
-		plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222, 5900},
 		ports:          []string{"9222", "5900"},
 		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
