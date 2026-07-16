@@ -177,7 +177,7 @@ type UnifiedFile struct {
 	// Namespaces holds child namespaces mounted by namespaced `import:`
 	// entries (alias → fully-resolved isolated UnifiedFile). NOT authored
 	// directly and NOT flat-merged into the root maps — populated by
-	// materializeLoadedProject (loader_driver.go) from the walk's namespace
+	// materializeLoadedProject (materialize.go) from the walk's namespace
 	// mounts. Entries are referenced qualified, e.g.
 	// `base: cachyos.cachyos` resolves `cachyos` in Namespaces, then its
 	// Box["cachyos"]. Bare refs inside a namespace resolve within that
@@ -282,16 +282,18 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 		}
 		rootData = data
 	}
-	// THE KIND-BLIND WALK (sdk/loaderkit): import queue + discover + namespaced-import mounts +
-	// per-document parse → a generic spec.LoadedProject. No materialize, no merge — those are the
-	// registry-coupled host half below (boundary law). The root's repo-identity cycle-break seed +
-	// the six kind-blind host seams live in hostWalkProject (loader_driver.go).
+	// THE KIND-BLIND WALK (sdk/loaderkit, reached exclusively via the registered loader plugin's
+	// spec.ProjectWalker — charly core imports no sdk mechanism kit, #46): import queue + discover +
+	// namespaced-import mounts + per-document parse → a generic spec.LoadedProject. No materialize,
+	// no merge — those are the registry-coupled host half below (boundary law). The root's
+	// repo-identity cycle-break seed + the six kind-blind host seams live in hostWalkProject
+	// (loader_threaded.go).
 	lp, err := hostWalkProject(dir, rootData)
 	if err != nil {
 		return nil, true, err
 	}
 	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *UnifiedFile, exactly as
-	// the former inline loadUnifiedInto did (materializeLoadedProject, loader_driver.go).
+	// the former inline loadUnifiedInto did (materializeLoadedProject, materialize.go).
 	merged := &UnifiedFile{}
 	if err := materializeLoadedProject(&lp, merged, map[int64]*UnifiedFile{}); err != nil {
 		return nil, true, err
@@ -974,7 +976,7 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 				return fmt.Errorf("%s: %w", target, gerr)
 			}
 			// The SAME per-node discovered-fold the LoadUnified walk path uses
-			// (materializeDiscoveredNode, loader_driver.go) — a LAYER candy registers a lazy
+			// (materializeDiscoveredNode, materialize.go) — a LAYER candy registers a lazy
 			// `From:` reference (explicit entry wins), every other kind materializes inline. R3:
 			// one discovered-node handler for both the walk path and this candy-scan path.
 			if err := materializeDiscoveredNode(gn, dir, rootDir, manifest, uf); err != nil {

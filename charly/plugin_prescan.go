@@ -188,7 +188,7 @@ func setKindConnectPass(v bool) {
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
 // project's declared external KIND words (F4), so a `kind: <plugin-word>` entity decodes via
 // runPluginKind during load. Called at the walk's Boundary seam AFTER the prescan and BEFORE the
-// host materialize (materializeLoadedProject, loader_driver.go) decodes/folds the entity nodes.
+// host materialize (materializeLoadedProject, materialize.go) decodes/folds the entity nodes.
 // The connect re-loads the project (LoadConfig +
 // ScanAllCandyWithConfigOpts → LoadUnified, which fetches @github kind candies too), so it is
 // GUARDED by inKindConnectPass — the nested load skips this pre-pass and DEFERS its kind nodes
