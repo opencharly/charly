@@ -11,15 +11,15 @@ import (
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
 // (ResolveDistro / FindFormat / AllFormatNames / ExpandPackageInheritance /
 // ValidBuilderType / BuilderNames / distroTagChain / bareDistroName / wrapDistroDef)
-// live in sdk/buildkit now (P3), aliased back via buildkit_aliases.go. The
+// live in sdk/buildkit now (P3) — every charly/*.go caller references buildkit.DistroConfig /
+// buildkit.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
 // (phase, venue) phase-template resolvers moved to sdk/buildkit too (P8b — they are
 // PURE over the CUE-sourced spec types: FormatDef = spec.Format, BuilderDef =
-// spec.Builder, Phase/Venue = spec enums), aliased back just below. This file keeps
-// only the loader glue.
-
-// formatPhaseTemplate / builderPhaseTemplate → sdk/buildkit (P8b shim — the pure
-// (phase, venue) phase-template resolvers moved so the build render engine shares
-// them). Aliased back for the unchanged package-main call sites + tests.
+// spec.Builder, Phase/Venue = spec enums); this file keeps only the loader glue.
+//
+// formatPhaseTemplate / builderPhaseTemplate remain thin var-bindings onto
+// buildkit.FormatPhaseTemplate / buildkit.BuilderPhaseTemplate for the unchanged
+// package-main call sites + tests — residual K3-adjacent alias inventory, not yet dissolved.
 var (
 	formatPhaseTemplate  = buildkit.FormatPhaseTemplate
 	builderPhaseTemplate = buildkit.BuilderPhaseTemplate
