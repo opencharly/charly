@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,7 +68,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
-	routed, err := ResolveTarget(&BundleNode{Target: "exampledeploy"}, "e3deploy")
+	routed, err := ResolveTarget(&spec.BundleNode{Target: "exampledeploy"}, "e3deploy")
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}
@@ -116,7 +117,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// --- Test: host-side file check on the probe marker passes (no plugin call). ---
-	if err := tgt.Test(ctx, []Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
+	if err := tgt.Test(ctx, []spec.Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
 		t.Fatalf("Test (probe marker present): %v", err)
 	}
 

@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // description_collect.go — collect the baked `plan:` view for the
 // ai.opencharly.description OCI label.
 //
@@ -25,8 +29,8 @@ package main
 
 // bakeableSteps returns the subset of a plan that belongs in the runtime
 // descriptor label per the bake rule above.
-func bakeableSteps(plan []Step) []Step {
-	var out []Step
+func bakeableSteps(plan []spec.Step) []spec.Step {
+	var out []spec.Step
 	for _, s := range plan {
 		bake := false
 		switch {

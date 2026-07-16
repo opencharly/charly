@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"sync"
 
 	"github.com/opencharly/sdk"
@@ -33,7 +34,7 @@ import (
 // dispatch-merged node (may be nil on the Update path — the preresolver re-resolves
 // from the tree), and the compiled InstallPlans (where the apk: ApkInstallStep entries
 // live). It returns the opaque JSON the matching plugin decodes (or nil to ship none).
-type deployPreresolver func(name, dir string, node *BundleNode, plans []*InstallPlan) (json.RawMessage, error)
+type deployPreresolver func(name, dir string, node *spec.BundleNode, plans []*InstallPlan) (json.RawMessage, error)
 
 // deployPreresolvers maps an external deploy SUBSTRATE word → its host-side preresolver.
 // Populated at package-var init time (before any init(), like registerDedicatedBuiltin),
@@ -82,7 +83,7 @@ func registerPluginDeployPreresolver(word string, fn deployPreresolver) {
 // ships the returned opaque JSON in DeployVenue.Substrate — the generalization of the in-core
 // k8s/android preresolvers (F6).
 func wireDeployPreresolver(gp *grpcProvider) deployPreresolver {
-	return func(name, dir string, node *BundleNode, plans []*InstallPlan) (json.RawMessage, error) {
+	return func(name, dir string, node *spec.BundleNode, plans []*InstallPlan) (json.RawMessage, error) {
 		var extra map[string]any
 		if len(plans) > 0 {
 			extra = map[string]any{"plans": plans}

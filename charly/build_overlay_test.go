@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"testing"
 )
 
@@ -15,10 +16,10 @@ func TestPodDeployEngine(t *testing.T) {
 	if got := podDeployEngine(nil); got != "podman" {
 		t.Errorf("podDeployEngine(nil) = %q, want podman", got)
 	}
-	if got := podDeployEngine(&BundleNode{}); got != "podman" {
+	if got := podDeployEngine(&spec.BundleNode{}); got != "podman" {
 		t.Errorf("podDeployEngine(empty) = %q, want podman", got)
 	}
-	if got := podDeployEngine(&BundleNode{Engine: "docker"}); got != "docker" {
+	if got := podDeployEngine(&spec.BundleNode{Engine: "docker"}); got != "docker" {
 		t.Errorf("podDeployEngine(docker) = %q, want docker", got)
 	}
 }
@@ -56,7 +57,7 @@ func TestOverlayBuildInputsCtxRoundTrip(t *testing.T) {
 		t.Fatalf("overlayBuildInputsFrom on a bare ctx = %v, want nil", got)
 	}
 	plans := []*InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
-	node := &BundleNode{Image: "base"}
+	node := &spec.BundleNode{Image: "base"}
 	exec := ShellExecutor{}
 	ctx := withOverlayBuildInputs(context.Background(), &overlayBuildInputs{plans: plans, parentExec: exec, parentNode: node})
 	got := overlayBuildInputsFrom(ctx)

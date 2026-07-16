@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/spec"
+	"testing"
+)
 
 // newVenueTestUF builds a small UnifiedFile covering every venue class the
 // shared check-verb resolver must distinguish.
@@ -9,7 +12,7 @@ func newVenueTestUF() *UnifiedFile {
 		VM: rawTemplateMap(map[string]*VmSpec{
 			"cachyos-gpu": {}, // bare kind:vm entity
 		}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"web-pod":     {Target: "pod"},
 			"k3s-vm":      {Target: "vm", From: "k3s-vm-entity"},
 			"bare-vm-dep": {Target: "vm"}, // target:vm with no explicit Vm → falls back to key

@@ -185,7 +185,7 @@ func stepEmitBuilder(req spec.StepEmitRequest, build buildEngineContext) (string
 	// the box-build path and the plugin's OpResolve use, R3); a custom one via its vocabulary
 	// install_template.
 	if bDef.Inline {
-		ctx := &BuildStageContext{
+		ctx := &spec.BuildStageContext{
 			LayerStage:  layer.Name,
 			UID:         build.Box.UID,
 			GID:         build.Box.GID,
@@ -325,7 +325,7 @@ func stepEmitOp(req spec.StepEmitRequest, build buildEngineContext) (string, err
 		return "", fmt.Errorf("task emit: candy %q not found", s.CandyName)
 	}
 	var b strings.Builder
-	if _, err := build.Generator.emitTasks(&b, layer, build.Box, []Op{*s.Op}, build.ImageBuildDir, build.ContextRelPrefix); err != nil {
+	if _, err := build.Generator.emitTasks(&b, layer, build.Box, []spec.Op{*s.Op}, build.ImageBuildDir, build.ContextRelPrefix); err != nil {
 		return "", err
 	}
 	return b.String(), nil

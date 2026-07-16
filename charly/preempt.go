@@ -120,7 +120,7 @@ func (l *Lease) ReleaseFailed() error {
 // that declares requires_exclusive — UNLESS an outer orchestrator already owns one
 // (envPreemptLeaseHeld). On a real acquire it marks the env so nested `charly` subprocesses
 // skip re-acquiring. A no-op lease is safe to Release.
-func acquireExclusiveForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+func acquireExclusiveForClaimant(claimant string, node spec.BundleNode, transient bool) (*Lease, error) {
 	if len(node.RequiredExclusive()) == 0 {
 		return &Lease{}, nil
 	}
@@ -132,7 +132,7 @@ func acquireExclusiveForClaimant(claimant string, node BundleNode, transient boo
 
 // acquireSharedForClaimant acquires (or reuses) a SHARED refcounted lease for a pod/bed that
 // declares requires_shared. Mirrors acquireExclusiveForClaimant.
-func acquireSharedForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+func acquireSharedForClaimant(claimant string, node spec.BundleNode, transient bool) (*Lease, error) {
 	if len(node.RequiredShared()) == 0 {
 		return &Lease{}, nil
 	}
@@ -145,7 +145,7 @@ func acquireSharedForClaimant(claimant string, node BundleNode, transient bool) 
 // acquireDispatch is the shared acquire leg (R3): it Invokes verb:arbiter with the pre-computed
 // tokens + claim address, and on an active lease marks envPreemptLeaseHeld so nested
 // subprocesses skip re-acquiring.
-func acquireDispatch(action, claimant string, tokens []string, node BundleNode, transient bool) (*Lease, error) {
+func acquireDispatch(action, claimant string, tokens []string, node spec.BundleNode, transient bool) (*Lease, error) {
 	r, err := arbiterInvoke(spec.ArbiterInvokeInput{
 		Action:    action,
 		Claimant:  claimant,
@@ -171,7 +171,7 @@ func acquireDispatch(action, claimant string, tokens []string, node BundleNode, 
 // nvidia GPU but declared NO explicit claim is auto-promoted to a SHARED claimant of the gpu
 // token here (withImpliedGPUShared) — so EVERY GPU-consuming deployment becomes a tracked,
 // preemptable shared claimant with no per-deploy config.
-func acquireResourceForClaimant(claimant string, node BundleNode, transient bool) (*Lease, error) {
+func acquireResourceForClaimant(claimant string, node spec.BundleNode, transient bool) (*Lease, error) {
 	node = withImpliedGPUShared(node)
 	if len(node.RequiredExclusive()) > 0 {
 		return acquireExclusiveForClaimant(claimant, node, transient)
@@ -200,8 +200,8 @@ func releaseResourceClaim(claimant string) {
 // project's deploy map (committed charly.yml, includes folded check beds) as the BASE, with the
 // operator's per-host ~/.config/charly/charly.yml overlay merged ON TOP (the overlay WINS on a
 // name clash — it carries local-only `preemptible:`, a PER-HOST decision). Keyed by deploy name.
-func gatherDeployNodes() map[string]BundleNode {
-	out := map[string]BundleNode{}
+func gatherDeployNodes() map[string]spec.BundleNode {
+	out := map[string]spec.BundleNode{}
 	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
 		maps.Copy(out, uf.Bundle)
 	}
@@ -215,8 +215,8 @@ func gatherDeployNodes() map[string]BundleNode {
 
 // gatherPreemptibleHolders is gatherDeployNodes filtered to the preemptible holders (the
 // candidate set the arbiter may stop).
-func gatherPreemptibleHolders() map[string]BundleNode {
-	out := map[string]BundleNode{}
+func gatherPreemptibleHolders() map[string]spec.BundleNode {
+	out := map[string]spec.BundleNode{}
 	for name, node := range gatherDeployNodes() {
 		if node.IsPreemptible() {
 			out[name] = node
@@ -228,16 +228,16 @@ func gatherPreemptibleHolders() map[string]BundleNode {
 // lookupVMClaimant finds a deploy/check node that targets the given kind:vm entity and declares
 // requires_exclusive — the claimant a standalone `charly vm create/stop/destroy <entity>`
 // acquires/releases an exclusive lease for. ok=false when none exists.
-func lookupVMClaimant(vmEntity string) (string, BundleNode, bool) {
+func lookupVMClaimant(vmEntity string) (string, spec.BundleNode, bool) {
 	for name, node := range gatherDeployNodes() {
 		if deployTraitDescent(node.Target).Venue == "ssh" && node.From == vmEntity && len(node.RequiredExclusive()) > 0 { // vm (ssh venue)
 			return name, node, true
 		}
 	}
-	return "", BundleNode{}, false
+	return "", spec.BundleNode{}, false
 }
 
-func holderAddrFor(name string, node BundleNode) holderAddr {
+func holderAddrFor(name string, node spec.BundleNode) holderAddr {
 	base, instance := parseDeployKey(name)
 	target := node.Target
 	if target == "" {
@@ -399,7 +399,7 @@ func dedupeNonEmpty(in []string) []string {
 
 // sortedHolderKeys returns the sorted keys of a holder map (the gather projection iterates
 // deterministically).
-func sortedHolderKeys(m map[string]BundleNode) []string {
+func sortedHolderKeys(m map[string]spec.BundleNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

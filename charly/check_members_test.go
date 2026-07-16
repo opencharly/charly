@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"testing"
 
@@ -78,12 +79,12 @@ func TestRunOne_UnresolvedHostVarFails(t *testing.T) {
 	// directly (it implements kit.PlanContext), so a one-op Run exercises the same
 	// var-resolution gate.
 	hostCheck := cmdOpP("curl -fsS http://${HOST:absent:80}/")
-	if res := r.Run(context.Background(), []Op{*hostCheck})[0]; res.Status != TestFail {
+	if res := r.Run(context.Background(), []spec.Op{*hostCheck})[0]; res.Status != TestFail {
 		t.Errorf("unresolved ${HOST:…} → status %v (%q), want TestFail", res.Status, res.Message)
 	}
 	// A non-host unresolved var is a legitimate SKIP (input genuinely N/A here).
 	otherCheck := cmdOpP("echo ${SOME_UNSET_VAR}")
-	if res := r.Run(context.Background(), []Op{*otherCheck})[0]; res.Status != TestSkip {
+	if res := r.Run(context.Background(), []spec.Op{*otherCheck})[0]; res.Status != TestSkip {
 		t.Errorf("unresolved non-host var → status %v (%q), want TestSkip", res.Status, res.Message)
 	}
 }

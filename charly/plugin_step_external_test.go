@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,7 @@ import (
 // because the teardown ops are recorded DYNAMICALLY from the OpExecute reply.
 func TestExternalPluginStep_Derivations(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
-	rootStep := &ExternalPluginStep{Op: &Op{Plugin: "examplestep"}, ResolvedUser: "root"}
+	rootStep := &ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "root"}
 	if rootStep.Kind() != StepKindExternalPlugin {
 		t.Fatalf("Kind = %q, want %q", rootStep.Kind(), StepKindExternalPlugin)
 	}
@@ -31,7 +32,7 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 	if rootStep.Scope() != ScopeSystem {
 		t.Fatalf("Scope(root) = %v, want ScopeSystem", rootStep.Scope())
 	}
-	userStep := &ExternalPluginStep{Op: &Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
+	userStep := &ExternalPluginStep{Op: &spec.Op{Plugin: "examplestep"}, ResolvedUser: "1000:1000"}
 	if userStep.Scope() != ScopeUser {
 		t.Fatalf("Scope(1000:1000) = %v, want ScopeUser", userStep.Scope())
 	}
@@ -101,7 +102,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	marker := fmt.Sprintf("teststep-%d", time.Now().UnixNano())
-	op := &Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": marker}}
+	op := &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": marker}}
 
 	// 3. The routing seam: compileActOp lowers a `run: plugin: examplestep` op whose
 	//    provider is an external grpcProvider to an ExternalPluginStep (not an OpStep).

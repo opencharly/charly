@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,9 +122,9 @@ func TestValidatePlanSteps_Diagnostics(t *testing.T) {
 
 	// An agent-check step that carries an Op verb is illegal (agent steps must not). Setting
 	// AgentCheck makes StepKind()==agent-check; setting the Op Plugin verb makes Kind() succeed.
-	bad := Step{AgentCheck: "the thing works"}
+	bad := spec.Step{AgentCheck: "the thing works"}
 	bad.Plugin = "command"
-	if errs := kit.ValidatePlanSteps("desc", []Step{bad}, "candy:x"); len(errs) != 1 ||
+	if errs := kit.ValidatePlanSteps("desc", []spec.Step{bad}, "candy:x"); len(errs) != 1 ||
 		!strings.Contains(errs[0], "agent steps must not carry an Op verb") {
 		t.Fatalf("agent-step-with-verb: errs = %v, want the 'agent steps must not carry an Op verb' diagnostic", errs)
 	}

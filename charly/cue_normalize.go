@@ -21,6 +21,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/opencharly/sdk/spec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -34,10 +35,10 @@ type shorthandExpander func(node *yaml.Node) error
 // cueShorthandExpanders maps a canonical Go type to the expander that
 // canonicalizes its shorthand wire forms. Keyed by the value type (not pointer).
 var cueShorthandExpanders = map[reflect.Type]shorthandExpander{
-	reflect.TypeOf(PackageItem{}):       expandPackageItemNode,
-	reflect.TypeOf(PortSpec{}):          expandPortSpecNode,
-	reflect.TypeOf(PreemptibleConfig{}): expandPreemptibleNode,
-	reflect.TypeOf(TunnelYAML{}):        expandTunnelNode,
+	reflect.TypeOf(spec.PackageItem{}):       expandPackageItemNode,
+	reflect.TypeOf(spec.PortSpec{}):          expandPortSpecNode,
+	reflect.TypeOf(spec.PreemptibleConfig{}): expandPreemptibleNode,
+	reflect.TypeOf(spec.TunnelYAML{}):        expandTunnelNode,
 }
 
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()

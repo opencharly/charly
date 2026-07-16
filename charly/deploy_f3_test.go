@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,7 +35,7 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A LOCAL bed — persisting it would write an un-loadable `local:` cross-ref.
 	disp := true
-	persistBedDeployOverrides("check-local", BundleNode{
+	persistBedDeployOverrides("check-local", spec.BundleNode{
 		Target:     "local",
 		From:       "check-local-app",
 		Disposable: &disp,
@@ -53,7 +54,7 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A POD bed is STILL persisted (the skip is not too broad). Non-disposable so it
 	// is a plain deploy entry, not a check bed subject to validateCheckBeds.
-	persistBedDeployOverrides("pod-deploy-x", BundleNode{
+	persistBedDeployOverrides("pod-deploy-x", spec.BundleNode{
 		Target: "pod",
 		Image:  "pod-deploy-x",
 	})
@@ -92,15 +93,15 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 
 	// The two roles of the group live-preemption bed: a requires_exclusive CLAIMANT
 	// member and a preemptible HOLDER member.
-	persistBedDeployOverrides("preempt-taker", BundleNode{
+	persistBedDeployOverrides("preempt-taker", spec.BundleNode{
 		Target:            "pod",
 		Image:             "check-pod",
 		RequiresExclusive: []string{"test-lock"},
 	})
-	persistBedDeployOverrides("preempt-holder", BundleNode{
+	persistBedDeployOverrides("preempt-holder", spec.BundleNode{
 		Target:      "pod",
 		Image:       "check-pod",
-		Preemptible: &PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
+		Preemptible: &spec.PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
 	})
 
 	dc, err := deploykit.LoadBundleConfig()

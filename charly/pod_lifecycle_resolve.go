@@ -208,7 +208,7 @@ func resolvePodStartDirect(box, instance string, rt *ResolvedRuntime, opts podSt
 		return nil, fmt.Errorf("port conflicts detected:%s", FormatPortConflicts(conflicts, box))
 	}
 
-	var deployBox *BundleNode
+	var deployBox *spec.BundleNode
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
@@ -386,7 +386,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 		return nil, err
 	}
 
-	var deployBox *BundleNode
+	var deployBox *spec.BundleNode
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
@@ -445,7 +445,7 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 	// already mounted — this only affects env). Best-effort, exactly as CmdCmd.Run did.
 	var agentEnv []string
 	if rt, rtErr := ResolveRuntime(); rtErr == nil {
-		var deployBox *BundleNode
+		var deployBox *spec.BundleNode
 		if overlay, ok := deploykit.LoadDeployConfigForRead("charly cmd").Lookup(box, instance); ok {
 			deployBox = &overlay
 		}

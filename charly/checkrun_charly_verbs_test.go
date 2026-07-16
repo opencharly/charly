@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/opencharly/sdk/spec"
 	"strings"
 	"testing"
 
@@ -136,7 +137,7 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	// the live-verb externalization (the generic `plugin` verb itself is
 	// context-permissive) — a wl step authors context: [runtime], exactly as the
 	// real candies do.
-	res := r.Run(context.Background(), []Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
+	res := r.Run(context.Background(), []spec.Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
 	if len(res) != 1 || res[0].Status != TestSkip {
 		t.Fatalf("expected skip under RunModeBox, got %+v", res[0])
 	}
@@ -164,16 +165,16 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 func TestCheckKind_NewVerbsDispatched(t *testing.T) {
 	cases := []struct {
 		name string
-		c    Op
+		c    spec.Op
 		verb string
 	}{
-		{"cdp", Op{Plugin: "cdp", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"wl", Op{Plugin: "wl", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x"}}, "plugin"},
-		{"dbus", Op{Plugin: "dbus", PluginInput: map[string]any{"method": "list"}}, "plugin"},
-		{"vnc", Op{Plugin: "vnc", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"record", Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}}, "plugin"},
-		{"spice", Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}}, "plugin"},
-		{"libvirt", Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}}, "plugin"},
+		{"cdp", spec.Op{Plugin: "cdp", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"wl", spec.Op{Plugin: "wl", PluginInput: map[string]any{"method": "screenshot", "artifact": "/tmp/x"}}, "plugin"},
+		{"dbus", spec.Op{Plugin: "dbus", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"vnc", spec.Op{Plugin: "vnc", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"record", spec.Op{Plugin: "record", PluginInput: map[string]any{"method": "list"}}, "plugin"},
+		{"spice", spec.Op{Plugin: "spice", PluginInput: map[string]any{"method": "status"}}, "plugin"},
+		{"libvirt", spec.Op{Plugin: "libvirt", PluginInput: map[string]any{"method": "info"}}, "plugin"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

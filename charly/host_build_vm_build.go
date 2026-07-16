@@ -140,7 +140,7 @@ func hostBuildVmBuild(_ context.Context, req spec.VmBuildRequest, _ buildEngineC
 		return spec.VmBuildReply{}, err
 	}
 
-	var existingState *VmDeployState
+	var existingState *spec.VmDeployState
 	if e, ok := deploykit.LoadDeployConfigForRead("charly vm build").LookupKey("vm:" + boxName); ok {
 		existingState = e.VmState
 	}

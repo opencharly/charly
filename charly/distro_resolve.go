@@ -13,7 +13,7 @@ import (
 
 // resolveDistroViaPlugin projects one opaque distro body into a *DistroDef
 // (= *spec.ResolvedDistro) via candy/plugin-distro's OpResolve leg.
-func resolveDistroViaPlugin(body json.RawMessage) (*DistroDef, error) {
+func resolveDistroViaPlugin(body json.RawMessage) (*spec.ResolvedDistro, error) {
 	reply, err := hostInvoke[spec.DistroResolveInput, spec.DistroResolveReply](ClassKind, "distro", OpResolve, spec.DistroResolveInput{Distro: body})
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func resolveDistroViaPlugin(body json.RawMessage) (*DistroDef, error) {
 // resolveDistros projects uf.PluginKinds["distro"] (opaque bodies) into *DistroDef
 // envelopes via the plugin. A bad entry is skipped rather than poisoning the
 // vocabulary (cf. decodePluginKindMap).
-func (uf *UnifiedFile) resolveDistros() map[string]*DistroDef {
+func (uf *UnifiedFile) resolveDistros() map[string]*spec.ResolvedDistro {
 	if uf == nil {
 		return nil
 	}
@@ -32,7 +32,7 @@ func (uf *UnifiedFile) resolveDistros() map[string]*DistroDef {
 	if len(bodies) == 0 {
 		return nil
 	}
-	out := make(map[string]*DistroDef, len(bodies))
+	out := make(map[string]*spec.ResolvedDistro, len(bodies))
 	for name, body := range bodies {
 		d, err := resolveDistroViaPlugin(body)
 		if err != nil || d == nil {

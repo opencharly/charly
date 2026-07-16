@@ -1,6 +1,9 @@
 package main
 
-import "path/filepath"
+import (
+	"github.com/opencharly/sdk/spec"
+	"path/filepath"
+)
 
 // candy_model_accessors.go — field accessors on the runtime Candy so it satisfies
 // deploykit.CandyModel, the read-only interface the deploy-plan compiler
@@ -14,7 +17,7 @@ func (l *Candy) GetName() string         { return l.Name }
 func (l *Candy) GetSourceDir() string    { return l.SourceDir }
 func (l *Candy) GetVersion() string      { return l.Version }
 func (l *Candy) Vars() map[string]string { return l.vars }
-func (l *Candy) PlanSteps() []Step       { return l.plan }
+func (l *Candy) PlanSteps() []spec.Step  { return l.plan }
 func (l *Candy) Reboot() bool            { return l.reboot }
 
 // HasFile reports whether the candy ships a detect file (pixi.toml/etc.) or an

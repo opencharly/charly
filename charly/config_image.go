@@ -810,7 +810,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *ResolvedRuntime) error {
 			// Update charly.yml with seeded state
 			if seeded > 0 {
 				if dc == nil {
-					dc = &BundleConfig{Bundle: make(map[string]BundleNode)}
+					dc = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 				}
 				imgDeploy := dc.Bundle[deployKey(c.Box, c.Instance)]
 				for i := range imgDeploy.Volume {
@@ -1228,10 +1228,10 @@ func (c *BoxConfigSetupCmd) persistResourceCaps(dc **BundleConfig) error {
 		return nil
 	}
 	if *dc == nil {
-		*dc = &BundleConfig{Bundle: make(map[string]BundleNode)}
+		*dc = &BundleConfig{Bundle: make(map[string]spec.BundleNode)}
 	}
 	if (*dc).Bundle == nil {
-		(*dc).Bundle = make(map[string]BundleNode)
+		(*dc).Bundle = make(map[string]spec.BundleNode)
 	}
 	key := deployKey(c.Box, c.Instance)
 	entry := (*dc).Bundle[key]
@@ -1359,7 +1359,7 @@ func injectEnvProvides(boxName, instance string, envProvides map[string]string, 
 //
 // portMap is a {containerPort -> hostPort} lookup used by resolveTemplate
 // to substitute {{.HostPort N}} placeholders. nil is accepted.
-func injectMCPProvides(boxName, instance string, mcpProvides []MCPServerYAML, portMap map[int]int) (bool, error) {
+func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAML, portMap map[int]int) (bool, error) {
 	if len(mcpProvides) == 0 {
 		return false, nil
 	}
@@ -1438,7 +1438,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []MCPServerYAML, po
 
 // warnMissingMCPRequires checks resolved MCP servers against required MCP dependencies
 // and prints warnings for any that are missing.
-func warnMissingMCPRequires(boxName string, requires []EnvDependency, mcpServers []MCPProvideEntry) {
+func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpServers []MCPProvideEntry) {
 	resolved := make(map[string]bool, len(mcpServers))
 	for _, s := range mcpServers {
 		resolved[s.Name] = true
@@ -1456,7 +1456,7 @@ func warnMissingMCPRequires(boxName string, requires []EnvDependency, mcpServers
 
 // checkMissingEnvRequires checks resolved env vars against required env dependencies.
 // Returns an error if any required vars are missing — charly config will abort.
-func checkMissingEnvRequires(boxName string, requires []EnvDependency, resolvedEnv []string) error {
+func checkMissingEnvRequires(boxName string, requires []spec.EnvDependency, resolvedEnv []string) error {
 	// Build set of resolved env var names
 	resolved := make(map[string]bool, len(resolvedEnv))
 	for _, e := range resolvedEnv {
@@ -1465,7 +1465,7 @@ func checkMissingEnvRequires(boxName string, requires []EnvDependency, resolvedE
 		}
 	}
 
-	var missing []EnvDependency
+	var missing []spec.EnvDependency
 	for _, dep := range requires {
 		if !resolved[dep.Name] {
 			missing = append(missing, dep)
@@ -1501,7 +1501,7 @@ func checkMissingEnvRequires(boxName string, requires []EnvDependency, resolvedE
 //
 // The error message tells the user exactly which credential store path to
 // populate, following the `charly secrets set charly/<service>/<key> <value>` form.
-func checkMissingSecretRequires(boxName string, requires []EnvDependency, resolutions []SecretResolution) error {
+func checkMissingSecretRequires(boxName string, requires []spec.EnvDependency, resolutions []SecretResolution) error {
 	resolvedByName := make(map[string]bool, len(resolutions))
 	for _, r := range resolutions {
 		if r.Resolved {
@@ -1509,7 +1509,7 @@ func checkMissingSecretRequires(boxName string, requires []EnvDependency, resolu
 		}
 	}
 
-	var missing []EnvDependency
+	var missing []spec.EnvDependency
 	for _, dep := range requires {
 		if !resolvedByName[dep.Name] {
 			missing = append(missing, dep)

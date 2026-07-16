@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ func TestWriteContextIgnore(t *testing.T) {
 		Dir: dir,
 		Config: &Config{
 			// "image" duplicated to exercise dedup against author input.
-			Defaults: BoxConfig{ContextIgnore: []string{"image", ".check", "image"}},
+			Defaults: spec.BoxConfig{ContextIgnore: []string{"image", ".check", "image"}},
 		},
 	}
 	if err := g.writeContextIgnore(); err != nil {

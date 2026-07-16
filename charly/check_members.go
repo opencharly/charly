@@ -30,6 +30,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/opencharly/sdk/spec"
 	"os"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ import (
 // (nil, nil) when no host refs are present. The caller closes the returned cleanups at run end
 // (via kit.CloseHostCleanups) on the paths that tear down ${HOST} forwards (VM / group); the
 // pod / local paths, which historically leaked them, still discard them.
-func resolveHostVarsForChecks(checks []Op, instance string) (map[string]string, []func()) {
+func resolveHostVarsForChecks(checks []spec.Op, instance string) (map[string]string, []func()) {
 	refs := kit.CollectHostRefs(checks)
 	if len(refs) == 0 {
 		return nil, nil
@@ -54,8 +55,8 @@ func resolveHostVarsForChecks(checks []Op, instance string) (map[string]string, 
 
 // resolveHostVarsForSteps is the plan-step counterpart (harness / iterate / feature-run /
 // live-plan paths), flattening every step's embedded Op.
-func resolveHostVarsForSteps(plan []Step, instance string) (map[string]string, []func()) {
-	checks := make([]Op, 0, len(plan))
+func resolveHostVarsForSteps(plan []spec.Step, instance string) (map[string]string, []func()) {
+	checks := make([]spec.Op, 0, len(plan))
 	for _, st := range plan {
 		checks = append(checks, st.Op)
 	}
@@ -153,7 +154,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 	}
 	dir, _ := os.Getwd()
 	var projectCfg *Config
-	var deployOverlay *BundleNode
+	var deployOverlay *spec.BundleNode
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
 	}

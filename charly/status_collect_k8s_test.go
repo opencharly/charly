@@ -14,7 +14,7 @@ import (
 // `ctx`, plus an unrelated pod deploy that the collector must ignore.
 func k8sUnified(name, image, tmpl, ctx string) *UnifiedFile {
 	return &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			name:       {Target: "k8s", Image: image, From: tmpl},
 			"some-pod": {Target: "pod", Image: "redis"},
 		},
@@ -129,7 +129,7 @@ func TestK8sCollector_AvailableFalse(t *testing.T) {
 	}
 
 	// Only a pod deploy declared — still nothing for the k8s substrate.
-	uf := &UnifiedFile{Bundle: map[string]BundleNode{"web": {Target: "pod", Image: "web"}}}
+	uf := &UnifiedFile{Bundle: map[string]spec.BundleNode{"web": {Target: "pod", Image: "web"}}}
 	if col.Available(CollectOpts{Unified: uf}) {
 		t.Errorf("Available = true with only a pod deploy, want false")
 	}

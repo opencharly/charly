@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 	"testing"
 )
@@ -18,9 +19,9 @@ func TestVmHostdevCount(t *testing.T) {
 	}{
 		{"nil spec", nil, 0},
 		{"nil libvirt", &VmSpec{}, 0},
-		{"nil devices", &VmSpec{Libvirt: &LibvirtDomain{}}, 0},
-		{"zero hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &vmshared.LibvirtDevices{}}}, 0},
-		{"two hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &vmshared.LibvirtDevices{
+		{"nil devices", &VmSpec{Libvirt: &spec.LibvirtDomain{}}, 0},
+		{"zero hostdevs", &VmSpec{Libvirt: &spec.LibvirtDomain{Devices: &vmshared.LibvirtDevices{}}}, 0},
+		{"two hostdevs", &VmSpec{Libvirt: &spec.LibvirtDomain{Devices: &vmshared.LibvirtDevices{
 			Hostdevs: []vmshared.LibvirtHostdev{{}, {}},
 		}}}, 2},
 	}

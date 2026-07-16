@@ -135,16 +135,16 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		IncludedCandy: []CandyRef{{Raw: "gnupg"}},
 	}
 	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
-	candy.mcpProvides = []MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
-	candy.portSpecs = []PortSpec{{Port: 9000, Protocol: "tcp"}}
-	candy.service = []ServiceEntry{{Name: "charly-daemon"}}
+	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
+	candy.portSpecs = []spec.PortSpec{{Port: 9000, Protocol: "tcp"}}
+	candy.service = []spec.ServiceEntry{{Name: "charly-daemon"}}
 
 	rp := &spec.ResolvedProject{
 		Version: "2026.100.0000",
 		Boxes:   map[string]spec.ResolvedBoxView{"demo": projectResolvedBox(fullResolvedBoxFixture())},
 		Candies: map[string]spec.CandyView{"charly": projectCandyView(candy)},
 	}
-	bundle := map[string]BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
+	bundle := map[string]spec.BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
 	for k, v := range bundle {
 		node := v
 		if rp.Deploy == nil {

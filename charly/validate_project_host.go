@@ -223,11 +223,11 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 			return
 		}
 		seen[w] = true
-		if opActsInBuildDeploy(&Op{Plugin: w}) {
+		if opActsInBuildDeploy(&spec.Op{Plugin: w}) {
 			rp.ActCapableVerbs = append(rp.ActCapableVerbs, w)
 		}
 	}
-	scanPlan := func(plan []Step) {
+	scanPlan := func(plan []spec.Step) {
 		for i := range plan {
 			op := &plan[i].Op
 			if len(op.VerbsSet()) == 0 {
