@@ -10,7 +10,6 @@ type EnvConfig = kit.EnvConfig
 var (
 	envMapToPairs   = kit.EnvMapToPairs
 	envPairsToMap   = kit.EnvPairsToMap
-	ExpandEnvConfig = kit.ExpandEnvConfig
 	MergeEnvConfigs = kit.MergeEnvConfigs
 	ExpandPath      = kit.ExpandPath
 )

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/kit"
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
@@ -56,7 +57,7 @@ func TestExternalDeploy_FillsPackageRemoveUninstallCmdOnRecord(t *testing.T) {
 		t.Fatalf("recordDeploy: %v", err)
 	}
 
-	rec, err := ReadCandyRecord(paths, "chrome")
+	rec, err := kit.ReadCandyRecord(paths, "chrome")
 	if err != nil || rec == nil {
 		t.Fatalf("ReadCandyRecord: %v / %+v", err, rec)
 	}

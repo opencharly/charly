@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"github.com/opencharly/sdk/vmshared"
+	"testing"
+)
 
 // TestVmHostdevCount pins the nil-safety contract of the VM_HOSTDEV_COUNT
 // intent source: a spec with no libvirt block, no devices block, or an empty
@@ -16,9 +19,9 @@ func TestVmHostdevCount(t *testing.T) {
 		{"nil spec", nil, 0},
 		{"nil libvirt", &VmSpec{}, 0},
 		{"nil devices", &VmSpec{Libvirt: &LibvirtDomain{}}, 0},
-		{"zero hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &LibvirtDevices{}}}, 0},
-		{"two hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &LibvirtDevices{
-			Hostdevs: []LibvirtHostdev{{}, {}},
+		{"zero hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &vmshared.LibvirtDevices{}}}, 0},
+		{"two hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &vmshared.LibvirtDevices{
+			Hostdevs: []vmshared.LibvirtHostdev{{}, {}},
 		}}}, 2},
 	}
 	for _, tc := range cases {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,7 +99,7 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{})
 	plan := &InstallPlan{Candy: "demo", Steps: []InstallStep{
-		&RepoChangeStep{
+		&deploykit.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/demo.repo",
 			Content: "[demo]\nname=demo\n",

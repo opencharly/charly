@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"testing"
 )
 
@@ -130,7 +131,7 @@ distro:
 // dropped on the floor.
 func TestBaseBootstrapPackages_DebootstrapDispatch(t *testing.T) {
 	d := &DistroDef{
-		Debootstrap: &DebootstrapDef{
+		Debootstrap: &vmshared.DebootstrapDef{
 			Suite:        "trixie",
 			Mirror:       "http://deb.debian.org/debian",
 			BasePackages: []string{"linux-image-amd64", "grub-efi-amd64", "openssh-server"},

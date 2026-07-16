@@ -102,9 +102,8 @@ func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }
 type ScenarioContext = kit.ScenarioContext
 
 var (
-	NewScenarioContext = kit.NewScenarioContext
-	ResolveCheckLevel  = kit.ResolveCheckLevel
-	CheckLevelReaches  = kit.CheckLevelReaches
+	ResolveCheckLevel = kit.ResolveCheckLevel
+	CheckLevelReaches = kit.CheckLevelReaches
 )
 
 const (
@@ -116,14 +115,14 @@ const (
 
 // --- the ${NAME[:arg]} check-variable expansion grammar (P5-unit-4), in sdk/kit so a plugin
 // candy that runs a plan expands ${VAR}s with the SAME grammar the check engine uses. ---
-// ExpandTestVars is NOT aliased — core production expands vars via opExpandVars (which wraps
-// kit.ExpandTestVars internally); the sole other caller is checkvars_test.go, which calls
-// kit.ExpandTestVars directly. Aliasing a name only a test uses would be a caller-less-in-
+// ExpandTestVars is NOT aliased — its only charly/ caller is checkvars_test.go, which calls
+// kit.ExpandTestVars directly. kit.ExpandOpVars (formerly aliased here as opExpandVars) has
+// no charly/ caller at all, test or production; the binding was removed rather than kept as a
+// caller-less export. Aliasing a name only a test uses would itself be a caller-less-in-
 // production export.
 var (
 	TestVarRefs       = kit.TestVarRefs
 	IsRuntimeOnlyVar  = kit.IsRuntimeOnlyVar
-	opExpandVars      = kit.ExpandOpVars
 	collectAnyStrings = kit.CollectAnyStrings
 )
 

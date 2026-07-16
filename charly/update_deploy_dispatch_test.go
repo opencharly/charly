@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/vmshared"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,7 +105,7 @@ func TestNoteUpdateDisposability(t *testing.T) {
 		},
 		{
 			name:     "ephemeral implies disposable — no note",
-			node:     &BundleNode{Ephemeral: &EphemeralLifetime{}},
+			node:     &BundleNode{Ephemeral: &vmshared.EphemeralLifetime{}},
 			image:    "scratch-pod",
 			wantNote: false,
 		},
