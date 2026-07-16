@@ -64,7 +64,7 @@ check-local:
               context:
                 - runtime
               command:
-                command: charly status --json
+                command: ${CHARLY_BIN} status --json
                 in_container: false
             - check: the external examplestep verb-as-step EXECUTED at local deploy — its OpExecute wrote the probe marker on the guest venue over the E3b reverse channel (proves ExternalPluginStep → InvokeWithExecutor(OpExecute))
               id: examplestep-deploy-marker

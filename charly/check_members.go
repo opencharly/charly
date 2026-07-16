@@ -175,5 +175,5 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 		return &kit.CheckVarResolver{}
 	}
 	res, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, venue.Engine, name, venue.Name, instance)
-	return res
+	return stampCharlyBin(res)
 }

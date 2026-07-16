@@ -19,9 +19,7 @@ import (
 // assertion is correctness: every concurrently-written entry survives.
 func TestSaveVmDeployState_ConcurrentWritersAllSurvive(t *testing.T) {
 	overlay := filepath.Join(t.TempDir(), "charly.yml")
-	orig := DeployConfigPath
-	DeployConfigPath = func() (string, error) { return overlay, nil }
-	t.Cleanup(func() { DeployConfigPath = orig })
+	t.Setenv(DeployConfigEnv, overlay)
 
 	const n = 12
 	var wg sync.WaitGroup
@@ -67,9 +65,7 @@ func TestSaveVmDeployState_ConcurrentWritersAllSurvive(t *testing.T) {
 // acquire/defer-release balance.
 func TestSaveVmDeployState_LockReleasedBetweenCalls(t *testing.T) {
 	overlay := filepath.Join(t.TempDir(), "charly.yml")
-	orig := DeployConfigPath
-	DeployConfigPath = func() (string, error) { return overlay, nil }
-	t.Cleanup(func() { DeployConfigPath = orig })
+	t.Setenv(DeployConfigEnv, overlay)
 
 	if err := saveVmDeployState("vm:one", "", &spec.VmDeployState{SshPort: 2201}); err != nil {
 		t.Fatalf("first write: %v", err)
@@ -102,9 +98,7 @@ func TestSaveVmDeployState_LockReleasedBetweenCalls(t *testing.T) {
 // bundle (check-other-vm, From=other-vm).
 func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 	overlay := filepath.Join(t.TempDir(), "charly.yml")
-	orig := DeployConfigPath
-	DeployConfigPath = func() (string, error) { return overlay, nil }
-	t.Cleanup(func() { DeployConfigPath = orig })
+	t.Setenv(DeployConfigEnv, overlay)
 
 	// Seed through the REAL write path under the bundle/bed key (dctx.Name) with
 	// the resolved VM entity — exactly how the vm lifecycle hook PrepareVenue persists it.

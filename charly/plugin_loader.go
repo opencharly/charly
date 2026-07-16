@@ -290,13 +290,19 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	if st, statErr := os.Stat(filepath.Join(srcDir, "cmd", "serve")); statErr == nil && st.IsDir() {
 		target = "./cmd/serve"
 	}
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binTmp, target)
+	buildVCS := "-buildvcs=false"
+	buildEnv := pluginBuildEnv(os.Environ(), srcDir)
+	if pluginSourceHasGitRevision(srcDir, buildEnv) {
+		buildVCS = "-buildvcs=auto"
+	}
+	cmd := exec.CommandContext(ctx, "go", "build", buildVCS, "-o", binTmp, target)
 	cmd.Dir = srcDir
-	// Go's VCS stamping asks Git for repository status. Multiple different plugin builds run in
-	// parallel and therefore hold different binary locks, but their Git probes share one index.
-	// Disable Git's optional index refresh/write for this read-only status operation: stamping stays
-	// enabled, while concurrent builds cannot contend on shared mutable index state.
-	cmd.Env = pluginBuildEnv(os.Environ())
+	// A source with a real Git revision is VCS-stamped. An archive/copy without
+	// one cannot truthfully be stamped, so it is explicitly built without VCS
+	// metadata instead of borrowing an unrelated ancestor repository. Multiple
+	// source builds may run concurrently; their read-only Git status probes never
+	// refresh or write a shared index.
+	cmd.Env = buildEnv
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
 		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
@@ -308,15 +314,53 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	return bin, nil
 }
 
-func pluginBuildEnv(base []string) []string {
-	env := make([]string, 0, len(base)+2)
+func pluginBuildEnv(base []string, srcDir string) []string {
+	env := make([]string, 0, len(base)+4)
 	for _, entry := range base {
-		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_OPTIONAL_LOCKS=") {
+		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_") || strings.HasPrefix(entry, "PWD=") {
 			continue
 		}
 		env = append(env, entry)
 	}
-	return append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0")
+	if absolute, err := filepath.Abs(srcDir); err == nil {
+		srcDir = absolute
+	}
+	env = append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0", "PWD="+srcDir)
+	return env
+}
+
+// pluginSourceHasGitRevision establishes whether a source has provenance that
+// may truthfully be embedded. The probes use exactly the sanitized child
+// environment: inherited GIT_* state may never lend a source someone else's
+// repository identity.
+//
+// Go discovers a physical .git ancestor before it invokes Git. If that marker
+// is malformed or unrelated, auto VCS mode fails instead of omitting metadata.
+// A source without a usable committed Git worktree is therefore built with the
+// explicit no-stamp policy selected by buildPluginBinary.
+func pluginSourceHasGitRevision(srcDir string, env []string) bool {
+	inside, ok := pluginGitProbe(srcDir, env, "rev-parse", "--is-inside-work-tree")
+	if !ok || inside != "true" {
+		return false
+	}
+	if _, ok := pluginGitProbe(srcDir, env, "status", "--porcelain"); !ok {
+		return false
+	}
+	_, ok = pluginGitProbe(srcDir, env, "rev-parse", "--verify", "HEAD")
+	return ok
+}
+
+// pluginGitProbe runs a Git query with the exact environment the Go child will
+// inherit. It does not fall back to the parent process environment.
+func pluginGitProbe(srcDir string, env []string, args ...string) (string, bool) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = srcDir
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(out)), true
 }
 
 // bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a

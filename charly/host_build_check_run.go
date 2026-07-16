@@ -260,6 +260,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		}
 	}
 	resolver, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, engine, req.Name, containerName, req.Instance)
+	resolver = stampCharlyBin(resolver)
 	// validateTagExpr still VALIDATES --tag's syntax (a malformed expression errors here);
 	// applying the parsed filter to the plan walk is a known, tracked gap — see the
 	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed

@@ -168,17 +168,19 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		return spec.CheckBedReply{}, fmt.Errorf("check-bed setup: %q is not a disposable check bed", req.Bed)
 	}
 
-	// calver + logDir up front so the GPU-skip reply carries them too (single-sourced dir naming).
+	// CalVer and logDir are single-sourced for both normal runs and prerequisite
+	// skips. A normal run creates its directory only after it owns the per-bed
+	// lock: a rejected duplicate must not masquerade as a newer incomplete run.
 	calver := ComputeCalVer()
 	logDir := filepath.Join(".check", req.Bed, calver)
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
-	}
 
 	// Host-prerequisite fail-fast (BEFORE any acquire): a bed claiming a GPU resource whose vendor
 	// has no matching card is unsatisfiable here — a clean SKIP (exit 3), not a failure. Acquires
 	// NOTHING, so no session is inserted and no teardown is needed.
 	if tok, vendor, missing := bedGPUPrereqMissing(node); missing {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
+		}
 		return spec.CheckBedReply{
 			Calver: calver,
 			LogDir: logDir,
@@ -211,6 +213,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
 	}
 	s.bedUnlock = bedUnlock
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
+	}
 
 	// Per-DOMAIN serialization for VM beds (sorted → no deadlock across a multi-domain bed).
 	// Keyed by the DEPLOY (req.Bed) post-P33, so distinct beds sharing one kind:vm entity get

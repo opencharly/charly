@@ -1,6 +1,10 @@
-# OpenCharly's trusted repository is a full development environment. The
-# candybox, disposability rules, approvals, and R0-R10 gates remain its safety
-# boundary; this setting only supplies the filesystem/network capability those
-# workflows require.
-default_permissions = ":danger-full-access"
+# OpenCharly keeps Codex constrained to this repository by default. Charly's
+# approved disposable workloads, not an unrestricted host agent, provide the
+# full candybox execution surface. Git metadata, normal host caches, network,
+# and Charly deploy/R10 commands cross the sandbox through exact approvals.
+sandbox_mode = "workspace-write"
 approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+
+[sandbox_workspace_write]
+network_access = false
