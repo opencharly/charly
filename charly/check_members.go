@@ -116,7 +116,7 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // filterHostVars returns the subset of unresolved variable keys that are
 // cross-member ${HOST:…} vars. runOne FAILS a check that references any of these
 // filterHostVars (the ${HOST:…} unresolved-var filter) moved to sdk/kit (planspec.go) with the
-// plan walk that consumes it; charly/kit_aliases.go binds the package-main name.
+// plan walk that consumes it; package main references it directly as kit.FilterHostVars.
 // closeHostCleanups / collectHostRefs / splitHostKey (P12a follow-up) moved to
 // sdk/kit (hostrefs.go) alongside it — all pure over spec.Op / kit.HostVar, with
 // zero core state; this file's callers (resolveHostVarsForChecks, resolveHostVars,

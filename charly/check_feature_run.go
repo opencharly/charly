@@ -56,7 +56,7 @@ func stepFailCount(results []kit.StepResult) int {
 }
 
 // reportSteps writes results in the requested format and returns the fail
-// count. Reuses the FormatStepResults* reporters (kit.FormatStepResults*, aliased in kit_aliases.go).
+// count. Reuses the FormatStepResults* reporters (kit.FormatStepResults*, referenced directly).
 func reportSteps(w io.Writer, results []kit.StepResult, format string) int {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "json":

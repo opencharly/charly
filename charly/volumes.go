@@ -7,8 +7,8 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 )
 
-// VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); aliased in
-// deploykit_state_aliases.go so callers here are unchanged.
+// VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); referenced
+// directly here as deploykit.VolumeMount / deploykit.ResolvedBindMount.
 
 // CollectBoxVolume resolves all volumes for a box by traversing the
 // full box chain (box → base → base's base) and collecting volume

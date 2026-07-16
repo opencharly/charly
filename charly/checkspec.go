@@ -12,7 +12,7 @@ import (
 // The ${NAME[:arg]} check-variable expansion grammar (ExpandTestVars / TestVarRefs /
 // IsRuntimeOnlyVar / ExpandOpVars / ExpandAnyVars / CollectAnyStrings / the runtime-var
 // prefixes) lives ONCE in sdk/kit (checkvars_expand.go) so a plugin candy that runs a plan
-// expands ${VAR}s identically. charly/kit_aliases.go carries the package-main bindings; the
+// expands ${VAR}s identically. package main references these directly as kit.X; the
 // check SEMANTICS that consult VerbCatalog (opEffectiveDo / opActsInBuildDeploy) stay below.
 
 // ---------------------------------------------------------------------------

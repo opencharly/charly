@@ -89,8 +89,8 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 type LabelSecretEntry = spec.LabelSecretEntry
 
 // CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
-// Secret= directive) is a deploykit resolved-runtime type now, aliased in
-// deploykit_pod_aliases.go — it moved to sdk/deploykit with the pod config-write
+// Secret= directive) is a deploykit resolved-runtime type now, referenced directly
+// as deploykit.CollectedSecret — it moved to sdk/deploykit with the pod config-write
 // mechanism (P11). Service/Key/RotateOnConfig are populated by CollectCandySecretAccepts
 // for credential-store-backed secrets (secret_accepts / secret_requires); zero for
 // candy-owned secrets (the CollectSecretsFromLabels path). Service/Key override the
