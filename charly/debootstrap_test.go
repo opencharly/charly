@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/vmshared"
 	"testing"
 )
 
@@ -124,45 +123,9 @@ distro:
 	}
 }
 
-// TestBaseBootstrapPackages_DebootstrapDispatch confirms that
-// baseBootstrapPackages now returns d.Debootstrap.BasePackages (the stage-2
-// chroot apt-get install set) for debootstrap-flavored distros.
-// Previously this returned nil and the stage-2 package set was silently
-// dropped on the floor.
-func TestBaseBootstrapPackages_DebootstrapDispatch(t *testing.T) {
-	d := &DistroDef{
-		Debootstrap: &vmshared.DebootstrapDef{
-			Suite:        "trixie",
-			Mirror:       "http://deb.debian.org/debian",
-			BasePackages: []string{"linux-image-amd64", "grub-efi-amd64", "openssh-server"},
-		},
-	}
-	got := baseBootstrapPackages(d)
-	if len(got) != 3 || got[0] != "linux-image-amd64" {
-		t.Errorf("baseBootstrapPackages = %v, want [linux-image-amd64 grub-efi-amd64 openssh-server]", got)
-	}
-}
-
-// TestBaseBootstrapPackages_PacstrapStillWorks ensures the pacstrap branch is
-// untouched by the debootstrap wiring.
-func TestBaseBootstrapPackages_PacstrapStillWorks(t *testing.T) {
-	d := &DistroDef{
-		Pacstrap: &PacstrapDef{
-			BasePackages: []string{"base", "linux", "openssh"},
-		},
-	}
-	got := baseBootstrapPackages(d)
-	if len(got) != 3 || got[0] != "base" {
-		t.Errorf("baseBootstrapPackages = %v, want [base linux openssh]", got)
-	}
-}
-
-// TestBaseBootstrapPackages_NilDistro must not panic.
-func TestBaseBootstrapPackages_NilDistro(t *testing.T) {
-	if got := baseBootstrapPackages(nil); got != nil {
-		t.Errorf("nil distro should yield nil, got %v", got)
-	}
-	if got := baseBootstrapPackages(&DistroDef{}); got != nil {
-		t.Errorf("empty distro should yield nil, got %v", got)
-	}
-}
+// The TestBaseBootstrapPackages_* suite (DebootstrapDispatch / PacstrapStillWorks /
+// NilDistro) moved to candy/plugin-vm/vm_bootstrap_engine_test.go with baseBootstrapPackages
+// itself (P8b-rest: the VM-bootstrap disk-build engine moved into the plugin). The sibling
+// bootstrapPackagesForBox in charly/build.go (the box-build `from: builder:` path) is
+// unaffected by this move — untouched, still core, still (pre-existing, unrelated to this
+// cutover) without its own dedicated unit test.
