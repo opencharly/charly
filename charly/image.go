@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk/kit"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml (or, in the
@@ -66,7 +67,7 @@ func (c *BoxPullCmd) Run() error {
 		// Tag override: only meaningful for short-name input. Resolve
 		// the canonical short-name ref FIRST so the build-fallback
 		// path picks up the requested tag.
-		if !looksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
+		if !kit.LooksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}
@@ -81,34 +82,24 @@ func (c *BoxPullCmd) Run() error {
 	return EnsureImagePresent(context.Background(), c.Box, cfg, dir)
 }
 
-// looksLikeFullRef returns true if the image ref contains a registry segment
-// (a "/" before any ":") — e.g. "ghcr.io/org/name:tag" — so it can be pulled
-// without charly.yml resolution.
-func looksLikeFullRef(ref string) bool {
-	if strings.HasPrefix(ref, "@") {
-		return false
-	}
-	slash := strings.Index(ref, "/")
-	if slash < 0 {
-		return false
-	}
-	colon := strings.Index(ref, ":")
-	return colon < 0 || slash < colon
-}
+// kit.LooksLikeFullRef (P12a: relocated to sdk/kit/local_image.go — it had 4
+// core callers beyond this file, R3 single-source) returns true if the image
+// ref contains a registry segment (a "/" before any ":") — e.g.
+// "ghcr.io/org/name:tag" — so it can be pulled without charly.yml resolution.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
-// when the underlying cause is a missing local image (ErrImageNotLocal).
+// when the underlying cause is a missing local image (kit.ErrImageNotLocal).
 // Called from main() just before FatalIfErrorf so the exit path still passes
 // through Kong's standard error rendering.
 func FormatCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, ErrImageNotLocal) {
+	if errors.Is(err, kit.ErrImageNotLocal) {
 		// ExtractMetadata wraps as "image not found in local storage: <ref>";
 		// pull out the ref so we can render the recommendation.
 		msg := err.Error()
-		ref := strings.TrimPrefix(msg, ErrImageNotLocal.Error()+": ")
+		ref := strings.TrimPrefix(msg, kit.ErrImageNotLocal.Error()+": ")
 		return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
 	}
 	return err

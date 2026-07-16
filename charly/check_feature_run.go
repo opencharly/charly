@@ -78,12 +78,20 @@ func resolveGraderAgent(dir, name string) (*spec.AgentExecSpec, error) {
 	return ai, nil
 }
 
-// planTagFilter parses an optional --tag expression into a TagExpr.
-func planTagFilter(tag string) (*TagExpr, error) {
+// validateTagExpr syntax-checks an optional --tag expression (rejecting a malformed
+// one). It does NOT apply the parsed expression as a step filter: kit.RunPlan (the
+// walk both hostFeatureBox and hostFeatureLive drive, since the P12a architecture
+// fold) takes no tag-filter parameter and walks every step unconditionally — a
+// confirmed, RCA'd, non-blocking gap (per-tag filtering was never wired past this
+// parse), routed to the next check-correctness thematic batch. Named + shaped for
+// what it actually does now (was planTagFilter, whose *TagExpr return had no live
+// caller once every RunPlan call site dropped the filter arg — R1/unparam).
+func validateTagExpr(tag string) error {
 	if strings.TrimSpace(tag) == "" {
-		return nil, nil
+		return nil
 	}
-	return ParseTagExpr(tag)
+	_, err := ParseTagExpr(tag)
+	return err
 }
 
 // ---------------------------------------------------------------------------

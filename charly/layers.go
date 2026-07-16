@@ -766,7 +766,7 @@ func (l *Candy) runOps() []Op {
 	for i := range l.plan {
 		step := &l.plan[i]
 		kw, err := step.StepKind()
-		if err != nil || kw != KwRun {
+		if err != nil || kw != kit.KwRun {
 			continue
 		}
 		op := step.Op
@@ -1369,7 +1369,7 @@ type candyCandidate struct {
 func pickCandyVersion(bareRef string, cands []candyCandidate) candyCandidate {
 	best := cands[0]
 	for _, c := range cands[1:] {
-		if compareCalVer(c.version, best.version) > 0 {
+		if kit.CompareCalVer(c.version, best.version) > 0 {
 			best = c // newer per-entity version
 		} else if c.version == best.version && compareSemver(c.gitTag, best.gitTag) > 0 {
 			best = c // same per-entity version: prefer the newest git tag

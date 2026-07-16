@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // EnsureImage ensures the image is available in the run engine's local store.
@@ -19,7 +21,7 @@ import (
 //     BuilderRun, the check preflight, and `charly box pull` all go
 //     through (see charly/ensure_image.go).
 //
-// Returns ErrImageNotLocal (wrapped with the ref) only when ALL three
+// Returns kit.ErrImageNotLocal (wrapped with the ref) only when ALL three
 // tiers fail.
 func EnsureImage(imageRef string, rt *ResolvedRuntime) error {
 	if LocalImageExists(rt.RunEngine, imageRef) {
@@ -40,7 +42,7 @@ func EnsureImage(imageRef string, rt *ResolvedRuntime) error {
 		return nil
 	}
 
-	return fmt.Errorf("%w: %s", ErrImageNotLocal, imageRef)
+	return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 }
 
 // loadProjectCfgFromCwd returns the project config + dir when the

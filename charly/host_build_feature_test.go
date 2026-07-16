@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // writeFeatureFixtureProject writes a minimal unified project (charly.yml + one discovered
@@ -99,19 +101,21 @@ func TestEnumerateFeatures_RunsValidatePlanSteps(t *testing.T) {
 	}
 }
 
-// TestValidatePlanSteps_Diagnostics unit-tests the SHARED core validator that both
-// `charly box validate` (validate.go) AND the externalized `charly feature validate` (via the "feature" HostBuild seam) invoke
-// — the function that STAYS core (R3). It flags an empty description and an agent step that
-// illegally carries an Op verb; a clean (empty) plan with a real description yields no errors.
+// TestValidatePlanSteps_Diagnostics unit-tests the SHARED kit.ValidatePlanSteps validator that
+// both `charly box validate` (validate.go) AND the externalized `charly feature validate` (via
+// the "feature" HostBuild seam) invoke — P12a relocated it to sdk/kit (R3, one copy reachable
+// from both call sites without a core→plugin import). It flags an empty description and an
+// agent step that illegally carries an Op verb; a clean (empty) plan with a real description
+// yields no errors.
 func TestValidatePlanSteps_Diagnostics(t *testing.T) {
 	// Empty description → flagged.
-	if errs := validatePlanSteps("   ", nil, "candy:x"); len(errs) != 1 ||
+	if errs := kit.ValidatePlanSteps("   ", nil, "candy:x"); len(errs) != 1 ||
 		!strings.Contains(errs[0], "description is empty") {
 		t.Fatalf("empty description: errs = %v, want exactly one 'description is empty'", errs)
 	}
 
 	// Non-empty description, no steps → clean.
-	if errs := validatePlanSteps("a real description", nil, "candy:x"); len(errs) != 0 {
+	if errs := kit.ValidatePlanSteps("a real description", nil, "candy:x"); len(errs) != 0 {
 		t.Fatalf("clean: errs = %v, want none", errs)
 	}
 
@@ -119,7 +123,7 @@ func TestValidatePlanSteps_Diagnostics(t *testing.T) {
 	// AgentCheck makes StepKind()==agent-check; setting the Op Plugin verb makes Kind() succeed.
 	bad := Step{AgentCheck: "the thing works"}
 	bad.Plugin = "command"
-	if errs := validatePlanSteps("desc", []Step{bad}, "candy:x"); len(errs) != 1 ||
+	if errs := kit.ValidatePlanSteps("desc", []Step{bad}, "candy:x"); len(errs) != 1 ||
 		!strings.Contains(errs[0], "agent steps must not carry an Op verb") {
 		t.Fatalf("agent-step-with-verb: errs = %v, want the 'agent steps must not carry an Op verb' diagnostic", errs)
 	}

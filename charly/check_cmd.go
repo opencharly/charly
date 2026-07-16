@@ -129,7 +129,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	if set == nil || set.IsEmpty() {
 		return liveResult{NoPlan: true}, nil
 	}
-	resolver, _ := ResolveCheckVarsRuntime(meta, deployOverlay, engine, c.Box, containerName, c.Instance)
+	resolver, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, engine, c.Box, containerName, c.Instance)
 
 	rctx := resolveCheckRunnerContext(c.Box, dir, projectCfg)
 	env, hasRuntime := resolverEnv(resolver)
@@ -163,7 +163,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 		TargetResolver: venueResolver(c.Instance),
 	})
 
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: fmt.Sprintf("Image: %s (container: %s)", meta.Box, containerName)}, nil
 }
 
@@ -303,9 +303,9 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		// for the kubeconfig context + ClusterProfile. Lets a candy's deploy-scope
 		// k8s checks address their own cluster generically via cluster:
 		// "${DEPLOY_NAME}" instead of hard-coding the bed's cluster name.
-		"DEPLOY_NAME": sanitizeDeployName("vm:" + vmName),
+		"DEPLOY_NAME": kit.SanitizeDeployName("vm:" + vmName),
 	}
-	resolver := &CheckVarResolver{Env: env, HasRuntime: true}
+	resolver := &kit.CheckVarResolver{Env: env, HasRuntime: true}
 
 	// Nested-in-VM POD leaf: delegate the pod's check to the guest `charly`. FROM
 	// THE GUEST the nested pod is a DIRECT pod — guest-local podman, ports on
@@ -382,7 +382,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		HostVars:       hostVars,
 		TargetResolver: venueResolver(c.Instance),
 	})
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: fmt.Sprintf("VM: charly-%s (ssh %s@%s:%d)", c.Box, user, host, port)}, nil
 }
 
@@ -865,7 +865,7 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	if herr != nil || home == "" {
 		home = os.Getenv("HOME")
 	}
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := &kit.CheckVarResolver{Env: map[string]string{
 		"IMAGE":    image,
 		"INSTANCE": instance,
 		"USER":     user,
@@ -894,7 +894,7 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 		HostVars:       hostVars,
 		TargetResolver: venueResolver(instance),
 	})
-	return RunPlan(context.Background(), runner, set, nil, false), true, nil
+	return kit.RunPlan(context.Background(), runner, set, false), true, nil
 }
 
 // subdeployments (subject + driver) brought up on the shared charly net, and every
@@ -919,7 +919,7 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 	}
 	header := fmt.Sprintf("Group bed: %s [%d sibling member(s); venue-dispatched, no root container]", c.Box, len(entry.Members))
 
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := &kit.CheckVarResolver{Env: map[string]string{
 		"IMAGE":    c.Box,
 		"INSTANCE": c.Instance,
 	}, HasRuntime: true}
@@ -951,7 +951,7 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 		TargetResolver: venueResolver(c.Instance),
 	})
 	set := &LabelDescriptionSet{Deploy: []LabeledDescription{{Origin: "group:" + c.Box, Plan: plan}}}
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: header}, nil
 }
 

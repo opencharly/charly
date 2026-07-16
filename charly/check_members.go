@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // hostVar is the unified cross-member address variable. ${HOST:<member>} resolves
@@ -188,8 +189,8 @@ func splitHostKey(key string) (name, arg string, ok bool) {
 // connects to the driver's endpoint (via their out-of-process plugins). ${HOST:<member>}
 // addressing of the SUBJECT rides in via RunnerConfig.HostVars (the kit.Runner.EffectiveEnv
 // overlay), independent of which venue is active.
-func liveTargetResolver(instance string) func(string) (*CheckVarResolver, DeployExecutor, error) {
-	return func(target string) (*CheckVarResolver, DeployExecutor, error) {
+func liveTargetResolver(instance string) func(string) (*kit.CheckVarResolver, DeployExecutor, error) {
+	return func(target string) (*kit.CheckVarResolver, DeployExecutor, error) {
 		venue, err := resolveCheckVenue(target, instance)
 		if err != nil {
 			return nil, nil, err
@@ -204,9 +205,9 @@ func liveTargetResolver(instance string) func(string) (*CheckVarResolver, Deploy
 // unreadable image label yields an empty resolver (the driven probe then relies
 // on ${HOST:<member>} + literals, which is the common cross-deployment case). Shares
 // the ResolveCheckVarsRuntime primitive with the primary target (R3).
-func liveDeployVarResolver(name, instance string, venue *CheckVenue) *CheckVarResolver {
+func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckVarResolver {
 	if venue == nil || !venue.IsContainer() {
-		return &CheckVarResolver{}
+		return &kit.CheckVarResolver{}
 	}
 	dir, _ := os.Getwd()
 	var projectCfg *Config
@@ -224,12 +225,12 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *CheckVarRe
 	imageRef := resolveDeployBoxName(name, instance)
 	resolvedRef, err := resolveImageRefForEnsure(imageRef, projectCfg, dir)
 	if err != nil {
-		return &CheckVarResolver{}
+		return &kit.CheckVarResolver{}
 	}
 	meta, err := ExtractMetadata(venue.Engine, resolvedRef)
 	if err != nil || meta == nil {
-		return &CheckVarResolver{}
+		return &kit.CheckVarResolver{}
 	}
-	res, _ := ResolveCheckVarsRuntime(meta, deployOverlay, venue.Engine, name, venue.Name, instance)
+	res, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, venue.Engine, name, venue.Name, instance)
 	return res
 }

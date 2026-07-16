@@ -88,9 +88,9 @@ func deployExecOf(kr *kit.Runner) DeployExecutor {
 	return nil
 }
 
-// resolverEnv projects a *CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair
+// resolverEnv projects a *kit.CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair
 // (nil-safe — a nil resolver yields no env, no runtime state).
-func resolverEnv(res *CheckVarResolver) (map[string]string, bool) {
+func resolverEnv(res *kit.CheckVarResolver) (map[string]string, bool) {
 	if res == nil {
 		return nil, false
 	}

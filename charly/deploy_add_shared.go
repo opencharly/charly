@@ -18,6 +18,8 @@ import (
 	"maps"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // prepareCandySecrets resolves the candies backing `plans`, computes their
@@ -112,7 +114,7 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList
 	if opts.DryRun {
 		return nil
 	}
-	if err := RetrieveCandyArtifacts(ctx, exec, candyList, sanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
+	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
 		return err
 	}
 	if deployHasCandy(candyList, "k3s-server") {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -227,7 +228,7 @@ func (c *Collector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 	// that had no published ports). Use the BASE image name from the row,
 	// not the joined container name.
 	if (len(cs.Ports) == 0 || len(cs.Volumes) == 0 || cs.Network == "") && cs.Image != "" {
-		ref, _ := ResolveNewestLocalCalVer(bin, cs.Image)
+		ref, _ := kit.ResolveNewestLocalCalVer(bin, cs.Image)
 		if ref != "" {
 			if meta, _ := ExtractMetadata(bin, ref); meta != nil {
 				if len(cs.Ports) == 0 {

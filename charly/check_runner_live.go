@@ -203,7 +203,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 			Origin: "pod:" + pod,
 			Plan:   []Step{e.step},
 		}}}
-		results := RunPlan(ctx, runner, set, nil, false)
+		results := kit.RunPlan(ctx, runner, set, false)
 		if !isScored(e.step) {
 			continue // provisioning run: step — executed, not scored
 		}

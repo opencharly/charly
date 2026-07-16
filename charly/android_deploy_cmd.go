@@ -13,6 +13,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // AndroidDevice is a resolved install target — enough for the deploy:android
@@ -53,7 +55,7 @@ const adbServerPort = 5037
 // the deploy:android plugin consumes. Used by resolveAndroidDevice for the in-pod /
 // nested device.
 func adbAddrForContainer(engine, containerName string) (string, error) {
-	insp, err := InspectContainer(engine, containerName)
+	insp, err := kit.InspectContainer(engine, containerName)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", containerName, err)
 	}
@@ -72,7 +74,7 @@ func adbAddrForContainer(engine, containerName string) (string, error) {
 // emits the protocol-suffixed form. Relocated from the deleted charly/adb.go — it
 // is pure engine-inspect arithmetic (no goadb), shared by adbAddrForContainer and
 // resolveAndroidHostPortRef's nested ${HOST_PORT:N} resolution (R3).
-func findHostPort(insp *ContainerInspection, containerPort int) (int, error) {
+func findHostPort(insp *kit.ContainerInspection, containerPort int) (int, error) {
 	// Host-networked containers expose the container port AS the host port.
 	if insp.IsHostNetworked() {
 		return containerPort, nil
@@ -198,7 +200,7 @@ func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, err
 	if !containerRunning(engine, container) {
 		return "", fmt.Errorf("parent pod container %s is not running (start it before deploying the android endpoint device)", container)
 	}
-	insp, err := InspectContainer(engine, container)
+	insp, err := kit.InspectContainer(engine, container)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", container, err)
 	}

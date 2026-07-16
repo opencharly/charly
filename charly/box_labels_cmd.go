@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // BoxLabelsCmd implements `charly box labels <ref>` — print a BUILT image
@@ -22,14 +24,14 @@ func (c *BoxLabelsCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	imageRef, err := resolveLocalImageRef(rt.RunEngine, c.Image)
+	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, c.Image)
 	if err != nil {
 		return err
 	}
 	labels, err := InspectLabels(rt.RunEngine, imageRef)
 	if err != nil {
 		if !LocalImageExists(rt.RunEngine, imageRef) {
-			return fmt.Errorf("%w: %s", ErrImageNotLocal, imageRef)
+			return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 		}
 		return err
 	}
