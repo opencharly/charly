@@ -34,8 +34,10 @@ tailscale-up:
                 systemctl is-active --quiet tailscaled || exit 0
 
                 # Operator: uid 1000 is the canonical human deploy user
-                # (matches the wheel-nopasswd layer and charly/deploy_target_local.go
-                # renderBuilderScript). SUDO_USER is unreliable — runSudoShell calls
+                # (matches the wheel-nopasswd layer and the deploykit.RenderBuilderScript
+                # helper in sdk/deploykit/localpkg.go, relocated from
+                # charly/deploy_host_helpers.go in the W3 build-engine wave).
+                # SUDO_USER is unreliable — runSudoShell calls
                 # `sudo -n bash -s` without -E, so env_reset strips it under
                 # default sudoers.
                 account=$(getent passwd 1000 | cut -d: -f1 || true)
@@ -74,8 +76,10 @@ tailscale-up:
                 systemctl is-active --quiet tailscaled || exit 0
 
                 # Operator: uid 1000 is the canonical human deploy user
-                # (matches the wheel-nopasswd layer and charly/deploy_target_local.go
-                # renderBuilderScript). SUDO_USER is unreliable — runSudoShell calls
+                # (matches the wheel-nopasswd layer and the deploykit.RenderBuilderScript
+                # helper in sdk/deploykit/localpkg.go, relocated from
+                # charly/deploy_host_helpers.go in the W3 build-engine wave).
+                # SUDO_USER is unreliable — runSudoShell calls
                 # `sudo -n bash -s` without -E, so env_reset strips it under
                 # default sudoers.
                 account=$(getent passwd 1000 | cut -d: -f1 || true)
