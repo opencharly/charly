@@ -12,16 +12,26 @@ import (
 )
 
 // host_build_render_seam.go — the "render-seam" host-builder (#67 render-DRIVE move).
-// plugin-build's deploykit.Generator render calls back to the host for each host-coupled seam
-// (RenderService, the builder resolves, ValidateEgress, EmitPluginOp, localpkg, header-copy,
-// ensure-builders) via HostBuild("render-seam", RenderSeamRequest{Method, Params}). This
-// builder dispatches by Method to the corresponding CORE function — the EXACT funcs the core
-// toDeploykit closures call — so the render is byte-identical to the pre-move core render
-// (byte-parity by construction). The rich inputs (spec types — BuilderResolveInput, ServiceEntry,
-// ResolvedInit, ServiceRenderContext, Builder, BuildStageContext, Op) ride the opaque Params
-// bytes; the host unmarshals + calls. The live *Generator (gen.Boxes/gen.Candies/gen.Config/
-// gen.Dir) comes from the per-dir renderGenCache populated by build-prep (one gen per dir per
-// process) — no per-call reload.
+// plugin-build's deploykit.Generator render calls back to the host for the REMAINING
+// host-coupled seams (EmitPluginOp, localpkg, inline-builder, ensure-builders) via
+// HostBuild("render-seam", RenderSeamRequest{Method, Params}). This builder dispatches by
+// Method to the corresponding CORE function — the EXACT funcs the core toDeploykit closures
+// call — so the render is byte-identical to the pre-move core render (byte-parity by
+// construction). The rich inputs (spec types — Builder, BuildStageContext, Op) ride the opaque
+// Params bytes; the host unmarshals + calls. The live *Generator (gen.Boxes/gen.Candies/
+// gen.Config/gen.Dir) comes from the per-dir renderGenCache populated by build-prep (one gen
+// per dir per process) — no per-call reload.
+//
+// K3 render-seam production move: RenderService, the two detection/external builder resolves,
+// ValidateEgress, and RewriteHeaderCopy were PURE providerRegistry.resolve+Invoke dispatch (or
+// pure data + host-fs I/O over the CandyModel envelope) — proven to need no host callback at
+// all (RDD-spiked live), so candy/plugin-build now calls them directly and their cases here are
+// GONE (their host functions stay: RenderService/egressValidate/validateTextEgress still serve
+// OTHER core callers — install_build_services.go, k8s_generate.go, install_ledger.go, etc. —
+// only the RENDER-SEAM's dispatch of them is dead). The 4 remaining cases have a genuine
+// host-only dependency: EnsureBuilders/InlineBuilder need the live loader's scan+connect
+// machinery (rides K1, #40); EmitPluginOp needs a Go-level type-assertion (ProvisionActor/
+// BuildEmitter) against a BUILTIN provider's concrete type, which only charly core holds.
 
 // renderGenCache holds the live *Generator per project dir for the render-seam host-builder.
 // Populated by hostBuildBuildResolve (the first HostBuild in a box build/generate); read by
@@ -87,54 +97,9 @@ func renderSeamResult(method string, result any) (spec.RenderSeamReply, error) {
 // function failure is surfaced in reply.Error (the EXACT core error string, so plugin-build
 // re-emits it byte-identical to the pre-move core render).
 //
-//nolint:gocyclo // by-Method dispatch switch — one case per render seam (the 9 host-coupled seams); splitting each into a method scatters a single dispatch without reducing the real branch surface.
+//nolint:gocyclo // by-Method dispatch switch — one case per render seam (the 4 remaining host-coupled seams); splitting each into a method scatters a single dispatch without reducing the real branch surface.
 func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildEngineContext) (spec.RenderSeamReply, error) {
 	switch req.Method {
-	case deploykit.RenderSeamRenderService:
-		var p deploykit.RenderServiceParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		rendered, err := RenderService(p.Entry, p.Def, p.Ctx)
-		if err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		out, err := marshalJSON(deploykit.RenderServiceResult{Rendered: rendered})
-		if err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: marshal result: %w", req.Method, err)
-		}
-		return spec.RenderSeamReply{Result: out}, nil
-
-	case deploykit.RenderSeamDetectionBuilder:
-		var p deploykit.DetectionBuilderParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		gen, img, er := renderSeamGenBox(p.Dir, p.BoxName, req.Method)
-		if er != nil {
-			return *er, nil
-		}
-		reply, err := gen.resolveDetectionBuilderStageSeam(p.BuilderName, p.In, img)
-		if err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		return renderSeamResult(req.Method, deploykit.DetectionBuilderResult{Reply: reply})
-
-	case deploykit.RenderSeamExternalBuilder:
-		var p deploykit.ExternalBuilderParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		gen, img, er := renderSeamGenBox(p.Dir, p.BoxName, req.Method)
-		if er != nil {
-			return *er, nil
-		}
-		reply, err := gen.resolveExternalBuilderStageSeam(p.Word, p.CandyName, img)
-		if err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		return renderSeamResult(req.Method, deploykit.ExternalBuilderResult{Reply: reply})
-
 	case deploykit.RenderSeamInlineBuilder:
 		var p deploykit.InlineBuilderParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
@@ -187,25 +152,6 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		}
 		return spec.RenderSeamReply{Result: out}, nil
 
-	case deploykit.RenderSeamRewriteHeaderCopy:
-		var p deploykit.RewriteHeaderCopyParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		gen := loadRenderGen(p.Dir)
-		if gen == nil {
-			return spec.RenderSeamReply{Error: fmt.Sprintf("render-seam %s: no generator for dir %q", req.Method, p.Dir)}, nil
-		}
-		hc, err := gen.rewriteHeaderCopyForRemote(p.HeaderCopy)
-		if err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		out, err := marshalJSON(deploykit.RewriteHeaderCopyResult{HeaderCopy: hc})
-		if err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: marshal result: %w", req.Method, err)
-		}
-		return spec.RenderSeamReply{Result: out}, nil
-
 	case deploykit.RenderSeamEnsureBuilders:
 		var p deploykit.EnsureBuildersParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
@@ -250,16 +196,6 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 			return spec.RenderSeamReply{Error: fmt.Sprintf("run: plugin verb %q build-emit: %s", p.Op.Plugin, ferr.Error())}, nil
 		}
 		return renderSeamResult(req.Method, deploykit.EmitPluginOpResult{Out: frag, IsScript: false})
-
-	case deploykit.RenderSeamValidateEgress:
-		var p deploykit.ValidateEgressParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		if err := egressValidate(p.Kind, p.Label, p.Mode, string(p.Data)); err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		return spec.RenderSeamReply{Result: []byte("{}")}, nil
 	}
 
 	return spec.RenderSeamReply{}, fmt.Errorf("render-seam: unknown method %q", req.Method)
