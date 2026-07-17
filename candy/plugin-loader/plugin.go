@@ -93,6 +93,14 @@ func (*provider) ScanInlineCandy(name, sourceDir string, ly *spec.Candy) (spec.C
 	return loaderkit.ScanInlineCandy(name, sourceDir, ly)
 }
 
+// ScanRemoteCandy implements spec.CandyScanner's remote-repo half — scanning specific candies out
+// of a downloaded remote repository directory (only the bare refs in wantRefs), delegating to the
+// same sdk/loaderkit construction logic ScanCandy uses, plus the Remote/RepoPath/SubPathPrefix
+// mutation + sibling-dep qualification loaderkit.ScanRemoteCandy performs.
+func (*provider) ScanRemoteCandy(repoDir, repoPath string, wantRefs map[string]bool, parseManifest func(path string) (*spec.Candy, error)) (map[string]spec.ScannedCandy, error) {
+	return loaderkit.ScanRemoteCandy(repoDir, repoPath, wantRefs, parseManifest)
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.
