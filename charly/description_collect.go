@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -38,7 +37,7 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 		switch {
 		case s.Check != "" || s.AgentCheck != "":
 			bake = true
-		case s.Run != "" && opInContext(&s.Op, deploykit.CtxRuntime):
+		case s.Run != "" && opInContext(&s.Op, spec.CtxRuntime):
 			bake = true
 		}
 		if !bake {
