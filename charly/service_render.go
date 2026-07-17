@@ -11,11 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"sort"
-	"strings"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -39,7 +36,7 @@ func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRende
 	if def == nil || def.ServiceSchema == nil {
 		return nil, fmt.Errorf("RenderService: init system has no service_schema")
 	}
-	ctx = buildServiceRenderContext(entry, ctx)
+	ctx = deploykit.BuildServiceRenderContext(entry, ctx)
 	rendered, err := renderServiceViaPlugin(spec.ServiceRenderInput{Init: def.Raw, Ctx: ctx})
 	if err != nil {
 		return nil, err
@@ -52,63 +49,6 @@ func RenderService(entry *spec.ServiceEntry, def *ResolvedInit, ctx ServiceRende
 		}
 	}
 	return rendered, nil
-}
-
-// buildServiceRenderContext fills the entry-derived, home-expanded render context
-// (a pure ServiceEntry projection — NO init-system knowledge). The plugin renders
-// its templates against this; the packaged/drop-in branch decisions are precomputed
-// here (PackagedUnit, RenderDropin) so the plugin renders from the ctx alone.
-func buildServiceRenderContext(entry *spec.ServiceEntry, ctx ServiceRenderContext) ServiceRenderContext {
-	ctx.Name = entry.Name
-	ctx.Scope = entry.EffectiveScope()
-	ctx.PackagedUnit = entry.UsePackaged
-	ctx.RenderDropin = entry.Overrides != nil
-	ctx.Env = flattenedEnvMap(entry.Env, entry.Overrides)
-	ctx.EnvList = sortedEnvList(ctx.Env)
-	if entry.Exec != "" {
-		ctx.Exec = entry.Exec
-	}
-	if entry.Overrides != nil && entry.Overrides.Exec != "" {
-		ctx.Exec = entry.Overrides.Exec
-	}
-	if entry.WorkingDirectory != "" {
-		ctx.WorkingDirectory = entry.WorkingDirectory
-	}
-	// Make home-relative exec/working-dir/env portable across init systems
-	// (supervisord's %(ENV_HOME)s + ~ / ${HOME} / $HOME), resolved against ctx.Home.
-	if ctx.Home != "" {
-		homify := func(s string) string {
-			s = strings.ReplaceAll(s, "%(ENV_HOME)s", ctx.Home)
-			return kit.ExpandPath(s, ctx.Home)
-		}
-		ctx.Exec = homify(ctx.Exec)
-		ctx.WorkingDirectory = homify(ctx.WorkingDirectory)
-		for k, v := range ctx.Env {
-			ctx.Env[k] = homify(v)
-		}
-		ctx.EnvList = sortedEnvList(ctx.Env)
-	}
-	if entry.User != "" {
-		ctx.User = entry.User
-	}
-	ctx.After = append(ctx.After, entry.After...)
-	if entry.Overrides != nil {
-		ctx.After = append(ctx.After, entry.Overrides.After...)
-	}
-	ctx.Before = append(ctx.Before, entry.Before...)
-	ctx.WantedBy = entry.WantedBy
-	ctx.Restart = entry.Restart
-	ctx.Stdout = entry.Stdout
-	ctx.StopTimeout = entry.StopTimeout
-	ctx.Kind = entry.Kind
-	ctx.Events = entry.Events
-	ctx.AutoStart = entry.AutoStart
-	ctx.StartRetries = entry.StartRetries
-	ctx.StartSecs = entry.StartSecs
-	ctx.StopSignal = entry.StopSignal
-	ctx.ExitCodes = entry.ExitCode
-	ctx.Priority = entry.Priority
-	return ctx
 }
 
 // renderServiceViaPlugin invokes candy/plugin-init's OpResolve service-render leg.
@@ -155,28 +95,3 @@ func invokeInitResolve(req spec.InitResolveRequest) ([]byte, error) {
 	return invokeTyped[spec.InitResolveRequest, json.RawMessage](context.Background(), prov, "init", OpResolve, req)
 }
 
-// sortedEnvList returns a sorted-by-key slice of env entries. Deterministic ordering
-// matters for template rendering — tests compare rendered output directly.
-func sortedEnvList(env map[string]string) []KeyValue {
-	keys := make([]string, 0, len(env))
-	for k := range env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]KeyValue, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, KeyValue{Key: k, Value: env[k]})
-	}
-	return out
-}
-
-// flattenedEnvMap composes base + overrides into one map (overrides win). Returns a
-// fresh map; callers don't mutate base.
-func flattenedEnvMap(base map[string]string, overrides *ServiceOverrides) map[string]string {
-	out := make(map[string]string, len(base))
-	maps.Copy(out, base)
-	if overrides != nil {
-		maps.Copy(out, overrides.Env)
-	}
-	return out
-}
