@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
@@ -599,23 +598,22 @@ func (c *Config) effectiveBuilderForBox(name string, img spec.BoxConfig) buildki
 // that actually declare a non-empty builder map are considered. Root-image
 // iteration is name-sorted so the result is deterministic when more than one
 // image shares a distro tag.
+//
+// The lookup itself (the priority-ordered "first distro-tag match wins" walk)
+// is the shared buildkit.PickDistroBuilder (R3): this method's own job is
+// adapting the UNRESOLVED project config (c.allBoxNames() + c.BoxConfig) into
+// the generic candidate shape — sdk/deploykit's ComputeIntermediates adapts
+// its own ALREADY-RESOLVED boxes map into the SAME shape instead of
+// re-implementing the walk (see buildkit.DistroBuilderCandidate's doc comment
+// for why the two callers can't share the data source, only the algorithm).
 func (c *Config) distroBuilderMap(distroTags []string) buildkit.BuilderMap {
-	if len(distroTags) == 0 {
-		return nil
-	}
 	names := c.allBoxNames()
-	for _, tag := range distroTags {
-		for _, name := range names {
-			img, _ := c.BoxConfig(name)
-			if len(img.Builder) == 0 {
-				continue
-			}
-			if slices.Contains(img.Distro, tag) {
-				return img.Builder
-			}
-		}
+	candidates := make([]buildkit.DistroBuilderCandidate, 0, len(names))
+	for _, name := range names {
+		img, _ := c.BoxConfig(name)
+		candidates = append(candidates, buildkit.DistroBuilderCandidate{Name: name, Distro: img.Distro, Builder: img.Builder})
 	}
-	return nil
+	return buildkit.PickDistroBuilder(candidates, distroTags)
 }
 
 // walkBaseChainDistro walks the base chain through box: entries to find

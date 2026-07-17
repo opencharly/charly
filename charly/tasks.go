@@ -102,10 +102,12 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	// asset referenced by a stage_header_copy COPY line (stays core).
 	dg.RewriteHeaderCopyForRemote = g.rewriteHeaderCopyForRemote
 	// writeCandySteps seams: the inline-builder registry resolve (builder-emit
-	// cluster, stays core) and the localpkg image install (its dev leg builds on
-	// the host). ExternalizedBuilders is the registry fact selecting the branch.
+	// cluster, stays core) and the localpkg image install. ExternalizedBuilders is
+	// the registry fact selecting the branch. RenderLocalPkgImageInstall itself
+	// moved to deploykit (W3, pure function of its step argument) — wired directly,
+	// no core closure needed.
 	dg.ExternalizedBuilders = externalizedBuilders
-	dg.RenderLocalPkgImageInstall = renderLocalPkgImageInstall
+	dg.RenderLocalPkgImageInstall = deploykit.RenderLocalPkgImageInstall
 	dg.ResolveInlineBuilder = g.resolveInlineBuilderSeam
 	// Builder-cluster registry seams (K3-A): the multi-stage BUILDER render moved to
 	// deploykit (builders_render.go); its ONLY host coupling — the provider registry

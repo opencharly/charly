@@ -50,7 +50,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	})
 
 	t.Run("localpkg arm", func(t *testing.T) {
-		// A LocalPkgInstallStep with nil LocalPkg is a clean skip in execLocalPkgInstall —
+		// A LocalPkgInstallStep with nil LocalPkg is a clean skip in deploykit.ExecLocalPkgInstall —
 		// proving the LocalPkgInstall arm was taken (no error, vs the default arm's error).
 		rep := call(t, &deploykit.LocalPkgInstallStep{CandyName: "charly", PkgbuildRef: "pkg/arch", Format: "pac"}, deploykit.EmitOpts{})
 		if rep.GetError() != "" {

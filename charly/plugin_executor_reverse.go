@@ -173,8 +173,8 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		}
 		reverseOps = st.Reverse()
 	case *deploykit.LocalPkgInstallStep:
-		supported := venueHasPkgManager(ctx, s.exec, st.LocalPkg, opts)
-		if rerr := execLocalPkgInstall(ctx, s.exec, st, supported, s.exec.Venue(), opts); rerr != nil {
+		supported := deploykit.VenueHasPkgManager(ctx, s.exec, st.LocalPkg, opts)
+		if rerr := deploykit.ExecLocalPkgInstall(ctx, s.exec, st, supported, s.exec.Venue(), opts); rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
 		reverseOps = st.Reverse()

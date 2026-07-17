@@ -12,7 +12,7 @@
 //   - HOST-COUPLED (C1.2/C1.3/C1.4/C1.5) — system-packages, builder, local-pkg-install, and op. Their
 //     build-context render needs the host build ENGINE (system-packages: the DistroDef format
 //     templates + RenderTemplate; builder: the multi-stage buildStageContext + RenderTemplate engine;
-//     local-pkg-install: renderLocalPkgImageInstall — buildLocalPkgOnHost + host-dir staging for a
+//     local-pkg-install: deploykit.RenderLocalPkgImageInstall — deploykit.BuildLocalPkgOnHost + host-dir staging for a
 //     dev bed, the release-download RUN for production; op: the RICHEST — Generator.emitTasks, the
 //     full per-verb render pipeline with COPY staging + op coalescing), which cannot cross the
 //     process boundary, so their OpEmit calls back the host's "step-emit" host-builder over the

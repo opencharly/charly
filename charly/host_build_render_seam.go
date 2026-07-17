@@ -13,7 +13,7 @@ import (
 
 // host_build_render_seam.go — the "render-seam" host-builder (#67 render-DRIVE move).
 // plugin-build's deploykit.Generator render calls back to the host for the REMAINING
-// host-coupled seams (EmitPluginOp, localpkg, inline-builder, ensure-builders) via
+// host-coupled seams (EmitPluginOp, inline-builder, ensure-builders) via
 // HostBuild("render-seam", RenderSeamRequest{Method, Params}). This builder dispatches by
 // Method to the corresponding CORE function — the EXACT funcs the core toDeploykit closures
 // call — so the render is byte-identical to the pre-move core render (byte-parity by
@@ -28,10 +28,16 @@ import (
 // all (RDD-spiked live), so candy/plugin-build now calls them directly and their cases here are
 // GONE (their host functions stay: RenderService/egressValidate/validateTextEgress still serve
 // OTHER core callers — install_build_services.go, k8s_generate.go, install_ledger.go, etc. —
-// only the RENDER-SEAM's dispatch of them is dead). The 4 remaining cases have a genuine
-// host-only dependency: EnsureBuilders/InlineBuilder need the live loader's scan+connect
-// machinery (rides K1, #40); EmitPluginOp needs a Go-level type-assertion (ProvisionActor/
-// BuildEmitter) against a BUILTIN provider's concrete type, which only charly core holds.
+// only the RENDER-SEAM's dispatch of them is dead). LocalPkg is ALSO GONE (W3): its render-seam
+// claim of a genuine host dependency was STALE — CompileLocalPkgStep operates on CandyModel +
+// ResolvedBox, both ALREADY present in the plugin's own dg.Candies/dg.Boxes (populated from the
+// envelope), so RenderLocalPkgImageInstall now runs directly in candy/plugin-build (deploykit's
+// NewRenderGeneratorFromProject wires it without a host round-trip). The 3 remaining cases have
+// a genuine host-only dependency: EnsureBuilders/InlineBuilder need the live loader's
+// scan+connect machinery (rides K1, #40) AND the provider registry (a permanent kernel
+// M-mechanism — see CLAUDE.md "The kernel/plugin boundary law"); EmitPluginOp needs a Go-level
+// type-assertion (ProvisionActor/BuildEmitter) against a BUILTIN provider's concrete type, which
+// only charly core (package main, which no other package can import) holds — also permanent.
 
 // renderGenCache holds the live *Generator per project dir for the render-seam host-builder.
 // Populated by hostBuildBuildResolve (the first HostBuild in a box build/generate); read by
@@ -51,20 +57,6 @@ func loadRenderGen(dir string) *Generator {
 	}
 	renderGenCache.Store(dir, g)
 	return g
-}
-
-// candyModelByLeaf returns the deploykit CandyModel for the candy whose LEAF name (Candy.Name)
-// matches leaf, or nil. The render-seam carries the candy LEAF (step.CandyName); the live
-// gen.Candies is keyed by the full scanned-set key (a remote ref), so the lookup is by leaf —
-// the stable identity the deploykit render (candyOrder) and the live graph share.
-func candyModelByLeaf(candies map[string]*Candy, leaf string) deploykit.CandyModel {
-	cm := candyModelMap(candies)
-	for k, c := range candies {
-		if c != nil && c.Name == leaf {
-			return cm[k]
-		}
-	}
-	return nil
 }
 
 // renderSeamGenBox loads the cached Generator + the named box for a render-seam method.
@@ -114,43 +106,6 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 			return spec.RenderSeamReply{Error: err.Error()}, nil
 		}
 		return renderSeamResult(req.Method, deploykit.InlineBuilderResult{Fragment: frag})
-
-	case deploykit.RenderSeamLocalPkg:
-		var p deploykit.LocalPkgParams
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
-		}
-		gen, img, er := renderSeamGenBox(p.Dir, p.BoxName, req.Method)
-		if er != nil {
-			return *er, nil
-		}
-		// Rebuild the LocalPkgInstallStep from the SAME source origin/main used
-		// (candyModelMap(gen.Candies) — the toDeploykit conversion), so byte-exact. The
-		// deploykit seam carries step.CandyName (the candy LEAF name), but gen.Candies is keyed
-		// by the full scanned-set key (a remote candy's ref, e.g. github.com/.../charly), so
-		// look the candy up by LEAF name (origin/main had the step pre-built from the keyed
-		// candy; the leaf is the stable identity both halves share).
-		cm := candyModelByLeaf(gen.Candies, p.CandyName)
-		if cm == nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: candy %q not found", req.Method, p.CandyName)
-		}
-		step := deploykit.CompileLocalPkgStep(cm, img, deploykit.HostContext{})
-		if step == nil {
-			return spec.RenderSeamReply{Result: []byte("{}")}, nil
-		}
-		s, ok := step.(*deploykit.LocalPkgInstallStep)
-		if !ok {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: CompileLocalPkgStep returned %T, not *LocalPkgInstallStep", req.Method, step)
-		}
-		frag, err := renderLocalPkgImageInstall(s, p.DevLocalPkg, p.ImageDir, p.BoxName)
-		if err != nil {
-			return spec.RenderSeamReply{Error: err.Error()}, nil
-		}
-		out, err := marshalJSON(deploykit.LocalPkgResult{Fragment: frag})
-		if err != nil {
-			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: marshal result: %w", req.Method, err)
-		}
-		return spec.RenderSeamReply{Result: out}, nil
 
 	case deploykit.RenderSeamEnsureBuilders:
 		var p deploykit.EnsureBuildersParams
