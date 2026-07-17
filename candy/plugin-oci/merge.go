@@ -3,10 +3,10 @@ package oci
 // merge.go — the go-containerregistry layer-MERGE engine, relocated verbatim from
 // charly/merge.go (the P14a OCI cutover). The engine (planMerge → executeMerge →
 // mergeLayers → whiteout handling + the podman/skopeo daemon load/save) runs HOST-SIDE
-// in this candy — go-containerregistry lives HERE, not in charly core. The host's merge
-// consumers (`charly box merge` MergeCmd.runOne + candy/plugin-build's drive) reach it
-// via verb:oci OpRun with oci_op=merge, handing a spec.MergeRequest and decoding a
-// spec.MergeReply (structured layer counts + progress Notes the host prints).
+// in this candy — go-containerregistry lives HERE, not in charly core. The merge
+// consumers (candy/plugin-box's `charly box merge` command, P14, + candy/plugin-build's
+// drive) reach it via verb:oci OpRun with oci_op=merge, handing a spec.MergeRequest and
+// decoding a spec.MergeReply (structured layer counts + progress Notes the host prints).
 
 import (
 	"archive/tar"
@@ -61,8 +61,9 @@ func mergeLeg(paramsJSON []byte) (*pb.InvokeReply, error) {
 }
 
 // runMerge resolves the merge knobs (defaulting engine/limits) and runs the ref-based
-// engine. The host (MergeCmd.runOne / the build drive) always resolves + passes Engine;
-// the empty-engine default preserves the former host-side ResolveRuntime fallback.
+// engine. The caller (candy/plugin-box's mergeOneBox / the build drive) always resolves
+// + passes Engine; the empty-engine default preserves the former host-side
+// ResolveRuntime fallback.
 func runMerge(req spec.MergeRequest) spec.MergeReply {
 	engine := req.Engine
 	if engine == "" {

@@ -4,9 +4,9 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves SEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/inspect/list/labels` parse + dispatch here while the
-// retained core BoxCmd verbs — build/merge/feature/reconcile/the authoring verbs — stay in core):
+// It serves EIGHT command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/inspect/list/labels/merge` parse + dispatch here while
+// the retained core BoxCmd verbs — build/feature/reconcile/the authoring verbs — stay in core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
@@ -30,6 +30,10 @@
 //     directly via sdk/kit (ResolveRuntime/ResolveLocalImageRef/InspectImageLabels) — pure
 //     container-storage probes with zero loader coupling, so this needs NO core reentry (K3
 //     reentry-class dissolution; the former `__box-labels` HostBuild("cli") hop is gone).
+//   - command:merge — `charly box merge`: reads Registry/Tag/Merge settings for one (or every
+//     merge.auto) box off the resolved-project envelope, then reaches verb:oci DIRECTLY via
+//     InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own post-build inline
+//     merge already uses) — zero core reentry (P14: relocated from charly/merge.go).
 //
 // NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
 // REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
@@ -59,7 +63,7 @@ import (
 const calver = "2026.194.0000"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge"}
 
 // NewProvider returns the box command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.

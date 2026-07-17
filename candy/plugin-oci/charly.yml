@@ -26,11 +26,13 @@ plugin-oci:
             VmOp): oci_op=merge decodes a spec.MergeRequest and returns a spec.MergeReply
             (layer counts + progress Notes the host prints; a per-merge failure rides
             Reply.Error), oci_op=inspect-user decodes a spec.ImageUserInput and returns a
-            spec.UserInfo. The core consumers reach it via the oci_plugin.go shim
-            (`charly box merge` MergeCmd.runOne + generate.go's adopt-user resolution) and,
-            from the build drive, via Executor.InvokeProvider(verb:oci). The MERGE engine's
-            byte-identical relocation is locked by the candy's TestMergeEngineGoldenParity
-            (the merged-layer DiffID golden).
+            spec.UserInfo. `charly box merge` (candy/plugin-box's mergeOneBox, P14) and
+            candy/plugin-build's drive both reach it DIRECTLY via Executor.InvokeProvider
+            (verb:oci) — the F10 peer-dispatch leg; the ONE remaining core consumer is
+            generate.go's adopt-user resolution, reached via the oci_plugin.go shim (still
+            core-side, K1-gated — see that file's own migration-inventory note). The MERGE
+            engine's byte-identical relocation is locked by the candy's
+            TestMergeEngineGoldenParity (the merged-layer DiffID golden).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-oci
             providers:

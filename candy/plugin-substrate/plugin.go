@@ -84,13 +84,18 @@ func CliMain(args []string) int {
 // Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the
 // KEPT #<Kind>Value core def (runPluginKind → validateStandaloneKindValueCUE), NOT by this
 // served schema. The self-contained #SubstrateKindLoad def exists only to satisfy the
-// non-empty-schema load gate + document the seam.
+// non-empty-schema load gate + document the seam. Also advertises command:reap-orphans and
+// verb:status-fanout (K6) — an INTERNAL-ONLY verb (never authored in a check plan, never a CLI
+// subcommand; reached solely by the host's "status-substrate" HostBuild forward via
+// providerRegistry.resolve + Invoke), mirroring the existing verb:libvirt/verb:credential/
+// verb:arbiter internal-dispatch precedent.
 func NewMeta() pb.PluginMetaServer {
-	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+1)
+	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+2)
 	for _, w := range substrateWords {
 		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, DeployTraits: substrateTraits[w]})
 	}
 	caps = append(caps, sdk.ProvidedCapability{Class: "command", Word: "reap-orphans"})
+	caps = append(caps, sdk.ProvidedCapability{Class: "verb", Word: "status-fanout"})
 	return sdk.NewMeta(calver, caps,
 		nil)
 }
@@ -152,6 +157,35 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 			return nil, err
 		}
 		return &pb.InvokeReply{ResultJson: res.json}, nil
+	case sdk.OpStatusCollectAll:
+		// K6: the WHOLE status subsystem fan-out + deploy-cone enrichment (relocated from
+		// charly/status_collector.go). Needs the reverse-channel executor threaded onto ctx
+		// so the vm/k8s per-word collectors it calls (via statusCollect, in-package) can reach
+		// HostBuild("resolved-project") / InvokeProvider("verb","libvirt",...) for themselves —
+		// exactly the executor context the host's OLD in-core dispatch used to thread.
+		if req.GetReserved() != "status-fanout" {
+			return nil, fmt.Errorf("substrate provider: OpStatusCollectAll unsupported for word %q (want status-fanout)", req.GetReserved())
+		}
+		fanExec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("plugin-substrate: reverse-channel executor: %w", err)
+		}
+		fanCtx := sdk.ContextWithExecutor(ctx, fanExec)
+		var fanReq spec.StatusSubstrateRequest
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &fanReq); uerr != nil {
+				return nil, fmt.Errorf("substrate status-fanout: decode request: %w", uerr)
+			}
+		}
+		reply, ferr := runStatusFanout(fanCtx, fanReq)
+		if ferr != nil {
+			return nil, ferr
+		}
+		out, merr := json.Marshal(reply)
+		if merr != nil {
+			return nil, fmt.Errorf("substrate status-fanout: marshal reply: %w", merr)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
 	default:
 		return nil, fmt.Errorf("substrate kind %q: unsupported op %q", req.GetReserved(), req.GetOp())
 	}

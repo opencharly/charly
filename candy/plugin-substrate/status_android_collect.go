@@ -67,7 +67,8 @@ func collectAndroidStatus(ctx context.Context, req spec.SubstrateStatusRequest) 
 		return spec.SubstrateStatusReply{}, fmt.Errorf("android status-collect: %w", err)
 	}
 	// Best-effort: absence of a per-machine overlay is normal (mirrors
-	// NewCollector's own graceful handling of a missing/invalid charly.yml).
+	// newFlatCollector's own graceful handling of a missing/invalid charly.yml,
+	// status_flat.go, same package).
 	perMachine, _ := deploykit.LoadBundleConfig()
 
 	nodes := collectAndroidDeployNodes(rp, perMachine)

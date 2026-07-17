@@ -15,13 +15,16 @@ plugin-status:
 
             The ONE thing the plugin cannot do itself is the LIVE collection engine — fan out
             across every deployment substrate (pod/vm/k8s/local/android) and probe live tools.
-            That engine STAYS core (charly/status_collector.go's Collector + the per-substrate
-            collectors) and is reached via the generic "status-substrate" HostBuild seam
-            (charly/status_substrate_host.go, spec.StatusSubstrateRequest{Single,IncludeAll,Box,
-            Instance} → spec.StatusSubstrateReply{Rows,Single}) — narrowed (K5) to drop
-            Nested/Roots now that the declared-tree resolution is plugin-side. "status-substrate"
-            is a class-generic action noun, not a provider word (F11). This is the same "plugin
-            owns the command + a generic seam for the core-coupled bits" doctrine
+            That engine now lives in candy/plugin-substrate (status_flat.go's flatCollector,
+            K6 — the former charly/status_collector.go, whole-file moved; the earlier "stays
+            core, registry-boundary blocker" verdict on it was reopened and reversed) and is
+            reached via the generic "status-substrate" HostBuild seam
+            (charly/status_substrate_host.go, now a THIN forward to verb:status-fanout —
+            spec.StatusSubstrateRequest{Single,IncludeAll,Box,Instance} →
+            spec.StatusSubstrateReply{Rows,Single}) — narrowed (K5) to drop Nested/Roots now
+            that the declared-tree resolution is plugin-side. "status-substrate" is a
+            class-generic action noun, not a provider word (F11). This is the same "plugin owns
+            the command + a generic seam for the core-coupled bits" doctrine
             candy/plugin-settings established.
 
             status is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its

@@ -6,10 +6,11 @@ package substratekind
 // leg — the SAME peer-plugin-dispatch seam candy/plugin-example-dispatch
 // demonstrates — and maps each domain to a bare DeploymentStatus row. The
 // charly.yml deploy-tree ENRICHMENT (SSH-port/network from the matching
-// target:vm entry's vm_state) stays host-side (mirrors the pod substrate's own
-// split: this plugin returns LIVE rows only, charly/status_collector.go
-// applies the deploy-cone enrichment afterward) — so this file carries NO
-// BundleConfig/UnifiedFile dependency at all.
+// target:vm entry's vm_state) is a SEPARATE concern (mirrors the pod
+// substrate's own split: this file returns LIVE rows only; status_flat.go's
+// flatCollector.enrichVmRow, K6, same package, applies the deploy-cone
+// enrichment afterward) — so this file carries NO BundleConfig/UnifiedFile
+// dependency at all.
 
 import (
 	"context"
