@@ -65,7 +65,7 @@ const RepoOverrideEnv = "CHARLY_REPO_OVERRIDE"
 // normalizeOverrideRepoPath canonicalizes the LHS of a CHARLY_REPO_OVERRIDE pair to
 // the repo-root form ParseRemoteRef yields, so `opencharly/charly` and
 // `github.com/opencharly/charly` both match (same auto-prefix rule as
-// normalizeRepoSpec in main_repo.go).
+// loaderkit.NormalizeRepoSpec, since W9's main_repo.go relocation).
 func normalizeOverrideRepoPath(rp string) string {
 	rp = strings.TrimSpace(strings.TrimSuffix(rp, "/"))
 	if i := strings.Index(rp, "/"); i > 0 && !strings.Contains(rp[:i], ".") {

@@ -66,7 +66,8 @@ type UnifiedFile struct {
 	// repo identity: a transitive import of THIS repo (at ANY pinned version)
 	// resolves to the local working tree instead of fetching a divergent pinned
 	// snapshot, so the root's namespace pins win. When unset, the loader falls
-	// back to `git remote origin` inference (see ns_identity.go).
+	// back to `git remote origin` inference (see sdk/loaderkit/repo_identity.go, since W9's
+	// ns_identity.go relocation).
 	Repo string `yaml:"repo,omitempty" json:"repo,omitempty"`
 	// Import is the SINGLE composition statement (the legacy `include:` key
 	// was deleted in the 2026-05 import-namespace cutover). A list whose
