@@ -306,6 +306,15 @@ func TestCollectRemoteRefs(t *testing.T) {
 			},
 		}),
 	}
+	// MARKER (W9 follow-up batch #59, see CHANGELOG "validate.go:371's remote-Require
+	// accessor"): "my-layer"'s Require fixture below carries the FULL "@repo:vTag" pinned
+	// string in a CandyView.Require wire-form field — a real scan+finalize (FinalizeCandyRefs)
+	// never produces this; it always bare-strings Require/IncludedCandy before a CandyReader
+	// is wrapped. This test therefore does NOT exercise validateRemoteCandies's real
+	// production input and is a false positive for the regression that gap describes
+	// (verified LATENT/unreachable in this repo today, not a reason to leave this
+	// misrepresenting green). Batch #59 reworks this fixture to go through a real
+	// ScanCandy()/finalizeScannedCandies() round-trip instead of hand-building CandyView.
 	layers := map[string]spec.CandyReader{
 		"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{}),
 		"my-layer": testCandy("my-layer", spec.CandyModel{}, spec.CandyView{Require: []string{
