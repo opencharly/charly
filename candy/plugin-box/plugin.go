@@ -26,9 +26,10 @@
 //     the hidden core `__box-inspect-overlay`. See inspect_list.go.
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
 //     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
-//   - command:labels — `charly box labels <ref>`: reaches the hidden core `__box-labels` reentry over
-//     HostBuild("cli") (ResolveRuntime/resolveLocalImageRef/InspectLabels are host container-storage
-//     probes, the SAME reentry shape as pkg/inspect-overlay/list-tags, P14-rest).
+//   - command:labels — `charly box labels <ref>`: resolves the local image + prints its OCI labels
+//     directly via sdk/kit (ResolveRuntime/ResolveLocalImageRef/InspectImageLabels) — pure
+//     container-storage probes with zero loader coupling, so this needs NO core reentry (K3
+//     reentry-class dissolution; the former `__box-labels` HostBuild("cli") hop is gone).
 //
 // NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
 // REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at

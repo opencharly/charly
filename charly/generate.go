@@ -202,8 +202,8 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// Derive each image's content-stable identity (ai.opencharly.version)
 	// from per-entity versions now that the base chain + auto-intermediates are
-	// materialized. See effective_version.go.
-	if err := g.computeEffectiveVersions(); err != nil {
+	// materialized (the build render/version-compute machinery, sdk/deploykit).
+	if err := deploykit.ComputeEffectiveVersions(g.Boxes, candyModelMap(g.Candies)); err != nil {
 		return nil, err
 	}
 
@@ -445,13 +445,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 // the var-alias so the generate-speedup test references the unqualified name.
 var renderDnfConfWrite = deploykit.RenderDnfConfWrite
 
-// generateInitFragments → deploykit.Generator.GenerateInitFragments (P8 shim). The
-// pod-overlay build (deploy_target_pod.go) calls this directly; the box-build render
-// drives it from sdk/deploykit/generate.go (#67 render-DRIVE move).
-func (g *Generator) generateInitFragments(boxName, initName string, def *ResolvedInit, candyOrder []string) error {
-	return g.toDeploykit().GenerateInitFragments(boxName, initName, def, candyOrder)
-}
-
 // collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
 // Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
@@ -641,22 +634,13 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 	return fmt.Sprintf("COPY %s %s", newSrc, fields[2]), nil
 }
 
-// candyCopySource returns the COPY source path for a candy in the Containerfile,
-// relative to the build context root (g.Dir).
-//
-// For the common case (no `directory:` override in the candy manifest), this returns
-// "candy/<candyRef>/" for local candies and ".build/_candy/<name>.<version>/" for remote
-// candies — identical to the legacy behavior.
-//
-// When the candy declares `directory:` and points SourceDir outside the default
-// candy/<name>/ location, the result is the build-root-relative path to
-// SourceDir so that Containerfile COPY directives pick up files from the author's
-// chosen config directory.
 // candyMapKey returns the key under which a candy is stored in g.Candies: the
 // fully-qualified remote ref (RepoPath/SubPathPrefix/Name) for remote candies,
 // the short name for local ones. Use this whenever code holds a *Candy but
-// needs to look it up (or pass its key to candyCopySource), since a remote
-// candy's short Name does NOT match its map key.
+// needs to look it up in g.Candies, since a remote candy's short Name does
+// NOT match its map key. (deploykit.Generator.CandyCopySource — the COPY
+// source path resolver — is the sdk-side render helper; charly core's own
+// wrapper was dead, K3, and is gone.)
 // candyMapKey → deploykit.CandyMapKey (P8 shim).
 var candyMapKey = deploykit.CandyMapKey
 
@@ -696,7 +680,3 @@ func (g *Generator) candyByName(name string) *Candy {
 // candyStageDirName → deploykit.CandyStageDirName (P8 shim).
 var candyStageDirName = deploykit.CandyStageDirName
 
-// candyCopySource → deploykit.Generator.CandyCopySource (P8 shim).
-func (g *Generator) candyCopySource(candyRef string) string {
-	return g.toDeploykit().CandyCopySource(candyRef)
-}

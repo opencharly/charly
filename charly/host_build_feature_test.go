@@ -49,10 +49,10 @@ func writeFeatureFixtureProject(t *testing.T, desc string) string {
 
 // TestEnumerateFeatures_InvokesInCoreLoader proves the "feature" HostBuild seam's core half
 // (enumerateFeatures, host_build_feature.go) actually invokes the in-core unified loader
-// (LoadConfig / ScanCandy) and the Step plan model — the data the externalized candy/plugin-feature
-// formats. The fixture candy's name, its one-line description summary, and its single check step must
-// all surface as enumerated data, proving the loader parsed the entity and the plan model flattened
-// its step/check.
+// (LoadConfig / ScanCandy) and returns the Step plan model RAW (K3 moved the summary/keyword/check
+// transform to candy/plugin-feature) — the fixture candy's name, description, and its single check
+// step must all surface as enumerated RAW data, proving the loader parsed the entity and the plan
+// model carried its step/check through untransformed.
 func TestEnumerateFeatures_InvokesInCoreLoader(t *testing.T) {
 	dir := writeFeatureFixtureProject(t, "A fixture candy proving the in-core loader runs")
 
@@ -60,36 +60,30 @@ func TestEnumerateFeatures_InvokesInCoreLoader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enumerateFeatures: %v", err)
 	}
-	var e *struct {
-		kind, name, desc, summary string
-		steps, checks             int
-	}
+	var e *spec.FeatureEntity
 	for i := range ents {
 		if ents[i].Name == "feat-fixture" {
-			nChecks := 0
-			for _, s := range ents[i].Steps {
-				if s.IsCheck {
-					nChecks++
-				}
-			}
-			e = &struct {
-				kind, name, desc, summary string
-				steps, checks             int
-			}{ents[i].Kind, ents[i].Name, ents[i].Description, ents[i].Summary, len(ents[i].Steps), nChecks}
+			e = &ents[i]
 		}
 	}
 	if e == nil {
 		t.Fatalf("feat-fixture not enumerated: %+v", ents)
 	}
-	if e.kind != "candy" || !strings.Contains(e.desc, "A fixture candy proving the in-core loader runs") || e.steps != 1 || e.checks != 1 {
-		t.Fatalf("enumerated entity wrong: kind=%s desc=%q steps=%d checks=%d", e.kind, e.desc, e.steps, e.checks)
+	nChecks := 0
+	for _, s := range e.Plan {
+		if s.Check != "" || s.AgentCheck != "" {
+			nChecks++
+		}
+	}
+	if e.Kind != "candy" || !strings.Contains(e.Description, "A fixture candy proving the in-core loader runs") || len(e.Plan) != 1 || nChecks != 1 {
+		t.Fatalf("enumerated entity wrong: kind=%s desc=%q plan=%d checks=%d", e.Kind, e.Description, len(e.Plan), nChecks)
 	}
 }
 
-// TestEnumerateFeatures_RunsValidatePlanSteps proves the seam runs the SHARED validatePlanSteps over
-// the parsed plan model end-to-end: a candy with a non-empty description + a well-formed check: step
-// enumerates with ZERO ValidationErrors — proving the loader + plan model + validatePlanSteps chain
-// actually ran (not a no-op).
+// TestEnumerateFeatures_RunsValidatePlanSteps proves the seam's RAW plan + description survive
+// enumeration well-formed enough that the SHARED kit.ValidatePlanSteps (now run in candy/plugin-feature)
+// would find zero errors — i.e. the loader + plan model chain produced a clean plan (not a no-op or a
+// corrupted transform).
 func TestEnumerateFeatures_RunsValidatePlanSteps(t *testing.T) {
 	dir := writeFeatureFixtureProject(t, "A fixture candy with a valid plan")
 	ents, err := enumerateFeatures(dir, "")
@@ -97,8 +91,10 @@ func TestEnumerateFeatures_RunsValidatePlanSteps(t *testing.T) {
 		t.Fatalf("enumerateFeatures: %v", err)
 	}
 	for _, e := range ents {
-		if e.Name == "feat-fixture" && len(e.ValidationErrors) != 0 {
-			t.Fatalf("clean candy has validation errors: %v", e.ValidationErrors)
+		if e.Name == "feat-fixture" {
+			if errs := kit.ValidatePlanSteps(e.Description, e.Plan, e.Kind+":"+e.Name); len(errs) != 0 {
+				t.Fatalf("clean candy has validation errors: %v", errs)
+			}
 		}
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -67,14 +66,14 @@ type hostPlanGrammar struct{}
 
 // EffectiveDo resolves op's do-mode (the keyword-stamped intentDo wins, else the verb's
 // VerbCatalog default, else DoAssert).
-func (hostPlanGrammar) EffectiveDo(op *spec.Op) kit.DoMode { return opEffectiveDo(op) }
+func (hostPlanGrammar) EffectiveDo(op *spec.Op) spec.DoMode { return opEffectiveDo(op) }
 
 // InContext reports whether op is legal in the run's active context: runtime=true → the live
 // (runtime) context, runtime=false → the box (build) context.
 func (hostPlanGrammar) InContext(op *spec.Op, runtime bool) bool {
-	wantCtx := deploykit.CtxBuild
+	wantCtx := spec.CtxBuild
 	if runtime {
-		wantCtx = deploykit.CtxRuntime
+		wantCtx = spec.CtxRuntime
 	}
 	return opInContext(op, wantCtx)
 }

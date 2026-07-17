@@ -774,7 +774,7 @@ func (l *Candy) runOps() []spec.Op {
 			continue
 		}
 		op := step.Op
-		if opInContext(&op, deploykit.CtxRuntime) && !opInContext(&op, deploykit.CtxBuild) && !opInContext(&op, deploykit.CtxDeploy) {
+		if opInContext(&op, spec.CtxRuntime) && !opInContext(&op, spec.CtxBuild) && !opInContext(&op, spec.CtxDeploy) {
 			continue
 		}
 		out = append(out, op)
@@ -1361,3 +1361,9 @@ func pickCandyVersion(bareRef string, cands []candyCandidate) candyCandidate {
 	}
 	return best
 }
+
+// Inject the VerbCatalog-coupled op-context classifier (checkspec.go's opInContext) into
+// deploykit's swappable seam (deploykit itself holds no VerbCatalog — that vocabulary is
+// core, reserved_registry.go). Hosted here (not checkspec.go) so checkspec.go needs no
+// kit/deploykit import at all (K3, #39) — this file already imports deploykit.
+func init() { deploykit.OpInContext = opInContext }

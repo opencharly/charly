@@ -43,8 +43,9 @@ type BoxCmd struct {
 // reconcile) are UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go
 // knows zero verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
 // externalizes (mirroring generate/validate/new/pkg/inspect/list/labels above, P14-rest trace,
-// 2026-07): merge.go and box_labels_cmd.go/pkg_cmd.go already document their own UNTIL-K5/K1
-// notes; build/pull/feature/reconcile are the remaining residue in this struct.
+// 2026-07 — labels externalized fully in K3, no host reentry left; see charly/labels.go): merge.go
+// and pkg_cmd.go already document their own UNTIL-K5/K1 notes; build/pull/feature/reconcile are
+// the remaining residue in this struct.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three
@@ -102,11 +103,17 @@ func FormatCLIError(err error) error {
 		return nil
 	}
 	if errors.Is(err, kit.ErrImageNotLocal) {
-		// ExtractMetadata wraps as "image not found in local storage: <ref>";
-		// pull out the ref so we can render the recommendation.
+		// ExtractMetadata (or any other wrapper — a compiled-in command plugin's generic
+		// dispatchInProcCommand "command %q: %w" wrap included, K3 reentry-class dissolution)
+		// renders as "...image not found in local storage: <ref>"; find the marker WHEREVER it
+		// lands in the message (not just as a whole-message prefix — that broke the moment a
+		// command-dispatch wrap started prefixing it) and pull out the ref from after it.
+		marker := kit.ErrImageNotLocal.Error() + ": "
 		msg := err.Error()
-		ref := strings.TrimPrefix(msg, kit.ErrImageNotLocal.Error()+": ")
-		return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		if idx := strings.LastIndex(msg, marker); idx >= 0 {
+			ref := msg[idx+len(marker):]
+			return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		}
 	}
 	return err
 }

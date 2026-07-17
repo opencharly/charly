@@ -62,8 +62,8 @@ func TestBakeableSteps_StampsIntentDo(t *testing.T) {
 	if len(baked) != 2 {
 		t.Fatalf("bakeableSteps = %d steps, want 2 (check + agent-check both bake)", len(baked))
 	}
-	if got := baked[0].IntentDo; got != string(DoAssert) {
-		t.Errorf("check-step intent_do = %q, want %q (deterministic keyword stamp)", got, DoAssert)
+	if got := baked[0].IntentDo; got != string(spec.DoAssert) {
+		t.Errorf("check-step intent_do = %q, want %q (deterministic keyword stamp)", got, spec.DoAssert)
 	}
 	if got := baked[1].IntentDo; got != "" {
 		t.Errorf("verb-less agent-check intent_do = %q, want empty", got)

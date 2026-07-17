@@ -1242,8 +1242,8 @@ func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 	// host-built and COPYed into every composing image (generate.go
 	// emitBakedPlugins), but the COPY alone does not pull it into the require
 	// chain — so its version: would NOT reach the composing image's
-	// EffectiveVersion (effective_version.go walks the require-resolved candy set
-	// via collectAllBoxCandies → ResolveCandyOrder over Require). Without the
+	// EffectiveVersion (deploykit.ComputeEffectiveVersions walks the require-resolved
+	// candy set via collectAllBoxCandies → ResolveCandyOrder over Require). Without the
 	// implication a changed baked plugin whose own version: bumped but no other
 	// layer's did leaves EffectiveVersion (the ai.opencharly.version label)
 	// unchanged, so charly clean retention + short-name resolution treat it as
