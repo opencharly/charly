@@ -1289,10 +1289,10 @@ func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 		if env == nil {
 			env = make(map[string]string)
 		}
-		layer.envConfig = &kit.EnvConfig{Vars: env, PathAppend: ly.PathAppend}
+		layer.envConfig = &spec.EnvConfig{Vars: env, PathAppend: ly.PathAppend}
 	}
 	if ly.Route != nil {
-		layer.route = &deploykit.RouteConfig{Host: ly.Route.Host, Port: fmt.Sprintf("%d", ly.Route.Port)}
+		layer.route = &spec.RouteConfig{Host: ly.Route.Host, Port: fmt.Sprintf("%d", ly.Route.Port)}
 	}
 	layer.volumes = ly.Volume
 	layer.aliases = ly.Alias

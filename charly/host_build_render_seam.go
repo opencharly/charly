@@ -101,7 +101,7 @@ func renderSeamResult(method string, result any) (spec.RenderSeamReply, error) {
 func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildEngineContext) (spec.RenderSeamReply, error) {
 	switch req.Method {
 	case deploykit.RenderSeamInlineBuilder:
-		var p deploykit.InlineBuilderParams
+		var p spec.InlineBuilderParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -113,10 +113,10 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		if err != nil {
 			return spec.RenderSeamReply{Error: err.Error()}, nil
 		}
-		return renderSeamResult(req.Method, deploykit.InlineBuilderResult{Fragment: frag})
+		return renderSeamResult(req.Method, spec.InlineBuilderResult{Fragment: frag})
 
 	case deploykit.RenderSeamLocalPkg:
-		var p deploykit.LocalPkgParams
+		var p spec.LocalPkgParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -146,14 +146,14 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		if err != nil {
 			return spec.RenderSeamReply{Error: err.Error()}, nil
 		}
-		out, err := marshalJSON(deploykit.LocalPkgResult{Fragment: frag})
+		out, err := marshalJSON(spec.LocalPkgResult{Fragment: frag})
 		if err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: marshal result: %w", req.Method, err)
 		}
 		return spec.RenderSeamReply{Result: out}, nil
 
 	case deploykit.RenderSeamEnsureBuilders:
-		var p deploykit.EnsureBuildersParams
+		var p spec.EnsureBuildersParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -167,7 +167,7 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 		return spec.RenderSeamReply{Result: []byte("{}")}, nil
 
 	case deploykit.RenderSeamEmitPluginOp:
-		var p deploykit.EmitPluginOpParams
+		var p spec.EmitPluginOpParams
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return spec.RenderSeamReply{}, fmt.Errorf("render-seam %s: decode params: %w", req.Method, err)
 		}
@@ -189,13 +189,13 @@ func hostBuildRenderSeam(_ context.Context, req spec.RenderSeamRequest, _ buildE
 			if !sok {
 				return spec.RenderSeamReply{Error: fmt.Sprintf("run: plugin verb %q is not act-capable (ProvisionActor declined)", p.Op.Plugin)}, nil
 			}
-			return renderSeamResult(req.Method, deploykit.EmitPluginOpResult{Out: script, IsScript: true})
+			return renderSeamResult(req.Method, spec.EmitPluginOpResult{Out: script, IsScript: true})
 		}
 		frag, ferr := emitPluginFragment(prov, p.Op, img)
 		if ferr != nil {
 			return spec.RenderSeamReply{Error: fmt.Sprintf("run: plugin verb %q build-emit: %s", p.Op.Plugin, ferr.Error())}, nil
 		}
-		return renderSeamResult(req.Method, deploykit.EmitPluginOpResult{Out: frag, IsScript: false})
+		return renderSeamResult(req.Method, spec.EmitPluginOpResult{Out: frag, IsScript: false})
 	}
 
 	return spec.RenderSeamReply{}, fmt.Errorf("render-seam: unknown method %q", req.Method)

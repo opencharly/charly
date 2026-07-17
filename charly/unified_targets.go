@@ -38,7 +38,7 @@ import (
 // no-executor and the summary errors; nodeName is the deploy identifier. Shared
 // by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
 // kind/name labels (R3).
-func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
+func runUnifiedTargetChecks(ctx context.Context, exec spec.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
 	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
 	for _, id := range opts.OnlyIDs {
 		onlyIDs[id] = true
