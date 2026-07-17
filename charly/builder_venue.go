@@ -6,15 +6,17 @@ package main
 // images live) and installs them onto an arbitrary venue via the DeployExecutor:
 //
 //   - aur (s.LocalPkg != nil): produces .pkg.tar.zst files in a host staging dir, then
-//     ships + installs them onto the venue via the SHARED transferAndInstallPkgs leg.
+//     ships + installs them onto the venue via the SHARED deploykit.TransferAndInstallPkgs leg.
 //   - npm/pixi/cargo (home-artifact): produces user-home subdirs (~/.npm-global,
 //     ~/.pixi, ~/.cargo) baking the VENUE home path, tars them, and extracts into the
 //     venue user's $HOME over the executor.
 //
-// The build ENGINE (BuilderRun → podman; EnsureImagePresent → charly box build;
-// buildDepPkgsOnHost → the aur dep-builder) STAYS the irreducible core (package main);
-// this function is the orchestration that drives it against a venue executor. It is the
-// SAME body the VM target used (extracted verbatim, behavior-preserving), so an
+// The dep-builder engine itself (deploykit.BuildDepPkgsOnHost → kit.BuilderRun → podman) is a
+// PURE sdk/deploykit function (W3) — this file's ONE remaining core dependency is the injected
+// image-resolve/ensure closures (resolveImageRefForEnsure / EnsureImagePresent → `charly box
+// build`, a genuine loader action), which this function closes over build.Cfg/build.ProjectDir
+// and passes in. This function is the orchestration that drives the dep-builder against a venue
+// executor — the SAME body the VM target used (extracted verbatim, behavior-preserving), so an
 // out-of-process deploy/step plugin driving a BuilderStep over the RunHostStep reverse channel
 // runs the IDENTICAL machinery a built-in VM deploy runs — no second implementation.
 
@@ -55,17 +57,18 @@ type buildEngineContext struct {
 	// via the SAME buildStageContext + RenderTemplate pipeline the box build uses (R3, the
 	// C1.3 relocation of the Builder build-emit onto the step-emit seam), and the HOST-COUPLED
 	// LocalPkgInstall step-emitter (stepEmitLocalPkgInstall) can render the dev/prod localpkg
-	// IMAGE install via renderLocalPkgImageInstall (the C1.4 relocation). They are zero for
-	// every deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and
-	// the LocalPkgInstall DEPLOY leg is execLocalPkgInstall (separate host-engine paths driven
-	// via RunHostStep), which read none of them.
+	// IMAGE install via deploykit.RenderLocalPkgImageInstall (the C1.4 relocation). They are zero
+	// for every deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and
+	// the LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
+	// driven via RunHostStep), which read none of them.
 	Generator     *Generator
 	BuilderConfig *buildkit.BuilderConfig
 	Box           *buildkit.ResolvedBox
 	// ImageBuildDir is the per-image (pod-overlay) build dir — the imageDir the
 	// dev-mode localpkg build-emit stages a locally-built package into
-	// (renderLocalPkgImageDevInstall). It is buildEngineContext.ImageBuildDir, NOT Generator.BuildDir (the
-	// overlay build dir differs from the project .build root). Zero for every deploy-leg context.
+	// (deploykit's renderLocalPkgImageDevInstall). It is buildEngineContext.ImageBuildDir, NOT
+	// Generator.BuildDir (the overlay build dir differs from the project .build root). Zero for
+	// every deploy-leg context.
 	ImageBuildDir string
 	// ContextRelPrefix is the build-context-relative prefix for staged inline
 	// content — the datum the HOST-COUPLED Op step-emitter (stepEmitOp, step_emit_hostbuild.go)
@@ -96,7 +99,7 @@ func builderStepImage(s *deploykit.BuilderStep, opts deploykit.EmitOpts) (string
 // by the compiler for the aur builder) and goes through the build-on-host → transfer →
 // package-install leg; everything else is a home-artifact builder (pixi/npm/cargo) whose
 // ~/.pixi / ~/.npm-global / ~/.cargo output is tarred into the venue home. An unknown
-// builder with neither shape has no host build script (renderBuilderScript errors on a
+// builder with neither shape has no host build script (deploykit.RenderBuilderScript errors on a
 // nil BuilderDef cell); --skip-incompatible skips it.
 func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, venueHome string, build buildEngineContext, s *deploykit.BuilderStep, opts deploykit.EmitOpts) error {
 	if s.LocalPkg == nil {
@@ -116,15 +119,22 @@ func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, ven
 	}
 	// Gate on the format's local_pkg.probe (e.g. `command -v pacman`) succeeding on the
 	// VENUE — config-driven, not a hardcoded distro/builder-name check.
-	if !venueHasPkgManager(ctx, exec, s.LocalPkg, opts) {
+	if !deploykit.VenueHasPkgManager(ctx, exec, s.LocalPkg, opts) {
 		return fmt.Errorf("builder %q (candy=%s) builds %s package files but the venue has no %s package manager (local_pkg.probe %q failed); cannot install the built packages",
 			s.Builder, s.CandyName, s.LocalPkg.DepBuilder, s.LocalPkg.DepBuilder, s.LocalPkg.Probe)
 	}
 
 	// Build the aur packages on the HOST through the SHARED host-side dep-build helper
 	// (R3) — the builder runs on the host (podman); the venue never needs a container
-	// runtime. The package glob comes from the format config.
-	matches, err := buildDepPkgsOnHost(ctx, s.LocalPkg, s.BuilderDef, image, deploykit.ExtractStringSlice(s.RawStageContext, "packages"), s.CandyDir, build.Cfg, build.ProjectDir, opts)
+	// runtime. The package glob comes from the format config. The image resolve/ensure
+	// seams are INJECTED closures (deploykit.BuildDepPkgsOnHost imports no *Config) —
+	// closing over build.Cfg/build.ProjectDir here, the one genuine core dependency.
+	matches, err := deploykit.BuildDepPkgsOnHost(ctx, s.LocalPkg, s.BuilderDef, image, deploykit.ExtractStringSlice(s.RawStageContext, "packages"), s.CandyDir,
+		func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
+		func(ctx context.Context, img string) error {
+			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
+		},
+		opts)
 	if err != nil {
 		return fmt.Errorf("venue aur builder: %w", err)
 	}
@@ -136,7 +146,7 @@ func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, ven
 	// transfer+install leg (R3). The install command (e.g. `pacman -U`) comes from the
 	// format's local_pkg.install_template and is the upgrade form, so a re-run after a
 	// partial failure replaces the staging content idempotently.
-	return transferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
+	return deploykit.TransferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
 }
 
 // runVenueHomeArtifactBuilder runs a user-home builder (npm/pixi/cargo) on the HOST into
@@ -172,7 +182,7 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 
 	bindMounts := map[string]string{venueHome: stageHost}
 	envVars := kit.UserScopeEnv(venueHome)
-	script, err := renderBuilderScript(s, venueHome)
+	script, err := deploykit.RenderBuilderScript(s, venueHome)
 	if err != nil {
 		return err
 	}
@@ -190,7 +200,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 		// BuilderRun can resolve a namespace-qualified / short builder ref (e.g. a
 		// bed's install_opts.builder_image: arch.arch-builder) to its concrete image
 		// — newest-local, or built on-demand from the project — instead of only
-		// accepting a full registry ref. Mirrors buildDepPkgsOnHost (localpkg.go).
+		// accepting a full registry ref. Mirrors deploykit.BuildDepPkgsOnHost's own injected
+		// ResolveImage/EnsureImage closures (sdk/deploykit/localpkg.go).
 		ResolveImage: func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
 		EnsureImage: func(ctx context.Context, img string) error {
 			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)

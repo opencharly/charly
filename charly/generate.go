@@ -45,7 +45,7 @@ type Generator struct {
 	// from LOCAL in-development source instead of downloading the published
 	// release. Set ONLY for disposable check-bed image builds (the check-bed runner
 	// passes `--dev-local-pkg`), so a bed always tests the in-development charly;
-	// a production box build leaves it false. See renderLocalPkgImageInstall.
+	// a production box build leaves it false. See deploykit.RenderLocalPkgImageInstall.
 	DevLocalPkg bool
 
 	// (The per-image builder-reply caches externalBuilderReplies/detectionBuilderReplies
@@ -679,4 +679,3 @@ func (g *Generator) candyByName(name string) *Candy {
 // FIRST dot. Cache-safe: the path changes iff the candy version changes.
 // candyStageDirName → deploykit.CandyStageDirName (P8 shim).
 var candyStageDirName = deploykit.CandyStageDirName
-

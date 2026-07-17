@@ -5,7 +5,7 @@ package main
 //
 // This is the release-artifact counterpart of the deploy-time localpkg step:
 // both build the package the SAME way — through the format's embedded build vocabulary's
-// `local_pkg.build_template` rendered by buildLocalPkgOnHost (R3) — so there is
+// `local_pkg.build_template` rendered by deploykit.BuildLocalPkgOnHost (R3) — so there is
 // ONE per-format build definition and ZERO distro-specific Go here. The command
 // is format-blind: it looks up each requested format's local_pkg block in
 // the embedded build vocabulary and the candy's per-format source dir, builds, and copies the
@@ -25,8 +25,9 @@ import (
 // BoxPkgCmd builds native package artifacts for a candy's localpkg sources. The user-facing
 // `charly box pkg` grammar now lives in the COMPILED-IN candy/plugin-box (command:pkg, nested
 // under box); this struct is registered as the hidden `charly __box-pkg` reentry the plugin reaches
-// over HostBuild("cli") — the pkg build engine (buildLocalPkgOnHost) needs the host build context
-// the plugin cannot compute pre-K1.
+// over HostBuild("cli") — the pkg build engine (candy scan → the candy's localpkg source dir)
+// needs the host build context the plugin cannot compute pre-K1; deploykit.BuildLocalPkgOnHost
+// itself is a pure downstream call.
 //
 // K1-doomed: dies when plugin-box loads the project itself via sdk/loadkit (K1).
 type BoxPkgCmd struct {
@@ -84,12 +85,12 @@ func (c *BoxPkgCmd) Run() error {
 		if lp == nil {
 			return fmt.Errorf("no distro in the embedded build vocabulary declares a local_pkg block for format %q", format)
 		}
-		srcDir := resolveLocalPkgDir(src, lyr.SourceDir, dir, lp.SourceSentinel)
+		srcDir := deploykit.ResolveLocalPkgDir(src, lyr.SourceDir, dir, lp.SourceSentinel)
 		if srcDir == "" {
 			return fmt.Errorf("package source %q for format %q not found (sentinel %q)", src, format, lp.SourceSentinel)
 		}
 		fmt.Fprintf(os.Stderr, "Building %s package for candy %q from %s\n", format, c.Candy, srcDir)
-		files, err := buildLocalPkgOnHost(ctx, lp, srcDir, deploykit.EmitOpts{})
+		files, err := deploykit.BuildLocalPkgOnHost(ctx, lp, srcDir, deploykit.EmitOpts{})
 		if err != nil {
 			return fmt.Errorf("building %s package: %w", format, err)
 		}

@@ -26,10 +26,10 @@ package main
 //   - The HOST-COUPLED SystemPackages (C1.2) + Builder (C1.3) + LocalPkgInstall (C1.4) + Op (C1.5)
 //     kinds — their OpEmit calls back the host's "step-emit" host-builder for a render they cannot do
 //     across the process boundary (SystemPackages needs the DistroDef-format templates; Builder needs
-//     the multi-stage buildStageContext + RenderTemplate engine; LocalPkgInstall needs the host
-//     localpkg build engine renderLocalPkgImageInstall → buildLocalPkgOnHost + host-dir staging; Op
+//     the multi-stage buildStageContext + RenderTemplate engine; LocalPkgInstall calls deploykit's
+//     pure RenderLocalPkgImageInstall/BuildLocalPkgOnHost + host-dir staging; Op
 //     needs the RICHEST Generator.emitTasks per-verb render pipeline — COPY staging, op coalescing).
 //     See step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder, stepEmitLocalPkgInstall,
 //     stepEmitOp). Their DEPLOY legs (SystemPackages/Builder/LocalPkgInstall host-engine via
-//     RunHostStep → renderHostPackageCommand / runVenueBuilderStep / execLocalPkgInstall; Op the
-//     act-OpStep resolveProvisionScript / renderOpCommand path) are likewise unchanged.
+//     RunHostStep → renderHostPackageCommand / runVenueBuilderStep / deploykit.ExecLocalPkgInstall;
+//     Op the act-OpStep resolveProvisionScript / renderOpCommand path) are likewise unchanged.

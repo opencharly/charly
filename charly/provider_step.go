@@ -76,8 +76,8 @@ func stepProviderFor(kind spec.StepKind) (StepProvider, bool) {
 //     local-pkg-install (C1.4) + op (C1.5) — the plugin's OpEmit calls back the host's "step-emit"
 //     host-builder (HostBuild) for a render it cannot do across the process boundary
 //     (system-packages needs the DistroDef format templates; builder needs the multi-stage
-//     buildStageContext + RenderTemplate engine; local-pkg-install needs the host localpkg build
-//     engine renderLocalPkgImageInstall → buildLocalPkgOnHost + host-dir staging; op needs the
+//     buildStageContext + RenderTemplate engine; local-pkg-install calls deploykit's pure
+//     RenderLocalPkgImageInstall/BuildLocalPkgOnHost + host-dir staging; op needs the
 //     RICHEST Generator.emitTasks per-verb render pipeline — COPY staging + op coalescing). See
 //     charly/step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder,
 //     stepEmitLocalPkgInstall, stepEmitOp).
