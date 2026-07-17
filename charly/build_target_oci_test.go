@@ -71,9 +71,9 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{DistroCfg: buildkit.WrapDistroDef(distro)})
 	plan := &deploykit.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
-			Format:     "rpm",
-			Phase: spec.PhaseInstall,
-			Packages:   []string{"ripgrep"},
+			Format:   "rpm",
+			Phase:    spec.PhaseInstall,
+			Packages: []string{"ripgrep"},
 			RawInstallContext: map[string]any{
 				"package": []any{"ripgrep"},
 			},
@@ -105,9 +105,9 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	tgt := ociTestTarget(buildEngineContext{DistroCfg: buildkit.WrapDistroDef(distro)})
 	plan := &deploykit.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
-			Format:     "rpm",
-			Phase: spec.PhaseInstall,
-			Packages:   []string{"foo"},
+			Format:   "rpm",
+			Phase:    spec.PhaseInstall,
+			Packages: []string{"foo"},
 			RawInstallContext: map[string]any{
 				"package": []any{"foo"},
 			},
@@ -189,7 +189,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 // pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → spliceClassStepEmit("local-pkg-install") →
 // the compiled-in candy/plugin-installstep OpEmit → emitViaHostBuild → HostBuild("step-emit",
 // {Word:"local-pkg-install"}) → stepEmitLocalPkgInstall (the in-core host localpkg build engine on
-// the in-proc reverse channel) → renderLocalPkgImageInstall. It asserts the release-download RUN the former
+// the in-proc reverse channel) → deploykit.RenderLocalPkgImageInstall. It asserts the release-download RUN the former
 // in-proc overlay-walker localpkg build-emit produced — the test FAILS without this change (there is no
 // in-proc LocalPkgInstall StepProvider; the plugin must serve step:local-pkg-install and the host must
 // register the step-emit renderer). This is the exact in-proc chain a pod overlay with a localpkg

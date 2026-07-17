@@ -3,8 +3,8 @@
 # A self-contained, dependency-free, source-free Arch package that installs ONE marker
 # file. It exists so the examplebuild-localpkg candy compiles a LocalPkgInstallStep that an
 # out-of-process deploy plugin drives over the RunHostStep host-engine reverse leg: the host builds
-# it with `makepkg` (buildLocalPkgOnHost) and installs it onto the venue with `pacman -U`
-# (transferAndInstallPkgs) — the EXISTING build machinery, exposed over the reverse channel.
+# it with `makepkg` (deploykit.BuildLocalPkgOnHost) and installs it onto the venue with `pacman -U`
+# (deploykit.TransferAndInstallPkgs) — the EXISTING build machinery, exposed over the reverse channel.
 # It conflicts with nothing (owns only /opt/charly-f3-witness) and is removed cleanly by the
 # plugin's recorded `pacman -R` reverse op at `charly bundle del`.
 pkgname=charly-f3-witness

@@ -144,7 +144,7 @@ type pkgGrammar struct {
 }
 
 // dispatchPkg reaches the hidden core `__box-pkg` reentry over HostBuild("cli"): the localpkg build
-// engine (buildLocalPkgOnHost) needs the host build context the plugin cannot compute pre-K1. The
+// engine (deploykit.BuildLocalPkgOnHost, W3) still needs core's builder-image resolve closures pre-K1. The
 // subprocess inherits charly's stdio (it prints the built file paths + status) and exits 0/1.
 func dispatchPkg(hc *hostClient, args []string) error {
 	var g pkgGrammar
