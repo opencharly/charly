@@ -79,9 +79,9 @@ func collectK8sStatus(ctx context.Context, req spec.SubstrateStatusRequest) (spe
 // fetchResolvedProject re-hydrates the resolved-project envelope over the
 // established HostBuild("resolved-project") seam (candy/plugin-bundle's
 // OpCompile proves this composition in production). Dir is left empty — a
-// compiled-in substrate plugin shares the host process's cwd, exactly what
-// charly/status_collector.go's own NewCollector already relies on
-// (os.Getwd()) for the SAME project projection.
+// compiled-in substrate plugin shares the host process's cwd, so the host-side
+// "resolved-project" handler's own os.Getwd() already resolves the right
+// project without this plugin naming a directory.
 func fetchResolvedProject(ctx context.Context) (*spec.ResolvedProject, error) {
 	exec, err := sdk.ExecutorForInvoke(ctx, 0)
 	if err != nil {

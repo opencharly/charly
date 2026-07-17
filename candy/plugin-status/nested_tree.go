@@ -170,8 +170,8 @@ func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploy
 	if err != nil {
 		return nil, err
 	}
-	// Best-effort: absence of a per-machine overlay is normal (mirrors NewCollector's own
-	// graceful handling of a missing/invalid charly.yml).
+	// Best-effort: absence of a per-machine overlay is normal (mirrors
+	// candy/plugin-substrate's newFlatCollector, K6, the same pattern).
 	perMachine, _ := deploykit.LoadBundleConfig()
 	return mergedNestedRootsFrom(rp, perMachine), nil
 }

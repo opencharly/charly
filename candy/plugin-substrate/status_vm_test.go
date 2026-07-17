@@ -46,8 +46,9 @@ func TestVMStatusFromDomainState(t *testing.T) {
 
 // TestCollectVmStatus_Rows asserts collectVmStatus maps each mocked libvirt
 // domain to a BARE row (Kind/Source/Image/Status/Container) — no deploy
-// enrichment (that moved host-side to charly/status_collector.go's
-// enrichVmRow, tested there against synthetic BundleConfig fixtures).
+// enrichment (a separate concern: status_flat.go's flatCollector.enrichVmRow,
+// K6, same package, tested in status_flat_test.go against synthetic
+// BundleConfig fixtures).
 func TestCollectVmStatus_Rows(t *testing.T) {
 	cases := []struct {
 		name    string

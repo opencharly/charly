@@ -1,13 +1,12 @@
 package substratekind
 
-// status_collect.go — the substrate COLLECTOR OpStatus dispatch. The host's
-// status fan-out (charly/status_collector.go collectFlat) reaches EVERY
-// collector (pod + local, P14a; vm + k8s + android, K5) over the kind
-// provider's Invoke as sdk.OpStatusCollect, dispatched by word
-// (pod/vm/k8s/local/android) — the SAME one-provider-serves-all-5-words shape
-// the C2-substrate kind decode uses. All 5 words are now plugin-served —
-// the in-proc SubstrateCollector registry this seam once deferred to no
-// longer has any registrants (see charly/status_substrate.go, deleted).
+// status_collect.go — the substrate COLLECTOR OpStatus dispatch. flatCollector's status fan-out
+// (status_flat.go, K6 — the former charly/status_collector.go's collectFlat, moved WHOLE into
+// this package) reaches EVERY collector by a DIRECT in-package call (pod + local, P14a; vm + k8s +
+// android, K5) — the SAME one-provider-serves-all-5-words shape the C2-substrate kind decode uses,
+// now with no registry/wire round-trip needed for the in-package leg either. All 5 words are
+// plugin-served — the in-proc SubstrateCollector registry this seam once deferred to no longer
+// has any registrants (see charly/status_substrate.go, deleted).
 
 import (
 	"context"
