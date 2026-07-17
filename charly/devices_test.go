@@ -63,7 +63,7 @@ func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
 	sec := SecurityConfig{
 		Devices: []string{"/dev/fuse"}, // already has /dev/fuse
 	}
-	sec.Devices = deploykit.AppendUniqueString(sec.Devices, detected.Devices...)
+	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
 
 	want := []string{"/dev/fuse", "/dev/kvm"}
 	if !reflect.DeepEqual(sec.Devices, want) {
@@ -172,7 +172,7 @@ func TestAMDGPUGroupInjection(t *testing.T) {
 	}
 
 	sec := SecurityConfig{}
-	sec.Devices = deploykit.AppendUniqueString(sec.Devices, detected.Devices...)
+	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
 	if detected.AMDGPU {
 		sec.GroupAdd = appendGroupsForAMDGPU(sec.GroupAdd)
 	}

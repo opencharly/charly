@@ -88,7 +88,7 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 // (quadlet_test.go) with the NormalizeCgroupSize/FormatCPUQuota helpers in P11.
 // TestSecurityArgs* + TestAppendUnique/TestIpcModeBlocksShmSize/TestMaxShmSize/
 // TestParseShmBytes/TestMinCap/TestMinCpus moved to sdk/deploykit/security_test.go
-// with the CollectSecurity split (W9) — SecurityArgs/ResourceCapArgs/AppendUniqueString/
+// with the CollectSecurity split (W9) — SecurityArgs/ResourceCapArgs/AppendUnique/
 // the byte-size helpers now live there exclusively.
 
 func TestBuildStartArgsWithPrivileged(t *testing.T) {

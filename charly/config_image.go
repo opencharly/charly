@@ -485,7 +485,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 
 	// Merge auto-detected devices into security config
 	if !security.Privileged {
-		security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
+		security.Devices = deploykit.AppendUnique(security.Devices, detected.Devices...)
 		if detected.AMDGPU {
 			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 		}
@@ -1647,7 +1647,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// Merge security
 		security := meta.Security
 		if !security.Privileged {
-			security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
+			security.Devices = deploykit.AppendUnique(security.Devices, detected.Devices...)
 			if detected.AMDGPU {
 				security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 			}
