@@ -12,9 +12,11 @@ import (
 // coupled today — ResolveBoxEngine* / ImageRuntime are consumed from
 // commands.go, container.go, pod_lifecycle_resolve.go, preempt.go,
 // resolved_project_host.go, service.go, start.go, config_image.go,
-// status_collector.go, volume_cp_tags_cmd.go (P14-rest trace, 2026-07) — none
-// of which are movable in isolation without also relocating those consumers.
-// Stays core until the K4 deploy-cone wave moves the whole consumer set
+// volume_cp_tags_cmd.go (P14-rest trace, 2026-07; status_collector.go left this
+// consumer set at K6 — the status subsystem now calls
+// deploykit.ResolveBoxEngineForDeploy directly from candy/plugin-substrate) —
+// none of the remaining consumers are movable in isolation without also
+// relocating them. Stays core until the K4 deploy-cone wave moves the whole consumer set
 // together; a unilateral move of this file alone would strand its callers.
 
 // EngineBinary returns the binary name for the given engine.
