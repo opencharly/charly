@@ -117,3 +117,34 @@ func TestPkgGrammar_Parse(t *testing.T) {
 		t.Errorf("Out default = %q, want dist", g.Out)
 	}
 }
+
+// TestCanonicalLabelKey_ExpandsShorthand + TestSortedLabelKeys_FiltersToContractUnlessAll: moved
+// from charly/box_labels_cmd_test.go (K3 reentry-class dissolution — canonicalLabelKey/
+// sortedLabelKeys moved here with dispatchLabels).
+func TestCanonicalLabelKey_ExpandsShorthand(t *testing.T) {
+	cases := map[string]string{
+		"init":                      "ai.opencharly.init",
+		"version":                   "ai.opencharly.version",
+		"ai.opencharly.description": "ai.opencharly.description",
+		"org.opencontainers.x":      "org.opencontainers.x",
+	}
+	for in, want := range cases {
+		if got := canonicalLabelKey(in); got != want {
+			t.Errorf("canonicalLabelKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSortedLabelKeys_FiltersToContractUnlessAll(t *testing.T) {
+	labels := map[string]string{
+		"ai.opencharly.version": "2026.001.0001",
+		"ai.opencharly.init":    "supervisord",
+		"maintainer":            "someone",
+	}
+	if got := sortedLabelKeys(labels, false); !reflect.DeepEqual(got, []string{"ai.opencharly.init", "ai.opencharly.version"}) {
+		t.Errorf("contract-only keys = %v", got)
+	}
+	if got := sortedLabelKeys(labels, true); !reflect.DeepEqual(got, []string{"ai.opencharly.init", "ai.opencharly.version", "maintainer"}) {
+		t.Errorf("all keys = %v", got)
+	}
+}

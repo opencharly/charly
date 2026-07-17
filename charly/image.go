@@ -102,11 +102,17 @@ func FormatCLIError(err error) error {
 		return nil
 	}
 	if errors.Is(err, kit.ErrImageNotLocal) {
-		// ExtractMetadata wraps as "image not found in local storage: <ref>";
-		// pull out the ref so we can render the recommendation.
+		// ExtractMetadata (or any other wrapper — a compiled-in command plugin's generic
+		// dispatchInProcCommand "command %q: %w" wrap included, K3 reentry-class dissolution)
+		// renders as "...image not found in local storage: <ref>"; find the marker WHEREVER it
+		// lands in the message (not just as a whole-message prefix — that broke the moment a
+		// command-dispatch wrap started prefixing it) and pull out the ref from after it.
+		marker := kit.ErrImageNotLocal.Error() + ": "
 		msg := err.Error()
-		ref := strings.TrimPrefix(msg, kit.ErrImageNotLocal.Error()+": ")
-		return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		if idx := strings.LastIndex(msg, marker); idx >= 0 {
+			ref := msg[idx+len(marker):]
+			return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		}
 	}
 	return err
 }

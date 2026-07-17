@@ -3,9 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
@@ -41,28 +39,10 @@ type (
 )
 
 // InspectLabels reads OCI labels from a local image via engine inspect.
-// Package-level var for testability.
-var InspectLabels = defaultInspectLabels
-
-func defaultInspectLabels(engine, imageRef string) (map[string]string, error) {
-	binary := kit.EngineBinary(engine)
-	cmd := exec.Command(binary, "inspect", "--format", "{{json .Config.Labels}}", imageRef)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("inspecting %s: %w", imageRef, err)
-	}
-
-	trimmed := strings.TrimSpace(string(output))
-	if trimmed == "null" || trimmed == "" {
-		return nil, nil
-	}
-
-	var labels map[string]string
-	if err := json.Unmarshal([]byte(trimmed), &labels); err != nil {
-		return nil, fmt.Errorf("parsing labels from %s: %w", imageRef, err)
-	}
-	return labels, nil
-}
+// Package-level var for testability. The impl (kit.InspectImageLabels) is a pure
+// container-storage probe promoted to sdk/kit (K3 reentry-class dissolution) — candy/plugin-box's
+// `labels` command calls it directly too, so this is the single shared implementation, not a dup.
+var InspectLabels = kit.InspectImageLabels
 
 // ExtractMetadata reads OCI labels from a local image and returns parsed BoxMetadata.
 // Returns nil if the image has no ai.opencharly labels.

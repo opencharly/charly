@@ -86,12 +86,11 @@ type CLI struct {
 	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
 	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
 
-	// __box-labels is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
-	// command:labels word (nested under `box`, P14-rest). The plugin owns the user-facing
-	// `charly box labels` grammar + dispatch and reaches this over HostBuild("cli") — the SAME
-	// tracked-residue shape as the sibling __box-pkg/__box-inspect-overlay/__box-list-tags/
-	// __box-fetch/__box-refresh reentries above.
-	BoxLabels BoxLabelsCmd `cmd:"" name:"__box-labels" hidden:"" help:"internal: print a built image's OCI labels (reentry behind box labels)"`
+	// __box-labels is GONE (K3 reentry-class dissolution): candy/plugin-box's `labels` command now
+	// calls kit.ResolveRuntime/ResolveLocalImageRef/InspectImageLabels directly — all pure
+	// container-storage probes with zero loader coupling, unlike the pkg/inspect-overlay/list-tags/
+	// fetch/refresh siblings above, which genuinely need host-coupled state and stay K5-doomed
+	// reentries for now.
 
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s

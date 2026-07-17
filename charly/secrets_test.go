@@ -591,3 +591,31 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		}
 	}
 }
+
+// TestApplySecretRefresh_NamedAllAndUnmatched (moved from box_labels_cmd_test.go, K3 reentry-class
+// dissolution — that file's own subjects, canonicalLabelKey/sortedLabelKeys, moved to
+// candy/plugin-box; this test covers ApplySecretRefresh, defined in secrets.go, so it belongs here).
+func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
+	base := []deploykit.CollectedSecret{
+		{Name: "charly-app-db-password", SecretName: "db-password"},
+		{Name: "charly-app-api-key", SecretName: "api-key"},
+	}
+
+	out, unmatched := ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), nil)
+	if len(unmatched) != 0 || out[0].RotateOnConfig || out[1].RotateOnConfig {
+		t.Fatal("no-op refresh must not rotate or report unmatched")
+	}
+
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"db-password", "nope"})
+	if !out[0].RotateOnConfig || out[1].RotateOnConfig {
+		t.Errorf("named refresh rotated wrong set: %+v", out)
+	}
+	if !reflect.DeepEqual(unmatched, []string{"nope"}) {
+		t.Errorf("unmatched = %v, want [nope]", unmatched)
+	}
+
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"all"})
+	if !out[0].RotateOnConfig || !out[1].RotateOnConfig || len(unmatched) != 0 {
+		t.Errorf("'all' refresh must rotate everything: %+v unmatched=%v", out, unmatched)
+	}
+}
