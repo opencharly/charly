@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -55,8 +54,8 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 }
 
 // CollectDescriptions returns nil if every section is empty.
-func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *kit.LabelDescriptionSet {
-	set := &kit.LabelDescriptionSet{}
+func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *spec.LabelDescriptionSet {
+	set := &spec.LabelDescriptionSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 	for _, candyName := range allCandyNames {
@@ -68,7 +67,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 		if layer.Description == "" && len(baked) == 0 {
 			continue
 		}
-		set.Candy = append(set.Candy, kit.LabeledDescription{
+		set.Candy = append(set.Candy, spec.LabeledDescription{
 			Origin:      "candy:" + candyName,
 			Description: layer.Description,
 			Plan:        baked,
@@ -79,7 +78,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 	if img, ok := cfg.BoxConfig(boxName); ok {
 		baked := bakeableSteps(img.Plan)
 		if img.Description != "" || len(baked) > 0 {
-			set.Box = append(set.Box, kit.LabeledDescription{
+			set.Box = append(set.Box, spec.LabeledDescription{
 				Origin:      "box:" + boxName,
 				Description: img.Description,
 				Plan:        baked,

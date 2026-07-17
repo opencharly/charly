@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // maxReverseChannelMsgBytes is the max gRPC message size (recv AND send) for the E3b
@@ -161,7 +161,7 @@ func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, erro
 // VM); false (the default) makes a RebootStep skip-and-note (a host venue is never rebooted).
 // Falls back to a plain Invoke (broker id 0) when the connection has no broker (an in-proc
 // transport) or no executor is given.
-func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error) {
+func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error) {
 	var brokerID uint32
 	if g.conn.Broker != nil && (exec != nil || cc != nil) {
 		id := g.conn.Broker.NextId()
