@@ -533,6 +533,32 @@ func finalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *InitC
 	return out
 }
 
+// withLocalRawRefs returns opts with every local candy's RAW (pre-finalize) require:/candy:
+// refs appended to ExtraCandyRefs. CollectRemoteRefsOpts's own "candy manifest require:/candy:"
+// walk reads CandyView.Require/.IncludedCandy — the FINALIZED bare-string wire form
+// (FinalizeCandyRefs strips a "@repo:vTAG" pin down to the bare graph-topology name; correct
+// for its OWN consumers, ExpandCandy/ResolveCandyOrder, which are version-agnostic). Feeding
+// that walk a wrapped view therefore leaves it structurally UNABLE to discover a local candy's
+// pinned remote dep at all (a bare name never looks remote to IsRemoteCandyRef) — the confirmed
+// root cause of a "depends: unknown candy" crash a live box/cachyos generate surfaced (a local
+// candy's require: pins a remote plugin candy). So the raw pre-finalize refs (still carrying the
+// full pin, from spec.ScannedCandy.Refs) are harvested here and fed in as ExtraCandyRefs — the
+// SAME mechanism a deploy's add_candy: already uses to reach a ref no base/builder/require edge
+// would otherwise surface. A local (non-remote) ref is a harmless no-op (IsRemoteCandyRef gates it).
+func withLocalRawRefs(opts ResolveOpts, localScanned map[string]spec.ScannedCandy) ResolveOpts {
+	extraRefs := append([]string(nil), opts.ExtraCandyRefs...)
+	for _, sc := range localScanned {
+		for _, dep := range sc.Refs.Require {
+			extraRefs = append(extraRefs, dep.Raw)
+		}
+		for _, dep := range sc.Refs.IncludedCandy {
+			extraRefs = append(extraRefs, dep.Raw)
+		}
+	}
+	opts.ExtraCandyRefs = extraRefs
+	return opts
+}
+
 // CandyNames returns a sorted list of candy names
 func CandyNames(layers map[string]spec.CandyReader) []string {
 	names := make([]string, 0, len(layers))
@@ -582,10 +608,14 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 		return nil, err
 	}
 
-	// 2. Collect remote refs from @-prefixed candy references. CollectRemoteRefsOpts walks
-	// each candy's Require/IncludedCandy edges via the CandyReader interface, so it needs a
-	// wrapped view — a throwaway one (nil initCfg; Require/IncludedCandy don't depend on it).
-	downloads, err := CollectRemoteRefsOpts(cfg, finalizeScannedCandies(localScanned, nil), opts)
+	// 2. Collect remote refs from @-prefixed candy references, PLUS every local candy's raw
+	// (pre-finalize) require:/candy: refs — see withLocalRawRefs' doc comment for why the
+	// wrapped-view walk CollectRemoteRefsOpts does on its own can't discover these alone.
+	// The nil-initCfg wrap below is the throwaway this function's own doc comment covers:
+	// CollectRemoteRefsOpts only reads Require/IncludedCandy off it (unaffected by
+	// InitSystems), and finalizeScannedCandies never mutates localScanned, so this call
+	// and the FINAL wrap at the bottom of this function operate on independent copies.
+	downloads, err := CollectRemoteRefsOpts(cfg, finalizeScannedCandies(localScanned, nil), withLocalRawRefs(opts, localScanned))
 	if err != nil {
 		return nil, err
 	}

@@ -109,11 +109,14 @@ type ResolveOpts struct {
 	// ScanAllCandyWithConfigOpts can run the cross-candy init-system host-completion
 	// pass (the PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
 	// FINAL spec.CandyReader — a CandyReader is read-only from the caller's side, so
-	// nothing can mutate CandyView.InitSystems after the scan returns. nil (the
-	// zero-value ResolveOpts every caller but generate.go passes) skips the pass
-	// entirely, matching today's behavior for every caller that doesn't need it —
-	// InitSystems just stays empty, exactly like calling ScanAllCandy without ever
-	// invoking PopulateCandyInitSystem does today.
+	// nothing can mutate CandyView.InitSystems after the scan returns. Every caller
+	// that feeds a wire envelope another process reads for HasInit() lookups MUST set
+	// this (generate.go's NewGenerator and validate_project_host.go's
+	// loadProjectForResolve both do — the latter's scan feeds rp.Candies/
+	// rp.CandyModels, which plugin-build's Generator consumes for real Containerfile
+	// emission via EmitInitFragmentStages). A caller that leaves this nil skips the
+	// pass entirely and InitSystems stays empty on every candy — correct only for a
+	// caller with no init-aware consumer downstream.
 	InitCfg *InitConfig
 }
 

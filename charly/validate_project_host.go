@@ -86,6 +86,15 @@ func loadProjectForResolve(dir string, opts ResolveOpts, diags *spec.Diagnostics
 		RegisterBuildVocabulary(lp.distroCfg)
 	}
 
+	// InitCfg threads the init-system host-completion pass into the scan pipeline —
+	// mirrors NewGenerator's opts.InitCfg = defaultInitCfg (charly/generate.go). A
+	// spec.CandyReader is read-only once wrapped, so InitSystems must be populated
+	// before ScanAllCandyWithConfigOpts wraps each candy. Required since #67: this
+	// scan's output (lp.layers) feeds rp.Candies/rp.CandyModels — the wire envelope
+	// plugin-build's Generator consumes for its own per-candy HasInit() lookups
+	// during Containerfile emission (EmitInitFragmentStages).
+	opts.InitCfg = lp.initCfg
+
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		if diags == nil {
