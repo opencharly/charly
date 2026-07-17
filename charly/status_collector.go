@@ -27,11 +27,18 @@ import (
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the remaining
 // orchestration (collectFlat's pod/vm deploy-enrichment calls, Single) is
-// deploy-cone-coupled (BundleConfig), same as the remaining status_reap.go
-// file (its own switch-on-target-word concerns are a separate future cutover
-// — P14-rest trace, 2026-07; see status_substrate.go for the CollectOpts
-// rationale). The declared-nested-tree pre-resolution formerly here
-// (status_nested.go) moved PLUGIN-SIDE (candy/plugin-status/nested_tree.go, K5).
+// deploy-cone-coupled through GENUINELY core-private dependencies (verified,
+// not assumed, K5): providerRegistry.resolve + invokeTyped (the registry
+// itself — a plugin only ever reaches a peer via InvokeProvider), plus
+// ExtractMetadata/resolveBoxName (T-55's K4 shared-resolver extraction
+// territory) and ListProvisionedSecretNames/quadletDir/quadletExistsInstance/
+// serviceNameInstance/ResolveBoxEngineForDeploy (core-private, no sdk-portable
+// equivalent exists today). This is a DIFFERENT class of blocker than the two
+// files that DID move this K5 pass: status_nested.go (→
+// candy/plugin-status/nested_tree.go) and status_reap.go (→
+// candy/plugin-substrate/command_reap_orphans.go) depended ONLY on
+// sdk-portable deploykit/spec — see status_substrate.go for the CollectOpts
+// rationale.
 type Collector struct {
 	rt      *kit.ResolvedRuntime
 	quadlet string

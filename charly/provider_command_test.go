@@ -137,8 +137,8 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 
 // TestCommandProviders_DeployLifecycleCommands proves every deploy-lifecycle + remaining
 // leaf command extracted into a dedicated COMMAND-class provider (the deploy-lifecycle
-// batch: start/stop/restart/update/remove/logs/shell/cmd/cp/volume/service/config/
-// reap-orphans) is (1) registered in providerRegistry as a CommandProvider with the
+// batch: start/stop/restart/update/remove/logs/shell/cmd/cp/volume/service/config) is
+// (1) registered in providerRegistry as a CommandProvider with the
 // matching Reserved() word, and (2) collected by collectCommandPlugins() and injected into
 // the REAL charly CLI grammar via kong.Plugins, so its subcommand path parses and selects
 // exactly as before the extraction (the Run handler — which calls the unchanged core
@@ -149,7 +149,11 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // through a builtin CommandProvider, exactly like vm/feature. `status` is no longer here
 // either — P14a chunk 2b externalized it to the compiled-in candy/plugin-status
 // (command:status), the SAME dynamic in-proc bridge alias/settings/clean/candy use; its
-// compiled-in registration is asserted by TestCommandCompileIn_StatusInProc.)
+// compiled-in registration is asserted by TestCommandCompileIn_StatusInProc. `reap-orphans`
+// is no longer here either — K5 relocated it to the compiled-in candy/plugin-substrate
+// (command:reap-orphans, alongside its existing substrate-liveness collectors), the SAME
+// dynamic in-proc bridge; its compiled-in registration is asserted by
+// TestCommandCompileIn_ReapOrphansInProc.)
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"start", []string{"start", "mybox"}, "start <box>"},
@@ -164,8 +168,33 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 		{"volume", []string{"volume", "list", "mybox"}, "volume list <box>"},
 		{"service", []string{"service", "status", "mybox"}, "service status <box>"},
 		{"config", []string{"config", "status", "mybox"}, "config status <box>"},
-		{"reap-orphans", []string{"reap-orphans"}, "reap-orphans"},
 	})
+}
+
+// TestCommandCompileIn_ReapOrphansInProc proves the K5 status-subsystem relocation:
+// `charly reap-orphans`, formerly a dedicated builtin CommandProvider
+// (plugin_command_reap_orphans.go, deleted), is now served by the compiled-in
+// candy/plugin-substrate (command:reap-orphans, alongside its existing kind:pod/vm/k8s/
+// local/android + OpStatusCollect capabilities) — registered IN-PROC as a ClassCommand
+// inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
+// dispatchCommand routes `charly reap-orphans` to it via Invoke(OpRun) and its liveness
+// probes reach the verb:libvirt peer provider over InvokeProvider (F10) instead of the
+// deleted core-private invokeVmPlugin. (End-to-end CLI dispatch is exercised by the live
+// R10 bed.)
+func TestCommandCompileIn_ReapOrphansInProc(t *testing.T) {
+	prov, ok := providerRegistry.resolve(ClassCommand, "reap-orphans")
+	if !ok {
+		t.Fatal("compiled-in command candy plugin-substrate did not register command:reap-orphans (pluginsgen/compiled_plugins)")
+	}
+	if _, isGrpc := prov.(*grpcProvider); isGrpc {
+		t.Fatal("reap-orphans registered as a *grpcProvider — expected an in-proc inprocProvider (compiled-in placement)")
+	}
+	if _, isInproc := prov.(*inprocProvider); !isInproc {
+		t.Fatalf("reap-orphans provider is %T, want *inprocProvider (compiled-in command, dispatched in-proc)", prov)
+	}
+	if _, isCmdProv := prov.(CommandProvider); isCmdProv {
+		t.Fatal("reap-orphans should NOT be a static CommandProvider — a compiled-in command candy uses the dynamic in-proc command bridge (dispatchCommand → Invoke(OpRun))")
+	}
 }
 
 // commandProviderCase is one case for assertCommandProviderInjected: a Reserved() word, the
@@ -267,6 +296,12 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	// command with no subcommands, so its CLI-model path is bare "status" (mirrors "clean").
 	if paths["status"] {
 		t.Error("status unexpectedly present in the builtin CLI model — `status` is now a compiled-in command (candy/plugin-status, command:status), a dynamic holder not a builtin CommandProvider")
+	}
+	// reap-orphans (K5) is likewise now COMPILED-IN and OWNS its command (candy/plugin-substrate,
+	// alongside its existing substrate-liveness collectors) — absent from this builtin-only model,
+	// a flat leaf command with no subcommands, so its CLI-model path is bare "reap-orphans".
+	if paths["reap-orphans"] {
+		t.Error("reap-orphans unexpectedly present in the builtin CLI model — `reap-orphans` is now a compiled-in command (candy/plugin-substrate, command:reap-orphans), a dynamic holder not a builtin CommandProvider")
 	}
 	if paths["check.box"] {
 		t.Error("check.box unexpectedly present in the builtin CLI model — `check` is now a compiled-in command (candy/plugin-check, command:check), a dynamic holder not a builtin CommandProvider")
