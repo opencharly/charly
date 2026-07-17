@@ -105,6 +105,16 @@ type ResolveOpts struct {
 	// SAME pipeline (per-entity-version arbitration + SourceDir population); a local
 	// add_candy ref is already covered by ScanCandy and is a no-op here.
 	ExtraCandyRefs []string
+	// InitCfg is the project init: vocabulary (W9), threaded through so
+	// ScanAllCandyWithConfigOpts can run the cross-candy init-system host-completion
+	// pass (the PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
+	// FINAL spec.CandyReader — a CandyReader is read-only from the caller's side, so
+	// nothing can mutate CandyView.InitSystems after the scan returns. nil (the
+	// zero-value ResolveOpts every caller but generate.go passes) skips the pass
+	// entirely, matching today's behavior for every caller that doesn't need it —
+	// InitSystems just stays empty, exactly like calling ScanAllCandy without ever
+	// invoking PopulateCandyInitSystem does today.
+	InitCfg *InitConfig
 }
 
 // shouldIncludeDisabled reports whether name's disabled gate should be
