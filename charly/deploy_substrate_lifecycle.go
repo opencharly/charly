@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -45,7 +44,7 @@ type substrateLifecycle interface {
 	// in-guest over the returned executor), while pod CONSUMES it to build the overlay
 	// (its add_candy overlay plans; empty for a pod with no add_candy). It persists any
 	// substrate runtime state (vm: VmDeployState). Skipped on a dry-run by the caller.
-	PrepareVenue(ctx context.Context, name, dir string, node *spec.BundleNode, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) (deploykit.DeployExecutor, error)
+	PrepareVenue(ctx context.Context, name, dir string, node *spec.BundleNode, plans []*spec.InstallPlan, opts spec.EmitOpts) (spec.DeployExecutor, error)
 
 	// ArtifactKey returns the name candy artifacts (+ the k3s ClusterProfile) are keyed
 	// under for this deploy — for vm "vm:<entity>", NOT the deploy name, because one k3s
@@ -56,7 +55,7 @@ type substrateLifecycle interface {
 	// PostApply runs host orchestration AFTER the plan walk (vm: nested target:pod children
 	// as persistent in-guest quadlets via plugin-deploy-vm's PostApply). Add only — Update is a
 	// walk-only idempotent re-apply (matching the prior in-proc VmUnifiedTarget.Update).
-	PostApply(ctx context.Context, name, dir string, node *spec.BundleNode, exec deploykit.DeployExecutor, opts deploykit.EmitOpts) error
+	PostApply(ctx context.Context, name, dir string, node *spec.BundleNode, exec spec.DeployExecutor, opts spec.EmitOpts) error
 
 	// VenueExecutor returns the live DeployExecutor reaching this running deploy's venue — for vm the
 	// guest *SSHExecutor against the managed alias (NO boot; the guest is expected up, and a down guest
@@ -65,7 +64,7 @@ type substrateLifecycle interface {
 	// ReverseOps over it, AND the F12 Attach leg runs the interactive/live-stdio session over it (vm →
 	// `ssh -t <alias>`). It invokes the wire Op sdk.OpTeardownExecutor — kept under its original name
 	// for wire stability (teardown was merely its FIRST consumer; the method name reflects the contract).
-	VenueExecutor(name string, node *spec.BundleNode) (deploykit.DeployExecutor, error)
+	VenueExecutor(name string, node *spec.BundleNode) (spec.DeployExecutor, error)
 
 	// PostTeardown runs host cleanup AFTER teardown (vm: RemoveVmSshStanza +
 	// removeVmDeployEntry + ephemeral lifecycle teardown; pod: `charly remove` + drop the
