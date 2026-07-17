@@ -1,6 +1,6 @@
 package main
 
-// scan_candy_parity_spike_test.go — the W9 RDD SPIKE proving loaderkit.ScanCandy produces
+// scan_candy_parity_spike_test.go — the W9 RDD SPIKE proving loaderkit.ScanCandyManifest produces
 // byte-identical (CandyModel, CandyView) output to the pre-move scanCandy+populateCandyFromYAML+
 // projectCandyModel/projectCandyView pipeline, on real candies exercising the three derived-logic
 // branches (bake_plugin→require, package-section derivation, port normalization) plus a negative
@@ -31,16 +31,16 @@ func TestScanCandyParitySpike(t *testing.T) {
 			oldModel := projectCandyModel(old)
 			oldView := projectCandyView(old)
 
-			newModel, newView, newRefs, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+			newModel, newView, newRefs, err := loaderkit.ScanCandyManifest(dir, "spike", UnifiedFileName, parseCandyYAML)
 			if err != nil {
-				t.Fatalf("new loaderkit.ScanCandy: %v", err)
+				t.Fatalf("new loaderkit.ScanCandyManifest: %v", err)
 			}
 
-			// The host-side second pass ScanCandy's doc comment describes: RunOps (registry-
+			// The host-side second pass ScanCandyManifest's doc comment describes: RunOps (registry-
 			// adjacent opInContext/VerbCatalog, task #39, still core) and HasInit
 			// (PopulateCandyInitSystem's cross-candy InitConfig resolution) are NOT scan-computable
 			// — simulate that pass here exactly as the real ScanAllCandy wrapper will, then re-OR
-			// the two predicates the same way ScanCandy's own partial computation expects.
+			// the two predicates the same way ScanCandyManifest's own partial computation expects.
 			newModel.RunOps = old.runOps()
 			newView.HasInit = old.HasAnyInit()
 			newModel.HasInstallFiles = newModel.HasInstallFiles || len(newModel.RunOps) > 0
@@ -101,9 +101,9 @@ func TestScanCandyParitySpikePortProtocol(t *testing.T) {
 	oldModel := projectCandyModel(old)
 	oldView := projectCandyView(old)
 
-	newModel, newView, newRefs, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+	newModel, newView, newRefs, err := loaderkit.ScanCandyManifest(dir, "spike", UnifiedFileName, parseCandyYAML)
 	if err != nil {
-		t.Fatalf("new loaderkit.ScanCandy: %v", err)
+		t.Fatalf("new loaderkit.ScanCandyManifest: %v", err)
 	}
 	newModel.RunOps = old.runOps()
 	newView.HasInit = old.HasAnyInit()
@@ -192,7 +192,7 @@ func TestScanRemoteCandyParitySpike(t *testing.T) {
 			newModel.HasContent = newModel.HasContent || newModel.HasInstallFiles || newView.HasInit
 
 			// loaderkit.ScanRemoteCandy already ran QualifyRemoteSiblingDeps internally (unlike the
-			// plain ScanCandy spike above) — only FinalizeCandyRefs remains to reach the FINAL
+			// plain ScanCandyManifest spike above) — only FinalizeCandyRefs remains to reach the FINAL
 			// bare-string form.
 			loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
 
@@ -273,9 +273,9 @@ func TestScanCandyParitySpikeMalformed(t *testing.T) {
 		t.Fatal("expected old scanCandy to fail on malformed YAML")
 	}
 
-	_, _, _, newErr := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+	_, _, _, newErr := loaderkit.ScanCandyManifest(dir, "spike", UnifiedFileName, parseCandyYAML)
 	if newErr == nil {
-		t.Fatal("expected new loaderkit.ScanCandy to fail on malformed YAML")
+		t.Fatal("expected new loaderkit.ScanCandyManifest to fail on malformed YAML")
 	}
 
 	if oldErr.Error() != newErr.Error() {

@@ -114,6 +114,13 @@ func projectCandyView(c *Candy) spec.CandyView {
 	// `charly box list routes|volumes|aliases` prints; has_init + port_relay reconstruct
 	// the init-triggering predicate (HasAnyInit || PortRelayPorts>0) for `list services`.
 	v.HasInit = c.HasAnyInit()
+	// init_systems — the PER-INIT-SYSTEM map (W9 finding): without this, specCandyAdapter.HasInit
+	// (sdk/deploykit, backing every deploykit.CandyModel consumer — e.g. EmitInitFragmentStages)
+	// has no way to answer "does this candy trigger init system Y", only the aggregate has_init
+	// "any init" bool above. Carries whatever PopulateCandyInitSystem has already populated on c
+	// (nil if that pass hasn't run for this build — same conditional-population dependency
+	// HasAnyInit()/has_init already has).
+	v.InitSystems = c.InitSystems
 	v.PortRelayPorts = c.PortRelayPorts
 	if route, _ := c.Route(); route != nil {
 		v.Route = route
