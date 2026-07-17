@@ -27,15 +27,22 @@ import (
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K5 — the remaining
 // orchestration (collectFlat's pod/vm deploy-enrichment calls, Single) is
-// deploy-cone-coupled (BundleConfig/UnifiedFile), same as the remaining
-// status_nested.go/status_reap.go files (their own switch-on-target-word
-// concerns are separate future cutovers — P14-rest trace, 2026-07; see
-// status_substrate.go for the CollectOpts rationale).
+// deploy-cone-coupled through GENUINELY core-private dependencies (verified,
+// not assumed, K5): providerRegistry.resolve + invokeTyped (the registry
+// itself — a plugin only ever reaches a peer via InvokeProvider), plus
+// ExtractMetadata/resolveBoxName (T-55's K4 shared-resolver extraction
+// territory) and ListProvisionedSecretNames/quadletDir/quadletExistsInstance/
+// serviceNameInstance/ResolveBoxEngineForDeploy (core-private, no sdk-portable
+// equivalent exists today). This is a DIFFERENT class of blocker than the two
+// files that DID move this K5 pass: status_nested.go (→
+// candy/plugin-status/nested_tree.go) and status_reap.go (→
+// candy/plugin-substrate/command_reap_orphans.go) depended ONLY on
+// sdk-portable deploykit/spec — see status_substrate.go for the CollectOpts
+// rationale.
 type Collector struct {
 	rt      *kit.ResolvedRuntime
 	quadlet string
 	deploy  *deploykit.BundleConfig
-	unified *UnifiedFile // best-effort charly.yml projection (may be nil)
 }
 
 // NewCollector wires up the runtime + cached deploy + quadlet dir. charly.yml
@@ -53,14 +60,6 @@ func NewCollector(rt *kit.ResolvedRuntime) (*Collector, error) { //nolint:unpara
 	if qdir, err := quadletDir(); err == nil {
 		c.quadlet = qdir
 	}
-	// Best-effort charly.yml projection (incl. folded kind:check beds) for
-	// the non-pod substrate collectors. Absence / load errors are non-fatal:
-	// the unified field stays nil and substrate collectors degrade gracefully.
-	if cwd, err := os.Getwd(); err == nil {
-		if uf, ok, err := LoadUnified(cwd); err == nil && ok {
-			c.unified = uf
-		}
-	}
 	return c, nil
 }
 
@@ -73,21 +72,18 @@ func NewCollector(rt *kit.ResolvedRuntime) (*Collector, error) { //nolint:unpara
 // final — each collector's whole collection is deploy-tree-derived inside
 // the plugin itself via HostBuild("resolved-project") + (for android)
 // deploykit.LoadBundleConfig()). The result is sorted by (Kind, deployKey) —
-// the FLAT fan-out ONLY, stopping BEFORE the nested overlay (the overlay is
-// the command:status candy's PURE fold; the host pre-resolves the declared
-// tree separately via buildStatusRootsTree). Returns the resolved CollectOpts
-// too, so the caller (hostBuildStatusSubstrate) can feed it to
-// buildStatusRootsTree.
+// the FLAT fan-out ONLY; the declared-nested-tree pre-resolution + overlay
+// are the command:status candy's own concern now (nested_tree.go + overlay.go,
+// K5), so this no longer takes or returns a nested dimension. Returns the
+// resolved CollectOpts too, purely for enrichVmRow's reuse inside this file.
 //
 // A plugin word returning an error logs a WARNING to stderr and contributes
 // no rows (graceful degradation, via collectSubstrate) — it NEVER aborts the
 // whole command.
-func (c *Collector) collectFlat(ctx context.Context, includeAll, nested bool) ([]spec.DeploymentStatus, CollectOpts, error) { //nolint:unparam // error return kept for interface/API stability
+func (c *Collector) collectFlat(ctx context.Context, includeAll bool) ([]spec.DeploymentStatus, CollectOpts, error) { //nolint:unparam // error return kept for interface/API stability
 	opts := CollectOpts{
 		IncludeAll: includeAll,
-		Nested:     nested,
 		Deploy:     c.deploy,
-		Unified:    c.unified,
 		RunMode:    c.rt.RunMode,
 	}
 

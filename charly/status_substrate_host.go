@@ -10,18 +10,18 @@ import (
 
 // status_substrate_host.go — the generic "status-substrate" F10 host-builder. The externalized
 // `charly status` command plugin (candy/plugin-status) OWNS the CLI grammar + the PURE nested
-// overlay + render; it asks the host to do the one thing it cannot do itself — collect the live
-// deployment state across every substrate (pod/vm/k8s/local/android) and pre-resolve the DECLARED
-// nested-deployment tree into the wire-safe spec.StatusNestedNode shape. Every core-coupled helper
-// this needs (ResolveRuntime/NewCollector/Collector.collectFlat/Collector.Single/BundleNode/
-// classifyTarget/ResolveDeployChain) stays in core — reached via this ONE generic action noun
-// (F11: "status-substrate" is a class-generic HostBuild kind, never a provider word).
+// overlay + render + (K5) the declared-nested-tree pre-resolution (nested_tree.go, directly off
+// the resolved-project envelope + deploykit.LoadBundleConfig — no host round-trip); it asks the
+// host to do the one thing it still cannot do itself — collect the LIVE deployment state across
+// every substrate (pod/vm/k8s/local/android), which needs the runtime-resolved engine/quadlet
+// context + the per-substrate plugin fan-out (F11: "status-substrate" is a class-generic HostBuild
+// kind, never a provider word).
 const statusSubstrateBuilderKind = "status-substrate"
 
 // hostBuildStatusSubstrate runs the status-collection engine host-side. req.Single selects the
-// pod-scoped detail path (mirrors the former core status command's Collector.Single call); otherwise it
-// runs the full multi-substrate fan-out (collectFlat) and pre-resolves the declared nested tree
-// (buildStatusRootsTree) — the candy's PURE overlay folds Rows+Roots without any core type.
+// pod-scoped detail path (mirrors the former core status command's Collector.Single call);
+// otherwise it runs the full multi-substrate fan-out (collectFlat). The declared nested tree is no
+// longer resolved here (K5) — the candy computes its own roots and folds Rows+Roots itself.
 func hostBuildStatusSubstrate(ctx context.Context, req spec.StatusSubstrateRequest, _ buildEngineContext) (spec.StatusSubstrateReply, error) {
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
@@ -40,12 +40,11 @@ func hostBuildStatusSubstrate(ctx context.Context, req spec.StatusSubstrateReque
 		return spec.StatusSubstrateReply{Single: ds}, nil
 	}
 
-	rows, opts, ferr := col.collectFlat(ctx, req.IncludeAll, req.Nested)
+	rows, _, ferr := col.collectFlat(ctx, req.IncludeAll)
 	if ferr != nil {
 		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: collect: %w", ferr)
 	}
-	roots := buildStatusRootsTree(opts, req.Nested)
-	return spec.StatusSubstrateReply{Rows: rows, Roots: roots}, nil
+	return spec.StatusSubstrateReply{Rows: rows}, nil
 }
 
 var _ = func() bool {
