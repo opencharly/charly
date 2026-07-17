@@ -202,8 +202,8 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 
 	// Derive each image's content-stable identity (ai.opencharly.version)
 	// from per-entity versions now that the base chain + auto-intermediates are
-	// materialized. See effective_version.go.
-	if err := g.computeEffectiveVersions(); err != nil {
+	// materialized (the build render/version-compute machinery, sdk/deploykit).
+	if err := deploykit.ComputeEffectiveVersions(g.Boxes, candyModelMap(g.Candies)); err != nil {
 		return nil, err
 	}
 
