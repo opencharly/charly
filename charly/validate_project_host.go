@@ -42,7 +42,7 @@ const diagSeverityError = "error"
 // version. empty marks a project-less directory (ErrNoCharlyYml → the empty-project contract).
 type loadedProject struct {
 	cfg        *Config
-	layers     map[string]*Candy
+	layers     map[string]spec.CandyReader
 	uf         *UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *buildkit.DistroConfig
 	builderCfg *buildkit.BuilderConfig
@@ -59,7 +59,7 @@ type loadedProject struct {
 // validate runs on a broken project. The build vocabulary is registered (so ResolveBox resolves
 // distro/builder) exactly as before.
 func loadProjectForResolve(dir string, opts ResolveOpts, diags *spec.Diagnostics) (*loadedProject, error) {
-	lp := &loadedProject{layers: map[string]*Candy{}}
+	lp := &loadedProject{layers: map[string]spec.CandyReader{}}
 
 	cfg, err := LoadConfig(dir)
 	if errors.Is(err, ErrNoCharlyYml) {
@@ -241,7 +241,7 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 	}
 	for _, layer := range lp.layers {
 		if layer != nil {
-			scanPlan(layer.plan)
+			scanPlan(layer.PlanSteps())
 		}
 	}
 	if lp.cfg != nil {

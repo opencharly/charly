@@ -42,12 +42,12 @@ func (e *ValidationError) HasErrors() bool {
 // kind-keyed manifest, #NodeDoc for a node-form manifest). This is the sole
 // candy-schema validator; the former hand-written Go candy validators are
 // deleted. Inline/synthesized candies with no manifest file on disk are skipped.
-func validateCandyCUESchemas(layers map[string]*Candy, errs *ValidationError) {
+func validateCandyCUESchemas(layers map[string]spec.CandyReader, errs *ValidationError) {
 	for name, c := range layers {
-		if c == nil || c.Path == "" {
+		if c == nil || c.GetSourceDir() == "" {
 			continue
 		}
-		f := filepath.Join(c.Path, UnifiedFileName)
+		f := filepath.Join(c.GetSourceDir(), UnifiedFileName)
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue // remote/inline candy without a local manifest — skip
@@ -366,7 +366,7 @@ func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *
 }
 
 // validateRemoteCandies checks remote candy consistency
-func validateRemoteCandies(cfg *Config, layers map[string]*Candy, errs *ValidationError) {
+func validateRemoteCandies(cfg *Config, layers map[string]spec.CandyReader, errs *ValidationError) {
 	// Check version conflicts (same repo referenced with different versions)
 	_, err := CollectRemoteRefs(cfg, layers)
 	if err != nil {
@@ -375,15 +375,15 @@ func validateRemoteCandies(cfg *Config, layers map[string]*Candy, errs *Validati
 
 	// Check for naming conflicts between remote candies from different repos
 	for _, layer := range layers {
-		if !layer.Remote {
+		if !layer.GetRemote() {
 			continue
 		}
 		for _, other := range layers {
-			if !other.Remote || other == layer {
+			if !other.GetRemote() || other == layer {
 				continue
 			}
-			if other.Name == layer.Name && other.RepoPath != layer.RepoPath {
-				errs.Add("remote candy name conflict: %q provided by both %s and %s", layer.Name, layer.RepoPath, other.RepoPath)
+			if other.GetName() == layer.GetName() && other.GetRepoPath() != layer.GetRepoPath() {
+				errs.Add("remote candy name conflict: %q provided by both %s and %s", layer.GetName(), layer.GetRepoPath(), other.GetRepoPath())
 			}
 		}
 	}

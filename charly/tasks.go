@@ -189,7 +189,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 	if !ok {
 		return "", fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
 	}
-	in := deploykit.BuilderResolveInputFrom(layer.Name, bName, bDef, ctx)
+	in := deploykit.BuilderResolveInputFrom(layer.GetName(), bName, bDef, ctx)
 	reply, err := resolveBuilderStage(prov, bName, in, img)
 	if err != nil {
 		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)
@@ -202,7 +202,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 
 // emitTasks → deploykit.Generator.EmitTasks (P8 shim). Core resolves the render
 // state via toDeploykit() (seams wired) and delegates the byte-producing emit.
-func (g *Generator) emitTasks(b *strings.Builder, layer *Candy, img *buildkit.ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
+func (g *Generator) emitTasks(b *strings.Builder, layer spec.CandyReader, img *buildkit.ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
 	return g.toDeploykit().EmitTasks(b, layer, img, ops, buildDir, contextRelPrefix)
 }
 

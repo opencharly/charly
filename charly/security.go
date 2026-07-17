@@ -11,7 +11,7 @@ import (
 // W9 split). The MERGE ITSELF (candy-order fold + override application — biggest/smallest-wins
 // rules) is deploykit.MergeCandySecurity, the pure R-item every OCI-label-collector build-render
 // consumer can share (host today, an out-of-process build/deploy plugin tomorrow).
-func CollectSecurity(cfg *Config, layers map[string]*Candy, boxName string) SecurityConfig {
+func CollectSecurity(cfg *Config, layers map[string]spec.CandyReader, boxName string) SecurityConfig {
 	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return SecurityConfig{}

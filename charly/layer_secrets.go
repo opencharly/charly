@@ -116,13 +116,13 @@ func ResolveSecretForCandy(layers []spec.CandyReader) map[string]string {
 // slice covered by the given plans (both CandiesIncluded for image-level
 // plans and per-plan Candy for candy-only plans). Used by deploy-add to
 // call ResolveSecretForCandy + RetrieveCandyArtifacts.
-func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]*Candy, error) {
+func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]spec.CandyReader, error) {
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
-	var ordered []*Candy
+	var ordered []spec.CandyReader
 	pick := func(name string) {
 		if name == "" || seen[name] {
 			return

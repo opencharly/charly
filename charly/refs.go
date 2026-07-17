@@ -280,7 +280,7 @@ type RemoteDownload struct {
 // CollectRemoteRefs is the default-opts wrapper (enabled images only) around
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
-func CollectRemoteRefs(cfg *Config, layers map[string]*Candy) ([]RemoteDownload, error) {
+func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]RemoteDownload, error) {
 	return CollectRemoteRefsOpts(cfg, layers, ResolveOpts{})
 }
 
@@ -299,7 +299,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]*Candy) ([]RemoteDownload,
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOpts) ([]RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts ResolveOpts) ([]RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of
@@ -430,12 +430,12 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 
 	// Scan the candy manifest require: and candy: fields
 	for candyName, layer := range layers {
-		for _, dep := range layer.Require {
+		for _, dep := range layer.GetRequire() {
 			if err := addRef(dep.Raw, fmt.Sprintf("layer %s require", candyName)); err != nil {
 				return nil, err
 			}
 		}
-		for _, ref := range layer.IncludedCandy {
+		for _, ref := range layer.GetIncludedCandy() {
 			if err := addRef(ref.Raw, fmt.Sprintf("layer %s layer", candyName)); err != nil {
 				return nil, err
 			}

@@ -533,7 +533,7 @@ func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []sp
 		if !ok || lyr == nil {
 			continue
 		}
-		out = append(out, bakeableSteps(lyr.plan)...)
+		out = append(out, bakeableSteps(lyr.PlanSteps())...)
 	}
 	return out
 }
@@ -560,14 +560,14 @@ func candySourceDirs(dir string, cfg *Config) (map[string]string, error) {
 // Origin = "candy:" + this same key, so resolveCheckApk's CandyDirs[origin]
 // lookup matches in BOTH cases. The SAME scanned map drives the plugin loader
 // (R3 — one scan, both consumers).
-func candyDirsFromScan(candyMap map[string]*Candy) map[string]string {
+func candyDirsFromScan(candyMap map[string]spec.CandyReader) map[string]string {
 	if len(candyMap) == 0 {
 		return nil
 	}
 	out := make(map[string]string, len(candyMap))
 	for key, lyr := range candyMap {
-		if lyr != nil && lyr.SourceDir != "" {
-			out[key] = lyr.SourceDir
+		if lyr != nil && lyr.GetSourceDir() != "" {
+			out[key] = lyr.GetSourceDir()
 		}
 	}
 	return out

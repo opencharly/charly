@@ -16,7 +16,7 @@ import (
 // unchanged from before the W9 split). The concatenation itself is deploykit.MergeCandyHooks, the
 // pure R-item every OCI-label-collector build-render consumer can share (host today, an
 // out-of-process build/deploy plugin tomorrow).
-func CollectHooks(cfg *Config, layers map[string]*Candy, boxName string) *HooksConfig {
+func CollectHooks(cfg *Config, layers map[string]spec.CandyReader, boxName string) *HooksConfig {
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 
 	candies := make([]spec.CandyReader, 0, len(allCandyNames))

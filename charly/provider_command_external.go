@@ -11,6 +11,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // externalCommandDispatch pairs an OUT-OF-PROCESS command word with the dynamic Kong holder
@@ -240,7 +241,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 	if candy == nil {
 		return "", fmt.Errorf("command %q: no plugin candy provides command:%s in the project", word, word)
 	}
-	bin, err := resolvePluginBinary(ctx, candy.SourceDir, name)
+	bin, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name)
 	if err != nil {
 		return "", fmt.Errorf("command %q: %w", word, err)
 	}
@@ -249,13 +250,13 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 
 // findCommandPluginCandy returns the scanned-set key + candy of the plugin candy whose
 // declaration provides command:<word>, or ("", nil) if none does.
-func findCommandPluginCandy(candies map[string]*Candy, word string) (string, *Candy) {
+func findCommandPluginCandy(candies map[string]spec.CandyReader, word string) (string, spec.CandyReader) {
 	for name, candy := range candies {
-		if candy == nil || candy.Plugin == nil {
+		if candy == nil || !candy.IsPluginCandy() {
 			continue
 		}
-		for _, capability := range candy.Plugin.Providers {
-			if class, w, ok := splitCapability(string(capability)); ok && class == ClassCommand && w == word {
+		for _, capability := range candy.GetPluginProviders() {
+			if class, w, ok := splitCapability(capability); ok && class == ClassCommand && w == word {
 				return name, candy
 			}
 		}

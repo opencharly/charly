@@ -753,7 +753,7 @@ func (c *deployAddCmd) emitOpts() deploykit.EmitOpts {
 // the ref, so the existing CollectRemoteRefs/ScanAllCandy machinery pulls it —
 // and keys by its bare ref. This makes `charly bundle add --add-layer <remote>`
 // (e.g. the VM check beds' add_candy:) fully automatic with no manual pre-fetch.
-func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]*Candy, string, error) {
+func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string) (map[string]spec.CandyReader, string, error) {
 	scanCfg := cfg
 	candyKey := ref.Name
 	if ref.Source == RefSourceRemote {
@@ -856,7 +856,7 @@ func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 // scoped to those words. A pre-pass error (an externalized builder whose plugin won't connect) is
 // FATAL, never a silent skip (R4). Called at every BuildDeployPlan compile site so the purity
 // invariant holds uniformly.
-func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]*Candy, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
+func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
 	bc, err := preresolveBuilderContexts(context.Background(), cfg, dir, order, layers, img)
 	if err != nil {
 		return hostCtx, err

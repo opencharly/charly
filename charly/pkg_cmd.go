@@ -85,7 +85,7 @@ func (c *BoxPkgCmd) Run() error {
 		if lp == nil {
 			return fmt.Errorf("no distro in the embedded build vocabulary declares a local_pkg block for format %q", format)
 		}
-		srcDir := deploykit.ResolveLocalPkgDir(src, lyr.SourceDir, dir, lp.SourceSentinel)
+		srcDir := deploykit.ResolveLocalPkgDir(src, lyr.GetSourceDir(), dir, lp.SourceSentinel)
 		if srcDir == "" {
 			return fmt.Errorf("package source %q for format %q not found (sentinel %q)", src, format, lp.SourceSentinel)
 		}

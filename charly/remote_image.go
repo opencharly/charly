@@ -28,7 +28,7 @@ type RemoteImageContext struct {
 	CacheDir string
 	Config   *Config
 	Resolved *buildkit.ResolvedBox
-	Candies  map[string]*Candy
+	Candies  map[string]spec.CandyReader
 	ImageRef string // registry/name:tag for pull
 	BoxName  string // short name (e.g. "openclaw-browser")
 }

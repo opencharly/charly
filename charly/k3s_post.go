@@ -238,9 +238,9 @@ func mergeKubeconfig(retrievedPath, contextName string) error {
 // given candy name. Used to gate whether K3sPostProvision runs — a no-op
 // check against the ordered candy slice the deploy-add dispatcher already
 // has in scope.
-func deployHasCandy(layers []*Candy, name string) bool {
+func deployHasCandy(layers []spec.CandyReader, name string) bool {
 	for _, l := range layers {
-		if l != nil && l.Name == name {
+		if l != nil && l.GetName() == name {
 			return true
 		}
 	}

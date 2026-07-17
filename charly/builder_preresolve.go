@@ -46,7 +46,7 @@ import (
 // externalized plugin) is skipped — collectBuilderContext gives it base-only context. An
 // externalized builder that cannot be connected fails LOUDLY (R4 — never a silent incomplete
 // teardown).
-func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]*Candy, img *buildkit.ResolvedBox) (map[string]deploykit.BuilderPreresolved, error) {
+func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (map[string]deploykit.BuilderPreresolved, error) {
 	needed := deploykit.DetectExternalizedBuilders(order, candyModelMap(layers), externalizedBuilders, img)
 	if len(needed) == 0 {
 		return nil, nil
@@ -74,14 +74,14 @@ func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, ord
 			if err != nil {
 				return nil, fmt.Errorf("candy %q: builder %q collect-context: %w", candyName, bName, err)
 			}
-			reverse, err := invokeBuilderReverse(ctx, prov, bName, layer.Name, collected)
+			reverse, err := invokeBuilderReverse(ctx, prov, bName, layer.GetName(), collected)
 			if err != nil {
 				return nil, fmt.Errorf("candy %q: builder %q reverse: %w", candyName, bName, err)
 			}
 			if out == nil {
 				out = map[string]deploykit.BuilderPreresolved{}
 			}
-			out[deploykit.BuilderCtxKey(layer.Name, bName)] = deploykit.BuilderPreresolved{Context: collected, Reverse: reverse}
+			out[deploykit.BuilderCtxKey(layer.GetName(), bName)] = deploykit.BuilderPreresolved{Context: collected, Reverse: reverse}
 		}
 	}
 	return out, nil
@@ -144,8 +144,8 @@ func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words
 // builder-specific stage-context keys. The host fills the generic descriptor it can derive
 // without builder-specific knowledge: the candy/builder/home always, plus the builder's
 // detect-config package section (Packages/Replaces) used today only by aur.
-func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer *Candy, bDef *BuilderDef, img *buildkit.ResolvedBox) (map[string]any, error) {
-	in := spec.BuilderCollectInput{Candy: layer.Name, Builder: word, Home: img.Home}
+func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer spec.CandyReader, bDef *BuilderDef, img *buildkit.ResolvedBox) (map[string]any, error) {
+	in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: word, Home: img.Home}
 	if bDef.DetectConfig != "" {
 		if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
 			in.Packages = append([]string(nil), sec.Packages...)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // AggregateCandyCapabilities walks `order` (candy names in topological
@@ -13,7 +14,7 @@ import (
 // Returns an error if two candies declare conflicting values for the same
 // OCI label key — the conflict surfaces the bug rather than silently
 // picking a winner.
-func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*buildkit.AggregatedCandyCaps, error) {
+func AggregateCandyCapabilities(layers map[string]spec.CandyReader, order []string) (*buildkit.AggregatedCandyCaps, error) {
 	out := &buildkit.AggregatedCandyCaps{
 		OCILabels: make(map[string]string),
 		Provided:  make(map[string]bool),
@@ -66,7 +67,7 @@ func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*buil
 // CheckRequiredCapabilities returns a sorted list of capability names
 // requested via `requires_capabilities:` on any candy in `order` but not
 // provided by the aggregated capabilities. Empty slice on success.
-func CheckRequiredCapabilities(layers map[string]*Candy, order []string, agg *buildkit.AggregatedCandyCaps) []string {
+func CheckRequiredCapabilities(layers map[string]spec.CandyReader, order []string, agg *buildkit.AggregatedCandyCaps) []string {
 	if agg == nil {
 		agg = &buildkit.AggregatedCandyCaps{Provided: map[string]bool{}}
 	}
@@ -92,7 +93,7 @@ func CheckRequiredCapabilities(layers map[string]*Candy, order []string, agg *bu
 
 // CandyCapabilitiesError formats a missing-capabilities error with a
 // remediation hint pointing at which candies requested what.
-func CandyCapabilitiesError(layers map[string]*Candy, order []string, missing []string) error {
+func CandyCapabilitiesError(layers map[string]spec.CandyReader, order []string, missing []string) error {
 	if len(missing) == 0 {
 		return nil
 	}

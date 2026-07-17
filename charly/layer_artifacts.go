@@ -38,7 +38,7 @@ import (
 func RetrieveCandyArtifacts(
 	ctx context.Context,
 	exec spec.DeployExecutor,
-	layers []*Candy,
+	layers []spec.CandyReader,
 	deployName string,
 	envVars map[string]string,
 	opts spec.EmitOpts,
@@ -52,8 +52,8 @@ func RetrieveCandyArtifacts(
 			continue
 		}
 		for _, a := range artifacts {
-			if err := retrieveOne(ctx, exec, layer.Name, a, deployName, envVars, opts); err != nil {
-				return fmt.Errorf("candy %q artifact %q: %w", layer.Name, a.Name, err)
+			if err := retrieveOne(ctx, exec, layer.GetName(), a, deployName, envVars, opts); err != nil {
+				return fmt.Errorf("candy %q artifact %q: %w", layer.GetName(), a.Name, err)
 			}
 		}
 	}
