@@ -14,10 +14,10 @@ import (
 )
 
 // command.go — the externalized `charly status` command. The plugin OWNS the Kong grammar
-// (moved from charly/status.go's StatusCmd) + the PURE nested-overlay fold (overlay.go) + the
-// render output (render.go). The collection engine (Collector, the per-substrate collectors, the
-// declared-nested-tree pre-resolution) stays in core and is reached via the generic
-// "status-substrate" HostBuild seam (charly/status_substrate_host.go).
+// (moved from charly/status.go's StatusCmd) + the declared-nested-tree pre-resolution
+// (nested_tree.go, K5) + the PURE nested-overlay fold (overlay.go) + the render output
+// (render.go). Only the LIVE per-substrate collection (pod/vm/k8s/local/android) stays host-side,
+// reached via the generic "status-substrate" HostBuild seam (charly/status_substrate_host.go).
 //
 // status is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process
 // and gets the in-proc reverse channel (dispatchInProcCommand threads it), so
@@ -52,12 +52,15 @@ func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 	if box == "" {
 		reply, herr := hostStatusSubstrate(ctx, exec, spec.StatusSubstrateRequest{
 			IncludeAll: cmd.All,
-			Nested:     cmd.Nested,
 		})
 		if herr != nil {
 			return herr
 		}
-		rows := applyNestedOverlay(reply.Rows, reply.Roots)
+		roots, rerr := buildStatusRootsTree(exec, ctx, cmd.Nested)
+		if rerr != nil {
+			return rerr
+		}
+		rows := applyNestedOverlay(reply.Rows, roots)
 		if cmd.JSON {
 			return RenderJSON(os.Stdout, rows)
 		}

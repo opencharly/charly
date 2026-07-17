@@ -5,22 +5,23 @@ plugin-status:
             COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly status`
             CLI — the runtime-status surface (table / detail / JSON, --all, --nested). The plugin
             owns the command end to end: the Kong grammar (command.go, moved from
-            charly/status.go's StatusCmd), the PURE nested-deployment overlay fold (overlay.go,
+            charly/status.go's StatusCmd), the declared-nested-tree pre-resolution (nested_tree.go,
+            K5, relocated from charly/status_nested.go's buildStatusRootsTree — every dependency it
+            once claimed core-coupled, BundleConfig/ResolveDeployChain/ClassifyTarget/
+            LoadBundleConfig, is sdk-portable), the PURE nested-deployment overlay fold (overlay.go,
             ported from charly/status_nested.go's applyNestedOverlay/buildNestedChildren/
             nestedChildStatus/claimFlatRow), and the render output (render.go, moved verbatim
             from charly/status_render.go). No plugin-specific command LOGIC is left in core.
 
             The ONE thing the plugin cannot do itself is the LIVE collection engine — fan out
-            across every deployment substrate (pod/vm/k8s/local/android), probe live tools, and
-            pre-resolve the declared nested-deployment tree into the wire-safe
-            spec.StatusNestedNode shape the PURE overlay folds. That engine STAYS core
-            (charly/status_collector.go's Collector + the per-substrate collectors +
-            charly/status_nested.go's buildStatusRootsTree) and is reached via the generic
-            "status-substrate" HostBuild seam (charly/status_substrate_host.go,
-            spec.StatusSubstrateRequest{Single,IncludeAll,Nested,Box,Instance} →
-            spec.StatusSubstrateReply{Rows,Roots,Single}). "status-substrate" is a
-            class-generic action noun, not a provider word (F11). This is the same "plugin owns
-            the command + a generic seam for the core-coupled bits" doctrine
+            across every deployment substrate (pod/vm/k8s/local/android) and probe live tools.
+            That engine STAYS core (charly/status_collector.go's Collector + the per-substrate
+            collectors) and is reached via the generic "status-substrate" HostBuild seam
+            (charly/status_substrate_host.go, spec.StatusSubstrateRequest{Single,IncludeAll,Box,
+            Instance} → spec.StatusSubstrateReply{Rows,Single}) — narrowed (K5) to drop
+            Nested/Roots now that the declared-tree resolution is plugin-side. "status-substrate"
+            is a class-generic action noun, not a provider word (F11). This is the same "plugin
+            owns the command + a generic seam for the core-coupled bits" doctrine
             candy/plugin-settings established.
 
             status is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its

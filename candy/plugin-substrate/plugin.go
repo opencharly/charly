@@ -23,12 +23,20 @@
 // entities, box/fedora, box/cachyos, box/arch, box/debian, box/ubuntu) relies on them without
 // discovering this candy, exactly like the tier-1 kinds and group. (cmd/serve serves it
 // out-of-process too — one provider, two placements, zero authoring change.)
+//
+// This package ALSO serves command:reap-orphans (K5: relocated from charly/status_reap.go,
+// command_reap_orphans.go) — a substrate-liveness-probing command that fits naturally alongside
+// the OTHER substrate-liveness code here (status_pod.go/status_vm.go/status_k8s.go/…). Unlike the
+// kind capabilities, reap-orphans is COMPILED-IN ONLY (its os.Executable()-based re-entry to
+// `charly bundle del` assumes it runs inside the charly binary); out-of-process it degrades with a
+// clear error.
 package substratekind
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
@@ -58,6 +66,19 @@ var substrateTraits = map[string]*spec.DeployTraits{
 // NewProvider returns the substrate kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
+// CliMain is the out-of-process CLI entrypoint for command:reap-orphans (only reached when this
+// candy is NOT compiled in). reap-orphans needs the reverse-channel executor (the libvirt liveness
+// probe), which is unavailable out-of-process, so runReapOrphansCLI (with a nil executor) errors
+// clearly — the canonical placement is compiled-in (Invoke → provider.go's OpRun case), where the
+// reverse channel is threaded. Mirrors candy/plugin-status's CliMain.
+func CliMain(args []string) int {
+	if err := runReapOrphansCLI(context.Background(), nil, args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
 // NewMeta advertises the 5 STRUCTURAL substrate kind capabilities (Class "kind",
 // Structural:true) + the self-contained CUE schema (via sdk.NewMeta → BuildCapabilities).
 // Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the
@@ -65,10 +86,11 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // served schema. The self-contained #SubstrateKindLoad def exists only to satisfy the
 // non-empty-schema load gate + document the seam.
 func NewMeta() pb.PluginMetaServer {
-	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords))
+	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+1)
 	for _, w := range substrateWords {
 		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, DeployTraits: substrateTraits[w]})
 	}
+	caps = append(caps, sdk.ProvidedCapability{Class: "command", Word: "reap-orphans"})
 	return sdk.NewMeta(calver, caps,
 		nil)
 }
@@ -84,6 +106,26 @@ type provider struct{ pb.UnimplementedProviderServer }
 // pre-decodes and threads via op.Env.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
+	case sdk.OpRun:
+		if req.GetReserved() != "reap-orphans" {
+			return nil, fmt.Errorf("substrate provider: OpRun unsupported for word %q (want reap-orphans)", req.GetReserved())
+		}
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("plugin-substrate: reverse-channel executor: %w", err)
+		}
+		var in struct {
+			Args []string `json:"args"`
+		}
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &in); uerr != nil {
+				return nil, fmt.Errorf("plugin-substrate: decode args: %w", uerr)
+			}
+		}
+		if rerr := runReapOrphansCLI(ctx, exec, in.Args); rerr != nil {
+			return nil, rerr
+		}
+		return &pb.InvokeReply{}, nil
 	case sdk.OpLoad:
 		return substrateLoad(req)
 	case sdk.OpResolve:
