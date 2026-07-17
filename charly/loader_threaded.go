@@ -46,6 +46,20 @@ func requireProjectWalker() spec.ProjectWalker {
 	return activeProjectWalker
 }
 
+// activeCandyScanner is the registered CANDY-SCAN — the spec.CandyScanner of the compiled-in
+// loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). No in-core
+// fallback, mirroring activeProjectWalker: a nil scanner means the loader plugin was not compiled
+// in — a FATAL, never a silent fallback (requireCandyScanner).
+var activeCandyScanner spec.CandyScanner
+
+// requireCandyScanner returns the registered scanner or FATALs with a clear message.
+func requireCandyScanner() spec.CandyScanner {
+	if activeCandyScanner == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeCandyScanner
+}
+
 // hostWalkProject runs the kind-blind whole-project WALK via the registered loader plugin,
 // returning its generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml
 // bytes; the seams are the REGISTRY-COUPLED host primitives the walk consults instead of the

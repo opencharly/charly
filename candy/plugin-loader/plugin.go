@@ -75,6 +75,24 @@ func (*provider) WalkProject(rootDir string, rootData []byte, rootIdentity strin
 	return loaderkit.Walk(rootDir, rootData, rootIdentity, seams)
 }
 
+// ScanCandy implements spec.CandyScanner — the typed CANDY-SCAN the host calls once per candy
+// directory (compiled-in, no wire envelope): fs-probes + manifest parse + the derived-logic
+// construction (bake_plugin→require, package-section derivation, port normalization), delegating
+// to the ONE copy in sdk/loaderkit. parseManifest is the host-injected, registry-coupled manifest
+// parse (mirrors WalkSeams.Parser above) — the candy-manifest parse threads the registered
+// DocParser + the registry-derived Threaded snapshot, so it stays host-side; only the scan+construct
+// logic moves here.
+func (*provider) ScanCandy(path, name, manifestName string, parseManifest func(path string) (*spec.Candy, error)) (spec.CandyModel, spec.CandyView, spec.CandyRefs, error) {
+	return loaderkit.ScanCandy(path, name, manifestName, parseManifest)
+}
+
+// ScanInlineCandy implements spec.CandyScanner's inline half — a candy declared directly in a
+// unified charly.yml (no separate manifest file, ly already parsed), delegating to the same
+// sdk/loaderkit construction logic ScanCandy uses.
+func (*provider) ScanInlineCandy(name, sourceDir string, ly *spec.Candy) (spec.CandyModel, spec.CandyView, spec.CandyRefs) {
+	return loaderkit.ScanInlineCandy(name, sourceDir, ly)
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.

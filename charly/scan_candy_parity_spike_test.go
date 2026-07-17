@@ -30,7 +30,7 @@ func TestScanCandyParitySpike(t *testing.T) {
 			oldModel := projectCandyModel(old)
 			oldView := projectCandyView(old)
 
-			newModel, newView, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+			newModel, newView, newRefs, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
 			if err != nil {
 				t.Fatalf("new loaderkit.ScanCandy: %v", err)
 			}
@@ -45,8 +45,39 @@ func TestScanCandyParitySpike(t *testing.T) {
 			newModel.HasInstallFiles = newModel.HasInstallFiles || len(newModel.RunOps) > 0
 			newModel.HasContent = newModel.HasContent || newModel.HasInstallFiles || newView.HasInit
 
-			diffFields(t, "CandyModel", dir, oldModel, newModel)
+			// Simulate the host's finalize step. QualifyRemoteSiblingDeps is DELIBERATELY not
+			// called here: these are all LOCALLY-scanned candy dirs, and the pre-move
+			// qualifyRemoteSiblingDeps is only ever invoked from the ScanRemoteCandy path (a
+			// freshly-fetched remote candy) — calling it here would qualify every ref against an
+			// empty RepoPath/SubPathPrefix and corrupt .Resolved, which is not what the real
+			// pipeline does for a local candy. FinalizeCandyRefs alone (no qualification) proves
+			// Finding 4's fix (CandyRefs carrying the rich form through to a LATER finalize,
+			// instead of bare-stringing at scan time) reproduces the old byte-exact LOCAL result.
+			loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
+
+			// BakePlugin is skipped in the CandyModel diff below: the pre-move projectCandyModel
+			// NEVER populated it (Finding 3 — a genuine schema gap, not a parity target), so OLD is
+			// always empty here regardless of the candy's own bake_plugin: declaration. Assert the
+			// NEW value directly instead — it must equal the bare-string projection of the rich
+			// BakePlugin refs FinalizeCandyRefs just wrote.
+			if want := bareRefs(old.BakePlugin); !reflect.DeepEqual(want, newModel.BakePlugin) {
+				t.Errorf("CandyModel.BakePlugin: want bare projection %+v, got %+v", want, newModel.BakePlugin)
+			}
+			diffFields(t, "CandyModel", dir, oldModel, newModel, "BakePlugin")
 			diffFields(t, "CandyView", dir, oldView, newView)
+
+			// Parity on the RICH pre-qualification form itself (the carrier Finding 4 introduced) —
+			// against the live *Candy's own Require/IncludedCandy/BakePlugin fields, which pre-move
+			// hold the SAME rich CandyRefEntry shape (deploykit.CandyRef is a passthrough alias).
+			if !reflect.DeepEqual(old.Require, newRefs.Require) {
+				t.Errorf("CandyRefs.Require mismatch for %s:\nOLD: %+v\nNEW: %+v", dir, old.Require, newRefs.Require)
+			}
+			if !reflect.DeepEqual(old.IncludedCandy, newRefs.IncludedCandy) {
+				t.Errorf("CandyRefs.IncludedCandy mismatch for %s:\nOLD: %+v\nNEW: %+v", dir, old.IncludedCandy, newRefs.IncludedCandy)
+			}
+			if !reflect.DeepEqual(old.BakePlugin, newRefs.BakePlugin) {
+				t.Errorf("CandyRefs.BakePlugin mismatch for %s:\nOLD: %+v\nNEW: %+v", dir, old.BakePlugin, newRefs.BakePlugin)
+			}
 		})
 	}
 }
@@ -69,7 +100,7 @@ func TestScanCandyParitySpikePortProtocol(t *testing.T) {
 	oldModel := projectCandyModel(old)
 	oldView := projectCandyView(old)
 
-	newModel, newView, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+	newModel, newView, newRefs, err := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
 	if err != nil {
 		t.Fatalf("new loaderkit.ScanCandy: %v", err)
 	}
@@ -77,6 +108,7 @@ func TestScanCandyParitySpikePortProtocol(t *testing.T) {
 	newView.HasInit = old.HasAnyInit()
 	newModel.HasInstallFiles = newModel.HasInstallFiles || len(newModel.RunOps) > 0
 	newModel.HasContent = newModel.HasContent || newModel.HasInstallFiles || newView.HasInit
+	loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
 
 	diffFields(t, "CandyModel", dir, oldModel, newModel)
 	diffFields(t, "CandyView", dir, oldView, newView)
@@ -89,13 +121,22 @@ func TestScanCandyParitySpikePortProtocol(t *testing.T) {
 }
 
 // diffFields reports ONLY the top-level struct fields that differ between old and new, by name
-// and value — a whole-struct %+v dump is too noisy for these deeply-nested candy views.
-func diffFields(t *testing.T, label, dir string, oldV, newV any) {
+// and value — a whole-struct %+v dump is too noisy for these deeply-nested candy views. skip
+// names fields the caller has already asserted separately (a deliberate old/new divergence, e.g.
+// a genuine pre-move schema gap being fixed by this move — never a silent parity waiver).
+func diffFields(t *testing.T, label, dir string, oldV, newV any, skip ...string) {
 	t.Helper()
+	skipSet := make(map[string]bool, len(skip))
+	for _, s := range skip {
+		skipSet[s] = true
+	}
 	ov := reflect.ValueOf(oldV)
 	nv := reflect.ValueOf(newV)
 	ot := ov.Type()
 	for i := 0; i < ot.NumField(); i++ {
+		if skipSet[ot.Field(i).Name] {
+			continue
+		}
 		of := ov.Field(i).Interface()
 		nf := nv.Field(i).Interface()
 		if !reflect.DeepEqual(of, nf) {
@@ -117,7 +158,7 @@ func TestScanCandyParitySpikeMalformed(t *testing.T) {
 		t.Fatal("expected old scanCandy to fail on malformed YAML")
 	}
 
-	_, _, newErr := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
+	_, _, _, newErr := loaderkit.ScanCandy(dir, "spike", UnifiedFileName, parseCandyYAML)
 	if newErr == nil {
 		t.Fatal("expected new loaderkit.ScanCandy to fail on malformed YAML")
 	}
