@@ -110,7 +110,7 @@ func (c *BoxConfigSetupCmd) Run() error {
 	}
 
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
-	if IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly config <image-name>'", c.Box)
 	}
 
@@ -485,7 +485,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 
 	// Merge auto-detected devices into security config
 	if !security.Privileged {
-		security.Devices = appendUnique(security.Devices, detected.Devices...)
+		security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
 		if detected.AMDGPU {
 			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 		}
@@ -987,7 +987,7 @@ func directPodmanArgs(qcfg deploykit.QuadletConfig, bindMounts []deploykit.Resol
 	}
 	// Translate security config to podman flags via the existing
 	// SecurityArgs helper (the same source quadlet uses).
-	args = append(args, SecurityArgs(qcfg.Security)...)
+	args = append(args, deploykit.SecurityArgs(qcfg.Security)...)
 	// User-namespace mapping for bind-backed volumes (matches quadlet
 	// behavior: keep-id when there are host bind mounts).
 	if len(bindMounts) > 0 && qcfg.UID > 0 {
@@ -1647,7 +1647,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// Merge security
 		security := meta.Security
 		if !security.Privileged {
-			security.Devices = appendUnique(security.Devices, detected.Devices...)
+			security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
 			if detected.AMDGPU {
 				security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 			}

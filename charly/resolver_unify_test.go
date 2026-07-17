@@ -4,9 +4,10 @@ import "testing"
 
 // These tests pin the resolver-unification cutover: every command's
 // box/local name resolution must descend import namespaces through the ONE
-// namespace-aware mechanism (splitNamespaceRef / resolveBoxRef), instead of a
-// flat root-only `c.Box[name]` lookup that silently misses (or truncates at)
-// an imported namespace. Each test FAILS against the pre-cutover code.
+// namespace-aware mechanism (spec.SplitNamespaceRef / resolveBoxRef), instead
+// of a flat root-only `c.Box[name]` lookup that silently misses (or
+// truncates at) an imported namespace. Each test FAILS against the
+// pre-cutover code.
 
 // fixtureNamespacedProject writes a root project that imports a `sub`
 // namespace, with `app` (root, external fedora base) and `sub.widget`

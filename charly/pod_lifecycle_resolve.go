@@ -186,7 +186,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 	}
 
 	if !security.Privileged {
-		security.Devices = appendUnique(security.Devices, detected.Devices...)
+		security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
 		if detected.AMDGPU {
 			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 		}
@@ -215,7 +215,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 	}
 	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
 	for _, v := range agentFwd.Volumes {
-		security.Mounts = appendUnique(security.Mounts, v)
+		security.Mounts = deploykit.AppendUniqueString(security.Mounts, v)
 	}
 	envVars = append(envVars, agentFwd.Env...)
 
@@ -407,14 +407,14 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 		return nil, err
 	}
 	if !security.Privileged {
-		security.Devices = appendUnique(security.Devices, detected.Devices...)
+		security.Devices = deploykit.AppendUniqueString(security.Devices, detected.Devices...)
 		if detected.AMDGPU {
 			security.GroupAdd = appendGroupsForAMDGPU(security.GroupAdd)
 		}
 	}
 	envVars = appendAutoDetectedEnv(envVars, detected)
 	for _, v := range agentFwd.Volumes {
-		security.Mounts = appendUnique(security.Mounts, v)
+		security.Mounts = deploykit.AppendUniqueString(security.Mounts, v)
 	}
 	envVars = append(envVars, agentFwd.Env...)
 	resolvedNetwork, err := ResolveNetwork(network, engine)
@@ -534,7 +534,7 @@ func buildShellArgs(engine, imageRef string, uid, gid int, ports []string, volum
 	if gpu {
 		args = append(args, kit.GPURunArgs(engine)...)
 	}
-	args = append(args, SecurityArgs(security)...)
+	args = append(args, deploykit.SecurityArgs(security)...)
 	for _, port := range ports {
 		args = append(args, "-p", deploykit.LocalizePort(port, bindAddr))
 	}

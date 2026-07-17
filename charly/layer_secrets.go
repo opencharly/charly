@@ -71,29 +71,28 @@ func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source strin
 //
 // Returns the env map; never returns an error. The auto-generate policy
 // guarantees every `secret_requires:` resolves to a non-empty value.
-func ResolveCandySecret(layer *Candy) map[string]string {
+// Takes spec.CandyReader (the read-only interface every *Candy already
+// satisfies) rather than the concrete type — this function needs only the
+// SecretRequire/SecretAccept accessors, not the loader-constructed struct.
+func ResolveCandySecret(layer spec.CandyReader) map[string]string {
 	env := map[string]string{}
 	if layer == nil {
 		return env
 	}
 
-	if layer.HasSecretRequires() {
-		for _, dep := range layer.SecretRequire() {
-			val, _ := ensureCandySecret(dep, true)
-			env[dep.Name] = val
-		}
+	for _, dep := range layer.SecretRequire() {
+		val, _ := ensureCandySecret(dep, true)
+		env[dep.Name] = val
 	}
 
-	if layer.HasSecretAccepts() {
-		for _, dep := range layer.SecretAccept() {
-			val, _ := ensureCandySecret(dep, false)
-			if val == "" && dep.Default != "" {
-				env[dep.Name] = dep.Default
-				continue
-			}
-			if val != "" {
-				env[dep.Name] = val
-			}
+	for _, dep := range layer.SecretAccept() {
+		val, _ := ensureCandySecret(dep, false)
+		if val == "" && dep.Default != "" {
+			env[dep.Name] = dep.Default
+			continue
+		}
+		if val != "" {
+			env[dep.Name] = val
 		}
 	}
 
@@ -105,7 +104,7 @@ func ResolveCandySecret(layer *Candy) map[string]string {
 // into one env map, with candy-order precedence (later candies win on
 // duplicate names, matching the existing generate.go `secretRequiresMap`
 // semantics in the label-emission path).
-func ResolveSecretForCandy(layers []*Candy) map[string]string {
+func ResolveSecretForCandy(layers []spec.CandyReader) map[string]string {
 	env := map[string]string{}
 	for _, l := range layers {
 		maps.Copy(env, ResolveCandySecret(l))

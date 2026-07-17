@@ -197,7 +197,7 @@ func TestResolveSecretsForCandies_TwoCandiesSameSecret(t *testing.T) {
 	agent := &Candy{
 		secretRequires: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
 	}
-	env := ResolveSecretForCandy([]*Candy{server, agent})
+	env := ResolveSecretForCandy([]spec.CandyReader{server, agent})
 
 	val := env["K3S_CLUSTER_TOKEN"]
 	if val == "" || len(val) != 44 {

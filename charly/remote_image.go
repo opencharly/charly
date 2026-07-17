@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an
@@ -23,7 +24,7 @@ import (
 // RemoteImageContext holds the resolved state of a remote image reference.
 // It contains everything needed to pull/build and run the image.
 type RemoteImageContext struct {
-	Ref      ParsedRef
+	Ref      spec.ParsedRef
 	CacheDir string
 	Config   *Config
 	Resolved *buildkit.ResolvedBox
@@ -35,7 +36,7 @@ type RemoteImageContext struct {
 // ResolveRemoteImage resolves a remote image reference to a full context.
 // Format: @github.com/org/repo/image:version
 func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
-	parsed := ParseRemoteRef(ref)
+	parsed := spec.ParseRemoteRef(ref)
 	if parsed.RepoPath == "" || parsed.Name == "" {
 		return nil, fmt.Errorf("invalid remote image ref %q: expected @github.com/org/repo/image:version", ref)
 	}

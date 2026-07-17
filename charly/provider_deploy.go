@@ -88,7 +88,7 @@ func externalDeploySubstratePluginRef(word string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return "@" + DefaultProjectRepo + "/" + sub, true
+	return "@" + spec.DefaultProjectRepo + "/" + sub, true
 }
 
 // checkDeployProviderBijection: every canonical deploy-target word is a valid deployable

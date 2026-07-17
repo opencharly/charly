@@ -29,7 +29,7 @@ func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*buil
 		if !ok || layer == nil {
 			continue
 		}
-		c := layer.capabilities
+		c := layer.Capabilities()
 		if c == nil {
 			continue
 		}
@@ -76,7 +76,7 @@ func CheckRequiredCapabilities(layers map[string]*Candy, order []string, agg *bu
 		if !ok || layer == nil {
 			continue
 		}
-		for _, req := range layer.requiresCapabilities {
+		for _, req := range layer.RequiresCapabilities() {
 			if !agg.Provided[req] {
 				missing[req] = true
 			}
@@ -102,7 +102,7 @@ func CandyCapabilitiesError(layers map[string]*Candy, order []string, missing []
 		if !ok || layer == nil {
 			continue
 		}
-		for _, req := range layer.requiresCapabilities {
+		for _, req := range layer.RequiresCapabilities() {
 			for _, m := range missing {
 				if req == m {
 					requesters = append(requesters, fmt.Sprintf("    %s (requires %s)", name, req))

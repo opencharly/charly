@@ -134,7 +134,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 	// takes the flat tail below exactly as before, so existing behaviour
 	// is unchanged; only qualified names (which previously hard-errored
 	// "not found") gain resolution.
-	if ns, rest, ok := splitNamespaceRef(name); ok {
+	if ns, rest, ok := spec.SplitNamespaceRef(name); ok {
 		sub, found := c.Namespaces[ns]
 		if !found {
 			return nil, fmt.Errorf("import namespace %q not found (resolving image %q)", ns, name)
@@ -453,7 +453,7 @@ func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (
 	// graph + filterBox have every dependency. Uses the SAME
 	// pullNamespacedBox path as the base pull.
 	for _, name := range opts.RequestedBoxes {
-		if _, _, qualified := splitNamespaceRef(name); !qualified {
+		if _, _, qualified := spec.SplitNamespaceRef(name); !qualified {
 			continue
 		}
 		if _, done := resolved[name]; done {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // isTerminal reports whether stdout is connected to a terminal.
@@ -68,7 +69,7 @@ type ShellCmd struct {
 func (c *ShellCmd) Run() error {
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
 	// Users must pull first, then run shell on the short name.
-	if IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)

@@ -123,8 +123,8 @@ func projectCandyView(c *Candy) spec.CandyView {
 	// capabilities — the per-candy caps the validate ENGINE reads off the envelope (task #60,
 	// ruling a). Filled whenever the candy declares a `capabilities:` block; the validate plugin
 	// re-runs AggregateCandyCapabilities (a boolean OR of PreserveUser over the box's candy order).
-	if c.capabilities != nil {
-		v.Capabilities = &spec.CandyCapabilitiesView{PreserveUser: c.capabilities.PreserveUser}
+	if caps := c.Capabilities(); caps != nil {
+		v.Capabilities = &spec.CandyCapabilitiesView{PreserveUser: caps.PreserveUser}
 	}
 	// the candy's OWN declared plugin block (validatePluginCandy SUBJECT, task #60): the declared
 	// provider capability strings + source, so the validate plugin can check each declared BUILTIN
@@ -144,31 +144,38 @@ func projectCandyView(c *Candy) spec.CandyView {
 // (identity/graph). A pure DATA projection over accessors the *Candy already exposes.
 func projectCandyModel(c *Candy) spec.CandyModel {
 	m := spec.CandyModel{
-		Name:            c.Name,
-		Version:         c.Version,
-		SourceDir:       c.SourceDir,
-		ExternalBuilder: c.ExternalBuilder,
-		Reboot:          c.Reboot(),
-		Plan:            c.PlanSteps(),
-		RunOps:          c.runOps(),
-		Service:         c.Service(),
-		Extract:         c.Extract(),
-		Data:            c.Data(),
-		Apk:             c.Apk(),
-		TopPackages:     c.TopPackages(),
-		Vars:            c.Vars(),
-		Libvirt:         c.Libvirt(),
-		Engine:          c.Engine(),
-		PortRelayPorts:  c.PortRelayPorts,
-		ServiceFiles:    c.ServiceFiles(),
-		Volumes:         c.Volume(),
-		Aliases:         c.Alias(),
-		EnvRequire:      c.EnvRequire(),
-		EnvAccept:       c.EnvAccept(),
-		SecretRequire:   c.SecretRequire(),
-		SecretAccept:    c.SecretAccept(),
-		MCPRequire:      c.MCPRequire(),
-		MCPAccept:       c.MCPAccept(),
+		Name:               c.Name,
+		Version:            c.Version,
+		SourceDir:          c.SourceDir,
+		ExternalBuilder:    c.ExternalBuilder,
+		Reboot:             c.Reboot(),
+		Plan:               c.PlanSteps(),
+		RunOps:             c.runOps(),
+		Service:            c.Service(),
+		Extract:            c.Extract(),
+		Data:               c.Data(),
+		Apk:                c.Apk(),
+		TopPackages:        c.TopPackages(),
+		Vars:               c.Vars(),
+		Libvirt:            c.Libvirt(),
+		Engine:             c.Engine(),
+		PortRelayPorts:     c.PortRelayPorts,
+		ServiceFiles:       c.ServiceFiles(),
+		Volumes:            c.Volume(),
+		Aliases:            c.Alias(),
+		EnvRequire:         c.EnvRequire(),
+		EnvAccept:          c.EnvAccept(),
+		SecretRequire:      c.SecretRequire(),
+		SecretAccept:       c.SecretAccept(),
+		MCPRequire:         c.MCPRequire(),
+		MCPAccept:          c.MCPAccept(),
+		Security:           c.Security(),
+		Hook:               c.Hooks(),
+		Artifact:           c.Artifact(),
+		RequiresCapability: c.RequiresCapabilities(),
+		Capability:         c.Capabilities(),
+		Secret:             c.Secret(),
+		Port:               c.PortSpecs(),
 		// Host-precomputed predicates (#67): the live *Candy verdicts the envelope CandyModel
 		// cannot recompute faithfully (env/ports/route/volumes/aliases/libvirt/init + the fs-probe
 		// caches). Carried so the specCandyAdapter matches the live *Candy byte-exactly (the

@@ -159,7 +159,7 @@ func TestParseRemoteRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := ParseRemoteRef(tt.ref)
+		got := spec.ParseRemoteRef(tt.ref)
 		if got.RepoPath != tt.wantRepo || got.SubPath != tt.wantSub || got.Name != tt.wantName || got.Version != tt.wantVer {
 			t.Errorf("ParseRemoteRef(%q) = {Repo: %q, SubPath: %q, Name: %q, Version: %q}, want {%q, %q, %q, %q}",
 				tt.ref, got.RepoPath, got.SubPath, got.Name, got.Version, tt.wantRepo, tt.wantSub, tt.wantName, tt.wantVer)
@@ -204,7 +204,7 @@ func TestIsRemoteImageRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := IsRemoteImageRef(tt.ref)
+		got := spec.IsRemoteImageRef(tt.ref)
 		if got != tt.want {
 			t.Errorf("IsRemoteImageRef(%q) = %v, want %v", tt.ref, got, tt.want)
 		}

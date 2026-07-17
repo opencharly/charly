@@ -482,7 +482,7 @@ func validateDeploymentName(name, parentPath string) error {
 // resolves exactly once.
 func canonicalRef(ref, baseDir string) (key, path string, err error) {
 	if strings.HasPrefix(ref, "@") {
-		parsed := ParseRemoteRef(ref)
+		parsed := spec.ParseRemoteRef(ref)
 		version := parsed.Version
 		if version == "" {
 			branch, e := kit.GitDefaultBranch(kit.RepoGitURL(parsed.RepoPath))

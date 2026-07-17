@@ -60,10 +60,18 @@ func (*provider) ParseDoc(doc *yaml.Node, t spec.Threaded) (map[string]*yaml.Nod
 // WalkProject implements spec.ProjectWalker — the typed whole-project WALK the host calls once
 // per project load (compiled-in, no wire envelope): import queue + discover + namespaced-import
 // mounts + per-document parse, delegating to the ONE copy in sdk/loaderkit. seams carries the
-// host's registry-coupled callbacks (parse pre-scan, ref resolution, the #NodeDoc gate, the
-// repo-identity cycle-break) — this candy never touches the registry directly (boundary law
-// clause D).
+// host's registry-coupled callbacks (parse pre-scan, ref resolution, the #NodeDoc gate) — this
+// candy never touches the registry directly (boundary law clause D). The repo-identity cycle-break
+// (seams.RepoIdentity + the rootIdentity seed) is NOT registry-coupled — it's pure fs/git/yaml
+// logic (loaderkit.RepoIdentity/RootRepoIdentity) this candy composes ITSELF when the host leaves
+// it unset, so charly core need not hold that logic just to thread a function value through.
 func (*provider) WalkProject(rootDir string, rootData []byte, rootIdentity string, seams spec.WalkSeams) (spec.LoadedProject, error) {
+	if seams.RepoIdentity == nil {
+		seams.RepoIdentity = loaderkit.RepoIdentity
+	}
+	if rootIdentity == "" {
+		rootIdentity = loaderkit.RootRepoIdentity(rootDir)
+	}
 	return loaderkit.Walk(rootDir, rootData, rootIdentity, seams)
 }
 

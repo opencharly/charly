@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // StartCmd launches a container with supervisord in the background
@@ -26,7 +27,7 @@ type StartCmd struct {
 
 func (c *StartCmd) Run() error {
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
-	if IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
@@ -59,8 +60,8 @@ func (c *StopCmd) Run() error {
 	// Resolve the image name (handle remote refs)
 	boxName := c.Box
 	ref := StripURLScheme(c.Box)
-	if IsRemoteImageRef(ref) {
-		boxName = ParseRemoteRef(ref).Name
+	if spec.IsRemoteImageRef(ref) {
+		boxName = spec.ParseRemoteRef(ref).Name
 	}
 	// Unified dispatch (the K4 deep-body move): `charly stop` routes through LifecycleTarget.Stop —
 	// a pod reaches the plugin's OpStop body (tunnel stop → container stop → enc unmount if
@@ -170,8 +171,8 @@ type RestartCmd struct {
 func (c *RestartCmd) Run() error {
 	boxName := c.Box
 	ref := StripURLScheme(c.Box)
-	if IsRemoteImageRef(ref) {
-		boxName = ParseRemoteRef(ref).Name
+	if spec.IsRemoteImageRef(ref) {
+		boxName = spec.ParseRemoteRef(ref).Name
 	}
 
 	rt, err := kit.ResolveRuntime()
@@ -247,7 +248,7 @@ func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name 
 	if gpu {
 		args = append(args, kit.GPURunArgs(engine)...)
 	}
-	args = append(args, SecurityArgs(security)...)
+	args = append(args, deploykit.SecurityArgs(security)...)
 	for _, port := range ports {
 		args = append(args, "-p", deploykit.LocalizePort(port, bindAddr))
 	}

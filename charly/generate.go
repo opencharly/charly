@@ -441,10 +441,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 	return nil
 }
 
-// renderDnfConfWrite → deploykit.RenderDnfConfWrite (P8 shim). The host package keeps
-// the var-alias so the generate-speedup test references the unqualified name.
-var renderDnfConfWrite = deploykit.RenderDnfConfWrite
-
 // collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
 // Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
@@ -561,7 +557,7 @@ func (g *Generator) createRemoteCandyCopies() error {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, candyStageDirName(layer))); err != nil {
+		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, deploykit.CandyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}
@@ -641,14 +637,13 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 // NOT match its map key. (deploykit.Generator.CandyCopySource — the COPY
 // source path resolver — is the sdk-side render helper; charly core's own
 // wrapper was dead, K3, and is gone.)
-// candyMapKey → deploykit.CandyMapKey (P8 shim).
-var candyMapKey = deploykit.CandyMapKey
+// candyMapKey → deploykit.CandyMapKey.
 
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
-// It is the FORWARD counterpart of candyMapKey (which maps a *Candy back to its
+// It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a *Candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
 // REMOTE candy (e.g. a deploy's add_candy: pulled via ResolveOpts.ExtraCandyRefs)
-// is keyed under its fully-qualified ref (candyMapKey), so the direct bare lookup
+// is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
 // MISSES and we fall back to matching the Candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from
 // collectOverlayCandies / p.AddCandies) and needs the *Candy goes through here, so
@@ -677,6 +672,4 @@ func (g *Generator) candyByName(name string) *Candy {
 // `charly clean` can prune outdated versions. Candy names are dot-free
 // (lowercase-hyphenated), so the version (a dotted CalVer) parses back off the
 // FIRST dot. Cache-safe: the path changes iff the candy version changes.
-// candyStageDirName → deploykit.CandyStageDirName (P8 shim).
-var candyStageDirName = deploykit.CandyStageDirName
-
+// candyStageDirName → deploykit.CandyStageDirName.

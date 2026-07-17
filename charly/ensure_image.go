@@ -50,6 +50,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // EnsureImagePresent is the canonical helper. Every command that
@@ -89,7 +90,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 	// Fallback: remote ref → build from the cached @github.com/... repo
 	// using the same workflow as `charly box build @<ref>`.
 	stripped := StripURLScheme(image)
-	if IsRemoteImageRef(stripped) {
+	if spec.IsRemoteImageRef(stripped) {
 		if rctx, err := ResolveRemoteImage(stripped, ""); err == nil {
 			fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
 			rt, rerr := kit.ResolveRuntime()
@@ -155,7 +156,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 		return "", fmt.Errorf("empty image")
 	}
 	stripped := StripURLScheme(image)
-	if IsRemoteImageRef(stripped) {
+	if spec.IsRemoteImageRef(stripped) {
 		return image, nil
 	}
 	if kit.LooksLikeFullRef(image) {
@@ -178,7 +179,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 // canonical registry ref declared in the remote project's charly.yml.
 func pullRefForEnsure(image string, cfg *Config, projectDir string) (string, error) {
 	stripped := StripURLScheme(image)
-	if IsRemoteImageRef(stripped) {
+	if spec.IsRemoteImageRef(stripped) {
 		rctx, err := ResolveRemoteImage(stripped, "")
 		if err != nil {
 			return "", fmt.Errorf("resolving remote ref %q: %w", image, err)
@@ -219,7 +220,7 @@ func buildableShortName(image string, cfg *Config) string {
 		return ""
 	}
 	stripped := StripURLScheme(image)
-	if IsRemoteImageRef(stripped) {
+	if spec.IsRemoteImageRef(stripped) {
 		return ""
 	}
 	// Strip tag if present. Be careful: a registry like

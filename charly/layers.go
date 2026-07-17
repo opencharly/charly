@@ -786,6 +786,19 @@ func (l *Candy) runOps() []spec.Op {
 // format). Empty for non-Android candies.
 func (l *Candy) Apk() []ApkPackageSpec { return l.apk }
 
+// Capabilities returns the candy's `capabilities:` declaration (what it
+// contributes to the image's aggregated capability set), or nil when the
+// candy declares none. Exported so layer_capabilities.go's aggregation reads
+// it through the same public-accessor surface every other Candy field uses
+// (Route/Security/Hooks/...), rather than the unexported field directly —
+// the W9 pre-step that lets AggregateCandyCapabilities move with Candy later.
+func (l *Candy) Capabilities() *CandyCapabilities { return l.capabilities }
+
+// RequiresCapabilities returns the capability names the candy declared via
+// `requires_capabilities:` (what it needs some OTHER candy in the image to
+// provide). Empty when the candy requires none.
+func (l *Candy) RequiresCapabilities() []string { return l.requiresCapabilities }
+
 // LocalPkg returns the candy's native-package SOURCE dir for the given package
 // FORMAT (pac/rpm/deb), or "" when the candy declares none for that format. See
 // LocalPkgInstallStep.
@@ -1287,7 +1300,7 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 				// its own pinned repo/git-tag.
 				enqueueDep := func(dep deploykit.CandyRef) error {
 					if dep.IsRemote() {
-						p := ParseRemoteRef(dep.Raw)
+						p := spec.ParseRemoteRef(dep.Raw)
 						return enqueue(p.RepoPath, p.Version, dep.Bare())
 					}
 					return enqueue(dl.RepoPath, dl.Version, dl.RepoPath+"/"+layer.SubPathPrefix+dep.Raw)

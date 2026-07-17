@@ -25,7 +25,7 @@ import (
 // vmPluginCandyRef): in a check bed CHARLY_REPO_OVERRIDE redirects it to the local superproject
 // under development; outside a bed it fetches the published candy.
 func deployPodPluginCandyRef() string {
-	return "@" + DefaultProjectRepo + "/candy/plugin-deploy-pod"
+	return "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-pod"
 }
 
 // writePodConfigViaPlugin connects deploy:pod on-demand and Invokes its OpConfigWrite to render +

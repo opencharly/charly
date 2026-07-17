@@ -95,7 +95,7 @@ func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	gen := &Generator{
 		Dir:      ctxRoot,
 		BuildDir: filepath.Join(ctxRoot, ".build"), // == g.Dir + "/.build" (NewGenerator default)
-		Candies:  map[string]*Candy{candyMapKey(candy): candy},
+		Candies:  map[string]*Candy{deploykit.CandyMapKey(candy): candy},
 	}
 
 	if err := gen.createRemoteCandyCopies(); err != nil {
