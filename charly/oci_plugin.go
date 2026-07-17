@@ -9,36 +9,38 @@ import (
 )
 
 // oci_plugin.go is the CORE adapter for the externalized OCI IMAGE ENGINE (the P14a
-// cutover). The go-containerregistry layer-MERGE engine (formerly charly/merge.go) + the
-// remote-image adopt-user PROBE (formerly charly/registry.go) live
-// OUT-OF-PROCESS in candy/plugin-oci (verb:oci); charly/go.mod links go-containerregistry
-// NOWHERE. The core consumers reach the plugin through the provider registry:
+// cutover). The go-containerregistry layer-MERGE engine + the remote-image adopt-user PROBE
+// (formerly charly/registry.go) live OUT-OF-PROCESS in candy/plugin-oci (verb:oci);
+// charly/go.mod links go-containerregistry NOWHERE. The remaining core consumer reaches the
+// plugin through the provider registry:
 //
-//   - `charly box merge` (merge.go MergeCmd.runOne) resolves a box → spec.MergeRequest and
-//     forwards it via invokeOciMerge, printing the reply's progress Notes;
-//   - the build engine's adopt-user resolution (generate.go) calls invokeOciInspectUser;
-//   - candy/plugin-build's build DRIVE calls Executor.InvokeProvider(verb:oci) directly
-//     (the F10 peer-dispatch leg — plugin↔plugin, not this core shim).
+//   - the build engine's adopt-user resolution (generate.go) calls invokeOciInspectUser.
+//
+// `charly box merge` moved OUT of core at P14 (candy/plugin-box/merge_cmd.go) — it now reaches
+// verb:oci DIRECTLY over InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own
+// post-build inline merge, drive.go's mergeBox, already uses), so this adapter's former
+// invokeOciMerge/ociOpMerge half is GONE — no core caller needs it any more (R5 — the dead half
+// deleted in the same cutover that retired its only consumer, not left as an unused shim).
 //
 // MIGRATION INVENTORY (north-star §4.4 — every stays-core construct has a named K-wave exit):
-// this oci_plugin.go core shim is UNTIL-K3. generate.go's adopt-user consumer (invokeOciInspectUser)
-// + the `charly box merge` CLI consumer move WITH the build engine into buildkit/plugin-build at K3;
-// this host→verb:oci adapter dies or shrinks to the build-engine's own InvokeProvider(verb:oci) then.
+// this oci_plugin.go core shim is UNTIL-K1, NOT K3 as a stale prior note here claimed — its sole
+// remaining consumer, generate.go's adopt-user resolution, is one of the loader-coupled "HARD
+// TAIL" files (K1, not yet landed), so this file cannot retire until K1 moves generate.go's
+// resolve/render engine off the loader. It then dies or shrinks to the build-engine's own
+// InvokeProvider(verb:oci), exactly like candy/plugin-build's build DRIVE already calls
+// Executor.InvokeProvider(verb:oci) directly (the F10 peer-dispatch leg — plugin↔plugin, not
+// this core shim).
 //
 // verb:oci is a pure INTERNAL RPC keyed by an oci_op ENV discriminator (mirroring the vm
 // plugin's VmOp — the request struct rides Params, the leg selector rides Env), NOT a
 // `plugin_input`-enveloped check verb. It is COMPILED INTO charly by default
 // (compiled_plugins:), so providerRegistry resolves it in-process AND project-lessly (the
-// merge + adopt-user probes run on the build path, on hosts that may carry no project);
-// the connectPluginByWord fallback covers the baked / project-source coexist paths — the
+// adopt-user probe runs on the build path, on hosts that may carry no project); the
+// connectPluginByWord fallback covers the baked / project-source coexist paths — the
 // registry-first pattern of tunnel_plugin.go / credential_plugin.go.
 
-// ociEnvMerge / ociEnvInspectUser are the env-JSON selectors matching candy/plugin-oci's
-// ociEnv{OciOp}.
-const (
-	ociOpMerge       = "merge"
-	ociOpInspectUser = "inspect-user"
-)
+// ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
+const ociOpInspectUser = "inspect-user"
 
 // ociProvider resolves verb:oci. Registry-first so a COMPILED-IN plugin resolves in-process
 // and project-lessly; falls back to connectPluginByWord for the baked / project-source
@@ -81,20 +83,6 @@ func invokeOci(ociOp string, params any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("oci: verb:oci returned no result")
 	}
 	return out.JSON, nil
-}
-
-// invokeOciMerge forwards a resolved merge request to verb:oci and decodes the
-// spec.MergeReply (layer counts + progress Notes + a per-merge Error).
-func invokeOciMerge(req spec.MergeRequest) (spec.MergeReply, error) {
-	raw, err := invokeOci(ociOpMerge, req)
-	if err != nil {
-		return spec.MergeReply{}, err
-	}
-	var reply spec.MergeReply
-	if err := json.Unmarshal(raw, &reply); err != nil {
-		return spec.MergeReply{}, fmt.Errorf("oci merge: decode reply: %w", err)
-	}
-	return reply, nil
 }
 
 // invokeOciInspectUser probes a remote image's /etc/passwd for the user at uid via
