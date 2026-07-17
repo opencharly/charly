@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestScanCandyParitySpike(t *testing.T) {
@@ -54,7 +55,7 @@ func TestScanCandyParitySpike(t *testing.T) {
 			// pipeline does for a local candy. FinalizeCandyRefs alone (no qualification) proves
 			// Finding 4's fix (CandyRefs carrying the rich form through to a LATER finalize,
 			// instead of bare-stringing at scan time) reproduces the old byte-exact LOCAL result.
-			loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
+			spec.FinalizeCandyRefs(&newModel, &newView, newRefs)
 
 			// BakePlugin is skipped in the CandyModel diff below: the pre-move projectCandyModel
 			// NEVER populated it (Finding 3 — a genuine schema gap, not a parity target), so OLD is
@@ -109,7 +110,7 @@ func TestScanCandyParitySpikePortProtocol(t *testing.T) {
 	newView.HasInit = old.HasAnyInit()
 	newModel.HasInstallFiles = newModel.HasInstallFiles || len(newModel.RunOps) > 0
 	newModel.HasContent = newModel.HasContent || newModel.HasInstallFiles || newView.HasInit
-	loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
+	spec.FinalizeCandyRefs(&newModel, &newView, newRefs)
 
 	diffFields(t, "CandyModel", dir, oldModel, newModel)
 	diffFields(t, "CandyView", dir, oldView, newView)
@@ -194,7 +195,7 @@ func TestScanRemoteCandyParitySpike(t *testing.T) {
 			// loaderkit.ScanRemoteCandy already ran QualifyRemoteSiblingDeps internally (unlike the
 			// plain ScanCandyManifest spike above) — only FinalizeCandyRefs remains to reach the FINAL
 			// bare-string form.
-			loaderkit.FinalizeCandyRefs(&newModel, &newView, newRefs)
+			spec.FinalizeCandyRefs(&newModel, &newView, newRefs)
 
 			if want := bareRefs(old.BakePlugin); !reflect.DeepEqual(want, newModel.BakePlugin) {
 				t.Errorf("CandyModel.BakePlugin: want bare projection %+v, got %+v", want, newModel.BakePlugin)
