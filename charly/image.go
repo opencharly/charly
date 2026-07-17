@@ -43,8 +43,9 @@ type BoxCmd struct {
 // reconcile) are UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go
 // knows zero verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
 // externalizes (mirroring generate/validate/new/pkg/inspect/list/labels above, P14-rest trace,
-// 2026-07): merge.go and box_labels_cmd.go/pkg_cmd.go already document their own UNTIL-K5/K1
-// notes; build/pull/feature/reconcile are the remaining residue in this struct.
+// 2026-07 — labels externalized fully in K3, no host reentry left; see charly/labels.go): merge.go
+// and pkg_cmd.go already document their own UNTIL-K5/K1 notes; build/pull/feature/reconcile are
+// the remaining residue in this struct.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three

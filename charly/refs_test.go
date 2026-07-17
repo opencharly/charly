@@ -595,29 +595,11 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	}
 }
 
-func TestCandyCopySource(t *testing.T) {
-	g := &Generator{
-		Candies: map[string]*Candy{
-			"pixi":                              {Name: "pixi", Remote: false},
-			"github.com/test/repo/layers/cuda":  {Name: "cuda", Version: "2026.167.1200", Remote: true, RepoPath: "github.com/test/repo"},
-			"github.com/test/repo/layers/nover": {Name: "nover", Remote: true, RepoPath: "github.com/test/repo"},
-		},
-	}
-
-	if got := g.candyCopySource("pixi"); got != "candy/pixi" {
-		t.Errorf("local candy: got %q, want %q", got, "candy/pixi")
-	}
-	// Remote candies stage under the VERSION-keyed .build/_candy/<name>.<version>/
-	// so distinct candy versions never share a dir (cross-version crossover).
-	if got := g.candyCopySource("github.com/test/repo/layers/cuda"); got != ".build/_candy/cuda.2026.167.1200" {
-		t.Errorf("remote candy: got %q, want %q", got, ".build/_candy/cuda.2026.167.1200")
-	}
-	// Defensive: a version-less remote candy (should never happen — the resolver
-	// hard-errors) falls back to the bare name rather than a trailing-dot dir.
-	if got := g.candyCopySource("github.com/test/repo/layers/nover"); got != ".build/_candy/nover" {
-		t.Errorf("version-less remote candy: got %q, want %q", got, ".build/_candy/nover")
-	}
-}
+// TestCandyCopySource was relocated to sdk/deploykit/candy_stage_test.go (K3,
+// Bucket-1 dissolution): the dead charly.Generator.candyCopySource wrapper this
+// test exercised is gone — deploykit.Generator.CandyCopySource is the live
+// production path (candy/plugin-deploy-pod/overlay.go reaches it directly), and
+// the sdk-side test now covers it against that Generator directly.
 
 // TestRepoOverrideDir covers the CHARLY_REPO_OVERRIDE parser: exact + short-form
 // match, miss, multi-pair, and the loud-failure cases (malformed, missing dir,
