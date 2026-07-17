@@ -164,7 +164,9 @@ func ScanCandy(dir string) (map[string]spec.CandyReader, error) {
 // legacyScanCandiesDir is the pre-unified filesystem walk. Kept for test
 // fixtures (and the migration tool) that don't yet have an charly.yml. Every
 // candy here is LOCAL (no remote-sibling qualification needed — mirrors the
-// W9 spike's local-candy case), so FinalizeCandyRefs runs immediately per candy.
+// W9 spike's local-candy case), so completion + FinalizeCandyRefs run immediately
+// per candy (RunOps/HasContent/HasInstallFiles — completeCandyRunOps — since this
+// path never reaches ScanAllCandyWithConfigOpts's winners loop).
 func legacyScanCandiesDir(dir string) (map[string]spec.CandyReader, error) {
 	candiesDir := filepath.Join(dir, DefaultCandyDir)
 	entries, err := os.ReadDir(candiesDir)
@@ -184,6 +186,7 @@ func legacyScanCandiesDir(dir string) (map[string]spec.CandyReader, error) {
 		if err != nil {
 			return nil, fmt.Errorf("scanning candy %s: %w", name, err)
 		}
+		completeCandyRunOps(&m, &v)
 		spec.FinalizeCandyRefs(&m, &v, refs)
 		layers[name] = deploykit.NewSpecCandyModel(m, v)
 	}
@@ -462,6 +465,38 @@ func PopulateCandyInitSystem(scanned map[string]spec.ScannedCandy, initCfg *Init
 	}
 }
 
+// completeCandyRunOps finishes the ONE host-completed predicate scanFromParsed's own doc comment
+// flags as not scan-computable standalone: RunOps needs opInContext (registry-adjacent D-data only
+// charly core holds), so a single candy's scan can't derive it — this runs the SAME live-compute the
+// pre-move *Candy.runOps() did (a `run:` step passes unless it is PURELY runtime-context), then
+// OR-completes HasInstallFiles/HasContent with it (+ the already-known InitSystems term, when
+// PopulateCandyInitSystem has run for this candy) — the associative-OR completion the scan-time
+// partial computation deliberately deferred. MUST run on the mutable pre-wrap (Model, View) pair,
+// before FinalizeCandyRefs+NewSpecCandyModel (a spec.CandyReader is read-only after that).
+func completeCandyRunOps(m *spec.CandyModel, v *spec.CandyView) {
+	for i := range m.Plan {
+		step := &m.Plan[i]
+		kw, err := step.StepKind()
+		if err != nil || kw != kit.KwRun {
+			continue
+		}
+		op := step.Op
+		if opInContext(&op, spec.CtxRuntime) && !opInContext(&op, spec.CtxBuild) && !opInContext(&op, spec.CtxDeploy) {
+			continue
+		}
+		m.RunOps = append(m.RunOps, op)
+	}
+	hasAnyInit := false
+	for _, triggers := range v.InitSystems {
+		if triggers {
+			hasAnyInit = true
+			break
+		}
+	}
+	m.HasInstallFiles = m.HasInstallFiles || len(m.RunOps) > 0
+	m.HasContent = m.HasContent || m.HasInstallFiles || hasAnyInit
+}
+
 // CandyNames returns a sorted list of candy names
 func CandyNames(layers map[string]spec.CandyReader) []string {
 	names := make([]string, 0, len(layers))
@@ -639,11 +674,13 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 	}
 
 	// 5. Host-completion (InitSystems, opts.InitCfg-gated — nil by default, matching
-	// every caller but generate.go) THEN finalize (bare-string the refs) THEN wrap
-	// into the FINAL spec.CandyReader — in that order, since a CandyReader is
-	// read-only and can't be mutated after this point.
+	// every caller but generate.go; then RunOps + the HasInstallFiles/HasContent
+	// fold, unconditional) THEN finalize (bare-string the refs) THEN wrap into the
+	// FINAL spec.CandyReader — in that order, since a CandyReader is read-only and
+	// can't be mutated after this point.
 	PopulateCandyInitSystem(winners, opts.InitCfg)
 	for ref, sc := range winners {
+		completeCandyRunOps(&sc.Model, &sc.View)
 		spec.FinalizeCandyRefs(&sc.Model, &sc.View, sc.Refs)
 		layers[ref] = deploykit.NewSpecCandyModel(sc.Model, sc.View)
 	}

@@ -152,11 +152,11 @@ func TestEnsureCandySecret_CustomKeyRoutesToOverride(t *testing.T) {
 func TestResolveCandySecrets_RequiredAutoGen(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	layer := &Candy{
-		secretRequires: []spec.EnvDependency{
+	layer := testCandy("k3s", spec.CandyModel{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "K3S_CLUSTER_TOKEN"},
 		},
-	}
+	}, spec.CandyView{})
 	env := ResolveCandySecret(layer)
 	val, ok := env["K3S_CLUSTER_TOKEN"]
 	if !ok || val == "" {
@@ -173,11 +173,11 @@ func TestResolveCandySecrets_RequiredAutoGen(t *testing.T) {
 func TestResolveCandySecrets_OptionalDefaultFallback(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	layer := &Candy{
-		secretAccepts: []spec.EnvDependency{
+	layer := testCandy("x", spec.CandyModel{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "OPTIONAL_VAR", Default: "fallback-value"},
 		},
-	}
+	}, spec.CandyView{})
 	env := ResolveCandySecret(layer)
 	if env["OPTIONAL_VAR"] != "fallback-value" {
 		t.Errorf("expected fallback-value, got %q", env["OPTIONAL_VAR"])
@@ -191,12 +191,12 @@ func TestResolveCandySecrets_OptionalDefaultFallback(t *testing.T) {
 func TestResolveSecretsForCandies_TwoCandiesSameSecret(t *testing.T) {
 	defer setupIsolatedConfigStore(t)()
 
-	server := &Candy{
-		secretRequires: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
-	}
-	agent := &Candy{
-		secretRequires: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
-	}
+	server := testCandy("server", spec.CandyModel{
+		SecretRequire: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
+	}, spec.CandyView{})
+	agent := testCandy("agent", spec.CandyModel{
+		SecretRequire: []spec.EnvDependency{{Name: "K3S_CLUSTER_TOKEN"}},
+	}, spec.CandyView{})
 	env := ResolveSecretForCandy([]spec.CandyReader{server, agent})
 
 	val := env["K3S_CLUSTER_TOKEN"]

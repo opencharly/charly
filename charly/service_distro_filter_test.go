@@ -76,7 +76,7 @@ func customServiceCount(steps []spec.InstallStep) int {
 }
 
 func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
-	layer := &Candy{Name: "virtualization", service: virtualizationServiceEntries()}
+	layer := testCandy("virtualization", spec.CandyModel{Service: virtualizationServiceEntries()}, spec.CandyView{})
 
 	t.Run("debian systemd (vm) enables only libvirtd.socket", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}

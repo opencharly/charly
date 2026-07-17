@@ -39,11 +39,7 @@ func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]spec.Can
 	if err != nil {
 		return nil, nil, err
 	}
-	models := make([]spec.CandyReader, len(candyList))
-	for i, c := range candyList {
-		models[i] = c
-	}
-	secretEnv := ResolveSecretForCandy(models)
+	secretEnv := ResolveSecretForCandy(candyList)
 	InjectSecretsIntoPlans(plans, secretEnv)
 	return candyList, secretEnv, nil
 }

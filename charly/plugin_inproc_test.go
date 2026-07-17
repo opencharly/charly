@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-
-	"github.com/opencharly/sdk/spec"
 )
 
 // TestCompiledInPlugin_ExternalprobeDispatches proves the "one provider, two
@@ -56,11 +54,8 @@ func TestCoexistSwitch_CompiledInSkipsOutOfProcess(t *testing.T) {
 	if _, ok := providerRegistry.ResolveVerb("externalprobe"); !ok {
 		t.Fatal("externalprobe must be compiled in (plugins_generated.go) for this test")
 	}
-	decl := &spec.Plugin{
-		Source:    "github.com/opencharly/charly/candy/plugin-example-external",
-		Providers: []spec.PluginCapability{"verb:externalprobe"},
-	}
-	connected, err := pluginAlreadyConnected("plugin-example-external", decl)
+	connected, err := pluginAlreadyConnected("plugin-example-external",
+		"github.com/opencharly/charly/candy/plugin-example-external", []string{"verb:externalprobe"})
 	if err != nil {
 		t.Fatalf("coexist switch must SKIP a compiled-in word, got collision error: %v", err)
 	}

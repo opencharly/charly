@@ -204,7 +204,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	// Derive each image's content-stable identity (ai.opencharly.version)
 	// from per-entity versions now that the base chain + auto-intermediates are
 	// materialized (the build render/version-compute machinery, sdk/deploykit).
-	if err := deploykit.ComputeEffectiveVersions(g.Boxes, candyModelMap(g.Candies)); err != nil {
+	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
 		return nil, err
 	}
 
@@ -426,12 +426,8 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 			// dispatch (dispatchExternalCommand's baked path), so an unrelated `charly <cmd>` in
 			// the container pays nothing.
 			if plugin.IsPluginCandy() && len(plugin.GetPluginProviders()) > 0 {
-				providers := plugin.GetPluginProviders()
-				lines := make([]string, len(providers))
-				for i, c := range providers {
-					lines[i] = c // PluginCapability is a "<class>:<word>" string
-				}
-				manifest := strings.Join(lines, "\n") + "\n"
+				providers := plugin.GetPluginProviders() // each a "<class>:<word>" string
+				manifest := strings.Join(providers, "\n") + "\n"
 				if err := os.WriteFile(filepath.Join(stageDir, binName+".providers"), []byte(manifest), 0o644); err != nil {
 					return fmt.Errorf("candy %q: bake_plugin %q: stage manifest: %w", candyName, key, err)
 				}
@@ -634,7 +630,7 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 
 // candyMapKey returns the key under which a candy is stored in g.Candies: the
 // fully-qualified remote ref (RepoPath/SubPathPrefix/Name) for remote candies,
-// the short name for local ones. Use this whenever code holds a *Candy but
+// the short name for local ones. Use this whenever code holds a spec.CandyReader but
 // needs to look it up in g.Candies, since a remote candy's short Name does
 // NOT match its map key. (deploykit.Generator.CandyCopySource — the COPY
 // source path resolver — is the sdk-side render helper; charly core's own
@@ -642,13 +638,13 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 // candyMapKey → deploykit.CandyMapKey.
 
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
-// It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a *Candy back to its
+// It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
 // REMOTE candy (e.g. a deploy's add_candy: pulled via ResolveOpts.ExtraCandyRefs)
 // is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
-// MISSES and we fall back to matching the Candy's own Name. Every call site that
+// MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from
-// collectOverlayCandies / p.AddCandies) and needs the *Candy goes through here, so
+// collectOverlayCandies / p.AddCandies) and needs the candy goes through here, so
 // a remote add_candy overlay layer resolves instead of being silently skipped
 // (the add_candy-on-pod-overlay "candy not found" / skipped-stage class).
 func (g *Generator) candyByName(name string) spec.CandyReader {

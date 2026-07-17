@@ -243,7 +243,7 @@ var _ = func() bool { registerStepEmitter("builder", stepEmitBuilder); return tr
 // stepEmitLocalPkgInstall renders the LocalPkgInstall InstallStep's BUILD-context Containerfile
 // fragment — the C1.4 relocation of the LocalPkgInstall build-emit off deploykit.OCITarget onto the
 // step-emit seam. deploykit.RenderLocalPkgImageInstall (relocated from core, W3) is now a PURE
-// function of its step argument (no *Config, no live *Candy graph) — it BUILDS the candy's
+// function of its step argument (no *Config, no scanned candy set) — it BUILDS the candy's
 // package from LOCAL in-development source on the HOST for a disposable check bed
 // (deploykit.BuildLocalPkgOnHost — makepkg / podman, which the compiled-in candy/plugin-installstep
 // can do itself; host exec/file-I/O is not a process-boundary concern) and STAGES the built file

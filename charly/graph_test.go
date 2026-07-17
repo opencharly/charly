@@ -7,18 +7,17 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
 func TestResolveCandyOrder(t *testing.T) {
 	// Create test candies
-	layers := map[string]*Candy{
-		"pixi":    {Name: "pixi", Require: nil},
-		"python":  {Name: "python", Require: deploykit.ToCandyRefs([]string{"pixi"})},
-		"ml-libs": {Name: "ml-libs", Require: deploykit.ToCandyRefs([]string{"python"})},
-		"nodejs":  {Name: "nodejs", Require: nil},
-		"web-ui":  {Name: "web-ui", Require: deploykit.ToCandyRefs([]string{"nodejs"})},
+	layers := map[string]spec.CandyReader{
+		"pixi":    testCandy("pixi", spec.CandyModel{}, spec.CandyView{}),
+		"python":  testCandy("python", spec.CandyModel{}, spec.CandyView{Require: []string{"pixi"}}),
+		"ml-libs": testCandy("ml-libs", spec.CandyModel{}, spec.CandyView{Require: []string{"python"}}),
+		"nodejs":  testCandy("nodejs", spec.CandyModel{}, spec.CandyView{}),
+		"web-ui":  testCandy("web-ui", spec.CandyModel{}, spec.CandyView{Require: []string{"nodejs"}}),
 	}
 
 	tests := []struct {
@@ -93,10 +92,10 @@ func TestResolveCandyOrder(t *testing.T) {
 
 func TestResolveCandyOrderCycle(t *testing.T) {
 	// Create candies with a cycle: a -> b -> c -> a
-	layers := map[string]*Candy{
-		"a": {Name: "a", Require: deploykit.ToCandyRefs([]string{"b"})},
-		"b": {Name: "b", Require: deploykit.ToCandyRefs([]string{"c"})},
-		"c": {Name: "c", Require: deploykit.ToCandyRefs([]string{"a"})},
+	layers := map[string]spec.CandyReader{
+		"a": testCandy("a", spec.CandyModel{}, spec.CandyView{Require: []string{"b"}}),
+		"b": testCandy("b", spec.CandyModel{}, spec.CandyView{Require: []string{"c"}}),
+		"c": testCandy("c", spec.CandyModel{}, spec.CandyView{Require: []string{"a"}}),
 	}
 
 	_, err := ResolveCandyOrder([]string{"a"}, layers, nil)
@@ -322,7 +321,7 @@ func TestCandiesProvidedByImage(t *testing.T) {
 		},
 	}
 
-	layers := map[string]*Candy{} // not used, just for type
+	layers := map[string]spec.CandyReader{} // not used, just for type
 
 	tests := []struct {
 		name    string
@@ -360,13 +359,13 @@ func TestCandiesProvidedByImage(t *testing.T) {
 }
 
 func TestExpandCandies(t *testing.T) {
-	layers := map[string]*Candy{
-		"pipewire":     {Name: "pipewire", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"wayvnc":       {Name: "wayvnc", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"chrome":       {Name: "chrome", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"waybar":       {Name: "waybar", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"sway-desktop": {Name: "sway-desktop", IncludedCandy: deploykit.ToCandyRefs([]string{"pipewire", "wayvnc", "chrome", "waybar"})},
-		"openclaw":     {Name: "openclaw", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+	layers := map[string]spec.CandyReader{
+		"pipewire":     testCandy("pipewire", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"wayvnc":       testCandy("wayvnc", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"chrome":       testCandy("chrome", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"waybar":       testCandy("waybar", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"sway-desktop": testCandy("sway-desktop", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"pipewire", "wayvnc", "chrome", "waybar"}}),
+		"openclaw":     testCandy("openclaw", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
 	}
 
 	// Basic expansion
@@ -381,10 +380,10 @@ func TestExpandCandies(t *testing.T) {
 }
 
 func TestExpandCandiesDedup(t *testing.T) {
-	layers := map[string]*Candy{
-		"pipewire":     {Name: "pipewire", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"wayvnc":       {Name: "wayvnc", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"sway-desktop": {Name: "sway-desktop", IncludedCandy: deploykit.ToCandyRefs([]string{"pipewire", "wayvnc"})},
+	layers := map[string]spec.CandyReader{
+		"pipewire":     testCandy("pipewire", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"wayvnc":       testCandy("wayvnc", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"sway-desktop": testCandy("sway-desktop", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"pipewire", "wayvnc"}}),
 	}
 
 	// pipewire referenced directly AND via sway-desktop — should appear once
@@ -399,12 +398,12 @@ func TestExpandCandiesDedup(t *testing.T) {
 }
 
 func TestExpandCandiesNested(t *testing.T) {
-	layers := map[string]*Candy{
-		"pipewire":     {Name: "pipewire", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"wayvnc":       {Name: "wayvnc", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"chrome":       {Name: "chrome", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"vnc-stack":    {Name: "vnc-stack", IncludedCandy: deploykit.ToCandyRefs([]string{"pipewire", "wayvnc"})},
-		"browser-desk": {Name: "browser-desk", IncludedCandy: deploykit.ToCandyRefs([]string{"vnc-stack", "chrome"})},
+	layers := map[string]spec.CandyReader{
+		"pipewire":     testCandy("pipewire", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"wayvnc":       testCandy("wayvnc", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"chrome":       testCandy("chrome", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"vnc-stack":    testCandy("vnc-stack", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"pipewire", "wayvnc"}}),
+		"browser-desk": testCandy("browser-desk", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"vnc-stack", "chrome"}}),
 	}
 
 	result, err := ExpandCandy([]string{"browser-desk"}, layers)
@@ -418,9 +417,9 @@ func TestExpandCandiesNested(t *testing.T) {
 }
 
 func TestExpandCandiesCycle(t *testing.T) {
-	layers := map[string]*Candy{
-		"a": {Name: "a", IncludedCandy: deploykit.ToCandyRefs([]string{"b"})},
-		"b": {Name: "b", IncludedCandy: deploykit.ToCandyRefs([]string{"a"})},
+	layers := map[string]spec.CandyReader{
+		"a": testCandy("a", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"b"}}),
+		"b": testCandy("b", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"a"}}),
 	}
 
 	_, err := ExpandCandy([]string{"a"}, layers)
@@ -430,11 +429,15 @@ func TestExpandCandiesCycle(t *testing.T) {
 }
 
 func TestExpandCandiesWithContent(t *testing.T) {
-	layers := map[string]*Candy{
-		"pipewire": {Name: "pipewire", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"wayvnc":   {Name: "wayvnc", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		// Composing candy that also has its own install content
-		"desktop": {Name: "desktop", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}, IncludedCandy: deploykit.ToCandyRefs([]string{"pipewire", "wayvnc"})},
+	layers := map[string]spec.CandyReader{
+		"pipewire": testCandy("pipewire", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"wayvnc":   testCandy("wayvnc", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		// Composing candy that also has its own install content — HasContent is host-precomputed
+		// on CandyModel post-move (#67), so a composing-candy fixture that must SURVIVE the
+		// ExpandCandy content gate (graph.go: "Composing candies only appear in result if they
+		// also have content") sets it explicitly, mirroring the pre-move *Candy.HasContent()
+		// verdict a non-empty plan: produced (HasTasks()->HasInstallFiles()->HasContent()).
+		"desktop": testCandy("desktop", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}, HasContent: true}, spec.CandyView{IncludedCandy: []string{"pipewire", "wayvnc"}}),
 	}
 
 	result, err := ExpandCandy([]string{"desktop"}, layers)
@@ -449,11 +452,11 @@ func TestExpandCandiesWithContent(t *testing.T) {
 }
 
 func TestResolveCandyOrderWithComposition(t *testing.T) {
-	layers := map[string]*Candy{
-		"pixi":        {Name: "pixi", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"python":      {Name: "python", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}, Require: deploykit.ToCandyRefs([]string{"pixi"})},
-		"supervisord": {Name: "supervisord", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}, Require: deploykit.ToCandyRefs([]string{"python"})},
-		"svc-stack":   {Name: "svc-stack", IncludedCandy: deploykit.ToCandyRefs([]string{"python", "supervisord"})},
+	layers := map[string]spec.CandyReader{
+		"pixi":        testCandy("pixi", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"python":      testCandy("python", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{Require: []string{"pixi"}}),
+		"supervisord": testCandy("supervisord", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{Require: []string{"python"}}),
+		"svc-stack":   testCandy("svc-stack", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"python", "supervisord"}}),
 	}
 
 	order, err := ResolveCandyOrder([]string{"svc-stack"}, layers, nil)
@@ -468,11 +471,11 @@ func TestResolveCandyOrderWithComposition(t *testing.T) {
 }
 
 func TestDependsOnComposingCandy(t *testing.T) {
-	layers := map[string]*Candy{
-		"pipewire":     {Name: "pipewire", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"wayvnc":       {Name: "wayvnc", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
-		"sway-desktop": {Name: "sway-desktop", IncludedCandy: deploykit.ToCandyRefs([]string{"pipewire", "wayvnc"})},
-		"myapp":        {Name: "myapp", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}, Require: deploykit.ToCandyRefs([]string{"sway-desktop"})},
+	layers := map[string]spec.CandyReader{
+		"pipewire":     testCandy("pipewire", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"wayvnc":       testCandy("wayvnc", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
+		"sway-desktop": testCandy("sway-desktop", spec.CandyModel{}, spec.CandyView{IncludedCandy: []string{"pipewire", "wayvnc"}}),
+		"myapp":        testCandy("myapp", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{Require: []string{"sway-desktop"}}),
 	}
 
 	order, err := ResolveCandyOrder([]string{"myapp"}, layers, nil)

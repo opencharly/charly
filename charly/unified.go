@@ -1187,6 +1187,7 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyRead
 					}
 				}
 			}
+			completeCandyRunOps(&m, &v)
 			spec.FinalizeCandyRefs(&m, &v, refs)
 			out[name] = deploykit.NewSpecCandyModel(m, v)
 			continue
@@ -1195,6 +1196,7 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyRead
 		// charly.yml), so no remote-sibling qualification is needed — mirrors the
 		// W9 spike's local-candy case.
 		m, v, refs := requireCandyScanner().ScanInlineCandy(name, rootDir, &il.CandyYAML)
+		completeCandyRunOps(&m, &v)
 		spec.FinalizeCandyRefs(&m, &v, refs)
 		out[name] = deploykit.NewSpecCandyModel(m, v)
 	}

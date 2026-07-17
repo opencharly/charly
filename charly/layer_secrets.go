@@ -71,9 +71,9 @@ func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source strin
 //
 // Returns the env map; never returns an error. The auto-generate policy
 // guarantees every `secret_requires:` resolves to a non-empty value.
-// Takes spec.CandyReader (the read-only interface every *Candy already
-// satisfies) rather than the concrete type — this function needs only the
-// SecretRequire/SecretAccept accessors, not the loader-constructed struct.
+// Takes spec.CandyReader (the read-only interface every scanned candy is wrapped
+// into, W9) rather than a concrete type — this function needs only the
+// SecretRequire/SecretAccept accessors.
 func ResolveCandySecret(layer spec.CandyReader) map[string]string {
 	env := map[string]string{}
 	if layer == nil {
@@ -112,7 +112,7 @@ func ResolveSecretForCandy(layers []spec.CandyReader) map[string]string {
 	return env
 }
 
-// CandyForPlan reloads the candy map and returns the ordered *Candy
+// CandyForPlan reloads the candy map and returns the ordered spec.CandyReader
 // slice covered by the given plans (both CandiesIncluded for image-level
 // plans and per-plan Candy for candy-only plans). Used by deploy-add to
 // call ResolveSecretForCandy + RetrieveCandyArtifacts.

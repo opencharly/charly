@@ -41,7 +41,7 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 
 	relBuildDir := filepath.Join(".build", "overlay-test")
 
-	gen := &Generator{Dir: ctxRoot, Candies: map[string]*Candy{"marker": {Name: "marker"}}}
+	gen := &Generator{Dir: ctxRoot, Candies: map[string]spec.CandyReader{"marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{})}}
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
 	// build dir (the invariant hostBuildOverlay's prep sets + caches for the step-emit emitter).
 	build := buildEngineContext{Generator: gen, Box: &buildkit.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
@@ -88,14 +88,13 @@ func TestCreateRemoteCandyCopies_StagesRemoteCandySource(t *testing.T) {
 	}
 
 	const ver = "2026.181.1430"
-	candy := &Candy{
-		Name: "marker", Version: ver, Remote: true, Path: remoteSrc,
-		RepoPath: "github.com/x/y", SubPathPrefix: "candy/",
-	}
+	candy := testCandy("marker", spec.CandyModel{Version: ver, SourceDir: remoteSrc}, spec.CandyView{
+		Remote: true, RepoPath: "github.com/x/y", SubPathPrefix: "candy/",
+	})
 	gen := &Generator{
 		Dir:      ctxRoot,
 		BuildDir: filepath.Join(ctxRoot, ".build"), // == g.Dir + "/.build" (NewGenerator default)
-		Candies:  map[string]*Candy{deploykit.CandyMapKey(candy): candy},
+		Candies:  map[string]spec.CandyReader{deploykit.CandyMapKey(candy): candy},
 	}
 
 	if err := gen.createRemoteCandyCopies(); err != nil {

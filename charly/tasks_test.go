@@ -453,7 +453,7 @@ func TestEmitTasks_UserCoalescing(t *testing.T) {
 		{Mkdir: "/b", RunAs: "root"},
 		{Mkdir: "/c", RunAs: "root"}, // all root → single USER 0 header, one RUN
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -481,7 +481,7 @@ func TestEmitTasks_CommandEmitsRun(t *testing.T) {
 	ops := []spec.Op{
 		{Plugin: "command", PluginInput: map[string]any{"command": "echo rpmfusion-enable"}, RunAs: "root"},
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -501,7 +501,7 @@ func TestEmitTasks_UserSwitches(t *testing.T) {
 		{Mkdir: "/b", RunAs: "${USER}"},
 		{Mkdir: "/c", RunAs: "${USER}"}, // coalesces with previous
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -530,7 +530,7 @@ func TestEmitTasks_OrderPreserved(t *testing.T) {
 		{Copy: "f", To: "/a/f", RunAs: "root"},
 		{Mkdir: "/b", RunAs: "root"},
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -556,7 +556,7 @@ func TestEmitTasks_ParentDirAutoInsert(t *testing.T) {
 		// Copy to /etc/traefik/traefik.yml without declaring /etc/traefik first
 		{Copy: "traefik.yml", To: "/etc/traefik/traefik.yml", RunAs: "root"},
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -582,7 +582,7 @@ func TestEmitTasks_ParentDirSuppressedWhenDeclared(t *testing.T) {
 		{Mkdir: "/etc/foo", RunAs: "root"},
 		{Copy: "bar", To: "/etc/foo/bar", RunAs: "root"},
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
@@ -601,7 +601,7 @@ func TestEmitTasks_WriteStagesContent(t *testing.T) {
 	ops := []spec.Op{
 		{Write: "/etc/foo.conf", Content: "hello world\n", RunAs: "root"},
 	}
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	buildDir := filepath.Join(dir, "test-img")
 	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, buildDir, ".build/test-img")
@@ -655,8 +655,21 @@ func TestEmitVarsEnv_SortedKeys(t *testing.T) {
 
 // --- Parity: ensure HasInstallFiles picks up HasTasks ---
 
+// TestCandy_HasInstallFiles_IncludesTasks proves the RunOps host-completion pass
+// (completeCandyRunOps, charly/layers.go) folds a candy's `run:` steps into RunOps and
+// OR-completes HasInstallFiles/HasContent with it — the associative-OR completion
+// scanFromParsed's own doc comment defers to the host (RunOps needs opInContext, which a
+// single candy's scan can't reach). Every ScanCandy/ScanAllCandy/ProjectCandies entry point
+// calls completeCandyRunOps before the final FinalizeCandyRefs+wrap, so this exercises that
+// SAME completion step directly on a (Model, View) pair, mirroring what those call sites do.
 func TestCandy_HasInstallFiles_IncludesTasks(t *testing.T) {
-	l := &Candy{plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}
+	m := spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}
+	v := spec.CandyView{}
+	completeCandyRunOps(&m, &v)
+	l := testCandy("x", m, v)
+	if !l.HasTasks() {
+		t.Fatal("HasTasks() should be true after completeCandyRunOps folds the run: step into RunOps")
+	}
 	if !l.HasInstallFiles() {
 		t.Error("HasInstallFiles() should be true when HasTasks is true")
 	}

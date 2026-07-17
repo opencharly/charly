@@ -95,11 +95,11 @@ func TestCandyPixi(t *testing.T) {
 	if pixi.FormatSection("rpm") != nil {
 		t.Error("pixi should not have rpm format section")
 	}
-	if pixi.HasPixiToml {
+	if pixi.HasFile("pixi.toml") {
 		t.Error("pixi should not have pixi.toml")
 	}
-	if len(pixi.Require) != 0 {
-		t.Errorf("pixi should have no depends, got %v", pixi.Require)
+	if len(pixi.GetRequire()) != 0 {
+		t.Errorf("pixi should have no depends, got %v", pixi.GetRequire())
 	}
 }
 
@@ -114,11 +114,11 @@ func TestCandyPython(t *testing.T) {
 		t.Fatal("python candy not found")
 	}
 
-	if !python.HasPixiToml {
+	if !python.HasFile("pixi.toml") {
 		t.Error("python should have pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(python.Require), []string{"pixi"}) {
-		t.Errorf("python.Require = %v, want [pixi]", python.Require)
+	if !reflect.DeepEqual(bareRefs(python.GetRequire()), []string{"pixi"}) {
+		t.Errorf("python.Require = %v, want [pixi]", python.GetRequire())
 	}
 }
 
@@ -212,10 +212,10 @@ func TestCandyCargoTool(t *testing.T) {
 		t.Fatal("cargo-tool candy not found")
 	}
 
-	if !cargoTool.HasCargoToml {
+	if !cargoTool.GetHasCargoToml() {
 		t.Error("cargo-tool should have Cargo.toml")
 	}
-	if !cargoTool.HasSrcDir {
+	if !cargoTool.HasFile("src") {
 		t.Error("cargo-tool should have src/ directory")
 	}
 }
@@ -377,17 +377,17 @@ func TestCandyPixiLocked(t *testing.T) {
 		t.Fatal("pixi-locked candy not found")
 	}
 
-	if !locked.HasPixiToml {
+	if !locked.HasFile("pixi.toml") {
 		t.Error("pixi-locked should have pixi.toml")
 	}
-	if !locked.HasPixiLock {
+	if !locked.GetHasPixiLock() {
 		t.Error("pixi-locked should have pixi.lock")
 	}
 	if locked.PixiManifest() != "pixi.toml" {
 		t.Errorf("pixi-locked.PixiManifest() = %q, want %q", locked.PixiManifest(), "pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(locked.Require), []string{"pixi"}) {
-		t.Errorf("pixi-locked.Require = %v, want [pixi]", locked.Require)
+	if !reflect.DeepEqual(bareRefs(locked.GetRequire()), []string{"pixi"}) {
+		t.Errorf("pixi-locked.Require = %v, want [pixi]", locked.GetRequire())
 	}
 }
 
@@ -402,10 +402,10 @@ func TestCandyPixiNoLock(t *testing.T) {
 		t.Fatal("python candy not found")
 	}
 
-	if !python.HasPixiToml {
+	if !python.HasFile("pixi.toml") {
 		t.Error("python should have pixi.toml")
 	}
-	if python.HasPixiLock {
+	if python.GetHasPixiLock() {
 		t.Error("python should not have pixi.lock")
 	}
 }
@@ -463,60 +463,55 @@ func TestCandyPortRelayFromYAML(t *testing.T) {
 		t.Fatal("webservice candy not found")
 	}
 
-	if len(ws.PortRelayPorts) == 0 {
+	if len(ws.RelayPorts()) == 0 {
 		t.Error("webservice should have port_relay")
 	}
 
-	relay := ws.PortRelayPorts
+	relay := ws.RelayPorts()
 	if len(relay) != 1 || relay[0] != 8080 {
-		t.Errorf("PortRelayPorts = %v, want [8080]", relay)
+		t.Errorf("RelayPorts() = %v, want [8080]", relay)
 	}
 }
 
 func TestCandyPortRelay(t *testing.T) {
 	// Test direct struct construction (no testdata file needed)
-	layer := &Candy{
-		Name:           "chrome",
-		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	layer := testCandy("chrome", spec.CandyModel{
+		Plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222},
-		ports:          []string{"9222"},
-		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}},
-	}
+		Port:           []spec.PortSpec{{Port: 9222, Protocol: "http"}},
+	}, spec.CandyView{})
 
-	if len(layer.PortRelayPorts) == 0 {
+	if len(layer.RelayPorts()) == 0 {
 		t.Error("candy should have port_relay")
 	}
-	relay := layer.PortRelayPorts
+	relay := layer.RelayPorts()
 	if len(relay) != 1 || relay[0] != 9222 {
-		t.Errorf("PortRelayPorts = %v, want [9222]", relay)
+		t.Errorf("RelayPorts() = %v, want [9222]", relay)
 	}
 }
 
 func TestCandyPortRelayNone(t *testing.T) {
-	layer := &Candy{
-		Name: "basic",
-		plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
-	}
+	layer := testCandy("basic", spec.CandyModel{
+		Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	}, spec.CandyView{})
 
-	if len(layer.PortRelayPorts) != 0 {
+	if len(layer.RelayPorts()) != 0 {
 		t.Error("basic candy should not have port_relay")
 	}
 }
 
 func TestCandyPortRelayMultiple(t *testing.T) {
-	layer := &Candy{
-		Name:           "multi",
-		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	layer := testCandy("multi", spec.CandyModel{
+		Plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222, 5900},
-		ports:          []string{"9222", "5900"},
-		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
-	}
+		Port:           []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
+	}, spec.CandyView{})
 
-	relay := layer.PortRelayPorts
+	relay := layer.RelayPorts()
 	if len(relay) != 2 {
-		t.Fatalf("PortRelayPorts returned %d ports, want 2", len(relay))
+		t.Fatalf("RelayPorts() returned %d ports, want 2", len(relay))
 	}
 	if relay[0] != 9222 || relay[1] != 5900 {
-		t.Errorf("PortRelayPorts = %v, want [9222 5900]", relay)
+		t.Errorf("RelayPorts() = %v, want [9222 5900]", relay)
 	}
 }

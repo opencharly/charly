@@ -37,7 +37,7 @@ import (
 
 // (detectExternalizedBuilders relocated to sdk/deploykit as the shared
 // DetectExternalizedBuilders pkg func (K3-A, R3) — the SAME detection the box-build
-// render uses; preresolveBuilderContexts calls it over candyModelMap(layers) below.)
+// render uses; preresolveBuilderContexts calls it over layers below.)
 
 // preresolveBuilderContexts connects the EXACT externalized builder plugins the deploy triggers
 // (on-demand, scoped) and RPCs each one's OpCollectContext + OpReverse for every (candy, builder)
@@ -47,7 +47,7 @@ import (
 // externalized builder that cannot be connected fails LOUDLY (R4 — never a silent incomplete
 // teardown).
 func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (map[string]deploykit.BuilderPreresolved, error) {
-	needed := deploykit.DetectExternalizedBuilders(order, candyModelMap(layers), externalizedBuilders, img)
+	needed := deploykit.DetectExternalizedBuilders(order, layers, externalizedBuilders, img)
 	if len(needed) == 0 {
 		return nil, nil
 	}

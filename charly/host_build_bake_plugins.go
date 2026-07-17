@@ -12,8 +12,8 @@ import (
 // host_build_bake_plugins.go — the "bake-plugins" host-builder (#67 render-DRIVE move).
 // plugin-build's deploykit.Generator.EmitBakedPlugins seam calls back to the host via
 // HostBuild("bake-plugins") to build + stage each bake_plugin binary + emit the COPY/chmod
-// Containerfile fragment. The host loads the project (NewGenerator — needs the live *Candy
-// graph for SourceDir + buildPluginBinary), runs the EXISTING emitBakedPlugins method, and
+// Containerfile fragment. The host loads the project (NewGenerator — needs the scanned candy
+// set for SourceDir + buildPluginBinary), runs the EXISTING emitBakedPlugins method, and
 // returns the fragment string. The deploykit render writes it into the Containerfile buffer.
 
 // hostBuildBakePlugins is the "bake-plugins" host-builder: it loads the project, finds the
@@ -29,7 +29,7 @@ func hostBuildBakePlugins(_ context.Context, req spec.BakePluginsRequest, _ buil
 		dir = cwd
 	}
 
-	// Reconstruct the Generator to access the live *Candy graph (SourceDir + buildPluginBinary).
+	// Reconstruct the Generator to access the scanned candy set (SourceDir + buildPluginBinary).
 	// The box name + candy order ride the request. The Generator is disposable — built per call.
 	gen, err := NewGenerator(dir, "", ResolveOpts{})
 	if err != nil {
@@ -45,7 +45,7 @@ func hostBuildBakePlugins(_ context.Context, req spec.BakePluginsRequest, _ buil
 	boxName := req.BoxName
 
 	// Run the host's emitBakedPlugins — the EXISTING method on *Generator (generate.go).
-	// It reads g.Candies (live *Candy graph) + g.BuildDir + builds + stages each bake_plugin.
+	// It reads g.Candies (the scanned candy set) + g.BuildDir + builds + stages each bake_plugin.
 	var b strings.Builder
 	if err := gen.emitBakedPlugins(&b, boxName, req.CandyOrder); err != nil {
 		return spec.BakePluginsReply{Error: errString(fmt.Errorf("bake-plugins: %w", err))}, nil

@@ -57,7 +57,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg := deploykit.NewRenderGenerator()
 	dg.Dir = g.Dir
-	dg.Candies = candyModelMap(g.Candies)
+	dg.Candies = g.Candies
 	dg.Tag = g.Tag
 	dg.Boxes = g.Boxes
 	dg.BuildDir = g.BuildDir

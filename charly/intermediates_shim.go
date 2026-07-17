@@ -33,11 +33,11 @@ func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[str
 		Distro:    cfg.Defaults.Distro,
 		Build:     cfg.Defaults.Build,
 	}
-	return deploykit.ComputeIntermediates(boxes, candyModelMap(layers), defaults, tag)
+	return deploykit.ComputeIntermediates(boxes, layers, defaults, tag)
 }
 
 // GlobalCandyOrder computes the global topological candy order (deploykit) over
-// the concrete candy map held by generate.go / validate.go.
+// the scanned candy map held by generate.go / validate.go.
 func GlobalCandyOrder(boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader) ([]string, error) {
-	return deploykit.GlobalCandyOrder(boxes, candyModelMap(layers))
+	return deploykit.GlobalCandyOrder(boxes, layers)
 }

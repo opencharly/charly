@@ -10,13 +10,9 @@ import (
 
 func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 	// Two candies disagreeing on memory_max — tightest wins.
-	layers := map[string]*Candy{
-		"big": {
-			security: &SecurityConfig{MemoryMax: "8g", MemoryHigh: "7g", Cpus: "8"},
-		},
-		"small": {
-			security: &SecurityConfig{MemoryMax: "4g", MemoryHigh: "3g", Cpus: "2"},
-		},
+	layers := map[string]spec.CandyReader{
+		"big":   testCandy("big", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "8g", MemoryHigh: "7g", Cpus: "8"}}, spec.CandyView{}),
+		"small": testCandy("small", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "4g", MemoryHigh: "3g", Cpus: "2"}}, spec.CandyView{}),
 	}
 	cfg := &Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{
@@ -38,10 +34,8 @@ func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 	// Box-level security.memory_max replaces whatever the candies decided,
 	// consistent with how ShmSize is handled.
-	layers := map[string]*Candy{
-		"chrome": {
-			security: &SecurityConfig{MemoryMax: "6g", ShmSize: "1g"},
-		},
+	layers := map[string]spec.CandyReader{
+		"chrome": testCandy("chrome", spec.CandyModel{Security: &SecurityConfig{MemoryMax: "6g", ShmSize: "1g"}}, spec.CandyView{}),
 	}
 	cfg := &Config{
 		Box: boxMapOf(map[string]spec.BoxConfig{

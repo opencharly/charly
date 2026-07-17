@@ -56,7 +56,7 @@ func TestCandyRef(t *testing.T) {
 func TestPickCandyVersion(t *testing.T) {
 	mk := func(ver, tag string) candyCandidate {
 		return candyCandidate{
-			layer:   &Candy{Name: "x", Version: ver},
+			scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
 			version: ver,
 			gitTag:  tag,
 			source:  "github.com/o/r@" + tag,
@@ -235,7 +235,7 @@ func TestScanRemoteCandies(t *testing.T) {
 		"github.com/opencharly/ml-layers/candy/cuda":      true,
 		"github.com/opencharly/ml-layers/candy/python-ml": true,
 	}
-	layers, err := ScanRemoteCandy(dir, "github.com/opencharly/ml-layers", wantRefs)
+	layers, err := requireCandyScanner().ScanRemoteCandy(dir, "github.com/opencharly/ml-layers", wantRefs, parseCandyYAML)
 	if err != nil {
 		t.Fatalf("ScanRemoteCandy() error = %v", err)
 	}
@@ -248,34 +248,34 @@ func TestScanRemoteCandies(t *testing.T) {
 	if !ok {
 		t.Fatal("cuda candy not found")
 	}
-	if !cuda.Remote {
+	if !cuda.View.Remote {
 		t.Error("cuda should be remote")
 	}
-	if cuda.RepoPath != "github.com/opencharly/ml-layers" {
-		t.Errorf("cuda.RepoPath = %q", cuda.RepoPath)
+	if cuda.View.RepoPath != "github.com/opencharly/ml-layers" {
+		t.Errorf("cuda.RepoPath = %q", cuda.View.RepoPath)
 	}
-	if cuda.Name != "cuda" {
-		t.Errorf("cuda.Name = %q, want %q", cuda.Name, "cuda")
+	if cuda.View.Name != "cuda" {
+		t.Errorf("cuda.Name = %q, want %q", cuda.View.Name, "cuda")
 	}
-	if cuda.SubPathPrefix != "candy/" {
-		t.Errorf("cuda.SubPathPrefix = %q, want %q", cuda.SubPathPrefix, "candy/")
+	if cuda.View.SubPathPrefix != "candy/" {
+		t.Errorf("cuda.SubPathPrefix = %q, want %q", cuda.View.SubPathPrefix, "candy/")
 	}
 
 	pyml := layers["github.com/opencharly/ml-layers/candy/python-ml"]
-	if !pyml.HasPixiToml {
+	if !deploykit.NewSpecCandyModel(pyml.Model, pyml.View).HasFile("pixi.toml") {
 		t.Error("python-ml should have pixi.toml")
 	}
 	// A remote candy's plain-name sibling dep is qualified at scan time to the
 	// sibling's fully-qualified map key, so the dependency graph resolves it
 	// against the cuda candy fetched from the same repo (keyed identically).
 	wantDep := "github.com/opencharly/ml-layers/candy/cuda"
-	if len(pyml.Require) != 1 || pyml.Require[0].Bare() != wantDep {
-		t.Errorf("python-ml.Require = %v, want [%s]", pyml.Require, wantDep)
+	if len(pyml.Refs.Require) != 1 || pyml.Refs.Require[0].Bare() != wantDep {
+		t.Errorf("python-ml.Require = %v, want [%s]", pyml.Refs.Require, wantDep)
 	}
 	// CandyRef.Raw preserves the original short-name form for transitive fetch,
 	// while .Bare() yields the qualified sibling key the graph resolves on.
-	if pyml.Require[0].Raw != "cuda" {
-		t.Errorf("python-ml.Require[0].Raw = %q, want cuda", pyml.Require[0].Raw)
+	if pyml.Refs.Require[0].Raw != "cuda" {
+		t.Errorf("python-ml.Require[0].Raw = %q, want cuda", pyml.Refs.Require[0].Raw)
 	}
 }
 
@@ -306,11 +306,11 @@ func TestCollectRemoteRefs(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{
-		"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})},
-		"my-layer": {Name: "my-layer", Require: deploykit.ToCandyRefs([]string{
+	layers := map[string]spec.CandyReader{
+		"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{}),
+		"my-layer": testCandy("my-layer", spec.CandyModel{}, spec.CandyView{Require: []string{
 			"@github.com/myorg/service-layers/layers/svc:v2.0.0",
-		})},
+		}}),
 	}
 
 	downloads, err := CollectRemoteRefs(cfg, layers)
@@ -344,7 +344,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	// An image config that references NOTHING remote — proves the add_candy ref is
 	// collected via ExtraCandyRefs, not via any image-closure edge.
 	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
-	layers := map[string]*Candy{"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})}}
+	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
 	opts := ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
@@ -401,7 +401,7 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{}
+	layers := map[string]spec.CandyReader{}
 
 	downloads, err := CollectRemoteRefs(cfg, layers)
 	if err != nil {
@@ -439,7 +439,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{}
+	layers := map[string]spec.CandyReader{}
 
 	// Default opts (enabled-only) → the disabled image is skipped, no downloads.
 	if dls, err := CollectRemoteRefs(cfg, layers); err != nil {
@@ -509,7 +509,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 			},
 		},
 	}
-	layers := map[string]*Candy{}
+	layers := map[string]spec.CandyReader{}
 
 	downloads, err := CollectRemoteRefs(cfg, layers)
 	if err != nil {
@@ -548,10 +548,10 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{
-		"local": {Name: "local", Version: "2026.001.0001", Require: deploykit.ToCandyRefs([]string{
+	layers := map[string]spec.CandyReader{
+		"local": testCandy("local", spec.CandyModel{Version: "2026.001.0001"}, spec.CandyView{Require: []string{
 			"@github.com/org/repo/layers/cuda:v1.0.0",
-		})},
+		}}),
 	}
 
 	downloads, err := CollectRemoteRefs(cfg, layers)
@@ -583,7 +583,7 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{}
+	layers := map[string]spec.CandyReader{}
 
 	downloads, err := CollectRemoteRefs(cfg, layers)
 	if err != nil {
