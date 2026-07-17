@@ -1144,12 +1144,24 @@ func (uf *UnifiedFile) ProjectBundleConfig() *deploykit.BundleConfig {
 }
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
-// spec.CandyReader form (W9: the type-Candy move). Entries with `from:` go through
-// the registered loader plugin's typed CandyScanner seam so directory-based candies
-// behave identically to today. Inline entries synthesize from the embedded CandyYAML
-// (Part A's `directory:` field still applies).
+// spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
+// the ONE choke point (finalizeScannedCandies, no InitCfg in scope for a standalone call) —
+// see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
 func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyReader, error) {
-	out := map[string]spec.CandyReader{}
+	scanned, err := uf.projectCandiesScanned(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	return finalizeScannedCandies(scanned, nil), nil
+}
+
+// projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per
+// entry in uf.Candy, into its pre-completion, pre-finalize spec.ScannedCandy form. Entries with
+// `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
+// candies behave identically to today. Inline entries synthesize from the embedded CandyYAML
+// (Part A's `directory:` field still applies).
+func (uf *UnifiedFile) projectCandiesScanned(rootDir string) (map[string]spec.ScannedCandy, error) {
+	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
 		il, ok := decodeInlineCandy(raw)
 		if !ok {
@@ -1187,18 +1199,14 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyRead
 					}
 				}
 			}
-			completeCandyRunOps(&m, &v)
-			spec.FinalizeCandyRefs(&m, &v, refs)
-			out[name] = deploykit.NewSpecCandyModel(m, v)
+			out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
 			continue
 		}
 		// Inline candy — synthesize. Always LOCAL (declared directly in this
 		// charly.yml), so no remote-sibling qualification is needed — mirrors the
 		// W9 spike's local-candy case.
 		m, v, refs := requireCandyScanner().ScanInlineCandy(name, rootDir, &il.CandyYAML)
-		completeCandyRunOps(&m, &v)
-		spec.FinalizeCandyRefs(&m, &v, refs)
-		out[name] = deploykit.NewSpecCandyModel(m, v)
+		out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
 	}
 	return out, nil
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -513,5 +515,47 @@ func TestCandyPortRelayMultiple(t *testing.T) {
 	}
 	if relay[0] != 9222 || relay[1] != 5900 {
 		t.Errorf("RelayPorts() = %v, want [9222 5900]", relay)
+	}
+}
+
+// TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion is the choke-point pinning
+// fixture: a LOCAL-only project (legacyScanCandiesDirScanned, zero remote refs — the early-return
+// leg of ScanAllCandyWithConfigOpts) with a packaged-service candy + a supplied opts.InitCfg must
+// have InitSystems completed with that SAME InitCfg, exactly like a remote-arbitrated winner would.
+// Before the finalizeScannedCandies choke-point consolidation, locals wrapped inside
+// legacyScanCandiesDir/ProjectCandies with NO InitCfg in scope (PopulateCandyInitSystem ran only
+// over the remote `winners` map) — so HasInit was unconditionally false for every local candy
+// regardless of what generate.go supplied. This test FAILS on that shape and passes on the
+// consolidated one.
+func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testing.T) {
+	dir := t.TempDir()
+	candyDir := filepath.Join(dir, "candy", "svc")
+	if err := os.MkdirAll(candyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "candy:\n  name: svc\n  service:\n    - name: myd\n      use_packaged: myd.service\n      enable: true\n      scope: system\n"
+	if err := os.WriteFile(filepath.Join(candyDir, UnifiedFileName), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+		"supervisord": {
+			CandyFields:   []string{"service"},
+			ServiceSchema: &spec.InitServiceSchema{SupportsPackaged: true},
+		},
+	}}
+
+	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, ResolveOpts{InitCfg: initCfg})
+	if err != nil {
+		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
+	}
+	svc, ok := layers["svc"]
+	if !ok {
+		t.Fatal("svc candy not found")
+	}
+	if !svc.HasInit("supervisord") {
+		t.Fatal("local candy's InitSystems must be completed with opts.InitCfg even with zero remote " +
+			"downloads (the early-return path) — regression if false: InitSystems host-completion " +
+			"skipped the local half")
 	}
 }

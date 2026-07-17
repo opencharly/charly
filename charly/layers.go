@@ -147,7 +147,23 @@ const DefaultBoxDir = kit.DefaultBoxDir
 // form (W9: the type-Candy move — core never holds a concrete Candy struct; every
 // candy is a spec.CandyModel + spec.CandyView pair scanned by the registered loader
 // plugin's typed CandyScanner seam, then wrapped via deploykit.NewSpecCandyModel).
+// Delegates to scanLocalCandies + the ONE choke point (finalizeScannedCandies, no
+// InitCfg in scope for a standalone call) — see ScanAllCandyWithConfigOpts's doc
+// comment for why a local candy is NEVER wrapped anywhere else.
 func ScanCandy(dir string) (map[string]spec.CandyReader, error) {
+	scanned, err := scanLocalCandies(dir)
+	if err != nil {
+		return nil, err
+	}
+	return finalizeScannedCandies(scanned, nil), nil
+}
+
+// scanLocalCandies is the UNWRAPPED local-scan dispatcher — the ONE place every construction
+// path (ScanCandy directly, or ScanAllCandyWithConfigOpts combining locals with remote winners)
+// gets a project's local candies as pre-completion, pre-finalize spec.ScannedCandy values, so
+// completion (RunOps + InitSystems, the latter opts.InitCfg-gated) always runs at the SAME final
+// choke point a remote candy goes through — never earlier, never with a different InitCfg.
+func scanLocalCandies(dir string) (map[string]spec.ScannedCandy, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)
@@ -156,27 +172,25 @@ func ScanCandy(dir string) (map[string]spec.CandyReader, error) {
 		if err := uf.ApplyDiscover(dir); err != nil {
 			return nil, fmt.Errorf("discover: %w", err)
 		}
-		return uf.ProjectCandies(dir)
+		return uf.projectCandiesScanned(dir)
 	}
-	return legacyScanCandiesDir(dir)
+	return legacyScanCandiesDirScanned(dir)
 }
 
-// legacyScanCandiesDir is the pre-unified filesystem walk. Kept for test
-// fixtures (and the migration tool) that don't yet have an charly.yml. Every
-// candy here is LOCAL (no remote-sibling qualification needed — mirrors the
-// W9 spike's local-candy case), so completion + FinalizeCandyRefs run immediately
-// per candy (RunOps/HasContent/HasInstallFiles — completeCandyRunOps — since this
-// path never reaches ScanAllCandyWithConfigOpts's winners loop).
-func legacyScanCandiesDir(dir string) (map[string]spec.CandyReader, error) {
+// legacyScanCandiesDirScanned is the pre-unified filesystem walk's UNWRAPPED body. Kept for test
+// fixtures (and the migration tool) that don't yet have an charly.yml. Every candy here is LOCAL
+// (no remote-sibling qualification needed — mirrors the W9 spike's local-candy case); completion
+// + finalize + wrap happen ONLY at the choke point (finalizeScannedCandies), never here.
+func legacyScanCandiesDirScanned(dir string) (map[string]spec.ScannedCandy, error) {
 	candiesDir := filepath.Join(dir, DefaultCandyDir)
 	entries, err := os.ReadDir(candiesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]spec.CandyReader), nil
+			return make(map[string]spec.ScannedCandy), nil
 		}
 		return nil, fmt.Errorf("reading candy directory: %w", err)
 	}
-	layers := make(map[string]spec.CandyReader)
+	scanned := make(map[string]spec.ScannedCandy)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -186,11 +200,9 @@ func legacyScanCandiesDir(dir string) (map[string]spec.CandyReader, error) {
 		if err != nil {
 			return nil, fmt.Errorf("scanning candy %s: %w", name, err)
 		}
-		completeCandyRunOps(&m, &v)
-		spec.FinalizeCandyRefs(&m, &v, refs)
-		layers[name] = deploykit.NewSpecCandyModel(m, v)
+		scanned[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
 	}
-	return layers, nil
+	return scanned, nil
 }
 
 // parseCandyYAML reads and unmarshals a candy manifest file. Strict schema:
@@ -497,6 +509,30 @@ func completeCandyRunOps(m *spec.CandyModel, v *spec.CandyView) {
 	m.HasContent = m.HasContent || m.HasInstallFiles || hasAnyInit
 }
 
+// finalizeScannedCandies is the SOLE choke point that produces a spec.CandyReader: every
+// construction path (ScanCandy, legacyScanCandiesDirScanned via scanLocalCandies,
+// (*UnifiedFile).projectCandiesScanned via scanLocalCandies, and
+// ScanAllCandyWithConfigOpts over its combined local+remote set) funnels through here, so no
+// path can ever wrap a candy with a term (InitSystems, RunOps) still missing — there is no
+// OTHER way to obtain a spec.CandyReader. Order: InitSystems (initCfg-gated; a nil initCfg is a
+// documented no-op) THEN RunOps + the HasInstallFiles/HasContent OR-fold (unconditional) THEN
+// FinalizeCandyRefs (bare-string the refs) THEN wrap — since a CandyReader is read-only from
+// the wrap onward. Does NOT mutate its input map: PopulateCandyInitSystem mutates `scanned`
+// in place when initCfg is non-nil, but every OTHER step below operates on a range-loop COPY,
+// so calling this twice against the SAME map with different initCfg values (the throwaway
+// nil-initCfg call ScanAllCandyWithConfigOpts makes for CollectRemoteRefsOpts's edge-walk,
+// then the real opts.InitCfg call at the end) is safe.
+func finalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *InitConfig) map[string]spec.CandyReader {
+	PopulateCandyInitSystem(scanned, initCfg)
+	out := make(map[string]spec.CandyReader, len(scanned))
+	for name, sc := range scanned {
+		completeCandyRunOps(&sc.Model, &sc.View)
+		spec.FinalizeCandyRefs(&sc.Model, &sc.View, sc.Refs)
+		out[name] = deploykit.NewSpecCandyModel(sc.Model, sc.View)
+	}
+	return out
+}
+
 // CandyNames returns a sorted list of candy names
 func CandyNames(layers map[string]spec.CandyReader) []string {
 	names := make([]string, 0, len(layers))
@@ -530,26 +566,32 @@ func ScanAllCandyWithConfig(dir string, cfg *Config) (map[string]spec.CandyReade
 // Internally the whole scan→fetch→qualify→arbitrate pipeline (W9) carries each
 // candidate as a mutable (spec.CandyModel, spec.CandyView, spec.CandyRefs) triple
 // (spec.ScannedCandy) in place of the pre-move *Candy — the RICH CandyRefEntry form
-// survives through remote-sibling qualification, and ONLY the arbitration WINNERS
-// are host-completed (PopulateCandyInitSystem, opts.InitCfg) + finalized
-// (spec.FinalizeCandyRefs, bare-stringing the refs) + wrapped
-// (deploykit.NewSpecCandyModel) into the returned map[string]spec.CandyReader — a
-// candidate that loses arbitration never pays that cost.
+// survives through remote-sibling qualification. LOCAL candies stay UNWRAPPED here
+// too (scanLocalCandies, not ScanCandy) so opts.InitCfg reaches them at the SAME
+// finalizeScannedCandies choke point the remote winners go through — a local-only
+// project (or the early-return below) must complete InitSystems/RunOps identically
+// to one with remote candies, never via a separate, InitCfg-less wrap. The one
+// exception is the throwaway wrap CollectRemoteRefsOpts needs (it walks Require/
+// IncludedCandy edges, unaffected by initCfg) — finalizeScannedCandies never mutates
+// its input map (each candidate is completed off a range-loop COPY), so calling it
+// twice (once throwaway, once final) is safe and cheap.
 func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[string]spec.CandyReader, error) {
-	// 1. Scan local candies
-	layers, err := ScanCandy(dir)
+	// 1. Scan local candies (unwrapped — see doc comment above).
+	localScanned, err := scanLocalCandies(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Collect remote refs from @-prefixed candy references
-	downloads, err := CollectRemoteRefsOpts(cfg, layers, opts)
+	// 2. Collect remote refs from @-prefixed candy references. CollectRemoteRefsOpts walks
+	// each candy's Require/IncludedCandy edges via the CandyReader interface, so it needs a
+	// wrapped view — a throwaway one (nil initCfg; Require/IncludedCandy don't depend on it).
+	downloads, err := CollectRemoteRefsOpts(cfg, finalizeScannedCandies(localScanned, nil), opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(downloads) == 0 {
-		return layers, nil
+		return finalizeScannedCandies(localScanned, opts.InitCfg), nil
 	}
 
 	// 3. Per-entity-version resolution. The git tag is ONLY the fetch coordinate;
@@ -664,28 +706,25 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 	}
 
 	// 4. Arbitrate each bare ref by per-entity version; materialize the winner.
-	winners := make(map[string]spec.ScannedCandy, len(candidates))
+	combined := make(map[string]spec.ScannedCandy, len(localScanned)+len(candidates))
+	for name, sc := range localScanned {
+		combined[name] = sc
+	}
 	for ref, cands := range candidates {
 		winner := pickCandyVersion(ref, cands)
-		if _, ok := layers[winner.scanned.Model.Name]; ok {
+		if _, ok := localScanned[winner.scanned.Model.Name]; ok {
 			fmt.Fprintf(os.Stderr, "Note: local candy %q shadows remote candy %q\n", winner.scanned.Model.Name, ref)
 		}
-		winners[ref] = winner.scanned
+		combined[ref] = winner.scanned
 	}
 
 	// 5. Host-completion (InitSystems, opts.InitCfg-gated — nil by default, matching
 	// every caller but generate.go; then RunOps + the HasInstallFiles/HasContent
 	// fold, unconditional) THEN finalize (bare-string the refs) THEN wrap into the
-	// FINAL spec.CandyReader — in that order, since a CandyReader is read-only and
-	// can't be mutated after this point.
-	PopulateCandyInitSystem(winners, opts.InitCfg)
-	for ref, sc := range winners {
-		completeCandyRunOps(&sc.Model, &sc.View)
-		spec.FinalizeCandyRefs(&sc.Model, &sc.View, sc.Refs)
-		layers[ref] = deploykit.NewSpecCandyModel(sc.Model, sc.View)
-	}
-
-	return layers, nil
+	// FINAL spec.CandyReader — ONE choke point, over the COMBINED local+remote set,
+	// since a CandyReader is read-only and can't be mutated after this point (a local
+	// candy must never wrap earlier than this, or it silently misses opts.InitCfg).
+	return finalizeScannedCandies(combined, opts.InitCfg), nil
 }
 
 // candyCandidate is one fetched materialization of a bare candy ref. The git tag
