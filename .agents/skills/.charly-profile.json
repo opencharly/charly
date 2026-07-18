@@ -54,6 +54,7 @@
     "charly-coder--google-cloud": "../../plugins/coder/skills/google-cloud",
     "charly-coder--google-cloud-npm": "../../plugins/coder/skills/google-cloud-npm",
     "charly-coder--grafana-tools": "../../plugins/coder/skills/grafana-tools",
+    "charly-coder--kimi": "../../plugins/coder/skills/kimi",
     "charly-coder--kubernetes-layer": "../../plugins/coder/skills/kubernetes-layer",
     "charly-coder--language-runtimes": "../../plugins/coder/skills/language-runtimes",
     "charly-coder--nodejs": "../../plugins/coder/skills/nodejs",
