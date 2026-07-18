@@ -267,6 +267,11 @@ func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, re
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
 func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+	// This assembler can receive a freshly reloaded candy graph, independently
+	// of Generate's initial graph. Complete the same per-init facts here before
+	// projecting CandyView so the SDK renderer receives exact HasInit(name)
+	// evidence rather than an empty map.
+	PopulateCandyInitSystem(layers, initCfg)
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()

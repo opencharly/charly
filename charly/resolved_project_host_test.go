@@ -172,6 +172,31 @@ func TestProjectCandyViewPreservesPerInitTriggers(t *testing.T) {
 	}
 }
 
+func TestResolvedProjectCompletesPerInitTriggersBeforeProjection(t *testing.T) {
+	candy := &Candy{service: []spec.ServiceEntry{{
+		Name: "sshd",
+		Exec: "/usr/local/bin/sshd-wrapper",
+	}}}
+	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+		"supervisord": {
+			CandyFields: []string{"service"},
+			ServiceSchema: &spec.InitServiceSchema{
+				ServiceTemplate: "[program:{{.Name}}]",
+			},
+		},
+	}}
+	rp, err := projectResolvedProjectWithBoxes(
+		&Config{}, map[string]*Candy{"sshd": candy}, nil,
+		nil, nil, initCfg, t.TempDir(), "test", ResolveOpts{}, nil, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rp.Candies["sshd"].InitSystems["supervisord"] {
+		t.Fatal("resolved-project assembly dropped the completed supervisord trigger")
+	}
+}
+
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic
 // (two marshals identical) and byte-stable against the committed golden. A dropped field, a reordered
 // struct, or a changed projection all FAIL here. Regenerate with -update-resolved-project-golden.
