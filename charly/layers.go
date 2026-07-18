@@ -1040,6 +1040,17 @@ func (l *Candy) Artifact() []CandyArtifact {
 	return l.artifacts
 }
 
+// Capabilities and RequiresCapabilities expose the candy's authored image
+// contract through spec.CandyReader. The runtime fields remain the single
+// source; this adapter performs no projection or defaulting.
+func (l *Candy) Capabilities() *spec.CandyCapability {
+	return l.capabilities
+}
+
+func (l *Candy) RequiresCapabilities() []string {
+	return l.requiresCapabilities
+}
+
 // EnvProvides returns env vars this candy provides to other containers (pre-populated from the candy manifest)
 func (l *Candy) EnvProvides() map[string]string {
 	return l.envProvides
