@@ -5,7 +5,7 @@
 # task completion, or a teammate going idle.
 #
 # DOCTRINE: a POINTER reminder — the authoritative team model (bed-scoped
-# ownership, persistent bed owners, the commit gate) lives in CLAUDE.md +
+# ownership, persistent bed owners, the commit gate) lives in the project rulebook +
 # /charly-internals:agents; this hook points at it with terse behavioral
 # anchors, restating no rule bodies. See /charly-internals:agents "Hooks doctrine".
 
