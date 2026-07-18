@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check semantic parity between the independent Claude and Codex rulebooks."""
+"""Check semantic parity between the independent Claude and Codex rulebooks and
+the generated per-harness developer profiles (Claude, Codex, Kimi)."""
 
 from __future__ import annotations
 
@@ -168,7 +169,7 @@ def validate_developer_profiles(root: pathlib.Path, errors: list[str]) -> None:
         errors.append(f"project developer profile cannot be checked: {prerequisite_error}")
         return
     assert setup is not None
-    for harness in ("claude", "codex"):
+    for harness in ("claude", "codex", "kimi"):
         try:
             result = subprocess.run(
                 [str(setup), harness, "--check", "developer"],
