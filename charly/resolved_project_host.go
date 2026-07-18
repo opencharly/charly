@@ -114,6 +114,7 @@ func projectCandyView(c *Candy) spec.CandyView {
 	// `charly box list routes|volumes|aliases` prints; has_init + port_relay reconstruct
 	// the init-triggering predicate (HasAnyInit || PortRelayPorts>0) for `list services`.
 	v.HasInit = c.HasAnyInit()
+	v.InitSystems = c.InitSystems
 	v.PortRelayPorts = c.PortRelayPorts
 	if route, _ := c.Route(); route != nil {
 		v.Route = route

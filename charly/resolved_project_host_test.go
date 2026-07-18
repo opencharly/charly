@@ -158,6 +158,20 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 	return rp
 }
 
+func TestProjectCandyViewPreservesPerInitTriggers(t *testing.T) {
+	candy := &Candy{InitSystems: map[string]bool{
+		"supervisord": true,
+		"systemd":     false,
+	}}
+	view := projectCandyView(candy)
+	if !view.InitSystems["supervisord"] {
+		t.Fatal("projectCandyView dropped the supervisord init trigger")
+	}
+	if view.InitSystems["systemd"] {
+		t.Fatal("projectCandyView changed the false systemd init trigger")
+	}
+}
+
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic
 // (two marshals identical) and byte-stable against the committed golden. A dropped field, a reordered
 // struct, or a changed projection all FAIL here. Regenerate with -update-resolved-project-golden.
