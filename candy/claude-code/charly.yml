@@ -1,17 +1,43 @@
 claude-code:
     candy:
-        version: 2026.144.1443
+        version: 2026.199.1330
         description: |
             Installs the Claude Code CLI globally via npm so `claude` is on PATH.
             The candy depends on nodejs and ships a package.json pinning
             @anthropic-ai/claude-code, which the build installs globally into
             ~/.npm-global/bin. The result is verifiable: the claude binary exists at
             that path and `claude --version` prints the Claude Code version banner.
+            A CUE-validated tmux terminal profile makes the same CLI available
+            through the generic local/SSH/nested Charly agent channel.
         require:
             - nodejs
         path_append:
             - "~/.local/bin"
+        agent_provide:
+            - provider: tmux
+              protocol_version: 2
+              profiles: [claude-code]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: true
+        terminal_profile:
+            claude-code:
+                name: claude-code
+                entrypoint: [claude]
+                cols: 120
+                rows: 40
+                semantic_adapter: claude-code
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
         plan:
+            - run: allow the deterministically pinned Claude Code package to install its platform-native binary under npm 11
+              command: npm rebuild -g @anthropic-ai/claude-code --allow-scripts=@anthropic-ai/claude-code
+              run_as: ${USER}
+            - check: the installed Claude Code package exactly matches the declared deterministic pin
+              command: node -e 'const p=require(process.env.HOME+"/.npm-global/lib/node_modules/@anthropic-ai/claude-code/package.json");if(p.version!=="2.1.214")process.exit(1)'
+              exit_status: 0
             - check: the claude binary is installed into the npm global bin directory
               file:
                 file: ${HOME}/.npm-global/bin/claude

@@ -50,3 +50,62 @@
 	mode?:     "copy" | "bind"
 	optional?: bool
 }
+
+// The declarative team kind is plugin-owned as well. These standalone names
+// reproduce the shared SDK wire contract without depending on, or colliding
+// with, the host's base schema during plugin Describe splicing.
+#AgentTeamInput: {
+	description?: string & !=""
+	agents: [#AtMember, ...#AtMember]
+	edges?: [...#AtEdge]
+	coordinator?:     string
+	concurrency?:     int & >=1
+	evidence_policy?: "target" | "coordinator" | "both" @go(EvidencePolicy)
+}
+
+#AtMember: {
+	name:    string & !=""
+	runtime: string & !=""
+	role?:   string
+	target?: #AtTarget
+	terminal_profile?: #AtTerminalProfile
+}
+
+#AtEdge: {
+	from: string & !=""
+	to:   string & !=""
+	allow?: [...string]
+}
+
+#AtTarget: {
+	hops?: [...#AtTargetHop]
+	deployment?:  string
+	instance?:    string
+	working_dir?: string
+}
+
+#AtTargetHop: {
+	transport:      "inproc" | "exec" | "ssh" | "grpc" | "tmux"
+	address?:       string
+	user?:          string
+	port?:          int & >0 & <=65535
+	identity_file?: string
+	command?: [...string]
+	env?: {[string]: string}
+	options?: {[string]: string}
+}
+
+#AtTerminalProfile: {
+	name:       string & !=""
+	entrypoint: [string, ...string]
+	working_dir?: string
+	env?: {[string]: string}
+	cols: *120 | (int & >0 & <=1000)
+	rows: *40 | (int & >0 & <=1000)
+	readiness?: {...}
+	semantic_adapter?: string
+	keys?: [...string]
+	signals?: [...string]
+	persistence?: "none" | "detach" | "required"
+	transcript?:  "none" | "raw" | "screen" | "both"
+}

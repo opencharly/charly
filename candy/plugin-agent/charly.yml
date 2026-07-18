@@ -1,19 +1,32 @@
 plugin-agent:
     candy:
-        version: 2026.176.3201
+        version: 2026.199.1330
         description: |-
-            The `agent` plugin KIND relocated into a candy: a KIND provider dispatching
-            via the pb Invoke(OpLoad) envelope (decode the authored `agent:` entity into
-            its core spec type, re-marshal as canonical JSON). Serves itself in BOTH
-            placements (compiled-in OR out-of-process) like the matching/exampleprobe
-            verbs + the init kind — no kit contract needed (kinds are pb-shape).
+            Headless, daemon-free agent control plugin owning CUE-validated agent and
+            agent-team kinds plus reflected `charly agent`, `charly tui`, and
+            compatibility `charly tmux` commands. It persists sessions, runs, ordered
+            evidence, incidents, RCA, and recovery decisions while routing every runtime
+            and terminal operation through generic Provider.Channel target data. The
+            tmux compatibility surface is a typed facade and never constructs remote
+            tmux shell strings or accesses an operator tmux socket.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-agent
             providers:
                 - kind:agent
+                - kind:agent-team
+                - command:agent
+                - command:tui
+                - command:tmux
         plan:
-            - check: the agent kind plugin ships a buildable Go module the host compiles in (default) or serves out-of-process; its entity decode is exercised by any box/deploy composing a `agent:` node
-              id: agent-kind-module-present
-              context:
-                - build
-              command: "true"
+            - check: the headless typed agent command tree is present in the compiled Charly binary
+              id: agent-control-cli-present
+              context: [runtime]
+              command: charly agent runtime list
+              exit_status: 0
+            - check: the legacy tmux command grammar is preserved as a typed-provider compatibility facade
+              id: typed-tmux-compatibility-present
+              context: [runtime]
+              command: charly tmux list --help
+              exit_status: 0
+              stdout:
+                - contains: List compatibility tmux sessions

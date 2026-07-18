@@ -13,3 +13,13 @@ func TestCliStepLogPreservesSpawnError(t *testing.T) {
 		t.Fatalf("cliStepLog() = %q, want executable path and OS error", got)
 	}
 }
+
+func TestRunTaggedImageRefPinsArtifactCheckToBedBuild(t *testing.T) {
+	const tag = "check-agent-pod-2026.199.1654"
+	if got := runTaggedImageRef("check-agent-box", tag); got != "check-agent-box:"+tag {
+		t.Fatalf("runTaggedImageRef() = %q, want the exact per-run build reference", got)
+	}
+	if got := runTaggedImageRef("check-agent-box", ""); got != "check-agent-box" {
+		t.Fatalf("runTaggedImageRef() without tag = %q, want logical image unchanged", got)
+	}
+}

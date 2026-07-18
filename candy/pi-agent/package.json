@@ -1,0 +1,10 @@
+{
+  "name": "charly-pi-agent-runtime",
+  "version": "2026.199.1330",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@earendil-works/pi-tui": "0.80.10"
+  }
+}

@@ -73,6 +73,16 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 			}
 		}
 	}
+	profiles := map[string]spec.TerminalProfile{}
+	for _, candyName := range candyOrder {
+		layer := g.Candies[candyName]
+		for name, profile := range layer.terminalProfiles {
+			profiles[name] = profile
+		}
+	}
+	if len(profiles) > 0 {
+		meta.TerminalProfiles = profiles
+	}
 	meta.PortProto = portProtos
 
 	// Volumes: short form names (without charly-<image>- prefix). The wire form is
@@ -137,7 +147,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 					e := &layer.Service()[i]
 					capServices = append(capServices, spec.CapabilityService{
 						Name:             e.Name,
-						Scope:       e.EffectiveScope(),
+						Scope:            e.EffectiveScope(),
 						Enable:           e.Enable,
 						UsePackaged:      e.UsePackaged,
 						Exec:             e.Exec,
@@ -253,6 +263,13 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 			mcpProvides = append(mcpProvides, mcpProvidesMap[name])
 		}
 		meta.MCPProvide = mcpProvides
+	}
+
+	for _, candyName := range candyOrder {
+		layer := g.Candies[candyName]
+		if layer.HasAgentProvides() {
+			meta.AgentProvide = append(meta.AgentProvide, layer.AgentProvide()...)
+		}
 	}
 
 	// MCP requires / accepts.

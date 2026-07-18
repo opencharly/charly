@@ -702,7 +702,8 @@ auto-fallback to `opencharly/charly` when no project is wired
   engine (`engine.build podman|docker`), secret backend, host
   aliases (`hosts.<name> user@machine`), VM backend.
 - `charly version` — print computed CalVer tag.
-- `charly tmux {ls, attach}` — drive tmux sessions inside containers.
+- `charly agent terminal {launch, run, attach, snapshot, transcript, input, key, resize, signal, close}` — typed local/remote/nested terminal channels.
+- `charly tmux {shell, cmd, run, attach, list, capture, send, kill}` — compatibility facade over those typed channels; it never targets the operator's tmux server directly.
 - `charly ssh tunnel {spice, vnc, …}` — forward SPICE/VNC/unix sockets
   from a remote libvirt host to the local machine.
 - `charly alias install` — register box-scoped shell aliases
@@ -713,7 +714,7 @@ auto-fallback to `opencharly/charly` when no project is wired
 
 → `/charly-core:clean`, `/charly-core:charly-doctor`, `/charly-core:charly-update`,
 `/charly-build:migrate`, `/charly-build:settings`, `/charly-core:ssh`,
-`/charly-automation:tmux`, `/charly-automation:alias`,
+`/charly-automation:alias`,
 `/charly-automation:udev`.
 
 ## Command reference
@@ -730,7 +731,7 @@ gateway exposing the entire surface as MCP tools.
 | **Box (build mode)** | `charly box {build, generate, validate, merge, new, inspect, list, pull, reconcile}` | `/charly-image:image` + `/charly-build:build`, `/charly-build:generate`, `/charly-build:validate`, `/charly-build:merge`, `/charly-build:new`, `/charly-build:inspect`, `/charly-build:list`, `/charly-build:pull`, `/charly-build:reconcile` |
 | **Box authoring (MCP-first)** | `charly box {set, add-candy, rm-candy, fetch, refresh, write, cat}` and `charly candy {set, add-rpm, add-deb, add-pac, add-aur}` | `/charly-image:image` "Authoring" + `/charly-image:layer` |
 | **Deployment** | `charly bundle {add, del, sync, from-box, export, import, show, reset, status, path}`; `charly config`; `charly start`, `charly stop`, `charly restart`, `charly update`, `charly remove` | `/charly-core:deploy`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`, `/charly-core:charly-update`, `/charly-core:remove`, `/charly-local:local-deploy`, `/charly-kubernetes:kubernetes`, `/charly-internals:vm-deploy-target` |
-| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`, `charly tmux` | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs`, `/charly-automation:tmux` |
+| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`; `charly agent` sessions/runs/teams/federation/terminals/incidents/RCA/recovery; `charly tui`; typed-provider `charly tmux` compatibility | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs` |
 | **Test + probes** | `charly check {box, live, run}` + the 11 live probe verbs (`cdp`, `wl`, `dbus`, `vnc`, `mcp`, `record`, `spice`, `libvirt`, `k8s`, `adb`, `appium`); `charly feature {list, pending, validate}` | `/charly-check:check`, `/charly-check:cdp`, `/charly-check:wl`, `/charly-check:dbus`, `/charly-check:vnc`, `/charly-check:spice`, `/charly-check:libvirt`, `/charly-check:record`, `/charly-kubernetes:check-k8s`, `/charly-check:adb`, `/charly-check:appium` |
 | **MCP gateway** | `charly mcp {serve, ping, servers, list-tools, list-resources, list-prompts, call, read}` | `/charly-build:charly-mcp-cmd`, `/charly-coder:charly-mcp` |
 | **VM** | `charly vm {build, create, start, stop, destroy, snapshot, clone, console, ssh, import, list}` | `/charly-vm:vm`, `/charly-vm:vms-catalog`, `/charly-internals:vm-deploy-target` |

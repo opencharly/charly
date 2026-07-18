@@ -119,9 +119,9 @@ func TestReverseOpsPluginScript(t *testing.T) {
 			t.Fatal(err)
 		}
 		ops := []spec.ReverseOp{{
-			Kind:       spec.ReverseOpPluginScript,
+			Kind:  spec.ReverseOpPluginScript,
 			Scope: spec.ScopeUser,
-			Extra:      map[string]string{spec.ReverseOpPluginScriptKey: "rm -f " + marker},
+			Extra: map[string]string{spec.ReverseOpPluginScriptKey: "rm -f " + marker},
 		}}
 		kit.RunReverseOps(ops, &mockReverseExecutor{})
 		if _, err := os.Stat(marker); !os.IsNotExist(err) {
@@ -133,9 +133,9 @@ func TestReverseOpsPluginScript(t *testing.T) {
 	// (emits the sudo marker + the verbatim script) without needing real sudo.
 	t.Run("system-scope routes through sudo (dry-run)", func(t *testing.T) {
 		ops := []spec.ReverseOp{{
-			Kind:       spec.ReverseOpPluginScript,
+			Kind:  spec.ReverseOpPluginScript,
 			Scope: spec.ScopeSystem,
-			Extra:      map[string]string{spec.ReverseOpPluginScriptKey: "rm -rf /tmp/charly-plugin-script-test"},
+			Extra: map[string]string{spec.ReverseOpPluginScriptKey: "rm -rf /tmp/charly-plugin-script-test"},
 		}}
 		got := captureStderr(t, func() { kit.RunReverseOps(ops, &mockReverseExecutor{dryRun: true}) })
 		if !strings.Contains(got, "[dry-run] sudo bash -lc") {

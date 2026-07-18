@@ -69,6 +69,8 @@ func TestLabelConstantsAreSingular(t *testing.T) {
 		{spec.LabelSecretAccept, "ai.opencharly.secret_accept"},
 		{spec.LabelSecretRequire, "ai.opencharly.secret_require"},
 		{spec.LabelMCPProvide, "ai.opencharly.mcp_provide"},
+		{spec.LabelAgentProvide, "ai.opencharly.agent_provide"},
+		{spec.LabelTerminalProfiles, "ai.opencharly.terminal_profiles"},
 		{spec.LabelMCPRequire, "ai.opencharly.mcp_require"},
 		{spec.LabelMCPAccept, "ai.opencharly.mcp_accept"},
 	}

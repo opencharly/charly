@@ -55,6 +55,7 @@ compiled_plugins:
     - plugin-package
     - plugin-init
     - plugin-agent
+    - plugin-agent-pi
     - plugin-builder
     - plugin-distro
     - plugin-resource
@@ -65,6 +66,7 @@ compiled_plugins:
     - plugin-build
     - plugin-installstep
     - plugin-tunnel
+    - plugin-tmux
     - plugin-migrate
     - plugin-clean
     - plugin-settings

@@ -34,6 +34,7 @@ use ./candy/plugin-service
 use ./candy/plugin-package
 use ./candy/plugin-init
 use ./candy/plugin-agent
+use ./candy/plugin-agent-pi
 use ./candy/plugin-builder
 use ./candy/plugin-distro
 use ./candy/plugin-resource
@@ -44,6 +45,7 @@ use ./candy/plugin-candy-kind
 use ./candy/plugin-build
 use ./candy/plugin-installstep
 use ./candy/plugin-tunnel
+use ./candy/plugin-tmux
 use ./candy/plugin-migrate
 use ./candy/plugin-clean
 use ./candy/plugin-settings
