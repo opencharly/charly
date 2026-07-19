@@ -32,6 +32,17 @@ tasks:
       - |
         CALVER=$(bash pkg/arch/calver.sh)
         cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+      # Workspace-mode Go may extend the tracked go.work.sum when a compiled
+      # plugin adds a module-graph requirement. Surface that generated metadata
+      # immediately instead of letting a nominally successful build leave an
+      # unexplained dirty tree that only the final Git gate notices.
+      - |
+        if ! git diff --quiet -- go.work.sum; then
+          echo "task build:binary: go build updated tracked go.work.sum" >&2
+          echo "Review and commit the workspace checksum, then rerun task build:binary." >&2
+          git diff -- go.work.sum >&2
+          exit 1
+        fi
       - cp bin/charly candy/charly/bin/charly
 
   # Solo/bootstrap use only — never run this on a host with in-flight multi-teammate
