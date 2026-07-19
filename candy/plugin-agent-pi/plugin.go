@@ -15,6 +15,7 @@ import (
 
 	"github.com/opencharly/charly/candy/plugin-agent-pi/params"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -123,15 +124,22 @@ func decodeAgentRunRequest(payload []byte) (spec.AgentRunRequest, error) {
 }
 
 type piProcess struct {
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	stdout      io.ReadCloser
-	stderr      io.ReadCloser
-	killFailure <-chan error
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	stderr io.ReadCloser
+	// reaped is closed by finishPiProcess the moment cmd.Wait() returns. It is
+	// the disarm signal for watchPiProcessGroup: a reaped child's pgid is
+	// recyclable, so no shutdown signal may be sent after this point.
+	reaped chan struct{}
 }
 
 func startPiProcess(ctx context.Context, path string, environment map[string]any) (*piProcess, error) {
-	cmd := exec.CommandContext(ctx, path)
+	// exec.Command, NOT exec.CommandContext: the os/exec ctx hook would SIGKILL
+	// the direct child the instant ctx cancels — preempting the graceful
+	// process-group shutdown ladder the watcher below owns, and orphaning every
+	// other member of the child's process group.
+	cmd := exec.Command(path)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Env = append(cmd.Environ(), piEnv(environment)...)
 	stdin, err := cmd.StdinPipe()
@@ -149,22 +157,24 @@ func startPiProcess(ctx context.Context, path string, environment map[string]any
 	if err := cmd.Start(); err != nil {
 		return nil, errors.Join(err, stdin.Close(), stdout.Close(), stderr.Close())
 	}
-	killFailure := make(chan error, 1)
-	go watchPiProcessGroup(ctx, cmd, killFailure)
-	return &piProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, killFailure: killFailure}, nil
+	process := &piProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, reaped: make(chan struct{})}
+	go watchPiProcessGroup(ctx, process)
+	return process, nil
 }
 
-func watchPiProcessGroup(ctx context.Context, cmd *exec.Cmd, result chan<- error) {
-	<-ctx.Done()
-	if cmd.Process == nil {
-		result <- nil
-		return
+// watchPiProcessGroup owns the cancel-path shutdown of the runner's process
+// group. On ctx cancel it walks the graceful-first ladder
+// (kit.ShutdownProcessGroup: stdin EOF → grace → SIGTERM the group → grace →
+// SIGKILL the group), which returns only after cmd.Wait() has reaped the
+// child. The reaped channel DISARMS the watcher: a cancel arriving after Wait
+// (for example OpenChannel's deferred cancel following a clean stdin-EOF exit)
+// exits here without signaling, so a recycled pgid can never be hit.
+func watchPiProcessGroup(ctx context.Context, process *piProcess) {
+	select {
+	case <-process.reaped:
+	case <-ctx.Done():
+		kit.ShutdownProcessGroup(process.cmd, process.stdin, process.reaped)
 	}
-	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.ESRCH) {
-		err = nil
-	}
-	result <- err
 }
 
 func runPiProcess(ctx context.Context, cancel context.CancelFunc, stream sdk.ProviderChannel, process *piProcess, sender *piSender, request spec.AgentRunRequest) (returnErr error) {
@@ -172,7 +182,7 @@ func runPiProcess(ctx context.Context, cancel context.CancelFunc, stream sdk.Pro
 		if returnErr != nil && !errors.Is(returnErr, io.EOF) {
 			cancel()
 		}
-		returnErr = finishPiProcess(ctx, stream, process, sender, returnErr)
+		returnErr = finishPiProcess(stream, process, sender, returnErr)
 	}()
 	if err := sender.send(&pb.ChannelFrame{Kind: sdk.ChannelStatus, Name: "running"}); err != nil {
 		return err
@@ -212,17 +222,17 @@ func runPiProcess(ctx context.Context, cancel context.CancelFunc, stream sdk.Pro
 	return returnErr
 }
 
-func finishPiProcess(ctx context.Context, stream sdk.ProviderChannel, process *piProcess, sender *piSender, runErr error) error {
+func finishPiProcess(stream sdk.ProviderChannel, process *piProcess, sender *piSender, runErr error) error {
 	if closeErr := process.stdin.Close(); closeErr != nil {
 		runErr = errors.Join(runErr, fmt.Errorf("plugin-agent-pi: close runner input: %w", closeErr))
 	}
-	if waitErr := process.cmd.Wait(); runErr == nil && waitErr != nil {
+	waitErr := process.cmd.Wait()
+	// The child is reaped — disarm the watcher before any later cancel (the
+	// deferred one in OpenChannel included) can fire it at a recycled pgid, and
+	// unblock its shutdown ladder if one is running.
+	close(process.reaped)
+	if runErr == nil && waitErr != nil {
 		runErr = waitErr
-	}
-	if ctx.Err() != nil {
-		if killErr := <-process.killFailure; killErr != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("plugin-agent-pi: kill runner process group: %w", killErr))
-		}
 	}
 	if runErr != nil && !errors.Is(runErr, io.EOF) && stream.Context().Err() == nil {
 		return errors.Join(runErr, sender.send(&pb.ChannelFrame{Kind: sdk.ChannelError, Error: runErr.Error()}))

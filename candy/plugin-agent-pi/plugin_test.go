@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -162,4 +163,91 @@ printf '%s\n' '{"type":"agent_end"}'
 	if !session || !settled {
 		t.Fatalf("Pi SSH/gRPC frames missing session/settled: session=%v settled=%v", session, settled)
 	}
+}
+
+// The cancel-path shutdown regression gate: the old watchPiProcessGroup opened
+// with a raw SIGKILL to the process group, so a cancel-then-Wait always read
+// "signal: killed". The graceful-first ladder (kit.ShutdownProcessGroup) opens
+// with the stdin EOF a stdio-carried runner answers — a plain `sh` reading
+// stdin must therefore reap with a CLEAN exit status after a cancel.
+func TestCancelShutdownLadderOpensWithStdinEOF(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh unavailable")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	process, err := startPiProcess(ctx, sh, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	waitErr := process.cmd.Wait()
+	close(process.reaped) // unblock the ladder's final reap-wait
+	if waitErr != nil {
+		t.Fatalf("cancel-path Wait = %v, want a clean stdin-EOF exit (graceful ladder, no opening force-kill)", waitErr)
+	}
+}
+
+// A runner that ignores its stdin EOF must die by the ladder's SIGTERM rung —
+// never by an opening SIGKILL. `sleep` reads no stdin and keeps SIGTERM's
+// default disposition, so after the first ProcessShutdownGrace (the production
+// constant inside the ladder, not a test-side poll) the group terminates by
+// SIGTERM and Wait reports "signal: terminated"; the old code reported
+// "signal: killed".
+func TestCancelShutdownLadderEscalatesToSIGTERMNotSIGKILL(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep unavailable")
+	}
+	runner := filepath.Join(t.TempDir(), "ignores-stdin-eof")
+	if err := os.WriteFile(runner, []byte("#!/bin/sh\nexec sleep 600\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	process, err := startPiProcess(ctx, runner, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	waitErr := process.cmd.Wait()
+	close(process.reaped)
+	if waitErr == nil || waitErr.Error() != "signal: terminated" {
+		t.Fatalf("cancel-path Wait = %v, want %q (SIGTERM escalation, not SIGKILL)", waitErr, "signal: terminated")
+	}
+}
+
+// Once Wait has reaped the child the watcher is DISARMED: a late cancel — the
+// deferred cancel in OpenChannel after a clean stdin-EOF exit is the real
+// instance — returns promptly without walking the ladder's signal rungs, so no
+// signal can ever land on the now-recyclable pgid.
+func TestWatcherDisarmedAfterReap(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh unavailable")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := exec.Command(sh)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	process := &piProcess{cmd: cmd, stdin: stdin, reaped: make(chan struct{})}
+	exited := make(chan struct{})
+	go func() {
+		watchPiProcessGroup(ctx, process)
+		close(exited)
+	}()
+	if err := stdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	close(process.reaped)
+	cancel() // the late cancel: disarmed, no ladder
+	<-exited // the watcher must return promptly
 }
