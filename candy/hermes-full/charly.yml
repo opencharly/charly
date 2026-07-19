@@ -1,6 +1,6 @@
 hermes-full:
     candy:
-        version: 2026.156.1921
+        version: 2026.200.1600
         description: |
             Standalone Hermes AI-agent metalayer composing the AI coding CLIs (claude/codex/gemini/forge) plus the developer and DevOps toolchains into one box
             hermes-full is a pure meta-composition with no install of its own: it
