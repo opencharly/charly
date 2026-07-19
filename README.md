@@ -654,7 +654,7 @@ The agent iteration harness sits on top of a disposable check bed via two
 pieces — the `kind: agent` catalog and an `iterate:` block:
 
 - **`kind: agent`** — reusable agent CLI catalog (`claude`,
-  `codex`, `gemini`, …). Each entry declares a command, a version
+  `codex`, `gemini`, `kimi`, …). Each entry declares a command, a version
   probe, an output format (typically `stream-json`), and credential
   paths. The harness parses each NDJSON line into
   `iteration[].runner_event`.

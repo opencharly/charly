@@ -276,6 +276,13 @@ gemini:
         version_command: [gemini, --version]
         credential:
             - {src: ~/.config/gcloud/application_default_credentials.json, dst: ~/.config/gcloud/application_default_credentials.json, optional: true}
+kimi:
+    agent:
+        description: Moonshot Kimi Code CLI — coding agent.
+        command: [kimi, -p, "${PROMPT}"]
+        version_command: [kimi, --version]
+        credential:
+            - {src: ~/.kimi-code/credentials/kimi-code.json, dst: ~/.kimi-code/credentials/kimi-code.json, optional: true}
 # =============================================================================
 # kind: check — disposable, zero-operator-side-effect R10 test beds.
 # =============================================================================
