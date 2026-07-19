@@ -1,6 +1,6 @@
 hermes-full:
     candy:
-        version: 2026.156.1921
+        version: 2026.200.1600
         description: |
             Standalone Hermes AI-agent metalayer composing the AI coding CLIs (claude/codex/gemini/forge) plus the developer and DevOps toolchains into one box
             hermes-full is a pure meta-composition with no install of its own: it
@@ -30,9 +30,9 @@ hermes-full:
                 file: ${HOME}/.local/bin/hermes-entrypoint
                 exists: true
                 mode: "0755"
-            - check: the Claude Code CLI binary is on PATH in the npm global bin dir
+            - check: the Claude Code CLI binary is on PATH at the native install location
               file:
-                file: ${HOME}/.npm-global/bin/claude
+                file: /usr/local/bin/claude
                 exists: true
             - check: the OpenAI Codex CLI binary is on PATH in the npm global bin dir
               file:
