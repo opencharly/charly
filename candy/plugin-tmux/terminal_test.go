@@ -485,6 +485,25 @@ func TestCloseAcknowledgesBeforeKillingRunOwnedServer(t *testing.T) {
 	}
 }
 
+func TestNaturalExitCleanupBelongsToOwningTerminalOperation(t *testing.T) {
+	for _, test := range []struct {
+		operation string
+		closed    bool
+	}{
+		{operation: "run", closed: true},
+		{operation: "attach", closed: true},
+		{operation: "launch", closed: false},
+		{operation: "snapshot", closed: false},
+		{operation: "control", closed: false},
+	} {
+		t.Run(test.operation, func(t *testing.T) {
+			if got := terminalOperationOwnsNaturalExit(test.operation); got != test.closed {
+				t.Fatalf("owns natural exit = %v, want %v", got, test.closed)
+			}
+		})
+	}
+}
+
 func TestTmuxChannelOverRealSSHAndGRPC(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux unavailable")
@@ -492,7 +511,7 @@ func TestTmuxChannelOverRealSSHAndGRPC(t *testing.T) {
 	if _, err := exec.LookPath("ssh"); err != nil {
 		t.Skip("OpenSSH client unavailable")
 	}
-	server := testkit.StartSSHProcessServer(t, func() *exec.Cmd {
+	server := testkit.StartSSHProcessServer(t, func(_ string) *exec.Cmd {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestTmuxGRPCHelperProcess$")
 		cmd.Env = append(os.Environ(), "CHARLY_TMUX_GRPC_HELPER=1")
 		return cmd

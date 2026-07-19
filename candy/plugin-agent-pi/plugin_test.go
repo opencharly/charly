@@ -105,7 +105,7 @@ printf '%s\n' '{"type":"agent_end"}'
 	if err := os.WriteFile(runner, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	server := testkit.StartSSHProcessServer(t, func() *exec.Cmd {
+	server := testkit.StartSSHProcessServer(t, func(_ string) *exec.Cmd {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPiGRPCHelperProcess$")
 		cmd.Env = append(os.Environ(), "CHARLY_PI_GRPC_HELPER=1", "CHARLY_PI_RUNNER="+runner)
 		return cmd

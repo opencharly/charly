@@ -83,6 +83,7 @@ func (s *channelSender) replayFrom(sequence uint64) error {
 type tmuxChannel struct {
 	profile              spec.TerminalProfile
 	agentRuntime         bool
+	operation            string
 	socket               string
 	sender               *channelSender
 	control              *exec.Cmd
@@ -164,6 +165,7 @@ func newTmuxChannel(open *pb.ChannelFrame, stream sdk.ProviderChannel, profile s
 	channel := &tmuxChannel{
 		profile:         profile,
 		agentRuntime:    open.GetClass() == "agent-runtime",
+		operation:       open.GetOp(),
 		socket:          "charly-" + safeID(open.GetRequestId()),
 		sender:          &channelSender{stream: stream, request: open.GetRequestId(), next: open.GetAckSequence() + 1, replay: sdk.NewReplayBuffer(4096, 16<<20)},
 		promptReady:     make(chan struct{}),
@@ -723,8 +725,12 @@ func (c *tmuxChannel) sendPaneExit(code int32, refresh bool) error {
 			return err
 		}
 	}
-	c.closed = code == 0
+	c.closed = code == 0 && terminalOperationOwnsNaturalExit(c.operation)
 	return c.sender.send(&pb.ChannelFrame{Kind: sdk.ChannelExit, ExitCode: code})
+}
+
+func terminalOperationOwnsNaturalExit(operation string) bool {
+	return operation == "run" || operation == "attach"
 }
 
 func (c *tmuxChannel) readInput(stream sdk.ProviderChannel) error {
@@ -1068,18 +1074,6 @@ func parsePaneSubscription(line string) (bool, int32, error) {
 		return false, 0, fmt.Errorf("malformed tmux pane exit status %q: %w", value[1], err)
 	}
 	return true, int32(code), nil
-}
-
-func parseLastInt32(line string) int32 {
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return -1
-	}
-	value, err := strconv.ParseInt(fields[len(fields)-1], 10, 32)
-	if err != nil {
-		return -1
-	}
-	return int32(value)
 }
 
 var canonicalKeys = map[string]string{

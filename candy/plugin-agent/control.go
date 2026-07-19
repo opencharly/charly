@@ -980,7 +980,14 @@ func executeTerminal(profileArg, targetArg, provider, requestedRunID string, mod
 	if err != nil {
 		return err
 	}
-	open := &pb.ChannelFrame{Kind: sdk.ChannelOpen, RequestId: string(runID), Class: classTerminal, Reserved: provider, Op: "run", PayloadJson: payload, TargetJson: targetJSON, AckSequence: cursor}
+	operation := "run"
+	switch mode {
+	case terminalDetach:
+		operation = "launch"
+	case terminalAttach:
+		operation = "attach"
+	}
+	open := &pb.ChannelFrame{Kind: sdk.ChannelOpen, RequestId: string(runID), Class: classTerminal, Reserved: provider, Op: operation, PayloadJson: payload, TargetJson: targetJSON, AckSequence: cursor}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	inputs := make(chan *pb.ChannelFrame, 256)
@@ -1190,7 +1197,7 @@ func executeTerminalControl(profileArg, targetArg, provider, requestedRunID stri
 	if err := validateGenerated("#TerminalInput", input); err != nil {
 		return err
 	}
-	_, target, runID, open, err := terminalOpen(profileArg, targetArg, provider, requestedRunID)
+	_, target, runID, open, err := terminalOpen(profileArg, targetArg, provider, requestedRunID, "control")
 	if err != nil {
 		return err
 	}
@@ -1258,7 +1265,7 @@ func executeTerminalControl(profileArg, targetArg, provider, requestedRunID stri
 }
 
 func executeTerminalSnapshot(profileArg, targetArg, provider, requestedRunID string) error {
-	profile, target, runID, open, err := terminalOpen(profileArg, targetArg, provider, requestedRunID)
+	profile, target, runID, open, err := terminalOpen(profileArg, targetArg, provider, requestedRunID, "snapshot")
 	if err != nil {
 		return err
 	}
@@ -1334,7 +1341,7 @@ func executeTerminalSnapshot(profileArg, targetArg, provider, requestedRunID str
 	return writeJSON(snapshot)
 }
 
-func terminalOpen(profileArg, targetArg, provider, requestedRunID string) (spec.TerminalProfile, spec.TargetSpec, spec.UUIDv7, *pb.ChannelFrame, error) {
+func terminalOpen(profileArg, targetArg, provider, requestedRunID, operation string) (spec.TerminalProfile, spec.TargetSpec, spec.UUIDv7, *pb.ChannelFrame, error) {
 	target, err := decodeTarget(targetArg)
 	if err != nil {
 		return spec.TerminalProfile{}, target, "", nil, err
@@ -1363,7 +1370,7 @@ func terminalOpen(profileArg, targetArg, provider, requestedRunID string) (spec.
 	if err != nil {
 		return profile, target, runID, nil, err
 	}
-	open := &pb.ChannelFrame{Kind: sdk.ChannelOpen, RequestId: string(runID), Class: classTerminal, Reserved: provider, Op: "run", PayloadJson: payload, TargetJson: targetJSON, AckSequence: cursor}
+	open := &pb.ChannelFrame{Kind: sdk.ChannelOpen, RequestId: string(runID), Class: classTerminal, Reserved: provider, Op: operation, PayloadJson: payload, TargetJson: targetJSON, AckSequence: cursor}
 	return profile, target, runID, open, nil
 }
 

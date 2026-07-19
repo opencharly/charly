@@ -182,12 +182,15 @@ func TestTerminalReconnectStartsAfterDurableCursor(t *testing.T) {
 	if _, err := store.AppendTerminalFrame(spec.TerminalFrame{RunID: runID, Sequence: 1, Kind: "status", Status: "detached"}); err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, open, err := terminalOpen(`{"name":"shell","entrypoint":["sh"],"cols":80,"rows":24}`, `{}`, "tmux", string(runID))
+	_, _, _, open, err := terminalOpen(`{"name":"shell","entrypoint":["sh"],"cols":80,"rows":24}`, `{}`, "tmux", string(runID), "control")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if open.GetAckSequence() != 1 {
 		t.Fatalf("reconnect acknowledgement cursor = %d, want 1", open.GetAckSequence())
+	}
+	if open.GetOp() != "control" {
+		t.Fatalf("reconnect operation = %q, want control", open.GetOp())
 	}
 }
 
