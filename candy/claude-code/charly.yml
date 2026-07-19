@@ -1,6 +1,6 @@
 claude-code:
     candy:
-        version: 2026.199.1330
+        version: 2026.200.0740
         description: |
             Installs the Claude Code CLI globally via npm so `claude` is on PATH.
             The candy depends on nodejs and ships a package.json pinning
@@ -8,11 +8,15 @@ claude-code:
             ~/.npm-global/bin. The result is verifiable: the claude binary exists at
             that path and `claude --version` prints the Claude Code version banner.
             A CUE-validated tmux terminal profile makes the same CLI available
-            through the generic local/SSH/nested Charly agent channel.
+            through the generic local/SSH/nested Charly agent channel. Runtime
+            self-updates are disabled so the image-owned package pin and native
+            binary remain immutable across real terminal sessions.
         require:
             - nodejs
         path_append:
             - "~/.local/bin"
+        env:
+            DISABLE_AUTOUPDATER: "1"
         agent_provide:
             - provider: tmux
               protocol_version: 2
@@ -42,6 +46,9 @@ claude-code:
               file:
                 file: ${HOME}/.npm-global/bin/claude
                 exists: true
+            - check: Claude Code runtime self-updates are disabled for reproducible image-owned installs
+              command: test "${DISABLE_AUTOUPDATER}" = 1
+              exit_status: 0
             - check: running claude --version exits cleanly and prints the Claude Code banner
               exit_status: 0
               stdout:

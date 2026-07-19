@@ -510,7 +510,8 @@ arch:
                     # the sdk remote ("fatal: … not our ref"). sdk is wired by PKGBUILD prepare() from
                     # a SEPARATE file:// source, so superproject-fetch recursion is never needed.
                     build_template: |
-                        cd {{.SrcDir}} && PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
+                        SOURCE_ROOT=$(cd {{.SourceDir}}/../.. && pwd)
+                        cd {{.SrcDir}} && CHARLY_LOCALPKG_SOURCE_ROOT="$SOURCE_ROOT" PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
                     # Refresh the sync DB (+ reseed the keyring from the installed keyring
                     # packages) BEFORE installing the local pkg — `pacman -U` resolves the
                     # pkg's depends= from the sync DB, and a pinned base image's DB drifts
@@ -742,7 +743,7 @@ debian:
                     source_sentinel: debian/control
                     build_template: |
                         set -e
-                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
                         [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
@@ -984,7 +985,7 @@ fedora:
                     source_sentinel: '*.spec'
                     build_template: |
                         set -e
-                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
                         [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
