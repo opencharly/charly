@@ -14,6 +14,7 @@ import (
 
 func (l *Candy) GetIncludedCandy() []deploykit.CandyRef { return l.IncludedCandy }
 func (l *Candy) GetRequire() []deploykit.CandyRef       { return l.Require }
+func (l *Candy) GetBakePlugin() []deploykit.CandyRef    { return l.BakePlugin }
 func (l *Candy) GetHasPackageJson() bool                { return l.HasPackageJson }
 func (l *Candy) GetHasCargoToml() bool                  { return l.HasCargoToml }
 func (l *Candy) GetExternalBuilder() string             { return l.ExternalBuilder }

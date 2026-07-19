@@ -1,0 +1,22 @@
+plugin-agent-pi:
+    candy:
+        version: 2026.199.1330
+        description: |-
+            Generic agent-runtime:pi provider. Launches the ephemeral native Pi
+            SDK runner, carries Pi's upstream runRpcMode JSONL over the generic
+            CUE-generated Provider.Channel, persists through SessionManager, and
+            exits at Pi's deterministic agent_end event. No daemon or listener.
+            An opt-in adapter delegates to the official experimental Pi
+            orchestrator rpc-stream CLI without duplicating its socket protocol.
+        plugin:
+            source: github.com/opencharly/charly/candy/plugin-agent-pi
+            providers:
+                - agent-runtime:pi
+        require:
+            - pi-agent
+        plan:
+            - check: the compiled provider registry exposes Pi as a typed streaming agent runtime
+              context: [runtime]
+              command: charly agent runtime status pi --class agent-runtime
+              stdout:
+                - contains: '"streaming":true'

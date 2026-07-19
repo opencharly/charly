@@ -94,4 +94,3 @@ func invokeInitResolve(req spec.InitResolveRequest) ([]byte, error) {
 	}
 	return invokeTyped[spec.InitResolveRequest, json.RawMessage](context.Background(), prov, "init", OpResolve, req)
 }
-

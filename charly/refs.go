@@ -218,6 +218,27 @@ func mergeRepoOverrides(existing, add string) string {
 	}
 }
 
+// applySelfSuperprojectOverride makes the check plugin's initial
+// resolved-project projection obey the same local-candy rule as the subsequent
+// bed session. Each `charly check run` is a separate process, so the temporary
+// environment mutation is process-local; restoration keeps other commands in
+// that process unchanged.
+func applySelfSuperprojectOverride(projectDir string) func() {
+	pair := selfSuperprojectOverridePair(projectDir)
+	if pair == "" {
+		return func() {}
+	}
+	old, had := os.LookupEnv(RepoOverrideEnv)
+	_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(old, pair))
+	return func() {
+		if had {
+			_ = os.Setenv(RepoOverrideEnv, old)
+			return
+		}
+		_ = os.Unsetenv(RepoOverrideEnv)
+	}
+}
+
 // autoMigratedRepos guards the remote-cache auto-migration against unbounded
 // re-entry. A migration that re-enters LoadUnified would resolve @github refs and
 // re-enter EnsureRepoDownloaded → the command:migrate Invoke. With a self- or mutual

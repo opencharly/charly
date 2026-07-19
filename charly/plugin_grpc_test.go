@@ -13,6 +13,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // testVerbProvider is an in-proc Provider used to exercise the gRPC contract.
@@ -148,6 +149,66 @@ func TestProviderRegistryDispatch(t *testing.T) {
 	}
 	if p, ok := r.ResolveKind("dup"); !ok || p.Class() != ClassKind {
 		t.Fatalf("ResolveKind(dup) = %v,%v want kind", p, ok)
+	}
+}
+
+func TestSSHExecutorForTargetHopPreservesGenericTransportOptions(t *testing.T) {
+	hop := spec.TargetHop{
+		Transport:    "ssh",
+		Address:      "box.example",
+		User:         "agent",
+		Port:         2207,
+		IdentityFile: "/keys/id_ed25519",
+		Options: spec.StrMap{
+			"ProxyJump":             "bastion",
+			"StrictHostKeyChecking": "accept-new",
+		},
+	}
+	exec := sshExecutorForTargetHop(hop)
+	if exec.User != hop.User || exec.Host != hop.Address || exec.Port != int(hop.Port) {
+		t.Fatalf("executor coordinates = %+v, want hop %+v", exec, hop)
+	}
+	wantArgs := []string{"-i", "/keys/id_ed25519", "-o", "ProxyJump=bastion", "-o", "StrictHostKeyChecking=accept-new"}
+	if strings.Join(exec.Args, "\x00") != strings.Join(wantArgs, "\x00") {
+		t.Fatalf("executor args = %#v, want %#v", exec.Args, wantArgs)
+	}
+}
+
+func TestSplitTargetProcessPairPreservesDialAndRecursesAcrossRouteMatrix(t *testing.T) {
+	tests := []struct {
+		name      string
+		hops      []spec.TargetHop
+		wantFirst string
+		wantRest  []string
+		ok        bool
+	}{
+		{name: "exec grpc tmux", hops: []spec.TargetHop{{Transport: "exec"}, {Transport: "grpc"}, {Transport: "tmux"}}, wantFirst: "exec", wantRest: []string{"tmux"}, ok: true},
+		{name: "ssh grpc tmux", hops: []spec.TargetHop{{Transport: "ssh", Address: "box"}, {Transport: "grpc"}, {Transport: "tmux"}}, wantFirst: "ssh", wantRest: []string{"tmux"}, ok: true},
+		{name: "ssh grpc exec grpc tmux", hops: []spec.TargetHop{{Transport: "ssh", Address: "box"}, {Transport: "grpc"}, {Transport: "exec"}, {Transport: "grpc"}, {Transport: "tmux"}}, wantFirst: "ssh", wantRest: []string{"exec", "grpc", "tmux"}, ok: true},
+		{name: "terminal local", hops: []spec.TargetHop{{Transport: "tmux"}}, wantRest: []string{"tmux"}},
+		{name: "missing grpc", hops: []spec.TargetHop{{Transport: "ssh", Address: "box"}, {Transport: "tmux"}}, wantRest: []string{"ssh", "tmux"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			target := spec.TargetSpec{Deployment: "placement", WorkingDir: "/work", Hops: test.hops}
+			dial, remaining, ok := splitTargetProcessPair(target)
+			if ok != test.ok {
+				t.Fatalf("split ok = %v, want %v", ok, test.ok)
+			}
+			if ok && (len(dial.Hops) != len(test.hops) || dial.Hops[0].Transport != test.wantFirst) {
+				t.Fatalf("dial route = %#v, want full route starting %s", dial.Hops, test.wantFirst)
+			}
+			gotRest := make([]string, 0, len(remaining.Hops))
+			for _, hop := range remaining.Hops {
+				gotRest = append(gotRest, hop.Transport)
+			}
+			if strings.Join(gotRest, ",") != strings.Join(test.wantRest, ",") {
+				t.Fatalf("remaining route = %v, want %v", gotRest, test.wantRest)
+			}
+			if remaining.Deployment != target.Deployment || remaining.WorkingDir != target.WorkingDir {
+				t.Fatalf("orthogonal target fields were lost: %#v", remaining)
+			}
+		})
 	}
 }
 

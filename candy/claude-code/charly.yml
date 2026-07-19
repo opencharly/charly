@@ -1,6 +1,6 @@
 claude-code:
     candy:
-        version: 2026.198.2107
+        version: 2026.200.1654
         description: |-
             Installs the Claude Code CLI via the official native installer
             (https://claude.ai/install.sh) — the currently-recommended method
@@ -13,11 +13,35 @@ claude-code:
             persistent home volume over /home/<user>). Replaces the deprecated
             @anthropic-ai/claude-code npm package (a thin launcher that deferred a
             native-binary download to first runtime and so failed `claude --version`
-            in hermetic offline image builds). Verifiable offline: /usr/local/bin/claude
-            exists and `claude --version` prints the Claude Code banner — both in the
-            built image and on a live deployment.
+            in hermetic offline image builds). A CUE-validated tmux terminal
+            profile makes the same CLI available through the generic
+            local/SSH/nested Charly agent channel, and runtime self-updates are
+            disabled (DISABLE_AUTOUPDATER=1) so the image-owned install remains
+            immutable across real terminal sessions. Verifiable offline:
+            /usr/local/bin/claude exists and `claude --version` prints the Claude
+            Code banner — both in the built image and on a live deployment.
         package:
             - curl
+        env:
+            DISABLE_AUTOUPDATER: "1"
+        agent_provide:
+            - provider: tmux
+              protocol_version: 2
+              profiles: [claude-code]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: true
+        terminal_profile:
+            claude-code:
+                name: claude-code
+                entrypoint: [claude]
+                cols: 120
+                rows: 40
+                semantic_adapter: claude-code
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
         plan:
             - run: download the official claude code native installer
               download: "https://claude.ai/install.sh"
@@ -40,6 +64,9 @@ claude-code:
               file:
                 file: /usr/local/bin/claude
                 exists: true
+            - check: Claude Code runtime self-updates are disabled for reproducible image-owned installs
+              command: test "${DISABLE_AUTOUPDATER}" = 1
+              exit_status: 0
             - check: running claude --version exits cleanly and prints the Claude Code banner
               exit_status: 0
               stdout:

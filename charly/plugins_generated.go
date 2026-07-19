@@ -9,6 +9,7 @@ package main
 import (
 	cp_plugin_addr "github.com/opencharly/charly/candy/plugin-addr"
 	cp_plugin_agent "github.com/opencharly/charly/candy/plugin-agent"
+	cp_plugin_agent_pi "github.com/opencharly/charly/candy/plugin-agent-pi"
 	cp_plugin_alias "github.com/opencharly/charly/candy/plugin-alias"
 	cp_plugin_authoring "github.com/opencharly/charly/candy/plugin-authoring"
 	cp_plugin_box "github.com/opencharly/charly/candy/plugin-box"
@@ -56,6 +57,7 @@ import (
 	cp_plugin_sidecar "github.com/opencharly/charly/candy/plugin-sidecar"
 	cp_plugin_status "github.com/opencharly/charly/candy/plugin-status"
 	cp_plugin_substrate "github.com/opencharly/charly/candy/plugin-substrate"
+	cp_plugin_tmux "github.com/opencharly/charly/candy/plugin-tmux"
 	cp_plugin_tunnel "github.com/opencharly/charly/candy/plugin-tunnel"
 	cp_plugin_unix_group "github.com/opencharly/charly/candy/plugin-unix-group"
 	cp_plugin_user "github.com/opencharly/charly/candy/plugin-user"
@@ -90,6 +92,7 @@ func init() {
 	registerCompiledCheckVerb(cp_plugin_package.NewCheckVerb(), cp_plugin_package.NewMeta())
 	registerCompiledPlugin(cp_plugin_init.NewProvider(), cp_plugin_init.NewMeta())
 	registerCompiledPlugin(cp_plugin_agent.NewProvider(), cp_plugin_agent.NewMeta())
+	registerCompiledPlugin(cp_plugin_agent_pi.NewProvider(), cp_plugin_agent_pi.NewMeta())
 	registerCompiledPlugin(cp_plugin_builder.NewProvider(), cp_plugin_builder.NewMeta())
 	registerCompiledPlugin(cp_plugin_distro.NewProvider(), cp_plugin_distro.NewMeta())
 	registerCompiledPlugin(cp_plugin_resource.NewProvider(), cp_plugin_resource.NewMeta())
@@ -100,6 +103,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_build.NewProvider(), cp_plugin_build.NewMeta())
 	registerCompiledPlugin(cp_plugin_installstep.NewProvider(), cp_plugin_installstep.NewMeta())
 	registerCompiledPlugin(cp_plugin_tunnel.NewProvider(), cp_plugin_tunnel.NewMeta())
+	registerCompiledPlugin(cp_plugin_tmux.NewProvider(), cp_plugin_tmux.NewMeta())
 	registerCompiledPlugin(cp_plugin_migrate.NewProvider(), cp_plugin_migrate.NewMeta())
 	registerCompiledPlugin(cp_plugin_clean.NewProvider(), cp_plugin_clean.NewMeta())
 	registerCompiledPlugin(cp_plugin_settings.NewProvider(), cp_plugin_settings.NewMeta())

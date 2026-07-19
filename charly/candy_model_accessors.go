@@ -23,9 +23,33 @@ import (
 func (l *Candy) GetName() string         { return l.Name }
 func (l *Candy) GetSourceDir() string    { return l.SourceDir }
 func (l *Candy) GetVersion() string      { return l.Version }
+func (l *Candy) GetStatus() string       { return l.Status }
+func (l *Candy) GetDescription() string  { return l.Description }
 func (l *Candy) Vars() map[string]string { return l.vars }
 func (l *Candy) PlanSteps() []spec.Step  { return l.plan }
 func (l *Candy) Reboot() bool            { return l.reboot }
+
+func (l *Candy) IsPluginCandy() bool {
+	return l.Plugin != nil
+}
+
+func (l *Candy) GetPluginSource() string {
+	if l.Plugin == nil {
+		return ""
+	}
+	return l.Plugin.Source
+}
+
+func (l *Candy) GetPluginProviders() []string {
+	if l.Plugin == nil {
+		return nil
+	}
+	providers := make([]string, len(l.Plugin.Providers))
+	for i, provider := range l.Plugin.Providers {
+		providers[i] = string(provider)
+	}
+	return providers
+}
 
 // HasFile reports whether the candy ships a detect file (pixi.toml/etc.) or an
 // arbitrary file under its source dir — the builder-detection probe.

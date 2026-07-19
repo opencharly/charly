@@ -114,6 +114,7 @@ func projectCandyView(c *Candy) spec.CandyView {
 	// `charly box list routes|volumes|aliases` prints; has_init + port_relay reconstruct
 	// the init-triggering predicate (HasAnyInit || PortRelayPorts>0) for `list services`.
 	v.HasInit = c.HasAnyInit()
+	v.InitSystems = c.InitSystems
 	v.PortRelayPorts = c.PortRelayPorts
 	if route, _ := c.Route(); route != nil {
 		v.Route = route
@@ -266,6 +267,11 @@ func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, re
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
 func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+	// This assembler can receive a freshly reloaded candy graph, independently
+	// of Generate's initial graph. Complete the same per-init facts here before
+	// projecting CandyView so the SDK renderer receives exact HasInit(name)
+	// evidence rather than an empty map.
+	PopulateCandyInitSystem(layers, initCfg)
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
@@ -503,6 +509,10 @@ func hostBuildResolvedProject(_ context.Context, req spec.ResolvedProjectRequest
 			return spec.ResolvedProject{}, err
 		}
 		dir = d
+	}
+	if req.LocalSuperproject {
+		restore := applySelfSuperprojectOverride(dir)
+		defer restore()
 	}
 	rp, err := buildResolvedProjectFromDir(dir, ResolveOpts{IncludeDisabled: req.IncludeDisabled})
 	if err != nil {

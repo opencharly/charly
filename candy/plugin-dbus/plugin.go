@@ -19,7 +19,7 @@
 //
 // STRUCTURAL externalization, NOT a dep-shed: godbus stays in charly's core for the Secret
 // Service / GPG secrets (enc.go / secret_service.go / secrets_gpg.go). The host-side
-// best-effort notification (`charly cmd --notify` / `charly tmux cmd`) keeps working via its
+// best-effort notification (`charly cmd --notify`) keeps working via its
 // own in-core gdbus path (notify.go) — also gdbus, never this plugin.
 //
 // Dual-placement by construction: the SAME NewProvider()/NewMeta() compile INTO charly

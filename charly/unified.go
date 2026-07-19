@@ -1313,6 +1313,8 @@ func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
 	layer.secretAccepts = ly.SecretAccept
 	layer.secretRequires = ly.SecretRequire
 	layer.mcpProvides = ly.MCPProvide
+	layer.agentProvides = ly.AgentProvide
+	layer.terminalProfiles = ly.TerminalProfiles
 	layer.mcpRequires = ly.MCPRequire
 	layer.mcpAccepts = ly.MCPAccept
 	layer.engine = ly.Engine

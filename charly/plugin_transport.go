@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
 
 	"github.com/opencharly/sdk"
@@ -72,12 +73,21 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 		Cmd:              cmd,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		AutoMTLS:         true,
+		Logger:           pluginClientLogger(os.Stderr),
 	})
 	unit, err := connectAndDescribe(ctx, client)
 	if err != nil {
 		return nil, nil, err
 	}
 	return unit, &clientCloser{client}, nil
+}
+
+func pluginClientLogger(output io.Writer) hclog.Logger {
+	return hclog.New(&hclog.LoggerOptions{
+		Name:   "charly.plugin",
+		Level:  hclog.Warn,
+		Output: output,
+	})
 }
 
 // connectAndDescribe dispenses the uniform plugin, reads its capability manifest

@@ -198,7 +198,7 @@ func externalCommandExecPlan(d externalCommandDispatch) (bin string, argv, env [
 		return "", nil, nil, err
 	}
 	argv = append([]string{bin}, args...)
-	env = commandExecEnv()
+	env = commandExecEnv(d.word)
 	return bin, argv, env, nil
 }
 
@@ -268,7 +268,7 @@ func findCommandPluginCandy(candies map[string]*Candy, word string) (string, *Ca
 // CHARLY_BIN stamped with charly's own executable, so a command plugin that shells BACK to
 // charly (the MCP bridge fork/execs `charly __cli-model` + `charly <cmd>`) calls the SAME
 // binary that dispatched it, not whatever `charly` is on PATH — matching LocalTransport.
-func commandExecEnv() []string {
+func commandExecEnv(word string) []string {
 	cookie := sdk.Handshake.MagicCookieKey + "="
 	src := os.Environ()
 	env := make([]string, 0, len(src)+1)
@@ -281,6 +281,7 @@ func commandExecEnv() []string {
 	if exe, err := os.Executable(); err == nil {
 		env = append(env, "CHARLY_BIN="+exe)
 	}
+	env = append(env, "CHARLY_COMMAND_WORD="+word)
 	return env
 }
 

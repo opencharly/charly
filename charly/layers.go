@@ -331,40 +331,42 @@ type Candy struct {
 	SubPathPrefix string // e.g. "candy/" — parent directory within the repo for sibling resolution
 
 	// Pre-populated from the candy manifest
-	formatSections  map[string]*deploykit.PackageSection // generic format sections (only `aur` now — the secondary AUR build format)
-	tagSections     map[string]*deploykit.TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
-	topPackages     []string                             // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
-	ports           []string
-	portSpecs       []spec.PortSpec // full PortSpec data with protocol info
-	envConfig       *kit.EnvConfig
-	route           *deploykit.RouteConfig
-	serviceFiles    []string            // paths to *.service files in candy dir (systemd user-level, file_copy model)
-	service         []spec.ServiceEntry // unified service: list (the only service schema)
-	volumes         []VolumeYAML
-	aliases         []AliasYAML
-	extract         []ExtractYAML
-	data            []DataYAML
-	security        *SecurityConfig
-	libvirt         []string
-	hooks           *HooksConfig
-	secrets         []SecretYAML
-	envProvides     map[string]string    // env vars provided to other containers (service discovery)
-	envRequires     []spec.EnvDependency // env vars this candy must have
-	envAccepts      []spec.EnvDependency // env vars this candy can optionally use
-	secretAccepts   []spec.EnvDependency // credential-store-backed env vars this candy can optionally use
-	secretRequires  []spec.EnvDependency // credential-store-backed env vars this candy must have
-	mcpProvides     []spec.MCPServerYAML // MCP servers provided to other containers
-	mcpRequires     []spec.EnvDependency // MCP servers this candy must have
-	mcpAccepts      []spec.EnvDependency // MCP servers this candy can optionally use
-	engine          string               // required run engine from the candy manifest ("docker", "podman", or "")
-	vars            map[string]string    // candy-local variables (from the candy manifest vars:)
-	apk             []ApkPackageSpec     // Android apps to install on a kind:android device (from the candy manifest apk:)
-	localpkg        map[string]string    // per-format native-package source dirs (pac/rpm/deb → dir) from the candy manifest localpkg:
-	reboot          bool                 // reboot the deploy target after this candy (from the candy manifest reboot:)
-	ExternalBuilder string               // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see deploykit EmitExternalBuilderStages
-	plan            []spec.Step          // unified ordered plan (from the candy manifest plan:): run:/check:/agent-*/include:
-	artifacts       []CandyArtifact      // files to retrieve after setup (from the candy manifest artifacts:)
-	shell           *spec.Shell          // shell-init declarations (from the candy manifest shell:)
+	formatSections   map[string]*deploykit.PackageSection // generic format sections (only `aur` now — the secondary AUR build format)
+	tagSections      map[string]*deploykit.TagPkgConfig   // per-distro/version package sections (debian, ubuntu, debian:13, …) — the sole package surface
+	topPackages      []string                             // top-level package: — the always-included BASE, folded at RESOLVE time (never at parse — that cross-contaminated debian/ubuntu)
+	ports            []string
+	portSpecs        []spec.PortSpec // full PortSpec data with protocol info
+	envConfig        *kit.EnvConfig
+	route            *deploykit.RouteConfig
+	serviceFiles     []string            // paths to *.service files in candy dir (systemd user-level, file_copy model)
+	service          []spec.ServiceEntry // unified service: list (the only service schema)
+	volumes          []VolumeYAML
+	aliases          []AliasYAML
+	extract          []ExtractYAML
+	data             []DataYAML
+	security         *SecurityConfig
+	libvirt          []string
+	hooks            *HooksConfig
+	secrets          []SecretYAML
+	envProvides      map[string]string    // env vars provided to other containers (service discovery)
+	envRequires      []spec.EnvDependency // env vars this candy must have
+	envAccepts       []spec.EnvDependency // env vars this candy can optionally use
+	secretAccepts    []spec.EnvDependency // credential-store-backed env vars this candy can optionally use
+	secretRequires   []spec.EnvDependency // credential-store-backed env vars this candy must have
+	mcpProvides      []spec.MCPServerYAML // MCP servers provided to other containers
+	agentProvides    []spec.AgentRuntimeCapability
+	terminalProfiles map[string]spec.TerminalProfile
+	mcpRequires      []spec.EnvDependency // MCP servers this candy must have
+	mcpAccepts       []spec.EnvDependency // MCP servers this candy can optionally use
+	engine           string               // required run engine from the candy manifest ("docker", "podman", or "")
+	vars             map[string]string    // candy-local variables (from the candy manifest vars:)
+	apk              []ApkPackageSpec     // Android apps to install on a kind:android device (from the candy manifest apk:)
+	localpkg         map[string]string    // per-format native-package source dirs (pac/rpm/deb → dir) from the candy manifest localpkg:
+	reboot           bool                 // reboot the deploy target after this candy (from the candy manifest reboot:)
+	ExternalBuilder  string               // reserved word of an EXTERNAL builder plugin this candy selects (from the candy manifest external_builder:); resolved at build via OpResolve — see deploykit EmitExternalBuilderStages
+	plan             []spec.Step          // unified ordered plan (from the candy manifest plan:): run:/check:/agent-*/include:
+	artifacts        []CandyArtifact      // files to retrieve after setup (from the candy manifest artifacts:)
+	shell            *spec.Shell          // shell-init declarations (from the candy manifest shell:)
 
 	// Candy-contributed image-level facts (capabilities: block in the candy manifest)
 	// and cross-candy requirement declarations (requires_capabilities:).
@@ -825,6 +827,7 @@ func (l *Candy) HasEnvAccepts() bool     { return len(l.envAccepts) > 0 }
 func (l *Candy) HasSecretRequires() bool { return len(l.secretRequires) > 0 }
 func (l *Candy) HasSecretAccepts() bool  { return len(l.secretAccepts) > 0 }
 func (l *Candy) HasMCPProvides() bool    { return len(l.mcpProvides) > 0 }
+func (l *Candy) HasAgentProvides() bool  { return len(l.agentProvides) > 0 }
 func (l *Candy) HasMCPRequires() bool    { return len(l.mcpRequires) > 0 }
 func (l *Candy) HasMCPAccepts() bool     { return len(l.mcpAccepts) > 0 }
 
@@ -1037,6 +1040,17 @@ func (l *Candy) Artifact() []CandyArtifact {
 	return l.artifacts
 }
 
+// Capabilities and RequiresCapabilities expose the candy's authored image
+// contract through spec.CandyReader. The runtime fields remain the single
+// source; this adapter performs no projection or defaulting.
+func (l *Candy) Capabilities() *spec.CandyCapability {
+	return l.capabilities
+}
+
+func (l *Candy) RequiresCapabilities() []string {
+	return l.requiresCapabilities
+}
+
 // EnvProvides returns env vars this candy provides to other containers (pre-populated from the candy manifest)
 func (l *Candy) EnvProvides() map[string]string {
 	return l.envProvides
@@ -1070,6 +1084,12 @@ func (l *Candy) SecretRequire() []spec.EnvDependency {
 // MCPProvides returns MCP servers this candy provides to other containers (pre-populated from the candy manifest)
 func (l *Candy) MCPProvide() []spec.MCPServerYAML {
 	return l.mcpProvides
+}
+
+func (l *Candy) AgentProvide() []spec.AgentRuntimeCapability { return l.agentProvides }
+func (l *Candy) TerminalProfile(name string) (spec.TerminalProfile, bool) {
+	v, ok := l.terminalProfiles[name]
+	return v, ok
 }
 
 // MCPRequires returns MCP servers this candy must have from the environment (pre-populated from the candy manifest)

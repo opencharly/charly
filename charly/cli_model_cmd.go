@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
-	"strings"
-
-	"github.com/alecthomas/kong"
+	"sort"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // cli_model_cmd.go implements `charly __cli-model` — the hidden seam that emits charly's
@@ -39,112 +37,36 @@ func (CliModelCmd) Run() error {
 // COMPILED-IN command CANDIES (mcp / secrets / udev / vm / alias, dynamic pass-through Args
 // holders) are NOT reflected here — they dispatch via syscall.Exec or an in-proc Invoke(OpRun),
 // not the reflected builtin-CommandProvider grammar, so they carry no per-subcommand model.
-func buildCLIModel() (*sdk.CLIModel, error) {
+func buildCLIModel() (*spec.CLIModel, error) {
 	var modelCLI CLI
 	modelCLI.Plugins = collectCommandPlugins()
-	k, err := kong.New(&modelCLI, kong.Name("charly"), kong.UsageOnError())
+	model, err := sdk.BuildCLIModel(&modelCLI, "charly", CharlyVersion(), "")
 	if err != nil {
-		return nil, fmt.Errorf("building kong model: %w", err)
+		return nil, err
 	}
-	model := &sdk.CLIModel{Name: "charly", Version: CharlyVersion()}
-	for _, leaf := range k.Model.Leaves(true) {
-		model.Leaves = append(model.Leaves, kongLeafToModelLeaf(leaf))
+	seen := make(map[string]bool, len(model.Leaves))
+	for _, leaf := range model.Leaves {
+		seen[leaf.Path] = true
+	}
+	for _, provider := range providerRegistry.allProviders() {
+		if provider.Class() != ClassCommand {
+			continue
+		}
+		carrier, ok := provider.(interface{ CommandModel() *spec.CLIModel })
+		if !ok || carrier.CommandModel() == nil {
+			continue
+		}
+		for _, leaf := range carrier.CommandModel().Leaves {
+			if seen[leaf.Path] {
+				return nil, fmt.Errorf("duplicate reflected command leaf %q", leaf.Path)
+			}
+			seen[leaf.Path] = true
+			model.Leaves = append(model.Leaves, leaf)
+		}
+	}
+	sort.Slice(model.Leaves, func(i, j int) bool { return model.Leaves[i].Path < model.Leaves[j].Path })
+	if err := sdk.ValidateGenerated("#CLIModel", model); err != nil {
+		return nil, err
 	}
 	return model, nil
-}
-
-// kongLeafToModelLeaf converts one Kong leaf into the sdk.CLILeaf wire shape.
-func kongLeafToModelLeaf(leaf *kong.Node) sdk.CLILeaf {
-	out := sdk.CLILeaf{
-		Path:   leafPath(leaf),
-		Help:   strings.TrimSpace(leaf.Help),
-		Hidden: false,
-	}
-	// Hidden machinery (the `__`-prefixed leaves like __plugin / __cli-model) is marked
-	// so a consumer skips it without a hand-maintained list.
-	if strings.HasPrefix(out.Path, "__") {
-		out.Hidden = true
-	}
-	for _, pos := range leaf.Positional {
-		out.Positionals = append(out.Positionals, kongValueToArg(pos, "", pos.Required))
-	}
-	seen := map[string]bool{}
-	for _, pos := range leaf.Positional {
-		seen[sanitizePropName(pos.Name)] = true
-	}
-	for _, group := range leaf.AllFlags(true) {
-		for _, f := range group {
-			if f.Hidden || isHelpFlag(f) {
-				continue
-			}
-			prop := sanitizePropName(f.Name)
-			if seen[prop] {
-				continue
-			}
-			seen[prop] = true
-			arg := kongValueToArg(f.Value, f.Name, f.Required)
-			arg.IsBool = f.IsBool()
-			arg.Negated = f.Negated
-			out.Flags = append(out.Flags, arg)
-		}
-	}
-	return out
-}
-
-// kongValueToArg infers the JSON-schema-relevant facts of a positional or flag.
-func kongValueToArg(v *kong.Value, flagName string, required bool) sdk.CLIArg {
-	arg := sdk.CLIArg{Prop: sanitizePropName(v.Name), Name: flagName, Help: v.Help, Required: required}
-	// Gate on v.Enum (kong's EnumSlice() returns [""] for a non-enum value, which would
-	// otherwise emit a spurious single-empty-string enum on every arg).
-	if v.Enum != "" {
-		for _, e := range v.EnumSlice() {
-			arg.Enum = append(arg.Enum, fmt.Sprint(e))
-		}
-	}
-	if v.IsSlice() {
-		arg.Type = "array"
-		arg.IsSlice = true
-		arg.ElemType = jsonTypeForKind(v.Target.Type().Elem().Kind())
-		return arg
-	}
-	if v.IsMap() {
-		arg.Type = "object"
-		arg.IsMap = true
-		return arg
-	}
-	arg.Type = jsonTypeForKind(v.Target.Kind())
-	if v.HasDefault && v.Default != "" {
-		arg.HasDefault = true
-		arg.Default = v.Default
-	}
-	return arg
-}
-
-// leafPath returns a dotted command path like "box.build" from Kong's space-separated Path().
-func leafPath(n *kong.Node) string { return strings.ReplaceAll(n.Path(), " ", ".") }
-
-func isHelpFlag(f *kong.Flag) bool { return f.Name == "help" || f.Name == "help-all" }
-
-// sanitizePropName lowercases and replaces "-" with "_" so JSON-schema properties are
-// idiomatic snake_case; the consumer reverses it via the model's CLIArg.Name.
-func sanitizePropName(s string) string { return strings.ReplaceAll(strings.ToLower(s), "-", "_") }
-
-// jsonTypeForKind maps a reflect.Kind to a JSON-schema primitive type (durations / addrs
-// round-trip as strings).
-func jsonTypeForKind(k reflect.Kind) string {
-	switch k {
-	case reflect.Bool:
-		return "boolean"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "integer"
-	case reflect.Float32, reflect.Float64:
-		return "number"
-	case reflect.Slice, reflect.Array:
-		return "array"
-	case reflect.Map, reflect.Struct:
-		return "object"
-	default:
-		return "string"
-	}
 }
