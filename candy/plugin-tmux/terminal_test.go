@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -160,8 +161,7 @@ func TestCaptureScreenReconcilesDetachedHistory(t *testing.T) {
 	}
 	socket := fmt.Sprintf("charly-history-%d", time.Now().UnixNano())
 	t.Cleanup(func() { _ = exec.Command("tmux", "-L", socket, "kill-server").Run() })
-	command := "printf 'DETACHED-EVIDENCE-OK\\n'; seq 1 40; sleep 30"
-	if output, err := exec.Command("tmux", "-L", socket, "-f", "/dev/null", "new-session", "-d", "-s", "run", "-x", "80", "-y", "5", "sh", "-c", command).CombinedOutput(); err != nil {
+	if output, err := exec.Command("tmux", "-L", socket, "-f", "/dev/null", "new-session", "-d", "-s", "run", "-x", "80", "-y", "5", "sh").CombinedOutput(); err != nil {
 		t.Fatalf("create history fixture: %s: %v", output, err)
 	}
 	stream := &testChannel{ctx: context.Background(), notify: make(chan struct{}, 1)}
@@ -177,19 +177,19 @@ func TestCaptureScreenReconcilesDetachedHistory(t *testing.T) {
 			t.Errorf("stop terminal response drain: %v", err)
 		}
 	}()
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		screen, err := channel.captureScreen()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if bytes.Contains(screen, []byte("DETACHED-EVIDENCE-OK")) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("detached history missing from capture: %q", screen)
-		}
-		time.Sleep(10 * time.Millisecond)
+	// Event-driven readiness, no fixed-interval sleep poll: a control client
+	// subscribes to the pane's %output stream BEFORE the fixture command runs
+	// (the ordering terminal.go's launchEntrypoint documents), and HISTORY-READY
+	// — printed last — proves every preceding byte reached the pane.
+	awaitTmuxOutput(t, socket, tmuxPane,
+		"printf 'DETACHED-EVIDENCE-OK\\n'; seq 1 40; printf 'HISTORY-READY\\n'; sleep 30",
+		"HISTORY-READY")
+	screen, err := channel.captureScreen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(screen, []byte("DETACHED-EVIDENCE-OK")) {
+		t.Fatalf("detached history missing from capture: %q", screen)
 	}
 	if err := channel.synchronizeScreen(true); err != nil {
 		t.Fatal(err)
@@ -199,6 +199,66 @@ func TestCaptureScreenReconcilesDetachedHistory(t *testing.T) {
 	if len(stream.frames) == 0 || stream.frames[0].GetKind() != sdk.ChannelTerminal || !bytes.Contains(stream.frames[0].GetData(), []byte("DETACHED-EVIDENCE-OK")) {
 		t.Fatalf("reconciled frames missing detached evidence: %#v", stream.frames)
 	}
+}
+
+// awaitTmuxOutput drives pane readiness off the tmux control-mode output
+// subscription — the SAME mechanism the production channel uses (terminal.go's
+// start attaches control before launchEntrypoint runs the entrypoint, so no
+// %output event can be missed). It attaches a control client to the fixture
+// session, injects command via send-keys, and returns once the accumulated
+// %output stream contains evidence. Deterministic: the wait is bounded only by
+// a hard deadline that kills the control client, never by a sleep-poll loop.
+func awaitTmuxOutput(t *testing.T, socket, target, command, evidence string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	control := exec.CommandContext(ctx, "tmux", "-L", socket, "-C", "attach-session", "-t", "run")
+	stdout, err := control.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A control client lives only while its stdin stays open — stdin EOF is its
+	// detach signal (%exit), which is why production holds controlIn for the
+	// channel's whole life (terminal.go).
+	stdin, err := control.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := control.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		cancel()
+		_ = control.Wait()
+	})
+	if err := runTmux(socket, "send-keys", "-t", target, "-l", "--", command); err != nil {
+		t.Fatal(err)
+	}
+	if err := runTmux(socket, "send-keys", "-t", target, "Enter"); err != nil {
+		t.Fatal(err)
+	}
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64*1024), 1<<20)
+	var received []byte
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "%output ") && !strings.HasPrefix(line, "%extended-output ") {
+			continue
+		}
+		data, err := decodeControlOutput(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		received = append(received, data...)
+		if bytes.Contains(received, []byte(evidence)) {
+			return
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("control output subscription: %v", err)
+	}
+	t.Fatalf("control output ended before %q arrived: %q", evidence, received)
 }
 
 func TestVirtualScreenHandlesAltScreenUnicodeCursorAndResize(t *testing.T) {

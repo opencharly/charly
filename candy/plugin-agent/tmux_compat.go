@@ -15,6 +15,18 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// Compat-session CREATION geometry. A detached compat session is created with
+// no attached TTY to inherit a size from, so the facade uses one fixed
+// default — the same 120x40 the candy-authored agent terminal profiles pin
+// (candy/claude-code, candy/codex, candy/gemini). It is only the creation
+// size: a later attach reconciles the profile to the live window
+// (TestTmuxReattachUsesLiveWindowSize) and runtime resize rides typed resize
+// frames.
+const (
+	tmuxCompatCols = 120
+	tmuxCompatRows = 40
+)
+
 type TmuxCompatCmd struct {
 	Attach  TmuxCompatAttachCmd  `cmd:"" help:"Attach to a typed tmux terminal (interactive)"`
 	Capture TmuxCompatCaptureCmd `cmd:"" help:"Read the structured terminal snapshot or transcript"`
@@ -51,7 +63,7 @@ func (c *TmuxCompatRunCmd) Run() error {
 	}
 	profile := spec.TerminalProfile{
 		Name: "tmux-compat-" + c.Session, Entrypoint: []string{"sh", "-lc", c.Command},
-		Cols: 120, Rows: 40, Persistence: "detach", Transcript: "both",
+		Cols: tmuxCompatCols, Rows: tmuxCompatRows, Persistence: "detach", Transcript: "both",
 	}
 	session, err := createCompatSession(c.Session, target, profile)
 	if err != nil {
@@ -72,7 +84,7 @@ func (c *TmuxCompatShellCmd) Run() error {
 		return err
 	}
 	if !found {
-		profile := spec.TerminalProfile{Name: "tmux-compat-" + c.Session, Entrypoint: []string{"sh"}, Cols: 120, Rows: 40, Persistence: "detach", Transcript: "both"}
+		profile := spec.TerminalProfile{Name: "tmux-compat-" + c.Session, Entrypoint: []string{"sh"}, Cols: tmuxCompatCols, Rows: tmuxCompatRows, Persistence: "detach", Transcript: "both"}
 		session, err = createCompatSession(c.Session, target, profile)
 		if err != nil {
 			return err
@@ -110,7 +122,12 @@ func (c *TmuxCompatCaptureCmd) Run() error {
 type TmuxCompatCommandCmd struct {
 	tmuxCompatTarget
 	Command string `arg:"" help:"Literal command text"`
-	Notify  bool   `long:"notify" negatable:"" default:"true" help:"Accepted for compatibility"`
+	// Notify is parsed for grammar compatibility with the former facade and is
+	// intentionally INERT either way: the typed terminal channel reports
+	// command progress as channel events (status/snapshot/settled), so there
+	// is no notify side-channel left to drive. The flag must stay — removing
+	// it would break existing invocations at kong parse time.
+	Notify bool `long:"notify" negatable:"" default:"true" help:"Accepted for compatibility; no effect (completion arrives as channel events)"`
 }
 
 func (c *TmuxCompatCommandCmd) Run() error {

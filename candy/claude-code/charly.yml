@@ -1,6 +1,6 @@
 claude-code:
     candy:
-        version: 2026.200.0740
+        version: 2026.199.1330
         description: |
             Installs the Claude Code CLI globally via npm so `claude` is on PATH.
             The candy depends on nodejs and ships a package.json pinning

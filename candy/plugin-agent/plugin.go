@@ -49,10 +49,25 @@ func validateAgentJSON(definition string, payload []byte) error {
 func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises the kind's capability (Class "kind", word "agent") + its
-// self-contained CUE schema (via sdk.NewMeta → BuildCapabilities).
-func NewMeta() pb.PluginMetaServer {
-	agentModel, tuiModel, tmuxModel := commandModels()
-	return sdk.NewMeta("2026.199.1330",
+// self-contained CUE schema. The command CLIModels are reflected LAZILY inside
+// Describe (agentMeta) rather than eagerly in the constructor: a kong
+// reflection regression then surfaces as a Describe error at plugin
+// registration — loud, but never a panic crashing every charly startup.
+func NewMeta() pb.PluginMetaServer { return agentMeta{} }
+
+// agentMeta is the plugin's PluginMetaServer: NewMeta stays trivial (it is
+// called at process init by plugins_generated.go) and all fallible reflection
+// happens in Describe, which can return an error.
+type agentMeta struct {
+	pb.UnimplementedPluginMetaServer
+}
+
+func (agentMeta) Describe(context.Context, *pb.Empty) (*pb.Capabilities, error) {
+	agentModel, tuiModel, tmuxModel, err := commandModels()
+	if err != nil {
+		return nil, err
+	}
+	return sdk.BuildCapabilities("2026.199.1330",
 		[]sdk.ProvidedCapability{
 			{Class: "kind", Word: "agent", InputDef: "#AgentInput"},
 			{Class: "kind", Word: "agent-team", InputDef: "#AgentTeamInput"},
@@ -60,7 +75,7 @@ func NewMeta() pb.PluginMetaServer {
 			{Class: "command", Word: "tui", CommandModel: tuiModel},
 			{Class: "command", Word: "tmux", CommandModel: tmuxModel},
 		},
-		schemaFS)
+		schemaFS, "schema")
 }
 
 type provider struct{ pb.UnimplementedProviderServer }
@@ -191,21 +206,24 @@ func runCommand(word string, args []string) error {
 	}
 }
 
-func commandModels() (*spec.CLIModel, *spec.CLIModel, *spec.CLIModel) {
-	agentModel, err := sdk.BuildCLIModel(&AgentCmd{}, "agent", "2026.199.1330", "agent")
+// commandModels reflects the three kong grammars into CLIModels. Every error
+// propagates to Describe (no panic): BuildCLIModel fails only on a malformed
+// grammar, and that must degrade the plugin's registration, never the host.
+func commandModels() (agentModel, tuiModel, tmuxModel *spec.CLIModel, err error) {
+	agentModel, err = sdk.BuildCLIModel(&AgentCmd{}, "agent", "2026.199.1330", "agent")
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
 	}
 	type tuiRoot struct {
 		Tui TuiCmd `cmd:"" name:"tui" help:"Open the thin Pi-TUI client for the typed agent control plane"`
 	}
-	tuiModel, err := sdk.BuildCLIModel(&tuiRoot{}, "charly", "2026.199.1330", "")
+	tuiModel, err = sdk.BuildCLIModel(&tuiRoot{}, "charly", "2026.199.1330", "")
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
 	}
-	tmuxModel, err := sdk.BuildCLIModel(&TmuxCompatCmd{}, "tmux", "2026.199.1330", "tmux")
+	tmuxModel, err = sdk.BuildCLIModel(&TmuxCompatCmd{}, "tmux", "2026.199.1330", "tmux")
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
 	}
-	return agentModel, tuiModel, tmuxModel
+	return agentModel, tuiModel, tmuxModel, nil
 }

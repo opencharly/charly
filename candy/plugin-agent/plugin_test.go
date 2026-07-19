@@ -1,8 +1,11 @@
 package agentkind
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	pb "github.com/opencharly/sdk/proto"
 )
 
 // The compiled-in command dispatch regression gate: a compiled-in command runs
@@ -37,5 +40,29 @@ func TestRunCommandParseErrorPropagates(t *testing.T) {
 	}
 	if err := runCommand("bogus", nil); err == nil || !strings.Contains(err.Error(), `unsupported command word "bogus"`) {
 		t.Fatalf("unsupported word: want the explicit error, got %v", err)
+	}
+}
+
+// The command CLIModels ride Describe (lazily, error-returning — never a
+// NewMeta-time panic crashing charly startup). A healthy grammar must yield
+// every capability with the three command models populated.
+func TestNewMetaDescribeBuildsCommandModels(t *testing.T) {
+	caps, err := NewMeta().Describe(context.Background(), &pb.Empty{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := map[string]bool{}
+	for _, provided := range caps.GetProvided() {
+		if provided.GetClass() == "command" {
+			if len(provided.GetCommandModelJson()) == 0 {
+				t.Fatalf("command %q served no CLI model", provided.GetWord())
+			}
+			models[provided.GetWord()] = true
+		}
+	}
+	for _, word := range []string{"agent", "tui", "tmux"} {
+		if !models[word] {
+			t.Fatalf("Describe missing command model for %q", word)
+		}
 	}
 }

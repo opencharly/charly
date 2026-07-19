@@ -210,7 +210,10 @@ func TestCompatibilityFacadeStoreHonorsAgentStateEnvironment(t *testing.T) {
 }
 
 func TestCommandModelsPublishAgentLeavesAndTUI(t *testing.T) {
-	agent, tui, tmux := commandModels()
+	agent, tui, tmux, err := commandModels()
+	if err != nil {
+		t.Fatal(err)
+	}
 	paths := map[string]bool{}
 	for _, model := range []*spec.CLIModel{agent, tui, tmux} {
 		for _, leaf := range model.Leaves {
