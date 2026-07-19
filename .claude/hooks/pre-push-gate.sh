@@ -37,14 +37,14 @@ def block(msg):
     sys.exit(2)
 
 
-FORCE = "force-push is forbidden on every branch in every repo (CLAUDE.md: main only " \
+FORCE = "force-push is forbidden on every branch in every repo (project rulebook: main only " \
         "fast-forwards, tags are add-only). Remove --force / --force-with-lease / -f, " \
         "and any leading `+` on a refspec (`+feat/x` forces feat/x)."
 NOVERIFY = "`git push --no-verify` bypasses hooks — forbidden."
 HOOKSPATH = "`git -c core.hooksPath=...` bypasses the project's git hooks — the config " \
-            "spelling of --no-verify; forbidden (CLAUDE.md: never bypass hooks)."
+            "spelling of --no-verify; forbidden (project rulebook: never bypass hooks)."
 TOMAIN = "direct push to `main` is forbidden — `main` advances ONLY via an agent-validated " \
-         "PR merge (CLAUDE.md / git-workflow). Push a `feat/` branch and open a PR."
+         "PR merge (project rulebook / git-workflow). Push a `feat/` branch and open a PR."
 
 try:
     invocations = git_invocations(cmd, "push")

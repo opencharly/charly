@@ -434,6 +434,30 @@ over `.codex/config.toml`, so it cannot request the Git, cache, network, or R10
 approvals this role requires. That observed runtime override is a capability
 limit, not a reason to add user config, a wrapper, a clone, or broad host access.
 
+## Kimi project configuration
+
+Kimi Code reads this rulebook natively (project `AGENTS.md`) and discovers the
+same repo-native `.agents/skills/` tree as project-scope skills with on-demand
+`Skill` invocation; `plugins/setup kimi developer` syncs and drift-checks those
+links and prints the canonical `kimi-user-config.toml` snippet. Kimi has no
+project-level `config.toml`: its permission rules and hooks live in the
+user-level `~/.kimi-code/config.toml` (the operator merges the snippet there),
+and the shipped hooks are repo-guarded so they fire only inside an OpenCharly
+checkout and delegate to the shared `.claude/hooks/` gate scripts.
+
+Kimi ships only the built-in `coder` / `explore` / `plan` subagents — there is
+no custom subagent registry — so wherever this rulebook or a skill requires a
+fresh teammate, RCA, or independent `pr-validator`, the Kimi session spawns a
+FRESH separate `kimi` session rooted at the superproject and briefs it with the
+agent's `plugins/internals/agents/<name>.md` by path; context isolation, not a
+registered role, provides the required independence. The same fresh-validator
+protocol (W0 envelope, durable verdict comment before gated actions, merge-time
+CalVer, squash-merge, tag) applies unchanged; a denied or unavailable action is
+`BLOCKED`, never a reshaped retry.
+
+Kimi commits carry the same attribution trailer form, e.g.
+`Assisted-by: Kimi Code Moonshot <model> (<confidence>)`.
+
 ## Codex teammates and validation
 
 Use a separate Codex agent thread wherever a skill requires a teammate,
