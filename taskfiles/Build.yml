@@ -49,10 +49,10 @@ tasks:
 
   # Release-artifact builds — thin wrappers over `charly box pkg`, which builds each
   # native package via the SAME embedded local_pkg.build_template the deploy-time
-  # localpkg path uses (R3): makepkg/rpmbuild/dpkg-buildpackage run DIRECTLY on the
-  # host running `task`, never in a container — so `pkg:fedora`/`pkg:debian` need
-  # their own matching host (rpm tooling / dpkg tooling respectively); `pkg:arch`
-  # needs an Arch-family host. Output → dist/.
+  # localpkg path uses (R3): `pac` runs makepkg DIRECTLY on the host (needs an
+  # Arch-family host); `rpm`/`deb` run rpmbuild/dpkg-buildpackage distro-natively in
+  # rootless podman (fedora:43 / debian:13 build containers) on any host with podman.
+  # Output → dist/.
   pkg:arch:
     desc: Build the charly .pkg.tar.zst release artifact into dist/
     dir: "{{.ROOT_DIR}}"
@@ -80,3 +80,38 @@ tasks:
     deps: [binary]
     cmds:
       - bin/charly box pkg
+
+  # Package test matrix (install targets = every distro version FULLY supported by
+  # the upstream maintainers; verified 2026-07 against endoflife.date):
+  #
+  #   artifact        cells (base images)
+  #   .pkg.tar.zst    archlinux:latest, cachyos-v3 (this repo's own pin)
+  #   .deb            debian:13, ubuntu:24.04, ubuntu:26.04
+  #   .rpm            fedora:43, fedora:44
+  #
+  # `pkg:test` runs scripts/pkg-install-test.sh — the SINGLE canonical definition
+  # (R3): the release-packages workflow calls the SAME script per format; never a
+  # second inline copy. Each cell natively installs the artifact in a throwaway
+  # rootless-podman container and asserts dep auto-resolution, `charly version`
+  # equals the build CalVer, and welded-plugin project-less dispatch.
+  #
+  # Version-bump runbook (when a distro revs, e.g. fedora 44→45):
+  #   1. Check upstream support FIRST (endoflife.date): drop cells whose version
+  #      left full support (debian 12 hit its security-support cliff 2026-07-11;
+  #      fedora 43 goes EOL 2026-12-09 — its cell drops then).
+  #   2. Add the new cell to scripts/pkg-install-test.sh (matrix lives ONLY there).
+  #   3. Check dep-name drift against the new release's repos: run the new cell —
+  #      a resolve failure lands the fix in the owning pkg/<fmt> repo (deb
+  #      Depends: alternatives / rpm `%if 0%{?fedora}` guards), never here.
+  #   4. The one-venue-per-format BUILD container (debian:13 / fedora:43 in the
+  #      embedded local_pkg.build_template) is deliberate — the artifact serves the
+  #      whole format family. A second build version needs an explicit
+  #      `build_image:` field on local_pkg, not a template edit.
+  #   5. Box-substrate support (new base entities, distro.<name>.version, VM beds)
+  #      is a SEPARATE cutover in the box/<distro> submodules, not this matrix.
+  pkg:test:
+    desc: Install-test the dist/ packages on every supported distro version (7 container cells)
+    dir: "{{.ROOT_DIR}}"
+    deps: [pkg:all]
+    cmds:
+      - scripts/pkg-install-test.sh dist/ "$(bash pkg/arch/calver.sh)"
