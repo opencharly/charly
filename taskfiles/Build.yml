@@ -29,20 +29,28 @@ tasks:
       # same stamp, so the `charly` layer (and every image/VM baking it) ships a
       # self-identifying binary, and the PKGBUILD's pkgver() reads this same
       # binary's `charly version` so the pacman package can never disagree.
+      # Build to a temp path FIRST so a guard failure below can never leave
+      # bin/charly newer than the image-baked candy/charly/bin/charly copy
+      # (split-brain freshness): promotion happens only after every check
+      # passes, and the promote + copy are adjacent with no exit between them.
       - |
         CALVER=$(bash pkg/arch/calver.sh)
-        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly .
+        cd charly && go build -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/.charly.next .
       # Workspace-mode Go may extend the tracked go.work.sum when a compiled
       # plugin adds a module-graph requirement. Surface that generated metadata
       # immediately instead of letting a nominally successful build leave an
-      # unexplained dirty tree that only the final Git gate notices.
+      # unexplained dirty tree that only the final Git gate notices. The guard
+      # itself runs only inside a Git worktree — a git-less source export has
+      # no checksum lineage to protect (`git diff` would exit 128 there).
       - |
-        if ! git diff --quiet -- go.work.sum; then
+        if git rev-parse --git-dir >/dev/null 2>&1 && ! git diff --quiet -- go.work.sum; then
           echo "task build:binary: go build updated tracked go.work.sum" >&2
           echo "Review and commit the workspace checksum, then rerun task build:binary." >&2
           git diff -- go.work.sum >&2
+          rm -f bin/.charly.next
           exit 1
         fi
+      - mv bin/.charly.next bin/charly
       - cp bin/charly candy/charly/bin/charly
 
   # Solo/bootstrap use only — never run this on a host with in-flight multi-teammate

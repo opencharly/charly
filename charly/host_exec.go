@@ -48,10 +48,15 @@ func shouldReexecForHost(cli *CLI, cmdPath string) bool {
 }
 
 // ReexecOverSSH rewrites os.Args by stripping --host and the client-
-// local path flags (--dir/-C, --repo), then invokes
-// `ssh <resolved-target> charly <rest of argv>`. Stdin/stdout/stderr are
-// piped straight through. The returned exit code is whatever `ssh`
-// exits with (which propagates the remote `charly` exit code).
+// local path flags (--dir/-C, --repo), resolves the remote charly
+// endpoint (the venue's own PATH charly when it is at least as new as
+// the local controller; otherwise a version-gated replica of the local
+// binary delivered by kit.EnsureCharlyInDeployVenue), then invokes
+// `ssh <resolved-target> <endpoint> <rest of argv>`. Stdin/stdout/stderr
+// are piped straight through. The returned exit code is whatever `ssh`
+// exits with (which propagates the remote `charly` exit code). The
+// happy path prints nothing — a diagnostic appears only when the local
+// binary is actually replicated or the bootstrap fails.
 func ReexecOverSSH(cli *CLI) int {
 	target, err := resolveHostAlias(cli.Host)
 	if err != nil {
@@ -85,13 +90,16 @@ func ReexecOverSSH(cli *CLI) int {
 		fmt.Fprintf(os.Stderr, "charly: --host %q: resolve active controller: %v\n", cli.Host, err)
 		return 2
 	}
-	fmt.Fprintf(os.Stderr, "charly: --host %q: bootstrap Charly endpoint on %s\n", cli.Host, executor.Venue())
 	remoteBin, err := kit.EnsureCharlyInDeployVenue(context.Background(), executor, controllerBin, CharlyVersion())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "charly: --host %q: bootstrap Charly endpoint: %v\n", cli.Host, err)
 		return 1
 	}
-	fmt.Fprintf(os.Stderr, "charly: --host %q: endpoint ready at %s\n", cli.Host, remoteBin)
+	if remoteBin != "charly" {
+		// The venue's PATH charly was absent or older, so the remote command
+		// runs a replica of THIS local binary — a version skew worth one line.
+		fmt.Fprintf(os.Stderr, "charly: --host %q: venue charly absent/older; running replicated controller binary at %s\n", cli.Host, remoteBin)
+	}
 	sshArgs, err := sshCmdArgsWithEndpoint(target, remoteBin, cli.HostIdentityFile, cli.HostOption, remoteArgv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "charly: --host %q: %v\n", cli.Host, err)
