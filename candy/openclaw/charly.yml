@@ -1,6 +1,6 @@
 openclaw:
     candy:
-        version: 2026.167.1310
+        version: 2026.200.0158
         description: |
             Headless OpenClaw AI gateway service on port 18789
             Installs the openclaw npm package globally (package.json ->
@@ -40,6 +40,11 @@ openclaw:
               file:
                 file: ${HOME}/.npm-global/bin/openclaw
                 exists: true
+            - check: the openclaw gateway reports the exact security-patched package version
+              exit_status: 0
+              stdout:
+                - matches: "2026\\.7\\.1-2"
+              command: ${HOME}/.npm-global/bin/openclaw --version
             - check: the openclaw gateway runs as a supervised service
               context:
                 - runtime
