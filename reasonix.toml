@@ -1,0 +1,20 @@
+[permissions]
+mode = "ask"
+allow = [
+    # Built-in exploration
+    "explore",
+    # Submodule and plugin discovery
+    "Bash(cd /home/atrawog/Atrapub/coder/reasonix/o/charly && git submodule status plugins 2>/dev/null; ls plugins/ 2>/dev/null | head -5; echo \"---\"; ls .claude/skills/ 2>/dev/null || echo \"no .claude/skills/\"; echo \"---\"; ls .reasonix/ 2>/dev/null || echo \"no .reasonix/\")",
+    "Bash(cd /home/atrawog/Atrapub/coder/reasonix/o/charly && cat .agents/skills/.charly-profile.json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(json.dumps(list(d.keys())[:5], indent=2)); print('...'); print('total entries:', len(d))\" 2>/dev/null || echo \"parse failed\")",
+    "Bash(cd /home/atrawog/Atrapub/coder/reasonix/o/charly && cat .agents/skills/.charly-profile.json | python3 -c \"\nimport json,sys\nd=json.load(sys.stdin)\nprint('version:', d.get('version'))\nprint('links count:', len(d.get('links',[])))\nfor l in d.get('links',[])[:3]:\n    print(' ', l)\n\")",
+    "Bash(cd /home/atrawog/Atrapub/coder/reasonix/o/charly && git submodule status 2>/dev/null)",
+    "Bash(cd /home/atrawog/Atrapub/coder/reasonix/o/charly && cat .agents/skills/.charly-profile.json | python3 -c \"\nimport json,sys\nd=json.load(sys.stdin)\nprint('version:', d.get('version'))\nlinks = d.get('links',{})\nprint('links count:', len(links))\n# Show a few entries\nfor k in list(links.keys())[:5]:\n    print(f'  {k} -> {links[k]}')\n\")",
+    # Charly R10/check verbs (parity with Claude Code + Kimi)
+    "Bash(charly check run:*)",
+    "Bash(charly check live:*)",
+    "Bash(charly check box:*)",
+    "Bash(charly status:*)",
+    # GitHub PR merge (pr-validator)
+    "Bash(gh pr merge:*)",
+    "Bash(gh api --method POST repos/opencharly:*)",
+]
