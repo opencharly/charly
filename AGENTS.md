@@ -456,7 +456,7 @@ CalVer, squash-merge, tag) applies unchanged; a denied or unavailable action is
 `BLOCKED`, never a reshaped retry.
 
 Kimi commits carry the same attribution trailer form, e.g.
-`Assisted-by: Kimi Code Moonshot <model> (<confidence>)`.
+`Assisted-by: Kimi Code (Moonshot <model>; <confidence>)`.
 
 ## Codex teammates and validation
 
