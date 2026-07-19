@@ -164,41 +164,28 @@ func CliMain(args []string) int {
 	return 0
 }
 
+// runCommand parses the pass-through args of a COMPILED-IN command — which runs
+// in charly's OWN process — so it must NEVER let kong terminate the host: kong's
+// default Exit is os.Exit, and a raw kong.New/Parse would make `charly agent
+// --help` kill charly whole and skip every defer. sdk.RunInProcCLI is the house
+// in-proc helper (sdk/clidispatch.go documents the hazard): --help/--version
+// print and return nil without running any leaf, a kong-requested non-zero exit
+// becomes *sdk.ExitCodeError (honored by the host's exit-code mapping in
+// charly/main.go), and a genuine parse error propagates unchanged.
 func runCommand(word string, args []string) error {
 	switch word {
 	case "agent":
 		var command AgentCmd
-		parser, err := kong.New(&command, kong.Name("agent"), kong.Description("Durable, transport-neutral agent sessions, runs, terminals, teams, and recovery"))
-		if err != nil {
-			return err
-		}
-		ctx, err := parser.Parse(args)
-		if err != nil {
-			return err
-		}
-		return ctx.Run()
+		return sdk.RunInProcCLI("agent", &command, args,
+			kong.Description("Durable, transport-neutral agent sessions, runs, terminals, teams, and recovery"))
 	case "tui":
 		var command TuiCmd
-		parser, err := kong.New(&command, kong.Name("tui"), kong.Description("Open the thin Pi-TUI client for the typed agent control plane"))
-		if err != nil {
-			return err
-		}
-		ctx, err := parser.Parse(args)
-		if err != nil {
-			return err
-		}
-		return ctx.Run()
+		return sdk.RunInProcCLI("tui", &command, args,
+			kong.Description("Open the thin Pi-TUI client for the typed agent control plane"))
 	case "tmux":
 		var command TmuxCompatCmd
-		parser, err := kong.New(&command, kong.Name("tmux"), kong.Description("Compatibility facade over typed terminal:tmux channels"))
-		if err != nil {
-			return err
-		}
-		ctx, err := parser.Parse(args)
-		if err != nil {
-			return err
-		}
-		return ctx.Run()
+		return sdk.RunInProcCLI("tmux", &command, args,
+			kong.Description("Compatibility facade over typed terminal:tmux channels"))
 	default:
 		return fmt.Errorf("unsupported command word %q", word)
 	}
