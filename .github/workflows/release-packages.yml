@@ -52,12 +52,16 @@ jobs:
         run: |
           go -C charly build -ldflags "-X main.BuildCalVer=$(bash pkg/arch/calver.sh)" -o ../bin/charly .
           bin/charly box pkg pac
-          # Stable-named copy the charly candy's localpkg download_template fetches
-          # (releases/latest/download/opencharly-<arch>.pkg.tar.zst). Runner is amd64;
-          # exclude the makepkg -debug split package.
-          cp "$(ls -1 dist/*.pkg.tar.zst | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.pkg.tar.zst
       - name: Install-test .pkg.tar.zst on arch + cachyos (scripts/pkg-install-test.sh)
         run: scripts/pkg-install-test.sh dist/ "$(bash pkg/arch/calver.sh)" pac-arch pac-cachyos
+      # The stable-named alias copies the charly candy's localpkg download_template
+      # fetches (releases/latest/download/opencharly-<arch>.<fmt>) are made ONLY
+      # AFTER the install-test gate: the script's artifact globs must match exactly
+      # one file per format (a canonical artifact + alias pair is a duplicate
+      # target for pacman -U / a same-NEVRA pair for dnf). Runner is amd64;
+      # exclude the makepkg -debug split package.
+      - name: Make stable-named release copies (after the gate)
+        run: cp "$(ls -1 dist/*.pkg.tar.zst | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.pkg.tar.zst
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
@@ -74,13 +78,14 @@ jobs:
         run: |
           go -C charly build -ldflags "-X main.BuildCalVer=$(bash pkg/arch/calver.sh)" -o ../bin/charly .
           bin/charly box pkg rpm deb
-          # Stable-named copies the charly candy's localpkg download_template fetches
-          # (releases/latest/download/opencharly-<arch>.{rpm,deb}). Runner is amd64;
-          # exclude any -debuginfo/-debugsource split package.
-          cp "$(ls -1 dist/*.rpm | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.rpm
-          cp "$(ls -1 dist/*.deb | head -1)" dist/opencharly-amd64.deb
       - name: Install-test .deb + .rpm on debian:13, ubuntu:24.04/26.04, fedora:43/44 (scripts/pkg-install-test.sh)
         run: scripts/pkg-install-test.sh dist/ "$(bash pkg/arch/calver.sh)" deb-debian13 deb-ubuntu2404 deb-ubuntu2604 rpm-fedora43 rpm-fedora44
+      # Stable-named release copies — AFTER the gate (see the pac job's note).
+      # Exclude any -debuginfo/-debugsource split package.
+      - name: Make stable-named release copies (after the gate)
+        run: |
+          cp "$(ls -1 dist/*.rpm | grep -v -- '-debug' | head -1)" dist/opencharly-amd64.rpm
+          cp "$(ls -1 dist/*.deb | head -1)" dist/opencharly-amd64.deb
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
