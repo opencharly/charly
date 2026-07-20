@@ -323,8 +323,34 @@ func TestEmitDownload_TarGz(t *testing.T) {
 	if !strings.Contains(out, `-o "$__c.part"`) || !strings.Contains(out, `mv -f "$__c.part" "$__c"`) {
 		t.Errorf("download must be integrity-safe (.part + atomic rename):\n%s", out)
 	}
-	if !strings.Contains(out, "--mount=type=cache,id=charly-tmp-downloads,dst=/tmp/downloads") {
-		t.Errorf("should declare the downloads cache mount:\n%s", out)
+	if !strings.Contains(out, "--mount=type=cache,id=charly-tmp-downloads-uid1000,dst=/tmp/downloads,uid=1000,gid=1000") {
+		t.Errorf("non-root stage must get an uid/gid-owned downloads cache mount (the curl-23 class):\n%s", out)
+	}
+}
+
+// TestEmitDownload_DownloadsCacheRootShared: a ROOT stage keeps the shared
+// (root-owned) downloads cache mount; only non-root stages get the uid-scoped
+// owned cache that keeps one root-stage download from breaking every non-root
+// stage's downloads (the curl-23 failure).
+func TestEmitDownload_DownloadsCacheRootShared(t *testing.T) {
+	var b strings.Builder
+	img := testResolvedBox()
+	img.User = "root"
+	img.UID = 0
+	img.GID = 0
+	err := emitDownload(&b,
+		spec.Op{Download: "https://example.com/x.tar.gz", Extract: "none", To: "/usr/local/bin/x"},
+		img,
+	)
+	if err != nil {
+		t.Fatalf("emitDownload: %v", err)
+	}
+	out := b.String()
+	if !strings.Contains(out, "--mount=type=cache,id=charly-tmp-downloads,dst=/tmp/downloads,sharing=locked") {
+		t.Errorf("root stage must keep the shared downloads cache mount:\n%s", out)
+	}
+	if strings.Contains(out, "charly-tmp-downloads-uid") {
+		t.Errorf("root stage must NOT get a uid-scoped cache id:\n%s", out)
 	}
 }
 
