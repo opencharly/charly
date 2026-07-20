@@ -142,6 +142,22 @@ func deployDelArgv(name string) []string {
 //
 // For a flat name (no children, no dots) the behavior is unchanged —
 // exactly one target's Emit() call.
+//
+// K4-C SEQUENCING NOTE (never a permanence claim — tracked FINAL/K5 IOU): the tree
+// walk itself (resolveTreeRoot's LoadUnified dependency, deriveChildExecutorForPath's
+// live-executor composition below) STAYS host-side THIS wave, not because it is hard,
+// but because porting it needs a NEW mechanism this wave deliberately does not build:
+// a venue-descriptor seam (the operator-mandated venue-scoped-executor-session design)
+// that lets a plugin's own tree walk thread an OPAQUE, wire-safe descriptor instead of
+// a live deploykit.DeployExecutor value, re-materialized host-side at each level —
+// exactly the pattern substrateLifecycle's OpPrepareVenue->VenueDescriptor already uses
+// for the ROOT venue, generalized here to every NESTED hop. The enabler is registered
+// as a FINAL/K5 exit gated on (a) per-level descriptor re-materialization proven on a
+// nested VM-in-pod tree (needs its own RDD spike) and (b) resolveTreeRoot's
+// LoadUnified-from-plugin disposition (K1) — building the seam before K1 lands would
+// still leave this walk partially host-bound, so the two enablers resolve TOGETHER.
+// dispatchNode's leaf-level Add/Del dispatch already routes through the deploy-dispatch
+// seam (root-level Add; every Del) proving the underlying broker mechanism live.
 func (c *deployAddCmd) Run() error {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -567,6 +583,20 @@ func pathLeaf(path string) string {
 // it supplies the current node's flattened container name (derived from the
 // dotted path) for a container target, hops through vmChildExecutor for a vm
 // child, and otherwise shares the parent executor.
+//
+// E/M/D VERIFIED (P13-KERNEL, per the orchestrator's ruling): the outer switch
+// dispatches on deployTraitDescent(...).Transport — a small DECLARED closed vocabulary
+// (none|container-exec|ssh|reject) every substrate provider maps itself onto, NOT a
+// switch on the concrete kind word (vm/pod/local/k8s/android never appear here) — so
+// this is legitimate D-data-driven dispatch, not an incomplete per-kind seam needing a
+// fix now. Each case CONSTRUCTS a live deploykit.DeployExecutor from that transport —
+// structurally the SAME shape as substrateLifecycle's already-sanctioned
+// OpPrepareVenue->VenueDescriptor->host-re-materializes-a-real-executor pattern, just
+// for a NESTED hop instead of the root venue. Tracked FINAL/K5 IOU (never a permanence
+// claim): generalize this transport->executor construction to be reachable via a wire
+// VenueDescriptor-style envelope, so a plugin's own tree walk can request the NEXT
+// hop's descriptor instead of needing a live Go value — the same enabler Run()'s
+// header names (per-level descriptor re-materialization, gated on its own RDD spike).
 func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
