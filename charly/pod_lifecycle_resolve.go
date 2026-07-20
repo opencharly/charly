@@ -131,7 +131,7 @@ func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 	if imageRef == "" {
 		return nil
 	}
-	meta, err := ExtractMetadata("podman", imageRef)
+	meta, err := deploykit.ExtractMetadata("podman", imageRef)
 	if err != nil || meta == nil {
 		return nil
 	}
@@ -334,7 +334,7 @@ func resolvePodRuntimeImage(box, instance, tag string, rt *kit.ResolvedRuntime, 
 	if err := EnsureImage(imageRef, rt); err != nil {
 		return nil, err
 	}
-	meta, err := ExtractMetadata(engine, imageRef)
+	meta, err := deploykit.ExtractMetadata(engine, imageRef)
 	if err != nil {
 		return nil, err
 	}

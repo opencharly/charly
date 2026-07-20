@@ -123,7 +123,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	if err != nil {
 		return liveResult{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
 	}
-	meta, err := ExtractMetadata(engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
 	if err != nil {
 		return liveResult{}, err
 	}

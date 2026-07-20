@@ -316,7 +316,7 @@ func TestDistroConfigFindFormat(t *testing.T) {
 			t.Errorf("FindFormat(%q) = nil, want a FormatDef", f)
 			continue
 		}
-		if formatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
+		if buildkit.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			t.Errorf("format %q has no phase.install.host cell", f)
 		}
 		if fd.UninstallTemplate == "" {

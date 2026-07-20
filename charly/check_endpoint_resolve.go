@@ -208,7 +208,7 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	labels, err := InspectLabels(engine, imageRef)
+	labels, err := kit.InspectImageLabels(engine, imageRef)
 	if err != nil {
 		return "", err
 	}

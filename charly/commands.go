@@ -265,7 +265,7 @@ func (c *podRemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
 	if imageRef == "" {
 		return
 	}
-	meta, metaErr := ExtractMetadata(engine, imageRef)
+	meta, metaErr := deploykit.ExtractMetadata(engine, imageRef)
 	if metaErr != nil || meta == nil || meta.Hook == nil || meta.Hook.PreRemove == "" {
 		return
 	}

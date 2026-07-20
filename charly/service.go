@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -55,7 +56,7 @@ func resolveServiceInit(box, instance string) (engine, containerName string, ini
 	if imageRef == "" {
 		return "", "", nil, fmt.Errorf("cannot determine image for container %s", containerName)
 	}
-	meta, err := ExtractMetadata(engine, imageRef)
+	meta, err := deploykit.ExtractMetadata(engine, imageRef)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("cannot read image metadata: %w", err)
 	}
@@ -160,7 +161,7 @@ func validateServiceName(engine, containerName, serviceName string) error {
 	if imageRef == "" {
 		return fmt.Errorf("cannot determine image for container %s", containerName)
 	}
-	meta, err := ExtractMetadata(engine, imageRef)
+	meta, err := deploykit.ExtractMetadata(engine, imageRef)
 	if err != nil {
 		return fmt.Errorf("cannot read image metadata: %w", err)
 	}

@@ -43,11 +43,11 @@ func renderHostPackageCommand(distroCfg *buildkit.DistroConfig, s *deploykit.Sys
 	if formatDef == nil {
 		return "", fmt.Errorf("no format %q in distro config", s.Format)
 	}
-	tmpl := formatPhaseTemplate(formatDef, spec.PhaseInstall, spec.VenueHostNative)
+	tmpl := buildkit.FormatPhaseTemplate(formatDef, spec.PhaseInstall, spec.VenueHostNative)
 	if tmpl == "" {
 		return "", nil // no host cell for this format → skip
 	}
-	ctx := buildkit.NewInstallContext(s.RawInstallContext, formatDefCacheMountDefs(formatDef))
+	ctx := buildkit.NewInstallContext(s.RawInstallContext, formatDef.CacheMount)
 	cmd, err := buildkit.RenderTemplate(s.Format+"-host-install", tmpl, ctx)
 	if err != nil {
 		return "", fmt.Errorf("rendering %s host install template: %w", s.Format, err)

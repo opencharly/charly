@@ -171,7 +171,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 	if err != nil {
 		return &kit.CheckVarResolver{}
 	}
-	meta, err := ExtractMetadata(venue.Engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(venue.Engine, resolvedRef)
 	if err != nil || meta == nil {
 		return &kit.CheckVarResolver{}
 	}

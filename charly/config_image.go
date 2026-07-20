@@ -298,7 +298,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	if err := EnsureImage(imageRef, podmanRT); err != nil {
 		return err
 	}
-	meta, err := ExtractMetadata("podman", imageRef)
+	meta, err := deploykit.ExtractMetadata("podman", imageRef)
 	if err != nil {
 		return err
 	}
@@ -770,7 +770,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 					dataRef = resolved
 				}
 			}
-			dm, err := ExtractMetadata(dataEngine, dataRef)
+			dm, err := deploykit.ExtractMetadata(dataEngine, dataRef)
 			if err != nil {
 				return fmt.Errorf("extracting metadata from data image %s: %w", dataRef, err)
 			}
@@ -1593,7 +1593,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		if imageRef == "" {
 			imageRef = resolveShellImageRef("", boxName, "")
 		}
-		meta, err := ExtractMetadata("podman", imageRef)
+		meta, err := deploykit.ExtractMetadata("podman", imageRef)
 		if err != nil || meta == nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not read metadata for %s, skipping quadlet update\n", key)
 			continue

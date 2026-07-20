@@ -15,15 +15,9 @@ import (
 // buildkit.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
 // (phase, venue) phase-template resolvers moved to sdk/buildkit too (P8b — they are
 // PURE over the CUE-sourced spec types: FormatDef = spec.Format, BuilderDef =
-// spec.Builder, Phase/Venue = spec enums); this file keeps only the loader glue.
-//
-// formatPhaseTemplate / builderPhaseTemplate remain thin var-bindings onto
-// buildkit.FormatPhaseTemplate / buildkit.BuilderPhaseTemplate for the unchanged
-// package-main call sites + tests — residual K3-adjacent alias inventory, not yet dissolved.
-var (
-	formatPhaseTemplate  = buildkit.FormatPhaseTemplate
-	builderPhaseTemplate = buildkit.BuilderPhaseTemplate
-)
+// spec.Builder, Phase/Venue = spec enums); callers reference buildkit.FormatPhaseTemplate /
+// buildkit.BuilderPhaseTemplate directly (K3 ZERO-ALIASES dissolution — this file keeps only
+// the loader glue).
 
 // --- Loading ---
 //

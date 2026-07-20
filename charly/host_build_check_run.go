@@ -102,7 +102,7 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	meta, err := ExtractMetadata(rt.RunEngine, imageRef)
+	meta, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -184,7 +184,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	meta, err := ExtractMetadata(rt.RunEngine, imageRef)
+	meta, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -244,7 +244,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
 	}
-	meta, err := ExtractMetadata(engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
