@@ -6,7 +6,7 @@ import (
 
 // CollectShell walks the base-image chain for boxName and gathers
 // per-(origin, shell) shell-init contributions into a three-section
-// LabelShellSet. Mirrors CollectDescriptions / CollectHooks shape — dedupe by
+// spec.LabelShellSet. Mirrors CollectDescriptions / CollectHooks shape — dedupe by
 // candy name, walk internal bases until an external image, terminate
 // on visited-image cycle.
 //
@@ -18,8 +18,8 @@ import (
 //     deploy time by MergeDeployShell from charly.yml entries.
 //
 // Returns nil if every section is empty.
-func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName string) *LabelShellSet {
-	set := &LabelShellSet{}
+func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName string) *spec.LabelShellSet {
+	set := &spec.LabelShellSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 	for _, candyName := range allCandyNames {
@@ -52,9 +52,9 @@ func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName strin
 }
 
 // shellConfigToEntry projects an in-memory ShellConfig into the
-// label-emission ShellEntry shape. Returns nil when the config is
+// label-emission spec.ShellEntry shape. Returns nil when the config is
 // effectively empty (no Init, no PathAppend, no per-shell overrides).
-func shellConfigToEntry(cfg *spec.Shell, origin string) *ShellEntry {
+func shellConfigToEntry(cfg *spec.Shell, origin string) *spec.ShellEntry {
 	if cfg == nil {
 		return nil
 	}
@@ -62,7 +62,7 @@ func shellConfigToEntry(cfg *spec.Shell, origin string) *ShellEntry {
 	if !hasGeneric && len(cfg.ByShell()) == 0 {
 		return nil
 	}
-	entry := &ShellEntry{
+	entry := &spec.ShellEntry{
 		Origin:   origin,
 		Priority: cfg.Priority,
 	}
@@ -90,21 +90,21 @@ func shellConfigToEntry(cfg *spec.Shell, origin string) *ShellEntry {
 }
 
 // MergeDeployShell applies a charly.yml `shell:` overlay onto a label-
-// baked LabelShellSet, returning a new merged set. Mirrors
+// baked spec.LabelShellSet, returning a new merged set. Mirrors
 // MergeDeployDescriptions semantics:
 //   - Entry with matching ID and skip:true → drop the matched entry.
 //   - Entry with matching ID and skip:false → replace the matched
 //     entry wholesale.
 //   - Entry with no matching ID (or no ID) → append into the deploy
 //     section with Origin "deploy" if not set.
-func MergeDeployShell(baked *LabelShellSet, overlay []ShellEntry) *LabelShellSet {
+func MergeDeployShell(baked *spec.LabelShellSet, overlay []spec.ShellEntry) *spec.LabelShellSet {
 	if baked == nil {
-		baked = &LabelShellSet{}
+		baked = &spec.LabelShellSet{}
 	}
-	out := &LabelShellSet{
-		Candy:  append([]ShellEntry(nil), baked.Candy...),
-		Box:    append([]ShellEntry(nil), baked.Box...),
-		Deploy: append([]ShellEntry(nil), baked.Deploy...),
+	out := &spec.LabelShellSet{
+		Candy:  append([]spec.ShellEntry(nil), baked.Candy...),
+		Box:    append([]spec.ShellEntry(nil), baked.Box...),
+		Deploy: append([]spec.ShellEntry(nil), baked.Deploy...),
 	}
 	if len(overlay) == 0 {
 		return out
@@ -126,15 +126,15 @@ func MergeDeployShell(baked *LabelShellSet, overlay []ShellEntry) *LabelShellSet
 
 // replaceShellEntryByID looks up entry.ID across the three sections of
 // `set` and either replaces (skip=false) or removes (skip=true). The
-// `skip` field on ShellEntry is encoded as zero priority + nil
+// `skip` field on spec.ShellEntry is encoded as zero priority + nil
 // Generic + nil ByShell when stored on disk; charly.yml-side parsing
 // consumes a separate ShellOverlayEntry struct that carries Skip
 // explicitly. Here we treat any incoming entry whose Generic/ByShell
 // are both nil AND whose Origin is "deploy" or "" as a skip-by-id
 // signal — see BundleNode.Shell parsing in deploy.go.
-func replaceShellEntryByID(set *LabelShellSet, e ShellEntry) bool {
+func replaceShellEntryByID(set *spec.LabelShellSet, e spec.ShellEntry) bool {
 	skip := e.Generic == nil && len(e.ByShell) == 0
-	for _, bucket := range [...]*[]ShellEntry{&set.Candy, &set.Box, &set.Deploy} {
+	for _, bucket := range [...]*[]spec.ShellEntry{&set.Candy, &set.Box, &set.Deploy} {
 		for i, b := range *bucket {
 			if b.ID != e.ID {
 				continue

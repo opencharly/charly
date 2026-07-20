@@ -88,7 +88,7 @@ func (c *podStopCmd) Run() error {
 func stopTunnelForImage(boxName, instance string) {
 	var tc *TunnelConfig
 
-	// Tunnel config comes from charly.yml (overlaid onto BoxMetadata).
+	// Tunnel config comes from charly.yml (overlaid onto spec.BoxMetadata).
 	ctrName := kit.ContainerNameInstance(boxName, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef != "" {
@@ -160,7 +160,7 @@ func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name 
 // the embedded `init:` vocabulary — including custom ones — now reaches
 // runtime. wellKnownInitDefs is consulted only for pre-init_def-label images
 // (built before the label existed; their labels cannot be re-baked).
-func resolveEntrypointFromMeta(meta *BoxMetadata) []string {
+func resolveEntrypointFromMeta(meta *spec.BoxMetadata) []string {
 	if meta.Init == "" {
 		return []string{"sleep", "infinity"}
 	}

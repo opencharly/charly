@@ -64,6 +64,8 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchLabels(args)
 	case "merge":
 		return dispatchMerge(hc, args)
+	case "reconcile":
+		return dispatchReconcile(args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}

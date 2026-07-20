@@ -44,7 +44,7 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 
 	payload, err := json.Marshal(capDef)
 	if err != nil {
-		t.Fatalf("marshal CapabilityInitDef: %v", err)
+		t.Fatalf("marshal spec.CapabilityInitDef: %v", err)
 	}
 
 	// Exercise the actual bake seam: deploykit WriteLabels must emit the
@@ -121,7 +121,7 @@ func TestResolveEntrypointFromMeta_LegacyLabelAbsent(t *testing.T) {
 		{"unknown-legacy-init", []string{"sleep", "infinity"}},
 	}
 	for _, tc := range cases {
-		meta := &BoxMetadata{Init: tc.init} // InitDef intentionally nil
+		meta := &spec.BoxMetadata{Init: tc.init} // InitDef intentionally nil
 		got := resolveEntrypointFromMeta(meta)
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("resolveEntrypointFromMeta(Init=%q, no label) = %v, want %v", tc.init, got, tc.want)
@@ -137,7 +137,7 @@ func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
 		{"supervisord", "supervisorctl"},
 		{"systemd", "systemctl"},
 	} {
-		meta := &BoxMetadata{Init: tc.init} // InitDef nil → legacy fallback
+		meta := &spec.BoxMetadata{Init: tc.init} // InitDef nil → legacy fallback
 		def, err := resolveInitDefFromMeta(meta)
 		if err != nil {
 			t.Fatalf("resolveInitDefFromMeta(%q): %v", tc.init, err)
@@ -147,7 +147,7 @@ func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
 		}
 	}
 
-	if _, err := resolveInitDefFromMeta(&BoxMetadata{Init: "vocab-only-custom"}); err == nil {
+	if _, err := resolveInitDefFromMeta(&spec.BoxMetadata{Init: "vocab-only-custom"}); err == nil {
 		t.Error("resolveInitDefFromMeta with unknown init + no label should error")
 	}
 }
@@ -161,9 +161,9 @@ func TestInitDefLabel_CustomInitAtRuntime(t *testing.T) {
 	if _, ok := wellKnownInitDefs["myinit"]; ok {
 		t.Fatal("precondition: myinit must NOT be a well-known init")
 	}
-	meta := &BoxMetadata{
+	meta := &spec.BoxMetadata{
 		Init: "myinit",
-		InitDef: &CapabilityInitDef{
+		InitDef: &spec.CapabilityInitDef{
 			Entrypoint:         []string{"myinit", "--run", "/etc/myinit.conf"},
 			ManagementTool:     "myctl",
 			ManagementCommands: map[string]string{"status": "status", "restart": "restart {{.Service}}"},

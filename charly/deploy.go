@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers +
@@ -108,9 +109,9 @@ var DeployConfigPath = kit.DefaultDeployConfigPath
 const DeployConfigEnv = kit.DeployConfigEnv
 
 // ToShellEntry converts a charly.yml overlay into the LabelShell
-// ShellEntry shape consumed by MergeDeployShell.
-func shellOverlayToEntry(o *DeployShellOverlay) ShellEntry {
-	entry := ShellEntry{
+// spec.ShellEntry shape consumed by MergeDeployShell.
+func shellOverlayToEntry(o *DeployShellOverlay) spec.ShellEntry {
+	entry := spec.ShellEntry{
 		Origin:   o.Origin,
 		ID:       o.ID,
 		Priority: o.Priority,

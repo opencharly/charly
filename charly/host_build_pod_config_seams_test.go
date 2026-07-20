@@ -29,6 +29,14 @@ func TestHostBuildPodConfigResolveRef_PrefersPersistedOverlay(t *testing.T) {
 	origPath := DeployConfigPath
 	DeployConfigPath = func() (string, error) { return cfgPath, nil }
 	t.Cleanup(func() { DeployConfigPath = origPath })
+	// deploykit.SaveDeployState / LoadDeployConfigForRead below resolve the per-host
+	// overlay path INDEPENDENTLY via kit.DefaultDeployConfigPath (honoring ONLY
+	// kit.DeployConfigEnv, never charly's own DeployConfigPath var — see
+	// sdk/kit/deployconfig.go's "shared by charly core... and candy/plugin-migrate,
+	// ONE definition" note) — without this, they fall through to the operator's REAL
+	// ~/.config/charly/charly.yml, leaking host state into the test (RCA 2026-07-20,
+	// surfaced by the candy-level libvirt: field schema-version bump).
+	t.Setenv(kit.DeployConfigEnv, cfgPath)
 
 	// Persist the overlay ref exactly as PrepareVenue does.
 	deploykit.SaveDeployState("check-addcandy-pod", "", deploykit.SaveDeployStateInput{

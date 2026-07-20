@@ -150,7 +150,7 @@ func hostBuildPodConfigMigrateSecrets(_ context.Context, req spec.PodConfigMigra
 	if err := json.Unmarshal(req.ConfigJSON, &dc); err != nil {
 		return spec.PodConfigMigrateSecretsReply{}, err
 	}
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigMigrateSecretsReply{}, err
 	}
@@ -166,7 +166,7 @@ func hostBuildPodConfigMigrateSecrets(_ context.Context, req spec.PodConfigMigra
 }
 
 func hostBuildPodConfigScrubCliEnv(_ context.Context, req spec.PodConfigScrubCliEnvRequest, _ buildEngineContext) (spec.PodConfigScrubCliEnvReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigScrubCliEnvReply{}, err
 	}
@@ -223,7 +223,7 @@ func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineR
 }
 
 func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnelResolveRequest, _ buildEngineContext) (spec.PodConfigTunnelResolveReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigTunnelResolveReply{}, err
 	}
@@ -310,7 +310,7 @@ func hostBuildPodConfigResolveSidecars(_ context.Context, req spec.PodConfigReso
 }
 
 func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigProvisionSecretsRequest, _ buildEngineContext) (spec.PodConfigProvisionSecretsReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigProvisionSecretsReply{}, err
 	}
@@ -396,7 +396,7 @@ func hostBuildPodConfigSaveDeployState(_ context.Context, req spec.PodConfigSave
 }
 
 func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSecretEnvRequest, _ buildEngineContext) (spec.PodConfigHookSecretEnvReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigHookSecretEnvReply{}, err
 	}

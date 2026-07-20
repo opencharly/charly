@@ -41,8 +41,11 @@ func (c *Config) boxCandyChain(layers map[string]spec.CandyReader, boxName strin
 
 // boxDirectCandies returns the ordered, transitively-resolved candy map-keys
 // for boxName's OWN candies only — NO base-chain traversal. The shared walk for
-// LEAF-SPECIFIC fields (CollectSecurity, CollectBoxAlias,
-// CollectLibvirtSnippets) that intentionally do NOT inherit from a base box.
+// LEAF-SPECIFIC fields (CollectSecurity, CollectBoxAlias) that intentionally do
+// NOT inherit from a base box. (Formerly also backed CollectLibvirtSnippets,
+// deleted as dead code — the box-level `libvirt:` field it served was removed
+// in the VM hard-cutover; raw XML snippets now live on the paired `kind: vm`
+// entity's `spec.libvirt.snippets:`.)
 func (c *Config) boxDirectCandies(layers map[string]spec.CandyReader, boxName string) ([]string, error) {
 	img, ok := c.BoxConfig(boxName)
 	if !ok {

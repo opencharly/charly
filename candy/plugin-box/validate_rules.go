@@ -399,18 +399,6 @@ func validateSystemdServices(vc *vctx, e *vErr) {
 	}
 }
 
-// validateLibvirt validates candy-level libvirt XML snippets (image-level libvirt: was removed).
-func validateLibvirt(vc *vctx, e *vErr) {
-	for name := range vc.models {
-		m := vc.models[name]
-		for i, snippet := range m.Libvirt {
-			if err := vmshared.ValidateLibvirtSnippet(snippet); err != nil {
-				e.Add("candy %q libvirt[%d]: %v", name, i, err)
-			}
-		}
-	}
-}
-
 // validateEnvProvides checks env_provides template-variable well-formedness.
 func validateEnvProvides(vc *vctx, e *vErr) {
 	for name := range vc.views {

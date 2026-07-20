@@ -25,18 +25,97 @@ func TestEngine_CueOwnedVersion(t *testing.T) {
 	}
 }
 
-// TestMigrationTable_CompactNodeForm: the table carries exactly the
-// schema-compaction migration — an apply: goHook entry that touches host state.
+// TestMigrationTable_CompactNodeForm: the table carries the schema-compaction
+// migration — an apply: goHook entry that touches host state — as its FIRST
+// (oldest) step, ahead of any later step.
 func TestMigrationTable_CompactNodeForm(t *testing.T) {
-	if len(migrationTable) != 1 {
-		t.Fatalf("migration table should carry exactly the compact-node-form entry, got %d", len(migrationTable))
+	if len(migrationTable) == 0 {
+		t.Fatal("migration table is empty, expected at least the compact-node-form entry")
 	}
 	m := migrationTable[0]
 	if m.Name != "compact-node-form" || m.Apply != "compactNodeForm" || !m.TouchesHost {
-		t.Errorf("unexpected table entry: %+v", m)
+		t.Errorf("unexpected first table entry: %+v", m)
 	}
 	if _, ok := goHooks[m.Apply]; !ok {
 		t.Errorf("hook %q not registered in goHooks", m.Apply)
+	}
+}
+
+// TestMigrationTable_StripCandyLibvirtField: the table carries the candy-level
+// `libvirt:` field removal as a project-only (non-touches_host) apply: goHook
+// entry, strictly after compact-node-form.
+func TestMigrationTable_StripCandyLibvirtField(t *testing.T) {
+	if len(migrationTable) != 2 {
+		t.Fatalf("migration table should carry exactly 2 entries, got %d", len(migrationTable))
+	}
+	m := migrationTable[1]
+	if m.Name != "strip-candy-libvirt-field" || m.Apply != "stripCandyLibvirtField" || m.TouchesHost {
+		t.Errorf("unexpected second table entry: %+v", m)
+	}
+	if _, ok := goHooks[m.Apply]; !ok {
+		t.Errorf("hook %q not registered in goHooks", m.Apply)
+	}
+	if !migrationTable[0].Version.Less(m.Version) {
+		t.Errorf("strip-candy-libvirt-field version %s must be strictly after compact-node-form %s", m.Version, migrationTable[0].Version)
+	}
+}
+
+// TestStripCandyLibvirtField_RemovesCandyLevelOnly: the reshaper removes ONLY the
+// direct candy-body `libvirt:` field, leaving a same-named `vm:`-kind entity's own
+// domain-config `libvirt: {...}` object AND a `libvirt:` check-verb step nested in
+// a candy's `plan:` completely untouched (the exact ambiguity a blanket
+// under_kind-scoped delete_key op would have gotten wrong — see the hook's header).
+func TestStripCandyLibvirtField_RemovesCandyLevelOnly(t *testing.T) {
+	m := migration{Name: "t", Apply: "stripCandyLibvirtField"}
+	in := "" +
+		"qemu-guest-agent:\n" +
+		"  candy:\n" +
+		"    version: 2026.149.1200\n" +
+		"    package: [qemu-guest-agent]\n" +
+		"    libvirt: [\"<channel type='unix'/>\"]\n" +
+		"    plan:\n" +
+		"      - check: the libvirt domain is queryable\n" +
+		"        libvirt: info\n" +
+		"vm-libvirt:\n" +
+		"  vm:\n" +
+		"    libvirt:\n" +
+		"      devices:\n" +
+		"        channels: [{type: unix}]\n"
+	out, changed := applyTransform(t, m, in)
+	if !changed {
+		t.Fatal("expected the candy-level libvirt: field to be removed")
+	}
+	var doc struct {
+		QemuGuestAgent struct {
+			Candy struct {
+				Package []string         `yaml:"package"`
+				Libvirt []string         `yaml:"libvirt"`
+				Plan    []map[string]any `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"qemu-guest-agent"`
+		VmLibvirt struct {
+			Vm struct {
+				Libvirt map[string]any `yaml:"libvirt"`
+			} `yaml:"vm"`
+		} `yaml:"vm-libvirt"`
+	}
+	if err := yaml.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("reparse: %v\n%s", err, out)
+	}
+	if doc.QemuGuestAgent.Candy.Libvirt != nil {
+		t.Errorf("candy-level libvirt: field survived: %v", doc.QemuGuestAgent.Candy.Libvirt)
+	}
+	if len(doc.QemuGuestAgent.Candy.Package) != 1 || doc.QemuGuestAgent.Candy.Package[0] != "qemu-guest-agent" {
+		t.Errorf("unrelated candy field damaged: %v", doc.QemuGuestAgent.Candy.Package)
+	}
+	if len(doc.QemuGuestAgent.Candy.Plan) != 1 || doc.QemuGuestAgent.Candy.Plan[0]["libvirt"] != "info" {
+		t.Errorf("the candy's own plan-step libvirt: check-verb sugar was damaged: %v", doc.QemuGuestAgent.Candy.Plan)
+	}
+	if doc.VmLibvirt.Vm.Libvirt == nil {
+		t.Error("the vm entity's own libvirt: domain config was incorrectly removed")
+	}
+	if _, changed2 := applyTransform(t, m, out); changed2 {
+		t.Error("second pass changed an already-migrated doc")
 	}
 }
 

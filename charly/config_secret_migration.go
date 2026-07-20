@@ -35,7 +35,7 @@ import (
 // secretDeclaredOnBox returns the set of env var names an image declares
 // as credential-backed (secret_accepts or secret_requires). Returns a
 // non-nil empty set when meta is nil or has no secret declarations.
-func secretDeclaredOnBox(meta *BoxMetadata) map[string]bool {
+func secretDeclaredOnBox(meta *spec.BoxMetadata) map[string]bool {
 	names := map[string]bool{}
 	if meta == nil {
 		return names
@@ -87,7 +87,7 @@ func secretKeyForDep(dep spec.EnvDependency) (service, key string) {
 // This is idempotent: running it a second time on a now-clean charly.yml is
 // a no-op. Running it on a host that never had plaintext credentials is a
 // no-op.
-func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *BoxMetadata, image, instance string) (int, error) {
+func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *spec.BoxMetadata, image, instance string) (int, error) {
 	if dc == nil || dc.Bundle == nil {
 		return 0, nil
 	}
@@ -185,7 +185,7 @@ func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *BoxMetadata, im
 // Returns (cleaned []string, imported int). cleaned is the new -e list
 // (never nil — returns an empty slice when all entries were migrated);
 // imported is the number of credentials moved into the store.
-func scrubSecretCLIEnv(cliEnv []string, meta *BoxMetadata) ([]string, int) {
+func scrubSecretCLIEnv(cliEnv []string, meta *spec.BoxMetadata) ([]string, int) {
 	if len(cliEnv) == 0 {
 		return cliEnv, 0
 	}

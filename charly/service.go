@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // podServiceCmd is the host-side reconstruction of the former ServiceCmd's four leaves (now
@@ -114,7 +115,7 @@ var wellKnownInitDefs = map[string]*ResolvedInit{
 // system — including custom ones — resolves at runtime. Falls back to
 // wellKnownInitDefs only for pre-init_def-label images (built before the
 // label existed).
-func resolveInitDefFromMeta(meta *BoxMetadata) (*ResolvedInit, error) {
+func resolveInitDefFromMeta(meta *spec.BoxMetadata) (*ResolvedInit, error) {
 	if meta.InitDef != nil {
 		return &ResolvedInit{
 			Entrypoint:         meta.InitDef.Entrypoint,

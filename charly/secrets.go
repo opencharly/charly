@@ -91,7 +91,7 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 
 // LabelSecretEntry represents a secret requirement in an OCI image label.
 // Only metadata is stored — never the secret value. CUE-sourced in spec (boxmetadata.cue, P2B)
-// + aliased in-place; carried on BoxMetadata.Secret (ai.opencharly.secret).
+// + aliased in-place; carried on spec.BoxMetadata.Secret (ai.opencharly.secret).
 type LabelSecretEntry = spec.LabelSecretEntry
 
 // CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
@@ -387,7 +387,7 @@ type SecretResolution struct {
 // This function does NOT touch the podman secret store — that's the job of
 // ProvisionPodmanSecrets. It only reads from the credential store. No network
 // calls, no filesystem mutations, safe to run speculatively.
-func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
+func CollectCandySecretAccepts(boxName, instance string, meta *spec.BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
 	if meta == nil {
 		return nil, nil
 	}
@@ -451,7 +451,7 @@ func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (col
 // a hook that consumes a secret (e.g. github-runner's registration token) would
 // otherwise never see it. Generic across every hook+secret candy (R3); inert
 // (returns nil) when the image declares no secrets or none resolve.
-func resolveHookSecretEnv(boxName, instance string, meta *BoxMetadata) []string {
+func resolveHookSecretEnv(boxName, instance string, meta *spec.BoxMetadata) []string {
 	collected, _ := CollectCandySecretAccepts(boxName, instance, meta)
 	var env []string
 	for _, s := range collected {
