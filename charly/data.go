@@ -5,6 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // DataProvisionMode controls how provisionData copies files.
@@ -98,7 +101,7 @@ var (
 // image (busybox) to run cp. Bind-mount targets use the simpler podman
 // create + podman cp path.
 func provisionData(engine string, imageRef string, meta *BoxMetadata,
-	bindMounts []ResolvedBindMount, namedVolumes []VolumeMount,
+	bindMounts []deploykit.ResolvedBindMount, namedVolumes []deploykit.VolumeMount,
 	deployName, instance string, mode DataProvisionMode) (int, error) {
 
 	if len(meta.DataEntries) == 0 {
@@ -122,7 +125,7 @@ func provisionData(engine string, imageRef string, meta *BoxMetadata,
 	// instance deploy.
 	targets := make(map[string]seedTarget, len(bindMounts)+len(namedVolumes))
 	for _, nv := range namedVolumes {
-		bare := BareVolumeName(nv.VolumeName, deployName, instance)
+		bare := kit.BareVolumeName(nv.VolumeName, deployName, instance)
 		targets[bare] = seedTarget{
 			bareName:    bare,
 			kind:        seedKindNamed,
@@ -228,7 +231,7 @@ func provisionData(engine string, imageRef string, meta *BoxMetadata,
 func provisionFromRunnableImage(engine string, imageRef string, meta *BoxMetadata,
 	entry LabelDataEntry, target seedTarget, mode DataProvisionMode) error {
 
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 
 	cpFlag := "cp -a"
 	if mode == DataProvisionMerge {
@@ -286,7 +289,7 @@ func provisionFromScratchImage(engine string, imageRef string,
 		return fmt.Errorf("pulling seeder helper image: %w", err)
 	}
 
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 
 	cpFlag := "cp -a"
 	if mode == DataProvisionMerge {
@@ -315,7 +318,7 @@ func provisionFromScratchImage(engine string, imageRef string,
 // podman cp requires a host-visible destination.
 func provisionFromScratchImageToHost(engine string, imageRef string,
 	entry LabelDataEntry, hostPath string) error {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	containerName := fmt.Sprintf("charly-data-seed-%d", os.Getpid())
 
 	// Create a throwaway container from the scratch image. It doesn't need
@@ -334,7 +337,7 @@ func provisionFromScratchImageToHost(engine string, imageRef string,
 // volume from a FROM-scratch data image; every other seeding path uses the
 // target image's own filesystem.
 func ensureSeederHelperImage(engine string) error {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	// Cheap "already present?" check — image exists returns 0 if the
 	// image is in local storage.
 	if err := dataCmdRun(binary, "image", "exists", SeederHelperImage); err == nil {
@@ -358,7 +361,7 @@ func isDirEmpty(path string) bool {
 // by DataProvisionInitial gating, where the safe behavior on ambiguity is
 // to attempt the seed (the cp itself will report any failure).
 func volumeIsEmpty(engine, volumeName string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	out, err := dataCmdOutput(binary, "volume", "inspect",
 		"--format", "{{.Mountpoint}}", volumeName)
 	if err != nil {

@@ -1,15 +1,37 @@
 codex:
     candy:
-        version: 2026.144.1443
+        version: 2026.199.1330
         description: |
             Installs the OpenAI Codex CLI globally via npm so `codex` is on PATH.
             The candy depends on nodejs and ships a package.json pinning
             @openai/codex, which the build installs globally into
             ~/.npm-global/bin. The result is verifiable: the codex binary exists at
-            that path and `codex --version` exits cleanly.
+            that path and `codex --version` exits cleanly. A CUE-validated tmux
+            terminal profile exposes it through the generic Charly agent channel.
         require:
             - nodejs
+        agent_provide:
+            - provider: tmux
+              protocol_version: 2
+              profiles: [codex]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: true
+        terminal_profile:
+            codex:
+                name: codex
+                entrypoint: [codex]
+                cols: 120
+                rows: 40
+                semantic_adapter: codex
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
         plan:
+            - check: the installed Codex package exactly matches the declared deterministic pin
+              command: node -e 'const p=require(process.env.HOME+"/.npm-global/lib/node_modules/@openai/codex/package.json");if(p.version!=="0.144.6")process.exit(1)'
+              exit_status: 0
             - check: the codex binary is installed into the npm global bin directory
               file:
                 file: ${HOME}/.npm-global/bin/codex

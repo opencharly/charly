@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_fixture_test.go — the (c') converted-test infrastructure (task #60): the validate ENGINE
@@ -1419,7 +1422,7 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 
 // TestValidateBuildAndDistro_InvalidPkg ← TestValidateInvalidPkg. A build format not in the vocabulary.
 func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
-	cfg := &Config{Defaults: BoxConfig{Build: BuildFormats{"invalid"}}, Box: boxMapOf(map[string]BoxConfig{})}
+	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"invalid"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
 	errs := &ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
@@ -1429,7 +1432,7 @@ func TestValidateBuildAndDistro_InvalidPkg(t *testing.T) {
 
 // TestValidateBuildAndDistro_InvalidPkgValue ← TestValidateInvalidPkgValue.
 func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
-	cfg := &Config{Defaults: BoxConfig{Build: BuildFormats{"zypper"}}, Box: boxMapOf(map[string]BoxConfig{})}
+	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"zypper"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
 	errs := &ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if !errs.HasErrors() || !strings.Contains(errs.Error(), "is not valid") {
@@ -1439,7 +1442,7 @@ func TestValidateBuildAndDistro_InvalidPkgValue(t *testing.T) {
 
 // TestValidateBuildAndDistro_PacValid ← TestValidatePacPkgValue. `pac` is a valid vocabulary format.
 func TestValidateBuildAndDistro_PacValid(t *testing.T) {
-	cfg := &Config{Defaults: BoxConfig{Build: BuildFormats{"pac"}}, Box: boxMapOf(map[string]BoxConfig{})}
+	cfg := &Config{Defaults: spec.BoxConfig{Build: BuildFormats{"pac"}}, Box: boxMapOf(map[string]spec.BoxConfig{})}
 	errs := &ValidationError{}
 	validateBuildAndDistro(cfg, testDistroConfig(), errs)
 	if errs.HasErrors() {
@@ -1450,9 +1453,9 @@ func TestValidateBuildAndDistro_PacValid(t *testing.T) {
 // TestValidateBuilderRefs_SelfBuilder ← TestValidateSelfBuilder. A per-image builder referencing self.
 func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 	cfg := &Config{
-		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
-			"myimg": {Candy: []string{"pixi"}, Builder: BuilderMap{"pixi": "myimg"}},
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
+			"myimg": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "myimg"}},
 		}),
 	}
 	errs := &ValidationError{}
@@ -1466,8 +1469,8 @@ func TestValidateBuilderRefs_SelfBuilder(t *testing.T) {
 // image inheriting defaults.builder that points to itself is NOT an error.
 func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 	cfg := &Config{
-		Defaults: BoxConfig{Build: BuildFormats{"rpm"}, Builder: BuilderMap{"pixi": "builder", "npm": "builder"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}, Builder: buildkit.BuilderMap{"pixi": "builder", "npm": "builder"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"builder": {Candy: []string{"pixi"}},
 		}),
 	}
@@ -1481,9 +1484,9 @@ func TestValidateBuilderRefs_InheritedSelfNotError(t *testing.T) {
 // TestValidateBuilderRefs_PerImageNotFound ← TestValidatePerImageBuilderNotFound.
 func TestValidateBuilderRefs_PerImageNotFound(t *testing.T) {
 	cfg := &Config{
-		Defaults: BoxConfig{Build: BuildFormats{"rpm"}},
-		Box: boxMapOf(map[string]BoxConfig{
-			"app": {Candy: []string{"pixi"}, Builder: BuilderMap{"pixi": "nonexistent"}},
+		Defaults: spec.BoxConfig{Build: BuildFormats{"rpm"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
+			"app": {Candy: []string{"pixi"}, Builder: buildkit.BuilderMap{"pixi": "nonexistent"}},
 		}),
 	}
 	errs := &ValidationError{}

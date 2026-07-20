@@ -17,11 +17,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // deployAddCmd is the host-side orchestration for `charly bundle add <name> [<ref>]`.
@@ -98,8 +104,15 @@ type deployDelCmd struct {
 	// carried onto the resolved the local deploy target by Run before Del. Nil
 	// falls back to the local-exec path in reverse_ops.go. Set programmatically
 	// by host-side teardown callers, never authored on the CLI.
-	Runner ReverseRunner
+	Runner kit.ReverseRunner
 }
+
+// deployDelCmd satisfies kit.ReverseExecutor via thin wrappers — keeps the
+// flag-accessor protocol decoupled from the concrete command type.
+func (c *deployDelCmd) ReverseDryRun() bool              { return c.DryRun }
+func (c *deployDelCmd) ReverseKeepRepoChanges() bool     { return c.KeepRepoChanges }
+func (c *deployDelCmd) ReverseKeepServices() bool        { return c.KeepServices }
+func (c *deployDelCmd) ReverseRunner() kit.ReverseRunner { return c.Runner }
 
 // deployDelArgv returns the argv (everything AFTER the charly binary) for a
 // non-interactive `charly bundle del <name>`: the verb, the name, and the ONE valid
@@ -144,7 +157,9 @@ func (c *deployAddCmd) Run() error {
 	// update — adds THIS deploy's add_candy: candies (+ any CLI --add-candy) to the scan
 	// (the image-closure scan never reaches them), so a deploy that add_candy's an
 	// out-of-tree plugin candy would otherwise leave its grpcProvider unloaded (R3).
-	loadDeployPlugins(dir, c.Name, c.AddCandy)
+	if err := loadDeployPlugins(dir, c.Name, c.AddCandy); err != nil {
+		return err
+	}
 
 	// Resolve the named root + any dotted-path subtree the user
 	// targeted. Supports three call shapes:
@@ -154,20 +169,20 @@ func (c *deployAddCmd) Run() error {
 	//   charly bundle add openclaw-stack.web.db  — v2 subtree
 	targetPath := c.Name
 	tree, _ := resolveTreeRoot(dir)
-	var rootNode *BundleNode
+	var rootNode *spec.BundleNode
 	var resolvedPath string
 	// parentExec is the executor chain derived from any ANCESTORS the
 	// dotted path walks through. Without this, `charly bundle add a.b.c`
 	// would run c's dispatch locally — ignoring a/b's substrate.
-	var parentExec DeployExecutor
+	var parentExec deploykit.DeployExecutor
 	if tree != nil {
-		if n, ancestors, nodeErr := ResolveNodePath(tree, targetPath); nodeErr == nil {
+		if n, ancestors, nodeErr := deploykit.ResolveNodePath(tree, targetPath); nodeErr == nil {
 			rootNode = n
 			resolvedPath = targetPath
 			// Derive the parent's executor chain from ancestors so the
 			// target node runs in the right substrate (SSH into parent
 			// VM, podman exec into parent pod, etc.).
-			segments := splitDottedPath(targetPath)
+			segments := deploykit.SplitDottedPath(targetPath)
 			for i, anc := range ancestors {
 				ancPath := strings.Join(segments[:i+1], ".")
 				next, derr := deriveChildExecutorForPath(ancPath, anc, parentExec)
@@ -204,7 +219,7 @@ func (c *deployAddCmd) Run() error {
 		return c.dispatchNode(resolvedPath, rootNode, parentExec, dir)
 	}
 
-	if err := WalkDeploymentTree(resolvedPath, rootNode, parentExec, func(path string, node *BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
+	if err := deploykit.WalkDeploymentTree(resolvedPath, rootNode, parentExec, func(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 		if err := c.dispatchNode(path, node, parentExec, dir); err != nil {
 			return nil, err
 		}
@@ -239,7 +254,7 @@ func (c *deployAddCmd) Run() error {
 // parentExec is the DeployExecutor of the enclosing environment; nil
 // at the root. Non-nil means "this node is a child of something" —
 // its target composes a NestedExecutor over parentExec.
-func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec DeployExecutor, dir string) error {
+func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor, dir string) error {
 	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node, parentExec)
 	if err != nil {
 		return err
@@ -278,7 +293,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 		return err
 	}
 
-	deployID := computeDeployID(base, candySet, addCandies)
+	deployID := deploykit.ComputeDeployID(base, candySet, addCandies)
 	for _, p := range plans {
 		p.DeployID = deployID
 		// Union — don't clobber. The per-alPlan propagation loop above
@@ -335,7 +350,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 	// classified target so `charly bundle add host ./x.yml` still resolves.
 	resolveNode := node
 	if resolveNode == nil {
-		resolveNode = &BundleNode{Target: target}
+		resolveNode = &spec.BundleNode{Target: target}
 	}
 
 	utgt, err := ResolveTarget(resolveNode, deployName)
@@ -362,7 +377,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *BundleNode, parentExec De
 // CLI flags. On the root this matches the pre-v2 behavior; on children the
 // fields come from the child node (not c.Name's top-level entry). Returns an
 // error only when neither a <ref> nor a charly.yml entry resolves a ref.
-func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parentExec DeployExecutor) (EmitOpts, string, []string, string, error) {
+func (c *deployAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.EmitOpts, string, []string, string, error) {
 	opts := c.emitOpts()
 	opts.ParentExec = parentExec
 	opts.Path = path
@@ -383,7 +398,7 @@ func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parent
 			node.Version = tag
 		}
 		if node.InstallOpts != nil {
-			opts = installOptsApplyTo(node.InstallOpts, opts)
+			opts = deploykit.InstallOptsApplyTo(node.InstallOpts, opts)
 		}
 		if len(addCandies) == 0 && len(node.AddCandy) > 0 {
 			addCandies = append([]string(nil), node.AddCandy...)
@@ -411,7 +426,7 @@ func (c *deployAddCmd) resolveNodeOverlays(path string, node *BundleNode, parent
 // precedence is CLI > deployment > template — because InstallOptsConfig.ApplyTo
 // is fill-empty, so applying the template's opts after the deployment's leaves
 // the deployment's values intact and only fills the gaps.
-func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies []string, opts EmitOpts) ([]string, EmitOpts, error) {
+func resolveNodeTemplate(target, path, dir string, node *spec.BundleNode, addCandies []string, opts deploykit.EmitOpts) ([]string, deploykit.EmitOpts, error) {
 	if target == "local" && node != nil && node.From != "" {
 		tmpl, ferr := findLocalSpec(dir, node.From)
 		if ferr != nil {
@@ -425,7 +440,7 @@ func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies 
 		merged = append(merged, addCandies...)
 		addCandies = merged
 		// Fill install_opts gaps from the template.
-		opts = installOptsApplyTo(tmpl.InstallOpts, opts)
+		opts = deploykit.InstallOptsApplyTo(tmpl.InstallOpts, opts)
 	}
 	return addCandies, opts, nil
 }
@@ -438,8 +453,8 @@ func resolveNodeTemplate(target, path, dir string, node *BundleNode, addCandies 
 // …) rather than the operator host's context — otherwise the candy's install
 // tasks pick the wrong distro section and the overlay build fails. Returns the
 // plans, the base identity, and the candy set.
-func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCandies []string, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	var plans []*InstallPlan
+func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCandies []string, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
+	var plans []*deploykit.InstallPlan
 	var base string
 	var candySet []string
 
@@ -455,10 +470,10 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("resolving ref %q: %w", refStr, err)
 		}
-		// Save c.Tag for compilePlans; restore after.
+		// Save c.Tag for the compile selection; restore after.
 		savedTag := c.Tag
 		c.Tag = tag
-		plans, base, candySet, err = c.compilePlans(ref, cfg, distroCfg, builderCfg, dir)
+		plans, base, candySet, err = c.compileRefSelection(ref, cfg, distroCfg, builderCfg, dir)
 		c.Tag = savedTag
 		if err != nil {
 			return nil, "", nil, err
@@ -466,8 +481,8 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 	}
 
 	// Only host/vm targets use syntheticHostBox / syntheticVmBox (handled
-	// inside compileCandyPlans); pod/k8s resolve the base image context here.
-	var baseImg *ResolvedBox
+	// inside compileCandySelection); pod/k8s resolve the base image context here.
+	var baseImg *buildkit.ResolvedBox
 	if (target == "pod" || target == "k8s") && refStr != "" {
 		if baseResolved, rerr := cfg.ResolveBox(refStr, tag, dir, ResolveOpts{}); rerr == nil {
 			baseImg = baseResolved
@@ -484,11 +499,11 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("resolving --add-candy %q: %w", al, err)
 		}
-		var alPlans []*InstallPlan
+		var alPlans []*deploykit.InstallPlan
 		if baseImg != nil {
-			alPlans, _, _, err = c.compileCandyPlansWithContext(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
+			alPlans, _, _, err = c.compileCandySelection(alRef, cfg, distroCfg, builderCfg, dir, baseImg)
 		} else {
-			alPlans, _, _, err = c.compilePlans(alRef, cfg, distroCfg, builderCfg, dir)
+			alPlans, _, _, err = c.compileRefSelection(alRef, cfg, distroCfg, builderCfg, dir)
 		}
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("compiling --add-candy %q: %w", al, err)
@@ -519,7 +534,7 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 // is the hint: literal `host` → host target; anything else → pod.
 // The legacy `vm:<name>` name-prefix heuristic was removed — VM
 // deploys are now always tree-backed with explicit target:vm.
-func classifyNodeTarget(node *BundleNode, path string) string {
+func classifyNodeTarget(node *spec.BundleNode, path string) string {
 	if node != nil && node.Target != "" {
 		return node.Target
 	}
@@ -542,7 +557,7 @@ func pathLeaf(path string) string {
 // it supplies the current node's flattened container name (derived from the
 // dotted path) for a container target, hops through vmChildExecutor for a vm
 // child, and otherwise shares the parent executor.
-func deriveChildExecutorForPath(path string, node *BundleNode, parentExec DeployExecutor) (DeployExecutor, error) {
+func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
 	}
@@ -560,7 +575,7 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 		if parentExec != nil {
 			return parentExec, nil
 		}
-		return ShellExecutor{}, nil
+		return kit.ShellExecutor{}, nil
 	case "container-exec":
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
@@ -568,20 +583,20 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 		// consumer (android_deploy_cmd.go, check_venue.go, build_overlay.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
-		name := "charly-" + NestedContainerName(path)
-		engineJump := JumpPodmanExec
+		name := "charly-" + kit.NestedContainerName(path)
+		engineJump := kit.JumpPodmanExec
 		if node.Engine == "docker" {
-			engineJump = JumpDockerExec
+			engineJump = kit.JumpDockerExec
 		}
 		if parentExec == nil {
-			parentExec = ShellExecutor{}
+			parentExec = kit.ShellExecutor{}
 		}
-		return &NestedExecutor{
+		return &kit.NestedExecutor{
 			Parent: parentExec,
-			Jump:   NestedJump{Kind: engineJump, Target: name},
+			Jump:   kit.NestedJump{Kind: engineJump, Target: name},
 		}, nil
 	case "ssh":
-		return vmChildExecutor(parentExec, path)
+		return deploykit.VmChildExecutor(parentExec, path)
 	case "reject":
 		return nil, fmt.Errorf("k8s targets cannot have children")
 	}
@@ -595,11 +610,11 @@ func deriveChildExecutorForPath(path string, node *BundleNode, parentExec Deploy
 // is synthesized from the classified target so the resolver has a
 // target: to dispatch on.
 func (c *deployDelCmd) Run() error {
-	paths, err := DefaultLedgerPaths()
+	paths, err := kit.DefaultLedgerPaths()
 	if err != nil {
 		return err
 	}
-	lock, err := AcquireLedgerLock(paths)
+	lock, err := kit.AcquireLedgerLock(paths)
 	if err != nil {
 		return err
 	}
@@ -615,7 +630,9 @@ func (c *deployDelCmd) Run() error {
 	// grpcProvider for teardown — the SAME loadDeployPlugins bundle add / charly
 	// update use (R3). Best-effort; the dispatch fails loudly if still unresolved.
 	if cwd, _ := os.Getwd(); cwd != "" {
-		loadDeployPlugins(cwd, c.Name, nil)
+		if err := loadDeployPlugins(cwd, c.Name, nil); err != nil {
+			return err
+		}
 	}
 
 	// Build the gate-flag-bearing adapter. Del's signature is uniform
@@ -644,14 +661,16 @@ func (c *deployDelCmd) Run() error {
 	// Tear down any sibling members (companion deployments) FIRST — the reverse
 	// of bringUpMembers (root up → members up; members down → root down). Best-effort
 	// + the SAME helper the bed runner uses (R3). Skipped on a dry-run.
+	var memberErr error
 	if !c.DryRun {
-		tearDownMembers(node)
+		memberErr = tearDownMembers(node)
 	}
 
-	return utgt.Del(context.Background(), DelOpts{
+	targetErr := utgt.Del(context.Background(), DelOpts{
 		DryRun:    c.DryRun,
 		AssumeYes: c.AssumeYes,
 	})
+	return errors.Join(memberErr, targetErr)
 }
 
 // resolveDelNode resolves the BundleNode + canonical kind for a
@@ -669,12 +688,12 @@ func (c *deployDelCmd) Run() error {
 // direct-mode deploy). A mistyped/unknown name has no artifact and is rejected
 // loudly, instead of being silently synthesized into a pod del that tears down
 // nothing and then fails with a misleading "unknown target pod".
-func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
+func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 	if c.Name == "host" {
-		return &BundleNode{Target: "local"}, "local", nil
+		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
 	if strings.HasPrefix(c.Name, "vm:") {
-		return &BundleNode{Target: "vm"}, "vm", nil
+		return &spec.BundleNode{Target: "vm"}, "vm", nil
 	}
 	if cwd, _ := os.Getwd(); cwd != "" {
 		if tree, _ := resolveTreeRoot(cwd); tree != nil {
@@ -685,7 +704,7 @@ func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
 		}
 	}
 	if podDeploymentArtifactExists(c.Name) {
-		return &BundleNode{Target: "pod"}, "pod", nil
+		return &spec.BundleNode{Target: "pod"}, "pod", nil
 	}
 	return nil, "", fmt.Errorf("no such deployment %q — run `charly bundle list` to see "+
 		"deployments (a VM deploy is torn down as `charly bundle del vm:%s`)", c.Name, c.Name)
@@ -697,7 +716,7 @@ func (c *deployDelCmd) resolveDelNode() (*BundleNode, string, error) {
 // that lets a ref-based `charly bundle del <name>` with no charly.yml entry still tear a real pod
 // down, while a mistyped name (no artifact) is rejected.
 func podDeploymentArtifactExists(name string) bool {
-	cn := NestedContainerName(name)
+	cn := kit.NestedContainerName(name)
 	if dir, err := quadletDir(); err == nil {
 		for _, suffix := range []string{".container", ".pod"} {
 			if _, err := os.Stat(filepath.Join(dir, "charly-"+cn+suffix)); err == nil {
@@ -712,8 +731,8 @@ func podDeploymentArtifactExists(name string) bool {
 // Helpers
 // ---------------------------------------------------------------------------
 
-func (c *deployAddCmd) emitOpts() EmitOpts {
-	return EmitOpts{
+func (c *deployAddCmd) emitOpts() deploykit.EmitOpts {
+	return deploykit.EmitOpts{
 		DryRun:               c.DryRun,
 		FormatJSON:           c.Format == "json",
 		AllowRepoChanges:     c.AllowRepoChanges,
@@ -725,23 +744,6 @@ func (c *deployAddCmd) emitOpts() EmitOpts {
 		Pull:                 c.Pull,
 		BuilderImageOverride: c.BuilderImage,
 	}
-}
-
-// compilePlans resolves the ref to a candy set and builds plans for
-// each. For image refs: walk the image's candies in topological order.
-// For candy refs: compile a single plan. For remote refs: fetch and
-// proceed (remote fetch is handled by existing EnsureRepoDownloaded).
-func (c *deployAddCmd) compilePlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	if ref.Source == RefSourceRemote && ref.Kind == RefKindBox {
-		return nil, "", nil, fmt.Errorf("remote image refs are not supported by bundle add (ref=%s)", ref.Raw)
-	}
-	if ref.Kind == RefKindBox {
-		return c.compileBoxPlans(ref, cfg, distroCfg, builderCfg, dir)
-	}
-	// Local AND remote candy refs flow here — scanCandiesForRef fetches a
-	// remote `--add-layer @host/org/repo/candy/<name>:ver` (and its deps)
-	// on demand, so deploy add of remote candies is fully automatic.
-	return c.compileCandyPlans(ref, cfg, distroCfg, builderCfg, dir)
 }
 
 // scanCandiesForRef scans the candy set needed to compile `ref`, returning the
@@ -758,9 +760,9 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 		aug := *cfg
 		aug.Box = make(boxMap, len(cfg.Box)+1)
 		maps.Copy(aug.Box, cfg.Box)
-		aug.Box["__charly_addlayer_fetch__"] = encodeBox(BoxConfig{Candy: []string{ref.Raw}})
+		aug.Box["__charly_addlayer_fetch__"] = encodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
 		scanCfg = &aug
-		candyKey = BareRef(ref.Raw)
+		candyKey = deploykit.BareRef(ref.Raw)
 	}
 	layers, err := ScanAllCandyWithConfig(dir, scanCfg)
 	if err != nil {
@@ -772,43 +774,6 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 	return layers, candyKey, nil
 }
 
-func (c *deployAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	_ = distroCfg
-	_ = builderCfg
-	img, err := cfg.ResolveBox(ref.Name, c.Tag, dir, ResolveOpts{})
-	if err != nil {
-		return nil, "", nil, err
-	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var parent map[string]bool
-	order, err := ResolveCandyOrder(img.Candy, layers, parent)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	hostCtx := c.compileHostContext()
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	for _, candyName := range order {
-		layer := layers[candyName]
-		if layer == nil {
-			continue
-		}
-		p, err := BuildDeployPlan(layer, img, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", candyName, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, img.Name, order, nil
-}
-
 // pruneContainerInitForSystemd drops the `supervisord` candy (the CONTAINER
 // init system) from a resolved DEPLOY candy order when the target is systemd
 // (host / vm). On a systemd target the OS init is the one and only init system
@@ -818,7 +783,7 @@ func (c *deployAddCmd) compileBoxPlans(ref *DeployRef, cfg *Config, distroCfg *D
 // only affects host/vm deploys. Candies that `require: supervisord` purely for
 // graph ordering are unaffected at runtime — their services run under systemd
 // regardless of whether the supervisord package is present.
-func pruneContainerInitForSystemd(order []string, hostCtx HostContext) []string {
+func pruneContainerInitForSystemd(order []string, hostCtx deploykit.HostContext) []string {
 	if !hostCtx.MachineVenue {
 		return order
 	}
@@ -832,115 +797,12 @@ func pruneContainerInitForSystemd(order []string, hostCtx HostContext) []string 
 	return out
 }
 
-// compileCandyPlansWithContext is the same as compileCandyPlans but uses
-// the provided *ResolvedBox as the compile context (so add_candy for
-// a pod/k8s deployment compile against the base image's distro/user
-// context, not the operator host's).
-func (c *deployAddCmd) compileCandyPlansWithContext(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string, ctx *ResolvedBox) ([]*InstallPlan, string, []string, error) {
-	_ = builderCfg
-	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	order, err := ResolveCandyOrder([]string{candyKey}, layers, nil)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Raw, err)
-	}
-	if distroCfg != nil && ctx.DistroDef == nil {
-		ctx.DistroDef = distroCfg.ResolveDistro(ctx.Distro)
-	}
-	if builderCfg != nil && ctx.BuilderConfig == nil {
-		ctx.BuilderConfig = builderCfg
-	}
-	hostCtx := c.compileHostContext()
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, ctx)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	for _, name := range order {
-		p, err := BuildDeployPlan(layers[name], ctx, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", name, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, ref.Name, order, nil
-}
-
-func (c *deployAddCmd) compileCandyPlans(ref *DeployRef, cfg *Config, distroCfg *DistroConfig, builderCfg *BuilderConfig, dir string) ([]*InstallPlan, string, []string, error) {
-	_ = builderCfg
-	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	// Expand transitive deps — a candy deploy (bare `charly bundle add <candy>`
-	// or `--add-layer <name>`) MUST pull in the candy's `require:` graph in
-	// topological order. Without this, candies whose tasks rely on upstream
-	// binaries (e.g. pre-commit's cargo install needing rust) fail with
-	// "command not found". Remote refs key by their bare ref (scanCandiesForRef).
-	order, err := ResolveCandyOrder([]string{candyKey}, layers, nil)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Name, err)
-	}
-	// Pick the synthetic image template that matches the deploy target so
-	// `${USER}` AND the package format resolve correctly: the guest user +
-	// guest distro/format for any VM target (c.vmEntity, set by dispatchNode
-	// from node.From or the "vm:" prefix), the operator host's for everything
-	// else.
-	var img *ResolvedBox
-	if c.vmEntity != "" {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if body, present := uf.VM[c.vmEntity]; present {
-				if spec, err := resolveVmViaPlugin(body); err == nil && spec != nil {
-					img = syntheticVmBox(spec, distroCfg)
-				}
-			}
-		}
-	}
-	if img == nil {
-		img = syntheticHostBox()
-	}
-	hostCtx := c.compileHostContext()
-	if distroCfg != nil {
-		img.DistroDef = distroCfg.ResolveDistro(img.Distro)
-	}
-	if builderCfg != nil {
-		img.BuilderConfig = builderCfg
-	}
-	// Resolve the synthetic host/VM image's builder map through the SAME
-	// canonical method ResolveBox uses (resolveEffectiveBuilder), so a
-	// local/host deploy onto an Arch/cachyos host auto-selects arch-builder
-	// (distro-keyed) exactly like a built image would — no command-specific
-	// divergence. This path previously seeded from cfg.Defaults.Builder only,
-	// which gave a cachyos host fedora-builder and left the local deploy/execBuilder
-	// with the wrong builder when a candy's install needs cargo/npm/pixi/aur.
-	if cfg != nil {
-		img.Builder = cfg.resolveEffectiveBuilder(img.Name, img.Distro, img.Base, img.IsExternalBase, img.Builder)
-	}
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	var plans []*InstallPlan
-	for _, name := range order {
-		p, err := BuildDeployPlan(layers[name], img, hostCtx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("compiling %s: %w", name, err)
-		}
-		plans = append(plans, p)
-	}
-	return plans, ref.Name, order, nil
-}
-
-func (c *deployAddCmd) printPlans(plans []*InstallPlan, opts EmitOpts) error {
+func (c *deployAddCmd) printPlans(plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
 	if opts.FormatJSON {
 		return json.NewEncoder(os.Stdout).Encode(plans)
 	}
 	for _, p := range plans {
-		fmt.Println(DescribePlan(p))
+		fmt.Println(deploykit.DescribePlan(p))
 	}
 	return nil
 }
@@ -952,13 +814,13 @@ func (c *deployAddCmd) printPlans(plans []*InstallPlan, opts EmitOpts) error {
 // detectHostContext builds the HostContext struct used by the compiler
 // for host-target deploys. Returns a zero-value struct for container
 // deploys (the compiler ignores host-only fields there).
-func detectHostContext() HostContext {
+func detectHostContext() deploykit.HostContext {
 	hd, _ := DetectHostDistro()
 	glibc, _ := DetectHostGlibc()
 	if hd == nil {
-		return HostContext{}
+		return deploykit.HostContext{}
 	}
-	return HostContext{
+	return deploykit.HostContext{
 		MachineVenue: true,
 		Distro:       hd.PrimaryTag(),
 		GlibcVersion: glibc,
@@ -978,7 +840,7 @@ func detectHostContext() HostContext {
 // a namespaced fedora.fedora-builder) is resolved to a concrete image later by
 // BuilderRun → EnsureImagePresent (builder_run.go), so it need not be a full registry
 // ref.
-func (c *deployAddCmd) compileHostContext() HostContext {
+func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 	hostCtx := detectHostContext()
 	if c.builderImageOverride != "" {
 		hostCtx.BuilderImage = c.builderImageOverride
@@ -994,7 +856,7 @@ func (c *deployAddCmd) compileHostContext() HostContext {
 // scoped to those words. A pre-pass error (an externalized builder whose plugin won't connect) is
 // FATAL, never a silent skip (R4). Called at every BuildDeployPlan compile site so the purity
 // invariant holds uniformly.
-func preresolveBuildersInto(hostCtx HostContext, cfg *Config, dir string, order []string, layers map[string]*Candy, img *ResolvedBox) (HostContext, error) {
+func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]*Candy, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
 	bc, err := preresolveBuilderContexts(context.Background(), cfg, dir, order, layers, img)
 	if err != nil {
 		return hostCtx, err
@@ -1013,9 +875,9 @@ func preresolveBuildersInto(hostCtx HostContext, cfg *Config, dir string, order 
 // which would default to 0 — quietly routing the task through
 // ScopeSystem (sudo), installing user-scoped tooling like
 // `cargo install` to /root/.cargo/bin instead of $HOME/.cargo/bin.
-func syntheticHostBox() *ResolvedBox {
+func syntheticHostBox() *buildkit.ResolvedBox {
 	hd, _ := DetectHostDistro()
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Name:         "host-adhoc",
 		Home:         os.Getenv("HOME"),
 		User:         os.Getenv("USER"),
@@ -1039,7 +901,7 @@ func syntheticHostBox() *ResolvedBox {
 // the "vm:<name>" deploy-key prefix (the CLI `charly bundle add vm:<name>` form).
 // This is the single signal the candy compiler uses to pick syntheticVmBox
 // over syntheticHostBox — the prefix alone missed bed/target:vm deploys.
-func resolveVmEntity(deployName string, node *BundleNode) string {
+func resolveVmEntity(deployName string, node *spec.BundleNode) string {
 	if node != nil && node.From != "" {
 		return node.From
 	}
@@ -1073,7 +935,7 @@ func resolveVmEntity(deployName string, node *BundleNode) string {
 // user (cloud-init's adopt path respects that). bootc VMs default to
 // root, in which case we fall back to the same syntheticHostBox()
 // semantics (System scope, no per-user path).
-func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
+func syntheticVmBox(spec *VmSpec, distroCfg *buildkit.DistroConfig) *buildkit.ResolvedBox {
 	user := resolveVmSshUser(spec)
 	if user == "" || user == "root" {
 		img := syntheticHostBox()
@@ -1082,7 +944,7 @@ func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
 		img.Home = "/root"
 		return img
 	}
-	img := &ResolvedBox{
+	img := &buildkit.ResolvedBox{
 		Name: "vm-adhoc",
 		User: user,
 		UID:  1000,
@@ -1100,7 +962,7 @@ func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
 			// distro tag — image/VM parity for the distro-cascade resolver. Then
 			// expand inherit_packages: ancestors (a cachyos VM → [cachyos, arch]
 			// so `arch:` candy blocks reach it), mirroring the image-resolve path.
-			img.Distro = distroCfg.ExpandPackageInheritance(distroTagChain(distroKey, def.Version))
+			img.Distro = distroCfg.ExpandPackageInheritance(buildkit.DistroTagChain(distroKey, def.Version))
 			if pf := def.PrimaryFormat(); pf != "" {
 				img.Pkg = pf
 				img.BuildFormats = []string{pf}
@@ -1113,7 +975,7 @@ func syntheticVmBox(spec *VmSpec, distroCfg *DistroConfig) *ResolvedBox {
 }
 
 // resolveDistroDef returns the DistroDef for a given distro tag.
-func resolveDistroDef(cfg *DistroConfig, distroTag string) *DistroDef {
+func resolveDistroDef(cfg *buildkit.DistroConfig, distroTag string) *spec.ResolvedDistro {
 	if cfg == nil || distroTag == "" {
 		return nil
 	}
@@ -1123,7 +985,7 @@ func resolveDistroDef(cfg *DistroConfig, distroTag string) *DistroDef {
 // loadConfigForDeploy loads charly.yml + the embedded build vocabulary for the
 // current project directory. Runs RegisterBuildVocabulary as a side effect since
 // the candy scanner needs it.
-func loadConfigForDeploy(dir string) (*Config, *DistroConfig, *BuilderConfig, error) {
+func loadConfigForDeploy(dir string) (*Config, *buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		return nil, nil, nil, err

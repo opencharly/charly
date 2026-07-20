@@ -4,6 +4,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedServiceVerb_DispatchesViaKit proves the THREE-role `service` verb —
@@ -24,7 +28,7 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "supervisorctl status", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"service": "nginx", "running": true}})
+		&spec.Op{PluginInput: map[string]any{"service": "nginx", "running": true}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +38,7 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("service provider does not implement ProvisionActor: %T", prov)
 	}
-	script, ok := pa.RenderProvisionScript(&Op{PluginInput: map[string]any{"service": "nginx"}}, nil)
+	script, ok := pa.RenderProvisionScript(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, nil)
 	if !ok || !strings.Contains(script, "systemctl enable") || !strings.Contains(script, "supervisorctl") {
 		t.Fatalf("act: want an enable shell, got ok=%v %q", ok, script)
 	}
@@ -44,11 +48,11 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	if !ok {
 		t.Fatalf("service provider does not implement TypedStepProvider (multi-role step adapter missing): %T", prov)
 	}
-	if sp.LowersTo() != StepKindServicePackaged {
+	if sp.LowersTo() != spec.StepKindServicePackaged {
 		t.Fatalf("LowersTo = %v, want StepKindServicePackaged", sp.LowersTo())
 	}
-	step := sp.ConstructStep(&Op{PluginInput: map[string]any{"service": "nginx"}}, &Candy{Name: "mylayer"}, &ResolvedBox{})
-	sps, ok := step.(*ServicePackagedStep)
+	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, &Candy{Name: "mylayer"}, &buildkit.ResolvedBox{})
+	sps, ok := step.(*deploykit.ServicePackagedStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *ServicePackagedStep", step)
 	}

@@ -15,6 +15,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,8 +36,8 @@ func buildBundleNodeInto(gn *genericNode, uf *UnifiedFile) error {
 // discriminator value carries the deploy config; inline STEP children (checks) fold
 // into the bundle's plan via decodeNodeValue (the assembler); ENTITY children are
 // RESOURCE members (deploy-into / alongside).
-func buildBundleNode(gn *genericNode) (*BundleNode, error) {
-	var dn BundleNode
+func buildBundleNode(gn *genericNode) (*spec.BundleNode, error) {
+	var dn spec.BundleNode
 	if err := decodeNodeValue(gn, &dn); err != nil {
 		return nil, err
 	}
@@ -59,12 +61,12 @@ func buildBundleNode(gn *genericNode) (*BundleNode, error) {
 		// venue (deploy-into → Nested).
 		if dn.Target == "" {
 			if dn.Members == nil {
-				dn.Members = map[string]*BundleNode{}
+				dn.Members = map[string]*spec.BundleNode{}
 			}
 			dn.Members[name] = member
 		} else {
 			if dn.Children == nil {
-				dn.Children = map[string]*BundleNode{}
+				dn.Children = map[string]*spec.BundleNode{}
 			}
 			dn.Children[name] = member
 		}
@@ -81,8 +83,8 @@ func buildBundleNode(gn *genericNode) (*BundleNode, error) {
 // op.Env so the plugin attaches it to its spec.Deploy reply). Data + step children are
 // NOT members — they fold into the node body via decodeNodeValue. A non-resource entity
 // child is a hard error (deploy/resource children must be pod/vm/k8s/local/android/group).
-func buildResourceMemberChildren(gn *genericNode) (map[string]*BundleNode, error) {
-	var out map[string]*BundleNode
+func buildResourceMemberChildren(gn *genericNode) (map[string]*spec.BundleNode, error) {
+	var out map[string]*spec.BundleNode
 	for _, rk := range gn.children {
 		// Data + step children are folded into the node body by decodeNodeValue;
 		// only sub-ENTITY children are resource members.
@@ -97,7 +99,7 @@ func buildResourceMemberChildren(gn *genericNode) (map[string]*BundleNode, error
 			return nil, err
 		}
 		if out == nil {
-			out = map[string]*BundleNode{}
+			out = map[string]*spec.BundleNode{}
 		}
 		out[rk.name] = member
 	}
@@ -127,7 +129,7 @@ func bundleTargetForDisc(d string) string {
 // setBundleCrossRef sets the deploy's cross-ref from a scalar discriminator value
 // (EDGE-INHERIT cutover B): a `pod:` scalar is the IMAGE the pod runs; a vm/k8s/
 // local/android scalar is the same-kind template the deploy inherits (`from:`).
-func setBundleCrossRef(dn *BundleNode, disc, ref string) {
+func setBundleCrossRef(dn *spec.BundleNode, disc, ref string) {
 	switch disc {
 	case "pod":
 		dn.Image = ref

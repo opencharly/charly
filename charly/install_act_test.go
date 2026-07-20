@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // The REVERSAL-PRESERVATION GATE for the package→plugin extraction: a
@@ -13,18 +16,18 @@ import (
 // DROP them — that is exactly what this verb's TypedStepProvider exists to prevent. The
 // keyword (run:) supplies the act intent the deleted Op.Do axis used to carry.
 func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{{Run: "install redis", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{
 		Plugin:      "package",
 		PluginInput: map[string]any{"package": "redis"},
 	}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 
-	var sp *SystemPackagesStep
+	var sp *deploykit.SystemPackagesStep
 	for _, s := range steps {
-		if _, isOp := s.(*OpStep); isOp {
+		if _, isOp := s.(*deploykit.OpStep); isOp {
 			t.Fatalf("plugin: package run step lowered to a generic OpStep — the load-bearing reversals would be DROPPED; got %#v", s)
 		}
-		if v, ok := s.(*SystemPackagesStep); ok {
+		if v, ok := s.(*deploykit.SystemPackagesStep); ok {
 			sp = v
 		}
 	}
@@ -36,16 +39,16 @@ func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *test
 	}
 	// The install-phase step installs the package → Reverse() removes it.
 	rev := sp.Reverse()
-	if len(rev) != 1 || rev[0].Kind != ReverseOpPackageRemove {
+	if len(rev) != 1 || rev[0].Kind != spec.ReverseOpPackageRemove {
 		t.Errorf("plugin: package run step did not reverse to package-remove: %+v", rev)
 	}
 	// A PhasePrepare step carrying a copr repo reverses to ReverseOpCoprDisable — the OTHER
 	// load-bearing reversal SystemPackagesStep records (and the typed step preserves), which
 	// a generic OpStep cannot express.
-	prep := &SystemPackagesStep{Format: "rpm", Phase: PhasePrepare, Copr: []string{"someuser/somerepo"}}
+	prep := &deploykit.SystemPackagesStep{Format: "rpm", Phase: spec.PhasePrepare, Copr: []string{"someuser/somerepo"}}
 	var sawCopr bool
 	for _, op := range prep.Reverse() {
-		if op.Kind == ReverseOpCoprDisable {
+		if op.Kind == spec.ReverseOpCoprDisable {
 			sawCopr = true
 		}
 	}
@@ -64,9 +67,9 @@ func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
 	dir := t.TempDir()
 	layer := &Candy{Name: "lyr"}
 	g := &Generator{BuildDir: dir}
-	op := Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
+	op := spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []Op{op}, dir, ".build/test-img"); err != nil {
+	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{op}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -87,18 +90,18 @@ func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
 // OpStep (the path the other extracted state-provision verbs take) would DROP them — that
 // is exactly what this verb's TypedStepProvider exists to prevent.
 func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{{Run: "enable sshd", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: spec.Op{
 		Plugin:      "service",
 		PluginInput: map[string]any{"service": "sshd"},
 	}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 
-	var sp *ServicePackagedStep
+	var sp *deploykit.ServicePackagedStep
 	for _, s := range steps {
-		if _, isOp := s.(*OpStep); isOp {
+		if _, isOp := s.(*deploykit.OpStep); isOp {
 			t.Fatalf("plugin: service run step lowered to a generic OpStep — the load-bearing reversals would be DROPPED; got %#v", s)
 		}
-		if v, ok := s.(*ServicePackagedStep); ok {
+		if v, ok := s.(*deploykit.ServicePackagedStep); ok {
 			sp = v
 		}
 	}
@@ -116,11 +119,11 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 	sp.PriorEnabled = true
 	sp.OverridesText = "[Service]\nEnvironment=X=1\n"
 	sp.OverridesPath = "/etc/systemd/system/sshd.service.d/charly-x.conf"
-	got := map[ReverseOpKind]bool{}
+	got := map[spec.ReverseOpKind]bool{}
 	for _, op := range sp.Reverse() {
 		got[op.Kind] = true
 	}
-	for _, want := range []ReverseOpKind{ReverseOpServiceDisable, ReverseOpRestoreEnabled, ReverseOpRemoveDropin} {
+	for _, want := range []spec.ReverseOpKind{spec.ReverseOpServiceDisable, spec.ReverseOpRestoreEnabled, spec.ReverseOpRemoveDropin} {
 		if !got[want] {
 			t.Errorf("ServicePackagedStep.Reverse() missing %q; got %v", want, got)
 		}
@@ -133,15 +136,15 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 // preserves end-to-end (compileActOp → ServicePackagedStep → candy/plugin-installstep
 // service-packaged OpEmit, the C1.1-externalized build-emit).
 func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{{Run: "enable sshd", Op: Op{
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "enable sshd", Op: spec.Op{
 		Plugin:      "service",
 		PluginInput: map[string]any{"service": "sshd"},
 		Context:     []string{"build"},
 	}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
-	tgt := &OCITarget{}
-	plan := &InstallPlan{Candy: "x", Steps: steps}
-	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	tgt := ociTestTarget(buildEngineContext{})
+	plan := &deploykit.InstallPlan{Candy: "x", Steps: steps}
+	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	got := tgt.String()
@@ -158,20 +161,20 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 // the deploy walk would route to an OpExecute the build-emit-only step plugin cannot serve. Proves
 // verb-first precedence in compileActOp.
 func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
-	layer := &Candy{Name: "check-local-layer", plan: []Step{{Run: "drop the marker", Op: Op{
+	layer := &Candy{Name: "check-local-layer", plan: []spec.Step{{Run: "drop the marker", Op: spec.Op{
 		Plugin:      "file",
 		PluginInput: map[string]any{"file": "/etc/check-local-marker", "exists": true},
 		Context:     []string{"deploy"},
 	}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 	if len(steps) != 1 {
 		t.Fatalf("want exactly 1 compiled step, got %d (%#v)", len(steps), steps)
 	}
-	if es, isExternal := steps[0].(*externalStep); isExternal {
+	if es, isExternal := steps[0].(*deploykit.ExternalStep); isExternal {
 		t.Fatalf("run: plugin: file lowered to an externalStep (kind %q) — verb-first precedence regressed; "+
 			"the deploy walk would route it to OpExecute, which the build-emit-only step plugin cannot serve", es.Kind())
 	}
-	op, ok := steps[0].(*OpStep)
+	op, ok := steps[0].(*deploykit.OpStep)
 	if !ok {
 		t.Fatalf("run: plugin: file must lower to an OpStep (the file verb act), got %T", steps[0])
 	}
@@ -183,14 +186,14 @@ func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 // A build-context run: step folds into the install plan; a sibling check: step in
 // the same plan does NOT (it is a runtime probe, not an install step).
 func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{
-		{Run: "install vim", Op: Op{Plugin: "package", PluginInput: map[string]any{"package": "vim"}, Context: []string{"build"}}},
-		{Check: "vim present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/vim", "exists": true}}}, // a check: step → not folded
+	layer := &Candy{Name: "x", plan: []spec.Step{
+		{Run: "install vim", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "vim"}, Context: []string{"build"}}},
+		{Check: "vim present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/vim", "exists": true}}}, // a check: step → not folded
 	}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 	pkgCount := 0
 	for _, s := range steps {
-		if _, ok := s.(*SystemPackagesStep); ok {
+		if _, ok := s.(*deploykit.SystemPackagesStep); ok {
 			pkgCount++
 		}
 	}
@@ -202,10 +205,10 @@ func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
 // A runtime-only run: step (context: [runtime]) is NOT folded into the build
 // plan — the check Runner executes it live, so folding would double-run.
 func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{
-		{Run: "run", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, Context: []string{"runtime"}}},
+	layer := &Candy{Name: "x", plan: []spec.Step{
+		{Run: "run", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, Context: []string{"runtime"}}},
 	}}
-	if steps := compileOpSteps(layer, testResolvedBox()); len(steps) != 0 {
+	if steps := deploykit.CompileOpSteps(layer, testResolvedBox()); len(steps) != 0 {
 		t.Fatalf("runtime-only run: step must not be folded into the build plan, got %d steps", len(steps))
 	}
 }
@@ -213,12 +216,12 @@ func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
 // A run: command step (the install timeline; the former task: list) lowers to an
 // OpStep — it must NOT be dropped, and the run-as user drives scope.
 func TestCompileOpSteps_RunCommandLowersToOpStep(t *testing.T) {
-	layer := &Candy{Name: "x", plan: []Step{{Run: "run cmd", Op: Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, RunAs: "root"}}}}
-	steps := compileOpSteps(layer, testResolvedBox())
+	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "run cmd", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, RunAs: "root"}}}}
+	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 	if len(steps) != 1 {
 		t.Fatalf("run: command dropped: %d steps", len(steps))
 	}
-	op, ok := steps[0].(*OpStep)
+	op, ok := steps[0].(*deploykit.OpStep)
 	if !ok || op.Op.Plugin != "command" || op.Op.PluginInput["command"] != "echo hi" {
 		t.Fatalf("run: command not compiled as an OpStep: %#v", steps[0])
 	}

@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
+)
 
 // TestVmHostdevCount pins the nil-safety contract of the VM_HOSTDEV_COUNT
 // intent source: a spec with no libvirt block, no devices block, or an empty
@@ -15,10 +21,10 @@ func TestVmHostdevCount(t *testing.T) {
 	}{
 		{"nil spec", nil, 0},
 		{"nil libvirt", &VmSpec{}, 0},
-		{"nil devices", &VmSpec{Libvirt: &LibvirtDomain{}}, 0},
-		{"zero hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &LibvirtDevices{}}}, 0},
-		{"two hostdevs", &VmSpec{Libvirt: &LibvirtDomain{Devices: &LibvirtDevices{
-			Hostdevs: []LibvirtHostdev{{}, {}},
+		{"nil devices", &VmSpec{Libvirt: &spec.LibvirtDomain{}}, 0},
+		{"zero hostdevs", &VmSpec{Libvirt: &spec.LibvirtDomain{Devices: &vmshared.LibvirtDevices{}}}, 0},
+		{"two hostdevs", &VmSpec{Libvirt: &spec.LibvirtDomain{Devices: &vmshared.LibvirtDevices{
+			Hostdevs: []vmshared.LibvirtHostdev{{}, {}},
 		}}}, 2},
 	}
 	for _, tc := range cases {
@@ -32,7 +38,7 @@ func TestVmHostdevCount(t *testing.T) {
 // resolves only against a live VM deployment, so a scope:"build" check must be
 // barred from referencing it (validate_check.go enforces this via IsRuntimeOnlyVar).
 func TestVmHostdevCountIsRuntimeOnly(t *testing.T) {
-	if !IsRuntimeOnlyVar("VM_HOSTDEV_COUNT") {
+	if !kit.IsRuntimeOnlyVar("VM_HOSTDEV_COUNT") {
 		t.Error("VM_HOSTDEV_COUNT must be runtime-only so build-scope checks cannot reference it")
 	}
 }

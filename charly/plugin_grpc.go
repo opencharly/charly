@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -10,7 +14,10 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/targetkit"
 )
 
 // maxReverseChannelMsgBytes is the max gRPC message size (recv AND send) for the E3b
@@ -33,9 +40,10 @@ const maxReverseChannelMsgBytes = 512 << 20 // 512 MiB
 // plugin_input — the structured form of the proto ProvidedCapability, carried on
 // the servedSet and lifted onto a connected unit's schema.
 type ProvidedCap struct {
-	Class    ProviderClass
-	Word     string
-	InputDef string
+	Class            ProviderClass
+	Word             string
+	InputDef         string
+	CommandModelJson []byte
 }
 
 // servedSet is the set of plugin UNITS a `__plugin serve` process exposes over
@@ -59,7 +67,11 @@ func newServedSet(calver string, units []PluginUnit) *servedSet {
 		for _, p := range u.Providers {
 			k := provKey(p.Class(), p.Reserved())
 			s.byKey[k] = p
-			s.provided = append(s.provided, ProvidedCap{Class: p.Class(), Word: p.Reserved(), InputDef: u.Schema.InputDefs[k]})
+			capability := ProvidedCap{Class: p.Class(), Word: p.Reserved(), InputDef: u.Schema.InputDefs[k]}
+			if carrier, ok := p.(interface{ commandModelPayload() []byte }); ok {
+				capability.CommandModelJson = carrier.commandModelPayload()
+			}
+			s.provided = append(s.provided, capability)
 		}
 	}
 	sort.Slice(s.provided, func(i, j int) bool {
@@ -101,6 +113,182 @@ func (s *providerGRPCServer) InvokeStream(req *pb.InvokeRequest, srv pb.Provider
 	return srv.Send(&pb.Frame{ResultJson: rep.GetResultJson()})
 }
 
+func (s *providerGRPCServer) Channel(srv pb.Provider_ChannelServer) error {
+	open, err := sdk.ReceiveChannelOpen(srv)
+	if err != nil {
+		return err
+	}
+	if handled, err := relayNestedTarget(open, srv); handled {
+		return err
+	}
+	p, ok := s.set.byKey[open.GetClass()+":"+open.GetReserved()]
+	if !ok {
+		return fmt.Errorf("plugin serve: no provider %s:%s", open.GetClass(), open.GetReserved())
+	}
+	channel, ok := p.(sdk.ChannelProvider)
+	if !ok {
+		return fmt.Errorf("plugin serve: provider %s:%s has no bidirectional channel", open.GetClass(), open.GetReserved())
+	}
+	return channel.OpenChannel(open, srv)
+}
+
+// relayNestedTarget consumes exactly one outer process+gRPC pair from the
+// CUE-generated target chain. If another process+gRPC pair remains it opens the
+// same Provider.Channel on that node. A terminal/tmux hop remains domain data
+// for the selected provider, which is how tmux-over-gRPC composes with either
+// local or SSH gRPC without a combination-specific implementation.
+func relayNestedTarget(open *pb.ChannelFrame, upstream sdk.ProviderChannel) (handled bool, returnErr error) {
+	if len(open.GetTargetJson()) == 0 {
+		return false, nil
+	}
+	var target spec.TargetSpec
+	if err := json.Unmarshal(open.GetTargetJson(), &target); err != nil {
+		return true, fmt.Errorf("provider channel target: %w", err)
+	}
+	if err := sdk.ValidateGenerated("#TargetSpec", target); err != nil {
+		return true, fmt.Errorf("provider channel target: %w", err)
+	}
+	// Deployment is an orthogonal placement selector, not a transport kind.
+	// Start the same fixed gRPC endpoint through the deployment executor, clear
+	// only the selector, and leave the complete transport route for that Charly
+	// node. This permits deployment→SSH→gRPC→tmux and every shorter composition
+	// without a combination-specific branch.
+	if target.Deployment != "" {
+		venue, err := resolveCheckVenue(target.Deployment, target.Instance)
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q: %w", target.Deployment, err)
+		}
+		processExecutor, ok := venue.Exec.(spec.ProcessExecutor)
+		if !ok {
+			return true, fmt.Errorf("provider channel deployment %q (%s): %w", target.Deployment, venue.Exec.Venue(), spec.ErrNotSupported)
+		}
+		controllerBin, err := activeCharlyBinary()
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
+		}
+		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for deployment %q on %s\n", target.Deployment, venue.Exec.Venue())
+		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), venue.Exec, controllerBin, CharlyVersion())
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q endpoint bootstrap: %w", target.Deployment, err)
+		}
+		fmt.Fprintf(os.Stderr, "provider channel: deployment %q endpoint ready at %s\n", target.Deployment, remoteCharly)
+		process, err := processExecutor.StartProcess(upstream.Context(), spec.ProcessLaunch{Argv: []string{remoteCharly, "__agent-target", "serve", "--stdio"}, WorkingDir: target.WorkingDir})
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q process: %w", target.Deployment, err)
+		}
+		conn, client, err := targetkit.DialProcessProvider(upstream.Context(), process, targetkit.DialOptions{Stderr: os.Stderr})
+		if err != nil {
+			return true, fmt.Errorf("provider channel deployment %q gRPC: %w", target.Deployment, errors.Join(err, process.Close()))
+		}
+		defer func() { returnErr = errors.Join(returnErr, conn.Close()) }()
+		target.Deployment = ""
+		target.Instance = ""
+		placed, err := json.Marshal(target)
+		if err != nil {
+			return true, err
+		}
+		open.TargetJson = placed
+		downstream, err := sdk.OpenProviderChannel(upstream.Context(), client, open)
+		if err != nil {
+			return true, err
+		}
+		return true, relayProviderChannels(upstream, downstream)
+	}
+	dialTarget, remainingTarget, hasProcessPair := splitTargetProcessPair(target)
+	if !hasProcessPair {
+		trimmed, err := json.Marshal(target)
+		if err != nil {
+			return true, err
+		}
+		open.TargetJson = trimmed
+		return false, nil
+	}
+	trimmed, err := json.Marshal(remainingTarget)
+	if err != nil {
+		return true, err
+	}
+	open.TargetJson = trimmed
+	controllerBin, err := activeCharlyBinary()
+	if err != nil {
+		return true, fmt.Errorf("provider channel %s endpoint bootstrap: %w", target.Hops[0].Transport, err)
+	}
+	dialOpts := targetkit.DialOptions{CharlyBinary: controllerBin, Stderr: os.Stderr}
+	if dialTarget.Hops[0].Transport == "ssh" {
+		sshExec := sshExecutorForTargetHop(dialTarget.Hops[0])
+		fmt.Fprintf(os.Stderr, "provider channel: bootstrap Charly endpoint for SSH target %s\n", sshExec.Venue())
+		remoteCharly, err := kit.EnsureCharlyInDeployVenue(upstream.Context(), sshExec, controllerBin, CharlyVersion())
+		if err != nil {
+			return true, fmt.Errorf("provider channel SSH endpoint bootstrap for %s: %w", sshExec.Venue(), err)
+		}
+		fmt.Fprintf(os.Stderr, "provider channel: SSH endpoint ready at %s\n", remoteCharly)
+		dialOpts.RemoteCharlyBinary = remoteCharly
+	}
+	conn, client, err := targetkit.DialProvider(upstream.Context(), dialTarget, dialOpts)
+	if err != nil {
+		return true, err
+	}
+	defer func() { returnErr = errors.Join(returnErr, conn.Close()) }()
+	downstream, err := sdk.OpenProviderChannel(upstream.Context(), client, open)
+	if err != nil {
+		return true, err
+	}
+	return true, relayProviderChannels(upstream, downstream)
+}
+
+// splitTargetProcessPair returns the complete route needed to dial exactly one
+// process+gRPC boundary and the route that the responsible downstream Charly
+// must continue consuming. Keeping these as two values is load-bearing: mutating
+// the dial route before DialProvider would silently skip SSH or exec placement.
+func splitTargetProcessPair(target spec.TargetSpec) (dial, remaining spec.TargetSpec, ok bool) {
+	if len(target.Hops) < 2 || (target.Hops[0].Transport != "exec" && target.Hops[0].Transport != "ssh") || target.Hops[1].Transport != "grpc" {
+		return spec.TargetSpec{}, target, false
+	}
+	dial = target
+	dial.Hops = append([]spec.TargetHop(nil), target.Hops...)
+	remaining = target
+	remaining.Hops = append([]spec.TargetHop(nil), target.Hops[2:]...)
+	return dial, remaining, true
+}
+
+func activeCharlyBinary() (string, error) {
+	path, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve active Charly executable: %w", err)
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve active Charly executable path: %w", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("stat active Charly executable %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("active Charly executable %s is not a regular file", path)
+	}
+	return path, nil
+}
+
+func sshExecutorForTargetHop(hop spec.TargetHop) *kit.SSHExecutor {
+	args := make([]string, 0, 2+2*len(hop.Options))
+	if hop.IdentityFile != "" {
+		args = append(args, "-i", hop.IdentityFile)
+	}
+	keys := make([]string, 0, len(hop.Options))
+	for key := range hop.Options {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		args = append(args, "-o", key+"="+hop.Options[key])
+	}
+	return &kit.SSHExecutor{User: hop.User, Host: hop.Address, Port: int(hop.Port), Args: args}
+}
+
+func relayProviderChannels(upstream sdk.ProviderChannel, downstream pb.Provider_ChannelClient) error {
+	return sdk.RelayChannel(upstream, downstream)
+}
+
 type metaGRPCServer struct {
 	pb.UnimplementedPluginMetaServer
 	set *servedSet
@@ -109,7 +297,7 @@ type metaGRPCServer struct {
 func (m *metaGRPCServer) Describe(_ context.Context, _ *pb.Empty) (*pb.Capabilities, error) {
 	provided := make([]*pb.ProvidedCapability, 0, len(m.set.provided))
 	for _, c := range m.set.provided {
-		provided = append(provided, &pb.ProvidedCapability{Class: string(c.Class), Word: c.Word, InputDef: c.InputDef})
+		provided = append(provided, &pb.ProvidedCapability{Class: string(c.Class), Word: c.Word, InputDef: c.InputDef, CommandModelJson: c.CommandModelJson})
 	}
 	return &pb.Capabilities{
 		Calver:          m.set.calver,
@@ -149,6 +337,17 @@ func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, erro
 	return &Result{JSON: rep.GetResultJson()}, nil
 }
 
+// OpenChannel makes the generic bidirectional channel placement-invisible. It
+// forwards the already-validated open frame and then relays both directions;
+// agent and terminal semantics remain entirely in the target plugin.
+func (g *grpcProvider) OpenChannel(open *pb.ChannelFrame, upstream sdk.ProviderChannel) error {
+	downstream, err := sdk.OpenProviderChannel(upstream.Context(), g.conn.Provider, open)
+	if err != nil {
+		return err
+	}
+	return relayProviderChannels(upstream, downstream)
+}
+
 // InvokeWithExecutor invokes a deploy/step/builder op WITH the E3b reverse channel: it
 // stands up the host's ExecutorService (delegating to exec) on this connection's
 // go-plugin broker, passes the broker id in the request, and the out-of-process plugin
@@ -160,7 +359,7 @@ func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, erro
 // VM); false (the default) makes a RebootStep skip-and-note (a host venue is never rebooted).
 // Falls back to a plain Invoke (broker id 0) when the connection has no broker (an in-proc
 // transport) or no executor is given.
-func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, exec DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error) {
+func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error) {
 	var brokerID uint32
 	if g.conn.Broker != nil && (exec != nil || cc != nil) {
 		id := g.conn.Broker.NextId()

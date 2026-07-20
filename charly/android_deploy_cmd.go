@@ -5,14 +5,23 @@ package main
 // `target: android` is an EXTERNAL deploy substrate served out-of-process by
 // candy/plugin-adb (deploy:android — see android_deploy_preresolve.go). These
 // helpers resolve a kind:android DEVICE (an in-pod emulator or a remote adb
-// endpoint) to its adb endpoint host-side WITHOUT goadb (engine inspect only), and
-// are shared by the deploy:android preresolver AND the `charly status`
-// AndroidCollector (R3). The goadb wire talk + the app install/uninstall live in
-// candy/plugin-adb; this file does only device-endpoint resolution.
+// endpoint) to its adb endpoint host-side WITHOUT goadb (engine inspect only)
+// for the deploy:android preresolver. The `charly status` android collector
+// (K5: candy/plugin-substrate/status_android_collect.go) used to share this
+// exact code as the in-core AndroidCollector; it now carries its OWN
+// plugin-local re-implementation of the same resolution LOGIC (a plugin
+// cannot import charly/ types), so this is no longer literally shared code —
+// it is the deploy-time consumer alone. The goadb wire talk + the app
+// install/uninstall live in candy/plugin-adb; this file does only
+// device-endpoint resolution.
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // AndroidDevice is a resolved install target — enough for the deploy:android
@@ -53,7 +62,7 @@ const adbServerPort = 5037
 // the deploy:android plugin consumes. Used by resolveAndroidDevice for the in-pod /
 // nested device.
 func adbAddrForContainer(engine, containerName string) (string, error) {
-	insp, err := InspectContainer(engine, containerName)
+	insp, err := kit.InspectContainer(engine, containerName)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", containerName, err)
 	}
@@ -72,7 +81,7 @@ func adbAddrForContainer(engine, containerName string) (string, error) {
 // emits the protocol-suffixed form. Relocated from the deleted charly/adb.go — it
 // is pure engine-inspect arithmetic (no goadb), shared by adbAddrForContainer and
 // resolveAndroidHostPortRef's nested ${HOST_PORT:N} resolution (R3).
-func findHostPort(insp *ContainerInspection, containerPort int) (int, error) {
+func findHostPort(insp *kit.ContainerInspection, containerPort int) (int, error) {
 	// Host-networked containers expose the container port AS the host port.
 	if insp.IsHostNetworked() {
 		return containerPort, nil
@@ -104,12 +113,33 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 	return lookupAndroidSpec(uf, name)
 }
 
+// lookupAndroidSpec resolves a kind:android device by name from the unified
+// config (K5: relocated from the deleted status_collect_adb.go — the status
+// collector's own android lookup moved to
+// candy/plugin-substrate/status_android_collect.go's androidSpecFor, which
+// resolves against the resolved-project envelope instead of *UnifiedFile;
+// this copy is the SEPARATE deploy-time consumer, findAndroidSpec above).
+func lookupAndroidSpec(uf *UnifiedFile, name string) *ResolvedAndroid {
+	if uf == nil || uf.Android == nil || name == "" {
+		return nil
+	}
+	body, ok := uf.Android[name]
+	if !ok {
+		return nil
+	}
+	r, err := resolveAndroidViaPlugin(body)
+	if err != nil {
+		return nil
+	}
+	return r
+}
+
 // resolveAndroidDevice builds the AndroidDevice install handle from the spec
 // and deploy context. Endpoint devices target a remote adb server (apkeep on
 // the host); image devices target an in-pod emulator (apkeep in-pod). For a
 // nested deploy (dotted path), the in-pod container is the PARENT pod
 // (charly-<flat-parent-path>); for a top-level deploy it resolves by image name.
-func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) (AndroidDevice, error) {
+func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path string) (AndroidDevice, error) {
 	serial := spec.EffectiveSerial()
 
 	// Remote/physical endpoint — host-side apkeep + goadb.
@@ -143,8 +173,8 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) 
 	if i := strings.LastIndexByte(path, '.'); i >= 0 {
 		// Nested under a pod — the emulator runs in the PARENT pod container.
 		parent := path[:i]
-		container = "charly-" + NestedContainerName(parent)
-		engine = EngineBinary(engine)
+		container = "charly-" + kit.NestedContainerName(parent)
+		engine = kit.EngineBinary(engine)
 		if !containerRunning(engine, container) {
 			return AndroidDevice{}, fmt.Errorf("parent pod container %s is not running (start it before deploying the android device)", container)
 		}
@@ -170,7 +200,7 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *BundleNode, path string) 
 // the image-device branch uses (R3). The parent pod is derived from the deploy
 // path (path[:lastDot]), exactly like the image branch. Returns addr unchanged
 // when it carries no ${HOST_PORT:N} reference (a literal host:port endpoint).
-func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, error) {
+func resolveAndroidHostPortRef(addr, path string, node *spec.BundleNode) (string, error) {
 	const marker = "${HOST_PORT:"
 	before, after, ok := strings.Cut(addr, marker)
 	if !ok {
@@ -193,12 +223,12 @@ func resolveAndroidHostPortRef(addr, path string, node *BundleNode) (string, err
 	if node != nil && node.Engine == "docker" {
 		engine = "docker"
 	}
-	engine = EngineBinary(engine)
-	container := "charly-" + NestedContainerName(path[:i])
+	engine = kit.EngineBinary(engine)
+	container := "charly-" + kit.NestedContainerName(path[:i])
 	if !containerRunning(engine, container) {
 		return "", fmt.Errorf("parent pod container %s is not running (start it before deploying the android endpoint device)", container)
 	}
-	insp, err := InspectContainer(engine, container)
+	insp, err := kit.InspectContainer(engine, container)
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", container, err)
 	}

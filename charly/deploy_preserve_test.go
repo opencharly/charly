@@ -4,6 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestCharlyUpdatePreservesPerHostDeployFields reproduces the operator's scenario
@@ -46,12 +50,12 @@ vm:cachyos-gpu:
 	if err := removeVmDeployEntry("vm:cachyos-gpu"); err != nil {
 		t.Fatalf("removeVmDeployEntry (destroy leg): %v", err)
 	}
-	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
+	if err := saveVmDeployState("vm:cachyos-gpu", "cachyos-gpu", &spec.VmDeployState{InstanceID: "rebuilt-uuid", SshPort: 2222}); err != nil {
 		t.Fatalf("saveVmDeployState (create leg): %v", err)
 	}
 
 	// Reload and assert NOTHING operator-authored was dropped by the cycle.
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}
@@ -99,7 +103,7 @@ vm:check-cachyos-gpu-vm:
 	if err := removeVmDeployEntry("vm:check-cachyos-gpu-vm"); err != nil {
 		t.Fatalf("removeVmDeployEntry: %v", err)
 	}
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig: %v", err)
 	}
@@ -160,21 +164,21 @@ cachyos-gpu:
 // committed project profile (no preemptible) merged with the per-host overlay
 // (preemptible) must keep the per-host flag, regardless of merge order.
 func TestMergeDeployConfigsPreservesPreemptible(t *testing.T) {
-	project := &BundleConfig{Bundle: map[string]BundleNode{
+	project := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"cachyos-gpu": {Target: "vm", From: "cachyos-gpu"}, // committed: NO preemptible
 	}}
-	perHost := &BundleConfig{Bundle: map[string]BundleNode{
-		"cachyos-gpu": {Preemptible: &PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
+	perHost := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+		"cachyos-gpu": {Preemptible: &spec.PreemptibleConfig{Holds: []string{"nvidia-gpu"}}}, // local opt-in
 	}}
 	for _, tc := range []struct {
 		name    string
-		configs []*BundleConfig
+		configs []*deploykit.BundleConfig
 	}{
-		{"project then per-host", []*BundleConfig{project, perHost}},
-		{"per-host then project", []*BundleConfig{perHost, project}},
+		{"project then per-host", []*deploykit.BundleConfig{project, perHost}},
+		{"per-host then project", []*deploykit.BundleConfig{perHost, project}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			merged := MergeDeployConfigs(tc.configs...)
+			merged := deploykit.MergeDeployConfigs(tc.configs...)
 			node := merged.Bundle["cachyos-gpu"]
 			if node.Preemptible == nil || len(node.Preemptible.Holds) != 1 {
 				t.Errorf("merge DROPPED per-host preemptible: got %+v", node.Preemptible)

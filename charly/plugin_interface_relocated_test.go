@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedInterfaceVerb_DispatchesViaKit proves the `interface` check verb —
@@ -23,7 +25,7 @@ func TestRelocatedInterfaceVerb_DispatchesViaKit(t *testing.T) {
 	// present: non-empty `ip -o addr show` output, exit 0 → pass.
 	fePresent := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "ip -o addr show", stdout: "1: lo    inet 127.0.0.1/8", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fePresent, RunModeLive),
-		&Op{PluginInput: map[string]any{"interface": "lo"}})
+		&spec.Op{PluginInput: map[string]any{"interface": "lo"}})
 	if res.Status != TestPass {
 		t.Fatalf("present: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -31,7 +33,7 @@ func TestRelocatedInterfaceVerb_DispatchesViaKit(t *testing.T) {
 	// absent: empty output → fail.
 	feAbsent := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "ip -o addr show", stdout: "", exit: 0}}}
 	res2 := cv.RunVerb(context.Background(), hostVerbResolverFor(feAbsent, RunModeLive),
-		&Op{PluginInput: map[string]any{"interface": "nonexistent"}})
+		&spec.Op{PluginInput: map[string]any{"interface": "nonexistent"}})
 	if res2.Status != TestFail {
 		t.Fatalf("absent: want fail, got %v: %s", res2.Status, res2.Message)
 	}

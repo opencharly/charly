@@ -3,22 +3,27 @@ package main
 // deploy_target_unified.go — the canonical DeployTarget interface.
 //
 // The legacy DeployTarget interface in install_plan.go is the 2-method
-// contract (Name + Emit) that the retained BUILD ENGINES (OCITarget, PodDeployTarget)
-// satisfy at the IR-emission level. This file defines the lifecycle-and-management
+// contract (Name + Emit) that the retained BUILD ENGINES (the pod-overlay walker, now
+// sdk/deploykit.OCITarget) satisfy at the IR-emission level. This file defines the lifecycle-and-management
 // contract layered on top: UnifiedDeployTarget with the per-verb methods, plus
 // LifecycleTarget for the live-runtime targets.
 //
 // Every `charly bundle add` / `charly bundle del` / `charly update` dispatches through
 // ResolveTarget (unified_targets.go) → an UnifiedDeployTarget adapter. ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to the generic externalDeployTarget
-// over the executor reverse channel, served by its own out-of-process plugin. The core build
-// engines they once wrapped (PodDeployTarget overlay synthesis; the VM disk build) are now
-// invoked HOST-SIDE from each substrate's registered substrateLifecycle hook (pod/vm) or
-// preresolver (android/k8s). There is no per-kind dispatch switch in the cmd files — the kind
-// lives behind the adapter method.
+// over the executor reverse channel, served by its own out-of-process plugin. The pod-overlay
+// render + the VM disk build that once lived in core are now invoked HOST-SIDE from each
+// substrate's registered substrateLifecycle hook (pod/vm) or preresolver (android/k8s) — the
+// pod-overlay render moved to candy/plugin-deploy-pod (P11c), reached via HostBuild("overlay")
+// prep + HostBuild("step-emit","oci-emit-step") per-step dispatch. There is no per-kind dispatch
+// switch in the cmd files — the kind lives behind the adapter method.
 
 import (
 	"context"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // DeployContext carries everything an Add needs from the generic
@@ -33,7 +38,7 @@ import (
 type DeployContext struct {
 	// Node is the dispatch-merged BundleNode. nil for a ref-based
 	// deploy with no charly.yml entry (e.g. `charly bundle add host ./x.yml`).
-	Node *BundleNode
+	Node *spec.BundleNode
 
 	// Name is the deploy key (the bed key / charly.yml map key, e.g.
 	// "check-k3s-vm"). Distinct from the kind:vm entity name (node.From).
@@ -46,8 +51,8 @@ type DeployContext struct {
 	// dispatchNode (loadConfigForDeploy). Reused by each Add so the
 	// construction matches what dispatchNode compiled plans against.
 	Cfg        *Config
-	DistroCfg  *DistroConfig
-	BuilderCfg *BuilderConfig
+	DistroCfg  *buildkit.DistroConfig
+	BuilderCfg *buildkit.BuilderConfig
 
 	// Base is the resolved primary base — the image name for pod/k8s,
 	// or the deploy path for target-only kinds (local/vm/android).
@@ -78,14 +83,14 @@ type UnifiedDeployTarget interface {
 	// is also the sole plumbing point for the `inside:` cross-ref
 	// (a target=host deployment with inside: arch-vm resolves its
 	// executor as NestedExecutor(ResolveTarget(arch-vm).Executor())).
-	Executor() DeployExecutor
+	Executor() deploykit.DeployExecutor
 
 	// Add applies the given plans to the target. Equivalent to
 	// `charly bundle add <name>`. Idempotent: re-applying the same plan
 	// is safe. dctx carries the dispatch-merged node + loaded configs;
 	// the adapter constructs its live embedded target from it (never
 	// re-reading the node from disk — see DeployContext).
-	Add(ctx context.Context, dctx *DeployContext, plans []*InstallPlan, opts EmitOpts) error
+	Add(ctx context.Context, dctx *DeployContext, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error
 
 	// Del reverses every candy currently recorded for this target
 	// and removes the deploy record. Equivalent to `charly bundle del
@@ -96,13 +101,13 @@ type UnifiedDeployTarget interface {
 	// Test runs the given deploy-scope checks against the live
 	// target. Equivalent to `charly check live <name>`. Returns nil only if
 	// every non-skipped check passes.
-	Test(ctx context.Context, checks []Op, opts TestOpts) error
+	Test(ctx context.Context, checks []spec.Op, opts TestOpts) error
 
 	// Update re-applies the plan diff between the currently-recorded
 	// candy set and the plan set derived from fresh charly.yml.
 	// Equivalent to `charly bundle update <name>` (new command; today's
 	// `charly update` is image-focused and will be separate).
-	Update(ctx context.Context, plans []*InstallPlan, opts UpdateOpts) error
+	Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error
 }
 
 // LifecycleTarget extends UnifiedDeployTarget for live-runtime targets

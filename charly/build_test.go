@@ -4,10 +4,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestFilterImages(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {
 			Name:           "fedora",
 			IsExternalBase: true,
@@ -37,7 +40,7 @@ func TestFilterImages(t *testing.T) {
 }
 
 func TestFilterImagesUnknown(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {Name: "fedora", IsExternalBase: true},
 	}
 	_, err := filterBox([]string{"fedora"}, []string{"nonexistent"}, images)
@@ -47,7 +50,7 @@ func TestFilterImagesUnknown(t *testing.T) {
 }
 
 func TestFilterImagesIncludesBuilder(t *testing.T) {
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"builder": {
 			Name:           "builder",
 			IsExternalBase: true,
@@ -55,13 +58,13 @@ func TestFilterImagesIncludesBuilder(t *testing.T) {
 		"fedora": {
 			Name:           "fedora",
 			IsExternalBase: true,
-			Builder:        BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 		"app": {
 			Name:           "app",
 			Base:           "fedora",
 			IsExternalBase: false,
-			Builder:        BuilderMap{"pixi": "builder", "npm": "builder"},
+			Builder:        buildkit.BuilderMap{"pixi": "builder", "npm": "builder"},
 		},
 	}
 
@@ -86,7 +89,7 @@ func TestFilterImagesIncludesBootstrapBuilder(t *testing.T) {
 	// `charly update --build versa` path silently skipped scheduling
 	// cachyos-pacstrap-builder, and runPrivilegedBootstrap then hard-failed
 	// at resolveLocalImageRef with "build the bootstrap_builder_image first".
-	images := map[string]*ResolvedBox{
+	images := map[string]*buildkit.ResolvedBox{
 		"arch": {
 			Name:           "arch",
 			IsExternalBase: true,
@@ -135,7 +138,7 @@ func TestHostPlatform(t *testing.T) {
 // (GPGME "No data" on SigLevel=Never repos); (3) non-microarch / empty inputs
 // stay clean (no spurious [options], no regression for arch-pacstrap).
 func TestRenderPacstrapExtraConf(t *testing.T) {
-	cachyos := &PacstrapDef{ExtraRepos: []PacstrapRepo{
+	cachyos := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "cachyos-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
@@ -160,7 +163,7 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 	}
 
 	// Plain (non-microarch) repo without SigLevel → repo block, no [options].
-	plain := &PacstrapDef{ExtraRepos: []PacstrapRepo{
+	plain := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
 	}}
 	got = renderPacstrapExtraConf(plain)

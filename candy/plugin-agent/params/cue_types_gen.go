@@ -67,3 +67,94 @@ type AgCredentialMount struct {
 
 	Optional bool `yaml:"optional,omitempty" json:"optional,omitempty"`
 }
+
+// The declarative team kind is plugin-owned as well. These standalone names
+// reproduce the shared SDK wire contract without depending on, or colliding
+// with, the host's base schema during plugin Describe splicing.
+type AgentTeamInput struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+
+	Agents []AtMember `yaml:"agents,omitempty" json:"agents"`
+
+	Edges []AtEdge `yaml:"edges,omitempty" json:"edges,omitempty"`
+
+	Coordinator string `yaml:"coordinator,omitempty" json:"coordinator,omitempty"`
+
+	Concurrency int64 `yaml:"concurrency,omitempty" json:"concurrency,omitempty"`
+
+	EvidencePolicy string `yaml:"evidence_policy,omitempty" json:"evidence_policy,omitempty"`
+}
+
+type AtMember struct {
+	Name string `yaml:"name,omitempty" json:"name"`
+
+	Runtime string `yaml:"runtime,omitempty" json:"runtime"`
+
+	Role string `yaml:"role,omitempty" json:"role,omitempty"`
+
+	Target AtTarget `yaml:"target,omitempty" json:"target,omitempty"`
+
+	Terminal_profile AtTerminalProfile `yaml:"terminal_profile,omitempty" json:"terminal_profile,omitempty"`
+}
+
+type AtTarget struct {
+	Hops []AtTargetHop `yaml:"hops,omitempty" json:"hops,omitempty"`
+
+	Deployment string `yaml:"deployment,omitempty" json:"deployment,omitempty"`
+
+	Instance string `yaml:"instance,omitempty" json:"instance,omitempty"`
+
+	Working_dir string `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+}
+
+type AtTargetHop struct {
+	Transport string `yaml:"transport,omitempty" json:"transport"`
+
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+
+	Port int64 `yaml:"port,omitempty" json:"port,omitempty"`
+
+	Identity_file string `yaml:"identity_file,omitempty" json:"identity_file,omitempty"`
+
+	Command []string `yaml:"command,omitempty" json:"command,omitempty"`
+
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	Options map[string]string `yaml:"options,omitempty" json:"options,omitempty"`
+}
+
+type AtTerminalProfile struct {
+	Name string `yaml:"name,omitempty" json:"name"`
+
+	Entrypoint []string `yaml:"entrypoint,omitempty" json:"entrypoint"`
+
+	Working_dir string `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	Cols int64 `yaml:"cols,omitempty" json:"cols"`
+
+	Rows int64 `yaml:"rows,omitempty" json:"rows"`
+
+	Readiness map[string]any/* CUE top */ `yaml:"readiness,omitempty" json:"readiness,omitempty"`
+
+	Semantic_adapter string `yaml:"semantic_adapter,omitempty" json:"semantic_adapter,omitempty"`
+
+	Keys []string `yaml:"keys,omitempty" json:"keys,omitempty"`
+
+	Signals []string `yaml:"signals,omitempty" json:"signals,omitempty"`
+
+	Persistence string `yaml:"persistence,omitempty" json:"persistence,omitempty"`
+
+	Transcript string `yaml:"transcript,omitempty" json:"transcript,omitempty"`
+}
+
+type AtEdge struct {
+	From string `yaml:"from,omitempty" json:"from"`
+
+	To string `yaml:"to,omitempty" json:"to"`
+
+	Allow []string `yaml:"allow,omitempty" json:"allow,omitempty"`
+}

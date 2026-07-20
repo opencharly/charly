@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // fakeExternalVerb is an OUT-OF-PROCESS-style verb Provider: a real Provider for a live
@@ -34,7 +36,7 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 	r := hostVerbResolverFor(nil, RunModeBox)
 	fake := &fakeExternalVerb{reply: `{"status":"pass","message":"saw-op"}`}
 
-	op := &Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}
+	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}
 	res := r.invokeVerbProvider(context.Background(), fake, "kube", op)
 	if res.Status != TestPass {
 		t.Fatalf("status=%v msg=%q, want pass", res.Status, res.Message)
@@ -48,7 +50,7 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 
 	// The provider received the FULL Op as params_json — the proof a verb's #Op
 	// authoring needs no migration to externalize.
-	var seen Op
+	var seen spec.Op
 	if err := json.Unmarshal(fake.gotParams, &seen); err != nil {
 		t.Fatalf("params_json is not the Op: %v", err)
 	}

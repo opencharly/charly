@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // The E3 perf go/no-go gate, locked as a test (CLAUDE.md RDD; the
 // EVERY-KIND-IS-A-PLUGIN plan's "E3 perf-RDD spike — the go/no-go gate for the
@@ -18,8 +22,8 @@ import "testing"
 // regression; the benchmarks quantify the envelope tax the typed path avoids.
 
 // benchOp is a representative goss-verb Op (the file verb's authored shape).
-func benchOp() *Op {
-	return &Op{
+func benchOp() *spec.Op {
+	return &spec.Op{
 		Plugin:      "file",
 		PluginInput: map[string]any{"file": "/etc/os-release", "mode": "0644"},
 		Content:     "x\n",

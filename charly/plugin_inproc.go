@@ -34,6 +34,14 @@ func (p *inprocProvider) Invoke(ctx context.Context, op *Operation) (*Result, er
 	return &Result{JSON: rep.GetResultJson()}, nil
 }
 
+func (p *inprocProvider) OpenChannel(open *pb.ChannelFrame, stream sdk.ProviderChannel) error {
+	channel, ok := p.srv.(sdk.ChannelProvider)
+	if !ok {
+		return fmt.Errorf("compiled-in provider %s:%s has no bidirectional channel", p.class, p.word)
+	}
+	return channel.OpenChannel(open, stream)
+}
+
 // buildUnitInProc lifts a compiled-in plugin's (meta, provider) pair into a
 // *PluginUnit by calling Describe IN-PROCESS and wrapping each advertised
 // capability in an inprocProvider — the in-proc analogue of buildUnit
@@ -101,6 +109,12 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	// the sole parser, registered here at init before any load; requireLoaderParser FATALs if absent.
 	if dp, ok := srv.(spec.DocParser); ok {
 		activeLoaderParser = dp
+	}
+	// The SAME compiled-in loader plugin (#46) ALSO exposes the typed whole-project WALK via
+	// spec.ProjectWalker — wire it as the active walk mechanism so hostWalkProject dispatches
+	// through it (no wire envelope), instead of charly core importing sdk/loaderkit directly.
+	if pw, ok := srv.(spec.ProjectWalker); ok {
+		activeProjectWalker = pw
 	}
 	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —
 	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download

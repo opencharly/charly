@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -22,24 +25,24 @@ type recordingExec struct {
 }
 
 func (e *recordingExec) Venue() string { return "rec://test" }
-func (e *recordingExec) RunSystem(_ context.Context, script string, _ EmitOpts) error {
+func (e *recordingExec) RunSystem(_ context.Context, script string, _ deploykit.EmitOpts) error {
 	e.sysScripts = append(e.sysScripts, script)
 	return nil
 }
-func (e *recordingExec) RunUser(_ context.Context, script string, _ EmitOpts) error {
+func (e *recordingExec) RunUser(_ context.Context, script string, _ deploykit.EmitOpts) error {
 	e.userScripts = append(e.userScripts, script)
 	return nil
 }
-func (e *recordingExec) RunBuilder(context.Context, BuilderRunOpts) ([]byte, error) {
+func (e *recordingExec) RunBuilder(context.Context, deploykit.BuilderRunOpts) ([]byte, error) {
 	return nil, nil
 }
-func (e *recordingExec) PutFile(_ context.Context, localPath, remotePath string, _ uint32, _ bool, _ EmitOpts) error {
+func (e *recordingExec) PutFile(_ context.Context, localPath, remotePath string, _ uint32, _ bool, _ deploykit.EmitOpts) error {
 	e.putDest = remotePath
 	b, _ := os.ReadFile(localPath)
 	e.putContent = string(b)
 	return nil
 }
-func (e *recordingExec) GetFile(context.Context, string, bool, EmitOpts) ([]byte, error) {
+func (e *recordingExec) GetFile(context.Context, string, bool, deploykit.EmitOpts) ([]byte, error) {
 	return nil, os.ErrNotExist
 }
 func (e *recordingExec) RunInteractive(context.Context, string) (int, error) {
@@ -62,13 +65,13 @@ func (e *recordingExec) ResolveHome(context.Context, string) (string, error) {
 func TestCompileShellHookStepDefersHome(t *testing.T) {
 	layer := &Candy{
 		Name: "nodejs",
-		envConfig: &EnvConfig{
+		envConfig: &kit.EnvConfig{
 			Vars:       map[string]string{"NPM_CONFIG_PREFIX": "~/.npm-global"},
 			PathAppend: []string{"$HOME/.npm-global/bin"},
 		},
 	}
-	img := &ResolvedBox{Home: "/home/operator"}
-	step := compileShellHookStep(layer, img)
+	img := &buildkit.ResolvedBox{Home: "/home/operator"}
+	step := deploykit.CompileShellHookStep(layer, img)
 	if step == nil {
 		t.Fatal("compileShellHookStep returned nil")
 	}
@@ -87,27 +90,27 @@ func TestCompileShellHookStepDefersHome(t *testing.T) {
 // OpStep cmd bodies alone (those shell-expand $HOME at runtime as the deploy
 // user, already correct on every venue). Idempotent.
 func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
-	plan := &InstallPlan{Steps: []InstallStep{
-		&ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm-global"}, PathAdd: []string{"{{.Home}}/bin"}},
-		&ShellSnippetStep{Snippet: "export X={{.Home}}/y", Destination: "{{.Home}}/.bashrc", PathAppend: []string{"{{.Home}}/bin"}},
-		&FileStep{Dest: "{{.Home}}/.config/foo"},
-		&OpStep{Op: &Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
+	plan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
+		&deploykit.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm-global"}, PathAdd: []string{"{{.Home}}/bin"}},
+		&deploykit.ShellSnippetStep{Snippet: "export X={{.Home}}/y", Destination: "{{.Home}}/.bashrc", PathAppend: []string{"{{.Home}}/bin"}},
+		&deploykit.FileStep{Dest: "{{.Home}}/.config/foo"},
+		&deploykit.OpStep{Op: &spec.Op{Command: "echo {{.Home}}", Copy: "wrapper"}, To: "{{.Home}}/.local/bin/wrapper"},
 	}}
-	planResolveHome(plan, "/home/cachy")
+	deploykit.ResolveHome(plan, "/home/cachy")
 
-	sh := plan.Steps[0].(*ShellHookStep)
+	sh := plan.Steps[0].(*deploykit.ShellHookStep)
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" || sh.PathAdd[0] != "/home/cachy/bin" {
 		t.Errorf("ShellHookStep not resolved: %+v", sh)
 	}
-	sn := plan.Steps[1].(*ShellSnippetStep)
+	sn := plan.Steps[1].(*deploykit.ShellSnippetStep)
 	if sn.Snippet != "export X=/home/cachy/y" || sn.Destination != "/home/cachy/.bashrc" || sn.PathAppend[0] != "/home/cachy/bin" {
 		t.Errorf("ShellSnippetStep not resolved: %+v", sn)
 	}
-	fs := plan.Steps[2].(*FileStep)
+	fs := plan.Steps[2].(*deploykit.FileStep)
 	if fs.Dest != "/home/cachy/.config/foo" {
 		t.Errorf("FileStep.Dest = %q", fs.Dest)
 	}
-	ts := plan.Steps[3].(*OpStep)
+	ts := plan.Steps[3].(*deploykit.OpStep)
 	if ts.Op.Command != "echo {{.Home}}" {
 		t.Errorf("OpStep.Op.Command should be untouched (runtime $HOME), got %q", ts.Op.Command)
 	}
@@ -119,7 +122,7 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 	}
 
 	// Idempotent: a second call (token already gone) is a no-op.
-	planResolveHome(plan, "/home/other")
+	deploykit.ResolveHome(plan, "/home/other")
 	if sh.EnvVars["P"] != "/home/cachy/.npm-global" {
 		t.Errorf("ResolveHome not idempotent: %q", sh.EnvVars["P"])
 	}
@@ -147,10 +150,10 @@ func TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan(t *testing.T) {
 	// venue exec would fail.
 	apkExec := &homeFailExec{}
 	tgt := &externalDeployTarget{name: "check-android-emulator-pod.device", exec: apkExec}
-	apkPlan := &InstallPlan{Steps: []InstallStep{
-		&ApkInstallStep{Packages: []ApkPackageSpec{{Package: "com.example"}}, CandyName: "app"},
+	apkPlan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
+		&deploykit.ApkInstallStep{Packages: []ApkPackageSpec{{Package: "com.example"}}, CandyName: "app"},
 	}}
-	if err := tgt.prepareReverseState(context.Background(), []*InstallPlan{apkPlan}); err != nil {
+	if err := tgt.prepareReverseState(context.Background(), []*deploykit.InstallPlan{apkPlan}); err != nil {
 		t.Fatalf("apk-only plan: prepareReverseState should skip the venue exec, got err: %v", err)
 	}
 	if apkExec.resolveHomeCalls != 0 {
@@ -161,10 +164,10 @@ func TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan(t *testing.T) {
 	// its failure surfaces (proving the guard didn't over-skip).
 	homeExec := &homeFailExec{}
 	tgt2 := &externalDeployTarget{name: "some-local", exec: homeExec}
-	homePlan := &InstallPlan{Steps: []InstallStep{
-		&ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm"}, CandyName: "nodejs"},
+	homePlan := &deploykit.InstallPlan{Steps: []spec.InstallStep{
+		&deploykit.ShellHookStep{EnvVars: map[string]string{"P": "{{.Home}}/.npm"}, CandyName: "nodejs"},
 	}}
-	if err := tgt2.prepareReverseState(context.Background(), []*InstallPlan{homePlan}); err == nil {
+	if err := tgt2.prepareReverseState(context.Background(), []*deploykit.InstallPlan{homePlan}); err == nil {
 		t.Error("home-token plan: prepareReverseState should surface the ResolveHome failure, got nil")
 	}
 	if homeExec.resolveHomeCalls != 1 {

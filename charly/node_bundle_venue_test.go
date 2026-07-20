@@ -2,22 +2,27 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestFlattenBundleVenues_StampsAndHoists verifies the loader venue pass:
 // member steps get a bare venue, nested-child steps a dotted venue, and all are
 // hoisted into the root bundle's flat Plan (member/child Plans cleared).
 func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
-	uf := &UnifiedFile{Bundle: map[string]BundleNode{
+	uf := &UnifiedFile{Bundle: map[string]spec.BundleNode{
 		// A pure-GROUP bed whose agent-provisioned member `os` carries a step.
 		"default": {
 			Target: "", // group
-			Members: map[string]*BundleNode{
+			Members: map[string]*spec.BundleNode{
 				"os": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Plan: []Step{
-						{Check: "marker present", Op: Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
+					Plan: []spec.Step{
+						{Check: "marker present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/etc/charly-os-marker"}}},
 					},
 				},
 			},
@@ -26,14 +31,14 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 		"cross": {
 			Target: "pod",
 			Image:  "web",
-			Plan: []Step{
-				{Check: "web serves marker", Op: Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
+			Plan: []spec.Step{
+				{Check: "web serves marker", Op: spec.Op{Plugin: "http", PluginInput: map[string]any{"http": "http://127.0.0.1:8080/"}}},
 			},
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"migrate": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Plan: []Step{
+					Plan: []spec.Step{
 						{Check: "migration ran", Op: cmdOp("test -f /done")},
 					},
 				},
@@ -78,10 +83,10 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 // pure group bundle (no workload container) is a hard error — a group has no
 // venue of its own.
 func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
-	uf := &UnifiedFile{Bundle: map[string]BundleNode{
+	uf := &UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"grp": {
 			Target: "", // group, but carries a direct step → illegal
-			Plan: []Step{
+			Plan: []spec.Step{
 				{Check: "stray", Op: cmdOp("true")},
 			},
 		},
@@ -97,16 +102,16 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 // connection (the chain is built, not dialed). This is the unit-level proof the
 // coordinator's R10 live bed round-trip will exercise end-to-end.
 func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"nested-check-vm": {
 			Target:           "vm",
 			From:             "nested-check-vm",
 			AgentProvisioned: true,
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"inner-app-pod": {
 					Target:           "pod",
 					AgentProvisioned: true,
-					Children: map[string]*BundleNode{
+					Children: map[string]*spec.BundleNode{
 						"nested-redis-pod": {
 							Target:           "pod",
 							AgentProvisioned: true,
@@ -118,15 +123,15 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 	}
 	const dotted = "nested-check-vm.inner-app-pod.nested-redis-pod"
 
-	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), dotted, ShellExecutor{})
+	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), dotted, kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("ResolveDeployChain(%q): %v", dotted, err)
 	}
 	if leaf == nil {
 		t.Fatalf("ResolveDeployChain(%q): nil leaf", dotted)
 	}
-	if classifyTarget(leaf) != "pod" {
-		t.Errorf("leaf target = %q, want pod", classifyTarget(leaf))
+	if deploykit.ClassifyTarget(leaf) != "pod" {
+		t.Errorf("leaf target = %q, want pod", deploykit.ClassifyTarget(leaf))
 	}
 	if chain == nil {
 		t.Fatalf("ResolveDeployChain(%q): nil chain", dotted)
@@ -148,7 +153,7 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 // bare-name fallback to the `charly-<name>` container the agent deploys —
 // without any top-level bundle entry (agent-provisioned members are not folded).
 func TestResolveBareAgentProvisionedVenue(t *testing.T) {
-	roots := map[string]BundleNode{} // os is NOT a top-level entry (not folded)
+	roots := map[string]spec.BundleNode{} // os is NOT a top-level entry (not folded)
 	sc, err := resolveScoringChain(stampTestDescents(roots), "os")
 	if err != nil {
 		t.Fatalf("resolveScoringChain(os): %v", err)
@@ -161,19 +166,19 @@ func TestResolveBareAgentProvisionedVenue(t *testing.T) {
 // TestOverlayRoundTrip_NestedChildSurvives (Risk 5a) proves the per-host overlay
 // writer round-trips a deployment's NESTED CHILD + derived TARGET even though
 // BundleNode.Children/Target are now yaml:"-" (the writer re-emits them via
-// marshalBundleNodeLegacy → migrateDeployEntity → node-form children). A lossy
+// marshalBundleNode → node-form children). A lossy
 // writer would silently drop the nested child on the next saveDeployState.
 func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	disposable := true
-	dc := &BundleConfig{Bundle: map[string]BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"myapp": {
 			Target:     "pod",
 			Image:      "web",
 			Disposable: &disposable,
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"inner": {
 					Target: "pod",
 					Image:  "db",
@@ -181,11 +186,11 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 			},
 		},
 	}}
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
 
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip): %v", err)
 	}
@@ -193,8 +198,8 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	if !ok {
 		t.Fatalf("round-trip lost the deploy entry myapp; got entries %v", bundleKeysOf(dc2.Bundle))
 	}
-	if classifyTarget(&got) != "pod" {
-		t.Errorf("round-trip target = %q, want pod (re-derived)", classifyTarget(&got))
+	if deploykit.ClassifyTarget(&got) != "pod" {
+		t.Errorf("round-trip target = %q, want pod (re-derived)", deploykit.ClassifyTarget(&got))
 	}
 	if got.Image != "web" {
 		t.Errorf("round-trip box = %q, want web", got.Image)
@@ -203,8 +208,8 @@ func TestOverlayRoundTrip_NestedChildSurvives(t *testing.T) {
 	if !ok {
 		t.Fatalf("round-trip LOST nested child %q (lossy overlay writer) — got children %v", "inner", childKeysOf(got.Children))
 	}
-	if classifyTarget(inner) != "pod" {
-		t.Errorf("nested child target = %q, want pod", classifyTarget(inner))
+	if deploykit.ClassifyTarget(inner) != "pod" {
+		t.Errorf("nested child target = %q, want pod", deploykit.ClassifyTarget(inner))
 	}
 	if inner.Image != "db" {
 		t.Errorf("nested child box = %q, want db", inner.Image)
@@ -223,20 +228,20 @@ func TestOverlayRoundTrip_GroupMembersSurvive(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	disposable := true
-	dc := &BundleConfig{Bundle: map[string]BundleNode{
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
 		"shop": {
 			Target:     "", // GROUP — no workload cross-ref
 			Disposable: &disposable,
-			Members: map[string]*BundleNode{
+			Members: map[string]*spec.BundleNode{
 				"web":    {Target: "pod", Image: "web"},
 				"chrome": {Target: "pod", Image: "chrome-headless"},
 			},
 		},
 	}}
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		t.Fatalf("SaveBundleConfig: %v", err)
 	}
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("LoadBundleConfig (round-trip) — a memberless group bed fails validateCheckBeds: %v", err)
 	}
@@ -259,14 +264,14 @@ func TestPersistBedDeployOverrides_GroupBedNotPersisted(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	disposable := true
-	groupBed := BundleNode{
+	groupBed := spec.BundleNode{
 		Target:     "", // GROUP — no workload cross-ref
 		Disposable: &disposable,
-		Members:    map[string]*BundleNode{"web": {Target: "pod", Image: "web"}},
+		Members:    map[string]*spec.BundleNode{"web": {Target: "pod", Image: "web"}},
 	}
 	persistBedDeployOverrides("check-cross-pod-cdp", groupBed)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay poisoned by persisting a group bed root: %v", err)
 	}
@@ -277,7 +282,7 @@ func TestPersistBedDeployOverrides_GroupBedNotPersisted(t *testing.T) {
 	}
 }
 
-func bundleKeysOf(m map[string]BundleNode) []string {
+func bundleKeysOf(m map[string]spec.BundleNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
@@ -285,7 +290,7 @@ func bundleKeysOf(m map[string]BundleNode) []string {
 	return out
 }
 
-func childKeysOf(m map[string]*BundleNode) []string {
+func childKeysOf(m map[string]*spec.BundleNode) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

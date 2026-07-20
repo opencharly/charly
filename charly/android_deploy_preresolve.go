@@ -10,8 +10,10 @@ package main
 // the project's apk: candy specs — that needs host context. This preresolver does the
 // host half and ships the result in DeployVenue.Substrate (a spec.AndroidDeployVenue):
 //
-//   - resolve the kind:android device → adb endpoint (resolveAndroidDevice, the SAME
-//     helper the `charly status` AndroidCollector uses — R3);
+//   - resolve the kind:android device → adb endpoint (resolveAndroidDevice —
+//     candy/plugin-substrate's K5 status collector carries its own plugin-local
+//     copy of this SAME resolution logic, since a plugin cannot import charly/
+//     types; the two are no longer literally one shared function);
 //   - collect the apk install specs from the deploy's COMPILED plans (each apk: candy
 //     compiled to an ApkInstallStep), rewriting committed-APK relative paths to
 //     ABSOLUTE host paths the plugin reads;
@@ -29,6 +31,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -60,7 +63,7 @@ var _ = func() bool {
 // node may be nil (the Update path carries no DeployContext) — it then re-resolves
 // the deploy node from the tree by name (the node-free re-resolution every node-free
 // deploy lifecycle method uses).
-func androidDeployPreresolve(name, dir string, node *BundleNode, plans []*InstallPlan) (json.RawMessage, error) {
+func androidDeployPreresolve(name, dir string, node *spec.BundleNode, plans []*deploykit.InstallPlan) (json.RawMessage, error) {
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
@@ -118,14 +121,14 @@ func androidDeployPreresolve(name, dir string, node *BundleNode, plans []*Instal
 // rewriting committed-APK relative paths to ABSOLUTE host paths (resolved against the
 // candy source tree) so the plugin — which reads the file on the host but has no
 // candy context — can open it. package entries pass through unchanged.
-func collectAndroidInstalls(plans []*InstallPlan) ([]spec.ApkPackageSpec, error) {
+func collectAndroidInstalls(plans []*deploykit.InstallPlan) ([]spec.ApkPackageSpec, error) {
 	var installs []spec.ApkPackageSpec
 	for _, p := range plans {
 		if p == nil {
 			continue
 		}
 		for _, step := range p.Steps {
-			apkStep, ok := step.(*ApkInstallStep)
+			apkStep, ok := step.(*deploykit.ApkInstallStep)
 			if !ok {
 				continue
 			}

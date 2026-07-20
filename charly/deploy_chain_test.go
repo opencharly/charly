@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
+
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -12,8 +15,8 @@ import (
 // production stampBundleDescents), recursing the nested/peer subtree — so chain unit tests, which
 // build BundleNode literals directly bypassing the loader, run against realistically-stamped
 // nodes instead of tripping the nil-descent guard.
-func stampTestDescents(roots map[string]BundleNode) map[string]BundleNode {
-	out := make(map[string]BundleNode, len(roots))
+func stampTestDescents(roots map[string]spec.BundleNode) map[string]spec.BundleNode {
+	out := make(map[string]spec.BundleNode, len(roots))
 	for k, v := range roots {
 		n := v
 		kit.StampDescent(&n, deployTraitsFor)
@@ -25,10 +28,10 @@ func stampTestDescents(roots map[string]BundleNode) map[string]BundleNode {
 // TestResolveDeployChain_FlatContainer verifies a single-segment pod path
 // produces a one-hop NestedExecutor with JumpPodmanExec into "charly-<name>".
 func TestResolveDeployChain_FlatContainer(t *testing.T) {
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"redis": {Target: "pod"},
 	}
-	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "redis", ShellExecutor{})
+	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "redis", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -45,16 +48,16 @@ func TestResolveDeployChain_FlatContainer(t *testing.T) {
 // TestResolveDeployChain_VmFlat verifies a single-segment vm path returns
 // a plain SSHExecutor (no NestedExecutor wrapper at the root level).
 func TestResolveDeployChain_VmFlat(t *testing.T) {
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
 		},
 	}
-	_, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm", ShellExecutor{})
+	_, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "bench-vm", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -71,20 +74,20 @@ func TestResolveDeployChain_VmFlat(t *testing.T) {
 // pod nested inside a VM. Must produce a chain where the leaf hop is
 // JumpPodmanExec into the flattened name "charly-bench-vm_inner".
 func TestResolveDeployChain_VmInnerPod(t *testing.T) {
-	innerNode := &BundleNode{Target: "pod"}
-	roots := map[string]BundleNode{
+	innerNode := &spec.BundleNode{Target: "pod"}
+	roots := map[string]spec.BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"inner": innerNode,
 			},
 		},
 	}
-	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner", ShellExecutor{})
+	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -110,26 +113,26 @@ func TestResolveDeployChain_VmInnerPod(t *testing.T) {
 // TestResolveDeployChain_ThreeDeep stacks three hops:
 // vm → inner-pod → nested-pod. Verifies arbitrary depth works.
 func TestResolveDeployChain_ThreeDeep(t *testing.T) {
-	deepNode := &BundleNode{Target: "pod"}
-	innerNode := &BundleNode{
+	deepNode := &spec.BundleNode{Target: "pod"}
+	innerNode := &spec.BundleNode{
 		Target: "pod",
-		Children: map[string]*BundleNode{
+		Children: map[string]*spec.BundleNode{
 			"deeper": deepNode,
 		},
 	}
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"bench-vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"inner": innerNode,
 			},
 		},
 	}
-	leaf, chain, err := ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner.deeper", ShellExecutor{})
+	leaf, chain, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "bench-vm.inner.deeper", kit.ShellExecutor{})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -149,11 +152,11 @@ func TestResolveDeployChain_ThreeDeep(t *testing.T) {
 // TestResolveDeployChain_UnknownRoot returns a clear error with the
 // "available deployments" hint.
 func TestResolveDeployChain_UnknownRoot(t *testing.T) {
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"redis": {Target: "pod"},
 		"web":   {Target: "pod"},
 	}
-	_, _, err := ResolveDeployChain(stampTestDescents(roots), "missing", ShellExecutor{})
+	_, _, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "missing", kit.ShellExecutor{})
 	if err == nil {
 		t.Fatal("expected error for unknown root")
 	}
@@ -168,19 +171,19 @@ func TestResolveDeployChain_UnknownRoot(t *testing.T) {
 // TestResolveDeployChain_UnknownNestedChild returns a hint about
 // available nested children.
 func TestResolveDeployChain_UnknownNestedChild(t *testing.T) {
-	roots := map[string]BundleNode{
+	roots := map[string]spec.BundleNode{
 		"vm": {
 			Target: "vm",
-			VmState: &VmDeployState{
+			VmState: &spec.VmDeployState{
 				SshUser: "arch",
 				SshPort: 2222,
 			},
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"inner-app": {Target: "pod"},
 			},
 		},
 	}
-	_, _, err := ResolveDeployChain(stampTestDescents(roots), "vm.missing-child", ShellExecutor{})
+	_, _, err := deploykit.ResolveDeployChain(stampTestDescents(roots), "vm.missing-child", kit.ShellExecutor{})
 	if err == nil {
 		t.Fatal("expected error for unknown nested child")
 	}
@@ -194,7 +197,7 @@ func TestResolveDeployChain_UnknownNestedChild(t *testing.T) {
 
 // TestContainerChain produces a JumpPodmanExec chain into the literal name.
 func TestContainerChain(t *testing.T) {
-	chain := ContainerChain("podman", "charly-redis")
+	chain := deploykit.ContainerChain("podman", "charly-redis")
 	venue := chain.Venue()
 	if !strings.Contains(venue, "podman-exec:charly-redis") {
 		t.Errorf("venue %q does not contain podman-exec:charly-redis", venue)

@@ -1,0 +1,78 @@
+pi-agent:
+    candy:
+        version: 2026.199.1330
+        description: |-
+            Ephemeral native Pi agent runtime. Pins @earendil-works/pi-coding-agent
+            and pi-tui 0.80.10 and installs a thin runner built on
+            createAgentSessionRuntime, SessionManager, and Pi's own
+            runRpcMode JSONL transport. It has no service, listener, supervisor, or
+            boot-time process; one runner exists only for an active Charly run.
+            When the separately installed official Pi orchestrator CLI is present,
+            the runner delegates orchestrated streams to that CLI without copying
+            or translating its protocol.
+            It also installs a pi-tui controller that renders durable Charly
+            sessions/events and invokes only the typed `charly agent` API.
+        require:
+            - nodejs
+        volume:
+            - name: sessions
+              path: ~/.pi/agent/sessions
+        agent_provide:
+            - provider: pi
+              protocol_version: 2
+              entrypoint: [charly-pi-agent-runner]
+              interaction_modes: [structured]
+              persistence: required
+              semantic_completion: true
+            - provider: tmux
+              protocol_version: 2
+              profiles: [pi]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: false
+        terminal_profile:
+            pi:
+                name: pi
+                entrypoint: [pi]
+                cols: 120
+                rows: 40
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
+        plan:
+            - run: prepare the official Pi SessionManager store for an unprivileged named-volume mount
+              command: 'mkdir -p "${HOME}/.pi/agent/sessions"'
+              run_as: ${USER}
+            - run: install the native Pi runtime entrypoint
+              copy: pi-agent-runner.mjs
+              to: ${HOME}/.npm-global/lib/node_modules/charly-pi-agent-runtime/pi-agent-runner.mjs
+              mode: "0755"
+              run_as: ${USER}
+            - run: install the Pi-TUI controller for the headless Charly API
+              copy: charly-agent-tui.mjs
+              to: ${HOME}/.npm-global/lib/node_modules/charly-pi-agent-runtime/charly-agent-tui.mjs
+              mode: "0755"
+              run_as: ${USER}
+            - run: expose the native Pi runtime and controller on the npm user PATH
+              command: 'mkdir -p "${HOME}/.npm-global/bin" && ln -sfn ../lib/node_modules/charly-pi-agent-runtime/pi-agent-runner.mjs "${HOME}/.npm-global/bin/charly-pi-agent-runner" && ln -sfn ../lib/node_modules/charly-pi-agent-runtime/charly-agent-tui.mjs "${HOME}/.npm-global/bin/charly-agent-tui"'
+              run_as: ${USER}
+            - check: the pinned official Pi coding-agent and TUI packages are installed
+              command: node -e 'const a=require(process.env.HOME+"/.npm-global/lib/node_modules/@earendil-works/pi-coding-agent/package.json");const b=require(process.env.HOME+"/.npm-global/lib/node_modules/@earendil-works/pi-tui/package.json");if(a.version!=="0.80.10"||b.version!=="0.80.10")process.exit(1)'
+              exit_status: 0
+            - check: the ephemeral native Pi runner is installed and executable
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/charly-pi-agent-runtime/pi-agent-runner.mjs
+                exists: true
+                mode: "0755"
+            - check: the Pi-TUI controller is installed and executable
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/charly-pi-agent-runtime/charly-agent-tui.mjs
+                exists: true
+                mode: "0755"
+            - check: the native Pi runtime is exposed on PATH
+              command: 'test "$(readlink "${HOME}/.npm-global/bin/charly-pi-agent-runner")" = ../lib/node_modules/charly-pi-agent-runtime/pi-agent-runner.mjs'
+              exit_status: 0
+            - check: the Pi-TUI controller is exposed on PATH
+              command: 'test "$(readlink "${HOME}/.npm-global/bin/charly-agent-tui")" = ../lib/node_modules/charly-pi-agent-runtime/charly-agent-tui.mjs'
+              exit_status: 0

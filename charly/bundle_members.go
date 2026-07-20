@@ -18,9 +18,11 @@ package main
 // codebase.
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"sort"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // foldMembers copies every deploy node's `peer:` entries into the Bundle map as
@@ -38,7 +40,7 @@ func foldMembers(uf *UnifiedFile) error {
 	// a collision between two owners' members is reported deterministically.
 	type pendingMember struct {
 		key        string
-		node       BundleNode
+		node       spec.BundleNode
 		owner      string
 		disposable bool
 	}
@@ -106,19 +108,44 @@ func validateMembers(uf *UnifiedFile) error {
 			if memberNode == nil {
 				continue
 			}
-			switch memberNode.Target {
-			case "", "pod", "vm", "local", "k8s", "android":
-				// "" defaults to pod; only these target kinds are valid.
-			default:
-				return fmt.Errorf("deploy %q peer %q has unsupported target %q (must be pod, vm, local, k8s, or android)", owner, memberKey, memberNode.Target)
+			// Kind-blind: a peer member's target is valid iff it is a recognized
+			// deploy substrate (the empty target defaults to pod). Dispatched
+			// through the recognition registry — NOT a compiled-in per-kind switch —
+			// because the substrate kinds are plugin-served (C2-substrate), so a new
+			// external deploy substrate is a valid member target without a core edit
+			// (the kernel/plugin boundary law: a validator checks the word is a
+			// recognized kind; the P9 word-switch gate's intended pattern).
+			if !validMemberTarget(memberNode.Target) {
+				return fmt.Errorf("deploy %q peer %q has unsupported target %q (not a recognized deploy substrate; \"\" defaults to pod)", owner, memberKey, memberNode.Target)
 			}
 		}
 	}
 	return nil
 }
 
+// validMemberTarget reports whether target is a valid peer-member deploy target:
+// the empty target (which defaults to pod) or one of the canonical deploy
+// substrates. It consults the canonical deploy-target set (deployTargetWords —
+// the bijection's D-data, tied to spec.ResourceKinds), NOT a compiled-in per-kind
+// switch on the consumer, so the consumer names no concrete kind word (the
+// kernel/plugin boundary law). A new deploy substrate is added to that canonical
+// set once, not to a per-consumer switch. deployTargetWords itself is tracked
+// migration inventory (a per-kind Go slice) with a named K-wave exit, not
+// permanent core; this cutover removes the consumer-side switch only.
+func validMemberTarget(target string) bool {
+	if target == "" {
+		return true
+	}
+	for _, w := range deployTargetWords {
+		if w == target {
+			return true
+		}
+	}
+	return false
+}
+
 // sortedMemberKeys returns the member keys of a node in deterministic order.
-func sortedMemberKeys(members map[string]*BundleNode) []string {
+func sortedMemberKeys(members map[string]*spec.BundleNode) []string {
 	if len(members) == 0 {
 		return nil
 	}
@@ -150,7 +177,7 @@ func withMemberTag(args []string, imageTag string) []string {
 // lifecycle (create + ssh-wait + deploy), a kind:local member is registered via
 // `charly bundle add <member>`. The SAME helper serves the kind:check bed runner
 // and the operator deploy path (R3). Idempotent on an already-running member.
-func bringUpMembers(node *BundleNode, imageTag string) error {
+func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
 	}
@@ -182,7 +209,7 @@ func bringUpMembers(node *BundleNode, imageTag string) error {
 			// get distinct, collision-free domains + per-domain disk overlays + ports (P33). The
 			// entity is the disk/spec source (the `bundle add` ref); --domain names this member's domain.
 			memberDomain := vmDomainIdentity(memberKey)
-			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain)
+			_ = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", memberDomain, "--if-exists")
 			if err := runCharlySubcommand("vm", "create", memberNode.From, "--domain", memberDomain); err != nil {
 				return fmt.Errorf("peer %q (vm create %s): %w", memberKey, memberNode.From, err)
 			}
@@ -214,14 +241,14 @@ func bringUpMembers(node *BundleNode, imageTag string) error {
 	return nil
 }
 
-// tearDownMembers tears down every member of `node` (best-effort, deterministic
-// order) — the companion to bringUpMembers. VM members are `vm destroy`ed, pod
-// members removed + purged, kind:local members reversed via `charly bundle del`.
-// Never fails the owner's teardown.
-func tearDownMembers(node *BundleNode) {
+// tearDownMembers tears down every member of `node` in deterministic order — the companion to
+// bringUpMembers. It attempts every member and returns their joined errors so callers can finish
+// the full cleanup while still failing the owning operation.
+func tearDownMembers(node *spec.BundleNode) error {
 	if node == nil || len(node.Members) == 0 {
-		return
+		return nil
 	}
+	var errs []error
 	for _, memberKey := range sortedMemberKeys(node.Members) {
 		memberNode := node.Members[memberKey]
 		var err error
@@ -231,34 +258,44 @@ func tearDownMembers(node *BundleNode) {
 			// entity — P33), but bring-up ALSO registered the member in the deploy ledger via
 			// `bundle add`. Reverse that too, or a ledger record survives every teardown and they
 			// accumulate run over run.
-			err = runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey))
-			if delErr := runCharlySubcommand(deployDelArgv(memberKey)...); delErr != nil && err == nil {
-				err = delErr
-			}
+			destroyErr := runCharlySubcommand("vm", "destroy", memberNode.From, "--domain", vmDomainIdentity(memberKey), "--if-exists")
+			delErr := runCharlySubcommand(deployDelArgv(memberKey)...)
+			err = errors.Join(destroyErr, delErr)
 		case isPodMember(memberNode):
 			err = runCharlySubcommand("remove", memberKey, "--purge")
 		default:
 			err = runCharlySubcommand(deployDelArgv(memberKey)...)
 		}
 		if err != nil {
-			// Best-effort teardown never fails the owner's teardown — but a
-			// silent discard once hid a flag-parse abort that leaked the member
-			// (see CHANGELOG/), so surface it as a warning instead of swallowing.
-			fmt.Fprintf(os.Stderr, "warning: peer %q teardown: %v\n", memberKey, err)
+			errs = append(errs, fmt.Errorf("peer %q teardown: %w", memberKey, err))
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // isPodMember reports whether a member node is a CONTAINER-venue (pod) deployment — reading the
 // stamped descent trait (P9), never the substrate kind word (an empty target resolves to the pod
 // default via nodeTraits). Pod members go through config+start; other venues through deploy add.
-func isPodMember(node *BundleNode) bool {
+func isPodMember(node *spec.BundleNode) bool {
 	return node != nil && nodeTraits(node).Venue == "container"
 }
 
 // isVmMember reports whether a folded group member is an SSH-venue (vm) substrate (P9 trait, not
 // the kind word), so the group bed builds its disk (vm build) and brings it up via the libvirt
 // lifecycle (vm create + ssh-wait) rather than the pod/local path.
-func isVmMember(node *BundleNode) bool {
+func isVmMember(node *spec.BundleNode) bool {
 	return node != nil && nodeTraits(node).Venue == "ssh"
+}
+
+// sortedDeployKeys returns a Bundle map's keys in deterministic (name) order.
+// K5: relocated from the deleted status_collect_adb.go — a generic Bundle-map
+// helper with no android-specific logic, shared by this file's own owner-walk
+// and node_bundle_venue.go's venue walk (R3, one shared abstraction).
+func sortedDeployKeys(m map[string]spec.BundleNode) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -1,11 +1,11 @@
 // Package status is the charly plugin OWNING the externalized `charly status` command — the
 // runtime-status get/render surface (table / detail / JSON, --all, --nested). The plugin owns the
-// subcommand grammar (command.go), the PURE nested-overlay fold (overlay.go), and the render
-// output (render.go); the collection engine (Collector, the per-substrate collectors, and the
-// declared-nested-tree pre-resolution) stays in core and is reached via the generic
-// "status-substrate" HostBuild seam. There is no hidden core-command forward — the plugin does
-// the work, calling back for the ONE thing it cannot do itself (live host/venue collection), the
-// doctrine candy/plugin-settings established.
+// subcommand grammar (command.go), the declared-nested-tree pre-resolution (nested_tree.go, K5),
+// the PURE nested-overlay fold (overlay.go), and the render output (render.go); only the LIVE
+// per-substrate collection (Collector, the per-substrate collectors) stays in core and is reached
+// via the generic "status-substrate" HostBuild seam. There is no hidden core-command forward — the
+// plugin does the work, calling back for the ONE thing it cannot do itself (live host/venue
+// collection), the doctrine candy/plugin-settings established.
 //
 // status is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) (provider.go) runs in
 // charly's process and gets the in-proc reverse channel that dispatchInProcCommand threads (Seam

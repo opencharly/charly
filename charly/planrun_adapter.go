@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opencharly/sdk/spec"
+
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -34,7 +36,7 @@ type hostVerbResolver struct {
 // CheckVerbProvider via its typed RunVerb (threaded the host CheckContext over the kit.Runner),
 // an out-of-process provider via the Invoke envelope (invokeVerbProvider). (_, false) means no
 // such verb is registered — the walk reports the op as an unknown-verb skip.
-func (h *hostVerbResolver) RunVerb(ctx context.Context, op *Op) (CheckResult, bool) {
+func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (CheckResult, bool) {
 	kind, err := op.Kind()
 	if err != nil {
 		return CheckResult{}, false
@@ -53,7 +55,7 @@ func (h *hostVerbResolver) RunVerb(ctx context.Context, op *Op) (CheckResult, bo
 
 // RunProvisionAct runs a do:act state-provision verb's create/configure act; (_, false) means
 // the verb has no act path (the walk falls through to the assert dispatch).
-func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *spec.Op, verb string) (CheckResult, bool) {
 	return h.runProvisionAct(ctx, op, verb)
 }
 
@@ -64,14 +66,14 @@ type hostPlanGrammar struct{}
 
 // EffectiveDo resolves op's do-mode (the keyword-stamped intentDo wins, else the verb's
 // VerbCatalog default, else DoAssert).
-func (hostPlanGrammar) EffectiveDo(op *Op) kit.DoMode { return opEffectiveDo(op) }
+func (hostPlanGrammar) EffectiveDo(op *spec.Op) spec.DoMode { return opEffectiveDo(op) }
 
 // InContext reports whether op is legal in the run's active context: runtime=true → the live
 // (runtime) context, runtime=false → the box (build) context.
-func (hostPlanGrammar) InContext(op *Op, runtime bool) bool {
-	wantCtx := CtxBuild
+func (hostPlanGrammar) InContext(op *spec.Op, runtime bool) bool {
+	wantCtx := spec.CtxBuild
 	if runtime {
-		wantCtx = CtxRuntime
+		wantCtx = spec.CtxRuntime
 	}
 	return opInContext(op, wantCtx)
 }
@@ -79,11 +81,11 @@ func (hostPlanGrammar) InContext(op *Op, runtime bool) bool {
 // ContextsLabel is op's effective-contexts list pre-formatted for the context-skip message —
 // the SAME %v rendering the former core ContextSkipReason used, so the message is
 // byte-identical.
-func (hostPlanGrammar) ContextsLabel(op *Op) string {
+func (hostPlanGrammar) ContextsLabel(op *spec.Op) string {
 	return fmt.Sprintf("%v", opEffectiveContexts(op))
 }
 
-// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *CheckVarResolver +
+// venueResolver adapts the core liveTargetResolver (an `on:` DRIVER venue → *kit.CheckVarResolver +
 // DeployExecutor) to the kit.VenueResolver seam (venue → kit.Executor + env + hasRuntime) the
 // runner's per-step SwapVenue drives. It always returns a non-nil env map so SwapVenue swaps the
 // engine env for the driver venue (matching the former "always swap the resolver" behaviour: a

@@ -23,19 +23,27 @@
 // entities, box/fedora, box/cachyos, box/arch, box/debian, box/ubuntu) relies on them without
 // discovering this candy, exactly like the tier-1 kinds and group. (cmd/serve serves it
 // out-of-process too — one provider, two placements, zero authoring change.)
+//
+// This package ALSO serves command:reap-orphans (K5: relocated from charly/status_reap.go,
+// command_reap_orphans.go) — a substrate-liveness-probing command that fits naturally alongside
+// the OTHER substrate-liveness code here (status_pod.go/status_vm.go/status_k8s.go/…). Unlike the
+// kind capabilities, reap-orphans is COMPILED-IN ONLY (its os.Executable()-based re-entry to
+// `charly bundle del` assumes it runs inside the charly binary); out-of-process it degrades with a
+// clear error.
 package substratekind
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
-const calver = "2026.182.1200"
+const calver = "2026.196.0600"
 
 // substrateWords is the ONE list of words this provider serves — pod/vm/k8s/local/android.
 var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
@@ -58,17 +66,36 @@ var substrateTraits = map[string]*spec.DeployTraits{
 // NewProvider returns the substrate kind provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
+// CliMain is the out-of-process CLI entrypoint for command:reap-orphans (only reached when this
+// candy is NOT compiled in). reap-orphans needs the reverse-channel executor (the libvirt liveness
+// probe), which is unavailable out-of-process, so runReapOrphansCLI (with a nil executor) errors
+// clearly — the canonical placement is compiled-in (Invoke → provider.go's OpRun case), where the
+// reverse channel is threaded. Mirrors candy/plugin-status's CliMain.
+func CliMain(args []string) int {
+	if err := runReapOrphansCLI(context.Background(), nil, args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
 // NewMeta advertises the 5 STRUCTURAL substrate kind capabilities (Class "kind",
 // Structural:true) + the self-contained CUE schema (via sdk.NewMeta → BuildCapabilities).
 // Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the
 // KEPT #<Kind>Value core def (runPluginKind → validateStandaloneKindValueCUE), NOT by this
 // served schema. The self-contained #SubstrateKindLoad def exists only to satisfy the
-// non-empty-schema load gate + document the seam.
+// non-empty-schema load gate + document the seam. Also advertises command:reap-orphans and
+// verb:status-fanout (K6) — an INTERNAL-ONLY verb (never authored in a check plan, never a CLI
+// subcommand; reached solely by the host's "status-substrate" HostBuild forward via
+// providerRegistry.resolve + Invoke), mirroring the existing verb:libvirt/verb:credential/
+// verb:arbiter internal-dispatch precedent.
 func NewMeta() pb.PluginMetaServer {
-	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords))
+	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+2)
 	for _, w := range substrateWords {
 		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, DeployTraits: substrateTraits[w]})
 	}
+	caps = append(caps, sdk.ProvidedCapability{Class: "command", Word: "reap-orphans"})
+	caps = append(caps, sdk.ProvidedCapability{Class: "verb", Word: "status-fanout"})
 	return sdk.NewMeta(calver, caps,
 		nil)
 }
@@ -82,8 +109,28 @@ type provider struct{ pb.UnimplementedProviderServer }
 // typed map). The op.Params body is deliberately IGNORED — a substrate value cannot be soundly
 // re-decoded from the raw op.Params (host-canonicalized shorthand), which is why the host
 // pre-decodes and threads via op.Env.
-func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
+	case sdk.OpRun:
+		if req.GetReserved() != "reap-orphans" {
+			return nil, fmt.Errorf("substrate provider: OpRun unsupported for word %q (want reap-orphans)", req.GetReserved())
+		}
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("plugin-substrate: reverse-channel executor: %w", err)
+		}
+		var in struct {
+			Args []string `json:"args"`
+		}
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &in); uerr != nil {
+				return nil, fmt.Errorf("plugin-substrate: decode args: %w", uerr)
+			}
+		}
+		if rerr := runReapOrphansCLI(ctx, exec, in.Args); rerr != nil {
+			return nil, rerr
+		}
+		return &pb.InvokeReply{}, nil
 	case sdk.OpLoad:
 		return substrateLoad(req)
 	case sdk.OpResolve:
@@ -98,6 +145,45 @@ func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		out, err := resolveSubstrateTemplate(in)
 		if err != nil {
 			return nil, err
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	case sdk.OpStatusCollect:
+		// P14a + K5: the substrate COLLECTOR OpStatus. The host's status
+		// fan-out reaches the cleanly-movable collectors (pod live + local,
+		// vm, k8s) here, by word (pod/vm/k8s/local/android). android alone
+		// still defers (it merges PROJECT + PER-MACHINE deploy config).
+		res, err := statusCollect(ctx, req.GetReserved(), req.GetParamsJson())
+		if err != nil {
+			return nil, err
+		}
+		return &pb.InvokeReply{ResultJson: res.json}, nil
+	case sdk.OpStatusCollectAll:
+		// K6: the WHOLE status subsystem fan-out + deploy-cone enrichment (relocated from
+		// charly/status_collector.go). Needs the reverse-channel executor threaded onto ctx
+		// so the vm/k8s per-word collectors it calls (via statusCollect, in-package) can reach
+		// HostBuild("resolved-project") / InvokeProvider("verb","libvirt",...) for themselves —
+		// exactly the executor context the host's OLD in-core dispatch used to thread.
+		if req.GetReserved() != "status-fanout" {
+			return nil, fmt.Errorf("substrate provider: OpStatusCollectAll unsupported for word %q (want status-fanout)", req.GetReserved())
+		}
+		fanExec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+		if err != nil {
+			return nil, fmt.Errorf("plugin-substrate: reverse-channel executor: %w", err)
+		}
+		fanCtx := sdk.ContextWithExecutor(ctx, fanExec)
+		var fanReq spec.StatusSubstrateRequest
+		if len(req.GetParamsJson()) > 0 {
+			if uerr := json.Unmarshal(req.GetParamsJson(), &fanReq); uerr != nil {
+				return nil, fmt.Errorf("substrate status-fanout: decode request: %w", uerr)
+			}
+		}
+		reply, ferr := runStatusFanout(fanCtx, fanReq)
+		if ferr != nil {
+			return nil, ferr
+		}
+		out, merr := json.Marshal(reply)
+		if merr != nil {
+			return nil, fmt.Errorf("substrate status-fanout: marshal reply: %w", merr)
 		}
 		return &pb.InvokeReply{ResultJson: out}, nil
 	default:

@@ -134,3 +134,38 @@ func TestValidateCandyApk(t *testing.T) {
 		})
 	}
 }
+
+// TestAliasNameRegex ← charly/alias_collect_test.go TestAliasNameRegex (P14-rest dead-code sweep,
+// 2026-07): the charly-core copy of this regex had NO production call site left (validateAliases,
+// the actual enforcement, lives here — this file's aliasNameRe, above in validate_rules.go — not in
+// charly/core), so the core copy + this test moved together; the core copy is deleted in the same
+// cutover. Pattern-regression coverage for aliasNameRe now lives against the ONE live copy.
+func TestAliasNameRegex(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"openclaw", true},
+		{"my-tool", true},
+		{"my_tool", true},
+		{"my.tool", true},
+		{"MyTool", true},
+		{"tool123", true},
+		{"1start", true},
+		{"", false},
+		{"-start", false},
+		{".start", false},
+		{"_start", false},
+		{"has space", false},
+		{"has/slash", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := aliasNameRe.MatchString(tt.name)
+			if got != tt.want {
+				t.Errorf("aliasNameRe.MatchString(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}

@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
@@ -84,7 +86,7 @@ func TestDetectedDevicesInSecurityArgs(t *testing.T) {
 }
 
 func TestDetectedDevicesInQuadlet(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "test",
 		ImageRef:    "test:latest",
 		Home:        "/workspace",
@@ -94,7 +96,7 @@ func TestDetectedDevicesInQuadlet(t *testing.T) {
 			Devices: []string{"/dev/kvm", "/dev/fuse"},
 		},
 	}
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !containsLine(content, "AddDevice=nvidia.com/gpu=all") {
 		t.Error("expected AddDevice=nvidia.com/gpu=all for GPU")
 	}
@@ -210,7 +212,7 @@ func TestAMDGPUGroupsIdempotent(t *testing.T) {
 }
 
 func TestAMDGPUGroupsInQuadlet(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:     "test-amd",
 		ImageRef:    "test-amd:latest",
 		Home:        "/workspace",
@@ -221,7 +223,7 @@ func TestAMDGPUGroupsInQuadlet(t *testing.T) {
 			GroupAdd: []string{"keep-groups"},
 		},
 	}
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !containsLine(content, "GroupAdd=keep-groups") {
 		t.Error("expected GroupAdd=keep-groups in quadlet")
 	}

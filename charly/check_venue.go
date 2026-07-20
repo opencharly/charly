@@ -9,6 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // CheckEndpoint is a host-reachable TCP address for a port that lives inside the
@@ -42,12 +47,12 @@ func resolveCheckEndpoint(venue *CheckVenue, port int) (*CheckEndpoint, error) {
 		return &CheckEndpoint{Addr: addr}, nil
 	case "host":
 		// Local host → the port directly; ssh-host → an ssh -L forward.
-		if se, ok := venue.Exec.(*SSHExecutor); ok {
+		if se, ok := venue.Exec.(*kit.SSHExecutor); ok {
 			return sshForwardEndpoint(se, port)
 		}
 		return &CheckEndpoint{Addr: fmt.Sprintf("127.0.0.1:%d", port)}, nil
 	case "vm":
-		return sshForwardEndpoint(&SSHExecutor{Host: VmSshAlias(venue.VMName), ConnectTimeout: 10}, port)
+		return sshForwardEndpoint(&kit.SSHExecutor{Host: kit.VmSshAlias(venue.VMName), ConnectTimeout: 10}, port)
 	}
 	return nil, fmt.Errorf("cannot resolve a port endpoint for venue kind %q", venue.Kind)
 }
@@ -64,23 +69,7 @@ func containerPublishedAddr(engine, containerName string, port int) (string, err
 		}
 		return "", fmt.Errorf("no port mapping found for %d in %s", port, containerName)
 	}
-	return parsePublishedPort(string(out), port)
-}
-
-// parsePublishedPort parses `<engine> port` output (one "ip:port" per line,
-// IPv4 + IPv6) into a single host-reachable "127.0.0.1:port", normalizing
-// 0.0.0.0 / [::]. Pure (unit-tested) — shared by every port-protocol venue.
-func parsePublishedPort(output string, port int) (string, error) {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		return "", fmt.Errorf("no port mapping found for %d", port)
-	}
-	hostPort := strings.TrimSpace(lines[0])
-	hostPort = strings.Replace(hostPort, "0.0.0.0", "127.0.0.1", 1)
-	if after, ok := strings.CutPrefix(hostPort, "[::]:"); ok {
-		hostPort = "127.0.0.1:" + after
-	}
-	return hostPort, nil
+	return kit.ParsePublishedPort(string(out), port)
 }
 
 // sshForwardEndpoint opens a `ssh -NT -L 127.0.0.1:<rand>:127.0.0.1:<port>`
@@ -88,7 +77,7 @@ func parsePublishedPort(output string, port int) (string, error) {
 // SSHExecutor (ssh-config / managed alias supply the user/port/key). A bounded
 // readiness probe waits for the local listener — a readiness probe, not a blind
 // sleep (R4).
-func sshForwardEndpoint(e *SSHExecutor, port int) (*CheckEndpoint, error) {
+func sshForwardEndpoint(e *kit.SSHExecutor, port int) (*CheckEndpoint, error) {
 	// Reserve a free local port, then release it for ssh to bind.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -156,7 +145,7 @@ func sshForwardEndpoint(e *SSHExecutor, port int) (*CheckEndpoint, error) {
 
 // venueRunSilent runs a command on the venue discarding output, returning an
 // error on non-zero exit (availability probes + fire-and-forget actions).
-func venueRunSilent(ex DeployExecutor, script string) error {
+func venueRunSilent(ex deploykit.DeployExecutor, script string) error {
 	_, _, exit, err := ex.RunCapture(context.Background(), script)
 	if err != nil {
 		return err
@@ -168,7 +157,7 @@ func venueRunSilent(ex DeployExecutor, script string) error {
 }
 
 // venueHasTool reports whether `tool` is on PATH on the venue.
-func venueHasTool(ex DeployExecutor, tool string) bool {
+func venueHasTool(ex deploykit.DeployExecutor, tool string) bool {
 	_, _, exit, err := ex.RunCapture(context.Background(), "command -v "+tool+" >/dev/null 2>&1")
 	return err == nil && exit == 0
 }
@@ -200,7 +189,7 @@ func venueHasTool(ex DeployExecutor, tool string) bool {
 // for VM / host venues, which reach published ports via an SSH local-forward
 // instead.
 type CheckVenue struct {
-	Exec     DeployExecutor
+	Exec     deploykit.DeployExecutor
 	Kind     string
 	Engine   string // container engine ("podman"/"docker"); "" for vm/host
 	Name     string // container name (container venue) or vm entity name (vm venue)
@@ -230,18 +219,18 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 	// which is also the in-guest delegation target (host SSHes into the VM
 	// and runs `charly check live . …` there with the live session env).
 	if name == "." {
-		return &CheckVenue{Exec: ShellExecutor{}, Kind: "host"}, nil
+		return &CheckVenue{Exec: kit.ShellExecutor{}, Kind: "host"}, nil
 	}
 
 	dir, _ := os.Getwd()
 	if uf, ok, err := LoadUnified(dir); err == nil && ok && uf != nil {
 		if domainID, isVM := checkVmTarget(uf, name); isVM {
-			var exec DeployExecutor = &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
+			var exec deploykit.DeployExecutor = &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 10}
 			// Dotted nested path (vm.inner-pod): build the full chain so the
 			// verb lands inside the leaf's venue, not the parent VM's shell.
 			if strings.Contains(name, ".") {
 				if roots, _ := resolveTreeRoot(dir); roots != nil {
-					if _, chain, chainErr := ResolveDeployChain(roots, name, ShellExecutor{}); chainErr == nil && chain != nil {
+					if _, chain, chainErr := deploykit.ResolveDeployChain(roots, name, kit.ShellExecutor{}); chainErr == nil && chain != nil {
 						exec = chain
 					}
 				}
@@ -249,7 +238,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 			return &CheckVenue{Exec: exec, Kind: "vm", Name: domainID, VMName: domainID, Instance: instance}, nil
 		}
 		if node, isLocal := checkLocalTarget(uf, name); isLocal {
-			exec, err := rootExecutorForDeployNode(&node)
+			exec, err := deploykit.RootExecutorForDeployNode(&node)
 			if err != nil {
 				return nil, err
 			}
@@ -262,12 +251,12 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 		// `charly-<flat-path>` (NestedContainerName) for host-side port mapping.
 		if strings.Contains(name, ".") {
 			if roots, _ := resolveTreeRoot(dir); roots != nil {
-				if _, chain, chainErr := ResolveDeployChain(roots, name, ShellExecutor{}); chainErr == nil && chain != nil {
+				if _, chain, chainErr := deploykit.ResolveDeployChain(roots, name, kit.ShellExecutor{}); chainErr == nil && chain != nil {
 					return &CheckVenue{
 						Exec:     chain,
 						Kind:     "container",
 						Engine:   "podman",
-						Name:     "charly-" + NestedContainerName(name),
+						Name:     "charly-" + kit.NestedContainerName(name),
 						Instance: instance,
 					}, nil
 				}
@@ -281,7 +270,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 		return nil, err
 	}
 	return &CheckVenue{
-		Exec:     ContainerChain(engine, containerName),
+		Exec:     deploykit.ContainerChain(engine, containerName),
 		Kind:     "container",
 		Engine:   engine,
 		Name:     containerName,
@@ -329,9 +318,9 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 // external deploy to the host path for BOTH the declarative `charly check live`
 // and the interactive `charly check <verb>`, instead of the pod/container path
 // (which would fail at resolveContainer with "container ... is not running").
-func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
+func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	if uf == nil || uf.Bundle == nil {
-		return BundleNode{}, false
+		return spec.BundleNode{}, false
 	}
 	root := name
 	if idx := strings.Index(name, "."); idx > 0 {
@@ -354,5 +343,5 @@ func checkLocalTarget(uf *UnifiedFile, name string) (BundleNode, bool) {
 			return entry, true
 		}
 	}
-	return BundleNode{}, false
+	return spec.BundleNode{}, false
 }

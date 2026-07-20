@@ -8,7 +8,7 @@ package main
 // into the generator. The IR defined here lifts the walk into structured
 // data so the same plan can be consumed by:
 //
-//   - OCITarget        → deploy-mode pod-overlay (add_candy) Containerfile emission (charly bundle add <name>)
+//   - deploykit.OCITarget        → deploy-mode pod-overlay (add_candy) Containerfile emission (charly bundle add <name>)
 //   - ContainerDeploy  → deploy-mode overlay + quadlet (charly bundle add <name>)
 //   - the local deploy target → deploy-mode host execution (charly bundle add host)
 //
@@ -41,112 +41,14 @@ import (
 // The `{{.Home}}` spelling matches the existing builder-artifact convention
 // (deploykit expandBuilderPath), so the two token systems stay aligned.
 
-// ---------------------------------------------------------------------------
-// Scope — where the effect lands on the target filesystem.
-// ---------------------------------------------------------------------------
-
-// Scope is the spec-homed enum (sdk/spec/deploy_wire.go) — aliased here so
-// the whole IR keeps spelling it `Scope`/`ScopeSystem`/… unchanged. It lives in
-// spec because an out-of-process deploy/step/builder plugin (through the SDK)
-// constructs it for a ReverseOp it returns across the process boundary; package
-// main and the SDK therefore share ONE type (R3).
-type Scope = spec.Scope
-
-const (
-	ScopeSystem      = spec.ScopeSystem
-	ScopeUser        = spec.ScopeUser
-	ScopeUserProfile = spec.ScopeUserProfile
-)
-
-// ---------------------------------------------------------------------------
-// Venue / Phase / StepKind / Gate — the InstallPlan IR discriminator enums.
-// Defined in sdk/spec (ir_enums.go); aliased here so the IR is importable
-// without charly core (mirrors the Scope alias above). Internal enums — the
-// StepView wire carries them as primitives, so no CUE (Venue/Phase are int
-// iota enums cue exp gengotypes cannot express anyway).
-// ---------------------------------------------------------------------------
-
-type (
-	Venue    = spec.Venue
-	Phase    = spec.Phase
-	StepKind = spec.StepKind
-	Gate     = spec.Gate
-)
-
-const (
-	VenueHostNative       = spec.VenueHostNative
-	VenueContainerBuilder = spec.VenueContainerBuilder
-	VenueSkip             = spec.VenueSkip
-
-	PhasePrepare = spec.PhasePrepare
-	PhaseInstall = spec.PhaseInstall
-	PhaseCleanup = spec.PhaseCleanup
-
-	StepKindSystemPackages  = spec.StepKindSystemPackages
-	StepKindBuilder         = spec.StepKindBuilder
-	StepKindOp              = spec.StepKindOp
-	StepKindFile            = spec.StepKindFile
-	StepKindServicePackaged = spec.StepKindServicePackaged
-	StepKindServiceCustom   = spec.StepKindServiceCustom
-	StepKindShellHook       = spec.StepKindShellHook
-	StepKindShellSnippet    = spec.StepKindShellSnippet
-	StepKindRepoChange      = spec.StepKindRepoChange
-	StepKindApkInstall      = spec.StepKindApkInstall
-	StepKindLocalPkgInstall = spec.StepKindLocalPkgInstall
-	StepKindReboot          = spec.StepKindReboot
-	StepKindExternalPlugin  = spec.StepKindExternalPlugin
-
-	GateNone             = spec.GateNone
-	GateAllowRepoChanges = spec.GateAllowRepoChanges
-	GateAllowRootTasks   = spec.GateAllowRootTasks
-	GateWithServices     = spec.GateWithServices
-)
-
-// ---------------------------------------------------------------------------
-// ReverseOp — what the ledger records to un-do a step at teardown time.
-// ---------------------------------------------------------------------------
-
-// ReverseOpKind + ReverseOp are spec-homed (sdk/spec/deploy_wire.go) and
-// aliased here. They live in spec because an out-of-process deploy/step/builder
-// plugin (through the SDK) RETURNS ReverseOps across the process boundary for
-// the host to record + replay; package main and the SDK share ONE type (R3).
-// ReverseOpPluginScript is the generic recordable kind such a plugin returns.
-type ReverseOpKind = spec.ReverseOpKind
-
-const (
-	ReverseOpPackageRemove  = spec.ReverseOpPackageRemove
-	ReverseOpCargoUninstall = spec.ReverseOpCargoUninstall
-	ReverseOpNpmUninstallG  = spec.ReverseOpNpmUninstallG
-	ReverseOpPixiEnvRemove  = spec.ReverseOpPixiEnvRemove
-	ReverseOpRmFileSystem   = spec.ReverseOpRmFileSystem
-	ReverseOpRmFileUser     = spec.ReverseOpRmFileUser
-	ReverseOpRmDirRecursive = spec.ReverseOpRmDirRecursive
-	ReverseOpServiceDisable = spec.ReverseOpServiceDisable
-	ReverseOpServiceRemove  = spec.ReverseOpServiceRemove
-	ReverseOpRemoveDropin   = spec.ReverseOpRemoveDropin
-	ReverseOpRestoreEnabled = spec.ReverseOpRestoreEnabled
-	ReverseOpRemoveManaged  = spec.ReverseOpRemoveManaged
-	ReverseOpRemoveEnvdFile = spec.ReverseOpRemoveEnvdFile
-	ReverseOpRemoveRepoFile = spec.ReverseOpRemoveRepoFile
-	ReverseOpCoprDisable    = spec.ReverseOpCoprDisable
-	ReverseOpPluginScript   = spec.ReverseOpPluginScript
-)
-
-// ReverseOp is the spec-homed teardown action (see ReverseOpKind above).
-type ReverseOp = spec.ReverseOp
-
-// ---------------------------------------------------------------------------
-// InstallStep — the primary IR element. Each step has one concrete type.
-// ---------------------------------------------------------------------------
-
-// InstallStep is the common interface every concrete step implements.
-// Consumers (OCITarget / the local deploy target) switch on Kind() to dispatch
-// to the right rendering or execution path.
-// InstallStep is the polymorphic InstallPlan step interface, homed in sdk/spec
-// (with the IR enums it returns + the InstallPlan container that holds
-// []InstallStep). The 13 concrete step structs below implement spec.InstallStep
-// structurally, so they need no change beyond this alias (P4).
-type InstallStep = spec.InstallStep
+// Scope / Venue / Phase / StepKind / Gate / ReverseOpKind / ReverseOp / InstallStep are the
+// InstallPlan IR's discriminator enums + step interface, all homed natively in sdk/spec
+// (deploy_wire.go / ir_enums.go) — referenced below as spec.Scope / spec.Venue / etc.
+// (K3 ZERO-ALIASES dissolution — an alias is always residue regardless of what it aliases).
+// They live in spec because an out-of-process deploy/step/builder plugin (through the SDK)
+// constructs/returns them across the process boundary; package main and the SDK share ONE
+// type (R3). Venue/Phase are int iota enums cue exp gengotypes cannot express, so they are
+// hand-written in spec, not CUE-sourced.
 
 // externalStep is an EXTERNAL, plugin-CONTRIBUTED install-step KIND (F3, closes C1): a step
 // whose Kind() is "external:<word>", carried OPAQUELY (Payload) and whose Scope/Venue/Gate
@@ -163,15 +65,15 @@ type InstallStep = spec.InstallStep
 // plugin-declared Scope/Venue/Gate — the contract the host applies via the open default arm
 // with NO compiled-in case.
 type stepContract struct {
-	Scope Scope
-	Venue Venue
-	Gate  Gate
+	Scope spec.Scope
+	Venue spec.Venue
+	Gate  spec.Gate
 	// Emits is the F-STEP-EMIT flag: the step produces a build-context Containerfile
 	// FRAGMENT (the serving plugin answers Invoke(OpEmit) → spec.EmitReply.Fragment).
-	// The pod-overlay OCITarget consults it via the open external-step arm — Emits=true →
+	// The pod-overlay deploykit.OCITarget consults it via the open external-step arm — Emits=true →
 	// bake the fragment; Emits=false → skip (a deploy-only external step, like apk on an
 	// image build). Advisory for the DEPLOY leg (executeExternalStep ignores it); load-bearing
-	// for the BUILD leg (OCITarget.emitExternalStep).
+	// for the BUILD leg (ociEmitStep).
 	Emits bool
 }
 

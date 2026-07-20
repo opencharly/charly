@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedUserVerb_DispatchesViaKit proves the MULTI-ROLE `user` verb — relocated to
@@ -23,7 +25,7 @@ func TestRelocatedUserVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "getent passwd", stdout: "root:x:0:0:root:/root:/bin/bash\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"user": "root", "uid": 0}})
+		&spec.Op{PluginInput: map[string]any{"user": "root", "uid": 0}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +36,7 @@ func TestRelocatedUserVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("user provider does not implement ProvisionActor (multi-role adapter missing): %T", prov)
 	}
 	script, ok := pa.RenderProvisionScript(
-		&Op{PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc", "shell": "/bin/sh"}}, nil)
+		&spec.Op{PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc", "shell": "/bin/sh"}}, nil)
 	if !ok || !strings.Contains(script, "useradd") || !strings.Contains(script, "svc") {
 		t.Fatalf("act: want a useradd script, got ok=%v %q", ok, script)
 	}

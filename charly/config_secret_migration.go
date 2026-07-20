@@ -5,6 +5,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // This file implements the two pre-resolution helpers for the credential-
@@ -48,7 +51,7 @@ func secretDeclaredOnBox(meta *BoxMetadata) map[string]bool {
 
 // secretDepNames returns the flat list of env var names declared as
 // credential-backed on an image. Used by the config_image.go Run() call
-// site to populate SaveDeployStateInput.SecretNames for the defense-in-depth
+// site to populate deploykit.SaveDeployStateInput.SecretNames for the defense-in-depth
 // scrub in saveDeployState. Returns nil (not an empty slice) when meta has
 // no secret declarations — matches the rest of the omitempty-style API.
 func secretDepNames(meta *BoxMetadata) []string {
@@ -71,7 +74,7 @@ func secretDepNames(meta *BoxMetadata) []string {
 // otherwise the default (charly/secret, dep.Name) is returned. The format is
 // enforced by validateSecretDeps at build time, so this is purely a
 // structural split — no validation is re-run here.
-func secretKeyForDep(dep EnvDependency) (service, key string) {
+func secretKeyForDep(dep spec.EnvDependency) (service, key string) {
 	if dep.Key != "" {
 		// Key format validated: ^charly/<service>/<key>$ — the service is
 		// everything before the final "/", the key is the last segment.
@@ -103,7 +106,7 @@ func secretKeyForDep(dep EnvDependency) (service, key string) {
 // This is idempotent: running it a second time on a now-clean charly.yml is
 // a no-op. Running it on a host that never had plaintext credentials is a
 // no-op.
-func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, instance string) (int, error) {
+func MigratePlaintextEnvSecret(dc *deploykit.BundleConfig, meta *BoxMetadata, image, instance string) (int, error) {
 	if dc == nil || dc.Bundle == nil {
 		return 0, nil
 	}
@@ -112,7 +115,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 		return 0, nil
 	}
 
-	key := deployKey(image, instance)
+	key := deploykit.DeployKey(image, instance)
 	entry, ok := dc.Bundle[key]
 	if !ok || len(entry.Env) == 0 {
 		return 0, nil
@@ -148,7 +151,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 
 	// Build a lookup from dep name → full EnvDependency so we can honor any
 	// `key:` override on the candy declaration.
-	depByName := map[string]EnvDependency{}
+	depByName := map[string]spec.EnvDependency{}
 	for _, dep := range meta.SecretRequire {
 		depByName[dep.Name] = dep
 	}
@@ -180,7 +183,7 @@ func MigratePlaintextEnvSecret(dc *BundleConfig, meta *BoxMetadata, image, insta
 
 	entry.Env = staying
 	dc.Bundle[key] = entry
-	if err := SaveBundleConfig(dc); err != nil {
+	if err := saveBundleConfigNodeForm(dc); err != nil {
 		return migrated, fmt.Errorf("persisting cleaned charly.yml after migration: %w (backup at %s)", err, backupPath)
 	}
 	fmt.Fprintf(os.Stderr, "Backed up previous charly.yml to %s (rollback: mv %s %s)\n", backupPath, backupPath, deployConfigPathOrEmpty())
@@ -210,7 +213,7 @@ func scrubSecretCLIEnv(cliEnv []string, meta *BoxMetadata) ([]string, int) {
 		return cliEnv, 0
 	}
 
-	depByName := map[string]EnvDependency{}
+	depByName := map[string]spec.EnvDependency{}
 	if meta != nil {
 		for _, dep := range meta.SecretRequire {
 			depByName[dep.Name] = dep

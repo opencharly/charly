@@ -6,6 +6,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestWriteContextIgnore verifies the generated .containerignore /
@@ -18,7 +21,7 @@ func TestWriteContextIgnore(t *testing.T) {
 		Dir: dir,
 		Config: &Config{
 			// "image" duplicated to exercise dedup against author input.
-			Defaults: BoxConfig{ContextIgnore: []string{"image", ".check", "image"}},
+			Defaults: spec.BoxConfig{ContextIgnore: []string{"image", ".check", "image"}},
 		},
 	}
 	if err := g.writeContextIgnore(); err != nil {
@@ -64,17 +67,17 @@ func TestRenderDnfConfWrite(t *testing.T) {
 	if got := renderDnfConfWrite(nil); got != "" {
 		t.Errorf("nil Dnf should render empty, got %q", got)
 	}
-	if got := renderDnfConfWrite(&DnfConfig{}); got != "" {
+	if got := renderDnfConfWrite(&vmshared.DnfConfig{}); got != "" {
 		t.Errorf("zero Dnf should render empty, got %q", got)
 	}
-	got := renderDnfConfWrite(&DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true})
+	got := renderDnfConfWrite(&vmshared.DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true})
 	for _, want := range []string{"max_parallel_downloads=10", "fastestmirror=True", ">> /etc/dnf/dnf.conf", "&& \\"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("rendered dnf.conf fragment missing %q, got: %q", want, got)
 		}
 	}
 	// Only one knob set → only that line.
-	onlyParallel := renderDnfConfWrite(&DnfConfig{MaxParallelDownloads: 5})
+	onlyParallel := renderDnfConfWrite(&vmshared.DnfConfig{MaxParallelDownloads: 5})
 	if strings.Contains(onlyParallel, "fastestmirror") {
 		t.Errorf("fastestmirror should be absent when unset, got %q", onlyParallel)
 	}

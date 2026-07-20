@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestResolveImageRefForEnsure_RemoteRef — `@github.com/...`
@@ -49,7 +51,7 @@ func TestResolveImageRefForEnsure_ShortNameRequiresCfg(t *testing.T) {
 // `ghcr.io/opencharly/arch-builder:<tag>` build locally on a
 // host with no ghcr.io credentials.
 func TestBuildableShortName_FullRefBasenameLookup(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{
 		"arch-builder":   {},
 		"fedora-builder": {},
 	})}
@@ -82,7 +84,7 @@ func TestBuildableShortName_NilCfg(t *testing.T) {
 // TestBuildableShortName_RemoteRef returns "" — remote refs use the
 // remote project's charly.yml; local build is not applicable.
 func TestBuildableShortName_RemoteRef(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{"x": {}})}
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"x": {}})}
 	if got := buildableShortName("@github.com/owner/repo/x:tag", cfg); got != "" {
 		t.Errorf("expected '' for remote ref, got %q", got)
 	}

@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // #75 — bed-scoped fixture image tags. These unit tests pin the two pure/host-side
 // mechanisms of the fix; the k8s-preresolver node.Version honoring + the plugin's
@@ -43,7 +47,7 @@ func TestBedRunImageTag(t *testing.T) {
 // propagation in resolveNodeOverlays.
 func TestResolveNodeOverlays_PropagatesExplicitTagToNodeVersion(t *testing.T) {
 	c := &deployAddCmd{Tag: "check-k8s-deploy-2026.195.0600"}
-	node := &BundleNode{Image: "check-k8s-deploy-app"}
+	node := &spec.BundleNode{Image: "check-k8s-deploy-app"}
 	_, refStr, _, tag, err := c.resolveNodeOverlays("check-k8s-deploy-workload", node, nil)
 	if err != nil {
 		t.Fatalf("resolveNodeOverlays: unexpected error: %v", err)
@@ -61,7 +65,7 @@ func TestResolveNodeOverlays_PropagatesExplicitTagToNodeVersion(t *testing.T) {
 	// An authored node.Version WINS over --tag (existing precedence, unchanged) — the
 	// propagation must not clobber an operator-pinned version.
 	c2 := &deployAddCmd{Tag: "bed-tag"}
-	node2 := &BundleNode{Image: "img", Version: "operator-pin"}
+	node2 := &spec.BundleNode{Image: "img", Version: "operator-pin"}
 	if _, _, _, tag2, err := c2.resolveNodeOverlays("d", node2, nil); err != nil {
 		t.Fatalf("resolveNodeOverlays (authored version): %v", err)
 	} else if tag2 != "operator-pin" || node2.Version != "operator-pin" {

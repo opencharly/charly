@@ -4,6 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestPersistBedDeployOverrides_SkipsLocalBed pins the bed-infra fix for the
@@ -32,14 +36,14 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A LOCAL bed — persisting it would write an un-loadable `local:` cross-ref.
 	disp := true
-	persistBedDeployOverrides("check-local", BundleNode{
+	persistBedDeployOverrides("check-local", spec.BundleNode{
 		Target:     "local",
 		From:       "check-local-app",
 		Disposable: &disp,
 		Lifecycle:  "dev",
 	})
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("overlay unloadable after local-bed persist (it should have been SKIPPED): %v", err)
 	}
@@ -51,11 +55,11 @@ func TestPersistBedDeployOverrides_SkipsLocalBed(t *testing.T) {
 
 	// A POD bed is STILL persisted (the skip is not too broad). Non-disposable so it
 	// is a plain deploy entry, not a check bed subject to validateCheckBeds.
-	persistBedDeployOverrides("pod-deploy-x", BundleNode{
+	persistBedDeployOverrides("pod-deploy-x", spec.BundleNode{
 		Target: "pod",
 		Image:  "pod-deploy-x",
 	})
-	dc2, err := LoadBundleConfig()
+	dc2, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after pod-bed persist: %v", err)
 	}
@@ -90,18 +94,18 @@ func TestPersistBedDeployOverrides_RoundtripsArbiterFields(t *testing.T) {
 
 	// The two roles of the group live-preemption bed: a requires_exclusive CLAIMANT
 	// member and a preemptible HOLDER member.
-	persistBedDeployOverrides("preempt-taker", BundleNode{
+	persistBedDeployOverrides("preempt-taker", spec.BundleNode{
 		Target:            "pod",
 		Image:             "check-pod",
 		RequiresExclusive: []string{"test-lock"},
 	})
-	persistBedDeployOverrides("preempt-holder", BundleNode{
+	persistBedDeployOverrides("preempt-holder", spec.BundleNode{
 		Target:      "pod",
 		Image:       "check-pod",
-		Preemptible: &PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
+		Preemptible: &spec.PreemptibleConfig{Holds: []string{"test-lock"}, Restore: "always"},
 	})
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload per-host overlay: %v", err)
 	}

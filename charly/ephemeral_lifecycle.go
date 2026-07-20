@@ -10,6 +10,10 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // ephemeral_lifecycle.go — shared lifecycle helpers for ephemeral
@@ -88,7 +92,7 @@ type EphemeralHandle struct {
 //
 // Returns the handle that should be passed to TeardownEphemeralLifecycle
 // at deploy del time.
-func RegisterEphemeralLifecycle(node *BundleNode, deployName string) (*EphemeralHandle, error) {
+func RegisterEphemeralLifecycle(node *spec.BundleNode, deployName string) (*EphemeralHandle, error) {
 	if node == nil || !node.IsEphemeral() {
 		return nil, fmt.Errorf("RegisterEphemeralLifecycle: node %q is not marked ephemeral", deployName)
 	}
@@ -160,7 +164,7 @@ func RegisterEphemeralLifecycle(node *BundleNode, deployName string) (*Ephemeral
 //  3. Decrement snapshot refcount (vm-target only).
 //  4. Decrement parent's child-refcount (nested case).
 //  5. Clear EphemeralRuntime from charly.yml.
-func TeardownEphemeralLifecycle(node *BundleNode, deployName string) error {
+func TeardownEphemeralLifecycle(node *spec.BundleNode, deployName string) error {
 	if node == nil || !node.IsEphemeral() {
 		return fmt.Errorf("TeardownEphemeralLifecycle: node %q is not marked ephemeral", deployName)
 	}
@@ -196,7 +200,7 @@ func TeardownEphemeralLifecycle(node *BundleNode, deployName string) error {
 
 // effectiveTTL computes the TTL for a deploy, clipping to the parent
 // ephemeral's remaining TTL when nested. parentID may be empty.
-func effectiveTTL(node *BundleNode, parentID string) (time.Duration, error) {
+func effectiveTTL(node *spec.BundleNode, parentID string) (time.Duration, error) {
 	declared := node.Ephemeral.EffectiveTTL()
 	if parentID == "" {
 		return declared, nil
@@ -304,19 +308,19 @@ func sanitizeUnitName(s string) string {
 // persistEphemeralRuntime writes the EphemeralHandle into charly.yml's
 // vm_state.ephemeral (or pod_state / k8s_state for those targets).
 func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
 	if dc == nil {
-		dc = &BundleConfig{Bundle: map[string]BundleNode{}}
+		dc = &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{}}
 	}
 	node, ok := dc.Bundle[deployName]
 	if !ok {
-		node = BundleNode{}
+		node = spec.BundleNode{}
 	}
 	if node.VmState == nil {
-		node.VmState = &VmDeployState{}
+		node.VmState = &spec.VmDeployState{}
 	}
 	node.VmState.Ephemeral = &EphemeralRuntime{
 		ID:              h.ID,
@@ -329,12 +333,12 @@ func persistEphemeralRuntime(deployName string, h *EphemeralHandle) error {
 		InstanceName:    h.InstanceName,
 	}
 	dc.Bundle[deployName] = node
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // clearEphemeralRuntime removes the lifecycle metadata at teardown.
 func clearEphemeralRuntime(deployName string) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}
@@ -347,13 +351,13 @@ func clearEphemeralRuntime(deployName string) error {
 	}
 	node.VmState.Ephemeral = nil
 	dc.Bundle[deployName] = node
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // bumpParentChildRefcount adjusts the parent ephemeral's child counter
 // by delta (+1 on nested register, -1 on nested teardown).
 func bumpParentChildRefcount(parentID string, delta int) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}
@@ -369,7 +373,7 @@ func bumpParentChildRefcount(parentID string, delta int) error {
 			node.VmState.Ephemeral.ChildRefcount = 0
 		}
 		dc.Bundle[name] = node
-		return SaveBundleConfig(dc)
+		return saveBundleConfigNodeForm(dc)
 	}
 	return nil
 }
@@ -377,7 +381,7 @@ func bumpParentChildRefcount(parentID string, delta int) error {
 // lookupEphemeralByID scans charly.yml for the ephemeral with the
 // given ID. Used for nested TTL clipping.
 func lookupEphemeralByID(id string) (*EphemeralRuntime, error) {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)
 	}
@@ -397,7 +401,7 @@ func lookupEphemeralByID(id string) (*EphemeralRuntime, error) {
 // set guards against cycles (which would only occur via manual
 // charly.yml editing).
 func teardownChildren(deployName string) error {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return err
 	}
@@ -412,7 +416,7 @@ func teardownChildren(deployName string) error {
 	return teardownChildrenRec(dc, parentID, visited)
 }
 
-func teardownChildrenRec(dc *BundleConfig, parentID string, visited map[string]bool) error {
+func teardownChildrenRec(dc *deploykit.BundleConfig, parentID string, visited map[string]bool) error {
 	var toDel []string
 	for name, node := range dc.Bundle {
 		if visited[name] {

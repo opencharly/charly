@@ -7,6 +7,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+
 	"cuelang.org/go/cue"
 	"github.com/opencharly/sdk/kit"
 	"gopkg.in/yaml.v3"
@@ -193,7 +196,7 @@ func isNodeFormFile(data []byte) bool {
 // boxEntityWireYAML marshals a resolved BoxConfig back to the authored `box:`
 // wire form (a kind-keyed document), injecting the map-key name that BoxConfig
 // does not itself carry, so it can be CUE-ingested and validated against #Box.
-func boxEntityWireYAML(name string, box BoxConfig) ([]byte, error) {
+func boxEntityWireYAML(name string, box spec.BoxConfig) ([]byte, error) {
 	raw, err := yaml.Marshal(box)
 	if err != nil {
 		return nil, err
@@ -212,7 +215,7 @@ func boxEntityWireYAML(name string, box BoxConfig) ([]byte, error) {
 // validateBuildAndDistro validates build: and distro: entries.
 // build: entries are checked against the embedded distro format definitions (charly/charly.yml).
 // distro: is free-form (any string, including distro:version).
-func validateBuildAndDistro(cfg *Config, distroCfg *DistroConfig, errs *ValidationError) {
+func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs *ValidationError) {
 	validateBuild := func(context string, build BuildFormats) {
 		for _, b := range build {
 			if !distroCfg.ValidFormat(b) {
@@ -268,7 +271,7 @@ var validBuildCacheModes = map[string]bool{
 // defaults; values are validated wherever they appear so a typo surfaces at
 // `charly box validate` rather than silently mis-driving a build.
 func validateBuildTunables(cfg *Config, errs *ValidationError) {
-	check := func(name string, ic BoxConfig) {
+	check := func(name string, ic spec.BoxConfig) {
 		if ic.Jobs != nil && *ic.Jobs < 1 {
 			errs.Add("%s: jobs must be >= 1, got %d", name, *ic.Jobs)
 		}
@@ -310,7 +313,7 @@ func validateBuildTunables(cfg *Config, errs *ValidationError) {
 // (over the resolved builder map + ResolveCandyOrder) moved to the validate plugin (envelope-portable);
 // this reference-validation half stays host (like validateBuildAndDistro) and rides reply.Diagnostics.
 // Kind-blind: builder/build TYPE words are checked against the runtime builder vocab, no kind switch.
-func validateBuilderRefs(cfg *Config, builderCfg *BuilderConfig, errs *ValidationError) {
+func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *ValidationError) {
 	// Validate defaults.builder entries.
 	for typ, builder := range cfg.Defaults.Builder {
 		if !builderCfg.ValidBuilderType(typ) {

@@ -61,5 +61,5 @@ func cloneYAMLNode(node *yaml.Node) (*yaml.Node, error) {
 	return &out, nil
 }
 
-// mappingRoot moved to kit (kit.MappingRoot, aliased in kit_aliases.go) — shared with
+// mappingRoot moved to kit (kit.MappingRoot, referenced directly) — shared with
 // candy/plugin-migrate's engine (R3).

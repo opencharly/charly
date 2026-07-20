@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -50,15 +51,15 @@ func (f *fakeExecutor) ResolveHome(_ context.Context, _ string) (string, error) 
 }
 
 // Stubs satisfying the rest of DeployExecutor — never called by these tests.
-func (f *fakeExecutor) RunSystem(_ context.Context, _ string, _ EmitOpts) error { return nil }
-func (f *fakeExecutor) RunUser(_ context.Context, _ string, _ EmitOpts) error   { return nil }
-func (f *fakeExecutor) RunBuilder(_ context.Context, _ BuilderRunOpts) ([]byte, error) {
+func (f *fakeExecutor) RunSystem(_ context.Context, _ string, _ deploykit.EmitOpts) error { return nil }
+func (f *fakeExecutor) RunUser(_ context.Context, _ string, _ deploykit.EmitOpts) error   { return nil }
+func (f *fakeExecutor) RunBuilder(_ context.Context, _ deploykit.BuilderRunOpts) ([]byte, error) {
 	return nil, nil
 }
-func (f *fakeExecutor) PutFile(_ context.Context, _, _ string, _ uint32, _ bool, _ EmitOpts) error {
+func (f *fakeExecutor) PutFile(_ context.Context, _, _ string, _ uint32, _ bool, _ deploykit.EmitOpts) error {
 	return nil
 }
-func (f *fakeExecutor) GetFile(_ context.Context, _ string, _ bool, _ EmitOpts) ([]byte, error) {
+func (f *fakeExecutor) GetFile(_ context.Context, _ string, _ bool, _ deploykit.EmitOpts) ([]byte, error) {
 	return nil, nil
 }
 
@@ -83,7 +84,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "if [ -e", stdout: "exists=1|regular file|755|root|root\n"},
 		}
-		results := r.Run(context.Background(), []Op{
+		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis-server", "exists": true, "mode": "0755", "filetype": "file"}},
 		})
 		if len(results) != 1 || results[0].Status != TestPass {
@@ -96,7 +97,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "if [ -e", stdout: "exists=1|regular file|755|root|root\n"},
 		}
-		results := r.Run(context.Background(), []Op{
+		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/x", "mode": "0644"}},
 		})
 		if results[0].Status != TestFail || !strings.Contains(results[0].Message, "mode") {
@@ -109,7 +110,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "if [ -e", stdout: "exists=0||||\n"},
 		}
-		results := r.Run(context.Background(), []Op{
+		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/nope", "exists": false}},
 		})
 		if results[0].Status != TestPass {
@@ -122,7 +123,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "if [ -e", stdout: "exists=1|regular file|644|root|root\n"},
 		}
-		results := r.Run(context.Background(), []Op{
+		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/x", "exists": false}},
 		})
 		if results[0].Status != TestFail {
@@ -136,7 +137,7 @@ func TestRunner_FileVerb(t *testing.T) {
 			{matchPrefix: "if [ -e", stdout: "exists=1|regular file|644|root|root\n"},
 			{matchPrefix: "cat ", stdout: "line one\nfsfreeze-hook.d here\nline three\n"},
 		}
-		results := r.Run(context.Background(), []Op{
+		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/etc/x", "contains": "fsfreeze-hook.d"}},
 		})
 		if results[0].Status != TestPass {
@@ -160,8 +161,8 @@ func TestRunner_CommandVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "redis-cli ping", stdout: "PONG\n", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}},
+		res := r.Run(context.Background(), []spec.Op{
+			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -173,8 +174,8 @@ func TestRunner_CommandVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "status", stdout: "ready ok running", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "status"}, Stdout: MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}},
+		res := r.Run(context.Background(), []spec.Op{
+			{Plugin: "command", PluginInput: map[string]any{"command": "status"}, Stdout: spec.MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -186,7 +187,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "fail-cmd", exit: 2},
 		}
-		res := r.Run(context.Background(), []Op{cmdOp("fail-cmd")})
+		res := r.Run(context.Background(), []spec.Op{cmdOp("fail-cmd")})
 		if res[0].Status != TestFail || !strings.Contains(res[0].Message, "exit=2") {
 			t.Errorf("expected exit failure, got %+v", res[0])
 		}
@@ -197,8 +198,8 @@ func TestRunner_CommandVerb(t *testing.T) {
 		fake.responses = []fakeResponse{
 			{matchPrefix: "uptime", stdout: "load average: 0.12 0.34 0.56\n", exit: 0},
 		}
-		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "uptime"}, Stdout: MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}},
+		res := r.Run(context.Background(), []spec.Op{
+			{Plugin: "command", PluginInput: map[string]any{"command": "uptime"}, Stdout: spec.MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v", res[0])
@@ -222,8 +223,8 @@ func TestRunner_VariableExpansion(t *testing.T) {
 			{matchPrefix: "redis-cli -p 16379", stdout: "PONG\n", exit: 0},
 		}
 		r := newCheckRunner(kit.RunnerConfig{Exec: fake, Mode: RunModeLive, Env: map[string]string{"HOST_PORT:6379": "16379"}})
-		res := r.Run(context.Background(), []Op{
-			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: MatcherList{{Op: "equals", Value: "PONG"}}},
+		res := r.Run(context.Background(), []spec.Op{
+			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
 		if res[0].Status != TestPass {
 			t.Errorf("expected pass, got %+v. fake calls: %v", res[0], fake.calls)
@@ -232,7 +233,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 
 	t.Run("unresolved → skip", func(t *testing.T) {
 		r, _ := newFakeRunner(t, RunModeLive)
-		res := r.Run(context.Background(), []Op{
+		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}},
 		})
 		if res[0].Status != TestSkip || !strings.Contains(res[0].Message, "unresolved") {
@@ -244,7 +245,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 // Skip:true short-circuits before any execution.
 func TestRunner_SkipFlag(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeLive)
-	res := r.Run(context.Background(), []Op{{Plugin: "command", PluginInput: map[string]any{"command": "anything"}, Skip: true}})
+	res := r.Run(context.Background(), []spec.Op{{Plugin: "command", PluginInput: map[string]any{"command": "anything"}, Skip: true}})
 	if res[0].Status != TestSkip {
 		t.Errorf("expected skip, got %+v", res[0])
 	}
@@ -253,7 +254,7 @@ func TestRunner_SkipFlag(t *testing.T) {
 // Zero-verb check fails with a clear error at runOne.
 func TestRunner_EmptyCheck(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeLive)
-	res := r.Run(context.Background(), []Op{{}})
+	res := r.Run(context.Background(), []spec.Op{{}})
 	if res[0].Status != TestFail || !strings.Contains(res[0].Message, "no verb") {
 		t.Errorf("expected fail with 'no verb', got %+v", res[0])
 	}

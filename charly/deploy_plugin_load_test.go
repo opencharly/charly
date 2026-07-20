@@ -3,6 +3,10 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger proves the externalized vm
@@ -13,7 +17,7 @@ import (
 func TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger(t *testing.T) {
 	fe := &recordingExec{} // a non-ShellExecutor venue → the remote (guest) write path
 	tgt := &externalDeployTarget{name: "check-arch-vm", prov: &grpcProvider{capMeta: capMeta{word: "vm", class: ClassDeployTarget}}, exec: fe}
-	plans := []*InstallPlan{{Candy: "ripgrep", Version: "2026.1.1", DeployID: "abc1230000000000"}}
+	plans := []*deploykit.InstallPlan{{Candy: "ripgrep", Version: "2026.1.1", DeployID: "abc1230000000000"}}
 	if err := tgt.recordVenueLedger(plans); err != nil {
 		t.Fatalf("recordVenueLedger: %v", err)
 	}
@@ -33,8 +37,8 @@ func TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger(t *testing.T) {
 // (ShellExecutor) skips the venue write — recordDeploy already wrote the operator-side ledger
 // there, so the venue IS the host and a second write would be redundant.
 func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
-	tgt := &externalDeployTarget{name: "host-bed", prov: &grpcProvider{capMeta: capMeta{word: "local", class: ClassDeployTarget}}, exec: ShellExecutor{}}
-	plans := []*InstallPlan{{Candy: "direnv", DeployID: "deadbeef00000000"}}
+	tgt := &externalDeployTarget{name: "host-bed", prov: &grpcProvider{capMeta: capMeta{word: "local", class: ClassDeployTarget}}, exec: kit.ShellExecutor{}}
+	plans := []*deploykit.InstallPlan{{Candy: "direnv", DeployID: "deadbeef00000000"}}
 	if err := tgt.recordVenueLedger(plans); err != nil {
 		t.Fatalf("recordVenueLedger host-local: %v", err)
 	}
@@ -46,12 +50,12 @@ func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
 // deployNodePluginContext surfaced no plugin words for the nested child and its substrate
 // word never loaded its provider (the "unknown target local" regression).
 func TestResolveDeployNodeByPath(t *testing.T) {
-	tree := map[string]BundleNode{
+	tree := map[string]spec.BundleNode{
 		"check-arch-vm": {
 			Target: "vm",
-			Children: map[string]*BundleNode{
+			Children: map[string]*spec.BundleNode{
 				"arch-host": {Target: "local"},
-				"web":       {Target: "pod", Children: map[string]*BundleNode{"db": {Target: "pod"}}},
+				"web":       {Target: "pod", Children: map[string]*spec.BundleNode{"db": {Target: "pod"}}},
 			},
 		},
 		"pod-bed": {Target: "pod"},

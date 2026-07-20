@@ -39,6 +39,7 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
+	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -50,7 +51,6 @@ my-example-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
 	// The whole F4 path: prescan recognizes examplekind → connectDeclaredKindPlugins builds +
 	// connects it (re-entrancy-guarded) → normalizeNodeInto/runPluginKind decodes the body.
 	uf, _, err := LoadUnified(dir)
@@ -97,6 +97,7 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	if err := copyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
+	requireUnversionedSource(t, dstCandy)
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -108,7 +109,6 @@ bad-kind:
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
 	_, _, err = LoadUnified(dir)
 	if err == nil {
 		t.Fatal("LoadUnified must FAIL when the kind's OpValidate rejects the body (Diagnostics error)")
@@ -124,6 +124,13 @@ func pluginKindKeys(uf *UnifiedFile) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func requireUnversionedSource(t *testing.T, dir string) {
+	t.Helper()
+	if pluginSourceHasGitRevision(dir, pluginBuildEnv(os.Environ(), dir)) {
+		t.Fatal("staged candy must remain an unversioned source fixture")
+	}
 }
 
 // copyCandyFixReplace copies a candy module tree to dst, rewriting go.mod's

@@ -10,11 +10,14 @@ import (
 )
 
 // host_build_feature.go — the generic "feature" F10 host-builder. The externalized `charly feature`
-// command plugin (candy/plugin-feature) OWNS the list/pending/validate grammar + output and asks the
-// host to enumerate the project's plans via Executor.HostBuild("feature", spec.FeatureRequest{...}).
-// The unified LOADER (LoadConfig / ScanCandy — the kernel), the Step plan model, and validatePlanSteps
-// (shared with `charly box validate`, R3) STAY core, reached via this generic action noun (F11). The
-// seam returns plain enumerated DATA — the plugin does all the formatting/verdict/exit-code logic.
+// command plugin (candy/plugin-feature) OWNS the list/pending/validate grammar + output, INCLUDING
+// the plan-to-summary transform (kit.KeywordOf/kit.ValidatePlanSteps/deploykit.DescriptionInfo are
+// sdk-portable, K3) and asks the host to enumerate the project's RAW plans via
+// Executor.HostBuild("feature", spec.FeatureRequest{...}). The unified LOADER (LoadConfig / ScanCandy
+// — the kernel) STAYS core, reached via this generic action noun (F11) — this file needs no
+// kit/deploykit import as a result of the transform moving to the plugin. The seam returns plain
+// enumerated RAW data (description + plan) — the plugin does all the summarizing/validating/
+// formatting/verdict/exit-code logic.
 const featureBuilderKind = "feature"
 
 func hostBuildFeature(_ context.Context, req spec.FeatureRequest, _ buildEngineContext) (spec.FeatureReply, error) {
@@ -29,11 +32,11 @@ func hostBuildFeature(_ context.Context, req spec.FeatureRequest, _ buildEngineC
 	return spec.FeatureReply{Entities: ents}, nil
 }
 
-// enumerateFeatures loads the project config + candies and flattens every kind: entity's plan into
-// plain spec.FeatureEntity data (summary, per-step keyword/text/agent/check flags, and the shared
-// validatePlanSteps errors). Content-less candy layers are listed with empty data (the plugin renders
-// them as "(no description)"); content-less box images are omitted (matching the former engine). Split
-// from the host-builder so a unit test can drive the real loader + plan model against a fixture.
+// enumerateFeatures loads the project config + candies and flattens every kind: entity into plain
+// spec.FeatureEntity RAW data (description + plan, untransformed). Content-less candy layers are
+// listed with empty data (the plugin renders them as "(no description)"); content-less box images are
+// omitted (matching the former engine). Split from the host-builder so a unit test can drive the real
+// loader against a fixture.
 func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
@@ -46,31 +49,12 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 	f := strings.ToLower(strings.TrimSpace(filter))
 
 	var ents []spec.FeatureEntity
-	add := func(kind, name, desc string, plan []Step) {
+	add := func(kind, name, desc string, plan []spec.Step) {
 		eid := kind + ":" + name
 		if f != "" && f != eid && f != kind {
 			return
 		}
-		e := spec.FeatureEntity{Kind: kind, Name: name, Description: desc}
-		if desc != "" || len(plan) > 0 {
-			if s := descriptionInfo(desc); s != "" {
-				e.Summary = s
-			} else {
-				e.Summary = "(empty)"
-			}
-			for i := range plan {
-				step := plan[i]
-				e.Steps = append(e.Steps, spec.FeatureStep{
-					Index:   i,
-					Keyword: string(keywordOf(&step)),
-					Text:    step.KeywordText(),
-					IsAgent: step.IsAgent(),
-					IsCheck: step.Check != "" || step.AgentCheck != "",
-				})
-			}
-			e.ValidationErrors = validatePlanSteps(desc, plan, eid)
-		}
-		ents = append(ents, e)
+		ents = append(ents, spec.FeatureEntity{Kind: kind, Name: name, Description: desc, Plan: plan})
 	}
 
 	for name, layer := range layers {

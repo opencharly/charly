@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // namespace.go — the Go-inspired hierarchical-namespace resolver.
@@ -61,17 +64,17 @@ func leafName(ref string) string {
 // resolveBoxRef resolves a (possibly qualified) box name to its BoxConfig
 // and the Config (namespace context) it lives in. Bare names resolve in c;
 // `ns.name` descends into c.Namespaces[ns] recursively.
-func (c *Config) resolveBoxRef(ref string) (BoxConfig, *Config, bool) {
+func (c *Config) resolveBoxRef(ref string) (spec.BoxConfig, *Config, bool) {
 	if ns, rest, ok := splitNamespaceRef(ref); ok {
 		sub, ok := c.Namespaces[ns]
 		if !ok {
-			return BoxConfig{}, nil, false
+			return spec.BoxConfig{}, nil, false
 		}
 		return sub.resolveBoxRef(rest)
 	}
 	img, ok := c.BoxConfig(ref)
 	if !ok {
-		return BoxConfig{}, nil, false
+		return spec.BoxConfig{}, nil, false
 	}
 	return img, c, true
 }
@@ -134,7 +137,7 @@ func (c *Config) resolveLocalRef(ref string) (*ResolvedLocal, bool) {
 // already-resolved local image set into `out` (keyed by the fully-qualified
 // name), resolving each within its own namespace context. Iterates to a fixpoint
 // because a pulled-in image may itself reference a (deeper) namespaced base.
-func (c *Config) resolveNamespacedBases(out map[string]*ResolvedBox, calverTag, dir string, opts ResolveOpts) error {
+func (c *Config) resolveNamespacedBases(out map[string]*buildkit.ResolvedBox, calverTag, dir string, opts ResolveOpts) error {
 	for {
 		var todo []string
 		add := func(ref string) {
@@ -182,7 +185,7 @@ func (c *Config) resolveNamespacedBases(out map[string]*ResolvedBox, calverTag, 
 // (keyPrefix + descended namespaces + leaf). Re-keys the entry's own internal
 // base so the build graph references the fully-qualified ancestor, and recurses
 // to pull that ancestor too.
-func (c *Config) pullNamespacedBox(from *Config, ref, keyPrefix, calverTag, dir string, opts ResolveOpts, out map[string]*ResolvedBox) error {
+func (c *Config) pullNamespacedBox(from *Config, ref, keyPrefix, calverTag, dir string, opts ResolveOpts, out map[string]*buildkit.ResolvedBox) error {
 	cur := from
 	var curPrefix strings.Builder
 	curPrefix.WriteString(keyPrefix)
@@ -229,7 +232,7 @@ func (c *Config) pullNamespacedBox(from *Config, ref, keyPrefix, calverTag, dir 
 		return curPrefix.String() + r
 	}
 	if len(ri.Builder) > 0 {
-		rk := make(BuilderMap, len(ri.Builder))
+		rk := make(buildkit.BuilderMap, len(ri.Builder))
 		for format, b := range ri.Builder {
 			rk[format] = requalify(b)
 		}

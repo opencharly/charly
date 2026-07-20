@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // checkrun_act.go — the runtime do:act execution path.
@@ -43,7 +47,7 @@ import (
 // action verb whose handler already acts, a pure observe verb, or a non-act plugin) — the
 // runtime caller then falls through to the normal dispatch; an emit caller turns it into a
 // hard error (a run: step naming a non-act verb has no build/deploy install path).
-func resolveProvisionScript(op *Op, distros []string) (string, bool) {
+func resolveProvisionScript(op *spec.Op, distros []string) (string, bool) {
 	word, err := op.Kind()
 	if err != nil {
 		return "", false
@@ -67,7 +71,7 @@ func resolveProvisionScript(op *Op, distros []string) (string, bool) {
 // provision renderer (an action verb whose handler already acts, or a pure
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
-func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (CheckResult, bool) {
 	script, ok := resolveProvisionScript(c, h.kr.Distros())
 	if !ok {
 		return CheckResult{}, false
@@ -75,7 +79,7 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *Op, verb stri
 	if h.kr.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
 	}
-	_, stderr, exit, err := h.kr.Exec().RunCapture(ctx, wrapContainerCommand(script))
+	_, stderr, exit, err := h.kr.Exec().RunCapture(ctx, kit.WrapContainerCommand(script))
 	if err != nil {
 		return failf(c, "act %s: execution error: %v", verb, err), true
 	}
@@ -100,3 +104,33 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *Op, verb stri
 // plus the box-build emitTasks `case "plugin"` seam) — their build/deploy install timeline
 // lowers into a TYPED SystemPackagesStep / ServicePackagedStep via the TypedStepProvider
 // (compileActOp), NOT this shell.
+
+// renderOpCommand turns a non-copy OpStep into a shell command. The structured verbs
+// (command/plugin:command/mkdir/link/setcap/write/download) render via the SHARED pure
+// kit.RenderOpCommand; an act-`plugin:` verb (a builtin ProvisionActor) renders via the
+// in-proc registry (resolveProvisionScript, above) — the SAME seam the build/runtime act
+// paths use (R3). copy is staged via the executor's PutFile, never rendered. The ONE
+// op→shell render copy is kit's; the in-proc deploy path calls this wrapper, an
+// out-of-process deploy plugin's kit.WalkPlans calls kit.RenderOpCommand directly.
+func renderOpCommand(s *deploykit.OpStep) (string, error) {
+	if s.Op == nil {
+		return "", fmt.Errorf("renderOpCommand: nil op")
+	}
+	if s.Op.Copy != "" {
+		return "", fmt.Errorf("copy: task must be staged via PutFile, not rendered")
+	}
+	if cmd, handled := kit.RenderOpCommand(s.Op, s.CtxPath, s.CandyVars); handled {
+		return cmd, nil
+	}
+	// Not a pure-renderable verb → an act-`plugin:` verb whose ProvisionActor shell needs
+	// the in-proc registry. ok=false means the verb has no act form (a run: step naming a
+	// non-act verb has no install path — a hard authoring error).
+	script, ok := resolveProvisionScript(s.Op, s.Distros)
+	if !ok {
+		return "", fmt.Errorf("run: plugin verb %q is not act-capable (no ProvisionActor)", s.Op.Plugin)
+	}
+	return script, nil
+}
+
+// shQuoteArg single-quotes an argument for POSIX shell embedding (re-export).
+func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }

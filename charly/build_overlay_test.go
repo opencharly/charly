@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // build_overlay_test.go — unit coverage for the HOST-SIDE pod-overlay build ENGINE that STAYS core
@@ -15,10 +19,10 @@ func TestPodDeployEngine(t *testing.T) {
 	if got := podDeployEngine(nil); got != "podman" {
 		t.Errorf("podDeployEngine(nil) = %q, want podman", got)
 	}
-	if got := podDeployEngine(&BundleNode{}); got != "podman" {
+	if got := podDeployEngine(&spec.BundleNode{}); got != "podman" {
 		t.Errorf("podDeployEngine(empty) = %q, want podman", got)
 	}
-	if got := podDeployEngine(&BundleNode{Engine: "docker"}); got != "docker" {
+	if got := podDeployEngine(&spec.BundleNode{Engine: "docker"}); got != "docker" {
 		t.Errorf("podDeployEngine(docker) = %q, want docker", got)
 	}
 }
@@ -55,9 +59,9 @@ func TestOverlayBuildInputsCtxRoundTrip(t *testing.T) {
 	if got := overlayBuildInputsFrom(context.Background()); got != nil {
 		t.Fatalf("overlayBuildInputsFrom on a bare ctx = %v, want nil", got)
 	}
-	plans := []*InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
-	node := &BundleNode{Image: "base"}
-	exec := ShellExecutor{}
+	plans := []*deploykit.InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
+	node := &spec.BundleNode{Image: "base"}
+	exec := kit.ShellExecutor{}
 	ctx := withOverlayBuildInputs(context.Background(), &overlayBuildInputs{plans: plans, parentExec: exec, parentNode: node})
 	got := overlayBuildInputsFrom(ctx)
 	if got == nil {

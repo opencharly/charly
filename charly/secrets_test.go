@@ -5,6 +5,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCollectSecretsFromLabels(t *testing.T) {
@@ -37,7 +40,7 @@ func TestCollectSecretsFromLabels(t *testing.T) {
 }
 
 func TestSecretArgs(t *testing.T) {
-	secrets := []CollectedSecret{
+	secrets := []deploykit.CollectedSecret{
 		{Name: "charly-img-pass", Target: "/run/secrets/pass"},
 		{Name: "charly-img-user", Target: "/run/secrets/user"},
 	}
@@ -54,17 +57,17 @@ func TestSecretArgs(t *testing.T) {
 }
 
 func TestQuadletSecretDirectives(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "test-img",
 		ImageRef: "ghcr.io/test/test-img:latest",
 		Home:     "/tmp",
-		Secrets: []CollectedSecret{
+		Secrets: []deploykit.CollectedSecret{
 			{Name: "charly-test-img-api-key", Target: "/run/secrets/api_key"},
 			{Name: "charly-test-img-db-pass", Target: "/run/secrets/db_pass"},
 		},
 	}
 
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !strings.Contains(content, "Secret=charly-test-img-api-key,target=/run/secrets/api_key") {
 		t.Error("missing Secret= directive for api-key")
 	}
@@ -91,13 +94,13 @@ func TestQuadletSecretDirectives(t *testing.T) {
 // refactor that adds an ExecStartPre or rehydrates the value as an
 // Environment= line will fail this test.
 func TestQuadletSecretEnvDirectives(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "openwebui",
 		ImageRef: "ghcr.io/opencharly/openwebui:latest",
 		UID:      1000,
 		GID:      1000,
 		Env:      []string{"WEBUI_URL=http://localhost:8080"},
-		Secrets: []CollectedSecret{
+		Secrets: []deploykit.CollectedSecret{
 			{
 				Name:           "charly-openwebui-openrouter-api-key",
 				Env:            "OPENROUTER_API_KEY",
@@ -117,7 +120,7 @@ func TestQuadletSecretEnvDirectives(t *testing.T) {
 		},
 	}
 
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 
 	// Positive: the Secret= directives for both credential-backed secrets
 	// must be present. These are what podman uses to inject the decrypted
@@ -242,7 +245,7 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 		t.Fatalf("Set charly/secret/TEST_CHARLY_CRED_ROUTEA_KEY: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Name:           "charly-openwebui-test-charly-cred-routea-key",
 		Env:            "TEST_CHARLY_CRED_ROUTEA_KEY",
 		SecretName:     "TEST_CHARLY_CRED_ROUTEA_KEY",
@@ -275,7 +278,7 @@ func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 		t.Fatalf("Set default path: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Env:            "TEST_CHARLY_CRED_ROUTEB_KEY",
 		SecretName:     "TEST_CHARLY_CRED_ROUTEB_KEY",
 		Service:        "charly/api-key",
@@ -301,7 +304,7 @@ func TestResolveSecretValueLegacyChainUnchanged(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 
-	cs := CollectedSecret{
+	cs := deploykit.CollectedSecret{
 		Name:       "charly-immich-db-password",
 		Env:        "DB_PASSWORD",
 		SecretName: "db-password",
@@ -338,10 +341,10 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 	}
 
 	meta := &BoxMetadata{
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ROUTEA", Description: "override", Key: "charly/api-key/routea"},
 			{Name: "TEST_CHARLY_CRED_ROUTEB", Description: "default"},
 		},
@@ -362,7 +365,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 
 	// Find the override entry and verify Service/Key were parsed from the
 	// `key: charly/api-key/routea` override.
-	var routea *CollectedSecret
+	var routea *deploykit.CollectedSecret
 	for i, cs := range collected {
 		if cs.Env == "TEST_CHARLY_CRED_ROUTEA" {
 			routea = &collected[i]
@@ -383,7 +386,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 	}
 
 	// Find the default-path entry and verify default Service/Key applied.
-	var routeb *CollectedSecret
+	var routeb *deploykit.CollectedSecret
 	for i, cs := range collected {
 		if cs.Env == "TEST_CHARLY_CRED_ROUTEB" {
 			routeb = &collected[i]
@@ -431,10 +434,10 @@ func TestCollectCandySecretAcceptsMissingRequired(t *testing.T) {
 	withIsolatedCredentialStore(t) // empty store
 
 	meta := &BoxMetadata{
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_OPT", Description: "optional"},
 		},
 	}
@@ -485,7 +488,7 @@ func TestCollectCandySecretAcceptsEnvOverride(t *testing.T) {
 	t.Setenv("TEST_CHARLY_CRED_IMPORTED", "from-env-synthetic")
 
 	meta := &BoxMetadata{
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_IMPORTED", Description: "opt", Key: "charly/api-key/imported"},
 		},
 	}
@@ -523,10 +526,10 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		Secret: []LabelSecretEntry{
 			{Name: "webui-secret-key", Target: "/run/secrets/webui_secret_key", Env: "WEBUI_SECRET_KEY"},
 		},
-		SecretRequire: []EnvDependency{
+		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ADMIN_PASSWORD", Description: "synthetic admin password"},
 		},
-		SecretAccept: []EnvDependency{
+		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_ROUTEA", Description: "synthetic optional", Key: "charly/api-key/routea"},
 		},
 	}
@@ -551,7 +554,7 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		t.Fatalf("merged has %d entries, want 3", len(merged))
 	}
 
-	byEnv := map[string]CollectedSecret{}
+	byEnv := map[string]deploykit.CollectedSecret{}
 	for _, cs := range merged {
 		byEnv[cs.Env] = cs
 	}
@@ -586,5 +589,33 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 		if !strings.HasPrefix(cs.Name, "charly-openwebui-") {
 			t.Errorf("CollectedSecret.Name = %q, want prefix charly-openwebui-", cs.Name)
 		}
+	}
+}
+
+// TestApplySecretRefresh_NamedAllAndUnmatched (moved from box_labels_cmd_test.go, K3 reentry-class
+// dissolution — that file's own subjects, canonicalLabelKey/sortedLabelKeys, moved to
+// candy/plugin-box; this test covers ApplySecretRefresh, defined in secrets.go, so it belongs here).
+func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
+	base := []deploykit.CollectedSecret{
+		{Name: "charly-app-db-password", SecretName: "db-password"},
+		{Name: "charly-app-api-key", SecretName: "api-key"},
+	}
+
+	out, unmatched := ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), nil)
+	if len(unmatched) != 0 || out[0].RotateOnConfig || out[1].RotateOnConfig {
+		t.Fatal("no-op refresh must not rotate or report unmatched")
+	}
+
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"db-password", "nope"})
+	if !out[0].RotateOnConfig || out[1].RotateOnConfig {
+		t.Errorf("named refresh rotated wrong set: %+v", out)
+	}
+	if !reflect.DeepEqual(unmatched, []string{"nope"}) {
+		t.Errorf("unmatched = %v, want [nope]", unmatched)
+	}
+
+	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"all"})
+	if !out[0].RotateOnConfig || !out[1].RotateOnConfig || len(unmatched) != 0 {
+		t.Errorf("'all' refresh must rotate everything: %+v unmatched=%v", out, unmatched)
 	}
 }

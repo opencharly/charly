@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalDeployPlugin_ReverseChannelEndToEnd proves the FULL external deploy
@@ -66,7 +70,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
-	routed, err := ResolveTarget(&BundleNode{Target: "exampledeploy"}, "e3deploy")
+	routed, err := ResolveTarget(&spec.BundleNode{Target: "exampledeploy"}, "e3deploy")
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}
@@ -80,13 +84,13 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	//    the recorded teardown run for real without a sudo prompt.
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	root := t.TempDir()
-	paths := &LedgerPaths{
+	paths := &kit.LedgerPaths{
 		Root:     root,
 		Deploys:  filepath.Join(root, "deploys"),
 		Candies:  filepath.Join(root, "layers"),
 		LockFile: filepath.Join(root, ".lock"),
 	}
-	tgt := &externalDeployTarget{name: name, prov: gp, exec: ShellExecutor{}, paths: paths}
+	tgt := &externalDeployTarget{name: name, prov: gp, exec: kit.ShellExecutor{}, paths: paths}
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")
@@ -94,28 +98,28 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	// --- Add: reverse channel applies both markers; host records the ledger. ---
-	if err := tgt.Add(ctx, nil, nil, EmitOpts{}); err != nil {
+	if err := tgt.Add(ctx, nil, nil, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	mustExist(t, applied, "Add did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "Add did not write the probe marker over the reverse channel")
-	rec, err := ReadDeployRecord(paths, tgt.deployID())
+	rec, err := kit.ReadDeployRecord(paths, tgt.deployID())
 	if err != nil || rec == nil {
 		t.Fatalf("Add did not write the deploy record: rec=%v err=%v", rec, err)
 	}
 	if rec.Target != "exampledeploy" {
 		t.Fatalf("deploy record target = %q, want %q (must NOT be \"host\" — would collide with the local deploy target.Del's scan)", rec.Target, "exampledeploy")
 	}
-	crec, err := ReadCandyRecord(paths, "plugin-example-deploy")
+	crec, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec == nil {
 		t.Fatalf("Add did not write the candy record: crec=%v err=%v", crec, err)
 	}
-	if len(crec.ReverseOps) != 1 || crec.ReverseOps[0].Kind != ReverseOpPluginScript {
+	if len(crec.ReverseOps) != 1 || crec.ReverseOps[0].Kind != spec.ReverseOpPluginScript {
 		t.Fatalf("candy record reverse ops = %+v, want exactly one plugin-script op", crec.ReverseOps)
 	}
 
 	// --- Test: host-side file check on the probe marker passes (no plugin call). ---
-	if err := tgt.Test(ctx, []Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
+	if err := tgt.Test(ctx, []spec.Op{{ID: "probe", Plugin: "file", PluginInput: map[string]any{"file": probe, "exists": true}}}, TestOpts{}); err != nil {
 		t.Fatalf("Test (probe marker present): %v", err)
 	}
 
@@ -124,7 +128,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 	mustExist(t, probe, "Update lost the probe marker")
-	crec2, err := ReadCandyRecord(paths, "plugin-example-deploy")
+	crec2, err := kit.ReadCandyRecord(paths, "plugin-example-deploy")
 	if err != nil || crec2 == nil || len(crec2.ReverseOps) != 1 {
 		t.Fatalf("Update must keep exactly ONE reverse op (idempotent), got %+v err=%v", crec2, err)
 	}
@@ -135,10 +139,10 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	mustNotExist(t, probe, "Del did not remove the probe marker (reverse op not replayed)")
 	mustNotExist(t, applied, "Del did not remove the applied marker (reverse op not replayed)")
-	if rec, _ := ReadDeployRecord(paths, tgt.deployID()); rec != nil {
+	if rec, _ := kit.ReadDeployRecord(paths, tgt.deployID()); rec != nil {
 		t.Fatal("Del did not delete the deploy record")
 	}
-	if crec, _ := ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
+	if crec, _ := kit.ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {
 		t.Fatal("Del did not delete the candy record")
 	}
 }

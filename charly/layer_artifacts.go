@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // RetrieveCandyArtifacts walks every artifact declared by every candy
@@ -35,11 +37,11 @@ import (
 // block, used to rewrite server URLs in a retrieved kubeconfig).
 func RetrieveCandyArtifacts(
 	ctx context.Context,
-	exec DeployExecutor,
+	exec spec.DeployExecutor,
 	layers []*Candy,
 	deployName string,
 	envVars map[string]string,
-	opts EmitOpts,
+	opts spec.EmitOpts,
 ) error {
 	for _, layer := range layers {
 		if layer == nil {
@@ -61,12 +63,12 @@ func RetrieveCandyArtifacts(
 // retrieveOne handles a single artifact.
 func retrieveOne(
 	ctx context.Context,
-	exec DeployExecutor,
+	exec spec.DeployExecutor,
 	candyName string,
 	a CandyArtifact,
 	deployName string,
 	envVars map[string]string,
-	opts EmitOpts,
+	opts spec.EmitOpts,
 ) error {
 	if a.Path == "" || a.RetrieveTo == "" {
 		return fmt.Errorf("invalid artifact declaration (path and retrieve_to are required)")
@@ -146,10 +148,10 @@ func retrieveOne(
 // dispatcher-level timeouts win over the per-artifact deadline.
 func waitForArtifactPath(
 	ctx context.Context,
-	exec DeployExecutor,
+	exec spec.DeployExecutor,
 	path string,
 	maxWait time.Duration,
-	opts EmitOpts,
+	opts spec.EmitOpts,
 ) error {
 	if opts.DryRun {
 		return nil

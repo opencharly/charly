@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -46,12 +48,12 @@ const checkBedBuilderKind = "check-bed"
 // bedSession holds the live host handles a bed run owns across its HostBuild ops.
 type bedSession struct {
 	bed       string
-	node      BundleNode     // resolved once at setup; drives the members/wait ops
-	bedDomain string         // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
-	imageTag  string         // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
-	bedUnlock func() error   // acquireFileLock(".check/<bed>/.lock")
-	domUnlock []func() error // acquireVmDomainLock per bedVmDomains, in acquire order
-	lease     *Lease         // acquireResourceForClaimant
+	node      spec.BundleNode // resolved once at setup; drives the members/wait ops
+	bedDomain string          // per-deploy VM domain identity (vmDomainIdentity(bed)); the live domain is charly-<bedDomain>
+	imageTag  string          // per-RUN bed-scoped image tag (<bed>-<calver>); every box build + deploy in the run passes it as --tag (#75)
+	bedUnlock func() error    // acquireFileLock(".check/<bed>/.lock")
+	domUnlock []func() error  // acquireVmDomainLock per bedVmDomains, in acquire order
+	lease     *Lease          // acquireResourceForClaimant
 
 	// env restore state
 	repoOvSet bool   // this session set CHARLY_REPO_OVERRIDE
@@ -122,8 +124,7 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if s == nil {
 			return spec.CheckBedReply{}, fmt.Errorf("check-bed members-down: no live session for bed %q", req.Bed)
 		}
-		tearDownMembers(&s.node)
-		return spec.CheckBedReply{}, nil
+		return spec.CheckBedReply{}, tearDownMembers(&s.node)
 	case "wait-ready":
 		s := lookupBedSession(req.Bed)
 		if s == nil {
@@ -157,6 +158,28 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 			dir = cwd
 		}
 	}
+	// The bed must resolve against the parent superproject's in-development
+	// candies on its very first load. Installing this after LoadUnified is too
+	// late on a fresh cache: the pinned @github refs have already failed. Keep
+	// the override active for the later cli children by transferring its restore
+	// state into the bed session after the node is resolved.
+	pair := selfSuperprojectOverridePair(dir)
+	oldRepoOverride, hadRepoOverride := os.LookupEnv(RepoOverrideEnv)
+	overrideSet := pair != ""
+	overrideTransferred := false
+	if overrideSet {
+		_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(oldRepoOverride, pair))
+	}
+	defer func() {
+		if !overrideSet || overrideTransferred {
+			return
+		}
+		if hadRepoOverride {
+			_ = os.Setenv(RepoOverrideEnv, oldRepoOverride)
+		} else {
+			_ = os.Unsetenv(RepoOverrideEnv)
+		}
+	}()
 	uf, ok, err := LoadUnified(dir)
 	if err != nil {
 		return spec.CheckBedReply{}, err
@@ -169,17 +192,19 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		return spec.CheckBedReply{}, fmt.Errorf("check-bed setup: %q is not a disposable check bed", req.Bed)
 	}
 
-	// calver + logDir up front so the GPU-skip reply carries them too (single-sourced dir naming).
+	// CalVer and logDir are single-sourced for both normal runs and prerequisite
+	// skips. A normal run creates its directory only after it owns the per-bed
+	// lock: a rejected duplicate must not masquerade as a newer incomplete run.
 	calver := ComputeCalVer()
 	logDir := filepath.Join(".check", req.Bed, calver)
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
-	}
 
 	// Host-prerequisite fail-fast (BEFORE any acquire): a bed claiming a GPU resource whose vendor
 	// has no matching card is unsatisfiable here — a clean SKIP (exit 3), not a failure. Acquires
 	// NOTHING, so no session is inserted and no teardown is needed.
 	if tok, vendor, missing := bedGPUPrereqMissing(node); missing {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
+		}
 		return spec.CheckBedReply{
 			Calver: calver,
 			LogDir: logDir,
@@ -196,6 +221,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// to the plugin in the reply so its `charly vm create/destroy/start` cli steps pass
 	// --domain <bedDomain> (`vm build` stays entity-scoped); harmless (unused) for non-VM beds.
 	s := &bedSession{bed: req.Bed, node: node, bedDomain: vmDomainIdentity(req.Bed), imageTag: bedRunImageTag(req.Bed, calver)}
+	if overrideSet {
+		s.repoOvSet = true
+		s.hadRepoOv = hadRepoOverride
+		s.oldRepoOv = oldRepoOverride
+		overrideTransferred = true
+		fmt.Fprintf(os.Stderr, "charly check run %s: testing LOCAL candies (%s += %s)\n", req.Bed, RepoOverrideEnv, pair)
+	}
 	inserted := false
 	defer func() {
 		if !inserted {
@@ -212,6 +244,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		return spec.CheckBedReply{}, fmt.Errorf("locking check bed %q: %w", req.Bed, lockErr)
 	}
 	s.bedUnlock = bedUnlock
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return spec.CheckBedReply{}, fmt.Errorf("creating %s: %w", logDir, err)
+	}
 
 	// Per-DOMAIN serialization for VM beds (sorted → no deadlock across a multi-domain bed).
 	// Keyed by the DEPLOY (req.Bed) post-P33, so distinct beds sharing one kind:vm entity get
@@ -223,18 +258,6 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 			return spec.CheckBedReply{}, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, req.Bed, derr)
 		}
 		s.domUnlock = append(s.domUnlock, du)
-	}
-
-	// Local-candy resolution (the candy-ref analogue of --dev-local-pkg): point the bed's
-	// parent-repo @github candy refs at the LOCAL superproject working tree so the bed tests the
-	// in-development candies. Set in the host process so the cli-forked children inherit it.
-	if pair := selfSuperprojectOverridePair("."); pair != "" {
-		old, had := os.LookupEnv(RepoOverrideEnv)
-		_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(old, pair))
-		s.repoOvSet = true
-		s.hadRepoOv = had
-		s.oldRepoOv = old
-		fmt.Fprintf(os.Stderr, "charly check run %s: testing LOCAL candies (%s += %s)\n", req.Bed, RepoOverrideEnv, pair)
 	}
 
 	// Isolate this bed's EPHEMERAL deploy state to a PER-BED config file so CONCURRENT beds never
@@ -293,13 +316,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		ImageTag:       s.imageTag,
 		LocalRef:       node.From, // local bed ref
 		VMDomains:      domains,
-		CheckLiveRefs:  bedCheckLiveRefs(req.Bed, node.Children),
-		ChildKeys:      sortedNestedKeys(node.Children),
+		CheckLiveRefs:  deploykit.BedCheckLiveRefs(req.Bed, node.Children),
+		ChildKeys:      deploykit.SortedNestedKeys(node.Children),
 		LocalChildKeys: bedLocalChildKeys(node.Children),
 		Members:        bedMemberDescriptors(node.Members),
-		RunBuild:       CheckLevelReaches(level, CheckLevelBuild),
-		RunRuntime:     CheckLevelReaches(level, CheckLevelNoAgent),
-		RunAgent:       CheckLevelReaches(level, CheckLevelAgent),
+		RunBuild:       kit.CheckLevelReaches(level, kit.CheckLevelBuild),
+		RunRuntime:     kit.CheckLevelReaches(level, kit.CheckLevelNoAgent),
+		RunAgent:       kit.CheckLevelReaches(level, kit.CheckLevelAgent),
 	}, nil
 }
 
@@ -323,7 +346,7 @@ func bedSessionTeardown(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 // box, BEFORE the members-up op deploys them). Deterministic order (sortedMemberKeys). A vm member's
 // From is the kind:vm ENTITY (build/spec source, entity-scoped — NOT --domain); the per-deploy member
 // domain (vmDomainIdentity(memberKey)) is applied host-side by bringUpMembers, not here.
-func bedMemberDescriptors(members map[string]*BundleNode) []spec.CheckBedMember {
+func bedMemberDescriptors(members map[string]*spec.BundleNode) []spec.CheckBedMember {
 	keys := sortedMemberKeys(members)
 	if len(keys) == 0 {
 		return nil
@@ -356,9 +379,9 @@ func bedRunImageTag(bed, calver string) string {
 // sortedNestedKeys order — the set a VM root deploys host-side (mirroring deployNestedLocalChildren:
 // a VM's nested CONTAINER children are deployed in-guest by plugin-deploy-vm's PostApply, so a
 // host-side re-deploy would be wrong).
-func bedLocalChildKeys(children map[string]*BundleNode) []string {
+func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
-	for _, childKey := range sortedNestedKeys(children) {
+	for _, childKey := range deploykit.SortedNestedKeys(children) {
 		child := children[childKey]
 		if child != nil && nodeTraits(child).HostRooted { // local (host-rooted shell venue)
 			out = append(out, childKey)

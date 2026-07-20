@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 )
 
 // CLI defines the command-line interface structure
@@ -26,7 +27,9 @@ type CLI struct {
 	// Commands marked LocalOnly (settings, version, ssh tunnel) are
 	// not re-execed — they always run on the local machine. See
 	// charly/host_exec.go for the exec dispatch.
-	Host string `long:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
+	Host             string   `long:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
+	HostIdentityFile string   `long:"host-identity-file" env:"CHARLY_HOST_IDENTITY_FILE" help:"SSH identity file for --host" type:"path"`
+	HostOption       []string `long:"host-option" env:"CHARLY_HOST_OPTION" help:"OpenSSH option for --host (repeatable, KEY=VALUE)"`
 
 	// Dir is the project directory that every build-mode command resolves
 	// charly.yml / candy/ relative to. Default is the process
@@ -46,9 +49,10 @@ type CLI struct {
 	// with --dir.
 	Repo string `long:"repo" env:"CHARLY_PROJECT_REPO" placeholder:"OWNER/REPO[@REF]" help:"Read charly.yml from a remote git repo (e.g. opencharly/charly). Use 'default' for opencharly/charly."`
 
-	Box      BoxCmd            `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
-	Plugin   PluginInternalCmd `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`
-	CliModel CliModelCmd       `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (sdk.CLIModel) for the out-of-process MCP bridge"`
+	Box         BoxCmd                 `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
+	Plugin      PluginInternalCmd      `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`
+	AgentTarget AgentTargetInternalCmd `cmd:"" name:"__agent-target" hidden:"" help:"internal: serve generic provider gRPC over stdio"`
+	CliModel    CliModelCmd            `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (sdk.CLIModel) for the out-of-process MCP bridge"`
 
 	// __plugin-providers prints a candy's plugin.providers (one <class>:<word> per line) —
 	// the single source the PKGBUILD uses to bake the host /usr/lib/charly/plugins/.providers
@@ -72,6 +76,24 @@ type CLI struct {
 	// K5-doomed: both die when the deploy-overlay + store reads move into the plugin over sdk kits.
 	BoxInspectOverlay InspectOverlayCmd `cmd:"" name:"__box-inspect-overlay" hidden:"" help:"internal: inspect deploy-overlay formats tunnel/bind_mounts (reentry behind box inspect)"`
 	BoxListTags       ListTagsCmd       `cmd:"" name:"__box-list-tags" hidden:"" help:"internal: list locally stored CalVer image tags (reentry behind box list tags)"`
+
+	// __box-fetch / __box-refresh are the hidden core reentry points behind the COMPILED-IN
+	// candy/plugin-authoring command:fetch / command:refresh words (nested under `box`, P14b).
+	// The plugin owns the user-facing `charly box fetch/refresh` grammar + dispatch and reaches
+	// these over HostBuild("cli") — the repo resolver (ResolveProjectRepo → EnsureRepoDownloaded)
+	// is host-coupled (CHARLY_REPO_OVERRIDE + the refs-backend dispatch + the command:migrate
+	// auto-migration), which a sdk-only plugin cannot reach.
+	// K5-doomed: both die when ResolveProjectRepo/EnsureRepoDownloaded move into the plugin over
+	// sdk kits (a `HostBuild("refs-resolve")` seam) — the SAME tracked-residue pattern as the
+	// sibling __box-inspect-overlay / __box-list-tags reentries above (K5 seam-death sweep).
+	BoxFetch   BoxFetchCmd   `cmd:"" name:"__box-fetch" hidden:"" help:"internal: pre-prime the remote-repo cache (reentry behind box fetch)"`
+	BoxRefresh BoxRefreshCmd `cmd:"" name:"__box-refresh" hidden:"" help:"internal: force re-clone of a remote project repo (reentry behind box refresh)"`
+
+	// __box-labels is GONE (K3 reentry-class dissolution): candy/plugin-box's `labels` command now
+	// calls kit.ResolveRuntime/ResolveLocalImageRef/InspectImageLabels directly — all pure
+	// container-storage probes with zero loader coupling, unlike the pkg/inspect-overlay/list-tags/
+	// fetch/refresh siblings above, which genuinely need host-coupled state and stay K5-doomed
+	// reentries for now.
 
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim: pkgver()'s
@@ -137,7 +159,7 @@ func main() {
 	// Load project .env into process environment before any config resolution.
 	// Real env vars take precedence over .env values.
 	if dir, err := os.Getwd(); err == nil {
-		if err := LoadProcessDotenv(dir); err != nil {
+		if err := kit.LoadProcessDotenv(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: loading .env: %v\n", err)
 		}
 	}
@@ -214,7 +236,7 @@ func main() {
 
 	// Stale-binary guardrail: if cwd is inside an opencharly source tree
 	// AND the source tree has .go files newer than this binary, abort
-	// with a clear error pointing at `task build:charly`. See
+	// with a clear error pointing at `task build:binary`. See
 	// CheckBinaryFreshness for the full rationale (CLAUDE.md R9 +
 	// the 2026-05-09 cuda-cudnn cache-mount incident).
 	CheckBinaryFreshness(ctx.Command())

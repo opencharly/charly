@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // validate_test.go — after the validate ENGINE moved to candy/plugin-box (task #60), this file keeps
@@ -16,27 +18,27 @@ import (
 func TestValidateBuildTunables(t *testing.T) {
 	cases := []struct {
 		name    string
-		ic      BoxConfig
+		ic      spec.BoxConfig
 		wantErr string // substring; "" = expect no error
 	}{
-		{"all unset is valid", BoxConfig{}, ""},
-		{"valid full set", BoxConfig{Jobs: new(4), PodmanJobs: new(0), PodmanJobsCap: new(8), Cache: "image", ContextIgnore: []string{"image", ".check"}}, ""},
-		{"jobs zero rejected", BoxConfig{Jobs: new(0)}, "jobs must be >= 1"},
-		{"jobs negative rejected", BoxConfig{Jobs: new(-2)}, "jobs must be >= 1"},
-		{"podman_jobs negative rejected", BoxConfig{PodmanJobs: new(-1)}, "podman_jobs must be >= 0"},
-		{"podman_jobs zero allowed (auto)", BoxConfig{PodmanJobs: new(0)}, ""},
-		{"podman_jobs_cap zero rejected", BoxConfig{PodmanJobsCap: new(0)}, "podman_jobs_cap must be >= 1"},
-		{"bad cache mode rejected", BoxConfig{Cache: "bogus"}, "cache must be one of"},
-		{"cache none allowed", BoxConfig{Cache: "none"}, ""},
-		{"empty context_ignore entry rejected", BoxConfig{ContextIgnore: []string{"image", "  "}}, "context_ignore[1] must not be empty"},
-		{"keep_images zero allowed (disabled)", BoxConfig{KeepImages: new(0)}, ""},
-		{"keep_images negative rejected", BoxConfig{KeepImages: new(-1)}, "keep_images must be >= 0"},
-		{"keep_check_runs valid", BoxConfig{KeepCheckRuns: new(10)}, ""},
-		{"keep_check_runs negative rejected", BoxConfig{KeepCheckRuns: new(-3)}, "keep_check_runs must be >= 0"},
+		{"all unset is valid", spec.BoxConfig{}, ""},
+		{"valid full set", spec.BoxConfig{Jobs: new(4), PodmanJobs: new(0), PodmanJobsCap: new(8), Cache: "image", ContextIgnore: []string{"image", ".check"}}, ""},
+		{"jobs zero rejected", spec.BoxConfig{Jobs: new(0)}, "jobs must be >= 1"},
+		{"jobs negative rejected", spec.BoxConfig{Jobs: new(-2)}, "jobs must be >= 1"},
+		{"podman_jobs negative rejected", spec.BoxConfig{PodmanJobs: new(-1)}, "podman_jobs must be >= 0"},
+		{"podman_jobs zero allowed (auto)", spec.BoxConfig{PodmanJobs: new(0)}, ""},
+		{"podman_jobs_cap zero rejected", spec.BoxConfig{PodmanJobsCap: new(0)}, "podman_jobs_cap must be >= 1"},
+		{"bad cache mode rejected", spec.BoxConfig{Cache: "bogus"}, "cache must be one of"},
+		{"cache none allowed", spec.BoxConfig{Cache: "none"}, ""},
+		{"empty context_ignore entry rejected", spec.BoxConfig{ContextIgnore: []string{"image", "  "}}, "context_ignore[1] must not be empty"},
+		{"keep_images zero allowed (disabled)", spec.BoxConfig{KeepImages: new(0)}, ""},
+		{"keep_images negative rejected", spec.BoxConfig{KeepImages: new(-1)}, "keep_images must be >= 0"},
+		{"keep_check_runs valid", spec.BoxConfig{KeepCheckRuns: new(10)}, ""},
+		{"keep_check_runs negative rejected", spec.BoxConfig{KeepCheckRuns: new(-3)}, "keep_check_runs must be >= 0"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Defaults: tc.ic, Box: boxMapOf(map[string]BoxConfig{})}
+			cfg := &Config{Defaults: tc.ic, Box: boxMapOf(map[string]spec.BoxConfig{})}
 			errs := &ValidationError{}
 			validateBuildTunables(cfg, errs)
 			if tc.wantErr == "" {

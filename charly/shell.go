@@ -7,6 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // isTerminal reports whether stdout is connected to a terminal.
@@ -25,7 +28,7 @@ func defaultIsTerminal() bool {
 var containerRunning = defaultContainerRunning
 
 func defaultContainerRunning(engine, name string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	cmd := exec.Command(binary, "container", "inspect",
 		"--format", "{{.State.Running}}", name)
 	out, err := cmd.Output()
@@ -39,7 +42,7 @@ func defaultContainerRunning(engine, name string) bool {
 // storage, RUNNING OR STOPPED (unlike containerRunning, which is false for a stopped container). A
 // bare `container inspect` succeeds for any existing container, so its exit status is the signal.
 var containerExists = func(engine, name string) bool {
-	binary := EngineBinary(engine)
+	binary := kit.EngineBinary(engine)
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
@@ -68,7 +71,7 @@ func (c *ShellCmd) Run() error {
 	if IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
 	}
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
 	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
 	// venue command (resolvePodShellPlan, #59 inventory), the owning plugin runs it over the served
@@ -95,34 +98,12 @@ func (c *ShellCmd) Run() error {
 	return lt.Attach(withPodShellOpts(context.Background(), opts), cmd, true)
 }
 
-// resolveShellImageRef builds the full image reference from registry,
-// name, and tag. When `tag` is empty, it resolves to the newest local
-// CalVer for the given short name via `ResolveNewestLocalCalVer` —
-// this is the CalVer-only contract (`/charly-build:build` "Cache Efficiency").
-// Callers that explicitly want a specific tag pass it; callers whose
-// `--tag` flag is empty get the newest CalVer without extra work.
-//
-// When `registry` is set AND `tag` is empty, there's no way to guess
-// a remote CalVer without a registry-list call, so the caller gets
-// `<registry>/<name>` back with no tag suffix — the engine will
-// resolve it locally first (matching any single local tag) or error.
+// resolveShellImageRef builds the full image reference from registry, name, and tag. Thin
+// delegate to kit.ResolveShellImageRef (P14: the logic moved to sdk/kit so candy/plugin-box's
+// `merge` command can call it too, R3 single source) — every existing core call site keeps this
+// name unchanged.
 func resolveShellImageRef(registry, name, tag string) string {
-	if tag == "" {
-		// Try local CalVer resolution. Best-effort: if nothing local
-		// matches, fall back to a tagless ref so the engine's own
-		// resolution path can error with its canonical message.
-		if resolved, err := ResolveNewestLocalCalVer("podman", name); err == nil && resolved != "" {
-			return resolved
-		}
-		if registry != "" {
-			return fmt.Sprintf("%s/%s", registry, name)
-		}
-		return name
-	}
-	if registry != "" {
-		return fmt.Sprintf("%s/%s:%s", registry, name, tag)
-	}
-	return fmt.Sprintf("%s:%s", name, tag)
+	return kit.ResolveShellImageRef(registry, name, tag)
 }
 
 // exec_LookPath wraps os/exec.LookPath to avoid importing os/exec in syscall code.

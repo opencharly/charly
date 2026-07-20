@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestReadinessConfig_ResolveDefaults(t *testing.T) {
@@ -11,7 +13,7 @@ func TestReadinessConfig_ResolveDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("nil/default resolve must succeed: %v", err)
 	}
-	if rr.NoProgress != readinessNoProgressFallback || rr.AbsoluteCap != readinessAbsoluteCapFallback || rr.StopGrace != readinessStopGraceFallback {
+	if rr.NoProgress != vmshared.ReadinessNoProgressFallback || rr.AbsoluteCap != vmshared.ReadinessAbsoluteCapFallback || rr.StopGrace != vmshared.ReadinessStopGraceFallback {
 		t.Fatalf("defaults wrong: %+v", rr)
 	}
 	if err := rr.ValidateOrdering(); err != nil {

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -35,13 +38,13 @@ import (
 type externalDeployTarget struct {
 	name string
 	prov *grpcProvider
-	exec DeployExecutor
+	exec deploykit.DeployExecutor
 
 	// node is the dispatch-merged BundleNode (set by ResolveTarget). A substrate with a
 	// registered lifecycle hook (vm) needs it to resolve its kind:vm entity for the
 	// host-side lifecycle (start/stop/rebuild/teardown bookkeeping). nil for a ref-based
 	// deploy with no charly.yml entry.
-	node *BundleNode
+	node *spec.BundleNode
 
 	// nodeOnly mirrors `charly bundle add --node-only`: when true, Add does NOT run the
 	// substrate's PostApply (vm: skip the nested target:pod children — the caller deploys
@@ -56,13 +59,13 @@ type externalDeployTarget struct {
 
 	// paths is the ledger root for this deploy's records. nil →
 	// DefaultLedgerPaths() (the operator ledger). Tests redirect it to a temp dir.
-	paths *LedgerPaths
+	paths *kit.LedgerPaths
 
 	// revRunner is the ReverseRunner Del hands to runReverseOps. nil → reverse_ops
 	// falls back to local exec.Command (sudo bash / bash) — the host-teardown path,
 	// matching the executor (ShellExecutor) ResolveTarget gives an external deploy.
 	// Tests inject a no-sudo runner.
-	revRunner ReverseRunner
+	revRunner kit.ReverseRunner
 
 	// KeepRepoChanges / KeepServices are the `charly bundle del --keep-…` teardown gates,
 	// set by the del-command dispatcher (bundle_add_cmd.go) for the externalized local
@@ -85,15 +88,15 @@ type externalDeployTarget struct {
 	build buildEngineContext
 }
 
-func (t *externalDeployTarget) Name() string             { return t.name }
-func (t *externalDeployTarget) Kind() string             { return "host" } // ops run on the host venue via the reverse channel
-func (t *externalDeployTarget) Executor() DeployExecutor { return t.exec }
+func (t *externalDeployTarget) Name() string                       { return t.name }
+func (t *externalDeployTarget) Kind() string                       { return "host" } // ops run on the host venue via the reverse channel
+func (t *externalDeployTarget) Executor() deploykit.DeployExecutor { return t.exec }
 
-func (t *externalDeployTarget) ledgerPaths() (*LedgerPaths, error) {
+func (t *externalDeployTarget) ledgerPaths() (*kit.LedgerPaths, error) {
 	if t.paths != nil {
 		return t.paths, nil
 	}
-	return DefaultLedgerPaths()
+	return kit.DefaultLedgerPaths()
 }
 
 // deployID is the deterministic ledger key for this external deploy — derived
@@ -102,7 +105,7 @@ func (t *externalDeployTarget) ledgerPaths() (*LedgerPaths, error) {
 // target's Kind()=="host" would otherwise collide with a real host deploy in
 // the local deploy target.Del's `Target=="host"` scan).
 func (t *externalDeployTarget) deployID() string {
-	return computeDeployID(t.name, nil, nil)
+	return deploykit.ComputeDeployID(t.name, nil, nil)
 }
 
 // Add applies the deployment via the out-of-process provider, then records the returned
@@ -112,8 +115,8 @@ func (t *externalDeployTarget) deployID() string {
 // retrieval + --verify AFTER the plugin applied — the SAME shared helpers the in-proc
 // local/vm targets use (R3). All are no-ops for a deployment whose candies declare neither
 // (the android/k8s/example substrates), so the path stays generic.
-func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*InstallPlan, opts EmitOpts) error {
-	var node *BundleNode
+func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
+	var node *spec.BundleNode
 	var dir string
 	if dctx != nil {
 		node = dctx.Node
@@ -211,8 +214,8 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 // the local deploy target.Update's re-Emit). The unified Update signature carries no
 // DeployContext, so the venue descriptor carries only the deploy name; a substrate
 // preresolver (if any) re-resolves the node from the tree by name.
-func (t *externalDeployTarget) Update(ctx context.Context, plans []*InstallPlan, opts UpdateOpts) error {
-	return t.apply(ctx, t.node, "", plans, EmitOpts{
+func (t *externalDeployTarget) Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error {
+	return t.apply(ctx, t.node, "", plans, deploykit.EmitOpts{
 		DryRun:           opts.DryRun,
 		AllowRepoChanges: opts.AllowRepoChanges,
 		AllowRootTasks:   opts.AllowRootTasks,
@@ -226,7 +229,7 @@ func (t *externalDeployTarget) Update(ctx context.Context, plans []*InstallPlan,
 // venue (with any substrate-specific preresolved payload), Invoke the provider with the
 // host executor on the broker, decode the reply, and (unless DryRun) persist the teardown
 // ops + record to the ledger.
-func (t *externalDeployTarget) apply(ctx context.Context, node *BundleNode, dir string, plans []*InstallPlan, opts EmitOpts) error {
+func (t *externalDeployTarget) apply(ctx context.Context, node *spec.BundleNode, dir string, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
 	dryRun := opts.DryRun
 	// Substrate venue preparation (Design A): a substrate with a registered lifecycle hook
 	// (vm) runs its host-side preflight (boot the domain, WaitForSSH/CloudInit, charly-in-
@@ -273,7 +276,7 @@ func (t *externalDeployTarget) apply(ctx context.Context, node *BundleNode, dir 
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
 		if p != nil {
-			views = append(views, planWireView(p))
+			views = append(views, deploykit.WireView(p))
 		}
 	}
 	params, err := json.Marshal(views)
@@ -348,11 +351,11 @@ func (t *externalDeployTarget) apply(ctx context.Context, node *BundleNode, dir 
 // (recordDeploy: computeDeployID + reverse ops) is SEPARATE and drives `charly bundle del`
 // (the venue ledger is provenance, never replayed) — so this venue write is purely additive
 // and never disturbs teardown. Idempotent on re-apply (Update): the *Via writers overwrite.
-func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
+func (t *externalDeployTarget) recordVenueLedger(plans []*deploykit.InstallPlan) error {
 	if t.exec == nil {
 		return nil
 	}
-	if _, isLocal := t.exec.(ShellExecutor); isLocal {
+	if _, isLocal := t.exec.(kit.ShellExecutor); isLocal {
 		return nil // host-local venue — recordDeploy already wrote the operator-side ledger
 	}
 	paths, err := t.ledgerPaths()
@@ -369,7 +372,7 @@ func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
 			break
 		}
 	}
-	deployRec := &DeployRecord{
+	deployRec := &kit.DeployRecord{
 		DeployID:   id,
 		Image:      t.name,
 		Target:     t.prov.word,
@@ -380,7 +383,7 @@ func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
 			continue
 		}
 		ver := p.Version
-		if verr := AddCandyDeploymentVia(t.exec, paths, p.Candy, id, func(rec *CandyRecord) {
+		if verr := kit.AddCandyDeploymentVia(t.exec, paths, p.Candy, id, func(rec *kit.CandyRecord) {
 			rec.Version = ver
 		}); verr != nil {
 			return fmt.Errorf("external deploy %q: venue ledger candy %s: %w", t.name, p.Candy, verr)
@@ -389,7 +392,7 @@ func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
 	}
 	// WriteDeployRecordVia creates the deploys/ dir even when no candy wrote a layer record
 	// (a boot-only deploy), so the guest-ledger dir probes still pass.
-	if werr := WriteDeployRecordVia(t.exec, paths, deployRec); werr != nil {
+	if werr := kit.WriteDeployRecordVia(t.exec, paths, deployRec); werr != nil {
 		return fmt.Errorf("external deploy %q: venue ledger deploy record: %w", t.name, werr)
 	}
 	return nil
@@ -414,7 +417,7 @@ func (t *externalDeployTarget) recordVenueLedger(plans []*InstallPlan) error {
 // such steps) is skipped entirely: calling ResolveHome unconditionally there was a live
 // `podman exec` / `ssh` that HARD-FAILS (exit 125 "no such container" / exit 255 ssh)
 // when the venue isn't reachable yet — never a "no-op", despite the old comment's claim.
-func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []*InstallPlan) error {
+func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []*deploykit.InstallPlan) error {
 	needsHome := false
 	needsServiceProbe := false
 	for _, p := range plans {
@@ -423,9 +426,9 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 		}
 		for _, step := range p.Steps {
 			switch step.(type) {
-			case *ShellHookStep, *ShellSnippetStep, *FileStep:
+			case *deploykit.ShellHookStep, *deploykit.ShellSnippetStep, *deploykit.FileStep:
 				needsHome = true
-			case *ServicePackagedStep:
+			case *deploykit.ServicePackagedStep:
 				needsServiceProbe = true
 			}
 		}
@@ -446,15 +449,15 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 			continue
 		}
 		if home != "" {
-			planResolveHome(p, home)
+			deploykit.ResolveHome(p, home)
 		}
 		for _, step := range p.Steps {
 			switch s := step.(type) {
-			case *ShellHookStep:
+			case *deploykit.ShellHookStep:
 				if s.EnvFile == "" && home != "" {
 					s.EnvFile = EnvdFilePath(home, s.CandyName)
 				}
-			case *ServicePackagedStep:
+			case *deploykit.ServicePackagedStep:
 				s.PriorEnabled = venueUnitEnabled(ctx, t.exec, s.Unit, s.TargetScope)
 			}
 		}
@@ -470,11 +473,11 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 // exec.Command. This is the SAME generalization that makes a vm teardown run in the guest
 // AND a local-remote teardown run on the remote (R3) — previously a local-remote teardown
 // wrongly ran on the operator host.
-func reverseRunnerForExecutor(exec DeployExecutor, existing ReverseRunner) ReverseRunner {
+func reverseRunnerForExecutor(exec deploykit.DeployExecutor, existing kit.ReverseRunner) kit.ReverseRunner {
 	if existing != nil {
 		return existing
 	}
-	if sshExec, isSSH := exec.(*SSHExecutor); isSSH {
+	if sshExec, isSSH := exec.(*kit.SSHExecutor); isSSH {
 		return &sshReverseRunner{exec: sshExec}
 	}
 	return nil
@@ -486,9 +489,9 @@ func reverseRunnerForExecutor(exec DeployExecutor, existing ReverseRunner) Rever
 // unit, so teardown restores the prior state. A probe failure (executor error / non-zero
 // exit) reports "not enabled" (the safe default — teardown then disables, never spuriously
 // re-enables).
-func venueUnitEnabled(ctx context.Context, exec DeployExecutor, unit string, scope Scope) bool {
+func venueUnitEnabled(ctx context.Context, exec deploykit.DeployExecutor, unit string, scope spec.Scope) bool {
 	cmd := "systemctl is-enabled --quiet " + shQuoteArg(unit)
-	if scope == ScopeUser {
+	if scope == spec.ScopeUser {
 		cmd = "systemctl --user is-enabled --quiet " + shQuoteArg(unit)
 	}
 	_, _, exit, err := exec.RunCapture(ctx, cmd)
@@ -523,7 +526,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 	// in-proc local/vm deploy targets called before externalization — idempotent
 	// (an op already carrying a command, or a non-package-remove op, is skipped;
 	// a nil DistroConfig is a no-op).
-	fillReverseUninstallCmds(reverseOps, func(format string, packages []string) string {
+	kit.FillReverseUninstallCmds(reverseOps, func(format string, packages []string) string {
 		if t.build.DistroCfg == nil {
 			return ""
 		}
@@ -531,20 +534,20 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 		if fd == nil || strings.TrimSpace(fd.UninstallTemplate) == "" {
 			return ""
 		}
-		ctx := &InstallContext{Packages: append([]string(nil), packages...)}
-		rendered, err := RenderTemplate(format+"-uninstall", fd.UninstallTemplate, ctx)
+		ctx := &spec.InstallContext{Packages: append([]string(nil), packages...)}
+		rendered, err := buildkit.RenderTemplate(format+"-uninstall", fd.UninstallTemplate, ctx)
 		if err != nil {
 			return ""
 		}
 		return strings.TrimSpace(rendered)
 	})
-	if err := AddCandyDeployment(paths, candy, id, func(rec *CandyRecord) {
+	if err := kit.AddCandyDeployment(paths, candy, id, func(rec *kit.CandyRecord) {
 		rec.Version = reply.Record.Version
-		rec.ReverseOps = append([]ReverseOp(nil), reverseOps...) // replace (idempotent)
+		rec.ReverseOps = append([]spec.ReverseOp(nil), reverseOps...) // replace (idempotent)
 	}); err != nil {
 		return fmt.Errorf("external deploy %q: record candy: %w", t.name, err)
 	}
-	return WriteDeployRecord(paths, &DeployRecord{
+	return kit.WriteDeployRecord(paths, &kit.DeployRecord{
 		DeployID:   id,
 		Image:      t.name,
 		Target:     t.prov.word, // the deploy WORD (e.g. "exampledeploy") — NOT "host"
@@ -556,7 +559,7 @@ func (t *externalDeployTarget) recordDeploy(reply spec.DeployReply) error {
 // Test runs the deploy-scope checks against the host venue. The plugin is NOT
 // involved — the checks are in-proc CheckVerbProviders run against t.exec, the
 // SAME runUnifiedTargetChecks path the host/pod/vm targets use (R3).
-func (t *externalDeployTarget) Test(ctx context.Context, checks []Op, opts TestOpts) error {
+func (t *externalDeployTarget) Test(ctx context.Context, checks []spec.Op, opts TestOpts) error {
 	return runUnifiedTargetChecks(ctx, t.exec, t.Kind(), t.name, checks, opts)
 }
 
@@ -569,7 +572,7 @@ func (t *externalDeployTarget) Del(ctx context.Context, opts DelOpts) error {
 	if err != nil {
 		return err
 	}
-	rec, err := ReadDeployRecord(paths, t.deployID())
+	rec, err := kit.ReadDeployRecord(paths, t.deployID())
 	if err != nil {
 		return err
 	}
@@ -656,7 +659,7 @@ func (t *externalDeployTarget) Status(ctx context.Context) (StatusInfo, error) {
 	if err != nil {
 		return StatusInfo{}, err
 	}
-	rec, err := ReadDeployRecord(paths, t.deployID())
+	rec, err := kit.ReadDeployRecord(paths, t.deployID())
 	if err != nil || rec == nil {
 		return StatusInfo{State: "stopped", Healthy: false}, nil
 	}

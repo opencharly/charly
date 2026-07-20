@@ -4,9 +4,10 @@ package main
 //
 // UnifiedDeployTarget/LifecycleTarget via externalDeployTarget (the out-of-process
 // substrate adapter — ALL FIVE substrates local/vm/pod/k8s/android externalized), and the
-// ResolveTarget dispatcher. There are no in-proc UnifiedDeployTarget adapters left; the core
-// build engines they once wrapped (PodDeployTarget overlay synthesis, the VM disk build)
-// are now invoked host-side from each substrate's lifecycle hook.
+// ResolveTarget dispatcher. There are no in-proc UnifiedDeployTarget adapters left; the
+// pod-overlay render + the VM disk build that once lived in core are now invoked host-side
+// from each substrate's lifecycle hook — the pod-overlay render moved to candy/plugin-deploy-pod
+// (P11c), reached via HostBuild("overlay") prep + the "step-emit"/"oci-emit-step" per-step dispatch.
 //
 // Each adapter wraps an existing legacy target via struct embedding.
 // Methods on the adapter take precedence over inherited legacy methods
@@ -25,6 +26,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
+
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -34,7 +38,7 @@ import (
 // no-executor and the summary errors; nodeName is the deploy identifier. Shared
 // by Pod/Vm/the local deploy target.Test — the three were byte-identical bar the
 // kind/name labels (R3).
-func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, nodeName string, checks []Op, opts TestOpts) error {
+func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, kind, nodeName string, checks []spec.Op, opts TestOpts) error {
 	onlyIDs := make(map[string]bool, len(opts.OnlyIDs))
 	for _, id := range opts.OnlyIDs {
 		onlyIDs[id] = true
@@ -108,11 +112,12 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 // over the E3b reverse channel. Unlike vm, pod's plugin WALKS NOTHING: pod bakes its install
 // steps INTO the image at build time, so its substrateLifecycle (the external
 // candy/plugin-deploy-pod, M4) builds the overlay container image HOST-SIDE in PrepareVenue
-// via HostBuild("overlay") → the RETAINED core
-// OCITarget/Generator engine, in-process — like vm builds its disk host-side) and owns the
-// container lifecycle (config/start/remove + the `charly update` rebuild gate). PodDeployTarget
-// (deploy_target_pod.go) is RETAINED as that core overlay-build engine; only the adapter +
-// the in-proc dedicated deploy provider were deleted.
+// via HostBuild("overlay") → the core prep+resolve seam (build_overlay.go) + the candy's own
+// render (deploykit.OCITarget walker + the "step-emit"/"oci-emit-step" per-step dispatch —
+// P11c dissolved the former in-core overlay render into the candy), like vm builds its disk
+// host-side) and owns the container lifecycle (config/start/remove + the `charly update`
+// rebuild gate). The former in-core pod overlay target struct is GONE (moved to the candy);
+// only the adapter + the in-proc dedicated deploy provider were deleted.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -150,7 +155,7 @@ func runUnifiedTargetChecks(ctx context.Context, exec DeployExecutor, kind, node
 //   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
 //   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
 //     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
-func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
+func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, error) {
 	if node == nil {
 		return nil, fmt.Errorf("no deployment %q; run `charly bundle list`", name)
 	}
@@ -181,7 +186,7 @@ func ResolveTarget(node *BundleNode, name string) (UnifiedDeployTarget, error) {
 	// the substrate. android/k8s carry no host: field, so they resolve to ShellExecutor
 	// (the host venue) — unchanged from the prior hardcoded ShellExecutor{}.
 	if gp, ok := prov.(*grpcProvider); ok {
-		exec, perr := rootExecutorForDeployNode(node)
+		exec, perr := deploykit.RootExecutorForDeployNode(node)
 		if perr != nil {
 			return nil, fmt.Errorf("deployment %q: %w", name, perr)
 		}

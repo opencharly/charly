@@ -25,6 +25,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,10 +37,10 @@ type shorthandExpander func(node *yaml.Node) error
 // cueShorthandExpanders maps a canonical Go type to the expander that
 // canonicalizes its shorthand wire forms. Keyed by the value type (not pointer).
 var cueShorthandExpanders = map[reflect.Type]shorthandExpander{
-	reflect.TypeOf(PackageItem{}):       expandPackageItemNode,
-	reflect.TypeOf(PortSpec{}):          expandPortSpecNode,
-	reflect.TypeOf(PreemptibleConfig{}): expandPreemptibleNode,
-	reflect.TypeOf(TunnelYAML{}):        expandTunnelNode,
+	reflect.TypeOf(spec.PackageItem{}):       expandPackageItemNode,
+	reflect.TypeOf(spec.PortSpec{}):          expandPortSpecNode,
+	reflect.TypeOf(spec.PreemptibleConfig{}): expandPreemptibleNode,
+	reflect.TypeOf(spec.TunnelYAML{}):        expandTunnelNode,
 }
 
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
@@ -215,11 +218,11 @@ func expandPortSpecNode(node *yaml.Node) error {
 			port = after
 		}
 	}
-	portNode := scalarNode(port)
+	portNode := kit.ScalarNode(port)
 	portNode.Tag = "!!int"
 	*node = *mappingNodes(
 		"port", portNode,
-		"protocol", scalarNode(proto),
+		"protocol", kit.ScalarNode(proto),
 	)
 	return nil
 }
@@ -243,12 +246,12 @@ func expandTunnelNode(node *yaml.Node) error {
 	if node.Kind != yaml.ScalarNode {
 		return nil
 	}
-	kv := []any{"provider", scalarNode(node.Value)}
+	kv := []any{"provider", kit.ScalarNode(node.Value)}
 	switch node.Value {
 	case "tailscale":
-		kv = append(kv, "private", scalarNode("all"))
+		kv = append(kv, "private", kit.ScalarNode("all"))
 	case "cloudflare":
-		kv = append(kv, "public", scalarNode("all"))
+		kv = append(kv, "public", kit.ScalarNode("all"))
 	}
 	*node = *mappingNodes(kv...)
 	return nil
@@ -270,11 +273,11 @@ func mappingNodes(kv ...any) *yaml.Node {
 		var vn *yaml.Node
 		switch v := kv[i+1].(type) {
 		case string:
-			vn = scalarNode(v)
+			vn = kit.ScalarNode(v)
 		case *yaml.Node:
 			vn = v
 		}
-		m.Content = append(m.Content, scalarNode(k), vn)
+		m.Content = append(m.Content, kit.ScalarNode(k), vn)
 	}
 	return m
 }

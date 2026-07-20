@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Ensures Kind() returns the correct verb for each single-verb Check and
@@ -13,30 +16,30 @@ import (
 func TestCheck_Kind(t *testing.T) {
 	tests := []struct {
 		name    string
-		check   Op
+		check   spec.Op
 		wantKey string
 		wantErr string // substring
 	}{
 		// `file` is NO LONGER a verb — it left #OpVerb in the file→plugin extraction and
 		// is now `plugin: file` + #FileInput. A bare Op has no File field, so the file
 		// CHECK is the generic plugin verb.
-		{"file-as-plugin", Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis"}}, "plugin", ""},
+		{"file-as-plugin", spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis"}}, "plugin", ""},
 		// `package` is NO LONGER a verb — it left #OpVerb in the package→plugin
 		// extraction and is now `plugin: package` + #PackageInput. A bare Op has no
 		// Package field, so the package CHECK is the generic plugin verb.
-		{"package-as-plugin", Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "plugin", ""},
+		{"package-as-plugin", spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}, "plugin", ""},
 		// `service` is NO LONGER a verb — it left #OpVerb in the service→plugin
 		// extraction and is now `plugin: service` + #ServiceInput. A bare Op has no
 		// Service field, so the service CHECK is the generic plugin verb.
-		{"service-as-plugin", Op{Plugin: "service", PluginInput: map[string]any{"service": "redis"}}, "plugin", ""},
+		{"service-as-plugin", spec.Op{Plugin: "service", PluginInput: map[string]any{"service": "redis"}}, "plugin", ""},
 		// `command` is NO LONGER a verb — it left #OpVerb in the command→plugin
 		// extraction and is now a shared #Op modifier (wl/libvirt argv). A bare
 		// Op.Command therefore yields NO verb; the command CHECK is `plugin: command`.
-		{"command-modifier-not-verb", Op{Command: "redis-cli ping"}, "", "no verb"},
-		{"command-as-plugin", Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}}, "plugin", ""},
-		{"plugin", Op{Plugin: "matching"}, "plugin", ""},
-		{"none", Op{}, "", "no verb"},
-		{"two", Op{Copy: "/x", Mkdir: "/tmp/d"}, "", "multiple verbs"},
+		{"command-modifier-not-verb", spec.Op{Command: "redis-cli ping"}, "", "no verb"},
+		{"command-as-plugin", spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}}, "plugin", ""},
+		{"plugin", spec.Op{Plugin: "matching"}, "plugin", ""},
+		{"none", spec.Op{}, "", "no verb"},
+		{"two", spec.Op{Copy: "/x", Mkdir: "/tmp/d"}, "", "multiple verbs"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,7 +91,7 @@ func TestCheck_UnmarshalYAMLList(t *testing.T) {
     in_container: false
   stdout: PONG
 `
-	var got []Op
+	var got []spec.Op
 	if err := decodeViaCUEForTest(t, src, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -168,7 +171,7 @@ func TestCheck_UnmarshalYAMLList(t *testing.T) {
 // Verifies Matcher decodes scalar, sequence, and single-key map forms.
 func TestMatcher_UnmarshalYAML(t *testing.T) {
 	type wrap struct {
-		M []Matcher `yaml:"m"`
+		M []spec.Matcher `yaml:"m"`
 	}
 	src := `
 m:
@@ -212,7 +215,7 @@ m:
 // Rejects a matcher map with more than one operator key.
 func TestMatcher_RejectsMultiKey(t *testing.T) {
 	src := `{equals: 1, contains: [2]}`
-	var m Matcher
+	var m spec.Matcher
 	if err := decodeViaCUEForTest(t, src, &m); err == nil {
 		t.Fatal("expected error for multi-key matcher map, got nil")
 	}
@@ -223,7 +226,7 @@ func TestCheck_ExpandVars(t *testing.T) {
 	// file is now a plugin verb; its path + owner ride plugin_input. opExpandVars walks the
 	// PluginInput map (kit.ExpandAnyVars), so ${HOME} / ${MISSING} resolve there exactly as they
 	// did when file/owner were base #Op string fields. Command stays an #Op modifier.
-	c := Op{
+	c := spec.Op{
 		Plugin: "file",
 		PluginInput: map[string]any{
 			"file":  "${HOME}/.redis",
@@ -235,7 +238,7 @@ func TestCheck_ExpandVars(t *testing.T) {
 		"HOME":           "/home/user",
 		"HOST_PORT:6379": "16379",
 	}
-	missing := opExpandVars(&c, env)
+	missing := kit.ExpandOpVars(&c, env)
 
 	if got := c.PluginInput["file"]; got != "/home/user/.redis" {
 		t.Errorf("plugin_input.file = %q", got)
@@ -259,17 +262,17 @@ func TestMatcher_UnmarshalJSON_Shorthand(t *testing.T) {
 	cases := []struct {
 		name  string
 		input string
-		want  Matcher
+		want  spec.Matcher
 	}{
-		{"scalar string", `"OK"`, Matcher{Op: "equals", Value: "OK"}},
-		{"scalar number", `42`, Matcher{Op: "equals", Value: float64(42)}},
-		{"scalar bool", `true`, Matcher{Op: "equals", Value: true}},
-		{"canonical map", `{"op":"contains","value":"ready"}`, Matcher{Op: "contains", Value: "ready"}},
-		{"operator map", `{"matches":"^OK$"}`, Matcher{Op: "matches", Value: "^OK$"}},
+		{"scalar string", `"OK"`, spec.Matcher{Op: "equals", Value: "OK"}},
+		{"scalar number", `42`, spec.Matcher{Op: "equals", Value: float64(42)}},
+		{"scalar bool", `true`, spec.Matcher{Op: "equals", Value: true}},
+		{"canonical map", `{"op":"contains","value":"ready"}`, spec.Matcher{Op: "contains", Value: "ready"}},
+		{"operator map", `{"matches":"^OK$"}`, spec.Matcher{Op: "matches", Value: "^OK$"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var m Matcher
+			var m spec.Matcher
 			if err := json.Unmarshal([]byte(tc.input), &m); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
@@ -299,7 +302,7 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var ml MatcherList
+			var ml spec.MatcherList
 			if err := json.Unmarshal([]byte(tc.input), &ml); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
@@ -319,7 +322,7 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 // Verifies the extended ${NAME[:arg]} regex does not regress plain ${NAME}
 // references (backward compatibility with deploykit.TaskVarRefPattern consumers).
 func TestTestVarRefPattern_BackwardCompatible(t *testing.T) {
-	got := TestVarRefs("${HOME}/x ${USER}")
+	got := kit.TestVarRefs("${HOME}/x ${USER}")
 	want := []string{"HOME", "USER"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -343,7 +346,7 @@ func TestMatcherList_BareScalarDefaultsToEquals(t *testing.T) {
 command: echo PONG
 stdout: PONG
 `
-	var c Op
+	var c spec.Op
 	if err := decodeViaCUEForTest(t, yamlSrc, &c); err != nil {
 		t.Fatalf("yaml unmarshal: %v", err)
 	}
@@ -364,7 +367,7 @@ stdout: PONG
 // DEPLOY_NAME is deploy-scope (resolved only against a live deployment), so a
 // build-scope check referencing it must be rejected by the validator.
 func TestIsRuntimeOnlyVar_DeployName(t *testing.T) {
-	if !IsRuntimeOnlyVar("DEPLOY_NAME") {
+	if !kit.IsRuntimeOnlyVar("DEPLOY_NAME") {
 		t.Error("DEPLOY_NAME must be runtime-only")
 	}
 }

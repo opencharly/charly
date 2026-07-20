@@ -4,7 +4,21 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 )
+
+// remote_image.go — resolves an `@github.com/org/repo/box[:version]` REMOTE ref (NOT an
+// OCI-registry concern despite the filename; the actual go-containerregistry engine lives in
+// candy/plugin-oci) into a full build/run context: clone/cache the repo, load its charly.yml,
+// resolve the box, scan its candies, and (BuildImage) build it.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1/K3 — the repo-fetch/cache
+// machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1),
+// and BuildImage's delegation to BuildCmd is build-cone (K3). Consumers span both cones —
+// build.go, commands.go, ensure_image.go, image.go, shell.go, start.go, config_image.go
+// (P14-rest trace, 2026-07) — so this moves together with the loader/build waves, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.
 // It contains everything needed to pull/build and run the image.
@@ -12,7 +26,7 @@ type RemoteImageContext struct {
 	Ref      ParsedRef
 	CacheDir string
 	Config   *Config
-	Resolved *ResolvedBox
+	Resolved *buildkit.ResolvedBox
 	Candies  map[string]*Candy
 	ImageRef string // registry/name:tag for pull
 	BoxName  string // short name (e.g. "openclaw-browser")
@@ -28,8 +42,8 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 
 	version := parsed.Version
 	if version == "" {
-		repoURL := RepoGitURL(parsed.RepoPath)
-		tag, err := GitLatestTag(repoURL)
+		repoURL := kit.RepoGitURL(parsed.RepoPath)
+		tag, err := kit.GitLatestTag(repoURL)
 		if err != nil {
 			return nil, fmt.Errorf("resolving latest version for %s: %w", parsed.RepoPath, err)
 		}
@@ -77,10 +91,10 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 }
 
 // BuildImage builds the image locally from the cached source.
-func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error {
+func (ctx *RemoteImageContext) BuildImage(_ *kit.ResolvedRuntime, tag string) error {
 	// The generate+build both run inside buildCmd.Run() now that box build dispatches through the
 	// compiled-in candy/plugin-build DRIVE (build:box) — which resolves + renders the .build/ tree
-	// host-side over the build-resolve seam, then drives podman — from ctx.CacheDir after the chdir
+	// host-side over the build-prep seam, then drives podman — from ctx.CacheDir after the chdir
 	// below. A standalone NewGenerator+Generate preflight here would be redundant work whose .build/
 	// output the candy build drive immediately regenerates.
 	buildCmd := &BuildCmd{
@@ -94,26 +108,6 @@ func (ctx *RemoteImageContext) BuildImage(_ *ResolvedRuntime, tag string) error 
 	defer os.Chdir(origDir) //nolint:errcheck
 
 	return buildCmd.Run()
-}
-
-// ContainerName returns the container name for a remote image.
-func (ctx *RemoteImageContext) ContainerName() string {
-	return containerName(ctx.BoxName)
-}
-
-// CollectVolumes collects volumes for the remote image.
-func (ctx *RemoteImageContext) CollectVolumes() ([]VolumeMount, error) {
-	return CollectBoxVolume(
-		ctx.Config, ctx.Candies, ctx.BoxName,
-		ctx.Resolved.Home,
-		nil,
-	)
-}
-
-// RemoteContainerName returns the container name for a remote ref.
-func RemoteContainerName(ref string) string {
-	parsed := ParseRemoteRef(ref)
-	return containerName(parsed.Name)
 }
 
 // StripURLScheme removes http:// or https:// from a remote ref if present.

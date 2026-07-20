@@ -1,62 +1,42 @@
 package main
 
-import "github.com/opencharly/sdk/deploykit"
-
-// intermediates_shim.go — P8b transitional shims. The PURE-compute half of the
-// auto-intermediate subsystem moved to sdk/deploykit (deploykit/intermediates.go,
-// byte-identical logic over CandyModel + buildkit.ResolvedBox). These thin
-// package-main wrappers keep the HOST-COUPLED half (charly/intermediates.go —
-// ComputeIntermediates / processSiblingGroup / createIntermediate / walkTrieScoped,
-// which read *Config cfg.Defaults) + the tests compiling unchanged, converting
-// map[string]*Candy → map[string]deploykit.CandyModel via candyModelMap
-// (graph_shim.go) where a caller still holds the concrete candy map. Mirrors
-// graph_shim.go; shrinks as the host-coupled half relocates too.
-
-// trieNode / siblingKey — the intermediate-computation data structures, homed in
-// deploykit now (aliased so the host-coupled walker reads them unchanged).
-type (
-	trieNode   = deploykit.TrieNode
-	siblingKey = deploykit.SiblingKey
+import (
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 )
 
-func newTrieNode(layer string) *trieNode { return deploykit.NewTrieNode(layer) }
+// intermediates_shim.go — W3 (K3 build-engine move). The auto-intermediate-image
+// subsystem is now ENTIRELY in sdk/deploykit: deploykit/intermediates.go carries
+// the pure candy-graph/trie half (moved in P8b), and
+// deploykit/intermediates_compute.go now ALSO carries the former HOST-COUPLED
+// half (ComputeIntermediates/processSiblingGroup/createIntermediate/
+// walkTrieScoped/pickAutoName/resolvePlatforms/distroBuilderMap — formerly
+// charly/intermediates.go, which read *Config directly). This file keeps ONLY
+// the thin core entry point that lifts cfg.Defaults into a
+// deploykit.IntermediateDefaults value + the GlobalCandyOrder wrapper still
+// used by generate.go/resolved_project_host.go. Mirrors graph_shim.go.
 
-func sortedKeys(m map[string]*trieNode) []string { return deploykit.SortedKeys(m) }
-
-func sortedSiblingKeys(m map[siblingKey][]string) []siblingKey {
-	return deploykit.SortedSiblingKeys(m)
-}
-
-func collectSubtreeBoxes(node *trieNode) []string { return deploykit.CollectSubtreeBoxes(node) }
-
-func intersectPlatforms(parent, defaults []string) []string {
-	return deploykit.IntersectPlatforms(parent, defaults)
-}
-
-func updateBoxBase(imgName, parentName string, result map[string]*ResolvedBox) {
-	deploykit.UpdateBoxBase(imgName, parentName, result)
-}
-
-func pixiBoundCandies(layers map[string]*Candy) map[string]bool {
-	return deploykit.PixiBoundCandies(candyModelMap(layers))
+// ComputeIntermediates computes auto-generated intermediate images. It lifts
+// cfg.Defaults into a deploykit.IntermediateDefaults (the scalar fields the
+// relocated ComputeIntermediates needs) and delegates entirely to
+// deploykit.ComputeIntermediates — no host callback remains.
+func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy, cfg *Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
+	defaults := deploykit.IntermediateDefaults{
+		Builder:   buildkit.BuilderMap(cfg.Defaults.Builder),
+		UID:       cfg.Defaults.UID,
+		User:      cfg.Defaults.User,
+		GID:       cfg.Defaults.GID,
+		Merge:     cfg.Defaults.Merge,
+		Registry:  cfg.Defaults.Registry,
+		Platforms: cfg.Defaults.Platforms,
+		Distro:    cfg.Defaults.Distro,
+		Build:     cfg.Defaults.Build,
+	}
+	return deploykit.ComputeIntermediates(boxes, candyModelMap(layers), defaults, tag)
 }
 
 // GlobalCandyOrder computes the global topological candy order (deploykit) over
-// the concrete candy map held by generate.go / validate.go / ComputeIntermediates.
-func GlobalCandyOrder(boxes map[string]*ResolvedBox, layers map[string]*Candy) ([]string, error) {
+// the concrete candy map held by generate.go / validate.go.
+func GlobalCandyOrder(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) ([]string, error) {
 	return deploykit.GlobalCandyOrder(boxes, candyModelMap(layers))
-}
-
-// AbsoluteCandySequence returns an image's complete candy set as a subsequence of
-// the global order (deploykit).
-func AbsoluteCandySequence(boxName string, boxes map[string]*ResolvedBox, layers map[string]*Candy, globalOrder []string) []string {
-	return deploykit.AbsoluteCandySequence(boxName, boxes, candyModelMap(layers), globalOrder)
-}
-
-func relativeCandySequence(boxName string, parentProvided map[string]bool, boxes map[string]*ResolvedBox, layers map[string]*Candy, globalOrder []string, pixiBound map[string]bool) []string {
-	return deploykit.RelativeCandySequence(boxName, parentProvided, boxes, candyModelMap(layers), globalOrder, pixiBound)
-}
-
-func computeOwnCandies(parentName string, pathCandies []string, result map[string]*ResolvedBox, layers map[string]*Candy, globalOrder []string, pixiBound map[string]bool) []string {
-	return deploykit.ComputeOwnCandies(parentName, pathCandies, result, candyModelMap(layers), globalOrder, pixiBound)
 }

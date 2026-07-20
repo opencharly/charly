@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -23,7 +24,7 @@ import (
 //   - preemptible.restore must be "always" or "on-success".
 //   - requires_exclusive entries must be non-empty strings.
 //   - a node may not both hold and require the SAME token (self-contention).
-func ValidatePreemptibleOnNode(name string, node *BundleNode, errs *ValidationError) {
+func ValidatePreemptibleOnNode(name string, node *spec.BundleNode, errs *ValidationError) {
 	if node == nil {
 		return
 	}
@@ -67,7 +68,7 @@ func ValidatePreemptibleOnNode(name string, node *BundleNode, errs *ValidationEr
 
 // ValidatePreemptibleAcrossDeploy validates every node in a charly.yml config
 // (the operator-deploy load path). Accumulates into errs.
-func ValidatePreemptibleAcrossDeploy(dc *BundleConfig, errs *ValidationError) {
+func ValidatePreemptibleAcrossDeploy(dc *deploykit.BundleConfig, errs *ValidationError) {
 	if dc == nil {
 		return
 	}
@@ -125,7 +126,7 @@ func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
 		}
 		vmName := node.From
 		if vmName == "" {
-			base, _ := parseDeployKey(name)
+			base, _ := deploykit.ParseDeployKey(name)
 			vmName = base
 		}
 		if spec, _ := resolveVmViaPlugin(uf.VM[vmName]); spec != nil && spec.Backend == "qemu" {

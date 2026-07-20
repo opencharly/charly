@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestLoadBundleConfig_LegacySchemaErrors exercises the load-time guard:
@@ -23,7 +25,7 @@ func TestLoadBundleConfig_LegacySchemaErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := LoadBundleConfig()
+	_, err := deploykit.LoadBundleConfig()
 	if err == nil {
 		t.Fatal("LoadBundleConfig accepted legacy schema; want error")
 	}

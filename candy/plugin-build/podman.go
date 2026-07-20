@@ -25,8 +25,9 @@ func imageTags(box spec.BuildResolveBox) []string {
 // via stdin (-f -) to avoid race conditions with concurrent generate overwrites on disk. For
 // Podman --push, the image is built locally (--manifest) without pushing; push happens separately
 // after merge. The privileged builder-bootstrap (from: builder:<name>) already ran HOST-SIDE during
-// build-resolve, so this drive never runs it.
-func (c driveConfig) buildImage(box spec.BuildResolveBox) error {
+// build-prep, so this drive never runs it. The Containerfile content is rendered by plugin-build
+// via deploykit.Generator (NOT shipped in the reply — #67 render-DRIVE move).
+func (c driveConfig) buildImage(box spec.BuildResolveBox, containerfile string) error {
 	tags := imageTags(box)
 
 	// Per-image build lock: serialize concurrent builds of THIS image across charly processes
@@ -50,7 +51,7 @@ func (c driveConfig) buildImage(box spec.BuildResolveBox) error {
 
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = c.Dir
-	cmd.Stdin = strings.NewReader(box.Containerfile)
+	cmd.Stdin = strings.NewReader(containerfile)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

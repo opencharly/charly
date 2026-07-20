@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,7 +66,7 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	if ufImg.Candy["my-image"] != nil {
 		t.Fatal("image shape also landed in uf.Candy — must be uf.Box ONLY")
 	}
-	var baseBox BoxConfig
+	var baseBox spec.BoxConfig
 	if err := decodeNodeValue(imgGn, &baseBox); err != nil {
 		t.Fatalf("baseline decodeNodeValue (image): %v", err)
 	}

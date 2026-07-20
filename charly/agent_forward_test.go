@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestResolveSSHAgentForward(t *testing.T) {
@@ -43,14 +46,20 @@ func TestResolveSSHAgentForward_Missing(t *testing.T) {
 
 func TestResolveSSHAgentForward_NonexistentSocket(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", "/nonexistent/agent.sock")
-	_, _, ok := resolveSSHAgentForward()
+	var ok bool
+	stderr := captureStderr(t, func() {
+		_, _, ok = resolveSSHAgentForward()
+	})
 	if ok {
 		t.Error("expected ok=false with nonexistent socket path")
+	}
+	if !strings.Contains(stderr, "does not exist, skipping SSH agent forwarding") {
+		t.Fatalf("stderr = %q, want missing-socket diagnostic", stderr)
 	}
 }
 
 func TestResolveAgentForwarding_Disabled(t *testing.T) {
-	rt := &ResolvedRuntime{
+	rt := &kit.ResolvedRuntime{
 		ForwardGpgAgent: false,
 		ForwardSshAgent: false,
 	}
@@ -65,12 +74,12 @@ func TestResolveAgentForwarding_Disabled(t *testing.T) {
 
 func TestResolveAgentForwarding_DeployOverride(t *testing.T) {
 	// Global: enabled. Deploy: disabled.
-	rt := &ResolvedRuntime{
+	rt := &kit.ResolvedRuntime{
 		ForwardGpgAgent: true,
 		ForwardSshAgent: true,
 	}
 	f := false
-	deploy := &BundleNode{
+	deploy := &spec.BundleNode{
 		ForwardGpgAgent: &f,
 		ForwardSshAgent: &f,
 	}

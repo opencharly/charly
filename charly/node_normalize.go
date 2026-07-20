@@ -55,6 +55,10 @@ func normalizeNodeInto(gn *genericNode, uf *UnifiedFile) error {
 			if inKindConnectPass() {
 				return nil
 			}
+			if err := declaredKindConnectError(gn.disc); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: node %q: kind %q provider build/connect failed: %v; skipping the node — any command that uses it will fail loudly at that point\n", gn.name, gn.disc, err)
+				return nil
+			}
 			fmt.Fprintf(os.Stderr, "Warning: node %q: kind %q is declared by a plugin whose provider did not connect (build/connect failed); skipping the node — any command that uses it will fail loudly at that point\n", gn.name, gn.disc)
 			return nil
 		}

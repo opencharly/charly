@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
-func img(id, name, short, version string) LocalImageInfo {
-	return LocalImageInfo{
+func img(id, name, short, version string) kit.LocalImageInfo {
+	return kit.LocalImageInfo{
 		ID:    id,
 		Names: []string{name},
 		Labels: map[string]string{
@@ -22,16 +24,16 @@ func img(id, name, short, version string) LocalImageInfo {
 // keep-newest-N, the in-use skip, and the "never touch unlabelled / undateable"
 // guards. Uses dryRun so no real rmi runs.
 func TestPruneImagesByRetention(t *testing.T) {
-	origList, origCtr, origFloor := ListLocalImages, listContainerImageRefs, liveBuildFloor
-	defer func() { ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	origList, origCtr, origFloor := kit.ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
 	// Stub the build-activity floor to "no live build" so the retention decision under
 	// test is deterministic regardless of a concurrent host build holding a lock in the
 	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
 	// host-global lock dir and made the test fail whenever another build ran concurrently).
 	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
 
-	ListLocalImages = func(string) ([]LocalImageInfo, error) {
-		return []LocalImageInfo{
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
 			img("aaa", "ghcr/foo:2026.001.0100", "foo", "2026.001.0100"), // oldest foo
 			img("bbb", "ghcr/foo:2026.001.0200", "foo", "2026.001.0200"), // middle foo (mark in-use)
 			img("ccc", "ghcr/foo:2026.001.0300", "foo", "2026.001.0300"), // newest foo (kept)
@@ -62,8 +64,8 @@ func TestPruneImagesByRetention(t *testing.T) {
 // each row's Names listing every tag — model that worst case (pre-dedup input)
 // to prove retention is per-TAG and never wipes the just-built/newest tag.
 func TestPruneImagesByRetention_SharedID(t *testing.T) {
-	origList, origCtr, origFloor := ListLocalImages, listContainerImageRefs, liveBuildFloor
-	defer func() { ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
+	origList, origCtr, origFloor := kit.ListLocalImages, listContainerImageRefs, liveBuildFloor
+	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
 	// Stub the build-activity floor to "no live build" so the retention decision under
 	// test is deterministic regardless of a concurrent host build holding a lock in the
 	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
@@ -77,9 +79,9 @@ func TestPruneImagesByRetention_SharedID(t *testing.T) {
 		"ghcr/check-pod:2026.150.0836",
 		"ghcr/check-pod:2026.150.0916", // newest / just-built
 	}
-	rowPerTag := make([]LocalImageInfo, len(allTags))
+	rowPerTag := make([]kit.LocalImageInfo, len(allTags))
 	for i := range allTags {
-		rowPerTag[i] = LocalImageInfo{
+		rowPerTag[i] = kit.LocalImageInfo{
 			ID:    "ccc", // all five tags share ONE image id
 			Names: append([]string(nil), allTags...),
 			Labels: map[string]string{
@@ -88,7 +90,7 @@ func TestPruneImagesByRetention_SharedID(t *testing.T) {
 			},
 		}
 	}
-	ListLocalImages = func(string) ([]LocalImageInfo, error) { return rowPerTag, nil }
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) { return rowPerTag, nil }
 	listContainerImageRefs = func(string) (map[string]bool, map[string]bool, error) {
 		return map[string]bool{}, map[string]bool{}, nil
 	}
@@ -113,9 +115,9 @@ func TestPruneImagesByRetention_SharedID(t *testing.T) {
 
 func TestPruneImagesByRetention_Disabled(t *testing.T) {
 	called := false
-	origList := ListLocalImages
-	defer func() { ListLocalImages = origList }()
-	ListLocalImages = func(string) ([]LocalImageInfo, error) { called = true; return nil, nil }
+	origList := kit.ListLocalImages
+	defer func() { kit.ListLocalImages = origList }()
+	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) { called = true; return nil, nil }
 
 	removed, err := pruneImagesByRetention("podman", 0, true)
 	if err != nil || removed != nil {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 
 	"golang.org/x/sync/errgroup"
 
@@ -53,22 +55,24 @@ func resolveRequest(req spec.BuildRequest, generateOnly bool) spec.BuildResolveR
 	}
 }
 
-// resolveBuild runs the host loader/render RESOLVE over the F10 HostBuild seam: it marshals the
-// BuildResolveRequest, calls HostBuild("build-resolve", …), and decodes the drive-model reply. A
-// resolve FAILURE rides reply.Error (reply-error convention; the RPC itself succeeds) and is
-// surfaced as a Go error. Shared by runBoxBuild + runBoxGenerate (R3).
+// resolveBuild runs the host loader/prep RESOLVE over the F10 HostBuild seam: it marshals the
+// BuildResolveRequest, calls HostBuild("build-prep", …), and decodes the drive-model reply
+// (envelope + order/levels/boxes/tunables, NO Containerfile content). A resolve FAILURE rides
+// reply.Error (reply-error convention; the RPC itself succeeds) and is surfaced as a Go error.
+// Shared by runBoxBuild + runBoxGenerate (R3). plugin-build renders Containerfiles itself via
+// deploykit.Generator (#67 render-DRIVE move).
 func resolveBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest, generateOnly bool) (spec.BuildResolveReply, error) {
 	rrJSON, err := json.Marshal(resolveRequest(req, generateOnly))
 	if err != nil {
 		return spec.BuildResolveReply{}, err
 	}
-	replyJSON, err := ex.HostBuild(ctx, "build-resolve", rrJSON)
+	replyJSON, err := ex.HostBuild(ctx, "build-prep", rrJSON)
 	if err != nil {
 		return spec.BuildResolveReply{}, err
 	}
 	var reply spec.BuildResolveReply
 	if err := json.Unmarshal(replyJSON, &reply); err != nil {
-		return spec.BuildResolveReply{}, fmt.Errorf("decode build-resolve reply: %w", err)
+		return spec.BuildResolveReply{}, fmt.Errorf("decode build-prep reply: %w", err)
 	}
 	if reply.Error != "" {
 		return spec.BuildResolveReply{}, fmt.Errorf("%s", reply.Error)
@@ -98,12 +102,18 @@ func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) (
 		Dir:        req.Dir,
 	}
 
+	// Render Containerfiles via deploykit.Generator (the render DRIVE, #67).
+	containerfiles, err := renderContainerfiles(ctx, ex, reply, req.Dir, req.DevLocalPkg)
+	if err != nil {
+		return nil, err
+	}
+
 	boxByName := make(map[string]spec.BuildResolveBox, len(reply.Boxes))
 	for _, b := range reply.Boxes {
 		boxByName[b.Name] = b
 	}
 
-	builtBoxes, err := cfg.buildImages(ctx, ex, reply, boxByName)
+	builtBoxes, err := cfg.buildImages(ctx, ex, reply, boxByName, containerfiles)
 	if err != nil {
 		return nil, err
 	}
@@ -125,15 +135,27 @@ func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) (
 	return built, nil
 }
 
-// runBoxGenerate is the candy-side DRIVE behind the build:generate word: it asks the host to
-// render the .build/ Containerfile tree (build-resolve with GenerateOnly) and returns the emitted
-// Containerfile paths. No podman, no merge — the generate path builds nothing.
+// runBoxGenerate is the candy-side DRIVE behind the build:generate word: it asks the host
+// to prep + resolve the project (build-prep), then renders the .build/ Containerfile tree
+// itself via deploykit.Generator + returns the written Containerfile paths. No podman, no
+// merge — the generate path builds nothing (#67 render-DRIVE move).
 func runBoxGenerate(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) ([]string, error) {
 	reply, err := resolveBuild(ctx, ex, req, true)
 	if err != nil {
 		return nil, err
 	}
-	return reply.Written, nil
+	// Render Containerfiles via deploykit.Generator (the render DRIVE).
+	containerfiles, err := renderContainerfiles(ctx, ex, reply, req.Dir, req.DevLocalPkg)
+	if err != nil {
+		return nil, err
+	}
+	// Return the written Containerfile paths (sorted for determinism).
+	written := make([]string, 0, len(containerfiles))
+	for name := range containerfiles {
+		written = append(written, filepath.Join(req.Dir, ".build", name, "Containerfile"))
+	}
+	sort.Strings(written)
+	return written, nil
 }
 
 // buildImages runs the build-order loop over the host-resolved drive-model. A filtered (named)
@@ -142,14 +164,14 @@ func runBoxGenerate(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest
 // next so children start from a merged (fewer-layer) base image. Returns the built box descriptors
 // in build order (the caller derives FullTags + the push list). Mirrors the former host-side
 // BuildCmd.buildImages branch-for-branch.
-func (c driveConfig) buildImages(ctx context.Context, ex *sdk.Executor, reply spec.BuildResolveReply, boxByName map[string]spec.BuildResolveBox) ([]spec.BuildResolveBox, error) {
+func (c driveConfig) buildImages(ctx context.Context, ex *sdk.Executor, reply spec.BuildResolveReply, boxByName map[string]spec.BuildResolveBox, containerfiles map[string]string) ([]spec.BuildResolveBox, error) {
 	var built []spec.BuildResolveBox
 
 	if len(reply.Order) > 0 {
 		// Filtered build: sequential dependency order.
 		for _, name := range reply.Order {
 			box := boxByName[name]
-			if err := c.buildImage(box); err != nil {
+			if err := c.buildImage(box, containerfiles[name]); err != nil {
 				return nil, fmt.Errorf("building %s: %w", name, err)
 			}
 			built = append(built, box)
@@ -173,7 +195,7 @@ func (c driveConfig) buildImages(ctx context.Context, ex *sdk.Executor, reply sp
 			// Single image, no need for goroutine overhead.
 			name := level[0]
 			box := boxByName[name]
-			if err := c.buildImage(box); err != nil {
+			if err := c.buildImage(box, containerfiles[name]); err != nil {
 				return nil, fmt.Errorf("building %s: %w", name, err)
 			}
 		} else {
@@ -183,7 +205,7 @@ func (c driveConfig) buildImages(ctx context.Context, ex *sdk.Executor, reply sp
 			for _, name := range level {
 				box := boxByName[name]
 				g.Go(func() error {
-					if err := c.buildImage(box); err != nil {
+					if err := c.buildImage(box, containerfiles[name]); err != nil {
 						return fmt.Errorf("building %s: %w", name, err)
 					}
 					return nil

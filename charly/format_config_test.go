@@ -4,6 +4,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestLoadDistroConfigFromFile(t *testing.T) {
@@ -222,7 +226,7 @@ func TestLoadBuildConfigForImageFallback(t *testing.T) {
 }
 
 func TestDnfConfigParse(t *testing.T) {
-	var d DistroDef
+	var d spec.ResolvedDistro
 	if err := decodeViaCUEForTest(t, "dnf:\n  max_parallel_downloads: 10\n  fastestmirror: true\n", &d); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -238,13 +242,13 @@ func TestDnfConfigParse(t *testing.T) {
 // it declares none, and its own Dnf wins when set — same per-field merge as
 // the other DistroDef sub-blocks (BaseUser, Pacstrap, …).
 func TestDnfConfigInherit(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
+	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"fedora": {
-			Bootstrap: BootstrapDef{InstallCmd: "dnf install -y"},
-			Dnf:       &DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
+			Bootstrap: vmshared.BootstrapDef{InstallCmd: "dnf install -y"},
+			Dnf:       &vmshared.DnfConfig{MaxParallelDownloads: 10, Fastestmirror: true},
 		},
-		"fedora-child":  {Inherits: "fedora"},                                           // no own Dnf → inherits
-		"fedora-child2": {Inherits: "fedora", Dnf: &DnfConfig{MaxParallelDownloads: 3}}, // own Dnf wins
+		"fedora-child":  {Inherits: "fedora"},                                                    // no own Dnf → inherits
+		"fedora-child2": {Inherits: "fedora", Dnf: &vmshared.DnfConfig{MaxParallelDownloads: 3}}, // own Dnf wins
 	}}
 
 	got := dc.ResolveDistro([]string{"fedora-child"})
@@ -264,18 +268,18 @@ func TestDnfConfigInherit(t *testing.T) {
 // TestDistroDefPrimaryFormat proves PrimaryFormat returns the base format
 // (rpm/deb/pac), skipping the secondary `aur` builder format, deterministically.
 func TestDistroDefPrimaryFormat(t *testing.T) {
-	arch := &DistroDef{Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}}
+	arch := &spec.ResolvedDistro{Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}}
 	if got := arch.PrimaryFormat(); got != "pac" {
 		t.Errorf("arch PrimaryFormat = %q, want pac (aur is secondary)", got)
 	}
-	fedora := &DistroDef{Format: map[string]*FormatDef{"rpm": {}}}
+	fedora := &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}
 	if got := fedora.PrimaryFormat(); got != "rpm" {
 		t.Errorf("fedora PrimaryFormat = %q, want rpm", got)
 	}
-	if got := (&DistroDef{Format: map[string]*FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
+	if got := (&spec.ResolvedDistro{Format: map[string]*FormatDef{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
 		t.Errorf("aur-only PrimaryFormat = %q, want empty (no base format)", got)
 	}
-	if got := (*DistroDef)(nil).PrimaryFormat(); got != "" {
+	if got := (*spec.ResolvedDistro)(nil).PrimaryFormat(); got != "" {
 		t.Errorf("nil PrimaryFormat = %q, want empty", got)
 	}
 }
@@ -288,12 +292,12 @@ func TestFormatForDistroID(t *testing.T) {
 		"arch": "pac", "cachyos": "pac", "endeavouros": "pac", "unknown-distro": "",
 	}
 	for id, want := range cases {
-		if got := formatForDistroID(id); got != want {
+		if got := vmshared.FormatForDistroID(id); got != want {
 			t.Errorf("formatForDistroID(%q) = %q, want %q", id, got, want)
 		}
 	}
 	// FormatHint walks ID then ID_LIKE through the same table.
-	hd := &HostDistro{ID: "weird", IDLike: []string{"arch"}}
+	hd := &vmshared.HostDistro{ID: "weird", IDLike: []string{"arch"}}
 	if got := hd.FormatHint(); got != "pac" {
 		t.Errorf("FormatHint via ID_LIKE = %q, want pac", got)
 	}
@@ -312,7 +316,7 @@ func TestDistroConfigFindFormat(t *testing.T) {
 			t.Errorf("FindFormat(%q) = nil, want a FormatDef", f)
 			continue
 		}
-		if formatPhaseTemplate(fd, PhaseInstall, VenueHostNative) == "" {
+		if formatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			t.Errorf("format %q has no phase.install.host cell", f)
 		}
 		if fd.UninstallTemplate == "" {

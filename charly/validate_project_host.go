@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -43,8 +44,8 @@ type loadedProject struct {
 	cfg        *Config
 	layers     map[string]*Candy
 	uf         *UnifiedFile // nil when absent or its load/discover errored
-	distroCfg  *DistroConfig
-	builderCfg *BuilderConfig
+	distroCfg  *buildkit.DistroConfig
+	builderCfg *buildkit.BuilderConfig
 	initCfg    *InitConfig
 	version    string
 	empty      bool
@@ -223,11 +224,11 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 			return
 		}
 		seen[w] = true
-		if opActsInBuildDeploy(&Op{Plugin: w}) {
+		if opActsInBuildDeploy(&spec.Op{Plugin: w}) {
 			rp.ActCapableVerbs = append(rp.ActCapableVerbs, w)
 		}
 	}
-	scanPlan := func(plan []Step) {
+	scanPlan := func(plan []spec.Step) {
 		for i := range plan {
 			op := &plan[i].Op
 			if len(op.VerbsSet()) == 0 {

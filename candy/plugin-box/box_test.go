@@ -18,9 +18,9 @@ func TestCommandParent_NestsUnderBox(t *testing.T) {
 	}
 }
 
-// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the six nested command
-// capabilities (generate/validate/new/pkg/inspect/list), all class "command", each with no InputDef
-// (a command's args are pass-through tokens, not a structured plugin_input).
+// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the eight nested command
+// capabilities (generate/validate/new/pkg/inspect/list/labels/merge), all class "command", each
+// with no InputDef (a command's args are pass-through tokens, not a structured plugin_input).
 func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 	caps, err := NewMeta().Describe(context.Background(), &pb.Empty{})
 	if err != nil {
@@ -36,13 +36,13 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pkg", "inspect", "list"} {
+	for _, want := range []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 6 {
-		t.Errorf("want 6 command capabilities, got %d", len(caps.GetProvided()))
+	if len(caps.GetProvided()) != 8 {
+		t.Errorf("want 8 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 
@@ -115,5 +115,36 @@ func TestPkgGrammar_Parse(t *testing.T) {
 	}
 	if g.Out != "dist" {
 		t.Errorf("Out default = %q, want dist", g.Out)
+	}
+}
+
+// TestCanonicalLabelKey_ExpandsShorthand + TestSortedLabelKeys_FiltersToContractUnlessAll: moved
+// from charly/box_labels_cmd_test.go (K3 reentry-class dissolution — canonicalLabelKey/
+// sortedLabelKeys moved here with dispatchLabels).
+func TestCanonicalLabelKey_ExpandsShorthand(t *testing.T) {
+	cases := map[string]string{
+		"init":                      "ai.opencharly.init",
+		"version":                   "ai.opencharly.version",
+		"ai.opencharly.description": "ai.opencharly.description",
+		"org.opencontainers.x":      "org.opencontainers.x",
+	}
+	for in, want := range cases {
+		if got := canonicalLabelKey(in); got != want {
+			t.Errorf("canonicalLabelKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSortedLabelKeys_FiltersToContractUnlessAll(t *testing.T) {
+	labels := map[string]string{
+		"ai.opencharly.version": "2026.001.0001",
+		"ai.opencharly.init":    "supervisord",
+		"maintainer":            "someone",
+	}
+	if got := sortedLabelKeys(labels, false); !reflect.DeepEqual(got, []string{"ai.opencharly.init", "ai.opencharly.version"}) {
+		t.Errorf("contract-only keys = %v", got)
+	}
+	if got := sortedLabelKeys(labels, true); !reflect.DeepEqual(got, []string{"ai.opencharly.init", "ai.opencharly.version", "maintainer"}) {
+		t.Errorf("all keys = %v", got)
 	}
 }

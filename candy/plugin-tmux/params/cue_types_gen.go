@@ -2,11 +2,11 @@
 
 package params
 
-// #TmuxPlugin documents the command the plugin serves. The command keeps its entire contract in
-// its own CLI grammar (parsed from os.Args in CLI mode), so there is no plugin_input to validate
-// here.
+// The tmux plugin's self-contained declaration contract. Terminal and agent
+// channel payloads use sdk/schema/agent_control.cue directly; this plugin does
+// not duplicate those wire shapes.
 type TmuxPlugin struct {
-	Command string `yaml:"command,omitempty" json:"command"`
+	Providers []any/* CUE closed list */ `yaml:"providers,omitempty" json:"providers"`
 
 	Contract string `yaml:"contract,omitempty" json:"contract"`
 }

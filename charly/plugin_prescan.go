@@ -28,6 +28,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -173,6 +174,11 @@ func declaredKindWords() []string {
 // single-threaded per load; the flag rides declaredDeployMu for safety.
 var inKindConnectPassFlag bool
 
+// declaredKindConnectErr retains the actual host build/connect failure for a
+// declared external kind. The normalizer still permits read-only discovery of
+// unrelated nodes, but its mandatory warning must carry the actionable cause.
+var declaredKindConnectErr = map[string]error{}
+
 func inKindConnectPass() bool {
 	declaredDeployMu.RLock()
 	defer declaredDeployMu.RUnlock()
@@ -185,10 +191,42 @@ func setKindConnectPass(v bool) {
 	declaredDeployMu.Unlock()
 }
 
+func declaredKindConnectError(word string) error {
+	declaredDeployMu.RLock()
+	defer declaredDeployMu.RUnlock()
+	return declaredKindConnectErr[word]
+}
+
+func recordDeclaredKindConnectError(need map[string]struct{}, err error) {
+	declaredDeployMu.Lock()
+	defer declaredDeployMu.Unlock()
+	for word := range need {
+		declaredKindConnectErr[word] = err
+	}
+}
+
+// finalizeDeclaredKindConnections clears a retained cause only after the exact
+// declared word has registered. A later namespace boundary can legitimately
+// scan no matching plugin candy and make loadProjectPlugins return nil; that is
+// not a successful connection and must never erase the earlier causal error.
+func finalizeDeclaredKindConnections(need map[string]struct{}) {
+	declaredDeployMu.Lock()
+	defer declaredDeployMu.Unlock()
+	for word := range need {
+		if _, connected := providerRegistry.ResolveKind(word); connected {
+			delete(declaredKindConnectErr, word)
+			continue
+		}
+		if _, recorded := declaredKindConnectErr[word]; !recorded {
+			declaredKindConnectErr[word] = fmt.Errorf("declared kind provider %q did not register during load", word)
+		}
+	}
+}
+
 // connectDeclaredKindPlugins host-builds + connects the out-of-process plugins serving the
 // project's declared external KIND words (F4), so a `kind: <plugin-word>` entity decodes via
 // runPluginKind during load. Called at the walk's Boundary seam AFTER the prescan and BEFORE the
-// host materialize (materializeLoadedProject, loader_driver.go) decodes/folds the entity nodes.
+// host materialize (materializeLoadedProject, materialize.go) decodes/folds the entity nodes.
 // The connect re-loads the project (LoadConfig +
 // ScanAllCandyWithConfigOpts → LoadUnified, which fetches @github kind candies too), so it is
 // GUARDED by inKindConnectPass — the nested load skips this pre-pass and DEFERS its kind nodes
@@ -215,13 +253,19 @@ func connectDeclaredKindPlugins(dir string) {
 	defer setKindConnectPass(false)
 	cfg, err := LoadConfig(dir)
 	if err != nil {
+		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
 		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
 	}
 	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{})
 	if err != nil {
+		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
 		return
 	}
-	_ = loadProjectPlugins(context.Background(), candyMap, need)
+	if err := loadProjectPlugins(context.Background(), candyMap, need); err != nil {
+		recordDeclaredKindConnectError(need, err)
+		return
+	}
+	finalizeDeclaredKindConnections(need)
 }
 
 // recognizedDeploySubstrate reports whether word names a deploy substrate the

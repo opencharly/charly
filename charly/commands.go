@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -21,7 +22,7 @@ type LogsCmd struct {
 }
 
 func (c *LogsCmd) Run() error {
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// `charly logs` routes through the unified LifecycleTarget → OpLogs (F12): the host resolves the
 	// `journalctl`/`<engine> logs` stream command (resolvePodLogsPlan), the owning plugin streams it
 	// LIVE to the operator via exec.RunStream (stdio host-held). The former inline journalctl/podman
@@ -70,7 +71,7 @@ func (c *UpdateCmd) Run() error {
 	if IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	return c.dispatchByDeployTarget()
 }
 
@@ -84,24 +85,24 @@ type RemoveCmd struct {
 }
 
 func (c *RemoveCmd) Run() error {
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Releasing a persistent exclusive claim restores any holder this deploy
 	// preempted (no-op if no lease / gated by an outer orchestrator).
-	defer releaseResourceClaim(deployKey(c.Box, c.Instance))
+	defer releaseResourceClaim(deploykit.DeployKey(c.Box, c.Instance))
 	boxName := resolveBoxName(c.Box)
 
 	// Stop tunnel before removing container (best-effort)
 	stopTunnelForImage(boxName, c.Instance)
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
 
 	// Resolve per-image engine from charly.yml
 	runEngine := ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
-	engine := EngineBinary(runEngine)
-	containerName := containerNameInstance(boxName, c.Instance)
+	engine := kit.EngineBinary(runEngine)
+	containerName := kit.ContainerNameInstance(boxName, c.Instance)
 
 	// Run pre_remove hooks (best-effort, before stopping)
 	c.runPreRemoveHook(engine, containerName, boxName)
@@ -162,14 +163,14 @@ func (c *RemoveCmd) Run() error {
 		}
 
 		// Stop companion services before removing (best-effort)
-		stopTunnel := exec.Command("systemctl", "--user", "stop", tunnelServiceFilename(boxName))
+		stopTunnel := exec.Command("systemctl", "--user", "stop", deploykit.TunnelServiceFilename(boxName))
 		_ = stopTunnel.Run()
 		stopEnc := exec.Command("systemctl", "--user", "stop", encServiceFilename(boxName))
 		_ = stopEnc.Run()
 
 		svcDir, svcDirErr := systemdUserDir()
 		if svcDirErr == nil {
-			tunnelPath := filepath.Join(svcDir, tunnelServiceFilename(boxName))
+			tunnelPath := filepath.Join(svcDir, deploykit.TunnelServiceFilename(boxName))
 			if err := os.Remove(tunnelPath); err == nil {
 				fmt.Fprintf(os.Stderr, "Removed %s\n", tunnelPath)
 			}
@@ -189,7 +190,7 @@ func (c *RemoveCmd) Run() error {
 		// Clear any lingering failed state for main + companion services (best-effort)
 		for _, unit := range []string{
 			svc,
-			tunnelServiceFilename(boxName),
+			deploykit.TunnelServiceFilename(boxName),
 			encServiceFilename(boxName),
 		} {
 			rf := exec.Command("systemctl", "--user", "reset-failed", unit)
@@ -200,13 +201,13 @@ func (c *RemoveCmd) Run() error {
 			purgeDeployArtifacts(engine, boxName, c.Instance)
 		}
 		if !c.KeepDeploy {
-			cleanDeployEntry(boxName, c.Instance)
+			deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
 		}
 		return nil
 	}
 
 	// Direct mode: stop + rm
-	name := containerNameInstance(boxName, c.Instance)
+	name := kit.ContainerNameInstance(boxName, c.Instance)
 
 	stop := exec.Command(engine, "stop", name)
 	_ = stop.Run()
@@ -220,7 +221,7 @@ func (c *RemoveCmd) Run() error {
 		purgeDeployArtifacts(engine, boxName, c.Instance)
 	}
 	if !c.KeepDeploy {
-		cleanDeployEntry(boxName, c.Instance)
+		deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
 	}
 	return nil
 }
@@ -235,7 +236,7 @@ func (c *RemoveCmd) Run() error {
 func purgeDeployArtifacts(engine, boxName, instance string) {
 	removeVolumes(engine, boxName, instance)
 	removeEncryptedVolumes(boxName, instance)
-	dropOverlayImagesByRef(engine, deployKey(boxName, instance)+"-overlay")
+	dropOverlayImagesByRef(engine, deploykit.DeployKey(boxName, instance)+"-overlay")
 }
 
 // dropOverlayImagesByRef drops the <deploy-key>-overlay images an add_candy: overlay build
@@ -270,7 +271,7 @@ func (c *RemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
 // direct-mode start). containerImage is the best-effort (""-on-error)
 // wrapper over it, so there is exactly one inspect implementation.
 func containerImageRef(engine, containerName string) (string, error) {
-	out, _, exit, err := runCaptureCmd(exec.Command(EngineBinary(engine), "inspect", "--format", "{{.Config.Image}}", containerName))
+	out, _, exit, err := kit.RunCaptureCmd(exec.Command(kit.EngineBinary(engine), "inspect", "--format", "{{.Config.Image}}", containerName))
 	if err != nil {
 		return "", fmt.Errorf("inspecting container %s: %w", containerName, err)
 	}
@@ -305,11 +306,11 @@ func resolveBoxName(box string) string {
 // but not "which sidecars are attached to THIS deploy on THIS host".
 // Returns nil when nothing is attached.
 func resolveSidecarNames(boxName, instance string) []string {
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil || dc == nil {
 		return nil
 	}
-	entry, ok := dc.Bundle[deployKey(boxName, instance)]
+	entry, ok := dc.Bundle[deploykit.DeployKey(boxName, instance)]
 	if !ok || len(entry.Sidecar) == 0 {
 		return nil
 	}

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // nvidiaReport builds a synthetic VFIOReport with one NVIDIA GPU (vendor
@@ -59,14 +61,14 @@ func TestSelectGPUByVendor(t *testing.T) {
 
 func TestRequiredGPUResource(t *testing.T) {
 	resources := map[string]*ResolvedResource{"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}}}
-	node := BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
+	node := spec.BundleNode{Target: "vm", From: "gpu-vm", RequiresExclusive: []string{"nvidia-gpu"}}
 	tok, sel, ok := requiredGPUResource(&node, resources)
 	if !ok || tok != "nvidia-gpu" || sel.Vendor != "0x10de" {
 		t.Fatalf("requiredGPUResource = (%q,%v,%v), want nvidia-gpu/0x10de/true", tok, sel, ok)
 	}
 	// A token with no gpu selector (free arbitration token) → not a GPU resource.
 	free := map[string]*ResolvedResource{"some-lock": {}}
-	if _, _, ok := requiredGPUResource(&BundleNode{RequiresExclusive: []string{"some-lock"}}, free); ok {
+	if _, _, ok := requiredGPUResource(&spec.BundleNode{RequiresExclusive: []string{"some-lock"}}, free); ok {
 		t.Error("a selector-less resource token must not trigger GPU allocation")
 	}
 	if _, _, ok := requiredGPUResource(nil, resources); ok {

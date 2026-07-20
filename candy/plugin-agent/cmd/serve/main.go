@@ -8,4 +8,4 @@ import (
 	"github.com/opencharly/sdk"
 )
 
-func main() { sdk.Serve(agentkind.NewProvider(), agentkind.NewMeta()) }
+func main() { sdk.Main(agentkind.NewProvider(), agentkind.NewMeta(), agentkind.CliMain) }

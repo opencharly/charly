@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/opencharly/sdk/spec"
+
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/sdk/kit"
@@ -29,7 +31,7 @@ import (
 // loader's job at deploy/check time; validate only confirms the declaration is
 // well-formed (a load-TIMING property of out-of-process plugins, not a
 // schema-handling distinction — see validateAuthoredPluginInput).
-func validatePluginCandy(name string, p *CandyPluginDecl) []string {
+func validatePluginCandy(name string, p *spec.Plugin) []string {
 	if p == nil {
 		return nil
 	}
@@ -289,9 +291,19 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	if st, statErr := os.Stat(filepath.Join(srcDir, "cmd", "serve")); statErr == nil && st.IsDir() {
 		target = "./cmd/serve"
 	}
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binTmp, target)
+	buildVCS := "-buildvcs=false"
+	buildEnv := pluginBuildEnv(os.Environ(), srcDir)
+	if pluginSourceHasGitRevision(srcDir, buildEnv) {
+		buildVCS = "-buildvcs=auto"
+	}
+	cmd := exec.CommandContext(ctx, "go", "build", buildVCS, "-o", binTmp, target)
 	cmd.Dir = srcDir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	// A source with a real Git revision is VCS-stamped. An archive/copy without
+	// one cannot truthfully be stamped, so it is explicitly built without VCS
+	// metadata instead of borrowing an unrelated ancestor repository. Multiple
+	// source builds may run concurrently; their read-only Git status probes never
+	// refresh or write a shared index.
+	cmd.Env = buildEnv
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
 		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
@@ -301,6 +313,55 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
 	}
 	return bin, nil
+}
+
+func pluginBuildEnv(base []string, srcDir string) []string {
+	env := make([]string, 0, len(base)+4)
+	for _, entry := range base {
+		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_") || strings.HasPrefix(entry, "PWD=") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	if absolute, err := filepath.Abs(srcDir); err == nil {
+		srcDir = absolute
+	}
+	env = append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0", "PWD="+srcDir)
+	return env
+}
+
+// pluginSourceHasGitRevision establishes whether a source has provenance that
+// may truthfully be embedded. The probes use exactly the sanitized child
+// environment: inherited GIT_* state may never lend a source someone else's
+// repository identity.
+//
+// Go discovers a physical .git ancestor before it invokes Git. If that marker
+// is malformed or unrelated, auto VCS mode fails instead of omitting metadata.
+// A source without a usable committed Git worktree is therefore built with the
+// explicit no-stamp policy selected by buildPluginBinary.
+func pluginSourceHasGitRevision(srcDir string, env []string) bool {
+	inside, ok := pluginGitProbe(srcDir, env, "rev-parse", "--is-inside-work-tree")
+	if !ok || inside != "true" {
+		return false
+	}
+	if _, ok := pluginGitProbe(srcDir, env, "status", "--porcelain"); !ok {
+		return false
+	}
+	_, ok = pluginGitProbe(srcDir, env, "rev-parse", "--verify", "HEAD")
+	return ok
+}
+
+// pluginGitProbe runs a Git query with the exact environment the Go child will
+// inherit. It does not fall back to the parent process environment.
+func pluginGitProbe(srcDir string, env []string, args ...string) (string, bool) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = srcDir
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(out)), true
 }
 
 // bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a
@@ -527,7 +588,7 @@ func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, erro
 // host-built), connect over LocalTransport, run the SAME schema gate a builtin runs, then
 // register its providers. The schema travels over the Describe channel (gRPC
 // schema_cue) — the host never reads the candy's schema/ dir.
-func loadPluginUnit(ctx context.Context, name string, p *CandyPluginDecl, srcDir string) error {
+func loadPluginUnit(ctx context.Context, name string, p *spec.Plugin, srcDir string) error {
 	bin, err := resolvePluginBinary(ctx, srcDir, name)
 	if err != nil {
 		return fmt.Errorf("plugin %q (source %s): %w", name, p.Source, err)
@@ -588,7 +649,7 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra
 	// plan, and their plugins must load at BOTH the device deploy and check-live. This MIRRORS the
 	// op.Kind() surfacing deployNodePluginContext already does for the deploy NODE's plan (R3).
 	// Over-load safe: a builtin verb's candy is already registered; a non-plugin verb has no candy.
-	addStep := func(op *Op) {
+	addStep := func(op *spec.Op) {
 		add(op.Plugin)
 		if v, err := op.Kind(); err == nil {
 			add(v)
@@ -620,7 +681,7 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra
 // IGNORED (a word match in any class loads the unit): collection is the complete,
 // over-load-safe side, so matching on the word alone can never UNDER-load on a class
 // mismatch. A malformed capability string is skipped (validate flags it elsewhere).
-func pluginProvidesReferencedWord(p *CandyPluginDecl, refs map[string]struct{}) bool {
+func pluginProvidesReferencedWord(p *spec.Plugin, refs map[string]struct{}) bool {
 	for _, capability := range p.Providers {
 		if _, word, ok := splitCapability(string(capability)); ok {
 			if _, hit := refs[word]; hit {
@@ -693,7 +754,7 @@ func loadProjectPlugins(ctx context.Context, candies map[string]*Candy, refs map
 // providers together), so it returns true (skip); any one registered from a DIFFERENT
 // origin is a real word→two-providers collision and returns an error. Returns
 // (false, nil) when none of the plugin's providers are registered yet.
-func pluginAlreadyConnected(name string, p *CandyPluginDecl) (bool, error) {
+func pluginAlreadyConnected(name string, p *spec.Plugin) (bool, error) {
 	connected := false
 	for _, capability := range p.Providers {
 		class, word, ok := splitCapability(string(capability))

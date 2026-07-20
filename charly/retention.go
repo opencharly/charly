@@ -9,6 +9,9 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Retention fallbacks — used ONLY when defaults.keep_images / keep_check_runs are
@@ -22,7 +25,7 @@ const (
 
 // listContainerImageRefs returns the set of image IDs and image refs currently
 // referenced by ANY container (running or stopped, incl. quadlet-managed
-// deploys). Package-level var for testability (same pattern as ListLocalImages).
+// deploys). Package-level var for testability (same pattern as kit.ListLocalImages).
 var listContainerImageRefs = defaultContainerImageRefs
 
 func defaultContainerImageRefs(engine string) (ids map[string]bool, refs map[string]bool, err error) {
@@ -31,13 +34,13 @@ func defaultContainerImageRefs(engine string) (ids map[string]bool, refs map[str
 	// Parse JSON, not a Go-template `--format`: podman's `{{.ImageID}}` template
 	// panics (slice bounds [:12] length 0) when any container has an empty image
 	// ID. The raw JSON field handles that gracefully.
-	out, e := exec.Command(EngineBinary(engine), "ps", "-a", "--format", "json").Output()
+	out, e := exec.Command(kit.EngineBinary(engine), "ps", "-a", "--format", "json").Output()
 	if e != nil {
-		return ids, refs, fmt.Errorf("listing containers via %s: %w", EngineBinary(engine), e)
+		return ids, refs, fmt.Errorf("listing containers via %s: %w", kit.EngineBinary(engine), e)
 	}
 	var rows []map[string]any
 	if e := json.Unmarshal(out, &rows); e != nil {
-		return ids, refs, fmt.Errorf("parsing %s ps output: %w", EngineBinary(engine), e)
+		return ids, refs, fmt.Errorf("parsing %s ps output: %w", kit.EngineBinary(engine), e)
 	}
 	for _, r := range rows {
 		if v, ok := r["ImageID"].(string); ok {
@@ -58,7 +61,7 @@ func normImageID(s string) string { return strings.TrimPrefix(strings.TrimSpace(
 
 // imageInUse reports whether the candidate image is referenced by any container,
 // by ID (prefix-tolerant: 12-char vs 64-char) or by any of its tags.
-func imageInUse(im LocalImageInfo, ids, refs map[string]bool) bool {
+func imageInUse(im kit.LocalImageInfo, ids, refs map[string]bool) bool {
 	cid := normImageID(im.ID)
 	for id := range ids {
 		if cid != "" && id != "" && (strings.HasPrefix(cid, id) || strings.HasPrefix(id, cid)) {
@@ -75,8 +78,8 @@ func imageInUse(im LocalImageInfo, ids, refs map[string]bool) bool {
 
 // imageLabelCalVer parses the image's ai.opencharly.version label (the
 // content-derived EffectiveVersion) — the PRIMARY retention ordering key.
-func imageLabelCalVer(im LocalImageInfo) (CalVer, bool) {
-	return ParseCalVer(im.Labels[LabelVersion])
+func imageLabelCalVer(im kit.LocalImageInfo) (CalVer, bool) {
+	return ParseCalVer(im.Labels[spec.LabelVersion])
 }
 
 // pruneImagesByRetention keeps the newest keepN build TAGS per
@@ -111,7 +114,7 @@ type imageTagInfo struct {
 // (label-CalVer primary, build-tag CalVer tiebreaker; undatable tags last).
 // Non-charly images (no label) never appear.
 func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
-	imgs, err := ListLocalImages(engine)
+	imgs, err := kit.ListLocalImages(engine)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +125,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	groups := map[string][]imageTagInfo{}
 	seenRef := map[string]bool{}
 	for _, im := range imgs {
-		short := im.Labels[LabelBox]
+		short := im.Labels[spec.LabelBox]
 		if short == "" {
 			continue
 		}
@@ -133,7 +136,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 				continue
 			}
 			seenRef[ref] = true
-			tcv, okT := ParseCalVer(extractCalVerTag(ref))
+			tcv, okT := ParseCalVer(kit.ExtractCalVerTag(ref))
 			groups[short] = append(groups[short], imageTagInfo{
 				Ref: ref, ID: normImageID(im.ID), LabelCalVer: lcv, OkLabel: okL,
 				TagCalVer: tcv, OkTag: okT, InUse: inUse,
@@ -158,7 +161,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 }
 
 // liveBuildFloor is a package-level var for testability — the same seam
-// ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
+// kit.ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
 // build-activity lock dir (~/.cache/charly/locks/builds, shared across every
 // worktree on the host), so a retention test that does NOT stub it is
 // non-deterministic: a concurrent build in ANOTHER process holds a lock, the
@@ -285,7 +288,7 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 			// survive; it also refuses an image still held by a build /
 			// "external" container our InUse pre-check can't see — the
 			// safety backstop. Silent skip — in-use retention is expected.
-			if err := exec.Command(EngineBinary(engine), "rmi", c.Ref).Run(); err != nil {
+			if err := exec.Command(kit.EngineBinary(engine), "rmi", c.Ref).Run(); err != nil {
 				continue
 			}
 			if c.ID != "" {
@@ -308,24 +311,24 @@ func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
 	if _, _, live := liveBuildFloor(); live > 0 {
 		return nil, nil // never delete images while any build is in flight
 	}
-	out, err := exec.Command(EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
+	out, err := exec.Command(kit.EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("listing dangling images: %w", err)
 	}
-	imgs, err := parseLocalImagesJSON(out)
+	imgs, err := kit.ParseLocalImagesJSON(out)
 	if err != nil {
 		return nil, err
 	}
 	var removed []string
 	for _, im := range imgs {
-		if im.Labels[LabelBox] == "" {
+		if im.Labels[spec.LabelBox] == "" {
 			continue // not charly-built
 		}
 		if dryRun {
 			removed = append(removed, im.ID)
 			continue
 		}
-		if err := exec.Command(EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
+		if err := exec.Command(kit.EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
 			continue // parent of a kept image / in use — expected, keep
 		}
 		removed = append(removed, im.ID)

@@ -4,13 +4,15 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // The rename target MUST equal the live struct's yaml tag — otherwise the
 // migrator would rewrite the key to a name the loader still drops. This pins the
 // two together so a future tag rename can't silently desync the migrator.
 func TestInstallStrategyKey_MatchesStructTag(t *testing.T) {
-	f, ok := reflect.TypeOf(VmDeployState{}).FieldByName("CharlyInstallStrategy")
+	f, ok := reflect.TypeOf(spec.VmDeployState{}).FieldByName("CharlyInstallStrategy")
 	if !ok {
 		t.Fatal("VmDeployState has no CharlyInstallStrategy field")
 	}

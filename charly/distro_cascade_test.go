@@ -4,6 +4,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,12 +24,12 @@ func deriveCandy(t *testing.T, body string) *Candy {
 	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	root := mappingRoot(&doc)
+	root := kit.MappingRoot(&doc)
 	if root == nil {
 		t.Fatalf("test candy body is not a mapping")
 	}
-	var ly CandyYAML
-	if err := decodeEntityViaCUE(root, reflect.TypeOf(CandyYAML{}), &ly, "test-candy"); err != nil {
+	var ly spec.CandyYAML
+	if err := decodeEntityViaCUE(root, reflect.TypeOf(spec.CandyYAML{}), &ly, "test-candy"); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	layer := &Candy{Name: "t"}
@@ -33,20 +39,20 @@ func deriveCandy(t *testing.T, body string) *Candy {
 
 // debImg builds a minimal ResolvedBox with a deb primary format and the given
 // most-specific-first distro tag chain.
-func debImg(chain ...string) *ResolvedBox {
-	return &ResolvedBox{
+func debImg(chain ...string) *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Pkg:       "deb",
 		Distro:    chain,
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{"deb": {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"deb": {}}},
 	}
 }
 
-func pkgStep(t *testing.T, steps []InstallStep) *SystemPackagesStep {
+func pkgStep(t *testing.T, steps []spec.InstallStep) *deploykit.SystemPackagesStep {
 	t.Helper()
-	var found *SystemPackagesStep
+	var found *deploykit.SystemPackagesStep
 	n := 0
 	for _, s := range steps {
-		if sp, ok := s.(*SystemPackagesStep); ok {
+		if sp, ok := s.(*deploykit.SystemPackagesStep); ok {
 			found = sp
 			n++
 		}
@@ -59,11 +65,11 @@ func pkgStep(t *testing.T, steps []InstallStep) *SystemPackagesStep {
 
 // fmtImg builds a minimal ResolvedBox with the given primary package format and
 // most-specific-first distro tag chain.
-func fmtImg(format string, chain ...string) *ResolvedBox {
-	return &ResolvedBox{
+func fmtImg(format string, chain ...string) *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Pkg:       format,
 		Distro:    chain,
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{format: {}}},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{format: {}}},
 	}
 }
 
@@ -76,8 +82,8 @@ func fmtImg(format string, chain ...string) *ResolvedBox {
 func TestCascade_FormatFamilyLevel(t *testing.T) {
 	// deb family: shared under `deb:`, debian-only under `debian:`.
 	debCandy := deriveCandy(t, "name: t\ndistro:\n  deb:\n    package: [shared]\n  debian:\n    package: [deb-only]\n")
-	debian := pkgStep(t, compileSystemPackageSteps(debCandy, fmtImg("deb", "debian:13", "debian"), HostContext{})).Packages
-	ubuntu := pkgStep(t, compileSystemPackageSteps(debCandy, fmtImg("deb", "ubuntu:24.04", "ubuntu"), HostContext{})).Packages
+	debian := pkgStep(t, deploykit.CompileSystemPackageSteps(debCandy, fmtImg("deb", "debian:13", "debian"), deploykit.HostContext{})).Packages
+	ubuntu := pkgStep(t, deploykit.CompileSystemPackageSteps(debCandy, fmtImg("deb", "ubuntu:24.04", "ubuntu"), deploykit.HostContext{})).Packages
 	if !reflect.DeepEqual(debian, []string{"shared", "deb-only"}) {
 		t.Errorf("debian = %v, want [shared deb-only]", debian)
 	}
@@ -87,14 +93,14 @@ func TestCascade_FormatFamilyLevel(t *testing.T) {
 
 	// pac family: a single `pac:` block reaches BOTH arch and cachyos.
 	pacCandy := deriveCandy(t, "name: t\ndistro:\n  pac:\n    package: [sddm]\n")
-	arch := pkgStep(t, compileSystemPackageSteps(pacCandy, fmtImg("pac", "arch"), HostContext{})).Packages
-	cachyos := pkgStep(t, compileSystemPackageSteps(pacCandy, fmtImg("pac", "cachyos"), HostContext{})).Packages
+	arch := pkgStep(t, deploykit.CompileSystemPackageSteps(pacCandy, fmtImg("pac", "arch"), deploykit.HostContext{})).Packages
+	cachyos := pkgStep(t, deploykit.CompileSystemPackageSteps(pacCandy, fmtImg("pac", "cachyos"), deploykit.HostContext{})).Packages
 	if !reflect.DeepEqual(arch, []string{"sddm"}) || !reflect.DeepEqual(cachyos, []string{"sddm"}) {
 		t.Errorf("pac family: arch=%v cachyos=%v, want both [sddm]", arch, cachyos)
 	}
 
 	// cascadeTagChain order: distro chain, then format tag (least-specific) last.
-	if got := cascadeTagChain(fmtImg("pac", "cachyos")); !reflect.DeepEqual(got, []string{"cachyos", "pac"}) {
+	if got := deploykit.CascadeTagChain(fmtImg("pac", "cachyos")); !reflect.DeepEqual(got, []string{"cachyos", "pac"}) {
 		t.Errorf("cascadeTagChain = %v, want [cachyos pac]", got)
 	}
 }
@@ -192,7 +198,7 @@ distro:
   ubuntu-24.04:
     package: [u2404]
 `)
-	step := pkgStep(t, compileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), HostContext{}))
+	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), deploykit.HostContext{}))
 	// base (top-level, first) ∪ ubuntu ∪ ubuntu:24.04, deduped.
 	if !reflect.DeepEqual(step.Packages, []string{"base", "u", "u2404"}) {
 		t.Errorf("packages = %v, want [base u u2404]", step.Packages)
@@ -209,8 +215,8 @@ distro:
   ubuntu-24.04:
     repo: [{name: r, suite: from-version}]
 `)
-	step := pkgStep(t, compileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), HostContext{}))
-	repos := toMapSlice(step.RawInstallContext["repo"])
+	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), deploykit.HostContext{}))
+	repos := buildkit.ToMapSlice(step.RawInstallContext["repo"])
 	if len(repos) != 1 || repos[0]["suite"] != "from-version" {
 		t.Errorf("most-specific repo must win: got %v, want suite=from-version", repos)
 	}
@@ -234,12 +240,12 @@ distro:
 `
 	for i := range 50 { // many iterations to defeat any map-order flakiness
 		l := deriveCandy(t, body)
-		deb := pkgStep(t, compileSystemPackageSteps(l, debImg("debian:13", "debian"), HostContext{}))
-		ubu := pkgStep(t, compileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), HostContext{}))
-		if s := toMapSlice(deb.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "trixie" {
+		deb := pkgStep(t, deploykit.CompileSystemPackageSteps(l, debImg("debian:13", "debian"), deploykit.HostContext{}))
+		ubu := pkgStep(t, deploykit.CompileSystemPackageSteps(l, debImg("ubuntu:24.04", "ubuntu"), deploykit.HostContext{}))
+		if s := buildkit.ToMapSlice(deb.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "trixie" {
 			t.Fatalf("iter %d: debian must resolve trixie, got %v", i, s)
 		}
-		if s := toMapSlice(ubu.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "noble" {
+		if s := buildkit.ToMapSlice(ubu.RawInstallContext["repo"]); len(s) != 1 || s[0]["suite"] != "noble" {
 			t.Fatalf("iter %d: ubuntu must resolve noble, got %v", i, s)
 		}
 	}
@@ -254,9 +260,9 @@ distro:
   fedora:
     package: [vim]
 `)
-	img := &ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"},
-		DistroDef: &DistroDef{Format: map[string]*FormatDef{"rpm": {}}}}
-	step := pkgStep(t, compileSystemPackageSteps(l, img, HostContext{}))
+	img := &buildkit.ResolvedBox{Pkg: "rpm", Distro: []string{"fedora"},
+		DistroDef: &spec.ResolvedDistro{Format: map[string]*FormatDef{"rpm": {}}}}
+	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, img, deploykit.HostContext{}))
 	if !reflect.DeepEqual(step.Packages, []string{"vim"}) {
 		t.Errorf("fedora bare reach: packages = %v, want [vim]", step.Packages)
 	}
@@ -266,7 +272,7 @@ func TestCascade_TopOnlyCandyInstallsEverywhere(t *testing.T) {
 	// A candy with only a top-level package: (no distro:) installs that base on
 	// any image via the primary format.
 	l := deriveCandy(t, "name: t\npackage: [nodejs, npm]\n")
-	step := pkgStep(t, compileSystemPackageSteps(l, debImg("debian:13", "debian"), HostContext{}))
+	step := pkgStep(t, deploykit.CompileSystemPackageSteps(l, debImg("debian:13", "debian"), deploykit.HostContext{}))
 	if !reflect.DeepEqual(step.Packages, []string{"nodejs", "npm"}) {
 		t.Errorf("top-only base: packages = %v, want [nodejs npm]", step.Packages)
 	}
@@ -285,17 +291,17 @@ func TestDistroTagChain(t *testing.T) {
 		{"", "", nil},
 	}
 	for _, c := range cases {
-		if got := distroTagChain(c.distro, c.version); !reflect.DeepEqual(got, c.want) {
+		if got := buildkit.DistroTagChain(c.distro, c.version); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("distroTagChain(%q,%q) = %v, want %v", c.distro, c.version, got, c.want)
 		}
 	}
 }
 
 func TestDistroDefVersionInherits(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
-		"debian": {Version: "13", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
-		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: BootstrapDef{InstallCmd: "apt"}},
-		"cachy":  {Inherits: "debian", Bootstrap: BootstrapDef{InstallCmd: "apt"}}, // no own version
+	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
+		"debian": {Version: "13", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
+		"ubuntu": {Inherits: "debian", Version: "24.04", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}},
+		"cachy":  {Inherits: "debian", Bootstrap: vmshared.BootstrapDef{InstallCmd: "apt"}}, // no own version
 	}}
 	if v := dc.ResolveInherits(dc.Distro["ubuntu"], 10).Version; v != "24.04" {
 		t.Errorf("ubuntu version = %q, want 24.04 (child wins)", v)
@@ -313,7 +319,7 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // while a distro that only sets inherits: (ubuntu → debian) does NOT pull the
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
-	dc := &DistroConfig{Distro: map[string]*DistroDef{
+	dc := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
 		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
 		"debian":  {Format: map[string]*FormatDef{"deb": {}}},
@@ -344,7 +350,7 @@ func TestExpandPackageInheritance(t *testing.T) {
 		})
 	}
 	// nil config returns input unchanged (no panic).
-	if got := (*DistroConfig)(nil).ExpandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
+	if got := (*buildkit.DistroConfig)(nil).ExpandPackageInheritance([]string{"cachyos"}); !reflect.DeepEqual(got, []string{"cachyos"}) {
 		t.Errorf("nil dc must return input unchanged, got %v", got)
 	}
 }

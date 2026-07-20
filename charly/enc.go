@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -21,9 +23,9 @@ import (
 // Otherwise, use the global default: <storagePath>/charly-<image>-<name>.
 func resolveEncVolumeDir(vol DeployVolumeConfig, defaultStoragePath, boxName string) string {
 	if vol.Host != "" {
-		return expandHostHome(vol.Host)
+		return kit.ExpandHostHome(vol.Host)
 	}
-	return filepath.Join(defaultStoragePath, encryptedVolumeName(boxName, vol.Name))
+	return filepath.Join(defaultStoragePath, deploykit.EncryptedVolumeName(boxName, vol.Name))
 }
 
 // isEncryptedInitialized checks if gocryptfs has been initialized (gocryptfs.conf exists).
@@ -82,7 +84,7 @@ func encPlanFor(boxName, instance, volume, scopeDir string) ([]spec.EncVolumePla
 	if err != nil {
 		return nil, err
 	}
-	storageDir := deployStorageDir(boxName, instance)
+	storageDir := deploykit.DeployStorageDir(boxName, instance)
 	var plan []spec.EncVolumePlan
 	for _, m := range mounts {
 		if volume != "" && m.Name != volume {
@@ -361,7 +363,7 @@ func awaitKeyringUnlockViaPlugin(
 // the most common operational case is "restart when everything is still
 // mounted", and it has no passphrase dependency.
 func encMount(boxName, instance, volume string) error {
-	plan, err := encPlanFor(boxName, instance, volume, deployStorageDir(boxName, instance))
+	plan, err := encPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -397,7 +399,7 @@ func encMount(boxName, instance, volume string) error {
 // encUnmount unmounts encrypted volumes for an image.
 // If volume is non-empty, only that volume is unmounted.
 func encUnmount(boxName, instance, volume string) error {
-	plan, err := encPlanFor(boxName, instance, volume, deployStorageDir(boxName, instance))
+	plan, err := encPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -423,12 +425,12 @@ func encUnmount(boxName, instance, volume string) error {
 // (the orphaned-after-a-crash case is exactly when the dir persists). Each mount
 // is unmounted best-effort before removal; a purge never hard-fails on cleanup.
 func removeEncryptedVolumes(boxName, instance string) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return
 	}
 	base := rt.EncryptedStoragePath
-	prefix := "charly-" + deployStorageDir(boxName, instance) + "-"
+	prefix := "charly-" + deploykit.DeployStorageDir(boxName, instance) + "-"
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		return // no encrypted storage dir — nothing to purge
@@ -471,7 +473,7 @@ func encStatus(boxName, instance string) error {
 
 	fmt.Printf("%-20s %-12s %-8s %s\n", "NAME", "INITIALIZED", "MOUNTED", "PATH")
 	for _, m := range mounts {
-		volDir := resolveEncVolumeDir(m, storagePath, deployStorageDir(boxName, instance))
+		volDir := resolveEncVolumeDir(m, storagePath, deploykit.DeployStorageDir(boxName, instance))
 		cipherDir := filepath.Join(volDir, "cipher")
 		plainDir := filepath.Join(volDir, "plain")
 
@@ -490,7 +492,7 @@ func encStatus(boxName, instance string) error {
 
 // encPasswd changes the gocryptfs password for all encrypted volumes of an image.
 func encPasswd(boxName, instance string) error {
-	plan, err := encPlanFor(boxName, instance, "", deployStorageDir(boxName, instance))
+	plan, err := encPlanFor(boxName, instance, "", deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -594,7 +596,7 @@ func defaultAskPassword(id, prompt string) (string, error) {
 // loadEncryptedVolume loads encrypted volume configs from charly.yml for an image.
 // Returns the deploy volume configs with type=encrypted and the encrypted storage path.
 func loadEncryptedVolume(boxName, instance string) ([]DeployVolumeConfig, string, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return nil, "", err
 	}
@@ -607,7 +609,7 @@ func loadEncryptedVolume(boxName, instance string) ([]DeployVolumeConfig, string
 	// password → indefinite hang waiting for stdin. Surfacing the error
 	// turns that hang into a clean error message with a remediation
 	// hint pointing at `charly migrate`.
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return nil, "", fmt.Errorf("loading deploy config for encrypted volumes: %w", err)
 	}
@@ -615,7 +617,7 @@ func loadEncryptedVolume(boxName, instance string) ([]DeployVolumeConfig, string
 		return nil, rt.EncryptedStoragePath, nil
 	}
 
-	overlay, ok := dc.Bundle[deployKey(boxName, instance)]
+	overlay, ok := dc.Bundle[deploykit.DeployKey(boxName, instance)]
 	if !ok {
 		return nil, rt.EncryptedStoragePath, nil
 	}
@@ -632,11 +634,11 @@ func loadEncryptedVolume(boxName, instance string) ([]DeployVolumeConfig, string
 // encServiceFilename returns the systemd service filename for a legacy crypto companion unit.
 // Used only for cleanup of stale enc services from older charly versions.
 func encServiceFilename(boxName string) string {
-	return containerName(boxName) + "-enc.service"
+	return kit.ContainerName(boxName) + "-enc.service"
 }
 
 // hasEncryptedBindMounts returns true if any bind mount is encrypted.
-func hasEncryptedBindMounts(mounts []ResolvedBindMount) bool {
+func hasEncryptedBindMounts(mounts []deploykit.ResolvedBindMount) bool {
 	for _, m := range mounts {
 		if m.Encrypted {
 			return true
@@ -658,7 +660,7 @@ func hasEncryptedBindMounts(mounts []ResolvedBindMount) bool {
 // plain/ over a populated cipher tree and start writing plaintext on top.
 // The previous generic "not mounted" message was indistinguishable from
 // a fresh-setup state where no harm exists yet.
-func verifyBindMounts(mounts []ResolvedBindMount, boxName string) error {
+func verifyBindMounts(mounts []deploykit.ResolvedBindMount, boxName string) error {
 	for _, m := range mounts {
 		if m.Encrypted {
 			if !isEncryptedMounted(m.HostPath) {

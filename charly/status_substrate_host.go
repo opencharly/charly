@@ -4,47 +4,29 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
 )
 
-// status_substrate_host.go — the generic "status-substrate" F10 host-builder. The externalized
-// `charly status` command plugin (candy/plugin-status) OWNS the CLI grammar + the PURE nested
-// overlay + render; it asks the host to do the one thing it cannot do itself — collect the live
-// deployment state across every substrate (pod/vm/k8s/local/android) and pre-resolve the DECLARED
-// nested-deployment tree into the wire-safe spec.StatusNestedNode shape. Every core-coupled helper
-// this needs (ResolveRuntime/NewCollector/Collector.collectFlat/Collector.Single/BundleNode/
-// classifyTarget/ResolveDeployChain) stays in core — reached via this ONE generic action noun
-// (F11: "status-substrate" is a class-generic HostBuild kind, never a provider word).
+// status_substrate_host.go — the generic "status-substrate" F10 host-builder. K6 relocated the
+// LAST core-side status business logic (charly/status_collector.go's Collector + the deploy-cone
+// enrichment) into candy/plugin-substrate (status_flat.go, verb:status-fanout). This handler is
+// now PURE generic dispatch — an M-mechanism wire forward, no status-specific logic — resolving
+// the verb and threading the SAME in-proc reverse-channel executor the fan-out's vm/k8s legs need
+// (HostBuild("resolved-project") / InvokeProvider("verb","libvirt",...)) to reach the host for
+// themselves. The externalized `charly status` command plugin (candy/plugin-status) is unchanged
+// by this move — it still drives this SAME "status-substrate" HostBuild seam by name.
 const statusSubstrateBuilderKind = "status-substrate"
 
-// hostBuildStatusSubstrate runs the status-collection engine host-side. req.Single selects the
-// pod-scoped detail path (mirrors the former core status command's Collector.Single call); otherwise it
-// runs the full multi-substrate fan-out (collectFlat) and pre-resolves the declared nested tree
-// (buildStatusRootsTree) — the candy's PURE overlay folds Rows+Roots without any core type.
+// hostBuildStatusSubstrate forwards the request to verb:status-fanout (candy/plugin-substrate)
+// and returns its reply verbatim. No status business logic lives here.
 func hostBuildStatusSubstrate(ctx context.Context, req spec.StatusSubstrateRequest, _ buildEngineContext) (spec.StatusSubstrateReply, error) {
-	rt, err := ResolveRuntime()
-	if err != nil {
-		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: resolve runtime: %w", err)
+	prov, ok := providerRegistry.resolve(ClassVerb, "status-fanout")
+	if !ok {
+		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: substrate plugin (verb:status-fanout) not registered — charly built without the plugin-substrate candy")
 	}
-	col, err := NewCollector(rt)
-	if err != nil {
-		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: new collector: %w", err)
-	}
-
-	if req.Single {
-		ds, serr := col.Single(ctx, req.Box, req.Instance)
-		if serr != nil {
-			return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: single: %w", serr)
-		}
-		return spec.StatusSubstrateReply{Single: ds}, nil
-	}
-
-	rows, opts, ferr := col.collectFlat(ctx, req.IncludeAll, req.Nested)
-	if ferr != nil {
-		return spec.StatusSubstrateReply{}, fmt.Errorf("status-substrate: collect: %w", ferr)
-	}
-	roots := buildStatusRootsTree(opts, req.Nested)
-	return spec.StatusSubstrateReply{Rows: rows, Roots: roots}, nil
+	ctx = sdk.ContextWithExecutor(ctx, sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}}))
+	return invokeTyped[spec.StatusSubstrateRequest, spec.StatusSubstrateReply](ctx, prov, "status-fanout", sdk.OpStatusCollectAll, req)
 }
 
 var _ = func() bool {

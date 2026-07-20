@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedKernelParamVerb_DispatchesViaKit proves the MULTI-ROLE `kernel-param` verb
@@ -24,7 +26,7 @@ func TestRelocatedKernelParamVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "/proc/sys", stdout: "Linux\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"kernel-param": "kernel.ostype", "value": []any{"Linux"}}})
+		&spec.Op{PluginInput: map[string]any{"kernel-param": "kernel.ostype", "value": []any{"Linux"}}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -35,7 +37,7 @@ func TestRelocatedKernelParamVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("kernel-param provider does not implement ProvisionActor (multi-role adapter missing): %T", prov)
 	}
 	script, ok := pa.RenderProvisionScript(
-		&Op{PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": []any{10}}}, nil)
+		&spec.Op{PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": []any{10}}}, nil)
 	if !ok || !strings.Contains(script, "sysctl -w") || !strings.Contains(script, "swappiness") {
 		t.Fatalf("act: want a sysctl -w script, got ok=%v %q", ok, script)
 	}

@@ -108,12 +108,12 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	// (buildBundleNodeInto), so the entity participates in deploy/check exactly like a builtin
 	// pod/group/candy. A FLAT kind (F4) lands its opaque body in uf.PluginKinds, unchanged.
 	if structural {
-		var dn BundleNode
+		var dn spec.BundleNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: structural kind %q reply decode: %w", gn.name, gn.disc, err)
 		}
 		if uf.Bundle == nil {
-			uf.Bundle = map[string]BundleNode{}
+			uf.Bundle = map[string]spec.BundleNode{}
 		}
 		uf.Bundle[gn.name] = dn
 		return nil
@@ -189,7 +189,7 @@ func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		return fmt.Errorf("node %q: substrate kind %q: %w", gn.name, gn.disc, err)
 	}
 	if deployShape {
-		var dn BundleNode
+		var dn spec.BundleNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: substrate deploy reply decode: %w", gn.name, err)
 		}
@@ -219,7 +219,7 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	image := candyIsImage(gn)
 	var env spec.StructuralKindLoadEnv
 	if image {
-		var b BoxConfig
+		var b spec.BoxConfig
 		if err := decodeNodeValue(gn, &b); err != nil {
 			return fmt.Errorf("node %q: decode image: %w", gn.name, err)
 		}
@@ -240,14 +240,14 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		return fmt.Errorf("node %q: candy kind: %w", gn.name, err)
 	}
 	if image {
-		var b BoxConfig
+		var b spec.BoxConfig
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", gn.name, err)
 		}
 		uf.SetBox(gn.name, b)
 		return nil
 	}
-	var c CandyYAML
+	var c spec.CandyYAML
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", gn.name, err)
 	}

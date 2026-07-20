@@ -7,15 +7,19 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // command.go — the externalized `charly feature` command (list / pending / validate — inspect
-// plan-shaped descriptions). The plugin OWNS the subcommand grammar + the output formatting; the
-// genuine core subsystem it can't hold — the unified LOADER (LoadConfig / ScanCandy — the kernel), the
-// Step plan model, and validatePlanSteps (shared with `charly box validate`, R3) — stays core and is
-// reached via the generic "feature" HostBuild seam, which enumerates every entity's plan into plain
-// DATA (charly/host_build_feature.go). No hidden `__feature-*` forward.
+// plan-shaped descriptions). The plugin OWNS the subcommand grammar + the output formatting AND the
+// plan-to-summary transform (keyword/text/agent/check flattening + validatePlanSteps — kit.KeywordOf /
+// kit.ValidatePlanSteps / deploykit.DescriptionInfo are sdk-portable, K3); the genuine core subsystem
+// it can't hold — the unified LOADER (LoadConfig / ScanCandy — the kernel) — stays core and is reached
+// via the generic "feature" HostBuild seam, which enumerates every entity's RAW description + plan
+// into plain DATA (charly/host_build_feature.go, which needs no kit/deploykit import as a result). No
+// hidden `__feature-*` forward.
 //
 // (The Feature RUN verbs — `charly box feature run` / `charly check feature run` — stay children of
 // box/check in the core binary, NOT part of this plugin.)
@@ -49,22 +53,23 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 		switch sub {
 		case "list":
 			for _, e := range reply.Entities {
-				if e.Description == "" && len(e.Steps) == 0 {
+				steps := planSteps(e.Plan)
+				if e.Description == "" && len(steps) == 0 {
 					fmt.Printf("%s %s: (no description)\n", e.Kind, e.Name)
 					continue
 				}
 				nChecks := 0
-				for _, s := range e.Steps {
+				for _, s := range steps {
 					if s.IsCheck {
 						nChecks++
 					}
 				}
 				fmt.Printf("%s %s: %q (%d step%s, %d check%s)\n",
-					e.Kind, e.Name, e.Summary, len(e.Steps), plural(len(e.Steps)), nChecks, plural(nChecks))
+					e.Kind, e.Name, summary(e.Description), len(steps), plural(len(steps)), nChecks, plural(nChecks))
 			}
 		case "pending":
 			for _, e := range reply.Entities {
-				for _, s := range e.Steps {
+				for _, s := range planSteps(e.Plan) {
 					if s.IsAgent {
 						fmt.Printf("%s:%s — step %d: %s %q (agent-graded)\n", e.Kind, e.Name, s.Index, s.Keyword, s.Text)
 					}
@@ -73,7 +78,10 @@ func runFeatureCLI(ctx context.Context, exec *sdk.Executor, args []string) error
 		case "validate":
 			var errs []string
 			for _, e := range reply.Entities {
-				errs = append(errs, e.ValidationErrors...)
+				if e.Description == "" && len(e.Plan) == 0 {
+					continue
+				}
+				errs = append(errs, kit.ValidatePlanSteps(e.Description, e.Plan, e.Kind+":"+e.Name)...)
 			}
 			if len(errs) > 0 {
 				for _, er := range errs {
@@ -95,6 +103,42 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// stepSummary is one plan step flattened for list/pending output — the plugin's OWN transform of the
+// raw spec.Step the "feature" HostBuild seam ships (formerly computed host-side as spec.FeatureStep;
+// K3 moved the transform here since kit.KeywordOf/Step.KeywordText/Step.IsAgent are sdk-portable).
+type stepSummary struct {
+	Index   int
+	Keyword string
+	Text    string
+	IsAgent bool
+	IsCheck bool
+}
+
+// planSteps flattens a raw plan into stepSummary (the former host-side FeatureStep loop, moved here).
+func planSteps(plan []spec.Step) []stepSummary {
+	out := make([]stepSummary, len(plan))
+	for i := range plan {
+		step := plan[i]
+		out[i] = stepSummary{
+			Index:   i,
+			Keyword: string(kit.KeywordOf(&step)),
+			Text:    step.KeywordText(),
+			IsAgent: step.IsAgent(),
+			IsCheck: step.Check != "" || step.AgentCheck != "",
+		}
+	}
+	return out
+}
+
+// summary renders a description's info line, or "(empty)" for a description-less entity with a plan
+// (the former host-side summarizeDesc/DescriptionInfo call, moved here).
+func summary(desc string) string {
+	if s := deploykit.DescriptionInfo(desc); s != "" {
+		return s
+	}
+	return "(empty)"
 }
 
 // hostFeature enumerates the project's plans over the generic "feature" HostBuild kind. exec is nil on

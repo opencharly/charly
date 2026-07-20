@@ -48,6 +48,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // EnsureImagePresent is the canonical helper. Every command that
@@ -63,7 +65,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 	// For short names we resolve to a registry ref first; for full
 	// refs the input is already the storage key.
 	if ref, _ := resolveImageRefForEnsure(image, cfg, projectDir); ref != "" {
-		if LocalImageExists("podman", ref) {
+		if kit.LocalImageExists("podman", ref) {
 			fmt.Fprintf(os.Stderr, "ensure-image: %s present\n", ref)
 			return nil
 		}
@@ -90,7 +92,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 	if IsRemoteImageRef(stripped) {
 		if rctx, err := ResolveRemoteImage(stripped, ""); err == nil {
 			fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
-			rt, rerr := ResolveRuntime()
+			rt, rerr := kit.ResolveRuntime()
 			if rerr == nil {
 				if berr := rctx.BuildImage(rt, ""); berr == nil {
 					return nil
@@ -121,7 +123,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 		if cfg != nil {
 			if resolved, err := cfg.ResolveBox(short, "", projectDir, ResolveOpts{}); err == nil {
 				produced := resolveShellImageRef(resolved.Registry, resolved.Name, "")
-				if produced != "" && produced != image && looksLikeFullRef(image) {
+				if produced != "" && produced != image && kit.LooksLikeFullRef(image) {
 					if terr := podmanTagAlias(ctx, produced, image); terr != nil {
 						fmt.Fprintf(os.Stderr, "ensure-image: warning: tag alias %s -> %s failed: %v\n", produced, image, terr)
 					}
@@ -156,7 +158,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if IsRemoteImageRef(stripped) {
 		return image, nil
 	}
-	if looksLikeFullRef(image) {
+	if kit.LooksLikeFullRef(image) {
 		return image, nil
 	}
 	if cfg == nil {

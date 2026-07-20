@@ -10,12 +10,16 @@ package main
 // host. Exit code propagates.
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/kit"
 	"golang.org/x/term"
 )
 
@@ -44,10 +48,15 @@ func shouldReexecForHost(cli *CLI, cmdPath string) bool {
 }
 
 // ReexecOverSSH rewrites os.Args by stripping --host and the client-
-// local path flags (--dir/-C, --repo), then invokes
-// `ssh <resolved-target> charly <rest of argv>`. Stdin/stdout/stderr are
-// piped straight through. The returned exit code is whatever `ssh`
-// exits with (which propagates the remote `charly` exit code).
+// local path flags (--dir/-C, --repo), resolves the remote charly
+// endpoint (the venue's own PATH charly when it is at least as new as
+// the local controller; otherwise a version-gated replica of the local
+// binary delivered by kit.EnsureCharlyInDeployVenue), then invokes
+// `ssh <resolved-target> <endpoint> <rest of argv>`. Stdin/stdout/stderr
+// are piped straight through. The returned exit code is whatever `ssh`
+// exits with (which propagates the remote `charly` exit code). The
+// happy path prints nothing — a diagnostic appears only when the local
+// binary is actually replicated or the bootstrap fails.
 func ReexecOverSSH(cli *CLI) int {
 	target, err := resolveHostAlias(cli.Host)
 	if err != nil {
@@ -55,7 +64,48 @@ func ReexecOverSSH(cli *CLI) int {
 		return 2
 	}
 	remoteArgv := buildRemoteArgv(os.Args[1:])
-	cmd := exec.Command("ssh", sshCmdArgs(target, remoteArgv)...)
+	destination, portText, err := splitSSHTarget(target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "charly: --host %q: %v\n", cli.Host, err)
+		return 2
+	}
+	user, host := "", destination
+	if at := strings.LastIndex(destination, "@"); at >= 0 {
+		user, host = destination[:at], destination[at+1:]
+	}
+	port := 0
+	if portText != "" {
+		port, _ = strconv.Atoi(portText) // splitSSHTarget already validated it.
+	}
+	extra := make([]string, 0, 2+len(cli.HostOption)*2)
+	if cli.HostIdentityFile != "" {
+		extra = append(extra, "-i", cli.HostIdentityFile)
+	}
+	for _, option := range cli.HostOption {
+		extra = append(extra, "-o", option)
+	}
+	executor := &kit.SSHExecutor{User: user, Host: host, Port: port, Args: extra}
+	controllerBin, err := activeCharlyBinary()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "charly: --host %q: resolve active controller: %v\n", cli.Host, err)
+		return 2
+	}
+	remoteBin, err := kit.EnsureCharlyInDeployVenue(context.Background(), executor, controllerBin, CharlyVersion())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "charly: --host %q: bootstrap Charly endpoint: %v\n", cli.Host, err)
+		return 1
+	}
+	if remoteBin != "charly" {
+		// The venue's PATH charly was absent or older, so the remote command
+		// runs a replica of THIS local binary — a version skew worth one line.
+		fmt.Fprintf(os.Stderr, "charly: --host %q: venue charly absent/older; running replicated controller binary at %s\n", cli.Host, remoteBin)
+	}
+	sshArgs, err := sshCmdArgsWithEndpoint(target, remoteBin, cli.HostIdentityFile, cli.HostOption, remoteArgv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "charly: --host %q: %v\n", cli.Host, err)
+		return 2
+	}
+	cmd := exec.Command("ssh", sshArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -82,7 +132,7 @@ func resolveHostAlias(h string) (string, error) {
 		return h, nil
 	}
 	// Try alias lookup.
-	cfg, err := LoadRuntimeConfig()
+	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		// Fall back to raw — let ssh resolve via ~/.ssh/config.
 		return h, nil
@@ -113,11 +163,13 @@ func buildRemoteArgv(argv []string) []string {
 			skipNext = false
 			continue
 		}
-		if a == "--host" || a == "--dir" || a == "-C" || a == "--repo" {
+		if a == "--host" || a == "--host-identity-file" || a == "--host-option" || a == "--dir" || a == "-C" || a == "--repo" {
 			skipNext = true
 			continue
 		}
 		if strings.HasPrefix(a, "--host=") ||
+			strings.HasPrefix(a, "--host-identity-file=") ||
+			strings.HasPrefix(a, "--host-option=") ||
 			strings.HasPrefix(a, "--dir=") ||
 			strings.HasPrefix(a, "-C=") ||
 			strings.HasPrefix(a, "--repo=") {
@@ -135,12 +187,86 @@ func buildRemoteArgv(argv []string) []string {
 //
 // -tt allocates a pseudo-TTY when stdin is a TTY, so interactive
 // programs (prompts, pagers) work; piped stdin gets plain mode.
-func sshCmdArgs(target string, remoteArgv []string) []string {
-	args := make([]string, 0, 4+len(remoteArgv))
+func sshCmdArgs(target string, remoteArgv []string) ([]string, error) {
+	return sshCmdArgsWithEndpoint(target, "charly", "", nil, remoteArgv)
+}
+
+func sshCmdArgsWithEndpoint(target, remoteBinary, identityFile string, options, remoteArgv []string) ([]string, error) {
+	destination, port, err := splitSSHTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	args := make([]string, 0, 8+len(options)*2)
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		args = append(args, "-tt")
 	}
-	args = append(args, target, "charly")
-	args = append(args, remoteArgv...)
-	return args
+	if port != "" {
+		args = append(args, "-p", port)
+	}
+	if identityFile != "" {
+		args = append(args, "-i", identityFile)
+	}
+	for _, option := range options {
+		args = append(args, "-o", option)
+	}
+	remote := kit.ShellQuote(remoteBinary)
+	for _, arg := range remoteArgv {
+		remote += " " + kit.ShellQuote(arg)
+	}
+	args = append(args, destination, remote)
+	return args, nil
+}
+
+// splitSSHTarget converts the documented user@host[:port] form into OpenSSH's
+// argv representation. Ports are data, never embedded in the destination
+// token; IPv6 literals use the standard bracketed host:port form.
+func splitSSHTarget(target string) (destination, port string, err error) {
+	if target == "" {
+		return "", "", errors.New("empty SSH target")
+	}
+	user := ""
+	hostPort := target
+	if at := strings.LastIndex(target, "@"); at >= 0 {
+		if at == 0 || at == len(target)-1 {
+			return "", "", fmt.Errorf("invalid SSH target %q", target)
+		}
+		user, hostPort = target[:at], target[at+1:]
+	}
+	host := hostPort
+	switch {
+	case strings.HasPrefix(hostPort, "["):
+		switch {
+		case strings.Contains(hostPort, "]:"):
+			host, port, err = net.SplitHostPort(hostPort)
+			if err != nil {
+				return "", "", fmt.Errorf("invalid SSH target %q: %w", target, err)
+			}
+		case strings.HasSuffix(hostPort, "]"):
+			host = strings.TrimSuffix(strings.TrimPrefix(hostPort, "["), "]")
+		default:
+			return "", "", fmt.Errorf("invalid SSH target %q", target)
+		}
+	case strings.Count(hostPort, ":") == 1:
+		host, port, err = net.SplitHostPort(hostPort)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid SSH target %q: %w", target, err)
+		}
+	}
+	if host == "" {
+		return "", "", fmt.Errorf("invalid SSH target %q: empty host", target)
+	}
+	if port != "" {
+		value, parseErr := strconv.ParseUint(port, 10, 16)
+		if parseErr != nil || value == 0 {
+			return "", "", fmt.Errorf("invalid SSH target %q: port must be between 1 and 65535", target)
+		}
+	}
+	destination = host
+	if strings.Contains(host, ":") {
+		destination = "[" + host + "]"
+	}
+	if user != "" {
+		destination = user + "@" + destination
+	}
+	return destination, port, nil
 }

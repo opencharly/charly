@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 func TestValidateLibvirtSnippet(t *testing.T) {
@@ -20,7 +23,7 @@ func TestValidateLibvirtSnippet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateLibvirtSnippet(tt.snippet)
+			err := vmshared.ValidateLibvirtSnippet(tt.snippet)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateLibvirtSnippet(%q) error = %v, wantErr %v", tt.snippet, err, tt.wantErr)
 			}
@@ -44,7 +47,7 @@ func TestIsDeviceElement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.snippet[:20], func(t *testing.T) {
-			got := isDeviceElement(tt.snippet)
+			got := vmshared.IsDeviceElement(tt.snippet)
 			if got != tt.isDevice {
 				t.Errorf("isDeviceElement(%q) = %v, want %v", tt.snippet, got, tt.isDevice)
 			}
@@ -58,7 +61,7 @@ func TestCollectLibvirtSnippets(t *testing.T) {
 	// hard-cutover; box-level raw snippets now live on the paired
 	// kind:vm entity's spec.libvirt.snippets:).
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"test-image": {
 				Candy: []string{"layer-a", "layer-b"},
 			},
@@ -81,7 +84,7 @@ func TestCollectLibvirtSnippets(t *testing.T) {
 }
 
 func TestCollectLibvirtSnippets_NonexistentImage(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{})}
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{})}
 	layers := map[string]*Candy{}
 	snippets := CollectLibvirtSnippets(cfg, layers, "nonexistent")
 	if snippets != nil {

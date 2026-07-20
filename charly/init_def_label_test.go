@@ -5,13 +5,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestInitDefLabel_RoundTrip proves the init system is TRUE single-source: the
 // build-resolved init contract is read from the embedded init: vocabulary,
-// baked (via the same writeJSONLabel path generate.go uses) into the
-// ai.opencharly.init_def label, parsed back by ExtractMetadata, and the deploy
-// reads — resolveEntrypointFromMeta + resolveInitDefFromMeta — return the
+// baked (via the deploykit WriteLabels formatter — the #67 render-DRIVE emitter)
+// into the ai.opencharly.init_def label, parsed back by ExtractMetadata, and the
+// deploy reads — resolveEntrypointFromMeta + resolveInitDefFromMeta — return the
 // VOCAB values, not a hardcoded duplicate.
 func TestInitDefLabel_RoundTrip(t *testing.T) {
 	uf, err := embeddedDefaults()
@@ -24,8 +27,9 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	}
 	def := ic.Init["supervisord"]
 
-	// Build the runtime-relevant subset exactly as generate.go's bake seam does.
-	capDef := CapabilityInitDef{
+	// Build the runtime-relevant subset exactly as the host render-prep bake seam does
+	// (buildBakedMetadata → spec.BakedLabelSet.InitDef).
+	capDef := spec.CapabilityInitDef{
 		Entrypoint:         def.Entrypoint,
 		FallbackEntrypoint: def.FallbackEntrypoint,
 		ManagementTool:     def.ManagementTool,
@@ -43,14 +47,22 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 		t.Fatalf("marshal CapabilityInitDef: %v", err)
 	}
 
-	// Exercise the actual bake seam: writeJSONLabel must emit the label
-	// carrying exactly this JSON payload (podman's Containerfile parser
-	// consumes the shell-quoting, so the stored OCI label value is the raw JSON).
+	// Exercise the actual bake seam: deploykit WriteLabels must emit the
+	// ai.opencharly.init_def label carrying exactly this JSON payload (podman's
+	// Containerfile parser consumes the shell-quoting, so the stored OCI label
+	// value is the raw JSON).
+	bakedMeta := &spec.BakedLabelSet{
+		Version:      "2026.001.0000",
+		Box:          "round-trip",
+		Init:         "supervisord",
+		InitDef:      &capDef,
+		InitLabelKey: def.LabelKey,
+	}
 	var b strings.Builder
-	writeJSONLabel(&b, LabelInitDef, capDef)
+	deploykit.NewRenderGenerator().WriteLabels(&b, bakedMeta, "round-trip")
 	emitted := b.String()
-	if !strings.Contains(emitted, LabelInitDef) || !strings.Contains(emitted, string(payload)) {
-		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", LabelInitDef, payload, emitted)
+	if !strings.Contains(emitted, spec.LabelInitDef) || !strings.Contains(emitted, string(payload)) {
+		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", spec.LabelInitDef, payload, emitted)
 	}
 
 	// Parse path: ExtractMetadata reads the label value podman returns (raw JSON).
@@ -58,10 +70,10 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	defer func() { InspectLabels = orig }()
 	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
-			LabelVersion: "2026.001.0000",
-			LabelBox:     "round-trip",
-			LabelInit:    "supervisord",
-			LabelInitDef: string(payload),
+			spec.LabelVersion: "2026.001.0000",
+			spec.LabelBox:     "round-trip",
+			spec.LabelInit:    "supervisord",
+			spec.LabelInitDef: string(payload),
 		}, nil
 	}
 	meta, err := ExtractMetadata("podman", "round-trip")

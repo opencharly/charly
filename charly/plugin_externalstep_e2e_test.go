@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -56,11 +59,11 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("provider %T does not carry a step contract", unit.Providers[0])
 	}
 	sc, ok := carrier.declaredStepContract()
-	if !ok || sc.Scope != ScopeUser || sc.Venue != VenueHostNative || sc.Gate != GateNone {
+	if !ok || sc.Scope != spec.ScopeUser || sc.Venue != spec.VenueHostNative || sc.Gate != spec.GateNone {
 		t.Fatalf("declared contract = %+v ok=%v, want {ScopeUser, VenueHostNative, GateNone}", sc, ok)
 	}
 	// F-STEP-EMIT: the plugin DECLARES it produces a build-context fragment (Emits=true), so the
-	// pod-overlay OCITarget open external-step arm bakes it (proven below).
+	// pod-overlay deploykit.OCITarget open external-step arm bakes it (proven below).
 	if !sc.Emits {
 		t.Fatalf("declared contract Emits = false, want true (F-STEP-EMIT build leg)")
 	}
@@ -72,32 +75,31 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// class:step grpcProvider declaring a StepContract lowers to an externalStep carrying the
 	// DECLARED contract + the opaque payload (NOT an OpStep / ExternalPluginStep). Using the
 	// compiled step (not a hand-built one) proves the FULL authoring → compile → wire path.
-	op := &Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
-	routed := compileActOp(op, &Candy{Name: "plugin-example-stepkind"}, &ResolvedBox{Tags: []string{"fedora"}})
-	step, ok := routed.(*externalStep)
+	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
+	routed := compileActOp(op, &Candy{Name: "plugin-example-stepkind"}, &buildkit.ResolvedBox{Tags: []string{"fedora"}})
+	step, ok := routed.(*deploykit.ExternalStep)
 	if !ok {
 		t.Fatalf("compileActOp routed a class:step plugin to %T, want *externalStep", routed)
 	}
-	if step.Word != "examplestepkind" || step.ScopeV != ScopeUser || step.VenueV != VenueHostNative || step.GateV != GateNone {
+	if step.Word != "examplestepkind" || step.ScopeV != spec.ScopeUser || step.VenueV != spec.VenueHostNative || step.GateV != spec.GateNone {
 		t.Fatalf("externalStep contract = {%q, %v, %v, %v}, want {examplestepkind, ScopeUser, VenueHostNative, GateNone}", step.Word, step.ScopeV, step.VenueV, step.GateV)
 	}
 
-	// F-STEP-EMIT BUILD leg: the pod-overlay OCITarget open external-step arm resolves the
-	// class:step provider by the trimmed word, sees Emits=true, Invokes its OpEmit over the wire,
-	// and splices the returned Containerfile fragment — baking the persistent build marker with
-	// the opaque payload's value (proving the Payload round-trips through OpEmit too, and that a
-	// step kind with an EmitOCI fragment can be EXTERNALIZED — the one addition C1 needs).
-	tgt := &OCITarget{Box: &ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}}
-	if err := tgt.emitStep(step, &InstallPlan{Box: "check-stepkind"}); err != nil {
-		t.Fatalf("OCITarget.emitStep(external:examplestepkind): %v", err)
+	// F-STEP-EMIT BUILD leg: ociEmitStep's open external-step arm resolves the class:step provider
+	// by the trimmed word, sees Emits=true, Invokes its OpEmit over the wire, and splices the
+	// returned Containerfile fragment — baking the persistent build marker with the opaque
+	// payload's value (proving the Payload round-trips through OpEmit too, and that a step kind
+	// with an EmitOCI fragment can be EXTERNALIZED — the one addition C1 needs).
+	frag, err := ociEmitStep(step, &deploykit.InstallPlan{Box: "check-stepkind"}, []string{"fedora"}, buildEngineContext{Box: &buildkit.ResolvedBox{Name: "check-stepkind", Tags: []string{"fedora"}}})
+	if err != nil {
+		t.Fatalf("ociEmitStep(external:examplestepkind): %v", err)
 	}
-	frag := tgt.String()
 	if !strings.Contains(frag, "/etc/examplestepkind-build-baked") || !strings.Contains(frag, "EXTERNAL-STEPKIND-E2E") {
 		t.Fatalf("baked fragment = %q, want a RUN baking /etc/examplestepkind-build-baked with the payload marker EXTERNAL-STEPKIND-E2E", frag)
 	}
 
 	// Project it to the OPAQUE view (Kind "external:<word>" + Payload).
-	view := stepToView(step)
+	view := deploykit.StepToView(step)
 	if view.Kind != "external:examplestepkind" {
 		t.Fatalf("view.Kind = %q, want external:examplestepkind", view.Kind)
 	}
@@ -110,7 +112,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 
 	// Walk it via the host's RunHostStep OPEN DEFAULT ARM (stepFromView rebuilds the externalStep
 	// from the carried contract + Payload; executeExternalStep dispatches OpExecute to the plugin).
-	srv := &executorReverseServer{exec: ShellExecutor{}}
+	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
 	reply, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {
 		t.Fatalf("RunHostStep: %v", err)

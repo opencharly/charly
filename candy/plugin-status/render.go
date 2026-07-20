@@ -13,9 +13,10 @@ import (
 )
 
 // render.go — moved VERBATIM from charly/status_render.go (P14a chunk 2b), minus
-// formatTunnelSummary, which STAYED host (charly/status_collector.go) — it is a COLLECTION
-// helper (DeploymentStatus.Tunnel is already a plain string by the time it reaches this file).
-// Every cell helper here reads only spec.DeploymentStatus / spec.PortMapping / spec.ToolStatus
+// formatTunnelSummary — a COLLECTION helper (DeploymentStatus.Tunnel is already a plain string by
+// the time it reaches this file) that now lives in candy/plugin-substrate's status_flat.go (K6,
+// the former charly/status_collector.go). Every cell helper here reads only
+// spec.DeploymentStatus / spec.PortMapping / spec.ToolStatus
 // fields — no core type crosses the boundary.
 
 // RenderTable writes the multi-row aligned table.

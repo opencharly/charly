@@ -1,6 +1,10 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // gpu_allocate.go — the core-side GPU-resource PREREQ + host-probe helpers that
 // survive the P10 VM-CLI move. The create-time auto-allocation pipeline
@@ -21,7 +25,7 @@ import "os"
 // unsatisfiable GPU resource; false when the bed needs no GPU resource (or every
 // required vendor is present, or the resource vocabulary is unreadable — never
 // skip on a detection gap, only on a definite absence).
-func bedGPUPrereqMissing(node BundleNode) (token, vendor string, missing bool) {
+func bedGPUPrereqMissing(node spec.BundleNode) (token, vendor string, missing bool) {
 	resources := gatherResources()
 	if len(resources) == 0 {
 		return "", "", false
@@ -58,7 +62,7 @@ func gpuPrereqMissing(tokens []string, resources map[string]*ResolvedResource, d
 // requiredGPUResource scans a claimant's requires_exclusive tokens for the
 // first that maps to a `resource:` carrying a gpu selector. Returns the token,
 // the selector, and ok=false when the claimant needs no GPU resource.
-func requiredGPUResource(cnode *BundleNode, resources map[string]*ResolvedResource) (string, *ResolvedGpuSelector, bool) {
+func requiredGPUResource(cnode *spec.BundleNode, resources map[string]*ResolvedResource) (string, *ResolvedGpuSelector, bool) {
 	if cnode == nil {
 		return "", nil, false
 	}

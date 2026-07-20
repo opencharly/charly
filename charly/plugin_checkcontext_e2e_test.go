@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestKitVerbOutOfProcess_HTTPDoEndToEnd proves the FULL F2 CheckContextService reverse
@@ -69,7 +72,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatch := func(op *Op) pluginCheckResult {
+	dispatch := func(op *spec.Op) pluginCheckResult {
 		t.Helper()
 		params, mErr := marshalJSON(op)
 		if mErr != nil {
@@ -77,7 +80,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		}
 		out, iErr := gp.InvokeWithExecutor(ctx,
 			&Operation{Reserved: "http", Op: OpRun, Params: params, Env: envJSON},
-			ShellExecutor{}, buildEngineContext{}, false, cc)
+			kit.ShellExecutor{}, buildEngineContext{}, false, cc)
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)
 		}
@@ -89,7 +92,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	}
 
 	// Success: status 200 + body contains "ready" → pass, end-to-end over the reverse channel.
-	pass := dispatch(&Op{Plugin: "http", PluginInput: map[string]any{
+	pass := dispatch(&spec.Op{Plugin: "http", PluginInput: map[string]any{
 		"http": srv.URL, "status": 200, "body": []any{map[string]any{"contains": "ready"}},
 	}})
 	if pass.Status != "pass" {
@@ -97,7 +100,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	}
 
 	// Negative: status 500 expected vs 200 actual → fail (the verdict also crosses the channel).
-	fail := dispatch(&Op{Plugin: "http", PluginInput: map[string]any{"http": srv.URL, "status": 500}})
+	fail := dispatch(&spec.Op{Plugin: "http", PluginInput: map[string]any{"http": srv.URL, "status": 500}})
 	if fail.Status != "fail" {
 		t.Fatalf("status mismatch over reverse channel: status=%q, want fail", fail.Status)
 	}

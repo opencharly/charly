@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>
@@ -67,7 +69,7 @@ func (c *deployFromBoxCmd) Run() error {
 	// Pod path. Reuse the project-free runConfig core via ExplicitRef: it reads
 	// the image's labels, builds the QuadletConfig, writes + enables the
 	// quadlet, and daemon-reloads — all with no charly.yml.
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}

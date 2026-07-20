@@ -4,19 +4,21 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
 // decodeCandyKindFirst decodes a kind-first candy BODY through the same CUE entity
 // decoder the loader uses (handles PackageItem string-coercion + shorthand).
-func decodeCandyKindFirst(t *testing.T, body string) CandyYAML {
+func decodeCandyKindFirst(t *testing.T, body string) spec.CandyYAML {
 	t.Helper()
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
 		t.Fatalf("parsing kind-first candy: %v", err)
 	}
-	var c CandyYAML
-	if err := decodeEntityViaCUE(&doc, reflect.TypeOf(CandyYAML{}), &c, "kind-first"); err != nil {
+	var c spec.CandyYAML
+	if err := decodeEntityViaCUE(&doc, reflect.TypeOf(spec.CandyYAML{}), &c, "kind-first"); err != nil {
 		t.Fatalf("CUE-decoding kind-first candy: %v", err)
 	}
 	return c

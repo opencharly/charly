@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/opencharly/sdk"
@@ -58,6 +60,10 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchInspect(hc, args)
 	case "list":
 		return dispatchList(hc, args)
+	case "labels":
+		return dispatchLabels(args)
+	case "merge":
+		return dispatchMerge(hc, args)
 	default:
 		return fmt.Errorf("box: unknown command word %q", word)
 	}
@@ -138,7 +144,7 @@ type pkgGrammar struct {
 }
 
 // dispatchPkg reaches the hidden core `__box-pkg` reentry over HostBuild("cli"): the localpkg build
-// engine (buildLocalPkgOnHost) needs the host build context the plugin cannot compute pre-K1. The
+// engine (deploykit.BuildLocalPkgOnHost, W3) still needs core's builder-image resolve closures pre-K1. The
 // subprocess inherits charly's stdio (it prints the built file paths + status) and exits 0/1.
 func dispatchPkg(hc *hostClient, args []string) error {
 	var g pkgGrammar
@@ -155,6 +161,83 @@ func dispatchPkg(hc *hostClient, args []string) error {
 		return fmt.Errorf("box pkg failed (exit %d)", r.ExitCode)
 	}
 	return nil
+}
+
+// --- box labels ---
+
+// labelsGrammar is the `charly box labels <image> [--format] [--all]` CLI surface.
+type labelsGrammar struct {
+	Image  string `arg:"" help:"Image reference (full ref or short name resolved against local container storage; never reads charly.yml)"`
+	Format string `name:"format" help:"Print only this label's raw value — a full key, or the ai.opencharly.<key> shorthand (e.g. 'init'); exits non-zero when the label is absent"`
+	All    bool   `name:"all" help:"Print every label, not just the ai.opencharly.* contract"`
+}
+
+// dispatchLabels prints a built image's OCI labels straight from local container storage — pure
+// container-storage probes (kit.ResolveRuntime/ResolveLocalImageRef/InspectImageLabels), zero
+// loader coupling, zero host reentry (K3 reentry-class dissolution — this word no longer needs
+// hc at all, matching the `new` group's zero-reentry pattern).
+func dispatchLabels(args []string) error {
+	var g labelsGrammar
+	if done, err := parseLeaf("labels", &g, args); err != nil || done {
+		return err
+	}
+	rt, err := kit.ResolveRuntime()
+	if err != nil {
+		return err
+	}
+	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, g.Image)
+	if err != nil {
+		return err
+	}
+	labels, err := kit.InspectImageLabels(rt.RunEngine, imageRef)
+	if err != nil {
+		if !kit.LocalImageExists(rt.RunEngine, imageRef) {
+			return fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
+		}
+		return err
+	}
+	if g.Format != "" {
+		key := canonicalLabelKey(g.Format)
+		v, ok := labels[key]
+		if !ok {
+			return fmt.Errorf("label %q not present on %s — an empty or missing capability label is a failure (CLAUDE.md R8)", key, imageRef)
+		}
+		fmt.Println(v)
+		return nil
+	}
+	keys := sortedLabelKeys(labels, g.All)
+	if len(keys) == 0 {
+		return fmt.Errorf("no %s labels on %s — not an opencharly image (use --all for every label)", "ai.opencharly.*", imageRef)
+	}
+	for _, k := range keys {
+		fmt.Printf("%s=%s\n", k, labels[k])
+	}
+	return nil
+}
+
+// canonicalLabelKey expands the ai.opencharly.<key> shorthand: a bare token without dots refers
+// to the capability-contract namespace. Moved from charly/box_labels_cmd.go (K3 reentry-class
+// dissolution).
+func canonicalLabelKey(k string) string {
+	if strings.Contains(k, ".") {
+		return k
+	}
+	return "ai.opencharly." + k
+}
+
+// sortedLabelKeys returns the label keys to print, sorted; without --all only the
+// ai.opencharly.* contract participates. Moved from charly/box_labels_cmd.go (K3 reentry-class
+// dissolution).
+func sortedLabelKeys(labels map[string]string, all bool) []string {
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		if !all && !strings.HasPrefix(k, "ai.opencharly.") {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // --- box new (candy/project/box) ---

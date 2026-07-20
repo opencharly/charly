@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedUnixGroupVerb_DispatchesViaKit proves the MULTI-ROLE `unix_group` verb —
@@ -23,7 +25,7 @@ func TestRelocatedUnixGroupVerb_DispatchesViaKit(t *testing.T) {
 	}
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "getent group", stdout: "root:x:0:\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
-		&Op{PluginInput: map[string]any{"unix_group": "root", "gid": 0}})
+		&spec.Op{PluginInput: map[string]any{"unix_group": "root", "gid": 0}})
 	if res.Status != TestPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
@@ -34,7 +36,7 @@ func TestRelocatedUnixGroupVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("unix_group provider does not implement ProvisionActor (multi-role adapter missing): %T", prov)
 	}
 	script, ok := pa.RenderProvisionScript(
-		&Op{PluginInput: map[string]any{"unix_group": "svc", "gid": 1500}}, nil)
+		&spec.Op{PluginInput: map[string]any{"unix_group": "svc", "gid": 1500}}, nil)
 	if !ok || !strings.Contains(script, "groupadd") || !strings.Contains(script, "svc") {
 		t.Fatalf("act: want a groupadd script, got ok=%v %q", ok, script)
 	}

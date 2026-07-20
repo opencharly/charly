@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -15,7 +18,7 @@ import (
 // NOT a bed.
 func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"sample-pod-bed":   {Target: "pod", Image: "sample-image", Disposable: new(true)},
 			"sample-vm-bed":    {Target: "vm", From: "sample-vm", Disposable: new(true)},
 			"sample-local-bed": {Target: "local", From: "sample-local", Disposable: new(true)},
@@ -34,7 +37,7 @@ func TestCheckBeds_DerivesFromDisposableBundles(t *testing.T) {
 // TestValidateCheckBeds_TargetEnum asserts an unsupported target is rejected.
 func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 	uf := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-weird": {Target: "k8s", Disposable: new(true)},
 		},
 	}
@@ -48,7 +51,7 @@ func TestValidateCheckBeds_TargetEnum(t *testing.T) {
 // entity is undefined is rejected, and that a defined entity passes.
 func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	missing := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -57,7 +60,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 	}
 	ok := &UnifiedFile{
 		VM: rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
 	}
@@ -70,7 +73,7 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 // local: template is undefined is rejected, and that a defined one passes.
 func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	missing := &UnifiedFile{
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
@@ -79,7 +82,7 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 	}
 	ok := &UnifiedFile{
 		Local: rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
-		Bundle: map[string]BundleNode{
+		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},
 	}
@@ -119,7 +122,7 @@ ollama:
 
 	// A bed whose key differs from its image and whose port remaps off the
 	// image default — exactly the check-cachyos-ollama-pod shape.
-	bed := BundleNode{
+	bed := spec.BundleNode{
 		Target:     "pod",
 		Image:      "ollama",
 		Port:       []string{"45434:11434"},
@@ -128,7 +131,7 @@ ollama:
 	}
 	persistBedDeployOverrides("check-cachyos-ollama-pod", bed)
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		t.Fatalf("reload after seed: %v", err)
 	}
@@ -158,15 +161,15 @@ ollama:
 // only [name], so a nested selkies-kde pod was deployed but never evaluated.
 func TestBedCheckLiveRefs(t *testing.T) {
 	// Flat bed: just the substrate (identical to the prior behavior).
-	if got := bedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
+	if got := deploykit.BedCheckLiveRefs("check-pod", nil); len(got) != 1 || got[0] != "check-pod" {
 		t.Fatalf("flat bed: got %v, want [check-pod]", got)
 	}
 	// Nested bed: substrate first, then each child as a sorted dotted path.
-	nested := map[string]*BundleNode{
+	nested := map[string]*spec.BundleNode{
 		"selkies-kde": {Target: "pod"},
 		"cuda-pod":    {Target: "pod"},
 	}
-	got := bedCheckLiveRefs("check-cachyos-gpu-vm", nested)
+	got := deploykit.BedCheckLiveRefs("check-cachyos-gpu-vm", nested)
 	want := []string{
 		"check-cachyos-gpu-vm",
 		"check-cachyos-gpu-vm.cuda-pod", // sorted before selkies-kde
@@ -188,7 +191,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	// still does. This is the check-coverage gate for the e740430 defect: a hop
 	// for an android child wrongly resolved to a non-existent
 	// `charly-<parent>.device` container, failing every nested pod→android bed's R10.
-	androidNested := map[string]*BundleNode{
+	androidNested := map[string]*spec.BundleNode{
 		"web":    {Target: "pod"},
 		"device": {Target: "android"},
 	}
@@ -197,7 +200,7 @@ func TestBedCheckLiveRefs(t *testing.T) {
 	for _, c := range androidNested {
 		kit.StampDescent(c, deployTraitsFor)
 	}
-	gotA := bedCheckLiveRefs("check-android-emulator-pod", androidNested)
+	gotA := deploykit.BedCheckLiveRefs("check-android-emulator-pod", androidNested)
 	wantA := []string{
 		"check-android-emulator-pod",
 		"check-android-emulator-pod.web", // pod child kept; android "device" omitted

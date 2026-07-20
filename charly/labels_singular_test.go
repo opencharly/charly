@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExtractMetadata_SingularLabels proves the 2026-06 singular-label
@@ -47,28 +49,30 @@ func TestExtractMetadata_SingularLabels(t *testing.T) {
 // wire string. A regression to plural fails the suite — the contract guard.
 func TestLabelConstantsAreSingular(t *testing.T) {
 	pairs := []struct{ got, want string }{
-		{LabelPort, "ai.opencharly.port"},
-		{LabelVolume, "ai.opencharly.volume"},
-		{LabelAlias, "ai.opencharly.alias"},
-		{LabelHook, "ai.opencharly.hook"},
-		{LabelRoute, "ai.opencharly.route"},
-		{LabelSecret, "ai.opencharly.secret"},
-		{LabelService, "ai.opencharly.service"},
-		{LabelSkill, "ai.opencharly.skill"},
-		{LabelEnvCandy, "ai.opencharly.env_candy"},
-		{LabelPortProto, "ai.opencharly.port_proto"},
-		{LabelCandyVersion, "ai.opencharly.candy_version"},
-		{LabelPlatformFormat, "ai.opencharly.platform.format"},
-		{LabelBuilderUse, "ai.opencharly.builder.use"},
-		{LabelBuilderProvide, "ai.opencharly.builder.provide"},
-		{LabelEnvProvide, "ai.opencharly.env_provide"},
-		{LabelEnvRequire, "ai.opencharly.env_require"},
-		{LabelEnvAccept, "ai.opencharly.env_accept"},
-		{LabelSecretAccept, "ai.opencharly.secret_accept"},
-		{LabelSecretRequire, "ai.opencharly.secret_require"},
-		{LabelMCPProvide, "ai.opencharly.mcp_provide"},
-		{LabelMCPRequire, "ai.opencharly.mcp_require"},
-		{LabelMCPAccept, "ai.opencharly.mcp_accept"},
+		{spec.LabelPort, "ai.opencharly.port"},
+		{spec.LabelVolume, "ai.opencharly.volume"},
+		{spec.LabelAlias, "ai.opencharly.alias"},
+		{spec.LabelHook, "ai.opencharly.hook"},
+		{spec.LabelRoute, "ai.opencharly.route"},
+		{spec.LabelSecret, "ai.opencharly.secret"},
+		{spec.LabelService, "ai.opencharly.service"},
+		{spec.LabelSkill, "ai.opencharly.skill"},
+		{spec.LabelEnvCandy, "ai.opencharly.env_candy"},
+		{spec.LabelPortProto, "ai.opencharly.port_proto"},
+		{spec.LabelCandyVersion, "ai.opencharly.candy_version"},
+		{spec.LabelPlatformFormat, "ai.opencharly.platform.format"},
+		{spec.LabelBuilderUse, "ai.opencharly.builder.use"},
+		{spec.LabelBuilderProvide, "ai.opencharly.builder.provide"},
+		{spec.LabelEnvProvide, "ai.opencharly.env_provide"},
+		{spec.LabelEnvRequire, "ai.opencharly.env_require"},
+		{spec.LabelEnvAccept, "ai.opencharly.env_accept"},
+		{spec.LabelSecretAccept, "ai.opencharly.secret_accept"},
+		{spec.LabelSecretRequire, "ai.opencharly.secret_require"},
+		{spec.LabelMCPProvide, "ai.opencharly.mcp_provide"},
+		{spec.LabelAgentProvide, "ai.opencharly.agent_provide"},
+		{spec.LabelTerminalProfiles, "ai.opencharly.terminal_profiles"},
+		{spec.LabelMCPRequire, "ai.opencharly.mcp_require"},
+		{spec.LabelMCPAccept, "ai.opencharly.mcp_accept"},
 	}
 	for _, p := range pairs {
 		if p.got != p.want {

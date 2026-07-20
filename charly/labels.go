@@ -2,102 +2,25 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
-	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// ErrImageNotLocal is returned when ExtractMetadata is called on an image
+// ErrImageNotLocal (P12a: promoted to sdk/kit/local_image.go, referenced here as
+// kit.ErrImageNotLocal) is returned when ExtractMetadata is called on an image
 // that is not present in the engine's local storage. Deploy-mode commands
 // unwrap this sentinel at the error boundary to render a recommendation
 // pointing users to `charly box pull`.
-var ErrImageNotLocal = errors.New("image not found in local storage")
 
-// OCI label key constants (all namespaced under ai.opencharly.)
-const (
-	LabelVersion  = "ai.opencharly.version"
-	LabelBox      = "ai.opencharly.box"
-	LabelRegistry = "ai.opencharly.registry"
-	LabelBootc    = "ai.opencharly.bootc"
-	LabelUID      = "ai.opencharly.uid"
-	LabelGID      = "ai.opencharly.gid"
-	LabelUser     = "ai.opencharly.user"
-	LabelHome     = "ai.opencharly.home"
-	LabelPort     = "ai.opencharly.port"
-	LabelVolume   = "ai.opencharly.volume"
-	LabelAlias    = "ai.opencharly.alias"
-	LabelSecurity = "ai.opencharly.security"
-	LabelNetwork  = "ai.opencharly.network"
-	// Schema v4: LabelTunnel / LabelDNS / LabelAcmeEmail / LabelEngine
-	// removed — these are deployment choices with no image-declaration
-	// meaning. Deploy-time values flow through BundleNode →
-	// BoxMetadata, not through OCI labels.
-	LabelEnv  = "ai.opencharly.env"
-	LabelHook = "ai.opencharly.hook"
-	// LabelVm + LabelLibvirt: removed in the VM hard-cutover. VM specs
-	// now live in vm.yml as `kind: vm` entities; no longer embedded
-	// in container image OCI labels.
-	LabelRoute = "ai.opencharly.route"
-	LabelInit  = "ai.opencharly.init"
-	// LabelInitDef — the build-resolved init definition (the runtime-relevant
-	// subset of the embedded init: vocabulary entry: container entrypoint,
-	// fallback entrypoint, and the in-container service-management surface).
-	// Baked at build time so deploy reads the init contract from the image
-	// itself instead of re-deriving it from a hardcoded registry. Makes the
-	// init system TRUE single-source — including init systems declared ONLY
-	// in the embedded init: vocabulary, which now reach runtime via this label.
-	LabelInitDef        = "ai.opencharly.init_def"
-	LabelEnvCandy       = "ai.opencharly.env_candy"
-	LabelPathAppend     = "ai.opencharly.path_append"
-	LabelPortProto      = "ai.opencharly.port_proto"
-	LabelPortRelay      = "ai.opencharly.port_relay"
-	LabelSkill          = "ai.opencharly.skill"
-	LabelStatus         = "ai.opencharly.status"
-	LabelInfo           = "ai.opencharly.info"
-	LabelCandyVersion   = "ai.opencharly.candy_version"
-	LabelSecret         = "ai.opencharly.secret"
-	LabelPlatformDistro = "ai.opencharly.platform.distro"
-	LabelPlatformFormat = "ai.opencharly.platform.format"
-	LabelBuilderUse     = "ai.opencharly.builder.use"
-	LabelBuilderProvide = "ai.opencharly.builder.provide"
-	LabelDataEntries    = "ai.opencharly.data"
-	LabelDataBox        = "ai.opencharly.data_box"
-	LabelEnvProvide     = "ai.opencharly.env_provide"
-	LabelEnvRequire     = "ai.opencharly.env_require"
-	LabelEnvAccept      = "ai.opencharly.env_accept"
-	LabelSecretAccept   = "ai.opencharly.secret_accept"  // credential-store-backed env vars this image can optionally use
-	LabelSecretRequire  = "ai.opencharly.secret_require" // credential-store-backed env vars this image must have
-	LabelMCPProvide     = "ai.opencharly.mcp_provide"
-	LabelMCPRequire     = "ai.opencharly.mcp_require"
-	LabelMCPAccept      = "ai.opencharly.mcp_accept"
-	// LabelDescription — three-section plan-shaped self-description for
-	// every `kind:` entity the image rolled up. Each section carries one
-	// LabeledDescription per contributing entity (candy/box/deploy).
-	// Authored inline in YAML under `description:` on each kind; collected
-	// via CollectDescriptions following the same base-chain walk as
-	// CollectHooks. Subject to a 256 KiB soft cap with narrative truncation.
-	LabelDescription = "ai.opencharly.description"
-	// LabelService — structured JSON array of CapabilityService (full
-	// per-entry spec, not just names). Source-less deploy (`charly bundle from-box`)
-	// reads this to reconstruct every service's config without the repo.
-	LabelService = "ai.opencharly.service"
-	// LabelShell — three-section JSON shell-init manifest.
-	// Each section (candy/box/deploy) carries an ordered list of
-	// ShellEntry contributions (origin = candy name / "box" / "deploy",
-	// id, generic body, per-shell ByShell map). Source of truth for
-	// `charly box inspect`, `charly bundle from-box`, and the charly.yml
-	// `shell:` overlay merge — same shape as LabelDescription.
-	LabelShell = "ai.opencharly.shell"
-	// LabelCheckLevel — the per-box acceptance-depth rung (none|build|noagent|
-	// agent) authored as BoxConfig.CheckLevel. `charly check run <bed>` reads it
-	// from the built image to gate how deep the bed's acceptance runs. See
-	// check_level.go for the ladder.
-	LabelCheckLevel = "ai.opencharly.check_level"
-)
+// OCI label key constants (all namespaced under ai.opencharly.) live in sdk/spec
+// (label_consts.go — the build↔deploy wire contract: the deploykit WriteLabels EMITTER
+// + the ExtractMetadata deploy READER share one copy). Every charly/ reader below
+// references spec.LabelX directly (K3 ZERO-ALIASES dissolution — an alias is always
+// residue regardless of what it aliases).
 
 // BoxMetadata + the OCI-label sub-shapes are CUE-sourced in spec (boxmetadata.cue, P2B, #60)
 // and aliased IN-PLACE here (spec is the allowed import; these are NOT collected into an
@@ -116,44 +39,26 @@ type (
 )
 
 // InspectLabels reads OCI labels from a local image via engine inspect.
-// Package-level var for testability.
-var InspectLabels = defaultInspectLabels
-
-func defaultInspectLabels(engine, imageRef string) (map[string]string, error) {
-	binary := EngineBinary(engine)
-	cmd := exec.Command(binary, "inspect", "--format", "{{json .Config.Labels}}", imageRef)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("inspecting %s: %w", imageRef, err)
-	}
-
-	trimmed := strings.TrimSpace(string(output))
-	if trimmed == "null" || trimmed == "" {
-		return nil, nil
-	}
-
-	var labels map[string]string
-	if err := json.Unmarshal([]byte(trimmed), &labels); err != nil {
-		return nil, fmt.Errorf("parsing labels from %s: %w", imageRef, err)
-	}
-	return labels, nil
-}
+// Package-level var for testability. The impl (kit.InspectImageLabels) is a pure
+// container-storage probe promoted to sdk/kit (K3 reentry-class dissolution) — candy/plugin-box's
+// `labels` command calls it directly too, so this is the single shared implementation, not a dup.
+var InspectLabels = kit.InspectImageLabels
 
 // ExtractMetadata reads OCI labels from a local image and returns parsed BoxMetadata.
 // Returns nil if the image has no ai.opencharly labels.
-// Returns ErrImageNotLocal wrapped with the image ref if the image is not in local storage.
+// Returns kit.ErrImageNotLocal wrapped with the image ref if the image is not in local storage.
 //
 //nolint:gocyclo // uniform extraction of ~40 OCI labels (exists→unmarshal→store); flat form is the clearest representation
 func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	labels, err := InspectLabels(engine, imageRef)
 	if err != nil {
-		if !LocalImageExists(engine, imageRef) {
-			return nil, fmt.Errorf("%w: %s", ErrImageNotLocal, imageRef)
+		if !kit.LocalImageExists(engine, imageRef) {
+			return nil, fmt.Errorf("%w: %s", kit.ErrImageNotLocal, imageRef)
 		}
 		return nil, err
 	}
 
-	version := labels[LabelVersion]
+	version := labels[spec.LabelVersion]
 	if version == "" {
 		// Empty ai.opencharly.version => not an opencharly image (a plain
 		// registry base). This is the charly-vs-non-charly boundary, NOT a
@@ -166,52 +71,52 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	// they are deployment choices and flow onto BoxMetadata via
 	// MergeDeployOntoMetadata (charly.yml → metadata).
 	meta := &BoxMetadata{
-		Box:      labels[LabelBox],
+		Box:      labels[spec.LabelBox],
 		Version:  version,
-		Registry: labels[LabelRegistry],
-		User:     labels[LabelUser],
-		Home:     labels[LabelHome],
-		Network:  labels[LabelNetwork],
+		Registry: labels[spec.LabelRegistry],
+		User:     labels[spec.LabelUser],
+		Home:     labels[spec.LabelHome],
+		Network:  labels[spec.LabelNetwork],
 	}
 
 	// Bootc
-	if labels[LabelBootc] == "true" {
+	if labels[spec.LabelBootc] == "true" {
 		meta.Bootc = true
 	}
 
 	// UID
-	if v := labels[LabelUID]; v != "" {
+	if v := labels[spec.LabelUID]; v != "" {
 		uid, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("parsing %s=%q: %w", LabelUID, v, err)
+			return nil, fmt.Errorf("parsing %s=%q: %w", spec.LabelUID, v, err)
 		}
 		meta.UID = uid
 	}
 
 	// GID
-	if v := labels[LabelGID]; v != "" {
+	if v := labels[spec.LabelGID]; v != "" {
 		gid, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("parsing %s=%q: %w", LabelGID, v, err)
+			return nil, fmt.Errorf("parsing %s=%q: %w", spec.LabelGID, v, err)
 		}
 		meta.GID = gid
 	}
 
 	// Ports
-	if v := labels[LabelPort]; v != "" {
+	if v := labels[spec.LabelPort]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Port); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPort, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPort, err)
 		}
 	}
 
 	// Volumes
-	if v := labels[LabelVolume]; v != "" {
+	if v := labels[spec.LabelVolume]; v != "" {
 		var labelVols []LabelVolumeEntry
 		if err := json.Unmarshal([]byte(v), &labelVols); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelVolume, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelVolume, err)
 		}
 		for _, lv := range labelVols {
-			meta.Volume = append(meta.Volume, VolumeMount{
+			meta.Volume = append(meta.Volume, deploykit.VolumeMount{
 				VolumeName:    "charly-" + meta.Box + "-" + lv.Name,
 				ContainerPath: lv.Path,
 			})
@@ -219,23 +124,23 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	}
 
 	// Aliases
-	if v := labels[LabelAlias]; v != "" {
+	if v := labels[spec.LabelAlias]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Alias); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelAlias, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelAlias, err)
 		}
 	}
 
 	// Security
-	if v := labels[LabelSecurity]; v != "" {
+	if v := labels[spec.LabelSecurity]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Security); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelSecurity, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelSecurity, err)
 		}
 	}
 
 	// Tunnel config is a deploy-time concern — read from charly.yml only.
 	// Label is no longer written or read.
 
-	// Env — the label is baked as a JSON OBJECT (writeLabels bakes the image's
+	// Env — the label is baked as a JSON OBJECT (deploykit WriteLabels bakes the image's
 	// spec.Box.Env map). meta.Env is the []string KEY=VALUE form every deploy
 	// consumer expects (ResolveEnvVars, the start/shell deployEnv), so decode the
 	// object into a map and convert via envMapToPairs — the exact inverse of the
@@ -243,19 +148,19 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	// object straight into []string was the writer/reader mismatch that failed
 	// every image with a box-level env: map (check-box "cannot unmarshal object
 	// into []string").
-	if v := labels[LabelEnv]; v != "" {
+	if v := labels[spec.LabelEnv]; v != "" {
 		var envMap map[string]string
 		if err := json.Unmarshal([]byte(v), &envMap); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelEnv, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelEnv, err)
 		}
-		meta.Env = envMapToPairs(envMap)
+		meta.Env = kit.EnvMapToPairs(envMap)
 	}
 
 	// Hooks
-	if v := labels[LabelHook]; v != "" {
+	if v := labels[spec.LabelHook]; v != "" {
 		var hooks HooksConfig
 		if err := json.Unmarshal([]byte(v), &hooks); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelHook, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelHook, err)
 		}
 		meta.Hook = &hooks
 	}
@@ -265,22 +170,22 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	// `kind: vm` entities.
 
 	// Routes
-	if v := labels[LabelRoute]; v != "" {
+	if v := labels[spec.LabelRoute]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Route); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelRoute, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelRoute, err)
 		}
 	}
 
 	// Init system
-	meta.Init = labels[LabelInit]
+	meta.Init = labels[spec.LabelInit]
 
 	// Init definition: build-resolved entrypoint + management surface. Deploy
 	// reads this label-first (resolveEntrypointFromMeta / resolveInitDefFromMeta);
 	// absent only on images built before the label existed.
-	if v := labels[LabelInitDef]; v != "" {
+	if v := labels[spec.LabelInitDef]; v != "" {
 		var idef CapabilityInitDef
 		if err := json.Unmarshal([]byte(v), &idef); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelInitDef, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelInitDef, err)
 		}
 		meta.InitDef = &idef
 	}
@@ -297,31 +202,31 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	}
 
 	// Services: full structured per-entry data (LabelService).
-	if v := labels[LabelService]; v != "" {
+	if v := labels[spec.LabelService]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Service); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelService, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelService, err)
 		}
 	}
 
 	// Candy env vars
-	if v := labels[LabelEnvCandy]; v != "" {
+	if v := labels[spec.LabelEnvCandy]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.EnvCandy); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelEnvCandy, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelEnvCandy, err)
 		}
 	}
 
 	// Path append
-	if v := labels[LabelPathAppend]; v != "" {
+	if v := labels[spec.LabelPathAppend]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.PathAppend); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPathAppend, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPathAppend, err)
 		}
 	}
 
 	// Port protocols
-	if v := labels[LabelPortProto]; v != "" {
+	if v := labels[spec.LabelPortProto]; v != "" {
 		var protos map[string]string
 		if err := json.Unmarshal([]byte(v), &protos); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPortProto, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPortProto, err)
 		}
 		// PortProto is now string-keyed (spec reshape, P2B) — the JSON label wire was always a
 		// string-keyed object, so this is a direct copy (the former map[int]string + Atoi is gone).
@@ -329,146 +234,156 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 	}
 
 	// Port relay
-	if v := labels[LabelPortRelay]; v != "" {
+	if v := labels[spec.LabelPortRelay]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.PortRelay); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPortRelay, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPortRelay, err)
 		}
 	}
 
 	// Skills
-	meta.Skill = labels[LabelSkill]
+	meta.Skill = labels[spec.LabelSkill]
 
 	// Status and info
-	meta.Status = labels[LabelStatus]
-	meta.Info = labels[LabelInfo]
+	meta.Status = labels[spec.LabelStatus]
+	meta.Info = labels[spec.LabelInfo]
 
 	// Acceptance-depth rung (check_level)
-	meta.CheckLevel = labels[LabelCheckLevel]
+	meta.CheckLevel = labels[spec.LabelCheckLevel]
 
 	// Candy versions
-	if v := labels[LabelCandyVersion]; v != "" {
+	if v := labels[spec.LabelCandyVersion]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.CandyVersion); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelCandyVersion, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelCandyVersion, err)
 		}
 	}
 
 	// Secrets
-	if v := labels[LabelSecret]; v != "" {
+	if v := labels[spec.LabelSecret]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Secret); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelSecret, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelSecret, err)
 		}
 	}
 
 	// Platform distro (distro identity tags; first match picks bootstrap/format templates)
-	if v := labels[LabelPlatformDistro]; v != "" {
+	if v := labels[spec.LabelPlatformDistro]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Distro); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPlatformDistro, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPlatformDistro, err)
 		}
 	}
 
 	// Platform formats (package formats installed in this image: pac, rpm, pixi, …)
-	if v := labels[LabelPlatformFormat]; v != "" {
+	if v := labels[spec.LabelPlatformFormat]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.BuildFormat); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelPlatformFormat, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelPlatformFormat, err)
 		}
 	}
 
 	// Builder uses (consumer-side routing: format → builder-image name)
-	if v := labels[LabelBuilderUse]; v != "" {
+	if v := labels[spec.LabelBuilderUse]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Builder); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelBuilderUse, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelBuilderUse, err)
 		}
 	}
 
 	// Builder provides (producer-side capability: formats this image can build for others)
-	if v := labels[LabelBuilderProvide]; v != "" {
+	if v := labels[spec.LabelBuilderProvide]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.Build); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelBuilderProvide, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelBuilderProvide, err)
 		}
 	}
 
 	// Data entries (staging paths for deploy-time provisioning)
-	if v := labels[LabelDataEntries]; v != "" {
+	if v := labels[spec.LabelDataEntries]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.DataEntries); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelDataEntries, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelDataEntries, err)
 		}
 	}
 
 	// Data image flag
-	if labels[LabelDataBox] == "true" {
+	if labels[spec.LabelDataBox] == "true" {
 		meta.DataImage = true
 	}
 
 	// Env provides (env vars for other containers, templates with {{.ContainerName}})
-	if v := labels[LabelEnvProvide]; v != "" {
+	if v := labels[spec.LabelEnvProvide]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.EnvProvide); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelEnvProvide, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelEnvProvide, err)
 		}
 	}
 
 	// Env requires (env vars this image must have)
-	if v := labels[LabelEnvRequire]; v != "" {
+	if v := labels[spec.LabelEnvRequire]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.EnvRequire); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelEnvRequire, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelEnvRequire, err)
 		}
 	}
 
 	// Env accepts (env vars this image can optionally use)
-	if v := labels[LabelEnvAccept]; v != "" {
+	if v := labels[spec.LabelEnvAccept]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.EnvAccept); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelEnvAccept, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelEnvAccept, err)
 		}
 	}
 
 	// Secret requires (credential-store-backed env vars this image must have)
-	if v := labels[LabelSecretRequire]; v != "" {
+	if v := labels[spec.LabelSecretRequire]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.SecretRequire); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelSecretRequire, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelSecretRequire, err)
 		}
 	}
 
 	// Secret accepts (credential-store-backed env vars this image can optionally use)
-	if v := labels[LabelSecretAccept]; v != "" {
+	if v := labels[spec.LabelSecretAccept]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.SecretAccept); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelSecretAccept, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelSecretAccept, err)
 		}
 	}
 
 	// MCP provides (MCP servers for other containers, templates with {{.ContainerName}})
-	if v := labels[LabelMCPProvide]; v != "" {
+	if v := labels[spec.LabelMCPProvide]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.MCPProvide); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelMCPProvide, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelMCPProvide, err)
+		}
+	}
+	if v := labels[spec.LabelAgentProvide]; v != "" {
+		if err := json.Unmarshal([]byte(v), &meta.AgentProvide); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelAgentProvide, err)
+		}
+	}
+	if v := labels[spec.LabelTerminalProfiles]; v != "" {
+		if err := json.Unmarshal([]byte(v), &meta.TerminalProfiles); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelTerminalProfiles, err)
 		}
 	}
 
 	// MCP requires (MCP servers this image must have)
-	if v := labels[LabelMCPRequire]; v != "" {
+	if v := labels[spec.LabelMCPRequire]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.MCPRequire); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelMCPRequire, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelMCPRequire, err)
 		}
 	}
 
 	// MCP accepts (MCP servers this image can optionally use)
-	if v := labels[LabelMCPAccept]; v != "" {
+	if v := labels[spec.LabelMCPAccept]; v != "" {
 		if err := json.Unmarshal([]byte(v), &meta.MCPAccept); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelMCPAccept, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelMCPAccept, err)
 		}
 	}
 
 	// Shell-init manifest (three-section, candy/box/deploy)
-	if v := labels[LabelShell]; v != "" {
+	if v := labels[spec.LabelShell]; v != "" {
 		var ss LabelShellSet
 		if err := json.Unmarshal([]byte(v), &ss); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelShell, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelShell, err)
 		}
 		meta.Shell = &ss
 	}
 
 	// Description (three-section plan-shaped self-description)
-	if v := labels[LabelDescription]; v != "" {
-		var ds LabelDescriptionSet
+	if v := labels[spec.LabelDescription]; v != "" {
+		var ds kit.LabelDescriptionSet
 		if err := json.Unmarshal([]byte(v), &ds); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", LabelDescription, err)
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelDescription, err)
 		}
 		meta.Description = &ds
 	}

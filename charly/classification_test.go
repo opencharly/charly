@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // Note: VmSpec carries no Disposable / Lifecycle fields and
@@ -17,7 +20,7 @@ func TestDeployBoxConfig_DisposableRoundTrip(t *testing.T) {
 disposable: true
 lifecycle: dev
 `
-	var c BundleNode
+	var c spec.BundleNode
 	if err := decodeViaCUEForTest(t, yamlStr, &c); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -33,7 +36,7 @@ lifecycle: dev
 // mirror of the critical anti-derivation test.
 func TestDeployBoxConfig_LifecycleAloneDoesNotAuthorize(t *testing.T) {
 	yamlStr := `lifecycle: dev`
-	var c BundleNode
+	var c spec.BundleNode
 	if err := decodeViaCUEForTest(t, yamlStr, &c); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -64,7 +67,7 @@ deploy:
   fedora-coder-scratch:
     disposable: true
 `
-	var cfg BundleConfig
+	var cfg deploykit.BundleConfig
 	if err := decodeViaCUEForTest(t, yamlStr, &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

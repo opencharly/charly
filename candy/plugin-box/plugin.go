@@ -4,13 +4,13 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves SIX command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/inspect/list` parse + dispatch here while the retained
-// core BoxCmd verbs — build/merge/labels/feature/the authoring verbs — stay in core):
+// It serves EIGHT command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/inspect/list/labels/merge` parse + dispatch here while
+// the retained core BoxCmd verbs — build/feature/reconcile/the authoring verbs — stay in core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
-//     Containerfile tree host-side over HostBuild("build-resolve", GenerateOnly). Zero core reentry.
+//     Containerfile tree host-side over HostBuild("build-prep", GenerateOnly). Zero core reentry.
 //   - command:new — `charly box new candy/project/box`: calls kit.ScaffoldCandy / kit.ScaffoldProject
 //     / kit.AddBox directly (the scaffold ENGINE already lives in sdk/kit). Zero core reentry.
 //   - command:validate — `charly box validate`: fetches the error-TOLERANT resolved-project envelope
@@ -26,6 +26,23 @@
 //     the hidden core `__box-inspect-overlay`. See inspect_list.go.
 //   - command:list — `charly box list <sub>`: boxes/candies/targets/services/routes/volumes/aliases
 //     from the same envelope; `list tags` reenters the hidden core `__box-list-tags` (podman store).
+//   - command:labels — `charly box labels <ref>`: resolves the local image + prints its OCI labels
+//     directly via sdk/kit (ResolveRuntime/ResolveLocalImageRef/InspectImageLabels) — pure
+//     container-storage probes with zero loader coupling, so this needs NO core reentry (K3
+//     reentry-class dissolution; the former `__box-labels` HostBuild("cli") hop is gone).
+//   - command:merge — `charly box merge`: reads Registry/Tag/Merge settings for one (or every
+//     merge.auto) box off the resolved-project envelope, then reaches verb:oci DIRECTLY via
+//     InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own post-build inline
+//     merge already uses) — zero core reentry (P14: relocated from charly/merge.go).
+//
+// NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
+// REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
+// process init, because the provider registry's uniqueness key is provKey(class, word) alone
+// (provider_registry.go) with NO CommandParent component, and candy/plugin-feature already owns
+// the TOP-LEVEL {command, feature} word (`charly feature list/pending/validate`). See
+// charly/check_feature_run.go for the retained in-core BoxFeatureCmd/BoxFeatureRunCmd and the
+// full finding (routed to P12b: either rename the nested word, breaking CLI parity, or make the
+// registry key CommandParent-aware, a cross-cutting core change).
 //
 // COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the handlers run in charly's OWN process
 // and inherit charly's real stdio natively. It imports ONLY the sdk module, never charly core.
@@ -46,7 +63,7 @@ import (
 const calver = "2026.194.0000"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge"}
 
 // NewProvider returns the box command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.

@@ -16,6 +16,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // ensureScoreImages collects every image identifier the iterate plan's
@@ -26,7 +28,7 @@ import (
 // image the AGENT builds during the run, so it is not preflighted here either.
 //
 // Failures abort the check BEFORE any step runs.
-func ensureScoreImages(ctx context.Context, plan []Step, uf *UnifiedFile, projectDir string) error {
+func ensureScoreImages(ctx context.Context, plan []spec.Step, uf *UnifiedFile, projectDir string) error {
 	if uf == nil {
 		return nil
 	}

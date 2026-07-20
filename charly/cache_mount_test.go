@@ -3,18 +3,20 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // TestSharedCacheMount_StableID locks in the format that makes BuildKit
 // caches survive layer-hash churn — the entire reason CacheMount exists.
 func TestSharedCacheMount_StableID(t *testing.T) {
-	got := SharedCacheMount("/var/cache/libdnf5", "").String()
+	got := buildkit.SharedCacheMount("/var/cache/libdnf5", "").String()
 	want := "--mount=type=cache,id=charly-var-cache-libdnf5,dst=/var/cache/libdnf5,sharing=locked"
 	if got != want {
 		t.Errorf("SharedCacheMount default sharing\n  got:  %s\n  want: %s", got, want)
 	}
 
-	got = SharedCacheMount("/var/cache/pacman/pkg", "shared").String()
+	got = buildkit.SharedCacheMount("/var/cache/pacman/pkg", "shared").String()
 	want = "--mount=type=cache,id=charly-var-cache-pacman-pkg,dst=/var/cache/pacman/pkg,sharing=shared"
 	if got != want {
 		t.Errorf("SharedCacheMount nested path\n  got:  %s\n  want: %s", got, want)
@@ -24,15 +26,15 @@ func TestSharedCacheMount_StableID(t *testing.T) {
 // TestOwnedCacheMount_UIDInID confirms uid is part of the id namespace so
 // different-uid builds don't collide on file ownership inside the cache volume.
 func TestOwnedCacheMount_UIDInID(t *testing.T) {
-	got := OwnedCacheMount("/tmp/pixi-cache", 1000, 1000).String()
+	got := buildkit.OwnedCacheMount("/tmp/pixi-cache", 1000, 1000).String()
 	want := "--mount=type=cache,id=charly-tmp-pixi-cache-uid1000,dst=/tmp/pixi-cache,uid=1000,gid=1000"
 	if got != want {
 		t.Errorf("OwnedCacheMount\n  got:  %s\n  want: %s", got, want)
 	}
 
 	// Same dst, different uid → different id (the whole point).
-	a := OwnedCacheMount("/tmp/npm-cache", 1000, 1000).String()
-	b := OwnedCacheMount("/tmp/npm-cache", 2000, 2000).String()
+	a := buildkit.OwnedCacheMount("/tmp/npm-cache", 1000, 1000).String()
+	b := buildkit.OwnedCacheMount("/tmp/npm-cache", 2000, 2000).String()
 	if a == b {
 		t.Errorf("uid must differentiate the cache id; both produced:\n  %s", a)
 	}
@@ -51,7 +53,7 @@ func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
 		{Dst: "/tmp/aur-srcdest", Owned: true},            // user build cache
 		{Dst: "/tmp/aur-xdg-cache", Owned: true},          // user build cache
 	}
-	out := RenderCacheMountsAuto(mounts, 1000, 1000, " ", false)
+	out := buildkit.RenderCacheMountsAuto(mounts, 1000, 1000, " ", false)
 	if !strings.Contains(out, "id=charly-var-cache-pacman-pkg,dst=/var/cache/pacman/pkg,sharing=locked") {
 		t.Errorf("pacman entry must stay shared/locked (no uid):\n%s", out)
 	}
@@ -69,7 +71,7 @@ func TestRenderCacheMountsAuto_Mixed(t *testing.T) {
 // TestRenderCacheMounts_Empty must NOT emit a trailing separator when the
 // slice is empty — otherwise generated Containerfiles get a stray `\` line.
 func TestRenderCacheMounts_Empty(t *testing.T) {
-	if got := RenderCacheMounts(nil, -1, 0, " \\\n    ", true); got != "" {
+	if got := buildkit.RenderCacheMounts(nil, -1, 0, " \\\n    ", true); got != "" {
 		t.Errorf("empty mounts must produce empty string, got: %q", got)
 	}
 }
@@ -78,7 +80,7 @@ func TestRenderCacheMounts_Empty(t *testing.T) {
 // where we need the separator after the last entry (template chains into RUN body).
 func TestRenderCacheMounts_TrailingSeparator(t *testing.T) {
 	mounts := []CacheMountDef{{Dst: "/tmp/pixi-cache"}}
-	got := RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
+	got := buildkit.RenderCacheMounts(mounts, 1000, 1000, " \\\n    ", true)
 	if !strings.HasSuffix(got, " \\\n    ") {
 		t.Errorf("trailing separator missing; got: %q", got)
 	}
@@ -92,8 +94,8 @@ func TestRenderCacheMounts_TrailingSeparator(t *testing.T) {
 // keyed by something volatile and breaks the entire purpose of the fix.
 func TestCacheMountID_StableAcrossInvocations(t *testing.T) {
 	for i := range 10 {
-		a := SharedCacheMount("/var/cache/libdnf5", "locked").String()
-		b := SharedCacheMount("/var/cache/libdnf5", "locked").String()
+		a := buildkit.SharedCacheMount("/var/cache/libdnf5", "locked").String()
+		b := buildkit.SharedCacheMount("/var/cache/libdnf5", "locked").String()
 		if a != b {
 			t.Fatalf("non-deterministic id at iteration %d:\n  a=%s\n  b=%s", i, a, b)
 		}

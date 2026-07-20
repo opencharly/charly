@@ -3,13 +3,13 @@ package main
 import (
 	"slices"
 
-	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // The ${NAME[:arg]} check-variable expansion grammar (ExpandTestVars / TestVarRefs /
 // IsRuntimeOnlyVar / ExpandOpVars / ExpandAnyVars / CollectAnyStrings / the runtime-var
 // prefixes) lives ONCE in sdk/kit (checkvars_expand.go) so a plugin candy that runs a plan
-// expands ${VAR}s identically. charly/kit_aliases.go carries the package-main bindings; the
+// expands ${VAR}s identically. package main references these directly as kit.X; the
 // check SEMANTICS that consult VerbCatalog (opEffectiveDo / opActsInBuildDeploy) stay below.
 
 // ---------------------------------------------------------------------------
@@ -17,21 +17,13 @@ import (
 // single source of truth for per-verb legality + lowering.
 // ---------------------------------------------------------------------------
 
-// ExecContext is where an op runs. An op's Context list (or its VerbCatalog
-// default) declares legality; the active engine supplies the running context
-// and skips ops whose context set does not include it (VenueSkip).
-
-// DoMode (the act/assert/instruct axis) lives in sdk/kit alongside the plan walk that
-// dispatches on it (kit/planrun.go); these are the package-main bindings. act = perform a
-// side-effect; assert = run the matchers (read-only); instruct = hand free-form text to the
-// agent grader.
-type DoMode = kit.DoMode
-
-const (
-	DoAct      = kit.DoAct
-	DoAssert   = kit.DoAssert
-	DoInstruct = kit.DoInstruct
-)
+// ExecContext (where an op runs) and DoMode (the act/assert/instruct axis) are
+// spec.ExecContext / spec.DoMode — shared vocabulary types every consumer that classifies
+// an Op/Step needs (the plan walk in sdk/kit, the deploy-plan compiler in sdk/deploykit,
+// this file's registry-coupled semantics, and candy/plugin-box's independent validate-engine
+// re-derivation), referenced directly here (K3, #39 — no local alias). An op's Context list
+// (or its VerbCatalog default) declares legality; the active engine supplies the running
+// context and skips ops whose context set does not include it (VenueSkip).
 
 // VerbSpec is the per-verb metadata in VerbCatalog. Contexts[0] is the
 // canonical default context. LowersTo names the InstallPlan step kind an
@@ -40,8 +32,8 @@ const (
 // act-mode op needs an explicit `uninstall:` or is reversed via plan
 // teardown (live verbs) — enforced in validation.
 type VerbSpec struct {
-	Contexts   []ExecContext
-	DefaultDo  DoMode
+	Contexts   []spec.ExecContext
+	DefaultDo  spec.DoMode
 	Reversible bool
 	// LowersTo is gone — the ONLY verbs that lowered into a typed install step
 	// (package → SystemPackagesStep, service → ServicePackagedStep) are now extracted
@@ -51,13 +43,13 @@ type VerbSpec struct {
 }
 
 // HasContext reports whether the verb is legal in ctx.
-func (s VerbSpec) HasContext(ctx ExecContext) bool {
+func (s VerbSpec) HasContext(ctx spec.ExecContext) bool {
 	return slices.Contains(s.Contexts, ctx)
 }
 
 var (
-	ctxBuildDeploy        = []ExecContext{CtxBuild, CtxDeploy}
-	ctxBuildDeployRuntime = []ExecContext{CtxBuild, CtxDeploy, CtxRuntime}
+	ctxBuildDeploy        = []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy}
+	ctxBuildDeployRuntime = []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy, spec.CtxRuntime}
 )
 
 // VerbCatalog is the single source of truth for every verb's legality, default
@@ -66,13 +58,13 @@ var (
 // registry bijection in registry.go).
 var VerbCatalog = map[string]VerbSpec{
 	// install/build — imperative; build+deploy only (no live-runtime form).
-	"mkdir":    {ctxBuildDeploy, DoAct, false},
-	"copy":     {ctxBuildDeploy, DoAct, true}, // build → COPY, deploy → PutFile (venue-lowered)
-	"write":    {ctxBuildDeploy, DoAct, true},
-	"link":     {ctxBuildDeploy, DoAct, true},
-	"download": {ctxBuildDeploy, DoAct, true},
-	"setcap":   {ctxBuildDeploy, DoAct, false},
-	"build":    {ctxBuildDeploy, DoAct, false},
+	"mkdir":    {ctxBuildDeploy, spec.DoAct, false},
+	"copy":     {ctxBuildDeploy, spec.DoAct, true}, // build → COPY, deploy → PutFile (venue-lowered)
+	"write":    {ctxBuildDeploy, spec.DoAct, true},
+	"link":     {ctxBuildDeploy, spec.DoAct, true},
+	"download": {ctxBuildDeploy, spec.DoAct, true},
+	"setcap":   {ctxBuildDeploy, spec.DoAct, false},
+	"build":    {ctxBuildDeploy, spec.DoAct, false},
 
 	// `command` is NOT here — it is an extracted plugin verb (plugin: command +
 	// #CommandInput). It left #OpVerb/spec.OpVerbs/VerbCatalog; the check dispatches via
@@ -132,7 +124,7 @@ var VerbCatalog = map[string]VerbSpec{
 	// handler is runOne's providerRegistry.ResolveVerb dispatch; context is
 	// permissive (a plugin verb may probe at build/deploy/runtime — the plugin's
 	// own check declares where it applies). DoAssert (a check), not reversible.
-	"plugin": {ctxBuildDeployRuntime, DoAssert, false},
+	"plugin": {ctxBuildDeployRuntime, spec.DoAssert, false},
 }
 
 // installVerbs are the verbs that render directly to a generic OpStep install
@@ -156,7 +148,7 @@ var installVerbs = map[string]bool{
 // is act-capable via the dedicated emitCmd install path (NOT a ProvisionActor); every other plugin verb
 // acts when its registered provider is a ProvisionActor / TypedStepProvider / BuildEmitter, or
 // (standalone, provider not connected) when the parse-time prescan saw a plugin candy declare it.
-func opActsInBuildDeploy(c *Op) bool {
+func opActsInBuildDeploy(c *spec.Op) bool {
 	if c.Plugin == "command" {
 		return true
 	}
@@ -206,20 +198,20 @@ func opActsInBuildDeploy(c *Op) bool {
 // EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
 // moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
 // logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
-func stampStepIntentDo(s *Step) {
+func stampStepIntentDo(s *spec.Step) {
 	if len(s.VerbsSet()) == 0 {
 		return
 	}
-	s.IntentDo = string(kit.StepDoMode(s))
+	s.IntentDo = string(spec.StepDoMode(s))
 }
 
 // EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
 // wins (set by the enclosing Step at run/collect time), else the verb's
 // VerbCatalog default, else DoAssert.
-func opEffectiveDo(c *Op) DoMode {
-	switch DoMode(c.IntentDo) {
-	case DoAct, DoAssert, DoInstruct:
-		return DoMode(c.IntentDo)
+func opEffectiveDo(c *spec.Op) spec.DoMode {
+	switch spec.DoMode(c.IntentDo) {
+	case spec.DoAct, spec.DoAssert, spec.DoInstruct:
+		return spec.DoMode(c.IntentDo)
 	}
 	verb, err := c.Kind()
 	if err == nil {
@@ -227,16 +219,16 @@ func opEffectiveDo(c *Op) DoMode {
 			return spec.DefaultDo
 		}
 	}
-	return DoAssert
+	return spec.DoAssert
 }
 
 // EffectiveContexts returns the op's resolved execution contexts: an explicit
 // Context wins, else the verb's VerbCatalog default, else nil.
-func opEffectiveContexts(c *Op) []ExecContext {
+func opEffectiveContexts(c *spec.Op) []spec.ExecContext {
 	if len(c.Context) > 0 {
-		out := make([]ExecContext, 0, len(c.Context))
+		out := make([]spec.ExecContext, 0, len(c.Context))
 		for _, s := range c.Context {
-			out = append(out, ExecContext(s))
+			out = append(out, spec.ExecContext(s))
 		}
 		return out
 	}
@@ -248,7 +240,9 @@ func opEffectiveContexts(c *Op) []ExecContext {
 	return nil
 }
 
-// InContext reports whether the op is legal in ctx per its effective contexts.
-func opInContext(c *Op, ctx ExecContext) bool {
+// InContext reports whether the op is legal in ctx per its effective contexts. Its
+// deploykit.OpInContext DI-hook registration lives in layers.go (which already imports
+// deploykit) so this file needs no kit/deploykit import at all (K3, #39).
+func opInContext(c *spec.Op, ctx spec.ExecContext) bool {
 	return slices.Contains(opEffectiveContexts(c), ctx)
 }

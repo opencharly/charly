@@ -23,6 +23,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // k3sServerURLRe matches an `https://<host>:<port>` server URL in a kubeconfig.
@@ -103,7 +108,7 @@ func deployVMForwards(entityRef, deployName string) ([]string, error) {
 	}
 	key := "vm:" + vmDomainIdentity(deployName)
 	var alloc map[string]int
-	if entry, ok := loadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
+	if entry, ok := deploykit.LoadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
 		alloc = entry.VmState.PortForwards
 	}
 	resolved, rerr := resolveDeployForwards(vm.Network.PortForwards, alloc)
@@ -143,7 +148,7 @@ func resolveDeployForwards(authored []string, alloc map[string]int) ([]string, e
 
 // findBundleNodeByName locates a deploy node by key across the tree (top-level +
 // nested children + peer members).
-func findBundleNodeByName(bundle map[string]BundleNode, name string) *BundleNode {
+func findBundleNodeByName(bundle map[string]spec.BundleNode, name string) *spec.BundleNode {
 	for k := range bundle {
 		n := bundle[k]
 		if k == name {
@@ -159,7 +164,7 @@ func findBundleNodeByName(bundle map[string]BundleNode, name string) *BundleNode
 	return nil
 }
 
-func findBundleNodePtrByName(m map[string]*BundleNode, name string) *BundleNode {
+func findBundleNodePtrByName(m map[string]*spec.BundleNode, name string) *spec.BundleNode {
 	for k, n := range m {
 		if k == name {
 			return n
@@ -174,15 +179,6 @@ func findBundleNodePtrByName(m map[string]*BundleNode, name string) *BundleNode 
 	return nil
 }
 
-// sanitizeDeployName turns a deploy name like "vm:arch" or "stack.web.db"
-// into a shell-safe, path-safe, kubeconfig-context-safe identifier.
-// Colons and dots are replaced with dashes; that keeps the semantics
-// identifiable ("vm:arch" → "vm-arch") without breaking file paths.
-func sanitizeDeployName(s string) string {
-	r := strings.NewReplacer(":", "-", ".", "-", "/", "-")
-	return r.Replace(s)
-}
-
 // K3sPostProvision runs the post-provision steps for a k3s-server deploy.
 // No-op when the retrieved kubeconfig path does not exist (e.g. because
 // the candy did not actually include k3s-server, or the artifact
@@ -195,7 +191,7 @@ func K3sPostProvision(artifactKey, deployName string) error {
 	if err != nil {
 		return fmt.Errorf("resolving home: %w", err)
 	}
-	safe := sanitizeDeployName(artifactKey)
+	safe := kit.SanitizeDeployName(artifactKey)
 	retrieved := filepath.Join(home, ".cache", "charly", "clusters", safe, "kubeconfig.yaml")
 	if _, err := os.Stat(retrieved); err != nil {
 		// Not a k3s-server deploy, or retricheck was skipped. Nothing to do.
@@ -229,7 +225,7 @@ func K3sPostProvision(artifactKey, deployName string) error {
 // deploy-add is the single source of truth for clusters it manages, so a rebuild
 // cleanly picks up a fresh admin cert without stale entries.
 func mergeKubeconfig(retrievedPath, contextName string) error {
-	op := &Op{Plugin: "kube", PluginInput: map[string]any{
+	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{
 		"method": "merge-kubeconfig", "kubeconfig": retrievedPath, "kube_context": contextName,
 	}}
 	if _, err := invokeKubePlugin(op); err != nil {

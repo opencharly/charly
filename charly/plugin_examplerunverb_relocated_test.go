@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestRelocatedExamplerunverbVerb_DispatchesViaKit proves the reference host-coupled
@@ -21,7 +23,7 @@ func TestRelocatedExamplerunverbVerb_DispatchesViaKit(t *testing.T) {
 		t.Fatalf("examplerunverb provider is not a CheckVerbProvider: %T", prov)
 	}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
-		&Op{PluginInput: map[string]any{"marker": "runverb-xyz"}})
+		&spec.Op{PluginInput: map[string]any{"marker": "runverb-xyz"}})
 	if res.Status != TestPass {
 		t.Fatalf("want pass, got %v: %s", res.Status, res.Message)
 	}

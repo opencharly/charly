@@ -17,17 +17,17 @@ import (
 func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	// Four external plugin candies. examplestep/examplebuilder/spice/exampledeploy are
 	// each referenced by some site below; unusedverb is referenced NOWHERE.
-	stepPlugin := &CandyPluginDecl{Source: "github.com/x/step", Providers: []spec.PluginCapability{"verb:examplestep"}}
-	builderPlugin := &CandyPluginDecl{Source: "github.com/x/builder", Providers: []spec.PluginCapability{"builder:examplebuilder"}}
-	addedPlugin := &CandyPluginDecl{Source: "github.com/x/spice", Providers: []spec.PluginCapability{"verb:spice"}}
-	deployPlugin := &CandyPluginDecl{Source: "github.com/x/deploy", Providers: []spec.PluginCapability{"deploy:exampledeploy"}}
-	boxVerbPlugin := &CandyPluginDecl{Source: "github.com/x/boxverb", Providers: []spec.PluginCapability{"verb:boxverb"}}
-	unrefdPlugin := &CandyPluginDecl{Source: "github.com/x/unused", Providers: []spec.PluginCapability{"verb:unusedverb"}}
+	stepPlugin := &spec.Plugin{Source: "github.com/x/step", Providers: []spec.PluginCapability{"verb:examplestep"}}
+	builderPlugin := &spec.Plugin{Source: "github.com/x/builder", Providers: []spec.PluginCapability{"builder:examplebuilder"}}
+	addedPlugin := &spec.Plugin{Source: "github.com/x/spice", Providers: []spec.PluginCapability{"verb:spice"}}
+	deployPlugin := &spec.Plugin{Source: "github.com/x/deploy", Providers: []spec.PluginCapability{"deploy:exampledeploy"}}
+	boxVerbPlugin := &spec.Plugin{Source: "github.com/x/boxverb", Providers: []spec.PluginCapability{"verb:boxverb"}}
+	unrefdPlugin := &spec.Plugin{Source: "github.com/x/unused", Providers: []spec.PluginCapability{"verb:unusedverb"}}
 
 	candies := map[string]*Candy{
 		// A consumer candy whose run-step references the examplestep verb (the build-emit leg).
-		"examplestep-consumer": {Name: "examplestep-consumer", plan: []Step{
-			{Run: "bake at build", Op: Op{Plugin: "examplestep"}},
+		"examplestep-consumer": {Name: "examplestep-consumer", plan: []spec.Step{
+			{Run: "bake at build", Op: spec.Op{Plugin: "examplestep"}},
 		}},
 		// A consumer candy that selects an external builder via external_builder.
 		"examplebuilder-consumer": {Name: "examplebuilder-consumer", ExternalBuilder: "examplebuilder"},
@@ -42,8 +42,8 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	}
 	// A box whose baked plan authors a plugin check verb directly (boxverb) — the
 	// box-plan reference site (a baked plan runs at check live).
-	boxes := boxMapOf(map[string]BoxConfig{
-		"some-box": {Plan: []Step{{Check: "probe via boxverb", Op: Op{Plugin: "boxverb"}}}},
+	boxes := boxMapOf(map[string]spec.BoxConfig{
+		"some-box": {Plan: []spec.Step{{Check: "probe via boxverb", Op: spec.Op{Plugin: "boxverb"}}}},
 	})
 	// The deploy node's OWN references (deployNodePluginContext output): the inline
 	// `spice` bed-plan verb (its plugin came via add_candy) + the external deploy
@@ -65,7 +65,7 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 
 	// Selection: every referenced plugin (verb / external_builder / add_candy-inline /
 	// deploy-substrate / box-plan) is selected; the unreferenced one is NOT.
-	selected := map[string]*CandyPluginDecl{
+	selected := map[string]*spec.Plugin{
 		"examplestep (run-step verb)":       stepPlugin,
 		"examplebuilder (external_builder)": builderPlugin,
 		"spice (add_candy inline bed verb)": addedPlugin,
@@ -89,15 +89,15 @@ func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 func TestCollectReferencedPluginWords_ClassAgnostic(t *testing.T) {
 	// `shared` is referenced as a verb in a candy plan; a plugin provides it as a STEP.
 	candies := map[string]*Candy{
-		"consumer": {Name: "consumer", plan: []Step{{Run: "use shared", Op: Op{Plugin: "shared"}}}},
+		"consumer": {Name: "consumer", plan: []spec.Step{{Run: "use shared", Op: spec.Op{Plugin: "shared"}}}},
 	}
 	refs := collectReferencedPluginWords(candies, nil, nil)
-	stepProvider := &CandyPluginDecl{Source: "github.com/x/s", Providers: []spec.PluginCapability{"step:shared"}}
+	stepProvider := &spec.Plugin{Source: "github.com/x/s", Providers: []spec.PluginCapability{"step:shared"}}
 	if !pluginProvidesReferencedWord(stepProvider, refs) {
 		t.Fatalf("a word referenced in one class must select a plugin providing it in another (class-agnostic, no under-load)")
 	}
 	// A malformed capability is skipped, not a match.
-	malformed := &CandyPluginDecl{Source: "github.com/x/m", Providers: []spec.PluginCapability{"shared", "noclass:"}}
+	malformed := &spec.Plugin{Source: "github.com/x/m", Providers: []spec.PluginCapability{"shared", "noclass:"}}
 	if pluginProvidesReferencedWord(malformed, refs) {
 		t.Fatalf("a malformed capability string must not match")
 	}

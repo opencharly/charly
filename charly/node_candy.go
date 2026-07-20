@@ -10,6 +10,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,7 +45,7 @@ func buildCandy(gn *genericNode) (name string, ic *InlineCandy, err error) {
 	// Decode-ONLY at load (fast, runs on every invocation): the full closed-schema
 	// CUE validation (CalVer/enum/unknown-key checks) runs at `charly box validate`
 	// (validateCandyManifestCUE), not here — matching the legacy parseCandyYAML.
-	var c CandyYAML
+	var c spec.CandyYAML
 	if err := decodeNodeValue(gn, &c); err != nil {
 		return "", nil, err
 	}

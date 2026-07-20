@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
@@ -27,7 +28,7 @@ import (
 // stay consistent across live scoring regardless of the topo/bucket execution reorder.
 type scoredStep struct {
 	id   string
-	step Step
+	step spec.Step
 }
 
 // scoredPlanOrigin is the fixed origin used to derive step ids so that
@@ -35,23 +36,23 @@ type scoredStep struct {
 const scoredPlanOrigin = "plan"
 
 // scoredSteps wraps a plan with stable ids by declaration order.
-func scoredSteps(plan []Step) []scoredStep {
+func scoredSteps(plan []spec.Step) []scoredStep {
 	out := make([]scoredStep, len(plan))
 	for i := range plan {
-		out[i] = scoredStep{id: EffectiveStepID(&plan[i], scoredPlanOrigin, i), step: plan[i]}
+		out[i] = scoredStep{id: kit.EffectiveStepID(&plan[i], scoredPlanOrigin, i), step: plan[i]}
 	}
 	return out
 }
 
 // isScored reports whether a step is a scored success criterion (check: or
 // agent-check:).
-func isScored(s Step) bool { return s.Check != "" || s.AgentCheck != "" }
+func isScored(s spec.Step) bool { return s.Check != "" || s.AgentCheck != "" }
 
 // RunCheckLive scores `plan` against the live containers its check:/agent-check:
 // steps target via Op.Pod. Returns the spec.CheckRunResults wire shape the
 // plugin scorer (candy/plugin-check) consumes unchanged. `deployment` is
 // legacy/unused; `scoreName` labels the run.
-func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step) (*spec.CheckRunResults, error) {
+func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []spec.Step) (*spec.CheckRunResults, error) {
 	_ = deployment
 
 	if len(plan) == 0 {
@@ -92,7 +93,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step
 			ID:            e.id,
 			Origin:        "pod:" + e.step.Venue,
 			Text:          e.step.KeywordText(),
-			Tag:           EffectiveTags(e.step.Tag),
+			Tag:           kit.EffectiveTags(e.step.Tag),
 			Status:        "fail",
 			SkippedReason: "cycle: step is part of a depends_on cycle",
 		})
@@ -109,7 +110,7 @@ func RunCheckLive(ctx context.Context, deployment, scoreName string, plan []Step
 // bucket's runner, then runs each step — appending verdicts to out and
 // recording them in verdictByID. Split out of RunCheckLive, which keeps the
 // outer pod-grouping loop.
-func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
+func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map[string]spec.BundleNode, out *spec.CheckRunResults, verdictByID map[string]string) {
 	pod := bucket[0].step.Venue
 
 	var ephemeralCleanup func(bool)
@@ -188,7 +189,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 					ID:     e.id,
 					Origin: "pod:" + pod,
 					Text:   e.step.KeywordText(),
-					Tag:    EffectiveTags(e.step.Tag),
+					Tag:    kit.EffectiveTags(e.step.Tag),
 					Status: "fail",
 				})
 				out.Summary.Total++
@@ -199,11 +200,11 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		}
 
 		// Run the single step via RunPlan against the bucket's runner.
-		set := &LabelDescriptionSet{Candy: []LabeledDescription{{
+		set := &kit.LabelDescriptionSet{Candy: []kit.LabeledDescription{{
 			Origin: "pod:" + pod,
-			Plan:   []Step{e.step},
+			Plan:   []spec.Step{e.step},
 		}}}
-		results := RunPlan(ctx, runner, set, nil, false)
+		results := kit.RunPlan(ctx, runner, set, false)
 		if !isScored(e.step) {
 			continue // provisioning run: step — executed, not scored
 		}
@@ -215,8 +216,8 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 			ID:      e.id,
 			Origin:  "pod:" + pod,
 			Text:    e.step.KeywordText(),
-			Tag:     EffectiveTags(e.step.Tag),
-			Keyword: string(keywordOf(&e.step)),
+			Tag:     kit.EffectiveTags(e.step.Tag),
+			Keyword: string(kit.KeywordOf(&e.step)),
 			Status:  status,
 		}
 		if len(results) > 0 {
@@ -247,7 +248,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 		}
 		ephemeralCleanup(bucketFailed)
 	}
-	closeHostCleanups(hostCleanups)
+	kit.CloseHostCleanups(hostCleanups)
 }
 
 // topoSortScored orders scored steps by depends_on (id-keyed), returning the
@@ -326,8 +327,8 @@ func groupScoredByPod(sorted []scoredStep) [][]scoredStep {
 	return buckets
 }
 
-func bucketSteps(b []scoredStep) []Step {
-	out := make([]Step, len(b))
+func bucketSteps(b []scoredStep) []spec.Step {
+	out := make([]spec.Step, len(b))
 	for i, e := range b {
 		out[i] = e.step
 	}
@@ -340,16 +341,16 @@ func skippedStepScore(e scoredStep, pod, blockedBy string) spec.StepScore {
 		ID:            e.id,
 		Origin:        "pod:" + pod,
 		Text:          e.step.KeywordText(),
-		Tag:           EffectiveTags(e.step.Tag),
+		Tag:           kit.EffectiveTags(e.step.Tag),
 		Status:        "skipped",
 		SkippedReason: "dep-unmet: " + blockedBy,
 	}
 }
 
 // resolveScoringChain returns the DeployExecutor chain that reaches `pod`.
-func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecutor, error) {
+func resolveScoringChain(roots map[string]spec.BundleNode, pod string) (deploykit.DeployExecutor, error) {
 	if strings.Contains(pod, ".") && roots != nil {
-		_, chain, err := ResolveDeployChain(roots, pod, ShellExecutor{})
+		_, chain, err := deploykit.ResolveDeployChain(roots, pod, kit.ShellExecutor{})
 		if err == nil {
 			return chain, nil
 		}
@@ -357,14 +358,14 @@ func resolveScoringChain(roots map[string]BundleNode, pod string) (DeployExecuto
 	}
 	if roots != nil {
 		if node, ok := roots[pod]; ok && node.Descent != nil && node.Descent.HostRooted {
-			return rootExecutorForDeployNode(&node)
+			return deploykit.RootExecutorForDeployNode(&node)
 		}
 	}
-	return ContainerChain("podman", "charly-"+pod), nil
+	return deploykit.ContainerChain("podman", "charly-"+pod), nil
 }
 
 // RenderPlanYAML returns the plan rendered as a YAML block for ${PLAN}.
-func RenderPlanYAML(plan []Step) string {
+func RenderPlanYAML(plan []spec.Step) string {
 	if len(plan) == 0 {
 		return ""
 	}
@@ -380,14 +381,14 @@ func RenderPlanYAML(plan []Step) string {
 
 // isEphemeralDeploy reports whether the named pod resolves to a charly.yml
 // entry marked ephemeral.
-func isEphemeralDeploy(roots map[string]BundleNode, pod string) bool {
+func isEphemeralDeploy(roots map[string]spec.BundleNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
 	if node, ok := roots[pod]; ok {
 		return node.IsEphemeral()
 	}
-	if node, _, err := ResolveNodePath(roots, pod); err == nil && node != nil {
+	if node, _, err := deploykit.ResolveNodePath(roots, pod); err == nil && node != nil {
 		return node.IsEphemeral()
 	}
 	return false
@@ -395,11 +396,11 @@ func isEphemeralDeploy(roots map[string]BundleNode, pod string) bool {
 
 // ephemeralKeepOnFailure returns the keep_on_failure flag from the named
 // ephemeral deploy's lifetime block.
-func ephemeralKeepOnFailure(roots map[string]BundleNode, pod string) bool {
+func ephemeralKeepOnFailure(roots map[string]spec.BundleNode, pod string) bool {
 	if pod == "" {
 		return false
 	}
-	resolve := func(node *BundleNode) bool {
+	resolve := func(node *spec.BundleNode) bool {
 		if node == nil || node.Ephemeral == nil {
 			return false
 		}
@@ -408,7 +409,7 @@ func ephemeralKeepOnFailure(roots map[string]BundleNode, pod string) bool {
 	if node, ok := roots[pod]; ok {
 		return resolve(&node)
 	}
-	if node, _, err := ResolveNodePath(roots, pod); err == nil {
+	if node, _, err := deploykit.ResolveNodePath(roots, pod); err == nil {
 		return resolve(node)
 	}
 	return false

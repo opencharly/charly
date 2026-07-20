@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,7 +51,7 @@ func TestCandyUnknownKeyRejected(t *testing.T) {
 	// operational list is now `plan:` (the former `task:` key is retired — install
 	// ops are `run:` steps in the unified plan).
 	good := "name: t\nplan:\n  - run: install\n    command: echo hi\nvar:\n  FOO: bar\ncandy:\n  - supervisord\nsecret_accept:\n  - name: X\n"
-	var ly CandyYAML
+	var ly spec.CandyYAML
 	if err := yaml.Unmarshal([]byte(good), &ly); err != nil {
 		t.Fatalf("singular keys must parse, got error: %v", err)
 	}
@@ -66,7 +69,7 @@ func TestCandyUnknownKeyRejected(t *testing.T) {
 	// The distro: map form parses cleanly and routes to a tag section. Decoded
 	// through the CUE normalize path (bare-string packages are canonicalized to
 	// {name: …} by the normalizer, replacing the deleted PackageItem.UnmarshalYAML).
-	var ly3 CandyYAML
+	var ly3 spec.CandyYAML
 	if err := decodeViaCUEForTest(t, "name: t\ndistro:\n  fedora-43:\n    package: [vim]\n", &ly3); err != nil {
 		t.Fatalf("distro: map with fedora-43 must parse, got error: %v", err)
 	}
@@ -169,11 +172,11 @@ func TestCandyPacTool(t *testing.T) {
 		t.Error("pac-tool should have no pac format section (distro.arch → tag section)")
 	}
 	// Test raw fields accessible for templates
-	repos := toMapSlice(arch.Raw["repo"])
+	repos := buildkit.ToMapSlice(arch.Raw["repo"])
 	if len(repos) != 1 {
 		t.Errorf("arch repos count = %d, want 1", len(repos))
 	}
-	options := toStringSlice(arch.Raw["options"])
+	options := buildkit.ToStringSlice(arch.Raw["options"])
 	if !reflect.DeepEqual(options, []string{"--needed"}) {
 		t.Errorf("arch options = %v, want [--needed]", options)
 	}
@@ -474,10 +477,10 @@ func TestCandyPortRelay(t *testing.T) {
 	// Test direct struct construction (no testdata file needed)
 	layer := &Candy{
 		Name:           "chrome",
-		plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222},
 		ports:          []string{"9222"},
-		portSpecs:      []PortSpec{{Port: 9222, Protocol: "http"}},
+		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}},
 	}
 
 	if len(layer.PortRelayPorts) == 0 {
@@ -492,7 +495,7 @@ func TestCandyPortRelay(t *testing.T) {
 func TestCandyPortRelayNone(t *testing.T) {
 	layer := &Candy{
 		Name: "basic",
-		plan: []Step{{Run: "build", Op: cmdOp("true")}},
+		plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
 	}
 
 	if len(layer.PortRelayPorts) != 0 {
@@ -503,10 +506,10 @@ func TestCandyPortRelayNone(t *testing.T) {
 func TestCandyPortRelayMultiple(t *testing.T) {
 	layer := &Candy{
 		Name:           "multi",
-		plan:           []Step{{Run: "build", Op: cmdOp("true")}},
+		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222, 5900},
 		ports:          []string{"9222", "5900"},
-		portSpecs:      []PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
+		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
 	}
 
 	relay := layer.PortRelayPorts

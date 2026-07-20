@@ -12,9 +12,9 @@ import (
 // neither derives from the other.
 func TestBundleNode_PreemptibleOrthogonal(t *testing.T) {
 	tru := true
-	both := BundleNode{
+	both := spec.BundleNode{
 		Disposable:  &tru,
-		Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}},
+		Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}},
 	}
 	if !both.IsDisposable() {
 		t.Error("explicit disposable: true should be disposable")
@@ -24,32 +24,32 @@ func TestBundleNode_PreemptibleOrthogonal(t *testing.T) {
 	}
 
 	// Preemptible does NOT make a node disposable.
-	holderOnly := BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}}}
+	holderOnly := spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}}
 	if holderOnly.IsDisposable() {
 		t.Error("preemptible must not imply disposable")
 	}
 
 	// Disposable does NOT make a node preemptible.
-	dispOnly := BundleNode{Disposable: &tru}
+	dispOnly := spec.BundleNode{Disposable: &tru}
 	if dispOnly.IsPreemptible() {
 		t.Error("disposable must not imply preemptible")
 	}
 
 	// Empty holds → not preemptible.
-	empty := BundleNode{Preemptible: &PreemptibleConfig{}}
+	empty := spec.BundleNode{Preemptible: &spec.PreemptibleConfig{}}
 	if empty.IsPreemptible() {
 		t.Error("preemptible with no holds must not count as preemptible")
 	}
 
 	// nil → not preemptible.
-	if (BundleNode{}).IsPreemptible() {
+	if (spec.BundleNode{}).IsPreemptible() {
 		t.Error("absent preemptible must not be preemptible")
 	}
 }
 
 func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	// List shorthand → Holds, default stop/restore.
-	var listForm BundleNode
+	var listForm spec.BundleNode
 	if err := decodeViaCUEForTest(t, "preemptible: [gpu, tpu]\n", &listForm); err != nil {
 		t.Fatalf("list-shorthand unmarshal: %v", err)
 	}
@@ -59,24 +59,24 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	if deploykit.PreemptEffectiveStop(listForm.Preemptible) != spec.PreemptStopShutdown {
 		t.Errorf("default stop = %q, want shutdown", deploykit.PreemptEffectiveStop(listForm.Preemptible))
 	}
-	if preemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
-		t.Errorf("default restore = %q, want always", preemptEffectiveRestore(listForm.Preemptible))
+	if deploykit.PreemptEffectiveRestore(listForm.Preemptible) != spec.PreemptRestoreAlways {
+		t.Errorf("default restore = %q, want always", deploykit.PreemptEffectiveRestore(listForm.Preemptible))
 	}
 
 	// Block form.
-	var blockForm BundleNode
+	var blockForm spec.BundleNode
 	blockYAML := "preemptible:\n  holds: [gpu]\n  stop: shutdown\n  restore: on-success\n"
 	if err := decodeViaCUEForTest(t, blockYAML, &blockForm); err != nil {
 		t.Fatalf("block unmarshal: %v", err)
 	}
-	if preemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
-		t.Errorf("block restore = %q, want on-success", preemptEffectiveRestore(blockForm.Preemptible))
+	if deploykit.PreemptEffectiveRestore(blockForm.Preemptible) != spec.PreemptRestoreSuccess {
+		t.Errorf("block restore = %q, want on-success", deploykit.PreemptEffectiveRestore(blockForm.Preemptible))
 	}
 
 	// Scalar (e.g. `preemptible: true`) is rejected — a holder must name what
 	// it holds. The normalizer leaves a scalar unchanged, so CUE Decode of a
 	// scalar into the PreemptibleConfig struct fails.
-	var scalarForm BundleNode
+	var scalarForm spec.BundleNode
 	if err := decodeViaCUEForTest(t, "preemptible: true\n", &scalarForm); err == nil {
 		t.Fatal("scalar preemptible should be rejected")
 	}
@@ -85,46 +85,46 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 func TestValidatePreemptibleOnNode(t *testing.T) {
 	cases := []struct {
 		name     string
-		node     BundleNode
+		node     spec.BundleNode
 		wantErr  bool
 		contains string
 	}{
 		{
 			name: "valid holder",
-			node: BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}}},
+			node: spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}},
 		},
 		{
 			name: "valid claimant",
-			node: BundleNode{RequiresExclusive: []string{"gpu"}},
+			node: spec.BundleNode{RequiresExclusive: []string{"gpu"}},
 		},
 		{
 			name:     "empty holds",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{}},
+			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{}},
 			wantErr:  true,
 			contains: "must list at least one",
 		},
 		{
 			name:     "bad stop",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
+			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Stop: "pause"}},
 			wantErr:  true,
 			contains: "not supported",
 		},
 		{
 			name:     "bad restore",
-			node:     BundleNode{Preemptible: &PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
+			node:     spec.BundleNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}, Restore: "maybe"}},
 			wantErr:  true,
 			contains: "is invalid",
 		},
 		{
 			name:     "empty requires token",
-			node:     BundleNode{RequiresExclusive: []string{""}},
+			node:     spec.BundleNode{RequiresExclusive: []string{""}},
 			wantErr:  true,
 			contains: "empty token",
 		},
 		{
 			name: "self-contention",
-			node: BundleNode{
-				Preemptible:       &PreemptibleConfig{Holds: []string{"gpu"}},
+			node: spec.BundleNode{
+				Preemptible:       &spec.PreemptibleConfig{Holds: []string{"gpu"}},
 				RequiresExclusive: []string{"gpu"},
 			},
 			wantErr:  true,

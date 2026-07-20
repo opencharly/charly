@@ -18,6 +18,11 @@ import (
 	"maps"
 	"os"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // prepareCandySecrets resolves the candies backing `plans`, computes their
@@ -29,7 +34,7 @@ import (
 // Shared by the external substrate apply path AND each lifecycle hook's PrepareVenue
 // (vm: before the in-guest walk; pod: before the host-side overlay build) — the paths that
 // previously each ran CandyForPlan + ResolveSecretForCandy + InjectSecretsIntoPlans inline.
-func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string]string, error) {
+func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]*Candy, map[string]string, error) {
 	candyList, err := CandyForPlan(plans, dir, nil)
 	if err != nil {
 		return nil, nil, err
@@ -56,24 +61,27 @@ func prepareCandySecrets(plans []*InstallPlan, dir string) ([]*Candy, map[string
 // the bundle-add path uses — so bundle add / bundle del / charly update all connect a
 // deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
 // turns the pre-scanned placeholder word into a connected grpcProvider that
-// ResolveTarget can route to. Best-effort: a build/connect failure is a warning, then
-// the dispatch fails loudly at ResolveTarget / runPluginVerb rather than silently
-// mis-deploying.
-func loadDeployPlugins(dir, deployName string, extraAddCandy []string) {
+// ResolveTarget can route to. Discovery and build/connect failures retain their original cause and
+// abort dispatch; warning-and-continue used to mask a failed build as a downstream missing provider.
+func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	cfg, cerr := LoadConfig(dir)
 	if cerr != nil {
-		return
+		return fmt.Errorf("load plugin configuration: %w", cerr)
 	}
 	addCandy, refWords := deployNodePluginContext(dir, deployName)
 	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, ResolveOpts{ExtraCandyRefs: extra})
-	if scanErr != nil || candyMap == nil {
-		return
+	if scanErr != nil {
+		return fmt.Errorf("scan deploy plugins: %w", scanErr)
+	}
+	if candyMap == nil {
+		return nil
 	}
 	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
 	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
-		fmt.Fprintf(os.Stderr, "warning: plugin load: %v\n", perr)
+		return fmt.Errorf("load deploy plugins: %w", perr)
 	}
+	return nil
 }
 
 // buildArtifactEnv composes the env used for candy-artifact path
@@ -84,7 +92,7 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) {
 // to RetrieveCandyArtifacts so rewrite rules like ${K3S_KUBECONFIG_SERVER}
 // resolve to the declared value rather than a literal placeholder. The
 // node is the dispatch-merged BundleNode (never re-read from disk).
-func buildArtifactEnv(secretEnv map[string]string, node *BundleNode) map[string]string {
+func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[string]string {
 	env := make(map[string]string, len(secretEnv))
 	maps.Copy(env, secretEnv)
 	if node != nil {
@@ -105,11 +113,11 @@ func buildArtifactEnv(secretEnv map[string]string, node *BundleNode) map[string]
 // Shared by the local deploy target.Add / the vm deploy's Add path. artifactKey is
 // ENTITY-scoped (the artifact retrieve dir + the shared per-VM k3s cluster cache/context);
 // deployName is the real per-deploy (domain) identity the k3s port-forward lookup keys off.
-func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts EmitOpts) error {
+func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts deploykit.EmitOpts) error {
 	if opts.DryRun {
 		return nil
 	}
-	if err := RetrieveCandyArtifacts(ctx, exec, candyList, sanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
+	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
 		return err
 	}
 	if deployHasCandy(candyList, "k3s-server") {
@@ -126,7 +134,7 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec DeployExecutor, candyList
 // ordering). Consumes the merged node — does NOT re-read charly.yml.
 // Registration failure is logged (not fatal), matching the prior run*
 // behavior; the returned error is always nil today but kept for symmetry.
-func registerEphemeralIfMarked(node *BundleNode, name string) {
+func registerEphemeralIfMarked(node *spec.BundleNode, name string) {
 	if node == nil || !node.IsEphemeral() {
 		return
 	}

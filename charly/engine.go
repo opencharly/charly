@@ -1,5 +1,24 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+)
+
+// engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
+// resolution → deploykit + the deploy/bundle plugins). It is heavily cross-cone
+// coupled today — ResolveBoxEngine* / ImageRuntime are consumed from
+// commands.go, container.go, pod_lifecycle_resolve.go, preempt.go,
+// resolved_project_host.go, service.go, start.go, config_image.go,
+// volume_cp_tags_cmd.go (P14-rest trace, 2026-07; status_collector.go left this
+// consumer set at K6 — the status subsystem now calls
+// deploykit.ResolveBoxEngineForDeploy directly from candy/plugin-substrate) —
+// none of the remaining consumers are movable in isolation without also
+// relocating them. Stays core until the K4 deploy-cone wave moves the whole consumer set
+// together; a unilateral move of this file alone would strand its callers.
+
 // EngineBinary returns the binary name for the given engine.
 // The "auto" case should not normally be reached (resolved earlier by kit.DetectEngine),
 // but is handled defensively.
@@ -30,7 +49,7 @@ func ResolveBoxEngine(cfg *Config, layers map[string]*Candy, boxName string, glo
 
 // ImageRuntime returns a copy of rt with RunEngine adjusted for the given image.
 // If imageEngine is empty or matches the existing RunEngine, returns the original runtime.
-func ImageRuntime(rt *ResolvedRuntime, imageEngine string) *ResolvedRuntime {
+func ImageRuntime(rt *kit.ResolvedRuntime, imageEngine string) *kit.ResolvedRuntime {
 	if imageEngine == "" || imageEngine == rt.RunEngine {
 		return rt
 	}
@@ -56,7 +75,7 @@ func ResolveBoxEngineFromDir(dir, boxName, globalEngine string) string {
 // ResolveBoxEngineForDeploy resolves the run engine from charly.yml,
 // falling back to globalEngine. No charly.yml dependency.
 func ResolveBoxEngineForDeploy(boxName, instance, globalEngine string) string {
-	if entry, ok := loadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
+	if entry, ok := deploykit.LoadDeployConfigForRead("ResolveBoxEngineForDeploy").Lookup(boxName, instance); ok && entry.Engine != "" {
 		return entry.Engine
 	}
 	return globalEngine

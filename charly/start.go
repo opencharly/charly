@@ -5,6 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // StartCmd launches a container with supervisord in the background
@@ -26,8 +29,8 @@ func (c *StartCmd) Run() error {
 	if IsRemoteImageRef(StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
 	}
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
-	if err := rejectImageRefAsDeployName(c.Box); err != nil {
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
+	if err := deploykit.RejectImageRefAsDeployName(c.Box); err != nil {
 		return err
 	}
 	// Unified dispatch (the K4 deep-body move): `charly start` routes through ResolveTarget →
@@ -52,7 +55,7 @@ type StopCmd struct {
 }
 
 func (c *StopCmd) Run() error {
-	c.Box, c.Instance = canonicalizeDeployArg(c.Box, c.Instance)
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Resolve the image name (handle remote refs)
 	boxName := c.Box
 	ref := StripURLScheme(c.Box)
@@ -87,13 +90,13 @@ func stopPodService(boxName, instance string) error {
 		return nil
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine := EngineBinary(runEngine)
-	name := containerNameInstance(boxName, instance)
+	engine := kit.EngineBinary(runEngine)
+	name := kit.ContainerNameInstance(boxName, instance)
 
 	cmd := exec.Command(engine, "stop", name)
 	output, err := cmd.CombinedOutput()
@@ -103,7 +106,7 @@ func stopPodService(boxName, instance string) error {
 		if runEngine == "docker" {
 			otherEngine = "podman"
 		}
-		otherBinary := EngineBinary(otherEngine)
+		otherBinary := kit.EngineBinary(otherEngine)
 		fallbackCmd := exec.Command(otherBinary, "stop", name)
 		if _, fallbackErr := fallbackCmd.CombinedOutput(); fallbackErr == nil {
 			fmt.Fprintf(os.Stderr, "Stopped %s (via %s)\n", name, otherEngine)
@@ -136,13 +139,13 @@ func startPodService(boxName, instance string) error {
 		return nil
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine := EngineBinary(runEngine)
-	name := containerNameInstance(boxName, instance)
+	engine := kit.EngineBinary(runEngine)
+	name := kit.ContainerNameInstance(boxName, instance)
 
 	cmd := exec.Command(engine, "start", name)
 	output, err := cmd.CombinedOutput()
@@ -171,7 +174,7 @@ func (c *RestartCmd) Run() error {
 		boxName = ParseRemoteRef(ref).Name
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
@@ -191,8 +194,8 @@ func (c *RestartCmd) Run() error {
 
 	// Direct mode: delegate to engine restart.
 	runEngine := ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
-	engine := EngineBinary(runEngine)
-	name := containerNameInstance(boxName, c.Instance)
+	engine := kit.EngineBinary(runEngine)
+	name := kit.ContainerNameInstance(boxName, c.Instance)
 
 	cmd := exec.Command(engine, "restart", name)
 	output, err := cmd.CombinedOutput()
@@ -208,13 +211,13 @@ func stopTunnelForImage(boxName, instance string) {
 	var tc *TunnelConfig
 
 	// Tunnel config comes from charly.yml (overlaid onto BoxMetadata).
-	ctrName := containerNameInstance(boxName, instance)
+	ctrName := kit.ContainerNameInstance(boxName, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef != "" {
 		meta, metaErr := ExtractMetadata("podman", imageRef)
 		if metaErr == nil && meta != nil {
-			dc := loadDeployConfigForRead("charly start tunnel merge")
-			MergeDeployOntoMetadata(meta, dc, boxName, instance)
+			dc := deploykit.LoadDeployConfigForRead("charly start tunnel merge")
+			deploykit.MergeDeployOntoMetadata(meta, dc, boxName, instance)
 			if meta.Tunnel != nil {
 				tc = TunnelConfigFromMetadata(meta)
 			}
@@ -231,8 +234,8 @@ func stopTunnelForImage(boxName, instance string) {
 // buildStartArgs constructs the container run argument list for a detached service.
 // entrypoint is the init system command (e.g., ["supervisord", "-n", "-c", "/etc/supervisord.conf"])
 // or the fallback (e.g., ["sleep", "infinity"]).
-func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []VolumeMount, bindMounts []ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
-	binary := EngineBinary(engine)
+func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
+	binary := kit.EngineBinary(engine)
 	args := []string{
 		binary, "run", "-d", "--rm",
 		"--name", name,
@@ -242,11 +245,11 @@ func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name 
 		args = append(args, "--network", network[0])
 	}
 	if gpu {
-		args = append(args, GPURunArgs(engine)...)
+		args = append(args, kit.GPURunArgs(engine)...)
 	}
 	args = append(args, SecurityArgs(security)...)
 	for _, port := range ports {
-		args = append(args, "-p", localizePort(port, bindAddr))
+		args = append(args, "-p", deploykit.LocalizePort(port, bindAddr))
 	}
 	for _, vol := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", vol.VolumeName, vol.ContainerPath))

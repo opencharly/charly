@@ -123,7 +123,7 @@ func resolveProto(containerPort int, portProtos map[string]string) string {
 // ResolveTunnelConfig resolves a TunnelYAML into a TunnelConfig with defaults applied.
 // portProtos maps container port -> protocol ("http" or "tcp") from candy PortSpec data.
 // boxPorts is the list of image port mappings (e.g. "18789:18789", "443:18789").
-func ResolveTunnelConfig(t *TunnelYAML, boxName string, dns string, _ map[string]*Candy, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
+func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[string]*Candy, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
 	if t == nil {
 		return nil
 	}

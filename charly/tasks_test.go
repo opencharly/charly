@@ -5,12 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // testResolvedBox returns a ResolvedBox suitable for feeding the
 // task emitters. Uses fedora (rpm) by default with UID/GID 1000.
-func testResolvedBox() *ResolvedBox {
-	return &ResolvedBox{
+func testResolvedBox() *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Name:         "test-img",
 		User:         "user",
 		UID:          1000,
@@ -27,17 +30,17 @@ func testResolvedBox() *ResolvedBox {
 
 func TestTaskKind_Valid(t *testing.T) {
 	cases := []struct {
-		task Op
+		task spec.Op
 		want string
 	}{
 		{cmdOp("echo hi"), "plugin"}, // command is a plugin verb now (plugin: command)
-		{Op{Mkdir: "/etc/foo"}, "mkdir"},
-		{Op{Copy: "foo", To: "/bar"}, "copy"},
-		{Op{Write: "/x", Content: "body"}, "write"},
-		{Op{Link: "/a", Target: "/b"}, "link"},
-		{Op{Download: "http://x"}, "download"},
-		{Op{Setcap: "/bin/x"}, "setcap"},
-		{Op{Build: "all"}, "build"},
+		{spec.Op{Mkdir: "/etc/foo"}, "mkdir"},
+		{spec.Op{Copy: "foo", To: "/bar"}, "copy"},
+		{spec.Op{Write: "/x", Content: "body"}, "write"},
+		{spec.Op{Link: "/a", Target: "/b"}, "link"},
+		{spec.Op{Download: "http://x"}, "download"},
+		{spec.Op{Setcap: "/bin/x"}, "setcap"},
+		{spec.Op{Build: "all"}, "build"},
 	}
 	for _, c := range cases {
 		got, err := c.task.Kind()
@@ -166,7 +169,7 @@ func TestStageInlineContent_Idempotent(t *testing.T) {
 
 func TestEmitMkdirBatch_Coalesces(t *testing.T) {
 	var b strings.Builder
-	tasks := []Op{
+	tasks := []spec.Op{
 		{Mkdir: "/a", RunAs: "root"},
 		{Mkdir: "/b", RunAs: "root"},
 		{Mkdir: "/c", RunAs: "root"},
@@ -184,7 +187,7 @@ func TestEmitMkdirBatch_Coalesces(t *testing.T) {
 
 func TestEmitMkdirBatch_PerModeChmod(t *testing.T) {
 	var b strings.Builder
-	tasks := []Op{
+	tasks := []spec.Op{
 		{Mkdir: "/a", Mode: "0700"},
 		{Mkdir: "/b"}, // default — no chmod
 		{Mkdir: "/c", Mode: "0700"},
@@ -202,7 +205,7 @@ func TestEmitMkdirBatch_PerModeChmod(t *testing.T) {
 func TestEmitCopy_WithChown(t *testing.T) {
 	var b strings.Builder
 	emitCopy(&b,
-		Op{Copy: "wrapper", To: "/home/user/.local/bin/wrapper", Mode: "0755", RunAs: "${USER}"},
+		spec.Op{Copy: "wrapper", To: "/home/user/.local/bin/wrapper", Mode: "0755", RunAs: "${USER}"},
 		"my-layer", testResolvedBox(),
 	)
 	out := b.String()
@@ -223,7 +226,7 @@ func TestEmitCopy_WithChown(t *testing.T) {
 func TestEmitCopy_RootNoChown(t *testing.T) {
 	var b strings.Builder
 	emitCopy(&b,
-		Op{Copy: "traefik.yml", To: "/etc/traefik/traefik.yml", Mode: "0644", RunAs: "root"},
+		spec.Op{Copy: "traefik.yml", To: "/etc/traefik/traefik.yml", Mode: "0644", RunAs: "root"},
 		"traefik", testResolvedBox(),
 	)
 	out := b.String()
@@ -235,7 +238,7 @@ func TestEmitCopy_RootNoChown(t *testing.T) {
 func TestEmitWrite_UsesStagedPath(t *testing.T) {
 	var b strings.Builder
 	emitWrite(&b,
-		Op{Write: "/etc/foo.conf", Content: "body", Mode: "0644", RunAs: "root"},
+		spec.Op{Write: "/etc/foo.conf", Content: "body", Mode: "0644", RunAs: "root"},
 		".build/img/_inline/lyr/abc123",
 		testResolvedBox(),
 	)
@@ -251,7 +254,7 @@ func TestEmitWrite_UsesStagedPath(t *testing.T) {
 
 func TestEmitLinkBatch(t *testing.T) {
 	var b strings.Builder
-	tasks := []Op{
+	tasks := []spec.Op{
 		{Link: "/usr/local/bin/node", Target: "/usr/bin/node-24"},
 		{Link: "/usr/local/bin/npm", Target: "/usr/bin/npm-24"},
 	}
@@ -270,7 +273,7 @@ func TestEmitLinkBatch(t *testing.T) {
 
 func TestEmitSetcapBatch_StripAndSet(t *testing.T) {
 	var b strings.Builder
-	tasks := []Op{
+	tasks := []spec.Op{
 		{Setcap: "/usr/bin/sway"}, // strip
 		{Setcap: "/usr/bin/newuidmap", Caps: "cap_setuid=ep"},
 	}
@@ -290,7 +293,7 @@ func TestEmitSetcapBatch_StripAndSet(t *testing.T) {
 func TestEmitDownload_TarGz(t *testing.T) {
 	var b strings.Builder
 	err := emitDownload(&b,
-		Op{
+		spec.Op{
 			Download:       "https://example.com/app.tar.gz",
 			Extract:        "tar.gz",
 			To:             "/usr/local/bin",
@@ -328,7 +331,7 @@ func TestEmitDownload_TarGz(t *testing.T) {
 func TestEmitDownload_Sh(t *testing.T) {
 	var b strings.Builder
 	err := emitDownload(&b,
-		Op{Download: "https://sh.install", Extract: "sh", Env: map[string]string{"UV_INSTALL_DIR": "/usr/local/bin"}},
+		spec.Op{Download: "https://sh.install", Extract: "sh", Env: map[string]string{"UV_INSTALL_DIR": "/usr/local/bin"}},
 		testResolvedBox(),
 	)
 	if err != nil {
@@ -361,7 +364,7 @@ func TestEmitDownload_CacheModifier(t *testing.T) {
 	// owned per the task user. Root task → shared mount; user task → owned.
 	var b strings.Builder
 	if err := emitDownload(&b,
-		Op{Download: "https://x/app.zip", Extract: "zip", To: "/opt/app", RunAs: "root",
+		spec.Op{Download: "https://x/app.zip", Extract: "zip", To: "/opt/app", RunAs: "root",
 			Cache: []string{"/var/cache/app-build"}},
 		testResolvedBox()); err != nil {
 		t.Fatalf("emitDownload: %v", err)
@@ -378,12 +381,12 @@ func TestEmitDownload_CacheModifier(t *testing.T) {
 func TestTaskCacheMounts_OwnershipByUser(t *testing.T) {
 	img := testResolvedBox() // UID/GID 1000 in the test fixture
 	// root task → shared (sharing=locked), no uid in id
-	root := taskCacheMounts(Op{RunAs: "root", Cache: []string{"/var/cache/x"}}, img)
+	root := taskCacheMounts(spec.Op{RunAs: "root", Cache: []string{"/var/cache/x"}}, img)
 	if len(root) != 1 || !strings.Contains(root[0], "sharing=locked") || strings.Contains(root[0], "uid=") {
 		t.Errorf("root cache mount should be shared (no uid): %v", root)
 	}
 	// user task → owned (uid/gid), id carries -uid<N>
-	user := taskCacheMounts(Op{RunAs: "${USER}", Cache: []string{"/var/cache/x"}}, img)
+	user := taskCacheMounts(spec.Op{RunAs: "${USER}", Cache: []string{"/var/cache/x"}}, img)
 	if len(user) != 1 || !strings.Contains(user[0], "uid=") || !strings.Contains(user[0], "-uid") {
 		t.Errorf("non-root cache mount should be uid-owned: %v", user)
 	}
@@ -395,7 +398,7 @@ func TestTaskCacheMounts_OwnershipByUser(t *testing.T) {
 
 func TestEmitDownload_UnknownExtract(t *testing.T) {
 	var b strings.Builder
-	err := emitDownload(&b, Op{Download: "http://x", Extract: "rar"}, testResolvedBox())
+	err := emitDownload(&b, spec.Op{Download: "http://x", Extract: "rar"}, testResolvedBox())
 	if err == nil {
 		t.Fatal("expected error for unknown extract")
 	}
@@ -404,7 +407,7 @@ func TestEmitDownload_UnknownExtract(t *testing.T) {
 func TestEmitCmd_RootCacheMounts(t *testing.T) {
 	var b strings.Builder
 	emitCmd(&b,
-		Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hello"}, RunAs: "root"},
+		spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hello"}, RunAs: "root"},
 		"my-layer", testResolvedBox(), true,
 	)
 	out := b.String()
@@ -425,7 +428,7 @@ func TestEmitCmd_RootCacheMounts(t *testing.T) {
 func TestEmitCmd_UserNpmCache(t *testing.T) {
 	var b strings.Builder
 	emitCmd(&b,
-		Op{Plugin: "command", PluginInput: map[string]any{"command": "xdg-settings default-browser foo"}, RunAs: "${USER}"},
+		spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "xdg-settings default-browser foo"}, RunAs: "${USER}"},
 		"my-layer", testResolvedBox(), false,
 	)
 	out := b.String()
@@ -445,7 +448,7 @@ func TestEmitCmd_UserNpmCache(t *testing.T) {
 func TestEmitTasks_UserCoalescing(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
-	ops := []Op{
+	ops := []spec.Op{
 		{Mkdir: "/a", RunAs: "root"},
 		{Mkdir: "/b", RunAs: "root"},
 		{Mkdir: "/c", RunAs: "root"}, // all root → single USER 0 header, one RUN
@@ -475,7 +478,7 @@ func TestEmitTasks_UserCoalescing(t *testing.T) {
 func TestEmitTasks_CommandEmitsRun(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
-	ops := []Op{
+	ops := []spec.Op{
 		{Plugin: "command", PluginInput: map[string]any{"command": "echo rpmfusion-enable"}, RunAs: "root"},
 	}
 	layer := &Candy{Name: "lyr"}
@@ -493,7 +496,7 @@ func TestEmitTasks_CommandEmitsRun(t *testing.T) {
 func TestEmitTasks_UserSwitches(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
-	ops := []Op{
+	ops := []spec.Op{
 		{Mkdir: "/a", RunAs: "root"},
 		{Mkdir: "/b", RunAs: "${USER}"},
 		{Mkdir: "/c", RunAs: "${USER}"}, // coalesces with previous
@@ -522,7 +525,7 @@ func TestEmitTasks_OrderPreserved(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
 	// mkdir → copy → mkdir sequence: the second mkdir must NOT merge with the first
-	ops := []Op{
+	ops := []spec.Op{
 		{Mkdir: "/a", RunAs: "root"},
 		{Copy: "f", To: "/a/f", RunAs: "root"},
 		{Mkdir: "/b", RunAs: "root"},
@@ -549,7 +552,7 @@ func TestEmitTasks_OrderPreserved(t *testing.T) {
 func TestEmitTasks_ParentDirAutoInsert(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
-	ops := []Op{
+	ops := []spec.Op{
 		// Copy to /etc/traefik/traefik.yml without declaring /etc/traefik first
 		{Copy: "traefik.yml", To: "/etc/traefik/traefik.yml", RunAs: "root"},
 	}
@@ -575,7 +578,7 @@ func TestEmitTasks_ParentDirSuppressedWhenDeclared(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
 	// Author explicitly declared /etc/foo via mkdir — no auto-insert
-	ops := []Op{
+	ops := []spec.Op{
 		{Mkdir: "/etc/foo", RunAs: "root"},
 		{Copy: "bar", To: "/etc/foo/bar", RunAs: "root"},
 	}
@@ -595,7 +598,7 @@ func TestEmitTasks_ParentDirSuppressedWhenDeclared(t *testing.T) {
 func TestEmitTasks_WriteStagesContent(t *testing.T) {
 	dir := t.TempDir()
 	g := &Generator{BuildDir: dir}
-	ops := []Op{
+	ops := []spec.Op{
 		{Write: "/etc/foo.conf", Content: "hello world\n", RunAs: "root"},
 	}
 	layer := &Candy{Name: "lyr"}
@@ -653,7 +656,7 @@ func TestEmitVarsEnv_SortedKeys(t *testing.T) {
 // --- Parity: ensure HasInstallFiles picks up HasTasks ---
 
 func TestCandy_HasInstallFiles_IncludesTasks(t *testing.T) {
-	l := &Candy{plan: []Step{{Run: "build", Op: cmdOp("true")}}}
+	l := &Candy{plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}
 	if !l.HasInstallFiles() {
 		t.Error("HasInstallFiles() should be true when HasTasks is true")
 	}

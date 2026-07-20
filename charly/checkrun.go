@@ -2,6 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
@@ -81,34 +86,69 @@ func newHostVerbResolver(kr *kit.Runner) *hostVerbResolver {
 // every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;
 // a nil/absent exec yields nil. Used by the host verb dispatch, which needs the full
 // DeployExecutor surface (Venue/PutFile/GetFile) the reverse channel serves.
-func deployExecOf(kr *kit.Runner) DeployExecutor {
-	if e, ok := kr.Exec().(DeployExecutor); ok {
+func deployExecOf(kr *kit.Runner) deploykit.DeployExecutor {
+	if e, ok := kr.Exec().(deploykit.DeployExecutor); ok {
 		return e
 	}
 	return nil
 }
 
-// resolverEnv projects a *CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair
+// resolverEnv projects a *kit.CheckVarResolver into the kit.RunnerConfig Env + HasRuntime pair
 // (nil-safe — a nil resolver yields no env, no runtime state).
-func resolverEnv(res *CheckVarResolver) (map[string]string, bool) {
+func resolverEnv(res *kit.CheckVarResolver) (map[string]string, bool) {
 	if res == nil {
 		return nil, false
 	}
 	return res.Env, res.HasRuntime
 }
 
+// currentCharlyExecutable is the executable that owns this check run. Keeping it
+// injectable lets the resolver contract prove that host-side plan re-entry uses
+// the active binary rather than whatever a stale PATH happens to select.
+var currentCharlyExecutable = os.Executable
+
+// stampCharlyBin records the active charly executable path into a runtime check-var
+// resolver's Env as CHARLY_BIN, so host-side R10 plan re-entry (a plan step referencing
+// ${CHARLY_BIN}) drives the active binary instead of a stale PATH selection. CHARLY_BIN
+// is deliberately never synthesized from PATH: an unavailable executable leaves the
+// variable unresolved instead of silently selecting an unrelated installed Charly.
+// nil-safe; idempotent.
+func stampCharlyBin(res *kit.CheckVarResolver) *kit.CheckVarResolver {
+	if res == nil {
+		return res
+	}
+	if res.Env == nil {
+		res.Env = map[string]string{}
+	}
+	if path, err := currentCharlyExecutable(); err == nil && strings.TrimSpace(path) != "" {
+		res.Env["CHARLY_BIN"] = path
+	}
+	return res
+}
+
+// newRuntimeCheckVarResolver constructs a runtime check-var resolver (HasRuntime
+// true) from an env map, stamping CHARLY_BIN via stampCharlyBin. The
+// direct-construction analogue of the kit.ResolveCheckVarsRuntime call sites
+// (which stampCharlyBin their result).
+func newRuntimeCheckVarResolver(env map[string]string) *kit.CheckVarResolver {
+	if env == nil {
+		env = map[string]string{}
+	}
+	return stampCharlyBin(&kit.CheckVarResolver{Env: env, HasRuntime: true})
+}
+
 // ---------------------------------------------------------------------------
 // Result helpers
 // ---------------------------------------------------------------------------
 
-func passf(c *Op, msg string) CheckResult {
+func passf(c *spec.Op, msg string) CheckResult {
 	return CheckResult{Op: c, Status: TestPass, Message: msg}
 }
 
-func failf(c *Op, format string, args ...any) CheckResult {
+func failf(c *spec.Op, format string, args ...any) CheckResult {
 	return CheckResult{Op: c, Status: TestFail, Message: fmt.Sprintf(format, args...)}
 }
 
-func skipf(c *Op, msg string) CheckResult {
+func skipf(c *spec.Op, msg string) CheckResult {
 	return CheckResult{Op: c, Status: TestSkip, Message: msg}
 }

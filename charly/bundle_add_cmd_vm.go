@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // sshReverseRunner adapts SSHExecutor to the ReverseRunner interface so
@@ -12,15 +17,15 @@ import (
 // SSHExecutor the vm lifecycle hook's VenueExecutor supplies, so a vm `charly bundle del`
 // replays the recorded ReverseOps IN THE GUEST (Δ2).
 type sshReverseRunner struct {
-	exec *SSHExecutor
+	exec *kit.SSHExecutor
 }
 
 func (r *sshReverseRunner) RunSystem(script string) error {
-	return r.exec.RunSystem(context.Background(), script, EmitOpts{})
+	return r.exec.RunSystem(context.Background(), script, deploykit.EmitOpts{})
 }
 
 func (r *sshReverseRunner) RunUser(script string) error {
-	return r.exec.RunUser(context.Background(), script, EmitOpts{})
+	return r.exec.RunUser(context.Background(), script, deploykit.EmitOpts{})
 }
 
 // vmNameFromDeployName extracts the VM entity name from a deploy-key
@@ -72,7 +77,7 @@ func resolveVmSshUser(spec *VmSpec) string {
 //   - neither            → 2222.
 func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 	if spec.SSH != nil && spec.SSH.PortAuto {
-		if entry, ok := loadDeployConfigForRead("charly vm ssh-port").LookupKey("vm:" + vmName); ok && entry.VmState != nil && entry.VmState.SshPort > 0 {
+		if entry, ok := deploykit.LoadDeployConfigForRead("charly vm ssh-port").LookupKey("vm:" + vmName); ok && entry.VmState != nil && entry.VmState.SshPort > 0 {
 			return entry.VmState.SshPort, nil
 		}
 		alloc, err := AllocateAutoPorts([]int{22}, nil)
@@ -94,7 +99,7 @@ func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
 // it is persisted as the entry's `vm:` cross-ref so a bundle-keyed entry (a
 // kind:check VM bed, whose deploy key e.g. `check-k3s-vm` differs from
 // `vm:<entity>`) carries the linkage teardown needs to find + remove it.
-func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error {
+func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) error {
 	// Serialize the load→modify→save against concurrent charly processes — the
 	// SAME blocking deploy-config lock saveDeployState / cleanDeployEntry use
 	// (filelock.go). Without it two parallel `charly vm create` persist-auto-port
@@ -112,20 +117,20 @@ func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error 
 	defer func() { _ = unlock() }()
 
 	// Load existing charly.yml (or start fresh).
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}
 	if dc == nil {
-		dc = &BundleConfig{}
+		dc = &deploykit.BundleConfig{}
 	}
 	if dc.Bundle == nil {
-		dc.Bundle = map[string]BundleNode{}
+		dc.Bundle = map[string]spec.BundleNode{}
 	}
 
 	entry, exists := dc.Bundle[deployName]
 	if !exists {
-		entry = BundleNode{}
+		entry = spec.BundleNode{}
 	}
 	entry.Target = "vm"
 	// Persist the `vm:` cross-ref so the per-host entry is a well-formed bundle
@@ -144,7 +149,7 @@ func saveVmDeployState(deployName, vmEntity string, state *VmDeployState) error 
 	entry.VmState = state
 	dc.Bundle[deployName] = entry
 
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // removeVmDeployEntry strips deploy.<deployName> from charly.yml.
@@ -160,7 +165,7 @@ func removeVmDeployEntry(deployName string) error {
 	}
 	defer func() { _ = unlock() }()
 
-	dc, err := LoadBundleConfig()
+	dc, err := deploykit.LoadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -188,13 +193,13 @@ func removeVmDeployEntry(deployName string) error {
 	for _, key := range keys {
 		entry := dc.Bundle[key]
 		entry.VmState = nil
-		if isAutoVmDeployEntry(entry) {
+		if deploykit.IsAutoVmDeployEntry(entry) {
 			delete(dc.Bundle, key)
 		} else {
 			dc.Bundle[key] = entry
 		}
 	}
-	return SaveBundleConfig(dc)
+	return saveBundleConfigNodeForm(dc)
 }
 
 // vmDeployEntryKeys resolves the per-host charly.yml bundle key(s) a VM teardown
@@ -215,7 +220,7 @@ func removeVmDeployEntry(deployName string) error {
 // literal deployName key AND — when deployName is "vm:<X>" — every bundle whose `vm:` cross-ref
 // names <X>. Because domain identities are unique and never equal an entity a sibling shares, the
 // From-scan can no longer over-match sibling beds during a deploy teardown.
-func vmDeployEntryKeys(dc *BundleConfig, deployName string) []string {
+func vmDeployEntryKeys(dc *deploykit.BundleConfig, deployName string) []string {
 	var keys []string
 	seen := map[string]bool{}
 	add := func(k string) {

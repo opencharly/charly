@@ -3,6 +3,8 @@ package main
 import (
 	"slices"
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // gpu_imply.go — the CONFIG-COUPLED GPU-consumer helpers that STAY in core (cutover C9).
@@ -19,7 +21,7 @@ import (
 // selector — so it must get the GPU device (`--device nvidia.com/gpu=all` via CDI) in its
 // quadlet/run args EVEN when the host card is currently vfio-bound, because the arbiter flips
 // it to nvidia at start.
-func deployNodeSharesGPU(node BundleNode, resources map[string]*ResolvedResource) bool {
+func deployNodeSharesGPU(node spec.BundleNode, resources map[string]*ResolvedResource) bool {
 	for _, tok := range node.RequiredShared() {
 		if rdef := resources[tok]; rdef != nil && rdef.Gpu != nil {
 			return true
@@ -45,7 +47,7 @@ func nvidiaTokenFromResources(resources map[string]*ResolvedResource) string {
 
 // nodeSecurityListsNvidiaDevice reports whether a node's security.devices explicitly references
 // the NVIDIA GPU (the CDI name or a /dev/nvidia* node).
-func nodeSecurityListsNvidiaDevice(node BundleNode) bool {
+func nodeSecurityListsNvidiaDevice(node spec.BundleNode) bool {
 	if node.Security == nil {
 		return false
 	}
@@ -65,7 +67,7 @@ func nodeSecurityListsNvidiaDevice(node BundleNode) bool {
 // security.devices. Without this pod gate, EVERY local command bed on a GPU host would wrongly
 // acquire an implied nvidia-GPU-shared lease (which broke check-preempt-local's clean-ledger
 // `charly preempt status` assertion — the bed held its OWN implied lease).
-func nodeConsumesNvidiaGPU(node BundleNode) bool {
+func nodeConsumesNvidiaGPU(node spec.BundleNode) bool {
 	// A GROUP deploy root carries no workload container of its own (it only groups
 	// sibling members), so config_image emits NO `--device nvidia.com/gpu=all` for it
 	// — it never auto-consumes the GPU. Without this gate a group bed root on a GPU host
@@ -84,7 +86,7 @@ func nodeConsumesNvidiaGPU(node BundleNode) bool {
 // impliedGPUSharedToken returns the gpu-backed `resource:` token a node implicitly claims as
 // SHARED because it consumes the auto-detected nvidia GPU device — "" when the node is not a
 // GPU consumer, claims a resource exclusively, or no gpu token is configured.
-func impliedGPUSharedToken(node BundleNode, resources map[string]*ResolvedResource) string {
+func impliedGPUSharedToken(node spec.BundleNode, resources map[string]*ResolvedResource) string {
 	if len(node.RequiredExclusive()) > 0 {
 		return ""
 	}
@@ -97,7 +99,7 @@ func impliedGPUSharedToken(node BundleNode, resources map[string]*ResolvedResour
 // applyImpliedGPUShared returns node with its RequiresShared unioned with the implied gpu
 // token — a no-op copy when nothing is implied OR the node already claims the token. Pure
 // (resources injected) so it is unit-testable without disk.
-func applyImpliedGPUShared(node BundleNode, resources map[string]*ResolvedResource) BundleNode {
+func applyImpliedGPUShared(node spec.BundleNode, resources map[string]*ResolvedResource) spec.BundleNode {
 	tok := impliedGPUSharedToken(node, resources)
 	if tok == "" || slices.Contains(node.RequiresShared, tok) {
 		return node
@@ -110,6 +112,6 @@ func applyImpliedGPUShared(node BundleNode, resources map[string]*ResolvedResour
 // (acquireResourceForClaimant): it loads the project resource map and unions the implied gpu
 // token onto node, so a GPU-consuming pod that declared NO explicit claim still acquires a
 // shared lease and becomes preemptable by an exclusive claimant.
-func withImpliedGPUShared(node BundleNode) BundleNode {
+func withImpliedGPUShared(node spec.BundleNode) spec.BundleNode {
 	return applyImpliedGPUShared(node, gatherResources())
 }

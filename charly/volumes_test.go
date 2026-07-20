@@ -3,18 +3,21 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCollectImageVolumesSimple(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
 	layers := map[string]*Candy{
 		"svc": {
 			Name:    "svc",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			volumes: []VolumeYAML{{Name: "data", Path: "~/.myapp"}},
 		},
 	}
@@ -24,7 +27,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 		t.Fatalf("CollectBoxVolume() error = %v", err)
 	}
 
-	want := []VolumeMount{
+	want := []deploykit.VolumeMount{
 		{VolumeName: "charly-myapp-data", ContainerPath: "/home/user/.myapp"},
 	}
 	if !reflect.DeepEqual(mounts, want) {
@@ -34,7 +37,7 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 
 func TestCollectImageVolumesChain(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"app"}},
 		}),
@@ -42,12 +45,12 @@ func TestCollectImageVolumesChain(t *testing.T) {
 	layers := map[string]*Candy{
 		"store": {
 			Name:    "store",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			volumes: []VolumeYAML{{Name: "models", Path: "~/.models"}},
 		},
 		"app": {
 			Name:    "app",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			volumes: []VolumeYAML{{Name: "data", Path: "~/.app"}},
 		},
 	}
@@ -58,7 +61,7 @@ func TestCollectImageVolumesChain(t *testing.T) {
 	}
 
 	// Should have volumes from both child and base image candies
-	want := []VolumeMount{
+	want := []deploykit.VolumeMount{
 		{VolumeName: "charly-child-data", ContainerPath: "/home/user/.app"},
 		{VolumeName: "charly-child-models", ContainerPath: "/home/user/.models"},
 	}
@@ -69,7 +72,7 @@ func TestCollectImageVolumesChain(t *testing.T) {
 
 func TestCollectImageVolumesDedup(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base":  {Candy: []string{"store"}},
 			"child": {Base: "base", Candy: []string{"override"}},
 		}),
@@ -77,12 +80,12 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 	layers := map[string]*Candy{
 		"store": {
 			Name:    "store",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			volumes: []VolumeYAML{{Name: "data", Path: "~/.base-data"}},
 		},
 		"override": {
 			Name:    "override",
-			plan:    []Step{{Run: "build", Op: cmdOp("true")}},
+			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
 			volumes: []VolumeYAML{{Name: "data", Path: "~/.child-data"}},
 		},
 	}
@@ -103,12 +106,12 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 
 func TestCollectImageVolumesNoVolumes(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"base": {Candy: []string{"plain"}},
 		}),
 	}
 	layers := map[string]*Candy{
-		"plain": {Name: "plain", plan: []Step{{Run: "build", Op: cmdOp("true")}}},
+		"plain": {Name: "plain", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
 	}
 
 	mounts, err := CollectBoxVolume(cfg, layers, "base", "/home/user", nil)
@@ -142,7 +145,7 @@ func TestExpandHome(t *testing.T) {
 }
 
 func TestSortVolumeMounts(t *testing.T) {
-	mounts := []VolumeMount{
+	mounts := []deploykit.VolumeMount{
 		{VolumeName: "charly-app-z", ContainerPath: "/z"},
 		{VolumeName: "charly-app-a", ContainerPath: "/a"},
 		{VolumeName: "charly-app-m", ContainerPath: "/m"},

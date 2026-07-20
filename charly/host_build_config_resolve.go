@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -34,7 +36,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		}
 	}
 
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.ConfigResolveReply{}, err
 	}
@@ -108,7 +110,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 
 	// The persisted deploy-ledger runtime state (READ half): the plugin's build reuses the persisted
 	// ssh_port and its create regenerates the seed ISO from this prior state (idempotent auto-port).
-	if entry, ok := loadDeployConfigForRead("config-resolve").LookupKey("vm:" + req.Entity); ok {
+	if entry, ok := deploykit.LoadDeployConfigForRead("config-resolve").LookupKey("vm:" + req.Entity); ok {
 		reply.VmState = entry.VmState
 	}
 

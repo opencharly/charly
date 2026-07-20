@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // ParsedRef represents a parsed remote reference with version.
@@ -78,7 +81,7 @@ func splitRepoAndSubPath(ref string) (repoPath, subPath, name string) {
 
 // bareRefs returns the bare map-key form of each ref — for the consumers that
 // resolve a candy list against the candy map.
-func bareRefs(refs []CandyRef) []string {
+func bareRefs(refs []deploykit.CandyRef) []string {
 	if len(refs) == 0 {
 		return nil
 	}
@@ -215,6 +218,27 @@ func mergeRepoOverrides(existing, add string) string {
 	}
 }
 
+// applySelfSuperprojectOverride makes the check plugin's initial
+// resolved-project projection obey the same local-candy rule as the subsequent
+// bed session. Each `charly check run` is a separate process, so the temporary
+// environment mutation is process-local; restoration keeps other commands in
+// that process unchanged.
+func applySelfSuperprojectOverride(projectDir string) func() {
+	pair := selfSuperprojectOverridePair(projectDir)
+	if pair == "" {
+		return func() {}
+	}
+	old, had := os.LookupEnv(RepoOverrideEnv)
+	_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(old, pair))
+	return func() {
+		if had {
+			_ = os.Setenv(RepoOverrideEnv, old)
+			return
+		}
+		_ = os.Unsetenv(RepoOverrideEnv)
+	}
+}
+
 // autoMigratedRepos guards the remote-cache auto-migration against unbounded
 // re-entry. A migration that re-enters LoadUnified would resolve @github refs and
 // re-enter EnsureRepoDownloaded → the command:migrate Invoke. With a self- or mutual
@@ -257,13 +281,13 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 	} else if ok {
 		return dir, nil
 	}
-	cached, err := IsRepoCached(repoPath, version)
+	cached, err := kit.IsRepoCached(repoPath, version)
 	if err != nil {
 		return "", err
 	}
 	var path string
 	if cached {
-		path, err = RepoCachePath(repoPath, version)
+		path, err = kit.RepoCachePath(repoPath, version)
 	} else {
 		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
 		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
@@ -316,7 +340,7 @@ func cacheBehindHead(path string) bool {
 	if err != nil {
 		return true // no charly.yml → never-migrated → migrate
 	}
-	cv, ok := ParseCalVer(firstYAMLVersionLine(data))
+	cv, ok := ParseCalVer(kit.FirstYAMLVersionLine(data))
 	if !ok {
 		return true
 	}
@@ -366,19 +390,19 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 
 	addRef := func(ref, source string) error {
 		_ = source
-		if !IsRemoteCandyRef(ref) {
+		if !deploykit.IsRemoteCandyRef(ref) {
 			return nil
 		}
 		parsed := ParseRemoteRef(ref)
-		bareRef := BareRef(ref)
+		bareRef := deploykit.BareRef(ref)
 		version := parsed.Version
 		if version == "" {
 			// No version specified -- resolve to default branch
 			if branch, ok := defaultBranches[parsed.RepoPath]; ok {
 				version = branch
 			} else {
-				repoURL := RepoGitURL(parsed.RepoPath)
-				branch, err := GitDefaultBranch(repoURL)
+				repoURL := kit.RepoGitURL(parsed.RepoPath)
+				branch, err := kit.GitDefaultBranch(repoURL)
 				if err != nil {
 					return fmt.Errorf("%s: cannot resolve default branch for %s: %w", source, parsed.RepoPath, err)
 				}

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/spec"
+
 	"github.com/opencharly/sdk"
 )
 
@@ -86,7 +88,7 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	// 4. Invoke across the process boundary in BOX mode: the full #Op marshals over the
 	//    wire and the verb skips (no running container) — proving load + dispatch
 	//    round-trip end to end without a live emulator.
-	params, err := json.Marshal(&Op{Plugin: "appium", PluginInput: map[string]any{"method": "status"}})
+	params, err := json.Marshal(&spec.Op{Plugin: "appium", PluginInput: map[string]any{"method": "status"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,16 +120,16 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 // matcher pipeline, the plugin must receive the matchers to self-evaluate
 // them; this round-trip is exactly that wire path (the Op type is identical on both ends).
 func TestAppiumOpCrossesWireWithMatchers(t *testing.T) {
-	op := &Op{
+	op := &spec.Op{
 		Plugin:      "appium",
 		PluginInput: map[string]any{"method": "status"},
-		Stdout:      MatcherList{{Op: "contains", Value: `"ready":true`}},
+		Stdout:      spec.MatcherList{{Op: "contains", Value: `"ready":true`}},
 	}
 	params, err := json.Marshal(op) // the host's marshalJSON(c)
 	if err != nil {
 		t.Fatalf("marshal op: %v", err)
 	}
-	var got Op // the plugin's json.Unmarshal(params_json, &spec.Op)
+	var got spec.Op // the plugin's json.Unmarshal(params_json, &spec.Op)
 	if err := json.Unmarshal(params, &got); err != nil {
 		t.Fatalf("unmarshal op: %v", err)
 	}

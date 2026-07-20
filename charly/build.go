@@ -18,6 +18,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -52,19 +54,19 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	if strings.Contains(builderRef, "/") {
 		return builderRef, nil
 	}
-	if resolved, err := resolveLocalImageRef(engine, builderRef); err == nil {
+	if resolved, err := kit.ResolveLocalImageRef(engine, builderRef); err == nil {
 		return resolved, nil
 	}
 	fmt.Fprintf(os.Stderr, "Builder image %q not in local storage — building it automatically...\n", builderRef)
 	// Recurse on the dependency image through the SAME build:box dispatch the CLI uses
-	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-resolve")):
+	// (dispatchBoxBuild → the compiled-in candy/plugin-build DRIVE → HostBuild("build-prep")):
 	// the podman drive lives in the candy now (P8b), so the host cannot build inline. The
 	// in-proc reverse channel makes this re-entrant call cheap (no socket). Reached from the
-	// build-resolve bootstrap pre-pass AND the vm bootstrap path.
+	// build-prep bootstrap pre-pass AND the vm bootstrap path.
 	if err := dispatchBoxBuild(spec.BuildRequest{Boxes: []string{builderRef}, IncludeDisabled: true}); err != nil {
 		return "", fmt.Errorf("auto-building builder image %q: %w", builderRef, err)
 	}
-	resolved, err := resolveLocalImageRef(engine, builderRef)
+	resolved, err := kit.ResolveLocalImageRef(engine, builderRef)
 	if err != nil {
 		return "", fmt.Errorf("builder image %q still not found after auto-build: %w", builderRef, err)
 	}
@@ -121,7 +123,7 @@ func (c *BuildCmd) Run() error {
 	}
 
 	// Compute the build tag ONCE host-side so the retention activity-lock floor and
-	// the built images (build-resolve's NewGenerator) agree on ONE CalVer —
+	// the built images (build-prep's NewGenerator) agree on ONE CalVer —
 	// ComputeCalVer is clock-derived, so resolving it in two places would diverge.
 	tag := c.Tag
 	if tag == "" {
@@ -140,8 +142,9 @@ func (c *BuildCmd) Run() error {
 	defer func() { _ = buildActivityRelease() }()
 
 	// The podman DRIVE runs in the compiled-in candy/plugin-build (build:box); the
-	// host is a RESOLVE/RENDER seam provider (HostBuild("build-resolve")). P8b
-	// reversed the P8 "permanent facade" — the engine's drive now lives in the candy.
+	// host is a PREP + RESOLVE-PROJECT envelope seam provider (HostBuild("build-prep")).
+	// P8b reversed the P8 "permanent facade" — the podman DRIVE lives in the candy; #67 moved the
+	// render DRIVE to sdk/deploykit + plugin-build, so the host no longer renders Containerfiles.
 	if err := dispatchBoxBuild(spec.BuildRequest{
 		Boxes:           c.Boxes,
 		Tag:             tag,
@@ -171,7 +174,7 @@ func (c *BuildCmd) Run() error {
 // pruneAfterBuild runs the post-build retention prune host-side (best-effort,
 // warn-only): old-CalVer image-tag retention (keep_images) + stale build-staging
 // dir cleanup. It reads keep_images from a lightweight project-config load (the
-// full model already rendered in build-resolve; this is a cheap charly.yml read)
+// full model already prepped in build-prep; this is a cheap charly.yml read)
 // and resolves the engine via ResolveRuntime. Runs after the candy build drive
 // (build:box) completes.
 func pruneAfterBuild(dir string) {
@@ -181,8 +184,8 @@ func pruneAfterBuild(dir string) {
 	}
 	keep := resolveIntPtr(cfg.Defaults.KeepImages, nil, keepImagesFallback)
 	if keep > 0 {
-		if rt, rtErr := ResolveRuntime(); rtErr == nil {
-			engine := EngineBinary(rt.BuildEngine)
+		if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
+			engine := kit.EngineBinary(rt.BuildEngine)
 			if removed, err := pruneImagesByRetention(engine, keep, false); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
 			} else if len(removed) > 0 {
@@ -266,7 +269,7 @@ func (c *BuildCmd) checkRemoteRefsAndPivot() (bool, string, error) {
 // resolveBuildTunables fills the build-speed knobs (Jobs / PodmanJobs /
 // PodmanJobsCap / Cache) from project defaults: when the CLI flag / env layer
 // left them unset. A named fallback applies later if config is silent too.
-func (c *BuildCmd) resolveBuildTunables(def BoxConfig) {
+func (c *BuildCmd) resolveBuildTunables(def spec.BoxConfig) {
 	if c.Jobs == 0 {
 		c.Jobs = resolveIntPtr(def.Jobs, nil, 0)
 	}
@@ -354,7 +357,7 @@ func renderRuntimePacmanConf(p *PacstrapDef) (string, error) {
 	return b.String(), nil
 }
 
-func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *ResolvedBox) error {
+func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *buildkit.ResolvedBox) error {
 	if !strings.HasPrefix(img.From, "builder:") {
 		return nil
 	}
@@ -401,7 +404,7 @@ func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *Reso
 	}
 
 	ctx := struct {
-		Distro            *DistroDef
+		Distro            *spec.ResolvedDistro
 		Packages          []string
 		ExtraPacmanConf   string
 		RuntimePacmanConf string
@@ -471,7 +474,7 @@ func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *Reso
 // build path (the box config `from: builder:<name>` consumers). Same dispatch
 // rules: Pacstrap.BasePackages for pacstrap-flavored, Debootstrap.BasePackages
 // for debootstrap-flavored.
-func bootstrapPackagesForBox(img *ResolvedBox) []string {
+func bootstrapPackagesForBox(img *buildkit.ResolvedBox) []string {
 	if img.DistroDef == nil {
 		return nil
 	}
@@ -620,7 +623,7 @@ func (c *BuildCmd) buildRemote(ref string) error {
 
 // filterBox filters the build order to only include the requested images
 // and their dependencies.
-func filterBox(order []string, requested []string, boxes map[string]*ResolvedBox) ([]string, error) {
+func filterBox(order []string, requested []string, boxes map[string]*buildkit.ResolvedBox) ([]string, error) {
 	// Validate requested images exist
 	for _, name := range requested {
 		if _, ok := boxes[name]; !ok {
@@ -668,7 +671,7 @@ func filterBox(order []string, requested []string, boxes map[string]*ResolvedBox
 // CLI behaviour into the image. Skipped (with a one-line warning) when
 // `go` is not on PATH, so an end-user with a packaged charly install does
 // not see a hard error.
-func ensureCharlyBinaryFresh(dir string, boxes map[string]*ResolvedBox, requested []string) error {
+func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox, requested []string) error {
 	in := requested
 	if len(in) == 0 {
 		in = make([]string, 0, len(boxes))

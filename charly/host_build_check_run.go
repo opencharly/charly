@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -93,11 +94,11 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.Che
 // The reply carries []StepResult verbatim so the plugin's kit formatters produce byte-identical
 // output to the former in-core CheckBoxCmd.
 func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef, err := resolveLocalImageRef(rt.RunEngine, req.Image)
+	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, req.Image)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -116,12 +117,12 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 	// R44 Option A: ONE persistent container + per-step `podman exec` (checkBoxContainerChain),
 	// not a `podman run --rm` per step — O(N)→O(1) container setups so the passwd-setup store
 	// race is minimized; a residual create failure returns an infra error → INFRA exit class.
-	executor, teardown, err := checkBoxContainerChain(rt.RunEngine, imageRef)
+	executor, teardown, err := deploykit.CheckBoxContainerChain(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
 	defer teardown()
-	resolver := ResolveCheckVarsBuild(meta)
+	resolver := kit.ResolveCheckVarsBuild(meta)
 	env, hasRuntime := resolverEnv(resolver)
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:       executor,
@@ -132,7 +133,7 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 		VerifyOnly: true,
 	})
 
-	stepResults := RunPlan(context.Background(), runner, meta.Description, nil, false)
+	stepResults := kit.RunPlan(context.Background(), runner, meta.Description, false)
 	return kit.CheckRunReply{Image: imageRef, Steps: stepResults}, nil
 }
 
@@ -175,11 +176,11 @@ func hostCheckRunFeatureBox(_ context.Context, req spec.CheckRunRequest) (kit.Ch
 // against a disposable container, deterministic steps only (SkipDeterministicRun skips the
 // build-time install run: steps). Shared by the atom arm and the CLI shell (BoxFeatureRunCmd).
 func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	imageRef, err := resolveLocalImageRef(rt.RunEngine, req.Image)
+	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, req.Image)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -190,17 +191,20 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
 		return kit.CheckRunReply{Image: imageRef, NoSteps: true}, nil
 	}
-	filter, err := planTagFilter(req.Tag)
-	if err != nil {
+	// validateTagExpr still VALIDATES --tag's syntax (a malformed expression errors here);
+	// applying the parsed filter to the plan walk is a known, tracked gap — see the
+	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
+	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
+	if err := validateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	// R44 Option A (mirrors hostCheckRunBox): ONE persistent container + `podman exec` per step.
-	executor, teardown, err := checkBoxContainerChain(rt.RunEngine, imageRef)
+	executor, teardown, err := deploykit.CheckBoxContainerChain(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
 	defer teardown()
-	env, hasRuntime := resolverEnv(ResolveCheckVarsBuild(meta))
+	env, hasRuntime := resolverEnv(kit.ResolveCheckVarsBuild(meta))
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:                 executor,
 		Mode:                 RunModeBox,
@@ -209,7 +213,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		Distros:              meta.Distro,
 		SkipDeterministicRun: true,
 	})
-	results := RunPlan(context.Background(), runner, meta.Description, filter, req.Strict)
+	results := kit.RunPlan(context.Background(), runner, meta.Description, req.Strict)
 	return kit.CheckRunReply{Image: imageRef, Steps: results, Header: fmt.Sprintf("Feature run (image, build scope): %s", imageRef)}, nil
 }
 
@@ -247,31 +251,35 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
 		return kit.CheckRunReply{NoSteps: true}, nil
 	}
-	var deployOverlay *BundleNode
-	if dc := loadDeployConfigForRead("charly check feature run"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(req.Name, req.Instance)]; ok {
+	var deployOverlay *spec.BundleNode
+	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(req.Name, req.Instance)]; ok {
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[req.Name]; ok {
 			deployOverlay = &entry
 		}
 	}
-	resolver, _ := ResolveCheckVarsRuntime(meta, deployOverlay, engine, req.Name, containerName, req.Instance)
-	filter, err := planTagFilter(req.Tag)
-	if err != nil {
+	resolver, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, engine, req.Name, containerName, req.Instance)
+	resolver = stampCharlyBin(resolver)
+	// validateTagExpr still VALIDATES --tag's syntax (a malformed expression errors here);
+	// applying the parsed filter to the plan walk is a known, tracked gap — see the
+	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
+	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
+	if err := validateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	rctx := resolveCheckRunnerContext(req.Name, dir, projectCfg)
 	env, hasRuntime := resolverEnv(resolver)
-	var grader StepGrader
+	var grader kit.StepGrader
 	if !req.NoAgent {
 		ai, aerr := resolveGraderAgent(dir, req.Agent)
 		if aerr != nil {
 			return kit.CheckRunReply{}, aerr
 		}
-		grader = &AgentGrader{Agent: ai, Target: req.Name, Instance: req.Instance, Timeout: req.Timeout}
+		grader = &kit.AgentGrader{Agent: ai, Target: req.Name, Instance: req.Instance, Timeout: req.Timeout}
 	}
 	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:                 ContainerChain(engine, containerName),
+		Exec:                 deploykit.ContainerChain(engine, containerName),
 		Mode:                 RunModeLive,
 		Env:                  env,
 		HasRuntime:           hasRuntime,
@@ -283,7 +291,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		CandyScanErr:         rctx.CandyScanErr,
 		Grader:               grader,
 	})
-	results := RunPlan(context.Background(), runner, meta.Description, filter, req.Strict)
+	results := kit.RunPlan(context.Background(), runner, meta.Description, req.Strict)
 	grading := "agent-graded prose"
 	if req.NoAgent {
 		grading = "deterministic-only"

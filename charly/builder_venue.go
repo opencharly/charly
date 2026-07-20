@@ -6,24 +6,32 @@ package main
 // images live) and installs them onto an arbitrary venue via the DeployExecutor:
 //
 //   - aur (s.LocalPkg != nil): produces .pkg.tar.zst files in a host staging dir, then
-//     ships + installs them onto the venue via the SHARED transferAndInstallPkgs leg.
+//     ships + installs them onto the venue via the SHARED deploykit.TransferAndInstallPkgs leg.
 //   - npm/pixi/cargo (home-artifact): produces user-home subdirs (~/.npm-global,
 //     ~/.pixi, ~/.cargo) baking the VENUE home path, tars them, and extracts into the
 //     venue user's $HOME over the executor.
 //
-// The build ENGINE (BuilderRun → podman; EnsureImagePresent → charly box build;
-// buildDepPkgsOnHost → the aur dep-builder) STAYS the irreducible core (package main);
-// this function is the orchestration that drives it against a venue executor. It is the
-// SAME body the VM target used (extracted verbatim, behavior-preserving), so an
+// The dep-builder engine itself (deploykit.BuildDepPkgsOnHost → kit.BuilderRun → podman) is a
+// PURE sdk/deploykit function (W3) — this file's ONE remaining core dependency is the injected
+// image-resolve/ensure closures (resolveImageRefForEnsure / EnsureImagePresent → `charly box
+// build`, a genuine loader action), which this function closes over build.Cfg/build.ProjectDir
+// and passes in. This function is the orchestration that drives the dep-builder against a venue
+// executor — the SAME body the VM target used (extracted verbatim, behavior-preserving), so an
 // out-of-process deploy/step plugin driving a BuilderStep over the RunHostStep reverse channel
 // runs the IDENTICAL machinery a built-in VM deploy runs — no second implementation.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // buildEngineContext is the host-ENGINE context the reverse channel carries so the
@@ -42,38 +50,39 @@ type buildEngineContext struct {
 	// DistroCfg is the resolved distro: vocabulary the SystemPackagesStep host render
 	// (renderHostPackageCommand) needs to look up the format's phase.install.host
 	// template. Zero for an Invoke whose plan has no SystemPackagesStep.
-	DistroCfg *DistroConfig
+	DistroCfg *buildkit.DistroConfig
 
 	// The following are populated ONLY by the pod-overlay BUILD-emit path
-	// (OCITarget.stepEmitBuildContext), so the HOST-COUPLED Builder step-emitter
+	// (the buildEngineContext), so the HOST-COUPLED Builder step-emitter
 	// (stepEmitBuilder, step_emit_hostbuild.go) can render a multi-stage / inline builder
 	// via the SAME buildStageContext + RenderTemplate pipeline the box build uses (R3, the
 	// C1.3 relocation of the Builder build-emit onto the step-emit seam), and the HOST-COUPLED
 	// LocalPkgInstall step-emitter (stepEmitLocalPkgInstall) can render the dev/prod localpkg
-	// IMAGE install via renderLocalPkgImageInstall (the C1.4 relocation). They are zero for
-	// every deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and
-	// the LocalPkgInstall DEPLOY leg is execLocalPkgInstall (separate host-engine paths driven
-	// via RunHostStep), which read none of them.
+	// IMAGE install via deploykit.RenderLocalPkgImageInstall (the C1.4 relocation). They are zero
+	// for every deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and
+	// the LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
+	// driven via RunHostStep), which read none of them.
 	Generator     *Generator
-	BuilderConfig *BuilderConfig
-	Box           *ResolvedBox
-	// ImageBuildDir is the OCITarget's per-image (pod-overlay) build dir — the imageDir the
+	BuilderConfig *buildkit.BuilderConfig
+	Box           *buildkit.ResolvedBox
+	// ImageBuildDir is the per-image (pod-overlay) build dir — the imageDir the
 	// dev-mode localpkg build-emit stages a locally-built package into
-	// (renderLocalPkgImageDevInstall). It is OCITarget.BuildDir, NOT Generator.BuildDir (the
-	// overlay build dir differs from the project .build root). Zero for every deploy-leg context.
+	// (deploykit's renderLocalPkgImageDevInstall). It is buildEngineContext.ImageBuildDir, NOT
+	// Generator.BuildDir (the overlay build dir differs from the project .build root). Zero for
+	// every deploy-leg context.
 	ImageBuildDir string
-	// ContextRelPrefix is the OCITarget's build-context-relative prefix for staged inline
+	// ContextRelPrefix is the build-context-relative prefix for staged inline
 	// content — the datum the HOST-COUPLED Op step-emitter (stepEmitOp, step_emit_hostbuild.go)
 	// passes to Generator.emitTasks so a write: op stages its content-addressed COPY source
 	// under the correct .build/<image>/_inline path (the C1.5 relocation of the OpStep build-emit
-	// onto the step-emit seam). It is OCITarget.ContextRelPrefix. Zero for every deploy-leg context.
+	// onto the step-emit seam). It is buildEngineContext.ContextRelPrefix. Zero for every deploy-leg context.
 	ContextRelPrefix string
 }
 
 // builderStepImage resolves the builder image ref for a BuilderStep:
 // --builder-image override → the compiled BuilderStep.BuilderImage. The builder always
 // runs on the HOST (podman); the venue never needs a container runtime.
-func builderStepImage(s *BuilderStep, opts EmitOpts) (string, error) {
+func builderStepImage(s *deploykit.BuilderStep, opts deploykit.EmitOpts) (string, error) {
 	image := opts.BuilderImageOverride
 	if image == "" {
 		image = s.BuilderImage
@@ -91,11 +100,11 @@ func builderStepImage(s *BuilderStep, opts EmitOpts) (string, error) {
 // by the compiler for the aur builder) and goes through the build-on-host → transfer →
 // package-install leg; everything else is a home-artifact builder (pixi/npm/cargo) whose
 // ~/.pixi / ~/.npm-global / ~/.cargo output is tarred into the venue home. An unknown
-// builder with neither shape has no host build script (renderBuilderScript errors on a
+// builder with neither shape has no host build script (deploykit.RenderBuilderScript errors on a
 // nil BuilderDef cell); --skip-incompatible skips it.
-func runVenueBuilderStep(ctx context.Context, exec DeployExecutor, venueHome string, build buildEngineContext, s *BuilderStep, opts EmitOpts) error {
+func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, venueHome string, build buildEngineContext, s *deploykit.BuilderStep, opts deploykit.EmitOpts) error {
 	if s.LocalPkg == nil {
-		if s.BuilderDef == nil || builderPhaseTemplate(s.BuilderDef, PhaseInstall, VenueHostNative) == "" {
+		if s.BuilderDef == nil || builderPhaseTemplate(s.BuilderDef, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			if opts.SkipIncompatible {
 				fmt.Fprintf(os.Stderr, "builder step %q (candy=%s) skipped: no phase.install.host cell (--skip-incompatible)\n", s.Builder, s.CandyName)
 				return nil
@@ -111,15 +120,22 @@ func runVenueBuilderStep(ctx context.Context, exec DeployExecutor, venueHome str
 	}
 	// Gate on the format's local_pkg.probe (e.g. `command -v pacman`) succeeding on the
 	// VENUE — config-driven, not a hardcoded distro/builder-name check.
-	if !venueHasPkgManager(ctx, exec, s.LocalPkg, opts) {
+	if !deploykit.VenueHasPkgManager(ctx, exec, s.LocalPkg, opts) {
 		return fmt.Errorf("builder %q (candy=%s) builds %s package files but the venue has no %s package manager (local_pkg.probe %q failed); cannot install the built packages",
 			s.Builder, s.CandyName, s.LocalPkg.DepBuilder, s.LocalPkg.DepBuilder, s.LocalPkg.Probe)
 	}
 
 	// Build the aur packages on the HOST through the SHARED host-side dep-build helper
 	// (R3) — the builder runs on the host (podman); the venue never needs a container
-	// runtime. The package glob comes from the format config.
-	matches, err := buildDepPkgsOnHost(ctx, s.LocalPkg, s.BuilderDef, image, extractStringSlice(s.RawStageContext, "packages"), s.CandyDir, build.Cfg, build.ProjectDir, opts)
+	// runtime. The package glob comes from the format config. The image resolve/ensure
+	// seams are INJECTED closures (deploykit.BuildDepPkgsOnHost imports no *Config) —
+	// closing over build.Cfg/build.ProjectDir here, the one genuine core dependency.
+	matches, err := deploykit.BuildDepPkgsOnHost(ctx, s.LocalPkg, s.BuilderDef, image, deploykit.ExtractStringSlice(s.RawStageContext, "packages"), s.CandyDir,
+		func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
+		func(ctx context.Context, img string) error {
+			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
+		},
+		opts)
 	if err != nil {
 		return fmt.Errorf("venue aur builder: %w", err)
 	}
@@ -131,7 +147,9 @@ func runVenueBuilderStep(ctx context.Context, exec DeployExecutor, venueHome str
 	// transfer+install leg (R3). The install command (e.g. `pacman -U`) comes from the
 	// format's local_pkg.install_template and is the upgrade form, so a re-run after a
 	// partial failure replaces the staging content idempotently.
-	return transferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
+	installErr := deploykit.TransferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
+	cleanupErr := deploykit.CleanupBuiltPackageFiles(matches)
+	return errors.Join(installErr, cleanupErr)
 }
 
 // runVenueHomeArtifactBuilder runs a user-home builder (npm/pixi/cargo) on the HOST into
@@ -143,7 +161,7 @@ func runVenueBuilderStep(ctx context.Context, exec DeployExecutor, venueHome str
 // install-prefix path; baking the venue's home means the artifacts work unchanged once
 // extracted into the venue's real $HOME. Build caches (.cache/) are excluded from the
 // transfer — they're large and the venue doesn't need them.
-func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venueHome string, build buildEngineContext, s *BuilderStep, opts EmitOpts) error {
+func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExecutor, venueHome string, build buildEngineContext, s *deploykit.BuilderStep, opts deploykit.EmitOpts) error {
 	image, err := builderStepImage(s, opts)
 	if err != nil {
 		return err
@@ -166,13 +184,13 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venu
 	defer func() { _ = os.RemoveAll(stageHost); UnregisterTempCleanup(stageHost) }()
 
 	bindMounts := map[string]string{venueHome: stageHost}
-	envVars := UserScopeEnv(venueHome)
-	script, err := renderBuilderScript(s, venueHome)
+	envVars := kit.UserScopeEnv(venueHome)
+	script, err := deploykit.RenderBuilderScript(s, venueHome)
 	if err != nil {
 		return err
 	}
 
-	out, err := BuilderRun(opts.ContextOrDefault(), BuilderRunOpts{
+	out, err := kit.BuilderRun(opts.ContextOrDefault(), deploykit.BuilderRunOpts{
 		BuilderImage: image,
 		CandyDir:     s.CandyDir,
 		ScriptBody:   script,
@@ -185,7 +203,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venu
 		// BuilderRun can resolve a namespace-qualified / short builder ref (e.g. a
 		// bed's install_opts.builder_image: arch.arch-builder) to its concrete image
 		// — newest-local, or built on-demand from the project — instead of only
-		// accepting a full registry ref. Mirrors buildDepPkgsOnHost (localpkg.go).
+		// accepting a full registry ref. Mirrors deploykit.BuildDepPkgsOnHost's own injected
+		// ResolveImage/EnsureImage closures (sdk/deploykit/localpkg.go).
 		ResolveImage: func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
 		EnsureImage: func(ctx context.Context, img string) error {
 			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
@@ -241,7 +260,7 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venu
 	}
 	// Extract AS THE VENUE USER so the home artifacts (~/.npm-global, ~/.cargo, ~/.pixi)
 	// end up owned by the venue user, not root.
-	extractScript := fmt.Sprintf("set -e\nmkdir -p \"$HOME\"\ntar -C \"$HOME\" -xzf %s\n", deployShellQuote(venueTar))
+	extractScript := fmt.Sprintf("set -e\nmkdir -p \"$HOME\"\ntar -C \"$HOME\" -xzf %s\n", kit.ShellQuote(venueTar))
 	if err := dexec.RunUser(ctx, extractScript, opts); err != nil {
 		return fmt.Errorf("extracting builder artifacts on venue: %w", err)
 	}
@@ -249,7 +268,7 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec DeployExecutor, venu
 	// root-owned, and /tmp is sticky (1777) — the venue user can't remove a root-owned
 	// file there. Cleaning up as root avoids leaving a root-owned tarball behind (and
 	// previously aborted the deploy under the extract script's `set -e`).
-	if err := dexec.RunSystem(ctx, fmt.Sprintf("rm -f %s\n", deployShellQuote(venueTar)), opts); err != nil {
+	if err := dexec.RunSystem(ctx, fmt.Sprintf("rm -f %s\n", kit.ShellQuote(venueTar)), opts); err != nil {
 		return fmt.Errorf("removing builder tarball on venue: %w", err)
 	}
 	return nil

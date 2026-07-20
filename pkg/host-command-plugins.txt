@@ -23,7 +23,6 @@
 # One name per line; blank lines and `#` comments are ignored.
 plugin-secrets
 plugin-udev
-plugin-tmux
 plugin-preempt
 plugin-feature
 plugin-vm

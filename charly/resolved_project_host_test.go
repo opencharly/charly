@@ -10,6 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/vmshared"
+
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -26,8 +30,8 @@ func canonKey(s string) string { return strings.ToLower(strings.ReplaceAll(s, "_
 // non-zero value, plus the InitSystem json:"-" cache set — so the completeness test proves (a) every
 // field `charly box inspect` serializes survives the projection and (b) the host-only compute caches
 // are DROPPED (InitSystem is the flagged judgment call: it is json:"-", so inspect never emits it).
-func fullResolvedBoxFixture() *ResolvedBox {
-	return &ResolvedBox{
+func fullResolvedBoxFixture() *buildkit.ResolvedBox {
+	return &buildkit.ResolvedBox{
 		Name:                  "demo",
 		Version:               "2026.100.0001",
 		EffectiveVersion:      "2026.100.0002",
@@ -50,8 +54,8 @@ func fullResolvedBoxFixture() *ResolvedBox {
 		GID:                   1000,
 		Home:                  "/home/user",
 		UserAdopted:           true,
-		Merge:                 &MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
-		Builder:               BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
+		Merge:                 &vmshared.MergeConfig{Auto: true, MaxMB: 512, MaxTotalMB: 4096},
+		Builder:               buildkit.BuilderMap{"pixi": "ghcr.io/opencharly/pixi"},
 		BuilderCapabilities:   []string{"pixi"},
 		Auto:                  true,
 		Network:               "host",
@@ -104,10 +108,15 @@ func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 		}
 	}
 
-	// No host-only compute cache leaks into the wire view.
-	for _, cache := range []string{"distroconfig", "distrodef", "builderconfig", "initsystem", "initdef", "candycaps"} {
+	// No host-only compute cache leaks into the wire view. The 3 RESOLVE-time vocab pointers
+	// (DistroConfig/DistroDef/BuilderConfig) STAY host-only — the plugin render re-attaches them
+	// from the project vocab (NewSpecResolvedBox), so they must never cross the wire. The
+	// build-RENDER caches (BakedMetadata/Caps/RenderCandyOrder/InitSystem/InitDef/ActiveInits)
+	// ARE wire data now (#67 render-DRIVE move — the plugin render reads them from the envelope
+	// WITHOUT the live *Candy graph), so they are asserted in the positive set below.
+	for _, cache := range []string{"distroconfig", "distrodef", "builderconfig"} {
 		if _, leaked := viewCanon[cache]; leaked {
-			t.Fatalf("host-only cache %q leaked into ResolvedBoxView (must stay json:%q, never wire data)", cache, "-")
+			t.Fatalf("host-only vocab pointer %q leaked into ResolvedBoxView (must stay json:%q, never wire data)", cache, "-")
 		}
 	}
 }
@@ -125,20 +134,20 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		Info:          "the charly toolchain",
 		Remote:        true,
 		RepoPath:      "github.com/opencharly/charly",
-		Require:       []CandyRef{{Raw: "base"}},
-		IncludedCandy: []CandyRef{{Raw: "gnupg"}},
+		Require:       []deploykit.CandyRef{{Raw: "base"}},
+		IncludedCandy: []deploykit.CandyRef{{Raw: "gnupg"}},
 	}
 	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
-	candy.mcpProvides = []MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
-	candy.portSpecs = []PortSpec{{Port: 9000, Protocol: "tcp"}}
-	candy.service = []ServiceEntry{{Name: "charly-daemon"}}
+	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
+	candy.portSpecs = []spec.PortSpec{{Port: 9000, Protocol: "tcp"}}
+	candy.service = []spec.ServiceEntry{{Name: "charly-daemon"}}
 
 	rp := &spec.ResolvedProject{
 		Version: "2026.100.0000",
 		Boxes:   map[string]spec.ResolvedBoxView{"demo": projectResolvedBox(fullResolvedBoxFixture())},
 		Candies: map[string]spec.CandyView{"charly": projectCandyView(candy)},
 	}
-	bundle := map[string]BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
+	bundle := map[string]spec.BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
 	for k, v := range bundle {
 		node := v
 		if rp.Deploy == nil {
@@ -147,6 +156,45 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 		rp.Deploy[k] = &node
 	}
 	return rp
+}
+
+func TestProjectCandyViewPreservesPerInitTriggers(t *testing.T) {
+	candy := &Candy{InitSystems: map[string]bool{
+		"supervisord": true,
+		"systemd":     false,
+	}}
+	view := projectCandyView(candy)
+	if !view.InitSystems["supervisord"] {
+		t.Fatal("projectCandyView dropped the supervisord init trigger")
+	}
+	if view.InitSystems["systemd"] {
+		t.Fatal("projectCandyView changed the false systemd init trigger")
+	}
+}
+
+func TestResolvedProjectCompletesPerInitTriggersBeforeProjection(t *testing.T) {
+	candy := &Candy{service: []spec.ServiceEntry{{
+		Name: "sshd",
+		Exec: "/usr/local/bin/sshd-wrapper",
+	}}}
+	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+		"supervisord": {
+			CandyFields: []string{"service"},
+			ServiceSchema: &spec.InitServiceSchema{
+				ServiceTemplate: "[program:{{.Name}}]",
+			},
+		},
+	}}
+	rp, err := projectResolvedProjectWithBoxes(
+		&Config{}, map[string]*Candy{"sshd": candy}, nil,
+		nil, nil, initCfg, t.TempDir(), "test", ResolveOpts{}, nil, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rp.Candies["sshd"].InitSystems["supervisord"] {
+		t.Fatal("resolved-project assembly dropped the completed supervisord trigger")
+	}
 }
 
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic

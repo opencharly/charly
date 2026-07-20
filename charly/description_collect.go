@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // description_collect.go — collect the baked `plan:` view for the
 // ai.opencharly.description OCI label.
 //
@@ -16,17 +20,23 @@ package main
 // already materialized in the image. agent-run:/include: steps are not baked
 // (agent-run appears only in deploy-level iterate: plans; include is expanded
 // into iterate plans, never a candy bake).
+//
+// MergeDeployDescriptions (the per-host deploy-plan overlay onto a baked
+// LabelDescriptionSet) moved to sdk/kit (description_merge.go) — P12a follow-up:
+// pure over LabelDescriptionSet/spec.Step, zero core state. Its callers
+// (check_cmd.go's checkLivePod, the "live" gather engine) stay core (they need
+// LoadUnified/ExtractMetadata) and call kit.MergeDeployDescriptions.
 
 // bakeableSteps returns the subset of a plan that belongs in the runtime
 // descriptor label per the bake rule above.
-func bakeableSteps(plan []Step) []Step {
-	var out []Step
+func bakeableSteps(plan []spec.Step) []spec.Step {
+	var out []spec.Step
 	for _, s := range plan {
 		bake := false
 		switch {
 		case s.Check != "" || s.AgentCheck != "":
 			bake = true
-		case s.Run != "" && opInContext(&s.Op, CtxRuntime):
+		case s.Run != "" && opInContext(&s.Op, spec.CtxRuntime):
 			bake = true
 		}
 		if !bake {
@@ -44,8 +54,8 @@ func bakeableSteps(plan []Step) []Step {
 }
 
 // CollectDescriptions returns nil if every section is empty.
-func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *LabelDescriptionSet {
-	set := &LabelDescriptionSet{}
+func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *spec.LabelDescriptionSet {
+	set := &spec.LabelDescriptionSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 	for _, candyName := range allCandyNames {
@@ -57,7 +67,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 		if layer.Description == "" && len(baked) == 0 {
 			continue
 		}
-		set.Candy = append(set.Candy, LabeledDescription{
+		set.Candy = append(set.Candy, spec.LabeledDescription{
 			Origin:      "candy:" + candyName,
 			Description: layer.Description,
 			Plan:        baked,
@@ -68,7 +78,7 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 	if img, ok := cfg.BoxConfig(boxName); ok {
 		baked := bakeableSteps(img.Plan)
 		if img.Description != "" || len(baked) > 0 {
-			set.Box = append(set.Box, LabeledDescription{
+			set.Box = append(set.Box, spec.LabeledDescription{
 				Origin:      "box:" + boxName,
 				Description: img.Description,
 				Plan:        baked,
@@ -80,47 +90,4 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 		return nil
 	}
 	return set
-}
-
-// MergeDeployDescriptions overlays a deployment node's local `plan:` steps onto
-// a label-baked LabelDescriptionSet's Deploy section. A baked deploy step with
-// the same step id is replaced by the local one; otherwise the local step is
-// appended. This is the per-host override surface for acceptance steps
-// (charly.yml deploy entries). If localPlan is empty, returns baked unchanged.
-func MergeDeployDescriptions(baked *LabelDescriptionSet, localPlan []Step, originName string) *LabelDescriptionSet {
-	if len(localPlan) == 0 {
-		return baked
-	}
-	if baked == nil {
-		baked = &LabelDescriptionSet{}
-	}
-	// Index baked deploy steps by author id for replace-by-id (only steps
-	// carrying an explicit Op.ID participate; derived ids are positional and
-	// not stable across an overlay).
-	type loc struct{ ld, st int }
-	locByID := map[string]loc{}
-	for li := range baked.Deploy {
-		for si := range baked.Deploy[li].Plan {
-			if id := baked.Deploy[li].Plan[si].ID; id != "" {
-				locByID[id] = loc{li, si}
-			}
-		}
-	}
-	var fresh []Step
-	for _, st := range localPlan {
-		if id := st.ID; id != "" {
-			if l, ok := locByID[id]; ok {
-				baked.Deploy[l.ld].Plan[l.st] = st // replace by id
-				continue
-			}
-		}
-		fresh = append(fresh, st)
-	}
-	if len(fresh) > 0 {
-		baked.Deploy = append(baked.Deploy, LabeledDescription{
-			Origin: "deploy-local:" + originName,
-			Plan:   fresh,
-		})
-	}
-	return baked
 }

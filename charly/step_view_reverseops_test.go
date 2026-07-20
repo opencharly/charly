@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -15,7 +16,7 @@ import (
 // externalDeployTarget.prepareReverseState does on the live venue.
 func TestStepToView_CapturesReverseOps(t *testing.T) {
 	t.Run("file step → rm-file-system", func(t *testing.T) {
-		v := stepToView(&FileStep{Source: "/tmp/src", Dest: "/etc/marker", CandyName: "x"})
+		v := deploykit.StepToView(&deploykit.FileStep{Source: "/tmp/src", Dest: "/etc/marker", CandyName: "x"})
 		if len(v.ReverseOps) != 1 {
 			t.Fatalf("FileStep view ReverseOps = %d, want 1", len(v.ReverseOps))
 		}
@@ -28,7 +29,7 @@ func TestStepToView_CapturesReverseOps(t *testing.T) {
 	t.Run("shell-hook with EnvFile → remove-envd-file", func(t *testing.T) {
 		// EnvFile is set by the host (prepareReverseState) BEFORE projecting; without it
 		// ShellHook.Reverse() is nil (the deploy-time-state dependency Fork A captures).
-		v := stepToView(&ShellHookStep{CandyName: "mycandy", EnvFile: "/home/u/.config/opencharly/env.d/mycandy.env"})
+		v := deploykit.StepToView(&deploykit.ShellHookStep{CandyName: "mycandy", EnvFile: "/home/u/.config/opencharly/env.d/mycandy.env"})
 		if len(v.ReverseOps) != 1 || v.ReverseOps[0].Kind != spec.ReverseOpRemoveEnvdFile {
 			t.Fatalf("ShellHook view ReverseOps = %+v, want one remove-envd-file", v.ReverseOps)
 		}
@@ -37,7 +38,7 @@ func TestStepToView_CapturesReverseOps(t *testing.T) {
 	t.Run("service-packaged with PriorEnabled → restore-enabled recorded", func(t *testing.T) {
 		// PriorEnabled is probed on the venue by prepareReverseState; with it set, teardown
 		// records BOTH the disable AND the restore-enabled op.
-		v := stepToView(&ServicePackagedStep{Unit: "foo.service", Enable: true, PriorEnabled: true, TargetScope: ScopeSystem})
+		v := deploykit.StepToView(&deploykit.ServicePackagedStep{Unit: "foo.service", Enable: true, PriorEnabled: true, TargetScope: spec.ScopeSystem})
 		var sawRestore bool
 		for _, op := range v.ReverseOps {
 			if op.Kind == spec.ReverseOpRestoreEnabled {

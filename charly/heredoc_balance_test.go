@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestNoOvTokensInSource asserts the ov→charly rebrand left NO `OV_` token in
@@ -80,8 +83,8 @@ func assertBalancedHeredoc(t *testing.T, label, out string) {
 // TestRenderTaskCommand_WriteHeredocBalanced covers the deploy-path `write:`
 // task command (`install -m … <<'CHARLY_WRITE' … CHARLY_WRITE`).
 func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
-	cmd, err := renderOpCommand(&OpStep{
-		Op: &Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
+	cmd, err := renderOpCommand(&deploykit.OpStep{
+		Op: &spec.Op{Write: "/etc/charly/demo.conf", Content: "key = value\n", Mode: "0644"},
 	})
 	if err != nil {
 		t.Fatalf("renderTaskCommand: %v", err)
@@ -96,23 +99,23 @@ func TestRenderTaskCommand_WriteHeredocBalanced(t *testing.T) {
 // repo-file write (`CHARLY_REPO`) and the packaged-service drop-in
 // (`CHARLY_DROPIN`).
 func TestOCIEmit_HeredocsBalanced(t *testing.T) {
-	tgt := &OCITarget{}
-	plan := &InstallPlan{Candy: "demo", Steps: []InstallStep{
-		&RepoChangeStep{
+	tgt := ociTestTarget(buildEngineContext{})
+	plan := &deploykit.InstallPlan{Candy: "demo", Steps: []spec.InstallStep{
+		&deploykit.RepoChangeStep{
 			Format:  "rpm",
 			File:    "/etc/yum.repos.d/demo.repo",
 			Content: "[demo]\nname=demo\n",
 		},
-		&ServicePackagedStep{
+		&deploykit.ServicePackagedStep{
 			Unit:          "demo.service",
-			TargetScope:   ScopeSystem,
+			TargetScope:   spec.ScopeSystem,
 			Enable:        true,
 			OverridesText: "[Service]\nLimitNOFILE=65536\n",
 			OverridesPath: "/etc/systemd/system/demo.service.d/override.conf",
 			CandyName:     "demo",
 		},
 	}}
-	if err := tgt.Emit([]*InstallPlan{plan}, EmitOpts{}); err != nil {
+	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	out := tgt.String()
@@ -122,5 +125,5 @@ func TestOCIEmit_HeredocsBalanced(t *testing.T) {
 	if !strings.Contains(out, "<<'CHARLY_DROPIN'") {
 		t.Errorf("expected CHARLY_DROPIN opener in OCI output:\n%s", out)
 	}
-	assertBalancedHeredoc(t, "OCITarget.Emit", out)
+	assertBalancedHeredoc(t, "deploykit.OCITarget.Emit", out)
 }

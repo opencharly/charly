@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -20,11 +21,11 @@ import (
 const retentionBuilderKind = "retention"
 
 func hostBuildRetention(_ context.Context, req spec.RetentionRequest, _ buildEngineContext) (spec.RetentionReply, error) {
-	rt, err := ResolveRuntime()
+	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return spec.RetentionReply{Error: err.Error()}, nil
 	}
-	engineBin := EngineBinary(rt.BuildEngine)
+	engineBin := kit.EngineBinary(rt.BuildEngine)
 
 	// --invalidate: targeted image-tag invalidation ONLY (matches CleanCmd's early return).
 	if req.Invalidate != "" {

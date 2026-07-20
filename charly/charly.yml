@@ -21,7 +21,7 @@ providers:
     builder: []
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
-# `task build:charly` before `go build`) to emit charly/plugins_generated.go (one
+# `task build:binary` before `go build`) to emit charly/plugins_generated.go (one
 # registerCompiledPlugin() call per entry) + the repo-root go.work (a `use` directive
 # per entry, so `go build ./charly` resolves the candy imports). A plugin candy NOT
 # listed here still loads OUT-OF-PROCESS over gRPC when a plan references its word
@@ -55,6 +55,7 @@ compiled_plugins:
     - plugin-package
     - plugin-init
     - plugin-agent
+    - plugin-agent-pi
     - plugin-builder
     - plugin-distro
     - plugin-resource
@@ -65,6 +66,7 @@ compiled_plugins:
     - plugin-build
     - plugin-installstep
     - plugin-tunnel
+    - plugin-tmux
     - plugin-migrate
     - plugin-clean
     - plugin-settings
@@ -77,6 +79,7 @@ compiled_plugins:
     - plugin-bundle
     - plugin-alias
     - plugin-box
+    - plugin-authoring
     - plugin-oci
     - plugin-status
     - plugin-check
@@ -507,7 +510,8 @@ arch:
                     # the sdk remote ("fatal: … not our ref"). sdk is wired by PKGBUILD prepare() from
                     # a SEPARATE file:// source, so superproject-fetch recursion is never needed.
                     build_template: |
-                        cd {{.SrcDir}} && PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
+                        SOURCE_ROOT=$(cd {{.SourceDir}}/../.. && pwd)
+                        cd {{.SrcDir}} && CHARLY_LOCALPKG_SOURCE_ROOT="$SOURCE_ROOT" PKGDEST={{.PkgDest}} GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=fetch.recurseSubmodules GIT_CONFIG_VALUE_0=false makepkg -sf --noconfirm
                     # Refresh the sync DB (+ reseed the keyring from the installed keyring
                     # packages) BEFORE installing the local pkg — `pacman -U` resolves the
                     # pkg's depends= from the sync DB, and a pinned base image's DB drifts
@@ -739,9 +743,9 @@ debian:
                     source_sentinel: debian/control
                     build_template: |
                         set -e
-                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
                         # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
                         # `charly doctor`/`clean`/`vm` and the other welded commands resolve
@@ -981,9 +985,9 @@ fedora:
                     source_sentinel: '*.spec'
                     build_template: |
                         set -e
-                        SUPER=$(cd {{.SrcDir}}/../.. && pwd)
+                        SUPER=$(cd {{.SourceDir}}/../.. && pwd)
                         mkdir -p "$SUPER/bin/plugins"
-                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER/charly" && CGO_ENABLED=1 go build -ldflags "-X main.BuildCalVer=$(bash "$SUPER/pkg/arch/calver.sh")" -o "$SUPER/bin/charly" .)
+                        [ -x "$SUPER/bin/charly" ] || (cd "$SUPER" && CGO_ENABLED=1 task build:binary)
                         # Build the welded command plugins beside charly (the SAME
                         # pkg/host-command-plugins.txt set the arch PKGBUILD bakes) so
                         # `charly doctor`/`clean`/`vm` and the other welded commands resolve

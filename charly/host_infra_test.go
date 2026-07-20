@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // Tests for the four Task-9 host-infra files.
@@ -29,7 +33,7 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 		{``, "", "", false},
 	}
 	for _, tc := range tests {
-		k, v, ok := splitOsReleaseLine(tc.line)
+		k, v, ok := vmshared.SplitOsReleaseLine(tc.line)
 		if k != tc.k || v != tc.v || ok != tc.ok {
 			t.Errorf("splitOsReleaseLine(%q) = (%q, %q, %v); want (%q, %q, %v)",
 				tc.line, k, v, ok, tc.k, tc.v, tc.ok)
@@ -39,22 +43,22 @@ func TestDetectHostDistroFedora43(t *testing.T) {
 
 func TestHostDistroTagsAndFormatHint(t *testing.T) {
 	tests := []struct {
-		hd      *HostDistro
+		hd      *vmshared.HostDistro
 		wantTag string
 		wantFmt string
 	}{
 		{
-			hd:      &HostDistro{ID: "fedora", VersionID: "43"},
+			hd:      &vmshared.HostDistro{ID: "fedora", VersionID: "43"},
 			wantTag: "fedora:43",
 			wantFmt: "rpm",
 		},
 		{
-			hd:      &HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
+			hd:      &vmshared.HostDistro{ID: "ubuntu", VersionID: "24.04", IDLike: []string{"debian"}},
 			wantTag: "ubuntu:24.04",
 			wantFmt: "deb",
 		},
 		{
-			hd:      &HostDistro{ID: "arch"},
+			hd:      &vmshared.HostDistro{ID: "arch"},
 			wantTag: "arch",
 			wantFmt: "pac",
 		},
@@ -79,7 +83,7 @@ func TestParseGlibcVersion(t *testing.T) {
 		"":                                          "",
 	}
 	for in, want := range tests {
-		if got := parseGlibcVersion(in); got != want {
+		if got := vmshared.ParseGlibcVersion(in); got != want {
 			t.Errorf("parseGlibcVersion(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -99,7 +103,7 @@ func TestCompareGlibc(t *testing.T) {
 		{"2.39", "", 0},
 	}
 	for _, tc := range tests {
-		if got := CompareGlibc(tc.a, tc.b); got != tc.want {
+		if got := vmshared.CompareGlibc(tc.a, tc.b); got != tc.want {
 			t.Errorf("CompareGlibc(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}
@@ -107,10 +111,10 @@ func TestCompareGlibc(t *testing.T) {
 
 // ---------------- install_ledger.go ----------------
 
-func withTempLedger(t *testing.T) *LedgerPaths {
+func withTempLedger(t *testing.T) *kit.LedgerPaths {
 	t.Helper()
 	root := t.TempDir()
-	return &LedgerPaths{
+	return &kit.LedgerPaths{
 		Root:     root,
 		Deploys:  filepath.Join(root, "deploys"),
 		Candies:  filepath.Join(root, "layers"),
@@ -120,17 +124,17 @@ func withTempLedger(t *testing.T) *LedgerPaths {
 
 func TestLedgerRoundTrip(t *testing.T) {
 	paths := withTempLedger(t)
-	rec := &DeployRecord{
+	rec := &kit.DeployRecord{
 		DeployID:   "abc123",
 		Image:      "fedora-coder",
 		Target:     "host",
 		Candy:      []string{"ripgrep", "uv"},
 		DeployedAt: "2026-04-21T00:00:00Z",
 	}
-	if err := WriteDeployRecord(paths, rec); err != nil {
+	if err := kit.WriteDeployRecord(paths, rec); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got, err := ReadDeployRecord(paths, "abc123")
+	got, err := kit.ReadDeployRecord(paths, "abc123")
 	if err != nil || got == nil {
 		t.Fatalf("read: %v / %+v", err, got)
 	}
@@ -142,32 +146,32 @@ func TestLedgerRoundTrip(t *testing.T) {
 func TestLedgerRefcount(t *testing.T) {
 	paths := withTempLedger(t)
 	// Deploy A and B both include ripgrep.
-	if err := AddCandyDeployment(paths, "ripgrep", "deploy-A", nil); err != nil {
+	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-A", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
+	if err := kit.AddCandyDeployment(paths, "ripgrep", "deploy-B", nil); err != nil {
 		t.Fatal(err)
 	}
-	rec, _ := ReadCandyRecord(paths, "ripgrep")
+	rec, _ := kit.ReadCandyRecord(paths, "ripgrep")
 	if len(rec.DeployedBy) != 2 {
 		t.Errorf("DeployedBy = %v, want 2 entries", rec.DeployedBy)
 	}
 
 	// Remove A — ripgrep stays.
-	_, shouldRemove, err := RemoveCandyDeployment(paths, "ripgrep", "deploy-A")
+	_, shouldRemove, err := kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-A")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if shouldRemove {
 		t.Errorf("shouldRemove=true after removing one of two deployers")
 	}
-	rec, _ = ReadCandyRecord(paths, "ripgrep")
+	rec, _ = kit.ReadCandyRecord(paths, "ripgrep")
 	if len(rec.DeployedBy) != 1 || rec.DeployedBy[0] != "deploy-B" {
 		t.Errorf("after decrement: %v", rec.DeployedBy)
 	}
 
 	// Remove B — ripgrep should fully teardown.
-	_, shouldRemove, err = RemoveCandyDeployment(paths, "ripgrep", "deploy-B")
+	_, shouldRemove, err = kit.RemoveCandyDeployment(paths, "ripgrep", "deploy-B")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +182,7 @@ func TestLedgerRefcount(t *testing.T) {
 
 func TestLedgerFlock(t *testing.T) {
 	paths := withTempLedger(t)
-	lock, err := AcquireLedgerLock(paths)
+	lock, err := kit.AcquireLedgerLock(paths)
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
@@ -195,7 +199,7 @@ func TestLedgerFlock(t *testing.T) {
 // ---------------- builder_run.go ----------------
 
 func TestBuildBuilderRunArgs(t *testing.T) {
-	opts := BuilderRunOpts{
+	opts := deploykit.BuilderRunOpts{
 		BuilderImage: "fedora-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",
@@ -206,7 +210,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 			"PIXI_CACHE_DIR": "/home/user/.cache/charly/pixi",
 		},
 	}
-	args := BuildBuilderRunArgs(opts)
+	args := kit.BuildBuilderRunArgs(opts)
 	want := []string{
 		"run", "--rm",
 		"--pull=never", // EnsureImagePresent has already handled the pull/build; suppress podman's auto-pull.
@@ -240,7 +244,7 @@ func TestBuildBuilderRunArgs(t *testing.T) {
 
 func TestBuilderRunDryRun(t *testing.T) {
 	// DryRun should return nil, nil without actually exec'ing.
-	out, err := BuilderRun(context.Background(), BuilderRunOpts{
+	out, err := kit.BuilderRun(context.Background(), deploykit.BuilderRunOpts{
 		BuilderImage: "fedora-builder",
 		DryRun:       true,
 		ScriptBody:   "echo hi",
@@ -300,7 +304,7 @@ func TestRemoveManagedBlockAt(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemoveManagedBlockAt(path, "mycandy"); err != nil {
+	if err := kit.RemoveManagedBlockAt(path, "mycandy"); err != nil {
 		t.Fatalf("RemoveManagedBlockAt: %v", err)
 	}
 	got, _ := os.ReadFile(path)
@@ -323,7 +327,7 @@ func TestRenderManagedBlockStrip(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("sh", "-c", renderManagedBlockStrip(path, "mycandy")).CombinedOutput(); err != nil {
+	if out, err := exec.Command("sh", "-c", kit.RenderManagedBlockStrip(path, "mycandy")).CombinedOutput(); err != nil {
 		t.Fatalf("strip script failed: %v\n%s", err, out)
 	}
 	got, _ := os.ReadFile(path)
@@ -437,13 +441,13 @@ func TestShQuoteEnv(t *testing.T) {
 // subordinate uid that doesn't match the bind-mount owner and writes
 // fail with EACCES.
 func TestBuildBuilderRunArgsRunAsRoot(t *testing.T) {
-	opts := BuilderRunOpts{
+	opts := deploykit.BuilderRunOpts{
 		BuilderImage: "arch-builder:latest",
 		CandyDir:     "/home/user/layers/pre-commit",
 		HostHome:     "/home/user",
 		RunAsRoot:    true,
 	}
-	args := BuildBuilderRunArgs(opts)
+	args := kit.BuildBuilderRunArgs(opts)
 	full := strings.Join(args, " ")
 	if !strings.Contains(full, "--user 0:0") {
 		t.Errorf("RunAsRoot did not emit --user 0:0; got: %s", full)

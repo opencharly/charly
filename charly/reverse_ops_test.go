@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -16,10 +17,10 @@ type mockReverseExecutor struct {
 	keepServices bool
 }
 
-func (m *mockReverseExecutor) ReverseDryRun() bool          { return m.dryRun }
-func (m *mockReverseExecutor) ReverseKeepRepoChanges() bool { return m.keepRepo }
-func (m *mockReverseExecutor) ReverseKeepServices() bool    { return m.keepServices }
-func (m *mockReverseExecutor) ReverseRunner() ReverseRunner { return nil }
+func (m *mockReverseExecutor) ReverseDryRun() bool              { return m.dryRun }
+func (m *mockReverseExecutor) ReverseKeepRepoChanges() bool     { return m.keepRepo }
+func (m *mockReverseExecutor) ReverseKeepServices() bool        { return m.keepServices }
+func (m *mockReverseExecutor) ReverseRunner() kit.ReverseRunner { return nil }
 
 func TestReverseOpsUserScopeFileRemove(t *testing.T) {
 	tmp := t.TempDir()
@@ -31,11 +32,11 @@ func TestReverseOpsUserScopeFileRemove(t *testing.T) {
 	if err := os.WriteFile(fileB, []byte("y"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	ops := []ReverseOp{
-		{Kind: ReverseOpRmFileUser, Targets: []string{fileA, fileB}, Scope: ScopeUser},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpRmFileUser, Targets: []string{fileA, fileB}, Scope: spec.ScopeUser},
 	}
 	re := &mockReverseExecutor{dryRun: false}
-	runReverseOps(ops, re)
+	kit.RunReverseOps(ops, re)
 	for _, f := range []string{fileA, fileB} {
 		if _, err := os.Stat(f); !os.IsNotExist(err) {
 			t.Errorf("file still exists: %s (err=%v)", f, err)
@@ -50,11 +51,11 @@ func TestReverseOpsPixiEnvRemove(t *testing.T) {
 	if err := os.MkdirAll(envDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	ops := []ReverseOp{
-		{Kind: ReverseOpPixiEnvRemove, Targets: []string{"pre-commit"}, Scope: ScopeUser},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpPixiEnvRemove, Targets: []string{"pre-commit"}, Scope: spec.ScopeUser},
 	}
 	re := &mockReverseExecutor{}
-	runReverseOps(ops, re)
+	kit.RunReverseOps(ops, re)
 	if _, err := os.Stat(envDir); !os.IsNotExist(err) {
 		t.Errorf("pixi env still exists: %v", err)
 	}
@@ -67,12 +68,12 @@ func TestReverseOpsKeepServicesFlag(t *testing.T) {
 	// the (nil) runner, so a honored flag path emits nothing on stderr —
 	// assert that to prove the ops were skipped.
 	re := &mockReverseExecutor{keepServices: true}
-	ops := []ReverseOp{
-		{Kind: ReverseOpServiceDisable, Targets: []string{"nonexistent.service"}, Scope: ScopeUser},
-		{Kind: ReverseOpServiceRemove, Targets: []string{"/nonexistent"}, Scope: ScopeUser},
-		{Kind: ReverseOpRemoveDropin, Targets: []string{"/nonexistent"}, Scope: ScopeUser},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpServiceDisable, Targets: []string{"nonexistent.service"}, Scope: spec.ScopeUser},
+		{Kind: spec.ReverseOpServiceRemove, Targets: []string{"/nonexistent"}, Scope: spec.ScopeUser},
+		{Kind: spec.ReverseOpRemoveDropin, Targets: []string{"/nonexistent"}, Scope: spec.ScopeUser},
 	}
-	if got := captureStderr(t, func() { runReverseOps(ops, re) }); got != "" {
+	if got := captureStderr(t, func() { kit.RunReverseOps(ops, re) }); got != "" {
 		t.Errorf("keep-services=true should skip all service ops, but got stderr output: %q", got)
 	}
 }
@@ -81,11 +82,11 @@ func TestReverseOpsKeepRepoChangesFlag(t *testing.T) {
 	// keep-repo handlers return early on the flag BEFORE the dry-run print,
 	// so a honored flag emits nothing on stderr even in dry-run mode.
 	re := &mockReverseExecutor{keepRepo: true, dryRun: true}
-	ops := []ReverseOp{
-		{Kind: ReverseOpRemoveRepoFile, Targets: []string{"/etc/yum.repos.d/foo.repo"}, Format: "rpm"},
-		{Kind: ReverseOpCoprDisable, Targets: []string{"foo/bar"}, Format: "rpm"},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpRemoveRepoFile, Targets: []string{"/etc/yum.repos.d/foo.repo"}, Format: "rpm"},
+		{Kind: spec.ReverseOpCoprDisable, Targets: []string{"foo/bar"}, Format: "rpm"},
 	}
-	if got := captureStderr(t, func() { runReverseOps(ops, re) }); got != "" {
+	if got := captureStderr(t, func() { kit.RunReverseOps(ops, re) }); got != "" {
 		t.Errorf("keep-repo=true should skip all repo ops, but got stderr output: %q", got)
 	}
 }
@@ -96,10 +97,10 @@ func TestReverseOpsDryRunEmitsSudoMarkers(t *testing.T) {
 	// UninstallCmd is the config-rendered removal command the deploy target
 	// fills (from the rpm format's uninstall_template) and persists in the
 	// ledger op — reverse_ops.go runs it verbatim, no per-format switch.
-	ops := []ReverseOp{
-		{Kind: ReverseOpPackageRemove, Format: "rpm", Targets: []string{"ripgrep"}, UninstallCmd: "dnf remove -y ripgrep"},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpPackageRemove, Format: "rpm", Targets: []string{"ripgrep"}, UninstallCmd: "dnf remove -y ripgrep"},
 	}
-	got := captureStderr(t, func() { runReverseOps(ops, re) })
+	got := captureStderr(t, func() { kit.RunReverseOps(ops, re) })
 	if !strings.Contains(got, "[dry-run]") {
 		t.Errorf("expected dry-run marker, got: %s", got)
 	}
@@ -117,12 +118,12 @@ func TestReverseOpsPluginScript(t *testing.T) {
 		if err := os.WriteFile(marker, []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		ops := []ReverseOp{{
-			Kind:  ReverseOpPluginScript,
-			Scope: ScopeUser,
+		ops := []spec.ReverseOp{{
+			Kind:  spec.ReverseOpPluginScript,
+			Scope: spec.ScopeUser,
 			Extra: map[string]string{spec.ReverseOpPluginScriptKey: "rm -f " + marker},
 		}}
-		runReverseOps(ops, &mockReverseExecutor{})
+		kit.RunReverseOps(ops, &mockReverseExecutor{})
 		if _, err := os.Stat(marker); !os.IsNotExist(err) {
 			t.Errorf("plugin-script reverse op did not remove the marker (err=%v)", err)
 		}
@@ -131,12 +132,12 @@ func TestReverseOpsPluginScript(t *testing.T) {
 	// System scope routes through the sudo path — dry-run proves the routing
 	// (emits the sudo marker + the verbatim script) without needing real sudo.
 	t.Run("system-scope routes through sudo (dry-run)", func(t *testing.T) {
-		ops := []ReverseOp{{
-			Kind:  ReverseOpPluginScript,
-			Scope: ScopeSystem,
+		ops := []spec.ReverseOp{{
+			Kind:  spec.ReverseOpPluginScript,
+			Scope: spec.ScopeSystem,
 			Extra: map[string]string{spec.ReverseOpPluginScriptKey: "rm -rf /tmp/charly-plugin-script-test"},
 		}}
-		got := captureStderr(t, func() { runReverseOps(ops, &mockReverseExecutor{dryRun: true}) })
+		got := captureStderr(t, func() { kit.RunReverseOps(ops, &mockReverseExecutor{dryRun: true}) })
 		if !strings.Contains(got, "[dry-run] sudo bash -lc") {
 			t.Errorf("expected the system-scope sudo dry-run marker, got: %q", got)
 		}
@@ -148,8 +149,8 @@ func TestReverseOpsPluginScript(t *testing.T) {
 	// An empty script body is a no-op (nothing config-sanctioned to run), never
 	// an error or stray output.
 	t.Run("empty script is a no-op", func(t *testing.T) {
-		ops := []ReverseOp{{Kind: ReverseOpPluginScript, Scope: ScopeUser, Extra: map[string]string{}}}
-		if got := captureStderr(t, func() { runReverseOps(ops, &mockReverseExecutor{}) }); got != "" {
+		ops := []spec.ReverseOp{{Kind: spec.ReverseOpPluginScript, Scope: spec.ScopeUser, Extra: map[string]string{}}}
+		if got := captureStderr(t, func() { kit.RunReverseOps(ops, &mockReverseExecutor{}) }); got != "" {
 			t.Errorf("empty plugin-script should be a silent no-op, got stderr: %q", got)
 		}
 	})
@@ -168,12 +169,12 @@ func TestReverseOpsOrderIsReversed(t *testing.T) {
 	// files removed) because runReverseOp internals don't let us
 	// inspect order directly without more plumbing. Keeping this
 	// narrow since the behavior is obvious from the loop direction.
-	ops := []ReverseOp{
-		{Kind: ReverseOpRmFileUser, Targets: []string{pathA}, Scope: ScopeUser},
-		{Kind: ReverseOpRmFileUser, Targets: []string{pathB}, Scope: ScopeUser},
+	ops := []spec.ReverseOp{
+		{Kind: spec.ReverseOpRmFileUser, Targets: []string{pathA}, Scope: spec.ScopeUser},
+		{Kind: spec.ReverseOpRmFileUser, Targets: []string{pathB}, Scope: spec.ScopeUser},
 	}
 	re := &mockReverseExecutor{}
-	runReverseOps(ops, re)
+	kit.RunReverseOps(ops, re)
 	if _, err := os.Stat(pathA); !os.IsNotExist(err) {
 		t.Errorf("path A should be removed")
 	}

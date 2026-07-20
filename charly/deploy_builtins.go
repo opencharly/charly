@@ -12,8 +12,9 @@ package main
 // lifecycle hook (vm_deploy_lifecycle.go) boots the domain + builds the guest SSH executor.
 
 // the `pod` deploy substrate is external (candy/plugin-deploy-pod); its host-side
-// lifecycle (the plugin, M4) builds the overlay container image via the RETAINED core
-// engine (build_overlay.go → PodDeployTarget, over HostBuild("overlay")) + owns the
+// lifecycle (the plugin, M4) builds the overlay container image via the core prep+resolve
+// seam (build_overlay.go, over HostBuild("overlay")) + the candy's own render (deploykit.OCITarget
+// + "step-emit"/"oci-emit-step" per-step dispatch, P11c) + owns the
 // config/start/remove lifecycle (over HostBuild("cli")).
 
 // android and k8s are EXTERNAL deploy substrates (F1), served out-of-process by

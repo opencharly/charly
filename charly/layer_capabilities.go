@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // AggregateCandyCapabilities walks `order` (candy names in topological
@@ -11,8 +13,8 @@ import (
 // Returns an error if two candies declare conflicting values for the same
 // OCI label key — the conflict surfaces the bug rather than silently
 // picking a winner.
-func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*AggregatedCandyCaps, error) {
-	out := &AggregatedCandyCaps{
+func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*buildkit.AggregatedCandyCaps, error) {
+	out := &buildkit.AggregatedCandyCaps{
 		OCILabels: make(map[string]string),
 		Provided:  make(map[string]bool),
 	}
@@ -64,9 +66,9 @@ func AggregateCandyCapabilities(layers map[string]*Candy, order []string) (*Aggr
 // CheckRequiredCapabilities returns a sorted list of capability names
 // requested via `requires_capabilities:` on any candy in `order` but not
 // provided by the aggregated capabilities. Empty slice on success.
-func CheckRequiredCapabilities(layers map[string]*Candy, order []string, agg *AggregatedCandyCaps) []string {
+func CheckRequiredCapabilities(layers map[string]*Candy, order []string, agg *buildkit.AggregatedCandyCaps) []string {
 	if agg == nil {
-		agg = &AggregatedCandyCaps{Provided: map[string]bool{}}
+		agg = &buildkit.AggregatedCandyCaps{Provided: map[string]bool{}}
 	}
 	missing := make(map[string]bool)
 	for _, name := range order {

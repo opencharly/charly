@@ -5,30 +5,32 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 func TestEnsureImage(t *testing.T) {
 	// Save and restore original
-	orig := LocalImageExists
-	defer func() { LocalImageExists = orig }()
+	orig := kit.LocalImageExists
+	defer func() { kit.LocalImageExists = orig }()
 
 	t.Run("same engine image exists", func(t *testing.T) {
-		LocalImageExists = func(engine, ref string) bool { return true }
-		rt := &ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		kit.LocalImageExists = func(engine, ref string) bool { return true }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
 		if err := EnsureImage("myimage:latest", rt); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("same engine image missing", func(t *testing.T) {
-		LocalImageExists = func(engine, ref string) bool { return false }
-		rt := &ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
+		kit.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "docker"}
 		err := EnsureImage("myimage:latest", rt)
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, ErrImageNotLocal) {
-			t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 		}
 		if !strings.Contains(err.Error(), "myimage:latest") {
 			t.Errorf("expected error to name the missing image, got: %v", err)
@@ -36,34 +38,34 @@ func TestEnsureImage(t *testing.T) {
 	})
 
 	t.Run("cross engine already in run engine", func(t *testing.T) {
-		LocalImageExists = func(engine, ref string) bool {
+		kit.LocalImageExists = func(engine, ref string) bool {
 			return engine == "podman" // exists in run engine
 		}
-		rt := &ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		if err := EnsureImage("myimage:latest", rt); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("cross engine missing from both", func(t *testing.T) {
-		LocalImageExists = func(engine, ref string) bool { return false }
-		rt := &ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		kit.LocalImageExists = func(engine, ref string) bool { return false }
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		err := EnsureImage("myimage:latest", rt)
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !errors.Is(err, ErrImageNotLocal) {
-			t.Errorf("expected ErrImageNotLocal, got: %v", err)
+		if !errors.Is(err, kit.ErrImageNotLocal) {
+			t.Errorf("expected kit.ErrImageNotLocal, got: %v", err)
 		}
 	})
 
 	t.Run("cross engine needs transfer", func(t *testing.T) {
 		var checks []string
-		LocalImageExists = func(engine, ref string) bool {
+		kit.LocalImageExists = func(engine, ref string) bool {
 			checks = append(checks, engine)
 			return engine == "docker" // only in build engine
 		}
-		rt := &ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
+		rt := &kit.ResolvedRuntime{BuildEngine: "docker", RunEngine: "podman"}
 		// TransferImage will fail because no real engines, but we verify
 		// the check order: run engine first, then build engine
 		_ = EnsureImage("myimage:latest", rt)
@@ -83,10 +85,10 @@ func TestEnsureImage(t *testing.T) {
 		if _, err := exec.LookPath("docker"); err != nil {
 			t.Skip("docker not available, skipping cross-engine transfer test")
 		}
-		LocalImageExists = func(engine, ref string) bool {
+		kit.LocalImageExists = func(engine, ref string) bool {
 			return engine == "podman" // only in build engine
 		}
-		rt := &ResolvedRuntime{BuildEngine: "podman", RunEngine: "docker"}
+		rt := &kit.ResolvedRuntime{BuildEngine: "podman", RunEngine: "docker"}
 		// TransferImage will fail (no real engines), but we verify EnsureImage
 		// attempts the transfer in the right direction
 		err := EnsureImage("myimage:latest", rt)

@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -26,11 +25,11 @@ var lowercaseCheckVarPattern = regexp.MustCompile(`\$\{[a-z][a-zA-Z0-9_]*\}`)
 
 // verbSpec is the per-verb legality metadata: the contexts the verb may run in + its default do-mode.
 type verbSpec struct {
-	contexts  []deploykit.ExecContext
-	defaultDo kit.DoMode
+	contexts  []spec.ExecContext
+	defaultDo spec.DoMode
 }
 
-func (s verbSpec) hasContext(ctx deploykit.ExecContext) bool {
+func (s verbSpec) hasContext(ctx spec.ExecContext) bool {
 	return slices.Contains(s.contexts, ctx)
 }
 
@@ -43,9 +42,9 @@ func buildVerbCatalog() map[string]verbSpec {
 	m := make(map[string]verbSpec, len(spec.OpVerbs))
 	for _, v := range spec.OpVerbs {
 		if v == "plugin" {
-			m[v] = verbSpec{contexts: []deploykit.ExecContext{deploykit.CtxBuild, deploykit.CtxDeploy, deploykit.CtxRuntime}, defaultDo: kit.DoAssert}
+			m[v] = verbSpec{contexts: []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy, spec.CtxRuntime}, defaultDo: spec.DoAssert}
 		} else {
-			m[v] = verbSpec{contexts: []deploykit.ExecContext{deploykit.CtxBuild, deploykit.CtxDeploy}, defaultDo: kit.DoAct}
+			m[v] = verbSpec{contexts: []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy}, defaultDo: spec.DoAct}
 		}
 	}
 	return m
@@ -74,7 +73,7 @@ func validateOps(vc *vctx, e *vErr) {
 			if len(op.VerbsSet()) == 0 {
 				continue // agent / include / verb-less step
 			}
-			op.IntentDo = string(kit.StepDoMode(&plan[i]))
+			op.IntentDo = string(spec.StepDoMode(&plan[i]))
 			validateCheck(vc, op, fmt.Sprintf("%s step[%d]", who, i), e)
 		}
 	}
@@ -103,16 +102,16 @@ func validateCheck(vc *vctx, c *spec.Op, loc string, e *vErr) {
 	}
 
 	// A do:act op must have a real install path in each build/deploy context it claims.
-	if opEffectiveDo(c) == kit.DoAct && !opActsInBuildDeploy(vc, c, verb) {
+	if opEffectiveDo(c) == spec.DoAct && !opActsInBuildDeploy(vc, c, verb) {
 		for _, ctx := range opEffectiveContexts(c) {
-			if ctx == deploykit.CtxBuild || ctx == deploykit.CtxDeploy {
+			if ctx == spec.CtxBuild || ctx == spec.CtxDeploy {
 				e.Add("%s: verb %q cannot act (do: act) in %s context — its act form is runtime-only (use context: [runtime]); create files in build/deploy with the write/copy verbs", loc, verb, ctx)
 			}
 		}
 	}
 
 	// Runtime-only variable references are illegal in a build-legal op.
-	if opInContext(c, deploykit.CtxBuild) {
+	if opInContext(c, spec.CtxBuild) {
 		for _, r := range collectCheckRefs(c) {
 			if kit.IsRuntimeOnlyVar(r) {
 				e.Add("%s: references runtime-only variable ${%s} but scope is build — mark as scope: deploy or use scope:deploy-only attributes", loc, r)
@@ -136,11 +135,11 @@ func validateCheck(vc *vctx, c *spec.Op, loc string, e *vErr) {
 
 // opEffectiveContexts returns the op's resolved execution contexts: an explicit context: wins, else the
 // verb's catalog default, else nil.
-func opEffectiveContexts(c *spec.Op) []deploykit.ExecContext {
+func opEffectiveContexts(c *spec.Op) []spec.ExecContext {
 	if len(c.Context) > 0 {
-		out := make([]deploykit.ExecContext, 0, len(c.Context))
+		out := make([]spec.ExecContext, 0, len(c.Context))
 		for _, s := range c.Context {
-			out = append(out, deploykit.ExecContext(s))
+			out = append(out, spec.ExecContext(s))
 		}
 		return out
 	}
@@ -154,21 +153,21 @@ func opEffectiveContexts(c *spec.Op) []deploykit.ExecContext {
 
 // opEffectiveDo returns the op's resolved do-mode: the keyword-stamped intent_do wins, else the verb's
 // catalog default, else DoAssert.
-func opEffectiveDo(c *spec.Op) kit.DoMode {
-	switch kit.DoMode(c.IntentDo) {
-	case kit.DoAct, kit.DoAssert, kit.DoInstruct:
-		return kit.DoMode(c.IntentDo)
+func opEffectiveDo(c *spec.Op) spec.DoMode {
+	switch spec.DoMode(c.IntentDo) {
+	case spec.DoAct, spec.DoAssert, spec.DoInstruct:
+		return spec.DoMode(c.IntentDo)
 	}
 	if verb, err := c.Kind(); err == nil {
 		if vs, ok := verbCatalog[verb]; ok && vs.defaultDo != "" {
 			return vs.defaultDo
 		}
 	}
-	return kit.DoAssert
+	return spec.DoAssert
 }
 
 // opInContext reports whether the op is legal in ctx per its effective contexts.
-func opInContext(c *spec.Op, ctx deploykit.ExecContext) bool {
+func opInContext(c *spec.Op, ctx spec.ExecContext) bool {
 	return slices.Contains(opEffectiveContexts(c), ctx)
 }
 

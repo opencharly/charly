@@ -8,6 +8,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestCandyRef(t *testing.T) {
@@ -22,7 +26,7 @@ func TestCandyRef(t *testing.T) {
 		{"@github.com/org/repo/layers/cuda", "github.com/org/repo/layers/cuda", "", true},
 	}
 	for _, tt := range tests {
-		r := CandyRef{Raw: tt.raw}
+		r := deploykit.CandyRef{Raw: tt.raw}
 		if got := r.Bare(); got != tt.bare {
 			t.Errorf("CandyRef{%q}.Bare() = %q, want %q", tt.raw, got, tt.bare)
 		}
@@ -35,7 +39,7 @@ func TestCandyRef(t *testing.T) {
 	}
 	// A resolved sibling key overrides Bare() but leaves Raw (and thus the
 	// transitive-fetch view) intact.
-	r := CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
+	r := deploykit.CandyRef{Raw: "ffmpeg", Resolved: "github.com/org/repo/layers/ffmpeg"}
 	if r.Bare() != "github.com/org/repo/layers/ffmpeg" {
 		t.Errorf("resolved Bare() = %q", r.Bare())
 	}
@@ -113,7 +117,7 @@ func TestStripVersion(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		gotRef, gotVer := StripVersion(tt.ref)
+		gotRef, gotVer := deploykit.StripVersion(tt.ref)
 		if gotRef != tt.wantRef || gotVer != tt.wantVer {
 			t.Errorf("StripVersion(%q) = (%q, %q), want (%q, %q)", tt.ref, gotRef, gotVer, tt.wantRef, tt.wantVer)
 		}
@@ -132,7 +136,7 @@ func TestBareRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := BareRef(tt.ref)
+		got := deploykit.BareRef(tt.ref)
 		if got != tt.want {
 			t.Errorf("BareRef(%q) = %q, want %q", tt.ref, got, tt.want)
 		}
@@ -181,7 +185,7 @@ func TestIsRemoteCandyRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := IsRemoteCandyRef(tt.ref)
+		got := deploykit.IsRemoteCandyRef(tt.ref)
 		if got != tt.want {
 			t.Errorf("IsRemoteCandyRef(%q) = %v, want %v", tt.ref, got, tt.want)
 		}
@@ -293,7 +297,7 @@ func TestScanAllCandiesNoRemote(t *testing.T) {
 
 func TestCollectRemoteRefs(t *testing.T) {
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
 					"pixi",
@@ -303,8 +307,8 @@ func TestCollectRemoteRefs(t *testing.T) {
 		}),
 	}
 	layers := map[string]*Candy{
-		"pixi": {Name: "pixi", Require: toCandyRefs([]string{})},
-		"my-layer": {Name: "my-layer", Require: toCandyRefs([]string{
+		"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})},
+		"my-layer": {Name: "my-layer", Require: deploykit.ToCandyRefs([]string{
 			"@github.com/myorg/service-layers/layers/svc:v2.0.0",
 		})},
 	}
@@ -339,8 +343,8 @@ func TestCollectRemoteRefs(t *testing.T) {
 func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	// An image config that references NOTHING remote — proves the add_candy ref is
 	// collected via ExtraCandyRefs, not via any image-closure edge.
-	cfg := &Config{Box: boxMapOf(map[string]BoxConfig{"arch": {Candy: []string{"pixi"}}})}
-	layers := map[string]*Candy{"pixi": {Name: "pixi", Require: toCandyRefs([]string{})}}
+	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"arch": {Candy: []string{"pixi"}}})}
+	layers := map[string]*Candy{"pixi": {Name: "pixi", Require: deploykit.ToCandyRefs([]string{})}}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
 	opts := ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
@@ -360,8 +364,8 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	if got.Version != "v2026.174.0425" {
 		t.Errorf("plugin-spice download version = %q, want %q", got.Version, "v2026.174.0425")
 	}
-	if !slices.Contains(got.Refs, BareRef(pluginRef)) {
-		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, BareRef(pluginRef))
+	if !slices.Contains(got.Refs, deploykit.BareRef(pluginRef)) {
+		t.Errorf("plugin-spice download refs = %v, want to contain %q", got.Refs, deploykit.BareRef(pluginRef))
 	}
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
@@ -381,7 +385,7 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 	// migration, where the charly-cachyos kind:local template composes 30 remote
 	// @-ref candies — previously invisible to CollectRemoteRefs).
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
 					"@github.com/opencharly/charly/layers/pixi:v1.0.0",
@@ -426,7 +430,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	// disabled `debian-builder --include-disabled` would otherwise hit
 	// "unknown layer .../pixi" in computing global candy order.
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"debian-builder": {
 				Enabled: new(false),
 				Candy: []string{
@@ -459,7 +463,7 @@ func TestCollectRemoteRefsOptsIncludeDisabled(t *testing.T) {
 	}
 
 	// A DIFFERENT disabled image must stay filtered under the scoped opts.
-	cfg.SetBox("other-disabled", BoxConfig{
+	cfg.SetBox("other-disabled", spec.BoxConfig{
 		Enabled: new(false),
 		Candy:   []string{"@github.com/myorg/other/layers/x:v3.0.0"},
 	})
@@ -485,8 +489,8 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 	// builder edge was actually followed (it was absent before the fix, because
 	// the raw per-image img.Builder these images carry is empty).
 	cfg := &Config{
-		Defaults: BoxConfig{Builder: BuilderMap{"pixi": "charly.fedora-builder"}},
-		Box: boxMapOf(map[string]BoxConfig{
+		Defaults: spec.BoxConfig{Builder: buildkit.BuilderMap{"pixi": "charly.fedora-builder"}},
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"bazzite": {
 				Base:  "ghcr.io/ublue-os/bazzite:stable", // external base
 				Candy: []string{"@github.com/opencharly/charly/layers/foo:v1.0.0"},
@@ -495,7 +499,7 @@ func TestCollectRemoteRefsDefaultsBuilderTransitiveCandies(t *testing.T) {
 		}),
 		Namespaces: map[string]*Config{
 			"charly": {
-				Box: boxMapOf(map[string]BoxConfig{
+				Box: boxMapOf(map[string]spec.BoxConfig{
 					"fedora-builder": {
 						Base:    "quay.io/fedora/fedora:43",
 						Produce: []string{"pixi"},
@@ -536,7 +540,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 	// pickCandyVersion — see TestPickCandyVersion. Collection's job is just to
 	// fetch every distinct (repo, git-tag).
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
 					"@github.com/org/repo/layers/cuda:v2.0.0",
@@ -545,7 +549,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 		}),
 	}
 	layers := map[string]*Candy{
-		"local": {Name: "local", Version: "2026.001.0001", Require: toCandyRefs([]string{
+		"local": {Name: "local", Version: "2026.001.0001", Require: deploykit.ToCandyRefs([]string{
 			"@github.com/org/repo/layers/cuda:v1.0.0",
 		})},
 	}
@@ -570,7 +574,7 @@ func TestCollectRemoteRefsSameCandyBothTagsCollected(t *testing.T) {
 func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	// Different candies from same repo at different versions should be OK
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"myapp": {
 				Candy: []string{
 					"@github.com/org/repo/layers/cuda:v1.0.0",
@@ -591,29 +595,11 @@ func TestCollectRemoteRefsDifferentCandiesSameRepo(t *testing.T) {
 	}
 }
 
-func TestCandyCopySource(t *testing.T) {
-	g := &Generator{
-		Candies: map[string]*Candy{
-			"pixi":                              {Name: "pixi", Remote: false},
-			"github.com/test/repo/layers/cuda":  {Name: "cuda", Version: "2026.167.1200", Remote: true, RepoPath: "github.com/test/repo"},
-			"github.com/test/repo/layers/nover": {Name: "nover", Remote: true, RepoPath: "github.com/test/repo"},
-		},
-	}
-
-	if got := g.candyCopySource("pixi"); got != "candy/pixi" {
-		t.Errorf("local candy: got %q, want %q", got, "candy/pixi")
-	}
-	// Remote candies stage under the VERSION-keyed .build/_candy/<name>.<version>/
-	// so distinct candy versions never share a dir (cross-version crossover).
-	if got := g.candyCopySource("github.com/test/repo/layers/cuda"); got != ".build/_candy/cuda.2026.167.1200" {
-		t.Errorf("remote candy: got %q, want %q", got, ".build/_candy/cuda.2026.167.1200")
-	}
-	// Defensive: a version-less remote candy (should never happen — the resolver
-	// hard-errors) falls back to the bare name rather than a trailing-dot dir.
-	if got := g.candyCopySource("github.com/test/repo/layers/nover"); got != ".build/_candy/nover" {
-		t.Errorf("version-less remote candy: got %q, want %q", got, ".build/_candy/nover")
-	}
-}
+// TestCandyCopySource was relocated to sdk/deploykit/candy_stage_test.go (K3,
+// Bucket-1 dissolution): the dead charly.Generator.candyCopySource wrapper this
+// test exercised is gone — deploykit.Generator.CandyCopySource is the live
+// production path (candy/plugin-deploy-pod/overlay.go reaches it directly), and
+// the sdk-side test now covers it against that Generator directly.
 
 // TestRepoOverrideDir covers the CHARLY_REPO_OVERRIDE parser: exact + short-form
 // match, miss, multi-pair, and the loud-failure cases (malformed, missing dir,

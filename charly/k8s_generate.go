@@ -29,7 +29,7 @@ type K8sGenerateOpts struct {
 	DeploymentName string // map key from charly.yml:deployments.images (base image name)
 	Instance       string // "" for the bare overlay; non-empty for image/instance
 	ImageRef       string // fully qualified image ref (registry/name:tag)
-	Deploy         BundleNode
+	Deploy         spec.BundleNode
 	Capabilities   *Capabilities
 	Cluster        *ResolvedK8s
 	OutputDir      string // usually <projectDir>/.opencharly/k8s

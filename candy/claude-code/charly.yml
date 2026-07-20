@@ -1,23 +1,74 @@
 claude-code:
     candy:
-        version: 2026.144.1443
-        description: |
-            Installs the Claude Code CLI globally via npm so `claude` is on PATH.
-            The candy depends on nodejs and ships a package.json pinning
-            @anthropic-ai/claude-code, which the build installs globally into
-            ~/.npm-global/bin. The result is verifiable: the claude binary exists at
-            that path and `claude --version` prints the Claude Code version banner.
-        require:
-            - nodejs
-        path_append:
-            - "~/.local/bin"
+        version: 2026.200.1654
+        description: |-
+            Installs the Claude Code CLI via the official native installer
+            (https://claude.ai/install.sh) — the currently-recommended method
+            (https://code.claude.com/docs/en/quickstart). At image-build time it
+            fetches the platform-native `claude` binary, lets the installer
+            self-install its launcher under the build user's home, then relocates
+            the real binary to /usr/local/bin/claude — a system path that survives
+            the deploy-time home-volume mount (anything a candy installs under
+            ${HOME} at build time is SHADOWED once the live pod mounts its
+            persistent home volume over /home/<user>). Replaces the deprecated
+            @anthropic-ai/claude-code npm package (a thin launcher that deferred a
+            native-binary download to first runtime and so failed `claude --version`
+            in hermetic offline image builds). A CUE-validated tmux terminal
+            profile makes the same CLI available through the generic
+            local/SSH/nested Charly agent channel, and runtime self-updates are
+            disabled (DISABLE_AUTOUPDATER=1) so the image-owned install remains
+            immutable across real terminal sessions. Verifiable offline:
+            /usr/local/bin/claude exists and `claude --version` prints the Claude
+            Code banner — both in the built image and on a live deployment.
+        package:
+            - curl
+        env:
+            DISABLE_AUTOUPDATER: "1"
+        agent_provide:
+            - provider: tmux
+              protocol_version: 2
+              profiles: [claude-code]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: true
+        terminal_profile:
+            claude-code:
+                name: claude-code
+                entrypoint: [claude]
+                cols: 120
+                rows: 40
+                semantic_adapter: claude-code
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
         plan:
-            - check: the claude binary is installed into the npm global bin directory
+            - run: download the official claude code native installer
+              download: "https://claude.ai/install.sh"
+              to: /tmp/claude-code-install.sh
+              mode: "0755"
+              run_as: "${USER}"
+            - run: install the claude code native binary (latest stable) via the official installer
+              command: |
+                bash /tmp/claude-code-install.sh
+                rm -f /tmp/claude-code-install.sh
+              run_as: "${USER}"
+            - run: relocate the native binary to /usr/local/bin so it survives the deploy-time home-volume mount
+              command: |
+                u_home=$(getent passwd 1000 | cut -d: -f6)
+                real=$(readlink -f "${u_home}/.local/bin/claude")
+                install -m 0755 "$real" /usr/local/bin/claude
+                rm -rf "${u_home}/.local/share/claude" "${u_home}/.local/bin/claude"
+              run_as: root
+            - check: the claude binary is installed at the system-wide native install location
               file:
-                file: ${HOME}/.npm-global/bin/claude
+                file: /usr/local/bin/claude
                 exists: true
+            - check: Claude Code runtime self-updates are disabled for reproducible image-owned installs
+              command: test "${DISABLE_AUTOUPDATER}" = 1
+              exit_status: 0
             - check: running claude --version exits cleanly and prints the Claude Code banner
               exit_status: 0
               stdout:
                 - contains: "Claude Code"
-              command: ${HOME}/.npm-global/bin/claude --version
+              command: /usr/local/bin/claude --version

@@ -1,6 +1,10 @@
 package main
 
-import "context"
+import (
+	"context"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // The remaining IN-CHARLY-MODULE built-in check verb as a CheckVerbProvider (the
 // generic plugin dispatcher below). An internal/dispatch verb, NOT a user-authored
@@ -61,6 +65,6 @@ import "context"
 type pluginVerb struct{ builtinVerbBase }
 
 func (pluginVerb) Reserved() string { return "plugin" }
-func (pluginVerb) RunVerb(ctx context.Context, h *hostVerbResolver, op *Op) CheckResult {
+func (pluginVerb) RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult {
 	return h.runPluginVerb(ctx, op)
 }

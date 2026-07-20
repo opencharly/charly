@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -41,10 +44,10 @@ type CheckLiveCmd struct {
 // NoSteps ← NoPlan. Host-internal only (never crosses the plugin boundary); the plugin
 // owns the reporter, so this carries only what the seam reads.
 type liveResult struct {
-	Steps       []StepResult  // per-step verdicts (nil for a passthrough or no-plan result)
-	Header      string        // kind-specific banner, no trailing newline
-	NoPlan      bool          // no plan steps → the reply sets NoSteps
-	Passthrough *kit.StepPass // nested-pod-in-VM guest delegation (Steps unused)
+	Steps       []kit.StepResult // per-step verdicts (nil for a passthrough or no-plan result)
+	Header      string           // kind-specific banner, no trailing newline
+	NoPlan      bool             // no plan steps → the reply sets NoSteps
+	Passthrough *kit.StepPass    // nested-pod-in-VM guest delegation (Steps unused)
 }
 
 // checkLiveGather classifies c.Box (vm / local / group / pod) and runs the matching gather
@@ -83,8 +86,8 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	// the operator declared (the hard-required `image:` field), not what the container
 	// happens to be running.
 	dir, _ := os.Getwd()
-	var localPlan, projectPlan []Step
-	var deployOverlay *BundleNode
+	var localPlan, projectPlan []spec.Step
+	var deployOverlay *spec.BundleNode
 	var projectCfg *Config
 	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
 		projectCfg = uf.ProjectConfig()
@@ -98,9 +101,9 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 			}
 		}
 	}
-	dc := loadDeployConfigForRead("charly check live")
+	dc := deploykit.LoadDeployConfigForRead("charly check live")
 	if dc != nil {
-		if entry, ok := dc.Bundle[deployKey(c.Box, c.Instance)]; ok {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
 			localPlan = entry.Plan
 			deployOverlay = &entry
 		} else if entry, ok := dc.Bundle[c.Box]; ok {
@@ -109,8 +112,8 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 		}
 	}
 	// Project bundle plan + per-host overlay (local replaces project by id via
-	// MergeDeployDescriptions' merge rules), mirroring loadVmCheckPlans.
-	overlayPlan := append(append([]Step(nil), projectPlan...), localPlan...)
+	// kit.MergeDeployDescriptions' merge rules), mirroring loadVmCheckPlans.
+	overlayPlan := append(append([]spec.Step(nil), projectPlan...), localPlan...)
 
 	// Resolve the deploy key → declared image short-name via THE shared resolver
 	// (resolveDeployBoxName), then to a fully-qualified registry ref before ExtractMetadata
@@ -124,11 +127,12 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	if err != nil {
 		return liveResult{}, err
 	}
-	set := MergeDeployDescriptions(meta.Description, overlayPlan, c.Box)
+	set := kit.MergeDeployDescriptions(meta.Description, overlayPlan, c.Box)
 	if set == nil || set.IsEmpty() {
 		return liveResult{NoPlan: true}, nil
 	}
-	resolver, _ := ResolveCheckVarsRuntime(meta, deployOverlay, engine, c.Box, containerName, c.Instance)
+	resolver, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, engine, c.Box, containerName, c.Instance)
+	resolver = stampCharlyBin(resolver)
 
 	rctx := resolveCheckRunnerContext(c.Box, dir, projectCfg)
 	env, hasRuntime := resolverEnv(resolver)
@@ -139,16 +143,16 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	// would otherwise leak. Mirrors the correct checkLiveVM/checkLiveGroup defers.
 	hostVars := map[string]string{}
 	var hostCleanups []func()
-	for _, sec := range [][]LabeledDescription{set.Candy, set.Box, set.Deploy} {
+	for _, sec := range [][]kit.LabeledDescription{set.Candy, set.Box, set.Deploy} {
 		for _, ld := range sec {
 			v, cl := resolveHostVarsForSteps(ld.Plan, c.Instance)
 			maps.Copy(hostVars, v)
 			hostCleanups = append(hostCleanups, cl...)
 		}
 	}
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:           ContainerChain(engine, containerName),
+		Exec:           deploykit.ContainerChain(engine, containerName),
 		Mode:           RunModeLive,
 		Env:            env,
 		HasRuntime:     hasRuntime,
@@ -162,13 +166,13 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 		TargetResolver: venueResolver(c.Instance),
 	})
 
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: fmt.Sprintf("Image: %s (container: %s)", meta.Box, containerName)}, nil
 }
 
 // resolveNestedNode walks a dotted path through the Nested tree rooted at
 // the top-level deployment, returning the leaf BundleNode.
-func resolveNestedNode(roots map[string]BundleNode, path string) *BundleNode {
+func resolveNestedNode(roots map[string]spec.BundleNode, path string) *spec.BundleNode {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
 		return nil
@@ -201,15 +205,15 @@ func guestNestedCheckCmd(guestPod, format, section string, filter []string, inst
 		format = "text"
 	}
 	var cmd strings.Builder
-	cmd.WriteString("charly check live " + shellSingleQuote(guestPod) + " --format " + shellSingleQuote(format))
+	cmd.WriteString("charly check live " + kit.ShellQuote(guestPod) + " --format " + kit.ShellQuote(format))
 	if section != "" {
-		cmd.WriteString(" --section " + shellSingleQuote(section))
+		cmd.WriteString(" --section " + kit.ShellQuote(section))
 	}
 	for _, f := range filter {
-		cmd.WriteString(" --filter " + shellSingleQuote(f))
+		cmd.WriteString(" --filter " + kit.ShellQuote(f))
 	}
 	if instance != "" {
-		cmd.WriteString(" -i " + shellSingleQuote(instance))
+		cmd.WriteString(" -i " + kit.ShellQuote(instance))
 	}
 	return cmd.String()
 }
@@ -245,7 +249,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	// time. We point the executor at the alias and let ssh(1) resolve
 	// the rest from ~/.ssh/config + agent.
 	host := "127.0.0.1"
-	var executor DeployExecutor = &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
+	var executor deploykit.DeployExecutor = &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 10}
 
 	// 2026-04 cutover: when c.Box is dotted ("vm.inner-pod"), walk
 	// the deploy tree and construct the full chain via ResolveDeployChain
@@ -254,7 +258,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	// leaf returned the VM's user, not the inner pod's.
 	if strings.Contains(c.Box, ".") {
 		if roots, _ := resolveTreeRoot(dir); roots != nil {
-			if _, chain, chainErr := ResolveDeployChain(roots, c.Box, ShellExecutor{}); chainErr == nil && chain != nil {
+			if _, chain, chainErr := deploykit.ResolveDeployChain(roots, c.Box, kit.ShellExecutor{}); chainErr == nil && chain != nil {
 				executor = chain
 			}
 		}
@@ -271,7 +275,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	// not fixed sleeps — the same SSHExecutor preflight the external vm deploy walk runs
 	// at deploy time. Fast no-op on an already-settled guest (zero added
 	// latency); the VM analog of waitForContainerReady for the bed runner.
-	gate := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 5}
+	gate := &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 5}
 	gctx := context.Background()
 	if gerr := gate.WaitForSSH(gctx); gerr != nil {
 		return liveResult{}, fmt.Errorf("vm %q is not up / SSH-reachable — is the domain running? %w", domainID, gerr)
@@ -302,9 +306,9 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		// for the kubeconfig context + ClusterProfile. Lets a candy's deploy-scope
 		// k8s checks address their own cluster generically via cluster:
 		// "${DEPLOY_NAME}" instead of hard-coding the bed's cluster name.
-		"DEPLOY_NAME": sanitizeDeployName("vm:" + vmName),
+		"DEPLOY_NAME": kit.SanitizeDeployName("vm:" + vmName),
 	}
-	resolver := &CheckVarResolver{Env: env, HasRuntime: true}
+	resolver := newRuntimeCheckVarResolver(env)
 
 	// Nested-in-VM POD leaf: delegate the pod's check to the guest `charly`. FROM
 	// THE GUEST the nested pod is a DIRECT pod — guest-local podman, ports on
@@ -325,8 +329,8 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		// formats the returned Steps itself), so the guest defaults to text; the CLI shell has
 		// c.Format and preserves it. Section/Filter ride the request and pass through either way.
 		guestCmd := guestNestedCheckCmd(guestPod, c.Format, c.Section, c.Filter, c.Instance)
-		vmSSH := &SSHExecutor{Host: VmSshAlias(domainID), ConnectTimeout: 10}
-		header := fmt.Sprintf("VM: %s — nested pod %q evaluated IN the guest (%s)", VmSshAlias(domainID), guestPod, VmSshAlias(domainID))
+		vmSSH := &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 10}
+		header := fmt.Sprintf("VM: %s — nested pod %q evaluated IN the guest (%s)", kit.VmSshAlias(domainID), guestPod, kit.VmSshAlias(domainID))
 		stdout, stderr, exit, rerr := vmSSH.RunCapture(context.Background(), guestCmd)
 		pass := &kit.StepPass{Stdout: stdout, Stderr: stderr, ExitCode: exit}
 		if rerr != nil {
@@ -338,7 +342,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	if len(plan) == 0 {
 		return liveResult{NoPlan: true}, nil
 	}
-	set := &LabelDescriptionSet{Deploy: []LabeledDescription{{Origin: "vm:" + vmName, Plan: plan}}}
+	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "vm:" + vmName, Plan: plan}}}
 
 	// Load the project's composed OUT-OF-TREE plugins so an externalized check
 	// verb (e.g. `kube:`, served by candy/plugin-kube) RESOLVES in the VM check
@@ -357,10 +361,10 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	// and local (checkLiveLocal) paths already do (R3). Without
 	// it, a VM bed whose check drives a peer (e.g. check-cross-vm-http: a local
 	// host-driver curls the guest via ${HOST}'s ssh -L forward) leaves
-	// ${HOST} unresolved → the check FAILS "peer unreachable". closeHostCleanups
+	// ${HOST} unresolved → the check FAILS "peer unreachable". kit.CloseHostCleanups
 	// tears down any ssh -L forwards at run end.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, c.Instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	// Box stays the deploy/bed name (container + DEPLOY_NAME identity); VmName is the
 	// per-deploy DOMAIN IDENTITY (the deploy/bed key → vmDomainIdentity → charly-<domainID>,
 	// the live libvirt domain — NOT the shared kind:vm entity). The operator-side
@@ -381,14 +385,14 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		HostVars:       hostVars,
 		TargetResolver: venueResolver(c.Instance),
 	})
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: fmt.Sprintf("VM: charly-%s (ssh %s@%s:%d)", c.Box, user, host, port)}, nil
 }
 
 // resolveVmTarget resolves the VM check request (c.Box) to its kind:vm entity
 // name, an optional nested-leaf node (for a dotted "parent.child" path), and the
 // VmSpec.
-func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string, nestedLeaf *BundleNode, spec *VmSpec) {
+func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string, nestedLeaf *spec.BundleNode, spec *VmSpec) {
 	// Schema v4: c.Box may be
 	//   (a) a kind:vm entity name directly (e.g. "arch"),
 	//   (b) a kind:deployment name with target:vm (e.g. "arch-vm") whose
@@ -427,7 +431,7 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string
 // loadVmCheckPlans aggregates the VM deployment's check plan from the project
 // and per-machine deploy sources plus add_candy deploy-scope steps, returning
 // the merged plan and the SSH user/port (possibly overridden by local VmState).
-func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *BundleNode, user string, port int) (plan []Step, outUser string, outPort int) {
+func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int) {
 	outUser, outPort = user, port
 	// Two deploy sources for VMs:
 	//   - project-level: charly.yml / charly.yml `deployments.images["vm:<name>"]`
@@ -440,13 +444,13 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 	// `target: vm` + `vm: <c.Box>` resolves to the same VM.
 	// This is what makes `charly check live <deploy-name>` work for beds like
 	// `arch-vm` that don't carry the legacy `vm:` prefix in the key.
-	// Merge by id (local replaces project); same rules as MergeDeployDescriptions.
+	// Merge by id (local replaces project); same rules as kit.MergeDeployDescriptions.
 	// Resolve the VM's deploy entry via THE shared findVmDeployNode (deploy.go)
 	// — the same lookup `charly bundle add` uses — by deploy NAME (c.Box) first,
 	// then the vm entity (vmName). Keying by name first means a bed whose key
 	// differs from its vm entity (check-k3s-vm -> vm: k3s-vm) resolves to its
 	// own entry rather than being mis-matched via the vm entity name.
-	var projectPlan, localPlan []Step
+	var projectPlan, localPlan []spec.Step
 	var addCandies []string
 	// Nested dotted-path short-circuit: when the request is for a
 	// child node, use its own plan directly instead of the parent's.
@@ -454,13 +458,13 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 		projectPlan = nestedLeaf.Plan
 		addCandies = nestedLeaf.AddCandy
 	} else if pc := uf.ProjectBundleConfig(); pc != nil {
-		if entry, ok := findVmDeployNode(pc.Bundle, c.Box, vmName); ok {
+		if entry, ok := deploykit.FindVmDeployNode(pc.Bundle, c.Box, vmName); ok {
 			projectPlan = entry.Plan
 			addCandies = entry.AddCandy
 		}
 	}
-	if dc := loadDeployConfigForRead("charly check vm"); dc != nil {
-		if entry, ok := findVmDeployNode(dc.Bundle, c.Box, vmName); ok {
+	if dc := deploykit.LoadDeployConfigForRead("charly check vm"); dc != nil {
+		if entry, ok := deploykit.FindVmDeployNode(dc.Bundle, c.Box, vmName); ok {
 			localPlan = entry.Plan
 			if entry.VmState != nil {
 				if entry.VmState.SshUser != "" {
@@ -472,7 +476,7 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 			}
 		}
 	}
-	plan = append(append([]Step(nil), projectPlan...), localPlan...)
+	plan = append(append([]spec.Step(nil), projectPlan...), localPlan...)
 
 	// Collect deploy-scope steps from the candies this VM deployment applies,
 	// so ANY VM deploy — disposable bed OR persistent operator VM — that adds a
@@ -501,7 +505,7 @@ func vmHostdevCount(spec *VmSpec) int {
 // mechanism that lets `charly check live <vm>` run a candy's checks against ANY
 // deployment that applies it — the disposable bed or the persistent operator
 // VM — so one shared check-only candy covers both (no per-deploy copy, R3).
-func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []Step {
+func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []spec.Step {
 	if uf == nil || len(addCandies) == 0 {
 		return nil
 	}
@@ -516,16 +520,16 @@ func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []St
 	if err != nil || candyMap == nil {
 		return nil
 	}
-	var out []Step
+	var out []spec.Step
 	for _, ref := range addCandies {
 		// Only LOCAL (filesystem) candies contribute steps here — the shared
 		// candies live in the project's candy/ dir. Remote @github candies are
 		// SKIPPED: they carry their own context (and a re-scan can resolve a
 		// different cached version than what was deployed).
-		if IsRemoteCandyRef(ref) {
+		if deploykit.IsRemoteCandyRef(ref) {
 			continue
 		}
-		lyr, ok := candyMap[BareRef(ref)]
+		lyr, ok := candyMap[deploykit.BareRef(ref)]
 		if !ok || lyr == nil {
 			continue
 		}
@@ -667,8 +671,8 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 	//     OWN target (e.g. `local`) is surfaced + its plugin auto-injected;
 	//   - a single-process tree deploy (a pod root walked in one process, its nested children
 	//     of a DIFFERENT substrate) — the recursion surfaces every child's substrate word.
-	var visit func(n *BundleNode)
-	visit = func(n *BundleNode) {
+	var visit func(n *spec.BundleNode)
+	visit = func(n *spec.BundleNode) {
 		if n == nil {
 			return
 		}
@@ -707,7 +711,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 				refWords = append(refWords, v)
 			}
 		}
-		for _, ck := range sortedNestedKeys(n.Children) {
+		for _, ck := range deploykit.SortedNestedKeys(n.Children) {
 			visit(n.Children[ck])
 		}
 	}
@@ -726,7 +730,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
 // add <root>.<child>`. Returns false when any segment is absent.
-func resolveDeployNodeByPath(tree map[string]BundleNode, name string) (*BundleNode, bool) {
+func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {
@@ -764,7 +768,7 @@ func (c *CheckLiveCmd) checkLiveLocal() (liveResult, error) {
 	// Resolve the target node (leaf for a dotted path; the entry otherwise)
 	// and the root-segment node (whose host: selects the chain's root venue).
 	dotted := strings.Contains(c.Box, ".")
-	var node, rootNode *BundleNode
+	var node, rootNode *spec.BundleNode
 	if uf.Bundle != nil {
 		if dotted {
 			node = resolveNestedNode(uf.Bundle, c.Box)
@@ -785,20 +789,20 @@ func (c *CheckLiveCmd) checkLiveLocal() (liveResult, error) {
 
 	// Select the root venue from the root node's host:, then compose nested
 	// hops for a dotted path through the shared ResolveDeployChain.
-	executor, err := rootExecutorForDeployNode(rootNode)
+	executor, err := deploykit.RootExecutorForDeployNode(rootNode)
 	if err != nil {
 		return liveResult{}, fmt.Errorf("check live %q: %w", c.Box, err)
 	}
 	if dotted {
 		if roots, _ := resolveTreeRoot(dir); roots != nil {
-			if _, chain, chainErr := ResolveDeployChain(roots, c.Box, executor); chainErr == nil && chain != nil {
+			if _, chain, chainErr := deploykit.ResolveDeployChain(roots, c.Box, executor); chainErr == nil && chain != nil {
 				executor = chain
 			}
 		}
 	}
 
 	venue := "host (local)"
-	if _, isShell := executor.(ShellExecutor); !isShell {
+	if _, isShell := executor.(kit.ShellExecutor); !isShell {
 		venue = executor.Venue()
 	}
 	header := fmt.Sprintf("Local deploy: %s [%s]", c.Box, venue)
@@ -820,7 +824,7 @@ func (c *CheckLiveCmd) checkLiveLocal() (liveResult, error) {
 // `charly bundle add <local> --verify` (the local deploy target) so the two surfaces
 // source + run probes identically (R3). Host-context vars only (no
 // HOST_PORT:<N> / CONTAINER_IP). Returns the failure count.
-func checkLocalDeployScope(dir string, node *BundleNode, image, instance, _ string, _ []string, exec DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
+func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _ string, _ []string, exec deploykit.DeployExecutor, format string) (int, error) { //nolint:unparam // error return kept for symmetry with sibling deploy-scope checks
 	results, hadPlan, err := runLocalDeployScopePlan(dir, node, image, instance, exec)
 	if err != nil {
 		return 0, err
@@ -841,8 +845,8 @@ func checkLocalDeployScope(dir string, node *BundleNode, image, instance, _ stri
 // only (no HOST_PORT:<N> / CONTAINER_IP). Folds the ${HOST} CloseHosts teardown the pre-P12
 // local path discarded (design §6): the ssh -L forwards a VM-peer subject opens are torn down
 // after the plan run, exactly as checkLiveVM/checkLiveGroup already do.
-func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance string, exec DeployExecutor) (results []StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
-	var plan []Step
+func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance string, exec deploykit.DeployExecutor) (results []kit.StepResult, hadPlan bool, err error) { //nolint:unparam // err kept for symmetry; RunPlan never errors here today
+	var plan []spec.Step
 	if node != nil && strings.TrimSpace(node.From) != "" {
 		if spec, _ := findLocalSpec(dir, strings.TrimSpace(node.From)); spec != nil {
 			plan = append(plan, spec.Plan...)
@@ -851,8 +855,8 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	if node != nil {
 		plan = append(plan, node.Plan...)
 	}
-	if dc := loadDeployConfigForRead("charly check live"); dc != nil {
-		if entry, ok := dc.Bundle[deployKey(image, instance)]; ok {
+	if dc := deploykit.LoadDeployConfigForRead("charly check live"); dc != nil {
+		if entry, ok := dc.Bundle[deploykit.DeployKey(image, instance)]; ok {
 			plan = append(plan, entry.Plan...)
 		} else if entry, ok := dc.Bundle[image]; ok {
 			plan = append(plan, entry.Plan...)
@@ -864,24 +868,24 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 	if herr != nil || home == "" {
 		home = os.Getenv("HOME")
 	}
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := newRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    image,
 		"INSTANCE": instance,
 		"USER":     user,
 		"HOME":     home,
-	}, HasRuntime: true}
+	})
 
 	if len(plan) == 0 {
 		return nil, false, nil
 	}
-	set := &LabelDescriptionSet{Deploy: []LabeledDescription{{Origin: "local:" + image, Plan: plan}}}
+	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "local:" + image, Plan: plan}}}
 	env, hasRuntime := resolverEnv(resolver)
 	// Generic cross-deployment support (on: driver + ${HOST:<member>}) — a local SUBJECT bed
 	// can drive a peer too (R3). Capture + defer-close the ssh -L cleanups (design §6 leak fix):
 	// the pre-P12 local path discarded them, so a local subject driving a VM peer via
 	// ${HOST:<member>:<port>} leaked the forward.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
 		Exec:           exec,
 		Mode:           RunModeLive,
@@ -893,7 +897,7 @@ func runLocalDeployScopePlan(dir string, node *BundleNode, image, instance strin
 		HostVars:       hostVars,
 		TargetResolver: venueResolver(instance),
 	})
-	return RunPlan(context.Background(), runner, set, nil, false), true, nil
+	return kit.RunPlan(context.Background(), runner, set, false), true, nil
 }
 
 // subdeployments (subject + driver) brought up on the shared charly net, and every
@@ -918,10 +922,10 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 	}
 	header := fmt.Sprintf("Group bed: %s [%d sibling member(s); venue-dispatched, no root container]", c.Box, len(entry.Members))
 
-	resolver := &CheckVarResolver{Env: map[string]string{
+	resolver := newRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    c.Box,
 		"INSTANCE": c.Instance,
-	}, HasRuntime: true}
+	})
 	// Set the runner identity AND load the OUT-OF-PROCESS plugin candies the bed's
 	// flattened plan REFERENCES — a cdp:/spice:/… verb authored under a member. A group
 	// bed has no single image, so the load keys on the BED NAME (its flattened,
@@ -936,9 +940,9 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 	// venueResolver performs the per-step swap; ${HOST:<member>} addresses
 	// resolve through resolveHostVarsForSteps, whose ssh -L cleanups are deferred here.
 	hostVars, hostCleanups := resolveHostVarsForSteps(plan, c.Instance)
-	defer closeHostCleanups(hostCleanups)
+	defer kit.CloseHostCleanups(hostCleanups)
 	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:           ShellExecutor{},
+		Exec:           kit.ShellExecutor{},
 		Mode:           RunModeLive,
 		Env:            env,
 		HasRuntime:     hasRuntime,
@@ -949,8 +953,8 @@ func (c *CheckLiveCmd) checkLiveGroup() (liveResult, error) {
 		HostVars:       hostVars,
 		TargetResolver: venueResolver(c.Instance),
 	})
-	set := &LabelDescriptionSet{Deploy: []LabeledDescription{{Origin: "group:" + c.Box, Plan: plan}}}
-	results := RunPlan(context.Background(), runner, set, nil, false)
+	set := &kit.LabelDescriptionSet{Deploy: []kit.LabeledDescription{{Origin: "group:" + c.Box, Plan: plan}}}
+	results := kit.RunPlan(context.Background(), runner, set, false)
 	return liveResult{Steps: results, Header: header}, nil
 }
 

@@ -21,6 +21,9 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // dispatchByDeployTarget resolves c.Box as a charly.yml entry and
@@ -41,9 +44,9 @@ import (
 // `<base>/<inst>` entry, plain names still resolve, and dotted nested
 // paths (`a.b.c`) still walk. Mirrors the composition `charly start` uses via
 // dc.Lookup(c.Box, c.Instance). On miss the error reports the full key.
-func resolveUpdateDeployNode(tree map[string]BundleNode, image, instance string) (*BundleNode, error) {
-	key := deployKey(image, instance)
-	node, _, err := ResolveNodePath(tree, key)
+func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance string) (*spec.BundleNode, error) {
+	key := deploykit.DeployKey(image, instance)
+	node, _, err := deploykit.ResolveNodePath(tree, key)
 	if err != nil || node == nil {
 		return nil, fmt.Errorf("no deploy named %q in charly.yml. To refresh an image artifact only, use 'charly box pull %s'", key, image)
 	}
@@ -88,7 +91,9 @@ func (c *UpdateCmd) dispatchByDeployTarget() error {
 	// external deploy SUBSTRATE (the E3-deploy externalDeployTarget) resolves its
 	// grpcProvider for the rebuild — the SAME loadDeployPlugins bundle add / bundle
 	// del use (R3).
-	loadDeployPlugins(dir, deployName, nil)
+	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
+		return err
+	}
 
 	// UNIFIED dispatch — charly update for EVERY kind routes through the SAME
 	// ResolveTarget → LifecycleTarget.Rebuild path; there is no per-kind update
@@ -151,11 +156,11 @@ func extractQuadletImageLine(path string) (string, error) {
 // Cross-kind name reuse is permitted, so the user-facing key includes the
 // instance suffix when present (the deployKey form matches charly.yml + what the
 // operator typed).
-func noteUpdateDisposability(node *BundleNode, image, instance string) {
+func noteUpdateDisposability(node *spec.BundleNode, image, instance string) {
 	if node == nil || node.IsDisposable() {
 		return
 	}
-	key := deployKey(image, instance)
+	key := deploykit.DeployKey(image, instance)
 	lifecycle := node.Lifecycle
 	if lifecycle == "" {
 		lifecycle = "(unset)"

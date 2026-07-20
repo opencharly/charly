@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/opencharly/sdk/kit"
 )
 
 // BoxCmd groups build-mode commands that operate on charly.yml (or, in the
@@ -15,35 +16,36 @@ import (
 // image into local storage so deploy-mode commands can read its OCI labels).
 //
 // `charly box` is a SHARED command group: the RETAINED verbs below are the core
-// grammar spine (build → plugin-build; merge/labels; feature; the authoring
-// verbs). The generate/validate/new/pkg/inspect/list verbs are contributed as
-// NESTED command providers by the COMPILED-IN candy/plugin-box (each a
-// command:<word> with CommandParent()=="box"), attached into the embedded
-// kong.Plugins below. This mirrors how a compiled-in command holder embeds
-// kong.Plugins for its nested external subcommands.
+// grammar spine (build → plugin-build; feature/reconcile). The
+// generate/validate/new/pkg/inspect/list/labels/merge verbs are contributed as NESTED command
+// providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
+// (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
+// candy/plugin-authoring (P14b) — each a command:<word> with
+// CommandParent()=="box", attached into the embedded kong.Plugins below. This
+// mirrors how a compiled-in command holder embeds kong.Plugins for its nested
+// external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/inspect/list). main() sets this
-	// to collectExternalCommandPlugins()'s nestedByParent["box"] before kong.Parse.
+	// (candy/plugin-box's generate/validate/new/pkg/inspect/list/labels/merge +
+	// candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
+	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
+	// before kong.Parse.
 	kong.Plugins
 
-	Build   BuildCmd      `cmd:"" help:"Build container boxes"`
-	Merge   MergeCmd      `cmd:"" help:"Merge small layers in a built container image"`
-	Pull    BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
-	Labels  BoxLabelsCmd  `cmd:"" help:"Print a built image's OCI labels (the ai.opencharly.* capability contract; --format <key> for one value, --all for every label)"`
-	Feature BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
-
-	// Authoring verbs — added so the MCP tool surface (auto-reflected from
-	// Kong) can author a project from scratch over RPC.
-	Set       BoxSetCmd       `cmd:"" help:"Set a value in charly.yml by dot-path (e.g. box.foo.base fedora)"`
-	AddCandy  BoxAddCandyCmd  `cmd:"" name:"add-candy" help:"Append a candy to a box's candy: list (idempotent)"`
-	RmCandy   BoxRmCandyCmd   `cmd:"" name:"rm-candy" help:"Remove a candy from a box's candy: list"`
-	Fetch     BoxFetchCmd     `cmd:"" help:"Pre-prime the remote-repo cache (default: opencharly/charly)"`
-	Refresh   BoxRefreshCmd   `cmd:"" help:"Force re-clone of a remote project repo"`
-	Write     BoxWriteCmd     `cmd:"" help:"Write file contents under the project root (escape hatch for free-form files)"`
-	Cat       BoxCatCmd       `cmd:"" help:"Print file contents from under the project root"`
+	Build     BuildCmd        `cmd:"" help:"Build container boxes"`
+	Pull      BoxPullCmd      `cmd:"" help:"Pull an image from its registry into local storage"`
+	Feature   BoxFeatureCmd   `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 	Reconcile BoxReconcileCmd `cmd:"" help:"Align cross-repo @github candy pins to the newest version (clears resolver newest-wins warnings)"`
 }
+
+// MIGRATION INVENTORY (north-star §4.4): the RETAINED verbs above (build/pull/feature/
+// reconcile) are UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go
+// knows zero verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
+// externalizes (mirroring generate/validate/new/pkg/inspect/list/labels/merge above, P14-rest
+// trace, 2026-07 — labels externalized fully in K3, merge externalized at P14, no host reentry
+// left for either; see charly/labels.go + candy/plugin-box/merge_cmd.go): pkg_cmd.go already
+// documents its own UNTIL-K1 note; build/pull/feature/reconcile are the remaining residue in this
+// struct.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three
@@ -72,7 +74,7 @@ func (c *BoxPullCmd) Run() error {
 		// Tag override: only meaningful for short-name input. Resolve
 		// the canonical short-name ref FIRST so the build-fallback
 		// path picks up the requested tag.
-		if !looksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
+		if !kit.LooksLikeFullRef(c.Box) && !IsRemoteImageRef(StripURLScheme(c.Box)) {
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}
@@ -87,35 +89,31 @@ func (c *BoxPullCmd) Run() error {
 	return EnsureImagePresent(context.Background(), c.Box, cfg, dir)
 }
 
-// looksLikeFullRef returns true if the image ref contains a registry segment
-// (a "/" before any ":") — e.g. "ghcr.io/org/name:tag" — so it can be pulled
-// without charly.yml resolution.
-func looksLikeFullRef(ref string) bool {
-	if strings.HasPrefix(ref, "@") {
-		return false
-	}
-	slash := strings.Index(ref, "/")
-	if slash < 0 {
-		return false
-	}
-	colon := strings.Index(ref, ":")
-	return colon < 0 || slash < colon
-}
+// kit.LooksLikeFullRef (P12a: relocated to sdk/kit/local_image.go — it had 4
+// core callers beyond this file, R3 single-source) returns true if the image
+// ref contains a registry segment (a "/" before any ":") — e.g.
+// "ghcr.io/org/name:tag" — so it can be pulled without charly.yml resolution.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
-// when the underlying cause is a missing local image (ErrImageNotLocal).
+// when the underlying cause is a missing local image (kit.ErrImageNotLocal).
 // Called from main() just before FatalIfErrorf so the exit path still passes
 // through Kong's standard error rendering.
 func FormatCLIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, ErrImageNotLocal) {
-		// ExtractMetadata wraps as "image not found in local storage: <ref>";
-		// pull out the ref so we can render the recommendation.
+	if errors.Is(err, kit.ErrImageNotLocal) {
+		// ExtractMetadata (or any other wrapper — a compiled-in command plugin's generic
+		// dispatchInProcCommand "command %q: %w" wrap included, K3 reentry-class dissolution)
+		// renders as "...image not found in local storage: <ref>"; find the marker WHEREVER it
+		// lands in the message (not just as a whole-message prefix — that broke the moment a
+		// command-dispatch wrap started prefixing it) and pull out the ref from after it.
+		marker := kit.ErrImageNotLocal.Error() + ": "
 		msg := err.Error()
-		ref := strings.TrimPrefix(msg, ErrImageNotLocal.Error()+": ")
-		return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		if idx := strings.LastIndex(msg, marker); idx >= 0 {
+			ref := msg[idx+len(marker):]
+			return fmt.Errorf("image %q is not available locally.\nRun 'charly box pull %s' to fetch it first", ref, ref)
+		}
 	}
 	return err
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestReadCandyRecord_GatesPreCutover proves the ledger read path hard-rejects a
@@ -18,7 +20,7 @@ func TestReadCandyRecord_GatesPreCutover(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(layers, "old.json"), []byte(`{"layer":"old","deployed_by":[]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ReadCandyRecord(&LedgerPaths{Root: root, Candies: layers}, "old")
+	_, err := kit.ReadCandyRecord(&kit.LedgerPaths{Root: root, Candies: layers}, "old")
 	if err == nil {
 		t.Fatal("expected gate error on a pre-cutover record")
 	}

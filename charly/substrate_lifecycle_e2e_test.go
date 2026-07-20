@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 )
 
 // TestSubstrateLifecycle_PrepareVenueDescriptorRoundTrip proves the F6 HIGHEST-risk assumption on a
@@ -82,11 +85,11 @@ func TestSubstrateLifecycle_PrepareVenueDescriptorRoundTrip(t *testing.T) {
 
 	// The host adapter: it Invokes the plugin's OpPrepareVenue and re-materializes the descriptor.
 	lc := grpcSubstrateLifecycle{prov: gp}
-	exec, err := lc.PrepareVenue(ctx, "my-lifecycle", "", nil, nil, EmitOpts{})
+	exec, err := lc.PrepareVenue(ctx, "my-lifecycle", "", nil, nil, deploykit.EmitOpts{})
 	if err != nil {
 		t.Fatalf("PrepareVenue: %v", err)
 	}
-	if _, isShell := exec.(ShellExecutor); !isShell {
+	if _, isShell := exec.(kit.ShellExecutor); !isShell {
 		t.Fatalf("re-materialized executor is %T, want ShellExecutor (from the shell VenueDescriptor)", exec)
 	}
 	if exec.Venue() != "local" {

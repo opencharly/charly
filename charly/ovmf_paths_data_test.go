@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"testing"
+
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // TestOvmfPathsFromEmbedded is the drift-guard: ovmfCandidatesForDistro returns
@@ -10,7 +12,7 @@ import (
 // (Phase 4: data moved out of Go) — alias resolution (centos→fedora), secure selection,
 // and the unknown-distro union all preserved.
 func TestOvmfPathsFromEmbedded(t *testing.T) {
-	eq := func(t *testing.T, got []OvmfPaths, want ...[2]string) {
+	eq := func(t *testing.T, got []vmshared.OvmfPaths, want ...[2]string) {
 		t.Helper()
 		if len(got) != len(want) {
 			t.Fatalf("got %d candidates, want %d: %+v", len(got), len(want), got)
@@ -22,22 +24,22 @@ func TestOvmfPathsFromEmbedded(t *testing.T) {
 		}
 	}
 
-	eq(t, ovmfCandidatesForDistro("fedora", true),
+	eq(t, vmshared.OvmfCandidatesForDistro("fedora", true),
 		[2]string{"/usr/share/OVMF/OVMF_CODE.secboot.fd", "/usr/share/OVMF/OVMF_VARS.secboot.fd"},
 		[2]string{"/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd", "/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd"})
 
-	eq(t, ovmfCandidatesForDistro("arch", false),
+	eq(t, vmshared.OvmfCandidatesForDistro("arch", false),
 		[2]string{"/usr/share/edk2/x64/OVMF_CODE.4m.fd", "/usr/share/edk2/x64/OVMF_VARS.4m.fd"},
 		[2]string{"/usr/share/edk2-ovmf/x64/OVMF_CODE.fd", "/usr/share/edk2-ovmf/x64/OVMF_VARS.fd"})
 
-	eq(t, ovmfCandidatesForDistro("debian", true),
+	eq(t, vmshared.OvmfCandidatesForDistro("debian", true),
 		[2]string{"/usr/share/OVMF/OVMF_CODE_4M.ms.fd", "/usr/share/OVMF/OVMF_VARS_4M.ms.fd"},
 		[2]string{"/usr/share/OVMF/OVMF_CODE.secboot.fd", "/usr/share/OVMF/OVMF_VARS.secboot.fd"})
 
-	if got := ovmfCandidatesForDistro("centos", false); len(got) != 2 || got[0].CodePath != "/usr/share/OVMF/OVMF_CODE.fd" {
+	if got := vmshared.OvmfCandidatesForDistro("centos", false); len(got) != 2 || got[0].CodePath != "/usr/share/OVMF/OVMF_CODE.fd" {
 		t.Fatalf("centos→fedora alias broken: %+v", got)
 	}
-	if got := ovmfCandidatesForDistro("gentoo", false); len(got) != 6 {
+	if got := vmshared.OvmfCandidatesForDistro("gentoo", false); len(got) != 6 {
 		t.Fatalf("unknown-distro union = %d candidates, want 6: %+v", len(got), got)
 	}
 }
@@ -53,7 +55,7 @@ func TestResolveOvmfPaths_HostFirmwareResolves(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot detect host distro: %v", err)
 	}
-	paths, err := ResolveOvmfPaths(hd.ID, false)
+	paths, err := vmshared.ResolveOvmfPaths(hd.ID, false)
 	if err != nil {
 		t.Skipf("host %q has no OVMF firmware (edk2-ovmf) installed: %v", hd.ID, err)
 	}

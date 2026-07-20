@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/opencharly/sdk/spec"
+)
+
 // CollectShell walks the base-image chain for boxName and gathers
 // per-(origin, shell) shell-init contributions into a three-section
 // LabelShellSet. Mirrors CollectDescriptions / CollectHooks shape — dedupe by
@@ -50,7 +54,7 @@ func CollectShell(cfg *Config, layers map[string]*Candy, boxName string) *LabelS
 // shellConfigToEntry projects an in-memory ShellConfig into the
 // label-emission ShellEntry shape. Returns nil when the config is
 // effectively empty (no Init, no PathAppend, no per-shell overrides).
-func shellConfigToEntry(cfg *ShellConfig, origin string) *ShellEntry {
+func shellConfigToEntry(cfg *spec.Shell, origin string) *ShellEntry {
 	if cfg == nil {
 		return nil
 	}

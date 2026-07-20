@@ -4,6 +4,9 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 func TestSecurityArgsPrivileged(t *testing.T) {
@@ -126,7 +129,7 @@ func TestIpcModeBlocksShmSize(t *testing.T) {
 		{"", false},
 	}
 	for _, tc := range cases {
-		if got := ipcModeBlocksShmSize(tc.ipc); got != tc.want {
+		if got := deploykit.IpcModeBlocksShmSize(tc.ipc); got != tc.want {
 			t.Errorf("ipcModeBlocksShmSize(%q) = %v, want %v", tc.ipc, got, tc.want)
 		}
 	}
@@ -258,7 +261,7 @@ func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"test": {Candy: []string{"big", "small"}},
 		}),
 	}
@@ -283,7 +286,7 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 		},
 	}
 	cfg := &Config{
-		Box: boxMapOf(map[string]BoxConfig{
+		Box: boxMapOf(map[string]spec.BoxConfig{
 			"heavy": {
 				Candy:    []string{"chrome"},
 				Security: &SecurityConfig{MemoryMax: "16g"},
@@ -300,7 +303,7 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 }
 
 func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "selkies-desktop",
 		ImageRef: "ghcr.io/test/selkies-desktop:latest",
 		Home:     "/home/user",
@@ -312,7 +315,7 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 			Cpus:          "4",
 		},
 	}
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	// systemd rejects lowercase size suffixes on MemoryMax/MemoryHigh/
 	// MemorySwapMax (silently falls back to infinity). ShmSize is podman's
 	// own flag and keeps its original lowercase form.
@@ -367,13 +370,13 @@ func TestBuildShellArgsWithCapAdd(t *testing.T) {
 }
 
 func TestGenerateQuadletWithPrivileged(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "runner",
 		ImageRef: "ghcr.io/test/runner:latest",
 		Home:     "/workspace",
 		Security: SecurityConfig{Privileged: true},
 	}
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !containsLine(content, "PodmanArgs=--privileged") {
 		t.Error("expected PodmanArgs=--privileged in quadlet")
 	}
@@ -383,7 +386,7 @@ func TestGenerateQuadletWithPrivileged(t *testing.T) {
 }
 
 func TestGenerateQuadletWithCapAdd(t *testing.T) {
-	cfg := QuadletConfig{
+	cfg := deploykit.QuadletConfig{
 		BoxName:  "builder",
 		ImageRef: "ghcr.io/test/builder:latest",
 		Home:     "/workspace",
@@ -393,7 +396,7 @@ func TestGenerateQuadletWithCapAdd(t *testing.T) {
 			SecurityOpt: []string{"label=disable"},
 		},
 	}
-	content := generateQuadlet(cfg)
+	content := deploykit.GenerateQuadlet(cfg)
 	if !containsLine(content, "AddCapability=SYS_ADMIN") {
 		t.Errorf("expected AddCapability=SYS_ADMIN in quadlet:\n%s", content)
 	}

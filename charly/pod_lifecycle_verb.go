@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // pod_lifecycle_verb.go — the `charly start` / `charly stop` VERBS routed through the unified
@@ -17,9 +21,9 @@ import (
 // Target=pod + the box/instance to resolve the plan).
 
 // resolveLifecycleDeployNode resolves the deploy node for a start/stop verb from the per-host config.
-func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
-	key := deployKey(box, instance)
-	if dc := loadDeployConfigForRead("charly start/stop"); dc != nil {
+func resolveLifecycleDeployNode(box, instance string) (*spec.BundleNode, string) {
+	key := deploykit.DeployKey(box, instance)
+	if dc := deploykit.LoadDeployConfigForRead("charly start/stop"); dc != nil {
 		if node, ok := dc.Bundle[key]; ok {
 			n := node
 			if n.Target == "" || n.Target == "container" {
@@ -28,7 +32,7 @@ func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
 			return &n, key
 		}
 	}
-	return &BundleNode{Target: "pod"}, key
+	return &spec.BundleNode{Target: "pod"}, key
 }
 
 // dispatchLifecycleTarget resolves the deploy → its LifecycleTarget (connecting external substrate
@@ -36,7 +40,9 @@ func resolveLifecycleDeployNode(box, instance string) (*BundleNode, string) {
 func dispatchLifecycleTarget(verb, box, instance string) (LifecycleTarget, error) {
 	node, deployName := resolveLifecycleDeployNode(box, instance)
 	dir, _ := os.Getwd()
-	loadDeployPlugins(dir, deployName, nil)
+	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
+		return nil, err
+	}
 	// A bare box with NO deploy entry (an UNCONFIGURED image `charly shell`/`cmd`/`logs` targets — the
 	// former standalone-podman path) synthesizes a {Target:"pod"} node that no tree node references, so
 	// the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the substrate

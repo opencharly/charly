@@ -40,7 +40,7 @@ across 25 plugins. See `plugins/README.md` for the full index.
 - [Catalogs](#catalogs)
 - [Troubleshooting](#troubleshooting)
 - [Adding a candy](#adding-a-candy)
-- [Works with Claude Code](#works-with-claude-code)
+- [Works with Claude Code, Codex, and Kimi](#works-with-claude-code-codex-and-kimi)
 - [License](#license)
 
 ## What's in the chocolate factory
@@ -265,7 +265,7 @@ for you and your agents.** A deploy config is only useful if you can prove
 it works, so any box or deployment is self-verifiable end-to-end — the
 same surface whether you drive it at the keyboard or your agents drive
 it autonomously. See [Evaluate](#evaluate) for the framework and
-[Works with Claude Code](#works-with-claude-code) for the agents and
+[Works with Claude Code, Codex, and Kimi](#works-with-claude-code-codex-and-kimi) for the agents and
 workflows. → `/charly-check:check`, `/charly-internals:agents`.
 
 **Rootless-first power-user boxes.** The four boxes carrying the
@@ -289,53 +289,60 @@ VMs from a terminal inside the browser-accessible candybox desktop — uid 1000,
 
 ## Install
 
-**Recommended — Go install** (requires Go 1.25.3+):
-
-```bash
-go install github.com/opencharly/charly/charly@latest
-```
-
-This puts `charly` in your `$GOPATH/bin`. Create an `charly.yml` and
-a `candy/` directory and you're done. Legacy projects (predating
-the unified schema, the `kind:` discriminators, or the singular
-field names) convert in one shot with `charly migrate` — a single
-idempotent chain to the latest CalVer schema. See `/charly-build:migrate`.
-
-**Full project bootstrap** (to build boxes from this repo):
+**Development — the one workflow, per checkout** (requires Go 1.26+ and
+[go-task](https://taskfile.dev)):
 
 ```bash
 git clone --recurse-submodules https://github.com/opencharly/charly.git
-cd opencharly
-task build:charly         # on Arch: delegates to makepkg -si; elsewhere: portable install to ~/.local/bin/charly
-charly box build        # build everything
+cd charly
+task build:binary       # builds ./bin/charly (CalVer-stamped) — NEVER installs to the host
+./bin/charly box build  # build everything
 ```
 
-**Arch / CachyOS / Manjaro** — install system-wide via `pacman`, building this
-repo's bundled `opencharly-git` PKGBUILD (it is LOCAL-ONLY — NOT published to the
-AUR):
+Every invocation against THIS checkout uses `./bin/charly` — there is no
+system-wide dev install. Working from several checkouts or worktrees? Each gets
+its own `task build:binary` and its own `./bin/charly`; nothing is shared
+between them. Create your own `charly.yml` and a `candy/` directory in any
+project directory and you're done. Legacy projects (predating the unified
+schema, the `kind:` discriminators, or the singular field names) convert in one
+shot with `charly migrate` — a single idempotent chain to the latest CalVer
+schema. See `/charly-build:migrate`.
+
+For a personal `charly` on your `$PATH` — solo/bootstrap use only, never on a
+host with in-flight multi-teammate work:
 
 ```bash
-cd pkg/arch && makepkg -si     # build + pacman-install opencharly-git from this repo
-# or, equivalently, from the repo root:
-task build:charly                  # pre-installs the AUR-only deps via your AUR helper, then runs makepkg -sefi in pkg/arch
+task build:install-portable   # copies ./bin/charly to $HOME/.local/bin/charly
 ```
 
-The PKGBUILD `pkgver()` derives the same CalVer
-(`YYYY.DDD.HHMM`) `charly version` prints, so `pacman -Q opencharly-git`
-and `charly version` always agree. `depends=` covers the full runtime
-surface — `podman`/`docker`/`fuse-overlayfs`/`slirp4netns` for
-rootless containers, `qemu-full`/`libvirt`/`edk2-ovmf`/`swtpm` for
-`charly vm`, `gnupg`/`pinentry`/`libsecret`/`gocryptfs`/`tailscale` for
-secrets/encrypted volumes/tunnels, `go-task` so `task build:charly`
-works from any fresh checkout. The pacman post-install hook enables
-`docker.service` / `tailscaled.service` / `virtqemud.socket` and
-adds the user to the `docker` and `libvirt` groups automatically.
+This WRITES to `$HOME`. If `$HOME/.local/bin` precedes a native-package install
+location (e.g. `/usr/bin`) in your `$PATH`, it SHADOWS the system `charly` for
+your user — fine on a single-developer machine, but on a shared host it
+silently changes which binary any bare-`$PATH` lookup resolves to (another
+session, a script, a `local: {host: local}` deploy step).
 
-**From source:**
+**Native packages** (for END USERS who want `charly` on the host system —
+not the development workflow above):
 
 ```bash
-cd charly && go build -o ../bin/charly .
+task build:pkg:arch && sudo pacman -U dist/*.pkg.tar.zst      # Arch / CachyOS / Manjaro
+task build:pkg:fedora && sudo dnf install dist/*.rpm          # Fedora
+task build:pkg:debian && sudo apt install ./dist/*.deb        # Debian / Ubuntu
 ```
+
+Each `pkg:*` task drives `charly box pkg`, which builds the repo's bundled
+native-package sources (`pkg/arch`'s `opencharly-git` PKGBUILD is LOCAL-ONLY —
+NOT published to the AUR; `pkg/fedora`/`pkg/debian` analogously) into a plain
+artifact under `dist/` — the system-wide install step is always an explicit,
+separate command, never a side effect of building. The Arch PKGBUILD's
+`pkgver()` derives the same CalVer (`YYYY.DDD.HHMM`) `charly version` prints, so
+`pacman -Q opencharly-git` and `charly version` always agree; its `depends=`
+covers the full runtime surface — `podman`/`fuse-overlayfs`/`slirp4netns` for
+rootless containers, `qemu-full`/`libvirt`/`edk2-ovmf`/`swtpm` for `charly vm`,
+`gnupg`/`pinentry`/`gocryptfs`/`tailscale` for secrets/encrypted
+volumes/tunnels — and its post-install hook enables `docker.service` /
+`tailscaled.service` / `virtqemud.socket` and adds the user to the `docker` and
+`libvirt` groups automatically.
 
 ## Quickstart
 
@@ -647,7 +654,7 @@ The agent iteration harness sits on top of a disposable check bed via two
 pieces — the `kind: agent` catalog and an `iterate:` block:
 
 - **`kind: agent`** — reusable agent CLI catalog (`claude`,
-  `codex`, `gemini`, …). Each entry declares a command, a version
+  `codex`, `gemini`, `kimi`, …). Each entry declares a command, a version
   probe, an output format (typically `stream-json`), and credential
   paths. The harness parses each NDJSON line into
   `iteration[].runner_event`.
@@ -695,7 +702,8 @@ auto-fallback to `opencharly/charly` when no project is wired
   engine (`engine.build podman|docker`), secret backend, host
   aliases (`hosts.<name> user@machine`), VM backend.
 - `charly version` — print computed CalVer tag.
-- `charly tmux {ls, attach}` — drive tmux sessions inside containers.
+- `charly agent terminal {launch, run, attach, snapshot, transcript, input, key, resize, signal, close}` — typed local/remote/nested terminal channels.
+- `charly tmux {shell, cmd, run, attach, list, capture, send, kill}` — compatibility facade over those typed channels; it never targets the operator's tmux server directly.
 - `charly ssh tunnel {spice, vnc, …}` — forward SPICE/VNC/unix sockets
   from a remote libvirt host to the local machine.
 - `charly alias install` — register box-scoped shell aliases
@@ -706,7 +714,7 @@ auto-fallback to `opencharly/charly` when no project is wired
 
 → `/charly-core:clean`, `/charly-core:charly-doctor`, `/charly-core:charly-update`,
 `/charly-build:migrate`, `/charly-build:settings`, `/charly-core:ssh`,
-`/charly-automation:tmux`, `/charly-automation:alias`,
+`/charly-automation:alias`,
 `/charly-automation:udev`.
 
 ## Command reference
@@ -723,7 +731,7 @@ gateway exposing the entire surface as MCP tools.
 | **Box (build mode)** | `charly box {build, generate, validate, merge, new, inspect, list, pull, reconcile}` | `/charly-image:image` + `/charly-build:build`, `/charly-build:generate`, `/charly-build:validate`, `/charly-build:merge`, `/charly-build:new`, `/charly-build:inspect`, `/charly-build:list`, `/charly-build:pull`, `/charly-build:reconcile` |
 | **Box authoring (MCP-first)** | `charly box {set, add-candy, rm-candy, fetch, refresh, write, cat}` and `charly candy {set, add-rpm, add-deb, add-pac, add-aur}` | `/charly-image:image` "Authoring" + `/charly-image:layer` |
 | **Deployment** | `charly bundle {add, del, sync, from-box, export, import, show, reset, status, path}`; `charly config`; `charly start`, `charly stop`, `charly restart`, `charly update`, `charly remove` | `/charly-core:deploy`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`, `/charly-core:charly-update`, `/charly-core:remove`, `/charly-local:local-deploy`, `/charly-kubernetes:kubernetes`, `/charly-internals:vm-deploy-target` |
-| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`, `charly tmux` | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs`, `/charly-automation:tmux` |
+| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`; `charly agent` sessions/runs/teams/federation/terminals/incidents/RCA/recovery; `charly tui`; typed-provider `charly tmux` compatibility | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs` |
 | **Test + probes** | `charly check {box, live, run}` + the 11 live probe verbs (`cdp`, `wl`, `dbus`, `vnc`, `mcp`, `record`, `spice`, `libvirt`, `k8s`, `adb`, `appium`); `charly feature {list, pending, validate}` | `/charly-check:check`, `/charly-check:cdp`, `/charly-check:wl`, `/charly-check:dbus`, `/charly-check:vnc`, `/charly-check:spice`, `/charly-check:libvirt`, `/charly-check:record`, `/charly-kubernetes:check-k8s`, `/charly-check:adb`, `/charly-check:appium` |
 | **MCP gateway** | `charly mcp {serve, ping, servers, list-tools, list-resources, list-prompts, call, read}` | `/charly-build:charly-mcp-cmd`, `/charly-coder:charly-mcp` |
 | **VM** | `charly vm {build, create, start, stop, destroy, snapshot, clone, console, ssh, import, list}` | `/charly-vm:vm`, `/charly-vm:vms-catalog`, `/charly-internals:vm-deploy-target` |
@@ -804,7 +812,7 @@ not here.
 | Tunnel not appearing on a new instance | Tunnel config is `charly.yml`-only — add manually per instance (`/charly-core:deploy`) |
 | Service built fine but broken in production | `charly check live <image>` runs the baked layer + image + deploy checks (`/charly-check:check`) |
 | `charly vm build` fails: "no kind:vm entity in vm.yml" | Declare a `kind: vm` entity (`/charly-vm:vms-catalog`) |
-| SPICE console blank on cloud_image VM | Known `simpledrm → qxldrmfb` race under UEFI; switch to `firmware: bios` (`/charly-vm:arch`) |
+| SPICE console blank on cloud_image VM | Known `simpledrm → qxldrmfb` race under UEFI; switch to `firmware: bios` (`/charly-vm:arch-cloud-vm`) |
 | `charly bundle add vm:<name>` errors "VM does not exist" | Run `charly vm create <name>` first — VM deploy is not auto-provisioning (`/charly-core:deploy`) |
 | Resolver "referenced at multiple versions" warning | `charly box reconcile` aligns the cross-repo `@github` pins (`/charly-build:reconcile`) |
 | `charly box pull` says "image is not available locally" | `charly box pull` accepts short name + project, fully-qualified ref, or `@github` remote ref. See `/charly-build:pull` |
@@ -836,64 +844,55 @@ substitution, YAML anchors, and execution-order rules.
 gold-standard pattern (`candy/redis/charly.yml`), and the 10
 authoring gotchas.
 
-## Works with Claude Code
+## Works with Claude Code, Codex, and Kimi
 
-OpenCharly works hand-in-hand with
-[Claude Code](https://claude.com/claude-code). The bundled
-[plugins/](plugins/) directory provides skills that teach Claude
-how to compose, build, deploy, and manage your boxes.
-Every candy, every box, every command has a dedicated skill.
+The bundled [plugins/](plugins/) directory provides one skill tree for Claude
+Code, Codex, and Kimi. It teaches each harness how to compose, build, deploy,
+check, and manage boxes. Every candy, box, command, and contributor subsystem
+has an owning skill.
 
-**Quick setup** — add this to your project's `.claude/settings.json`:
-
-```json
-{
-  "enabledPlugins": {
-    "charly-core@charly-plugins": true,
-    "charly-build@charly-plugins": true,
-    "charly-check@charly-plugins": true,
-    "charly-image@charly-plugins": true,
-    "charly-internals@charly-plugins": true,
-    "charly-distros@charly-plugins": true,
-    "charly-infrastructure@charly-plugins": true,
-    "charly-jupyter@charly-plugins": true,
-    "charly-coder@charly-plugins": true
-  },
-  "extraKnownMarketplaces": {
-    "charly-plugins": {
-      "source": { "source": "directory", "path": "./plugins" }
-    }
-  }
-}
+```bash
+./plugins/setup claude                   # full developer mode (default)
+./plugins/setup codex developer
+./plugins/setup kimi developer
+./plugins/setup codex user               # use and author with Charly
+./plugins/setup codex container coder    # operate one container family
 ```
 
-Representative subset; see `plugins/.claude-plugin/marketplace.json`
-for the full 25-plugin catalog. Clone with submodules to get the
-plugins directory: `git clone --recurse-submodules
-https://github.com/opencharly/charly.git`.
+The repository's committed Claude settings, Codex marketplace, and the
+repo-native `.agents/skills/` tree (which Kimi reads natively as project-scope
+skills) select full developer mode. The kimi profile additionally prints the
+`kimi-user-config.toml` snippet — permission rules and repo-guarded hooks for
+the user-level `~/.kimi-code/config.toml`, since Kimi has no project-level
+config file — for the operator to merge by hand. Reduced profiles are for
+consumer repositories that carry the plugins repository at `./plugins`. Setup
+writes project files only and never
+changes `~/.claude`, `~/.codex`, `~/.kimi-code`, or another user configuration.
+It does not depend on MCP.
 
-**MCP gateway as the universal channel.** `charly mcp serve` exposes
-every `charly` CLI leaf as an MCP tool (Streamable HTTP or stdio), so
-the agent reaches the full build / deploy / test surface over
-RPC. Per-box MCP servers (chrome-devtools-mcp, jupyter-mcp,
-marimo-mcp, charly-mcp) auto-discover via `mcp_provide:` when their
-containers are running.
+Charly's MCP functionality remains available independently: `charly mcp serve`
+exposes the CLI over Streamable HTTP or stdio, and container-provided servers
+such as chrome-devtools-mcp, jupyter-mcp, marimo-mcp, and charly-mcp continue to
+auto-discover through `mcp_provide:`.
 
-**Sub-agents, dynamic workflows, and agent teams.** Beyond skills, the
-project ships Claude Code **sub-agents** (`plugins/internals/agents/`):
+**Agents and workflows.** Beyond skills, the project ships reusable plugin
+agents (`plugins/internals/agents/`):
 executors `check-bed-runner` and `deploy-verifier` that drive the `charly check`
 beds and return verbatim proof, plus enforcers `root-cause-analyzer`,
-`testing-validator`, and `layer-validator`. Two **dynamic workflows**
+`testing-validator`, and `layer-validator`. Claude Code also has dynamic workflows
 (`.claude/workflows/`) fan the work out — `/verify-beds` runs the SHORT
 disposable check beds as part of the R10 gate (deferring long beds to the
 persistent session, refusing host-local ones), `/audit-deploy-configs`
-evaluates your deploy configs — and the same agent definitions reuse as
-**agent-team** teammates. Whether you drive `charly` from the keyboard or hand it to an
-agent, testing and verifying deployments uses the one surface.
+evaluates your deploy configs. Codex uses the same agent roles through native
+subagents and the independent `AGENTS.md` rulebook. Kimi follows that same
+`AGENTS.md` rulebook natively, discovers the repo-native skills on demand, and
+runs the agent roles through fresh `kimi` sessions, with repo-guarded hooks and
+permission rules from the `kimi-user-config.toml` snippet. Whether you drive `charly`
+from the keyboard or hand it to an agent, verification uses the same surface.
 → `/charly-internals:agents`.
 
 See [VISION.md](VISION.md) for the long-term thesis and direction,
-[CLAUDE.md](CLAUDE.md) for the project's rules and mandates,
+[CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for the independent harness rulebooks,
 [plugins/README.md](plugins/README.md) for the full skill index (usage
 and architecture live in the skills), and this repo's [CHANGELOG/](CHANGELOG/README.md)
 for dated history (one file per CalVer version; by policy, never duplicated here or in skills).

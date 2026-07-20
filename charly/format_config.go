@@ -3,21 +3,23 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/spec"
+
 	"github.com/opencharly/sdk/buildkit"
 )
 
 // The DistroConfig / BuilderConfig types and their vocabulary-resolution methods
 // (ResolveDistro / FindFormat / AllFormatNames / ExpandPackageInheritance /
 // ValidBuilderType / BuilderNames / distroTagChain / bareDistroName / wrapDistroDef)
-// live in sdk/buildkit now (P3), aliased back via buildkit_aliases.go. The
+// live in sdk/buildkit now (P3) — every charly/*.go caller references buildkit.DistroConfig /
+// buildkit.BuilderConfig directly (K3 ZERO-ALIASES dissolved charly/buildkit_aliases.go). The
 // (phase, venue) phase-template resolvers moved to sdk/buildkit too (P8b — they are
 // PURE over the CUE-sourced spec types: FormatDef = spec.Format, BuilderDef =
-// spec.Builder, Phase/Venue = spec enums), aliased back just below. This file keeps
-// only the loader glue.
-
-// formatPhaseTemplate / builderPhaseTemplate → sdk/buildkit (P8b shim — the pure
-// (phase, venue) phase-template resolvers moved so the build render engine shares
-// them). Aliased back for the unchanged package-main call sites + tests.
+// spec.Builder, Phase/Venue = spec enums); this file keeps only the loader glue.
+//
+// formatPhaseTemplate / builderPhaseTemplate remain thin var-bindings onto
+// buildkit.FormatPhaseTemplate / buildkit.BuilderPhaseTemplate for the unchanged
+// package-main call sites + tests — residual K3-adjacent alias inventory, not yet dissolved.
 var (
 	formatPhaseTemplate  = buildkit.FormatPhaseTemplate
 	builderPhaseTemplate = buildkit.BuilderPhaseTemplate
@@ -31,9 +33,9 @@ var (
 // BuildFile is the on-disk schema of build.yml — three optional top-level
 // sections that map directly onto DistroConfig/BuilderConfig/InitConfig.
 type BuildFile struct {
-	Distro  map[string]*DistroDef    `yaml:"distro" json:"distro"`
-	Builder map[string]*BuilderDef   `yaml:"builder" json:"builder"`
-	Init    map[string]*ResolvedInit `yaml:"init" json:"init"`
+	Distro  map[string]*spec.ResolvedDistro `yaml:"distro" json:"distro"`
+	Builder map[string]*BuilderDef          `yaml:"builder" json:"builder"`
+	Init    map[string]*ResolvedInit        `yaml:"init" json:"init"`
 }
 
 // LoadBuildConfigForBox loads distro, builder, and init configs for the
@@ -42,7 +44,7 @@ type BuildFile struct {
 //
 // The init section is optional: projects without an `inits:` block return a
 // nil *InitConfig (no init system, no entrypoint beyond the base image default).
-func LoadBuildConfigForBox(dir string) (*DistroConfig, *BuilderConfig, *InitConfig, error) {
+func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
@@ -54,6 +56,6 @@ func LoadBuildConfigForBox(dir string) (*DistroConfig, *BuilderConfig, *InitConf
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.
-func LoadDefaultBuildConfig(dir string) (*DistroConfig, *BuilderConfig, *InitConfig, error) {
+func LoadDefaultBuildConfig(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
 	return LoadBuildConfigForBox(dir)
 }

@@ -227,8 +227,12 @@ func execErr(exec *sdk.Executor, ctx context.Context, script, label, target stri
 	return nil
 }
 
-// podPrepareVenue builds the overlay image HOST-SIDE via HostBuild("overlay") and returns a
-// host-local shell venue (the plugin walks nothing — pod bakes into the image).
+// podPrepareVenue builds the overlay image via HostBuild("overlay") (the host prep+resolve,
+// which returns the render envelope) + renders the overlay Containerfile IN THE CANDY (P11c —
+// the pod-only render body dissolved out of core) + runs podman build + the deploy-name alias tag
+// via the served host executor. Returns a host-local shell venue (the plugin walks nothing — pod
+// bakes into the image). The no-overlay path (no add_candy plans) tags the base as the deploy-name
+// alias so deployment-name-keyed commands resolve it when deploy-name != image-name.
 func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
 	var opts spec.LifecycleOpts
 	_ = json.Unmarshal(p.Opts, &opts)
@@ -244,28 +248,55 @@ func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: overlay build: %w", err)
 	}
-	var oreply spec.OverlayBuildReply
-	if err := json.Unmarshal(resJSON, &oreply); err != nil {
+	var reply spec.OverlayBuildReply
+	if err := json.Unmarshal(resJSON, &reply); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: decode overlay reply: %w", err)
 	}
-	if oreply.Error != "" {
-		return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: %s", oreply.Error)
+	if reply.Error != "" {
+		return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: %s", reply.Error)
 	}
 
-	reply := spec.PrepareVenueReply{Venue: spec.VenueDescriptor{Kind: "shell"}}
+	// The base box name — the key into reply.ResolvedProject.Boxes — is the SAME base the host prep
+	// used (req.Image / req.DeployName).
+	baseName := p.Image
+	if baseName == "" {
+		baseName = p.Name
+	}
+
+	// No overlay (no add_candy plans) → the base image is deploy-ready. Tag the deploy-name alias
+	// so `charly config/start <deploy-name>` resolves the base image when deploy-name != image-name
+	// (mirrors the former in-core pod-overlay Emit no-overlay branch). The host prep prepped the base
+	// ref + metadata; the candy tags the alias via the served executor.
+	resolvedImage := reply.BaseImage
+	if len(reply.Plans) == 0 {
+		if !opts.DryRun && reply.DeployName != "" && reply.BaseImage != "" {
+			if err := tagDeployAlias(ctx, exec, reply, reply.BaseImage, opts); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// Overlay path: render the overlay Containerfile in the candy + podman build + tag.
+		overlayRef, berr := buildOverlay(ctx, exec, reply, p.Dir, baseName, opts)
+		if berr != nil {
+			return nil, berr
+		}
+		resolvedImage = overlayRef
+	}
+
+	r := spec.PrepareVenueReply{Venue: spec.VenueDescriptor{Kind: "shell"}}
 	if !opts.DryRun {
-		reply.Notes = []string{
-			"Overlay image ready: " + oreply.OverlayRef,
-			"To start the container, run: charly start " + oreply.DeployName,
+		r.Notes = []string{
+			"Overlay image ready: " + resolvedImage,
+			"To start the container, run: charly start " + reply.DeployName,
 		}
 		// Persist the concrete overlay ref ONLY when an overlay was actually built (add_candy
-		// present, so OverlayRef differs from the base) — the host writes SaveDeployStateInput.
-		if oreply.OverlayRef != "" && oreply.OverlayRef != oreply.BaseImage {
-			state, _ := json.Marshal(map[string]any{"ResolvedImage": oreply.OverlayRef})
-			reply.State = state
+		// present, so resolvedImage differs from the base) — the host writes SaveDeployStateInput.
+		if resolvedImage != "" && resolvedImage != reply.BaseImage {
+			state, _ := json.Marshal(map[string]any{"ResolvedImage": resolvedImage})
+			r.State = state
 		}
 	}
-	return marshalReply(reply)
+	return marshalReply(r)
 }
 
 // podStatus parses `charly status --json` for this deploy's row (the SAME best-effort scan the

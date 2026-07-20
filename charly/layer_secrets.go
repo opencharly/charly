@@ -22,6 +22,9 @@ package main
 import (
 	"maps"
 	"strings"
+
+	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // ensureCandySecret resolves a secret_requires/secret_accepts EnvDependency
@@ -40,7 +43,7 @@ import (
 // fallback per credential_store.go DefaultCredentialStore); the second
 // caller's ResolveCredential reads the persisted value. All callers in
 // one process share the cached singleton.
-func ensureCandySecret(dep EnvDependency, required bool) (val, source string) {
+func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source string) {
 	service, key := "charly/secret", dep.Name
 	if dep.Key != "" {
 		if idx := strings.LastIndex(dep.Key, "/"); idx > 0 {
@@ -114,7 +117,7 @@ func ResolveSecretForCandy(layers []*Candy) map[string]string {
 // slice covered by the given plans (both CandiesIncluded for image-level
 // plans and per-plan Candy for candy-only plans). Used by deploy-add to
 // call ResolveSecretForCandy + RetrieveCandyArtifacts.
-func CandyForPlan(plans []*InstallPlan, dir string, cfg *Config) ([]*Candy, error) {
+func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]*Candy, error) {
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		return nil, err
@@ -146,13 +149,13 @@ func CandyForPlan(plans []*InstallPlan, dir string, cfg *Config) ([]*Candy, erro
 // a value they control). Called from deploy_add_cmd after
 // ResolveCandySecret and before target.Emit so the heredoc renderer
 // sees the values as regular env exports.
-func InjectSecretsIntoPlans(plans []*InstallPlan, env map[string]string) {
+func InjectSecretsIntoPlans(plans []*deploykit.InstallPlan, env map[string]string) {
 	if len(env) == 0 {
 		return
 	}
 	for _, p := range plans {
 		for _, step := range p.Steps {
-			ts, ok := step.(*OpStep)
+			ts, ok := step.(*deploykit.OpStep)
 			if !ok || ts.Op == nil {
 				continue
 			}

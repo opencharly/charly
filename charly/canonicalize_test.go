@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+
+	"github.com/opencharly/sdk/deploykit"
+)
 
 // TestCanonicalizeDeployArg exercises the Pattern A "<base>/<instance>"
 // splitting that every command entry point applies. Regression guard
@@ -25,7 +31,7 @@ func TestCanonicalizeDeployArg(t *testing.T) {
 		{"empty", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gotImage, gotInst := canonicalizeDeployArg(tc.arg, tc.instance)
+			gotImage, gotInst := deploykit.CanonicalizeDeployArg(tc.arg, tc.instance)
 			if gotImage != tc.wantImage || gotInst != tc.wantInst {
 				t.Errorf("canonicalizeDeployArg(%q, %q) = (%q, %q), want (%q, %q)",
 					tc.arg, tc.instance, gotImage, gotInst, tc.wantImage, tc.wantInst)
@@ -87,8 +93,8 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 	// allocated / pinned host:container mapping charly config computed). The merge
 	// applies the entry resolved BY DEPLOY KEY — never a sibling's, never the
 	// image-label container ports.
-	dc := &BundleConfig{
-		Bundle: map[string]BundleNode{
+	dc := &deploykit.BundleConfig{
+		Bundle: map[string]spec.BundleNode{
 			"ollama":                   {ResolvedPort: []string{"11434:11434"}},
 			"check-cachyos-ollama-pod": {Image: "ollama", ResolvedPort: []string{"45434:11434"}},
 		},
@@ -97,22 +103,22 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 	// Bed: deploy key differs from the baked image short-name. The merge must
 	// resolve the bed's OWN ResolvedPort, not the sibling "ollama" deploy.
 	bedMeta := &BoxMetadata{Box: "ollama", Port: []string{"11434"}}
-	MergeDeployOntoMetadata(bedMeta, dc, "check-cachyos-ollama-pod", "")
+	deploykit.MergeDeployOntoMetadata(bedMeta, dc, "check-cachyos-ollama-pod", "")
 	if len(bedMeta.Port) != 1 || bedMeta.Port[0] != "45434:11434" {
 		t.Errorf("bed merge: got Ports=%v, want [45434:11434] (must not pick up sibling 'ollama' deploy or the image default)", bedMeta.Port)
 	}
 
 	// Plain deploy: key == image short-name. Resolves its own entry as before.
 	plainMeta := &BoxMetadata{Box: "ollama", Port: []string{"11434"}}
-	MergeDeployOntoMetadata(plainMeta, dc, "ollama", "")
+	deploykit.MergeDeployOntoMetadata(plainMeta, dc, "ollama", "")
 	if len(plainMeta.Port) != 1 || plainMeta.Port[0] != "11434:11434" {
 		t.Errorf("plain merge: got Ports=%v, want [11434:11434]", plainMeta.Port)
 	}
 
 	// Instance deploy: "<base>/<instance>" key form resolves correctly.
-	dc.Bundle["selkies/work"] = BundleNode{Image: "selkies", ResolvedPort: []string{"3001:3000"}}
+	dc.Bundle["selkies/work"] = spec.BundleNode{Image: "selkies", ResolvedPort: []string{"3001:3000"}}
 	instMeta := &BoxMetadata{Box: "selkies", Port: []string{"3000"}}
-	MergeDeployOntoMetadata(instMeta, dc, "selkies", "work")
+	deploykit.MergeDeployOntoMetadata(instMeta, dc, "selkies", "work")
 	if len(instMeta.Port) != 1 || instMeta.Port[0] != "3001:3000" {
 		t.Errorf("instance merge: got Ports=%v, want [3001:3000]", instMeta.Port)
 	}
@@ -129,7 +135,7 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 func TestMergeDeployOntoMetadata_VolumesScopedToDeployKey(t *testing.T) {
 	const vol = "charly-immich-ml-pgdata"
 	mk := func() *BoxMetadata {
-		return &BoxMetadata{Box: "immich-ml", Volume: []VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
+		return &BoxMetadata{Box: "immich-ml", Volume: []deploykit.VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
 	}
 	for _, tc := range []struct {
 		name       string
@@ -145,7 +151,7 @@ func TestMergeDeployOntoMetadata_VolumesScopedToDeployKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			meta := mk()
 			// nil dc → exercises the unconditional, overlay-independent re-scope.
-			MergeDeployOntoMetadata(meta, nil, tc.deployName, tc.instance)
+			deploykit.MergeDeployOntoMetadata(meta, nil, tc.deployName, tc.instance)
 			if got := meta.Volume[0].VolumeName; got != tc.want {
 				t.Errorf("deploy %q/%q: volume = %q, want %q", tc.deployName, tc.instance, got, tc.want)
 			}

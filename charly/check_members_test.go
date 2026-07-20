@@ -3,48 +3,16 @@ package main
 import (
 	"context"
 	"reflect"
-	"sort"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
 )
 
-func TestSplitHostKey(t *testing.T) {
-	cases := []struct {
-		key, name, arg string
-		ok             bool
-	}{
-		{"HOST:web", "HOST", "web", true},
-		{"HOST:web:8080", "HOST", "web:8080", true},
-		{"HOST", "HOST", "", false},
-	}
-	for _, c := range cases {
-		name, arg, ok := splitHostKey(c.key)
-		if name != c.name || arg != c.arg || ok != c.ok {
-			t.Errorf("splitHostKey(%q) = (%q,%q,%v), want (%q,%q,%v)", c.key, name, arg, ok, c.name, c.arg, c.ok)
-		}
-	}
-}
-
-// TestCollectHostRefs scans every check string field for ${HOST:…} refs and
-// returns exactly those (not other parameterized vars like ${HOST_PORT}).
-func TestCollectHostRefs(t *testing.T) {
-	checks := []Op{
-		{Plugin: "cdp", PluginInput: map[string]any{"method": "open", "url": "http://${HOST:web}:8080"}},
-		{Plugin: "command", PluginInput: map[string]any{"command": "curl http://${HOST:web:8080}/health"}},
-		// addr/http are plugin verbs now — their refs live in plugin_input (collectHostRefs
-		// scans it via collectAnyStrings). The addr HOST_PORT is NOT a cross-member ref; the
-		// http ${HOST:web} is a duplicate of the cdp one.
-		{Plugin: "addr", PluginInput: map[string]any{"addr": "127.0.0.1:${HOST_PORT:8080}"}},
-		{Plugin: "http", PluginInput: map[string]any{"http": "http://${HOST:web}/"}},
-	}
-	got := collectHostRefs(checks)
-	sort.Strings(got)
-	want := []string{"HOST:web", "HOST:web:8080"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("collectHostRefs = %v, want %v", got, want)
-	}
-}
+// TestSplitHostKey / TestCollectHostRefs relocated to sdk/kit/hostrefs_test.go
+// (P12a follow-up: splitHostKey/collectHostRefs moved to kit.SplitHostKey/
+// kit.CollectHostRefs).
 
 // TestEffectiveEnv_HostVarsOverlay: ${HOST:…} addresses overlay onto the active
 // env in kit.Runner.EffectiveEnv — the single injection point that makes
@@ -82,7 +50,7 @@ func TestEffectiveEnv_NoHostVarsReturnsBase(t *testing.T) {
 // build-scope check can't reference it.
 func TestIsRuntimeOnlyVar_Host(t *testing.T) {
 	for _, key := range []string{"HOST:web", "HOST:web:8080"} {
-		if !IsRuntimeOnlyVar(key) {
+		if !kit.IsRuntimeOnlyVar(key) {
 			t.Errorf("%q should be runtime-only", key)
 		}
 	}
@@ -91,12 +59,12 @@ func TestIsRuntimeOnlyVar_Host(t *testing.T) {
 // TestFilterHostVars: only ${HOST:…} keys are selected — the ones whose
 // unresolution must FAIL (not skip) a check. ${HOST_PORT} (a distinct var) is NOT.
 func TestFilterHostVars(t *testing.T) {
-	got := filterHostVars([]string{"HOST:web:8080", "HOST_PORT:8080", "HOST:web", "USER"})
+	got := kit.FilterHostVars([]string{"HOST:web:8080", "HOST_PORT:8080", "HOST:web", "USER"})
 	want := []string{"HOST:web:8080", "HOST:web"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("filterHostVars = %v, want %v", got, want)
 	}
-	if got := filterHostVars([]string{"HOST_PORT:8080", "USER"}); len(got) != 0 {
+	if got := kit.FilterHostVars([]string{"HOST_PORT:8080", "USER"}); len(got) != 0 {
 		t.Errorf("filterHostVars with no host vars = %v, want empty", got)
 	}
 }
@@ -112,12 +80,12 @@ func TestRunOne_UnresolvedHostVarFails(t *testing.T) {
 	// directly (it implements kit.PlanContext), so a one-op Run exercises the same
 	// var-resolution gate.
 	hostCheck := cmdOpP("curl -fsS http://${HOST:absent:80}/")
-	if res := r.Run(context.Background(), []Op{*hostCheck})[0]; res.Status != TestFail {
+	if res := r.Run(context.Background(), []spec.Op{*hostCheck})[0]; res.Status != TestFail {
 		t.Errorf("unresolved ${HOST:…} → status %v (%q), want TestFail", res.Status, res.Message)
 	}
 	// A non-host unresolved var is a legitimate SKIP (input genuinely N/A here).
 	otherCheck := cmdOpP("echo ${SOME_UNSET_VAR}")
-	if res := r.Run(context.Background(), []Op{*otherCheck})[0]; res.Status != TestSkip {
+	if res := r.Run(context.Background(), []spec.Op{*otherCheck})[0]; res.Status != TestSkip {
 		t.Errorf("unresolved non-host var → status %v (%q), want TestSkip", res.Status, res.Message)
 	}
 }

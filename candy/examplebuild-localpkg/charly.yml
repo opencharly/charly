@@ -12,8 +12,8 @@ examplebuild-localpkg:
             LocalPkgInstallStep via the F2 RunSystem/PutFile legs — it needs the HOST
             build ENGINE (makepkg) + the executor-based `pacman -U`, which stay in
             charly's core. So the plugin drives the host-served RunHostStep host-engine reverse
-            leg: the host runs the EXISTING build machinery (buildLocalPkgOnHost →
-            makepkg, then transferAndInstallPkgs → pacman -U onto the venue) and the
+            leg: the host runs the EXISTING build machinery (deploykit.BuildLocalPkgOnHost →
+            makepkg, then deploykit.TransferAndInstallPkgs → pacman -U onto the venue) and the
             package's marker lands at /opt/charly-f3-witness/marker. Compose it as
             add_candy on an external deploy substrate (check-exampledeploy); the plugin
             records a `pacman -R` reverse op so `charly bundle del` removes the package

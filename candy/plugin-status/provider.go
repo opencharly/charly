@@ -55,7 +55,15 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		if herr != nil {
 			return nil, herr
 		}
-		overlaid := applyNestedOverlay(reply.Rows, reply.Roots)
+		// The programmatic leg always resolves the declared tree WITHOUT live-probing
+		// (nested=false) — it has no CLI flag to carry the intent, and no current
+		// peer caller needs the live multi-hop probe (that's the interactive `--nested`
+		// leg's job, wired through runStatusCLI/command.go instead).
+		roots, rerr := buildStatusRootsTree(exec, ctx, false)
+		if rerr != nil {
+			return nil, rerr
+		}
+		overlaid := applyNestedOverlay(reply.Rows, roots)
 		resultJSON, merr := json.Marshal(overlaid)
 		if merr != nil {
 			return nil, fmt.Errorf("plugin-status: marshal status-collect result: %w", merr)

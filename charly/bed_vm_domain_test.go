@@ -3,6 +3,8 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestBedVmDomains proves the per-DEPLOY domain serialization key-gathering (P33): a bed's VM
@@ -13,28 +15,28 @@ import (
 // The lock only serializes two invocations of the SAME deploy on its own domain.
 func TestBedVmDomains(t *testing.T) {
 	// Direct vm bed: the domain is charly-<bed-name>, NOT charly-<entity>.
-	if got := bedVmDomains("check-k3s-vm", BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-k3s-vm"}) {
+	if got := bedVmDomains("check-k3s-vm", spec.BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-k3s-vm"}) {
 		t.Fatalf("direct vm bed: got %v, want [charly-check-k3s-vm]", got)
 	}
 	// A SIBLING bed sharing the SAME entity resolves to a DIFFERENT domain — the P33 property that
 	// makes them collision-free (pre-P33 both were charly-k3s-vm and serialized).
-	if got := bedVmDomains("check-substrate", BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-substrate"}) {
+	if got := bedVmDomains("check-substrate", spec.BundleNode{Target: "vm", From: "k3s-vm"}); !reflect.DeepEqual(got, []string{"charly-check-substrate"}) {
 		t.Fatalf("sibling vm bed sharing the entity: got %v, want [charly-check-substrate] (distinct domain)", got)
 	}
 	// Group with a vm member: the member's domain is keyed by the MEMBER KEY.
-	group := BundleNode{Target: "group", Members: map[string]*BundleNode{
+	group := spec.BundleNode{Target: "group", Members: map[string]*spec.BundleNode{
 		"check-k8s-deploy-cluster":  {Target: "vm", From: "k3s-vm"},
 		"check-k8s-deploy-workload": {Target: "k8s"},
 	}}
 	if got := bedVmDomains("check-k8s-deploy", group); !reflect.DeepEqual(got, []string{"charly-check-k8s-deploy-cluster"}) {
 		t.Fatalf("group with a vm member: got %v, want [charly-check-k8s-deploy-cluster] (member-key domain)", got)
 	}
-	if got := bedVmDomains("check-pod", BundleNode{Target: "pod"}); len(got) != 0 {
+	if got := bedVmDomains("check-pod", spec.BundleNode{Target: "pod"}); len(got) != 0 {
 		t.Fatalf("non-vm bed: got %v, want no domains", got)
 	}
 	// A multi-vm group's distinct member domains come back sorted + deduped (dup member keys can't
 	// occur in a map, so dedup here guards the root+member overlap path).
-	multi := BundleNode{Target: "group", Members: map[string]*BundleNode{
+	multi := spec.BundleNode{Target: "group", Members: map[string]*spec.BundleNode{
 		"member-b": {Target: "vm", From: "shared-entity"},
 		"member-a": {Target: "vm", From: "shared-entity"},
 	}}
