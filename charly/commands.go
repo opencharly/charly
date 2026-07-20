@@ -39,9 +39,12 @@ func (c *podLogsCmd) Run() error {
 	return lt.Logs(context.Background(), LogsOpts{Follow: c.Follow, Sidecar: c.Sidecar})
 }
 
-// UpdateCmd updates an image (pulls/builds the latest), preserves the
-// existing deploy config (user-overlay state untouched), and restarts
-// the service to pick up the new image.
+// podUpdateCmd is the host-side reconstruction of the former UpdateCmd (now command:update in
+// candy/plugin-pod) — hostBuildPodUpdate (host_build_pod_update.go) runs its Run() body
+// VERBATIM. TRACKED P13-KERNEL EXIT: dispatchByDeployTarget's resolveTreeRoot/
+// loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) are core Mechanisms (the
+// project loader + provider registry) a plugin cannot import or hold — this resolver moves
+// through the same venue-scoped-executor-session seam when that wave lands.
 //
 // This verb handles the destroy-free update path for every target. The
 // first arg accepts EITHER a deploy name (looked up in charly.yml —
@@ -54,14 +57,14 @@ func (c *podLogsCmd) Run() error {
 // env, tunnel) is preserved across updates. Per the user's directive:
 // "Any config changes should be done via charly config only" — this verb
 // updates ARTIFACTS, charly config updates CONFIG.
-type UpdateCmd struct {
-	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
-	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build     bool   `long:"build" help:"Force local build instead of pulling from registry"`
-	Instance  string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Seed      bool   `long:"seed" default:"true" negatable:"" help:"Sync data from new image into bind-backed volumes (default: true)"`
-	ForceSeed bool   `long:"force-seed" help:"Overwrite existing data in volumes (default: only add new files)"`
-	DataFrom  string `long:"data-from" help:"Sync data from this data image instead"`
+type podUpdateCmd struct {
+	Box       string
+	Tag       string
+	Build     bool
+	Instance  string
+	Seed      bool
+	ForceSeed bool
+	DataFrom  string
 }
 
 // Run dispatches `charly update <name>` to the target-specific update
@@ -72,7 +75,7 @@ type UpdateCmd struct {
 //
 // The dispatch keeps ZERO duplicate code paths and ZERO silent
 // fallbacks. Every branch fails fast with an actionable error message.
-func (c *UpdateCmd) Run() error {
+func (c *podUpdateCmd) Run() error {
 	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}

@@ -136,7 +136,7 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 }
 
 // TestCommandProviders_DeployLifecycleCommands proves every remaining deploy-lifecycle leaf
-// command still extracted into a dedicated COMMAND-class provider (update/cmd) is
+// command still extracted into a dedicated COMMAND-class provider (cmd) is
 // (1) registered in providerRegistry as a CommandProvider
 // with the matching Reserved() word, and (2) collected by collectCommandPlugins() and injected
 // into the REAL charly CLI grammar via kong.Plugins, so its subcommand path parses and selects
@@ -153,40 +153,41 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // (command:reap-orphans, alongside its existing substrate-liveness collectors), the SAME
 // dynamic in-proc bridge; its compiled-in registration is asserted by
 // TestCommandCompileIn_ReapOrphansInProc. `start`/`stop`/`restart`/`logs`/`remove`/`shell`/
-// `service`/`volume`/`cp`/`config` are no longer here either — the DEPLOY wave's CLI-struct
-// port relocated them to the compiled-in candy/plugin-pod (command:start/stop/restart/logs/
-// remove/shell/service/volume/cp/config), the SAME dynamic in-proc bridge; their compiled-in
-// registration is asserted by TestCommandCompileIn_PodInProc. This closes out the DEPLOY
-// wave's CLI-struct port — every pod-lifecycle leaf command now lives in candy/plugin-pod.)
+// `service`/`volume`/`cp`/`config`/`update` are no longer here either — the DEPLOY wave's
+// CLI-struct port relocated them to the compiled-in candy/plugin-pod (command:start/stop/
+// restart/logs/remove/shell/service/volume/cp/config/update), the SAME dynamic in-proc
+// bridge; their compiled-in registration is asserted by TestCommandCompileIn_PodInProc. This
+// closes out the DEPLOY wave's CLI-struct port — every pod-lifecycle leaf command now lives
+// in candy/plugin-pod.)
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
-		{"update", []string{"update", "mybox"}, "update <box>"},
 		{"cmd", []string{"cmd", "mybox", "echo hi"}, "cmd <box> <command>"},
 	})
 }
 
 // TestCommandCompileIn_PodInProc proves the DEPLOY wave's CLI-struct port: `charly start`/
-// `stop`/`restart`/`logs`/`remove`/`shell`/`service`/`volume`/`cp`/`config`, formerly dedicated
-// builtin CommandProviders (plugin_command_start.go / plugin_command_stop.go /
+// `stop`/`restart`/`logs`/`remove`/`shell`/`service`/`volume`/`cp`/`config`/`update`, formerly
+// dedicated builtin CommandProviders (plugin_command_start.go / plugin_command_stop.go /
 // plugin_command_restart.go / plugin_command_logs.go / plugin_command_remove.go /
 // plugin_command_shell.go / plugin_command_service.go / plugin_command_volume.go /
-// plugin_command_cp.go / plugin_command_config.go, deleted), are now the compiled-in command
-// candy candy/plugin-pod — registered IN-PROC as ClassCommand inprocProviders (NOT
-// *grpcProvider, NOT a static builtin CommandProvider), so dispatchCommand routes each to it
-// via Invoke(OpRun): restart/volume/cp call sdk/kit + sdk/deploykit directly (no host seam —
-// pure logic, no core-only type or registry need), start/stop/logs/remove/shell/service/config
-// reach the registry- or type-bound orchestration (start.go's podStartCmd/podStopCmd,
-// commands.go's podLogsCmd/podRemoveCmd, shell.go's podShellCmd, service.go's podServiceCmd,
+// plugin_command_cp.go / plugin_command_config.go / plugin_command_update.go, deleted), are
+// now the compiled-in command candy candy/plugin-pod — registered IN-PROC as ClassCommand
+// inprocProviders (NOT *grpcProvider, NOT a static builtin CommandProvider), so
+// dispatchCommand routes each to it via Invoke(OpRun): restart/volume/cp call sdk/kit +
+// sdk/deploykit directly (no host seam — pure logic, no core-only type or registry need),
+// start/stop/logs/remove/shell/service/config/update reach the registry- or type-bound
+// orchestration (start.go's podStartCmd/podStopCmd, commands.go's
+// podLogsCmd/podRemoveCmd/podUpdateCmd, shell.go's podShellCmd, service.go's podServiceCmd,
 // config_image.go's UNCHANGED BoxConfigSetupCmd/BoxConfigStatusCmd/BoxConfigMountCmd/
 // BoxConfigUnmountCmd/BoxConfigPasswdCmd/BoxConfigRemoveCmd — kept by name since
 // bundle_from_box_cmd.go constructs BoxConfigSetupCmd directly) over HostBuild("pod-start")/
 // HostBuild("pod-stop")/HostBuild("pod-logs")/HostBuild("pod-remove")/HostBuild("pod-shell")/
 // HostBuild("pod-service")/HostBuild("pod-config-setup")/HostBuild("pod-config-status")/
 // HostBuild("pod-config-mount")/HostBuild("pod-config-unmount")/HostBuild("pod-config-passwd")/
-// HostBuild("pod-config-remove"). (End-to-end CLI dispatch is exercised live — see the DEPLOY
-// wave report — and by the R10 bed roster.)
+// HostBuild("pod-config-remove")/HostBuild("pod-update"). (End-to-end CLI dispatch is
+// exercised live — see the DEPLOY wave report — and by the R10 bed roster.)
 func TestCommandCompileIn_PodInProc(t *testing.T) {
-	for _, word := range []string{"start", "stop", "restart", "logs", "remove", "shell", "service", "volume", "cp", "config"} {
+	for _, word := range []string{"start", "stop", "restart", "logs", "remove", "shell", "service", "volume", "cp", "config", "update"} {
 		prov, ok := providerRegistry.resolve(ClassCommand, word)
 		if !ok {
 			t.Fatalf("compiled-in command candy plugin-pod did not register command:%s (pluginsgen/compiled_plugins)", word)

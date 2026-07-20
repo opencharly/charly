@@ -429,6 +429,32 @@ func (c *ConfigRemoveCmd) Run() error {
 	return hostPodSeam("pod-config-remove", spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
 }
 
+// UpdateCmd updates an image (pulls/builds the latest), preserves the existing deploy config
+// (user-overlay state untouched), and restarts the service to pick up the new image — the
+// `charly update` grammar. Registry-bound (resolveTreeRoot/loadDeployPlugins/ResolveTarget —
+// core Mechanisms) — forwards via HostBuild("pod-update").
+type UpdateCmd struct {
+	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
+	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Build     bool   `long:"build" help:"Force local build instead of pulling from registry"`
+	Instance  string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Seed      bool   `long:"seed" default:"true" negatable:"" help:"Sync data from new image into bind-backed volumes (default: true)"`
+	ForceSeed bool   `long:"force-seed" help:"Overwrite existing data in volumes (default: only add new files)"`
+	DataFrom  string `long:"data-from" help:"Sync data from this data image instead"`
+}
+
+func (c *UpdateCmd) Run() error {
+	return hostPodSeam("pod-update", spec.PodUpdateRequest{
+		Box:       c.Box,
+		Tag:       c.Tag,
+		Build:     c.Build,
+		Instance:  c.Instance,
+		Seed:      c.Seed,
+		ForceSeed: c.ForceSeed,
+		DataFrom:  c.DataFrom,
+	})
+}
+
 func (c *CpCmd) Run() error {
 	srcInCtr := strings.HasPrefix(c.Src, ":")
 	dstInCtr := strings.HasPrefix(c.Dst, ":")
