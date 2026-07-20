@@ -30,7 +30,7 @@ type StartCmd struct {
 	Port         []string `short:"p" help:"Remap host port (direct mode only)"`
 	VolumeFlag   []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
 	Bind         []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
-	NoAutoDetect bool      `long:"no-autodetect" help:"Disable automatic device detection"`
+	NoAutoDetect bool     `long:"no-autodetect" help:"Disable automatic device detection"`
 }
 
 func (c *StartCmd) Run() error {
