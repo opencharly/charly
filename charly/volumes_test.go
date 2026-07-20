@@ -14,12 +14,11 @@ func TestCollectImageVolumesSimple(t *testing.T) {
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
-	layers := map[string]*Candy{
-		"svc": {
-			Name:    "svc",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			volumes: []VolumeYAML{{Name: "data", Path: "~/.myapp"}},
-		},
+	layers := map[string]spec.CandyReader{
+		"svc": testCandy("svc",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.myapp"}}},
+		),
 	}
 
 	mounts, err := CollectBoxVolume(cfg, layers, "myapp", "/home/user", nil)
@@ -42,17 +41,15 @@ func TestCollectImageVolumesChain(t *testing.T) {
 			"child": {Base: "base", Candy: []string{"app"}},
 		}),
 	}
-	layers := map[string]*Candy{
-		"store": {
-			Name:    "store",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			volumes: []VolumeYAML{{Name: "models", Path: "~/.models"}},
-		},
-		"app": {
-			Name:    "app",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			volumes: []VolumeYAML{{Name: "data", Path: "~/.app"}},
-		},
+	layers := map[string]spec.CandyReader{
+		"store": testCandy("store",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Volumes: []VolumeYAML{{Name: "models", Path: "~/.models"}}},
+		),
+		"app": testCandy("app",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.app"}}},
+		),
 	}
 
 	mounts, err := CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
@@ -77,17 +74,15 @@ func TestCollectImageVolumesDedup(t *testing.T) {
 			"child": {Base: "base", Candy: []string{"override"}},
 		}),
 	}
-	layers := map[string]*Candy{
-		"store": {
-			Name:    "store",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			volumes: []VolumeYAML{{Name: "data", Path: "~/.base-data"}},
-		},
-		"override": {
-			Name:    "override",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			volumes: []VolumeYAML{{Name: "data", Path: "~/.child-data"}},
-		},
+	layers := map[string]spec.CandyReader{
+		"store": testCandy("store",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.base-data"}}},
+		),
+		"override": testCandy("override",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Volumes: []VolumeYAML{{Name: "data", Path: "~/.child-data"}}},
+		),
 	}
 
 	mounts, err := CollectBoxVolume(cfg, layers, "child", "/home/user", nil)
@@ -110,8 +105,8 @@ func TestCollectImageVolumesNoVolumes(t *testing.T) {
 			"base": {Candy: []string{"plain"}},
 		}),
 	}
-	layers := map[string]*Candy{
-		"plain": {Name: "plain", plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+	layers := map[string]spec.CandyReader{
+		"plain": testCandy("plain", spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}}, spec.CandyView{}),
 	}
 
 	mounts, err := CollectBoxVolume(cfg, layers, "base", "/home/user", nil)

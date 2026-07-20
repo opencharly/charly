@@ -116,6 +116,12 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	if pw, ok := srv.(spec.ProjectWalker); ok {
 		activeProjectWalker = pw
 	}
+	// The SAME compiled-in loader plugin (W9) ALSO exposes the typed CANDY-SCAN via
+	// spec.CandyScanner — wire it as the active scan mechanism so ScanAllCandy dispatches through
+	// it (no wire envelope), instead of charly core holding the scan+construct logic itself.
+	if cs, ok := srv.(spec.CandyScanner); ok {
+		activeCandyScanner = cs
+	}
 	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —
 	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download
 	// through it (no wire envelope). See candy/plugin-refs.

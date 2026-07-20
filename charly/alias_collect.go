@@ -39,7 +39,7 @@ type CollectedAlias = spec.CollectedAlias
 // CollectBoxAlias gathers aliases from the box's own candies + box-level config.
 // No base chain traversal — aliases are leaf-box specific.
 // Candy aliases come first; box-level overrides by name.
-func CollectBoxAlias(cfg *Config, layers map[string]*Candy, boxName string) ([]CollectedAlias, error) {
+func CollectBoxAlias(cfg *Config, layers map[string]spec.CandyReader, boxName string) ([]CollectedAlias, error) {
 	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)

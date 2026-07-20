@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -95,11 +97,11 @@ func TestCandyPixi(t *testing.T) {
 	if pixi.FormatSection("rpm") != nil {
 		t.Error("pixi should not have rpm format section")
 	}
-	if pixi.HasPixiToml {
+	if pixi.HasFile("pixi.toml") {
 		t.Error("pixi should not have pixi.toml")
 	}
-	if len(pixi.Require) != 0 {
-		t.Errorf("pixi should have no depends, got %v", pixi.Require)
+	if len(pixi.GetRequire()) != 0 {
+		t.Errorf("pixi should have no depends, got %v", pixi.GetRequire())
 	}
 }
 
@@ -114,11 +116,11 @@ func TestCandyPython(t *testing.T) {
 		t.Fatal("python candy not found")
 	}
 
-	if !python.HasPixiToml {
+	if !python.HasFile("pixi.toml") {
 		t.Error("python should have pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(python.Require), []string{"pixi"}) {
-		t.Errorf("python.Require = %v, want [pixi]", python.Require)
+	if !reflect.DeepEqual(bareRefs(python.GetRequire()), []string{"pixi"}) {
+		t.Errorf("python.Require = %v, want [pixi]", python.GetRequire())
 	}
 }
 
@@ -212,10 +214,10 @@ func TestCandyCargoTool(t *testing.T) {
 		t.Fatal("cargo-tool candy not found")
 	}
 
-	if !cargoTool.HasCargoToml {
+	if !cargoTool.GetHasCargoToml() {
 		t.Error("cargo-tool should have Cargo.toml")
 	}
-	if !cargoTool.HasSrcDir {
+	if !cargoTool.HasFile("src") {
 		t.Error("cargo-tool should have src/ directory")
 	}
 }
@@ -377,17 +379,17 @@ func TestCandyPixiLocked(t *testing.T) {
 		t.Fatal("pixi-locked candy not found")
 	}
 
-	if !locked.HasPixiToml {
+	if !locked.HasFile("pixi.toml") {
 		t.Error("pixi-locked should have pixi.toml")
 	}
-	if !locked.HasPixiLock {
+	if !locked.GetHasPixiLock() {
 		t.Error("pixi-locked should have pixi.lock")
 	}
 	if locked.PixiManifest() != "pixi.toml" {
 		t.Errorf("pixi-locked.PixiManifest() = %q, want %q", locked.PixiManifest(), "pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(locked.Require), []string{"pixi"}) {
-		t.Errorf("pixi-locked.Require = %v, want [pixi]", locked.Require)
+	if !reflect.DeepEqual(bareRefs(locked.GetRequire()), []string{"pixi"}) {
+		t.Errorf("pixi-locked.Require = %v, want [pixi]", locked.GetRequire())
 	}
 }
 
@@ -402,10 +404,10 @@ func TestCandyPixiNoLock(t *testing.T) {
 		t.Fatal("python candy not found")
 	}
 
-	if !python.HasPixiToml {
+	if !python.HasFile("pixi.toml") {
 		t.Error("python should have pixi.toml")
 	}
-	if python.HasPixiLock {
+	if python.GetHasPixiLock() {
 		t.Error("python should not have pixi.lock")
 	}
 }
@@ -463,60 +465,97 @@ func TestCandyPortRelayFromYAML(t *testing.T) {
 		t.Fatal("webservice candy not found")
 	}
 
-	if len(ws.PortRelayPorts) == 0 {
+	if len(ws.RelayPorts()) == 0 {
 		t.Error("webservice should have port_relay")
 	}
 
-	relay := ws.PortRelayPorts
+	relay := ws.RelayPorts()
 	if len(relay) != 1 || relay[0] != 8080 {
-		t.Errorf("PortRelayPorts = %v, want [8080]", relay)
+		t.Errorf("RelayPorts() = %v, want [8080]", relay)
 	}
 }
 
 func TestCandyPortRelay(t *testing.T) {
 	// Test direct struct construction (no testdata file needed)
-	layer := &Candy{
-		Name:           "chrome",
-		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	layer := testCandy("chrome", spec.CandyModel{
+		Plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222},
-		ports:          []string{"9222"},
-		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}},
-	}
+		Port:           []spec.PortSpec{{Port: 9222, Protocol: "http"}},
+	}, spec.CandyView{})
 
-	if len(layer.PortRelayPorts) == 0 {
+	if len(layer.RelayPorts()) == 0 {
 		t.Error("candy should have port_relay")
 	}
-	relay := layer.PortRelayPorts
+	relay := layer.RelayPorts()
 	if len(relay) != 1 || relay[0] != 9222 {
-		t.Errorf("PortRelayPorts = %v, want [9222]", relay)
+		t.Errorf("RelayPorts() = %v, want [9222]", relay)
 	}
 }
 
 func TestCandyPortRelayNone(t *testing.T) {
-	layer := &Candy{
-		Name: "basic",
-		plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
-	}
+	layer := testCandy("basic", spec.CandyModel{
+		Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	}, spec.CandyView{})
 
-	if len(layer.PortRelayPorts) != 0 {
+	if len(layer.RelayPorts()) != 0 {
 		t.Error("basic candy should not have port_relay")
 	}
 }
 
 func TestCandyPortRelayMultiple(t *testing.T) {
-	layer := &Candy{
-		Name:           "multi",
-		plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
+	layer := testCandy("multi", spec.CandyModel{
+		Plan:           []spec.Step{{Run: "build", Op: cmdOp("true")}},
 		PortRelayPorts: []int{9222, 5900},
-		ports:          []string{"9222", "5900"},
-		portSpecs:      []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
-	}
+		Port:           []spec.PortSpec{{Port: 9222, Protocol: "http"}, {Port: 5900, Protocol: "tcp"}},
+	}, spec.CandyView{})
 
-	relay := layer.PortRelayPorts
+	relay := layer.RelayPorts()
 	if len(relay) != 2 {
-		t.Fatalf("PortRelayPorts returned %d ports, want 2", len(relay))
+		t.Fatalf("RelayPorts() returned %d ports, want 2", len(relay))
 	}
 	if relay[0] != 9222 || relay[1] != 5900 {
-		t.Errorf("PortRelayPorts = %v, want [9222 5900]", relay)
+		t.Errorf("RelayPorts() = %v, want [9222 5900]", relay)
+	}
+}
+
+// TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion is the choke-point pinning
+// fixture: a LOCAL-only project (legacyScanCandiesDirScanned, zero remote refs — the early-return
+// leg of ScanAllCandyWithConfigOpts) with a packaged-service candy + a supplied opts.InitCfg must
+// have InitSystems completed with that SAME InitCfg, exactly like a remote-arbitrated winner would.
+// Before the finalizeScannedCandies choke-point consolidation, locals wrapped inside
+// legacyScanCandiesDir/ProjectCandies with NO InitCfg in scope (PopulateCandyInitSystem ran only
+// over the remote `winners` map) — so HasInit was unconditionally false for every local candy
+// regardless of what generate.go supplied. This test FAILS on that shape and passes on the
+// consolidated one.
+func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testing.T) {
+	dir := t.TempDir()
+	candyDir := filepath.Join(dir, "candy", "svc")
+	if err := os.MkdirAll(candyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "candy:\n  name: svc\n  service:\n    - name: myd\n      use_packaged: myd.service\n      enable: true\n      scope: system\n"
+	if err := os.WriteFile(filepath.Join(candyDir, UnifiedFileName), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+		"supervisord": {
+			CandyFields:   []string{"service"},
+			ServiceSchema: &spec.InitServiceSchema{SupportsPackaged: true},
+		},
+	}}
+
+	layers, err := ScanAllCandyWithConfigOpts(dir, &Config{}, ResolveOpts{InitCfg: initCfg})
+	if err != nil {
+		t.Fatalf("ScanAllCandyWithConfigOpts: %v", err)
+	}
+	svc, ok := layers["svc"]
+	if !ok {
+		t.Fatal("svc candy not found")
+	}
+	if !svc.HasInit("supervisord") {
+		t.Fatal("local candy's InitSystems must be completed with opts.InitCfg even with zero remote " +
+			"downloads (the early-return path) — regression if false: InitSystems host-completion " +
+			"skipped the local half")
 	}
 }

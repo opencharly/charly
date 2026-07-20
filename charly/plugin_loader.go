@@ -588,10 +588,10 @@ func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, erro
 // host-built), connect over LocalTransport, run the SAME schema gate a builtin runs, then
 // register its providers. The schema travels over the Describe channel (gRPC
 // schema_cue) — the host never reads the candy's schema/ dir.
-func loadPluginUnit(ctx context.Context, name string, p *spec.Plugin, srcDir string) error {
+func loadPluginUnit(ctx context.Context, name string, source string, srcDir string) error {
 	bin, err := resolvePluginBinary(ctx, srcDir, name)
 	if err != nil {
-		return fmt.Errorf("plugin %q (source %s): %w", name, p.Source, err)
+		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
 	}
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {
@@ -601,7 +601,7 @@ func loadPluginUnit(ctx context.Context, name string, p *spec.Plugin, srcDir str
 		_ = closer.Close()
 		return err
 	}
-	if err := providerRegistry.RegisterPluginProviders(unit.Providers, p.Source, closer); err != nil {
+	if err := providerRegistry.RegisterPluginProviders(unit.Providers, source, closer); err != nil {
 		_ = closer.Close()
 		return fmt.Errorf("plugin %q: register: %w", name, err)
 	}
@@ -632,7 +632,7 @@ func loadPluginUnit(ctx context.Context, name string, p *spec.Plugin, srcDir str
 // undispatched word — while under-load (a MISSED reference) breaks the verb/builder/
 // substrate at dispatch, so collection errs toward INCLUDE: every enumerated site is
 // unioned, and when in doubt a word is added rather than filtered.
-func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra []string) map[string]struct{} {
+func collectReferencedPluginWords(candies map[string]spec.CandyReader, boxes boxMap, extra []string) map[string]struct{} {
 	refs := make(map[string]struct{})
 	add := func(w string) {
 		if w != "" {
@@ -659,9 +659,10 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra
 		if candy == nil {
 			continue
 		}
-		add(candy.ExternalBuilder)
-		for i := range candy.plan {
-			addStep(&candy.plan[i].Op)
+		add(candy.GetExternalBuilder())
+		plan := candy.PlanSteps()
+		for i := range plan {
+			addStep(&plan[i].Op)
 		}
 	}
 	for _, raw := range boxes {
@@ -681,9 +682,9 @@ func collectReferencedPluginWords(candies map[string]*Candy, boxes boxMap, extra
 // IGNORED (a word match in any class loads the unit): collection is the complete,
 // over-load-safe side, so matching on the word alone can never UNDER-load on a class
 // mismatch. A malformed capability string is skipped (validate flags it elsewhere).
-func pluginProvidesReferencedWord(p *spec.Plugin, refs map[string]struct{}) bool {
-	for _, capability := range p.Providers {
-		if _, word, ok := splitCapability(string(capability)); ok {
+func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) bool {
+	for _, capability := range providers {
+		if _, word, ok := splitCapability(capability); ok {
 			if _, hit := refs[word]; hit {
 				return true
 			}
@@ -704,25 +705,27 @@ func pluginProvidesReferencedWord(p *spec.Plugin, refs map[string]struct{}) bool
 // plugin candies — adb/appium/kube/spice/example-* — most unused by any one build or
 // deploy). Errors are returned (not swallowed) so a bed asserting a plugin verb fails
 // loudly if its REFERENCED plugin won't load.
-func loadProjectPlugins(ctx context.Context, candies map[string]*Candy, refs map[string]struct{}) error {
+func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader, refs map[string]struct{}) error {
 	if err := loadBuiltinPluginUnits(); err != nil {
 		return fmt.Errorf("builtin plugin schema gate: %w", err)
 	}
 	for name, candy := range candies {
-		if candy == nil || candy.Plugin == nil {
+		if candy == nil || !candy.IsPluginCandy() {
 			continue
 		}
 		// Builtins are gated above (their schemas) and registered at init() (their
 		// providers); only out-of-tree sources need build + connect + register.
-		if src := candy.Plugin.Source; src == "" || src == "builtin" {
+		src := candy.GetPluginSource()
+		if src == "" || src == "builtin" {
 			continue
 		}
+		providers := candy.GetPluginProviders()
 		// PERF-SCOPING: skip an out-of-tree plugin candy NONE of whose providers is
 		// referenced by the work at hand — no wasted host build/connect for a word
 		// nothing will dispatch. refs is collected COMPLETE (collectReferencedPluginWords
 		// + deployNodePluginContext), so a skip here can never drop a referenced plugin
 		// (over-load safe; under-load is a bug — see the HARD CONSTRAINT in those docs).
-		if !pluginProvidesReferencedWord(candy.Plugin, refs) {
+		if !pluginProvidesReferencedWord(providers, refs) {
 			continue
 		}
 		// Idempotent re-load: loadProjectPlugins runs on EVERY connect path (build,
@@ -733,14 +736,14 @@ func loadProjectPlugins(ctx context.Context, candies map[string]*Candy, refs map
 		// schema-append+register before any of it runs a second time. A SAME word
 		// already registered from a DIFFERENT origin is a genuine bijection collision
 		// and errors here (preserving register's intent) before the wasteful re-build.
-		connected, err := pluginAlreadyConnected(name, candy.Plugin)
+		connected, err := pluginAlreadyConnected(name, src, providers)
 		if err != nil {
 			return err
 		}
 		if connected {
 			continue
 		}
-		if err := loadPluginUnit(ctx, name, candy.Plugin, candy.SourceDir); err != nil {
+		if err := loadPluginUnit(ctx, name, src, candy.GetSourceDir()); err != nil {
 			return err
 		}
 	}
@@ -754,10 +757,10 @@ func loadProjectPlugins(ctx context.Context, candies map[string]*Candy, refs map
 // providers together), so it returns true (skip); any one registered from a DIFFERENT
 // origin is a real word→two-providers collision and returns an error. Returns
 // (false, nil) when none of the plugin's providers are registered yet.
-func pluginAlreadyConnected(name string, p *spec.Plugin) (bool, error) {
+func pluginAlreadyConnected(name string, source string, providers []string) (bool, error) {
 	connected := false
-	for _, capability := range p.Providers {
-		class, word, ok := splitCapability(string(capability))
+	for _, capability := range providers {
+		class, word, ok := splitCapability(capability)
 		if !ok {
 			continue
 		}
@@ -777,7 +780,7 @@ func pluginAlreadyConnected(name string, p *spec.Plugin) (bool, error) {
 			connected = true
 			continue
 		}
-		if origin != p.Source {
+		if origin != source {
 			return false, fmt.Errorf("plugin %q provider %s:%s collides with one already registered from %q", name, class, word, origin)
 		}
 		connected = true

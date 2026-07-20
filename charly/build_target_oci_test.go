@@ -138,7 +138,7 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 	bc := &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
 		"cargo": {Inline: true},
 	}}
-	gen := &Generator{Candies: map[string]*Candy{"mytool": {Name: "mytool"}}}
+	gen := &Generator{Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
 	tgt := ociTestTarget(buildEngineContext{BuilderConfig: bc, Box: &buildkit.ResolvedBox{UID: 1000, GID: 1000}, Generator: gen})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
@@ -167,7 +167,7 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 	bc := &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
 		"pixi": {},
 	}}
-	gen := &Generator{Candies: map[string]*Candy{"mytool": {Name: "mytool"}}}
+	gen := &Generator{Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
 	tgt := ociTestTarget(buildEngineContext{BuilderConfig: bc, Box: &buildkit.ResolvedBox{UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}, Generator: gen})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
@@ -228,7 +228,7 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 // host-side.
 func TestOCITargetEmitOpViaPlugin(t *testing.T) {
 	dir := t.TempDir()
-	gen := &Generator{BuildDir: dir, Candies: map[string]*Candy{"mytool": {Name: "mytool"}}}
+	gen := &Generator{BuildDir: dir, Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
 	tgt := ociTestTarget(buildEngineContext{Generator: gen, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
@@ -300,17 +300,17 @@ func (f *fakeSkipStep) Reverse() []spec.ReverseOp { return nil }
 // OpStep build-emit fails with `task emit: candy "<name>" not found`. Regression for the
 // add_candy-on-pod-overlay "candy not found" build failure.
 func TestGeneratorCandyByNameRemoteQualifiedKey(t *testing.T) {
-	gen := &Generator{Candies: map[string]*Candy{
-		"github.com/org/repo/candy/marker": {Name: "marker"},
-		"local-layer":                      {Name: "local-layer"},
+	gen := &Generator{Candies: map[string]spec.CandyReader{
+		"github.com/org/repo/candy/marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{}),
+		"local-layer":                      testCandy("local-layer", spec.CandyModel{}, spec.CandyView{}),
 	}}
 
 	// Exact (local) key — bare == .Name — still resolves directly.
-	if c := gen.candyByName("local-layer"); c == nil || c.Name != "local-layer" {
+	if c := gen.candyByName("local-layer"); c == nil || c.GetName() != "local-layer" {
 		t.Fatalf("local-layer: got %v, want .Name=local-layer", c)
 	}
 	// Bare name resolves the qualified-key remote candy (the regression this fix closes).
-	if c := gen.candyByName("marker"); c == nil || c.Name != "marker" {
+	if c := gen.candyByName("marker"); c == nil || c.GetName() != "marker" {
 		t.Fatalf("marker bare-name lookup returned %v; qualified-key .Name fallback is broken", c)
 	}
 	// An unknown name is still nil (no accidental match).

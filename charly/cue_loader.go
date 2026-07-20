@@ -5,8 +5,8 @@ package main
 // canonicalized in place by NormalizeEntityNode against its Go type, re-marshaled,
 // CUE-ingested, and Decoded into the target struct — making CUE the universal
 // decode authority for the data model. The import:/discover: graph (which drives
-// composition) is decoded by yaml.v3 and resolved in Go (ns_identity.go), never
-// here. See memory cue-loader-switch-design.
+// composition) is decoded by yaml.v3 and resolved in Go (sdk/loaderkit/repo_identity.go, since
+// W9's ns_identity.go relocation), never here. See memory cue-loader-switch-design.
 
 import (
 	"fmt"

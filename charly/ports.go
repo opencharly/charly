@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 type (
@@ -35,7 +36,7 @@ var (
 	stripPortSuffix            = kit.StripPortSuffix
 )
 
-func CollectBoxPorts(cfg *Config, layers map[string]*Candy, boxName string) ([]string, error) {
+func CollectBoxPorts(cfg *Config, layers map[string]spec.CandyReader, boxName string) ([]string, error) {
 	names, err := cfg.boxCandyChain(layers, boxName)
 	if err != nil {
 		return nil, err

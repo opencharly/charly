@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -334,19 +333,10 @@ func TestResolveImageBuilders(t *testing.T) {
 // candy in its base chain (boxes no longer declare ports), deduped by container
 // port, sorted ascending, with the /udp suffix preserved.
 func TestCollectBoxPorts(t *testing.T) {
-	mk := func(name string, specs ...spec.PortSpec) *Candy {
-		l := &Candy{Name: name}
-		l.portSpecs = specs
-		for _, s := range specs {
-			if s.Protocol == "udp" {
-				l.ports = append(l.ports, fmt.Sprintf("%d/udp", s.Port))
-			} else {
-				l.ports = append(l.ports, fmt.Sprintf("%d", s.Port))
-			}
-		}
-		return l
+	mk := func(name string, specs ...spec.PortSpec) spec.CandyReader {
+		return testCandy(name, spec.CandyModel{Port: specs}, spec.CandyView{})
 	}
-	layers := map[string]*Candy{
+	layers := map[string]spec.CandyReader{
 		"sshd":     mk("sshd", spec.PortSpec{Port: 2222, Protocol: "tcp"}),
 		"web":      mk("web", spec.PortSpec{Port: 3000, Protocol: "https+insecure"}),
 		"cdp":      mk("cdp", spec.PortSpec{Port: 9222}),

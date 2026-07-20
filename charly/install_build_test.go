@@ -29,7 +29,7 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 			"pixi": {DetectFiles: []string{"pixi.toml"}},
 		}},
 	}
-	layer := &Candy{Name: "c", HasPixiToml: true}
+	layer := pixiCandy(t, "c")
 
 	// (a) Pre-resolved by the (simulated) pre-pass: the compiler must read it verbatim — no RPC.
 	wantRev := []spec.ReverseOp{{Kind: spec.ReverseOpPixiEnvRemove, Targets: []string{"myenv"}, Scope: spec.ScopeUser, Extra: map[string]string{"layer": "c"}}}
@@ -116,7 +116,7 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 // resolves the "fedora-coder" image. Returns nil, nil if fixtures can't
 // load (used to gracefully skip in CI environments that might not have
 // the fixture candies present).
-func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.ResolvedBox, map[string]*Candy) {
+func loadCompilerFixtures(t *testing.T, boxName string) (*Config, *buildkit.ResolvedBox, map[string]spec.CandyReader) {
 	t.Helper()
 	dir, _ := os.Getwd()
 	cfg, err := LoadConfig(dir)
@@ -241,7 +241,7 @@ func TestBuildDeployPlanPixiCandy(t *testing.T) {
 	if !ok {
 		t.Skip("pre-commit layer not present in fixtures")
 	}
-	if !pc.HasPixiToml {
+	if !pc.HasFile("pixi.toml") {
 		t.Skip("pre-commit doesn't have pixi.toml (fixture changed)")
 	}
 
@@ -361,7 +361,7 @@ func TestDescribePlanSummary(t *testing.T) {
 
 // TestBuildSystemPackagesStepRepos guards the repo-key fix in
 // buildSystemPackagesStep: repos are stored under the canonical "repo" key (what
-// derivePackageSectionsFromCalamares writes + NewInstallContext reads), as a
+// loaderkit's derivePackageSections writes + NewInstallContext reads), as a
 // []map[string]any value. The prior code read raw["repos"] (plural) with a
 // []interface{} assertion, so step.Repos was ALWAYS empty and the PhasePrepare
 // repo-gate (SystemPackagesStep.RequiresGate) never saw a candy's repos.

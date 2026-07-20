@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); referenced
@@ -14,7 +15,7 @@ import (
 // full box chain (box → base → base's base) and collecting volume
 // declarations from all candies. Volumes are deduplicated by name (first
 // declaration wins — outermost box takes priority).
-func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
+func CollectBoxVolume(cfg *Config, layers map[string]spec.CandyReader, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
 	// Collect all candy names from the box chain (outermost first) via the
 	// shared base-chain walk; propagate a resolution error as before.
 	allCandyNames, err := cfg.boxCandyChain(layers, boxName)

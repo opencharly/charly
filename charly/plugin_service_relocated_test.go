@@ -51,7 +51,7 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	if sp.LowersTo() != spec.StepKindServicePackaged {
 		t.Fatalf("LowersTo = %v, want StepKindServicePackaged", sp.LowersTo())
 	}
-	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, &Candy{Name: "mylayer"}, &buildkit.ResolvedBox{})
+	step := sp.ConstructStep(&spec.Op{PluginInput: map[string]any{"service": "nginx"}}, testCandy("mylayer", spec.CandyModel{}, spec.CandyView{}), &buildkit.ResolvedBox{})
 	sps, ok := step.(*deploykit.ServicePackagedStep)
 	if !ok {
 		t.Fatalf("ConstructStep returned %T, want *ServicePackagedStep", step)

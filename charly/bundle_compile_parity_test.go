@@ -228,7 +228,7 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 		exercised = append(exercised, name)
 		oldJSON[name] = string(mustMarshalJSON(t, newView))
 		// Class tracking (mirror the spike's detection).
-		if layer.HasPixiToml || layer.HasPackageJson || layer.HasCargoToml {
+		if layer.HasFile("pixi.toml") || layer.GetHasPackageJson() || layer.GetHasCargoToml() {
 			classes["builder"] = true
 		} else if len(layer.TopPackages()) > 0 || layer.HasFormatPackages() {
 			classes["pkg"] = true

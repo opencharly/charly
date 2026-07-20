@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // engine.go — per-box/per-deploy container-engine (podman/docker) RESOLUTION.
@@ -28,7 +29,7 @@ import (
 // now: candy engine requirements > global default. Deploy-time overrides
 // come from BundleNode.Engine via ResolveBoxEngineForDeploy /
 // ResolveBoxEngineFromMeta.
-func ResolveBoxEngine(cfg *Config, layers map[string]*Candy, boxName string, globalRunEngine string) string {
+func ResolveBoxEngine(cfg *Config, layers map[string]spec.CandyReader, boxName string, globalRunEngine string) string {
 	img, ok := cfg.BoxConfig(boxName)
 	if !ok {
 		return globalRunEngine

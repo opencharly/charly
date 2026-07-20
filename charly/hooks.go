@@ -7,38 +7,25 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // CollectHooks collects and concatenates hooks from all candies in a box's candy chain.
-// Hooks from multiple candies are concatenated in candy order.
-func CollectHooks(cfg *Config, layers map[string]*Candy, boxName string) *HooksConfig {
+// Hooks from multiple candies are concatenated in candy order. The host-side half: resolve the
+// box's FULL candy chain (base-inheriting — a *Config/walkBaseChain concern, genuinely core,
+// unchanged from before the W9 split). The concatenation itself is deploykit.MergeCandyHooks, the
+// pure R-item every OCI-label-collector build-render consumer can share (host today, an
+// out-of-process build/deploy plugin tomorrow).
+func CollectHooks(cfg *Config, layers map[string]spec.CandyReader, boxName string) *HooksConfig {
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
 
-	var postEnable, preRemove []string
-	for _, candyName := range allCandyNames {
-		layer, ok := layers[candyName]
-		if !ok {
-			continue
-		}
-		if layer.hooks == nil {
-			continue
-		}
-		if layer.hooks.PostEnable != "" {
-			postEnable = append(postEnable, strings.TrimSpace(layer.hooks.PostEnable))
-		}
-		if layer.hooks.PreRemove != "" {
-			preRemove = append(preRemove, strings.TrimSpace(layer.hooks.PreRemove))
+	candies := make([]spec.CandyReader, 0, len(allCandyNames))
+	for _, name := range allCandyNames {
+		if layer, ok := layers[name]; ok {
+			candies = append(candies, layer)
 		}
 	}
-
-	if len(postEnable) == 0 && len(preRemove) == 0 {
-		return nil
-	}
-
-	return &HooksConfig{
-		PostEnable: strings.Join(postEnable, "\n"),
-		PreRemove:  strings.Join(preRemove, "\n"),
-	}
+	return deploykit.MergeCandyHooks(candies)
 }
 
 // RunHook executes a hook script inside a running container.

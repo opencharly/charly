@@ -8,39 +8,10 @@ import (
 	"testing"
 )
 
-// TestNormalizeRepoSpec covers all four spec shapes plus the "default"
-// sentinel. Pure unit test, no I/O.
-func TestNormalizeRepoSpec(t *testing.T) {
-	cases := []struct {
-		name        string
-		spec        string
-		wantRepo    string
-		wantVersion string
-	}{
-		{name: "default sentinel", spec: "default",
-			wantRepo: "github.com/opencharly/charly", wantVersion: ""},
-		{name: "bare owner/repo", spec: "opencharly/charly",
-			wantRepo: "github.com/opencharly/charly", wantVersion: ""},
-		{name: "bare owner/repo @ ref", spec: "opencharly/charly@main",
-			wantRepo: "github.com/opencharly/charly", wantVersion: "main"},
-		{name: "host-qualified, no ref", spec: "github.com/foo/bar",
-			wantRepo: "github.com/foo/bar", wantVersion: ""},
-		{name: "host-qualified gitlab @ ref", spec: "gitlab.com/foo/bar@v1.0",
-			wantRepo: "gitlab.com/foo/bar", wantVersion: "v1.0"},
-		// Whitespace tolerance.
-		{name: "leading/trailing whitespace", spec: "  opencharly/charly@main  ",
-			wantRepo: "github.com/opencharly/charly", wantVersion: "main"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			gotRepo, gotVersion := normalizeRepoSpec(tc.spec)
-			if gotRepo != tc.wantRepo || gotVersion != tc.wantVersion {
-				t.Errorf("normalizeRepoSpec(%q) = (%q, %q); want (%q, %q)",
-					tc.spec, gotRepo, gotVersion, tc.wantRepo, tc.wantVersion)
-			}
-		})
-	}
-}
+// TestNormalizeRepoSpec (all four spec shapes + the "default" sentinel) and
+// TestCharlyRepo_DefaultExpansion (the "default" case alone) moved with the relocated code to
+// sdk/loaderkit/repo_identity_test.go (K1/W9) — loaderkit.NormalizeRepoSpec's own test now covers
+// them; kept here only the genuine INTEGRATION tests that spawn the real binary.
 
 // TestCharlyRepo_FlagChdir verifies that --repo / CHARLY_PROJECT_REPO drives main()
 // to chdir into the cache path before dispatching. Stays hermetic by
@@ -105,18 +76,5 @@ func TestCharlyRepo_DirConflict(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "mutually exclusive") {
 		t.Errorf("expected mutually-exclusive error, got: %s", out)
-	}
-}
-
-// TestCharlyRepo_DefaultExpansion verifies that --repo default normalizes to
-// the canonical github.com/opencharly/charly path. Pure unit-level
-// check, exercised through normalizeRepoSpec to avoid live network.
-func TestCharlyRepo_DefaultExpansion(t *testing.T) {
-	repo, version := normalizeRepoSpec("default")
-	if repo != DefaultProjectRepo {
-		t.Errorf("default normalized to %q; want %q", repo, DefaultProjectRepo)
-	}
-	if version != "" {
-		t.Errorf("default version should be empty (resolved later); got %q", version)
 	}
 }

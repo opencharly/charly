@@ -105,6 +105,19 @@ type ResolveOpts struct {
 	// SAME pipeline (per-entity-version arbitration + SourceDir population); a local
 	// add_candy ref is already covered by ScanCandy and is a no-op here.
 	ExtraCandyRefs []string
+	// InitCfg is the project init: vocabulary (W9), threaded through so
+	// ScanAllCandyWithConfigOpts can run the cross-candy init-system host-completion
+	// pass (the PopulateCandyInitSystem logic) BEFORE wrapping each candy into the
+	// FINAL spec.CandyReader — a CandyReader is read-only from the caller's side, so
+	// nothing can mutate CandyView.InitSystems after the scan returns. Every caller
+	// that feeds a wire envelope another process reads for HasInit() lookups MUST set
+	// this (generate.go's NewGenerator and validate_project_host.go's
+	// loadProjectForResolve both do — the latter's scan feeds rp.Candies/
+	// rp.CandyModels, which plugin-build's Generator consumes for real Containerfile
+	// emission via EmitInitFragmentStages). A caller that leaves this nil skips the
+	// pass entirely and InitSystems stays empty on every candy — correct only for a
+	// caller with no init-aware consumer downstream.
+	InitCfg *InitConfig
 }
 
 // shouldIncludeDisabled reports whether name's disabled gate should be
@@ -133,7 +146,7 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 	// takes the flat tail below exactly as before, so existing behaviour
 	// is unchanged; only qualified names (which previously hard-errored
 	// "not found") gain resolution.
-	if ns, rest, ok := splitNamespaceRef(name); ok {
+	if ns, rest, ok := spec.SplitNamespaceRef(name); ok {
 		sub, found := c.Namespaces[ns]
 		if !found {
 			return nil, fmt.Errorf("import namespace %q not found (resolving image %q)", ns, name)
@@ -452,7 +465,7 @@ func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (
 	// graph + filterBox have every dependency. Uses the SAME
 	// pullNamespacedBox path as the base pull.
 	for _, name := range opts.RequestedBoxes {
-		if _, _, qualified := splitNamespaceRef(name); !qualified {
+		if _, _, qualified := spec.SplitNamespaceRef(name); !qualified {
 			continue
 		}
 		if _, done := resolved[name]; done {

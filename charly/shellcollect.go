@@ -18,7 +18,7 @@ import (
 //     deploy time by MergeDeployShell from charly.yml entries.
 //
 // Returns nil if every section is empty.
-func CollectShell(cfg *Config, layers map[string]*Candy, boxName string) *LabelShellSet {
+func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName string) *LabelShellSet {
 	set := &LabelShellSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
