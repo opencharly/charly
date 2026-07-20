@@ -1,6 +1,12 @@
 package pod
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"sort"
+	"strings"
+
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -198,4 +204,129 @@ type ServiceRestartCmd struct {
 
 func (c *ServiceRestartCmd) Run() error {
 	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "restart", Box: c.Box, Service: c.Service, Instance: c.Instance})
+}
+
+// VolumeCmd groups the named-volume verbs — the `charly volume` grammar. NOT registry-bound (pure
+// sdk/kit + sdk/deploykit exec logic) — moves wholesale, zero seam.
+type VolumeCmd struct {
+	List  VolumeListCmd  `cmd:"" help:"List a deployment's charly-managed named volumes with their backing mountpoints"`
+	Reset VolumeResetCmd `cmd:"" help:"Remove ONE named volume so the next start recreates it fresh (e.g. wipe a sidecar's state volume to force re-auth)"`
+}
+
+// VolumeListCmd lists the engine-side named volumes belonging to a
+// deployment (app + sidecar volumes alike), with their host mountpoints —
+// the charly-native replacement for ad-hoc `podman volume ls/inspect`.
+type VolumeListCmd struct {
+	Box      string `arg:"" help:"Box / deploy name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *VolumeListCmd) Run() error {
+	rt, err := kit.ResolveRuntime()
+	if err != nil {
+		return err
+	}
+	boxName := kit.ResolveBoxName(c.Box)
+	bin := kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
+	prefix := kit.ContainerNameInstance(boxName, c.Instance) + "-"
+	out, err := exec.Command(bin, "volume", "ls", "--format", "{{.Name}}").Output()
+	if err != nil {
+		return fmt.Errorf("listing volumes: %w", err)
+	}
+	var names []string
+	for n := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if n != "" && strings.HasPrefix(n, prefix) {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		fmt.Printf("No named volumes for %s (prefix %s)\n", boxName, prefix)
+		return nil
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		mp, mpErr := exec.Command(bin, "volume", "inspect", "--format", "{{.Mountpoint}}", n).Output()
+		mount := strings.TrimSpace(string(mp))
+		if mpErr != nil {
+			mount = "(mountpoint unavailable)"
+		}
+		fmt.Printf("%s\t%s\n", n, mount)
+	}
+	return nil
+}
+
+// VolumeResetCmd removes ONE named volume so the next `charly start`
+// recreates it fresh — the charly-native replacement for the retired
+// `podman volume rm <name>` re-initialization path (sidecar state wipes,
+// corrupted caches). The engine refuses an in-use volume, so a running
+// deployment surfaces an actionable error instead of silent data loss.
+type VolumeResetCmd struct {
+	Box      string `arg:"" help:"Box / deploy name"`
+	Name     string `arg:"" help:"Volume name — bare (e.g. tailscale-state) or the full charly-<box>-<name> form"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *VolumeResetCmd) Run() error {
+	rt, err := kit.ResolveRuntime()
+	if err != nil {
+		return err
+	}
+	boxName := kit.ResolveBoxName(c.Box)
+	bin := kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine))
+	full := c.Name
+	if !strings.HasPrefix(full, "charly-") {
+		full = kit.ContainerNameInstance(boxName, c.Instance) + "-" + c.Name
+	}
+	if out, err := exec.Command(bin, "volume", "rm", full).CombinedOutput(); err != nil {
+		msg := strings.TrimSpace(string(out))
+		if strings.Contains(msg, "no such volume") {
+			return fmt.Errorf("volume %s does not exist", full)
+		}
+		return fmt.Errorf("removing volume %s: %s — an in-use volume is refused; stop the deployment first (`charly stop %s`)", full, msg, boxName)
+	}
+	fmt.Printf("Removed volume %s — the next `charly start %s` recreates it fresh\n", full, boxName)
+	return nil
+}
+
+// CpCmd copies a file between the host and a running container (app or
+// sidecar) — the charly-native replacement for ad-hoc `podman cp`. Exactly
+// one of <src>/<dst> carries the ':' prefix marking the container side. NOT
+// registry-bound — moves wholesale, zero seam.
+type CpCmd struct {
+	Box      string `arg:"" help:"Box / deploy name"`
+	Src      string `arg:"" help:"Source path — prefix with ':' for the container side"`
+	Dst      string `arg:"" help:"Destination path — prefix with ':' for the container side"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+	Sidecar  string `long:"sidecar" help:"Target the named SIDECAR container instead of the app container"`
+}
+
+func (c *CpCmd) Run() error {
+	srcInCtr := strings.HasPrefix(c.Src, ":")
+	dstInCtr := strings.HasPrefix(c.Dst, ":")
+	if srcInCtr == dstInCtr {
+		return fmt.Errorf("exactly one of <src>/<dst> must carry the ':' container-side prefix (got src=%q dst=%q)", c.Src, c.Dst)
+	}
+	var engine, name string
+	var err error
+	if c.Sidecar != "" {
+		engine, name, err = deploykit.ResolveSidecarContainer(c.Box, c.Instance, c.Sidecar)
+	} else {
+		engine, name, err = deploykit.ResolveContainer(c.Box, c.Instance)
+	}
+	if err != nil {
+		return err
+	}
+	src, dst := c.Src, c.Dst
+	if srcInCtr {
+		src = name + ":" + strings.TrimPrefix(src, ":")
+	} else {
+		dst = name + ":" + strings.TrimPrefix(dst, ":")
+	}
+	cmd := exec.Command(engine, "cp", src, dst)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s cp %s %s: %w", engine, src, dst, err)
+	}
+	return nil
 }
