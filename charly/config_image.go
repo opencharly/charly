@@ -569,7 +569,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// When sidecars are present, set PodName to enable pod mode
 	podName := ""
 	if len(resolvedSidecars) > 0 {
-		podName = PodNameInstance(c.Box, c.Instance)
+		podName = kit.PodNameInstance(c.Box, c.Instance)
 	}
 
 	qcfg := deploykit.QuadletConfig{
@@ -1135,7 +1135,7 @@ func (c *BoxConfigRemoveCmd) Run() error {
 	_ = cmd.Run()
 
 	// Also disable pod and sidecar services (best-effort)
-	podSvc := PodNameInstance(boxName, c.Instance) + "-pod.service"
+	podSvc := kit.PodNameInstance(boxName, c.Instance) + "-pod.service"
 	disablePod := exec.Command("systemctl", "--user", "disable", "--now", podSvc)
 	_ = disablePod.Run()
 
@@ -1149,7 +1149,7 @@ func (c *BoxConfigRemoveCmd) Run() error {
 	// with sidecars but belong to an unrelated deploy). See
 	// findPodSidecarQuadlets in sidecar.go.
 	if qdir, qErr := quadletDir(); qErr == nil {
-		podName := PodNameInstance(boxName, c.Instance)
+		podName := kit.PodNameInstance(boxName, c.Instance)
 		mainFile := kit.ContainerNameInstance(boxName, c.Instance) + ".container"
 		if sidecars, dErr := findPodSidecarQuadlets(qdir, podName, mainFile); dErr == nil {
 			for _, name := range sidecars {
@@ -1736,7 +1736,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 				for _, rs := range reply.Sidecars {
 					resolvedSidecars = append(resolvedSidecars, resolvedSidecarFromSpec(rs))
 				}
-				podName = PodNameInstance(boxName, instance)
+				podName = kit.PodNameInstance(boxName, instance)
 			}
 		}
 

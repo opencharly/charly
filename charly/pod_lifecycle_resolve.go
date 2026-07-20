@@ -476,7 +476,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	if rt.RunMode == "quadlet" {
 		svc := serviceNameInstance(boxName, instance)
 		if opts.Sidecar != "" {
-			svc = SidecarContainerNameInstance(boxName, instance, opts.Sidecar) + ".service"
+			svc = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar) + ".service"
 		}
 		argv := []string{"journalctl", "--user", "-u", svc}
 		if opts.Follow {
@@ -491,7 +491,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	engine := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
 	name := kit.ContainerNameInstance(boxName, instance)
 	if opts.Sidecar != "" {
-		name = SidecarContainerNameInstance(boxName, instance, opts.Sidecar)
+		name = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar)
 	}
 	argv := []string{engine, "logs"}
 	if opts.Follow {

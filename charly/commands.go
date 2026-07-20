@@ -134,7 +134,7 @@ func (c *RemoveCmd) Run() error {
 		// glob). Sources sidecar names from charly.yml — see
 		// resolveSidecarNames for why charly.yml is authoritative.
 		sidecarNames := resolveSidecarNames(boxName, c.Instance)
-		podBase := PodNameInstance(boxName, c.Instance)
+		podBase := kit.PodNameInstance(boxName, c.Instance)
 		for _, sc := range sidecarNames {
 			scPath := filepath.Join(qdir, podBase+"-"+sc+".container")
 			if err := os.Remove(scPath); err == nil {

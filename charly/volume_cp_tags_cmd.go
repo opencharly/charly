@@ -28,7 +28,7 @@ func resolveSidecarContainer(box, instance, sidecar string) (engine, name string
 	boxName := resolveBoxName(box)
 	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
 	engine = kit.EngineBinary(runEngine)
-	name = SidecarContainerNameInstance(boxName, instance, sidecar)
+	name = kit.SidecarContainerNameInstance(boxName, instance, sidecar)
 	if !containerRunning(engine, name) {
 		return "", "", fmt.Errorf("sidecar container %s is not running", name)
 	}
