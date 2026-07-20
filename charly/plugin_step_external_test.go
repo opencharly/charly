@@ -142,7 +142,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	// 5. Teardown: replaying the recorded plugin-script reverse op removes the markers
 	//    (record-and-replay — the `charly bundle del` contract). Local runner (nil
 	//    Runner → local bash, user scope, no sudo).
-	kit.RunReverseOps(reply.ReverseOps, &hostReverseExec{})
+	kit.RunReverseOps(reply.ReverseOps, &deploykit.HostReverseExec{})
 	mustNotExist(t, probe, "reverse op replay did not remove the probe marker")
 	mustNotExist(t, applied, "reverse op replay did not remove the applied marker")
 }

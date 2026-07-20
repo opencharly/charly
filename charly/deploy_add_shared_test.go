@@ -20,43 +20,10 @@ func funcPointer(fn func(string, string) error) uintptr {
 // deploy_add_shared_test.go — coverage for the P13-KERNEL step-3 k3s-server fix: the
 // artifact-declaration-driven dispatch that replaced the hardcoded
 // deployHasCandy(candyList, "k3s-server") special-case in retrieveArtifactsAndK3s.
-
-// TestCandyArtifactRegisters_NameBlind proves the collector reads each candy's OWN
-// artifact declaration, never the candy's NAME — the exact axis the bug fix targets. A
-// candy literally named "k3s-server" contributes NOTHING unless it actually declares a
-// `register:` hint on an artifact; a candy with an entirely different name contributes
-// "kubeconfig" when it does declare one.
-func TestCandyArtifactRegisters_NameBlind(t *testing.T) {
-	unhinted := testCandy("k3s-server", spec.CandyModel{Artifact: []spec.CandyArtifact{
-		{Name: "kubeconfig", Path: "/etc/rancher/k3s/k3s.yaml", RetrieveTo: "/tmp/x"},
-	}}, spec.CandyView{})
-	hinted := testCandy("totally-different-name", spec.CandyModel{Artifact: []spec.CandyArtifact{
-		{Name: "kubeconfig", Path: "/etc/rancher/k3s/k3s.yaml", RetrieveTo: "/tmp/x", Register: "kubeconfig"},
-	}}, spec.CandyView{})
-	other := testCandy("other-candy", spec.CandyModel{Artifact: []spec.CandyArtifact{
-		{Name: "state", Path: "/var/lib/other/state.json", RetrieveTo: "/tmp/y"},
-	}}, spec.CandyView{})
-
-	t.Run("name k3s-server alone triggers nothing", func(t *testing.T) {
-		got := candyArtifactRegisters([]spec.CandyReader{unhinted})
-		if len(got) != 0 {
-			t.Fatalf("expected no register hints for a candy with no register: declaration, got %v", got)
-		}
-	})
-
-	t.Run("declared register: kubeconfig triggers regardless of candy name", func(t *testing.T) {
-		got := candyArtifactRegisters([]spec.CandyReader{hinted, other})
-		if !got["kubeconfig"] || len(got) != 1 {
-			t.Fatalf("expected exactly {kubeconfig: true}, got %v", got)
-		}
-	})
-
-	t.Run("nil/empty layers -> empty set", func(t *testing.T) {
-		if got := candyArtifactRegisters(nil); len(got) != 0 {
-			t.Fatalf("expected empty set for nil layers, got %v", got)
-		}
-	})
-}
+// The declaration-reading half relocated to sdk/deploykit.CandyArtifactRegisters
+// (the 4/5 sdk lift) — its own name-blindness test
+// moved with it (sdk/deploykit/deploy_host_helpers_test.go). What stays here is the
+// host-side dispatch TABLE + the orchestrating retrieveArtifactsAndK3s.
 
 // TestArtifactRegisterHandlers_KubeconfigWired proves the production wiring: the
 // "kubeconfig" register hint maps to K3sPostProvision specifically (not merely SOME

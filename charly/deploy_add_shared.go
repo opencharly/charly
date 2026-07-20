@@ -15,9 +15,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
@@ -84,27 +82,6 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	return nil
 }
 
-// buildArtifactEnv composes the env used for candy-artifact path
-// substitution: the resolved secret env first, then the deploy node's
-// own env: lines overlaid (last-wins). nil node contributes nothing.
-//
-// Shared by the local deploy target.Add / the vm deploy's Add path — both feed it
-// to RetrieveCandyArtifacts so rewrite rules like ${K3S_KUBECONFIG_SERVER}
-// resolve to the declared value rather than a literal placeholder. The
-// node is the dispatch-merged BundleNode (never re-read from disk).
-func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[string]string {
-	env := make(map[string]string, len(secretEnv))
-	maps.Copy(env, secretEnv)
-	if node != nil {
-		for _, line := range node.Env {
-			if idx := strings.Index(line, "="); idx > 0 {
-				env[line[:idx]] = line[idx+1:]
-			}
-		}
-	}
-	return env
-}
-
 // artifactRegisterHandlers maps a candy artifact's declared `register:` hint (the
 // #CandyArtifact.Register field, SDD-sourced in sdk/schema/candy.cue) to the
 // post-retrieve processing it triggers. Word-keyed and data-driven (R3): a candy
@@ -113,24 +90,6 @@ func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[st
 // map entry here, never a hardcoded candy-name special-case.
 var artifactRegisterHandlers = map[string]func(artifactKey, deployName string) error{
 	"kubeconfig": K3sPostProvision,
-}
-
-// candyArtifactRegisters returns the DISTINCT `register:` hints declared across every
-// candy's artifact list — name-blind (it reads each artifact's own declaration, never
-// a candy name).
-func candyArtifactRegisters(layers []spec.CandyReader) map[string]bool {
-	out := map[string]bool{}
-	for _, layer := range layers {
-		if layer == nil {
-			continue
-		}
-		for _, a := range layer.Artifact() {
-			if a.Register != "" {
-				out[a.Register] = true
-			}
-		}
-	}
-	return out
 }
 
 // retrieveArtifactsAndK3s pulls back the candies' published artifacts via the same
@@ -149,7 +108,7 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor,
 	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
 		return err
 	}
-	for register := range candyArtifactRegisters(candyList) {
+	for register := range deploykit.CandyArtifactRegisters(candyList) {
 		handler, ok := artifactRegisterHandlers[register]
 		if !ok {
 			continue

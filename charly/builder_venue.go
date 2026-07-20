@@ -48,7 +48,7 @@ type buildEngineContext struct {
 	Cfg        *Config
 	ProjectDir string
 	// DistroCfg is the resolved distro: vocabulary the SystemPackagesStep host render
-	// (renderHostPackageCommand) needs to look up the format's phase.install.host
+	// (deploykit.RenderHostPackageCommand) needs to look up the format's phase.install.host
 	// template. Zero for an Invoke whose plan has no SystemPackagesStep.
 	DistroCfg *buildkit.DistroConfig
 

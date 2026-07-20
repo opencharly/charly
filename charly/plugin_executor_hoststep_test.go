@@ -59,7 +59,7 @@ func TestRunHostStep_Dispatch(t *testing.T) {
 	})
 
 	t.Run("system-packages arm", func(t *testing.T) {
-		// A PhaseInstall SystemPackagesStep with packages routes to renderHostPackageCommand;
+		// A PhaseInstall SystemPackagesStep with packages routes to deploykit.RenderHostPackageCommand;
 		// the test server's zero buildEngineContext has no DistroCfg, so the render errors
 		// "no distro config for format" — proving the SystemPackages arm was taken (and tried
 		// the DistroCfg render), NOT the default "not a host-engine step" arm.
