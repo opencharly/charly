@@ -69,7 +69,7 @@ type UpdateCmd struct {
 // The dispatch keeps ZERO duplicate code paths and ZERO silent
 // fallbacks. Every branch fails fast with an actionable error message.
 func (c *UpdateCmd) Run() error {
-	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
@@ -292,7 +292,7 @@ func containerImage(engine, containerName string) string {
 // resolveBoxName extracts the short box name from a ref that may be
 // a local box name or a remote ref (github.com/org/repo/box[@version]).
 func resolveBoxName(box string) string {
-	ref := StripURLScheme(box)
+	ref := kit.StripURLScheme(box)
 	if spec.IsRemoteImageRef(ref) {
 		return spec.ParseRemoteRef(ref).Name
 	}

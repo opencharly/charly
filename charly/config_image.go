@@ -110,7 +110,7 @@ func (c *BoxConfigSetupCmd) Run() error {
 	}
 
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
-	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly config <image-name>'", c.Box)
 	}
 

@@ -249,7 +249,7 @@ func dispatchBuild(word string, req spec.BuildRequest) error {
 func (c *BuildCmd) checkRemoteRefsAndPivot() (bool, string, error) {
 	// Check if any image arg is a remote ref
 	for _, img := range c.Boxes {
-		ref := StripURLScheme(img)
+		ref := kit.StripURLScheme(img)
 		if spec.IsRemoteImageRef(ref) {
 			return true, "", c.buildRemote(ref)
 		}

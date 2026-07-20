@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
@@ -109,11 +108,4 @@ func (ctx *RemoteImageContext) BuildImage(_ *kit.ResolvedRuntime, tag string) er
 	defer os.Chdir(origDir) //nolint:errcheck
 
 	return buildCmd.Run()
-}
-
-// StripURLScheme removes http:// or https:// from a remote ref if present.
-func StripURLScheme(ref string) string {
-	ref = strings.TrimPrefix(ref, "https://")
-	ref = strings.TrimPrefix(ref, "http://")
-	return ref
 }

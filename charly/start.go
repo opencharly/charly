@@ -27,7 +27,7 @@ type StartCmd struct {
 
 func (c *StartCmd) Run() error {
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
-	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
@@ -59,7 +59,7 @@ func (c *StopCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Resolve the image name (handle remote refs)
 	boxName := c.Box
-	ref := StripURLScheme(c.Box)
+	ref := kit.StripURLScheme(c.Box)
 	if spec.IsRemoteImageRef(ref) {
 		boxName = spec.ParseRemoteRef(ref).Name
 	}
@@ -83,7 +83,7 @@ type RestartCmd struct {
 
 func (c *RestartCmd) Run() error {
 	boxName := c.Box
-	ref := StripURLScheme(c.Box)
+	ref := kit.StripURLScheme(c.Box)
 	if spec.IsRemoteImageRef(ref) {
 		boxName = spec.ParseRemoteRef(ref).Name
 	}
