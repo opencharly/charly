@@ -673,10 +673,10 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 		ContainerPath: filepath.Join(qdir, kit.QuadletFilenameInstance(c.Box, c.Instance)),
 	}
 	if len(resolvedSidecars) > 0 {
-		writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(c.Box, c.Instance))
+		writeReq.PodPath = filepath.Join(qdir, kit.PodQuadletFilenameInstance(c.Box, c.Instance))
 		writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
 		for _, sc := range resolvedSidecars {
-			writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
+			writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, kit.SidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
 		}
 	}
 	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
@@ -1780,10 +1780,10 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// --update-all contract: a write failure warns + moves to the next deploy.
 		writeReq := spec.PodConfigWriteRequest{ContainerPath: qpath}
 		if len(resolvedSidecars) > 0 {
-			writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(boxName, instance))
+			writeReq.PodPath = filepath.Join(qdir, kit.PodQuadletFilenameInstance(boxName, instance))
 			writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
 			for _, sc := range resolvedSidecars {
-				writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(boxName, instance, sc.Name))
+				writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, kit.SidecarQuadletFilenameInstance(boxName, instance, sc.Name))
 			}
 		}
 		qcfgJSON, err := json.Marshal(qcfg)

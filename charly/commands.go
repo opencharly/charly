@@ -134,7 +134,7 @@ func (c *podRemoveCmd) Run() error {
 		fmt.Fprintf(os.Stderr, "Removed %s\n", qpath)
 
 		// Remove pod file if it exists (sidecar mode)
-		podPath := filepath.Join(qdir, podQuadletFilenameInstance(boxName, c.Instance))
+		podPath := filepath.Join(qdir, kit.PodQuadletFilenameInstance(boxName, c.Instance))
 		if err := os.Remove(podPath); err == nil {
 			fmt.Fprintf(os.Stderr, "Removed %s\n", podPath)
 		}
