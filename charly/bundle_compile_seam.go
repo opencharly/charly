@@ -69,6 +69,56 @@ func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*deplo
 	return plans, nil
 }
 
+// preresolveActiveInitInto preresolves a MachineVenue compile's active init system ONCE per
+// whole-deploy (alongside preresolveBuildersInto's builder pre-pass), so compileServiceSteps
+// (install_build_services.go) never re-derives it per-candy nor falls back to the
+// container-oriented InitConfig.ResolveInitSystem auto-detect heuristic — proven WRONG for a
+// machine venue by a live probe (2026-07-20): a plain custom-exec service entry matches BOTH the
+// systemd and supervisord ServiceSchema (both carry a non-empty ServiceTemplate), so auto-detect
+// cannot disambiguate, and its bootc-oriented tie-break ("prefer supervisord for container
+// images") would silently flip a real host/vm/local deploy to supervisord. A machine venue runs
+// the MACHINE'S OWN init — resolve initCfg.Init["systemd"] BY NAME with an existence check,
+// hard-erroring if absent rather than silently rendering no unit text (the original bug:
+// compileServiceSteps' lazy loadSystemd() swallowed a missing entry with no error at all). The
+// declared-venue-init trait (a vm/local Descent trait naming its own init system) is the tracked
+// generic exit that eventually replaces this by-name lookup; until it lands, "systemd" is the
+// only init a machine venue resolves. A no-op (returns hostCtx unchanged) for a container-image
+// compile (hostCtx.MachineVenue == false).
+func preresolveActiveInitInto(hostCtx deploykit.HostContext, dir string) (deploykit.HostContext, error) {
+	if !hostCtx.MachineVenue {
+		return hostCtx, nil
+	}
+	_, _, initCfg, err := LoadBuildConfigForBox(dir)
+	if err != nil {
+		return hostCtx, err
+	}
+	name, def, err := resolveActiveInitByName(initCfg)
+	if err != nil {
+		return hostCtx, err
+	}
+	hostCtx.ActiveInitName = name
+	hostCtx.ActiveInit = def
+	return hostCtx, nil
+}
+
+// resolveActiveInitByName is the pure by-name, existence-checked lookup preresolveActiveInitInto
+// wraps around LoadBuildConfigForBox — split out so it is directly unit-testable against a
+// hand-built *InitConfig, without a full project fixture. Only "systemd" is resolved today (every
+// machine venue is systemd in practice, per pruneContainerInitForSystemd's pre-existing
+// supervisord-exclusion for MachineVenue candy order); a future exclusive/machine-venue substrate
+// declaring a different init names it via the tracked declared-venue-init trait, never a second
+// hardcoded string here.
+func resolveActiveInitByName(initCfg *InitConfig) (string, *ResolvedInit, error) {
+	if initCfg == nil {
+		return "", nil, fmt.Errorf("machine-venue deploy requires the \"systemd\" init system, but the project's build vocabulary declares no init: section at all")
+	}
+	def, ok := initCfg.Init["systemd"]
+	if !ok || def == nil {
+		return "", nil, fmt.Errorf("machine-venue deploy requires the \"systemd\" init system, but no init.systemd entry is declared in the build vocabulary")
+	}
+	return "systemd", def, nil
+}
+
 // compileSelectionViaPlugin is the ONE per-unit helper: project the resolved box, marshal the
 // host-side HostContext, build the DeployCompileRequest, and re-materialize the plans. tag is the
 // image CalVer pin (for the plan Version field when the candy carries no version).
@@ -120,6 +170,10 @@ func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCf
 		return nil, "", nil, err
 	}
 	hostCtx := c.compileHostContext()
+	hostCtx, err = preresolveActiveInitInto(hostCtx, dir)
+	if err != nil {
+		return nil, "", nil, err
+	}
 	order = pruneContainerInitForSystemd(order, hostCtx)
 	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
 	if err != nil {
@@ -188,6 +242,10 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 		}
 	}
 	hostCtx := c.compileHostContext()
+	hostCtx, err = preresolveActiveInitInto(hostCtx, dir)
+	if err != nil {
+		return nil, "", nil, err
+	}
 	order = pruneContainerInitForSystemd(order, hostCtx)
 	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
 	if err != nil {
