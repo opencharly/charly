@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/opencharly/sdk/spec"
@@ -29,9 +28,6 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
-
-// k3sServerURLRe matches an `https://<host>:<port>` server URL in a kubeconfig.
-var k3sServerURLRe = regexp.MustCompile(`(https?://)([^:/\s]+):(\d+)`)
 
 // rewriteK3sServerToForward rewrites the retrieved kubeconfig's server URL, mapping
 // the guest-local k3s API port to the host-forwarded port declared on the deploy's VM
@@ -55,24 +51,16 @@ func rewriteK3sServerToForward(retrievedPath, entityRef, deployName string) erro
 	if err != nil {
 		return err
 	}
-	out := rewriteServerPorts(string(data), guestToHost)
+	// The pure text-rewrite + tree-search helpers this file used to define locally
+	// moved to sdk/deploykit (Cutover B unit 5, P13-KERNEL-B) — zero loader/registry
+	// dependency. What stays here (this function, deployVMForwards below) is the
+	// LoadUnified-coupled orchestration deciding WHICH forwards apply, K1-permanent
+	// per R-E2.
+	out := deploykit.RewriteServerPorts(string(data), guestToHost)
 	if out == string(data) {
 		return nil
 	}
 	return os.WriteFile(retrievedPath, []byte(out), 0o600)
-}
-
-// rewriteServerPorts rewrites every `https://<host>:<guestPort>` in data to
-// `https://127.0.0.1:<hostPort>` for each guest→host mapping (the QEMU user-mode
-// forward lives on the host loopback). Pure; unit-tested.
-func rewriteServerPorts(data string, guestToHost map[string]string) string {
-	return k3sServerURLRe.ReplaceAllStringFunc(data, func(m string) string {
-		p := k3sServerURLRe.FindStringSubmatch(m)
-		if hport, ok := guestToHost[p[3]]; ok && hport != p[3] {
-			return p[1] + "127.0.0.1:" + hport
-		}
-		return m
-	})
 }
 
 // deployVMForwards returns the network.port_forwards of the VM the named deploy runs
@@ -96,7 +84,7 @@ func deployVMForwards(entityRef, deployName string) ([]string, error) {
 	vmEntity := ""
 	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
 		vmEntity = e
-	} else if node := findBundleNodeByName(uf.Bundle, entityRef); node != nil {
+	} else if node := deploykit.FindBundleNode(uf.Bundle, entityRef); node != nil {
 		vmEntity = node.From
 	}
 	if vmEntity == "" {
@@ -111,72 +99,11 @@ func deployVMForwards(entityRef, deployName string) ([]string, error) {
 	if entry, ok := deploykit.LoadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
 		alloc = entry.VmState.PortForwards
 	}
-	resolved, rerr := resolveDeployForwards(vm.Network.PortForwards, alloc)
+	resolved, rerr := deploykit.ResolveDeployForwards(vm.Network.PortForwards, alloc)
 	if rerr != nil {
 		return nil, fmt.Errorf("deploy %q (vm_state key %q): %w", deployName, key, rerr)
 	}
 	return resolved, nil
-}
-
-// resolveDeployForwards maps authored network.port_forwards entries to concrete
-// "<host>:<guest>" strings: an `auto:<guest>` entry resolves to its persisted
-// auto-allocated host port, and a fixed "<host>:<guest>" passes through unchanged.
-// An `auto:<guest>` with NO persisted allocation is a LOUD ERROR, never a silent drop:
-// this runs only POST-vm-create (K3sPostProvision), where the allocation MUST exist, so a
-// miss means a persist/read key mismatch — surfacing it here turns a confusing downstream
-// `connection refused` into a diagnostic that names the unresolved entry (R1/R4). Pure;
-// unit-tested (k3s_post_test.go).
-func resolveDeployForwards(authored []string, alloc map[string]int) ([]string, error) {
-	out := make([]string, 0, len(authored))
-	for _, pf := range authored {
-		host, guest, ok := strings.Cut(pf, ":")
-		if !ok || guest == "" {
-			continue
-		}
-		if host == "auto" {
-			h, hit := alloc[guest]
-			if !hit || h <= 0 {
-				return nil, fmt.Errorf("auto port_forward %q has no persisted host-port allocation (the vm-create allocation must exist post-create)", pf)
-			}
-			out = append(out, fmt.Sprintf("%d:%s", h, guest))
-			continue
-		}
-		out = append(out, pf)
-	}
-	return out, nil
-}
-
-// findBundleNodeByName locates a deploy node by key across the tree (top-level +
-// nested children + peer members).
-func findBundleNodeByName(bundle map[string]spec.BundleNode, name string) *spec.BundleNode {
-	for k := range bundle {
-		n := bundle[k]
-		if k == name {
-			return &n
-		}
-		if r := findBundleNodePtrByName(n.Children, name); r != nil {
-			return r
-		}
-		if r := findBundleNodePtrByName(n.Members, name); r != nil {
-			return r
-		}
-	}
-	return nil
-}
-
-func findBundleNodePtrByName(m map[string]*spec.BundleNode, name string) *spec.BundleNode {
-	for k, n := range m {
-		if k == name {
-			return n
-		}
-		if r := findBundleNodePtrByName(n.Children, name); r != nil {
-			return r
-		}
-		if r := findBundleNodePtrByName(n.Members, name); r != nil {
-			return r
-		}
-	}
-	return nil
 }
 
 // K3sPostProvision runs the post-provision steps for a k3s-server deploy.

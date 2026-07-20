@@ -8,10 +8,13 @@ package main
 // never hidden behind a bare not-found. Used by the deploy-add dispatcher to
 // resolve a deployment's `local: <template-name>` reference.
 //
-// TRACKED FINAL/K5 EXIT (DEPLOY-wave W2 audit, 2026-07-20): calls LoadUnified directly —
-// no plugin has loader access today, an ENABLER GAP (not a permanence claim, same class as
-// the arbiter IOU) that only a FINAL/K5 loader-access seam can close. 26 LOC, trivial once
-// that seam exists.
+// STAY (Cutover B unit 5 re-audit, 2026-07-21): calls LoadUnified directly — K1-permanent
+// per R-E2 (the LoadUnified/materialize keystone spike stands; no plugin will ever get
+// direct loader access, so the prior framing here — "an ENABLER GAP... a FINAL/K5
+// loader-access seam can close it" — assumed an enabler R-E2 rules out, and is corrected).
+// This file is a FLOOR candidate (E/M/B/D: reads the permanent-core loader via the same
+// path every other node in this family does); final permanence + any #118 floor-allowlist
+// addition is a FLOOR-SLIM decision, not asserted here.
 func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	if dir == "" || name == "" {
 		return nil, nil
