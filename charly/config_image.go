@@ -426,7 +426,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// inject functions pass into resolveTemplate for {{.HostPort N}}
 	// substitution. nil-safe — if ports is empty the map is nil and
 	// HostPort templates degrade to the literal container port.
-	portMap := PortMapFromMappings(ports)
+	portMap := deploykit.PortMapFromMappings(ports)
 
 	// Inject provides BEFORE env resolution so this image's own provides
 	// (pod case) and other images' provides are available in the quadlet.
@@ -464,7 +464,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// instance consumer like `versa/ecovoyage` doesn't pick up the base
 	// `versa` deploy's provides, and vice versa.
 	ctrName := kit.ContainerNameInstance(c.Box, c.Instance)
-	acceptedEnv := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+	acceptedEnv := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	globalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
 	envVars, envErr := kit.ResolveEnvVars(globalEnv, meta.Env, "", workspaceBindHost(bindMounts), c.EnvFile, c.Env)
 	if envErr != nil {
@@ -864,7 +864,7 @@ skipDataProvision:
 	// Warn about missing mcp_requires servers
 	if len(meta.MCPRequire) > 0 {
 		dc := deploykit.LoadDeployConfigForRead("charly config mcp_requires check")
-		var mcpServers []MCPProvideEntry
+		var mcpServers []spec.MCPProvideEntry
 		if dc != nil && dc.Provides != nil {
 			mcpServers = spec.PodAwareMCPProvides(dc.Provides.MCP, deploykit.DeployKey(c.Box, c.Instance), kit.ContainerNameInstance(c.Box, c.Instance))
 		}
@@ -1315,7 +1315,7 @@ func injectEnvProvides(boxName, instance string, envProvides map[string]string, 
 	keys := sortedStringMapKeys(envProvides)
 	for _, key := range keys {
 		tmpl := envProvides[key]
-		value := resolveTemplate(tmpl, ctrName, portMap)
+		value := deploykit.ResolveTemplate(tmpl, ctrName, portMap)
 		source := deploykit.DeployKey(boxName, instance)
 		resolved := deploykit.EnvProvideEntry{
 			Name:   key,
@@ -1377,7 +1377,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 	changed := false
 
 	// Remove stale entries from this source (handles name changes on re-config)
-	var cleaned []MCPProvideEntry
+	var cleaned []spec.MCPProvideEntry
 	for _, e := range dc.Provides.MCP {
 		if e.Source != source {
 			cleaned = append(cleaned, e)
@@ -1388,7 +1388,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 	}
 
 	for _, mcp := range mcpProvides {
-		url := resolveTemplate(mcp.URL, ctrName, portMap)
+		url := deploykit.ResolveTemplate(mcp.URL, ctrName, portMap)
 		transport := mcp.Transport
 		if transport == "" {
 			transport = "http"
@@ -1398,7 +1398,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 		if instance != "" {
 			mcpName = mcp.Name + "-" + instance
 		}
-		resolved := MCPProvideEntry{
+		resolved := spec.MCPProvideEntry{
 			Name:      mcpName,
 			URL:       url,
 			Transport: transport,
@@ -1438,7 +1438,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 
 // warnMissingMCPRequires checks resolved MCP servers against required MCP dependencies
 // and prints warnings for any that are missing.
-func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpServers []MCPProvideEntry) {
+func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpServers []spec.MCPProvideEntry) {
 	resolved := make(map[string]bool, len(mcpServers))
 	for _, s := range mcpServers {
 		resolved[s.Name] = true
@@ -1606,7 +1606,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// Resolve env vars with updated global env. Pass deployKey so an
 		// instance's quadlet doesn't pick up another instance's provides.
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
-		updateAccepted := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 		globalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(boxName, instance), updateCtrName, updateAccepted)
 		envVars, err := kit.ResolveEnvVars(globalEnv, meta.Env, "", "", "", nil)
 		if err != nil {

@@ -183,7 +183,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 
 	deployEnv := meta.Env
 	startCtrName := kit.ContainerNameInstance(box, instance)
-	startAccepted := AcceptedEnvSet(envAccepts, envRequires)
+	startAccepted := deploykit.AcceptedEnvSet(envAccepts, envRequires)
 	startGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), startCtrName, startAccepted)
 	envVars, err := kit.ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
@@ -385,7 +385,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	ports, security, network := meta.Port, meta.Security, meta.Network
 
 	shellCtrName := kit.ContainerNameInstance(box, instance)
-	shellAccepted := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+	shellAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	shellGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), shellCtrName, shellAccepted)
 	envVars, err := kit.ResolveEnvVars(shellGlobalEnv, meta.Env, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
