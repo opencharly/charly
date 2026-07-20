@@ -1,0 +1,37 @@
+plugin-pod:
+    candy:
+        version: 2026.201.0000
+        description: |-
+            The `charly start`/`stop`/`restart`/`config`/`shell`/`service`/`logs`/`remove`/`cp`/
+            `volume` pod-lifecycle CLI — a COMMAND-class charly plugin (github.com/opencharly/sdk),
+            the CLI sibling of candy/plugin-deploy-pod (which keeps deploy:pod out-of-process,
+            untouched — mirroring the candy/plugin-vm / candy/plugin-deploy-vm split). Each command
+            word is INDEPENDENT (no shared parent). `charly restart` is pure sdk/kit + sdk/deploykit
+            logic (deploykit.RestartPodService) with zero host coupling. The registry-bound commands
+            (start/stop/…) forward their authored flags, as sdk/spec wire requests, to a per-command
+            HostBuild seam — the host reconstructs the original core orchestration struct and runs
+            its Run() logic VERBATIM (mirroring candy/plugin-bundle's deploy-add/deploy-del seams),
+            because the provider REGISTRY (ResolveTarget, the plugin loader) is a core Mechanism a
+            plugin cannot import or hold. COMPILED-IN, it dispatches IN-PROC via Invoke(OpRun), so the
+            handlers run in charly's own process and inherit real stdio/TTY natively. Placement of
+            THIS candy is independent of candy/plugin-deploy-pod's placement.
+        plugin:
+            providers:
+                - command:start
+                - command:stop
+                - command:restart
+                - command:logs
+                - command:remove
+                - command:shell
+                - command:service
+                - command:volume
+                - command:cp
+                - command:config
+                - command:update
+            source: github.com/opencharly/charly/candy/plugin-pod
+        plan:
+            - check: the pod command plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process or compile in; the full `charly start/stop/restart/…` end-to-end is exercised by the live R10 + the Go tests
+              id: pod-command-module-present
+              context:
+                - build
+              command: "test -f go.mod && test -f plugin.go && test -f command.go && test -f pod_cmd.go"

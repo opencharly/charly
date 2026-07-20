@@ -11,6 +11,12 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
+// network.go — the shared "charly" container network + DNS reconciliation. REASSIGNED to
+// P13-KERNEL (DEPLOY-wave W1 audit, 2026-07-20): ResolveNetwork's only callers are
+// config_image.go's BoxConfigSetupCmd and pod_lifecycle_resolve.go, both core-side (kept by
+// name for bundle_from_box_cmd.go / the P13-KERNEL exit respectively) — this file needs no
+// seam of its own this wave; it moves with those consumers when that wave lands.
+
 // CharlyNetworkName is the shared bridge network used by all charly containers.
 const CharlyNetworkName = "charly"
 

@@ -15,6 +15,12 @@ import (
 	"golang.org/x/term"
 )
 
+// secrets.go — container secret collection + podman secret provisioning. TRACKED
+// FINAL/K5 EXIT (DEPLOY-wave W1 audit, 2026-07-20): ResolveCredential/DefaultCredentialStore
+// route through connectPluginByWord to verb:credential — the core provider registry, the
+// same clause-M coupling as enc.go (see its header). Registered FINAL/K5 inventory
+// alongside enc.go's InvokeProvider rewrite, not this wave.
+
 // generateRandomSecretToken returns `byteCount` random bytes encoded as
 // url-safe base64 (RFC 4648 §5). For byteCount=32 this produces a 44-char
 // string (43 base64 chars + 1 `=` pad).

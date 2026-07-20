@@ -89,7 +89,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 
 	// Fallback: remote ref → build from the cached @github.com/... repo
 	// using the same workflow as `charly box build @<ref>`.
-	stripped := StripURLScheme(image)
+	stripped := kit.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
 		if rctx, err := ResolveRemoteImage(stripped, ""); err == nil {
 			fmt.Fprintf(os.Stderr, "ensure-image: building remote %s from cached source\n", image)
@@ -155,7 +155,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if image == "" {
 		return "", fmt.Errorf("empty image")
 	}
-	stripped := StripURLScheme(image)
+	stripped := kit.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
 		return image, nil
 	}
@@ -178,7 +178,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 // which performs the operator-side repo download and returns the
 // canonical registry ref declared in the remote project's charly.yml.
 func pullRefForEnsure(image string, cfg *Config, projectDir string) (string, error) {
-	stripped := StripURLScheme(image)
+	stripped := kit.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
 		rctx, err := ResolveRemoteImage(stripped, "")
 		if err != nil {
@@ -219,7 +219,7 @@ func buildableShortName(image string, cfg *Config) string {
 	if cfg == nil || cfg.Box == nil || image == "" {
 		return ""
 	}
-	stripped := StripURLScheme(image)
+	stripped := kit.StripURLScheme(image)
 	if spec.IsRemoteImageRef(stripped) {
 		return ""
 	}

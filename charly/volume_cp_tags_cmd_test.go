@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/kit"
+)
 
 func TestMatchImageGlob_FullRefAndLastSegment(t *testing.T) {
 	ref := "ghcr.io/opencharly/charly-fedora-2026-abc:2026.160.0100"
@@ -22,10 +26,10 @@ func TestMatchImageGlob_FullRefAndLastSegment(t *testing.T) {
 }
 
 func TestSidecarContainerNameInstance_Shape(t *testing.T) {
-	if got := SidecarContainerNameInstance("selkies-labwc", "", "tailscale"); got != "charly-selkies-labwc-tailscale" {
+	if got := kit.SidecarContainerNameInstance("selkies-labwc", "", "tailscale"); got != "charly-selkies-labwc-tailscale" {
 		t.Errorf("base sidecar name = %q", got)
 	}
-	if got := SidecarContainerNameInstance("selkies-labwc", "82.1.2.3", "tailscale"); got != "charly-selkies-labwc-82.1.2.3-tailscale" {
+	if got := kit.SidecarContainerNameInstance("selkies-labwc", "82.1.2.3", "tailscale"); got != "charly-selkies-labwc-82.1.2.3-tailscale" {
 		t.Errorf("instance sidecar name = %q", got)
 	}
 }

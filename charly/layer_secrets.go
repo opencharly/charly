@@ -43,6 +43,12 @@ import (
 // fallback per credential_store.go DefaultCredentialStore); the second
 // caller's ResolveCredential reads the persisted value. All callers in
 // one process share the cached singleton.
+//
+// TRACKED FINAL/K5 EXIT (DEPLOY-wave W2 audit, 2026-07-20): DefaultCredentialStore/
+// ResolveCredential route through the core provider registry (same verb-dispatch
+// coupling as enc.go/secrets.go — see their headers); CandyForPlan (below) additionally
+// takes *Config, the core-only project type. Registered FINAL/K5 alongside enc.go/
+// secrets.go's InvokeProvider rewrite, not this wave.
 func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source string) {
 	service, key := "charly/secret", dep.Name
 	if dep.Key != "" {

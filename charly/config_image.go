@@ -110,7 +110,7 @@ func (c *BoxConfigSetupCmd) Run() error {
 	}
 
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
-	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly config <image-name>'", c.Box)
 	}
 
@@ -426,7 +426,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// inject functions pass into resolveTemplate for {{.HostPort N}}
 	// substitution. nil-safe — if ports is empty the map is nil and
 	// HostPort templates degrade to the literal container port.
-	portMap := PortMapFromMappings(ports)
+	portMap := deploykit.PortMapFromMappings(ports)
 
 	// Inject provides BEFORE env resolution so this image's own provides
 	// (pod case) and other images' provides are available in the quadlet.
@@ -464,7 +464,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// instance consumer like `versa/ecovoyage` doesn't pick up the base
 	// `versa` deploy's provides, and vice versa.
 	ctrName := kit.ContainerNameInstance(c.Box, c.Instance)
-	acceptedEnv := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+	acceptedEnv := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	globalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(c.Box, c.Instance), ctrName, acceptedEnv)
 	envVars, envErr := kit.ResolveEnvVars(globalEnv, meta.Env, "", workspaceBindHost(bindMounts), c.EnvFile, c.Env)
 	if envErr != nil {
@@ -520,8 +520,9 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	//     credential store value.
 	//
 	// Both flow into the same ProvisionPodmanSecrets call — the existing
-	// Secret=<name>,type=env,target=<var> emission at quadlet.go:100-106
-	// handles them identically at runtime.
+	// Secret=<name>,type=env,target=<var> emission in
+	// sdk/deploykit/quadlet.go's emitContainerSection handles them
+	// identically at runtime.
 	candyOwnedSecrets := CollectSecretsFromLabels(c.Box, meta.Secret)
 	credBackedSecrets, secretResolutions := CollectCandySecretAccepts(c.Box, c.Instance, meta)
 
@@ -569,7 +570,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// When sidecars are present, set PodName to enable pod mode
 	podName := ""
 	if len(resolvedSidecars) > 0 {
-		podName = PodNameInstance(c.Box, c.Instance)
+		podName = kit.PodNameInstance(c.Box, c.Instance)
 	}
 
 	qcfg := deploykit.QuadletConfig{
@@ -662,7 +663,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// dirs, and computes the exact file PATHS (the core filename helpers), then Invokes the plugin
 	// to render + write the file CONTENTS byte-identically. RESOLVE + the host side-effects below
 	// (cloudflareTunnelSetup, systemctl, enc-mount, data-seed) stay here.
-	qdir, err := quadletDir()
+	qdir, err := kit.QuadletDir()
 	if err != nil {
 		return err
 	}
@@ -670,17 +671,17 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 		return fmt.Errorf("creating quadlet directory: %w", err)
 	}
 	writeReq := spec.PodConfigWriteRequest{
-		ContainerPath: filepath.Join(qdir, quadletFilenameInstance(c.Box, c.Instance)),
+		ContainerPath: filepath.Join(qdir, kit.QuadletFilenameInstance(c.Box, c.Instance)),
 	}
 	if len(resolvedSidecars) > 0 {
-		writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(c.Box, c.Instance))
+		writeReq.PodPath = filepath.Join(qdir, kit.PodQuadletFilenameInstance(c.Box, c.Instance))
 		writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
 		for _, sc := range resolvedSidecars {
-			writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
+			writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, kit.SidecarQuadletFilenameInstance(c.Box, c.Instance, sc.Name))
 		}
 	}
 	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
-		svcDir, err := systemdUserDir()
+		svcDir, err := kit.SystemdUserDir()
 		if err != nil {
 			return err
 		}
@@ -713,7 +714,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	}
 
 	// Clean up stale enc service from previous charly versions
-	if svcDir, svcErr := systemdUserDir(); svcErr == nil {
+	if svcDir, svcErr := kit.SystemdUserDir(); svcErr == nil {
 		encPath := filepath.Join(svcDir, encServiceFilename(c.Box))
 		if _, statErr := os.Stat(encPath); statErr == nil {
 			_ = os.Remove(encPath)
@@ -835,7 +836,7 @@ skipDataProvision:
 	hooks := meta.Hook
 	if hooks != nil && hooks.PostEnable != "" {
 		ctrName := kit.ContainerNameInstance(c.Box, c.Instance)
-		svc := serviceNameInstance(c.Box, c.Instance)
+		svc := kit.ServiceNameInstance(c.Box, c.Instance)
 
 		start := exec.Command("systemctl", "--user", "start", svc)
 		start.Stdout = os.Stderr
@@ -864,7 +865,7 @@ skipDataProvision:
 	// Warn about missing mcp_requires servers
 	if len(meta.MCPRequire) > 0 {
 		dc := deploykit.LoadDeployConfigForRead("charly config mcp_requires check")
-		var mcpServers []MCPProvideEntry
+		var mcpServers []spec.MCPProvideEntry
 		if dc != nil && dc.Provides != nil {
 			mcpServers = spec.PodAwareMCPProvides(dc.Provides.MCP, deploykit.DeployKey(c.Box, c.Instance), kit.ContainerNameInstance(c.Box, c.Instance))
 		}
@@ -1128,14 +1129,14 @@ func (c *BoxConfigRemoveCmd) Run() error {
 		return fmt.Errorf("charly config remove requires run_mode=quadlet or direct (current: %s)", rt.RunMode)
 	}
 
-	svc := serviceNameInstance(boxName, c.Instance)
+	svc := kit.ServiceNameInstance(boxName, c.Instance)
 	cmd := exec.Command("systemctl", "--user", "disable", "--now", svc)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
 
 	// Also disable pod and sidecar services (best-effort)
-	podSvc := PodNameInstance(boxName, c.Instance) + "-pod.service"
+	podSvc := kit.PodNameInstance(boxName, c.Instance) + "-pod.service"
 	disablePod := exec.Command("systemctl", "--user", "disable", "--now", podSvc)
 	_ = disablePod.Run()
 
@@ -1148,8 +1149,8 @@ func (c *BoxConfigRemoveCmd) Run() error {
 	// like charly-versa-ecovoyage.container that share the charly-versa- prefix
 	// with sidecars but belong to an unrelated deploy). See
 	// findPodSidecarQuadlets in sidecar.go.
-	if qdir, qErr := quadletDir(); qErr == nil {
-		podName := PodNameInstance(boxName, c.Instance)
+	if qdir, qErr := kit.QuadletDir(); qErr == nil {
+		podName := kit.PodNameInstance(boxName, c.Instance)
 		mainFile := kit.ContainerNameInstance(boxName, c.Instance) + ".container"
 		if sidecars, dErr := findPodSidecarQuadlets(qdir, podName, mainFile); dErr == nil {
 			for _, name := range sidecars {
@@ -1315,7 +1316,7 @@ func injectEnvProvides(boxName, instance string, envProvides map[string]string, 
 	keys := sortedStringMapKeys(envProvides)
 	for _, key := range keys {
 		tmpl := envProvides[key]
-		value := resolveTemplate(tmpl, ctrName, portMap)
+		value := deploykit.ResolveTemplate(tmpl, ctrName, portMap)
 		source := deploykit.DeployKey(boxName, instance)
 		resolved := deploykit.EnvProvideEntry{
 			Name:   key,
@@ -1377,7 +1378,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 	changed := false
 
 	// Remove stale entries from this source (handles name changes on re-config)
-	var cleaned []MCPProvideEntry
+	var cleaned []spec.MCPProvideEntry
 	for _, e := range dc.Provides.MCP {
 		if e.Source != source {
 			cleaned = append(cleaned, e)
@@ -1388,7 +1389,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 	}
 
 	for _, mcp := range mcpProvides {
-		url := resolveTemplate(mcp.URL, ctrName, portMap)
+		url := deploykit.ResolveTemplate(mcp.URL, ctrName, portMap)
 		transport := mcp.Transport
 		if transport == "" {
 			transport = "http"
@@ -1398,7 +1399,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 		if instance != "" {
 			mcpName = mcp.Name + "-" + instance
 		}
-		resolved := MCPProvideEntry{
+		resolved := spec.MCPProvideEntry{
 			Name:      mcpName,
 			URL:       url,
 			Transport: transport,
@@ -1438,7 +1439,7 @@ func injectMCPProvides(boxName, instance string, mcpProvides []spec.MCPServerYAM
 
 // warnMissingMCPRequires checks resolved MCP servers against required MCP dependencies
 // and prints warnings for any that are missing.
-func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpServers []MCPProvideEntry) {
+func warnMissingMCPRequires(boxName string, requires []spec.EnvDependency, mcpServers []spec.MCPProvideEntry) {
 	resolved := make(map[string]bool, len(mcpServers))
 	for _, s := range mcpServers {
 		resolved[s.Name] = true
@@ -1560,11 +1561,11 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		boxName, instance := deploykit.ParseDeployKey(key)
 
 		// Check if quadlet file exists (only update deployed images)
-		qdir, err := quadletDir()
+		qdir, err := kit.QuadletDir()
 		if err != nil {
 			continue
 		}
-		qpath := filepath.Join(qdir, quadletFilenameInstance(boxName, instance))
+		qpath := filepath.Join(qdir, kit.QuadletFilenameInstance(boxName, instance))
 		if _, err := os.Stat(qpath); os.IsNotExist(err) {
 			continue
 		}
@@ -1606,7 +1607,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// Resolve env vars with updated global env. Pass deployKey so an
 		// instance's quadlet doesn't pick up another instance's provides.
 		updateCtrName := kit.ContainerNameInstance(boxName, instance)
-		updateAccepted := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+		updateAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 		globalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(boxName, instance), updateCtrName, updateAccepted)
 		envVars, err := kit.ResolveEnvVars(globalEnv, meta.Env, "", "", "", nil)
 		if err != nil {
@@ -1660,7 +1661,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// and credential-backed secrets synthesized from meta.SecretAccept /
 		// meta.SecretRequire (new in the credential-backed-secrets feature).
 		// Both flow through the same cfg.Secrets slice and the same Secret=
-		// emission at quadlet.go:100-106.
+		// emission in sdk/deploykit/quadlet.go's emitContainerSection.
 		//
 		// This mirrors the Run() flow exactly. Without this merge, --update-all
 		// regenerations would drop credential-backed Secret= directives from
@@ -1736,7 +1737,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 				for _, rs := range reply.Sidecars {
 					resolvedSidecars = append(resolvedSidecars, resolvedSidecarFromSpec(rs))
 				}
-				podName = PodNameInstance(boxName, instance)
+				podName = kit.PodNameInstance(boxName, instance)
 			}
 		}
 
@@ -1780,10 +1781,10 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// --update-all contract: a write failure warns + moves to the next deploy.
 		writeReq := spec.PodConfigWriteRequest{ContainerPath: qpath}
 		if len(resolvedSidecars) > 0 {
-			writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(boxName, instance))
+			writeReq.PodPath = filepath.Join(qdir, kit.PodQuadletFilenameInstance(boxName, instance))
 			writeReq.SidecarPaths = make(map[string]string, len(resolvedSidecars))
 			for _, sc := range resolvedSidecars {
-				writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, sidecarQuadletFilenameInstance(boxName, instance, sc.Name))
+				writeReq.SidecarPaths[sc.Name] = filepath.Join(qdir, kit.SidecarQuadletFilenameInstance(boxName, instance, sc.Name))
 			}
 		}
 		qcfgJSON, err := json.Marshal(qcfg)

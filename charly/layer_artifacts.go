@@ -13,6 +13,9 @@ package main
 // Called from charly/deploy_add_cmd.go after target.Emit succeeds and any
 // deploy-scope tests pass — this is the finalization step that ends a
 // successful `charly bundle add`.
+//
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave W2 audit, 2026-07-20): deploy_add_cmd.go is
+// P13-KERNEL — this file moves with it through that wave's seam, never alone.
 
 import (
 	"context"

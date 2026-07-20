@@ -16,6 +16,13 @@ package main
 // bed runner (check_bed_run.go) and the operator deploy path
 // (bundle_add_cmd.go) — `peer:` works identically for check and deploy from one
 // codebase.
+//
+// TRACKED SPLIT-INVENTORY EXIT (DEPLOY-wave W2 audit, 2026-07-20): foldMembers/
+// validateMembers run during the LOADER phase (before any deploy dispatch) — clause-M/D
+// kernel territory; their exit (if any) is a FINAL/K5 decision, never a per-wave move.
+// bringUpMembers/tearDownMembers are consumed by BOTH bundle_add_cmd.go (P13-KERNEL) and
+// check_bed_run.go (the CHECK wave's bed runner) — registered split-inventory to those two
+// waves; this file moves with its consumers through their respective seams, never alone.
 
 import (
 	"errors"
