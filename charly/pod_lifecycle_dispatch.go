@@ -99,9 +99,11 @@ func podCmdOptsFromCtx(ctx context.Context) podCmdOpts {
 	return podCmdOpts{}
 }
 
-// pod_lifecycle_dispatch.go — the F6 HOST dispatch for the pod deep-body lifecycle (the K4 move). It
-// resolves the spec.PodLifecyclePlan host-side (pod_lifecycle_resolve.go = #59 inventory), threads it
-// into the plugin's OpStart/OpStop op.Params, and BRACKETS the shared arbiter claim around the op:
+// pod_lifecycle_dispatch.go — the F6 HOST dispatch for the pod deep-body lifecycle (the K4 move,
+// P13-KERNEL step-4(ii) direction-flip). It marshals the RAW CLI opts (spec.PodStartOpts/
+// PodStopOpts/PodAttachOpts — the plugin now self-resolves the actual spec.PodLifecyclePlan from
+// these, candy/plugin-deploy-pod/resolve.go), threads them into the plugin's OpStart/OpStop
+// op.Params, and BRACKETS the shared arbiter claim around the op:
 // acquire BEFORE OpStart, release AFTER OpStop, and release ON THE FAILURE PATH (a start that errors
 // after acquire must not leak the claim). The CHARLY_PREEMPT_LEASE lease is host-process M state a
 // placement-agnostic plugin cannot own, so it stays the in-core proxy (acquireResourceForClaimant).

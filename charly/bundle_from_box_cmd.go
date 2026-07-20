@@ -85,8 +85,8 @@ func (c *deployFromBoxCmd) Run() error {
 		return fmt.Errorf("from-box config %q: %w", name, err)
 	}
 
-	// In direct mode (no systemd-user) runConfigDirect already launched the
-	// container via `podman run -d`; nothing more to do. In quadlet mode
+	// In direct mode (no systemd-user) the plugin's runConfigDirect already launched the
+	// container via `podman run -d`; nothing more to do. In quadlet mode the plugin's
 	// runConfig only WROTE + enabled the quadlet (it starts the container
 	// itself only for a post_enable hook), so start the service now. Start by
 	// SERVICE name — the image ref is already baked into the quadlet from
