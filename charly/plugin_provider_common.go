@@ -23,15 +23,16 @@ import (
 type capMeta struct {
 	class            ProviderClass
 	word             string
-	contract         *stepContract      // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural       bool               // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates        bool               // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase            string             // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary          string             // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
-	traits           *spec.DeployTraits // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
-	cmdParent        string             // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
-	commandModel     *spec.CLIModel     // set ONLY for class:command; CUE-generated reflected leaf grammar
-	commandModelJSON []byte             // exact validated transport payload, preserved across relays
+	contract         *stepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	structural       bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
+	validates        bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
+	phase            string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary          string              // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	traits           *spec.DeployTraits  // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
+	cmdParent        string              // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
+	subcmds          []sdk.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
+	commandModel     *spec.CLIModel      // set ONLY for class:command; CUE-generated reflected leaf grammar
+	commandModelJSON []byte              // exact validated transport payload, preserved across relays
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -91,6 +92,11 @@ func (m capMeta) primaryInput() string { return m.primary }
 // registry so kit.StampDescent can stamp node.Descent BY TRAIT, never by kind-word switch.
 func (m capMeta) declaredDeployTraits() *spec.DeployTraits { return m.traits }
 
+// declaredSubcommands implements commandSubcommandCarrier (provider_command_external.go) — a
+// class:command capability's DECLARED one-level-deep CLI subcommand catalog (F-CLI-NEST), empty
+// for every capability that doesn't declare one (preserving today's flat pass-through holder).
+func (m capMeta) declaredSubcommands() []sdk.CLISubcommand { return m.subcmds }
+
 // buildCapMeta lifts one advertised pb.ProvidedCapability into the shared capMeta both provider
 // twins embed — the class/word plus the class-gated contract/structural/validates/phase/primary
 // flags, applied IDENTICALLY regardless of placement (R3). The caller (liftCapabilities) has
@@ -129,6 +135,14 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	m.phase = sdk.NormalizePhase(c.GetPhase())
 	if m.class == ClassVerb {
 		m.primary = c.GetPrimary()
+	}
+	// A class:command capability may DECLARE a one-level-deep subcommand catalog (F-CLI-NEST):
+	// collectExternalCommandPlugins builds a REAL nested Kong holder from it instead of the flat
+	// pass-through, and buildCLIModel synthesizes a "<word>.<name>" leaf per entry for MCP.
+	if m.class == ClassCommand {
+		for _, sc := range c.GetSubcommands() {
+			m.subcmds = append(m.subcmds, sdk.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp()})
+		}
 	}
 	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps
 	// them onto node.Descent so the deploy behaviour is consulted BY TRAIT, not by kind word.

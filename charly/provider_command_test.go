@@ -247,12 +247,16 @@ func assertCommandProviderInjected(t *testing.T, cases []commandProviderCase) {
 
 // TestCommandProviders_ExtractedReachMCP proves the builtin-only CLI model (buildCLIModel's
 // modelCLI, fed by collectCommandPlugins() exactly as the real CLI is) EXCLUDES every command that
-// became a dynamic command candy — a compiled-in or external command is a pass-through Args holder
-// (collectExternalCommandPlugins), never a builtin CommandProvider, so its subcommand leaves are
-// NOT reflected into the out-of-process MCP bridge's (candy/plugin-mcp) tool surface. The
-// still-builtin leaf-domain commands (ssh) that DO stay reflected are covered by
-// TestCommandProviders_ExtractedLeafCommands; `mcp` itself is correctly absent (the MCP server does
-// not expose "start an MCP server" as one of its own tools).
+// became a dynamic command candy with NO declared subcommand catalog — a compiled-in or external
+// command with no catalog is an opaque pass-through Args holder (collectExternalCommandPlugins),
+// never a builtin CommandProvider, so its subcommand leaves are NOT reflected into the
+// out-of-process MCP bridge's (candy/plugin-mcp) tool surface. The still-builtin leaf-domain
+// commands (ssh) that DO stay reflected are covered by TestCommandProviders_ExtractedLeafCommands;
+// `mcp` itself is correctly absent (the MCP server does not expose "start an MCP server" as one of
+// its own tools). `check` is the ONE exception (F-CLI-NEST, asserted separately below): it DOES
+// declare a subcommand catalog, so buildCLIModel folds its holder in via declaringCommandHolders
+// and its children — check.box included — ARE reflected, restoring the MCP tool discoverability
+// this test used to assert was permanently lost.
 func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	paths := cliModelLeafPaths(t)
 	if paths["alias.list"] {
@@ -303,7 +307,12 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	if paths["reap-orphans"] {
 		t.Error("reap-orphans unexpectedly present in the builtin CLI model — `reap-orphans` is now a compiled-in command (candy/plugin-substrate, command:reap-orphans), a dynamic holder not a builtin CommandProvider")
 	}
-	if paths["check.box"] {
-		t.Error("check.box unexpectedly present in the builtin CLI model — `check` is now a compiled-in command (candy/plugin-check, command:check), a dynamic holder not a builtin CommandProvider")
+	// check DOES declare a subcommand catalog (F-CLI-NEST), unlike every command above — its
+	// children are DELIBERATELY reflected (both for `--help` fidelity and for MCP tool
+	// generation, the two things this whole fix restores); see TestBuildCLIModel_CheckAndBoxList
+	// for the positive assertion. Asserting its ABSENCE here would re-encode the very regression
+	// this cutover fixes.
+	if !paths["check.box"] || !paths["check.live"] {
+		t.Error("check.box / check.live expected present in the builtin CLI model — `check` declares a subcommand catalog (F-CLI-NEST) and its children ARE reflected")
 	}
 }

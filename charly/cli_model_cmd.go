@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
+
+	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/spec"
@@ -33,13 +36,22 @@ func (CliModelCmd) Run() error {
 
 // buildCLIModel reflects the CLI struct (+ the builtin command-provider grammar, so an
 // extracted command like `ssh` is described identically to a hardcoded field) into an
-// sdk.CLIModel — the same model walk the MCP server formerly did in-process. EXTERNAL and
-// COMPILED-IN command CANDIES (mcp / secrets / udev / vm / alias, dynamic pass-through Args
-// holders) are NOT reflected here — they dispatch via syscall.Exec or an in-proc Invoke(OpRun),
-// not the reflected builtin-CommandProvider grammar, so they carry no per-subcommand model.
+// sdk.CLIModel — the same model walk the MCP server formerly did in-process, now implemented
+// ONCE in sdk.BuildCLIModel (R3) so every command plugin and the host emit the same CUE-generated
+// contract. EXTERNAL and COMPILED-IN command CANDIES with NO declared subcommand catalog (mcp /
+// secrets / udev / vm / alias — dynamic opaque pass-through Args holders) are NOT reflected here —
+// they dispatch via syscall.Exec or an in-proc Invoke(OpRun), carrying no per-subcommand shape the
+// host could describe. A command-class capability that DOES declare a catalog (F-CLI-NEST — e.g.
+// candy/plugin-check's "check" word, candy/plugin-box's "list" word) gets its REAL nested holder
+// included here too, so `charly __cli-model` (and therefore MCP tool generation) sees one leaf
+// per declared child exactly as if it were a static Kong field.
 func buildCLIModel() (*spec.CLIModel, error) {
 	var modelCLI CLI
 	modelCLI.Plugins = collectCommandPlugins()
+	_, _, extCmdTable := collectExternalCommandPlugins()
+	declaringTop, declaringNested := declaringCommandHolders(extCmdTable)
+	modelCLI.Plugins = append(modelCLI.Plugins, declaringTop...)
+	modelCLI.Box.Plugins = append(modelCLI.Box.Plugins, declaringNested["box"]...)
 	model, err := sdk.BuildCLIModel(&modelCLI, "charly", CharlyVersion(), "")
 	if err != nil {
 		return nil, err
@@ -69,4 +81,27 @@ func buildCLIModel() (*spec.CLIModel, error) {
 		return nil, err
 	}
 	return model, nil
+}
+
+// declaringCommandHolders returns the Kong holders for every command-class capability that
+// DECLARED a subcommand catalog (F-CLI-NEST) — bucketed top-level vs CommandParent-nested by its
+// dispatch-table key ("check" vs "box list") — so buildCLIModel can fold them into the reflected
+// model while PRESERVING the exclusion above for every other (flat, undeclared) command-class
+// capability. The per-leaf kong-reflection walk itself now lives in sdk.BuildCLIModel (R3, moved
+// out from this file alongside the CommandModel/CUE-generated protocol pipeline) — this helper
+// only selects WHICH holders join that walk.
+func declaringCommandHolders(table map[string]externalCommandDispatch) (top kong.Plugins, nestedByParent map[string]kong.Plugins) {
+	nestedByParent = map[string]kong.Plugins{}
+	for key, d := range table {
+		if len(d.subcommands) == 0 {
+			continue
+		}
+		if idx := strings.Index(key, " "); idx >= 0 {
+			parent := key[:idx]
+			nestedByParent[parent] = append(nestedByParent[parent], d.holder)
+			continue
+		}
+		top = append(top, d.holder)
+	}
+	return top, nestedByParent
 }
