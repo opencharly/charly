@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // vm_plugin_client.go is the HOST→plugin client for the internal VM-resolution ops. The go-libvirt
@@ -80,7 +82,7 @@ func vmPluginOpFlag(raw json.RawMessage, key string) bool {
 // outside the image closure). In a check bed CHARLY_REPO_OVERRIDE redirects it to the local
 // superproject under development; outside a bed it fetches the published candy.
 func vmPluginCandyRef() string {
-	return "@" + DefaultProjectRepo + "/candy/plugin-vm"
+	return "@" + spec.DefaultProjectRepo + "/candy/plugin-vm"
 }
 
 // invokeVmPluginEnv is the full-env variant (lifecycle ops carry Force/DeleteDisk).

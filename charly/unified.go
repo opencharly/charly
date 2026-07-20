@@ -66,7 +66,8 @@ type UnifiedFile struct {
 	// repo identity: a transitive import of THIS repo (at ANY pinned version)
 	// resolves to the local working tree instead of fetching a divergent pinned
 	// snapshot, so the root's namespace pins win. When unset, the loader falls
-	// back to `git remote origin` inference (see ns_identity.go).
+	// back to `git remote origin` inference (see sdk/loaderkit/repo_identity.go, since W9's
+	// ns_identity.go relocation).
 	Repo string `yaml:"repo,omitempty" json:"repo,omitempty"`
 	// Import is the SINGLE composition statement (the legacy `include:` key
 	// was deleted in the 2026-05 import-namespace cutover). A list whose
@@ -482,7 +483,7 @@ func validateDeploymentName(name, parentPath string) error {
 // resolves exactly once.
 func canonicalRef(ref, baseDir string) (key, path string, err error) {
 	if strings.HasPrefix(ref, "@") {
-		parsed := ParseRemoteRef(ref)
+		parsed := spec.ParseRemoteRef(ref)
 		version := parsed.Version
 		if version == "" {
 			branch, e := kit.GitDefaultBranch(kit.RepoGitURL(parsed.RepoPath))
@@ -1143,12 +1144,25 @@ func (uf *UnifiedFile) ProjectBundleConfig() *deploykit.BundleConfig {
 	}
 }
 
-// ProjectCandies scans or synthesizes a *Candy per entry in uf.Candy. Entries
-// with `from:` go through the existing scanCandy so directory-based candies
-// behave identically to today. Inline entries synthesize a *Candy from the
-// embedded CandyYAML (Part A's `directory:` field still applies).
-func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]*Candy, error) {
-	out := map[string]*Candy{}
+// ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
+// spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
+// the ONE choke point (finalizeScannedCandies, no InitCfg in scope for a standalone call) —
+// see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
+func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyReader, error) {
+	scanned, err := uf.projectCandiesScanned(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	return finalizeScannedCandies(scanned, nil), nil
+}
+
+// projectCandiesScanned is ProjectCandies' UNWRAPPED body: scans or synthesizes a candy per
+// entry in uf.Candy, into its pre-completion, pre-finalize spec.ScannedCandy form. Entries with
+// `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
+// candies behave identically to today. Inline entries synthesize from the embedded CandyYAML
+// (Part A's `directory:` field still applies).
+func (uf *UnifiedFile) projectCandiesScanned(rootDir string) (map[string]spec.ScannedCandy, error) {
+	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
 		il, ok := decodeInlineCandy(raw)
 		if !ok {
@@ -1164,7 +1178,7 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]*Candy, error)
 			if manifest == "" {
 				manifest = UnifiedFileName
 			}
-			layer, err := scanCandy(p, name, manifest)
+			m, v, refs, err := requireCandyScanner().ScanCandyManifest(p, name, manifest, parseCandyYAML)
 			if err != nil {
 				return nil, fmt.Errorf("candy %q from %q: %w", name, il.From, err)
 			}
@@ -1173,155 +1187,27 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]*Candy, error)
 			// the github cache under ~/.cache/charly/repos/). Mark them as
 			// Remote so the generator's createRemoteCandyCopies stages
 			// them into .build/_candy/ and the emitted Containerfile
-			// COPY paths resolve correctly.
+			// COPY paths resolve correctly. THIRD instance of the
+			// construct-then-mutate-Remote pattern (W9 mutation-site inventory) —
+			// distinct from loaderkit.ScanRemoteCandy's explicit-fetch case and
+			// loaderkit.QualifyRemoteSiblingDeps's sibling-dep qualification: this
+			// one fires on a plain `from:`-directory candy whose resolved path
+			// happens to fall outside the project root.
 			if absRoot, err := filepath.Abs(rootDir); err == nil {
 				if absCandy, err := filepath.Abs(p); err == nil {
 					if rel, err := filepath.Rel(absRoot, absCandy); err == nil && strings.HasPrefix(rel, "..") {
-						layer.Remote = true
+						v.Remote = true
 					}
 				}
 			}
-			out[name] = layer
+			out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
 			continue
 		}
-		// Inline candy — synthesize.
-		out[name] = synthesizeInlineCandy(name, il, rootDir)
+		// Inline candy — synthesize. Always LOCAL (declared directly in this
+		// charly.yml), so no remote-sibling qualification is needed — mirrors the
+		// W9 spike's local-candy case.
+		m, v, refs := requireCandyScanner().ScanInlineCandy(name, rootDir, &il.CandyYAML)
+		out[name] = spec.ScannedCandy{Model: m, View: v, Refs: refs}
 	}
 	return out, nil
-}
-
-// synthesizeInlineCandy produces a *Candy from an inline declaration in the
-// unified file. The effective Path is rootDir (the charly.yml's dir);
-// SourceDir always equals Path (the `directory:` field was deleted in the
-// 2026-05 Calamares cutover).
-func synthesizeInlineCandy(name string, il *InlineCandy, rootDir string) *Candy {
-	// Use inline candy body as if it were a parsed candy manifest at rootDir.
-	layer := &Candy{
-		Name: name,
-		Path: rootDir,
-	}
-	layer.SourceDir = rootDir
-	// Populate fields the same way scanCandy does post-parse. We reuse the
-	// logic by duplicating the minimal set a test would notice; the full set
-	// can be factored out alongside Part G's refactor.
-	populateCandyFromYAML(layer, &il.CandyYAML)
-	// Install-file detection against SourceDir.
-	layer.HasPixiToml = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.toml"))
-	layer.HasPyprojectToml = kit.FileExists(filepath.Join(layer.SourceDir, "pyproject.toml"))
-	layer.HasEnvironmentYml = kit.FileExists(filepath.Join(layer.SourceDir, "environment.yml"))
-	layer.HasPackageJson = kit.FileExists(filepath.Join(layer.SourceDir, "package.json"))
-	layer.HasCargoToml = kit.FileExists(filepath.Join(layer.SourceDir, "Cargo.toml"))
-	layer.HasSrcDir = kit.DirExists(filepath.Join(layer.SourceDir, "src"))
-	layer.HasPixiLock = kit.FileExists(filepath.Join(layer.SourceDir, "pixi.lock"))
-	svcFiles, _ := filepath.Glob(filepath.Join(layer.SourceDir, "*.service"))
-	if len(svcFiles) > 0 {
-		layer.serviceFiles = svcFiles
-	}
-	return layer
-}
-
-// populateCandyFromYAML copies every field from a parsed CandyYAML into the
-// runtime Candy. It is the SINGLE post-parse populator: BOTH scanCandy (the
-// discovered-candy-dir path) and synthesizeInlineCandy (the charly.yml
-// inline path) call it, so the two can never drift. (They previously did — the
-// inline path silently dropped artifacts/capabilities/requiresCapabilities/
-// shell and the unexported description.) The caller is responsible for the
-// install-file filesystem probes (HasPixiToml etc.) against SourceDir.
-func populateCandyFromYAML(layer *Candy, ly *spec.CandyYAML) {
-	layer.Version = ly.Version
-	layer.Description = ly.Description
-	layer.Status = ly.Status
-	layer.Info = deploykit.DescriptionInfo(ly.Description)
-	layer.Plugin = ly.Plugin
-
-	layer.Require = deploykit.ToCandyRefs(ly.Require)
-	layer.IncludedCandy = deploykit.ToCandyRefs(ly.Candy)
-	layer.BakePlugin = deploykit.ToCandyRefs(ly.BakePlugin)
-
-	// `bake_plugin: <ref>` IMPLIES `require: <ref>`. A baked plugin candy is
-	// host-built and COPYed into every composing image (generate.go
-	// emitBakedPlugins), but the COPY alone does not pull it into the require
-	// chain — so its version: would NOT reach the composing image's
-	// EffectiveVersion (deploykit.ComputeEffectiveVersions walks the require-resolved
-	// candy set via collectAllBoxCandies → ResolveCandyOrder over Require). Without the
-	// implication a changed baked plugin whose own version: bumped but no other
-	// layer's did leaves EffectiveVersion (the ai.opencharly.version label)
-	// unchanged, so charly clean retention + short-name resolution treat it as
-	// the same image and a stale baked plugin escapes rebuild. Folding the baked
-	// plugin candy into require also makes it reach the scanned candy set (the
-	// same path qualifyRemoteSiblingDeps documents for the baked-binary lookup).
-	// Dedupe by bare (map-key) name so a candy declaring BOTH does not double-add.
-	for _, bp := range layer.BakePlugin {
-		already := false
-		for _, req := range layer.Require {
-			if req.Bare() == bp.Bare() {
-				already = true
-				break
-			}
-		}
-		if !already {
-			layer.Require = append(layer.Require, bp)
-		}
-	}
-
-	layer.service = ly.Service
-	// derivePackageSectionsFromCalamares is the SOLE populator of the package
-	// surface (layer.tagSections + layer.topPackages, plus the arch `aur` format
-	// section) from package: + distro:. There is no top-level format/tag-key
-	// parse path anymore — the `distro:` map is the only package surface.
-	if len(ly.Package) > 0 || len(ly.Distro) > 0 {
-		derivePackageSectionsFromCalamares(layer, ly)
-	}
-	if len(ly.Port) > 0 {
-		layer.ports = make([]string, len(ly.Port))
-		layer.portSpecs = make([]spec.PortSpec, len(ly.Port))
-		for i, p := range ly.Port {
-			if p.Protocol == "udp" {
-				layer.ports[i] = fmt.Sprintf("%d/udp", p.Port)
-			} else {
-				layer.ports[i] = fmt.Sprintf("%d", p.Port)
-			}
-			layer.portSpecs[i] = p
-		}
-	}
-	if len(ly.Env) > 0 || len(ly.PathAppend) > 0 {
-		env := ly.Env
-		if env == nil {
-			env = make(map[string]string)
-		}
-		layer.envConfig = &kit.EnvConfig{Vars: env, PathAppend: ly.PathAppend}
-	}
-	if ly.Route != nil {
-		layer.route = &deploykit.RouteConfig{Host: ly.Route.Host, Port: fmt.Sprintf("%d", ly.Route.Port)}
-	}
-	layer.volumes = ly.Volume
-	layer.aliases = ly.Alias
-	layer.extract = ly.Extract
-	layer.data = ly.Data
-	layer.security = ly.Security
-	layer.libvirt = ly.Libvirt
-	layer.hooks = ly.Hook
-	layer.plan = ly.Plan
-	layer.artifacts = ly.Artifact
-	layer.capabilities = ly.Capability
-	layer.requiresCapabilities = ly.RequiresCapability
-	layer.PortRelayPorts = ly.PortRelay
-	layer.secrets = ly.SecretYAML
-	layer.envProvides = ly.EnvProvides
-	layer.envRequires = ly.EnvRequire
-	layer.envAccepts = ly.EnvAccept
-	layer.secretAccepts = ly.SecretAccept
-	layer.secretRequires = ly.SecretRequire
-	layer.mcpProvides = ly.MCPProvide
-	layer.agentProvides = ly.AgentProvide
-	layer.terminalProfiles = ly.TerminalProfiles
-	layer.mcpRequires = ly.MCPRequire
-	layer.mcpAccepts = ly.MCPAccept
-	layer.engine = ly.Engine
-	layer.vars = ly.Vars
-	layer.apk = ly.Apk
-	layer.localpkg = ly.LocalPkg
-	layer.reboot = ly.Reboot
-	layer.ExternalBuilder = ly.ExternalBuilder
-	layer.shell = ly.Shell
 }

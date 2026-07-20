@@ -83,130 +83,25 @@ func projectResolvedBox(b *buildkit.ResolvedBox) spec.ResolvedBoxView {
 	return v
 }
 
-// projectCandyView projects a scanned candy (the runtime *Candy) into the wire-safe spec.CandyView:
-// identity + dep-graph (bare-ref form) + provides + ports/services. The Has* filesystem probes, the
-// unexported package/service SECTIONS, and the *CandyPluginDecl stay host — this is NOT the candy
-// BUILD model (that is the CandyModel / S-CM concern, K3-D), only the identity/graph surface
-// inspect/list/status read.
-func projectCandyView(c *Candy) spec.CandyView {
-	v := spec.CandyView{
-		Name:          c.Name,
-		Version:       c.Version,
-		Description:   c.Description,
-		Status:        c.Status,
-		Info:          c.Info,
-		Remote:        c.Remote,
-		RepoPath:      c.RepoPath,
-		SubPathPrefix: c.SubPathPrefix, // #67 build-render: remote-candy COPY-source leg
-		IsPlugin:      c.Plugin != nil,
-		Require:       bareRefs(c.Require),
-		IncludedCandy: bareRefs(c.IncludedCandy),
-		EnvProvides:   c.EnvProvides(),
-		MCPProvide:    c.MCPProvide(),
+// rawCandyPair returns the underlying (spec.CandyModel, spec.CandyView) pair a wrapped
+// spec.CandyReader carries — the W9 escape hatch (deploykit.specCandyAdapter.RawCandy(), reached
+// via a structural type assertion so charly core never imports deploykit for this). Once the
+// scan-machinery move (loaderkit.ScanCandyManifest/ScanInlineCandy/ScanRemoteCandy) constructs the
+// wire-shaped CandyModel/CandyView DIRECTLY, the raw pair coming back out of a wrapped CandyReader
+// already IS ResolvedProject.CandyModels[name] / .Candies[name] verbatim — no re-projection needed
+// (the old projectCandyView/projectCandyModel pre-move re-derived these fields from a live *Candy;
+// there is no live *Candy anymore to project FROM). ok is false only for a CandyReader implementer
+// that isn't NewSpecCandyModel's adapter (no such implementer exists in production; a defensive,
+// never-panicking fallback for the theoretical case).
+func rawCandyPair(r spec.CandyReader) (spec.CandyModel, spec.CandyView, bool) {
+	raw, ok := r.(interface {
+		RawCandy() (spec.CandyModel, spec.CandyView)
+	})
+	if !ok {
+		return spec.CandyModel{}, spec.CandyView{}, false
 	}
-	for _, p := range c.PortSpecs() {
-		v.Ports = append(v.Ports, int64(p.Port))
-	}
-	for _, s := range c.Service() {
-		v.ServiceNames = append(v.ServiceNames, s.Name)
-	}
-	// list-subcommand growth: route/volumes/aliases carry the authored detail
-	// `charly box list routes|volumes|aliases` prints; has_init + port_relay reconstruct
-	// the init-triggering predicate (HasAnyInit || PortRelayPorts>0) for `list services`.
-	v.HasInit = c.HasAnyInit()
-	v.InitSystems = c.InitSystems
-	v.PortRelayPorts = c.PortRelayPorts
-	if route, _ := c.Route(); route != nil {
-		v.Route = route
-	}
-	v.Volumes = c.Volume()
-	v.Aliases = c.Alias()
-	// capabilities — the per-candy caps the validate ENGINE reads off the envelope (task #60,
-	// ruling a). Filled whenever the candy declares a `capabilities:` block; the validate plugin
-	// re-runs AggregateCandyCapabilities (a boolean OR of PreserveUser over the box's candy order).
-	if c.capabilities != nil {
-		v.Capabilities = &spec.CandyCapabilitiesView{PreserveUser: c.capabilities.PreserveUser}
-	}
-	// the candy's OWN declared plugin block (validatePluginCandy SUBJECT, task #60): the declared
-	// provider capability strings + source, so the validate plugin can check each declared BUILTIN
-	// `<class>:<word>` is compiled in (a member of ResolvedProject.ProviderCapabilities).
-	if c.Plugin != nil {
-		v.PluginSource = c.Plugin.Source
-		for _, cap := range c.Plugin.Providers {
-			v.PluginProviders = append(v.PluginProviders, string(cap))
-		}
-	}
-	return v
-}
-
-// projectCandyModel projects a runtime *Candy into the serializable spec.CandyModel — the candy
-// BUILD model (plan + lowered ops + resolved package/service/env/route sections) that validate, the
-// plan-include splicer, and K3-D read WITHOUT the live *Candy. Distinct from projectCandyView
-// (identity/graph). A pure DATA projection over accessors the *Candy already exposes.
-func projectCandyModel(c *Candy) spec.CandyModel {
-	m := spec.CandyModel{
-		Name:            c.Name,
-		Version:         c.Version,
-		SourceDir:       c.SourceDir,
-		ExternalBuilder: c.ExternalBuilder,
-		Reboot:          c.Reboot(),
-		Plan:            c.PlanSteps(),
-		RunOps:          c.runOps(),
-		Service:         c.Service(),
-		Extract:         c.Extract(),
-		Data:            c.Data(),
-		Apk:             c.Apk(),
-		TopPackages:     c.TopPackages(),
-		Vars:            c.Vars(),
-		Libvirt:         c.Libvirt(),
-		Engine:          c.Engine(),
-		PortRelayPorts:  c.PortRelayPorts,
-		ServiceFiles:    c.ServiceFiles(),
-		Volumes:         c.Volume(),
-		Aliases:         c.Alias(),
-		EnvRequire:      c.EnvRequire(),
-		EnvAccept:       c.EnvAccept(),
-		SecretRequire:   c.SecretRequire(),
-		SecretAccept:    c.SecretAccept(),
-		MCPRequire:      c.MCPRequire(),
-		MCPAccept:       c.MCPAccept(),
-		// Host-precomputed predicates (#67): the live *Candy verdicts the envelope CandyModel
-		// cannot recompute faithfully (env/ports/route/volumes/aliases/libvirt/init + the fs-probe
-		// caches). Carried so the specCandyAdapter matches the live *Candy byte-exactly (the
-		// candy-graph composition + pixi-bound detection gate on these).
-		HasContent:      c.HasContent(),
-		HasInstallFiles: c.HasInstallFiles(),
-	}
-	for _, f := range c.LocalPkgFormats() {
-		if m.LocalPkg == nil {
-			m.LocalPkg = map[string]string{}
-		}
-		m.LocalPkg[f] = c.LocalPkg(f)
-	}
-	if len(c.formatSections) > 0 {
-		m.FormatSections = make(map[string]spec.PackageSection, len(c.formatSections))
-		for k, v := range c.formatSections {
-			if v != nil {
-				m.FormatSections[k] = *v
-			}
-		}
-	}
-	if len(c.tagSections) > 0 {
-		m.TagSections = make(map[string]spec.TagPkgConfig, len(c.tagSections))
-		for k, v := range c.tagSections {
-			if v != nil {
-				m.TagSections[k] = *v
-			}
-		}
-	}
-	if env, _ := c.EnvConfig(); env != nil {
-		m.Env = env
-	}
-	if route, _ := c.Route(); route != nil {
-		m.Route = route
-	}
-	m.Shell = c.Shell()
-	return m
+	m, v := raw.RawCandy()
+	return m, v, true
 }
 
 // projectResolvedProject assembles the spec.ResolvedProject from already-loaded resolve-engine
@@ -218,7 +113,7 @@ func projectCandyModel(c *Candy) spec.CandyModel {
 // ResolveBox failure appends a spec.Diagnostic and SKIPS that box, so validate runs on a broken
 // project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
 // aggregate empty), so the tolerant branch is confined to the ResolveBox call.
-func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
 }
 
@@ -230,7 +125,7 @@ func projectResolvedProject(cfg *Config, layers map[string]*Candy, uf *UnifiedFi
 // buildBakedMetadata already used the same collectors for every gen.Box. A collector error
 // leaves that aggregate empty (a read-only projection never fails the whole load). Shared by
 // the pre-resolved (build-prep), fresh-resolve (validate), and auto-intermediate passes (R3).
-func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, resolved *buildkit.ResolvedBox, view *spec.ResolvedBoxView) {
+func projectBoxAggregates(cfg *Config, layers map[string]spec.CandyReader, name string, resolved *buildkit.ResolvedBox, view *spec.ResolvedBoxView) {
 	if img, ok := cfg.BoxConfig(name); ok {
 		view.Plan = img.Plan
 		view.AuthoredAliases = img.Alias
@@ -266,12 +161,7 @@ func projectBoxAggregates(cfg *Config, layers map[string]*Candy, name string, re
 // on the ResolvedBoxView. When nil (the validate/inspect path), boxes are resolved fresh.
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
-	// This assembler can receive a freshly reloaded candy graph, independently
-	// of Generate's initial graph. Complete the same per-init facts here before
-	// projecting CandyView so the SDK renderer receives exact HasInit(name)
-	// evidence rather than an empty map.
-	PopulateCandyInitSystem(layers, initCfg)
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	calver := ComputeCalVer()
@@ -341,12 +231,16 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *
 		if c == nil {
 			continue
 		}
+		m, v, ok := rawCandyPair(c)
+		if !ok {
+			continue
+		}
 		if rp.Candies == nil {
 			rp.Candies = make(map[string]spec.CandyView, len(layers))
 			rp.CandyModels = make(map[string]spec.CandyModel, len(layers))
 		}
-		rp.Candies[name] = projectCandyView(c)
-		rp.CandyModels[name] = projectCandyModel(c)
+		rp.Candies[name] = v
+		rp.CandyModels[name] = m
 	}
 
 	if uf != nil && len(uf.Bundle) > 0 {
@@ -419,7 +313,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]*Candy, uf *
 // plan) flattened over the three sections, so the relocated plugin box arm reads a byte-equivalent
 // plan without the resolve engine. Only boxes with a non-empty plan are recorded. The visited set
 // guards the pointer-keyed namespace cache against a self-referential cycle.
-func fillBoxPlans(cfg *Config, layers map[string]*Candy, prefix string, out map[string][]spec.Step, visited map[*Config]bool) {
+func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string, out map[string][]spec.Step, visited map[*Config]bool) {
 	if cfg == nil || visited[cfg] {
 		return
 	}

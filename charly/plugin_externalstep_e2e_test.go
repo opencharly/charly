@@ -76,7 +76,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// DECLARED contract + the opaque payload (NOT an OpStep / ExternalPluginStep). Using the
 	// compiled step (not a hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
-	routed := compileActOp(op, &Candy{Name: "plugin-example-stepkind"}, &buildkit.ResolvedBox{Tags: []string{"fedora"}})
+	routed := compileActOp(op, testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{}), &buildkit.ResolvedBox{Tags: []string{"fedora"}})
 	step, ok := routed.(*deploykit.ExternalStep)
 	if !ok {
 		t.Fatalf("compileActOp routed a class:step plugin to %T, want *externalStep", routed)

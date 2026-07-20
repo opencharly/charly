@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // box_fetch_reentry.go — the hidden `charly __box-fetch` / `__box-refresh` core reentry points
@@ -55,7 +56,7 @@ func (c *BoxRefreshCmd) Run() error {
 	if spec == "" {
 		spec = "default"
 	}
-	repoPath, version := normalizeRepoSpec(spec)
+	repoPath, version := loaderkit.NormalizeRepoSpec(spec)
 	if version == "" {
 		branch, err := kit.GitDefaultBranch(kit.RepoGitURL(repoPath))
 		if err != nil {

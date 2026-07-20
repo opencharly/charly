@@ -14,12 +14,11 @@ func TestCollectImageAliases(t *testing.T) {
 			"myapp": {Candy: []string{"svc"}},
 		}),
 	}
-	layers := map[string]*Candy{
-		"svc": {
-			Name:    "svc",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			aliases: []AliasYAML{{Name: "svc-cli", Command: "svc-cli-bin"}},
-		},
+	layers := map[string]spec.CandyReader{
+		"svc": testCandy("svc",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Aliases: []spec.CandyAlias{{Name: "svc-cli", Command: "svc-cli-bin"}}},
+		),
 	}
 
 	aliases, err := CollectBoxAlias(cfg, layers, "myapp")
@@ -42,12 +41,11 @@ func TestCollectImageAliasesImageOverridesCandy(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{
-		"svc": {
-			Name:    "svc",
-			plan:    []spec.Step{{Run: "build", Op: cmdOp("true")}},
-			aliases: []AliasYAML{{Name: "svc-cli", Command: "svc-cli-bin"}},
-		},
+	layers := map[string]spec.CandyReader{
+		"svc": testCandy("svc",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{Aliases: []spec.CandyAlias{{Name: "svc-cli", Command: "svc-cli-bin"}}},
+		),
 	}
 
 	aliases, err := CollectBoxAlias(cfg, layers, "myapp")
@@ -72,11 +70,11 @@ func TestCollectImageAliasesDefaultCommand(t *testing.T) {
 			},
 		}),
 	}
-	layers := map[string]*Candy{
-		"svc": {
-			Name: "svc",
-			plan: []spec.Step{{Run: "build", Op: cmdOp("true")}},
-		},
+	layers := map[string]spec.CandyReader{
+		"svc": testCandy("svc",
+			spec.CandyModel{Plan: []spec.Step{{Run: "build", Op: cmdOp("true")}}},
+			spec.CandyView{},
+		),
 	}
 
 	aliases, err := CollectBoxAlias(cfg, layers, "myapp")

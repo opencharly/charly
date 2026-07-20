@@ -63,7 +63,7 @@ func rawUnixGroupOp() spec.Op {
 // `# unknown verb "plugin"` even if the overlay path stayed green.
 func TestEmitTasks_PluginAct_UnixGroup(t *testing.T) {
 	dir := t.TempDir()
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
 	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
@@ -95,7 +95,7 @@ func rawFileRunOp() spec.Op {
 // install-emit pipeline.
 func TestEmitTasks_PluginAct_File(t *testing.T) {
 	dir := t.TempDir()
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
 	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
@@ -183,7 +183,7 @@ func rawKernelParamOp() spec.Op {
 // seam is verb-agnostic across the extracted state-provision verbs (not unix_group-special).
 func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 	dir := t.TempDir()
-	layer := &Candy{Name: "lyr"}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
 	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
@@ -208,8 +208,8 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 // even after the OpStep build-emit externalized onto the step-emit host-builder.
 func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
 	dir := t.TempDir()
-	layer := &Candy{Name: "lyr"}
-	g := &Generator{BuildDir: dir, Candies: map[string]*Candy{"lyr": layer}}
+	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
+	g := &Generator{BuildDir: dir, Candies: map[string]spec.CandyReader{"lyr": layer}}
 	tgt := ociTestTarget(buildEngineContext{Generator: g, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
 	plan := &deploykit.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&deploykit.OpStep{Op: &op, CandyName: "lyr"}}}

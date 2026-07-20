@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/spec"
@@ -126,26 +125,37 @@ func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 // node — no time-dependent inputs, so its marshaling is a stable golden.
 func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 	t.Helper()
-	candy := &Candy{
-		Name:          "charly",
-		Version:       "2026.100.0004",
-		Description:   "the charly toolchain",
-		Status:        "working",
-		Info:          "the charly toolchain",
-		Remote:        true,
-		RepoPath:      "github.com/opencharly/charly",
-		Require:       []deploykit.CandyRef{{Raw: "base"}},
-		IncludedCandy: []deploykit.CandyRef{{Raw: "gnupg"}},
+	// projectCandyView/projectCandyModel (which took the live *Candy) are gone (W9): the
+	// resolved-project host now gets the (Model, View) pair straight from the wrapped
+	// spec.CandyReader via the RawCandy() escape hatch (rawCandyPair) — no projection step
+	// left to exercise, so the fixture constructs the View directly with the SAME field
+	// values the old projection used to derive from the live *Candy's accessors.
+	candy := testCandy("charly",
+		spec.CandyModel{Version: "2026.100.0004"},
+		spec.CandyView{
+			Version:       "2026.100.0004",
+			Description:   "the charly toolchain",
+			Status:        "working",
+			Info:          "the charly toolchain",
+			Remote:        true,
+			RepoPath:      "github.com/opencharly/charly",
+			Require:       []string{"base"},
+			IncludedCandy: []string{"gnupg"},
+			EnvProvides:   map[string]string{"CHARLY_HOME": "/opt/charly"},
+			MCPProvide:    []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}},
+			Ports:         []int64{9000},
+			ServiceNames:  []string{"charly-daemon"},
+		},
+	)
+	_, candyView, ok := rawCandyPair(candy)
+	if !ok {
+		t.Fatal("rawCandyPair: candy fixture does not expose RawCandy()")
 	}
-	candy.envProvides = map[string]string{"CHARLY_HOME": "/opt/charly"}
-	candy.mcpProvides = []spec.MCPServerYAML{{Name: "charly-mcp", URL: "http://localhost:9000", Transport: "http"}}
-	candy.portSpecs = []spec.PortSpec{{Port: 9000, Protocol: "tcp"}}
-	candy.service = []spec.ServiceEntry{{Name: "charly-daemon"}}
 
 	rp := &spec.ResolvedProject{
 		Version: "2026.100.0000",
 		Boxes:   map[string]spec.ResolvedBoxView{"demo": projectResolvedBox(fullResolvedBoxFixture())},
-		Candies: map[string]spec.CandyView{"charly": projectCandyView(candy)},
+		Candies: map[string]spec.CandyView{"charly": candyView},
 	}
 	bundle := map[string]spec.BundleNode{"demo-pod": {Target: "pod", Description: "demo deploy"}}
 	for k, v := range bundle {
@@ -158,44 +168,11 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 	return rp
 }
 
-func TestProjectCandyViewPreservesPerInitTriggers(t *testing.T) {
-	candy := &Candy{InitSystems: map[string]bool{
-		"supervisord": true,
-		"systemd":     false,
-	}}
-	view := projectCandyView(candy)
-	if !view.InitSystems["supervisord"] {
-		t.Fatal("projectCandyView dropped the supervisord init trigger")
-	}
-	if view.InitSystems["systemd"] {
-		t.Fatal("projectCandyView changed the false systemd init trigger")
-	}
-}
-
-func TestResolvedProjectCompletesPerInitTriggersBeforeProjection(t *testing.T) {
-	candy := &Candy{service: []spec.ServiceEntry{{
-		Name: "sshd",
-		Exec: "/usr/local/bin/sshd-wrapper",
-	}}}
-	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
-		"supervisord": {
-			CandyFields: []string{"service"},
-			ServiceSchema: &spec.InitServiceSchema{
-				ServiceTemplate: "[program:{{.Name}}]",
-			},
-		},
-	}}
-	rp, err := projectResolvedProjectWithBoxes(
-		&Config{}, map[string]*Candy{"sshd": candy}, nil,
-		nil, nil, initCfg, t.TempDir(), "test", ResolveOpts{}, nil, nil,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !rp.Candies["sshd"].InitSystems["supervisord"] {
-		t.Fatal("resolved-project assembly dropped the completed supervisord trigger")
-	}
-}
+// Per-init-trigger completion (formerly TestProjectCandyViewPreservesPerInitTriggers /
+// TestResolvedProjectCompletesPerInitTriggersBeforeProjection, which exercised the pre-W9
+// resolve-time projectCandyView/*Candy path) is proven at the new SCAN-time choke point by
+// TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion (layers_test.go) — there is
+// no later separate PopulateCandyInitSystem(map[string]*Candy, ...) call left to exercise here.
 
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic
 // (two marshals identical) and byte-stable against the committed golden. A dropped field, a reordered

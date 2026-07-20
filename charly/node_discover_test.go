@@ -48,8 +48,8 @@ discover:
 	}
 	if cands["redis"] == nil {
 		t.Errorf("discovered node-form candy redis not loaded; got %d candies", len(cands))
-	} else if cands["redis"].Version != "2026.150.0000" {
-		t.Errorf("redis candy version = %q", cands["redis"].Version)
+	} else if cands["redis"].GetVersion() != "2026.150.0000" {
+		t.Errorf("redis candy version = %q", cands["redis"].GetVersion())
 	}
 	if _, ok := cfg.Box["coder"]; !ok {
 		t.Errorf("discovered node-form box coder not loaded; boxes present: %v", boxConfigKeys(cfg))

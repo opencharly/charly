@@ -63,7 +63,7 @@ func TestDetectedDevicesMergeIntoSecurity(t *testing.T) {
 	sec := SecurityConfig{
 		Devices: []string{"/dev/fuse"}, // already has /dev/fuse
 	}
-	sec.Devices = appendUnique(sec.Devices, detected.Devices...)
+	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
 
 	want := []string{"/dev/fuse", "/dev/kvm"}
 	if !reflect.DeepEqual(sec.Devices, want) {
@@ -75,7 +75,7 @@ func TestDetectedDevicesInSecurityArgs(t *testing.T) {
 	sec := SecurityConfig{
 		Devices: []string{"/dev/kvm", "/dev/fuse"},
 	}
-	args := SecurityArgs(sec)
+	args := deploykit.SecurityArgs(sec)
 	want := []string{
 		"--device", "/dev/kvm",
 		"--device", "/dev/fuse",
@@ -112,7 +112,7 @@ func TestPrivilegedSkipsDevices(t *testing.T) {
 	sec := SecurityConfig{Privileged: true}
 	// When privileged, auto-detected devices should not be merged
 	// (privileged already grants access to all devices)
-	args := SecurityArgs(sec)
+	args := deploykit.SecurityArgs(sec)
 	want := []string{"--privileged"}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("SecurityArgs(privileged) = %v, want %v", args, want)
@@ -172,7 +172,7 @@ func TestAMDGPUGroupInjection(t *testing.T) {
 	}
 
 	sec := SecurityConfig{}
-	sec.Devices = appendUnique(sec.Devices, detected.Devices...)
+	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
 	if detected.AMDGPU {
 		sec.GroupAdd = appendGroupsForAMDGPU(sec.GroupAdd)
 	}
@@ -184,7 +184,7 @@ func TestAMDGPUGroupInjection(t *testing.T) {
 	}
 
 	// Check it appears in SecurityArgs
-	args := SecurityArgs(sec)
+	args := deploykit.SecurityArgs(sec)
 	hasKeepGroups := false
 	for i, a := range args {
 		if a == "--group-add" && i+1 < len(args) && args[i+1] == "keep-groups" {

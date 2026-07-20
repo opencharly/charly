@@ -4,11 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
+	"reflect"
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -58,12 +59,15 @@ func TestCompileLocalPkgStep(t *testing.T) {
 	hostCtx := deploykit.HostContext{MachineVenue: true, Distro: "arch"}
 
 	// A candy with no localpkg entry for the target format → nil.
-	if step := deploykit.CompileLocalPkgStep(&Candy{Name: "no-pkg"}, img, hostCtx); step != nil {
+	if step := deploykit.CompileLocalPkgStep(testCandy("no-pkg", spec.CandyModel{}, spec.CandyView{}), img, hostCtx); step != nil {
 		t.Errorf("candy with no localpkg: should compile to nil, got %T", step)
 	}
 
 	// The charly candy's per-format map: pac resolves to pkg/arch.
-	l := &Candy{Name: "charly", SourceDir: "/layers/charly", localpkg: map[string]string{"pac": "pkg/arch", "rpm": "pkg/fedora", "deb": "pkg/debian"}}
+	l := testCandy("charly", spec.CandyModel{
+		SourceDir: "/layers/charly",
+		LocalPkg:  map[string]string{"pac": "pkg/arch", "rpm": "pkg/fedora", "deb": "pkg/debian"},
+	}, spec.CandyView{})
 	step := deploykit.CompileLocalPkgStep(l, img, hostCtx)
 	if step == nil {
 		t.Fatal("compileLocalPkgStep returned nil for a candy with a pac localpkg source")
@@ -124,13 +128,12 @@ func TestLocalPkgInstallStepIR(t *testing.T) {
 // package-aware cmd: gate sees charly already installed and does nothing
 // (instead of curling a /usr/local/bin/charly that shadows /usr/bin/charly).
 func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
-	l := &Candy{
-		Name:     "charly",
-		localpkg: map[string]string{"pac": "pkg/arch"},
-		plan: []spec.Step{
+	l := testCandy("charly", spec.CandyModel{
+		LocalPkg: map[string]string{"pac": "pkg/arch"},
+		Plan: []spec.Step{
 			{Run: "build", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo install charly"}, RunAs: "root"}},
 		},
-	}
+	}, spec.CandyView{})
 	img := &buildkit.ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
 	plan, err := deploykit.BuildDeployPlan(l, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
@@ -178,19 +181,37 @@ func TestOCITargetLocalPkgNilContractEmitsNothing(t *testing.T) {
 	}
 }
 
-// TestLocalPkgMapRejectsScalar proves the loader hard-rejects the legacy scalar
-// form with an `charly migrate` hint, and accepts the per-format map.
+// TestLocalPkgMapRejectsScalar proves the candy-manifest localpkg: field is CUE-CLOSED to the
+// per-format map shape (schema/candy.cue: `localpkg?: {pac?: string, rpm?: string, deb?:
+// string}`) — a legacy scalar form is rejected at CUE decode time (struct vs string type
+// mismatch), and the per-format map decodes into CandyYAML.LocalPkg. The rejection moved from a
+// hand-written LocalPkgMap.UnmarshalYAML (deleted with *Candy) to the schema itself (SDD): the
+// decode path is the SAME decodeEntityViaCUE every candy manifest goes through.
 func TestLocalPkgMapRejectsScalar(t *testing.T) {
-	var m LocalPkgMap
-	if err := yaml.Unmarshal([]byte("pkg/arch\n"), &m); err == nil || !strings.Contains(err.Error(), "per-format map") {
-		t.Errorf("scalar localpkg should be rejected as a per-format map, got %v", err)
+	decode := func(body string) (spec.CandyYAML, error) {
+		var doc yaml.Node
+		if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		root := kit.MappingRoot(&doc)
+		if root == nil {
+			t.Fatalf("test candy body is not a mapping")
+		}
+		var ly spec.CandyYAML
+		err := decodeEntityViaCUE(root, reflect.TypeOf(spec.CandyYAML{}), &ly, "test-candy")
+		return ly, err
 	}
-	m = nil
-	if err := yaml.Unmarshal([]byte("{pac: pkg/arch, rpm: pkg/fedora}\n"), &m); err != nil {
+
+	if _, err := decode("name: t\nlocalpkg: pkg/arch\n"); err == nil {
+		t.Error("scalar localpkg: should be rejected by CUE (per-format map shape), got nil error")
+	}
+
+	ly, err := decode("name: t\nlocalpkg:\n  pac: pkg/arch\n  rpm: pkg/fedora\n")
+	if err != nil {
 		t.Fatalf("map form should decode, got %v", err)
 	}
-	if m["pac"] != "pkg/arch" || m["rpm"] != "pkg/fedora" {
-		t.Errorf("decoded map = %v", m)
+	if ly.LocalPkg["pac"] != "pkg/arch" || ly.LocalPkg["rpm"] != "pkg/fedora" {
+		t.Errorf("decoded map = %v", ly.LocalPkg)
 	}
 }
 

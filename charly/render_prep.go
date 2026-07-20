@@ -5,8 +5,8 @@ import (
 )
 
 // render_prep.go — the HOST-SIDE render-prep pass (#67 render-DRIVE move). Fills the
-// build-render caches on *ResolvedBox by reading the LIVE *Candy/*Config/*InitConfig
-// graph — the EXACT computations generateContainerfile previously inlined. Called by
+// build-render caches on *ResolvedBox by reading the scanned candy set (spec.CandyReader)
+// + *Config/*InitConfig — the EXACT computations generateContainerfile previously inlined. Called by
 // hostBuildBuildResolve (production) AND by the parity test (live path). The deploykit
 // Generator.Generate reads these caches WITHOUT the live graph.
 //

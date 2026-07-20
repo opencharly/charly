@@ -34,6 +34,7 @@ import (
 	"sync"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -391,16 +392,16 @@ func declaredExternalCommandWords() []string {
 // locally vendored OR pulled via @github (the gap the parse-time prescan, which sees only
 // locally-discovered dirs, cannot close). Builtins are skipped: they register their verbs
 // at init(), so ResolveVerb already classifies them (this map is the not-connected path).
-func registerExternalVerbsFromCandies(candies map[string]*Candy) {
+func registerExternalVerbsFromCandies(candies map[string]spec.CandyReader) {
 	for _, candy := range candies {
-		if candy == nil || candy.Plugin == nil {
+		if candy == nil || !candy.IsPluginCandy() {
 			continue
 		}
-		if src := candy.Plugin.Source; src == "" || src == "builtin" {
+		if src := candy.GetPluginSource(); src == "" || src == "builtin" {
 			continue
 		}
-		for _, capability := range candy.Plugin.Providers {
-			if class, word, ok := splitCapability(string(capability)); ok {
+		for _, capability := range candy.GetPluginProviders() {
+			if class, word, ok := splitCapability(capability); ok {
 				switch class {
 				case ClassVerb:
 					registerDeclaredExternalVerb(word)

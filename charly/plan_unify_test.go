@@ -125,7 +125,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// The migration turns a `task: { package: redis }` op into a run: step. `package` is
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
-	layer := &Candy{Name: "x", plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}
+	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}, spec.CandyView{})
 	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
 
 	var sp *deploykit.SystemPackagesStep

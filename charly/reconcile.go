@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -108,7 +109,7 @@ func (c *BoxReconcileCmd) Run() error {
 			if !deploykit.IsRemoteCandyRef(s.Value) {
 				return
 			}
-			p := ParseRemoteRef(s.Value)
+			p := spec.ParseRemoteRef(s.Value)
 			if p.Version == "" {
 				return // unpinned ref — nothing to align
 			}
@@ -143,7 +144,7 @@ func (c *BoxReconcileCmd) Run() error {
 			if !deploykit.IsRemoteCandyRef(s.Value) {
 				return
 			}
-			p := ParseRemoteRef(s.Value)
+			p := spec.ParseRemoteRef(s.Value)
 			if p.Version == "" {
 				return
 			}

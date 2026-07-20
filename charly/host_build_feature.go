@@ -59,7 +59,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 
 	for name, layer := range layers {
 		if layer != nil {
-			add("candy", name, layer.Description, layer.plan)
+			add("candy", name, layer.GetDescription(), layer.PlanSteps())
 		}
 	}
 	for _, name := range cfg.allBoxNames() {

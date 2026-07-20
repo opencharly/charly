@@ -76,7 +76,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	profiles := map[string]spec.TerminalProfile{}
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		for name, profile := range layer.terminalProfiles {
+		for name, profile := range layer.TerminalProfiles() {
 			profiles[name] = profile
 		}
 	}
@@ -180,7 +180,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	var portRelay []int
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		portRelay = append(portRelay, layer.PortRelayPorts...)
+		portRelay = append(portRelay, layer.RelayPorts()...)
 	}
 	meta.PortRelay = portRelay
 
@@ -217,25 +217,25 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 
 	// Env requires / accepts.
-	meta.EnvRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.EnvRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasEnvRequires() {
 			return l.EnvRequire(), true
 		}
 		return nil, false
 	})
-	meta.EnvAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.EnvAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasEnvAccepts() {
 			return l.EnvAccept(), true
 		}
 		return nil, false
 	})
-	meta.SecretRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.SecretRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasSecretRequires() {
 			return l.SecretRequire(), true
 		}
 		return nil, false
 	})
-	meta.SecretAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.SecretAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasSecretAccepts() {
 			return l.SecretAccept(), true
 		}
@@ -273,13 +273,13 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 
 	// MCP requires / accepts.
-	meta.MCPRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.MCPRequire = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasMCPRequires() {
 			return l.MCPRequire(), true
 		}
 		return nil, false
 	})
-	meta.MCPAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l *Candy) ([]spec.EnvDependency, bool) {
+	meta.MCPAccept = sortedEnvDepsFromCandies(g.Candies, candyOrder, func(l spec.CandyReader) ([]spec.EnvDependency, bool) {
 		if l.HasMCPAccepts() {
 			return l.MCPAccept(), true
 		}
@@ -304,8 +304,8 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	var envConfigs []*kit.EnvConfig
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		if layer.envConfig != nil {
-			envConfigs = append(envConfigs, layer.envConfig)
+		if env, _ := layer.EnvConfig(); env != nil {
+			envConfigs = append(envConfigs, env)
 		}
 	}
 	envConfigs = append(envConfigs, g.collectBuilderRuntimeEnv(candyOrder, img)...)
@@ -333,7 +333,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 		layer := g.Candies[candyName]
 		cs := candyStatus(layer)
 		effectiveStatus = worstStatus(effectiveStatus, cs)
-		if li := deploykit.DescriptionInfo(layer.Description); li != "" && cs != "working" {
+		if li := deploykit.DescriptionInfo(layer.GetDescription()); li != "" && cs != "working" {
 			infoParts = append(infoParts, candyName+": "+li)
 		}
 	}
@@ -347,8 +347,8 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	candyVersions := make(map[string]string)
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		if layer.Version != "" {
-			candyVersions[candyName] = layer.Version
+		if v := layer.GetVersion(); v != "" {
+			candyVersions[candyName] = v
 		}
 	}
 	meta.CandyVersion = candyVersions
@@ -417,7 +417,7 @@ func collectedAliasesToLabel(aliases []CollectedAlias) []spec.CollectedAlias {
 
 // sortedEnvDepsFromCandies collects per-candy env-dependency lists (dedup by name, last wins) and
 // returns them sorted — the former writeLabels envRequires/accepts/mcp blocks (via sortedEnvDeps).
-func sortedEnvDepsFromCandies(layers map[string]*Candy, candyOrder []string, pick func(*Candy) ([]spec.EnvDependency, bool)) []spec.EnvDependency {
+func sortedEnvDepsFromCandies(layers map[string]spec.CandyReader, candyOrder []string, pick func(spec.CandyReader) ([]spec.EnvDependency, bool)) []spec.EnvDependency {
 	m := make(map[string]spec.EnvDependency)
 	for _, candyName := range candyOrder {
 		layer := layers[candyName]

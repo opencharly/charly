@@ -110,7 +110,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 
 	// 3. The routing seam: compileActOp lowers a `run: plugin: examplestep` op whose
 	//    provider is an external grpcProvider to an ExternalPluginStep (not an OpStep).
-	layer := &Candy{Name: "examplestep-deploy-consumer"}
+	layer := testCandy("examplestep-deploy-consumer", spec.CandyModel{}, spec.CandyView{})
 	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
 	step := compileActOp(op, layer, img)
 	eps, ok := step.(*deploykit.ExternalPluginStep)
@@ -125,7 +125,7 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 
 	// 4. Execute the step over the E3b reverse channel via the local ShellExecutor
 	//    (RunUser → bash -lc, no sudo) so the plugin's marker write runs for real.
-	plan := &deploykit.InstallPlan{Candy: layer.Name}
+	plan := &deploykit.InstallPlan{Candy: layer.GetName()}
 	reply, err := executeExternalPluginStep(ctx, eps, plan, kit.ShellExecutor{}, buildEngineContext{})
 	if err != nil {
 		t.Fatalf("executeExternalPluginStep: %v", err)

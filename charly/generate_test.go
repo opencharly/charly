@@ -15,8 +15,8 @@ import (
 // have `pixi.toml` — even if `pixi` is NOT a top-level candy.
 func TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv(t *testing.T) {
 	g := &Generator{
-		Candies: map[string]*Candy{
-			"jupyter": {Name: "jupyter", HasPixiToml: true},
+		Candies: map[string]spec.CandyReader{
+			"jupyter": pixiCandy(t, "jupyter"),
 		},
 	}
 	img := &buildkit.ResolvedBox{
@@ -50,8 +50,8 @@ func TestCollectBuilderRuntimeEnv_TriggeredEmitsRuntimeEnv(t *testing.T) {
 // would inherit pixi env even when it has no Python in it.
 func TestCollectBuilderRuntimeEnv_NotTriggered(t *testing.T) {
 	g := &Generator{
-		Candies: map[string]*Candy{
-			"chrome": {Name: "chrome"}, // no pixi.toml, no pyproject.toml
+		Candies: map[string]spec.CandyReader{
+			"chrome": testCandy("chrome", spec.CandyModel{}, spec.CandyView{}), // no pixi.toml, no pyproject.toml
 		},
 	}
 	img := &buildkit.ResolvedBox{
@@ -79,10 +79,10 @@ func TestCollectBuilderRuntimeEnv_NotTriggered(t *testing.T) {
 // once — no duplicate ENV PATH entries.
 func TestCollectBuilderRuntimeEnv_MultipleCandies(t *testing.T) {
 	g := &Generator{
-		Candies: map[string]*Candy{
-			"a": {Name: "a", HasPixiToml: true},
-			"b": {Name: "b", HasPixiToml: true},
-			"c": {Name: "c", HasPixiToml: true},
+		Candies: map[string]spec.CandyReader{
+			"a": pixiCandy(t, "a"),
+			"b": pixiCandy(t, "b"),
+			"c": pixiCandy(t, "c"),
 		},
 	}
 	img := &buildkit.ResolvedBox{
@@ -106,7 +106,7 @@ func TestCollectBuilderRuntimeEnv_MultipleCandies(t *testing.T) {
 // path through `LoadConfig` (test mode without build.yml) leaves
 // BuilderConfig nil. Don't panic.
 func TestCollectBuilderRuntimeEnv_NilBuilderConfig(t *testing.T) {
-	g := &Generator{Candies: map[string]*Candy{"x": {Name: "x", HasPixiToml: true}}}
+	g := &Generator{Candies: map[string]spec.CandyReader{"x": pixiCandy(t, "x")}}
 	img := &buildkit.ResolvedBox{Home: "/home/user", BuilderConfig: nil}
 	got := g.collectBuilderRuntimeEnv([]string{"x"}, img)
 	if got != nil {

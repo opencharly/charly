@@ -40,6 +40,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,12 +63,12 @@ const (
 
 // DeployRef is a parsed `<box-or-candy-ref>` ready to be loaded.
 type DeployRef struct {
-	Raw    string     // original input
-	Kind   RefKind    // box or candy
-	Source RefSource  // local-name | local-path | remote
-	Name   string     // resolved short name (ripgrep, fedora-coder, etc.)
-	Path   string     // absolute path to the relevant YAML; populated for local-name + local-path
-	Remote *ParsedRef // populated for remote refs
+	Raw    string          // original input
+	Kind   RefKind         // box or candy
+	Source RefSource       // local-name | local-path | remote
+	Name   string          // resolved short name (ripgrep, fedora-coder, etc.)
+	Path   string          // absolute path to the relevant YAML; populated for local-name + local-path
+	Remote *spec.ParsedRef // populated for remote refs
 }
 
 // ResolveDeployRef parses ref using projectDir as the current project
@@ -156,7 +157,7 @@ func refSubPathHas(subPath, segment string) bool {
 
 // resolveRemoteRef parses and classifies an @-prefixed remote ref.
 func resolveRemoteRef(ref string) (*DeployRef, error) {
-	parsed := ParseRemoteRef(ref)
+	parsed := spec.ParseRemoteRef(ref)
 	var kind RefKind
 	switch {
 	case refSubPathHas(parsed.SubPath, "candy") || refSubPathHas(parsed.SubPath, "layers"):

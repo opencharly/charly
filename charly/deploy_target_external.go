@@ -132,7 +132,7 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 	// resolved values (the plugin runs the steps with secrets already present). The SAME
 	// prepareCandySecrets the in-proc local/vm Add uses (R3). candyList feeds artifact
 	// retrieval below; secretEnv feeds artifact-path substitution.
-	var candyList []*Candy
+	var candyList []spec.CandyReader
 	var secretEnv map[string]string
 	if dir != "" {
 		var serr error
