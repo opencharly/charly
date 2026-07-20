@@ -66,7 +66,7 @@ func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, w
 	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
 
 	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
+	holder := externalCommandHolder(word, field, nil)
 	var cli struct{ kong.Plugins }
 	cli.Plugins = kong.Plugins{holder}
 	parser, err := kong.New(&cli, kong.Name("charly"))
@@ -78,7 +78,7 @@ func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, w
 	}
 
 	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	bin, argv, env, err := externalCommandExecPlan(d)
+	bin, argv, env, err := externalCommandExecPlan(d, "")
 	if err != nil {
 		t.Fatalf("externalCommandExecPlan: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestExternalCommandExecPlan_NestedCheckCommand(t *testing.T) {
 	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
 
 	field := exportedCommandField(word)
-	holder := externalCommandHolder(word, field)
+	holder := externalCommandHolder(word, field, nil)
 
 	type checkLike struct {
 		Box struct {
@@ -133,13 +133,71 @@ func TestExternalCommandExecPlan_NestedCheckCommand(t *testing.T) {
 		t.Fatalf("commandPathKey(%q) = %q, want %q", kctx.Command(), key, "check "+word)
 	}
 	d := externalCommandDispatch{word: word, holder: holder, field: field}
-	_, argv, _, err := externalCommandExecPlan(d)
+	_, argv, _, err := externalCommandExecPlan(d, "")
 	if err != nil {
 		t.Fatalf("externalCommandExecPlan: %v", err)
 	}
 	if len(argv) != 3 || argv[0] != "/fake/plugins/"+word || argv[1] != "nodes" || argv[2] != "--wide" {
 		t.Fatalf("argv = %v, want [/fake/plugins/%s nodes --wide]", argv, word)
 	}
+}
+
+// TestExternalCommandHolder_DeclaredSubcommands proves the F-CLI-NEST nested holder shape: a
+// command declaring a subcommand catalog gets a REAL named `cmd:""` child per entry (so Kong's own
+// `--help` lists them, unlike the opaque flat pass-through), and resolveCommandDispatch +
+// externalCommandArgs correctly recover which child was selected plus its own forwarded args —
+// restoring both `--help` fidelity and CLI-model (MCP) leaf discoverability for a plugin that
+// declares one (candy/plugin-check, candy/plugin-box's "list" word).
+func TestExternalCommandHolder_DeclaredSubcommands(t *testing.T) {
+	const word = "zzexecdeclared"
+	subs := []sdk.CLISubcommand{
+		{Name: "live", Help: "run the live check"},
+		{Name: "box", Help: "run the box check"},
+	}
+	field := exportedCommandField(word)
+	holder := externalCommandHolder(word, field, subs)
+
+	var cli struct{ kong.Plugins }
+	cli.Plugins = kong.Plugins{holder}
+	parser, err := kong.New(&cli, kong.Name("charly"))
+	if err != nil {
+		t.Fatalf("kong.New with nested command holder for %q: %v", word, err)
+	}
+	kctx, err := parser.Parse([]string{word, "live", "mydeploy"})
+	if err != nil {
+		t.Fatalf("kong.Parse: %v", err)
+	}
+	// Kong renders the DECLARED child as a real subcommand node — one token deeper than the
+	// registered table key (just the word itself).
+	if got, want := kctx.Command(), word+" live <args>"; got != want {
+		t.Fatalf("kctx.Command() = %q, want %q", got, want)
+	}
+
+	table := map[string]externalCommandDispatch{
+		word: {word: word, holder: holder, field: field, subcommands: subs},
+	}
+	d, sub, ok := resolveCommandDispatch(kctx.Command(), table)
+	if !ok {
+		t.Fatalf("resolveCommandDispatch(%q) did not resolve", kctx.Command())
+	}
+	if sub != "live" {
+		t.Fatalf("resolveCommandDispatch sub = %q, want %q", sub, "live")
+	}
+	if got, want := externalCommandArgs(d, sub), []string{"live", "mydeploy"}; !equalStrings(got, want) {
+		t.Fatalf("externalCommandArgs(d, %q) = %v, want %v", sub, got, want)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // assertCommandEnv checks commandExecEnv stripped the go-plugin handshake cookie (so the
