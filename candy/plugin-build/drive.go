@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -113,7 +114,20 @@ func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) (
 		boxByName[b.Name] = b
 	}
 
-	builtBoxes, err := cfg.buildImages(ctx, ex, reply, boxByName, containerfiles)
+	builtBoxes, err := func() ([]spec.BuildResolveBox, error) {
+		// Serialize the WHOLE image set against the shared containers-storage:
+		// podman's rootless store is not safe for two concurrent multi-stage
+		// builds (buildah panic / rootfs corruption — opencharly/charly#149).
+		// Resource-token arbitration: builds take turns on the store;
+		// non-build phases across processes stay parallel. Held across
+		// buildImages only — resolve/render do no store mutation.
+		release, lockErr := kit.AcquireStoreBuildLock()
+		if lockErr != nil {
+			return nil, fmt.Errorf("acquiring store build lock: %w", lockErr)
+		}
+		defer func() { _ = release() }()
+		return cfg.buildImages(ctx, ex, reply, boxByName, containerfiles)
+	}()
 	if err != nil {
 		return nil, err
 	}
