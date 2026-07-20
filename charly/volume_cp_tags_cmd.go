@@ -1,11 +1,12 @@
 package main
 
-// volume_cp_tags_cmd.go — sidecar-aware exec/logs resolution (resolveSidecarContainer, still
-// consumed by pod_lifecycle_resolve.go and other core call sites) and local image-tag listing.
-// VolumeCmd/CpCmd (the DEPLOY wave) moved wholesale — with zero seam — to candy/plugin-pod: they
-// needed no core-only type, only kit.ResolveBoxName/deploykit.ResolveBoxEngineForDeploy/
-// deploykit.ResolveContainer/deploykit.ResolveSidecarContainer, all already SDK-portable
-// equivalents of this file's own (still-here, still-needed-by-other-callers) bare helpers.
+// volume_cp_tags_cmd.go — local image-tag listing. VolumeCmd/CpCmd (the DEPLOY wave) moved
+// wholesale — with zero seam — to candy/plugin-pod: they needed no core-only type, only
+// kit.ResolveBoxName/deploykit.ResolveBoxEngineForDeploy/deploykit.ResolveContainer/
+// deploykit.ResolveSidecarContainer, all already SDK-portable. The former resolveSidecarContainer
+// (this file's own bare duplicate of deploykit.ResolveSidecarContainer) dissolved into that
+// deploykit twin (CHECK-wave container-resolve dedup) — its 2 callers (cmd.go,
+// pod_lifecycle_resolve.go) now call deploykit.ResolveSidecarContainer directly.
 
 import (
 	"fmt"
@@ -16,25 +17,6 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 )
-
-// resolveSidecarContainer resolves the engine + container name of a deploy's
-// SIDECAR container (charly-<box>[-<instance>]-<sidecar>) — the venue
-// `charly cmd --sidecar` / `charly logs --sidecar` / `charly cp --sidecar`
-// address, since the app-container resolver cannot reach it.
-func resolveSidecarContainer(box, instance, sidecar string) (engine, name string, err error) {
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return "", "", err
-	}
-	boxName := resolveBoxName(box)
-	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = kit.EngineBinary(runEngine)
-	name = kit.SidecarContainerNameInstance(boxName, instance, sidecar)
-	if !containerRunning(engine, name) {
-		return "", "", fmt.Errorf("sidecar container %s is not running", name)
-	}
-	return engine, name, nil
-}
 
 // ListTagsCmd lists the locally stored CalVer tags of charly-built images,
 // newest first per box — tag discovery for rollbacks

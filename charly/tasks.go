@@ -11,40 +11,11 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// P8 shims — the var-substitution + user-spec render helpers moved to
-// sdk/deploykit (tasks_emit.go). charly keeps these var-aliases so the
-// validate.go / check / bundle-add / install callers stay unchanged until
-// they relocate.
-var (
-	taskKnownNames       = deploykit.TaskKnownNames
-	taskUnresolvedRefs   = deploykit.TaskUnresolvedRefs
-	resolveUserSpec      = deploykit.ResolveUserSpec
-	taskSubstAutoExports = deploykit.TaskSubstAutoExports
-	taskSubstPath        = deploykit.TaskSubstPath
-)
-
-// stageInlineContent → deploykit.StageInlineContent (P8 shim).
-var stageInlineContent = deploykit.StageInlineContent
-
-// P8 shims — the per-verb Containerfile-line emitters moved to sdk/deploykit
-// (tasks_emit.go). charly keeps these var-aliases so callers outside tasks.go
-// (emitWrite←deploy_target_pod, emitVarsEnv←generate, emitCmd←checkspec/…) stay
-// unchanged until they relocate.
-var (
-	emitVarsEnv     = deploykit.EmitVarsEnv
-	emitMkdirBatch  = deploykit.EmitMkdirBatch
-	emitCopy        = deploykit.EmitCopy
-	emitWrite       = deploykit.EmitWrite
-	emitLinkBatch   = deploykit.EmitLinkBatch
-	emitSetcapBatch = deploykit.EmitSetcapBatch
-	taskCacheMounts = deploykit.TaskCacheMounts
-)
-
-// emitDownload → deploykit.EmitDownload (P8 shim).
-var emitDownload = deploykit.EmitDownload
-
-// emitCmd → deploykit.EmitCmd (P8 shim).
-var emitCmd = deploykit.EmitCmd
+// The var-substitution + user-spec render helpers, the inline-content stager, and
+// the per-verb Containerfile-line emitters all live in sdk/deploykit (tasks_emit.go);
+// every caller (here and in check_kit_adapter.go / install_build_act.go) references
+// deploykit.TaskKnownNames / deploykit.ResolveUserSpec / deploykit.EmitCmd / etc.
+// directly (K3 ZERO-ALIASES dissolution).
 
 // --- Orchestrator ---
 

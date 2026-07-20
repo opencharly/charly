@@ -92,7 +92,7 @@ func stopTunnelForImage(boxName, instance string) {
 	ctrName := kit.ContainerNameInstance(boxName, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef != "" {
-		meta, metaErr := ExtractMetadata("podman", imageRef)
+		meta, metaErr := deploykit.ExtractMetadata("podman", imageRef)
 		if metaErr == nil && meta != nil {
 			dc := deploykit.LoadDeployConfigForRead("charly start tunnel merge")
 			deploykit.MergeDeployOntoMetadata(meta, dc, boxName, instance)

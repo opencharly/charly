@@ -77,7 +77,7 @@ func (c *CheckLiveCmd) checkLiveGather() (liveResult, error) {
 // overlay, resolves runtime vars, and runs the plan. The check-run "live" seam
 // (hostCheckLive) consumes it via checkLiveGather.
 func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
-	engine, containerName, err := resolveContainer(c.Box, c.Instance)
+	engine, containerName, err := deploykit.ResolveContainer(c.Box, c.Instance)
 	if err != nil {
 		return liveResult{}, err
 	}
@@ -124,7 +124,7 @@ func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
 	if err != nil {
 		return liveResult{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
 	}
-	meta, err := ExtractMetadata(engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
 	if err != nil {
 		return liveResult{}, err
 	}
@@ -834,7 +834,7 @@ func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _
 		fmt.Fprintln(os.Stderr, "No plan steps to run.")
 		return 0, nil
 	}
-	return reportSteps(os.Stdout, results, format), nil
+	return kit.ReportStepResultsCount(os.Stdout, results, format), nil
 }
 
 // runLocalDeployScopePlan collects a local deployment's deploy-scope plan — the kind:local

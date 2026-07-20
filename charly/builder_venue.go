@@ -104,7 +104,7 @@ func builderStepImage(s *deploykit.BuilderStep, opts deploykit.EmitOpts) (string
 // nil BuilderDef cell); --skip-incompatible skips it.
 func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, venueHome string, build buildEngineContext, s *deploykit.BuilderStep, opts deploykit.EmitOpts) error {
 	if s.LocalPkg == nil {
-		if s.BuilderDef == nil || builderPhaseTemplate(s.BuilderDef, spec.PhaseInstall, spec.VenueHostNative) == "" {
+		if s.BuilderDef == nil || buildkit.BuilderPhaseTemplate(s.BuilderDef, spec.PhaseInstall, spec.VenueHostNative) == "" {
 			if opts.SkipIncompatible {
 				fmt.Fprintf(os.Stderr, "builder step %q (candy=%s) skipped: no phase.install.host cell (--skip-incompatible)\n", s.Builder, s.CandyName)
 				return nil

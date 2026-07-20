@@ -84,7 +84,7 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 		if !hasPort {
 			// ${HOST:<member>} → the running container's DNS name on the shared
 			// `charly` net (charly-<member>); also verifies it is actually running.
-			if _, ctr, err := resolveContainer(arg, instance); err == nil {
+			if _, ctr, err := deploykit.ResolveContainer(arg, instance); err == nil {
 				vars[key] = ctr
 			} else {
 				fmt.Fprintf(os.Stderr, "check: ${%s} — %v\n", key, err)
@@ -171,7 +171,7 @@ func liveDeployVarResolver(name, instance string, venue *CheckVenue) *kit.CheckV
 	if err != nil {
 		return &kit.CheckVarResolver{}
 	}
-	meta, err := ExtractMetadata(venue.Engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(venue.Engine, resolvedRef)
 	if err != nil || meta == nil {
 		return &kit.CheckVarResolver{}
 	}

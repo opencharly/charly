@@ -28,9 +28,9 @@ func (c *CmdCmd) Run() error {
 	// stdin). --notify stays a host wrapper — it is a host desktop-bus op, not a venue op.
 	resolve := func() (string, string, error) {
 		if c.Sidecar != "" {
-			return resolveSidecarContainer(c.Box, c.Instance, c.Sidecar)
+			return deploykit.ResolveSidecarContainer(c.Box, c.Instance, c.Sidecar)
 		}
-		return resolveContainer(c.Box, c.Instance)
+		return deploykit.ResolveContainer(c.Box, c.Instance)
 	}
 	engine, name, err := resolve()
 	if err != nil {

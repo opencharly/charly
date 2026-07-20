@@ -102,7 +102,7 @@ func (c *podRemoveCmd) Run() error {
 	// Releasing a persistent exclusive claim restores any holder this deploy
 	// preempted (no-op if no lease / gated by an outer orchestrator).
 	defer releaseResourceClaim(deploykit.DeployKey(c.Box, c.Instance))
-	boxName := resolveBoxName(c.Box)
+	boxName := kit.ResolveBoxName(c.Box)
 
 	// Stop tunnel before removing container (best-effort)
 	stopTunnelForImage(boxName, c.Instance)
@@ -112,8 +112,8 @@ func (c *podRemoveCmd) Run() error {
 		return err
 	}
 
-	// Resolve per-image engine from charly.yml
-	runEngine := ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
+	// Resolve per-image engine from the per-host deploy config (no charly.yml dependency).
+	runEngine := deploykit.ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
 	engine := kit.EngineBinary(runEngine)
 	containerName := kit.ContainerNameInstance(boxName, c.Instance)
 
@@ -265,7 +265,7 @@ func (c *podRemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
 	if imageRef == "" {
 		return
 	}
-	meta, metaErr := ExtractMetadata(engine, imageRef)
+	meta, metaErr := deploykit.ExtractMetadata(engine, imageRef)
 	if metaErr != nil || meta == nil || meta.Hook == nil || meta.Hook.PreRemove == "" {
 		return
 	}
@@ -299,16 +299,6 @@ func containerImageRef(engine, containerName string) (string, error) {
 func containerImage(engine, containerName string) string {
 	ref, _ := containerImageRef(engine, containerName)
 	return ref
-}
-
-// resolveBoxName extracts the short box name from a ref that may be
-// a local box name or a remote ref (github.com/org/repo/box[@version]).
-func resolveBoxName(box string) string {
-	ref := kit.StripURLScheme(box)
-	if spec.IsRemoteImageRef(ref) {
-		return spec.ParseRemoteRef(ref).Name
-	}
-	return box
 }
 
 // resolveSidecarNames returns the sorted set of sidecar key names

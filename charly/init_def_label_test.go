@@ -65,10 +65,10 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 		t.Fatalf("bake seam did not emit %s with payload %s; got: %q", spec.LabelInitDef, payload, emitted)
 	}
 
-	// Parse path: ExtractMetadata reads the label value podman returns (raw JSON).
-	orig := InspectLabels
-	defer func() { InspectLabels = orig }()
-	InspectLabels = func(engine, imageRef string) (map[string]string, error) {
+	// Parse path: deploykit.ExtractMetadata reads the label value podman returns (raw JSON).
+	orig := deploykit.InspectLabels
+	defer func() { deploykit.InspectLabels = orig }()
+	deploykit.InspectLabels = func(engine, imageRef string) (map[string]string, error) {
 		return map[string]string{
 			spec.LabelVersion: "2026.001.0000",
 			spec.LabelBox:     "round-trip",
@@ -76,7 +76,7 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 			spec.LabelInitDef: string(payload),
 		}, nil
 	}
-	meta, err := ExtractMetadata("podman", "round-trip")
+	meta, err := deploykit.ExtractMetadata("podman", "round-trip")
 	if err != nil {
 		t.Fatalf("ExtractMetadata: %v", err)
 	}

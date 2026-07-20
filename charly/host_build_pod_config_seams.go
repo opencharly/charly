@@ -85,7 +85,7 @@ func hostBuildPodConfigEnsureImage(_ context.Context, req spec.PodConfigEnsureIm
 	if err := EnsureImage(req.ImageRef, podmanRT); err != nil {
 		return spec.PodConfigEnsureImageReply{}, err
 	}
-	meta, err := ExtractMetadata("podman", req.ImageRef)
+	meta, err := deploykit.ExtractMetadata("podman", req.ImageRef)
 	if err != nil {
 		return spec.PodConfigEnsureImageReply{}, err
 	}
@@ -219,7 +219,7 @@ func hostBuildPodConfigContainerTunnel(_ context.Context, req spec.PodConfigCont
 }
 
 func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineRequest, _ buildEngineContext) (spec.PodConfigBoxEngineReply, error) {
-	return spec.PodConfigBoxEngineReply{Engine: ResolveBoxEngineForDeploy(req.Box, req.Instance, req.GlobalEngine)}, nil
+	return spec.PodConfigBoxEngineReply{Engine: deploykit.ResolveBoxEngineForDeploy(req.Box, req.Instance, req.GlobalEngine)}, nil
 }
 
 func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnelResolveRequest, _ buildEngineContext) (spec.PodConfigTunnelResolveReply, error) {

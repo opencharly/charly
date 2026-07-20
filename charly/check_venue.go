@@ -265,7 +265,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 	}
 
 	// Default: a running container.
-	engine, containerName, err := resolveContainer(name, instance)
+	engine, containerName, err := deploykit.ResolveContainer(name, instance)
 	if err != nil {
 		return nil, err
 	}

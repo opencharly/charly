@@ -17,7 +17,7 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 	if err != nil {
 		return nil
 	}
-	userDir, _ := resolveUserSpec(op.RunAs, img)
+	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
 	// A `plugin:` verb whose provider lowers into a TYPED install step (package →
 	// SystemPackagesStep, service → ServicePackagedStep) constructs that step here —
 	// BEFORE the generic OpStep fallthrough — so its Reverse() records the load-bearing
