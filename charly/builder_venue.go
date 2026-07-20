@@ -152,6 +152,14 @@ func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, ven
 	return errors.Join(installErr, cleanupErr)
 }
 
+// venueBuilderTarName names the per-invocation transfer tarball on the venue.
+// uniqueScope (the host staging dir's MkdirTemp suffix) makes two concurrent
+// deploys of the same candy to the same venue collision-free; the extract and
+// cleanup legs below quote it, so it travels verbatim.
+func venueBuilderTarName(candyName, uniqueScope string) string {
+	return "/tmp/charly-builder-" + candyName + "-" + uniqueScope + ".tar.gz"
+}
+
 // runVenueHomeArtifactBuilder runs a user-home builder (npm/pixi/cargo) on the HOST into
 // a staging dir bind-mounted AS the venue home, then ships the produced home subdirs into
 // the venue user's $HOME over the executor.
@@ -253,8 +261,11 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 	}
 
 	// Ship to the venue and extract into the venue user's $HOME AS the venue user, so
-	// ownership + baked paths are correct.
-	venueTar := "/tmp/charly-builder-" + s.CandyName + ".tar.gz"
+	// ownership + baked paths are correct. The tarball name carries the host staging
+	// dir's unique MkdirTemp suffix: a fixed per-candy name would let two concurrent
+	// deploys of the SAME candy to the SAME venue interleave (the second PutFile
+	// overwriting the first's tarball before its extract runs).
+	venueTar := venueBuilderTarName(s.CandyName, filepath.Base(tarDir))
 	if err := dexec.PutFile(ctx, tarball, venueTar, 0o644, false, opts); err != nil {
 		return fmt.Errorf("transfer builder artifacts: %w", err)
 	}
