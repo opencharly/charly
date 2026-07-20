@@ -196,7 +196,8 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
     required_build_terms = (
         "binary:",
         "main.BuildCalVer",
-        "-o ../bin/charly",
+        "-o ../bin/.charly.next",
+        "mv bin/.charly.next bin/charly",
     )
     for term in required_build_terms:
         if term not in build_text:
