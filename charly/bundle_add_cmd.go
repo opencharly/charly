@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -133,129 +132,6 @@ func deployDelArgv(name string) []string {
 	return []string{"bundle", "del", name, "--assume-yes"}
 }
 
-// Run executes `charly bundle add`.
-//
-// For a schema-v2 config, c.Name may be a dotted path (foo.bar.baz)
-// pointing into the deployments tree. The root segment (foo) is
-// dispatched first; each descendant is dispatched afterwards with
-// ParentExec threaded through via EmitOpts so nested targets execute
-// inside their parent's venue.
-//
-// For a flat name (no children, no dots) the behavior is unchanged —
-// exactly one target's Emit() call.
-//
-// K4-C PROGRESS NOTE: dispatchNode's leaf-level Add/Del dispatch now routes through the
-// deploy-dispatch seam UNCONDITIONALLY (root AND nested) — a nested node's ParentExec is
-// encoded into a spec.VenueDescriptor (venueDescriptorForExecutor, deploy_venue_descriptor.go)
-// and re-materialized host-side inside the seam handler, the SAME decouple point
-// substrateLifecycle's OpPrepareVenue->VenueDescriptor already uses for a ROOT venue,
-// generalized to a NESTED hop. This function's OWN tree walk (resolveTreeRoot, the
-// WalkDeploymentTree callback below) still runs host-side FOR NOW — it is the next
-// increment of this same K4-C cutover, not a deferred IOU: once the descriptor mechanism
-// is verified live on a nested bed (a pod-with-sidecar / check-group member shape), the
-// walk itself — including resolveTreeRoot's project-tree fetch (already available via the
-// existing HostBuild("resolved-project") envelope's .Deploy map, so no LoadUnified-from-
-// plugin dependency blocks it) and deriveChildExecutorForPath's descent (its BODY becomes
-// the host re-materializer a "deploy-child-venue" seam wraps) — ports into
-// candy/plugin-bundle. See deploy_venue_descriptor.go for the encode/decode mechanism.
-func (c *deployAddCmd) Run() error {
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
-	}
-
-	// Connect + register every OUT-OF-TREE plugin candy the deploy composes BEFORE any
-	// target.Add/Emit dispatches — so a target whose deploy path drives an external verb,
-	// OR whose SUBSTRATE is an external deploy provider (the E3-deploy externalDeployTarget,
-	// e.g. the now-externalized `android` substrate served by candy/plugin-adb's
-	// deploy:android provider), resolves its grpcProvider out-of-process. The shared
-	// loadDeployPlugins (deploy_add_shared.go) — also called by bundle del + charly
-	// update — adds THIS deploy's add_candy: candies (+ any CLI --add-candy) to the scan
-	// (the image-closure scan never reaches them), so a deploy that add_candy's an
-	// out-of-tree plugin candy would otherwise leave its grpcProvider unloaded (R3).
-	if err := loadDeployPlugins(dir, c.Name, c.AddCandy); err != nil {
-		return err
-	}
-
-	// Resolve the named root + any dotted-path subtree the user
-	// targeted. Supports three call shapes:
-	//
-	//   charly bundle add host                   — legacy; root = "host"
-	//   charly bundle add openclaw-stack         — v2 root with children
-	//   charly bundle add openclaw-stack.web.db  — v2 subtree
-	targetPath := c.Name
-	tree, _ := resolveTreeRoot(dir)
-	var rootNode *spec.BundleNode
-	var resolvedPath string
-	// parentExec is the executor chain derived from any ANCESTORS the
-	// dotted path walks through. Without this, `charly bundle add a.b.c`
-	// would run c's dispatch locally — ignoring a/b's substrate.
-	var parentExec deploykit.DeployExecutor
-	if tree != nil {
-		if n, ancestors, nodeErr := deploykit.ResolveNodePath(tree, targetPath); nodeErr == nil {
-			rootNode = n
-			resolvedPath = targetPath
-			// Derive the parent's executor chain from ancestors so the
-			// target node runs in the right substrate (SSH into parent
-			// VM, podman exec into parent pod, etc.).
-			segments := deploykit.SplitDottedPath(targetPath)
-			for i, anc := range ancestors {
-				ancPath := strings.Join(segments[:i+1], ".")
-				next, derr := deriveChildExecutorForPath(ancPath, anc, parentExec)
-				if derr != nil {
-					return fmt.Errorf("deriving executor for ancestor %q: %w", ancPath, derr)
-				}
-				parentExec = next
-			}
-		}
-	}
-
-	// Walk pre-order. At each node, dispatchNode compiles plans and routes
-	// through ResolveTarget → target.Add, with opts.ParentExec set to the
-	// executor derived from the parent chain.
-	//
-	// When rootNode is nil (ref-based deploy with no charly.yml entry
-	// e.g. `charly bundle add foo ./path/to/box.yml`) we fall through
-	// to the single-dispatch path.
-	if rootNode == nil {
-		return c.dispatchNode(resolvedPath, nil, nil, dir)
-	}
-
-	// --node-only dispatches just the resolved node, skipping the nested
-	// tree walk. Used when a parent substrate (e.g. a pod) must be started
-	// before its children can deploy — the caller deploys the children
-	// explicitly afterwards via dotted-path `charly bundle add parent.child`.
-	//
-	// A VM root is ALSO dispatched node-only: its nested target:pod children
-	// deploy IN the guest (the host can't tree-walk a pod-in-VM), so the VM
-	// target's Add deploys them itself after the VM is up
-	// (plugin-deploy-vm's PostApply). A host tree walk would wrongly try to deploy
-	// them locally / double-deploy.
-	if c.NodeOnly || (rootNode != nil && (nodeTraits(rootNode).Venue == "ssh" || strings.HasPrefix(resolvedPath, "vm:"))) { // vm root (ssh venue): nested pods deploy in-guest
-		return c.dispatchNode(resolvedPath, rootNode, parentExec, dir)
-	}
-
-	if err := deploykit.WalkDeploymentTree(resolvedPath, rootNode, parentExec, func(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
-		if err := c.dispatchNode(path, node, parentExec, dir); err != nil {
-			return nil, err
-		}
-		return deriveChildExecutorForPath(path, node, parentExec)
-	}); err != nil {
-		return err
-	}
-
-	// Operator deploy path: bring up any sibling members (companion deployments)
-	// ALONGSIDE the root on the shared `charly` network — the SAME bringUpMembers
-	// helper the kind:check bed runner uses (R3). The bed runner takes its own
-	// `--node-only` path above and brings members up itself after `charly start`, so
-	// peers are never double-deployed. A dry-run skips bring-up (nothing real
-	// was deployed to companion).
-	if c.DryRun {
-		return nil
-	}
-	return bringUpMembers(rootNode, "")
-}
-
 // dispatchNode compiles plans for a single node and runs the
 // appropriate target. Factored out of Run so the tree walker can call
 // it once per node.
@@ -359,14 +235,25 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		resolveNode = &spec.BundleNode{Target: target}
 	}
 
-	// K4-C: every Add dispatch — root AND nested — routes through the deploy-dispatch seam, a
-	// plugin-initiated HostBuild call nesting a SECOND out-of-process substrate dispatch (proven
-	// live on both a local and a vm substrate). A nested node's opts.ParentExec is encoded into a
-	// spec.VenueDescriptor and re-materialized inside the seam handler — the venue-descriptor
-	// generalization of substrateLifecycle's existing root-venue decouple point — so ResolveTarget
-	// + the adapter's nodeOnly wiring + Add all now happen host-side INSIDE
-	// hostBuildDeployDispatchAdd, not here.
-	return c.dispatchViaSeam(resolveNode, deployName, dir, base, plans, opts)
+	utgt, err := ResolveTarget(resolveNode, deployName)
+	if err != nil {
+		return fmt.Errorf("resolve target: %w", err)
+	}
+	if tt, ok := utgt.(*externalDeployTarget); ok {
+		tt.nodeOnly = c.NodeOnly
+	}
+
+	dctx := &DeployContext{
+		Node:       node,
+		Name:       deployName,
+		Dir:        dir,
+		Cfg:        cfg,
+		DistroCfg:  distroCfg,
+		BuilderCfg: builderCfg,
+		Base:       base,
+	}
+
+	return utgt.Add(context.Background(), dctx, plans, opts)
 }
 
 // resolveNodeOverlays computes the per-node emit opts, ref string, add-candy
@@ -562,15 +449,16 @@ func pathLeaf(path string) string {
 // this is legitimate D-data-driven dispatch, not an incomplete per-kind seam. Each case
 // CONSTRUCTS a live deploykit.DeployExecutor from that transport — structurally the SAME
 // shape as substrateLifecycle's already-sanctioned OpPrepareVenue->VenueDescriptor
-// pattern, just for a NESTED hop instead of the root venue. K4-C PROGRESS: this function's
-// BODY is now reachable through the wire via spec.VenueDescriptor's Kind=="nested" case
-// (Jump + recursive Parent — see deploy_venue_descriptor.go's venueDescriptorForExecutor
-// encoder + substrate_lifecycle_grpc.go's venueFromDescriptor decoder); a plugin holding a
-// descriptor for THIS node's parent can request the same executor construction that
-// happens here today. The tree WALK that calls this function still runs host-side for now
-// (see Run()'s header) — moving the CALL SITE into the plugin (once the descriptor
-// mechanism is verified live) needs a "deploy-child-venue" seam wrapping this exact body,
-// not a change to the body itself.
+// pattern, just for a NESTED hop instead of the root venue.
+//
+// K4-C WALK PORT (landed): the tree WALK now runs plugin-side (candy/plugin-bundle/walk.go).
+// This function's BODY is UNCHANGED and stays host-side — it is registry-coupled
+// (deployTraitDescent needs the providerRegistry) — but its CALL SITE moved: the
+// deploy-node-dispatch host-builder (host_build_deploy_node_dispatch.go) re-runs it once per
+// ANCESTOR, reconstructing the WHOLE parentExec chain from the ancestor path/node lists the
+// plugin's walk sends, rather than the caller passing a live parentExec through directly. A
+// live DeployExecutor never crosses the wire — no venue-descriptor encoding needed for this
+// hop; the plugin only ever holds paths + nodes.
 func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil
@@ -615,60 +503,6 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec d
 		return nil, fmt.Errorf("k8s targets cannot have children")
 	}
 	return parentExec, nil
-}
-
-// Run executes `charly bundle del`. Dispatch resolves the deployment node
-// (when present in charly.yml) and routes through ResolveTarget →
-// target.Del. Legacy name-prefix routing (`host` literal, `vm:<name>`)
-// still works for ref-based deploys without a charly.yml entry: a node
-// is synthesized from the classified target so the resolver has a
-// target: to dispatch on.
-func (c *deployDelCmd) Run() error {
-	paths, err := kit.DefaultLedgerPaths()
-	if err != nil {
-		return err
-	}
-	lock, err := kit.AcquireLedgerLock(paths)
-	if err != nil {
-		return err
-	}
-	defer lock.Release() //nolint:errcheck
-
-	node, kind, err := c.resolveDelNode()
-	if err != nil {
-		return err
-	}
-
-	// Connect the deployment's OUT-OF-TREE plugins before ResolveTarget, so an
-	// external deploy SUBSTRATE (the E3-deploy externalDeployTarget) resolves its
-	// grpcProvider for teardown — the SAME loadDeployPlugins bundle add / charly
-	// update use (R3). Best-effort; the dispatch fails loudly if still unresolved.
-	if cwd, _ := os.Getwd(); cwd != "" {
-		if err := loadDeployPlugins(cwd, c.Name, nil); err != nil {
-			return err
-		}
-	}
-
-	_ = kind // kind is informational; the adapter type already encodes it.
-
-	// K4-C: route the Del dispatch through the deploy-dispatch seam — a plugin-initiated
-	// HostBuild call nesting a second out-of-process substrate dispatch (spike #1's proven
-	// shape). Unlike Add, Del has no nested-executor concept (this Run never threads a
-	// ParentExec) and c.Runner is always nil on the CLI-invoked path (test-only injection —
-	// its sole construction site is host_build_deploy_del.go, from spec.DeployDelRequest,
-	// which carries no Runner field), so every del dispatch routes through the seam
-	// unconditionally — no direct in-process fallback needed.
-
-	// Tear down any sibling members (companion deployments) FIRST — the reverse
-	// of bringUpMembers (root up → members up; members down → root down). Best-effort
-	// + the SAME helper the bed runner uses (R3). Skipped on a dry-run.
-	var memberErr error
-	if !c.DryRun {
-		memberErr = tearDownMembers(node)
-	}
-
-	targetErr := c.dispatchDelViaSeam(node, c.Name)
-	return errors.Join(memberErr, targetErr)
 }
 
 // resolveDelNode resolves the BundleNode + canonical kind for a

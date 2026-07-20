@@ -64,32 +64,13 @@ type BundleAddCmd struct {
 	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
 }
 
-func (c *BundleAddCmd) Run() error {
-	return hostDeploySeam("deploy-add", spec.DeployAddRequest{
-		Name:             c.Name,
-		Ref:              c.Ref,
-		AddCandy:         c.AddCandy,
-		Tag:              c.Tag,
-		DryRun:           c.DryRun,
-		NodeOnly:         c.NodeOnly,
-		Format:           c.Format,
-		Pull:             c.Pull,
-		Verify:           c.Verify,
-		WithServices:     c.WithServices,
-		AllowRepoChanges: c.AllowRepoChanges,
-		AllowRootTasks:   c.AllowRootTasks,
-		SkipIncompatible: c.SkipIncompatible,
-		BuilderImage:     c.BuilderImage,
-		AssumeYes:        c.AssumeYes,
-		Disposable:       c.Disposable,
-		Lifecycle:        c.Lifecycle,
-	})
-}
+// BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).
 
-// BundleDelCmd is the `charly bundle del <name>` grammar; it forwards to the deploy-del
-// host-build seam. The AssumeYes field renders as `--assume-yes` (Kong derives the long
-// name from the FIELD; the `long:"yes"` tag is a no-op in the separate-tag form) with `-y`
-// as the short form — the exact contract charly/bundle_add_cmd.go::deployDelArgv relies on.
+// BundleDelCmd is the `charly bundle del <name>` grammar; Run() (walk.go) drives the
+// deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
+// renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
+// a no-op in the separate-tag form) with `-y` as the short form — the exact contract
+// charly/bundle_add_cmd.go::deployDelArgv relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
@@ -98,17 +79,6 @@ type BundleDelCmd struct {
 	KeepServices    bool `long:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
 	KeepImage       bool `long:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
 	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
-}
-
-func (c *BundleDelCmd) Run() error {
-	return hostDeploySeam("deploy-del", spec.DeployDelRequest{
-		Name:            c.Name,
-		AssumeYes:       c.AssumeYes,
-		KeepRepoChanges: c.KeepRepoChanges,
-		KeepServices:    c.KeepServices,
-		KeepImage:       c.KeepImage,
-		DryRun:          c.DryRun,
-	})
 }
 
 // BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar; it forwards to the

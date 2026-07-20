@@ -19,19 +19,19 @@ import (
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
 
 // Invoke dispatches the COMPILED-IN (in-proc) command:bundle ops: OpRun (the `charly bundle …`
-// CLI pass-through), OpCompile (the K4-B deploy-compile slice — the host's compileNodePlans
-// computes the per-node selection and Invokes OpCompile; runBundleCompile re-hydrates the
-// resolved-project envelope + loops deploykit.BuildDeployPlan), and OpDispatch (the K4-C
-// deploy-dispatch spike #1 — dispatchNode's root-level Add relays through this leg to
-// HostBuild("deploy-dispatch") instead of calling ResolveTarget().Add() in-process).
+// CLI pass-through) and OpCompile (the K4-B deploy-compile slice — the host's
+// compileNodePlans computes the per-node selection and Invokes OpCompile; runBundleCompile
+// re-hydrates the resolved-project envelope + loops deploykit.BuildDeployPlan). The retired
+// K4-C spike's OpDispatch relay (dispatchNode's root-level Add nesting a second HostBuild call)
+// is superseded by the walk port (walk.go): the plugin now drives the WHOLE tree walk itself and
+// calls the deploy-tree-resolve / deploy-node-dispatch / deploy-members-* / deploy-del-resolve /
+// deploy-node-del-dispatch seams directly, no OpDispatch round-trip needed.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
 	case sdk.OpRun:
 		return runBundleCommand(ctx, req)
 	case sdk.OpCompile:
 		return runBundleCompile(ctx, req)
-	case sdk.OpDispatch:
-		return runBundleDispatch(ctx, req)
 	default:
 		return nil, fmt.Errorf("bundle: unsupported op %q", req.GetOp())
 	}
