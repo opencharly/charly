@@ -18,20 +18,25 @@ import (
 
 // capMeta is the shared capability metadata every Provider carries regardless of placement — the
 // fields + carrier methods that are identical for grpcProvider and inprocProvider. Both EMBED it,
-// so the carrier interfaces (stepContractCarrier / structuralKindCarrier / validatingKindCarrier /
-// phaseCarrier / primaryCarrier) are satisfied ONCE for both placements via method promotion.
+// so the carrier interfaces (spec.StepContractCarrier / spec.StructuralKindCarrier /
+// spec.ValidatingKindCarrier / spec.PhaseCarrier / primaryCarrier) are satisfied ONCE for both
+// placements via method promotion. The carrier interfaces + StepContract live in sdk/spec (K4-C
+// relocation, provider_carriers.go) — an interface with an unexported method can only be
+// satisfied by a type in the SAME package as the interface, so capMeta's carrier methods below
+// are EXPORTED to satisfy them from across the package boundary.
 type capMeta struct {
 	class            ProviderClass
 	word             string
-	contract         *stepContract      // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural       bool               // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates        bool               // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase            string             // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary          string             // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
-	traits           *spec.DeployTraits // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
-	cmdParent        string             // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
-	commandModel     *spec.CLIModel     // set ONLY for class:command; CUE-generated reflected leaf grammar
-	commandModelJSON []byte             // exact validated transport payload, preserved across relays
+	contract         *spec.StepContract  // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	structural       bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
+	validates        bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
+	phase            string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary          string              // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	traits           *spec.DeployTraits  // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
+	cmdParent        string              // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
+	subcmds          []sdk.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
+	commandModel     *spec.CLIModel      // set ONLY for class:command; CUE-generated reflected leaf grammar
+	commandModelJSON []byte              // exact validated transport payload, preserved across relays
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -61,35 +66,40 @@ func (m capMeta) commandModelPayload() []byte {
 	return append([]byte(nil), m.commandModelJSON...)
 }
 
-// declaredStepContract implements stepContractCarrier — a class:step capability's plugin-declared
-// Scope/Venue/Gate/Emits (F3), nil/false for every other capability.
-func (m capMeta) declaredStepContract() (stepContract, bool) {
+// DeclaredStepContract implements spec.StepContractCarrier — a class:step capability's
+// plugin-declared Scope/Venue/Gate/Emits (F3), nil/false for every other capability.
+func (m capMeta) DeclaredStepContract() (spec.StepContract, bool) {
 	if m.contract == nil {
-		return stepContract{}, false
+		return spec.StepContract{}, false
 	}
 	return *m.contract, true
 }
 
-// isStructuralKind implements structuralKindCarrier — a class:kind capability whose decode returns
-// a spec.Deploy member tree (-> uf.Bundle) rather than a flat body (F5).
-func (m capMeta) isStructuralKind() bool { return m.structural }
+// IsStructuralKind implements spec.StructuralKindCarrier — a class:kind capability whose decode
+// returns a spec.Deploy member tree (-> uf.Bundle) rather than a flat body (F5).
+func (m capMeta) IsStructuralKind() bool { return m.structural }
 
-// isValidatingKind implements validatingKindCarrier — a class:kind capability serving a deep
+// IsValidatingKind implements spec.ValidatingKindCarrier — a class:kind capability serving a deep
 // OpValidate check the host dispatches at load (F7/C8).
-func (m capMeta) isValidatingKind() bool { return m.validates }
+func (m capMeta) IsValidatingKind() bool { return m.validates }
 
-// pluginPhase implements phaseCarrier — the plugin lifecycle phase the kernel loads/invokes this
-// capability in (F9; normalized, never empty).
-func (m capMeta) pluginPhase() string { return m.phase }
+// PluginPhase implements spec.PhaseCarrier — the plugin lifecycle phase the kernel loads/invokes
+// this capability in (F9; normalized, never empty).
+func (m capMeta) PluginPhase() string { return m.phase }
 
 // primaryInput implements primaryCarrier — a class:verb capability's declared scalar-sugar primary
 // input field (empty for every other capability).
 func (m capMeta) primaryInput() string { return m.primary }
 
-// declaredDeployTraits implements deployTraitsCarrier — a SUBSTRATE class:kind capability's
+// DeclaredDeployTraits implements spec.DeployTraitsCarrier — a SUBSTRATE class:kind capability's
 // declared #DeployTraits (P9), nil for every other capability. deployTraitsFor reads it off the
 // registry so kit.StampDescent can stamp node.Descent BY TRAIT, never by kind-word switch.
-func (m capMeta) declaredDeployTraits() *spec.DeployTraits { return m.traits }
+func (m capMeta) DeclaredDeployTraits() *spec.DeployTraits { return m.traits }
+
+// declaredSubcommands implements commandSubcommandCarrier (provider_command_external.go) — a
+// class:command capability's DECLARED one-level-deep CLI subcommand catalog (F-CLI-NEST), empty
+// for every capability that doesn't declare one (preserving today's flat pass-through holder).
+func (m capMeta) declaredSubcommands() []sdk.CLISubcommand { return m.subcmds }
 
 // buildCapMeta lifts one advertised pb.ProvidedCapability into the shared capMeta both provider
 // twins embed — the class/word plus the class-gated contract/structural/validates/phase/primary
@@ -114,7 +124,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// A class:step capability may DECLARE its install-step contract (F3): compileActOp builds an
 	// externalStep carrying the plugin-declared Scope/Venue/Gate/Emits.
 	if sc := c.GetStepContract(); m.class == ClassStep && sc != nil {
-		m.contract = &stepContract{Scope: deploykit.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
+		m.contract = &spec.StepContract{Scope: deploykit.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
 	}
 	// A class:kind capability may declare it decodes a STRUCTURAL entity (F5): runPluginKind folds
 	// its spec.Deploy reply into uf.Bundle instead of landing a flat body opaquely.
@@ -129,6 +139,14 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	m.phase = sdk.NormalizePhase(c.GetPhase())
 	if m.class == ClassVerb {
 		m.primary = c.GetPrimary()
+	}
+	// A class:command capability may DECLARE a one-level-deep subcommand catalog (F-CLI-NEST):
+	// collectExternalCommandPlugins builds a REAL nested Kong holder from it instead of the flat
+	// pass-through, and buildCLIModel synthesizes a "<word>.<name>" leaf per entry for MCP.
+	if m.class == ClassCommand {
+		for _, sc := range c.GetSubcommands() {
+			m.subcmds = append(m.subcmds, sdk.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp()})
+		}
 	}
 	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps
 	// them onto node.Descent so the deploy behaviour is consulted BY TRAIT, not by kind word.

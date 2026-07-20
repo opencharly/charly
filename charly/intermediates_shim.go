@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // intermediates_shim.go — W3 (K3 build-engine move). The auto-intermediate-image
@@ -20,7 +21,7 @@ import (
 // cfg.Defaults into a deploykit.IntermediateDefaults (the scalar fields the
 // relocated ComputeIntermediates needs) and delegates entirely to
 // deploykit.ComputeIntermediates — no host callback remains.
-func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy, cfg *Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
+func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader, cfg *Config, tag string) (map[string]*buildkit.ResolvedBox, error) {
 	defaults := deploykit.IntermediateDefaults{
 		Builder:   buildkit.BuilderMap(cfg.Defaults.Builder),
 		UID:       cfg.Defaults.UID,
@@ -32,11 +33,11 @@ func ComputeIntermediates(boxes map[string]*buildkit.ResolvedBox, layers map[str
 		Distro:    cfg.Defaults.Distro,
 		Build:     cfg.Defaults.Build,
 	}
-	return deploykit.ComputeIntermediates(boxes, candyModelMap(layers), defaults, tag)
+	return deploykit.ComputeIntermediates(boxes, layers, defaults, tag)
 }
 
 // GlobalCandyOrder computes the global topological candy order (deploykit) over
-// the concrete candy map held by generate.go / validate.go.
-func GlobalCandyOrder(boxes map[string]*buildkit.ResolvedBox, layers map[string]*Candy) ([]string, error) {
-	return deploykit.GlobalCandyOrder(boxes, candyModelMap(layers))
+// the scanned candy map held by generate.go / validate.go.
+func GlobalCandyOrder(boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader) ([]string, error) {
+	return deploykit.GlobalCandyOrder(boxes, layers)
 }

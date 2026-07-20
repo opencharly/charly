@@ -17,11 +17,9 @@ package main
 //     config-write mechanism in P11). The former hand-written wire mirror was deleted
 //     when the wire-type mandate was repaired (P11);
 //   - ValidPublicPorts — the allowed public serve ports, consulted by the resolution to
-//     validate a tunnel's public ports;
-//   - the config-path helpers tunnelConfigDir / tunnelConfigPath — `charly config` computes the
-//     cloudflared config path here and passes it (cloudflared_cfg_path) to the deploy:pod plugin's
-//     config-write, whose deploykit GenerateTunnelUnit emitter writes it into the companion unit's
-//     ExecStart line;
+//     validate a tunnel's public ports (the cloudflared config-path computation moved along
+//     with BoxConfigSetupCmd's orchestration to candy/plugin-deploy-pod's own tunnelConfigPath,
+//     P13-KERNEL direction-flip — no host-side copy needed anymore);
 //   - the resolution ResolveTunnelConfig / TunnelConfigFromMetadata / parseHostPorts /
 //     buildPortMapping / resolveProto — turn a charly.yml TunnelYAML (or image-label
 //     metadata) into a ready-to-execute TunnelConfig.
@@ -29,7 +27,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/opencharly/sdk/spec"
@@ -49,29 +46,6 @@ type (
 
 // ValidPublicPorts are the allowed external ports for Tailscale public access.
 var ValidPublicPorts = map[int]bool{443: true, 8443: true, 10000: true}
-
-// tunnelConfigDir returns ~/.config/charly/tunnels/. Retained in core because `charly config`
-// computes the cloudflared config path here (via tunnelConfigPath) for the pod config-write
-// request; candy/plugin-tunnel keeps its OWN copy to WRITE the config/PID files there.
-func tunnelConfigDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("determining home directory: %w", err)
-	}
-	return filepath.Join(home, ".config", "charly", "tunnels"), nil
-}
-
-// tunnelConfigPath returns the cloudflared config file path for a tunnel. `charly config`
-// computes it and passes it as cloudflared_cfg_path to the deploy:pod plugin's config-write,
-// where the deploykit GenerateTunnelUnit emitter writes the ExecStart=cloudflared --config
-// <path> line.
-func tunnelConfigPath(name string) (string, error) {
-	dir, err := tunnelConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, name+".yml"), nil
-}
 
 // parseHostPorts extracts host-side ports from image port mappings via the
 // canonical ParsePortMapping. Unparseable entries are reported on stderr —
@@ -123,7 +97,7 @@ func resolveProto(containerPort int, portProtos map[string]string) string {
 // ResolveTunnelConfig resolves a TunnelYAML into a TunnelConfig with defaults applied.
 // portProtos maps container port -> protocol ("http" or "tcp") from candy PortSpec data.
 // boxPorts is the list of image port mappings (e.g. "18789:18789", "443:18789").
-func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[string]*Candy, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
+func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[string]spec.CandyReader, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
 	if t == nil {
 		return nil
 	}

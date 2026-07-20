@@ -36,11 +36,17 @@ func (c *fakeCC) HTTPDo(_ context.Context, req kit.HTTPRequest) (kit.HTTPRespons
 	c.lastReq = req
 	return c.httpResp, c.httpErr
 }
-func (c *fakeCC) DialTimeout() time.Duration { return 3 * time.Second }
-func (c *fakeCC) Box() string                { return "" }
-func (c *fakeCC) Instance() string           { return "" }
-func (c *fakeCC) Distros() []string          { return nil }
-func (c *fakeCC) AddBackground(int)          {}
+func (c *fakeCC) ResolveEndpoint(context.Context, int) (string, error) { return "", nil }
+func (c *fakeCC) ResolveGraphicsEndpoint(context.Context, string) (kit.GraphicsEndpoint, error) {
+	return kit.GraphicsEndpoint{}, nil
+}
+func (c *fakeCC) ResolveClusterContext(context.Context, string) (string, error) { return "", nil }
+func (c *fakeCC) ResolveImageLabel(context.Context, string) (string, error)     { return "", nil }
+func (c *fakeCC) DialTimeout() time.Duration                                    { return 3 * time.Second }
+func (c *fakeCC) Box() string                                                   { return "" }
+func (c *fakeCC) Instance() string                                              { return "" }
+func (c *fakeCC) Distros() []string                                             { return nil }
+func (c *fakeCC) AddBackground(int)                                             {}
 
 // TestHTTPVerb_LiveViaHTTPDo proves the live path builds the request from the op + matches
 // the cc.HTTPDo response (status + body), and FAILS on a status mismatch. The verb dials

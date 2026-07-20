@@ -46,12 +46,32 @@ func requireProjectWalker() spec.ProjectWalker {
 	return activeProjectWalker
 }
 
+// activeCandyScanner is the registered CANDY-SCAN — the spec.CandyScanner of the compiled-in
+// loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). No in-core
+// fallback, mirroring activeProjectWalker: a nil scanner means the loader plugin was not compiled
+// in — a FATAL, never a silent fallback (requireCandyScanner).
+var activeCandyScanner spec.CandyScanner
+
+// requireCandyScanner returns the registered scanner or FATALs with a clear message.
+func requireCandyScanner() spec.CandyScanner {
+	if activeCandyScanner == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeCandyScanner
+}
+
 // hostWalkProject runs the kind-blind whole-project WALK via the registered loader plugin,
 // returning its generic parse envelope. rootData is the (bootstrap-transformed) root charly.yml
-// bytes; the seams are the six kind-blind host primitives the walk consults instead of the
+// bytes; the seams are the REGISTRY-COUPLED host primitives the walk consults instead of the
 // provider registry directly (boundary law clause D). This is the SOLE call site that reaches the
 // loader plugin's WalkProject — charly core builds the seams from its own host functions but never
 // imports sdk/loaderkit to drive the walk itself.
+//
+// RepoIdentity + the root-identity seed are DELIBERATELY left unset here: that logic (the
+// import-namespace cycle-break) is pure fs/git/yaml — no registry coupling — so the loader plugin
+// composes it ITSELF (sdk/loaderkit.RepoIdentity / RootRepoIdentity, defaulted in
+// candy/plugin-loader's WalkProject when the host leaves these zero) rather than charly core
+// holding that logic just to thread a function value through a struct literal.
 func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
 	seams := spec.WalkSeams{
 		Parser: requireLoaderParser(),
@@ -63,14 +83,11 @@ func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
 			connectDeclaredKindPlugins(bdir)
 			return nil
 		},
-		Threaded:     loaderThreaded,
-		ResolveRef:   canonicalRef,
-		GateDoc:      validateNodeDocCUE,
-		RepoIdentity: nsRepoIdentity,
+		Threaded:   loaderThreaded,
+		ResolveRef: canonicalRef,
+		GateDoc:    validateNodeDocCUE,
 	}
-	// Seed the root's own repo identity so a transitive self-import cycle-breaks to the in-progress
-	// root (the importing project's namespace pins win — ns_identity.go).
-	return requireProjectWalker().WalkProject(dir, rootData, rootRepoIdentity(dir), seams)
+	return requireProjectWalker().WalkProject(dir, rootData, "", seams)
 }
 
 // loaderThreaded builds the spec.Threaded snapshot: the recognized kind / deploy-substrate words

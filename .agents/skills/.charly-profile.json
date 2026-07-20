@@ -1,6 +1,7 @@
 {
   "version": 1,
   "links": {
+    "charly-automation--agent": "../../plugins/automation/skills/agent",
     "charly-automation--alias": "../../plugins/automation/skills/alias",
     "charly-automation--enc": "../../plugins/automation/skills/enc",
     "charly-automation--openclaw-deploy": "../../plugins/automation/skills/openclaw-deploy",
@@ -167,6 +168,7 @@
     "charly-internals--local-infra": "../../plugins/internals/skills/local-infra",
     "charly-internals--ovmf": "../../plugins/internals/skills/ovmf",
     "charly-internals--plugin": "../../plugins/internals/skills/plugin",
+    "charly-internals--root-cause-analyzer": "../../plugins/internals/skills/root-cause-analyzer",
     "charly-internals--skills": "../../plugins/internals/skills/skills",
     "charly-internals--strict-policy": "../../plugins/internals/skills/strict-policy",
     "charly-internals--vm-deploy-target": "../../plugins/internals/skills/vm-deploy-target",

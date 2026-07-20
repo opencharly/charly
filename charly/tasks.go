@@ -11,40 +11,11 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// P8 shims — the var-substitution + user-spec render helpers moved to
-// sdk/deploykit (tasks_emit.go). charly keeps these var-aliases so the
-// validate.go / check / bundle-add / install callers stay unchanged until
-// they relocate.
-var (
-	taskKnownNames       = deploykit.TaskKnownNames
-	taskUnresolvedRefs   = deploykit.TaskUnresolvedRefs
-	resolveUserSpec      = deploykit.ResolveUserSpec
-	taskSubstAutoExports = deploykit.TaskSubstAutoExports
-	taskSubstPath        = deploykit.TaskSubstPath
-)
-
-// stageInlineContent → deploykit.StageInlineContent (P8 shim).
-var stageInlineContent = deploykit.StageInlineContent
-
-// P8 shims — the per-verb Containerfile-line emitters moved to sdk/deploykit
-// (tasks_emit.go). charly keeps these var-aliases so callers outside tasks.go
-// (emitWrite←deploy_target_pod, emitVarsEnv←generate, emitCmd←checkspec/…) stay
-// unchanged until they relocate.
-var (
-	emitVarsEnv     = deploykit.EmitVarsEnv
-	emitMkdirBatch  = deploykit.EmitMkdirBatch
-	emitCopy        = deploykit.EmitCopy
-	emitWrite       = deploykit.EmitWrite
-	emitLinkBatch   = deploykit.EmitLinkBatch
-	emitSetcapBatch = deploykit.EmitSetcapBatch
-	taskCacheMounts = deploykit.TaskCacheMounts
-)
-
-// emitDownload → deploykit.EmitDownload (P8 shim).
-var emitDownload = deploykit.EmitDownload
-
-// emitCmd → deploykit.EmitCmd (P8 shim).
-var emitCmd = deploykit.EmitCmd
+// The var-substitution + user-spec render helpers, the inline-content stager, and
+// the per-verb Containerfile-line emitters all live in sdk/deploykit (tasks_emit.go);
+// every caller (here and in check_kit_adapter.go / install_build_act.go) references
+// deploykit.TaskKnownNames / deploykit.ResolveUserSpec / deploykit.EmitCmd / etc.
+// directly (K3 ZERO-ALIASES dissolution).
 
 // --- Orchestrator ---
 
@@ -57,7 +28,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	}
 	dg := deploykit.NewRenderGenerator()
 	dg.Dir = g.Dir
-	dg.Candies = candyModelMap(g.Candies)
+	dg.Candies = g.Candies
 	dg.Tag = g.Tag
 	dg.Boxes = g.Boxes
 	dg.BuildDir = g.BuildDir
@@ -189,7 +160,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 	if !ok {
 		return "", fmt.Errorf("candy %q: inline builder %q is externalized but its plugin is not connected", candyName, bName)
 	}
-	in := deploykit.BuilderResolveInputFrom(layer.Name, bName, bDef, ctx)
+	in := deploykit.BuilderResolveInputFrom(layer.GetName(), bName, bDef, ctx)
 	reply, err := resolveBuilderStage(prov, bName, in, img)
 	if err != nil {
 		return "", fmt.Errorf("candy %q: inline builder %q resolve: %w", candyName, bName, err)
@@ -202,7 +173,7 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 
 // emitTasks → deploykit.Generator.EmitTasks (P8 shim). Core resolves the render
 // state via toDeploykit() (seams wired) and delegates the byte-producing emit.
-func (g *Generator) emitTasks(b *strings.Builder, layer *Candy, img *buildkit.ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
+func (g *Generator) emitTasks(b *strings.Builder, layer spec.CandyReader, img *buildkit.ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
 	return g.toDeploykit().EmitTasks(b, layer, img, ops, buildDir, contextRelPrefix)
 }
 

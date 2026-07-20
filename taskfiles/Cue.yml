@@ -69,7 +69,7 @@ tasks:
         echo "cue:gen: regenerated sdk/spec + plugin params"
 
   bootstrap-cue:
-    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the RDD scratch binary, else checksum-verified download)
+    desc: Ensure ./bin/cue is the pinned cue CLI (prefers the sdk checkout's bin/cue, else checksum-verified download)
     dir: "{{.ROOT_DIR}}"
     status:
       - test -x bin/cue && bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'
@@ -77,11 +77,9 @@ tasks:
       - |
         set -euo pipefail
         mkdir -p bin
-        # Prefer a pre-fetched scratch binary (the RDD spike), else download the
+        # Prefer the sdk checkout's already-bootstrapped binary, else download the
         # pinned release and checksum-verify before extracting.
-        if [ -x /tmp/cue-rdd/cue ] && /tmp/cue-rdd/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
-          cp /tmp/cue-rdd/cue bin/cue
-        elif [ -x sdk/bin/cue ] && sdk/bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
+        if [ -x sdk/bin/cue ] && sdk/bin/cue version 2>/dev/null | grep -q '{{.CUE_VERSION}}'; then
           cp sdk/bin/cue bin/cue
         else
           ARCH="$(uname -m)"

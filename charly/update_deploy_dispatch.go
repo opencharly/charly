@@ -4,8 +4,14 @@ package main
 //
 // `charly update <name>` resolves a deploy name (VM/local/pod targets all
 // dispatch from here) or a bare image name; this file consolidates the
-// per-target dispatch into UpdateCmd so the user-facing surface is just
-// one verb.
+// per-target dispatch into podUpdateCmd (the host-side reconstruction of the
+// former UpdateCmd — now command:update in candy/plugin-pod) so the
+// user-facing surface is just one verb.
+//
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20): resolveTreeRoot/
+// loadDeployPlugins/ResolveTarget are core Mechanisms (the project loader + provider
+// registry) a plugin cannot import or hold — this file moves through the same
+// venue-scoped-executor-session seam when that wave lands.
 //
 // Critical semantic: NONE of the dispatchers below regenerate the
 // user-overlay deploy entry (no `charly bundle add` / `charly config` calls
@@ -53,7 +59,7 @@ func resolveUpdateDeployNode(tree map[string]spec.BundleNode, image, instance st
 	return node, nil
 }
 
-func (c *UpdateCmd) dispatchByDeployTarget() error {
+func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)

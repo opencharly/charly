@@ -20,7 +20,7 @@ charly-mcp:
             # deployed container has neither the candy source nor a go toolchain to build
             # it. (generate.go emitBakedPlugins → plugin_loader.go bakedPluginBinary.)
             #
-            # `bake_plugin:` IMPLIES `require:` (unified.go populateCandyFromYAML): the
+            # `bake_plugin:` IMPLIES `require:` (sdk/loaderkit/scan_candy.go populateFromYAML): the
             # baked plugin candy joins this candy's require chain, so (a) its version:
             # contributes to every composing image's EffectiveVersion (a baked-plugin
             # change forces a rebuild) and (b) it lands in the scanned candy set, where

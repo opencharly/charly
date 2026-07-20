@@ -96,18 +96,18 @@ func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*deploykit
 	// build_overlay.go's `tag != ""` branch (R3).
 	var imageRef string
 	if node.Version != "" {
-		imageRef = leafName(authored) + ":" + node.Version
+		imageRef = spec.LeafName(authored) + ":" + node.Version
 		if !kit.LocalImageExists(rt.RunEngine, imageRef) {
 			return nil, fmt.Errorf("deploy %q: pinned image %q not present in local %s storage", name, imageRef, rt.RunEngine)
 		}
 	} else {
-		resolved, rerr := kit.ResolveLocalImageRef(rt.RunEngine, leafName(authored))
+		resolved, rerr := kit.ResolveLocalImageRef(rt.RunEngine, spec.LeafName(authored))
 		if rerr != nil {
 			return nil, fmt.Errorf("deploy %q: resolving image %q: %w", name, authored, rerr)
 		}
 		imageRef = resolved
 	}
-	caps, err := ExtractMetadata(rt.RunEngine, imageRef)
+	caps, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("deploy %q: extracting capabilities from image %q: %w", name, imageRef, err)
 	}

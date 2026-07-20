@@ -1,10 +1,10 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // VolumeMount + ResolvedBindMount moved to sdk/deploykit (P13/C15); referenced
@@ -14,7 +14,7 @@ import (
 // full box chain (box → base → base's base) and collecting volume
 // declarations from all candies. Volumes are deduplicated by name (first
 // declaration wins — outermost box takes priority).
-func CollectBoxVolume(cfg *Config, layers map[string]*Candy, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
+func CollectBoxVolume(cfg *Config, layers map[string]spec.CandyReader, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
 	// Collect all candy names from the box chain (outermost first) via the
 	// shared base-chain walk; propagate a resolution error as before.
 	allCandyNames, err := cfg.boxCandyChain(layers, boxName)
@@ -64,88 +64,11 @@ func expandHome(path, home string) string {
 // (keyed by the deploy's container name), so a dedicated instance-only renamer is
 // no longer needed.
 
-// workspaceBindHost returns the host path of the "workspace" bind mount, or "".
-func workspaceBindHost(bindMounts []deploykit.ResolvedBindMount) string {
-	for _, bm := range bindMounts {
-		if bm.Name == "workspace" {
-			return bm.HostPath
-		}
-	}
-	return ""
-}
-
-// parseVolumeFlagsStandalone converts --volume and --bind CLI flags into DeployVolumeConfig.
-// Extracted from BoxConfigSetupCmd.parseVolumeFlags for reuse in shell/start.
-func parseVolumeFlagsStandalone(volumeFlags, bindFlags []string) []DeployVolumeConfig {
-	var configs []DeployVolumeConfig
-	seen := make(map[string]bool)
-
-	for _, v := range volumeFlags {
-		parts := strings.SplitN(v, ":", 3)
-		dv := DeployVolumeConfig{Name: parts[0]}
-		if len(parts) >= 2 {
-			dv.Type = parts[1]
-		}
-		if len(parts) >= 3 {
-			dv.Host = parts[2]
-		}
-		if dv.Type == "" {
-			dv.Type = "volume"
-		}
-		if dv.Type == "encrypt" {
-			dv.Type = "encrypted"
-		}
-		if !seen[dv.Name] {
-			configs = append(configs, dv)
-			seen[dv.Name] = true
-		}
-	}
-
-	for _, b := range bindFlags {
-		if seen[b] || seen[strings.SplitN(b, "=", 2)[0]] {
-			continue
-		}
-		if before, after, ok := strings.Cut(b, "="); ok {
-			name := before
-			host := after
-			// Resolve "." to absolute path
-			if host == "." {
-				if abs, err := filepath.Abs(host); err == nil {
-					host = abs
-				}
-			}
-			configs = append(configs, DeployVolumeConfig{Name: name, Type: "bind", Host: host})
-			seen[name] = true
-		} else {
-			configs = append(configs, DeployVolumeConfig{Name: b, Type: "bind"})
-			seen[b] = true
-		}
-	}
-
-	return configs
-}
-
-// mergeVolumeConfigs merges CLI overrides onto charly.yml volume configs.
-// CLI overrides win by name.
-func mergeVolumeConfigs(base, overrides []DeployVolumeConfig) []DeployVolumeConfig {
-	if len(overrides) == 0 {
-		return base
-	}
-	var result []DeployVolumeConfig
-	seen := make(map[string]bool)
-	// Overrides first (highest priority)
-	for _, o := range overrides {
-		result = append(result, o)
-		seen[o.Name] = true
-	}
-	// Base configs that weren't overridden
-	for _, b := range base {
-		if !seen[b.Name] {
-			result = append(result, b)
-		}
-	}
-	return result
-}
+// workspaceBindHost, parseVolumeFlagsStandalone, and mergeVolumeConfigs (the
+// BoxConfigSetupCmd.parseVolumeFlags extraction for shell/start reuse) moved along with
+// BoxConfigSetupCmd/BoxConfigRemoveCmd's orchestration to candy/plugin-deploy-pod
+// (P13-KERNEL direction-flip) — the plugin now owns its own workspaceBindHost +
+// parseVolumeFlags + mergeVolumeConfigsLocal, working on the wire spec.DeployVolume type.
 
 // sortVolumeMounts sorts volume mounts by name for deterministic output
 func sortVolumeMounts(mounts []deploykit.VolumeMount) {

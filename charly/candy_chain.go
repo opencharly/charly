@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // boxCandyChain returns the ordered, de-duplicated candy map-keys for boxName
 // across its FULL base-image chain (box → base → base's base), candy-order per
@@ -16,7 +20,7 @@ import "fmt"
 // error — callers that propagated it (CollectBoxVolume) keep doing so; callers
 // that swallowed it and used the partial result (CollectDescriptions et al.) keep doing
 // that by ignoring the returned error.
-func (c *Config) boxCandyChain(layers map[string]*Candy, boxName string) ([]string, error) {
+func (c *Config) boxCandyChain(layers map[string]spec.CandyReader, boxName string) ([]string, error) {
 	var out []string
 	seen := map[string]bool{}
 	for _, node := range c.walkBaseChain(boxName) {
@@ -39,7 +43,7 @@ func (c *Config) boxCandyChain(layers map[string]*Candy, boxName string) ([]stri
 // for boxName's OWN candies only — NO base-chain traversal. The shared walk for
 // LEAF-SPECIFIC fields (CollectSecurity, CollectBoxAlias,
 // CollectLibvirtSnippets) that intentionally do NOT inherit from a base box.
-func (c *Config) boxDirectCandies(layers map[string]*Candy, boxName string) ([]string, error) {
+func (c *Config) boxDirectCandies(layers map[string]spec.CandyReader, boxName string) ([]string, error) {
 	img, ok := c.BoxConfig(boxName)
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)

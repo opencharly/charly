@@ -11,6 +11,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // externalCommandDispatch pairs an OUT-OF-PROCESS command word with the dynamic Kong holder
@@ -20,9 +21,14 @@ import (
 // syscall.Exec'ing it (dispatchExternalCommand) — charly becomes the plugin, which then
 // inherits charly's terminal stdio/TTY natively (the whole point of the fork/exec seam).
 type externalCommandDispatch struct {
-	word   string // the command word: keys the binary resolve
-	holder any    // *struct{ <field> *struct{ Args []string } }
-	field  string // the exported holder field name (Kong needs exported fields)
+	word string // the command word: keys the binary resolve
+	// holder is *struct{ <field> *struct{ Args []string } } (the flat pass-through shape) when
+	// subcommands is empty, or *struct{ <field> *struct{ <Child1> *struct{Args []string} `cmd:""...`; ... } }
+	// (F-CLI-NEST — one level of DECLARED subcommands, each still ending in a pass-through leaf)
+	// when it isn't.
+	holder      any
+	field       string              // the exported holder field name (Kong needs exported fields)
+	subcommands []sdk.CLISubcommand // non-empty => the NESTED holder shape; empty => the flat shape
 }
 
 // collectExternalCommandPlugins builds a dynamic Kong subcommand for every OUT-OF-PROCESS
@@ -31,13 +37,16 @@ type externalCommandDispatch struct {
 // Run() handler and Kong's ctx.Run() cannot dispatch it; these are dispatched MANUALLY
 // post-parse via dispatchExternalCommand. Returns the holder structs for kong.Plugins embedding
 // — TOP-LEVEL on the CLI root, or NESTED under a parent command (e.g. `check`) for a provider
-// implementing NestedCommandProvider — plus the dispatch table keyed by the full command PATH
-// ("vm" top-level, "box generate" nested). TWO sources, unioned:
+// implementing NestedCommandProvider — plus the dispatch table keyed by the command's OWN
+// registered PATH ("vm" top-level, "box generate" nested) — NOT the full Kong-rendered path a
+// declared subcommand may extend by one more token; resolveCommandDispatch (main.go) is what
+// strips that extra token back off at lookup time. TWO sources, unioned:
 //   - (a) an already-CONNECTED external command provider in the registry (the eager path —
 //     uncommon, since command plugins are never connected for dispatch; carries the
-//     NestedCommandProvider parent for grammar nesting);
+//     NestedCommandProvider parent for grammar nesting AND the commandSubcommandCarrier catalog);
 //   - (b) a PRESCANNED command word (prescanProjectCommandWords, run in main before kong.Parse)
-//     — the common path: a TOP-LEVEL grammar holder.
+//     — the common path: a TOP-LEVEL grammar holder with no declared subcommands (no Describe has
+//     run yet to learn any).
 //
 // Empty (no external commands) when the project declares no command plugins — the grammar is
 // then byte-for-byte the builtin set.
@@ -56,8 +65,12 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		}
 		word := p.Reserved()
 		field := exportedCommandField(word)
-		holder := externalCommandHolder(word, field)
-		d := externalCommandDispatch{word: word, holder: holder, field: field}
+		var subs []sdk.CLISubcommand
+		if sc, ok := p.(commandSubcommandCarrier); ok {
+			subs = sc.declaredSubcommands()
+		}
+		holder := externalCommandHolder(word, field, subs)
+		d := externalCommandDispatch{word: word, holder: holder, field: field, subcommands: subs}
 		seen[word] = true
 		if ncp, ok := p.(NestedCommandProvider); ok {
 			if parent := ncp.CommandParent(); parent != "" {
@@ -69,15 +82,15 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		topLevel = append(topLevel, holder)
 		table[word] = d
 	}
-	// (b) prescanned command words — TOP-LEVEL holders. Nested external commands stay the
-	// registered path (a): the prescan learns only the word, not its parent, and no real
-	// nested external command exists today.
+	// (b) prescanned command words — TOP-LEVEL holders, no declared subcommands (no Describe has
+	// run yet). Nested external commands stay the registered path (a): the prescan learns only
+	// the word, not its parent, and no real nested external command exists today.
 	for _, word := range declaredExternalCommandWords() {
 		if seen[word] {
 			continue
 		}
 		field := exportedCommandField(word)
-		holder := externalCommandHolder(word, field)
+		holder := externalCommandHolder(word, field, nil)
 		topLevel = append(topLevel, holder)
 		table[word] = externalCommandDispatch{word: word, holder: holder, field: field}
 	}
@@ -95,35 +108,103 @@ type NestedCommandProvider interface {
 	CommandParent() string
 }
 
-// commandPathKey strips the trailing " <args>" placeholder Kong renders for an external
-// command's pass-through Args, yielding the command PATH that keys the dispatch table:
-// "examplecmd <args>" → "examplecmd"; "check kube <args>" → "check kube".
+// commandSubcommandCarrier is an optional refinement of a ClassCommand Provider (F-CLI-NEST): it
+// DECLARES its own one-level-deep CLI subcommand catalog (a name+help pair per child), advertised
+// over Describe via ProvidedCapability.Subcommands. collectExternalCommandPlugins uses it to build
+// a REAL nested Kong grammar — a named `cmd:""` child per entry, each still ending in a pass-through
+// Args leaf — in place of the opaque `[<args>...]` holder every OTHER command-class capability
+// gets, restoring both `--help` fidelity and `charly __cli-model` (MCP) leaf discoverability for
+// the declared children. Promoted onto both provider placements via capMeta embedding; a capability
+// that declares no subcommands (or a prescanned-but-unconnected external command, before any
+// Describe has run) keeps today's flat holder unchanged.
+type commandSubcommandCarrier interface {
+	Provider
+	declaredSubcommands() []sdk.CLISubcommand
+}
+
+// commandPathKey strips the trailing " <args>" placeholder Kong renders for a command's
+// deepest pass-through Args leaf, yielding the command PATH Kong actually parsed:
+// "examplecmd <args>" → "examplecmd"; "check kube <args>" → "check kube";
+// "check live <args>" → "check live" (F-CLI-NEST: "live" is a DECLARED subcommand of "check", one
+// token deeper than the "check" entry collectExternalCommandPlugins registered in the dispatch
+// table — resolveCommandDispatch is what strips that extra token back off).
 func commandPathKey(kongCommand string) string {
 	return strings.TrimSuffix(kongCommand, " <args>")
 }
 
-// externalCommandHolder builds a Kong command holder for one out-of-process command:
+// resolveCommandDispatch resolves a Kong-rendered command path (via ctx.Command(), e.g.
+// "check <args>", "check live <args>", "box list <args>", or "box list boxes <args>") to its
+// registered externalCommandDispatch entry plus the declared-subcommand NAME (if any) that must be
+// PREPENDED to the args forwarded to the plugin. A subcommand catalog (F-CLI-NEST) is declared
+// exactly ONE level deep, so at most one extra path token can separate the capability's own
+// registered table key from the fully-rendered path: try the path as-is first (the flat holder, or
+// a CommandParent-nested command with no further declared subcommands — unchanged behavior); if
+// that misses, drop the LAST token (the selected child's name) and retry — a hit there means the
+// dropped token is the child to prepend.
+func resolveCommandDispatch(kongCommand string, table map[string]externalCommandDispatch) (externalCommandDispatch, string, bool) {
+	path := commandPathKey(kongCommand)
+	if d, ok := table[path]; ok {
+		return d, "", true
+	}
+	if idx := strings.LastIndex(path, " "); idx >= 0 {
+		if d, ok := table[path[:idx]]; ok {
+			return d, path[idx+1:], true
+		}
+	}
+	return externalCommandDispatch{}, "", false
+}
+
+// externalCommandHolder builds a Kong command holder for one out-of-process (or compiled-in
+// dynamic-dispatch) command:
 //
 //	*struct{ <Field> *struct{ Args []string `arg:"" passthrough:""` } `cmd:"" name:"<word>"` }
 //
-// The pass-through Args carry every token after the command word; the plugin parses its own
-// flags (its CLI grammar owns that contract), so the core needs no per-flag knowledge here.
-func externalCommandHolder(word, field string) any {
-	argsType := reflect.StructOf([]reflect.StructField{
+// When subcommands is non-empty (F-CLI-NEST), the inner struct is instead a NAMED child per
+// declared entry — each STILL ending in its own pass-through Args leaf, so the plugin's real
+// internal flag/positional shape beneath any one child stays invisible to the host exactly like
+// today's flat holder; only the CHILD NAMING becomes real, which is what makes it a genuine Kong
+// `cmd:""` node (shows in `--help`, walkable by `charly __cli-model`) instead of an opaque
+// passthrough. The plugin parses its own flags beyond that (its CLI grammar owns that contract),
+// so the core needs no per-flag knowledge here either way.
+func externalCommandHolder(word, field string, subcommands []sdk.CLISubcommand) any {
+	bodyType := passthroughArgsType()
+	if len(subcommands) > 0 {
+		bodyType = nestedSubcommandType(subcommands)
+	}
+	holderType := reflect.StructOf([]reflect.StructField{
+		{
+			Name: field,
+			Type: reflect.PointerTo(bodyType),
+			Tag:  reflect.StructTag(fmt.Sprintf(`cmd:"" name:%q help:%q`, word, word+" (out-of-process command plugin)")),
+		},
+	})
+	return reflect.New(holderType).Interface()
+}
+
+// passthroughArgsType is the pass-through Args leaf every command holder bottoms out in — the flat
+// holder's own body, or one declared subcommand's body under the F-CLI-NEST nested shape.
+func passthroughArgsType() reflect.Type {
+	return reflect.StructOf([]reflect.StructField{
 		{
 			Name: "Args",
 			Type: reflect.TypeOf([]string{}),
 			Tag:  `arg:"" optional:"" passthrough:"" help:"arguments forwarded to the command plugin"`,
 		},
 	})
-	holderType := reflect.StructOf([]reflect.StructField{
-		{
-			Name: field,
-			Type: reflect.PointerTo(argsType),
-			Tag:  reflect.StructTag(fmt.Sprintf(`cmd:"" name:%q help:%q`, word, word+" (out-of-process command plugin)")),
-		},
-	})
-	return reflect.New(holderType).Interface()
+}
+
+// nestedSubcommandType builds the F-CLI-NEST inner struct: one named `cmd:""` field per declared
+// subcommand, each a pointer to its own pass-through Args leaf.
+func nestedSubcommandType(subcommands []sdk.CLISubcommand) reflect.Type {
+	fields := make([]reflect.StructField, 0, len(subcommands))
+	for _, sc := range subcommands {
+		fields = append(fields, reflect.StructField{
+			Name: exportedCommandField(sc.Name),
+			Type: reflect.PointerTo(passthroughArgsType()),
+			Tag:  reflect.StructTag(fmt.Sprintf(`cmd:"" name:%q help:%q`, sc.Name, sc.Help)),
+		})
+	}
+	return reflect.StructOf(fields)
 }
 
 // dispatchCommand routes a parsed dynamic command to its provider by PLACEMENT (F8): a
@@ -134,21 +215,23 @@ func externalCommandHolder(word, field string) any {
 // half of placement-invisibility: the SAME command candy works compiled-in or out-of-process,
 // the dynamic Kong grammar (externalCommandHolder) identical for both — only the dispatch
 // transport differs. The dynamic grammar carries no Run() method, so dispatch is manual either way.
-func dispatchCommand(d externalCommandDispatch) error {
+// sub is the declared-subcommand NAME resolveCommandDispatch recovered ("" for the flat case, or a
+// CommandParent nesting with no further declared subcommands).
+func dispatchCommand(d externalCommandDispatch, sub string) error {
 	if prov, ok := providerRegistry.resolve(ClassCommand, d.word); ok {
 		if _, external := prov.(*grpcProvider); !external {
-			return dispatchInProcCommand(prov, d)
+			return dispatchInProcCommand(prov, d, sub)
 		}
 	}
-	return dispatchExternalCommand(d)
+	return dispatchExternalCommand(d, sub)
 }
 
 // dispatchInProcCommand forwards a compiled-in command's parsed pass-through args to its in-proc
 // provider via Invoke(OpRun) — the candy's OpRun handler runs in charly's process (it owns
 // os.Stdout/Stderr/TTY natively), mirroring the OUT-OF-PROCESS plugin's pass-through `{"args":[…]}`
 // envelope (the OpRun contract), so a command candy behaves identically in either placement.
-func dispatchInProcCommand(prov Provider, d externalCommandDispatch) error {
-	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d)})
+func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
+	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub)})
 	if err != nil {
 		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
 	}
@@ -175,8 +258,8 @@ func dispatchInProcCommand(prov Provider, d externalCommandDispatch) error {
 // plugin BECOMES the process (a deployed `--listen` service has no wrapper and no
 // signal-forwarding hop). On success this never returns; only a PRE-exec failure (binary
 // missing / build fail / bad env) returns an error.
-func dispatchExternalCommand(d externalCommandDispatch) error {
-	bin, argv, env, err := externalCommandExecPlan(d)
+func dispatchExternalCommand(d externalCommandDispatch, sub string) error {
+	bin, argv, env, err := externalCommandExecPlan(d, sub)
 	if err != nil {
 		return err
 	}
@@ -191,8 +274,8 @@ func dispatchExternalCommand(d externalCommandDispatch) error {
 // out of the kong-populated holder, resolves the plugin binary by word, and builds the exec
 // argv (binary + args) and env (charly's environ minus the go-plugin handshake cookie, plus
 // CHARLY_BIN).
-func externalCommandExecPlan(d externalCommandDispatch) (bin string, argv, env []string, err error) {
-	args := externalCommandArgs(d)
+func externalCommandExecPlan(d externalCommandDispatch, sub string) (bin string, argv, env []string, err error) {
+	args := externalCommandArgs(d, sub)
 	bin, err = resolveCommandPluginBinary(context.Background(), d.word)
 	if err != nil {
 		return "", nil, nil, err
@@ -203,15 +286,32 @@ func externalCommandExecPlan(d externalCommandDispatch) (bin string, argv, env [
 }
 
 // externalCommandArgs reads the kong-populated pass-through Args out of the dynamic holder
-// struct by reflection. Returns nil when the command was invoked with no positional args.
-func externalCommandArgs(d externalCommandDispatch) []string {
+// struct by reflection. For the flat holder (sub == ""), that's the field's own Args slice. For
+// the F-CLI-NEST nested holder, sub names WHICH declared child Kong selected — its Args slice is
+// read one level deeper and the child's own NAME is prepended (dispatchCommand/the plugin's own
+// internal Kong parse expects "<subcommand> <its args...>", exactly like the flat pass-through
+// case forwards "<whatever the user typed>" verbatim). Returns nil when no args were supplied.
+func externalCommandArgs(d externalCommandDispatch, sub string) []string {
 	cmdField := reflect.ValueOf(d.holder).Elem().FieldByName(d.field)
-	if cmdField.IsValid() && !cmdField.IsNil() {
-		if a, ok := cmdField.Elem().FieldByName("Args").Interface().([]string); ok {
+	if !cmdField.IsValid() || cmdField.IsNil() {
+		return nil
+	}
+	container := cmdField.Elem()
+	if sub == "" {
+		if a, ok := container.FieldByName("Args").Interface().([]string); ok {
 			return a
 		}
+		return nil
 	}
-	return nil
+	childField := container.FieldByName(exportedCommandField(sub))
+	if !childField.IsValid() || childField.IsNil() {
+		return []string{sub}
+	}
+	var childArgs []string
+	if a, ok := childField.Elem().FieldByName("Args").Interface().([]string); ok {
+		childArgs = a
+	}
+	return append([]string{sub}, childArgs...)
 }
 
 // resolveCommandPluginBinary returns the provider binary that serves command:<word>. A BAKED
@@ -240,7 +340,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 	if candy == nil {
 		return "", fmt.Errorf("command %q: no plugin candy provides command:%s in the project", word, word)
 	}
-	bin, err := resolvePluginBinary(ctx, candy.SourceDir, name)
+	bin, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name)
 	if err != nil {
 		return "", fmt.Errorf("command %q: %w", word, err)
 	}
@@ -249,13 +349,13 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 
 // findCommandPluginCandy returns the scanned-set key + candy of the plugin candy whose
 // declaration provides command:<word>, or ("", nil) if none does.
-func findCommandPluginCandy(candies map[string]*Candy, word string) (string, *Candy) {
+func findCommandPluginCandy(candies map[string]spec.CandyReader, word string) (string, spec.CandyReader) {
 	for name, candy := range candies {
-		if candy == nil || candy.Plugin == nil {
+		if candy == nil || !candy.IsPluginCandy() {
 			continue
 		}
-		for _, capability := range candy.Plugin.Providers {
-			if class, w, ok := splitCapability(string(capability)); ok && class == ClassCommand && w == word {
+		for _, capability := range candy.GetPluginProviders() {
+			if class, w, ok := splitCapability(capability); ok && class == ClassCommand && w == word {
 				return name, candy
 			}
 		}

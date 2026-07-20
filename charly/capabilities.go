@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -168,7 +169,7 @@ func checkCapabilityLabelCompleteness() error {
 // repo access required. Errors propagate ErrImageNotLocal when appropriate
 // (caller can wrap with a "run charly box pull" hint).
 func CapabilitiesFromLabels(engine, imageRef string) (*Capabilities, error) {
-	meta, err := ExtractMetadata(engine, imageRef)
+	meta, err := deploykit.ExtractMetadata(engine, imageRef)
 	if err != nil {
 		return nil, err
 	}

@@ -64,32 +64,13 @@ type BundleAddCmd struct {
 	Lifecycle  string `long:"lifecycle" help:"Informational tier tag (scratch|dev|test|qa|staging|prod|custom). NO effect on disposability — use --disposable for that."`
 }
 
-func (c *BundleAddCmd) Run() error {
-	return hostDeploySeam("deploy-add", spec.DeployAddRequest{
-		Name:             c.Name,
-		Ref:              c.Ref,
-		AddCandy:         c.AddCandy,
-		Tag:              c.Tag,
-		DryRun:           c.DryRun,
-		NodeOnly:         c.NodeOnly,
-		Format:           c.Format,
-		Pull:             c.Pull,
-		Verify:           c.Verify,
-		WithServices:     c.WithServices,
-		AllowRepoChanges: c.AllowRepoChanges,
-		AllowRootTasks:   c.AllowRootTasks,
-		SkipIncompatible: c.SkipIncompatible,
-		BuilderImage:     c.BuilderImage,
-		AssumeYes:        c.AssumeYes,
-		Disposable:       c.Disposable,
-		Lifecycle:        c.Lifecycle,
-	})
-}
+// BundleAddCmd's Run() (the plugin-side deploy-tree WALK) lives in walk.go (K4-C walk port).
 
-// BundleDelCmd is the `charly bundle del <name>` grammar; it forwards to the deploy-del
-// host-build seam. The AssumeYes field renders as `--assume-yes` (Kong derives the long
-// name from the FIELD; the `long:"yes"` tag is a no-op in the separate-tag form) with `-y`
-// as the short form — the exact contract charly/bundle_add_cmd.go::deployDelArgv relies on.
+// BundleDelCmd is the `charly bundle del <name>` grammar; Run() (walk.go) drives the
+// deploy-del-resolve / deploy-members-down / deploy-node-del-dispatch seams. The AssumeYes field
+// renders as `--assume-yes` (Kong derives the long name from the FIELD; the `long:"yes"` tag is
+// a no-op in the separate-tag form) with `-y` as the short form — the exact contract
+// charly/bundle_add_cmd.go::deployDelArgv relies on.
 type BundleDelCmd struct {
 	Name string `arg:"" help:"Deploy name (literal 'host' or a container deploy name)"`
 
@@ -98,17 +79,6 @@ type BundleDelCmd struct {
 	KeepServices    bool `long:"keep-services" help:"Don't disable systemd units (just stop tracking)"`
 	KeepImage       bool `long:"keep-image" help:"Don't remove the synthesized overlay image (container target only)"`
 	DryRun          bool `long:"dry-run" help:"Print the teardown plan without executing"`
-}
-
-func (c *BundleDelCmd) Run() error {
-	return hostDeploySeam("deploy-del", spec.DeployDelRequest{
-		Name:            c.Name,
-		AssumeYes:       c.AssumeYes,
-		KeepRepoChanges: c.KeepRepoChanges,
-		KeepServices:    c.KeepServices,
-		KeepImage:       c.KeepImage,
-		DryRun:          c.DryRun,
-	})
 }
 
 // BundleFromBoxCmd is the `charly bundle from-box <ref> [name]` grammar; it forwards to the
@@ -135,23 +105,19 @@ func (c *BundleFromBoxCmd) Run() error {
 	})
 }
 
-// BundleShowCmd is the `charly bundle show [box]` grammar; it forwards to the deploy-config
-// host-build seam with op "show".
+// BundleShowCmd is the `charly bundle show [box]` grammar (K4-C: runs entirely plugin-side —
+// deploykit.LoadBundleConfig/DeployKey are already sdk-portable, no seam needed).
 type BundleShowCmd struct {
 	Box      string `arg:"" optional:"" help:"Show overrides for a specific box"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
 }
 
 func (c *BundleShowCmd) Run() error {
-	return hostDeploySeam("deploy-config", spec.DeployConfigRequest{
-		Op:       "show",
-		Box:      c.Box,
-		Instance: c.Instance,
-	})
+	return runBundleShow(c.Box, c.Instance)
 }
 
-// BundleExportCmd is the `charly bundle export [boxes…]` grammar; it forwards to the
-// deploy-config host-build seam with op "export".
+// BundleExportCmd is the `charly bundle export [boxes…]` grammar (K4-C: runs plugin-side;
+// --all reaches the project via the established HostBuild("resolved-project") seam).
 type BundleExportCmd struct {
 	Boxes  []string `arg:"" optional:"" help:"Boxes to export (default: all with overrides)"`
 	Output string   `short:"o" help:"Write to file instead of stdout"`
@@ -159,16 +125,11 @@ type BundleExportCmd struct {
 }
 
 func (c *BundleExportCmd) Run() error {
-	return hostDeploySeam("deploy-config", spec.DeployConfigRequest{
-		Op:     "export",
-		Boxes:  c.Boxes,
-		Output: c.Output,
-		All:    c.All,
-	})
+	return runBundleExport(c.Boxes, c.Output, c.All)
 }
 
-// BundleImportCmd is the `charly bundle import <files…>` grammar; it forwards to the
-// deploy-config host-build seam with op "import".
+// BundleImportCmd is the `charly bundle import <files…>` grammar (K4-C: runs plugin-side;
+// the SAVE step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
 type BundleImportCmd struct {
 	Files   []string `arg:"" help:"Deploy YAML files to import (merged left-to-right)"`
 	Replace bool     `help:"Replace entire charly.yml instead of merging with existing"`
@@ -176,35 +137,25 @@ type BundleImportCmd struct {
 }
 
 func (c *BundleImportCmd) Run() error {
-	return hostDeploySeam("deploy-config", spec.DeployConfigRequest{
-		Op:      "import",
-		Files:   c.Files,
-		Replace: c.Replace,
-		Box:     c.Box,
-	})
+	return runBundleImport(c.Files, c.Replace, c.Box)
 }
 
-// BundleResetCmd is the `charly bundle reset [box]` grammar; it forwards to the deploy-config
-// host-build seam with op "reset".
+// BundleResetCmd is the `charly bundle reset [box]` grammar (K4-C: runs plugin-side; the SAVE
+// step alone reaches the host via the narrow HostBuild("deploy-config-save") seam).
 type BundleResetCmd struct {
 	Box      string `arg:"" optional:"" help:"Box to reset (omit to clear all)"`
 	Instance string `short:"i" long:"instance" help:"Instance name"`
 }
 
 func (c *BundleResetCmd) Run() error {
-	return hostDeploySeam("deploy-config", spec.DeployConfigRequest{
-		Op:       "reset",
-		Box:      c.Box,
-		Instance: c.Instance,
-	})
+	return runBundleReset(c.Box, c.Instance)
 }
 
-// BundleStatusCmd is the `charly bundle status` grammar; it forwards to the deploy-config
-// host-build seam with op "status".
+// BundleStatusCmd is the `charly bundle status` grammar (K4-C: runs entirely plugin-side).
 type BundleStatusCmd struct{}
 
 func (c *BundleStatusCmd) Run() error {
-	return hostDeploySeam("deploy-config", spec.DeployConfigRequest{Op: "status"})
+	return runBundleStatus()
 }
 
 // BundlePathCmd is the `charly bundle path` grammar. It resolves the per-host deploy-overlay

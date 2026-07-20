@@ -8,76 +8,25 @@ package main
 // (candy/plugin-check); it drives the sequence over HostBuild("cli") + the check-bed
 // session seam. This file keeps only the loader/host Mechanisms a plugin (a separate
 // module importing only sdk) cannot perform and which the seam's session ops call:
-// the per-domain flock helpers
-// (bedVmDomains / acquireVmDomainLock), the acceptance-depth resolver (bedCheckLevel), the
+// the acceptance-depth resolver (bedCheckLevel), the
 // in-place-external classifier (bedExternalInPlace), the per-host deploy-override seed
 // (persistBedDeployOverrides), the nested-local-children apply (deployNestedLocalChildren),
-// and the readiness gates (waitForVmSshReady / waitForContainerReady).
+// and the readiness gates (waitForVmSshReady / waitForContainerReady). The former
+// bedVmDomains/acquireVmDomainLock pair (CHECK-wave bed-session spike) dissolved into
+// kit.BedVmDomains/kit.AcquireVmDomainLock — pure over an already-stamped spec.BundleNode, zero
+// core-state coupling, so it moved wholesale rather than staying behind this seam.
 
 import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/deploykit"
 )
-
-// bedVmDomains returns the sorted, deduped libvirt domain names (charly-<from>) a bed's
-// VM(s) occupy — the bed's own vm target plus any group-member vm targets. This is the
-// unit of exclusive host contention two DISTINCT beds can collide on (the per-domain lock
-// in the check-bed session seam serializes them).
-func bedVmDomains(name string, node spec.BundleNode) []string {
-	seen := map[string]bool{}
-	var out []string
-	add := func(domainID string) {
-		if domainID == "" {
-			return
-		}
-		dom := "charly-" + domainID
-		if seen[dom] {
-			return
-		}
-		seen[dom] = true
-		out = append(out, dom)
-	}
-	// Post-P33 the domain is keyed by the DEPLOY (charly-<domainIdentity>), not the shared entity:
-	// the VM root's domain derives from the bed name, each VM member's from its member key. So
-	// distinct beds sharing one kind:vm entity now hold DISTINCT domain locks and run fully parallel
-	// (the collision-free-by-construction goal); the lock only serializes two invocations of the SAME
-	// deploy on its own domain.
-	if nodeTraits(&node).Venue == "ssh" { // vm (ssh venue) root
-		add(vmDomainIdentity(name))
-	}
-	for memberKey, m := range node.Members {
-		if isVmMember(m) {
-			add(vmDomainIdentity(memberKey))
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// acquireVmDomainLock takes a BLOCKING, host-global advisory lock serializing every check
-// bed that occupies the given libvirt domain. Host-global (under ~/.cache/charly/.locks/)
-// because the qemu:///session domain namespace is host-wide, shared across project dirs.
-func acquireVmDomainLock(domain string) (func() error, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	dir := filepath.Join(home, ".cache", "charly", ".locks")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	return acquireFileLock(filepath.Join(dir, "vm-domain-"+domain+".lock"), true)
-}
 
 // bedCheckLevel resolves the acceptance-depth rung for a bed from its box's
 // authored check_level (none → DefaultCheckLevel). VM / local beds carry no box

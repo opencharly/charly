@@ -54,7 +54,7 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 }
 
 // CollectDescriptions returns nil if every section is empty.
-func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) *spec.LabelDescriptionSet {
+func CollectDescriptions(cfg *Config, layers map[string]spec.CandyReader, boxName string) *spec.LabelDescriptionSet {
 	set := &spec.LabelDescriptionSet{}
 
 	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
@@ -63,13 +63,13 @@ func CollectDescriptions(cfg *Config, layers map[string]*Candy, boxName string) 
 		if !ok {
 			continue
 		}
-		baked := bakeableSteps(layer.plan)
-		if layer.Description == "" && len(baked) == 0 {
+		baked := bakeableSteps(layer.PlanSteps())
+		if layer.GetDescription() == "" && len(baked) == 0 {
 			continue
 		}
 		set.Candy = append(set.Candy, spec.LabeledDescription{
 			Origin:      "candy:" + candyName,
-			Description: layer.Description,
+			Description: layer.GetDescription(),
 			Plan:        baked,
 		})
 	}

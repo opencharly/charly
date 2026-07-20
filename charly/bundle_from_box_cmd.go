@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>
@@ -14,10 +16,10 @@ import (
 // labels, with NO charly.yml project. Two targets:
 //
 //   - pod (default): generate + enable a podman quadlet from the image's labels
-//     (ports, services, volumes, env, GPU auto-detect via DetectHostDevices),
-//     then start the resulting systemd-user service. Reuses the project-free
-//     runConfig core via BoxConfigSetupCmd.ExplicitRef — no quadlet logic is
-//     duplicated.
+//     (ports, services, volumes, env, GPU auto-detect), then start the resulting
+//     systemd-user service. Reuses the project-free config-setup ORCHESTRATION
+//     (P13-KERNEL direction-flip: candy/plugin-deploy-pod's sdk.OpConfigSetup) via
+//     #PodConfigSetupRequest.ExplicitRef — no quadlet logic is duplicated.
 //   - k8s (--cluster <name>): emit a Kustomize tree via the existing
 //     DeployFromBox (charly/k8s_deploy_from_box.go) — unifying the from-box
 //     surface across both targets.
@@ -66,26 +68,25 @@ func (c *deployFromBoxCmd) Run() error {
 		return nil
 	}
 
-	// Pod path. Reuse the project-free runConfig core via ExplicitRef: it reads
-	// the image's labels, builds the QuadletConfig, writes + enables the
-	// quadlet, and daemon-reloads — all with no charly.yml.
+	// Pod path. Reuse the project-free config-setup ORCHESTRATION (now in candy/plugin-deploy-pod,
+	// the P13-KERNEL direction-flip) via ExplicitRef: it reads the image's labels, builds the
+	// QuadletConfig, writes + enables the quadlet, and daemon-reloads — all with no charly.yml.
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
-	icc := &BoxConfigSetupCmd{
+	if _, err := hostBuildPodConfigSetup(context.Background(), spec.PodConfigSetupRequest{
 		Box:         name,
 		Instance:    c.Instance,
 		Env:         c.Env,
 		Port:        c.Port,
 		ExplicitRef: c.Ref,
-	}
-	if err := icc.Run(); err != nil {
+	}, buildEngineContext{}); err != nil {
 		return fmt.Errorf("from-box config %q: %w", name, err)
 	}
 
-	// In direct mode (no systemd-user) runConfigDirect already launched the
-	// container via `podman run -d`; nothing more to do. In quadlet mode
+	// In direct mode (no systemd-user) the plugin's runConfigDirect already launched the
+	// container via `podman run -d`; nothing more to do. In quadlet mode the plugin's
 	// runConfig only WROTE + enabled the quadlet (it starts the container
 	// itself only for a post_enable hook), so start the service now. Start by
 	// SERVICE name — the image ref is already baked into the quadlet from
@@ -93,7 +94,7 @@ func (c *deployFromBoxCmd) Run() error {
 	// short-name re-resolution (as `charly start` does) would resolve the wrong
 	// image.
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(name, c.Instance)
+		svc := kit.ServiceNameInstance(name, c.Instance)
 		start := exec.Command("systemctl", "--user", "start", svc)
 		start.Stdout = os.Stderr
 		start.Stderr = os.Stderr

@@ -18,6 +18,13 @@ package main
 // race-free across multiple candies declaring the same secret because
 // DefaultCredentialStore is cached via sync.Once and the first caller's
 // Set is visible to the second caller's ResolveCredential.
+//
+// P13-KERNEL fold-in: InjectSecretsIntoPlans (the ONE genuinely pure function
+// in this file — no credential-store or project-loader dependency) relocated
+// to sdk/deploykit/secret_declare.go. Every other function here routes through
+// DefaultCredentialStore/ResolveCredential (provider-registry-coupled) or
+// ScanAllCandyWithConfig (loader-coupled) and stays charly-core, registered
+// FINAL/K5 credential-family inventory (see ensureCandySecret's own header).
 
 import (
 	"maps"
@@ -43,6 +50,12 @@ import (
 // fallback per credential_store.go DefaultCredentialStore); the second
 // caller's ResolveCredential reads the persisted value. All callers in
 // one process share the cached singleton.
+//
+// TRACKED FINAL/K5 EXIT (DEPLOY-wave W2 audit, 2026-07-20): DefaultCredentialStore/
+// ResolveCredential route through the core provider registry (same verb-dispatch
+// coupling as enc.go/secrets.go — see their headers); CandyForPlan (below) additionally
+// takes *Config, the core-only project type. Registered FINAL/K5 alongside enc.go/
+// secrets.go's InvokeProvider rewrite, not this wave.
 func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source string) {
 	service, key := "charly/secret", dep.Name
 	if dep.Key != "" {
@@ -71,29 +84,28 @@ func ensureCandySecret(dep spec.EnvDependency, required bool) (val, source strin
 //
 // Returns the env map; never returns an error. The auto-generate policy
 // guarantees every `secret_requires:` resolves to a non-empty value.
-func ResolveCandySecret(layer *Candy) map[string]string {
+// Takes spec.CandyReader (the read-only interface every scanned candy is wrapped
+// into, W9) rather than a concrete type — this function needs only the
+// SecretRequire/SecretAccept accessors.
+func ResolveCandySecret(layer spec.CandyReader) map[string]string {
 	env := map[string]string{}
 	if layer == nil {
 		return env
 	}
 
-	if layer.HasSecretRequires() {
-		for _, dep := range layer.SecretRequire() {
-			val, _ := ensureCandySecret(dep, true)
-			env[dep.Name] = val
-		}
+	for _, dep := range layer.SecretRequire() {
+		val, _ := ensureCandySecret(dep, true)
+		env[dep.Name] = val
 	}
 
-	if layer.HasSecretAccepts() {
-		for _, dep := range layer.SecretAccept() {
-			val, _ := ensureCandySecret(dep, false)
-			if val == "" && dep.Default != "" {
-				env[dep.Name] = dep.Default
-				continue
-			}
-			if val != "" {
-				env[dep.Name] = val
-			}
+	for _, dep := range layer.SecretAccept() {
+		val, _ := ensureCandySecret(dep, false)
+		if val == "" && dep.Default != "" {
+			env[dep.Name] = dep.Default
+			continue
+		}
+		if val != "" {
+			env[dep.Name] = val
 		}
 	}
 
@@ -105,7 +117,7 @@ func ResolveCandySecret(layer *Candy) map[string]string {
 // into one env map, with candy-order precedence (later candies win on
 // duplicate names, matching the existing generate.go `secretRequiresMap`
 // semantics in the label-emission path).
-func ResolveSecretForCandy(layers []*Candy) map[string]string {
+func ResolveSecretForCandy(layers []spec.CandyReader) map[string]string {
 	env := map[string]string{}
 	for _, l := range layers {
 		maps.Copy(env, ResolveCandySecret(l))
@@ -113,17 +125,17 @@ func ResolveSecretForCandy(layers []*Candy) map[string]string {
 	return env
 }
 
-// CandyForPlan reloads the candy map and returns the ordered *Candy
+// CandyForPlan reloads the candy map and returns the ordered spec.CandyReader
 // slice covered by the given plans (both CandiesIncluded for image-level
 // plans and per-plan Candy for candy-only plans). Used by deploy-add to
 // call ResolveSecretForCandy + RetrieveCandyArtifacts.
-func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]*Candy, error) {
+func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]spec.CandyReader, error) {
 	layers, err := ScanAllCandyWithConfig(dir, cfg)
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
-	var ordered []*Candy
+	var ordered []spec.CandyReader
 	pick := func(name string) {
 		if name == "" || seen[name] {
 			return
@@ -140,34 +152,4 @@ func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]*C
 		pick(p.Candy)
 	}
 	return ordered, nil
-}
-
-// InjectSecretsIntoPlans merges the resolved secret env map into every
-// OpStep's task.Env across the supplied plans. Existing task.Env keys
-// are preserved (candy-declared env takes precedence over a credential-
-// store collision — a deliberate choice so an author can explicitly pin
-// a value they control). Called from deploy_add_cmd after
-// ResolveCandySecret and before target.Emit so the heredoc renderer
-// sees the values as regular env exports.
-func InjectSecretsIntoPlans(plans []*deploykit.InstallPlan, env map[string]string) {
-	if len(env) == 0 {
-		return
-	}
-	for _, p := range plans {
-		for _, step := range p.Steps {
-			ts, ok := step.(*deploykit.OpStep)
-			if !ok || ts.Op == nil {
-				continue
-			}
-			if ts.Op.Env == nil {
-				ts.Op.Env = map[string]string{}
-			}
-			for k, v := range env {
-				if _, alreadySet := ts.Op.Env[k]; alreadySet {
-					continue
-				}
-				ts.Op.Env[k] = v
-			}
-		}
-	}
 }

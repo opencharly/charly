@@ -37,19 +37,28 @@ func compileServiceSteps(layer deploykit.CandyModel, img *buildkit.ResolvedBox, 
 			return systemdDef != nil
 		}
 		loadedSystemd = true
-		dir, err := os.Getwd()
-		if err != nil {
-			return false
+		// Prefer the deploy-compile seam's preresolved active init
+		// (bundle_compile_seam.go's preresolveActiveInitInto — a by-name,
+		// existence-checked lookup run ONCE per whole deploy). Fall back to a
+		// direct, per-call lazy lookup only for a caller that compiles outside
+		// that seam (e.g. a direct BuildDeployPlan test/caller).
+		if hostCtx.ActiveInitName == "systemd" && hostCtx.ActiveInit != nil {
+			systemdDef = hostCtx.ActiveInit
+		} else {
+			dir, err := os.Getwd()
+			if err != nil {
+				return false
+			}
+			_, _, initCfg, err := LoadBuildConfigForBox(dir)
+			if err != nil || initCfg == nil {
+				return false
+			}
+			def, ok := initCfg.Init["systemd"]
+			if !ok || def == nil {
+				return false
+			}
+			systemdDef = def
 		}
-		_, _, initCfg, err := LoadBuildConfigForBox(dir)
-		if err != nil || initCfg == nil {
-			return false
-		}
-		def, ok := initCfg.Init["systemd"]
-		if !ok || def == nil {
-			return false
-		}
-		systemdDef = def
 		renderCtx = ServiceRenderContext{
 			Candy:         layer.GetName(),
 			SystemUnitDir: "/etc/systemd/system",

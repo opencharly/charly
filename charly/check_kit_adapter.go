@@ -121,7 +121,7 @@ func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
 // the candy name) that the candy cannot. The load-bearing Reverse() lives on the built
 // step (package main), unchanged from the typed builtin verb's ConstructStep.
 func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
-	userDir, _ := resolveUserSpec(op.RunAs, img)
+	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
 	switch {
 	case desc.ServicePackaged != nil:
 		return &deploykit.ServicePackagedStep{

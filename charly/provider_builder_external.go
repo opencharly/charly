@@ -1,5 +1,7 @@
 package main
 
+import "github.com/opencharly/sdk/spec"
+
 // provider_builder_external.go — the externalized DETECTION-builder registry surface, the
 // builder-class companion of provider_deploy.go's externalizedDeploySubstrates /
 // externalDeploySubstratePlugins. The four detection-builders (cargo/npm/pixi/aur) are served
@@ -51,5 +53,5 @@ func externalBuilderPluginRef(word string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return "@" + DefaultProjectRepo + "/" + sub, true
+	return "@" + spec.DefaultProjectRepo + "/" + sub, true
 }

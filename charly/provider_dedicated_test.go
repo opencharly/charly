@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestExternalizedBuilders_NoInProcProvider proves the four detection-builders (cargo/npm/pixi/aur)
@@ -73,7 +74,7 @@ func TestDedicatedProviders_BulkStepResolveAndAbsent(t *testing.T) {
 			if !ok {
 				t.Fatalf("step:%s externalized build-emit word %q not registered (candy/plugin-installstep not compiled in?)", kind, word)
 			}
-			if _, ok := prov.(stepContractCarrier); !ok {
+			if _, ok := prov.(spec.StepContractCarrier); !ok {
 				t.Fatalf("step:%s class:step provider %q declares no StepContract", kind, word)
 			}
 			continue

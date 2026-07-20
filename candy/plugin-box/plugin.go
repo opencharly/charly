@@ -60,10 +60,29 @@ import (
 )
 
 // calver is the candy's identity CalVer (advertised over Describe).
-const calver = "2026.194.0000"
+const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
 var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge"}
+
+// boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
+// in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string
+// switch rather than a real Kong struct (unlike candy/plugin-check's CheckCmd). Declared on the
+// "list" capability so the host builds a REAL nested Kong grammar (restoring `charly box list
+// --help`'s subcommand listing) and synthesizes a "box.list.<name>" leaf per entry for
+// `charly __cli-model` / MCP tool generation (e.g. the box.list.boxes tool agents use to enumerate
+// boxes) — both lost when `box list` moved off a static core Kong leaf onto this dynamic dispatch
+// plugin (P15).
+var boxListSubcommands = []sdk.CLISubcommand{
+	{Name: "boxes", Help: "List enabled boxes"},
+	{Name: "candies", Help: "List every scanned candy"},
+	{Name: "targets", Help: "List build targets in dependency order"},
+	{Name: "services", Help: "List candies that trigger an init system"},
+	{Name: "routes", Help: "List candies that declare a route"},
+	{Name: "volumes", Help: "List candies' declared volumes"},
+	{Name: "aliases", Help: "List candies' declared aliases"},
+	{Name: "tags", Help: "List an image's tags in local podman storage"},
+}
 
 // NewProvider returns the box command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.
@@ -72,11 +91,17 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // NewMeta advertises command:generate/validate/new/pkg via sdk.NewMeta → BuildCapabilities so the
 // COMPILED-IN path registers each as a command provider (the host builds its dynamic Kong grammar +
 // dispatches Invoke(OpRun)). A command's args are pass-through CLI tokens, not a structured
-// plugin_input, so the capabilities carry no InputDef and the plugin ships no schema.
+// plugin_input, so the capabilities carry no InputDef and the plugin ships no schema. The "list"
+// word ALSO declares its own boxListSubcommands catalog (F-CLI-NEST); every other word declares
+// none, keeping today's flat pass-through grammar unchanged for them.
 func NewMeta() pb.PluginMetaServer {
 	caps := make([]sdk.ProvidedCapability, 0, len(boxCommandWords))
 	for _, w := range boxCommandWords {
-		caps = append(caps, sdk.ProvidedCapability{Class: "command", Word: w})
+		pc := sdk.ProvidedCapability{Class: "command", Word: w}
+		if w == "list" {
+			pc.Subcommands = boxListSubcommands
+		}
+		caps = append(caps, pc)
 	}
 	return sdk.NewMeta(calver, caps, nil)
 }

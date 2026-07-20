@@ -31,5 +31,5 @@ package main
 //     needs the RICHEST Generator.emitTasks per-verb render pipeline — COPY staging, op coalescing).
 //     See step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder, stepEmitLocalPkgInstall,
 //     stepEmitOp). Their DEPLOY legs (SystemPackages/Builder/LocalPkgInstall host-engine via
-//     RunHostStep → renderHostPackageCommand / runVenueBuilderStep / deploykit.ExecLocalPkgInstall;
+//     RunHostStep → deploykit.RenderHostPackageCommand / runVenueBuilderStep / deploykit.ExecLocalPkgInstall;
 //     Op the act-OpStep resolveProvisionScript / renderOpCommand path) are likewise unchanged.

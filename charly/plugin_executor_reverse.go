@@ -180,9 +180,9 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		reverseOps = st.Reverse()
 	case *deploykit.SystemPackagesStep:
 		// The format's phase.install.host template lives in the resolved DistroConfig the
-		// plugin cannot reach — render it host-side (the SAME renderHostPackageCommand the
-		// host-engine deploy paths use, R3) and RunSystem on the venue.
-		cmd, rerr := renderHostPackageCommand(s.build.DistroCfg, st)
+		// plugin cannot reach — render it host-side (the SAME deploykit.RenderHostPackageCommand
+		// the host-engine deploy paths use, R3) and RunSystem on the venue.
+		cmd, rerr := deploykit.RenderHostPackageCommand(s.build.DistroCfg, st)
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}

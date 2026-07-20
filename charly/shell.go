@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // isTerminal reports whether stdout is connected to a terminal.
@@ -46,38 +47,38 @@ var containerExists = func(engine, name string) bool {
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
-// forceTTY overrides isTerminal() when set to true (e.g., by --tty flag).
-// Allows automation tools like Claude Code to force TTY allocation.
-var forceTTY bool
-
-// ShellCmd starts a bash shell in a container image
-type ShellCmd struct {
-	Box             string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
-	Tag             string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Command         string   `short:"c" help:"Command to execute instead of interactive shell"`
-	Build           bool     `long:"build" help:"Force local build instead of pulling from registry"`
-	TTY             bool     `long:"tty" help:"Force TTY allocation (for automation tools that lack a real terminal)"`
-	Env             []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
-	EnvFile         string   `long:"env-file" help:"Load env vars from file"`
-	Instance        string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	VolumeFlag      []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
-	Bind            []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
-	AutoDetectFlags `embed:""`
+// podShellCmd is the host-side reconstruction of the former ShellCmd (now command:shell in
+// candy/plugin-pod) — hostBuildPodShell (host_build_pod_shell.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LifecycleTarget (deploy_target_unified.go,
+// pod_lifecycle_verb.go) are registered P13-KERNEL migration inventory (see start.go's header) —
+// this resolver moves through the same venue-scoped-executor-session seam when that wave lands.
+type podShellCmd struct {
+	Box          string
+	Tag          string
+	Command      string
+	Build        bool
+	TTY          bool
+	Env          []string
+	EnvFile      string
+	Instance     string
+	VolumeFlag   []string
+	Bind         []string
+	NoAutoDetect bool
 }
 
-func (c *ShellCmd) Run() error {
+func (c *podShellCmd) Run() error {
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
 	// Users must pull first, then run shell on the short name.
-	if IsRemoteImageRef(StripURLScheme(c.Box)) {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
-	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
-	// venue command (resolvePodShellPlan, #59 inventory), the owning plugin runs it over the served
-	// venue executor via RunInteractive (stdio host-held). The per-invocation CLI extras ride the ctx
-	// (podShellOpts) into the attach-plan hook; tty=true selects the interactive `charly shell` resolver
-	// (its `-it`-vs-`-i` decision reads ForceTTY/isTerminal internally).
+	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the plugin
+	// self-resolves the venue command (candy/plugin-deploy-pod's resolve_f12.go) and runs it over the
+	// served venue executor via RunInteractive (stdio host-held). The per-invocation CLI extras ride
+	// the ctx (podShellOpts) into the attach-plan hook; Interactive/WrapPTY are computed HERE (host
+	// isTerminal() against the REAL terminal) since the plugin's own stdio is not the operator's.
 	lt, err := dispatchLifecycleTarget("shell", c.Box, c.Instance)
 	if err != nil {
 		return err
@@ -89,7 +90,11 @@ func (c *ShellCmd) Run() error {
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
-		ForceTTY:     c.TTY,
+		// HOST-resolved NOW (never re-derived plugin-side — an out-of-process plugin's own
+		// os.Stdout is not the operator's terminal): --tty forces interactive; wrap_pty additionally
+		// wraps in script(1) when forced without a real terminal (an automation tool).
+		Interactive: c.TTY || isTerminal(),
+		WrapPTY:     c.TTY && !isTerminal(),
 	}
 	var cmd []string
 	if c.Command != "" {

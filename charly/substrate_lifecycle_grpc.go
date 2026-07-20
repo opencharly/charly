@@ -262,7 +262,7 @@ func (l grpcSubstrateLifecycle) Stop(ctx context.Context, name string, node *spe
 		return err
 	}
 	_, err = l.lifecycleInvoke(ctx, sdk.OpStop, name, "", node, map[string]any{"plan": planJSON}, kit.ShellExecutor{})
-	releaseResourceClaim(name) // release the persistent claim after stop (matches StopCmd's defer)
+	releaseResourceClaim(name) // release the persistent claim after stop (the F6 bracket podStopCmd's doc describes)
 	return err
 }
 

@@ -8,50 +8,24 @@ import (
 	"testing"
 )
 
-// TestNormalizeRepoSpec covers all four spec shapes plus the "default"
-// sentinel. Pure unit test, no I/O.
-func TestNormalizeRepoSpec(t *testing.T) {
-	cases := []struct {
-		name        string
-		spec        string
-		wantRepo    string
-		wantVersion string
-	}{
-		{name: "default sentinel", spec: "default",
-			wantRepo: "github.com/opencharly/charly", wantVersion: ""},
-		{name: "bare owner/repo", spec: "opencharly/charly",
-			wantRepo: "github.com/opencharly/charly", wantVersion: ""},
-		{name: "bare owner/repo @ ref", spec: "opencharly/charly@main",
-			wantRepo: "github.com/opencharly/charly", wantVersion: "main"},
-		{name: "host-qualified, no ref", spec: "github.com/foo/bar",
-			wantRepo: "github.com/foo/bar", wantVersion: ""},
-		{name: "host-qualified gitlab @ ref", spec: "gitlab.com/foo/bar@v1.0",
-			wantRepo: "gitlab.com/foo/bar", wantVersion: "v1.0"},
-		// Whitespace tolerance.
-		{name: "leading/trailing whitespace", spec: "  opencharly/charly@main  ",
-			wantRepo: "github.com/opencharly/charly", wantVersion: "main"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			gotRepo, gotVersion := normalizeRepoSpec(tc.spec)
-			if gotRepo != tc.wantRepo || gotVersion != tc.wantVersion {
-				t.Errorf("normalizeRepoSpec(%q) = (%q, %q); want (%q, %q)",
-					tc.spec, gotRepo, gotVersion, tc.wantRepo, tc.wantVersion)
-			}
-		})
-	}
-}
+// TestNormalizeRepoSpec (all four spec shapes + the "default" sentinel) and
+// TestCharlyRepo_DefaultExpansion (the "default" case alone) moved with the relocated code to
+// sdk/loaderkit/repo_identity_test.go (K1/W9) — loaderkit.NormalizeRepoSpec's own test now covers
+// them; kept here only the genuine INTEGRATION tests that spawn the real binary.
 
 // TestCharlyRepo_FlagChdir verifies that --repo / CHARLY_PROJECT_REPO drives main()
 // to chdir into the cache path before dispatching. Stays hermetic by
-// pre-populating CHARLY_REPO_CACHE so EnsureRepoDownloaded short-circuits via
-// IsRepoCached and never shells out to git.
+// pre-populating CHARLY_REPO_CACHE with an IMMUTABLE tag ref (v1.0.0), so
+// EnsureRepoDownloaded takes the offline cache-hit fast path and never shells
+// out to git. (A mutable branch ref would delegate to the downloader for the
+// freshness check by design — that path is covered by
+// TestEnsureRepoDownloaded_MutableRefAlwaysDelegates.)
 func TestCharlyRepo_FlagChdir(t *testing.T) {
 	bin := buildCharlyBinary(t)
 
 	cacheRoot := t.TempDir()
-	// Pre-seed cache at <root>/github.com/foo/bar@main/ with a valid project.
-	cachedRepo := filepath.Join(cacheRoot, "github.com", "foo", "bar@main")
+	// Pre-seed cache at <root>/github.com/foo/bar@v1.0.0/ with a valid project.
+	cachedRepo := filepath.Join(cacheRoot, "github.com", "foo", "bar@v1.0.0")
 	if err := os.MkdirAll(cachedRepo, 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -67,13 +41,13 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 	}{
 		{
 			name: "long flag --repo with @ref",
-			args: []string{"--repo", "foo/bar@main", "box", "list", "boxes"},
+			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
 			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot},
 		},
 		{
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, "CHARLY_PROJECT_REPO=foo/bar@main"},
+			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, "CHARLY_PROJECT_REPO=foo/bar@v1.0.0"},
 		},
 	}
 	for _, tc := range cases {
@@ -105,18 +79,5 @@ func TestCharlyRepo_DirConflict(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "mutually exclusive") {
 		t.Errorf("expected mutually-exclusive error, got: %s", out)
-	}
-}
-
-// TestCharlyRepo_DefaultExpansion verifies that --repo default normalizes to
-// the canonical github.com/opencharly/charly path. Pure unit-level
-// check, exercised through normalizeRepoSpec to avoid live network.
-func TestCharlyRepo_DefaultExpansion(t *testing.T) {
-	repo, version := normalizeRepoSpec("default")
-	if repo != DefaultProjectRepo {
-		t.Errorf("default normalized to %q; want %q", repo, DefaultProjectRepo)
-	}
-	if version != "" {
-		t.Errorf("default version should be empty (resolved later); got %q", version)
 	}
 }

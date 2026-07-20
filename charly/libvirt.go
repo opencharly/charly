@@ -2,11 +2,13 @@ package main
 
 import (
 	"strings"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // CollectLibvirtSnippets gathers libvirt XML snippets from all candies in a box
 // plus box-level snippets, deduplicating by exact string match.
-func CollectLibvirtSnippets(cfg *Config, layers map[string]*Candy, boxName string) []string {
+func CollectLibvirtSnippets(cfg *Config, layers map[string]spec.CandyReader, boxName string) []string {
 	seen := make(map[string]bool)
 	var snippets []string
 

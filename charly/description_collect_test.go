@@ -13,18 +13,17 @@ import (
 // label). Baking is verb-agnostic (bakeableSteps collects every check step regardless of
 // verb), so the migrated plugin: file checks across the corpus bake exactly like any check.
 func TestCollectDescriptions_BakesPluginFileCheck(t *testing.T) {
-	layers := map[string]*Candy{
-		"redis": {
-			Name:        "redis",
-			Description: "redis store",
-			plan: []spec.Step{
+	layers := map[string]spec.CandyReader{
+		"redis": testCandy("redis",
+			spec.CandyModel{Plan: []spec.Step{
 				{Check: "the redis binary exists", Op: spec.Op{
 					ID:          "redis-binary",
 					Plugin:      "file",
 					PluginInput: map[string]any{"file": "/usr/bin/redis-server", "exists": true},
 				}},
-			},
-		},
+			}},
+			spec.CandyView{Description: "redis store"},
+		),
 	}
 	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{
 		"redis-box": {Candy: []string{"redis"}},

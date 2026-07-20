@@ -26,6 +26,18 @@ package main
 //
 // On `charly bundle del host`, if no candies remain deployed the managed
 // block is removed from the shell init file.
+//
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave W2 audit, 2026-07-20): DetectLoginShell/
+// WriteEnvdFile/ManagedBlockBody/ShellInitFilePath/markersForTag are DEAD in production
+// (only host_infra_test.go references them — verified by grep, not assumed); sdk/kit/
+// profile.go already carries the live equivalents (DetectShellFromPath/RenderEnvdBody/
+// ManagedBlockBody/ShellInitFilePath/MarkersForTag), consumed by kit.WalkPlans since the
+// local/vm deploy targets externalized. EnvdFilePath/RemoveEnvdFile's own former core
+// caller relocated to sdk/deploykit.TeardownHostDeploy in the 4/5 sdk lift —
+// RemoveEnvdFile stays here (it is the ONE non-portable leaf that call needs) and is
+// wired in via the init() below, a package-var seam mirroring deploykit.CompileServiceSteps.
+// This file's confirmed-dead functions + the host_infra_test.go coverage trim still ride
+// the P13-KERNEL walk-port exit alongside their OWN remaining consumer, never a solo cleanup.
 
 import (
 	"fmt"
@@ -35,8 +47,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
+
+func init() { deploykit.RemoveEnvdFile = RemoveEnvdFile }
 
 // ShellKind classifies the user's login shell.
 type ShellKind string

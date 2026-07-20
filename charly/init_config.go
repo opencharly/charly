@@ -96,7 +96,7 @@ func detectsInit(def *ResolvedInit, ly *spec.CandyYAML, candyPath string) bool {
 // are also consulted for the bootc-prefer-systemd heuristic via
 // PreserveUser (the canonical signal that this is a bootc-flavored
 // composition).
-func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []string, explicit string) (string, *ResolvedInit) {
+func (ic *InitConfig) ResolveInitSystem(layers map[string]spec.CandyReader, candyOrder []string, explicit string) (string, *ResolvedInit) {
 	if ic == nil {
 		return "", nil
 	}
@@ -120,11 +120,13 @@ func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []s
 		if !ok {
 			continue
 		}
-		for initName := range layer.InitSystems {
-			initHits[initName] = true
+		for initName := range ic.Init {
+			if layer.HasInit(initName) {
+				initHits[initName] = true
+			}
 		}
 		// port_relay triggers the init system with a relay_template
-		if len(layer.PortRelayPorts) > 0 {
+		if len(layer.RelayPorts()) > 0 {
 			for initName, def := range ic.Init {
 				if def.RelayTemplate != "" {
 					initHits[initName] = true
@@ -162,7 +164,7 @@ func (ic *InitConfig) ResolveInitSystem(layers map[string]*Candy, candyOrder []s
 // ActiveInit returns all init systems that are active for the given image.
 // An image can have multiple active inits (e.g., supervisord + systemd on
 // bootc-flavored compositions).
-func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) map[string]*ResolvedInit {
+func (ic *InitConfig) ActiveInit(layers map[string]spec.CandyReader, candyOrder []string) map[string]*ResolvedInit {
 	if ic == nil {
 		return nil
 	}
@@ -178,16 +180,17 @@ func (ic *InitConfig) ActiveInit(layers map[string]*Candy, candyOrder []string) 
 		if !ok {
 			continue
 		}
-		for initName := range layer.InitSystems {
-			if def, ok := ic.Init[initName]; ok {
-				if !initDefRequirementsMet(def, caps) {
-					continue
-				}
-				result[initName] = def
+		for initName, def := range ic.Init {
+			if !layer.HasInit(initName) {
+				continue
 			}
+			if !initDefRequirementsMet(def, caps) {
+				continue
+			}
+			result[initName] = def
 		}
 		// port_relay triggers init systems with relay_template
-		if len(layer.PortRelayPorts) > 0 {
+		if len(layer.RelayPorts()) > 0 {
 			for initName, def := range ic.Init {
 				if def.RelayTemplate != "" && initDefRequirementsMet(def, caps) {
 					result[initName] = def

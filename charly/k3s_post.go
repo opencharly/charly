@@ -216,6 +216,12 @@ func K3sPostProvision(artifactKey, deployName string) error {
 	return nil
 }
 
+// K3sPostProvision's registration for the artifact-declaration-driven dispatch
+// (deploy_add_shared.go's artifactRegisterHandlers) — it must match the
+// func(artifactKey, deployName string) error shape exactly. K3sPostProvision already
+// does; this compile-time assertion catches a signature drift loudly.
+var _ func(string, string) error = K3sPostProvision
+
 // mergeKubeconfig merges the retrieved kubeconfig into the operator's
 // ~/.kube/config under the chosen context name. The clientcmd merge itself — and
 // therefore the client-go clientcmd dependency — lives in the
@@ -232,17 +238,4 @@ func mergeKubeconfig(retrievedPath, contextName string) error {
 		return err
 	}
 	return nil
-}
-
-// deployHasCandy returns true when the deploy's candy list includes the
-// given candy name. Used to gate whether K3sPostProvision runs — a no-op
-// check against the ordered candy slice the deploy-add dispatcher already
-// has in scope.
-func deployHasCandy(layers []*Candy, name string) bool {
-	for _, l := range layers {
-		if l != nil && l.Name == name {
-			return true
-		}
-	}
-	return false
 }

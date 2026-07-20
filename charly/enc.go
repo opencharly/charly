@@ -18,6 +18,16 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
+// enc.go — encrypted-volume in-core SHIM (C16a). TRACKED FINAL/K5 EXIT
+// (DEPLOY-wave W1 audit, 2026-07-20): encExecViaPlugin calls providerRegistry.resolve +
+// invokeTyped DIRECTLY (the host provider registry itself — clause-M kernel), and
+// resolveEncPassphrase*/awaitKeyringUnlockViaPlugin route through ResolveCredential/
+// DefaultCredentialStore, which are ALSO registry-coupled (connectPluginByWord to
+// verb:credential). Neither is portable as a bare move — becoming plugin-callable needs
+// the sdk.Executor.InvokeProvider rewrite candy/plugin-deploy-pod's podTunnelOp already
+// proves the shape of, threaded through every caller. Registered FINAL/K5 inventory
+// (credential-sensitive, deliberately not attempted without its own review), not this wave.
+
 // resolveEncVolumeDir returns the volume directory for an encrypted volume.
 // If the volume has an explicit Host path, use it directly.
 // Otherwise, use the global default: <storagePath>/charly-<image>-<name>.
@@ -660,7 +670,7 @@ func hasEncryptedBindMounts(mounts []deploykit.ResolvedBindMount) bool {
 // plain/ over a populated cipher tree and start writing plaintext on top.
 // The previous generic "not mounted" message was indistinguishable from
 // a fresh-setup state where no harm exists yet.
-func verifyBindMounts(mounts []deploykit.ResolvedBindMount, boxName string) error {
+func verifyBindMounts(mounts []deploykit.ResolvedBindMount, boxName string) error { //nolint:unparam // boxName names the offending box in the "charly config mount %s" hint text; today's callers are all test literals, but the param is genuinely load-bearing for the error message
 	for _, m := range mounts {
 		if m.Encrypted {
 			if !isEncryptedMounted(m.HostPath) {

@@ -22,7 +22,7 @@
 //
 // The DEPLOY leg for ALL these kinds STAYS in sdk/kit.WalkPlans (walkFile / walkShellHook
 // / …; system-packages + builder are host-engine kinds driven via RunHostStep →
-// renderHostPackageCommand / runVenueBuilderStep; op is the act-OpStep resolveProvisionScript /
+// deploykit.RenderHostPackageCommand / runVenueBuilderStep; op is the act-OpStep resolveProvisionScript /
 // renderOpCommand path), which renders them over the executor reverse channel; this plugin serves
 // ONLY OpEmit (the pod-overlay build-emit the host's deploykit.OCITarget splices).
 //

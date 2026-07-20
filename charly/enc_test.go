@@ -239,43 +239,8 @@ func TestQuadletWithoutEncryptedMounts(t *testing.T) {
 	}
 }
 
-func TestBuildShellArgsWithBindMounts(t *testing.T) {
-	withTerminal(t, true)
-	bindMounts := []deploykit.ResolvedBindMount{
-		{Name: "data", HostPath: "/home/user/data", ContPath: "/home/user/.myapp"},
-	}
-	args := buildShellArgs("docker", "myapp:latest", 1000, 1000, nil, nil, bindMounts, false, "", "127.0.0.1", nil, SecurityConfig{}, "/workspace")
-
-	found := false
-	for i, arg := range args {
-		if arg == "-v" && i+1 < len(args) && args[i+1] == "/home/user/data:/home/user/.myapp" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected -v /home/user/data:/home/user/.myapp in args, got: %v", args)
-	}
-	// Docker should NOT have --userns
-	for _, arg := range args {
-		if arg == "--userns=keep-id:uid=1000,gid=1000" {
-			t.Error("docker should not have --userns=keep-id")
-		}
-	}
-}
-
-func TestBuildShellArgsWithBindMountsPodman(t *testing.T) {
-	withTerminal(t, true)
-	bindMounts := []deploykit.ResolvedBindMount{
-		{Name: "data", HostPath: "/home/user/data", ContPath: "/home/user/.myapp"},
-	}
-	args := buildShellArgs("podman", "myapp:latest", 1000, 1000, nil, nil, bindMounts, false, "", "127.0.0.1", nil, SecurityConfig{}, "/workspace")
-
-	found := slices.Contains(args, "--userns=keep-id:uid=1000,gid=1000")
-	if !found {
-		t.Errorf("expected --userns=keep-id:uid=1000,gid=1000 in podman args, got: %v", args)
-	}
-}
+// TestBuildShellArgsWithBindMounts / TestBuildShellArgsWithBindMountsPodman relocated to
+// candy/plugin-deploy-pod/resolve_f12_test.go (buildShellArgs moved, P13-KERNEL step-4(ii)).
 
 func TestBuildStartArgsWithBindMounts(t *testing.T) {
 	bindMounts := []deploykit.ResolvedBindMount{

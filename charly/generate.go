@@ -19,7 +19,7 @@ import (
 type Generator struct {
 	Dir     string
 	Config  *Config
-	Candies map[string]*Candy
+	Candies map[string]spec.CandyReader
 	// InitConfig is the project init: vocabulary. Init-system resolution
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
 	// on the Generator — one project init config threaded to the build + pod-
@@ -128,6 +128,10 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	}
 	RegisterBuildVocabulary(defaultDistroCfg)
 
+	// InitCfg threads the init-system host-completion pass INTO the scan pipeline (W9): a
+	// spec.CandyReader is read-only, so InitSystems must be populated BEFORE ScanAllCandyWithConfigOpts
+	// wraps each winning candidate — there is no later separate PopulateCandyInitSystem call anymore.
+	opts.InitCfg = defaultInitCfg
 	layers, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
 	if err != nil {
 		return nil, err
@@ -153,9 +157,6 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
 		fmt.Fprintf(os.Stderr, "warning: build-time plugin load: %v\n", perr)
 	}
-
-	// Populate init systems on candies from the embedded build vocabulary
-	PopulateCandyInitSystem(layers, defaultInitCfg)
 
 	// Pre-build validation gate — dispatched to the compiled-in validate capability (candy/plugin-box)
 	// by word with a structured OpValidate op (task #60 (C-refined)); the validate ENGINE no longer
@@ -203,7 +204,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 	// Derive each image's content-stable identity (ai.opencharly.version)
 	// from per-entity versions now that the base chain + auto-intermediates are
 	// materialized (the build render/version-compute machinery, sdk/deploykit).
-	if err := deploykit.ComputeEffectiveVersions(g.Boxes, candyModelMap(g.Candies)); err != nil {
+	if err := deploykit.ComputeEffectiveVersions(g.Boxes, g.Candies); err != nil {
 		return nil, err
 	}
 
@@ -383,10 +384,10 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 	baked := map[string]struct{}{}
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		if layer == nil || len(layer.BakePlugin) == 0 {
+		if layer == nil || len(layer.GetBakePlugin()) == 0 {
 			continue
 		}
-		for _, ref := range layer.BakePlugin {
+		for _, ref := range layer.GetBakePlugin() {
 			// key is the g.Candies map key (used for SourceDir resolution); the baked
 			// FILENAME derives from its leaf via bakedPluginFileName — the stable identity
 			// the build-side and the in-container loader agree on across local/@github refs.
@@ -399,10 +400,10 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 			if plugin == nil {
 				return fmt.Errorf("candy %q: bake_plugin %q is not a known plugin candy (not in the scanned candy set)", candyName, key)
 			}
-			if plugin.SourceDir == "" {
+			if plugin.GetSourceDir() == "" {
 				return fmt.Errorf("candy %q: bake_plugin %q has no source dir to build from", candyName, key)
 			}
-			binPath, err := buildPluginBinary(context.Background(), plugin.SourceDir, key)
+			binPath, err := buildPluginBinary(context.Background(), plugin.GetSourceDir(), key)
 			if err != nil {
 				return fmt.Errorf("candy %q: bake_plugin %q: %w", candyName, key, err)
 			}
@@ -424,12 +425,9 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 			// WITHOUT building/connecting it — the binary is resolved + fork/exec'd lazily on
 			// dispatch (dispatchExternalCommand's baked path), so an unrelated `charly <cmd>` in
 			// the container pays nothing.
-			if plugin.Plugin != nil && len(plugin.Plugin.Providers) > 0 {
-				lines := make([]string, len(plugin.Plugin.Providers))
-				for i, c := range plugin.Plugin.Providers {
-					lines[i] = string(c) // PluginCapability is a "<class>:<word>" string
-				}
-				manifest := strings.Join(lines, "\n") + "\n"
+			if plugin.IsPluginCandy() && len(plugin.GetPluginProviders()) > 0 {
+				providers := plugin.GetPluginProviders() // each a "<class>:<word>" string
+				manifest := strings.Join(providers, "\n") + "\n"
 				if err := os.WriteFile(filepath.Join(stageDir, binName+".providers"), []byte(manifest), 0o644); err != nil {
 					return fmt.Errorf("candy %q: bake_plugin %q: stage manifest: %w", candyName, key, err)
 				}
@@ -441,10 +439,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 	return nil
 }
 
-// renderDnfConfWrite → deploykit.RenderDnfConfWrite (P8 shim). The host package keeps
-// the var-alias so the generate-speedup test references the unqualified name.
-var renderDnfConfWrite = deploykit.RenderDnfConfWrite
-
 // collectBuilderRuntimeEnv → deploykit.Generator.CollectBuilderRuntimeEnv (P8 shim).
 // Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
@@ -454,7 +448,7 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.
 // buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
 // buildStageContext → deploykit.Generator.BuildStageContext (P8 shim). Used by the
 // host resolveInlineBuilderSeam (the render-seam reverse leg, #67).
-func (g *Generator) buildStageContext(layer *Candy, builderName string, builderDef *BuilderDef, img *buildkit.ResolvedBox, builderRef string) *spec.BuildStageContext {
+func (g *Generator) buildStageContext(layer spec.CandyReader, builderName string, builderDef *BuilderDef, img *buildkit.ResolvedBox, builderRef string) *spec.BuildStageContext {
 	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
 }
 
@@ -480,11 +474,11 @@ const (
 // candyStatus returns a candy's authored maturity rung (working|testing|broken),
 // defaulting an unset value to "testing". The authoritative per-candy status
 // source — replaces the retired Description.Tag derivation.
-func candyStatus(c *Candy) string {
+func candyStatus(c spec.CandyReader) string {
 	if c == nil {
 		return StatusTesting
 	}
-	return resolveStatus(c.Status)
+	return resolveStatus(c.GetStatus())
 }
 
 // descriptionInfo moved to sdk/deploykit (deploykit.DescriptionInfo) in K5-Unit-1 —
@@ -522,7 +516,7 @@ func worstStatus(a, b string) string {
 func (g *Generator) createRemoteCandyCopies() error {
 	hasRemote := false
 	for _, layer := range g.Candies {
-		if layer.Remote {
+		if layer.GetRemote() {
 			hasRemote = true
 			break
 		}
@@ -547,21 +541,21 @@ func (g *Generator) createRemoteCandyCopies() error {
 		return err
 	}
 	for ref, layer := range g.Candies {
-		if !layer.Remote {
+		if !layer.GetRemote() {
 			continue
 		}
-		tmp, err := os.MkdirTemp(candyRoot, "."+layer.Name+".tmp.*")
+		tmp, err := os.MkdirTemp(candyRoot, "."+layer.GetName()+".tmp.*")
 		if err != nil {
 			return err
 		}
 		// Copy the candy's CONTENTS (trailing /.) into the temp so the versioned
 		// dir holds the files directly (the Containerfile COPYs `<dir>/ /`).
-		cmd := exec.Command("cp", "-a", layer.Path+"/.", tmp)
+		cmd := exec.Command("cp", "-a", layer.GetSourceDir()+"/.", tmp)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			_ = os.RemoveAll(tmp)
 			return fmt.Errorf("copying remote candy %s: %s: %w", ref, string(out), err)
 		}
-		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, candyStageDirName(layer))); err != nil {
+		if err := kit.InstallDirAtomic(tmp, filepath.Join(candyRoot, deploykit.CandyStageDirName(layer))); err != nil {
 			return fmt.Errorf("installing remote candy %s: %w", ref, err)
 		}
 	}
@@ -575,9 +569,9 @@ func (g *Generator) createRemoteCandyCopies() error {
 // cache). Returns "" when the build-config is local (no remote candies).
 func (g *Generator) remoteBuildConfigCacheRoot() string {
 	for _, l := range g.Candies {
-		if l.Remote && l.Path != "" {
-			suffix := filepath.Join(l.SubPathPrefix, l.Name) // e.g. "candy/pixi"
-			if trimmed, ok := strings.CutSuffix(l.Path, suffix); ok {
+		if l.GetRemote() && l.GetSourceDir() != "" {
+			suffix := filepath.Join(l.GetSubPathPrefix(), l.GetName()) // e.g. "candy/pixi"
+			if trimmed, ok := strings.CutSuffix(l.GetSourceDir(), suffix); ok {
 				return strings.TrimRight(trimmed, string(filepath.Separator))
 			}
 		}
@@ -636,25 +630,24 @@ func (g *Generator) rewriteHeaderCopyForRemote(headerCopy string) (string, error
 
 // candyMapKey returns the key under which a candy is stored in g.Candies: the
 // fully-qualified remote ref (RepoPath/SubPathPrefix/Name) for remote candies,
-// the short name for local ones. Use this whenever code holds a *Candy but
+// the short name for local ones. Use this whenever code holds a spec.CandyReader but
 // needs to look it up in g.Candies, since a remote candy's short Name does
 // NOT match its map key. (deploykit.Generator.CandyCopySource — the COPY
 // source path resolver — is the sdk-side render helper; charly core's own
 // wrapper was dead, K3, and is gone.)
-// candyMapKey → deploykit.CandyMapKey (P8 shim).
-var candyMapKey = deploykit.CandyMapKey
+// candyMapKey → deploykit.CandyMapKey.
 
 // candyByName resolves a candy by its INTRINSIC bare name against g.Candies.
-// It is the FORWARD counterpart of candyMapKey (which maps a *Candy back to its
+// It is the FORWARD counterpart of deploykit.CandyMapKey (which maps a candy back to its
 // store key): a LOCAL candy is keyed bare == Name, so the direct lookup hits; a
 // REMOTE candy (e.g. a deploy's add_candy: pulled via ResolveOpts.ExtraCandyRefs)
-// is keyed under its fully-qualified ref (candyMapKey), so the direct bare lookup
-// MISSES and we fall back to matching the Candy's own Name. Every call site that
+// is keyed under its fully-qualified ref (deploykit.CandyMapKey), so the direct bare lookup
+// MISSES and we fall back to matching the candy's own Name. Every call site that
 // holds a bare candy name (a plan step's CandyName; an overlay-candy name from
-// collectOverlayCandies / p.AddCandies) and needs the *Candy goes through here, so
+// collectOverlayCandies / p.AddCandies) and needs the candy goes through here, so
 // a remote add_candy overlay layer resolves instead of being silently skipped
 // (the add_candy-on-pod-overlay "candy not found" / skipped-stage class).
-func (g *Generator) candyByName(name string) *Candy {
+func (g *Generator) candyByName(name string) spec.CandyReader {
 	if g == nil {
 		return nil
 	}
@@ -662,7 +655,7 @@ func (g *Generator) candyByName(name string) *Candy {
 		return c
 	}
 	for _, c := range g.Candies {
-		if c != nil && c.Name == name {
+		if c != nil && c.GetName() == name {
 			return c
 		}
 	}
@@ -677,5 +670,4 @@ func (g *Generator) candyByName(name string) *Candy {
 // `charly clean` can prune outdated versions. Candy names are dot-free
 // (lowercase-hyphenated), so the version (a dotted CalVer) parses back off the
 // FIRST dot. Cache-safe: the path changes iff the candy version changes.
-// candyStageDirName → deploykit.CandyStageDirName (P8 shim).
-var candyStageDirName = deploykit.CandyStageDirName
+// candyStageDirName → deploykit.CandyStageDirName.

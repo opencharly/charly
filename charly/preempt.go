@@ -265,7 +265,7 @@ func holderStop(addr holderAddr) error {
 	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		return stopVM(addr.Vm, addr.Instance, false)
 	}
-	return stopPodService(addr.Base, addr.Instance)
+	return deploykit.StopPodService(addr.Base, addr.Instance)
 }
 
 func holderStart(addr holderAddr) error {
@@ -282,7 +282,7 @@ func holderStart(addr holderAddr) error {
 	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
 		return startVM(addr.Vm, addr.Instance)
 	}
-	return startPodService(addr.Base, addr.Instance)
+	return deploykit.StartPodService(addr.Base, addr.Instance)
 }
 
 // holderExists reports whether the holder's runtime object still exists — a
@@ -301,12 +301,12 @@ func holderExists(addr holderAddr) bool {
 		}
 		return false
 	}
-	if active, _ := quadletExistsInstance(addr.Base, addr.Instance); active {
+	if active, _ := kit.QuadletExistsInstance(addr.Base, addr.Instance); active {
 		return true
 	}
 	engine := "podman"
 	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
+		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
 	}
 	return exec.Command(engine, "container", "exists", kit.ContainerNameInstance(addr.Base, addr.Instance)).Run() == nil
 }
@@ -355,14 +355,14 @@ func vmIsRunning(name string) bool {
 // podIsRunning reports whether a pod deployment is up (the quadlet service when one exists,
 // else the container's runtime state).
 func podIsRunning(base, instance string) bool {
-	if active, _ := quadletExistsInstance(base, instance); active {
-		svc := serviceNameInstance(base, instance)
+	if active, _ := kit.QuadletExistsInstance(base, instance); active {
+		svc := kit.ServiceNameInstance(base, instance)
 		out, _ := exec.Command("systemctl", "--user", "is-active", svc).Output()
 		return strings.TrimSpace(string(out)) == "active"
 	}
 	engine := "podman"
 	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
+		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
 	}
 	name := kit.ContainerNameInstance(base, instance)
 	out, err := exec.Command(engine, "inspect", "--format", "{{.State.Running}}", name).CombinedOutput()

@@ -1,32 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/opencharly/sdk/kit"
 )
 
-// resolveContainer resolves engine + container name, verifying the container is running.
-// Use "." as image name for local mode (returns empty engine and name).
-func resolveContainer(box, instance string) (engine, name string, err error) {
-	if box == "." {
-		return "", "", nil
-	}
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return "", "", err
-	}
-	boxName := resolveBoxName(box)
-	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
-	engine = kit.EngineBinary(runEngine)
-	name = kit.ContainerNameInstance(boxName, instance)
-	if !containerRunning(engine, name) {
-		return "", "", fmt.Errorf("container %s is not running", name)
-	}
-	return engine, name, nil
-}
+// container.go — host-only container-network introspection. The former resolveContainer (a bare
+// duplicate of deploykit.ResolveContainer) dissolved into that deploykit twin (CHECK-wave
+// container-resolve dedup) — every caller now calls deploykit.ResolveContainer directly.
 
 // isHostNetworked checks if a running container uses --network host.
 func isHostNetworked(engine, containerName string) bool {

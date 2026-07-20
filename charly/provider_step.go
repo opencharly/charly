@@ -111,7 +111,7 @@ func checkStepProviderBijection() error {
 				missing = append(missing, fmt.Sprintf("%s (externalized build-emit; class:step plugin %q not registered)", k, word))
 				continue
 			}
-			if _, ok := p.(stepContractCarrier); !ok {
+			if _, ok := p.(spec.StepContractCarrier); !ok {
 				missing = append(missing, fmt.Sprintf("%s (class:step provider %q declares no StepContract)", k, word))
 			}
 			continue

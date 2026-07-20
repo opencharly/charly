@@ -3,12 +3,25 @@ package main
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // podStartOptsCtxKey threads the direct-mode `charly start` CLI extras (--env/--port/--volume/
 // --bind/auto-detect) from the verb dispatch through LifecycleTarget.Start(ctx) — which carries no
 // opts — into the pod start-plan hook, preserving parity for the runDirect path. Absent ⇒ zero opts
 // (the quadlet path — the deployed/bed case — ignores them anyway).
+// podStartOpts carries the direct-mode `charly start` CLI extras (they apply only to the runDirect
+// path; the quadlet path — the deployed/bed case — bakes config into the unit).
+type podStartOpts struct {
+	Env          []string
+	EnvFile      string
+	Port         []string
+	VolumeFlag   []string
+	Bind         []string
+	NoAutoDetect bool
+}
+
 type podStartOptsCtxKey struct{}
 
 func withPodStartOpts(ctx context.Context, o podStartOpts) context.Context {
@@ -37,7 +50,12 @@ func podStopUnmountFromCtx(ctx context.Context) bool {
 
 // podShellOpts carries `charly shell`'s per-invocation CLI extras (the flags that shape the resolved
 // exec/run argv but are NOT in the deploy config) through LifecycleTarget.Attach(ctx) — which carries
-// only cmd+tty — into the pod attach-plan hook. ForceTTY is `--tty` (the automation-tools PTY force).
+// only cmd+tty — into the pod attach-plan hook. Interactive/WrapPTY are the HOST-RESOLVED tty booleans
+// (interactive = force_tty || isTerminal(); wrap_pty = force_tty && !isTerminal()) — computed at the
+// moment of the real CLI invocation (shell.go's podShellCmd.Run) and threaded as DATA, since an
+// out-of-process plugin's own os.Stdout is not the operator's terminal (the P13-KERNEL walk-port
+// direction-flip: resolvePodShellPlan/buildShellArgs/buildExecArgs moved to the plugin, which must
+// never re-derive isTerminal() against its own stdio).
 type podShellOpts struct {
 	Tag          string
 	EnvFile      string
@@ -45,7 +63,8 @@ type podShellOpts struct {
 	VolumeFlag   []string
 	Bind         []string
 	NoAutoDetect bool
-	ForceTTY     bool
+	Interactive  bool
+	WrapPTY      bool
 }
 
 type podShellOptsCtxKey struct{}
@@ -80,9 +99,11 @@ func podCmdOptsFromCtx(ctx context.Context) podCmdOpts {
 	return podCmdOpts{}
 }
 
-// pod_lifecycle_dispatch.go — the F6 HOST dispatch for the pod deep-body lifecycle (the K4 move). It
-// resolves the spec.PodLifecyclePlan host-side (pod_lifecycle_resolve.go = #59 inventory), threads it
-// into the plugin's OpStart/OpStop op.Params, and BRACKETS the shared arbiter claim around the op:
+// pod_lifecycle_dispatch.go — the F6 HOST dispatch for the pod deep-body lifecycle (the K4 move,
+// P13-KERNEL step-4(ii) direction-flip). It marshals the RAW CLI opts (spec.PodStartOpts/
+// PodStopOpts/PodAttachOpts — the plugin now self-resolves the actual spec.PodLifecyclePlan from
+// these, candy/plugin-deploy-pod/resolve.go), threads them into the plugin's OpStart/OpStop
+// op.Params, and BRACKETS the shared arbiter claim around the op:
 // acquire BEFORE OpStart, release AFTER OpStop, and release ON THE FAILURE PATH (a start that errors
 // after acquire must not leak the claim). The CHARLY_PREEMPT_LEASE lease is host-process M state a
 // placement-agnostic plugin cannot own, so it stays the in-core proxy (acquireResourceForClaimant).
@@ -138,38 +159,43 @@ func registerLifecyclePlanHooks(word string, start, stop podLifecyclePlanResolve
 	}
 }
 
+// P13-KERNEL step-4(ii): the pod lifecycle now SELF-RESOLVES its start/stop/attach plans
+// (candy/plugin-deploy-pod's resolve.go/resolve_f12.go) from these RAW opts + the deploy key
+// already on lifecycleParams.Name, instead of the host pre-resolving a spec.PodLifecyclePlan /
+// spec.PodLiveStdioPlan and threading the RESULT. The registered closures below therefore marshal
+// the plain CUE-generated opts types (spec.PodStartOpts/PodStopOpts/PodAttachOpts) — NOT a
+// resolved plan — reusing the SAME "plan" wire slot (lifecycleParams.Plan) unchanged: the map/
+// registration MECHANISM in substrate_lifecycle_grpc.go (the arbiter-claim bracket gated on
+// hasPlan) is untouched, only the payload CONTENT changes. Logs registers NO hook — Logs() already
+// threads its LogsOpts unconditionally (extra["opts"]), which is all candy/plugin-deploy-pod's
+// resolvePodLogsPlan needs (box/instance come from the deploy key on lifecycleParams.Name).
 var _ = func() bool {
 	registerLifecyclePlanHooks("pod",
-		func(ctx context.Context, box, instance string) (json.RawMessage, error) {
-			plan, err := resolvePodStartPlan(box, instance, podStartOptsFromCtx(ctx))
-			if err != nil {
-				return nil, err
-			}
-			return marshalJSON(plan)
+		func(ctx context.Context, _, _ string) (json.RawMessage, error) {
+			o := podStartOptsFromCtx(ctx)
+			return marshalJSON(spec.PodStartOpts{
+				Env: o.Env, EnvFile: o.EnvFile, Port: o.Port, VolumeFlag: o.VolumeFlag,
+				Bind: o.Bind, NoAutoDetect: o.NoAutoDetect,
+			})
 		},
-		func(ctx context.Context, box, instance string) (json.RawMessage, error) {
-			plan, err := resolvePodStopPlan(box, instance, podStopUnmountFromCtx(ctx))
-			if err != nil {
-				return nil, err
-			}
-			return marshalJSON(plan)
+		func(ctx context.Context, _, _ string) (json.RawMessage, error) {
+			return marshalJSON(spec.PodStopOpts{Unmount: podStopUnmountFromCtx(ctx)})
 		},
 	)
 	registerLifecycleLivePlanHooks("pod",
-		func(ctx context.Context, box, instance string, cmd []string, tty bool) (json.RawMessage, error) {
-			plan, err := resolvePodAttachPlan(ctx, box, instance, cmd, tty)
-			if err != nil {
-				return nil, err
-			}
-			return marshalJSON(plan)
+		func(ctx context.Context, _, _ string, cmd []string, tty bool) (json.RawMessage, error) {
+			o := podShellOptsFromCtx(ctx)
+			co := podCmdOptsFromCtx(ctx)
+			return marshalJSON(spec.PodAttachOpts{
+				Cmd: cmd, Tty: tty,
+				Shell: spec.PodShellOpts{
+					Tag: o.Tag, EnvFile: o.EnvFile, Env: o.Env, VolumeFlag: o.VolumeFlag,
+					Bind: o.Bind, NoAutoDetect: o.NoAutoDetect, Interactive: o.Interactive, WrapPTY: o.WrapPTY,
+				},
+				CmdOpts: spec.PodCmdOpts{Sidecar: co.Sidecar},
+			})
 		},
-		func(_ context.Context, box, instance string, opts LogsOpts) (json.RawMessage, error) {
-			plan, err := resolvePodLogsPlan(box, instance, opts)
-			if err != nil {
-				return nil, err
-			}
-			return marshalJSON(plan)
-		},
+		nil, // Logs needs no hook — its LogsOpts already threads unconditionally
 	)
 	return true
 }()

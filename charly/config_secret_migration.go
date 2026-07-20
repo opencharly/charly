@@ -49,25 +49,6 @@ func secretDeclaredOnBox(meta *BoxMetadata) map[string]bool {
 	return names
 }
 
-// secretDepNames returns the flat list of env var names declared as
-// credential-backed on an image. Used by the config_image.go Run() call
-// site to populate deploykit.SaveDeployStateInput.SecretNames for the defense-in-depth
-// scrub in saveDeployState. Returns nil (not an empty slice) when meta has
-// no secret declarations — matches the rest of the omitempty-style API.
-func secretDepNames(meta *BoxMetadata) []string {
-	if meta == nil || (len(meta.SecretRequire) == 0 && len(meta.SecretAccept) == 0) {
-		return nil
-	}
-	names := make([]string, 0, len(meta.SecretRequire)+len(meta.SecretAccept))
-	for _, dep := range meta.SecretRequire {
-		names = append(names, dep.Name)
-	}
-	for _, dep := range meta.SecretAccept {
-		names = append(names, dep.Name)
-	}
-	return names
-}
-
 // secretKeyForDep returns the (service, key) tuple used to look up a secret
 // in the credential store. When the candy author set an explicit `key:
 // charly/api-key/openrouter` override, that's parsed into its two segments;

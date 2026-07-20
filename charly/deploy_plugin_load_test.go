@@ -92,11 +92,11 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 // externalizedDeploySubstrates by the startup checkDeployProviderBijection gate.
 func TestExternalDeploySubstratePluginRef(t *testing.T) {
 	want := map[string]string{
-		"vm":      "@" + DefaultProjectRepo + "/candy/plugin-deploy-vm",
-		"pod":     "@" + DefaultProjectRepo + "/candy/plugin-deploy-pod",
-		"local":   "@" + DefaultProjectRepo + "/candy/plugin-deploy-local",
-		"android": "@" + DefaultProjectRepo + "/candy/plugin-adb",
-		"k8s":     "@" + DefaultProjectRepo + "/candy/plugin-kube",
+		"vm":      "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-vm",
+		"pod":     "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-pod",
+		"local":   "@" + spec.DefaultProjectRepo + "/candy/plugin-deploy-local",
+		"android": "@" + spec.DefaultProjectRepo + "/candy/plugin-adb",
+		"k8s":     "@" + spec.DefaultProjectRepo + "/candy/plugin-kube",
 	}
 	for word, exp := range want {
 		got, ok := externalDeploySubstratePluginRef(word)

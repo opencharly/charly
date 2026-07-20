@@ -8,10 +8,11 @@ package main
 // compiled-in command:check plugin (candy/plugin-check); its CLI-free engine
 // (hostFeatureLive, wiring the host-side agent grader) lives behind the check-run
 // seam (host_build_check_run.go). This file keeps the BUILD-scope `charly box
-// feature run` leaf — which stays in the box grammar (image.go) — plus the helpers
-// both the box leaf and the deploy-scope engine share: reportSteps / stepFailCount
-// (step formatting), resolveGraderAgent (the kind:agent catalog resolution the
-// grader needs), and validateTagExpr (the --tag syntax check).
+// feature run` leaf — which stays in the box grammar (image.go) — plus
+// resolveGraderAgent (the kind:agent catalog resolution the grader needs, loader-
+// coupled). The former reportSteps/stepFailCount/validateTagExpr helpers dissolved
+// into kit.ReportStepResultsCount / kit.ValidateTagExpr (CHECK-wave) — all three were
+// pure wrappers with zero core-state coupling.
 //
 // P12a follow-up ATTEMPTED moving BoxFeatureCmd/BoxFeatureRunCmd to candy/plugin-box
 // as a 7th `box`-nested command word (CommandParent()=="box") — mirroring
@@ -31,45 +32,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
-
-// ---------------------------------------------------------------------------
-// Shared reporting
-// ---------------------------------------------------------------------------
-
-// stepFailCount returns how many steps ended in a fail verdict.
-func stepFailCount(results []kit.StepResult) int {
-	n := 0
-	for _, r := range results {
-		if r.Result.Status == TestFail {
-			n++
-		}
-	}
-	return n
-}
-
-// reportSteps writes results in the requested format and returns the fail
-// count. Reuses the FormatStepResults* reporters (kit.FormatStepResults*, referenced directly).
-func reportSteps(w io.Writer, results []kit.StepResult, format string) int {
-	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "json":
-		_ = kit.FormatStepResultsJSON(w, results)
-	case "tap":
-		kit.FormatStepResultsTAP(w, results)
-	case "junit":
-		_ = kit.FormatStepResultsJUnit(w, results)
-	default:
-		kit.FormatStepResultsText(w, results)
-	}
-	return stepFailCount(results)
-}
 
 // resolveGraderAgent loads the project's `agent:` catalog and resolves the named
 // AI (or the sole entry when name is empty). Errors clearly when no AI is
@@ -88,22 +56,6 @@ func resolveGraderAgent(dir, name string) (*spec.AgentExecSpec, error) {
 		return nil, err
 	}
 	return ai, nil
-}
-
-// validateTagExpr syntax-checks an optional --tag expression (rejecting a malformed
-// one). It does NOT apply the parsed expression as a step filter: kit.RunPlan (the
-// walk both hostFeatureBox and hostFeatureLive drive, since the P12a architecture
-// fold) takes no tag-filter parameter and walks every step unconditionally — a
-// confirmed, RCA'd, non-blocking gap (per-tag filtering was never wired past this
-// parse), routed to the next check-correctness thematic batch. Named + shaped for
-// what it actually does now (was planTagFilter, whose *TagExpr return had no live
-// caller once every RunPlan call site dropped the filter arg — R1/unparam).
-func validateTagExpr(tag string) error {
-	if strings.TrimSpace(tag) == "" {
-		return nil
-	}
-	_, err := kit.ParseTagExpr(tag)
-	return err
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +93,7 @@ func (c *BoxFeatureRunCmd) Run() error {
 		return nil
 	}
 	fmt.Fprintln(os.Stderr, reply.Header)
-	fails := reportSteps(os.Stdout, reply.Steps, c.Format)
+	fails := kit.ReportStepResultsCount(os.Stdout, reply.Steps, c.Format)
 	if fails > 0 {
 		return &sdk.ExitCodeError{Code: sdk.CheckFailExitCode, Err: fmt.Errorf("%d check(s) failed", fails)}
 	}

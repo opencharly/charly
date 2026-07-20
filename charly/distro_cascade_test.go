@@ -7,18 +7,19 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 
 	"gopkg.in/yaml.v3"
 )
 
-// deriveCandy parses a candy YAML body and runs the Calamares bridge, returning
-// the populated Candy (tagSections / formatSections / topPackages). It decodes
-// through the same CUE path the loader uses (normalize shorthand → CUE Decode),
-// so shorthand bodies (bare-string packages, scalar ports) work without the
-// deleted custom unmarshalers.
-func deriveCandy(t *testing.T, body string) *Candy {
+// deriveCandy parses a candy YAML body and runs it through the scan pipeline's package-derivation
+// pass (loaderkit.ScanInlineCandy → populateFromYAML → derivePackageSections), returning the
+// resulting spec.CandyReader (tagSections / formatSections / topPackages). It decodes through the
+// same CUE path the loader uses (normalize shorthand → CUE Decode), so shorthand bodies (bare-string
+// packages, scalar ports) work without the deleted custom unmarshalers.
+func deriveCandy(t *testing.T, body string) spec.CandyReader {
 	t.Helper()
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
@@ -32,9 +33,8 @@ func deriveCandy(t *testing.T, body string) *Candy {
 	if err := decodeEntityViaCUE(root, reflect.TypeOf(spec.CandyYAML{}), &ly, "test-candy"); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	layer := &Candy{Name: "t"}
-	derivePackageSectionsFromCalamares(layer, &ly)
-	return layer
+	m, v, _ := loaderkit.ScanInlineCandy("t", "", &ly)
+	return testCandy("t", m, v)
 }
 
 // debImg builds a minimal ResolvedBox with a deb primary format and the given

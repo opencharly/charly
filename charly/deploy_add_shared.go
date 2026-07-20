@@ -15,9 +15,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
@@ -34,13 +32,13 @@ import (
 // Shared by the external substrate apply path AND each lifecycle hook's PrepareVenue
 // (vm: before the in-guest walk; pod: before the host-side overlay build) — the paths that
 // previously each ran CandyForPlan + ResolveSecretForCandy + InjectSecretsIntoPlans inline.
-func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]*Candy, map[string]string, error) {
+func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]spec.CandyReader, map[string]string, error) {
 	candyList, err := CandyForPlan(plans, dir, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	secretEnv := ResolveSecretForCandy(candyList)
-	InjectSecretsIntoPlans(plans, secretEnv)
+	deploykit.InjectSecretsIntoPlans(plans, secretEnv)
 	return candyList, secretEnv, nil
 }
 
@@ -84,44 +82,38 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
 	return nil
 }
 
-// buildArtifactEnv composes the env used for candy-artifact path
-// substitution: the resolved secret env first, then the deploy node's
-// own env: lines overlaid (last-wins). nil node contributes nothing.
-//
-// Shared by the local deploy target.Add / the vm deploy's Add path — both feed it
-// to RetrieveCandyArtifacts so rewrite rules like ${K3S_KUBECONFIG_SERVER}
-// resolve to the declared value rather than a literal placeholder. The
-// node is the dispatch-merged BundleNode (never re-read from disk).
-func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[string]string {
-	env := make(map[string]string, len(secretEnv))
-	maps.Copy(env, secretEnv)
-	if node != nil {
-		for _, line := range node.Env {
-			if idx := strings.Index(line, "="); idx > 0 {
-				env[line[:idx]] = line[idx+1:]
-			}
-		}
-	}
-	return env
+// artifactRegisterHandlers maps a candy artifact's declared `register:` hint (the
+// #CandyArtifact.Register field, SDD-sourced in sdk/schema/candy.cue) to the
+// post-retrieve processing it triggers. Word-keyed and data-driven (R3): a candy
+// declares the hint on its OWN artifact entry (k3s-server's kubeconfig artifact
+// declares `register: kubeconfig`) — adding a new registration kind means adding ONE
+// map entry here, never a hardcoded candy-name special-case.
+var artifactRegisterHandlers = map[string]func(artifactKey, deployName string) error{
+	"kubeconfig": K3sPostProvision,
 }
 
-// retrieveArtifactsAndK3s pulls back the candies' published artifacts via
-// the same executor the deploy used, then runs the k3s-server post-hook
-// (merge kubeconfig + register ClusterProfile) when the candy set includes
-// k3s-server. No-op under DryRun.
+// retrieveArtifactsAndK3s pulls back the candies' published artifacts via the same
+// executor the deploy used, then runs whichever post-retrieve registration handlers
+// the retrieved candies' artifact declarations name (e.g. the k3s-server kubeconfig's
+// `register: kubeconfig` — merge kubeconfig + register ClusterProfile). No-op under
+// DryRun.
 //
 // Shared by the local deploy target.Add / the vm deploy's Add path. artifactKey is
 // ENTITY-scoped (the artifact retrieve dir + the shared per-VM k3s cluster cache/context);
 // deployName is the real per-deploy (domain) identity the k3s port-forward lookup keys off.
-func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor, candyList []*Candy, artifactKey, deployName string, artifactEnv map[string]string, opts deploykit.EmitOpts) error {
+func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor, candyList []spec.CandyReader, artifactKey, deployName string, artifactEnv map[string]string, opts deploykit.EmitOpts) error {
 	if opts.DryRun {
 		return nil
 	}
-	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
+	if err := deploykit.RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts, loadedReadiness()); err != nil {
 		return err
 	}
-	if deployHasCandy(candyList, "k3s-server") {
-		if err := K3sPostProvision(artifactKey, deployName); err != nil {
+	for register := range deploykit.CandyArtifactRegisters(candyList) {
+		handler, ok := artifactRegisterHandlers[register]
+		if !ok {
+			continue
+		}
+		if err := handler(artifactKey, deployName); err != nil {
 			return err
 		}
 	}

@@ -42,8 +42,8 @@ func deployTraitsFor(word string) *spec.DeployTraits {
 		}
 		return nil
 	}
-	if dc, ok := prov.(deployTraitsCarrier); ok {
-		return dc.declaredDeployTraits()
+	if dc, ok := prov.(spec.DeployTraitsCarrier); ok {
+		return dc.DeclaredDeployTraits()
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -22,16 +23,18 @@ import (
 // single ApkInstallStep carrying every entry, and that an empty apk: list
 // compiles to nothing.
 func TestCompileApkStep(t *testing.T) {
-	none := &Candy{Name: "no-apk"}
+	none := testCandy("no-apk", spec.CandyModel{}, spec.CandyView{})
 	if step := deploykit.CompileApkStep(none); step != nil {
 		t.Errorf("candy with no apk: should compile to nil step, got %T", step)
 	}
 
-	l := &Candy{Name: "test-apps", SourceDir: "/layers/test-apps"}
-	l.apk = []ApkPackageSpec{
-		{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
-		{Apk: "tests/data/x.apk"},
-	}
+	l := testCandy("test-apps", spec.CandyModel{
+		SourceDir: "/layers/test-apps",
+		Apk: []ApkPackageSpec{
+			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
+			{Apk: "tests/data/x.apk"},
+		},
+	}, spec.CandyView{})
 	step := deploykit.CompileApkStep(l)
 	if step == nil {
 		t.Fatal("compileApkStep returned nil for a candy with apk: entries")
@@ -72,18 +75,15 @@ func TestOCITargetSkipsApkInstall(t *testing.T) {
 }
 
 // TestPopulateCandyApk verifies the candy manifest `apk:` field flows through the
-// populator onto the resolved Candy.
+// scan pipeline onto the resulting spec.CandyReader.
 func TestPopulateCandyApk(t *testing.T) {
 	ly := &spec.CandyYAML{
 		Apk: []ApkPackageSpec{
 			{Package: "org.fdroid.fdroid", Source: "apk-pure", Arch: "x86_64"},
 		},
 	}
-	l := &Candy{Name: "test-apps"}
-	populateCandyFromYAML(l, ly)
-	if !l.HasApk() {
-		t.Fatal("HasApk() = false after populating apk: entries")
-	}
+	m, v, _ := loaderkit.ScanInlineCandy("test-apps", "", ly)
+	l := testCandy("test-apps", m, v)
 	if len(l.Apk()) != 1 || l.Apk()[0].Package != "org.fdroid.fdroid" {
 		t.Errorf("Apk() = %+v", l.Apk())
 	}

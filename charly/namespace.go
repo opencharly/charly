@@ -35,37 +35,18 @@ import (
 //     cachyos/Arch image auto-gets arch-builder with no per-image declaration,
 //     and no namespace-relative ref ever leaks.
 
-// splitNamespaceRef splits a qualified ref on its FIRST `.` into (namespace,
-// remainder). A bare ref (no dot, or a leading/trailing dot) returns ok=false.
-// The remainder may itself be qualified (`a.b.c` → "a", "b.c").
-func splitNamespaceRef(ref string) (ns, rest string, ok bool) {
-	i := strings.IndexByte(ref, '.')
-	if i <= 0 || i >= len(ref)-1 {
-		return "", "", false
-	}
-	return ref[:i], ref[i+1:], true
-}
-
-// leafName strips every namespace prefix from a (possibly qualified) ref,
-// returning the final member name — e.g. "charly.arch-builder" -> "arch-builder",
-// "a.b.c" -> "c", bare "fedora" -> "fedora". Paired with resolveBoxRef's
-// returned namespace Config, it gives the key under which the resolved entity
-// lives in that Config's Box map.
-func leafName(ref string) string {
-	for {
-		_, rest, ok := splitNamespaceRef(ref)
-		if !ok {
-			return ref
-		}
-		ref = rest
-	}
-}
+// splitNamespaceRef/leafName are now sdk/spec.SplitNamespaceRef / spec.LeafName
+// (the generic namespace-ref VOCAB — pure string predicates with a consumer
+// set wider than the loader cone: config.go, k8s_deploy_preresolve.go,
+// refs.go). leafName is paired with resolveBoxRef's returned namespace
+// Config: together they give the key under which the resolved entity lives
+// in that Config's Box map.
 
 // resolveBoxRef resolves a (possibly qualified) box name to its BoxConfig
 // and the Config (namespace context) it lives in. Bare names resolve in c;
 // `ns.name` descends into c.Namespaces[ns] recursively.
 func (c *Config) resolveBoxRef(ref string) (spec.BoxConfig, *Config, bool) {
-	if ns, rest, ok := splitNamespaceRef(ref); ok {
+	if ns, rest, ok := spec.SplitNamespaceRef(ref); ok {
 		sub, ok := c.Namespaces[ns]
 		if !ok {
 			return spec.BoxConfig{}, nil, false
@@ -115,7 +96,7 @@ func (c *Config) findBoxByLeaf(leaf string) (string, bool) {
 
 // resolveLocalRef resolves a (possibly qualified) kind:local template ref.
 func (c *Config) resolveLocalRef(ref string) (*ResolvedLocal, bool) {
-	if ns, rest, ok := splitNamespaceRef(ref); ok {
+	if ns, rest, ok := spec.SplitNamespaceRef(ref); ok {
 		sub, ok := c.Namespaces[ns]
 		if !ok {
 			return nil, false
@@ -144,7 +125,7 @@ func (c *Config) resolveNamespacedBases(out map[string]*buildkit.ResolvedBox, ca
 			if _, ok := out[ref]; ok {
 				return
 			}
-			if _, _, qualified := splitNamespaceRef(ref); qualified {
+			if _, _, qualified := spec.SplitNamespaceRef(ref); qualified {
 				todo = append(todo, ref)
 			}
 		}
@@ -190,7 +171,7 @@ func (c *Config) pullNamespacedBox(from *Config, ref, keyPrefix, calverTag, dir 
 	var curPrefix strings.Builder
 	curPrefix.WriteString(keyPrefix)
 	for {
-		ns, rest, qualified := splitNamespaceRef(ref)
+		ns, rest, qualified := spec.SplitNamespaceRef(ref)
 		if !qualified {
 			break
 		}

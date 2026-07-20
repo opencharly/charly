@@ -11,73 +11,16 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
+	"github.com/opencharly/sdk/spec"
 )
 
-// ParsedRef represents a parsed remote reference with version.
-// Works for both candy refs and image refs.
-// Format: @host/org/repo/sub/path:version
-type ParsedRef struct {
-	Raw      string // original string, e.g. "@github.com/org/repo/candy/name:v1.0.0"
-	RepoPath string // e.g. "github.com/org/repo"
-	SubPath  string // e.g. "candy/name" (path within repo)
-	Name     string // e.g. "name" (last segment)
-	Version  string // e.g. "v1.0.0"
-}
-
-// IsRemoteImageRef returns true if a ref looks like a remote image reference (starts with @)
-func IsRemoteImageRef(ref string) bool {
-	return strings.HasPrefix(ref, "@")
-}
-
-// ParseRemoteRef parses a remote reference into repo path, sub-path, name, and version.
-// e.g. "@github.com/org/repo/candy/name:v1.0.0" -> ParsedRef{RepoPath: "github.com/org/repo", SubPath: "candy/name", Name: "name", Version: "v1.0.0"}
-func ParseRemoteRef(ref string) *ParsedRef {
-	raw := ref
-
-	// Strip @ prefix
-	ref = strings.TrimPrefix(ref, "@")
-
-	// Split version
-	version := ""
-	if idx := strings.LastIndex(ref, ":"); idx != -1 {
-		version = ref[idx+1:]
-		ref = ref[:idx]
-	}
-
-	// Split into repo path (first 3 segments) and sub-path (rest)
-	repoPath, subPath, name := splitRepoAndSubPath(ref)
-
-	return &ParsedRef{
-		Raw:      raw,
-		RepoPath: repoPath,
-		SubPath:  subPath,
-		Name:     name,
-		Version:  version,
-	}
-}
-
-// splitRepoAndSubPath splits a ref into repo path (host/org/repo), sub-path, and name.
-// e.g. "github.com/org/repo/candy/name" -> ("github.com/org/repo", "candy/name", "name")
-// For short refs like "pixi", returns ("", "", "pixi").
-func splitRepoAndSubPath(ref string) (repoPath, subPath, name string) {
-	parts := strings.SplitN(ref, "/", 4) // [host, org, repo, sub/path]
-	if len(parts) < 4 {
-		// Not enough segments for a remote ref — treat as local name
-		name = parts[len(parts)-1]
-		if len(parts) <= 1 {
-			return "", "", name
-		}
-		return strings.Join(parts, "/"), "", name
-	}
-	repoPath = strings.Join(parts[:3], "/")
-	subPath = parts[3]
-	if idx := strings.LastIndex(subPath, "/"); idx != -1 {
-		name = subPath[idx+1:]
-	} else {
-		name = subPath
-	}
-	return repoPath, subPath, name
-}
+// ParsedRef, IsRemoteImageRef, ParseRemoteRef, SplitRepoAndSubPath — pure remote-ref string
+// parsing, relocated to sdk/spec (K1/W9) as generic vocab: their consumer set spans deploy/
+// provider/command files with zero loader-cone character, so a MECHANISM kit (loaderkit) would be
+// the wrong home — spec is the shared, always-legal-to-import vocabulary layer. charly/*.go call
+// sites now reference spec.ParsedRef / spec.ParseRemoteRef / spec.IsRemoteImageRef directly
+// (ZERO-ALIASES — no alias reintroduced here).
 
 // bareRefs returns the bare map-key form of each ref — for the consumers that
 // resolve a candy list against the candy map.
@@ -122,7 +65,7 @@ const RepoOverrideEnv = "CHARLY_REPO_OVERRIDE"
 // normalizeOverrideRepoPath canonicalizes the LHS of a CHARLY_REPO_OVERRIDE pair to
 // the repo-root form ParseRemoteRef yields, so `opencharly/charly` and
 // `github.com/opencharly/charly` both match (same auto-prefix rule as
-// normalizeRepoSpec in main_repo.go).
+// loaderkit.NormalizeRepoSpec, since W9's main_repo.go relocation).
 func normalizeOverrideRepoPath(rp string) string {
 	rp = strings.TrimSpace(strings.TrimSuffix(rp, "/"))
 	if i := strings.Index(rp, "/"); i > 0 && !strings.Contains(rp[:i], ".") {
@@ -194,7 +137,7 @@ func selfSuperprojectOverridePair(projectDir string) string {
 	if superDir == "" {
 		return "" // not a submodule — its candies already resolve from the local tree
 	}
-	identity := rootRepoIdentity(superDir)
+	identity := loaderkit.RootRepoIdentity(superDir)
 	if identity == "" {
 		return ""
 	}
@@ -286,11 +229,16 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 		return "", err
 	}
 	var path string
-	if cached {
+	if cached && !kit.IsMutableRef(version) {
 		path, err = kit.RepoCachePath(repoPath, version)
 	} else {
 		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
 		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
+		// A MUTABLE ref (a branch such as main, or the unversioned default branch) always
+		// delegates: the downloader re-resolves the ref's current commit and refreshes a
+		// stale export (the kit.DownloadRepo provenance check) — a plain cache hit would
+		// freeze the branch at its first-download content forever (the pre-#146 @main
+		// protocol skew). Immutable coordinates (tags, SHAs) keep the offline cache hit.
 		path, err = activeRefsDownloader.Download(repoPath, version)
 	}
 	if err != nil {
@@ -358,7 +306,7 @@ type RemoteDownload struct {
 // CollectRemoteRefs is the default-opts wrapper (enabled images only) around
 // CollectRemoteRefsOpts. The overwhelming majority of call sites want
 // enabled-only collection, so they keep this two-arg form.
-func CollectRemoteRefs(cfg *Config, layers map[string]*Candy) ([]RemoteDownload, error) {
+func CollectRemoteRefs(cfg *Config, layers map[string]spec.CandyReader) ([]RemoteDownload, error) {
 	return CollectRemoteRefsOpts(cfg, layers, ResolveOpts{})
 }
 
@@ -377,7 +325,7 @@ func CollectRemoteRefs(cfg *Config, layers map[string]*Candy) ([]RemoteDownload,
 // order.
 //
 //nolint:gocyclo // depth-first graph walker over base/candy/builder edges; nested loops are essential to the traversal
-func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOpts) ([]RemoteDownload, error) {
+func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts ResolveOpts) ([]RemoteDownload, error) {
 	// Collect EVERY distinct (repo, git-tag) a ref is referenced at. The git tag
 	// is only the FETCH coordinate — per-entity-version arbitration (and any
 	// warning) happens AFTER fetch in ScanAllCandyWithConfigOpts, so a re-tag of
@@ -393,7 +341,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 		if !deploykit.IsRemoteCandyRef(ref) {
 			return nil
 		}
-		parsed := ParseRemoteRef(ref)
+		parsed := spec.ParseRemoteRef(ref)
 		bareRef := deploykit.BareRef(ref)
 		version := parsed.Version
 		if version == "" {
@@ -476,7 +424,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 		}
 		for _, ref := range edges {
 			if _, tc, ok := c.resolveBoxRef(ref); ok {
-				if err := collectBox(tc, leafName(ref)); err != nil {
+				if err := collectBox(tc, spec.LeafName(ref)); err != nil {
 					return err
 				}
 			}
@@ -508,12 +456,12 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]*Candy, opts ResolveOp
 
 	// Scan the candy manifest require: and candy: fields
 	for candyName, layer := range layers {
-		for _, dep := range layer.Require {
+		for _, dep := range layer.GetRequire() {
 			if err := addRef(dep.Raw, fmt.Sprintf("layer %s require", candyName)); err != nil {
 				return nil, err
 			}
 		}
-		for _, ref := range layer.IncludedCandy {
+		for _, ref := range layer.GetIncludedCandy() {
 			if err := addRef(ref.Raw, fmt.Sprintf("layer %s layer", candyName)); err != nil {
 				return nil, err
 			}

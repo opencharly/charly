@@ -54,11 +54,11 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("providers = %+v, want exactly one step:examplestepkind", unit.Providers)
 	}
 	// The DECLARED StepContract round-trips from the plugin's Describe through buildUnit.
-	carrier, ok := unit.Providers[0].(stepContractCarrier)
+	carrier, ok := unit.Providers[0].(spec.StepContractCarrier)
 	if !ok {
 		t.Fatalf("provider %T does not carry a step contract", unit.Providers[0])
 	}
-	sc, ok := carrier.declaredStepContract()
+	sc, ok := carrier.DeclaredStepContract()
 	if !ok || sc.Scope != spec.ScopeUser || sc.Venue != spec.VenueHostNative || sc.Gate != spec.GateNone {
 		t.Fatalf("declared contract = %+v ok=%v, want {ScopeUser, VenueHostNative, GateNone}", sc, ok)
 	}
@@ -76,7 +76,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	// DECLARED contract + the opaque payload (NOT an OpStep / ExternalPluginStep). Using the
 	// compiled step (not a hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
-	routed := compileActOp(op, &Candy{Name: "plugin-example-stepkind"}, &buildkit.ResolvedBox{Tags: []string{"fedora"}})
+	routed := compileActOp(op, testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{}), &buildkit.ResolvedBox{Tags: []string{"fedora"}})
 	step, ok := routed.(*deploykit.ExternalStep)
 	if !ok {
 		t.Fatalf("compileActOp routed a class:step plugin to %T, want *externalStep", routed)

@@ -115,7 +115,7 @@ func appendGroupsForAMDGPU(groups []string) []string {
 	if slices.Contains(groups, "keep-groups") {
 		return groups
 	}
-	return appendUnique(groups, "keep-groups")
+	return append(groups, "keep-groups")
 }
 
 // appendAutoDetectedEnv injects GPU-related env vars from auto-detection results.
