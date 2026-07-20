@@ -143,21 +143,20 @@ func deployDelArgv(name string) []string {
 // For a flat name (no children, no dots) the behavior is unchanged —
 // exactly one target's Emit() call.
 //
-// K4-C SEQUENCING NOTE (never a permanence claim — tracked FINAL/K5 IOU): the tree
-// walk itself (resolveTreeRoot's LoadUnified dependency, deriveChildExecutorForPath's
-// live-executor composition below) STAYS host-side THIS wave, not because it is hard,
-// but because porting it needs a NEW mechanism this wave deliberately does not build:
-// a venue-descriptor seam (the operator-mandated venue-scoped-executor-session design)
-// that lets a plugin's own tree walk thread an OPAQUE, wire-safe descriptor instead of
-// a live deploykit.DeployExecutor value, re-materialized host-side at each level —
-// exactly the pattern substrateLifecycle's OpPrepareVenue->VenueDescriptor already uses
-// for the ROOT venue, generalized here to every NESTED hop. The enabler is registered
-// as a FINAL/K5 exit gated on (a) per-level descriptor re-materialization proven on a
-// nested VM-in-pod tree (needs its own RDD spike) and (b) resolveTreeRoot's
-// LoadUnified-from-plugin disposition (K1) — building the seam before K1 lands would
-// still leave this walk partially host-bound, so the two enablers resolve TOGETHER.
-// dispatchNode's leaf-level Add/Del dispatch already routes through the deploy-dispatch
-// seam (root-level Add; every Del) proving the underlying broker mechanism live.
+// K4-C PROGRESS NOTE: dispatchNode's leaf-level Add/Del dispatch now routes through the
+// deploy-dispatch seam UNCONDITIONALLY (root AND nested) — a nested node's ParentExec is
+// encoded into a spec.VenueDescriptor (venueDescriptorForExecutor, deploy_venue_descriptor.go)
+// and re-materialized host-side inside the seam handler, the SAME decouple point
+// substrateLifecycle's OpPrepareVenue->VenueDescriptor already uses for a ROOT venue,
+// generalized to a NESTED hop. This function's OWN tree walk (resolveTreeRoot, the
+// WalkDeploymentTree callback below) still runs host-side FOR NOW — it is the next
+// increment of this same K4-C cutover, not a deferred IOU: once the descriptor mechanism
+// is verified live on a nested bed (a pod-with-sidecar / check-group member shape), the
+// walk itself — including resolveTreeRoot's project-tree fetch (already available via the
+// existing HostBuild("resolved-project") envelope's .Deploy map, so no LoadUnified-from-
+// plugin dependency blocks it) and deriveChildExecutorForPath's descent (its BODY becomes
+// the host re-materializer a "deploy-child-venue" seam wraps) — ports into
+// candy/plugin-bundle. See deploy_venue_descriptor.go for the encode/decode mechanism.
 func (c *deployAddCmd) Run() error {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -351,16 +350,6 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		deployName = path
 	}
 
-	dctx := &DeployContext{
-		Node:       node,
-		Name:       deployName,
-		Dir:        dir,
-		Cfg:        cfg,
-		DistroCfg:  distroCfg,
-		BuilderCfg: builderCfg,
-		Base:       base,
-	}
-
 	// ResolveTarget needs a node carrying target:. For a ref-based deploy
 	// with no charly.yml entry (node == nil), synthesize one from the
 	// classified target so `charly bundle add host ./x.yml` still resolves.
@@ -369,33 +358,14 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		resolveNode = &spec.BundleNode{Target: target}
 	}
 
-	// K4-C spike #1 (P13-KERNEL): the ROOT-level (non-nested) Add dispatch routes through the
-	// new deploy-dispatch seam — a plugin-initiated HostBuild call nesting a SECOND
-	// out-of-process substrate dispatch — to prove the reverse-channel broker threads
-	// correctly before the rest of this orchestration ports into candy/plugin-bundle. A
-	// nested node (opts.ParentExec != nil) keeps the direct in-process call below until a
-	// later increment threads a parent executor across the wire too.
-	if opts.ParentExec == nil {
-		return c.dispatchViaSeam(resolveNode, deployName, dir, base, plans, opts)
-	}
-
-	utgt, err := ResolveTarget(resolveNode, deployName)
-	if err != nil {
-		return err
-	}
-
-	// Carry the per-kind add-time inputs onto the adapter (the unified
-	// Add signature is uniform; kind-specific knobs live on the struct,
-	// matching how Del's gate flags are wired).
-	if tt, ok := utgt.(*externalDeployTarget); ok {
-		// An external substrate with a lifecycle hook honors --node-only the SAME way the
-		// in-proc targets did: skip the substrate PostApply (vm: the nested target:pod
-		// children — the caller deploys them via the dotted path; pod: a no-op PostApply).
-		// Inert for hookless substrates (local/android/k8s), which have no PostApply.
-		tt.nodeOnly = c.NodeOnly
-	}
-
-	return utgt.Add(context.Background(), dctx, plans, opts)
+	// K4-C: every Add dispatch — root AND nested — routes through the deploy-dispatch seam, a
+	// plugin-initiated HostBuild call nesting a SECOND out-of-process substrate dispatch (proven
+	// live on both a local and a vm substrate). A nested node's opts.ParentExec is encoded into a
+	// spec.VenueDescriptor and re-materialized inside the seam handler — the venue-descriptor
+	// generalization of substrateLifecycle's existing root-venue decouple point — so ResolveTarget
+	// + the adapter's nodeOnly wiring + Add all now happen host-side INSIDE
+	// hostBuildDeployDispatchAdd, not here.
+	return c.dispatchViaSeam(resolveNode, deployName, dir, base, plans, opts)
 }
 
 // resolveNodeOverlays computes the per-node emit opts, ref string, add-candy
@@ -584,19 +554,22 @@ func pathLeaf(path string) string {
 // dotted path) for a container target, hops through vmChildExecutor for a vm
 // child, and otherwise shares the parent executor.
 //
-// E/M/D VERIFIED (P13-KERNEL, per the orchestrator's ruling): the outer switch
-// dispatches on deployTraitDescent(...).Transport — a small DECLARED closed vocabulary
+// E/M/D VERIFIED (P13-KERNEL): the outer switch dispatches on
+// deployTraitDescent(...).Transport — a small DECLARED closed vocabulary
 // (none|container-exec|ssh|reject) every substrate provider maps itself onto, NOT a
 // switch on the concrete kind word (vm/pod/local/k8s/android never appear here) — so
-// this is legitimate D-data-driven dispatch, not an incomplete per-kind seam needing a
-// fix now. Each case CONSTRUCTS a live deploykit.DeployExecutor from that transport —
-// structurally the SAME shape as substrateLifecycle's already-sanctioned
-// OpPrepareVenue->VenueDescriptor->host-re-materializes-a-real-executor pattern, just
-// for a NESTED hop instead of the root venue. Tracked FINAL/K5 IOU (never a permanence
-// claim): generalize this transport->executor construction to be reachable via a wire
-// VenueDescriptor-style envelope, so a plugin's own tree walk can request the NEXT
-// hop's descriptor instead of needing a live Go value — the same enabler Run()'s
-// header names (per-level descriptor re-materialization, gated on its own RDD spike).
+// this is legitimate D-data-driven dispatch, not an incomplete per-kind seam. Each case
+// CONSTRUCTS a live deploykit.DeployExecutor from that transport — structurally the SAME
+// shape as substrateLifecycle's already-sanctioned OpPrepareVenue->VenueDescriptor
+// pattern, just for a NESTED hop instead of the root venue. K4-C PROGRESS: this function's
+// BODY is now reachable through the wire via spec.VenueDescriptor's Kind=="nested" case
+// (Jump + recursive Parent — see deploy_venue_descriptor.go's venueDescriptorForExecutor
+// encoder + substrate_lifecycle_grpc.go's venueFromDescriptor decoder); a plugin holding a
+// descriptor for THIS node's parent can request the same executor construction that
+// happens here today. The tree WALK that calls this function still runs host-side for now
+// (see Run()'s header) — moving the CALL SITE into the plugin (once the descriptor
+// mechanism is verified live) needs a "deploy-child-venue" seam wrapping this exact body,
+// not a change to the body itself.
 func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.DeployExecutor, error) {
 	if node == nil {
 		return parentExec, nil

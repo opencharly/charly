@@ -10,25 +10,25 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// deploy_dispatch_seam.go — the K4-C host-side deploy-DISPATCH seam (P13-KERNEL spike #1). The
-// ONE new seam this wave adds: the boundary-law scoping pass found ResolveTarget(node,name) →
-// UnifiedDeployTarget.Add — a live provider-registry lookup + a live Executor composition — is
-// the SOLE genuinely-irreducible piece of the deploy kernel; everything around it either already
-// moved (the InstallPlan compile loop, K4-B/OpCompile) or was a stale "stays core" claim. This
-// spike routes the root-level (non-nested) Add dispatch through command:bundle's new OpDispatch
-// leg — a PLUGIN-INITIATED call that nests a SECOND out-of-process substrate dispatch through
-// HostBuild("deploy-dispatch") — to prove the reverse-channel broker threads correctly when the
-// outer call originates from the plugin (unlike OpCompile's HostBuild("resolved-project") call,
-// which is host-initiated). dispatchViaSeam is the ONLY call site (bundle_add_cmd.go's
-// dispatchNode, root-level only); a nested node keeps the direct in-process ResolveTarget().Add()
-// call until a later increment threads a parent executor across the wire too.
+// deploy_dispatch_seam.go — the K4-C host-side deploy-DISPATCH seam. The ONE new seam this wave
+// adds: the boundary-law scoping pass found ResolveTarget(node,name) → UnifiedDeployTarget.Add —
+// a live provider-registry lookup + a live Executor composition — is the SOLE genuinely-
+// irreducible piece of the deploy kernel; everything around it either already moved (the
+// InstallPlan compile loop, K4-B/OpCompile) or was a stale "stays core" claim. dispatchViaSeam
+// routes EVERY Add dispatch (root AND nested) through command:bundle's OpDispatch leg — a
+// PLUGIN-INITIATED call that nests a SECOND out-of-process substrate dispatch through
+// HostBuild("deploy-dispatch") — proven live on both a local and a vm substrate (spike #1). A
+// nested node's opts.ParentExec is encoded into a spec.VenueDescriptor (venueDescriptorForExecutor,
+// deploy_venue_descriptor.go) and re-materialized host-side inside the seam handler — the SAME
+// decouple point substrateLifecycle's PrepareVenue already uses for a root venue, generalized to
+// a nested tree hop, so a live executor never actually crosses the wire.
 
 // dispatchViaSeam marshals the resolved node + compiled plans + the EmitOpts scalar gates (never
-// the whole deploykit.EmitOpts struct, which carries the live, non-marshalable
-// ParentExec/ParentNode) into a spec.DeployDispatchRequest and Invokes command:bundle's
-// OpDispatch. The plugin relays the request VERBATIM to HostBuild("deploy-dispatch")
-// (hostBuildDeployDispatch, deploy_dispatch_host.go), which reconstructs the config +
-// DeployContext and runs the actual ResolveTarget → UnifiedDeployTarget.Add.
+// the whole deploykit.EmitOpts struct — ParentExec/ParentNode are handled separately, see above)
+// into a spec.DeployDispatchRequest and Invokes command:bundle's OpDispatch. The plugin relays the
+// request VERBATIM to HostBuild("deploy-dispatch") (hostBuildDeployDispatchAdd,
+// host_build_deploy_dispatch.go), which reconstructs the config + DeployContext + the decoded
+// parent executor and runs the actual ResolveTarget → UnifiedDeployTarget.Add.
 func (c *deployAddCmd) dispatchViaSeam(node *spec.BundleNode, deployName, dir, base string, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
 	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
 	if !ok {
@@ -64,6 +64,24 @@ func (c *deployAddCmd) dispatchViaSeam(node *spec.BundleNode, deployName, dir, b
 		Pull:                 opts.Pull,
 		BuilderImageOverride: opts.BuilderImageOverride,
 	}
+
+	// K4-C venue-descriptor generalization: encode a NESTED node's parent executor (never nil
+	// for a node reached via WalkDeploymentTree's callback under a live parent) so the seam
+	// handler can re-materialize it before calling Add.
+	if opts.ParentExec != nil {
+		pd, err := venueDescriptorForExecutor(opts.ParentExec)
+		if err != nil {
+			return fmt.Errorf("dispatch: encode parent venue: %w", err)
+		}
+		if pd != nil {
+			pdJSON, err := json.Marshal(pd)
+			if err != nil {
+				return fmt.Errorf("dispatch: marshal parent venue: %w", err)
+			}
+			req.ParentVenueJSON = pdJSON
+		}
+	}
+
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("dispatch: marshal request: %w", err)

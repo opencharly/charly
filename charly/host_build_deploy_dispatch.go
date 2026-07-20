@@ -93,6 +93,22 @@ func hostBuildDeployDispatchAdd(_ context.Context, req spec.DeployDispatchReques
 		BuilderImageOverride: req.BuilderImageOverride,
 	}
 
+	// K4-C venue-descriptor generalization: a NESTED dispatch (a child under a pod/vm parent)
+	// carries the parent's executor as a wire-safe descriptor — decode it back into the live
+	// executor deriveChildExecutorForPath already computed host-side (dispatchViaSeam encodes
+	// it before the call), exactly mirroring dispatchNode's direct in-process path.
+	if len(req.ParentVenueJSON) > 0 {
+		var pd spec.VenueDescriptor
+		if err := json.Unmarshal(req.ParentVenueJSON, &pd); err != nil {
+			return spec.DeployDispatchReply{}, fmt.Errorf("deploy-dispatch: decode parent venue: %w", err)
+		}
+		parentExec, err := venueFromDescriptor(pd)
+		if err != nil {
+			return spec.DeployDispatchReply{}, fmt.Errorf("deploy-dispatch: re-materialize parent venue: %w", err)
+		}
+		opts.ParentExec = parentExec
+	}
+
 	if err := utgt.Add(context.Background(), dctx, plans, opts); err != nil {
 		return spec.DeployDispatchReply{}, err
 	}

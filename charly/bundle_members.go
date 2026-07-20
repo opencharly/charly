@@ -185,15 +185,14 @@ func withMemberTag(args []string, imageTag string) []string {
 // `charly bundle add <member>`. The SAME helper serves the kind:check bed runner
 // and the operator deploy path (R3). Idempotent on an already-running member.
 //
-// K4-C SEQUENCING NOTE (tracked FINAL/K5 IOU, never a permanence claim): the outer
-// switch dispatches on isVmMember/isPodMember, which read the STAMPED DESCENT TRAIT
-// (D-data), not the substrate kind word — but unlike deriveChildExecutorForPath, most
-// bodies here shell out via runCharlySubcommand (a `charly <verb>` re-entrant CLI
-// call), not live in-process executor composition. That makes this function a
-// PLAUSIBLY SMALLER lift than the tree-walk's executor-chaining once the FINAL/K5
-// venue-descriptor work lands — it may port via the EXISTING HostBuild("cli") reentry
-// seam rather than needing the new descriptor mechanism at all. Flagged as a FINAL/K5
-// candidate for that seam, not re-scoped into this wave.
+// K4-C PROGRESS NOTE: the outer switch dispatches on isVmMember/isPodMember, which read
+// the STAMPED DESCENT TRAIT (D-data), not the substrate kind word — and unlike
+// deriveChildExecutorForPath, most bodies here shell out via runCharlySubcommand (a
+// `charly <verb>` re-entrant CLI call), not live in-process executor composition. This
+// function ports via the EXISTING HostBuild("cli") reentry seam (no new mechanism needed)
+// once the tree-walk port reaches it — a simpler lift than the executor-chaining cluster,
+// not requiring the venue-descriptor seam at all. Scheduled for the walk-port increment
+// of this same K4-C cutover, not deferred to a later wave.
 func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
@@ -262,9 +261,9 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 // bringUpMembers. It attempts every member and returns their joined errors so callers can finish
 // the full cleanup while still failing the owning operation.
 //
-// K4-C SEQUENCING NOTE: same FINAL/K5 IOU as bringUpMembers above — dispatch is
-// trait-declared (D), bodies are mostly runCharlySubcommand re-entry, a plausibly
-// smaller lift than the tree-walk's live-executor composition.
+// K4-C PROGRESS NOTE: same as bringUpMembers above — dispatch is trait-declared (D),
+// bodies are mostly runCharlySubcommand re-entry, ports via HostBuild("cli") at the
+// walk-port increment.
 func tearDownMembers(node *spec.BundleNode) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil

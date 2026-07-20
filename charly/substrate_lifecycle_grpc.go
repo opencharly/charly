@@ -33,6 +33,12 @@ type grpcSubstrateLifecycle struct {
 // venueFromDescriptor re-materializes a VenueDescriptor into a real host-side DeployExecutor — the
 // decouple point that lets a substrate lifecycle plugin run out-of-process: it returns a
 // serializable venue description, the host owns the live executor.
+//
+// K4-C: Kind "nested" recursively re-materializes Parent, then re-applies Jump exactly as
+// deriveChildExecutorForPath's *kit.NestedExecutor construction does (bundle_add_cmd.go) —
+// generalizing this decoder to the venue-scoped-executor-session seam's nested-tree hop, not
+// just a substrate lifecycle's root venue. The encoder (venueDescriptorForExecutor) lives in
+// deploy_venue_descriptor.go.
 func venueFromDescriptor(d spec.VenueDescriptor) (deploykit.DeployExecutor, error) {
 	switch d.Kind {
 	case "":
@@ -41,6 +47,26 @@ func venueFromDescriptor(d spec.VenueDescriptor) (deploykit.DeployExecutor, erro
 		return kit.ShellExecutor{}, nil
 	case "ssh":
 		return &kit.SSHExecutor{User: d.User, Host: d.Host, Port: d.Port, Args: d.Args, ConnectTimeout: d.ConnectTimeout}, nil
+	case "nested":
+		if d.Jump == nil {
+			return nil, fmt.Errorf("substrate lifecycle: nested venue descriptor missing jump")
+		}
+		var parent deploykit.DeployExecutor
+		if d.Parent != nil {
+			p, err := venueFromDescriptor(*d.Parent)
+			if err != nil {
+				return nil, err
+			}
+			parent = p
+		}
+		jumpKind, err := jumpKindFromWire(d.Jump.Kind)
+		if err != nil {
+			return nil, err
+		}
+		return &kit.NestedExecutor{
+			Parent: parent,
+			Jump:   kit.NestedJump{Kind: jumpKind, Target: d.Jump.Target, ExtraArgs: d.Jump.ExtraArgs},
+		}, nil
 	default:
 		return nil, fmt.Errorf("substrate lifecycle: unknown venue descriptor kind %q", d.Kind)
 	}
