@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 )
 
@@ -78,7 +79,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 				return graphicsEndpoint{}, fmt.Errorf("VNC server not reachable (port 5900): %w", err)
 			}
 			h.endpointCleanups = append(h.endpointCleanups, ep.Close)
-			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(resolveBoxName(h.kr.Box()), h.kr.Instance())}, nil
+			return graphicsEndpoint{Addr: ep.Addr, Password: resolveVNCPassword(kit.ResolveBoxName(h.kr.Box()), h.kr.Instance())}, nil
 		}
 	}
 
@@ -200,7 +201,7 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
 		return "", nil
 	}
-	engine, containerName, err := resolveContainer(h.kr.Box(), h.kr.Instance())
+	engine, containerName, err := deploykit.ResolveContainer(h.kr.Box(), h.kr.Instance())
 	if err != nil {
 		return "", err
 	}

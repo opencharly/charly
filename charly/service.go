@@ -43,8 +43,8 @@ func resolveServiceInit(box, instance string) (engine, containerName string, ini
 	if err != nil {
 		return "", "", nil, err
 	}
-	boxName := resolveBoxName(box)
-	runEngine := ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
+	boxName := kit.ResolveBoxName(box)
+	runEngine := deploykit.ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine)
 	engine = kit.EngineBinary(runEngine)
 	containerName = kit.ContainerNameInstance(boxName, instance)
 	if !containerRunning(engine, containerName) {

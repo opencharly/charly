@@ -76,7 +76,7 @@ func (c *CheckLiveCmd) checkLiveGather() (liveResult, error) {
 // overlay, resolves runtime vars, and runs the plan. The check-run "live" seam
 // (hostCheckLive) consumes it via checkLiveGather.
 func (c *CheckLiveCmd) checkLivePod() (liveResult, error) {
-	engine, containerName, err := resolveContainer(c.Box, c.Instance)
+	engine, containerName, err := deploykit.ResolveContainer(c.Box, c.Instance)
 	if err != nil {
 		return liveResult{}, err
 	}

@@ -758,7 +758,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	if c.Seed && (len(bindMounts) > 0 || len(volumes) > 0) {
 		dataMeta := meta
 		dataRef := imageRef
-		dataEngine := ResolveBoxEngineForDeploy(c.Box, c.Instance, rt.RunEngine)
+		dataEngine := deploykit.ResolveBoxEngineForDeploy(c.Box, c.Instance, rt.RunEngine)
 
 		// Use external data image if --data-from specified
 		if c.DataFrom != "" {
@@ -1107,7 +1107,7 @@ func (c *BoxConfigRemoveCmd) Run() error {
 		return err
 	}
 
-	boxName := resolveBoxName(c.Box)
+	boxName := kit.ResolveBoxName(c.Box)
 
 	// Direct-mode removal: the deploy was created without a quadlet, so
 	// `systemctl --user disable` would fail. Stop + remove the container

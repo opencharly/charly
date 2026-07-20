@@ -73,7 +73,7 @@ func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spe
 		SvcName:       kit.ServiceNameInstance(box, instance),
 		ContainerName: kit.ContainerNameInstance(box, instance),
 		DirectDeploy:  directDeploy,
-		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
+		EngineBin:     kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 	}
 	// Encrypted-volume mounts are skipped in direct-deploy mode (those require
 	// systemd-run --scope; matches runConfigDirect's warning path).
@@ -250,7 +250,7 @@ func resolvePodStopPlan(box, instance string, unmount bool) (*spec.PodLifecycleP
 	plan := &spec.PodLifecyclePlan{
 		ContainerName: kit.ContainerNameInstance(box, instance),
 		SvcName:       kit.ServiceNameInstance(box, instance),
-		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
+		EngineBin:     kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 		Unmount:       unmount,
 		Tunnel:        resolvePodTunnel(box, instance),
 	}
@@ -341,7 +341,7 @@ func resolvePodRuntimeImage(box, instance, tag string, rt *kit.ResolvedRuntime, 
 	if meta == nil {
 		return nil, fmt.Errorf("image %s has no embedded metadata; rebuild with latest charly", imageRef)
 	}
-	engine = ResolveBoxEngineFromMeta(meta, rt.RunEngine)
+	engine = deploykit.ResolveBoxEngineFromMeta(meta, rt.RunEngine)
 	deploykit.MergeDeployOntoMetadata(meta, dc, box, instance)
 
 	cliVolumes := parseVolumeFlagsStandalone(volumeFlag, bind)
@@ -439,9 +439,9 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 	var engine, name string
 	var err error
 	if opts.Sidecar != "" {
-		engine, name, err = resolveSidecarContainer(box, instance, opts.Sidecar)
+		engine, name, err = deploykit.ResolveSidecarContainer(box, instance, opts.Sidecar)
 	} else {
-		engine, name, err = resolveContainer(box, instance)
+		engine, name, err = deploykit.ResolveContainer(box, instance)
 	}
 	if err != nil {
 		return nil, err
@@ -476,7 +476,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	if err != nil {
 		return nil, err
 	}
-	boxName := resolveBoxName(box)
+	boxName := kit.ResolveBoxName(box)
 
 	if rt.RunMode == "quadlet" {
 		svc := kit.ServiceNameInstance(boxName, instance)
@@ -493,7 +493,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 		return &spec.PodLiveStdioPlan{Script: shellQuoteArgs(argv)}, nil
 	}
 
-	engine := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
+	engine := kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
 	name := kit.ContainerNameInstance(boxName, instance)
 	if opts.Sidecar != "" {
 		name = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar)

@@ -306,7 +306,7 @@ func holderExists(addr holderAddr) bool {
 	}
 	engine := "podman"
 	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
+		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
 	}
 	return exec.Command(engine, "container", "exists", kit.ContainerNameInstance(addr.Base, addr.Instance)).Run() == nil
 }
@@ -362,7 +362,7 @@ func podIsRunning(base, instance string) bool {
 	}
 	engine := "podman"
 	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
+		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
 	}
 	name := kit.ContainerNameInstance(base, instance)
 	out, err := exec.Command(engine, "inspect", "--format", "{{.State.Running}}", name).CombinedOutput()

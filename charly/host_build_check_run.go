@@ -230,7 +230,7 @@ func hostCheckRunFeatureLive(_ context.Context, req spec.CheckRunRequest) (kit.C
 // walk (it needs LoadUnified + the kind:agent CLI), so it stays behind the seam. Shared by the
 // atom arm and the CLI shell (CheckFeatureRunCmd).
 func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	engine, containerName, err := resolveContainer(req.Name, req.Instance)
+	engine, containerName, err := deploykit.ResolveContainer(req.Name, req.Instance)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
