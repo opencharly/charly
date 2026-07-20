@@ -33,6 +33,8 @@ func dispatchPodCommand(word string, args []string) error {
 		return sdk.RunInProcCLI("volume", &VolumeCmd{}, args)
 	case "cp":
 		return sdk.RunInProcCLI("cp", &CpCmd{}, args)
+	case "config":
+		return sdk.RunInProcCLI("config", &ConfigCmd{}, args)
 	default:
 		return fmt.Errorf("pod: unsupported command word %q", word)
 	}

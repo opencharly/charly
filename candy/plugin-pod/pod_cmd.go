@@ -300,6 +300,135 @@ type CpCmd struct {
 	Sidecar  string `long:"sidecar" help:"Target the named SIDECAR container instead of the app container"`
 }
 
+// ConfigCmd groups box configuration subcommands — the `charly config` grammar. Default
+// subcommand (no keyword): full setup (quadlet + secrets + enc). Every leaf's actual body is
+// deeply core-type-coupled (BundleConfig/ResolvedSidecar/enc*/deploykit.CleanDeployEntry, and
+// Setup is ALSO constructed directly, by its EXACT unchanged name, by bundle_from_box_cmd.go —
+// P13-kernel, out of this wave's scope — so the core struct cannot rename/move), so each leaf
+// forwards via its own HostBuild("pod-config-<leaf>") seam.
+type ConfigCmd struct {
+	Mount   ConfigMountCmd   `cmd:"mount" help:"Mount encrypted volumes"`
+	Passwd  ConfigPasswdCmd  `cmd:"passwd" help:"Change gocryptfs password"`
+	Remove  ConfigRemoveCmd  `cmd:"remove" help:"Remove quadlet and disable service"`
+	Setup   ConfigSetupCmd   `cmd:"" default:"withargs" help:"Setup quadlet, secrets, and encrypted volumes"`
+	Status  ConfigStatusCmd  `cmd:"status" help:"Show encrypted volume status"`
+	Unmount ConfigUnmountCmd `cmd:"unmount" help:"Unmount encrypted volumes"`
+}
+
+// ConfigSetupCmd configures a box: generates quadlet, provisions secrets, initializes and mounts
+// encrypted volumes — the `charly config [setup]` grammar (mirrors core's BoxConfigSetupCmd 1:1).
+type ConfigSetupCmd struct {
+	Box           string   `arg:"" optional:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
+	Tag           string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Build         bool     `long:"build" help:"Force local build instead of pulling from registry"`
+	Env           []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE), merged with existing vars"`
+	Clean         bool     `short:"c" long:"clean" help:"Replace all env vars instead of merging (clean slate)"`
+	EnvFile       string   `long:"env-file" help:"Load env vars from file"`
+	Instance      string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Port          []string `short:"p" help:"Remap host port (newHost:containerPort, e.g., 5901:5900)"`
+	KeepMounted   bool     `long:"keep-mounted" help:"Keep encrypted volumes mounted after setup"`
+	Password      string   `long:"password" default:"auto" enum:"auto,manual" help:"auto: generate secrets (default), manual: prompt for each"`
+	RefreshSecret []string `name:"refresh-secret" help:"Force re-provisioning of the named podman secret(s) from their source on this run ('all' = every secret of this image, sidecars included): the charly-<image>-<name> secret is removed and recreated. A candy-owned auto-generated secret gets a NEW value — re-initialize services that stored the old one"`
+	VolumeFlag    []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path]). Type: volume|bind|encrypted"`
+	Bind          []string `long:"bind" help:"Shorthand: configure volume as bind mount (name or name=path)"`
+	Encrypt       []string `long:"encrypt" help:"Shorthand: configure volume as encrypted (gocryptfs)"`
+	MemoryMax     string   `long:"memory-max" help:"Cgroup memory.max hard OOM limit (e.g. 6g, 500m). Persists to charly.yml."`
+	MemoryHigh    string   `long:"memory-high" help:"Cgroup memory.high soft limit — reclaim pressure before OOM. Persists to charly.yml."`
+	MemorySwapMax string   `long:"memory-swap-max" help:"Cgroup memory.swap.max ceiling. Persists to charly.yml."`
+	Cpus          string   `long:"cpus" help:"CPU quota in cores (e.g. 2.5 for 2.5 cores). Persists to charly.yml."`
+	Seed          bool     `long:"seed" default:"true" negatable:"" help:"Seed bind-backed volumes with data from image (default: true)"`
+	ForceSeed     bool     `long:"force-seed" help:"Re-seed even if target directory is not empty"`
+	DataFrom      string   `long:"data-from" help:"Seed data from this data image instead of the target image"`
+	UpdateAll     bool     `long:"update-all" help:"Regenerate quadlets for all other deployed boxes to pick up env_provides changes"`
+	SshKey        string   `long:"ssh-key" help:"SSH public key: 'auto' (default ~/.ssh key), path to .pub file, 'generate', or 'none'"`
+	Sidecar       []string `long:"sidecar" help:"Attach sidecar (from built-in templates, e.g. 'tailscale')"`
+	ListSidecars  bool     `long:"list-sidecars" help:"List available sidecar templates and exit"`
+	NoAutoDetect  bool     `long:"no-autodetect" help:"Disable automatic device detection"`
+}
+
+func (c *ConfigSetupCmd) Run() error {
+	return hostPodSeam("pod-config-setup", spec.PodConfigSetupRequest{
+		Box:           c.Box,
+		Tag:           c.Tag,
+		Build:         c.Build,
+		Env:           c.Env,
+		Clean:         c.Clean,
+		EnvFile:       c.EnvFile,
+		Instance:      c.Instance,
+		Port:          c.Port,
+		KeepMounted:   c.KeepMounted,
+		Password:      c.Password,
+		RefreshSecret: c.RefreshSecret,
+		VolumeFlag:    c.VolumeFlag,
+		Bind:          c.Bind,
+		Encrypt:       c.Encrypt,
+		MemoryMax:     c.MemoryMax,
+		MemoryHigh:    c.MemoryHigh,
+		MemorySwapMax: c.MemorySwapMax,
+		Cpus:          c.Cpus,
+		Seed:          c.Seed,
+		ForceSeed:     c.ForceSeed,
+		DataFrom:      c.DataFrom,
+		UpdateAll:     c.UpdateAll,
+		SshKey:        c.SshKey,
+		Sidecar:       c.Sidecar,
+		ListSidecars:  c.ListSidecars,
+		NoAutoDetect:  c.NoAutoDetect,
+	})
+}
+
+// ConfigStatusCmd shows status of all services
+type ConfigStatusCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ConfigStatusCmd) Run() error {
+	return hostPodSeam("pod-config-status", spec.PodConfigStatusRequest{Box: c.Box, Instance: c.Instance})
+}
+
+// ConfigMountCmd mounts encrypted volumes.
+type ConfigMountCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Volume   string `long:"volume" help:"Only mount this volume (by name)"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ConfigMountCmd) Run() error {
+	return hostPodSeam("pod-config-mount", spec.PodConfigMountRequest{Box: c.Box, Volume: c.Volume, Instance: c.Instance})
+}
+
+// ConfigUnmountCmd unmounts encrypted volumes.
+type ConfigUnmountCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Volume   string `long:"volume" help:"Only unmount this volume (by name)"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ConfigUnmountCmd) Run() error {
+	return hostPodSeam("pod-config-unmount", spec.PodConfigUnmountRequest{Box: c.Box, Volume: c.Volume, Instance: c.Instance})
+}
+
+// ConfigPasswdCmd changes the gocryptfs password.
+type ConfigPasswdCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ConfigPasswdCmd) Run() error {
+	return hostPodSeam("pod-config-passwd", spec.PodConfigPasswdRequest{Box: c.Box, Instance: c.Instance})
+}
+
+// ConfigRemoveCmd removes a quadlet service (replaces charly disable).
+type ConfigRemoveCmd struct {
+	Box      string `arg:"" help:"Box name or remote ref"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ConfigRemoveCmd) Run() error {
+	return hostPodSeam("pod-config-remove", spec.PodConfigRemoveRequest{Box: c.Box, Instance: c.Instance})
+}
+
 func (c *CpCmd) Run() error {
 	srcInCtr := strings.HasPrefix(c.Src, ":")
 	dstInCtr := strings.HasPrefix(c.Dst, ":")
