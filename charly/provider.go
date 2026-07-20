@@ -67,12 +67,18 @@ const (
 	// the registered downloader, so an alternative refs plugin (OCI/S3) can swap the backend. The
 	// host keeps the fetch orchestration (override/cache/migrate). See candy/plugin-refs (P7).
 	ClassRefs ProviderClass = "refs"
+	// ClassAgentRuntime is a structured agent-session runtime (Pi, a terminal
+	// adapter, or another implementation). Core resolves this class generically.
+	ClassAgentRuntime ProviderClass = "agent-runtime"
+	// ClassTerminal is an application-neutral terminal process capability. tmux
+	// is the first provider word, not a core transport special case.
+	ClassTerminal ProviderClass = "terminal"
 )
 
 // providerClasses is the closed set, used by the loader to validate a plugin's
 // `provides:` entries and by the bijection gate.
 var providerClasses = map[ProviderClass]bool{
-	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true, ClassRefs: true,
+	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true, ClassRefs: true, ClassAgentRuntime: true, ClassTerminal: true,
 }
 
 // splitCapability parses a "<class>:<word>" capability string as authored in a

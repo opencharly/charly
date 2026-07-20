@@ -1,0 +1,27 @@
+kimi:
+    candy:
+        version: 2026.199.2359
+        description: |
+            Installs the Moonshot Kimi Code CLI globally via npm so `kimi` is on PATH for AI coding assistance.
+            The candy depends on nodejs and ships a package.json pinning
+            @moonshot-ai/kimi-code, which the build installs globally under
+            NPM_CONFIG_PREFIX (~/.npm-global). The result is verifiable: the
+            kimi binary lands at ~/.npm-global/bin/kimi, the scoped package
+            is unpacked under ~/.npm-global/lib/node_modules/@moonshot-ai/kimi-code,
+            and `kimi --version` exits cleanly and prints a semantic version.
+        require:
+            - nodejs
+        plan:
+            - check: the kimi binary is installed into the npm global bin directory
+              file:
+                file: ${HOME}/.npm-global/bin/kimi
+                exists: true
+            - check: the @moonshot-ai/kimi-code scoped package is unpacked under the npm global lib directory
+              file:
+                file: ${HOME}/.npm-global/lib/node_modules/@moonshot-ai/kimi-code/package.json
+                exists: true
+            - check: running kimi --version exits cleanly and prints a semantic version
+              exit_status: 0
+              stdout:
+                - matches: "[0-9]+\\.[0-9]+"
+              command: ${HOME}/.npm-global/bin/kimi --version

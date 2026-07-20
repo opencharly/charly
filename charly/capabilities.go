@@ -95,15 +95,17 @@ var CapabilityLabelMap = map[string]string{
 	"DataImage":   spec.LabelDataBox,
 
 	// Env / secret / MCP dependency graph
-	"EnvProvide":    spec.LabelEnvProvide,
-	"EnvRequire":    spec.LabelEnvRequire,
-	"EnvAccept":     spec.LabelEnvAccept,
-	"SecretAccept":  spec.LabelSecretAccept,
-	"SecretRequire": spec.LabelSecretRequire,
-	"Secret":        spec.LabelSecret,
-	"MCPProvide":    spec.LabelMCPProvide,
-	"MCPRequire":    spec.LabelMCPRequire,
-	"MCPAccept":     spec.LabelMCPAccept,
+	"EnvProvide":       spec.LabelEnvProvide,
+	"EnvRequire":       spec.LabelEnvRequire,
+	"EnvAccept":        spec.LabelEnvAccept,
+	"SecretAccept":     spec.LabelSecretAccept,
+	"SecretRequire":    spec.LabelSecretRequire,
+	"Secret":           spec.LabelSecret,
+	"MCPProvide":       spec.LabelMCPProvide,
+	"AgentProvide":     spec.LabelAgentProvide,
+	"TerminalProfiles": spec.LabelTerminalProfiles,
+	"MCPRequire":       spec.LabelMCPRequire,
+	"MCPAccept":        spec.LabelMCPAccept,
 
 	// plan-shaped self-description — three-section (candy/box/deploy)
 	// LabelDescriptionSet. The description label set is additive; the

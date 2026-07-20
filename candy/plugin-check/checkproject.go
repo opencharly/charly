@@ -92,7 +92,7 @@ func resolveCheckProjection(ex *sdk.Executor, ctx context.Context, entity, dir s
 
 // resolvedProject fetches + decodes the generic resolved-project envelope over the reverse channel.
 func resolvedProject(ex *sdk.Executor, ctx context.Context, dir string) (*spec.ResolvedProject, error) {
-	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir})
+	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir, LocalSuperproject: true})
 	if err != nil {
 		return nil, err
 	}

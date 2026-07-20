@@ -58,9 +58,9 @@ func TestSystemPackagesStepScopeVenueGate(t *testing.T) {
 func TestSystemPackagesStepReverse(t *testing.T) {
 	// Install phase → one package-remove op with the tracked packages.
 	s := &deploykit.SystemPackagesStep{
-		Format:     "rpm",
-		Phase: spec.PhaseInstall,
-		Packages:   []string{"ripgrep", "fd-find"},
+		Format:   "rpm",
+		Phase:    spec.PhaseInstall,
+		Packages: []string{"ripgrep", "fd-find"},
 	}
 	ops := s.Reverse()
 	if len(ops) != 1 {
@@ -78,9 +78,9 @@ func TestSystemPackagesStepReverse(t *testing.T) {
 
 	// Prepare phase with copr → one copr-disable per copr entry.
 	s2 := &deploykit.SystemPackagesStep{
-		Format:     "rpm",
-		Phase: spec.PhasePrepare,
-		Copr:       []string{"coolercontrol/coolercontrol", "che/nerd-fonts"},
+		Format: "rpm",
+		Phase:  spec.PhasePrepare,
+		Copr:   []string{"coolercontrol/coolercontrol", "che/nerd-fonts"},
 	}
 	ops2 := s2.Reverse()
 	if len(ops2) != 2 {

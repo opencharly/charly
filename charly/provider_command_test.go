@@ -124,12 +124,12 @@ func TestCommandCompileIn_StatusInProc(t *testing.T) {
 func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"ssh", []string{"ssh", "tunnel", "spice", "myvm"}, "ssh tunnel spice <vm>"},
-		// `mcp`, `secrets`, `udev`, `tmux`, `preempt`, `feature`, and `alias` are intentionally
-		// absent: `charly mcp serve` (C1), `charly secrets …` (C2), `charly udev …`, `charly tmux …`
-		// (the first welded-command externalization), `charly preempt …` (the second),
+		// `mcp`, `secrets`, `udev`, `preempt`, `feature`, and `alias` are intentionally
+		// absent: `charly mcp serve` (C1), `charly secrets …` (C2), `charly udev …`,
+		// `charly preempt …` (the second welded-command externalization),
 		// `charly feature …` (the third), and `charly alias …` (P14, candy/plugin-alias — COMPILED-IN)
 		// are now dynamic command candies served by their own plugin (candy/plugin-mcp /
-		// candy/plugin-secrets / candy/plugin-udev / candy/plugin-tmux / candy/plugin-preempt /
+		// candy/plugin-secrets / candy/plugin-udev / candy/plugin-preempt /
 		// candy/plugin-feature / candy/plugin-alias), NOT builtin CommandProviders. alias's
 		// compiled-in in-proc registration is asserted by TestCommandCompileIn_AliasInProc.
 	})
@@ -268,8 +268,8 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	if paths["secrets.list"] {
 		t.Error("secrets.list unexpectedly present in the builtin CLI model — `secrets` is now an external command (candy/plugin-secrets), not a builtin CommandProvider")
 	}
-	if paths["tmux.list"] {
-		t.Error("tmux.list unexpectedly present in the builtin CLI model — `tmux` is now an external command (candy/plugin-tmux, the first welded-command externalization), not a builtin CommandProvider")
+	if !paths["tmux.list"] || !paths["tmux.run"] {
+		t.Error("typed-provider tmux compatibility command model is missing from MCP reflection")
 	}
 	if paths["preempt.status"] {
 		t.Error("preempt.status unexpectedly present in the builtin CLI model — `preempt` is now an external command (candy/plugin-preempt, the second welded-command externalization), not a builtin CommandProvider")

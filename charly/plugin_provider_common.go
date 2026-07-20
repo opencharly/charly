@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk"
@@ -20,16 +21,18 @@ import (
 // so the carrier interfaces (stepContractCarrier / structuralKindCarrier / validatingKindCarrier /
 // phaseCarrier / primaryCarrier) are satisfied ONCE for both placements via method promotion.
 type capMeta struct {
-	class      ProviderClass
-	word       string
-	contract   *stepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
-	structural bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
-	validates  bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
-	phase      string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
-	primary    string              // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
-	traits     *spec.DeployTraits  // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
-	cmdParent  string              // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
-	subcmds    []sdk.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
+	class            ProviderClass
+	word             string
+	contract         *stepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	structural       bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
+	validates        bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
+	phase            string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
+	primary          string              // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
+	traits           *spec.DeployTraits  // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
+	cmdParent        string              // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
+	subcmds          []sdk.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
+	commandModel     *spec.CLIModel      // set ONLY for class:command; CUE-generated reflected leaf grammar
+	commandModelJSON []byte              // exact validated transport payload, preserved across relays
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -43,6 +46,21 @@ func (m capMeta) Class() ProviderClass { return m.class }
 // — and every OUT-OF-PROCESS command — returns "" (top-level; no live out-of-process nested command
 // exists), so collectExternalCommandPlugins's `parent != ""` guard is what actually gates nesting.
 func (m capMeta) CommandParent() string { return m.cmdParent }
+
+// CommandModel returns a defensive copy of the plugin-published generated
+// #CLIModel. It lets the host merge plugin-owned leaves into __cli-model.
+func (m capMeta) CommandModel() *spec.CLIModel {
+	if m.commandModel == nil {
+		return nil
+	}
+	copy := *m.commandModel
+	copy.Leaves = append([]spec.CLILeaf(nil), m.commandModel.Leaves...)
+	return &copy
+}
+
+func (m capMeta) commandModelPayload() []byte {
+	return append([]byte(nil), m.commandModelJSON...)
+}
 
 // declaredStepContract implements stepContractCarrier — a class:step capability's plugin-declared
 // Scope/Venue/Gate/Emits (F3), nil/false for every other capability.
@@ -83,8 +101,22 @@ func (m capMeta) declaredSubcommands() []sdk.CLISubcommand { return m.subcmds }
 // twins embed — the class/word plus the class-gated contract/structural/validates/phase/primary
 // flags, applied IDENTICALLY regardless of placement (R3). The caller (liftCapabilities) has
 // already validated the class + word are well-formed.
-func buildCapMeta(c *pb.ProvidedCapability) capMeta {
+func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	m := capMeta{class: ProviderClass(c.GetClass()), word: c.GetWord()}
+	if raw := c.GetCommandModelJson(); len(raw) > 0 {
+		if m.class != ClassCommand {
+			return capMeta{}, fmt.Errorf("capability %s:%s carries command_model_json outside class=command", m.class, m.word)
+		}
+		var model spec.CLIModel
+		if err := json.Unmarshal(raw, &model); err != nil {
+			return capMeta{}, fmt.Errorf("command %s model: %w", m.word, err)
+		}
+		if err := sdk.ValidateGenerated("#CLIModel", model); err != nil {
+			return capMeta{}, fmt.Errorf("command %s model: %w", m.word, err)
+		}
+		m.commandModel = &model
+		m.commandModelJSON = append([]byte(nil), raw...)
+	}
 	// A class:step capability may DECLARE its install-step contract (F3): compileActOp builds an
 	// externalStep carrying the plugin-declared Scope/Venue/Gate/Emits.
 	if sc := c.GetStepContract(); m.class == ClassStep && sc != nil {
@@ -126,7 +158,7 @@ func buildCapMeta(c *pb.ProvidedCapability) capMeta {
 			}
 		}
 	}
-	return m
+	return m, nil
 }
 
 // liftCapabilities is the ONE capability-lift loop both buildUnit (out-of-process) and
@@ -142,7 +174,11 @@ func liftCapabilities(provided []*pb.ProvidedCapability, origin string, newProvi
 		if !providerClasses[class] || c.GetWord() == "" {
 			return nil, nil, fmt.Errorf("%s advertised malformed capability %q:%q", origin, c.GetClass(), c.GetWord())
 		}
-		providers = append(providers, newProvider(buildCapMeta(c), c))
+		meta, err := buildCapMeta(c)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s advertised invalid capability %s:%s: %w", origin, c.GetClass(), c.GetWord(), err)
+		}
+		providers = append(providers, newProvider(meta, c))
 		if c.GetInputDef() != "" {
 			inputDefs[provKey(class, c.GetWord())] = c.GetInputDef()
 		}

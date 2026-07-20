@@ -158,6 +158,7 @@ func validateCandyContents(vc *vctx, e *vErr) {
 var validPluginClasses = map[string]bool{
 	"kind": true, "verb": true, "deploy": true, "step": true,
 	"builder": true, "command": true, "build": true, "loader": true, "refs": true,
+	"agent-runtime": true, "terminal": true,
 }
 
 // splitPluginCapability splits a `<class>:<word>` capability, mirroring core splitCapability

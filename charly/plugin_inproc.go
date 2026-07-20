@@ -34,6 +34,14 @@ func (p *inprocProvider) Invoke(ctx context.Context, op *Operation) (*Result, er
 	return &Result{JSON: rep.GetResultJson()}, nil
 }
 
+func (p *inprocProvider) OpenChannel(open *pb.ChannelFrame, stream sdk.ProviderChannel) error {
+	channel, ok := p.srv.(sdk.ChannelProvider)
+	if !ok {
+		return fmt.Errorf("compiled-in provider %s:%s has no bidirectional channel", p.class, p.word)
+	}
+	return channel.OpenChannel(open, stream)
+}
+
 // buildUnitInProc lifts a compiled-in plugin's (meta, provider) pair into a
 // *PluginUnit by calling Describe IN-PROCESS and wrapping each advertised
 // capability in an inprocProvider — the in-proc analogue of buildUnit

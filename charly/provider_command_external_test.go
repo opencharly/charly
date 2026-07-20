@@ -33,20 +33,6 @@ func TestExternalCommandExecPlan_Udev(t *testing.T) {
 		[]string{word, "generate"}, []string{"generate"})
 }
 
-// TestExternalCommandExecPlan_Tmux proves the externalized `charly tmux` command — the FIRST
-// welded-command externalization — rides the SAME fork/exec seam: a dynamic Kong holder built
-// for the `tmux` word parses `tmux list mybox` (a leaf + box arg), externalCommandExecPlan
-// resolves the (baked) plugin-tmux binary by word and builds the exec argv `<bin> list mybox` +
-// the CLI-mode env (handshake cookie stripped, CHARLY_BIN stamped). This is the externalization
-// gate — `charly tmux` no longer resolves to a builtin CommandProvider; it resolves to
-// candy/plugin-tmux over this path, and the plugin re-expresses each leaf as a `charly cmd`/
-// `charly shell` shell-back (CHARLY_BIN is the SAME charly that dispatched it).
-func TestExternalCommandExecPlan_Tmux(t *testing.T) {
-	const word = "tmux"
-	assertExternalCommandExecPlan(t, word, "/fake/plugins/plugin-"+word,
-		[]string{word, "list", "mybox"}, []string{"list", "mybox"})
-}
-
 // (The former TestExternalCommandExecPlan_Vm was removed with the P10 VM-CLI move: `charly vm`
 // is now a COMPILED-IN command served by candy/plugin-vm (command:vm), dispatched IN-PROC — it
 // no longer rides the external fork/exec seam, so it is not an example word for this suite. The
@@ -56,7 +42,7 @@ func TestExternalCommandExecPlan_Tmux(t *testing.T) {
 // seam: a dynamic Kong holder built for the word parses the given argv, externalCommandExecPlan
 // resolves the baked plugin binary by word and builds the exec argv (binary ++ pass-through
 // args) + a CLI-mode env (handshake cookie stripped, CHARLY_BIN stamped — asserted by
-// assertCommandEnv). Shared by the passthrough/udev/tmux/vm exec-plan tests (R3).
+// assertCommandEnv). Shared by the passthrough/udev/vm exec-plan tests (R3).
 func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, wantTail []string) {
 	t.Helper()
 	// Set the go-plugin handshake cookie so the strip is non-trivial (assertCommandEnv checks
@@ -94,7 +80,7 @@ func assertExternalCommandExecPlan(t *testing.T, word, bakedBin string, parse, w
 			t.Fatalf("argv[%d] = %q, want %q (full %v)", i, argv[i], want[i], argv)
 		}
 	}
-	assertCommandEnv(t, env)
+	assertCommandEnv(t, env, word)
 }
 
 // TestExternalCommandExecPlan_NestedCheckCommand proves a NestedCommandProvider's dynamic
@@ -202,10 +188,11 @@ func equalStrings(a, b []string) bool {
 
 // assertCommandEnv checks commandExecEnv stripped the go-plugin handshake cookie (so the
 // fork/exec'd plugin runs in CLI mode, not serve mode — sdk.IsServeMode) and stamped CHARLY_BIN.
-func assertCommandEnv(t *testing.T, env []string) {
+func assertCommandEnv(t *testing.T, env []string, word string) {
 	t.Helper()
 	cookie := sdk.Handshake.MagicCookieKey + "="
 	hasBin := false
+	hasWord := false
 	for _, e := range env {
 		if strings.HasPrefix(e, cookie) {
 			t.Fatalf("env must NOT carry the go-plugin handshake cookie %q (the plugin would enter serve mode): %q", cookie, e)
@@ -213,8 +200,14 @@ func assertCommandEnv(t *testing.T, env []string) {
 		if strings.HasPrefix(e, "CHARLY_BIN=") {
 			hasBin = true
 		}
+		if e == "CHARLY_COMMAND_WORD="+word {
+			hasWord = true
+		}
 	}
 	if !hasBin {
 		t.Fatal("env must stamp CHARLY_BIN so the plugin shells back to the dispatching charly")
+	}
+	if !hasWord {
+		t.Fatalf("env must stamp CHARLY_COMMAND_WORD=%s so a multi-command plugin selects the dispatched grammar", word)
 	}
 }

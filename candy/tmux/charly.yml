@@ -5,8 +5,8 @@ tmux:
             Terminal multiplexer providing persistent, detachable terminal sessions inside containers
             The tmux candy installs the tmux package (same name on RPM, DEB, and PAC
             distros) so the binary lands at /usr/bin/tmux. tmux is the multiplexer
-            behind `charly tmux run/shell`: it starts a detached session server with no
-            controlling TTY and lets sessions outlive disconnects. It is verifiable by
+            used by Charly's typed terminal provider: it starts isolated detached session
+            servers with no controlling TTY and lets sessions outlive disconnects. It is verifiable by
             asserting the binary exists, the package is registered, the version banner
             prints, and a real detached session can be created, confirmed live, and killed.
         package:

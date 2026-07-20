@@ -27,7 +27,9 @@ type CLI struct {
 	// Commands marked LocalOnly (settings, version, ssh tunnel) are
 	// not re-execed — they always run on the local machine. See
 	// charly/host_exec.go for the exec dispatch.
-	Host string `long:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
+	Host             string   `long:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
+	HostIdentityFile string   `long:"host-identity-file" env:"CHARLY_HOST_IDENTITY_FILE" help:"SSH identity file for --host" type:"path"`
+	HostOption       []string `long:"host-option" env:"CHARLY_HOST_OPTION" help:"OpenSSH option for --host (repeatable, KEY=VALUE)"`
 
 	// Dir is the project directory that every build-mode command resolves
 	// charly.yml / candy/ relative to. Default is the process
@@ -47,9 +49,10 @@ type CLI struct {
 	// with --dir.
 	Repo string `long:"repo" env:"CHARLY_PROJECT_REPO" placeholder:"OWNER/REPO[@REF]" help:"Read charly.yml from a remote git repo (e.g. opencharly/charly). Use 'default' for opencharly/charly."`
 
-	Box      BoxCmd            `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
-	Plugin   PluginInternalCmd `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`
-	CliModel CliModelCmd       `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (sdk.CLIModel) for the out-of-process MCP bridge"`
+	Box         BoxCmd                 `cmd:"" name:"box" help:"Build, generate, inspect, and pull container boxes (reads charly.yml)"`
+	Plugin      PluginInternalCmd      `cmd:"" name:"__plugin" hidden:"" help:"internal: plugin server/relay plumbing"`
+	AgentTarget AgentTargetInternalCmd `cmd:"" name:"__agent-target" hidden:"" help:"internal: serve generic provider gRPC over stdio"`
+	CliModel    CliModelCmd            `cmd:"" name:"__cli-model" hidden:"" help:"internal: emit the CLI command tree as JSON (sdk.CLIModel) for the out-of-process MCP bridge"`
 
 	// __plugin-providers prints a candy's plugin.providers (one <class>:<word> per line) —
 	// the single source the PKGBUILD uses to bake the host /usr/lib/charly/plugins/.providers

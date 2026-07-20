@@ -14,7 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // serve.go is the heart of the externalized `charly mcp serve` — it turns the entire
@@ -36,8 +36,12 @@ import (
 // skip set is kept (and covers the external `mcp` command word too) as a defensive guard
 // against ever exposing a tool that re-invokes the server.
 var mcpSkipToolPaths = map[string]bool{
-	"mcp":       true,
-	"mcp.serve": true,
+	"mcp":                   true,
+	"mcp.serve":             true,
+	"tui":                   true,
+	"agent.terminal.attach": true,
+	"tmux.attach":           true,
+	"tmux.shell":            true,
 }
 
 // mcpSkipFlags are the root-global execution/project-context flags the MCP server manages
@@ -61,6 +65,35 @@ var mcpSkipFlags = map[string]bool{
 // this list deliberately conservative: a false negative exposes a dangerous tool to an
 // unsuspecting LLM. Entries match the dotted leaf path (sdk.CLILeaf.Path).
 var mcpDestructivePaths = map[string]bool{
+	// Agent control. Inspection remains available under --read-only; every
+	// operation that starts work or mutates durable control state is explicit.
+	"agent.session.create":  true,
+	"agent.session.new":     true,
+	"agent.session.close":   true,
+	"agent.run.start":       true,
+	"agent.run.abort":       true,
+	"agent.followup":        true,
+	"agent.steer":           true,
+	"agent.dispatch":        true,
+	"agent.delegate":        true,
+	"agent.federation.run":  true,
+	"agent.terminal.run":    true,
+	"agent.terminal.launch": true,
+	"agent.terminal.input":  true,
+	"agent.terminal.key":    true,
+	"agent.terminal.resize": true,
+	"agent.terminal.signal": true,
+	"agent.terminal.close":  true,
+	"agent.incident.create": true,
+	"agent.rca.start":       true,
+	"agent.rca.complete":    true,
+	"agent.recover.decide":  true,
+	"agent.recover.apply":   true,
+	// Compatibility facade over the same typed terminal channel.
+	"tmux.run":  true,
+	"tmux.cmd":  true,
+	"tmux.send": true,
+	"tmux.kill": true,
 	// Lifecycle
 	"remove":          true,
 	"stop":            true,
@@ -131,14 +164,10 @@ var mcpDestructivePaths = map[string]bool{
 	"alias.uninstall": true,
 	"alias.add":       true,
 	"alias.remove":    true,
-	// record / tmux state
+	// Recording state.
 	"record.start": true,
 	"record.stop":  true,
 	"record.cmd":   true,
-	"tmux.kill":    true,
-	"tmux.run":     true,
-	"tmux.send":    true,
-	"tmux.cmd":     true,
 	// Settings mutations
 	"settings.set":             true,
 	"settings.reset":           true,
@@ -249,12 +278,12 @@ func buildMcpServer(bin string, readOnly, noDefaultRepo bool) (*mcp.Server, int,
 // (no repo fetch). The PROJECT prefix is applied separately, per tool call, by the tool
 // handlers (buildMcpServer's computeProjectPrefix), so a cold-start network blip can never
 // strip project access from every tool.
-func fetchCLIModel(bin string) (*sdk.CLIModel, error) {
+func fetchCLIModel(bin string) (*spec.CLIModel, error) {
 	return runCLIModel(bin, nil)
 }
 
 // runCLIModel fork/execs the model emitter and decodes its stdout JSON.
-func runCLIModel(bin string, prefix []string) (*sdk.CLIModel, error) {
+func runCLIModel(bin string, prefix []string) (*spec.CLIModel, error) {
 	argv := append(append([]string{}, prefix...), "__cli-model")
 	cmd := exec.Command(bin, argv...)
 	cmd.Env = childCharlyEnv() // clear CHARLY_PROJECT_DIR so --repo default doesn't conflict
@@ -264,7 +293,7 @@ func runCLIModel(bin string, prefix []string) (*sdk.CLIModel, error) {
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("%s %s: %w (stderr: %s)", bin, strings.Join(argv, " "), err, strings.TrimSpace(errBuf.String()))
 	}
-	var model sdk.CLIModel
+	var model spec.CLIModel
 	if err := json.Unmarshal(out.Bytes(), &model); err != nil {
 		return nil, fmt.Errorf("decode cli-model JSON: %w", err)
 	}
@@ -278,7 +307,7 @@ func runCLIModel(bin string, prefix []string) (*sdk.CLIModel, error) {
 // cliLeafToTool converts one CLI leaf into an *mcp.Tool with a JSON-Schema object built
 // from its positionals and flags. additionalProperties:false keeps the LLM honest;
 // ReadOnlyHint/DestructiveHint annotations mirror the original exactly.
-func cliLeafToTool(leaf sdk.CLILeaf, destructive bool) *mcp.Tool {
+func cliLeafToTool(leaf spec.CLILeaf, destructive bool) *mcp.Tool {
 	props := map[string]any{}
 	var required []string
 
@@ -331,7 +360,7 @@ func cliLeafToTool(leaf sdk.CLILeaf, destructive bool) *mcp.Tool {
 // argToSchema produces a JSON-Schema fragment for one CLI arg (positional or flag). The
 // CLI model already carries the inferred facts (Type/Enum/Default+HasDefault/IsSlice+
 // ElemType/IsMap), so this needs no reflect/kong.
-func argToSchema(a sdk.CLIArg) map[string]any {
+func argToSchema(a spec.CLIArg) map[string]any {
 	out := map[string]any{}
 	if a.Help != "" {
 		out["description"] = a.Help
@@ -397,14 +426,14 @@ func argToSchema(a sdk.CLIArg) map[string]any {
 // returning an MCP ToolHandler that reconstructs an argv and fork/execs charly. No global
 // stream mutex is needed (unlike the original's runMu): fork/exec captures each call's
 // stdout/stderr into private buffers, so concurrent tool calls never interleave.
-func makeToolHandler(bin string, prefix []string, leaf sdk.CLILeaf) mcp.ToolHandler {
-	posByProp := map[string]sdk.CLIArg{}
+func makeToolHandler(bin string, prefix []string, leaf spec.CLILeaf) mcp.ToolHandler {
+	posByProp := map[string]spec.CLIArg{}
 	posOrder := make([]string, 0, len(leaf.Positionals))
 	for _, pos := range leaf.Positionals {
 		posByProp[pos.Prop] = pos
 		posOrder = append(posOrder, pos.Prop)
 	}
-	flagByProp := map[string]sdk.CLIArg{}
+	flagByProp := map[string]spec.CLIArg{}
 	for _, f := range leaf.Flags {
 		if mcpSkipFlags[f.Name] {
 			continue
@@ -451,7 +480,7 @@ func makeToolHandler(bin string, prefix []string, leaf sdk.CLILeaf) mcp.ToolHand
 // Flags come first (sorted for determinism; booleans emit --flag / --no-flag with no
 // value); positionals follow in declared order; cumulative slices expand. The leading
 // command tokens + project prefix are prepended by the caller.
-func argvFromJSON(posOrder []string, posByProp, flagByProp map[string]sdk.CLIArg, input map[string]any) ([]string, error) {
+func argvFromJSON(posOrder []string, posByProp, flagByProp map[string]spec.CLIArg, input map[string]any) ([]string, error) {
 	var args []string
 
 	for _, name := range sortedKeys(input) {
@@ -499,7 +528,7 @@ func argvFromJSON(posOrder []string, posByProp, flagByProp map[string]sdk.CLIArg
 
 // flagToArgv renders a single flag + value as CLI tokens, using the model's CLIArg facts
 // (.Name for --Name=…, .IsBool / .Negated for boolean shape).
-func flagToArgv(f sdk.CLIArg, v any) ([]string, error) {
+func flagToArgv(f spec.CLIArg, v any) ([]string, error) {
 	if f.IsBool {
 		b, ok := v.(bool)
 		if !ok {

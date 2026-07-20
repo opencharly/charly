@@ -158,6 +158,28 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 			dir = cwd
 		}
 	}
+	// The bed must resolve against the parent superproject's in-development
+	// candies on its very first load. Installing this after LoadUnified is too
+	// late on a fresh cache: the pinned @github refs have already failed. Keep
+	// the override active for the later cli children by transferring its restore
+	// state into the bed session after the node is resolved.
+	pair := selfSuperprojectOverridePair(dir)
+	oldRepoOverride, hadRepoOverride := os.LookupEnv(RepoOverrideEnv)
+	overrideSet := pair != ""
+	overrideTransferred := false
+	if overrideSet {
+		_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(oldRepoOverride, pair))
+	}
+	defer func() {
+		if !overrideSet || overrideTransferred {
+			return
+		}
+		if hadRepoOverride {
+			_ = os.Setenv(RepoOverrideEnv, oldRepoOverride)
+		} else {
+			_ = os.Unsetenv(RepoOverrideEnv)
+		}
+	}()
 	uf, ok, err := LoadUnified(dir)
 	if err != nil {
 		return spec.CheckBedReply{}, err
@@ -199,6 +221,13 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// to the plugin in the reply so its `charly vm create/destroy/start` cli steps pass
 	// --domain <bedDomain> (`vm build` stays entity-scoped); harmless (unused) for non-VM beds.
 	s := &bedSession{bed: req.Bed, node: node, bedDomain: vmDomainIdentity(req.Bed), imageTag: bedRunImageTag(req.Bed, calver)}
+	if overrideSet {
+		s.repoOvSet = true
+		s.hadRepoOv = hadRepoOverride
+		s.oldRepoOv = oldRepoOverride
+		overrideTransferred = true
+		fmt.Fprintf(os.Stderr, "charly check run %s: testing LOCAL candies (%s += %s)\n", req.Bed, RepoOverrideEnv, pair)
+	}
 	inserted := false
 	defer func() {
 		if !inserted {
@@ -229,18 +258,6 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 			return spec.CheckBedReply{}, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, req.Bed, derr)
 		}
 		s.domUnlock = append(s.domUnlock, du)
-	}
-
-	// Local-candy resolution (the candy-ref analogue of --dev-local-pkg): point the bed's
-	// parent-repo @github candy refs at the LOCAL superproject working tree so the bed tests the
-	// in-development candies. Set in the host process so the cli-forked children inherit it.
-	if pair := selfSuperprojectOverridePair("."); pair != "" {
-		old, had := os.LookupEnv(RepoOverrideEnv)
-		_ = os.Setenv(RepoOverrideEnv, mergeRepoOverrides(old, pair))
-		s.repoOvSet = true
-		s.hadRepoOv = had
-		s.oldRepoOv = old
-		fmt.Fprintf(os.Stderr, "charly check run %s: testing LOCAL candies (%s += %s)\n", req.Bed, RepoOverrideEnv, pair)
 	}
 
 	// Isolate this bed's EPHEMERAL deploy state to a PER-BED config file so CONCURRENT beds never

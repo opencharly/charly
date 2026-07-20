@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "command": "bash -c '[ -f \"$PWD/plugins/.claude-plugin/marketplace.json\" ] && [ -f \"$PWD/.claude/hooks/pre-commit-gate.sh\" ] && exec bash \"$PWD/.claude/hooks/pre-commit-gate.sh\" || exit 0'",
+        "timeout": 30000
+      },
+      {
+        "matcher": "Bash",
+        "command": "bash -c '[ -f \"$PWD/plugins/.claude-plugin/marketplace.json\" ] && [ -f \"$PWD/.claude/hooks/pre-push-gate.sh\" ] && exec bash \"$PWD/.claude/hooks/pre-push-gate.sh\" || exit 0'",
+        "timeout": 30000
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "command": "bash -c '[ -f \"$PWD/plugins/.claude-plugin/marketplace.json\" ] && exec bash \"$PWD/.claude/hooks/runtime-verification-reminder.sh\" || exit 0'",
+        "timeout": 5000
+      }
+    ],
+    "Stop": [
+      {
+        "command": "bash -c '[ -f \"$PWD/plugins/.claude-plugin/marketplace.json\" ] && exec bash \"$PWD/.claude/hooks/end-of-turn-challenge.sh\" || exit 0'",
+        "timeout": 5000
+      }
+    ]
+  }
+}

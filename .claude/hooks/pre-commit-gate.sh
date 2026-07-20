@@ -129,7 +129,7 @@ def lint_staged_go(repo):
 
 
 # --- ZERO-ALIASES gate (v2) ---------------------------------------------------
-# A deterministic backstop for CLAUDE.md's "Core is a PLUGIN HOST" ZERO-ALIASES
+# A deterministic backstop for the project rulebook's "Core is a PLUGIN HOST" ZERO-ALIASES
 # standing rule: no NEW charly/*_aliases.go file, and no declaration-form
 # re-export of a mechanism-kit symbol (an alias is a mislocated call site; the
 # fix is MOVING the consumer into its owning plugin, never re-exporting). Alias
@@ -222,7 +222,7 @@ def alias_gate(repo):
     if new_alias_files:
         block("ZERO-ALIASES: a NEW charly/*_aliases.go file is staged (%s). Alias files have "
               "NO migration exception — an alias is a mislocated call site; move the consumer "
-              "into its owning plugin instead of re-exporting. See CLAUDE.md 'The kernel/plugin "
+              "into its owning plugin instead of re-exporting. See the project rulebook 'The kernel/plugin "
               "boundary law' + the ZERO-ALIASES standing rule." % ", ".join(new_alias_files))
     # 2. Declaration-form kit-alias lines in the staged charly/*.go diff — again
     #    skipping any line the merge carried in from an incoming parent.
@@ -243,12 +243,12 @@ def alias_gate(repo):
                 continue  # survivor from an incoming merge parent, not a new alias
             block("ZERO-ALIASES: a declaration-form kit-alias line is staged in charly/ (%s). "
                   "Move the consumer into its owning plugin; never re-export a mechanism-kit "
-                  "symbol (an alias is a mislocated call site). See CLAUDE.md." % line.strip()[:120])
+                  "symbol (an alias is a mislocated call site). See the project rulebook." % line.strip()[:120])
         if cur_path and ALIASES_FILE.search(cur_path) and ALIAS_DECL_GROUPED.search(line):
             if merged_in_line(cur_path, content):
                 continue  # survivor from an incoming merge parent, not a new alias
             block("ZERO-ALIASES: a grouped kit-alias line is staged in %s (%s). Alias files have "
-                  "no exception — move the consumer, do not grow the alias file. See CLAUDE.md."
+                  "no exception — move the consumer, do not grow the alias file. See the project rulebook."
                   % (cur_path, line.strip()[:120]))
 
 

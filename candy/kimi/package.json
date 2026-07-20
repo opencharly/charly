@@ -1,0 +1,7 @@
+{
+  "name": "kimi-code-npm",
+  "version": "1.0.0",
+  "dependencies": {
+    "@moonshot-ai/kimi-code": "*"
+  }
+}

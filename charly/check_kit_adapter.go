@@ -135,9 +135,9 @@ func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer deploykit.Candy
 		// (compileSystemPackageSteps), NOT a per-op run: {package} step — match the
 		// pre-extraction lowering (Format + PhaseInstall + the cross-distro-resolved name).
 		return &deploykit.SystemPackagesStep{
-			Format:     img.Pkg,
-			Phase: spec.PhaseInstall,
-			Packages:   []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
+			Format:   img.Pkg,
+			Phase:    spec.PhaseInstall,
+			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
 		}
 	default:
 		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.GetName())
