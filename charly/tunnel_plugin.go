@@ -10,11 +10,13 @@ import (
 // C16b core-externalization cutover). The tailscale serve/funnel commands + the entire
 // cloudflared tunnel lifecycle live OUT-OF-PROCESS in candy/plugin-tunnel (verb:tunnel);
 // charly/tunnel.go keeps only the pure RESOLUTION (ResolveTunnelConfig /
-// TunnelConfigFromMetadata) + the quadlet-shared helpers. Every core tunnel consumer
-// (start.go's TunnelStart/TunnelStop, config_image.go's cloudflareTunnelSetup) is
-// UNCHANGED — it resolves the same *TunnelConfig and calls the same seams below, which
-// forward to verb:tunnel over the provider registry (compiled into charly via
-// `compiled_plugins:`, or the out-of-process coexist path when composed from source).
+// TunnelConfigFromMetadata) + the quadlet-shared helpers. start.go's TunnelStart/TunnelStop
+// consumers are UNCHANGED — they resolve the same *TunnelConfig and call the same seams
+// below, which forward to verb:tunnel over the provider registry (compiled into charly via
+// `compiled_plugins:`, or the out-of-process coexist path when composed from source). The
+// former host-side `setup` caller (config_image.go's cloudflareTunnelSetup, part of
+// BoxConfigSetupCmd's orchestration) moved along with that orchestration to
+// candy/plugin-deploy-pod, which now invokes verb:tunnel's `setup` method directly.
 //
 // The wire form matches the check-step path: both wrap the operation in a `plugin_input`
 // envelope carrying {method, config}, so the plugin (candy/plugin-tunnel) has ONE decode
@@ -90,19 +92,4 @@ func defaultTunnelStop(cfg TunnelConfig) error {
 		return errors.New(r.Error)
 	}
 	return nil
-}
-
-// cloudflareTunnelSetup forwards to verb:tunnel's `setup` method — create the tunnel,
-// write the cloudflared config YAML, route DNS — returning the tunnel name + config path
-// (config_image.go's quadlet path discards them; the signature is retained so callers
-// compile unchanged).
-func cloudflareTunnelSetup(cfg TunnelConfig) (tunnelName, configPath string, err error) {
-	r, ierr := invokeTunnel(cfg, "setup")
-	if ierr != nil {
-		return "", "", ierr
-	}
-	if r.Error != "" {
-		return "", "", errors.New(r.Error)
-	}
-	return r.Name, r.ConfigPath, nil
 }

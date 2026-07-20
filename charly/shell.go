@@ -47,10 +47,6 @@ var containerExists = func(engine, name string) bool {
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
-// forceTTY overrides isTerminal() when set to true (e.g., by --tty flag).
-// Allows automation tools like Claude Code to force TTY allocation.
-var forceTTY bool
-
 // podShellCmd is the host-side reconstruction of the former ShellCmd (now command:shell in
 // candy/plugin-pod) — hostBuildPodShell (host_build_pod_shell.go) runs its Run() body VERBATIM.
 // TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LifecycleTarget (deploy_target_unified.go,

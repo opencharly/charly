@@ -54,7 +54,7 @@ func TestRetrieveArtifactsAndK3s_DispatchesByDeclarationNotName(t *testing.T) {
 	})
 
 	var calls []string
-	artifactRegisterHandlers["kubeconfig"] = func(artifactKey, deployName string) error {
+	artifactRegisterHandlers["kubeconfig"] = func(artifactKey, deployName string) error { //nolint:unparam // error return required to match the artifactRegisterHandlers func-type; this mock never fails
 		calls = append(calls, artifactKey+"/"+deployName)
 		return nil
 	}

@@ -670,7 +670,7 @@ func hasEncryptedBindMounts(mounts []deploykit.ResolvedBindMount) bool {
 // plain/ over a populated cipher tree and start writing plaintext on top.
 // The previous generic "not mounted" message was indistinguishable from
 // a fresh-setup state where no harm exists yet.
-func verifyBindMounts(mounts []deploykit.ResolvedBindMount, boxName string) error {
+func verifyBindMounts(mounts []deploykit.ResolvedBindMount, boxName string) error { //nolint:unparam // boxName names the offending box in the "charly config mount %s" hint text; today's callers are all test literals, but the param is genuinely load-bearing for the error message
 	for _, m := range mounts {
 		if m.Encrypted {
 			if !isEncryptedMounted(m.HostPath) {

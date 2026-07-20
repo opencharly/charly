@@ -20,7 +20,7 @@ import (
 // wraps an EXISTING core function VERBATIM — unchanged internally — for the pieces that are
 // genuinely host/loader/registry/credential-coupled (the ledger's registered FINAL/K5 IOU family
 // for credential-store/enc.go internals; the DeployStateHost nil-seam for loader access; the
-// go:embed sidecar template data that lives only in the charly binary).
+// embedded (via a Go embed directive) sidecar template data that lives only in the charly binary).
 
 const (
 	podConfigEnsureImageKind      = "pod-config-ensure-image"

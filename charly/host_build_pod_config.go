@@ -32,7 +32,7 @@ const (
 	podConfigRemoveBuilderKind  = "pod-config-remove"
 )
 
-// invokePodConfigOp connects deploy:pod on-demand (mirroring writePodConfigViaPlugin's
+// invokePodConfigOp connects deploy:pod on-demand (using deployPodPluginCandyRef's
 // connectPluginByWordRef pattern) and dispatches op WITH a host-local venue executor (pod's own
 // venue is a no-op — see plugin-deploy-pod's Invoke doc — so the plugin's HostBuild callbacks are
 // what actually do the work), so the plugin's Invoke handler can call back HostBuild for the

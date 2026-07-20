@@ -658,7 +658,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		var tunnelCfg *spec.TunnelConfig
 		if meta.Tunnel != nil {
 			var tRep spec.PodConfigTunnelResolveReply
-			if err := hostBuild(ctx, ex, podConfigTunnelResolveKind, spec.PodConfigTunnelResolveRequest{MetaJSON: ensureRep.MetaJSON}, &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
+			if err := hostBuild(ctx, ex, podConfigTunnelResolveKind, spec.PodConfigTunnelResolveRequest(ensureRep), &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
 				var tc spec.TunnelConfig
 				if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
 					tunnelCfg = &tc
