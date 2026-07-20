@@ -26,23 +26,34 @@ func podConfigWrite(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if err := json.Unmarshal(req.GetParamsJson(), &r); err != nil {
 		return nil, fmt.Errorf("plugin-deploy-pod config-write: decode request: %w", err)
 	}
+	reply, err := renderAndWritePodConfig(r)
+	if err != nil {
+		return nil, err
+	}
+	return marshalReply(reply)
+}
+
+// renderAndWritePodConfig is the shared body: OpConfigWrite (the host-initiated `charly config`
+// pre-P13-KERNEL path some callers may still exercise) and the direction-flip's in-process
+// podConfigWriteSelf (config_setup_helpers.go) both call this — one render+write source (R3).
+func renderAndWritePodConfig(r spec.PodConfigWriteRequest) (spec.PodConfigWriteReply, error) {
 	var cfg deploykit.QuadletConfig
 	if err := json.Unmarshal(r.PodConfigJSON, &cfg); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-pod config-write: decode QuadletConfig: %w", err)
+		return spec.PodConfigWriteReply{}, fmt.Errorf("plugin-deploy-pod config-write: decode QuadletConfig: %w", err)
 	}
 
 	var written []string
 
 	// The .container quadlet (always).
 	if err := os.WriteFile(r.ContainerPath, []byte(deploykit.GenerateQuadlet(cfg)), 0o600); err != nil {
-		return nil, fmt.Errorf("writing quadlet file: %w", err)
+		return spec.PodConfigWriteReply{}, fmt.Errorf("writing quadlet file: %w", err)
 	}
 	written = append(written, r.ContainerPath)
 
 	// The .pod + sidecar .container files (host set PodPath/SidecarPaths iff sidecars are configured).
 	if r.PodPath != "" {
 		if err := os.WriteFile(r.PodPath, []byte(deploykit.GeneratePodQuadlet(cfg)), 0o600); err != nil {
-			return nil, fmt.Errorf("writing pod file: %w", err)
+			return spec.PodConfigWriteReply{}, fmt.Errorf("writing pod file: %w", err)
 		}
 		written = append(written, r.PodPath)
 	}
@@ -52,7 +63,7 @@ func podConfigWrite(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 			continue
 		}
 		if err := os.WriteFile(p, []byte(deploykit.GenerateSidecarQuadlet(sc, cfg.PodName)), 0o600); err != nil {
-			return nil, fmt.Errorf("writing sidecar file for %s: %w", sc.Name, err)
+			return spec.PodConfigWriteReply{}, fmt.Errorf("writing sidecar file for %s: %w", sc.Name, err)
 		}
 		written = append(written, p)
 	}
@@ -60,10 +71,10 @@ func podConfigWrite(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	// The cloudflare tunnel companion .service (host set TunnelPath iff cloudflare tunnel configured).
 	if r.TunnelPath != "" {
 		if err := os.WriteFile(r.TunnelPath, []byte(deploykit.GenerateTunnelUnit(cfg, r.CloudflaredCfgPath)), 0o644); err != nil {
-			return nil, fmt.Errorf("writing tunnel service file: %w", err)
+			return spec.PodConfigWriteReply{}, fmt.Errorf("writing tunnel service file: %w", err)
 		}
 		written = append(written, r.TunnelPath)
 	}
 
-	return marshalReply(spec.PodConfigWriteReply{WrittenPaths: written})
+	return spec.PodConfigWriteReply{WrittenPaths: written}, nil
 }

@@ -2,19 +2,27 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// host_build_pod_config.go — the "pod-config-*" F10 host-builders. The `charly config …`
-// command's CLI GRAMMAR moved to command:config (candy/plugin-pod, the DEPLOY wave), but the
-// implementation structs — BoxConfigSetupCmd/BoxConfigStatusCmd/BoxConfigMountCmd/
-// BoxConfigUnmountCmd/BoxConfigPasswdCmd/BoxConfigRemoveCmd (config_image.go) — STAY CORE
-// UNCHANGED, by their EXACT unchanged names: BoxConfigSetupCmd is ALSO constructed directly (not
-// through the CLI) by bundle_from_box_cmd.go and host_build_deploy_from_box.go (both P13-kernel,
-// out of this wave's scope), so it cannot be renamed or moved without stranding them. Each
-// plugin leaf forwards its flags via its own HostBuild("pod-config-<leaf>") seam, and each
-// builder here reconstructs the UNCHANGED core struct and runs its Run() body VERBATIM.
+// host_build_pod_config.go — the "pod-config-<leaf>" F10 host-builders. The `charly config …`
+// command's CLI GRAMMAR lives in command:config (candy/plugin-pod, the DEPLOY wave); each leaf
+// forwards its flags via its own HostBuild("pod-config-<leaf>") seam.
+//
+// P13-KERNEL direction-flip: Setup/Remove's former ORCHESTRATION (BoxConfigSetupCmd/
+// BoxConfigRemoveCmd, config_image.go) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
+// sdk.OpConfigRemove) — hostBuildPodConfigSetup/Remove now FORWARD onward to the plugin (resolve
+// deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider/grpcSubstrateLifecycle
+// already use) instead of running the orchestration in-core; the plugin calls back the narrow
+// "pod-config-*" seams in host_build_pod_config_seams.go for the host/loader/registry/
+// credential-coupled sub-steps. Status/Mount/Unmount/Passwd stay UNCHANGED — each is already a
+// one-line forward to enc.go (itself FINAL/K5-deferred registry-coupled inventory per its own
+// header), nothing to port.
 const (
 	podConfigSetupBuilderKind   = "pod-config-setup"
 	podConfigStatusBuilderKind  = "pod-config-status"
@@ -24,38 +32,44 @@ const (
 	podConfigRemoveBuilderKind  = "pod-config-remove"
 )
 
-func hostBuildPodConfigSetup(_ context.Context, req spec.PodConfigSetupRequest, _ buildEngineContext) (spec.PodConfigSetupReply, error) {
-	cmd := BoxConfigSetupCmd{
-		Box:           req.Box,
-		Tag:           req.Tag,
-		Build:         req.Build,
-		Env:           req.Env,
-		Clean:         req.Clean,
-		EnvFile:       req.EnvFile,
-		Instance:      req.Instance,
-		Port:          req.Port,
-		KeepMounted:   req.KeepMounted,
-		Password:      req.Password,
-		RefreshSecret: req.RefreshSecret,
-		VolumeFlag:    req.VolumeFlag,
-		Bind:          req.Bind,
-		Encrypt:       req.Encrypt,
-		MemoryMax:     req.MemoryMax,
-		MemoryHigh:    req.MemoryHigh,
-		MemorySwapMax: req.MemorySwapMax,
-		Cpus:          req.Cpus,
-		Seed:          req.Seed,
-		ForceSeed:     req.ForceSeed,
-		DataFrom:      req.DataFrom,
-		UpdateAll:     req.UpdateAll,
-		SshKey:        req.SshKey,
-		Sidecar:       req.Sidecar,
-		ListSidecars:  req.ListSidecars,
-		AutoDetectFlags: AutoDetectFlags{
-			NoAutoDetect: req.NoAutoDetect,
-		},
+// invokePodConfigOp connects deploy:pod on-demand (mirroring writePodConfigViaPlugin's
+// connectPluginByWordRef pattern) and dispatches op WITH a host-local venue executor (pod's own
+// venue is a no-op — see plugin-deploy-pod's Invoke doc — so the plugin's HostBuild callbacks are
+// what actually do the work), so the plugin's Invoke handler can call back HostBuild for the
+// narrow "pod-config-*" seams.
+func invokePodConfigOp(ctx context.Context, op string, reqJSON []byte) ([]byte, error) {
+	prov, ok := connectPluginByWordRef(ClassDeployTarget, "pod", deployPodPluginCandyRef())
+	if !ok {
+		return nil, fmt.Errorf("connecting deploy:pod plugin (candy/plugin-deploy-pod) for %s", op)
 	}
-	return spec.PodConfigSetupReply{}, cmd.Run()
+	inv, ok := prov.(executorInvoker)
+	if !ok {
+		return nil, fmt.Errorf("deploy:pod provider does not support the executor reverse channel (%s)", op)
+	}
+	res, err := inv.InvokeWithExecutor(ctx, &Operation{Reserved: "pod", Op: op, Params: reqJSON}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
+	if err != nil {
+		return nil, fmt.Errorf("deploy:pod %s: %w", op, err)
+	}
+	if res == nil {
+		return nil, nil
+	}
+	return res.JSON, nil
+}
+
+func hostBuildPodConfigSetup(ctx context.Context, req spec.PodConfigSetupRequest, _ buildEngineContext) (spec.PodConfigSetupReply, error) {
+	var rep spec.PodConfigSetupReply
+	reqJSON, err := marshalJSON(req)
+	if err != nil {
+		return rep, err
+	}
+	resJSON, err := invokePodConfigOp(ctx, sdk.OpConfigSetup, reqJSON)
+	if err != nil {
+		return rep, err
+	}
+	if len(resJSON) > 0 {
+		_ = json.Unmarshal(resJSON, &rep)
+	}
+	return rep, nil
 }
 
 func hostBuildPodConfigStatus(_ context.Context, req spec.PodConfigStatusRequest, _ buildEngineContext) (spec.PodConfigStatusReply, error) {
@@ -78,9 +92,20 @@ func hostBuildPodConfigPasswd(_ context.Context, req spec.PodConfigPasswdRequest
 	return spec.PodConfigPasswdReply{}, cmd.Run()
 }
 
-func hostBuildPodConfigRemove(_ context.Context, req spec.PodConfigRemoveRequest, _ buildEngineContext) (spec.PodConfigRemoveReply, error) {
-	cmd := BoxConfigRemoveCmd{Box: req.Box, Instance: req.Instance}
-	return spec.PodConfigRemoveReply{}, cmd.Run()
+func hostBuildPodConfigRemove(ctx context.Context, req spec.PodConfigRemoveRequest, _ buildEngineContext) (spec.PodConfigRemoveReply, error) {
+	var rep spec.PodConfigRemoveReply
+	reqJSON, err := marshalJSON(req)
+	if err != nil {
+		return rep, err
+	}
+	resJSON, err := invokePodConfigOp(ctx, sdk.OpConfigRemove, reqJSON)
+	if err != nil {
+		return rep, err
+	}
+	if len(resJSON) > 0 {
+		_ = json.Unmarshal(resJSON, &rep)
+	}
+	return rep, nil
 }
 
 var _ = func() bool {

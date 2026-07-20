@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // deployFromBoxCmd is the host-side orchestration for `charly bundle from-box <ref>
@@ -14,10 +16,10 @@ import (
 // labels, with NO charly.yml project. Two targets:
 //
 //   - pod (default): generate + enable a podman quadlet from the image's labels
-//     (ports, services, volumes, env, GPU auto-detect via DetectHostDevices),
-//     then start the resulting systemd-user service. Reuses the project-free
-//     runConfig core via BoxConfigSetupCmd.ExplicitRef — no quadlet logic is
-//     duplicated.
+//     (ports, services, volumes, env, GPU auto-detect), then start the resulting
+//     systemd-user service. Reuses the project-free config-setup ORCHESTRATION
+//     (P13-KERNEL direction-flip: candy/plugin-deploy-pod's sdk.OpConfigSetup) via
+//     #PodConfigSetupRequest.ExplicitRef — no quadlet logic is duplicated.
 //   - k8s (--cluster <name>): emit a Kustomize tree via the existing
 //     DeployFromBox (charly/k8s_deploy_from_box.go) — unifying the from-box
 //     surface across both targets.
@@ -66,21 +68,20 @@ func (c *deployFromBoxCmd) Run() error {
 		return nil
 	}
 
-	// Pod path. Reuse the project-free runConfig core via ExplicitRef: it reads
-	// the image's labels, builds the QuadletConfig, writes + enables the
-	// quadlet, and daemon-reloads — all with no charly.yml.
+	// Pod path. Reuse the project-free config-setup ORCHESTRATION (now in candy/plugin-deploy-pod,
+	// the P13-KERNEL direction-flip) via ExplicitRef: it reads the image's labels, builds the
+	// QuadletConfig, writes + enables the quadlet, and daemon-reloads — all with no charly.yml.
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return err
 	}
-	icc := &BoxConfigSetupCmd{
+	if _, err := hostBuildPodConfigSetup(context.Background(), spec.PodConfigSetupRequest{
 		Box:         name,
 		Instance:    c.Instance,
 		Env:         c.Env,
 		Port:        c.Port,
 		ExplicitRef: c.Ref,
-	}
-	if err := icc.Run(); err != nil {
+	}, buildEngineContext{}); err != nil {
 		return fmt.Errorf("from-box config %q: %w", name, err)
 	}
 

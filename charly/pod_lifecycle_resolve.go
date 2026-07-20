@@ -64,7 +64,7 @@ func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spe
 	if err != nil {
 		return nil, err
 	}
-	directDeploy := !exists && IsDirectDeploy(box, instance)
+	directDeploy := !exists && isDirectDeployMarkerTransitional(box, instance)
 	if !exists && !directDeploy {
 		return nil, fmt.Errorf("not configured; run 'charly config %s' first", box)
 	}
