@@ -286,11 +286,16 @@ func EnsureRepoDownloaded(repoPath, version string) (string, error) {
 		return "", err
 	}
 	var path string
-	if cached {
+	if cached && !kit.IsMutableRef(version) {
 		path, err = kit.RepoCachePath(repoPath, version)
 	} else {
 		// The cache-miss DOWNLOAD dispatches through the registered refs backend (P7):
 		// the compiled-in candy/plugin-refs (git) by default, swappable for an OCI/S3 plugin.
+		// A MUTABLE ref (a branch such as main, or the unversioned default branch) always
+		// delegates: the downloader re-resolves the ref's current commit and refreshes a
+		// stale export (the kit.DownloadRepo provenance check) — a plain cache hit would
+		// freeze the branch at its first-download content forever (the pre-#146 @main
+		// protocol skew). Immutable coordinates (tags, SHAs) keep the offline cache hit.
 		path, err = activeRefsDownloader.Download(repoPath, version)
 	}
 	if err != nil {
