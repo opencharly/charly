@@ -105,10 +105,39 @@ func buildArtifactEnv(secretEnv map[string]string, node *spec.BundleNode) map[st
 	return env
 }
 
-// retrieveArtifactsAndK3s pulls back the candies' published artifacts via
-// the same executor the deploy used, then runs the k3s-server post-hook
-// (merge kubeconfig + register ClusterProfile) when the candy set includes
-// k3s-server. No-op under DryRun.
+// artifactRegisterHandlers maps a candy artifact's declared `register:` hint (the
+// #CandyArtifact.Register field, SDD-sourced in sdk/schema/candy.cue) to the
+// post-retrieve processing it triggers. Word-keyed and data-driven (R3): a candy
+// declares the hint on its OWN artifact entry (k3s-server's kubeconfig artifact
+// declares `register: kubeconfig`) — adding a new registration kind means adding ONE
+// map entry here, never a hardcoded candy-name special-case.
+var artifactRegisterHandlers = map[string]func(artifactKey, deployName string) error{
+	"kubeconfig": K3sPostProvision,
+}
+
+// candyArtifactRegisters returns the DISTINCT `register:` hints declared across every
+// candy's artifact list — name-blind (it reads each artifact's own declaration, never
+// a candy name).
+func candyArtifactRegisters(layers []spec.CandyReader) map[string]bool {
+	out := map[string]bool{}
+	for _, layer := range layers {
+		if layer == nil {
+			continue
+		}
+		for _, a := range layer.Artifact() {
+			if a.Register != "" {
+				out[a.Register] = true
+			}
+		}
+	}
+	return out
+}
+
+// retrieveArtifactsAndK3s pulls back the candies' published artifacts via the same
+// executor the deploy used, then runs whichever post-retrieve registration handlers
+// the retrieved candies' artifact declarations name (e.g. the k3s-server kubeconfig's
+// `register: kubeconfig` — merge kubeconfig + register ClusterProfile). No-op under
+// DryRun.
 //
 // Shared by the local deploy target.Add / the vm deploy's Add path. artifactKey is
 // ENTITY-scoped (the artifact retrieve dir + the shared per-VM k3s cluster cache/context);
@@ -120,8 +149,12 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor,
 	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
 		return err
 	}
-	if deployHasCandy(candyList, "k3s-server") {
-		if err := K3sPostProvision(artifactKey, deployName); err != nil {
+	for register := range candyArtifactRegisters(candyList) {
+		handler, ok := artifactRegisterHandlers[register]
+		if !ok {
+			continue
+		}
+		if err := handler(artifactKey, deployName); err != nil {
 			return err
 		}
 	}
