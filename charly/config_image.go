@@ -493,7 +493,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	envVars = appendAutoDetectedEnv(envVars, detected)
 
 	// Resolve network (default to shared "charly" network)
-	resolvedNetwork, netErr := ResolveNetwork(network, rt.RunEngine)
+	resolvedNetwork, netErr := kit.ResolveNetwork(network, rt.RunEngine)
 	if netErr != nil {
 		return netErr
 	}
@@ -782,9 +782,9 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 
 		if len(dataMeta.DataEntries) > 0 {
 			// Determine provisioning mode
-			mode := DataProvisionInitial
+			mode := deploykit.DataProvisionInitial
 			if c.ForceSeed {
-				mode = DataProvisionForce
+				mode = deploykit.DataProvisionForce
 			} else {
 				// Check if already seeded (idempotent re-run)
 				allSeeded := true
@@ -803,7 +803,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 			}
 
 			fmt.Fprintln(os.Stderr, "Provisioning data into volumes...")
-			seeded, err := provisionData(dataEngine, dataRef, dataMeta, bindMounts, volumes, c.Box, c.Instance, mode)
+			seeded, err := deploykit.ProvisionData(dataEngine, dataRef, dataMeta, bindMounts, volumes, c.Box, c.Instance, mode)
 			if err != nil {
 				return fmt.Errorf("data provisioning: %w", err)
 			}
@@ -1617,7 +1617,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		envVars = kit.EnrichNoProxy(envVars, dc.DeployedContainerNames())
 
 		// Resolve network
-		resolvedNetwork, _ := ResolveNetwork(meta.Network, rt.RunEngine)
+		resolvedNetwork, _ := kit.ResolveNetwork(meta.Network, rt.RunEngine)
 
 		// Detect devices for GPU config
 		detected := DetectHostDevices()

@@ -198,7 +198,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 	}
 	envVars = appendAutoDetectedEnv(envVars, detected)
 
-	resolvedNetwork, netErr := ResolveNetwork(network, engine)
+	resolvedNetwork, netErr := kit.ResolveNetwork(network, engine)
 	if netErr != nil {
 		return nil, netErr
 	}
@@ -422,7 +422,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 		security.Mounts = deploykit.AppendUnique(security.Mounts, v)
 	}
 	envVars = append(envVars, agentFwd.Env...)
-	resolvedNetwork, err := ResolveNetwork(network, engine)
+	resolvedNetwork, err := kit.ResolveNetwork(network, engine)
 	if err != nil {
 		return nil, err
 	}
