@@ -14,15 +14,19 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// LogsCmd shows service container logs
-type LogsCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
-	Follow   bool   `short:"f" long:"follow" help:"Follow log output"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Sidecar  string `long:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
+// podLogsCmd is the host-side reconstruction of the former LogsCmd (now command:logs in
+// candy/plugin-pod) — hostBuildPodLogs (host_build_pod_logs.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LogsOpts/LifecycleTarget (deploy_target_unified.go,
+// pod_lifecycle_verb.go) are registered P13-KERNEL migration inventory (see start.go's header) —
+// this resolver moves through the same venue-scoped-executor-session seam when that wave lands.
+type podLogsCmd struct {
+	Box      string
+	Follow   bool
+	Instance string
+	Sidecar  string
 }
 
-func (c *LogsCmd) Run() error {
+func (c *podLogsCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// `charly logs` routes through the unified LifecycleTarget → OpLogs (F12): the host resolves the
 	// `journalctl`/`<engine> logs` stream command (resolvePodLogsPlan), the owning plugin streams it

@@ -20,6 +20,7 @@ plugin-pod:
                 - command:start
                 - command:stop
                 - command:restart
+                - command:logs
             source: github.com/opencharly/charly/candy/plugin-pod
         plan:
             - check: the pod command plugin ships a buildable Go module (go.mod + the provider main) the host can build + serve out-of-process or compile in; the full `charly start/stop/restart/…` end-to-end is exercised by the live R10 + the Go tests

@@ -21,6 +21,8 @@ func dispatchPodCommand(word string, args []string) error {
 		return sdk.RunInProcCLI("stop", &StopCmd{}, args)
 	case "restart":
 		return sdk.RunInProcCLI("restart", &RestartCmd{}, args)
+	case "logs":
+		return sdk.RunInProcCLI("logs", &LogsCmd{}, args)
 	default:
 		return fmt.Errorf("pod: unsupported command word %q", word)
 	}

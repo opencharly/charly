@@ -76,3 +76,21 @@ func (c *RestartCmd) Run() error {
 	}
 	return deploykit.RestartPodService(boxName, c.Instance)
 }
+
+// LogsCmd shows service container logs — the `charly logs` grammar. Registry-bound
+// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-logs").
+type LogsCmd struct {
+	Box      string `arg:"" help:"Box name or remote ref"`
+	Follow   bool   `short:"f" long:"follow" help:"Follow log output"`
+	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Sidecar  string `long:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
+}
+
+func (c *LogsCmd) Run() error {
+	return hostPodSeam("pod-logs", spec.PodLogsRequest{
+		Box:      c.Box,
+		Follow:   c.Follow,
+		Instance: c.Instance,
+		Sidecar:  c.Sidecar,
+	})
+}
