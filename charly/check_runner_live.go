@@ -174,7 +174,7 @@ func scoreOnePodBucket(ctx context.Context, bucket []scoredStep, deployRoots map
 	for _, e := range bucket {
 		// depends_on cascade — only matters for scored steps.
 		if isScored(e.step) {
-			if blocked := firstUnmetDepStep(e.step, verdictByID); blocked != "" {
+			if blocked := kit.FirstUnmetDepStep(e.step, verdictByID); blocked != "" {
 				out.Step = append(out.Step, skippedStepScore(e, pod, blocked))
 				out.Summary.Total++
 				out.Summary.Skip++

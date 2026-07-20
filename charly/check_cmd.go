@@ -833,7 +833,7 @@ func checkLocalDeployScope(dir string, node *spec.BundleNode, image, instance, _
 		fmt.Fprintln(os.Stderr, "No plan steps to run.")
 		return 0, nil
 	}
-	return reportSteps(os.Stdout, results, format), nil
+	return kit.ReportStepResultsCount(os.Stdout, results, format), nil
 }
 
 // runLocalDeployScopePlan collects a local deployment's deploy-scope plan — the kind:local

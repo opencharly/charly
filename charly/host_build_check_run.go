@@ -195,7 +195,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	// applying the parsed filter to the plan walk is a known, tracked gap — see the
 	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
 	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
-	if err := validateTagExpr(req.Tag); err != nil {
+	if err := kit.ValidateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	// R44 Option A (mirrors hostCheckRunBox): ONE persistent container + `podman exec` per step.
@@ -265,7 +265,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	// applying the parsed filter to the plan walk is a known, tracked gap — see the
 	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
 	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
-	if err := validateTagExpr(req.Tag); err != nil {
+	if err := kit.ValidateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	rctx := resolveCheckRunnerContext(req.Name, dir, projectCfg)
