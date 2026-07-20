@@ -55,7 +55,7 @@ type podStartOpts struct {
 // runs `systemctl --user start <svc>` (or `podman start <ctr>` for a direct-deploy marker) + mounts
 // encrypted volumes. Mirrors StartCmd.runQuadlet.
 func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spec.PodLifecyclePlan, error) {
-	exists, err := quadletExistsInstance(box, instance)
+	exists, err := kit.QuadletExistsInstance(box, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spe
 	}
 	plan := &spec.PodLifecyclePlan{
 		Mode:          "quadlet",
-		SvcName:       serviceNameInstance(box, instance),
+		SvcName:       kit.ServiceNameInstance(box, instance),
 		ContainerName: kit.ContainerNameInstance(box, instance),
 		DirectDeploy:  directDeploy,
 		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
@@ -241,10 +241,10 @@ func resolvePodStopPlan(box, instance string, unmount bool) (*spec.PodLifecycleP
 	if err != nil {
 		return nil, err
 	}
-	quadletActive, _ := quadletExistsInstance(box, instance)
+	quadletActive, _ := kit.QuadletExistsInstance(box, instance)
 	plan := &spec.PodLifecyclePlan{
 		ContainerName: kit.ContainerNameInstance(box, instance),
-		SvcName:       serviceNameInstance(box, instance),
+		SvcName:       kit.ServiceNameInstance(box, instance),
 		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 		Unmount:       unmount,
 		Tunnel:        resolvePodTunnel(box, instance),
@@ -474,7 +474,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	boxName := resolveBoxName(box)
 
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(boxName, instance)
+		svc := kit.ServiceNameInstance(boxName, instance)
 		if opts.Sidecar != "" {
 			svc = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar) + ".service"
 		}

@@ -237,7 +237,7 @@ func (c *deployStatusCmd) Run() error {
 	}
 
 	// Enumerate quadlet files
-	qdir, qdirErr := quadletDir()
+	qdir, qdirErr := kit.QuadletDir()
 	quadletBoxes := make(map[string]bool)
 	if qdirErr == nil {
 		entries, readErr := os.ReadDir(qdir)

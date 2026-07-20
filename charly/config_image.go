@@ -662,7 +662,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	// dirs, and computes the exact file PATHS (the core filename helpers), then Invokes the plugin
 	// to render + write the file CONTENTS byte-identically. RESOLVE + the host side-effects below
 	// (cloudflareTunnelSetup, systemctl, enc-mount, data-seed) stay here.
-	qdir, err := quadletDir()
+	qdir, err := kit.QuadletDir()
 	if err != nil {
 		return err
 	}
@@ -670,7 +670,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 		return fmt.Errorf("creating quadlet directory: %w", err)
 	}
 	writeReq := spec.PodConfigWriteRequest{
-		ContainerPath: filepath.Join(qdir, quadletFilenameInstance(c.Box, c.Instance)),
+		ContainerPath: filepath.Join(qdir, kit.QuadletFilenameInstance(c.Box, c.Instance)),
 	}
 	if len(resolvedSidecars) > 0 {
 		writeReq.PodPath = filepath.Join(qdir, podQuadletFilenameInstance(c.Box, c.Instance))
@@ -680,7 +680,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 		}
 	}
 	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
-		svcDir, err := systemdUserDir()
+		svcDir, err := kit.SystemdUserDir()
 		if err != nil {
 			return err
 		}
@@ -713,7 +713,7 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	}
 
 	// Clean up stale enc service from previous charly versions
-	if svcDir, svcErr := systemdUserDir(); svcErr == nil {
+	if svcDir, svcErr := kit.SystemdUserDir(); svcErr == nil {
 		encPath := filepath.Join(svcDir, encServiceFilename(c.Box))
 		if _, statErr := os.Stat(encPath); statErr == nil {
 			_ = os.Remove(encPath)
@@ -835,7 +835,7 @@ skipDataProvision:
 	hooks := meta.Hook
 	if hooks != nil && hooks.PostEnable != "" {
 		ctrName := kit.ContainerNameInstance(c.Box, c.Instance)
-		svc := serviceNameInstance(c.Box, c.Instance)
+		svc := kit.ServiceNameInstance(c.Box, c.Instance)
 
 		start := exec.Command("systemctl", "--user", "start", svc)
 		start.Stdout = os.Stderr
@@ -1128,7 +1128,7 @@ func (c *BoxConfigRemoveCmd) Run() error {
 		return fmt.Errorf("charly config remove requires run_mode=quadlet or direct (current: %s)", rt.RunMode)
 	}
 
-	svc := serviceNameInstance(boxName, c.Instance)
+	svc := kit.ServiceNameInstance(boxName, c.Instance)
 	cmd := exec.Command("systemctl", "--user", "disable", "--now", svc)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -1148,7 +1148,7 @@ func (c *BoxConfigRemoveCmd) Run() error {
 	// like charly-versa-ecovoyage.container that share the charly-versa- prefix
 	// with sidecars but belong to an unrelated deploy). See
 	// findPodSidecarQuadlets in sidecar.go.
-	if qdir, qErr := quadletDir(); qErr == nil {
+	if qdir, qErr := kit.QuadletDir(); qErr == nil {
 		podName := kit.PodNameInstance(boxName, c.Instance)
 		mainFile := kit.ContainerNameInstance(boxName, c.Instance) + ".container"
 		if sidecars, dErr := findPodSidecarQuadlets(qdir, podName, mainFile); dErr == nil {
@@ -1560,11 +1560,11 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		boxName, instance := deploykit.ParseDeployKey(key)
 
 		// Check if quadlet file exists (only update deployed images)
-		qdir, err := quadletDir()
+		qdir, err := kit.QuadletDir()
 		if err != nil {
 			continue
 		}
-		qpath := filepath.Join(qdir, quadletFilenameInstance(boxName, instance))
+		qpath := filepath.Join(qdir, kit.QuadletFilenameInstance(boxName, instance))
 		if _, err := os.Stat(qpath); os.IsNotExist(err) {
 			continue
 		}

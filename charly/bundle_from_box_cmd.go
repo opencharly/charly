@@ -93,7 +93,7 @@ func (c *deployFromBoxCmd) Run() error {
 	// short-name re-resolution (as `charly start` does) would resolve the wrong
 	// image.
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(name, c.Instance)
+		svc := kit.ServiceNameInstance(name, c.Instance)
 		start := exec.Command("systemctl", "--user", "start", svc)
 		start.Stdout = os.Stderr
 		start.Stderr = os.Stderr

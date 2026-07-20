@@ -301,7 +301,7 @@ func holderExists(addr holderAddr) bool {
 		}
 		return false
 	}
-	if active, _ := quadletExistsInstance(addr.Base, addr.Instance); active {
+	if active, _ := kit.QuadletExistsInstance(addr.Base, addr.Instance); active {
 		return true
 	}
 	engine := "podman"
@@ -355,8 +355,8 @@ func vmIsRunning(name string) bool {
 // podIsRunning reports whether a pod deployment is up (the quadlet service when one exists,
 // else the container's runtime state).
 func podIsRunning(base, instance string) bool {
-	if active, _ := quadletExistsInstance(base, instance); active {
-		svc := serviceNameInstance(base, instance)
+	if active, _ := kit.QuadletExistsInstance(base, instance); active {
+		svc := kit.ServiceNameInstance(base, instance)
 		out, _ := exec.Command("systemctl", "--user", "is-active", svc).Output()
 		return strings.TrimSpace(string(out)) == "active"
 	}

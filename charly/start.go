@@ -78,9 +78,9 @@ func (c *StopCmd) Run() error {
 // arbiter (charly/preempt.go), whose preemption path wants a bare, reversible
 // service stop that leaves the holder's disk/container intact for restart.
 func stopPodService(boxName, instance string) error {
-	quadletActive, _ := quadletExistsInstance(boxName, instance)
+	quadletActive, _ := kit.QuadletExistsInstance(boxName, instance)
 	if quadletActive {
-		svc := serviceNameInstance(boxName, instance)
+		svc := kit.ServiceNameInstance(boxName, instance)
 		cmd := exec.Command("systemctl", "--user", "stop", svc)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -127,9 +127,9 @@ func stopPodService(boxName, instance string) error {
 // before preemption), so this is a plain service/container start, not a full
 // `charly start` re-config.
 func startPodService(boxName, instance string) error {
-	quadletActive, _ := quadletExistsInstance(boxName, instance)
+	quadletActive, _ := kit.QuadletExistsInstance(boxName, instance)
 	if quadletActive {
-		svc := serviceNameInstance(boxName, instance)
+		svc := kit.ServiceNameInstance(boxName, instance)
 		cmd := exec.Command("systemctl", "--user", "start", svc)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -180,9 +180,9 @@ func (c *RestartCmd) Run() error {
 		return err
 	}
 
-	quadletActive, _ := quadletExistsInstance(boxName, c.Instance)
+	quadletActive, _ := kit.QuadletExistsInstance(boxName, c.Instance)
 	if quadletActive {
-		svc := serviceNameInstance(boxName, c.Instance)
+		svc := kit.ServiceNameInstance(boxName, c.Instance)
 		cmd := exec.Command("systemctl", "--user", "restart", svc)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

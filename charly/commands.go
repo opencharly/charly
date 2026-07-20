@@ -109,16 +109,16 @@ func (c *RemoveCmd) Run() error {
 	c.runPreRemoveHook(engine, containerName, boxName)
 
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(boxName, c.Instance)
+		svc := kit.ServiceNameInstance(boxName, c.Instance)
 		stop := exec.Command("systemctl", "--user", "stop", svc)
 		_ = stop.Run()
 
-		qdir, err := quadletDir()
+		qdir, err := kit.QuadletDir()
 		if err != nil {
 			return err
 		}
 
-		qpath := filepath.Join(qdir, quadletFilenameInstance(boxName, c.Instance))
+		qpath := filepath.Join(qdir, kit.QuadletFilenameInstance(boxName, c.Instance))
 		if err := os.Remove(qpath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing quadlet file: %w", err)
 		}
@@ -169,7 +169,7 @@ func (c *RemoveCmd) Run() error {
 		stopEnc := exec.Command("systemctl", "--user", "stop", encServiceFilename(boxName))
 		_ = stopEnc.Run()
 
-		svcDir, svcDirErr := systemdUserDir()
+		svcDir, svcDirErr := kit.SystemdUserDir()
 		if svcDirErr == nil {
 			tunnelPath := filepath.Join(svcDir, deploykit.TunnelServiceFilename(boxName))
 			if err := os.Remove(tunnelPath); err == nil {
