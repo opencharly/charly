@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
@@ -234,7 +235,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	}
 	vmName, domainID, nestedLeaf, spec := c.resolveVmTarget(uf)
 
-	user := resolveVmSshUser(spec)
+	user := vmshared.ResolveCloudInitSSHUser(spec)
 	// Port + ssh alias key off the per-deploy DOMAIN IDENTITY (the live domain is charly-<domainID>);
 	// the spec + DEPLOY_NAME (k8s cluster context) stay keyed by the ENTITY.
 	port, err := resolveVmSshPort(spec, domainID)

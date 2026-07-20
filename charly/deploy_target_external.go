@@ -468,7 +468,7 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 // reverseRunnerForExecutor derives the ReverseRunner a `charly bundle del` replays the
 // recorded ReverseOps over, from the deploy's executor (Δ2). An explicit runner (a test
 // injection) wins. Otherwise: an *SSHExecutor venue (a vm guest, or a `local: {host:
-// user@machine}` remote) replays IN THE GUEST/on-the-remote via an sshReverseRunner; any
+// user@machine}` remote) replays IN THE GUEST/on-the-remote via a kit.SSHReverseRunner; any
 // other venue (ShellExecutor for host:local) returns nil → reverse_ops falls back to local
 // exec.Command. This is the SAME generalization that makes a vm teardown run in the guest
 // AND a local-remote teardown run on the remote (R3) — previously a local-remote teardown
@@ -478,7 +478,7 @@ func reverseRunnerForExecutor(exec deploykit.DeployExecutor, existing kit.Revers
 		return existing
 	}
 	if sshExec, isSSH := exec.(*kit.SSHExecutor); isSSH {
-		return &sshReverseRunner{exec: sshExec}
+		return &kit.SSHReverseRunner{Exec: sshExec}
 	}
 	return nil
 }

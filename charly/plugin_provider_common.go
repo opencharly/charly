@@ -27,7 +27,7 @@ import (
 type capMeta struct {
 	class            ProviderClass
 	word             string
-	contract         *spec.StepContract // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
+	contract         *spec.StepContract  // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
 	structural       bool                // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
 	validates        bool                // set ONLY for a class:kind capability serving a deep OpValidate check (F7/C8)
 	phase            string              // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)

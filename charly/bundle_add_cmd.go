@@ -28,6 +28,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // deployAddCmd is the host-side orchestration for `charly bundle add <name> [<ref>]`.
@@ -933,7 +934,7 @@ func resolveVmEntity(deployName string, node *spec.BundleNode) string {
 // root, in which case we fall back to the same syntheticHostBox()
 // semantics (System scope, no per-user path).
 func syntheticVmBox(spec *VmSpec, distroCfg *buildkit.DistroConfig) *buildkit.ResolvedBox {
-	user := resolveVmSshUser(spec)
+	user := vmshared.ResolveCloudInitSSHUser(spec)
 	if user == "" || user == "root" {
 		img := syntheticHostBox()
 		img.Name = "vm-adhoc"
