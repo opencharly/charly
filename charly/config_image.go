@@ -22,20 +22,6 @@ import (
 // deferred registry-coupled inventory) + injectEnvProvides/injectMCPProvides (loader-coupled —
 // called from the pod-config-inject-env-provides/pod-config-inject-mcp-provides seam handlers).
 
-// isDirectDeployMarkerTransitional is a TEMPORARY host-side duplicate of the plugin's
-// IsDirectDeploy (candy/plugin-deploy-pod/config_setup_helpers.go) — pod_lifecycle_resolve.go
-// (step-4 item ii, still MID-FLIGHT) calls it host-side; deleted the moment that file's own move
-// lands (never survives to this wave's R10 acceptance run — Hard Cutover by Default).
-func isDirectDeployMarkerTransitional(box, instance string) bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	path := home + "/.config/charly/direct/" + kit.ContainerNameInstance(box, instance) + ".json"
-	_, err = os.Stat(path)
-	return err == nil
-}
-
 // BoxConfigStatusCmd shows encrypted volume status.
 type BoxConfigStatusCmd struct {
 	Box      string `arg:"" help:"Box name"`

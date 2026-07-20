@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -110,10 +111,16 @@ func podCli(ctx context.Context, exec *sdk.Executor, capture, bestEffort bool, a
 // image/metadata/overlay/volumes/env/security/ports/network/buildStartArgs + the enc/tunnel inputs)
 // and BRACKETED the arbiter claim around this op (acquire before, release after/on-failure).
 func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLifecyclePlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-pod start: decode plan: %w", err)
+	var opts spec.PodStartOpts
+	if err := json.Unmarshal(p.Plan, &opts); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod start: decode opts: %w", err)
 	}
+	box, instance := deploykit.ParseDeployKey(p.Name)
+	planPtr, err := resolvePodStartPlan(ctx, exec, box, instance, opts)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod start: resolve plan: %w", err)
+	}
+	plan := *planPtr
 	if len(plan.Enc) > 0 {
 		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
 			return nil, fmt.Errorf("plugin-deploy-pod start: mount encrypted volumes: %w", err)
@@ -135,10 +142,16 @@ func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.I
 // unmount encrypted volumes if `--unmount` was requested. The arbiter release is bracketed
 // host-side by the F6 dispatch (after this op + on the failure path).
 func podStop(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLifecyclePlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-pod stop: decode plan: %w", err)
+	var opts spec.PodStopOpts
+	if err := json.Unmarshal(p.Plan, &opts); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod stop: decode opts: %w", err)
 	}
+	box, instance := deploykit.ParseDeployKey(p.Name)
+	planPtr, err := resolvePodStopPlan(ctx, exec, box, instance, opts.Unmount)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod stop: resolve plan: %w", err)
+	}
+	plan := *planPtr
 	if plan.Tunnel != nil {
 		if err := podTunnelOp(ctx, exec, "stop", plan.Tunnel); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: tunnel teardown failed: %v\n", err)
@@ -331,9 +344,14 @@ func podStatus(ctx context.Context, exec *sdk.Executor, name string) (*pb.Invoke
 // host propagates it via *sdk.ExitCodeError. Distinct from podExec (OpShell, the #57 `charly service`
 // capture leg). A spawn/signal failure (not a non-zero exit) is a real error.
 func podAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLiveStdioPlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-pod attach: decode plan: %w", err)
+	var opts spec.PodAttachOpts
+	if err := json.Unmarshal(p.Plan, &opts); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod attach: decode opts: %w", err)
+	}
+	box, instance := deploykit.ParseDeployKey(p.Name)
+	plan, err := resolvePodAttachPlan(ctx, exec, box, instance, opts)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod attach: resolve plan: %w", err)
 	}
 	exit, err := exec.RunInteractive(ctx, plan.Script)
 	if err != nil {
@@ -348,9 +366,14 @@ func podAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 // logs` reentry — once `charly logs` routes through here (LifecycleTarget.Logs), that reentry would be
 // an infinite loop.
 func podLogs(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
-	var plan spec.PodLiveStdioPlan
-	if err := json.Unmarshal(p.Plan, &plan); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-pod logs: decode plan: %w", err)
+	var opts spec.PodLogsOpts
+	if err := json.Unmarshal(p.Opts, &opts); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod logs: decode opts: %w", err)
+	}
+	box, instance := deploykit.ParseDeployKey(p.Name)
+	plan, err := resolvePodLogsPlan(ctx, exec, box, instance, opts)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod logs: resolve plan: %w", err)
 	}
 	exit, err := exec.RunStream(ctx, plan.Script)
 	if err != nil {

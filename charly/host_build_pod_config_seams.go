@@ -41,6 +41,10 @@ const (
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
+	podConfigEncEnsurePlanKind    = "pod-config-enc-ensure-plan"
+	podConfigEncUnmountPlanKind   = "pod-config-enc-unmount-plan"
+	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
+	podConfigBoxEngineKind        = "pod-config-box-engine"
 )
 
 func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigListSidecarsReply, error) {
@@ -176,11 +180,46 @@ func hostBuildPodConfigDetectDevices(_ context.Context, req spec.PodConfigDetect
 		detected = DetectHostDevices()
 		LogDetectedDevices(detected)
 	}
+	if detected.GPU && req.Engine == "podman" {
+		EnsureCDI()
+	}
 	b, err := json.Marshal(detected)
 	if err != nil {
 		return spec.PodConfigDetectDevicesReply{}, err
 	}
 	return spec.PodConfigDetectDevicesReply{DetectedJSON: b}, nil
+}
+
+func hostBuildPodConfigEncEnsurePlan(_ context.Context, req spec.PodConfigEncEnsurePlanRequest, _ buildEngineContext) (spec.PodConfigEncEnsurePlanReply, error) {
+	body, err := resolvePodEncEnsure(req.Box, req.Instance)
+	if err != nil {
+		return spec.PodConfigEncEnsurePlanReply{}, err
+	}
+	return spec.PodConfigEncEnsurePlanReply{EncJSON: body}, nil
+}
+
+func hostBuildPodConfigEncUnmountPlan(_ context.Context, req spec.PodConfigEncUnmountPlanRequest, _ buildEngineContext) (spec.PodConfigEncUnmountPlanReply, error) {
+	body, err := resolvePodEncUnmount(req.Box, req.Instance)
+	if err != nil {
+		return spec.PodConfigEncUnmountPlanReply{}, err
+	}
+	return spec.PodConfigEncUnmountPlanReply{EncJSON: body}, nil
+}
+
+func hostBuildPodConfigContainerTunnel(_ context.Context, req spec.PodConfigContainerTunnelRequest, _ buildEngineContext) (spec.PodConfigContainerTunnelReply, error) {
+	tc := resolvePodTunnel(req.Box, req.Instance)
+	if tc == nil {
+		return spec.PodConfigContainerTunnelReply{}, nil
+	}
+	b, err := json.Marshal(tc)
+	if err != nil {
+		return spec.PodConfigContainerTunnelReply{}, err
+	}
+	return spec.PodConfigContainerTunnelReply{TunnelJSON: b}, nil
+}
+
+func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineRequest, _ buildEngineContext) (spec.PodConfigBoxEngineReply, error) {
+	return spec.PodConfigBoxEngineReply{Engine: ResolveBoxEngineForDeploy(req.Box, req.Instance, req.GlobalEngine)}, nil
 }
 
 func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnelResolveRequest, _ buildEngineContext) (spec.PodConfigTunnelResolveReply, error) {
@@ -383,5 +422,9 @@ var _ = func() bool {
 	registerHostBuilder(podConfigHookSecretEnvKind, typedHostBuilder(podConfigHookSecretEnvKind, hostBuildPodConfigHookSecretEnv))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))
+	registerHostBuilder(podConfigEncEnsurePlanKind, typedHostBuilder(podConfigEncEnsurePlanKind, hostBuildPodConfigEncEnsurePlan))
+	registerHostBuilder(podConfigEncUnmountPlanKind, typedHostBuilder(podConfigEncUnmountPlanKind, hostBuildPodConfigEncUnmountPlan))
+	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))
+	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
 	return true
 }()

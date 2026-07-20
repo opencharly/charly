@@ -841,6 +841,190 @@ func findPodSidecarQuadlets(qdir, podName, mainContainerFile string) ([]string, 
 	return matches, nil
 }
 
+// parseVolumeFlagsCLI mirrors charly-core volumes.go's parseVolumeFlagsStandalone — the shared
+// --volume/--bind CLI parser `charly shell`/`charly start` (direct mode) use.
+func parseVolumeFlagsCLI(volumeFlags, bindFlags []string) []spec.DeployVolume {
+	var configs []spec.DeployVolume
+	seen := make(map[string]bool)
+	for _, v := range volumeFlags {
+		parts := strings.SplitN(v, ":", 3)
+		dv := spec.DeployVolume{Name: parts[0]}
+		if len(parts) >= 2 {
+			dv.Type = parts[1]
+		}
+		if len(parts) >= 3 {
+			dv.Host = parts[2]
+		}
+		if dv.Type == "" {
+			dv.Type = "volume"
+		}
+		if dv.Type == "encrypt" {
+			dv.Type = "encrypted"
+		}
+		if !seen[dv.Name] {
+			configs = append(configs, dv)
+			seen[dv.Name] = true
+		}
+	}
+	for _, b := range bindFlags {
+		if seen[b] || seen[strings.SplitN(b, "=", 2)[0]] {
+			continue
+		}
+		if before, after, ok := strings.Cut(b, "="); ok {
+			host := after
+			if host == "." {
+				if abs, err := filepath.Abs(host); err == nil {
+					host = abs
+				}
+			}
+			configs = append(configs, spec.DeployVolume{Name: before, Type: "bind", Host: host})
+			seen[before] = true
+		} else {
+			configs = append(configs, spec.DeployVolume{Name: b, Type: "bind"})
+			seen[b] = true
+		}
+	}
+	return configs
+}
+
+// mergeVolumeConfigsLocal mirrors charly-core volumes.go's mergeVolumeConfigs — CLI overrides win
+// by name over charly.yml volume configs.
+func mergeVolumeConfigsLocal(base, overrides []spec.DeployVolume) []spec.DeployVolume {
+	if len(overrides) == 0 {
+		return base
+	}
+	var result []spec.DeployVolume
+	seen := make(map[string]bool)
+	for _, o := range overrides {
+		result = append(result, o)
+		seen[o.Name] = true
+	}
+	for _, b := range base {
+		if !seen[b.Name] {
+			result = append(result, b)
+		}
+	}
+	return result
+}
+
+// isEncryptedMountedLocal mirrors charly-core enc.go's isEncryptedMounted VERBATIM — pure
+// /proc/mounts read, matching on the resolved mount point AND the fuse.gocryptfs fstype.
+func isEncryptedMountedLocal(plainDir string) bool {
+	data, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(plainDir)
+	if err != nil {
+		resolved = plainDir
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		mountPoint, err := filepath.EvalSymlinks(fields[1])
+		if err != nil {
+			mountPoint = fields[1]
+		}
+		if mountPoint == resolved && fields[2] == "fuse.gocryptfs" {
+			return true
+		}
+	}
+	return false
+}
+
+// cipherPopulatedPlainEmptyLocal mirrors charly-core enc.go's cipherPopulatedPlainEmpty.
+func cipherPopulatedPlainEmptyLocal(cipherDir, plainDir string) bool {
+	plainEntries, err := os.ReadDir(plainDir)
+	if err != nil || len(plainEntries) > 0 {
+		return false
+	}
+	cipherEntries, err := os.ReadDir(cipherDir)
+	if err != nil {
+		return false
+	}
+	for _, e := range cipherEntries {
+		switch e.Name() {
+		case "gocryptfs.conf", "gocryptfs.diriv":
+			continue
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// verifyBindMountsLocal mirrors charly-core enc.go's verifyBindMounts.
+func verifyBindMountsLocal(mounts []deploykit.ResolvedBindMount, boxName string) error {
+	for _, m := range mounts {
+		if m.Encrypted {
+			if !isEncryptedMountedLocal(m.HostPath) {
+				cipherDir := filepath.Join(filepath.Dir(m.HostPath), "cipher")
+				if cipherPopulatedPlainEmptyLocal(cipherDir, m.HostPath) {
+					return fmt.Errorf(
+						"encrypted volume %q: cipher dir at %s is populated but plain mount at %s is empty — refusing to start (would write plaintext over encrypted data); run 'charly config mount %s' first",
+						m.Name, cipherDir, m.HostPath, boxName,
+					)
+				}
+				return fmt.Errorf("encrypted bind mount %q for image %q is not mounted; run 'charly config mount %s' first", m.Name, boxName, boxName)
+			}
+			continue
+		}
+		info, err := os.Stat(m.HostPath)
+		if err != nil {
+			return fmt.Errorf("bind mount %q: host path %q: %w", m.Name, m.HostPath, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("bind mount %q: host path %q is not a directory", m.Name, m.HostPath)
+		}
+	}
+	return nil
+}
+
+// buildStartArgs mirrors charly-core start.go's function of the same name VERBATIM (the direct-mode
+// `podman run -d …` argv).
+func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security spec.SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
+	binary := kit.EngineBinary(engine)
+	args := []string{
+		binary, "run", "-d", "--rm",
+		"--name", name,
+		"-w", workingDir,
+	}
+	if len(network) > 0 && network[0] != "" {
+		args = append(args, "--network", network[0])
+	}
+	if gpu {
+		args = append(args, kit.GPURunArgs(engine)...)
+	}
+	args = append(args, deploykit.SecurityArgs(security)...)
+	for _, port := range ports {
+		args = append(args, "-p", deploykit.LocalizePort(port, bindAddr))
+	}
+	for _, vol := range volumes {
+		args = append(args, "-v", fmt.Sprintf("%s:%s", vol.VolumeName, vol.ContainerPath))
+	}
+	for _, bm := range bindMounts {
+		args = append(args, "-v", fmt.Sprintf("%s:%s", bm.HostPath, bm.ContPath))
+	}
+	for _, m := range security.Mounts {
+		if after, ok := strings.CutPrefix(m, "tmpfs:"); ok {
+			args = append(args, "--tmpfs", after)
+		} else {
+			args = append(args, "-v", m)
+		}
+	}
+	if engine == "podman" && len(bindMounts) > 0 {
+		args = append(args, fmt.Sprintf("--userns=keep-id:uid=%d,gid=%d", uid, gid))
+	}
+	for _, e := range envVars {
+		args = append(args, "-e", e)
+	}
+	args = append(args, imageRef)
+	args = append(args, entrypoint...)
+	return args
+}
+
 // appendGroupsForAMDGPU / appendAutoDetectedEnv / appendEnvUnique mirror charly-core devices.go's
 // functions of the same name.
 func appendGroupsForAMDGPU(groups []string) []string {
