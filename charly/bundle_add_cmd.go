@@ -353,6 +353,16 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		resolveNode = &spec.BundleNode{Target: target}
 	}
 
+	// K4-C spike #1 (P13-KERNEL): the ROOT-level (non-nested) Add dispatch routes through the
+	// new deploy-dispatch seam — a plugin-initiated HostBuild call nesting a SECOND
+	// out-of-process substrate dispatch — to prove the reverse-channel broker threads
+	// correctly before the rest of this orchestration ports into candy/plugin-bundle. A
+	// nested node (opts.ParentExec != nil) keeps the direct in-process call below until a
+	// later increment threads a parent executor across the wire too.
+	if opts.ParentExec == nil {
+		return c.dispatchViaSeam(resolveNode, deployName, dir, base, plans, opts)
+	}
+
 	utgt, err := ResolveTarget(resolveNode, deployName)
 	if err != nil {
 		return err
@@ -635,28 +645,15 @@ func (c *deployDelCmd) Run() error {
 		}
 	}
 
-	// Build the gate-flag-bearing adapter. Del's signature is uniform
-	// (DelOpts only); kind-specific teardown gates live on the adapter.
-	utgt, err := ResolveTarget(node, c.Name)
-	if err != nil {
-		return err
-	}
-	if tt, ok := utgt.(*externalDeployTarget); ok {
-		// Every externalized substrate teardown honors the --keep-repo-changes /
-		// --keep-services gates + the test ReverseRunner. The external Del replays the
-		// recorded ReverseOps via teardownHostDeploy with these (for vm over the guest SSH
-		// reverse runner the lifecycle hook supplies; for local-remote over the SSH executor;
-		// otherwise locally). --keep-image rides through too — honored by pod's PostTeardown
-		// (suppress the <name>-overlay image drop), ignored by the others. A substrate's
-		// host-side cleanup (vm: ssh-config / charly.yml / ephemeral; pod: `charly remove` +
-		// overlay drop) is the lifecycle hook's PostTeardown (it resolves any identity from
-		// t.node, set by ResolveTarget).
-		tt.KeepRepoChanges = c.KeepRepoChanges
-		tt.KeepServices = c.KeepServices
-		tt.KeepImage = c.KeepImage
-		tt.revRunner = c.Runner
-	}
 	_ = kind // kind is informational; the adapter type already encodes it.
+
+	// K4-C: route the Del dispatch through the deploy-dispatch seam — a plugin-initiated
+	// HostBuild call nesting a second out-of-process substrate dispatch (spike #1's proven
+	// shape). Unlike Add, Del has no nested-executor concept (this Run never threads a
+	// ParentExec) and c.Runner is always nil on the CLI-invoked path (test-only injection —
+	// its sole construction site is host_build_deploy_del.go, from spec.DeployDelRequest,
+	// which carries no Runner field), so every del dispatch routes through the seam
+	// unconditionally — no direct in-process fallback needed.
 
 	// Tear down any sibling members (companion deployments) FIRST — the reverse
 	// of bringUpMembers (root up → members up; members down → root down). Best-effort
@@ -666,10 +663,7 @@ func (c *deployDelCmd) Run() error {
 		memberErr = tearDownMembers(node)
 	}
 
-	targetErr := utgt.Del(context.Background(), DelOpts{
-		DryRun:    c.DryRun,
-		AssumeYes: c.AssumeYes,
-	})
+	targetErr := c.dispatchDelViaSeam(node, c.Name)
 	return errors.Join(memberErr, targetErr)
 }
 
