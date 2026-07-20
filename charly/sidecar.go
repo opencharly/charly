@@ -70,16 +70,6 @@ func embeddedSidecarBodies() (map[string]json.RawMessage, error) {
 	return def.PluginKinds["sidecar"], nil
 }
 
-// sidecarTemplatesOf returns the project-root sidecar templates carried by a deploy
-// config (nil-safe), as OPAQUE bodies. These extend/override the embedded set inside
-// the sidecar plugin's OpResolve.
-func sidecarTemplatesOf(dc *deploykit.BundleConfig) map[string]json.RawMessage {
-	if dc == nil {
-		return nil
-	}
-	return dc.Sidecar
-}
-
 // findPodSidecarQuadlets returns the .container quadlets in qdir that belong
 // to the pod podName, identified by the load-bearing `Pod=<podName>.pod`
 // directive inside the quadlet's [Container] section. Filename-prefix

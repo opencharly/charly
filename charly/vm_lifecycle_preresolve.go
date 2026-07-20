@@ -20,6 +20,7 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 )
 
 // lifecyclePrepareHook resolves the host-side DATA a substrate's OpPrepareVenue needs but cannot
@@ -137,7 +138,7 @@ func vmLifecyclePrepare(name, dir string, node *spec.BundleNode) (json.RawMessag
 	in := spec.LifecyclePrepareInput{
 		Entity:         vmName,
 		VM:             vmSpec,
-		SSHUser:        resolveVmSshUser(vmSpec),
+		SSHUser:        vmshared.ResolveCloudInitSSHUser(vmSpec),
 		SSHPort:        sshPort,
 		Alias:          kit.VmSshAlias(domainID),
 		SSHKeyPath:     filepath.Join(stateDir, "id_ed25519"),

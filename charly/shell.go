@@ -47,10 +47,6 @@ var containerExists = func(engine, name string) bool {
 	return exec.Command(binary, "container", "inspect", name).Run() == nil
 }
 
-// forceTTY overrides isTerminal() when set to true (e.g., by --tty flag).
-// Allows automation tools like Claude Code to force TTY allocation.
-var forceTTY bool
-
 // podShellCmd is the host-side reconstruction of the former ShellCmd (now command:shell in
 // candy/plugin-pod) — hostBuildPodShell (host_build_pod_shell.go) runs its Run() body VERBATIM.
 // TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LifecycleTarget (deploy_target_unified.go,
@@ -78,11 +74,11 @@ func (c *podShellCmd) Run() error {
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 
-	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the host resolves the
-	// venue command (resolvePodShellPlan, #59 inventory), the owning plugin runs it over the served
-	// venue executor via RunInteractive (stdio host-held). The per-invocation CLI extras ride the ctx
-	// (podShellOpts) into the attach-plan hook; tty=true selects the interactive `charly shell` resolver
-	// (its `-it`-vs-`-i` decision reads ForceTTY/isTerminal internally).
+	// `charly shell` routes through the unified LifecycleTarget → OpAttach (F12): the plugin
+	// self-resolves the venue command (candy/plugin-deploy-pod's resolve_f12.go) and runs it over the
+	// served venue executor via RunInteractive (stdio host-held). The per-invocation CLI extras ride
+	// the ctx (podShellOpts) into the attach-plan hook; Interactive/WrapPTY are computed HERE (host
+	// isTerminal() against the REAL terminal) since the plugin's own stdio is not the operator's.
 	lt, err := dispatchLifecycleTarget("shell", c.Box, c.Instance)
 	if err != nil {
 		return err
@@ -94,7 +90,11 @@ func (c *podShellCmd) Run() error {
 		VolumeFlag:   c.VolumeFlag,
 		Bind:         c.Bind,
 		NoAutoDetect: c.NoAutoDetect,
-		ForceTTY:     c.TTY,
+		// HOST-resolved NOW (never re-derived plugin-side — an out-of-process plugin's own
+		// os.Stdout is not the operator's terminal): --tty forces interactive; wrap_pty additionally
+		// wraps in script(1) when forced without a real terminal (an automation tool).
+		Interactive: c.TTY || isTerminal(),
+		WrapPTY:     c.TTY && !isTerminal(),
 	}
 	var cmd []string
 	if c.Command != "" {

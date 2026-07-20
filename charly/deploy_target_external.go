@@ -69,7 +69,7 @@ type externalDeployTarget struct {
 
 	// KeepRepoChanges / KeepServices are the `charly bundle del --keep-…` teardown gates,
 	// set by the del-command dispatcher (bundle_add_cmd.go) for the externalized local
-	// substrate, then handed to teardownHostDeploy's ReverseExecutor in Del.
+	// substrate, then handed to deploykit.TeardownHostDeploy's ReverseExecutor in Del.
 	KeepRepoChanges bool
 	KeepServices    bool
 
@@ -155,7 +155,7 @@ func (t *externalDeployTarget) Add(ctx context.Context, dctx *DeployContext, pla
 	// declares an artifact: block. artifactEnv = secretEnv overlaid with the node's env:.
 	// The artifact KEY is substrate-supplied (vm → "vm:<entity>" for the k3s ClusterProfile
 	// naming); the generic default is the deploy name.
-	artifactEnv := buildArtifactEnv(secretEnv, node)
+	artifactEnv := deploykit.BuildArtifactEnv(secretEnv, node)
 	artifactKey := t.name
 	if life, ok := substrateLifecycleFor(t.prov.word); ok {
 		if k := life.ArtifactKey(t.name, node); k != "" {
@@ -284,9 +284,9 @@ func (t *externalDeployTarget) apply(ctx context.Context, node *spec.BundleNode,
 		return fmt.Errorf("external deploy %q: marshal plans: %w", t.name, err)
 	}
 	// Venue descriptor: the deploy name + the merged deploy-node env (reusing the
-	// shared buildArtifactEnv flattener, R3). The plugin reads it to locate where
+	// shared deploykit.BuildArtifactEnv flattener, R3). The plugin reads it to locate where
 	// to apply its effects on the venue.
-	venue := spec.DeployVenue{DeployName: t.name, Env: buildArtifactEnv(nil, node)}
+	venue := spec.DeployVenue{DeployName: t.name, Env: deploykit.BuildArtifactEnv(nil, node)}
 	// Substrate preresolution (F1): a registered host-side preresolver (e.g. the
 	// android one — resolve the live device endpoint + collect the apk install specs)
 	// produces the substrate-specific payload the plugin needs but cannot resolve
@@ -468,7 +468,7 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 // reverseRunnerForExecutor derives the ReverseRunner a `charly bundle del` replays the
 // recorded ReverseOps over, from the deploy's executor (Δ2). An explicit runner (a test
 // injection) wins. Otherwise: an *SSHExecutor venue (a vm guest, or a `local: {host:
-// user@machine}` remote) replays IN THE GUEST/on-the-remote via an sshReverseRunner; any
+// user@machine}` remote) replays IN THE GUEST/on-the-remote via a kit.SSHReverseRunner; any
 // other venue (ShellExecutor for host:local) returns nil → reverse_ops falls back to local
 // exec.Command. This is the SAME generalization that makes a vm teardown run in the guest
 // AND a local-remote teardown run on the remote (R3) — previously a local-remote teardown
@@ -478,7 +478,7 @@ func reverseRunnerForExecutor(exec deploykit.DeployExecutor, existing kit.Revers
 		return existing
 	}
 	if sshExec, isSSH := exec.(*kit.SSHExecutor); isSSH {
-		return &sshReverseRunner{exec: sshExec}
+		return &kit.SSHReverseRunner{Exec: sshExec}
 	}
 	return nil
 }
@@ -564,7 +564,7 @@ func (t *externalDeployTarget) Test(ctx context.Context, checks []spec.Op, opts 
 }
 
 // Del replays the RECORDED ReverseOps for this deploy (no plugin call): reads the
-// ledger record by deployID() and reverses it via teardownHostDeploy — the SAME
+// ledger record by deployID() and reverses it via deploykit.TeardownHostDeploy — the SAME
 // host-teardown helper the local deploy target.Del uses (R3). Only recorded ops are
 // replayed, never recomputed from a manifest.
 func (t *externalDeployTarget) Del(ctx context.Context, opts DelOpts) error {
@@ -602,13 +602,13 @@ func (t *externalDeployTarget) Del(ctx context.Context, opts DelOpts) error {
 		}
 	}
 	runner := reverseRunnerForExecutor(exec, t.revRunner)
-	re := &hostReverseExec{
+	re := &deploykit.HostReverseExec{
 		DryRun:          opts.DryRun,
 		KeepRepoChanges: t.KeepRepoChanges,
 		KeepServices:    t.KeepServices,
 		Runner:          runner,
 	}
-	if err := teardownHostDeploy(paths, rec, os.Getenv("HOME"), re); err != nil {
+	if err := deploykit.TeardownHostDeploy(paths, rec, os.Getenv("HOME"), re); err != nil {
 		return err
 	}
 

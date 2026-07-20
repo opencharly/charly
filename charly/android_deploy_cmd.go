@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -180,7 +181,7 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path str
 		}
 	} else {
 		// Top-level — resolve the running container by the device's image.
-		eng, name, err := resolveContainer(spec.Box, "")
+		eng, name, err := deploykit.ResolveContainer(spec.Box, "")
 		if err != nil {
 			return AndroidDevice{}, err
 		}

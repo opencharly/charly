@@ -5,6 +5,9 @@ import (
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/spec"
 )
 
 // providerRegistry is the ONE process-wide registry of Providers — the unified
@@ -222,6 +225,18 @@ func (r *Registry) allProviders() []Provider {
 		out = append(out, r.byKey[k])
 	}
 	return out
+}
+
+// phaseOfProvider returns a provider's lifecycle phase (F9), defaulting to sdk.PhaseRuntime for a
+// provider that declares none / is not a spec.PhaseCarrier. K4-C relocation from the deleted
+// install_plan.go — its sole caller (providersInPhase, below).
+func phaseOfProvider(p Provider) string {
+	if pc, ok := p.(spec.PhaseCarrier); ok {
+		if ph := pc.PluginPhase(); ph != "" {
+			return ph
+		}
+	}
+	return sdk.PhaseRuntime
 }
 
 // providersInPhase returns every registered provider whose lifecycle phase (F9) equals phase, in

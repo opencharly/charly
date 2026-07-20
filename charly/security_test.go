@@ -100,30 +100,8 @@ func TestBuildStartArgsWithPrivileged(t *testing.T) {
 	}
 }
 
-func TestBuildShellArgsWithCapAdd(t *testing.T) {
-	withTerminal(t, true)
-	sec := SecurityConfig{
-		CapAdd:  []string{"SYS_ADMIN"},
-		Devices: []string{"/dev/fuse"},
-	}
-	args := buildShellArgs("docker", "myimage:latest", 0, 0, nil, nil, nil, false, "", "127.0.0.1", nil, sec, "/workspace")
-	foundCap := false
-	foundDev := false
-	for i, arg := range args {
-		if arg == "--cap-add" && i+1 < len(args) && args[i+1] == "SYS_ADMIN" {
-			foundCap = true
-		}
-		if arg == "--device" && i+1 < len(args) && args[i+1] == "/dev/fuse" {
-			foundDev = true
-		}
-	}
-	if !foundCap {
-		t.Errorf("expected --cap-add SYS_ADMIN in args: %v", args)
-	}
-	if !foundDev {
-		t.Errorf("expected --device /dev/fuse in args: %v", args)
-	}
-}
+// TestBuildShellArgsWithCapAdd relocated to candy/plugin-deploy-pod/resolve_f12_test.go
+// (buildShellArgs moved, P13-KERNEL step-4(ii)).
 
 func TestGenerateQuadletWithPrivileged(t *testing.T) {
 	cfg := deploykit.QuadletConfig{

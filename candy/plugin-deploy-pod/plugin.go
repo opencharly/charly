@@ -65,6 +65,15 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	if req.GetOp() == sdk.OpConfigWrite {
 		return podConfigWrite(req)
 	}
+	// P13-KERNEL direction-flip: the config-BODY Ops. hostBuildPodConfigSetup/Remove
+	// (charly/host_build_pod_config.go) now forward onward here instead of running the
+	// orchestration in-core.
+	if req.GetOp() == sdk.OpConfigSetup {
+		return invokeConfigSetup(ctx, req)
+	}
+	if req.GetOp() == sdk.OpConfigRemove {
+		return invokeConfigRemove(ctx, req)
+	}
 	// M4: the pod substrate lifecycle Ops (prepare-venue/start/stop/status/logs/shell/rebuild/
 	// post-teardown/…) — externalized out of core — reach the plugin here over the reverse channel.
 	if isLifecycleOp(req.GetOp()) {

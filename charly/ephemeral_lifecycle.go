@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/opencharly/sdk/spec"
@@ -18,13 +13,22 @@ import (
 
 // ephemeral_lifecycle.go — shared lifecycle helpers for ephemeral
 // deployments. All three target types (vm/pod/k8s) call into these
-// functions from the existing run* paths in deploy_add_cmd_*.go and
-// deploy_del_cmd*.go. The helper logic is target-agnostic; per-target
-// instantiation/destruction stays in the target's own runner.
+// functions from deploy_add_shared.go's registerEphemeralIfMarked and
+// vm_lifecycle_preresolve.go's teardown hook — both HOST-CORE callers, so
+// this file's own move value is pure LOC reduction, not a plugin dependency.
+// The helper logic is target-agnostic; per-target instantiation/destruction
+// stays in the target's own runner.
 //
-// TRACKED P13-KERNEL EXIT (DEPLOY-wave W2 audit, 2026-07-20): every consumer
-// (deploy_add_cmd_*.go / deploy_del_cmd*.go) is P13-KERNEL — this file moves with them
-// through that wave's venue-scoped-executor-session seam, never alone.
+// P13-KERNEL fold-in (2026-07-20): the genuinely pure helpers (id generation,
+// naming-pattern rendering, unit-name sanitization) relocated to
+// sdk/deploykit/ephemeral_id.go. What STAYS here: nodeTraits (registry-coupled),
+// the WRITE-side EphemeralRuntime persistence (deploykit.LoadBundleConfig is
+// portable, but the write half needs saveBundleConfigNodeForm's
+// registry-coupled marshalDeployNode — the SAME "deploy-config-save" seam
+// family the config-management ops already route through, registered FINAL/K5
+// credential/loader-family inventory), and registerTransientTimer/
+// cancelTransientTimer/teardownChildrenRec's self-exec (systemd-run/systemctl/
+// nested `charly bundle del`) — genuinely host-only leaves.
 //
 // Two main entry points:
 //
@@ -101,7 +105,7 @@ func RegisterEphemeralLifecycle(node *spec.BundleNode, deployName string) (*Ephe
 		return nil, fmt.Errorf("RegisterEphemeralLifecycle: node %q is not marked ephemeral", deployName)
 	}
 
-	id, err := newEphemeralID()
+	id, err := deploykit.NewEphemeralID()
 	if err != nil {
 		return nil, fmt.Errorf("generating ephemeral id: %w", err)
 	}
@@ -114,7 +118,7 @@ func RegisterEphemeralLifecycle(node *spec.BundleNode, deployName string) (*Ephe
 	deadline := time.Now().Add(ttl)
 
 	pattern := node.Ephemeral.EffectiveNamingPattern()
-	instanceName, err := renderNamingPattern(pattern, deployName, id)
+	instanceName, err := deploykit.RenderNamingPattern(pattern, deployName, id)
 	if err != nil {
 		return nil, fmt.Errorf("rendering naming_pattern %q: %w", pattern, err)
 	}
@@ -233,34 +237,6 @@ func effectiveTTL(node *spec.BundleNode, parentID string) (time.Duration, error)
 	return declared, nil
 }
 
-// renderNamingPattern fills in {{.Source}} and {{.UUID6}} variables.
-func renderNamingPattern(pattern, source, id string) (string, error) {
-	t, err := template.New("naming").Parse(pattern)
-	if err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	err = t.Execute(&buf, struct {
-		Source string
-		UUID6  string
-	}{Source: source, UUID6: id})
-	if err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
-// newEphemeralID returns six characters of cryptographically-strong
-// random hex. Six characters is 24 bits of entropy — enough to make
-// concurrent collisions vanishingly rare for a per-deploy lifecycle.
-func newEphemeralID() (string, error) {
-	var b [3]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b[:]), nil
-}
-
 // registerTransientTimer creates a systemd-run --user --on-active=<ttl>
 // transient unit that fires `charly bundle del <deployName> --assume-yes` when
 // the TTL elapses. Returns the unit name (suitable for cancel).
@@ -275,7 +251,7 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 	if err != nil {
 		return "", fmt.Errorf("locating charly binary: %w", err)
 	}
-	unitName := fmt.Sprintf("charly-bundle-del-%s-%d", sanitizeUnitName(deployName), time.Now().Unix())
+	unitName := fmt.Sprintf("charly-bundle-del-%s-%d", deploykit.SanitizeUnitName(deployName), time.Now().Unix())
 	args := append([]string{
 		"--user",
 		"--unit=" + unitName,
@@ -299,14 +275,6 @@ func cancelTransientTimer(unit string) {
 	cmd := exec.Command("systemctl", "--user", "stop", unit)
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
-}
-
-// sanitizeUnitName makes a string safe for systemd unit naming
-// (replaces / and . with -).
-func sanitizeUnitName(s string) string {
-	r := strings.ReplaceAll(s, "/", "-")
-	r = strings.ReplaceAll(r, ".", "-")
-	return r
 }
 
 // persistEphemeralRuntime writes the EphemeralHandle into charly.yml's

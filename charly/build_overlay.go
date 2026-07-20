@@ -171,7 +171,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	var baseUser string
 	var baseSecurity *spec.Security
 	baseRegistry := readImageRegistry("podman", baseRef)
-	if baseMeta, merr := ExtractMetadata("podman", baseRef); merr == nil && baseMeta != nil {
+	if baseMeta, merr := deploykit.ExtractMetadata("podman", baseRef); merr == nil && baseMeta != nil {
 		baseUser = baseMeta.User
 		sec := baseMeta.Security
 		baseSecurity = &sec

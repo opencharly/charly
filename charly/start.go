@@ -92,7 +92,7 @@ func stopTunnelForImage(boxName, instance string) {
 	ctrName := kit.ContainerNameInstance(boxName, instance)
 	imageRef := containerImage("podman", ctrName)
 	if imageRef != "" {
-		meta, metaErr := ExtractMetadata("podman", imageRef)
+		meta, metaErr := deploykit.ExtractMetadata("podman", imageRef)
 		if metaErr == nil && meta != nil {
 			dc := deploykit.LoadDeployConfigForRead("charly start tunnel merge")
 			deploykit.MergeDeployOntoMetadata(meta, dc, boxName, instance)
@@ -112,7 +112,7 @@ func stopTunnelForImage(boxName, instance string) {
 // buildStartArgs constructs the container run argument list for a detached service.
 // entrypoint is the init system command (e.g., ["supervisord", "-n", "-c", "/etc/supervisord.conf"])
 // or the fallback (e.g., ["sleep", "infinity"]).
-func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
+func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security SecurityConfig, entrypoint []string, workingDir string, network ...string) []string { //nolint:unparam // bindAddr genuinely varies once this TRACKED P13-KERNEL-EXIT resolver gets its production caller back; today's callers are all test literals
 	binary := kit.EngineBinary(engine)
 	args := []string{
 		binary, "run", "-d", "--rm",

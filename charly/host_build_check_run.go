@@ -102,7 +102,7 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	meta, err := ExtractMetadata(rt.RunEngine, imageRef)
+	meta, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -184,7 +184,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	meta, err := ExtractMetadata(rt.RunEngine, imageRef)
+	meta, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -195,7 +195,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	// applying the parsed filter to the plan walk is a known, tracked gap — see the
 	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
 	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
-	if err := validateTagExpr(req.Tag); err != nil {
+	if err := kit.ValidateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	// R44 Option A (mirrors hostCheckRunBox): ONE persistent container + `podman exec` per step.
@@ -230,7 +230,7 @@ func hostCheckRunFeatureLive(_ context.Context, req spec.CheckRunRequest) (kit.C
 // walk (it needs LoadUnified + the kind:agent CLI), so it stays behind the seam. Shared by the
 // atom arm and the CLI shell (CheckFeatureRunCmd).
 func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	engine, containerName, err := resolveContainer(req.Name, req.Instance)
+	engine, containerName, err := deploykit.ResolveContainer(req.Name, req.Instance)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -244,7 +244,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
 	}
-	meta, err := ExtractMetadata(engine, resolvedRef)
+	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -265,7 +265,7 @@ func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	// applying the parsed filter to the plan walk is a known, tracked gap — see the
 	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
 	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
-	if err := validateTagExpr(req.Tag); err != nil {
+	if err := kit.ValidateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
 	rctx := resolveCheckRunnerContext(req.Name, dir, projectCfg)

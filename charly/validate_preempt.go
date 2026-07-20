@@ -85,13 +85,17 @@ func validatePreemptibleUnified(uf *UnifiedFile) error {
 }
 
 // validateResourceDefs checks the embedded `resource:` vocabulary
-// (charly/charly.yml) and its interaction with VM-targeted claimants:
+// (charly/charly.yml) and its interaction with exclusive-venue claimants:
 //
 //   - a `gpu:` selector MUST carry a non-empty vendor (auto-allocation matches
 //     DetectVFIO's reported PCI vendor against it);
-//   - a `target: vm` claimant requiring a GPU resource needs `backend: libvirt`
-//     on its VM entity — a PCI <hostdev> does not render under the qemu backend,
-//     so auto-allocation would silently fail at create time.
+//   - an ExclusiveVenue claimant (today: only `vm` — see
+//     candy/plugin-substrate/plugin.go:60's declared #DeployTraits,
+//     ExclusiveVenue:true) requiring a GPU resource needs `backend: libvirt` on
+//     its VM entity — a PCI <hostdev> does not render under the qemu backend,
+//     so auto-allocation would silently fail at create time. Read BY TRAIT
+//     (nodeTraits), never by switching on the substrate kind word (the boundary
+//     law) — the former `node.Target != "vm"` gate was an incomplete seam.
 func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
 	// resource is a plugin kind now (candy/plugin-resource); decode the name-keyed vocab once.
 	resources := uf.resolveResources()
@@ -107,7 +111,7 @@ func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
 		return
 	}
 	for name, node := range uf.Bundle {
-		if node.Target != "vm" {
+		if !nodeTraits(&node).ExclusiveVenue { // vm (exclusive venue)
 			continue
 		}
 		if _, _, ok := requiredGPUResource(&node, resources); !ok {

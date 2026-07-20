@@ -18,6 +18,13 @@ package main
 // race-free across multiple candies declaring the same secret because
 // DefaultCredentialStore is cached via sync.Once and the first caller's
 // Set is visible to the second caller's ResolveCredential.
+//
+// P13-KERNEL fold-in: InjectSecretsIntoPlans (the ONE genuinely pure function
+// in this file — no credential-store or project-loader dependency) relocated
+// to sdk/deploykit/secret_declare.go. Every other function here routes through
+// DefaultCredentialStore/ResolveCredential (provider-registry-coupled) or
+// ScanAllCandyWithConfig (loader-coupled) and stays charly-core, registered
+// FINAL/K5 credential-family inventory (see ensureCandySecret's own header).
 
 import (
 	"maps"
@@ -145,34 +152,4 @@ func CandyForPlan(plans []*deploykit.InstallPlan, dir string, cfg *Config) ([]sp
 		pick(p.Candy)
 	}
 	return ordered, nil
-}
-
-// InjectSecretsIntoPlans merges the resolved secret env map into every
-// OpStep's task.Env across the supplied plans. Existing task.Env keys
-// are preserved (candy-declared env takes precedence over a credential-
-// store collision — a deliberate choice so an author can explicitly pin
-// a value they control). Called from deploy_add_cmd after
-// ResolveCandySecret and before target.Emit so the heredoc renderer
-// sees the values as regular env exports.
-func InjectSecretsIntoPlans(plans []*deploykit.InstallPlan, env map[string]string) {
-	if len(env) == 0 {
-		return
-	}
-	for _, p := range plans {
-		for _, step := range p.Steps {
-			ts, ok := step.(*deploykit.OpStep)
-			if !ok || ts.Op == nil {
-				continue
-			}
-			if ts.Op.Env == nil {
-				ts.Op.Env = map[string]string{}
-			}
-			for k, v := range env {
-				if _, alreadySet := ts.Op.Env[k]; alreadySet {
-					continue
-				}
-				ts.Op.Env[k] = v
-			}
-		}
-	}
 }

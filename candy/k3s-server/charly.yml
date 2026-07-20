@@ -84,6 +84,12 @@ k3s-server:
         artifact:
             - name: kubeconfig
               path: /etc/rancher/k3s/k3s.yaml
+              # register: kubeconfig — declares this artifact needs the post-retrieve
+              # kubeconfig-merge registration (K3sPostProvision: server-URL rewrite to the
+              # host-forwarded port + merge into ~/.kube/config). Dispatched generically by
+              # retrieveArtifactsAndK3s off THIS declaration, never a hardcoded candy-name
+              # special-case.
+              register: kubeconfig
               mode: "0600"
               # k3s.service reaches systemd "active" when the binary execs, but
               # /etc/rancher/k3s/k3s.yaml lands ~3-15s later when the API

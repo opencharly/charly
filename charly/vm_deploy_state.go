@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -11,22 +10,12 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 )
 
-// sshReverseRunner adapts SSHExecutor to the ReverseRunner interface so
-// reverse_ops.go handlers can run tear-down commands inside the VM
-// without knowing about SSH. externalDeployTarget.Del derives one from the guest
-// SSHExecutor the vm lifecycle hook's VenueExecutor supplies, so a vm `charly bundle del`
-// replays the recorded ReverseOps IN THE GUEST (Δ2).
-type sshReverseRunner struct {
-	exec *kit.SSHExecutor
-}
-
-func (r *sshReverseRunner) RunSystem(script string) error {
-	return r.exec.RunSystem(context.Background(), script, deploykit.EmitOpts{})
-}
-
-func (r *sshReverseRunner) RunUser(script string) error {
-	return r.exec.RunUser(context.Background(), script, deploykit.EmitOpts{})
-}
+// vm_deploy_state.go — the charly.yml persistence half of the former bundle_add_cmd_vm.go
+// (P13-KERNEL): a plugin cannot touch the project's charly.yml directly (deploy_add_shared.go /
+// vm_lifecycle_preresolve.go's PrepareVenue seam persists the plugin's returned state HERE), so
+// these stay behind the config-persist HostBuild seam. The pure VM-spec helpers (SSH user/port
+// resolution) + the SSH ReverseRunner adapter moved to sdk/vmshared + sdk/kit respectively — see
+// vmshared.ResolveCloudInitSSHUser + kit.SSHReverseRunner + kit.ResolveVmSshPort.
 
 // vmNameFromDeployName extracts the VM entity name from a deploy-key
 // in the legacy "vm:<name>[/<instance>]" form. Callers that hold a
@@ -49,47 +38,19 @@ func vmNameFromDeployName(deployName string) (string, error) {
 	return rest, nil
 }
 
-// resolveVmSshUser picks the SSH user for a spec. Precedence mirrors
-// vmshared.ResolveCloudInitSSHUser: explicit spec.ssh.user → spec.source.base_user
-// (adopt path for cloud images) → source-kind default ("root" for bootc).
-// cloud_image sources with no base_user declared have no sensible
-// default — callers treat "" as "user must supply --ssh-key none and
-// manage identity out-of-band, or declare base_user in the spec".
-func resolveVmSshUser(spec *VmSpec) string {
-	if spec.SSH != nil && spec.SSH.User != "" {
-		return spec.SSH.User
-	}
-	if spec.Source.BaseUser != "" {
-		return spec.Source.BaseUser
-	}
-	if spec.Source.Kind == "bootc" {
-		return "root"
-	}
-	return ""
-}
-
-// resolveVmSshPort picks the host-side SSH port forward.
-//
-//   - ssh.port_auto: true → reuse the persisted vm_state.ssh_port if one was
-//     already allocated (idempotent across rebuilds), else allocate a free host
-//     port via the shared pod-path allocator and let the caller persist it.
-//   - ssh.port: N        → that fixed port.
-//   - neither            → 2222.
-func resolveVmSshPort(spec *VmSpec, vmName string) (int, error) {
-	if spec.SSH != nil && spec.SSH.PortAuto {
+// resolveVmSshPort picks the host-side SSH port forward, reusing the persisted
+// vm_state.ssh_port (idempotent across rebuilds) when ssh.port_auto is set — the
+// project-config READ is the one core-coupled bit; the resolution/allocation
+// decision itself is the shared kit.ResolveVmSshPort (R3 with candy/plugin-vm's
+// own persisted-state read, over its host seam).
+func resolveVmSshPort(sp *spec.ResolvedVm, vmName string) (int, error) {
+	var persisted int
+	if sp.SSH != nil && sp.SSH.PortAuto {
 		if entry, ok := deploykit.LoadDeployConfigForRead("charly vm ssh-port").LookupKey("vm:" + vmName); ok && entry.VmState != nil && entry.VmState.SshPort > 0 {
-			return entry.VmState.SshPort, nil
+			persisted = entry.VmState.SshPort
 		}
-		alloc, err := AllocateAutoPorts([]int{22}, nil)
-		if err != nil {
-			return 0, fmt.Errorf("vm %q: ssh.port_auto allocation failed: %w", vmName, err)
-		}
-		return alloc[0].Host, nil
 	}
-	if spec.SSH != nil && spec.SSH.Port > 0 {
-		return spec.SSH.Port, nil
-	}
-	return 2222, nil
+	return kit.ResolveVmSshPort(sp, vmName, persisted)
 }
 
 // saveVmDeployState writes the updated VmDeployState into

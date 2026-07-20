@@ -184,6 +184,15 @@ func withMemberTag(args []string, imageTag string) []string {
 // lifecycle (create + ssh-wait + deploy), a kind:local member is registered via
 // `charly bundle add <member>`. The SAME helper serves the kind:check bed runner
 // and the operator deploy path (R3). Idempotent on an already-running member.
+//
+// K4-C WALK PORT (landed): the outer switch dispatches on isVmMember/isPodMember, which read
+// the STAMPED DESCENT TRAIT (D-data), not the substrate kind word — and unlike
+// deriveChildExecutorForPath, most bodies here shell out via runCharlySubcommand (a
+// `charly <verb>` re-entrant CLI call, itself running IN this same host process — not the
+// HostBuild("cli") reverse-channel reentry an out-of-process plugin would need). This function's
+// BODY is UNCHANGED and stays host-side (providerRegistry + ledger + subprocess-dependent); the
+// plugin's walk (candy/plugin-bundle/walk.go) reaches it via the narrow "deploy-members-up" seam
+// (host_build_deploy_members.go) once, at the end of a successful `charly bundle add` tree walk.
 func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil
@@ -251,6 +260,9 @@ func bringUpMembers(node *spec.BundleNode, imageTag string) error {
 // tearDownMembers tears down every member of `node` in deterministic order — the companion to
 // bringUpMembers. It attempts every member and returns their joined errors so callers can finish
 // the full cleanup while still failing the owning operation.
+//
+// K4-C WALK PORT (landed): same as bringUpMembers above — stays host-side unchanged, reached
+// via the narrow "deploy-members-down" seam from `charly bundle del`'s plugin-side walk.
 func tearDownMembers(node *spec.BundleNode) error {
 	if node == nil || len(node.Members) == 0 {
 		return nil

@@ -107,7 +107,7 @@ func k8sDeployPreresolve(name, dir string, node *spec.BundleNode, _ []*deploykit
 		}
 		imageRef = resolved
 	}
-	caps, err := ExtractMetadata(rt.RunEngine, imageRef)
+	caps, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("deploy %q: extracting capabilities from image %q: %w", name, imageRef, err)
 	}

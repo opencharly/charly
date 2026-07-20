@@ -178,9 +178,9 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 // start/stop/logs/remove/shell/service/config/update reach the registry- or type-bound
 // orchestration (start.go's podStartCmd/podStopCmd, commands.go's
 // podLogsCmd/podRemoveCmd/podUpdateCmd, shell.go's podShellCmd, service.go's podServiceCmd,
-// config_image.go's UNCHANGED BoxConfigSetupCmd/BoxConfigStatusCmd/BoxConfigMountCmd/
-// BoxConfigUnmountCmd/BoxConfigPasswdCmd/BoxConfigRemoveCmd — kept by name since
-// bundle_from_box_cmd.go constructs BoxConfigSetupCmd directly) over HostBuild("pod-start")/
+// config_image.go's BoxConfigStatusCmd/BoxConfigMountCmd/BoxConfigUnmountCmd/
+// BoxConfigPasswdCmd — Setup/Remove instead FORWARD onward to the deploy:pod plugin's
+// sdk.OpConfigSetup/OpConfigRemove, the P13-KERNEL direction-flip) over HostBuild("pod-start")/
 // HostBuild("pod-stop")/HostBuild("pod-logs")/HostBuild("pod-remove")/HostBuild("pod-shell")/
 // HostBuild("pod-service")/HostBuild("pod-config-setup")/HostBuild("pod-config-status")/
 // HostBuild("pod-config-mount")/HostBuild("pod-config-unmount")/HostBuild("pod-config-passwd")/
