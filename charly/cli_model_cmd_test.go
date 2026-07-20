@@ -35,6 +35,28 @@ func TestCLIModel_CoversCommands(t *testing.T) {
 	}
 }
 
+// TestBuildCLIModel_CheckAndBoxList proves F-CLI-NEST end to end at the buildCLIModel level: a
+// command-class capability that DECLARES a subcommand catalog (candy/plugin-check's "check" word;
+// candy/plugin-box's "list" word, nested under "box") gets a real "<word>.<child>" leaf per entry —
+// restoring the MCP tool discoverability (e.g. box.list.boxes, the tool agents use to enumerate
+// boxes) that was silently lost when both commands externalized off a static core Kong struct.
+// run-local stays hidden (mirrors CheckCmd's own `hidden:""` tag), and a plain flat command with no
+// declared catalog (vm) stays excluded exactly as TestCommandProviders_ExtractedReachMCP asserts.
+func TestBuildCLIModel_CheckAndBoxList(t *testing.T) {
+	paths := cliModelLeafPaths(t)
+	for _, want := range []string{
+		"check.box", "check.live", "check.feature", "check.run",
+		"box.list.boxes", "box.list.candies", "box.list.tags",
+	} {
+		if !paths[want] {
+			t.Errorf("CLI model missing declared-subcommand leaf %q", want)
+		}
+	}
+	if paths["check.run-local"] {
+		t.Error("check.run-local unexpectedly present — CheckCmd tags it hidden:\"\", so KongSubcommands must skip it")
+	}
+}
+
 func TestCLIModel_CoversAgentControlPlane(t *testing.T) {
 	m, err := buildCLIModel()
 	if err != nil {

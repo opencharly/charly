@@ -6,9 +6,12 @@ import (
 )
 
 // TestShouldRefuseUnstamped is the full #74 decision — including the verbPath normalization the
-// isolated checkSubcommandIsRun test could NOT catch: Kong renders the check family's passthrough as
-// "check <args>", so the guard must normalize via commandPathKey (an exact "check" compare misses
-// every real invocation — the live-regression bug). Refuse iff `check run` + unstamped + bypass unset.
+// isolated checkSubcommandIsRun test could NOT catch. `check` DECLARES a subcommand catalog
+// (F-CLI-NEST), so Kong renders "check run <args>"/"check box <args>"/"check live <args>" — one
+// token deeper than a flat command's "check <args>" — and the guard must match on the FIRST token
+// either way (an exact "check" compare misses every real check-family invocation post F-CLI-NEST;
+// an exact "check <args>" compare would have missed them too before it, the original #74 bug).
+// Refuse iff `check run` + unstamped + bypass unset.
 func TestShouldRefuseUnstamped(t *testing.T) {
 	savedArgs := os.Args
 	savedVer := BuildCalVer
@@ -17,15 +20,15 @@ func TestShouldRefuseUnstamped(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		verb   string // ctx.Command() — "check <args>" for the whole check family
+		verb   string // ctx.Command() — the check family's F-CLI-NEST rendering per subcommand
 		args   []string
 		calver string
 		want   bool
 	}{
-		{"unstamped check run → refuse", "check <args>", []string{"charly", "check", "run", "b"}, "", true},
-		{"stamped check run → allow", "check <args>", []string{"charly", "check", "run", "b"}, "2026.154.0943", false},
-		{"unstamped check box → allow (scoped to run)", "check <args>", []string{"charly", "check", "box", "i"}, "", false},
-		{"unstamped check live → allow", "check <args>", []string{"charly", "check", "live", "d"}, "", false},
+		{"unstamped check run → refuse", "check run <args>", []string{"charly", "check", "run", "b"}, "", true},
+		{"stamped check run → allow", "check run <args>", []string{"charly", "check", "run", "b"}, "2026.154.0943", false},
+		{"unstamped check box → allow (scoped to run)", "check box <args>", []string{"charly", "check", "box", "i"}, "", false},
+		{"unstamped check live → allow", "check live <args>", []string{"charly", "check", "live", "d"}, "", false},
 		{"unstamped vm destroy → allow", "vm destroy", []string{"charly", "vm", "destroy", "x"}, "", false},
 	}
 	for _, c := range cases {
@@ -40,7 +43,7 @@ func TestShouldRefuseUnstamped(t *testing.T) {
 	os.Args = []string{"charly", "check", "run", "b"}
 	BuildCalVer = ""
 	t.Setenv("CHARLY_SKIP_FRESHNESS_CHECK", "1")
-	if shouldRefuseUnstamped("check <args>") {
+	if shouldRefuseUnstamped("check run <args>") {
 		t.Error("CHARLY_SKIP_FRESHNESS_CHECK=1 must disable the refusal")
 	}
 }
