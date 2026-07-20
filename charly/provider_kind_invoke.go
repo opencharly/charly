@@ -62,7 +62,7 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	// F7/C8: a kind declaring Validates serves a DEEP OpValidate check BEYOND the static CUE
 	// input-def gate above — the host dispatches it and surfaces error-severity Diagnostics as a
 	// load failure. A kind that does not declare it pays nothing (no extra round-trip).
-	if vc, ok := prov.(validatingKindCarrier); ok && vc.isValidatingKind() {
+	if vc, ok := prov.(spec.ValidatingKindCarrier); ok && vc.IsValidatingKind() {
 		vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpValidate, Params: paramsJSON})
 		if verr != nil {
 			return fmt.Errorf("node %q: plugin kind %q validate: %w", gn.name, gn.disc, verr)
@@ -85,7 +85,7 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	// unified against the plugin's CLOSED #<Kind>Input def, which the member subtree would
 	// violate. A FLAT kind (F4) is not structural — no member env, opaque body only.
 	structural := false
-	if sc, ok := prov.(structuralKindCarrier); ok && sc.isStructuralKind() {
+	if sc, ok := prov.(spec.StructuralKindCarrier); ok && sc.IsStructuralKind() {
 		structural = true
 	}
 	var envJSON json.RawMessage

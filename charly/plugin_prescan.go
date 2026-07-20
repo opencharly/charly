@@ -106,8 +106,8 @@ func recognizedStructuralKind(word string) bool {
 	if !ok {
 		return false
 	}
-	sc, ok := prov.(structuralKindCarrier)
-	return ok && sc.isStructuralKind()
+	sc, ok := prov.(spec.StructuralKindCarrier)
+	return ok && sc.IsStructuralKind()
 }
 
 // isDeclaredExternalKind reports whether `word` is a pre-scan-DECLARED external plugin kind (an F4/F5

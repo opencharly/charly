@@ -54,11 +54,11 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("providers = %+v, want exactly one step:examplestepkind", unit.Providers)
 	}
 	// The DECLARED StepContract round-trips from the plugin's Describe through buildUnit.
-	carrier, ok := unit.Providers[0].(stepContractCarrier)
+	carrier, ok := unit.Providers[0].(spec.StepContractCarrier)
 	if !ok {
 		t.Fatalf("provider %T does not carry a step contract", unit.Providers[0])
 	}
-	sc, ok := carrier.declaredStepContract()
+	sc, ok := carrier.DeclaredStepContract()
 	if !ok || sc.Scope != spec.ScopeUser || sc.Venue != spec.VenueHostNative || sc.Gate != spec.GateNone {
 		t.Fatalf("declared contract = %+v ok=%v, want {ScopeUser, VenueHostNative, GateNone}", sc, ok)
 	}

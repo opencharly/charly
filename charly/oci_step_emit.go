@@ -95,8 +95,8 @@ func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allow
 		return "", fmt.Errorf("oci-emit-step: class:step provider %q not connected at build time", word)
 	}
 	emits := false
-	if carrier, ok := prov.(stepContractCarrier); ok {
-		if sc, ok := carrier.declaredStepContract(); ok {
+	if carrier, ok := prov.(spec.StepContractCarrier); ok {
+		if sc, ok := carrier.DeclaredStepContract(); ok {
 			emits = sc.Emits
 		}
 	}

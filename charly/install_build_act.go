@@ -70,8 +70,8 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 			// `file` is a verb (handled above), and the other six (shell-hook/shell-snippet/
 			// service-packaged/service-custom/repo-change/apk-install) are compiler-emitted NATIVE
 			// step kinds, never authored as a `run: plugin:` op.
-			if carrier, ok := sp.(stepContractCarrier); ok {
-				if sc, ok := carrier.declaredStepContract(); ok {
+			if carrier, ok := sp.(spec.StepContractCarrier); ok {
+				if sc, ok := carrier.DeclaredStepContract(); ok {
 					payload, _ := marshalJSON(op.PluginInput)
 					return &deploykit.ExternalStep{
 						Word:      op.Plugin,

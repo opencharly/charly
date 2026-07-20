@@ -18,7 +18,7 @@ type zzWireTestBootstrapProvider struct{}
 
 func (zzWireTestBootstrapProvider) Reserved() string     { return "zzf9wiretest" }
 func (zzWireTestBootstrapProvider) Class() ProviderClass { return ClassVerb }
-func (zzWireTestBootstrapProvider) pluginPhase() string  { return sdk.PhaseBootstrap }
+func (zzWireTestBootstrapProvider) PluginPhase() string  { return sdk.PhaseBootstrap }
 func (zzWireTestBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	var in struct {
 		Config string `json:"config"`
@@ -89,7 +89,7 @@ type zzFakeBootstrapProvider struct{}
 
 func (zzFakeBootstrapProvider) Reserved() string     { return "zzfakebootstrap" }
 func (zzFakeBootstrapProvider) Class() ProviderClass { return ClassVerb }
-func (zzFakeBootstrapProvider) pluginPhase() string  { return sdk.PhaseBootstrap }
+func (zzFakeBootstrapProvider) PluginPhase() string  { return sdk.PhaseBootstrap }
 func (zzFakeBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	out, err := marshalJSON(map[string]string{"config": "TRANSFORMED-BY-BOOTSTRAP"})
 	if err != nil {
