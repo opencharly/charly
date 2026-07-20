@@ -16,12 +16,17 @@ import (
 // The pod start/stop bodies (podman run / systemctl / journalctl) EXECUTE in candy/plugin-deploy-pod
 // over the F6 OpStart/OpStop/OpShell channel (killing the former podCli("start"/…) `charly`-reentries);
 // the RESOLUTION — image/metadata/overlay/volumes/env/security/ports/network/agent-forwarding +
-// buildStartArgs + the enc/tunnel inputs the plugin composes — STAYS HOST-SIDE (config_image/deploy/
-// network/enc/tunnel = #59 migration inventory) and fills a spec.PodLifecyclePlan the host threads to
-// the plugin. This file is that resolution, relocated VERBATIM from StartCmd.runDirect/runQuadlet +
-// StopCmd (parity by construction — the SAME resolver helpers, same order). The ARBITER claim is NOT
-// resolved here — it is a shared host-process lease the F6 dispatch BRACKETS the plugin op with
-// (acquire before OpStart, release after OpStop + on the failure path); see pod_lifecycle_bracket.go.
+// buildStartArgs + the enc/tunnel inputs the plugin composes — is registered TRACKED P13-KERNEL EXIT
+// migration inventory (#59): it needs core-only types (BoxMetadata/SecurityConfig/ExtractMetadata)
+// and fills a spec.PodLifecyclePlan the host threads to the plugin. It moves through the ONE
+// venue-scoped-executor-session seam the P13-KERNEL wave builds, alongside bundle's deploy-add/
+// deploy-del resolver kernel (R3 across waves, never two seams) — never a permanent core residence.
+// This file is that resolution, relocated VERBATIM from the former core StartCmd.runDirect/
+// runQuadlet + StopCmd (now command:start/command:stop in candy/plugin-pod, reaching this file via
+// HostBuild("pod-start")/HostBuild("pod-stop") as podStartCmd/podStopCmd in start.go — parity by
+// construction, the SAME resolver helpers, same order). The ARBITER claim is NOT resolved here — it
+// is a shared host-process lease the F6 dispatch BRACKETS the plugin op with (acquire before
+// OpStart, release after OpStop + on the failure path); see pod_lifecycle_bracket.go.
 
 // resolvePodStartPlan builds the pod START plan the plugin executes. It mirrors StartCmd.Run's
 // quadlet/direct branch: quadlet mode threads the systemd unit name (the plugin runs `systemctl

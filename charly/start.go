@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
@@ -11,21 +10,35 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// StartCmd launches a container with supervisord in the background
-type StartCmd struct {
-	Box             string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
-	Tag             string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build           bool     `long:"build" help:"Force local build instead of pulling from registry"`
-	Env             []string `short:"e" long:"env" sep:"none" help:"Set container env var (direct mode only)"`
-	EnvFile         string   `long:"env-file" help:"Load env vars from file (direct mode only)"`
-	Instance        string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Port            []string `short:"p" help:"Remap host port (direct mode only)"`
-	VolumeFlag      []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
-	Bind            []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
-	AutoDetectFlags `embed:""`
+// start.go — the pod-lifecycle HOST-side resolution the CLI-struct port (DEPLOY wave) left
+// behind. StartCmd/StopCmd/RestartCmd moved to candy/plugin-pod (command:start/stop/restart);
+// restart is pure sdk/deploykit logic (deploykit.RestartPodService) needing no host seam, but
+// start/stop are registry-bound (ResolveTarget, the plugin loader — a core Mechanism a plugin
+// cannot hold), so they reach this file's resolvers via HostBuild("pod-start")/HostBuild(
+// "pod-stop") (host_build_pod_start.go / host_build_pod_stop.go), which reconstruct the moved
+// commands' bodies verbatim as podStartCmd/podStopCmd below. TRACKED P13-KERNEL EXIT: this
+// resolution kernel (buildStartArgs/resolveEntrypointFromMeta/stopTunnelForImage +
+// startViaLifecycle/stopViaLifecycle in pod_lifecycle_verb.go) is registered P13-KERNEL migration
+// inventory — it moves through the ONE venue-scoped-executor-session seam alongside bundle's
+// deploy-add/deploy-del resolver kernel when that wave builds it (R3 across waves, never two
+// seams), never a permanent core residence.
+
+// podStartCmd is the host-side reconstruction of the former StartCmd (now command:start in
+// candy/plugin-pod) — hostBuildPodStart (host_build_pod_start.go) runs its Run() body VERBATIM.
+type podStartCmd struct {
+	Box          string
+	Tag          string
+	Build        bool
+	Env          []string
+	EnvFile      string
+	Instance     string
+	Port         []string
+	VolumeFlag   []string
+	Bind         []string
+	NoAutoDetect bool
 }
 
-func (c *StartCmd) Run() error {
+func (c *podStartCmd) Run() error {
 	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
 	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
@@ -48,14 +61,15 @@ func (c *StartCmd) Run() error {
 	})
 }
 
-// StopCmd stops a running container started by StartCmd
-type StopCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Unmount  bool   `long:"unmount" help:"After stopping, also tear down encrypted FUSE mounts and gocryptfs scope units (charly-enc-<box>-<volume>.scope) for this box"`
+// podStopCmd is the host-side reconstruction of the former StopCmd (now command:stop in
+// candy/plugin-pod) — hostBuildPodStop (host_build_pod_stop.go) runs its Run() body VERBATIM.
+type podStopCmd struct {
+	Box      string
+	Instance string
+	Unmount  bool
 }
 
-func (c *StopCmd) Run() error {
+func (c *podStopCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Resolve the image name (handle remote refs)
 	boxName := c.Box
@@ -68,56 +82,6 @@ func (c *StopCmd) Run() error {
 	// --unmount); the shared arbiter claim is RELEASED host-side by the F6 dispatch after OpStop
 	// (restoring any holder this deploy preempted). --unmount rides the ctx into the plan hook.
 	return stopViaLifecycle(boxName, c.Instance, c.Unmount)
-}
-
-// RestartCmd restarts a service container. In quadlet mode it issues a single
-// `systemctl --user restart`, which is atomic from systemd's perspective —
-// ExecStopPost (e.g. tailscale serve --off) runs before ExecStartPost
-// (tailscale serve), and the unit ends in either active or failed, never the
-// silent stopped state that a manual stop+start sequence can produce when
-// start fails.
-type RestartCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-}
-
-func (c *RestartCmd) Run() error {
-	boxName := c.Box
-	ref := kit.StripURLScheme(c.Box)
-	if spec.IsRemoteImageRef(ref) {
-		boxName = spec.ParseRemoteRef(ref).Name
-	}
-
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return err
-	}
-
-	quadletActive, _ := kit.QuadletExistsInstance(boxName, c.Instance)
-	if quadletActive {
-		svc := kit.ServiceNameInstance(boxName, c.Instance)
-		cmd := exec.Command("systemctl", "--user", "restart", svc)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("restarting %s: %w", svc, err)
-		}
-		fmt.Fprintf(os.Stderr, "Restarted %s\n", svc)
-		return nil
-	}
-
-	// Direct mode: delegate to engine restart.
-	runEngine := ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
-	engine := kit.EngineBinary(runEngine)
-	name := kit.ContainerNameInstance(boxName, c.Instance)
-
-	cmd := exec.Command(engine, "restart", name)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s restart %s failed: %w\n%s", engine, name, err, strings.TrimSpace(string(output)))
-	}
-	fmt.Fprintf(os.Stderr, "Restarted %s\n", name)
-	return nil
 }
 
 // stopTunnelForImage attempts to stop any tunnel for the given image (best-effort).
