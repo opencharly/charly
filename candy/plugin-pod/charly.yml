@@ -33,4 +33,4 @@ plugin-pod:
               id: pod-command-module-present
               context:
                 - build
-              command: "true"
+              command: "test -f go.mod && test -f plugin.go && test -f command.go && test -f pod_cmd.go"
