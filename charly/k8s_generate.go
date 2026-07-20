@@ -138,3 +138,17 @@ func writeYAML(path string, doc any) error {
 	}
 	return os.WriteFile(path, out, 0644)
 }
+
+// defaultK8sOutputDir resolves the canonical output directory for emitted
+// kustomize trees, next to its GenerateK8sKustomize caller (moved from the
+// stray bundle_add_cmd_k8s.go): the deploy:k8s preresolver
+// (k8s_deploy_preresolve.go) and the source-less
+// `charly bundle from-box --target k8s` path (k8s_deploy_from_box.go) both
+// default to it when their caller hasn't already resolved a project dir.
+func defaultK8sOutputDir() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cwd, ".opencharly", "k8s"), nil
+}

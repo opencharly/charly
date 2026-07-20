@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/opencharly/sdk/spec"
 )
@@ -82,10 +81,16 @@ func DeployFromBox(opts DeployFromBoxOpts) (string, error) {
 		dc.Kubernetes.Namespace = opts.Namespace
 	}
 
-	// 5. Resolve output dir.
+	// 5. Resolve output dir — shares defaultK8sOutputDir (k8s_generate.go) with
+	// the deploy:k8s preresolver (R3): the sole caller (bundle_from_box_cmd.go)
+	// always passes ProjectDir as os.Getwd(), so this is behavior-preserving.
 	outDir := opts.OutputDir
 	if outDir == "" {
-		outDir = filepath.Join(projectDir, ".opencharly", "k8s")
+		var err error
+		outDir, err = defaultK8sOutputDir()
+		if err != nil {
+			return "", fmt.Errorf("resolving default k8s output dir: %w", err)
+		}
 	}
 
 	// 6. Generate.
