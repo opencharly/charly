@@ -9,80 +9,31 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-// ServiceCmd manages services inside a running container
-type ServiceCmd struct {
-	Restart ServiceRestartCmd `cmd:"" help:"Restart an in-container service"`
-	Start   ServiceStartCmd   `cmd:"" help:"Start an in-container service"`
-	Status  ServiceStatusCmd  `cmd:"" help:"Show status of in-container services"`
-	Stop    ServiceStopCmd    `cmd:"" help:"Stop an in-container service"`
+// podServiceCmd is the host-side reconstruction of the former ServiceCmd's four leaves (now
+// command:service in candy/plugin-pod, unified behind ONE Kong grammar with an Operation
+// discriminator) — hostBuildPodService (host_build_pod_service.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LifecycleTarget (deploy_target_unified.go,
+// pod_lifecycle_verb.go) are registered P13-KERNEL migration inventory (see start.go's header) —
+// this resolver moves through the same venue-scoped-executor-session seam when that wave lands.
+type podServiceCmd struct {
+	Operation string // "start" | "stop" | "status" | "restart"
+	Box       string
+	Service   string
+	Instance  string
 }
 
-// ServiceStatusCmd shows status of all services
-type ServiceStatusCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *ServiceStatusCmd) Run() error {
+func (c *podServiceCmd) Run() error {
 	engine, name, initDef, err := resolveServiceInit(c.Box, c.Instance)
 	if err != nil {
 		return err
 	}
-	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "status")
-}
-
-// ServiceStartCmd starts a service
-type ServiceStartCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *ServiceStartCmd) Run() error {
-	engine, name, initDef, err := resolveServiceInit(c.Box, c.Instance)
-	if err != nil {
-		return err
+	if c.Operation == "status" {
+		return execInitCommand(c.Box, c.Instance, engine, name, initDef, "status")
 	}
 	if err := validateServiceName(engine, name, c.Service); err != nil {
 		return err
 	}
-	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "start", c.Service)
-}
-
-// ServiceStopCmd stops a service
-type ServiceStopCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *ServiceStopCmd) Run() error {
-	engine, name, initDef, err := resolveServiceInit(c.Box, c.Instance)
-	if err != nil {
-		return err
-	}
-	if err := validateServiceName(engine, name, c.Service); err != nil {
-		return err
-	}
-	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "stop", c.Service)
-}
-
-// ServiceRestartCmd restarts a service
-type ServiceRestartCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Service  string `arg:"" help:"Service name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *ServiceRestartCmd) Run() error {
-	engine, name, initDef, err := resolveServiceInit(c.Box, c.Instance)
-	if err != nil {
-		return err
-	}
-	if err := validateServiceName(engine, name, c.Service); err != nil {
-		return err
-	}
-	return execInitCommand(c.Box, c.Instance, engine, name, initDef, "restart", c.Service)
+	return execInitCommand(c.Box, c.Instance, engine, name, initDef, c.Operation, c.Service)
 }
 
 // resolveServiceInit resolves the container, engine, and init system for service management.

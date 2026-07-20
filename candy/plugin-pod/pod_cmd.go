@@ -146,3 +146,56 @@ func (c *ShellCmd) Run() error {
 		NoAutoDetect: c.NoAutoDetect,
 	})
 }
+
+// ServiceCmd manages services inside a running container — the `charly service` grammar. All four
+// leaves share resolveServiceInit + execInitCommand host-side (registry-bound, not portable), so
+// they forward via ONE HostBuild("pod-service") seam with an Operation discriminator.
+type ServiceCmd struct {
+	Restart ServiceRestartCmd `cmd:"" help:"Restart an in-container service"`
+	Start   ServiceStartCmd   `cmd:"" help:"Start an in-container service"`
+	Status  ServiceStatusCmd  `cmd:"" help:"Show status of in-container services"`
+	Stop    ServiceStopCmd    `cmd:"" help:"Stop an in-container service"`
+}
+
+// ServiceStatusCmd shows status of all services
+type ServiceStatusCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ServiceStatusCmd) Run() error {
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "status", Box: c.Box, Instance: c.Instance})
+}
+
+// ServiceStartCmd starts a service
+type ServiceStartCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Service  string `arg:"" help:"Service name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ServiceStartCmd) Run() error {
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "start", Box: c.Box, Service: c.Service, Instance: c.Instance})
+}
+
+// ServiceStopCmd stops a service
+type ServiceStopCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Service  string `arg:"" help:"Service name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ServiceStopCmd) Run() error {
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "stop", Box: c.Box, Service: c.Service, Instance: c.Instance})
+}
+
+// ServiceRestartCmd restarts a service
+type ServiceRestartCmd struct {
+	Box      string `arg:"" help:"Box name"`
+	Service  string `arg:"" help:"Service name"`
+	Instance string `short:"i" long:"instance" help:"Instance name"`
+}
+
+func (c *ServiceRestartCmd) Run() error {
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "restart", Box: c.Box, Service: c.Service, Instance: c.Instance})
+}
