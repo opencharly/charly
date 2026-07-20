@@ -31,10 +31,14 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // (registerCompiledPlugin → providerRegistry.resolve(ClassCommand,"check") → dispatchInProcCommand
 // → Invoke(OpRun) with the threaded in-proc reverse channel). command:check is input-less (its
 // args are plain CLI tokens kong-parsed into the CheckCmd tree), so it ships NO schema — the load
-// gate waives it (mirror candy/plugin-clean).
+// gate waives it (mirror candy/plugin-clean). Subcommands is DERIVED from CheckCmd's OWN Kong tags
+// via sdk.KongSubcommands (F-CLI-NEST) rather than hand-duplicated (R3): the host uses it to build
+// a REAL nested Kong grammar (restoring `charly check --help`'s subcommand listing) and to
+// synthesize a "check.<name>" leaf per entry for `charly __cli-model` / MCP tool generation — both
+// lost when `check`'s CLI moved off a static core Kong struct onto this dynamic dispatch plugin.
 func NewMeta() pb.PluginMetaServer {
-	return sdk.NewMeta("2026.193.0900",
-		[]sdk.ProvidedCapability{{Class: "command", Word: "check"}},
+	return sdk.NewMeta("2026.198.2131",
+		[]sdk.ProvidedCapability{{Class: "command", Word: "check", Subcommands: sdk.KongSubcommands(&CheckCmd{})}},
 		nil)
 }
 

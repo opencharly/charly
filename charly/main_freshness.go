@@ -174,10 +174,11 @@ Bypass: export CHARLY_SKIP_FRESHNESS_CHECK=1      (NOT recommended)
 	os.Exit(1)
 }
 
-// checkSubcommandIsRun reports whether the check family's passthrough subcommand is "run" — the token
-// immediately after the "check" command word in os.Args. externalCommandHolder forwards everything
-// after the command word as passthrough Args, so ctx.Command() collapses to "check" for run/box/live
-// alike, and the subcommand can only be recovered from os.Args.
+// checkSubcommandIsRun reports whether the check family's subcommand is "run" — the token
+// immediately after the "check" command word in os.Args. This is a raw argv scan independent of
+// how Kong ends up rendering the parsed command path (a flat passthrough for a capability with no
+// declared subcommand catalog, or a real nested `cmd:""` child under F-CLI-NEST), so it stays
+// correct either way.
 func checkSubcommandIsRun() bool {
 	for i, a := range os.Args {
 		if a == "check" {
@@ -189,14 +190,18 @@ func checkSubcommandIsRun() bool {
 
 // shouldRefuseUnstamped is CheckBinaryStamped's pure decision: refuse iff the verb is `check run`
 // (the bed runner) AND the binary is unstamped, and the CHARLY_SKIP_FRESHNESS_CHECK bypass is unset.
-// verbPath is normalized via commandPathKey because Kong renders the check family's passthrough as
-// `check <args>` (NOT `check`), so an exact "check" compare silently misses every real invocation —
-// the bug the isolated os.Args unit test could not catch.
+// verbPath is normalized via commandPathKey and compared by its FIRST token: `check` declares a
+// subcommand catalog (F-CLI-NEST), so Kong renders "check run <args>"/"check box <args>"/etc — one
+// token deeper than the bare "check" an exact compare would expect — never just "check <args>" (a
+// command with no declared subcommands still renders that flat form; either shape's first token is
+// what identifies the command family, so comparing that alone is what the isolated os.Args unit
+// test could not catch on its own).
 func shouldRefuseUnstamped(verbPath string) bool {
 	if os.Getenv("CHARLY_SKIP_FRESHNESS_CHECK") != "" {
 		return false
 	}
-	if commandPathKey(verbPath) != "check" || !checkSubcommandIsRun() {
+	key := commandPathKey(verbPath)
+	if (key != "check" && !strings.HasPrefix(key, "check ")) || !checkSubcommandIsRun() {
 		return false
 	}
 	return CharlyVersion() == "unknown"
