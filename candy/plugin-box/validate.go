@@ -193,7 +193,6 @@ func runAllValidations(vc *vctx, e *vErr) {
 	validateAliases(vc, e)
 	validateCandyIncludes(vc, e)
 	validateSystemdServices(vc, e)
-	validateLibvirt(vc, e)
 	validateEnvProvides(vc, e)
 	validateEnvDeps(vc, e)
 	validateSecretDeps(vc, e)

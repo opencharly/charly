@@ -340,7 +340,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 		t.Fatalf("seed routeb: %v", err)
 	}
 
-	meta := &BoxMetadata{
+	meta := &spec.BoxMetadata{
 		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
@@ -433,7 +433,7 @@ func TestCollectCandySecretAcceptsHappyPath(t *testing.T) {
 func TestCollectCandySecretAcceptsMissingRequired(t *testing.T) {
 	withIsolatedCredentialStore(t) // empty store
 
-	meta := &BoxMetadata{
+	meta := &spec.BoxMetadata{
 		SecretRequire: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_REQUIRED", Description: "required"},
 		},
@@ -487,7 +487,7 @@ func TestCollectCandySecretAcceptsEnvOverride(t *testing.T) {
 
 	t.Setenv("TEST_CHARLY_CRED_IMPORTED", "from-env-synthetic")
 
-	meta := &BoxMetadata{
+	meta := &spec.BoxMetadata{
 		SecretAccept: []spec.EnvDependency{
 			{Name: "TEST_CHARLY_CRED_IMPORTED", Description: "opt", Key: "charly/api-key/imported"},
 		},
@@ -523,7 +523,7 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 
 	// A realistic openwebui-style metadata: one candy-owned webui-secret-key
 	// AND one credential-backed WEBUI_ADMIN_PASSWORD via secret_requires.
-	meta := &BoxMetadata{
+	meta := &spec.BoxMetadata{
 		Secret: []LabelSecretEntry{
 			{Name: "webui-secret-key", Target: "/run/secrets/webui_secret_key", Env: "WEBUI_SECRET_KEY"},
 		},

@@ -181,7 +181,7 @@ func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[s
 // TunnelConfigFromMetadata creates a TunnelConfig from image label metadata.
 // Unlike ResolveTunnelConfig, this doesn't need candy access since the tunnel
 // configuration is already stored in the label.
-func TunnelConfigFromMetadata(meta *BoxMetadata) *TunnelConfig {
+func TunnelConfigFromMetadata(meta *spec.BoxMetadata) *TunnelConfig {
 	if meta == nil || meta.Tunnel == nil {
 		return nil
 	}
