@@ -13,43 +13,22 @@ import (
 // which RPCs the vm plugin (the verb:libvirt provider) and decodes the structured result. Graceful
 // degrade (ok=false) when the plugin is absent — the dependent core path then falls back / no-ops,
 // rather than failing to compile (the plan's "core reaches the plugin through the registry").
-
-// vmPluginEnv is the host→plugin env for an internal VM-resolution RPC (matches candy/plugin-vm's
-// vmEnv VmOp/VmName/URI json fields).
-type vmPluginEnv struct {
-	VmOp       string             `json:"vm_op"`
-	VmName     string             `json:"vm_name"`
-	URI        string             `json:"uri"`
-	Force      bool               `json:"force,omitempty"`
-	DeleteDisk bool               `json:"delete_disk,omitempty"`
-	Snap       *vmSnapInternalReq `json:"snap,omitempty"`
-	StateDir   string             `json:"state_dir,omitempty"`
-}
-
-// displayEndpointWire decodes the vm plugin's resolve-spice/resolve-vnc result's `endpoint` (the
-// plugin's DisplayEndpoint, marshaled by field name — no json tags; json.Unmarshal matches
-// case-insensitively). The host builds the SPICE/VNC dialing + any ssh tunnel from it.
-type displayEndpointWire struct {
-	IsSocket     bool
-	SocketPath   string
-	Host         string
-	Port         int
-	Password     string
-	TunnelNeeded bool
-}
-
-// vmResolveResult decodes a resolve-spice/resolve-vnc reply.
-type vmResolveResult struct {
-	Endpoint     displayEndpointWire `json:"endpoint"`
-	Error        string              `json:"error"`
-	TunnelTarget string              `json:"tunnel_target"`
-}
+//
+// Cutover B unit 2 (R-E4): the wire shapes (spec.VmPluginEnv / spec.VmSnapInternalReq /
+// spec.VmDisplayEndpoint / spec.VmResolveResult) are now CUE-sourced (sdk/schema/vmclient.cue) —
+// they were hand-written Go structs here (an SDD violation) mirrored by an INDEPENDENT
+// hand-written twin in candy/plugin-vm (vm_target.go's DisplayEndpoint decoded the identical
+// shape by field name). Both retype onto the SAME generated defs now (R3, one shape). This
+// dispatch function itself STAYS — connectPluginByWordRef + Operation are core-only (the provider
+// registry, a kernel Mechanism), so the true "shared client" (plugin-deploy-vm calling plugin-vm's
+// libvirt primitives peer-to-peer) is a SEPARATE FINAL/K5 IOU gated on the InvokeProvider
+// generalization, not this move.
 
 // invokeVmPlugin RPCs the out-of-process vm plugin for an internal VM-resolution op
 // (domain-state / list-domains / resolve-spice / resolve-vnc) and returns the decoded JSON
 // result. ok=false when the plugin is absent (graceful degrade) or the call errored.
 func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
-	return invokeVmPluginEnv(vmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
+	return invokeVmPluginEnv(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
 }
 
 // vmPluginOpError decodes the `error` field from a lifecycle op reply ("" = success).
@@ -86,7 +65,7 @@ func vmPluginCandyRef() string {
 }
 
 // invokeVmPluginEnv is the full-env variant (lifecycle ops carry Force/DeleteDisk).
-func invokeVmPluginEnv(env vmPluginEnv) (json.RawMessage, bool) {
+func invokeVmPluginEnv(env spec.VmPluginEnv) (json.RawMessage, bool) {
 	prov, ok := connectPluginByWordRef(ClassVerb, "libvirt", vmPluginCandyRef())
 	if !ok {
 		return nil, false

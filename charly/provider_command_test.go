@@ -174,13 +174,17 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 // now the compiled-in command candy candy/plugin-pod — registered IN-PROC as ClassCommand
 // inprocProviders (NOT *grpcProvider, NOT a static builtin CommandProvider), so
 // dispatchCommand routes each to it via Invoke(OpRun): restart/volume/cp call sdk/kit +
-// sdk/deploykit directly (no host seam — pure logic, no core-only type or registry need),
-// start/stop/logs/remove/shell/service/config/update reach the registry- or type-bound
-// orchestration (start.go's podStartCmd/podStopCmd, commands.go's
-// podLogsCmd/podRemoveCmd/podUpdateCmd, shell.go's podShellCmd, service.go's podServiceCmd,
-// config_image.go's BoxConfigStatusCmd/BoxConfigMountCmd/BoxConfigUnmountCmd/
-// BoxConfigPasswdCmd — Setup/Remove instead FORWARD onward to the deploy:pod plugin's
-// sdk.OpConfigSetup/OpConfigRemove, the P13-KERNEL direction-flip) over HostBuild("pod-start")/
+// sdk/deploykit directly (no host seam — pure logic, no core-only type or registry need).
+// Cutover B unit 2 (pod-lifecycle-CLI-dispatch): start/stop/logs/shell/update/service/remove now
+// ALL own their orchestration in-plugin, reaching the host only for the irreducible
+// ResolveTarget + live-executor dispatch (start/stop/logs/shell/update/service) or the two
+// genuinely host-coupled remove axes (credential env, deploy-entry cleanup) + the
+// CHARLY_PREEMPT_LEASE-gated arbiter release (remove) — via the CONSOLIDATED
+// host_build_pod_lifecycle_dispatch.go (replacing the former per-verb podStartCmd/podStopCmd/
+// podLogsCmd/podShellCmd/podUpdateCmd/podServiceCmd/podRemoveCmd core reconstructions for all
+// seven verbs). config_image.go's BoxConfigStatusCmd/BoxConfigMountCmd/BoxConfigUnmountCmd/BoxConfigPasswdCmd
+// (Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
+// OpConfigRemove, the P13-KERNEL direction-flip) — over HostBuild("pod-start")/
 // HostBuild("pod-stop")/HostBuild("pod-logs")/HostBuild("pod-remove")/HostBuild("pod-shell")/
 // HostBuild("pod-service")/HostBuild("pod-config-setup")/HostBuild("pod-config-status")/
 // HostBuild("pod-config-mount")/HostBuild("pod-config-unmount")/HostBuild("pod-config-passwd")/

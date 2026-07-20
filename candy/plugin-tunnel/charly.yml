@@ -17,12 +17,14 @@ plugin-tunnel:
             tunnelConfigPath the systemd unit references; the pure schemeTarget/
             tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to
             sdk/deploykit with the emitter in P11). Only the EXECUTION leg lives
-            HERE: charly's core tunnel_plugin.go resolves a TunnelConfig, then forwards
-            TunnelStart / TunnelStop / cloudflareTunnelSetup over this verb's Invoke envelope
-            ({method, config}); the plugin runs the actual tailscale serve/funnel and
-            cloudflared lifecycle, stopping at the exec/auth boundary. Every core tunnel
-            consumer (start.go / config_image.go) is UNCHANGED — it resolves the same
-            TunnelConfig and calls the same seams.
+            HERE: the pod-lifecycle plugins that resolve a TunnelConfig via the
+            pod-config-container-tunnel / pod-config-tunnel-resolve host-build seams
+            (candy/plugin-deploy-pod for start/stop, candy/plugin-pod for remove — Cutover B
+            unit 2) drive this verb's start/stop/setup methods directly over InvokeProvider,
+            wrapped in the {method, config} Invoke envelope; the plugin runs the actual
+            tailscale serve/funnel and cloudflared lifecycle, stopping at the exec/auth
+            boundary. There is no remaining core-side tunnel EXECUTION dispatch — every
+            caller reaches this verb directly.
 
             verb:tunnel ALSO carries a benign `plan` (dry-run) method: given a TunnelConfig
             it returns the EXACT tailscale/cloudflared argv it WOULD run WITHOUT exec, so a

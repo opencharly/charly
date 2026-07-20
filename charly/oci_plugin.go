@@ -37,7 +37,10 @@ import (
 // (compiled_plugins:), so providerRegistry resolves it in-process AND project-lessly (the
 // adopt-user probe runs on the build path, on hosts that may carry no project); the
 // connectPluginByWord fallback covers the baked / project-source coexist paths — the
-// registry-first pattern of tunnel_plugin.go / credential_plugin.go.
+// registry-first pattern credential_plugin.go also uses (the former core tunnel-dispatch
+// adapter carrying this same pattern was DELETED — Cutover B unit 2 — once its last core
+// caller, podRemoveCmd's tunnel-stop, moved plugin-side; every tunnel EXECUTION leg is
+// plugin-driven now).
 
 // ociOpInspectUser is the env-JSON selector matching candy/plugin-oci's ociEnv{OciOp}.
 const ociOpInspectUser = "inspect-user"

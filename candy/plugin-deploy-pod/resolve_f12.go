@@ -72,7 +72,7 @@ func resolvePodShellPlan(ctx context.Context, ex *sdk.Executor, box, instance st
 		return &spec.PodLiveStdioPlan{Script: hostAttachScript(argv, opts.WrapPTY)}, nil
 	}
 
-	if err := verifyBindMountsLocal(bindMounts, box); err != nil {
+	if err := deploykit.VerifyBindMounts(bindMounts, box); err != nil {
 		return nil, err
 	}
 	if !security.Privileged {

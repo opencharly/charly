@@ -45,6 +45,7 @@ const (
 	podConfigEncUnmountPlanKind   = "pod-config-enc-unmount-plan"
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
+	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
 )
 
 func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigListSidecarsReply, error) {
@@ -108,7 +109,7 @@ func hostBuildPodConfigResolveRef(_ context.Context, req spec.PodConfigResolveRe
 	if ov := resolveDeployResolvedImage(req.Box, req.Instance); ov != "" && kit.LocalImageExists("podman", ov) {
 		imageRef = ov
 	} else {
-		imageRef = resolveShellImageRef("", deployBoxName, req.Tag)
+		imageRef = kit.ResolveShellImageRef("", deployBoxName, req.Tag)
 	}
 	return spec.PodConfigResolveRefReply{DeployBoxName: deployBoxName, ImageRef: imageRef}, nil
 }
@@ -403,6 +404,17 @@ func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSe
 	return spec.PodConfigHookSecretEnvReply{Env: resolveHookSecretEnv(req.Box, req.Instance, &meta)}, nil
 }
 
+// hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
+// remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
+// marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
+// K4-exit family CleanDeployEntry's own callers document), so this narrow twin of
+// hostBuildPodConfigSaveDeployState stays host-side rather than forcing the wrong-shaped
+// deploy-config-save seam to fit (see #PodConfigCleanDeployEntryRequest's doc comment).
+func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCleanDeployEntryRequest, _ buildEngineContext) (spec.PodConfigCleanDeployEntryReply, error) {
+	deploykit.CleanDeployEntry(req.Box, req.Instance, marshalDeployNode)
+	return spec.PodConfigCleanDeployEntryReply{}, nil
+}
+
 var _ = func() bool {
 	registerHostBuilder(podConfigEnsureImageKind, typedHostBuilder(podConfigEnsureImageKind, hostBuildPodConfigEnsureImage))
 	registerHostBuilder(podConfigResolveRefKind, typedHostBuilder(podConfigResolveRefKind, hostBuildPodConfigResolveRef))
@@ -426,5 +438,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigEncUnmountPlanKind, typedHostBuilder(podConfigEncUnmountPlanKind, hostBuildPodConfigEncUnmountPlan))
 	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
+	registerHostBuilder(podConfigCleanDeployEntryKind, typedHostBuilder(podConfigCleanDeployEntryKind, hostBuildPodConfigCleanDeployEntry))
 	return true
 }()

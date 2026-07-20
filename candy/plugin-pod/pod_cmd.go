@@ -13,11 +13,33 @@ import (
 )
 
 // pod_cmd.go — the pod-lifecycle CLI GRAMMAR (the DEPLOY-wave CLI-struct port). Each `charly
-// <word> …` Kong tree moved OUT of charly core into this plugin candy; a REGISTRY-BOUND leaf
-// (start/stop) forwards its authored flags, as the matching sdk/spec wire request, to its
-// HostBuild seam via hostPodSeam — the host reconstructs the core orchestration struct and runs
-// its Run() logic VERBATIM (mirroring candy/plugin-bundle/bundle_cmd.go). A leaf with NO registry
-// coupling (restart) calls sdk/deploykit directly — no seam needed.
+// <word> …` Kong tree moved OUT of charly core into this plugin candy. Cutover B unit 2
+// (pod-lifecycle-CLI-dispatch): start/stop/logs/shell/update now perform their OWN validation
+// (CanonicalizeDeployArg/RejectImageRefAsDeployName/remote-ref rejection — all pure sdk/deploykit +
+// sdk/spec calls) HERE, in the plugin, then forward via hostPodSeam to a HostBuild seam whose host
+// body is JUST the irreducible ResolveTarget + live-executor dispatch a plugin cannot hold
+// (charly/host_build_pod_lifecycle_dispatch.go) — the "bodies move, shells follow" cutover. A leaf
+// with NO registry coupling (restart) calls sdk/deploykit directly — no seam needed. service is
+// FULLY ported too (buildServiceArgv, service_resolve.go, resolves + validates + renders the argv
+// here, forwarding only the rendered argv).
+//
+// remove is FULLY ported too (option (b), full parity with the other 6 verbs): its WHOLE
+// orchestration — tunnel-stop (remove_tunnel.go, verb:tunnel over InvokeProvider) AND the
+// quadlet/container-teardown/hook/cleanup body (remove_orchestration.go's runPodRemove) — runs
+// HERE now. Two axes still reach the host, each over its own EXISTING narrow seam (no new
+// mechanism, R3): the credential-backed hook env (pod-config-hook-secret-env) and the deploy-entry
+// cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow twin of
+// pod-config-save-deploy-state — the existing deploy-config-save seam's shape doesn't fit, see
+// remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
+// (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the EXISTING "pod-remove" HostBuild
+// kind, deferred here as the LAST step — same shape as pod start/stop's own bracket.
+//
+// RDD caught a real latent placement bug mid-port (see remove_orchestration.go's header): two
+// deploykit calls that "looked" portable (resolveSidecarNames' LoadBundleConfig,
+// runPodRemove's ResolveBoxEngineForDeploy) transitively depend on deploykit.DeployStateHost,
+// which only charly-core's own init() populates — so both were rerouted through their own
+// EXISTING seams (pod-config-load-bundle, pod-config-box-engine) instead of calling deploykit
+// directly.
 
 // StartCmd launches a container with supervisord in the background — the `charly start` grammar.
 type StartCmd struct {
@@ -34,6 +56,14 @@ type StartCmd struct {
 }
 
 func (c *StartCmd) Run() error {
+	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`.
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
+		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly start <image-name>'", c.Box)
+	}
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
+	if err := deploykit.RejectImageRefAsDeployName(c.Box); err != nil {
+		return err
+	}
 	return hostPodSeam("pod-start", spec.PodStartRequest{
 		Box:          c.Box,
 		Tag:          c.Tag,
@@ -56,8 +86,15 @@ type StopCmd struct {
 }
 
 func (c *StopCmd) Run() error {
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
+	// Resolve the image name (handle remote refs).
+	boxName := c.Box
+	ref := kit.StripURLScheme(c.Box)
+	if spec.IsRemoteImageRef(ref) {
+		boxName = spec.ParseRemoteRef(ref).Name
+	}
 	return hostPodSeam("pod-stop", spec.PodStopRequest{
-		Box:      c.Box,
+		Box:      boxName,
 		Instance: c.Instance,
 		Unmount:  c.Unmount,
 	})
@@ -93,6 +130,7 @@ type LogsCmd struct {
 }
 
 func (c *LogsCmd) Run() error {
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	return hostPodSeam("pod-logs", spec.PodLogsRequest{
 		Box:      c.Box,
 		Follow:   c.Follow,
@@ -101,8 +139,17 @@ func (c *LogsCmd) Run() error {
 	})
 }
 
-// RemoveCmd removes a service container — the `charly remove` grammar. Deeply core-type-coupled
-// (not registry-bound, but not portable) — forwards via HostBuild("pod-remove").
+// RemoveCmd removes a service container — the `charly remove` grammar. Cutover B unit 2 remove-verb
+// completion (option (b), full parity with the other 6 verbs): the plugin now owns the WHOLE
+// orchestration itself — tunnel-stop (resolveContainerTunnel + podTunnelStop, remove_tunnel.go —
+// verb:tunnel over InvokeProvider) and the quadlet/container-teardown/hook/cleanup body
+// (runPodRemove, remove_orchestration.go), reaching the host only for the two genuinely
+// host-coupled axes (the credential-backed hook env via the EXISTING pod-config-hook-secret-env
+// seam, and the deploy-entry cleanup via the NEW pod-config-clean-deploy-entry seam — see
+// remove_orchestration.go's header for why the existing deploy-config-save seam doesn't fit). The
+// arbiter-release bracket stays host-side under the EXISTING "pod-remove" HostBuild kind — same
+// shape as pod start/stop's own bracket — deferred here as the LAST step so it always runs,
+// mirroring the former core `defer releaseResourceClaim(...)` semantics exactly.
 type RemoveCmd struct {
 	Box        string   `arg:"" help:"Box name or remote ref"`
 	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
@@ -112,13 +159,18 @@ type RemoveCmd struct {
 }
 
 func (c *RemoveCmd) Run() error {
-	return hostPodSeam("pod-remove", spec.PodRemoveRequest{
-		Box:        c.Box,
-		Instance:   c.Instance,
-		Purge:      c.Purge,
-		KeepDeploy: c.KeepDeploy,
-		Env:        c.Env,
-	})
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
+	boxName := kit.ResolveBoxName(c.Box)
+	defer func() {
+		_ = hostPodSeam("pod-remove", spec.PodRemoveRequest{Box: boxName, Instance: c.Instance})
+	}()
+
+	if tc := resolveContainerTunnel(c.Box, c.Instance); tc != nil {
+		if err := podTunnelStop(tc); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: tunnel teardown failed: %v\n", err)
+		}
+	}
+	return runPodRemove(c.Box, c.Instance, c.Purge, c.KeepDeploy, c.Env)
 }
 
 // ShellCmd starts a bash shell in a container image — the `charly shell` grammar. Registry-bound
@@ -138,6 +190,12 @@ type ShellCmd struct {
 }
 
 func (c *ShellCmd) Run() error {
+	// Remote refs (@github.com/...) are handled exclusively by `charly box pull`. Users must pull
+	// first, then run shell on the short name.
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
+		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first, then 'charly shell <image-name>'", c.Box)
+	}
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	return hostPodSeam("pod-shell", spec.PodShellRequest{
 		Box:          c.Box,
 		Tag:          c.Tag,
@@ -153,9 +211,11 @@ func (c *ShellCmd) Run() error {
 	})
 }
 
-// ServiceCmd manages services inside a running container — the `charly service` grammar. All four
-// leaves share resolveServiceInit + execInitCommand host-side (registry-bound, not portable), so
-// they forward via ONE HostBuild("pod-service") seam with an Operation discriminator.
+// ServiceCmd manages services inside a running container — the `charly service` grammar. Cutover
+// B unit 2 completion: each leaf now resolves + validates + renders the FULL argv itself
+// (buildServiceArgv, service_resolve.go — all portable) and forwards it via ONE
+// HostBuild("pod-service") seam whose host body does ONLY dispatchLifecycleTarget +
+// LifecycleTarget.Shell (the irreducible registry-bound step).
 type ServiceCmd struct {
 	Restart ServiceRestartCmd `cmd:"" help:"Restart an in-container service"`
 	Start   ServiceStartCmd   `cmd:"" help:"Start an in-container service"`
@@ -170,7 +230,11 @@ type ServiceStatusCmd struct {
 }
 
 func (c *ServiceStatusCmd) Run() error {
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "status", Box: c.Box, Instance: c.Instance})
+	argv, err := buildServiceArgv(c.Box, c.Instance, "status", "")
+	if err != nil {
+		return err
+	}
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
 }
 
 // ServiceStartCmd starts a service
@@ -181,7 +245,11 @@ type ServiceStartCmd struct {
 }
 
 func (c *ServiceStartCmd) Run() error {
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "start", Box: c.Box, Service: c.Service, Instance: c.Instance})
+	argv, err := buildServiceArgv(c.Box, c.Instance, "start", c.Service)
+	if err != nil {
+		return err
+	}
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
 }
 
 // ServiceStopCmd stops a service
@@ -192,7 +260,11 @@ type ServiceStopCmd struct {
 }
 
 func (c *ServiceStopCmd) Run() error {
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "stop", Box: c.Box, Service: c.Service, Instance: c.Instance})
+	argv, err := buildServiceArgv(c.Box, c.Instance, "stop", c.Service)
+	if err != nil {
+		return err
+	}
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
 }
 
 // ServiceRestartCmd restarts a service
@@ -203,7 +275,11 @@ type ServiceRestartCmd struct {
 }
 
 func (c *ServiceRestartCmd) Run() error {
-	return hostPodSeam("pod-service", spec.PodServiceRequest{Operation: "restart", Box: c.Box, Service: c.Service, Instance: c.Instance})
+	argv, err := buildServiceArgv(c.Box, c.Instance, "restart", c.Service)
+	if err != nil {
+		return err
+	}
+	return hostPodSeam("pod-service", spec.PodServiceRequest{Box: c.Box, Instance: c.Instance, Argv: argv})
 }
 
 // VolumeCmd groups the named-volume verbs — the `charly volume` grammar. NOT registry-bound (pure
@@ -444,6 +520,10 @@ type UpdateCmd struct {
 }
 
 func (c *UpdateCmd) Run() error {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
+		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
+	}
+	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	return hostPodSeam("pod-update", spec.PodUpdateRequest{
 		Box:       c.Box,
 		Tag:       c.Tag,

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"path/filepath"
 	"slices"
 
@@ -30,10 +29,10 @@ type FragmentContext struct {
 // SystemEnableContext is the template context for system_enable_template rendering.
 type SystemEnableContext = deploykit.SystemEnableContext
 
-// ServiceCommandContext is the template context for management_commands rendering.
-type ServiceCommandContext struct {
-	Service string
-}
+// ServiceCommandContext DELETED (Cutover B unit 2 service-verb completion) — its own
+// initRenderManagementCommand consumer moved to candy/plugin-pod/service_resolve.go
+// (serviceCommandContext, the plugin-local twin); this file's copy became dead (zero
+// non-test callers) once the last core caller (service.go) was deleted.
 
 // DetectCandyInit returns which init system names a candy triggers,
 // based on its candy manifest fields and file patterns.
@@ -219,15 +218,10 @@ func initDefRequirementsMet(def *ResolvedInit, caps *buildkit.AggregatedCandyCap
 	return true
 }
 
-// RenderManagementCommand renders a management command template with the given service name.
-func initRenderManagementCommand(def *ResolvedInit, operation, serviceName string) (string, error) {
-	tmplStr, ok := def.ManagementCommands[operation]
-	if !ok {
-		return "", fmt.Errorf("init system %q has no management command for %q", def.ManagementTool, operation)
-	}
-	ctx := ServiceCommandContext{Service: serviceName}
-	return buildkit.RenderTemplate("mgmt-"+operation, tmplStr, ctx)
-}
+// initRenderManagementCommand DELETED (Cutover B unit 2 service-verb completion) — dead code
+// (zero non-test callers once service.go's execInitCommand moved to candy/plugin-pod's
+// buildServiceArgv, which calls the plugin-local initRenderManagementCommand in
+// service_resolve.go instead).
 
 // --- Loading ---
 // Init config is loaded as part of LoadBuildConfigForBox in format_config.go.

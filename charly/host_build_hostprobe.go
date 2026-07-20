@@ -2,11 +2,29 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
+
+// exec_LookPath wraps os/exec.LookPath to avoid importing os/exec in syscall code. Relocated from
+// the deleted shell.go (Cutover B unit 2) — this file is its only remaining caller.
+var exec_LookPath = defaultLookPath
+
+func defaultLookPath(name string) (string, error) {
+	pathEnv := os.Getenv("PATH")
+	for _, dir := range filepath.SplitList(pathEnv) {
+		path := filepath.Join(dir, name)
+		info, err := os.Stat(path)
+		if err == nil && !info.IsDir() && info.Mode()&0111 != 0 {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("executable not found: %s", name)
+}
 
 // host_build_hostprobe.go — the generic "hostprobe" F10 host-builder. The externalized `charly doctor`
 // command plugin (candy/plugin-doctor) OWNS the ENTIRE host-dependency report — the check list, the group

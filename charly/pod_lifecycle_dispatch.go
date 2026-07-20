@@ -52,10 +52,10 @@ func podStopUnmountFromCtx(ctx context.Context) bool {
 // exec/run argv but are NOT in the deploy config) through LifecycleTarget.Attach(ctx) — which carries
 // only cmd+tty — into the pod attach-plan hook. Interactive/WrapPTY are the HOST-RESOLVED tty booleans
 // (interactive = force_tty || isTerminal(); wrap_pty = force_tty && !isTerminal()) — computed at the
-// moment of the real CLI invocation (shell.go's podShellCmd.Run) and threaded as DATA, since an
-// out-of-process plugin's own os.Stdout is not the operator's terminal (the P13-KERNEL walk-port
-// direction-flip: resolvePodShellPlan/buildShellArgs/buildExecArgs moved to the plugin, which must
-// never re-derive isTerminal() against its own stdio).
+// moment of the real CLI invocation (Cutover B unit 2: host_build_pod_lifecycle_dispatch.go's
+// hostBuildPodShell) and threaded as DATA, since an out-of-process plugin's own os.Stdout is not the
+// operator's terminal (the P13-KERNEL walk-port direction-flip: resolvePodShellPlan/buildShellArgs/
+// buildExecArgs moved to the plugin, which must never re-derive isTerminal() against its own stdio).
 type podShellOpts struct {
 	Tag          string
 	EnvFile      string

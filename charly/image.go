@@ -83,7 +83,7 @@ func (c *BoxPullCmd) Run() error {
 			if err != nil {
 				return err
 			}
-			ref := resolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
+			ref := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
 			return EnsureImagePresent(context.Background(), ref, cfg, dir)
 		}
 	}
