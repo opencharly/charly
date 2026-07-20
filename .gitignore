@@ -55,6 +55,10 @@ profile.cov
 # Machine-specific deploy overrides
 deploy.local.yml
 
+# Claude Code session scratchpad — per-session temporary files, never
+# version-controlled source.
+scratchpad/
+
 # OpenCharly build artifacts
 .build/
 bin/

@@ -102,9 +102,11 @@ func fetchResolvedProject(ctx context.Context) (*spec.ResolvedProject, error) {
 	return &rp, nil
 }
 
-// k8sTreeRoot returns <cwd>/.opencharly/k8s — the canonical root that
-// defaultK8sOutputDir (charly/deploy_add_cmd_k8s.go) emits Kustomize trees
-// under. The compiled-in plugin shares the host's cwd.
+// k8sTreeRoot returns <cwd>/.opencharly/k8s — the same canonical root
+// defaultK8sOutputDir (charly/k8s_generate.go) emits Kustomize trees under.
+// A separate implementation, not a shared call: the kernel/plugin boundary
+// law forbids this plugin from importing charly core, so the two share only
+// the convention, not the code. The compiled-in plugin shares the host's cwd.
 func k8sTreeRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
