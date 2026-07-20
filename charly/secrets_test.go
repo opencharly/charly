@@ -89,10 +89,10 @@ func TestQuadletSecretDirectives(t *testing.T) {
 //     runtime, no re-query is needed).
 //
 // This locks in architectural decision 2.2: credential-backed secrets flow
-// through the existing Secret=<name>,type=env,... emission at
-// quadlet.go:100-106 with zero changes to quadlet.go itself. Any future
-// refactor that adds an ExecStartPre or rehydrates the value as an
-// Environment= line will fail this test.
+// through the existing Secret=<name>,type=env,... emission in
+// sdk/deploykit/quadlet.go's emitContainerSection with zero changes to that
+// function itself. Any future refactor that adds an ExecStartPre or
+// rehydrates the value as an Environment= line will fail this test.
 func TestQuadletSecretEnvDirectives(t *testing.T) {
 	cfg := deploykit.QuadletConfig{
 		BoxName:  "openwebui",
@@ -511,7 +511,8 @@ func TestCollectCandySecretAcceptsEnvOverride(t *testing.T) {
 // `Secret=` directives, and `secret_requires` entrypoints crashlooped.
 //
 // The invariant this test locks in: anywhere the charly code path builds the
-// `cfg.Secret` slice that reaches `quadlet.go:writeSecretsSection`, it MUST
+// `cfg.Secret` slice that reaches `sdk/deploykit/quadlet.go`'s
+// `emitContainerSection` Secret= directive loop, it MUST
 // merge both candy-owned (`CollectSecretsFromLabels`) and credential-backed
 // (`CollectCandySecretAccepts`) collections. The `Run()` path does this at
 // `config_image.go` after the env resolution; the `updateAllDeployedQuadlets`

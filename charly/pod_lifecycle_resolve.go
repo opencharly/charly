@@ -16,12 +16,17 @@ import (
 // The pod start/stop bodies (podman run / systemctl / journalctl) EXECUTE in candy/plugin-deploy-pod
 // over the F6 OpStart/OpStop/OpShell channel (killing the former podCli("start"/…) `charly`-reentries);
 // the RESOLUTION — image/metadata/overlay/volumes/env/security/ports/network/agent-forwarding +
-// buildStartArgs + the enc/tunnel inputs the plugin composes — STAYS HOST-SIDE (config_image/deploy/
-// network/enc/tunnel = #59 migration inventory) and fills a spec.PodLifecyclePlan the host threads to
-// the plugin. This file is that resolution, relocated VERBATIM from StartCmd.runDirect/runQuadlet +
-// StopCmd (parity by construction — the SAME resolver helpers, same order). The ARBITER claim is NOT
-// resolved here — it is a shared host-process lease the F6 dispatch BRACKETS the plugin op with
-// (acquire before OpStart, release after OpStop + on the failure path); see pod_lifecycle_bracket.go.
+// buildStartArgs + the enc/tunnel inputs the plugin composes — is registered TRACKED P13-KERNEL EXIT
+// migration inventory (#59): it needs core-only types (BoxMetadata/SecurityConfig/ExtractMetadata)
+// and fills a spec.PodLifecyclePlan the host threads to the plugin. It moves through the ONE
+// venue-scoped-executor-session seam the P13-KERNEL wave builds, alongside bundle's deploy-add/
+// deploy-del resolver kernel (R3 across waves, never two seams) — never a permanent core residence.
+// This file is that resolution, relocated VERBATIM from the former core StartCmd.runDirect/
+// runQuadlet + StopCmd (now command:start/command:stop in candy/plugin-pod, reaching this file via
+// HostBuild("pod-start")/HostBuild("pod-stop") as podStartCmd/podStopCmd in start.go — parity by
+// construction, the SAME resolver helpers, same order). The ARBITER claim is NOT resolved here — it
+// is a shared host-process lease the F6 dispatch BRACKETS the plugin op with (acquire before
+// OpStart, release after OpStop + on the failure path); see pod_lifecycle_bracket.go.
 
 // resolvePodStartPlan builds the pod START plan the plugin executes. It mirrors StartCmd.Run's
 // quadlet/direct branch: quadlet mode threads the systemd unit name (the plugin runs `systemctl
@@ -55,7 +60,7 @@ type podStartOpts struct {
 // runs `systemctl --user start <svc>` (or `podman start <ctr>` for a direct-deploy marker) + mounts
 // encrypted volumes. Mirrors StartCmd.runQuadlet.
 func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spec.PodLifecyclePlan, error) {
-	exists, err := quadletExistsInstance(box, instance)
+	exists, err := kit.QuadletExistsInstance(box, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +70,7 @@ func resolvePodStartQuadlet(box, instance string, rt *kit.ResolvedRuntime) (*spe
 	}
 	plan := &spec.PodLifecyclePlan{
 		Mode:          "quadlet",
-		SvcName:       serviceNameInstance(box, instance),
+		SvcName:       kit.ServiceNameInstance(box, instance),
 		ContainerName: kit.ContainerNameInstance(box, instance),
 		DirectDeploy:  directDeploy,
 		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
@@ -178,7 +183,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 
 	deployEnv := meta.Env
 	startCtrName := kit.ContainerNameInstance(box, instance)
-	startAccepted := AcceptedEnvSet(envAccepts, envRequires)
+	startAccepted := deploykit.AcceptedEnvSet(envAccepts, envRequires)
 	startGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), startCtrName, startAccepted)
 	envVars, err := kit.ResolveEnvVars(startGlobalEnv, deployEnv, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
@@ -213,7 +218,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 	for _, v := range agentFwd.Volumes {
 		security.Mounts = deploykit.AppendUnique(security.Mounts, v)
 	}
@@ -241,10 +246,10 @@ func resolvePodStopPlan(box, instance string, unmount bool) (*spec.PodLifecycleP
 	if err != nil {
 		return nil, err
 	}
-	quadletActive, _ := quadletExistsInstance(box, instance)
+	quadletActive, _ := kit.QuadletExistsInstance(box, instance)
 	plan := &spec.PodLifecyclePlan{
 		ContainerName: kit.ContainerNameInstance(box, instance),
-		SvcName:       serviceNameInstance(box, instance),
+		SvcName:       kit.ServiceNameInstance(box, instance),
 		EngineBin:     kit.EngineBinary(ResolveBoxEngineForDeploy(box, instance, rt.RunEngine)),
 		Unmount:       unmount,
 		Tunnel:        resolvePodTunnel(box, instance),
@@ -380,7 +385,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	ports, security, network := meta.Port, meta.Security, meta.Network
 
 	shellCtrName := kit.ContainerNameInstance(box, instance)
-	shellAccepted := AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
+	shellAccepted := deploykit.AcceptedEnvSet(meta.EnvAccept, meta.EnvRequire)
 	shellGlobalEnv := dc.GlobalEnvForImage(deploykit.DeployKey(box, instance), shellCtrName, shellAccepted)
 	envVars, err := kit.ResolveEnvVars(shellGlobalEnv, meta.Env, "", workspaceBindHost(bindMounts), opts.EnvFile, opts.Env)
 	if err != nil {
@@ -391,7 +396,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 
 	name := kit.ContainerNameInstance(box, instance)
 	// Running container → exec into it (env-only; can't add volumes/devices to a running container).
@@ -451,7 +456,7 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 			deployBox = &overlay
 		}
 		hostHome, _ := os.UserHomeDir()
-		agentFwd := ResolveAgentForwarding(rt, deployBox, hostHome)
+		agentFwd := kit.ResolveAgentForwarding(rt, deployBox, hostHome)
 		agentEnv = agentFwd.Env
 	}
 
@@ -474,9 +479,9 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	boxName := resolveBoxName(box)
 
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(boxName, instance)
+		svc := kit.ServiceNameInstance(boxName, instance)
 		if opts.Sidecar != "" {
-			svc = SidecarContainerNameInstance(boxName, instance, opts.Sidecar) + ".service"
+			svc = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar) + ".service"
 		}
 		argv := []string{"journalctl", "--user", "-u", svc}
 		if opts.Follow {
@@ -491,7 +496,7 @@ func resolvePodLogsPlan(box, instance string, opts LogsOpts) (*spec.PodLiveStdio
 	engine := kit.EngineBinary(ResolveBoxEngineForDeploy(boxName, instance, rt.RunEngine))
 	name := kit.ContainerNameInstance(boxName, instance)
 	if opts.Sidecar != "" {
-		name = SidecarContainerNameInstance(boxName, instance, opts.Sidecar)
+		name = kit.SidecarContainerNameInstance(boxName, instance, opts.Sidecar)
 	}
 	argv := []string{engine, "logs"}
 	if opts.Follow {

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -79,24 +78,6 @@ func sidecarTemplatesOf(dc *deploykit.BundleConfig) map[string]json.RawMessage {
 		return nil
 	}
 	return dc.Sidecar
-}
-
-// --- Naming helpers ---
-
-func SidecarContainerName(boxName, sidecarName string) string {
-	return kit.ContainerName(boxName) + "-" + sidecarName
-}
-
-func SidecarContainerNameInstance(boxName, instance, sidecarName string) string {
-	return kit.ContainerNameInstance(boxName, instance) + "-" + sidecarName
-}
-
-func PodName(boxName string) string {
-	return kit.ContainerName(boxName)
-}
-
-func PodNameInstance(boxName, instance string) string {
-	return kit.ContainerNameInstance(boxName, instance)
 }
 
 // findPodSidecarQuadlets returns the .container quadlets in qdir that belong

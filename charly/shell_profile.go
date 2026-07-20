@@ -26,6 +26,16 @@ package main
 //
 // On `charly bundle del host`, if no candies remain deployed the managed
 // block is removed from the shell init file.
+//
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave W2 audit, 2026-07-20): DetectLoginShell/
+// WriteEnvdFile/ManagedBlockBody/ShellInitFilePath/markersForTag are DEAD in production
+// (only host_infra_test.go references them — verified by grep, not assumed); sdk/kit/
+// profile.go already carries the live equivalents (DetectShellFromPath/RenderEnvdBody/
+// ManagedBlockBody/ShellInitFilePath/MarkersForTag), consumed by kit.WalkPlans since the
+// local/vm deploy targets externalized. EnvdFilePath/RemoveEnvdFile keep ONE live core
+// caller each (deploy_target_external.go, deploy_host_helpers.go — both P13-KERNEL); this
+// file's confirmed-dead functions + the host_infra_test.go coverage trim ride the
+// P13-KERNEL exit alongside their consumers, never a solo cleanup.
 
 import (
 	"fmt"

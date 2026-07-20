@@ -7,6 +7,11 @@ package main
 // failure (e.g. a transient discover EACCES from a concurrent sibling build) is
 // never hidden behind a bare not-found. Used by the deploy-add dispatcher to
 // resolve a deployment's `local: <template-name>` reference.
+//
+// TRACKED FINAL/K5 EXIT (DEPLOY-wave W2 audit, 2026-07-20): calls LoadUnified directly —
+// no plugin has loader access today, an ENABLER GAP (not a permanence claim, same class as
+// the arbiter IOU) that only a FINAL/K5 loader-access seam can close. 26 LOC, trivial once
+// that seam exists.
 func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	if dir == "" || name == "" {
 		return nil, nil

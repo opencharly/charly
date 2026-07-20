@@ -125,7 +125,7 @@ func (h *arbiterHostServer) stopAndWait(addr spec.HolderAddr) error {
 // device — the reclaim seam. It reuses the status EngineClient's batched ps+inspect (SnapshotAll),
 // so it sees a container's GPU device the /proc/*/fd holder-scan never can. The deploy name is the
 // `charly-` prefix stripped off; `Base` = that name reconstructs the same container for the stop
-// seam (stopPodService(Base,"") -> charly-<Base>), for both plain and instance deploys.
+// seam (deploykit.StopPodService(Base,"") -> charly-<Base>), for both plain and instance deploys.
 func (h *arbiterHostServer) gpuCDIHolders() []spec.HolderAddr {
 	rt, err := kit.ResolveRuntime()
 	if err != nil {

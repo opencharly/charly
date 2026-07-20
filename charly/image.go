@@ -75,7 +75,7 @@ func (c *BoxPullCmd) Run() error {
 		// Tag override: only meaningful for short-name input. Resolve
 		// the canonical short-name ref FIRST so the build-fallback
 		// path picks up the requested tag.
-		if !kit.LooksLikeFullRef(c.Box) && !spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+		if !kit.LooksLikeFullRef(c.Box) && !spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}

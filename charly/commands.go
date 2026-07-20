@@ -14,15 +14,19 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// LogsCmd shows service container logs
-type LogsCmd struct {
-	Box      string `arg:"" help:"Box name or remote ref"`
-	Follow   bool   `short:"f" long:"follow" help:"Follow log output"`
-	Instance string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Sidecar  string `long:"sidecar" help:"Show the named SIDECAR container's logs instead of the app container's"`
+// podLogsCmd is the host-side reconstruction of the former LogsCmd (now command:logs in
+// candy/plugin-pod) — hostBuildPodLogs (host_build_pod_logs.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LogsOpts/LifecycleTarget (deploy_target_unified.go,
+// pod_lifecycle_verb.go) are registered P13-KERNEL migration inventory (see start.go's header) —
+// this resolver moves through the same venue-scoped-executor-session seam when that wave lands.
+type podLogsCmd struct {
+	Box      string
+	Follow   bool
+	Instance string
+	Sidecar  string
 }
 
-func (c *LogsCmd) Run() error {
+func (c *podLogsCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// `charly logs` routes through the unified LifecycleTarget → OpLogs (F12): the host resolves the
 	// `journalctl`/`<engine> logs` stream command (resolvePodLogsPlan), the owning plugin streams it
@@ -35,9 +39,12 @@ func (c *LogsCmd) Run() error {
 	return lt.Logs(context.Background(), LogsOpts{Follow: c.Follow, Sidecar: c.Sidecar})
 }
 
-// UpdateCmd updates an image (pulls/builds the latest), preserves the
-// existing deploy config (user-overlay state untouched), and restarts
-// the service to pick up the new image.
+// podUpdateCmd is the host-side reconstruction of the former UpdateCmd (now command:update in
+// candy/plugin-pod) — hostBuildPodUpdate (host_build_pod_update.go) runs its Run() body
+// VERBATIM. TRACKED P13-KERNEL EXIT: dispatchByDeployTarget's resolveTreeRoot/
+// loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) are core Mechanisms (the
+// project loader + provider registry) a plugin cannot import or hold — this resolver moves
+// through the same venue-scoped-executor-session seam when that wave lands.
 //
 // This verb handles the destroy-free update path for every target. The
 // first arg accepts EITHER a deploy name (looked up in charly.yml —
@@ -50,14 +57,14 @@ func (c *LogsCmd) Run() error {
 // env, tunnel) is preserved across updates. Per the user's directive:
 // "Any config changes should be done via charly config only" — this verb
 // updates ARTIFACTS, charly config updates CONFIG.
-type UpdateCmd struct {
-	Box       string `arg:"" help:"Deploy name (resolved via charly.yml) OR box name. For deploys, the target's update strategy is auto-selected (pod=systemctl restart with new image; vm=in-guest candy re-apply; local=idempotent re-apply)."`
-	Tag       string `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
-	Build     bool   `long:"build" help:"Force local build instead of pulling from registry"`
-	Instance  string `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Seed      bool   `long:"seed" default:"true" negatable:"" help:"Sync data from new image into bind-backed volumes (default: true)"`
-	ForceSeed bool   `long:"force-seed" help:"Overwrite existing data in volumes (default: only add new files)"`
-	DataFrom  string `long:"data-from" help:"Sync data from this data image instead"`
+type podUpdateCmd struct {
+	Box       string
+	Tag       string
+	Build     bool
+	Instance  string
+	Seed      bool
+	ForceSeed bool
+	DataFrom  string
 }
 
 // Run dispatches `charly update <name>` to the target-specific update
@@ -68,24 +75,29 @@ type UpdateCmd struct {
 //
 // The dispatch keeps ZERO duplicate code paths and ZERO silent
 // fallbacks. Every branch fails fast with an actionable error message.
-func (c *UpdateCmd) Run() error {
-	if spec.IsRemoteImageRef(StripURLScheme(c.Box)) {
+func (c *podUpdateCmd) Run() error {
+	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
 		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
 	}
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	return c.dispatchByDeployTarget()
 }
 
-// RemoveCmd removes a service container
-type RemoveCmd struct {
-	Box        string   `arg:"" help:"Box name or remote ref"`
-	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Purge      bool     `long:"purge" help:"Also remove named volumes"`
-	KeepDeploy bool     `name:"keep-deploy" help:"Keep charly.yml entry for this box"`
-	Env        []string `short:"e" long:"env" sep:"none" help:"Set env var for hooks (KEY=VALUE)"`
+// podRemoveCmd is the host-side reconstruction of the former RemoveCmd (now command:remove in
+// candy/plugin-pod) — hostBuildPodRemove (host_build_pod_remove.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: deeply core-type-coupled (BoxMetadata/ExtractMetadata/sidecar
+// resolution/deploykit.CleanDeployEntry — not registry-bound, but not portable either), so it
+// stays behind the seam alongside start/stop/logs until the P13-KERNEL wave's
+// venue-scoped-executor-session seam lands.
+type podRemoveCmd struct {
+	Box        string
+	Instance   string
+	Purge      bool
+	KeepDeploy bool
+	Env        []string
 }
 
-func (c *RemoveCmd) Run() error {
+func (c *podRemoveCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Releasing a persistent exclusive claim restores any holder this deploy
 	// preempted (no-op if no lease / gated by an outer orchestrator).
@@ -109,23 +121,23 @@ func (c *RemoveCmd) Run() error {
 	c.runPreRemoveHook(engine, containerName, boxName)
 
 	if rt.RunMode == "quadlet" {
-		svc := serviceNameInstance(boxName, c.Instance)
+		svc := kit.ServiceNameInstance(boxName, c.Instance)
 		stop := exec.Command("systemctl", "--user", "stop", svc)
 		_ = stop.Run()
 
-		qdir, err := quadletDir()
+		qdir, err := kit.QuadletDir()
 		if err != nil {
 			return err
 		}
 
-		qpath := filepath.Join(qdir, quadletFilenameInstance(boxName, c.Instance))
+		qpath := filepath.Join(qdir, kit.QuadletFilenameInstance(boxName, c.Instance))
 		if err := os.Remove(qpath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing quadlet file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Removed %s\n", qpath)
 
 		// Remove pod file if it exists (sidecar mode)
-		podPath := filepath.Join(qdir, podQuadletFilenameInstance(boxName, c.Instance))
+		podPath := filepath.Join(qdir, kit.PodQuadletFilenameInstance(boxName, c.Instance))
 		if err := os.Remove(podPath); err == nil {
 			fmt.Fprintf(os.Stderr, "Removed %s\n", podPath)
 		}
@@ -134,7 +146,7 @@ func (c *RemoveCmd) Run() error {
 		// glob). Sources sidecar names from charly.yml — see
 		// resolveSidecarNames for why charly.yml is authoritative.
 		sidecarNames := resolveSidecarNames(boxName, c.Instance)
-		podBase := PodNameInstance(boxName, c.Instance)
+		podBase := kit.PodNameInstance(boxName, c.Instance)
 		for _, sc := range sidecarNames {
 			scPath := filepath.Join(qdir, podBase+"-"+sc+".container")
 			if err := os.Remove(scPath); err == nil {
@@ -169,7 +181,7 @@ func (c *RemoveCmd) Run() error {
 		stopEnc := exec.Command("systemctl", "--user", "stop", encServiceFilename(boxName))
 		_ = stopEnc.Run()
 
-		svcDir, svcDirErr := systemdUserDir()
+		svcDir, svcDirErr := kit.SystemdUserDir()
 		if svcDirErr == nil {
 			tunnelPath := filepath.Join(svcDir, deploykit.TunnelServiceFilename(boxName))
 			if err := os.Remove(tunnelPath); err == nil {
@@ -248,7 +260,7 @@ var dropOverlayImagesByRef = kit.RemoveImagesByReference
 
 // runPreRemoveHook runs pre_remove hooks (best-effort). Reads hooks from
 // the running container's OCI labels.
-func (c *RemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
+func (c *podRemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
 	imageRef := containerImage(engine, containerName)
 	if imageRef == "" {
 		return
@@ -292,7 +304,7 @@ func containerImage(engine, containerName string) string {
 // resolveBoxName extracts the short box name from a ref that may be
 // a local box name or a remote ref (github.com/org/repo/box[@version]).
 func resolveBoxName(box string) string {
-	ref := StripURLScheme(box)
+	ref := kit.StripURLScheme(box)
 	if spec.IsRemoteImageRef(ref) {
 		return spec.ParseRemoteRef(ref).Name
 	}
