@@ -87,13 +87,13 @@ func testSupervisordInitDef() *ResolvedInit {
 
 func TestRenderServiceCustomSystemd(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:       "ollama",
-		Exec:       "/usr/bin/ollama serve",
-		Env:        map[string]string{"OLLAMA_HOST": "0.0.0.0:11434"},
-		Restart:    "always",
-		After:      []string{"network.target"},
-		Scope: "system",
-		Enable:     true,
+		Name:    "ollama",
+		Exec:    "/usr/bin/ollama serve",
+		Env:     map[string]string{"OLLAMA_HOST": "0.0.0.0:11434"},
+		Restart: "always",
+		After:   []string{"network.target"},
+		Scope:   "system",
+		Enable:  true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:         "ollama",
@@ -128,13 +128,13 @@ func TestRenderServiceCustomSystemd(t *testing.T) {
 // early user-manager start (where the Wayland display doesn't yet exist).
 func TestRenderServiceWantedBy(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:       "session-capture",
-		Exec:       "/usr/bin/session-capture",
-		Restart:    "always",
-		Scope: "user",
-		Enable:     true,
-		After:      []string{"graphical-session.target"},
-		WantedBy:   []string{"graphical-session.target"},
+		Name:     "session-capture",
+		Exec:     "/usr/bin/session-capture",
+		Restart:  "always",
+		Scope:    "user",
+		Enable:   true,
+		After:    []string{"graphical-session.target"},
+		WantedBy: []string{"graphical-session.target"},
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "session-capture",
@@ -158,11 +158,11 @@ func TestRenderServiceWantedBy(t *testing.T) {
 // substitute the real destination home at emit — not the build host's home.
 func TestRenderServiceHomePortabilityToken(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:       "selkies",
-		Exec:       "python3 %(ENV_HOME)s/.local/bin/selkies-capture-server",
-		Env:        map[string]string{"SELKIES_DATA": "$HOME/.config/selkies"},
-		Scope: "user",
-		Enable:     true,
+		Name:   "selkies",
+		Exec:   "python3 %(ENV_HOME)s/.local/bin/selkies-capture-server",
+		Env:    map[string]string{"SELKIES_DATA": "$HOME/.config/selkies"},
+		Scope:  "user",
+		Enable: true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "selkies",
@@ -209,7 +209,7 @@ func TestRenderServicePackagedWithOverrides(t *testing.T) {
 		Name:        "postgresql",
 		UsePackaged: "postgresql.service",
 		Enable:      true,
-		Scope:  "system",
+		Scope:       "system",
 		Overrides: &ServiceOverrides{
 			Env: map[string]string{"PGDATA": "/var/lib/postgresql/data"},
 		},
@@ -271,10 +271,10 @@ func TestRenderServiceCustomSupervisord(t *testing.T) {
 
 func TestRenderServiceUserScope(t *testing.T) {
 	entry := &spec.ServiceEntry{
-		Name:       "x",
-		Exec:       "/bin/true",
-		Scope: "user",
-		Enable:     true,
+		Name:   "x",
+		Exec:   "/bin/true",
+		Scope:  "user",
+		Enable: true,
 	}
 	rendered, err := RenderService(entry, testSystemdInitDef(), ServiceRenderContext{
 		Candy:       "x",

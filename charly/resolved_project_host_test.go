@@ -168,6 +168,12 @@ func fixedResolvedProjectFixture(t *testing.T) *spec.ResolvedProject {
 	return rp
 }
 
+// Per-init-trigger completion (formerly TestProjectCandyViewPreservesPerInitTriggers /
+// TestResolvedProjectCompletesPerInitTriggersBeforeProjection, which exercised the pre-W9
+// resolve-time projectCandyView/*Candy path) is proven at the new SCAN-time choke point by
+// TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion (layers_test.go) — there is
+// no later separate PopulateCandyInitSystem(map[string]*Candy, ...) call left to exercise here.
+
 // TestResolvedProject_ByteStableGolden proves the assembled spec.ResolvedProject is deterministic
 // (two marshals identical) and byte-stable against the committed golden. A dropped field, a reordered
 // struct, or a changed projection all FAIL here. Regenerate with -update-resolved-project-golden.

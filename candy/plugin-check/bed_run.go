@@ -15,7 +15,7 @@ package check
 // seam (setup/members-up/members-down/wait-ready/teardown) owns it and returns the
 // node-derived BedDescriptor the kind-blind plugin drives the sequence from. Every
 // `charly` subcommand rides HostBuild("cli"); the plugin owns the sequence LOGIC,
-// the per-step .log + summary.yml writes, the readiness poll, and the exit-code
+// the per-step .log + summary.yml writes and the exit-code
 // classification.
 //
 // #33: the current post-rebase sequence passes `--domain <bedDomain>` on `charly vm
@@ -27,8 +27,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/opencharly/sdk"
@@ -41,16 +41,6 @@ import (
 // retention notice's inspect-command hint (the core RepoOverrideEnv const is
 // package-main-only); the SESSION owns the actual set/restore lifecycle.
 const repoOverrideEnvName = "CHARLY_REPO_OVERRIDE"
-
-// bedReadyPollInterval / bedReadyPollCap bound the check-live readiness poll: the
-// check itself IS the readiness condition (a real synchronization primitive, not a
-// fixed sleep — a fresh service still running its first-boot migration is not ready
-// when merely exec-able). The generous cap mirrors the core's config-sourced
-// PollHeavy.
-const (
-	bedReadyPollInterval = 10 * time.Second
-	bedReadyPollCap      = 15 * time.Minute
-)
 
 // bedRunOpts carries the per-run knobs (sourced from `charly check run` flags).
 type bedRunOpts struct {
@@ -99,6 +89,17 @@ func withRunTag(args []string, tag string) []string {
 		return args
 	}
 	return append(args, "--tag", tag)
+}
+
+// runTaggedImageRef returns the exact OCI image reference produced by the
+// bed's `box build --tag`. Artifact verification must consume this reference,
+// not re-resolve the untagged logical box name: an older locally cached bed
+// image may otherwise be selected between the build and check steps.
+func runTaggedImageRef(image, tag string) string {
+	if image == "" || tag == "" {
+		return image
+	}
+	return image + ":" + tag
 }
 
 // runCheckBed executes the canonical R10 sequence for one check bed and writes
@@ -161,21 +162,32 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 	// shell out to a `charly` subcommand) in the summary with its real duration.
 	phase := func(stepName string, fn func() error) error {
 		t0 := time.Now()
+		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] START\n", name, stepName)
 		err := fn()
-		res.Step = append(res.Step, stepResult{Name: stepName, Duration: time.Since(t0), OK: err == nil})
+		dur := time.Since(t0)
+		res.Step = append(res.Step, stepResult{Name: stepName, Duration: dur, OK: err == nil})
 		if err != nil {
 			res.OK = false
 			if res.FailExitCode == 0 {
 				res.FailExitCode = 1
 			}
+			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] FAIL after %s: %v\n", name, stepName, dur.Round(time.Millisecond), err)
+			return err
 		}
-		return err
+		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] PASS after %s\n", name, stepName, dur.Round(time.Millisecond))
+		return nil
 	}
 
 	// step records a step's outcome (a `charly` subcommand over the cli seam) and
 	// writes its log file. Returns the run error so the caller can short-circuit.
 	step := func(stepName string, argv ...string) error {
 		t0 := time.Now()
+		logPath := filepath.Join(d.LogDir, stepName+".log")
+		command := checkStepCommandSummary(argv)
+		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] START (%s; log: %s)\n", name, stepName, command, logPath)
+		if writeErr := os.WriteFile(logPath, []byte("status: RUNNING\ncommand: "+command+"\n"), 0o644); writeErr != nil {
+			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] cannot initialize log %s: %v\n", name, stepName, logPath, writeErr)
+		}
 		reply, cerr := bedCliCombined(ex, ctx, argv...)
 		dur := time.Since(t0)
 		ok := cerr == nil && reply.ExitCode == 0
@@ -192,88 +204,23 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 				}
 			}
 		}
-		logPath := filepath.Join(d.LogDir, stepName+".log")
 		if writeErr := os.WriteFile(logPath, []byte(cliStepLog(reply)), 0o644); writeErr != nil {
 			fmt.Fprintf(os.Stderr, "charly check run %s: writing %s: %v\n", name, logPath, writeErr)
 		}
 		if cerr != nil {
-			return cerr
+			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] FAIL after %s: %v (log: %s)\n", name, stepName, dur.Round(time.Millisecond), cerr, logPath)
+			return fmt.Errorf("%s (%s) failed after %s: %w; log: %s", stepName, command, dur.Round(time.Millisecond), cerr, logPath)
 		}
 		if reply.ExitCode != 0 {
-			return fmt.Errorf("%s exited %d: %s", stepName, reply.ExitCode, reply.Error)
+			detail := strings.TrimSpace(reply.Error)
+			if detail == "" {
+				detail = strings.TrimSpace(reply.Stdout)
+			}
+			fmt.Fprintf(os.Stderr, "charly check run %s: [%s] FAIL after %s: exit %d: %s (log: %s)\n", name, stepName, dur.Round(time.Millisecond), reply.ExitCode, detail, logPath)
+			return fmt.Errorf("%s (%s) exited %d after %s: %s; log: %s", stepName, command, reply.ExitCode, dur.Round(time.Millisecond), detail, logPath)
 		}
+		fmt.Fprintf(os.Stderr, "charly check run %s: [%s] PASS after %s (log: %s)\n", name, stepName, dur.Round(time.Millisecond), logPath)
 		return nil
-	}
-
-	// stepReady runs a step with a bounded readiness retry: re-run the command until
-	// it succeeds or the cap elapses, recording only the FINAL attempt. The checks
-	// THEMSELVES are the readiness condition (a synchronization primitive, not a fixed
-	// sleep) — a slow-but-progressing deploy is waited for; a genuinely-broken deploy
-	// fails at the cap.
-	stepReady := func(stepName string, beforeRetry func(), argv ...string) error {
-		t0 := time.Now()
-		deadline := time.Now().Add(bedReadyPollCap)
-		var reply spec.CliReply
-		var lastErr error
-		for {
-			reply, lastErr = bedCliCombined(ex, ctx, argv...)
-			if lastErr == nil && reply.ExitCode == 0 {
-				break
-			}
-			if time.Now().After(deadline) || ctx.Err() != nil {
-				break
-			}
-			if beforeRetry != nil {
-				beforeRetry()
-			}
-			select {
-			case <-time.After(bedReadyPollInterval):
-			case <-ctx.Done():
-			}
-		}
-		ok := lastErr == nil && reply.ExitCode == 0
-		res.Step = append(res.Step, stepResult{Name: stepName, Duration: time.Since(t0), OK: ok})
-		if !ok {
-			res.OK = false
-			if res.FailExitCode == 0 {
-				if lastErr != nil {
-					res.FailExitCode = 1
-				} else {
-					res.FailExitCode = reply.ExitCode
-				}
-			}
-		}
-		logPath := filepath.Join(d.LogDir, stepName+".log")
-		if writeErr := os.WriteFile(logPath, []byte(reply.Stdout), 0o644); writeErr != nil {
-			fmt.Fprintf(os.Stderr, "charly check run %s: writing %s: %v\n", name, logPath, writeErr)
-		}
-		if lastErr != nil {
-			return lastErr
-		}
-		if reply.ExitCode != 0 {
-			return fmt.Errorf("%s exited %d", stepName, reply.ExitCode)
-		}
-		return nil
-	}
-
-	// recoverVMIfDown is the check-live retry recovery hook for a disposable VM bed:
-	// if the guest became unreachable mid-check, restart the domain and wait for sshd
-	// so the NEXT check-live retry runs against a LIVE guest. A
-	// detect→restart→wait-ready primitive, NOT a blind sleep-retry: it no-ops when the
-	// guest still answers, and for non-VM beds.
-	recoverVMIfDown := func() {
-		if !d.IsVM {
-			return
-		}
-		alias := "charly-" + d.BedDomain // this bed's per-deploy domain, not the entity
-		probe := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
-			"-o", "LogLevel=ERROR", alias, "true")
-		if probe.Run() == nil {
-			return // guest answers — not a dead VM
-		}
-		fmt.Fprintf(os.Stderr, "charly check run %s: VM bed %q unreachable mid-check — restarting disposable domain %s before retry\n", name, d.VMTemplate, alias)
-		bestEffort("vm", "start", d.VMTemplate, "--domain", d.BedDomain)
-		waitReady()
 	}
 
 	// cleanup tears the disposable bed's DEPLOYED TARGET down (suppressed by --keep).
@@ -342,7 +289,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 				return fail("image build member %s (%s): %w", m.Key, m.Image, err)
 			}
 			if d.RunBuild {
-				if err := step("check-image-"+m.Key, "check", "box", m.Image); err != nil {
+				if err := step("check-image-"+m.Key, "check", "box", runTaggedImageRef(m.Image, d.ImageTag)); err != nil {
 					return fail("check box member %s (%s): %w", m.Key, m.Image, err)
 				}
 			}
@@ -363,7 +310,7 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 			return fail("image build %s: %w", d.Image, err)
 		}
 		if d.RunBuild {
-			if err := step("check-image", "check", "box", d.Image); err != nil {
+			if err := step("check-image", "check", "box", runTaggedImageRef(d.Image, d.ImageTag)); err != nil {
 				return fail("check box %s: %w", d.Image, err)
 			}
 		}
@@ -449,16 +396,18 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		}
 	}
 
-	// checkLiveTree runs `charly check live` against the bed's substrate AND every
+	// checkLiveTree runs each `charly check live` exactly once against the bed's substrate AND every
 	// nested child through the multi-hop chain (bedCheckLiveRefs, resolved host-side
-	// into d.CheckLiveRefs). stepLabel disambiguates initial vs rebuild.
+	// into d.CheckLiveRefs). Readiness synchronization happens before this function;
+	// an acceptance failure is evidence and is never hidden by a timed retry.
+	// stepLabel disambiguates initial vs rebuild.
 	checkLiveTree := func(stepLabel string) error {
 		for i, ref := range d.CheckLiveRefs {
 			label := stepLabel
 			if i > 0 {
 				label = stepLabel + "-" + ref[len(name)+1:] // childKey after "<name>."
 			}
-			if err := stepReady(label, recoverVMIfDown, "check", "live", ref); err != nil {
+			if err := step(label, "check", "live", ref); err != nil {
 				return err
 			}
 		}
@@ -572,6 +521,22 @@ func cliStepLog(reply spec.CliReply) string {
 		output += "\n"
 	}
 	return output + reply.Error + "\n"
+}
+
+// checkStepCommandSummary returns enough context to identify a blocked HostBuild("cli")
+// boundary without echoing arbitrary command arguments (which may contain credentials).
+func checkStepCommandSummary(argv []string) string {
+	if len(argv) == 0 {
+		return "charly <missing-command>"
+	}
+	words := []string{"charly", argv[0]}
+	if len(argv) > 1 {
+		switch argv[0] {
+		case "check", "box", "bundle", "vm":
+			words = append(words, argv[1])
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // printDebugRetentionNotice tells the operator that a FAILED bed was left running for

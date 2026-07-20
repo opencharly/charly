@@ -34,3 +34,19 @@ func TestCLIModel_CoversCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestCLIModel_CoversAgentControlPlane(t *testing.T) {
+	m, err := buildCLIModel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]bool{}
+	for _, leaf := range m.Leaves {
+		paths[leaf.Path] = true
+	}
+	for _, want := range []string{"agent.runtime.list", "agent.runtime.status", "agent.session.new", "agent.session.show", "agent.run.start", "agent.run.list", "agent.run.show", "agent.run.abort", "agent.followup", "agent.steer", "agent.dispatch", "agent.delegate", "agent.team.list", "agent.federation.run", "agent.terminal.launch", "agent.terminal.snapshot", "agent.terminal.transcript", "agent.terminal.input", "agent.terminal.key", "agent.terminal.resize", "agent.terminal.signal", "agent.terminal.close", "agent.incident.create", "agent.incident.show", "agent.rca.show", "agent.rca.complete", "agent.recover.plan", "agent.recover.apply"} {
+		if !paths[want] {
+			t.Errorf("CLI model missing %s", want)
+		}
+	}
+}

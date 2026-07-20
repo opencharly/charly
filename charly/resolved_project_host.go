@@ -404,6 +404,10 @@ func hostBuildResolvedProject(_ context.Context, req spec.ResolvedProjectRequest
 		}
 		dir = d
 	}
+	if req.LocalSuperproject {
+		restore := applySelfSuperprojectOverride(dir)
+		defer restore()
+	}
 	rp, err := buildResolvedProjectFromDir(dir, ResolveOpts{IncludeDisabled: req.IncludeDisabled})
 	if err != nil {
 		return spec.ResolvedProject{}, err

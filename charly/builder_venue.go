@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -146,7 +147,9 @@ func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, ven
 	// transfer+install leg (R3). The install command (e.g. `pacman -U`) comes from the
 	// format's local_pkg.install_template and is the upgrade form, so a re-run after a
 	// partial failure replaces the staging content idempotently.
-	return deploykit.TransferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
+	installErr := deploykit.TransferAndInstallPkgs(ctx, exec, s.LocalPkg, matches, opts)
+	cleanupErr := deploykit.CleanupBuiltPackageFiles(matches)
+	return errors.Join(installErr, cleanupErr)
 }
 
 // runVenueHomeArtifactBuilder runs a user-home builder (npm/pixi/cargo) on the HOST into

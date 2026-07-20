@@ -1,6 +1,6 @@
 openclaw-full:
     candy:
-        version: 2026.144.1443
+        version: 2026.200.1600
         description: |
             Maximal headless OpenClaw deployment — gateway plus all feasible CLI tools/skills, no system Chrome/CDP
             openclaw-full is a pure meta-composition candy: it installs nothing of
@@ -8,9 +8,11 @@ openclaw-full:
             claude-code CLI, and 25 tool candies (codex, gemini, clawhub, mcporter,
             oracle, xurl, summarize, playwright, ripgrep, sqlite, tmux, ffmpeg, gh,
             uv, himalaya, …). The observable effect of the composition is that every
-            composed tool's key artifact lands in ONE image: the openclaw / claude /
-            mcporter binaries under ~/.npm-global/bin, uv under /usr/local/bin, and
-            rg / sqlite3 / tmux / ffmpeg / gh under /usr/bin. The scenarios and check
+            composed tool's key artifact lands in ONE image: the openclaw / mcporter
+            binaries under ~/.npm-global/bin, the claude binary under /usr/local/bin
+            (native installer, relocated at build time so it survives the deploy-time
+            home-volume mount), uv under /usr/local/bin, and rg / sqlite3 / tmux /
+            ffmpeg / gh under /usr/bin. The scenarios and check
             block assert that cross-section — they FAIL if any composed candy is
             dropped from the metalayer. The gateway's own port reachability is
             already checked by the composed openclaw candy and rides along.
@@ -43,15 +45,15 @@ openclaw-full:
             - ripgrep
             - sqlite
         plan:
-            - check: the claude-code CLI is composed into the image under the npm global bin dir
+            - check: the claude-code CLI is composed into the image under the native install location
               file:
-                file: ${HOME}/.npm-global/bin/claude
+                file: /usr/local/bin/claude
                 exists: true
             - check: claude --version exits cleanly and prints the Claude Code banner
               exit_status: 0
               stdout:
                 - contains: "Claude Code"
-              command: ${HOME}/.npm-global/bin/claude --version
+              command: /usr/local/bin/claude --version
             - check: the mcporter MCP CLI is composed into the image
               file:
                 file: ${HOME}/.npm-global/bin/mcporter

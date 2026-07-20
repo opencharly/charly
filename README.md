@@ -40,7 +40,7 @@ across 25 plugins. See `plugins/README.md` for the full index.
 - [Catalogs](#catalogs)
 - [Troubleshooting](#troubleshooting)
 - [Adding a candy](#adding-a-candy)
-- [Works with Claude Code](#works-with-claude-code)
+- [Works with Claude Code, Codex, and Kimi](#works-with-claude-code-codex-and-kimi)
 - [License](#license)
 
 ## What's in the chocolate factory
@@ -265,7 +265,7 @@ for you and your agents.** A deploy config is only useful if you can prove
 it works, so any box or deployment is self-verifiable end-to-end — the
 same surface whether you drive it at the keyboard or your agents drive
 it autonomously. See [Evaluate](#evaluate) for the framework and
-[Works with Claude Code](#works-with-claude-code) for the agents and
+[Works with Claude Code, Codex, and Kimi](#works-with-claude-code-codex-and-kimi) for the agents and
 workflows. → `/charly-check:check`, `/charly-internals:agents`.
 
 **Rootless-first power-user boxes.** The four boxes carrying the
@@ -654,7 +654,7 @@ The agent iteration harness sits on top of a disposable check bed via two
 pieces — the `kind: agent` catalog and an `iterate:` block:
 
 - **`kind: agent`** — reusable agent CLI catalog (`claude`,
-  `codex`, `gemini`, …). Each entry declares a command, a version
+  `codex`, `gemini`, `kimi`, …). Each entry declares a command, a version
   probe, an output format (typically `stream-json`), and credential
   paths. The harness parses each NDJSON line into
   `iteration[].runner_event`.
@@ -702,7 +702,8 @@ auto-fallback to `opencharly/charly` when no project is wired
   engine (`engine.build podman|docker`), secret backend, host
   aliases (`hosts.<name> user@machine`), VM backend.
 - `charly version` — print computed CalVer tag.
-- `charly tmux {ls, attach}` — drive tmux sessions inside containers.
+- `charly agent terminal {launch, run, attach, snapshot, transcript, input, key, resize, signal, close}` — typed local/remote/nested terminal channels.
+- `charly tmux {shell, cmd, run, attach, list, capture, send, kill}` — compatibility facade over those typed channels; it never targets the operator's tmux server directly.
 - `charly ssh tunnel {spice, vnc, …}` — forward SPICE/VNC/unix sockets
   from a remote libvirt host to the local machine.
 - `charly alias install` — register box-scoped shell aliases
@@ -713,7 +714,7 @@ auto-fallback to `opencharly/charly` when no project is wired
 
 → `/charly-core:clean`, `/charly-core:charly-doctor`, `/charly-core:charly-update`,
 `/charly-build:migrate`, `/charly-build:settings`, `/charly-core:ssh`,
-`/charly-automation:tmux`, `/charly-automation:alias`,
+`/charly-automation:alias`,
 `/charly-automation:udev`.
 
 ## Command reference
@@ -730,7 +731,7 @@ gateway exposing the entire surface as MCP tools.
 | **Box (build mode)** | `charly box {build, generate, validate, merge, new, inspect, list, pull, reconcile}` | `/charly-image:image` + `/charly-build:build`, `/charly-build:generate`, `/charly-build:validate`, `/charly-build:merge`, `/charly-build:new`, `/charly-build:inspect`, `/charly-build:list`, `/charly-build:pull`, `/charly-build:reconcile` |
 | **Box authoring (MCP-first)** | `charly box {set, add-candy, rm-candy, fetch, refresh, write, cat}` and `charly candy {set, add-rpm, add-deb, add-pac, add-aur}` | `/charly-image:image` "Authoring" + `/charly-image:layer` |
 | **Deployment** | `charly bundle {add, del, sync, from-box, export, import, show, reset, status, path}`; `charly config`; `charly start`, `charly stop`, `charly restart`, `charly update`, `charly remove` | `/charly-core:deploy`, `/charly-core:charly-config`, `/charly-core:start`, `/charly-core:stop`, `/charly-core:charly-update`, `/charly-core:remove`, `/charly-local:local-deploy`, `/charly-kubernetes:kubernetes`, `/charly-internals:vm-deploy-target` |
-| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`, `charly tmux` | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs`, `/charly-automation:tmux` |
+| **Runtime** | `charly shell`, `charly cmd`, `charly service`, `charly status`, `charly logs`; `charly agent` sessions/runs/teams/federation/terminals/incidents/RCA/recovery; `charly tui`; typed-provider `charly tmux` compatibility | `/charly-core:shell`, `/charly-core:cmd`, `/charly-core:service`, `/charly-core:charly-status`, `/charly-core:logs` |
 | **Test + probes** | `charly check {box, live, run}` + the 11 live probe verbs (`cdp`, `wl`, `dbus`, `vnc`, `mcp`, `record`, `spice`, `libvirt`, `k8s`, `adb`, `appium`); `charly feature {list, pending, validate}` | `/charly-check:check`, `/charly-check:cdp`, `/charly-check:wl`, `/charly-check:dbus`, `/charly-check:vnc`, `/charly-check:spice`, `/charly-check:libvirt`, `/charly-check:record`, `/charly-kubernetes:check-k8s`, `/charly-check:adb`, `/charly-check:appium` |
 | **MCP gateway** | `charly mcp {serve, ping, servers, list-tools, list-resources, list-prompts, call, read}` | `/charly-build:charly-mcp-cmd`, `/charly-coder:charly-mcp` |
 | **VM** | `charly vm {build, create, start, stop, destroy, snapshot, clone, console, ssh, import, list}` | `/charly-vm:vm`, `/charly-vm:vms-catalog`, `/charly-internals:vm-deploy-target` |
@@ -843,25 +844,31 @@ substitution, YAML anchors, and execution-order rules.
 gold-standard pattern (`candy/redis/charly.yml`), and the 10
 authoring gotchas.
 
-## Works with Claude Code and Codex
+## Works with Claude Code, Codex, and Kimi
 
 The bundled [plugins/](plugins/) directory provides one skill tree for Claude
-Code and Codex. It teaches either harness how to compose, build, deploy, check,
-and manage boxes. Every candy, box, command, and contributor subsystem has an
-owning skill.
+Code, Codex, and Kimi. It teaches each harness how to compose, build, deploy,
+check, and manage boxes. Every candy, box, command, and contributor subsystem
+has an owning skill.
 
 ```bash
 ./plugins/setup claude                   # full developer mode (default)
 ./plugins/setup codex developer
+./plugins/setup kimi developer
 ./plugins/setup codex user               # use and author with Charly
 ./plugins/setup codex container coder    # operate one container family
 ```
 
-The repository's committed Claude settings and Codex marketplace select full
-developer mode. Reduced profiles are for consumer repositories that carry the
-plugins repository at `./plugins`. Setup writes project files only and never
-changes `~/.claude`, `~/.codex`, or another user configuration. It does not
-depend on MCP.
+The repository's committed Claude settings, Codex marketplace, and the
+repo-native `.agents/skills/` tree (which Kimi reads natively as project-scope
+skills) select full developer mode. The kimi profile additionally prints the
+`kimi-user-config.toml` snippet — permission rules and repo-guarded hooks for
+the user-level `~/.kimi-code/config.toml`, since Kimi has no project-level
+config file — for the operator to merge by hand. Reduced profiles are for
+consumer repositories that carry the plugins repository at `./plugins`. Setup
+writes project files only and never
+changes `~/.claude`, `~/.codex`, `~/.kimi-code`, or another user configuration.
+It does not depend on MCP.
 
 Charly's MCP functionality remains available independently: `charly mcp serve`
 exposes the CLI over Streamable HTTP or stdio, and container-provided servers
@@ -877,7 +884,10 @@ beds and return verbatim proof, plus enforcers `root-cause-analyzer`,
 disposable check beds as part of the R10 gate (deferring long beds to the
 persistent session, refusing host-local ones), `/audit-deploy-configs`
 evaluates your deploy configs. Codex uses the same agent roles through native
-subagents and the independent `AGENTS.md` rulebook. Whether you drive `charly`
+subagents and the independent `AGENTS.md` rulebook. Kimi follows that same
+`AGENTS.md` rulebook natively, discovers the repo-native skills on demand, and
+runs the agent roles through fresh `kimi` sessions, with repo-guarded hooks and
+permission rules from the `kimi-user-config.toml` snippet. Whether you drive `charly`
 from the keyboard or hand it to an agent, verification uses the same surface.
 → `/charly-internals:agents`.
 

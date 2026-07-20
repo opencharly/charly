@@ -1,6 +1,6 @@
 gemini:
     candy:
-        version: 2026.144.1443
+        version: 2026.199.1330
         description: |
             Installs the Google Gemini CLI globally via npm so `gemini` is on PATH for AI coding assistance and search.
             The candy depends on nodejs and ships a package.json pinning
@@ -9,9 +9,32 @@ gemini:
             gemini binary lands at ~/.npm-global/bin/gemini, the scoped package
             is unpacked under ~/.npm-global/lib/node_modules/@google/gemini-cli,
             and `gemini --version` exits cleanly and prints a semantic version.
+            A CUE-validated tmux profile exposes it through the same generic
+            local/SSH/nested Charly agent channel as other terminal agents.
         require:
             - nodejs
+        agent_provide:
+            - provider: tmux
+              protocol_version: 2
+              profiles: [gemini]
+              interaction_modes: [terminal]
+              persistence: required
+              semantic_completion: true
+        terminal_profile:
+            gemini:
+                name: gemini
+                entrypoint: [gemini]
+                cols: 120
+                rows: 40
+                semantic_adapter: gemini
+                keys: [enter, escape, tab, backspace, up, down, left, right, home, end, page-up, page-down, delete, insert, ctrl-a, ctrl-c, ctrl-d, ctrl-e, ctrl-l, ctrl-z]
+                signals: [interrupt, eof, suspend]
+                persistence: required
+                transcript: both
         plan:
+            - check: the installed Gemini CLI package exactly matches the declared deterministic pin
+              command: node -e 'const p=require(process.env.HOME+"/.npm-global/lib/node_modules/@google/gemini-cli/package.json");if(p.version!=="0.51.0")process.exit(1)'
+              exit_status: 0
             - check: the gemini binary is installed into the npm global bin directory
               file:
                 file: ${HOME}/.npm-global/bin/gemini

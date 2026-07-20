@@ -12,6 +12,7 @@ package main
 // produced files into the output dir.
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -94,12 +95,17 @@ func (c *BoxPkgCmd) Run() error {
 		if err != nil {
 			return fmt.Errorf("building %s package: %w", format, err)
 		}
+		var copyErr error
 		for _, f := range files {
 			dst := filepath.Join(outDir, filepath.Base(f))
 			if err := copyFileTo(f, dst); err != nil {
-				return fmt.Errorf("copying %s to %s: %w", f, dst, err)
+				copyErr = fmt.Errorf("copying %s to %s: %w", f, dst, err)
+				break
 			}
 			fmt.Printf("%s\n", dst)
+		}
+		if err := errors.Join(copyErr, deploykit.CleanupBuiltPackageFiles(files)); err != nil {
+			return err
 		}
 	}
 	return nil

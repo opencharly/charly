@@ -345,6 +345,16 @@ func ExtractMetadata(engine, imageRef string) (*BoxMetadata, error) {
 			return nil, fmt.Errorf("parsing %s: %w", spec.LabelMCPProvide, err)
 		}
 	}
+	if v := labels[spec.LabelAgentProvide]; v != "" {
+		if err := json.Unmarshal([]byte(v), &meta.AgentProvide); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelAgentProvide, err)
+		}
+	}
+	if v := labels[spec.LabelTerminalProfiles]; v != "" {
+		if err := json.Unmarshal([]byte(v), &meta.TerminalProfiles); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", spec.LabelTerminalProfiles, err)
+		}
+	}
 
 	// MCP requires (MCP servers this image must have)
 	if v := labels[spec.LabelMCPRequire]; v != "" {
