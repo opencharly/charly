@@ -10,6 +10,12 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
+// data.go — volume data seeding for bind-backed + named-volume targets. REASSIGNED to
+// P13-KERNEL (DEPLOY-wave W1 audit, 2026-07-20): provisionData's only caller is
+// BoxConfigSetupCmd.runConfig (config_image.go), kept by its exact unchanged name for
+// bundle_from_box_cmd.go's direct construction (P13-KERNEL) — this file needs no seam of
+// its own this wave; it moves with BoxConfigSetupCmd's core body when that wave lands.
+
 // DataProvisionMode controls how provisionData copies files.
 type DataProvisionMode string
 

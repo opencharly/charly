@@ -22,6 +22,10 @@ import (
 // deploy_del_cmd*.go. The helper logic is target-agnostic; per-target
 // instantiation/destruction stays in the target's own runner.
 //
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave W2 audit, 2026-07-20): every consumer
+// (deploy_add_cmd_*.go / deploy_del_cmd*.go) is P13-KERNEL — this file moves with them
+// through that wave's venue-scoped-executor-session seam, never alone.
+//
 // Two main entry points:
 //
 //   RegisterEphemeralLifecycle(node, deployName) (*EphemeralRuntime, error)
