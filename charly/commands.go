@@ -80,16 +80,21 @@ func (c *UpdateCmd) Run() error {
 	return c.dispatchByDeployTarget()
 }
 
-// RemoveCmd removes a service container
-type RemoveCmd struct {
-	Box        string   `arg:"" help:"Box name or remote ref"`
-	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
-	Purge      bool     `long:"purge" help:"Also remove named volumes"`
-	KeepDeploy bool     `name:"keep-deploy" help:"Keep charly.yml entry for this box"`
-	Env        []string `short:"e" long:"env" sep:"none" help:"Set env var for hooks (KEY=VALUE)"`
+// podRemoveCmd is the host-side reconstruction of the former RemoveCmd (now command:remove in
+// candy/plugin-pod) — hostBuildPodRemove (host_build_pod_remove.go) runs its Run() body VERBATIM.
+// TRACKED P13-KERNEL EXIT: deeply core-type-coupled (BoxMetadata/ExtractMetadata/sidecar
+// resolution/deploykit.CleanDeployEntry — not registry-bound, but not portable either), so it
+// stays behind the seam alongside start/stop/logs until the P13-KERNEL wave's
+// venue-scoped-executor-session seam lands.
+type podRemoveCmd struct {
+	Box        string
+	Instance   string
+	Purge      bool
+	KeepDeploy bool
+	Env        []string
 }
 
-func (c *RemoveCmd) Run() error {
+func (c *podRemoveCmd) Run() error {
 	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
 	// Releasing a persistent exclusive claim restores any holder this deploy
 	// preempted (no-op if no lease / gated by an outer orchestrator).
@@ -252,7 +257,7 @@ var dropOverlayImagesByRef = kit.RemoveImagesByReference
 
 // runPreRemoveHook runs pre_remove hooks (best-effort). Reads hooks from
 // the running container's OCI labels.
-func (c *RemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
+func (c *podRemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
 	imageRef := containerImage(engine, containerName)
 	if imageRef == "" {
 		return

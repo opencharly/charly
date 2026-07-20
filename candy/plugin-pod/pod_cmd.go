@@ -94,3 +94,23 @@ func (c *LogsCmd) Run() error {
 		Sidecar:  c.Sidecar,
 	})
 }
+
+// RemoveCmd removes a service container — the `charly remove` grammar. Deeply core-type-coupled
+// (not registry-bound, but not portable) — forwards via HostBuild("pod-remove").
+type RemoveCmd struct {
+	Box        string   `arg:"" help:"Box name or remote ref"`
+	Instance   string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	Purge      bool     `long:"purge" help:"Also remove named volumes"`
+	KeepDeploy bool     `name:"keep-deploy" help:"Keep charly.yml entry for this box"`
+	Env        []string `short:"e" long:"env" sep:"none" help:"Set env var for hooks (KEY=VALUE)"`
+}
+
+func (c *RemoveCmd) Run() error {
+	return hostPodSeam("pod-remove", spec.PodRemoveRequest{
+		Box:        c.Box,
+		Instance:   c.Instance,
+		Purge:      c.Purge,
+		KeepDeploy: c.KeepDeploy,
+		Env:        c.Env,
+	})
+}

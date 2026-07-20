@@ -37,7 +37,7 @@ const calver = "2026.201.0000"
 // word is added here ONLY in the same change that deletes its old plugin_command_*.go shim
 // (never both registered at once, which panics the startup bijection-style duplicate-provider
 // guard).
-var podCommandWords = []string{"start", "stop", "restart", "logs"}
+var podCommandWords = []string{"start", "stop", "restart", "logs", "remove"}
 
 // NewProvider returns the pod command provider for in-proc registration (compiled-in) or
 // out-of-proc serving.
