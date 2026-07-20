@@ -251,9 +251,9 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 	// Per-DOMAIN serialization for VM beds (sorted → no deadlock across a multi-domain bed).
 	// Keyed by the DEPLOY (req.Bed) post-P33, so distinct beds sharing one kind:vm entity get
 	// distinct, collision-free domains + run fully parallel.
-	domains := bedVmDomains(req.Bed, node)
+	domains := kit.BedVmDomains(req.Bed, node)
 	for _, domain := range domains {
-		du, derr := acquireVmDomainLock(domain)
+		du, derr := kit.AcquireVmDomainLock(domain)
 		if derr != nil {
 			return spec.CheckBedReply{}, fmt.Errorf("locking vm domain %s for bed %q: %w", domain, req.Bed, derr)
 		}
