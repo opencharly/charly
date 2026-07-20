@@ -13,6 +13,24 @@ package main
 //   - literal "host" → deploy to the local machine (target: local)
 //   - any other name → a named container deployment (target: pod), or
 //     whatever target: the resolved charly.yml node declares.
+//
+// P13-KERNEL walk-port precision note (corrects an over-broad "drives from
+// the plugin" claim in the walk-port commit message/CHANGELOG): the
+// pre-order tree WALK itself (the loop deciding traversal order across
+// nested nodes) moved to candy/plugin-bundle/walk.go. The per-node TERMINAL
+// orchestration — dispatchNode below, plus its compile-selection helpers
+// (resolveNodeOverlays/loadConfigForDeploy/compileNodePlans) and the final
+// ResolveTarget dispatch anchor — did NOT move; it remains fully host-side,
+// reached from the plugin behind the ONE coarse
+// HostBuild("deploy-node-dispatch") seam (host_build_deploy_node_dispatch.go).
+// This is genuinely-tracked residue, not an oversight: loadConfigForDeploy
+// calls LoadConfig → LoadUnified, so the compile-selection half is K1-blocked
+// (the K1-blocked family register entry covers it); the ResolveTarget
+// dispatch anchor is registry-coupled the same way every other terminal
+// dispatch point is. Further seam decomposition — splitting dispatchNode's
+// body into narrower host-builders the way the pod-config direction-flip did
+// for BoxConfigSetupCmd/BoxConfigRemoveCmd — is a FLOOR-SLIM/#118-
+// reconciliation candidate, not part of this wave's contract.
 
 import (
 	"context"
