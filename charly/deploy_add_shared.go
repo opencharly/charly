@@ -38,7 +38,7 @@ func prepareCandySecrets(plans []*deploykit.InstallPlan, dir string) ([]spec.Can
 		return nil, nil, err
 	}
 	secretEnv := ResolveSecretForCandy(candyList)
-	InjectSecretsIntoPlans(plans, secretEnv)
+	deploykit.InjectSecretsIntoPlans(plans, secretEnv)
 	return candyList, secretEnv, nil
 }
 
@@ -105,7 +105,7 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor,
 	if opts.DryRun {
 		return nil
 	}
-	if err := RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts); err != nil {
+	if err := deploykit.RetrieveCandyArtifacts(ctx, exec, candyList, kit.SanitizeDeployName(artifactKey), artifactEnv, opts, loadedReadiness()); err != nil {
 		return err
 	}
 	for register := range deploykit.CandyArtifactRegisters(candyList) {
