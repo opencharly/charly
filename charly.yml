@@ -451,12 +451,12 @@ check-k3s-vm:
                 namespace: default
                 name: kubernetes
               context: [runtime]
-            - check: command=/tmp/charly-build/charly version || ${CHARLY_BIN} version
+            - check: command=${CHARLY_BIN} version
               id: kv-charly-version
               stdout: {matches: "[0-9]{4}\\.[0-9]+"}
               context: [runtime]
               command:
-                command: "/tmp/charly-build/charly version || ${CHARLY_BIN} version"
+                command: "${CHARLY_BIN} version"
                 in_container: false
             - agent-check: agent-check
               id: kv-matching
