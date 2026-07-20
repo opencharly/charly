@@ -520,8 +520,9 @@ func (c *BoxConfigSetupCmd) runConfig(rt *kit.ResolvedRuntime) error {
 	//     credential store value.
 	//
 	// Both flow into the same ProvisionPodmanSecrets call — the existing
-	// Secret=<name>,type=env,target=<var> emission at quadlet.go:100-106
-	// handles them identically at runtime.
+	// Secret=<name>,type=env,target=<var> emission in
+	// sdk/deploykit/quadlet.go's emitContainerSection handles them
+	// identically at runtime.
 	candyOwnedSecrets := CollectSecretsFromLabels(c.Box, meta.Secret)
 	credBackedSecrets, secretResolutions := CollectCandySecretAccepts(c.Box, c.Instance, meta)
 
@@ -1660,7 +1661,7 @@ func updateAllDeployedQuadlets(rt *kit.ResolvedRuntime, skipBox string) error {
 		// and credential-backed secrets synthesized from meta.SecretAccept /
 		// meta.SecretRequire (new in the credential-backed-secrets feature).
 		// Both flow through the same cfg.Secrets slice and the same Secret=
-		// emission at quadlet.go:100-106.
+		// emission in sdk/deploykit/quadlet.go's emitContainerSection.
 		//
 		// This mirrors the Run() flow exactly. Without this merge, --update-all
 		// regenerations would drop credential-backed Secret= directives from
