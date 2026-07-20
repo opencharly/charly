@@ -218,7 +218,7 @@ func resolvePodStartDirect(box, instance string, rt *kit.ResolvedRuntime, opts p
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 	for _, v := range agentFwd.Volumes {
 		security.Mounts = deploykit.AppendUnique(security.Mounts, v)
 	}
@@ -396,7 +396,7 @@ func resolvePodShellPlan(box, instance string, cmd []string, opts podShellOpts) 
 	if overlay, ok := dc.Lookup(box, instance); ok {
 		deployBox = &overlay
 	}
-	agentFwd := ResolveAgentForwarding(rt, deployBox, home)
+	agentFwd := kit.ResolveAgentForwarding(rt, deployBox, home)
 
 	name := kit.ContainerNameInstance(box, instance)
 	// Running container → exec into it (env-only; can't add volumes/devices to a running container).
@@ -456,7 +456,7 @@ func resolvePodCmdPlan(box, instance string, cmd []string, opts podCmdOpts) (*sp
 			deployBox = &overlay
 		}
 		hostHome, _ := os.UserHomeDir()
-		agentFwd := ResolveAgentForwarding(rt, deployBox, hostHome)
+		agentFwd := kit.ResolveAgentForwarding(rt, deployBox, hostHome)
 		agentEnv = agentFwd.Env
 	}
 
