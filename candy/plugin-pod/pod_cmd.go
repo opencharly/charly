@@ -114,3 +114,35 @@ func (c *RemoveCmd) Run() error {
 		Env:        c.Env,
 	})
 }
+
+// ShellCmd starts a bash shell in a container image — the `charly shell` grammar. Registry-bound
+// (dispatchLifecycleTarget/LifecycleTarget — core Mechanisms) — forwards via HostBuild("pod-shell").
+type ShellCmd struct {
+	Box          string   `arg:"" help:"Box name or remote ref (github.com/org/repo/box[@version])"`
+	Tag          string   `long:"tag" help:"Image CalVer tag (empty = newest local CalVer resolved via the ai.opencharly.version OCI label)"`
+	Command      string   `short:"c" help:"Command to execute instead of interactive shell"`
+	Build        bool     `long:"build" help:"Force local build instead of pulling from registry"`
+	TTY          bool     `long:"tty" help:"Force TTY allocation (for automation tools that lack a real terminal)"`
+	Env          []string `short:"e" long:"env" sep:"none" help:"Set container env var (KEY=VALUE)"`
+	EnvFile      string   `long:"env-file" help:"Load env vars from file"`
+	Instance     string   `short:"i" long:"instance" help:"Instance name for running multiple containers of the same box"`
+	VolumeFlag   []string `long:"volume" short:"v" help:"Configure volume backing (name:type[:path])"`
+	Bind         []string `long:"bind" help:"Bind volume to host path (name or name=path)"`
+	NoAutoDetect bool     `long:"no-autodetect" help:"Disable automatic device detection"`
+}
+
+func (c *ShellCmd) Run() error {
+	return hostPodSeam("pod-shell", spec.PodShellRequest{
+		Box:          c.Box,
+		Tag:          c.Tag,
+		Command:      c.Command,
+		Build:        c.Build,
+		TTY:          c.TTY,
+		Env:          c.Env,
+		EnvFile:      c.EnvFile,
+		Instance:     c.Instance,
+		VolumeFlag:   c.VolumeFlag,
+		Bind:         c.Bind,
+		NoAutoDetect: c.NoAutoDetect,
+	})
+}

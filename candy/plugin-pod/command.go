@@ -25,6 +25,8 @@ func dispatchPodCommand(word string, args []string) error {
 		return sdk.RunInProcCLI("logs", &LogsCmd{}, args)
 	case "remove":
 		return sdk.RunInProcCLI("remove", &RemoveCmd{}, args)
+	case "shell":
+		return sdk.RunInProcCLI("shell", &ShellCmd{}, args)
 	default:
 		return fmt.Errorf("pod: unsupported command word %q", word)
 	}

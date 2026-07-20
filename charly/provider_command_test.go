@@ -136,7 +136,7 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 }
 
 // TestCommandProviders_DeployLifecycleCommands proves every remaining deploy-lifecycle leaf
-// command still extracted into a dedicated COMMAND-class provider (update/shell/
+// command still extracted into a dedicated COMMAND-class provider (update/
 // cmd/cp/volume/service/config) is (1) registered in providerRegistry as a CommandProvider
 // with the matching Reserved() word, and (2) collected by collectCommandPlugins() and injected
 // into the REAL charly CLI grammar via kong.Plugins, so its subcommand path parses and selects
@@ -152,14 +152,13 @@ func TestCommandProviders_ExtractedLeafCommands(t *testing.T) {
 // is no longer here either — K5 relocated it to the compiled-in candy/plugin-substrate
 // (command:reap-orphans, alongside its existing substrate-liveness collectors), the SAME
 // dynamic in-proc bridge; its compiled-in registration is asserted by
-// TestCommandCompileIn_ReapOrphansInProc. `start`/`stop`/`restart`/`logs`/`remove` are no
+// TestCommandCompileIn_ReapOrphansInProc. `start`/`stop`/`restart`/`logs`/`remove`/`shell` are no
 // longer here either — the DEPLOY wave's CLI-struct port relocated them to the compiled-in
-// candy/plugin-pod (command:start/stop/restart/logs/remove), the SAME dynamic in-proc bridge;
-// their compiled-in registration is asserted by TestCommandCompileIn_PodInProc.)
+// candy/plugin-pod (command:start/stop/restart/logs/remove/shell), the SAME dynamic in-proc
+// bridge; their compiled-in registration is asserted by TestCommandCompileIn_PodInProc.)
 func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 	assertCommandProviderInjected(t, []commandProviderCase{
 		{"update", []string{"update", "mybox"}, "update <box>"},
-		{"shell", []string{"shell", "mybox"}, "shell <box>"},
 		{"cmd", []string{"cmd", "mybox", "echo hi"}, "cmd <box> <command>"},
 		{"cp", []string{"cp", "mybox", ":/a", "/b"}, "cp <box> <src> <dst>"},
 		{"volume", []string{"volume", "list", "mybox"}, "volume list <box>"},
@@ -169,18 +168,19 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 }
 
 // TestCommandCompileIn_PodInProc proves the DEPLOY wave's CLI-struct port: `charly start`/
-// `stop`/`restart`/`logs`/`remove`, formerly dedicated builtin CommandProviders
+// `stop`/`restart`/`logs`/`remove`/`shell`, formerly dedicated builtin CommandProviders
 // (plugin_command_start.go / plugin_command_stop.go / plugin_command_restart.go /
-// plugin_command_logs.go / plugin_command_remove.go, deleted), are now the compiled-in command
-// candy candy/plugin-pod — registered IN-PROC as ClassCommand inprocProviders (NOT
+// plugin_command_logs.go / plugin_command_remove.go / plugin_command_shell.go, deleted), are now
+// the compiled-in command candy candy/plugin-pod — registered IN-PROC as ClassCommand inprocProviders (NOT
 // *grpcProvider, NOT a static builtin CommandProvider), so dispatchCommand routes each to it
-// via Invoke(OpRun): restart calls sdk/deploykit directly (no host seam), start/stop/logs/remove
-// reach the registry- or type-bound orchestration (start.go's podStartCmd/podStopCmd,
-// commands.go's podLogsCmd/podRemoveCmd) over HostBuild("pod-start")/HostBuild("pod-stop")/
-// HostBuild("pod-logs")/HostBuild("pod-remove"). (End-to-end CLI dispatch is exercised live —
+// via Invoke(OpRun): restart calls sdk/deploykit directly (no host seam),
+// start/stop/logs/remove/shell reach the registry- or type-bound orchestration (start.go's
+// podStartCmd/podStopCmd, commands.go's podLogsCmd/podRemoveCmd, shell.go's podShellCmd) over
+// HostBuild("pod-start")/HostBuild("pod-stop")/HostBuild("pod-logs")/HostBuild("pod-remove")/
+// HostBuild("pod-shell"). (End-to-end CLI dispatch is exercised live —
 // see the DEPLOY wave report — and by the R10 bed roster.)
 func TestCommandCompileIn_PodInProc(t *testing.T) {
-	for _, word := range []string{"start", "stop", "restart", "logs", "remove"} {
+	for _, word := range []string{"start", "stop", "restart", "logs", "remove", "shell"} {
 		prov, ok := providerRegistry.resolve(ClassCommand, word)
 		if !ok {
 			t.Fatalf("compiled-in command candy plugin-pod did not register command:%s (pluginsgen/compiled_plugins)", word)
