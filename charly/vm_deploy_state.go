@@ -160,7 +160,7 @@ func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) e
 	// Writer B (candy/plugin-deploy-vm's PrepareVenue, see substrate_lifecycle_grpc.go) left behind
 	// for THIS SAME domain in an existing overlay — nothing writes one anymore, but pre-fix
 	// overlays (real users', every bed record until now) still carry it, and it poisons every
-	// subsequent load (validateDeploymentName's dot-rejection, charly/unified.go). One-touch
+	// subsequent load (spec.ValidateDeploymentName's dot-rejection). One-touch
 	// cleanup on the next write for this domain — no new migration machinery.
 	if pruned := pruneStaleVmDottedTwin(dc, deployName); pruned != "" {
 		fmt.Fprintf(os.Stderr, "note: pruned a stale per-host overlay entry %q for domain %q — left by a prior version's now-eliminated dotted-key vm-state write (canonical entry: %q)\n", pruned, vmshared.VmDomainIdentity(deployName), deployName)
@@ -174,7 +174,7 @@ func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) e
 // sanitized) — the "stale twin" ELIMINATED Writer B left behind (RCA #6, FINAL/K5 unit 6a): a nested
 // (dotted) deploy's per-host state used to ALSO get written under its raw, unsanitized name, racing
 // this canonical "vm:"+VmDomainIdentity(name)-keyed write, and poisoning the whole overlay on every
-// subsequent load since a dotted key fails charly/unified.go's validateDeploymentName. Pulled out as
+// subsequent load since a dotted key fails spec.ValidateDeploymentName. Pulled out as
 // its own pure function purely for testability (saveVmDeployState itself needs the seam-coupled
 // deploykit.LoadBundleConfig, not unit-testable standalone). Returns "" when no twin is found.
 func pruneStaleVmDottedTwin(dc *deploykit.BundleConfig, canonicalKey string) string {

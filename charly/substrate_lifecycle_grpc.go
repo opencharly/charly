@@ -145,7 +145,7 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 	// key — a second, independent writer racing candy/plugin-vm's own canonical
 	// "vm:"+VmDomainIdentity(name)-keyed persist (vm_create_orchestrate.go's hostConfigPersist),
 	// and for a NESTED (dotted) deploy name, poisoning the overlay on every subsequent load
-	// (charly/unified.go's validateDeploymentName dot-rejection). The vm substrate now owns its
+	// (spec.ValidateDeploymentName's dot-rejection). The vm substrate now owns its
 	// own persistence end to end — see candy/plugin-deploy-vm/lifecycle.go's PrepareVenue.
 	if len(reply.State) > 0 && !opts.DryRun {
 		var in deploykit.SaveDeployStateInput
