@@ -445,13 +445,6 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }
 
-// buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
-// buildStageContext → deploykit.Generator.BuildStageContext (P8 shim). Used by the
-// host resolveInlineBuilderSeam (the render-seam reverse leg, #67).
-func (g *Generator) buildStageContext(layer spec.CandyReader, builderName string, builderDef *BuilderDef, img *buildkit.ResolvedBox, builderRef string) *spec.BuildStageContext {
-	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
-}
-
 // resolveStatus returns the effective status string. Empty defaults to "testing".
 // Accepts a single status word (working/testing/broken) — the legacy form
 // used by older callers. Prefer resolveStatusFromTags for new code that

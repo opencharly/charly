@@ -21,7 +21,11 @@ import (
 // render-seam contract). The live host-side buildEngineContext (the overlay *Generator +
 // DistroDef/BuilderConfig/Box/ImageBuildDir/ContextRelPrefix, cached by hostBuildOverlay's
 // prep+resolve) is passed in as `build`; a live *Generator cannot cross the wire, so the
-// "oci-emit-step" render-seam looks it up from the per-dir overlayBuildContextCache.
+// "oci-emit-step" render-seam looks it up from the per-dir overlayBuildContextCache. `build`'s
+// scalars (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) ride the class:step OpEmit's BuildEnv
+// (ociSpliceClassStepEmit); the four former HOST-COUPLED step-emitters (system-packages/builder/
+// local-pkg-install/op) render DIRECTLY in candy/plugin-installstep against its OWN
+// "resolved-project"-built deploykit.Generator — there is no more in-core render for them.
 
 // ociEmitStep renders ONE InstallStep's pod-overlay Containerfile fragment via the core
 // provider-registry dispatch. It is the single source of truth (R3): the transitional in-core
@@ -29,7 +33,9 @@ import (
 // deploykit.OCITarget reaches it through the "oci-emit-step" render-seam. The returned fragment
 // has its trailing newline normalized (matching the former per-arm t.buf behaviour); an empty
 // return is a deploy-only / VenueSkip step (records nothing). `build` carries the host-side
-// buildEngineContext the host-coupled step-emitters (system-packages/builder/local-pkg/op) need.
+// buildEngineContext whose scalars ride onto the class:step OpEmit's BuildEnv (Image/DevLocalPkg/
+// ImageBuildDir/ContextRelPrefix) for the HOST-COUPLED words (system-packages/builder/local-pkg/op),
+// which render directly in the plugin — no in-core renderer is consulted for them.
 func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []string, build buildEngineContext) (string, error) {
 	var (
 		frag string
@@ -86,9 +92,12 @@ func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []s
 //
 // The Invoke ctx carries an IN-PROC reverse channel (sdk.ContextWithExecutor + executorReverseServer,
 // the SAME one dispatchBuild threads for the compiled-in build:box plugin, R3), threaded with the
-// host-side buildEngineContext (`build`), so a HOST-COUPLED step can call back HostBuild("step-emit",
-// …) during its OpEmit — the host build ENGINE stays core (the step-emit seam), the plugin only
-// REQUESTS it.
+// host-side buildEngineContext (`build`), so a HOST-COUPLED step can call back HostBuild
+// ("resolved-project") for the project structure it needs. The per-invocation scalars `build` already
+// carries (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) ride the SAME OpEmit Invoke's BuildEnv —
+// no separate round-trip: a HOST-COUPLED step's OpEmit builds its OWN deploykit.Generator from the
+// resolved-project envelope and renders directly (candy/plugin-installstep), rather than calling back
+// a host-side renderer.
 func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allowEmpty bool, build buildEngineContext) (string, error) {
 	prov, ok := providerRegistry.resolve(ClassStep, word)
 	if !ok {
@@ -106,7 +115,14 @@ func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allow
 	}
 	ctx := sdk.ContextWithExecutor(context.Background(),
 		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{build: build}}))
-	frag, err := invokeOpEmitFragmentOpt(ctx, prov, word, payload, distros, allowEmpty)
+	env := spec.BuildEnv{Distros: distros, ImageBuildDir: build.ImageBuildDir, ContextRelPrefix: build.ContextRelPrefix}
+	if build.Box != nil {
+		env.Image = build.Box.Name
+	}
+	if build.Generator != nil {
+		env.DevLocalPkg = build.Generator.DevLocalPkg
+	}
+	frag, err := invokeOpEmitFragmentOpt(ctx, prov, word, payload, env, allowEmpty)
 	if err != nil {
 		return "", fmt.Errorf("class:step %q build-emit: %w", word, err)
 	}

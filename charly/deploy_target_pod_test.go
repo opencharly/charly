@@ -23,13 +23,15 @@ import (
 // TestPodOverlayInlineCopyResolvesUnderContext guards the add_candy-on-pod overlay build's
 // context-prefix invariant: a write: step's inline content is staged to <BuildDir>/_inline/<candy>/<hash>
 // and the matching Containerfile COPY references it relative to the build context. The overlay
-// dispatch (ociEmitStep → stepEmitOp → Generator.emitTasks → emitWrite) must thread
-// ContextRelPrefix == ImageBuildDir (the overlay build dir, relative to the build-context root);
-// with an empty ContextRelPrefix the COPY drops the build-dir prefix and resolves to a non-existent
-// path, failing the overlay build with `COPY … _inline/<candy>/<hash>: stat: no such file or directory`.
-// Regression for that failure; mirrors the full build's contextRelPrefix = .build/<boxName>.
+// dispatch (ociEmitStep → ociSpliceClassStepEmit → candy/plugin-installstep's emitOp → dg.EmitTasks
+// → emitWrite) must thread ContextRelPrefix == ImageBuildDir (the overlay build dir, relative to
+// the build-context root) via the BuildEnv scalars; with an empty ContextRelPrefix the COPY drops
+// the build-dir prefix and resolves to a non-existent path, failing the overlay build with
+// `COPY … _inline/<candy>/<hash>: stat: no such file or directory`. Regression for that failure;
+// mirrors the full build's contextRelPrefix = .build/<boxName>.
 func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
-	ctxRoot := t.TempDir() // the build-context root (the project dir)
+	ctxRoot := t.TempDir() // the build-context root (the project dir); also the plugin's resolved-
+	// project cache key (os.Getwd()) — unique per test, so this test's stub can't leak into another.
 	old, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -41,10 +43,15 @@ func TestPodOverlayInlineCopyResolvesUnderContext(t *testing.T) {
 
 	relBuildDir := filepath.Join(".build", "overlay-test")
 
-	gen := &Generator{Dir: ctxRoot, Candies: map[string]spec.CandyReader{"marker": testCandy("marker", spec.CandyModel{}, spec.CandyView{})}}
+	stubResolvedProject(t, spec.ResolvedProject{
+		Boxes:       map[string]spec.ResolvedBoxView{"base": {Name: "base"}},
+		CandyModels: map[string]spec.CandyModel{"marker": {Name: "marker"}},
+		Candies:     map[string]spec.CandyView{"marker": {}},
+	})
 	// The overlay buildEngineContext threads ImageBuildDir == ContextRelPrefix == the overlay
-	// build dir (the invariant hostBuildOverlay's prep sets + caches for the step-emit emitter).
-	build := buildEngineContext{Generator: gen, Box: &buildkit.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
+	// build dir (the invariant hostBuildOverlay's prep sets, riding the BuildEnv scalars onto the
+	// class:step OpEmit).
+	build := buildEngineContext{Box: &buildkit.ResolvedBox{Name: "base"}, ImageBuildDir: relBuildDir, ContextRelPrefix: relBuildDir}
 	tgt := ociTestTarget(build)
 
 	op := &spec.Op{Write: "/etc/marker", Content: "POD-ADDCANDY-MARKER-OK v1\n", Mode: "0644", RunAs: "root"}

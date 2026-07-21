@@ -69,7 +69,7 @@ func TestPackagePluginActEmitsIntoBoxBuild(t *testing.T) {
 	g := &Generator{BuildDir: dir}
 	op := spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{op}, dir, ".build/test-img"); err != nil {
+	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{op}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
