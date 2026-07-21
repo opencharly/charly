@@ -30,9 +30,9 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/proclifecycle"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 const calver = "2026.182.0001"
@@ -114,7 +114,7 @@ func encExtpassArgs(imageID string) ([]string, func()) {
 		ep := "systemd-ask-password --id=" + imageID + " --timeout=0 --echo=masked Passphrase"
 		return []string{"-extpass", ep}, func() {}
 	}
-	vmshared.RegisterTempCleanup(f.Name())
+	proclifecycle.RegisterTempCleanup(f.Name())
 	if _, werr := f.WriteString(script); werr != nil {
 		fmt.Fprintf(os.Stderr, "encExtpassArgs: write extpass script: %v\n", werr)
 	}
@@ -122,7 +122,7 @@ func encExtpassArgs(imageID string) ([]string, func()) {
 		fmt.Fprintf(os.Stderr, "encExtpassArgs: chmod extpass script: %v\n", cerr)
 	}
 	_ = f.Close()
-	return []string{"-extpass", f.Name()}, func() { _ = os.Remove(f.Name()); vmshared.UnregisterTempCleanup(f.Name()) }
+	return []string{"-extpass", f.Name()}, func() { _ = os.Remove(f.Name()); proclifecycle.UnregisterTempCleanup(f.Name()) }
 }
 
 // runGocryptfsScope runs `systemd-run --scope --user --unit=<scope> -- gocryptfs
@@ -251,7 +251,7 @@ func passwdVolumes(in spec.EncExecInput) error {
 		if err != nil {
 			return fmt.Errorf("creating temp script for %s: %w", m.Name, err)
 		}
-		vmshared.RegisterTempCleanup(oldScript.Name())
+		proclifecycle.RegisterTempCleanup(oldScript.Name())
 		if _, werr := oldScript.WriteString("#!/bin/bash\nprintf '%s' '" + strings.ReplaceAll(in.OldPass, "'", "'\\''") + "'\n"); werr != nil {
 			return fmt.Errorf("writing temp script for %s: %w", m.Name, werr)
 		}
@@ -267,7 +267,7 @@ func passwdVolumes(in spec.EncExecInput) error {
 		cmd.Stderr = os.Stderr
 		runErr := cmd.Run()
 		_ = os.Remove(oldScript.Name())
-		vmshared.UnregisterTempCleanup(oldScript.Name())
+		proclifecycle.UnregisterTempCleanup(oldScript.Name())
 		if runErr != nil {
 			return fmt.Errorf("changing password for %s: %w", m.Name, runErr)
 		}

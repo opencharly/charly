@@ -31,6 +31,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -188,8 +189,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 	if err != nil {
 		return fmt.Errorf("builder staging mkdir: %w", err)
 	}
-	RegisterTempCleanup(stageHost)
-	defer func() { _ = os.RemoveAll(stageHost); UnregisterTempCleanup(stageHost) }()
+	proclifecycle.RegisterTempCleanup(stageHost)
+	defer func() { _ = os.RemoveAll(stageHost); proclifecycle.UnregisterTempCleanup(stageHost) }()
 
 	bindMounts := map[string]string{venueHome: stageHost}
 	envVars := kit.UserScopeEnv(venueHome)
@@ -250,8 +251,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 	if err != nil {
 		return fmt.Errorf("tar staging mkdir: %w", err)
 	}
-	RegisterTempCleanup(tarDir)
-	defer func() { _ = os.RemoveAll(tarDir); UnregisterTempCleanup(tarDir) }()
+	proclifecycle.RegisterTempCleanup(tarDir)
+	defer func() { _ = os.RemoveAll(tarDir); proclifecycle.UnregisterTempCleanup(tarDir) }()
 	tarball := filepath.Join(tarDir, "artifacts.tar.gz")
 	tarArgs := append([]string{"-C", stageHost, "-czf", tarball}, transferDirs...)
 	tarCmd := exec.CommandContext(ctx, "tar", tarArgs...)

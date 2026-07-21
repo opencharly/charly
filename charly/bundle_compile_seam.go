@@ -165,7 +165,7 @@ func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCf
 	if err != nil {
 		return nil, "", nil, err
 	}
-	order, err := ResolveCandyOrder(img.Candy, layers, nil)
+	order, err := deploykit.ResolveCandyOrder(img.Candy, layers, nil)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -201,7 +201,7 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 	if err != nil {
 		return nil, "", nil, err
 	}
-	order, err := ResolveCandyOrder([]string{candyKey}, layers, nil)
+	order, err := deploykit.ResolveCandyOrder([]string{candyKey}, layers, nil)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Raw, err)
 	}

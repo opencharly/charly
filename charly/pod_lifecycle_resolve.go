@@ -89,5 +89,5 @@ func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 	if meta.Tunnel == nil {
 		return nil
 	}
-	return TunnelConfigFromMetadata(meta)
+	return deploykit.TunnelConfigFromMetadata(meta)
 }

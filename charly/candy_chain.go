@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -24,7 +25,7 @@ func (c *Config) boxCandyChain(layers map[string]spec.CandyReader, boxName strin
 	var out []string
 	seen := map[string]bool{}
 	for _, node := range c.walkBaseChain(boxName) {
-		resolved, err := ResolveCandyOrder(node.Img.Candy, layers, nil)
+		resolved, err := deploykit.ResolveCandyOrder(node.Img.Candy, layers, nil)
 		if err != nil {
 			return out, err
 		}
@@ -51,5 +52,5 @@ func (c *Config) boxDirectCandies(layers map[string]spec.CandyReader, boxName st
 	if !ok {
 		return nil, fmt.Errorf("box %q not found in charly.yml", boxName)
 	}
-	return ResolveCandyOrder(img.Candy, layers, nil)
+	return deploykit.ResolveCandyOrder(img.Candy, layers, nil)
 }

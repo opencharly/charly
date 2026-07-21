@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -37,7 +38,7 @@ func ResolveBoxEngine(cfg *Config, layers map[string]spec.CandyReader, boxName s
 	}
 
 	// Candy-level engine requirements (transitive closure)
-	resolved, err := ResolveCandyOrder(img.Candy, layers, nil)
+	resolved, err := deploykit.ResolveCandyOrder(img.Candy, layers, nil)
 	if err == nil {
 		for _, candyName := range resolved {
 			if layer, ok := layers[candyName]; ok && layer.Engine() != "" {

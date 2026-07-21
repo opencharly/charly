@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // render_prep.go — the HOST-SIDE render-prep pass (#67 render-DRIVE move). Fills the
@@ -26,7 +28,7 @@ func renderPrepBox(g *Generator, boxName string) error {
 	var parentCandies map[string]bool
 	if !img.IsExternalBase {
 		var err error
-		parentCandies, err = CandyProvidedByBox(img.Base, g.Boxes, g.Candies)
+		parentCandies, err = deploykit.CandyProvidedByBox(img.Base, g.Boxes, g.Candies)
 		if err != nil {
 			return err
 		}

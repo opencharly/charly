@@ -13,20 +13,16 @@ import (
 )
 
 type (
-	AliasYAML              = vmshared.AliasYAML
 	AndroidGoogleAccount   = vmshared.AndroidGoogleAccount
 	ApkPackageSpec         = vmshared.ApkPackageSpec
 	BaseUserDef            = vmshared.BaseUserDef
 	BuilderDef             = vmshared.BuilderDef
 	CacheMountDef          = vmshared.CacheMountDef
 	CandyArtifact          = vmshared.CandyArtifact
-	CandyCapabilities      = vmshared.CandyCapabilities
 	CloudInitRuntimeParams = vmshared.CloudInitRuntimeParams
-	DataYAML               = vmshared.DataYAML
 	DeployShellOverlay     = vmshared.DeployShellOverlay
 	DeployVolumeConfig     = vmshared.DeployVolumeConfig
 	EphemeralRuntime       = vmshared.EphemeralRuntime
-	ExtractYAML            = vmshared.ExtractYAML
 	FormatDef              = vmshared.FormatDef
 	HooksConfig            = vmshared.HooksConfig
 	InstallOptsConfig      = vmshared.InstallOptsConfig
@@ -35,14 +31,10 @@ type (
 	PacstrapDef            = vmshared.PacstrapDef
 	ReadinessConfig        = vmshared.ReadinessConfig
 	ResolvedReadiness      = vmshared.ResolvedReadiness
-	SecretYAML             = vmshared.SecretYAML
 	SecurityConfig         = vmshared.SecurityConfig
 	ServiceOverrides       = vmshared.ServiceOverrides
 	ShellSpec              = vmshared.ShellSpec
-	SnapshotCreateOpts     = vmshared.SnapshotCreateOpts
-	SnapshotEntry          = vmshared.SnapshotEntry
 	SSHTunnel              = sshx.SSHTunnel
-	StepKeyword            = vmshared.StepKeyword
 	VmSource               = vmshared.VmSource
 	VmSpec                 = vmshared.VmSpec
 	VmSSH                  = vmshared.VmSSH
@@ -54,23 +46,24 @@ type (
 // plugins; loadedReadiness (readiness_config.go) feeds it the project's defaults.readiness.
 var readinessResolve = vmshared.ResolveReadiness
 
+// RegisterShutdownHook / RegisterTempCleanup / UnregisterTempCleanup /
+// InstallSignalHandler / SweepStaleTemps moved to sdk/proclifecycle
+// (FLOOR-SLIM mechanical batch) — a stdlib-only leaf, not a mechanism kit —
+// once a consumer census showed candy/plugin-enc, candy/plugin-secrets,
+// candy/plugin-vm, candy/plugin-oci, and sdk/deploykit/localpkg.go all call
+// them directly (never through this alias), making cleanup.go a genuinely
+// shared leaf rather than a charly-core-only dependency. charly/main.go,
+// builder_venue.go, and privileged_runner.go now import
+// github.com/opencharly/sdk/proclifecycle directly (NO-NEW-ALIASES: no
+// re-export here).
 var (
-	DecrementSnapshotRefcount   = vmshared.DecrementSnapshotRefcount
-	DetectHostDistro            = vmshared.DetectHostDistro
-	DetectHostGlibc             = vmshared.DetectHostGlibc
-	ErrPollFatal                = vmshared.ErrPollFatal
-	IncrementSnapshotRefcount   = vmshared.IncrementSnapshotRefcount
-	InstallSignalHandler        = vmshared.InstallSignalHandler
-	NewSSHTunnel                = sshx.NewSSHTunnel
-	ParseLibvirtURI             = vmshared.ParseLibvirtURI
-	pollUntil                   = vmshared.PollUntil
-	RegisterShutdownHook        = vmshared.RegisterShutdownHook
-	RegisterTempCleanup         = vmshared.RegisterTempCleanup
-	RenderCloudInit             = vmshared.RenderCloudInit
-	ResolveKeyInjectionChannels = vmshared.ResolveKeyInjectionChannels
-	SweepStaleTemps             = vmshared.SweepStaleTemps
-	UnregisterTempCleanup       = vmshared.UnregisterTempCleanup
-	WriteSeedISO                = vmshared.WriteSeedISO
+	DetectHostDistro = vmshared.DetectHostDistro
+	DetectHostGlibc  = vmshared.DetectHostGlibc
+	ErrPollFatal     = vmshared.ErrPollFatal
+	NewSSHTunnel     = sshx.NewSSHTunnel
+	ParseLibvirtURI  = vmshared.ParseLibvirtURI
+	pollUntil        = vmshared.PollUntil
+	RenderCloudInit  = vmshared.RenderCloudInit
 )
 
 // Pure VM helper functions consolidated into vmshared (vm_helpers.go) — the
