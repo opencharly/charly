@@ -20,24 +20,15 @@ import (
 // context grammar (hostPlanGrammar), and the per-step venue swap (venueResolver) — plus the
 // live-verb CheckContext (hostCheckContext) wrapping the runner. newCheckRunner wires them.
 //
-// CheckStatus, CheckResult, and the pass/fail/skip verdict constants live ONCE in sdk/kit —
-// they are the check engine's result model, shared with every plugin candy that runs a plan.
-// These are the package-main bindings; core's call sites are unchanged.
+// FLOOR-SLIM Unit 4: the former package-main CheckStatus/CheckResult/TestPass/TestFail/TestSkip
+// aliases are DELETED. spec.CheckResult (CUE-sourced, sdk/schema/checkresult.cue) is the
+// verdict envelope every registry-coupled floor file (provider.go/provider_verb.go/
+// verb_builtins.go/unified_targets.go/provider_checkenv.go, plus this file's passf/failf/skipf)
+// now references DIRECTLY — zero new sdk/kit import. sdk/kit.CheckResult (the engine's richer
+// internal type, embedding spec.CheckResult + the engine-internal DeadlineExceeded retry
+// signal that never crosses the wire) is used only inside sdk/kit + candy/plugin-check, which
+// already import kit. spec.StatusPass/StatusFail/StatusSkip are the verdict constants.
 //
-// kit.Status is the single pass/fail/skip enum: a verb's kit.Result verdict flows into a
-// CheckResult with no conversion.
-type CheckStatus = kit.Status
-
-const (
-	TestPass = kit.StatusPass
-	TestFail = kit.StatusFail
-	TestSkip = kit.StatusSkip
-)
-
-// CheckResult is the engine's per-step result record; StepResult wraps it with the step's
-// identity. Both live in kit (checkresult.go).
-type CheckResult = kit.CheckResult
-
 // RunMode selects routing rules for a check pass. It is a package-main binding onto kit.RunMode
 // (relocated with the runner); RunModeLive/RunModeBox map to kit.ModeLive/kit.ModeBox.
 //
@@ -141,14 +132,14 @@ func newRuntimeCheckVarResolver(env map[string]string) *kit.CheckVarResolver {
 // Result helpers
 // ---------------------------------------------------------------------------
 
-func passf(c *spec.Op, msg string) CheckResult {
-	return CheckResult{Op: c, Status: TestPass, Message: msg}
+func passf(c *spec.Op, msg string) spec.CheckResult {
+	return spec.CheckResult{Op: c, Status: spec.StatusPass, Message: msg}
 }
 
-func failf(c *spec.Op, format string, args ...any) CheckResult {
-	return CheckResult{Op: c, Status: TestFail, Message: fmt.Sprintf(format, args...)}
+func failf(c *spec.Op, format string, args ...any) spec.CheckResult {
+	return spec.CheckResult{Op: c, Status: spec.StatusFail, Message: fmt.Sprintf(format, args...)}
 }
 
-func skipf(c *spec.Op, msg string) CheckResult {
-	return CheckResult{Op: c, Status: TestSkip, Message: msg}
+func skipf(c *spec.Op, msg string) spec.CheckResult {
+	return spec.CheckResult{Op: c, Status: spec.StatusSkip, Message: msg}
 }

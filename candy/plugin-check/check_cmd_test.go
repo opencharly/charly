@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestFailErrorFor proves the R44 exit-classification: a run whose ONLY failures are podman
@@ -15,11 +16,11 @@ import (
 // marker the executor stamps. This is the superproject half of the fix that turns a
 // store-contention transient from a spurious exit-2 verdict into an honest exit-1 infra error.
 func TestFailErrorFor(t *testing.T) {
-	pass := kit.StepResult{Result: kit.CheckResult{Status: kit.StatusPass, Message: "exit=0"}}
-	checkFail := kit.StepResult{Result: kit.CheckResult{Status: kit.StatusFail, Message: "exit=1, want 0"}}
-	infraFail := kit.StepResult{Result: kit.CheckResult{Status: kit.StatusFail,
-		Message: "execution error: " + kit.ContainerInfraErrMarker + " [creating temporary passwd file]: podman exit=127"}}
-	skip := kit.StepResult{Result: kit.CheckResult{Status: kit.StatusSkip, Message: "excluded"}}
+	pass := kit.StepResult{Result: kit.CheckResult{CheckResult: spec.CheckResult{Status: kit.StatusPass, Message: "exit=0"}}}
+	checkFail := kit.StepResult{Result: kit.CheckResult{CheckResult: spec.CheckResult{Status: kit.StatusFail, Message: "exit=1, want 0"}}}
+	infraFail := kit.StepResult{Result: kit.CheckResult{CheckResult: spec.CheckResult{Status: kit.StatusFail,
+		Message: "execution error: " + kit.ContainerInfraErrMarker + " [creating temporary passwd file]: podman exit=127"}}}
+	skip := kit.StepResult{Result: kit.CheckResult{CheckResult: spec.CheckResult{Status: kit.StatusSkip, Message: "excluded"}}}
 
 	isCheckFailed := func(err error) bool {
 		var cf *CheckFailedError

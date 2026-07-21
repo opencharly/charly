@@ -78,9 +78,9 @@ type pluginCheckResult struct {
 // (built-in OR out-of-tree, transport-invisible). This is the permanent plugin
 // fall-through the foundation cutover (C0) adds; the built-in verb switch above is
 // migrated into the registry in C1.
-func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) CheckResult {
+func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.CheckResult {
 	word := c.Plugin
-	res := CheckResult{Verb: "plugin"}
+	res := spec.CheckResult{Verb: "plugin"}
 	// connectBakedPlugin (not a bare ResolveVerb) so a BAKED verb plugin resolves
 	// project-lessly inside a deployed container / on a host where it is installed alongside
 	// charly — additive: a registry hit returns immediately, and with no baked binary it is a
@@ -90,7 +90,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) CheckR
 		// An unresolved plugin verb is a FAILURE, not a skip — a bed asserting a
 		// plugin verb that never registered must go red, not fake-green (mirrors
 		// the unresolvable-${HOST:...} rule).
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = fmt.Sprintf("no provider registered for plugin verb %q", word)
 		return res
 	}
@@ -103,14 +103,14 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) CheckR
 	if c.PluginInput != nil {
 		j, err := marshalJSON(c.PluginInput)
 		if err != nil {
-			res.Status = TestFail
+			res.Status = spec.StatusFail
 			res.Message = "plugin verb: marshal plugin_input: " + err.Error()
 			return res
 		}
 		inputJSON = j
 	}
 	if err := validateAuthoredPluginInput(ClassVerb, word, inputJSON); err != nil {
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = err.Error()
 		return res
 	}
@@ -136,8 +136,8 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) CheckR
 // OUT-OF-PROCESS, not a CheckVerbProvider): an external verb reads the FULL Op it is
 // handed here (params_json), so a verb's params stay authored in #Op with NO migration
 // when its implementation moves out-of-tree. The caller sets res.Verb.
-func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *spec.Op) CheckResult {
-	res := CheckResult{}
+func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *spec.Op) spec.CheckResult {
+	res := spec.CheckResult{}
 	// Resolve a relative committed-APK path (appium: install-app, `apk: ./tests/data/…`)
 	// against the ORIGINATING candy's source tree HOST-side, BEFORE marshaling — an
 	// out-of-process verb has no CandyDirs, so it cannot anchor the fixture itself.
@@ -146,7 +146,7 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 	if apk := kit.InputStr(c, "apk"); apk != "" {
 		resolved, err := h.resolveCheckApk(apk, c.Origin)
 		if err != nil {
-			res.Status = TestFail
+			res.Status = spec.StatusFail
 			res.Message = fmt.Sprintf("verb %q: %v", word, err)
 			return res
 		}
@@ -170,14 +170,14 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 	defer h.runEndpointCleanups()
 	params, err := marshalJSON(c)
 	if err != nil {
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = fmt.Sprintf("verb %q: marshal op: %v", word, err)
 		return res
 	}
 	ce := snapshotCheckEnv(h.kr, c)
 	env, err := marshalJSON(ce)
 	if err != nil {
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = fmt.Sprintf("verb %q: marshal env: %v", word, err)
 		return res
 	}
@@ -206,23 +206,23 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 		out, err = prov.Invoke(ctx, op)
 	}
 	if err != nil {
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = fmt.Sprintf("verb %q: %v", word, err)
 		return res
 	}
 	var pr pluginCheckResult
 	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 		res.Message = fmt.Sprintf("verb %q: decode result: %v", word, err)
 		return res
 	}
 	switch pr.Status {
 	case "pass":
-		res.Status = TestPass
+		res.Status = spec.StatusPass
 	case "skip":
-		res.Status = TestSkip
+		res.Status = spec.StatusSkip
 	default:
-		res.Status = TestFail
+		res.Status = spec.StatusFail
 	}
 	res.Message = pr.Message
 	return res

@@ -139,7 +139,7 @@ func TestLiveVerb_SkipsUnderBoxMode(t *testing.T) {
 	// context-permissive) — a wl step authors context: [runtime], exactly as the
 	// real candies do.
 	res := r.Run(context.Background(), []spec.Op{{Plugin: "wl", PluginInput: map[string]any{"method": "status"}, Context: []string{"runtime"}}})
-	if len(res) != 1 || res[0].Status != TestSkip {
+	if len(res) != 1 || res[0].Status != spec.StatusSkip {
 		t.Fatalf("expected skip under RunModeBox, got %+v", res[0])
 	}
 	// A runtime-context step is skipped in box mode by the context-vs-mode

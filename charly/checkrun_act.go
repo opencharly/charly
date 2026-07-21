@@ -71,10 +71,10 @@ func resolveProvisionScript(op *spec.Op, distros []string) (string, bool) {
 // provision renderer (an action verb whose handler already acts, or a pure
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
-func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (spec.CheckResult, bool) {
 	script, ok := resolveProvisionScript(c, h.kr.Distros())
 	if !ok {
-		return CheckResult{}, false
+		return spec.CheckResult{}, false
 	}
 	if h.kr.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true

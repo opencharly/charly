@@ -21,7 +21,7 @@ import (
 // form), so the dispatch only ever deals with in-proc CheckVerbProviders here.
 type CheckVerbProvider interface {
 	Provider
-	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult
+	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) spec.CheckResult
 }
 
 // The EXTERNAL-CHARLY-VERBS kube/adb/appium/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are
