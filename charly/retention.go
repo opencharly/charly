@@ -338,8 +338,13 @@ func selectDanglingImages(imgs []kit.LocalImageInfo, onlyCharly bool) []kit.Loca
 // backstop tag retention relies on). Guarded like every other image-removing sweep in this file:
 // never while ANY build is live (an untagged intermediate may be a parent of an in-flight
 // build). Returns the removed (or would-remove, under dryRun) image IDs and the sum of their
-// reported Size in bytes — the "reclaimable" figure `--deep --dry-run` reports; a real run's
-// actually-freed bytes can differ slightly if `rmi` refuses a candidate the dry-run listed.
+// reported Size in bytes. This byte total is an UPPER BOUND on actual reclaimed disk, NOT a
+// prediction: podman's per-image Size counts every layer the image references, and dangling
+// images routinely SHARE layers with images that stay (retained tags, other dangling images) —
+// removing one image frees only the layers it held UNIQUELY. RDD-verified live: a --deep purge
+// removing 68 untagged images reported ~92.6 GiB via this sum but only ~4.6 GiB of disk was
+// actually freed, because most of those bytes were shared with ~3,400 remaining images. Callers
+// present this total as "up to", never as a firm reclaim prediction.
 func pruneDanglingImages(engine string, onlyCharly, dryRun bool) ([]string, int64, error) {
 	if _, _, live := liveBuildFloor(); live > 0 {
 		return nil, 0, nil // never delete images while any build is in flight

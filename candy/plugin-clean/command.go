@@ -33,7 +33,7 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print everything that would be removed; touch nothing")
 	images := fs.Bool("images", false, "Only image-tag retention")
 	check := fs.Bool("check", false, "Only check-run retention")
-	deep := fs.Bool("deep", false, "Purge every untagged/dangling image in local storage (not just charly-labeled) plus the layer blobs they alone held — a store-wide reclaim; runs ONLY this category unless combined with --images/--check")
+	deep := fs.Bool("deep", false, "Purge every untagged/dangling image in local storage (not just charly-labeled) plus any layer blobs they alone held — reports UP TO the summed image size, since layers SHARED with kept images reduce actual reclaim; pair with --invalidate for the fullest reclaim. Runs ONLY this category unless combined with --images/--check")
 	keep := fs.Int("keep", 0, "Override the retention count for this run (0 = use defaults:)")
 	invalidate := fs.String("invalidate", "", "Remove every charly-labeled image tag matching this glob (full ref or last path segment); runs ONLY the invalidation")
 	if err := fs.Parse(args); err != nil {
@@ -95,7 +95,7 @@ func runCleanCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 			}
 		}
 		if doDeep {
-			fmt.Printf("deep: %s %d untagged image(s) store-wide (%s reclaimable)\n", tag, len(reply.DeepIDs), kit.HumanBytes(reply.DeepBytes))
+			fmt.Printf("deep: %s %d untagged image(s) store-wide (up to %s reclaimable — shared layers may reduce actual reclaim; pair with --invalidate for the fullest reclaim)\n", tag, len(reply.DeepIDs), kit.HumanBytes(reply.DeepBytes))
 			for _, id := range reply.DeepIDs {
 				fmt.Printf("  %s\n", id)
 			}

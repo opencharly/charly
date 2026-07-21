@@ -22,9 +22,15 @@ plugin-clean:
             so this is EFFECTIVELY a dangling-image-plus-unused-layer prune. `--deep` NEVER fires
             implicitly on a plain `charly clean` (R5: zero default-behavior change) — it is
             strictly opt-in, mirroring `--images`/`--check`'s "runs ONLY this category" semantics.
-            `--deep --dry-run` is the safe default probe: it reports the would-remove count + the
-            total reclaimable bytes (DeepBytes, summed from each candidate's reported storage
-            Size) and touches nothing.
+            `--deep --dry-run` is the safe default probe: it reports the would-remove count + an
+            UPPER-BOUND reclaimable-bytes figure (DeepBytes, summed from each candidate's reported
+            storage Size) and touches nothing. That figure is "up to", never a firm prediction:
+            RDD-verified live, a --deep purge removing 68 untagged images (3,552 → 3,484) reported
+            ~92.6 GiB via the naive per-image Size sum but freed only ~4.6 GiB of real disk (132.6
+            GB → 128 GB), because most of those bytes were layers SHARED with the ~3,400 remaining
+            (largely stale-tagged) images — removal only frees layers an image held UNIQUELY. Pair
+            `--deep` with `--invalidate` (which removes stale TAGS, freeing their exclusively-held
+            layers too) to get closer to the reported figure.
 
             The ONE thing the plugin cannot compute itself is the SHARED retention engine
             (pruneImagesByRetention / pruneCheckRuns / pruneBuildCandyDirs / invalidateImageTags /
