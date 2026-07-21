@@ -10,15 +10,15 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
-	"github.com/opencharly/sdk/vmshared"
 )
 
 // vm_privileged_runner.go — the privileged-container exec primitive for the VM-disk build
 // engine (P8b-rest: the disk-build ENGINE moved here from charly core, mirroring how
 // candy/plugin-build already runs `podman build` itself instead of asking the host). Every
 // dependency this needs is already sdk-importable (kit.ResolveRuntime/EngineBinary/
-// TransferToRootful, vmshared.RegisterTempCleanup/UnregisterTempCleanup,
+// TransferToRootful, proclifecycle.RegisterTempCleanup/UnregisterTempCleanup,
 // buildkit.TemplateFuncs/BuilderPhaseTemplate), so this is a straight port of
 // charly/privileged_runner.go's RunPrivileged — kept as its own copy (not a shared sdk/kit
 // function) because charly core's OWN box-build privileged bootstrap
@@ -88,8 +88,8 @@ func RunPrivileged(p PrivilegedRun) error {
 		if err != nil {
 			return fmt.Errorf("creating staging dir: %w", err)
 		}
-		vmshared.RegisterTempCleanup(hostStaging)
-		defer vmshared.UnregisterTempCleanup(hostStaging)
+		proclifecycle.RegisterTempCleanup(hostStaging)
+		defer proclifecycle.UnregisterTempCleanup(hostStaging)
 		stagingDir = filepath.Dir(p.OutputPath)
 		args = append(args, "-v", fmt.Sprintf("%s:%s", hostStaging, stagingDir))
 	}

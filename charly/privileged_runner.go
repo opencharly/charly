@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -85,8 +86,8 @@ func RunPrivileged(p PrivilegedRun) error {
 		if err != nil {
 			return fmt.Errorf("creating staging dir: %w", err)
 		}
-		RegisterTempCleanup(hostStaging)
-		defer UnregisterTempCleanup(hostStaging)
+		proclifecycle.RegisterTempCleanup(hostStaging)
+		defer proclifecycle.UnregisterTempCleanup(hostStaging)
 		stagingDir = filepath.Dir(p.OutputPath)
 		args = append(args, "-v", fmt.Sprintf("%s:%s", hostStaging, stagingDir))
 	}

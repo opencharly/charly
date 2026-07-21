@@ -231,7 +231,7 @@ func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnel
 	if meta.Tunnel == nil {
 		return spec.PodConfigTunnelResolveReply{}, nil
 	}
-	tc := TunnelConfigFromMetadata(&meta)
+	tc := deploykit.TunnelConfigFromMetadata(&meta)
 	b, err := json.Marshal(tc)
 	if err != nil {
 		return spec.PodConfigTunnelResolveReply{}, err

@@ -27,9 +27,12 @@ package main
 //     helpers parseHostPorts / buildPortMapping / resolveProto) — turn a charly.yml
 //     TunnelYAML (or image-label metadata) into a ready-to-execute TunnelConfig. The
 //     resolution logic itself is a pure Mechanism (no host I/O, no globals) and moved
-//     to sdk/deploykit (FLOOR-SLIM mechanical batch); this file ALIASES the two
-//     entry points so the pod-config-container-tunnel / pod-config-tunnel-resolve
-//     host-build seams compile unchanged.
+//     to sdk/deploykit/tunnel_resolve.go (FLOOR-SLIM mechanical batch). Every
+//     charly-side caller (box_inspect_overlay.go, host_build_pod_config_seams.go,
+//     pod_lifecycle_resolve.go) calls deploykit.ResolveTunnelConfig /
+//     deploykit.TunnelConfigFromMetadata directly — NO alias re-export here
+//     (NO-NEW-ALIASES: an alias is a mislocated call site, never a legitimate
+//     landing spot).
 //
 // ValidPublicPorts (a stale "allowed public serve ports" table) was DELETED in the same
 // batch — it had ZERO callers anywhere in the tree; the public-port ALLOW decision is
@@ -37,7 +40,6 @@ package main
 // above), not by a fixed allowlist.
 
 import (
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -53,10 +55,11 @@ type (
 	TunnelConfig = spec.TunnelConfig
 )
 
-// ResolveTunnelConfig / TunnelConfigFromMetadata are aliased straight through to the
-// pure sdk/deploykit resolution mechanism (FLOOR-SLIM mechanical batch) — see the file
-// header. No behavior change; the logic itself now lives in sdk/deploykit/tunnel_resolve.go.
-var (
-	ResolveTunnelConfig      = deploykit.ResolveTunnelConfig
-	TunnelConfigFromMetadata = deploykit.TunnelConfigFromMetadata
-)
+// ResolveTunnelConfig / TunnelConfigFromMetadata (and their pure helpers
+// parseHostPorts / buildPortMapping / resolveProto) now live entirely in
+// sdk/deploykit/tunnel_resolve.go (FLOOR-SLIM mechanical batch) — see the file
+// header. Every charly-side caller (box_inspect_overlay.go,
+// host_build_pod_config_seams.go, pod_lifecycle_resolve.go) calls
+// deploykit.ResolveTunnelConfig / deploykit.TunnelConfigFromMetadata directly
+// (NO-NEW-ALIASES: a declaration-form `var X = deploykit.Y` re-export here
+// would just be the mislocated call site wearing a new hat).

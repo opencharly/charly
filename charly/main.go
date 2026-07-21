@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/proclifecycle"
 )
 
 // CLI defines the command-line interface structure
@@ -279,9 +280,9 @@ func main() {
 	// return and a panic unwind, and an explicit reap after dispatch (below)
 	// covers the os.Exit error / check-fail paths. SIGKILL / crash — the one
 	// class none of these catch — is the plugin SDK's parent-death watch's job.
-	RegisterShutdownHook(reapPlugins)
-	InstallSignalHandler()
-	SweepStaleTemps()
+	proclifecycle.RegisterShutdownHook(reapPlugins)
+	proclifecycle.InstallSignalHandler()
+	proclifecycle.SweepStaleTemps()
 	defer reapPlugins()
 
 	// A dynamic command plugin's command has no Run() method, so dispatch it manually:
