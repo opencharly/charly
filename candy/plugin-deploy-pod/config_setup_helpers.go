@@ -167,7 +167,9 @@ var wellKnownInitDefs = map[string]*spec.ResolvedInit{
 	},
 }
 
-// resolveEntrypointFromMeta mirrors charly-core start.go's function of the same name.
+// resolveEntrypointFromMeta is the plugin-side twin of the equivalent charly-core function of the
+// same name that P13-KERNEL step-4(ii) moved here; Cutover B unit 2 confirmed the core copy was
+// dead (zero non-test callers) and deleted it — this is now the ONLY live implementation.
 func resolveEntrypointFromMeta(meta *spec.BoxMetadata) []string {
 	if meta.Init == "" {
 		return []string{"sleep", "infinity"}
@@ -390,7 +392,7 @@ func runConfigDirect(qcfg deploykit.QuadletConfig, bindMounts []deploykit.Resolv
 	if tunnelCfg != nil && tunnelCfg.Provider == "cloudflare" {
 		fmt.Fprintf(os.Stderr, "Warning: cloudflare tunnel companion service requires systemd; tunnel will not be started in direct mode.\n")
 	}
-	if hasEncryptedBindMounts(bindMounts) {
+	if deploykit.HasEncryptedBindMounts(bindMounts) {
 		fmt.Fprintf(os.Stderr, "Warning: encrypted bind mounts require systemd-run; encrypted volumes will not be initialized in direct mode.\n")
 	}
 	name := kit.ContainerNameInstance(qcfg.BoxName, qcfg.Instance)
@@ -413,15 +415,8 @@ func runConfigDirect(qcfg deploykit.QuadletConfig, bindMounts []deploykit.Resolv
 	return nil
 }
 
-// hasEncryptedBindMounts mirrors charly-core enc.go's function of the same name.
-func hasEncryptedBindMounts(mounts []deploykit.ResolvedBindMount) bool {
-	for _, m := range mounts {
-		if m.Encrypted {
-			return true
-		}
-	}
-	return false
-}
+// hasEncryptedBindMounts DELETED (Cutover B unit 2) — a duplicate of the now-shared
+// deploykit.HasEncryptedBindMounts (sdk/deploykit/enc_probe.go); every call site repoints there.
 
 // workspaceBindHost mirrors charly-core volumes.go's function of the same name.
 func workspaceBindHost(bindMounts []deploykit.ResolvedBindMount) string {
@@ -693,7 +688,7 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 			Tunnel: tunnelCfg, UID: meta.UID, GID: meta.GID, Env: envVars, EnvFile: quadletEnvFile,
 			Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 			Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-			EncryptedMounts: hasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
+			EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
 			PodName: podName, Sidecar: resolvedSidecars,
 		}
 		if quadletEnvFile != "" {
@@ -813,8 +808,12 @@ func resolveBoxName(box string) string {
 	return box
 }
 
-// findPodSidecarQuadlets mirrors charly-core sidecar.go's function of the same name — pure
-// on-disk quadlet-dir scan (Pod=<podName>.pod directive match).
+// findPodSidecarQuadlets is a pure on-disk quadlet-dir scan (Pod=<podName>.pod directive match)
+// for `charly config remove`'s sidecar sweep. charly-core's OWN former twin of the same name
+// (charly/sidecar.go) was deleted as dead code (Cutover B unit 2) — it had zero production callers
+// even before that deletion, having been superseded by `charly remove`'s own charly.yml-driven
+// resolveSidecarNames (candy/plugin-pod/remove_orchestration.go) — so THIS function is not a
+// mirror of anything anymore, just this verb's own scan.
 func findPodSidecarQuadlets(qdir, podName, mainContainerFile string) ([]string, error) {
 	expected := fmt.Sprintf("Pod=%s.pod", podName)
 	entries, err := os.ReadDir(qdir)
@@ -907,83 +906,16 @@ func mergeVolumeConfigsLocal(base, overrides []spec.DeployVolume) []spec.DeployV
 	return result
 }
 
-// isEncryptedMountedLocal mirrors charly-core enc.go's isEncryptedMounted VERBATIM — pure
-// /proc/mounts read, matching on the resolved mount point AND the fuse.gocryptfs fstype.
-func isEncryptedMountedLocal(plainDir string) bool {
-	data, err := os.ReadFile("/proc/mounts")
-	if err != nil {
-		return false
-	}
-	resolved, err := filepath.EvalSymlinks(plainDir)
-	if err != nil {
-		resolved = plainDir
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		mountPoint, err := filepath.EvalSymlinks(fields[1])
-		if err != nil {
-			mountPoint = fields[1]
-		}
-		if mountPoint == resolved && fields[2] == "fuse.gocryptfs" {
-			return true
-		}
-	}
-	return false
-}
+// isEncryptedMountedLocal/cipherPopulatedPlainEmptyLocal/verifyBindMountsLocal DELETED (Cutover
+// B unit 2): these were hand-duplicated copies of charly-core's enc.go functions (a genuine R3
+// violation — the originals weren't movable as a whole at the time). The originals are now
+// portable and live in sdk/deploykit (enc_probe.go) as IsEncryptedMounted/CipherPopulatedPlainEmpty/
+// VerifyBindMounts — every call site below repoints there directly, one shared implementation.
 
-// cipherPopulatedPlainEmptyLocal mirrors charly-core enc.go's cipherPopulatedPlainEmpty.
-func cipherPopulatedPlainEmptyLocal(cipherDir, plainDir string) bool {
-	plainEntries, err := os.ReadDir(plainDir)
-	if err != nil || len(plainEntries) > 0 {
-		return false
-	}
-	cipherEntries, err := os.ReadDir(cipherDir)
-	if err != nil {
-		return false
-	}
-	for _, e := range cipherEntries {
-		switch e.Name() {
-		case "gocryptfs.conf", "gocryptfs.diriv":
-			continue
-		default:
-			return true
-		}
-	}
-	return false
-}
-
-// verifyBindMountsLocal mirrors charly-core enc.go's verifyBindMounts.
-func verifyBindMountsLocal(mounts []deploykit.ResolvedBindMount, boxName string) error {
-	for _, m := range mounts {
-		if m.Encrypted {
-			if !isEncryptedMountedLocal(m.HostPath) {
-				cipherDir := filepath.Join(filepath.Dir(m.HostPath), "cipher")
-				if cipherPopulatedPlainEmptyLocal(cipherDir, m.HostPath) {
-					return fmt.Errorf(
-						"encrypted volume %q: cipher dir at %s is populated but plain mount at %s is empty — refusing to start (would write plaintext over encrypted data); run 'charly config mount %s' first",
-						m.Name, cipherDir, m.HostPath, boxName,
-					)
-				}
-				return fmt.Errorf("encrypted bind mount %q for image %q is not mounted; run 'charly config mount %s' first", m.Name, boxName, boxName)
-			}
-			continue
-		}
-		info, err := os.Stat(m.HostPath)
-		if err != nil {
-			return fmt.Errorf("bind mount %q: host path %q: %w", m.Name, m.HostPath, err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("bind mount %q: host path %q is not a directory", m.Name, m.HostPath)
-		}
-	}
-	return nil
-}
-
-// buildStartArgs mirrors charly-core start.go's function of the same name VERBATIM (the direct-mode
-// `podman run -d …` argv).
+// buildStartArgs is the plugin-side twin of the equivalent charly-core function P13-KERNEL
+// step-4(ii) moved here VERBATIM (the direct-mode `podman run -d …` argv); Cutover B unit 2
+// confirmed the core copy was dead (zero non-test callers) and deleted it — this is now the ONLY
+// live implementation.
 func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name string, volumes []deploykit.VolumeMount, bindMounts []deploykit.ResolvedBindMount, gpu bool, bindAddr string, envVars []string, security spec.SecurityConfig, entrypoint []string, workingDir string, network ...string) []string {
 	binary := kit.EngineBinary(engine)
 	args := []string{

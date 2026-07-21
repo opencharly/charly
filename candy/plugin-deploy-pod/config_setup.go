@@ -397,7 +397,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		UID: uid, GID: gid, Env: envVars, EnvFile: quadletEnvFile, Instance: c.Instance,
 		Security: security, Network: resolvedNetwork, Status: meta.Status, Info: meta.Info,
 		Entrypoint: resolveEntrypointFromMeta(&meta), Secrets: provisioned, CharlyBin: charlyBin,
-		EncryptedMounts: hasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
+		EncryptedMounts: deploykit.HasEncryptedBindMounts(bindMounts), KeyringBackend: isKeyring,
 		PodName: podName, Sidecar: resolvedSidecars,
 	}
 
@@ -490,7 +490,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		}
 	}
 
-	if hasEncryptedBindMounts(bindMounts) {
+	if deploykit.HasEncryptedBindMounts(bindMounts) {
 		if err := hostBuild(ctx, ex, podConfigEncMountsKind, spec.PodConfigEncMountsRequest{
 			Box: c.Box, Instance: c.Instance, AutoGen: autoGen, KeepMounted: c.KeepMounted,
 		}, nil); err != nil {

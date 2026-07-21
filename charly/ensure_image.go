@@ -123,7 +123,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 		// the input was already a short name (no pinned tag).
 		if cfg != nil {
 			if resolved, err := cfg.ResolveBox(short, "", projectDir, ResolveOpts{}); err == nil {
-				produced := resolveShellImageRef(resolved.Registry, resolved.Name, "")
+				produced := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
 				if produced != "" && produced != image && kit.LooksLikeFullRef(image) {
 					if terr := podmanTagAlias(ctx, produced, image); terr != nil {
 						fmt.Fprintf(os.Stderr, "ensure-image: warning: tag alias %s -> %s failed: %v\n", produced, image, terr)
@@ -169,7 +169,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
-	return resolveShellImageRef(resolved.Registry, resolved.Name, ""), nil
+	return kit.ResolveShellImageRef(resolved.Registry, resolved.Name, ""), nil
 }
 
 // pullRefForEnsure returns the registry ref to hand to `podman pull`.

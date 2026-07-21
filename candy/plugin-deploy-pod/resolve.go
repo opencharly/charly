@@ -184,7 +184,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	if err := hostBuild(ctx, ex, podConfigEncEnsurePlanKind, spec.PodConfigEncEnsurePlanRequest{Box: box, Instance: instance}, &encRep); err != nil {
 		return nil, err
 	}
-	if err := verifyBindMountsLocal(bindMounts, box); err != nil {
+	if err := deploykit.VerifyBindMounts(bindMounts, box); err != nil {
 		return nil, err
 	}
 

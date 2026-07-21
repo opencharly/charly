@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
 )
+
+// TestFindPodSidecarQuadlets_* DELETED (Cutover B unit 2, R1 dead-code catch): findPodSidecarQuadlets
+// itself was deleted from sidecar.go as zero-production-caller dead code — these were its only
+// exercise, so they moved with it (i.e. nowhere; the function is gone, not relocated, since the
+// production sweep it purported to test was already superseded by resolveSidecarNames).
 
 // TestEmbeddedSidecarTemplates verifies the binary-embedded tailscale template
 // (charly.yml `sidecar:`) is well-formed. The kernel stores it as an opaque body;
@@ -55,95 +57,5 @@ func TestHasTailscaleSidecar(t *testing.T) {
 	}
 	if !HasTailscaleSidecar(map[string]json.RawMessage{"tailscale": json.RawMessage("{}")}) {
 		t.Error("tailscale should return true")
-	}
-}
-
-// TestFindPodSidecarQuadlets_ExcludesSiblingInstance is the regression test
-// for the charly config remove sidecar-sweep bug: the prior implementation matched
-// `<podPrefix>` as a bare filename prefix, which swept up sibling instances of
-// the same image (e.g. running `charly config remove versa` stopped the unrelated
-// production `charly-versa-ecovoyage.service`). The fix requires the candidate
-// quadlet to declare `Pod=<podname>.pod` in its content — the load-bearing
-// invariant that distinguishes true sidecars from sibling instances.
-func TestFindPodSidecarQuadlets_ExcludesSiblingInstance(t *testing.T) {
-	qdir := t.TempDir()
-
-	// Main pod container — caller excludes this from the returned list.
-	mainQuadlet := "[Unit]\nDescription=main\n\n[Container]\nPod=charly-versa.pod\nContainerName=charly-versa\nImage=ghcr.io/x/versa:latest\n"
-	writeQuadlet(t, qdir, "charly-versa.container", mainQuadlet)
-
-	// True sidecar — has Pod=charly-versa.pod, should match.
-	sidecarQuadlet := "[Unit]\nDescription=sidecar\n\n[Container]\nPod=charly-versa.pod\nContainerName=charly-versa-tailscale\nImage=ghcr.io/tailscale/tailscale:latest\n"
-	writeQuadlet(t, qdir, "charly-versa-tailscale.container", sidecarQuadlet)
-
-	// Sibling instance — no Pod= directive, must NOT match even though the
-	// filename shares the charly-versa- prefix. This is the regression scenario.
-	siblingQuadlet := "[Unit]\nDescription=sibling instance\n\n[Container]\nContainerName=charly-versa-ecovoyage\nImage=ghcr.io/x/versa:2026.135.1326\n"
-	writeQuadlet(t, qdir, "charly-versa-ecovoyage.container", siblingQuadlet)
-
-	// Sibling instance with its OWN pod — also must NOT match (its Pod=
-	// directive references a different pod).
-	siblingPodQuadlet := "[Unit]\nDescription=sibling pod instance\n\n[Container]\nPod=charly-versa-canary.pod\nContainerName=charly-versa-canary\nImage=ghcr.io/x/versa:latest\n"
-	writeQuadlet(t, qdir, "charly-versa-canary.container", siblingPodQuadlet)
-
-	// Unrelated image whose filename happens to start with charly-versa-something
-	// but is NOT in our pod.
-	unrelatedQuadlet := "[Unit]\n\n[Container]\nPod=charly-different.pod\nContainerName=charly-versa-something\n"
-	writeQuadlet(t, qdir, "charly-versa-something.container", unrelatedQuadlet)
-
-	// Pod file (.pod, not .container) — must be ignored by the sweep.
-	writeQuadlet(t, qdir, "charly-versa.pod", "[Pod]\nPodName=charly-versa\n")
-
-	got, err := findPodSidecarQuadlets(qdir, "charly-versa", "charly-versa.container")
-	if err != nil {
-		t.Fatalf("findPodSidecarQuadlets: %v", err)
-	}
-	want := []string{"charly-versa-tailscale.container"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("sidecars = %v, want %v", got, want)
-	}
-}
-
-// TestFindPodSidecarQuadlets_InstanceScoping covers the instance variant: a
-// removal of `versa -i ecovoyage` (pod name charly-versa-ecovoyage) must NOT pick
-// up the BASE versa's quadlets, and must pick up ecovoyage-scoped sidecars.
-func TestFindPodSidecarQuadlets_InstanceScoping(t *testing.T) {
-	qdir := t.TempDir()
-
-	// Base versa pod members (different pod name — must be excluded).
-	writeQuadlet(t, qdir, "charly-versa.container", "[Container]\nPod=charly-versa.pod\n")
-	writeQuadlet(t, qdir, "charly-versa-tailscale.container", "[Container]\nPod=charly-versa.pod\n")
-
-	// Ecovoyage instance + its sidecar.
-	writeQuadlet(t, qdir, "charly-versa-ecovoyage.container", "[Container]\nPod=charly-versa-ecovoyage.pod\n")
-	writeQuadlet(t, qdir, "charly-versa-ecovoyage-tailscale.container", "[Container]\nPod=charly-versa-ecovoyage.pod\n")
-
-	got, err := findPodSidecarQuadlets(qdir, "charly-versa-ecovoyage", "charly-versa-ecovoyage.container")
-	if err != nil {
-		t.Fatalf("findPodSidecarQuadlets: %v", err)
-	}
-	want := []string{"charly-versa-ecovoyage-tailscale.container"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("sidecars = %v, want %v", got, want)
-	}
-}
-
-// TestFindPodSidecarQuadlets_EmptyDir handles the no-quadlets case (a
-// just-installed system or a fully-cleaned host).
-func TestFindPodSidecarQuadlets_EmptyDir(t *testing.T) {
-	qdir := t.TempDir()
-	got, err := findPodSidecarQuadlets(qdir, "charly-versa", "charly-versa.container")
-	if err != nil {
-		t.Fatalf("findPodSidecarQuadlets: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("expected empty, got %v", got)
-	}
-}
-
-func writeQuadlet(t *testing.T, dir, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatalf("writing %s: %v", name, err)
 	}
 }

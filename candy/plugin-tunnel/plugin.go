@@ -11,8 +11,10 @@
 // (charly/tunnel.go: ResolveTunnelConfig / TunnelConfigFromMetadata; the pure
 // schemeTarget/tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to
 // sdk/deploykit with the emitter in P11). Only the
-// EXECUTION leg lives HERE: charly's core tunnel_plugin.go resolves a TunnelConfig, then
-// forwards TunnelStart / TunnelStop / cloudflareTunnelSetup over this verb's Invoke
+// EXECUTION leg lives HERE: the pod-lifecycle plugins that resolve a TunnelConfig
+// (candy/plugin-deploy-pod for start/stop, candy/plugin-pod for remove — Cutover B unit 2,
+// the former core dispatch adapter that used to sit between them is deleted) drive this
+// verb's start/stop/setup methods directly over InvokeProvider, wrapped in this verb's Invoke
 // envelope ({method, config}); tunnel_exec.go runs the actual tailscale serve/funnel and
 // cloudflared lifecycle, stopping at the exec/auth boundary.
 package tunnelverb
@@ -46,8 +48,9 @@ func NewMeta() pb.PluginMetaServer {
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// tunnelReply is the wire form the exec methods (start/stop/setup) return — byte-compatible
-// with the core's tunnelReply (charly/tunnel_plugin.go), the cross-module tunnel contract.
+// tunnelReply is the wire form the exec methods (start/stop/setup) return over
+// InvokeProvider/Invoke — today's callers (candy/plugin-deploy-pod, candy/plugin-pod) only
+// check the RPC error, but the reply's Error field is the one every caller COULD surface.
 type tunnelReply struct {
 	Error      string `json:"error,omitempty"`
 	Name       string `json:"name,omitempty"`
@@ -63,9 +66,10 @@ type pluginCheckResult struct {
 }
 
 // Invoke is the gRPC entry point for verb:tunnel. Both callers wrap the operation in a
-// `plugin_input` envelope: the core adapter (tunnel_plugin.go) marshals {plugin_input:
-// {method, config}} directly, and a `plugin: tunnel` CHECK step arrives as the marshaled
-// Op which carries the authored `plugin_input` — so ONE decode path serves both.
+// `plugin_input` envelope: the pod-lifecycle plugins (candy/plugin-deploy-pod's podTunnelOp,
+// candy/plugin-pod's podTunnelStop) marshal {plugin_input: {method, config}} directly via
+// InvokeProvider, and a `plugin: tunnel` CHECK step arrives as the marshaled Op which carries the
+// authored `plugin_input` — so ONE decode path serves both.
 func (provider) Invoke(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var in struct {
 		PluginInput params.TunnelInput `json:"plugin_input"`

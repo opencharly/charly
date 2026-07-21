@@ -3,6 +3,7 @@ package deploypod
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -210,14 +211,38 @@ func podContainerStop(ctx context.Context, exec *sdk.Executor, plan spec.PodLife
 }
 
 // podTunnelOp composes verb:tunnel over InvokeProvider with the {plugin_input:{method,config}}
-// envelope verb:tunnel decodes (byte-compatible with the in-core invokeTunnel adapter, R3).
+// envelope verb:tunnel decodes — the SAME envelope shape candy/plugin-pod's podTunnelStop
+// (remove_tunnel.go) uses for the `charly remove` teardown leg (R3, Cutover B unit 2). Also
+// decodes the reply's business-level Error field (R1 fix, Cutover B unit 2: InvokeProvider itself
+// only surfaces RPC-transport failures — unlike HostBuild, it does not hoist a reply-carried error
+// — so a verb:tunnel exec failure with a healthy RPC was previously swallowed silently here).
 func podTunnelOp(ctx context.Context, exec *sdk.Executor, method string, cfg *spec.TunnelConfig) error {
 	body, err := json.Marshal(map[string]any{"plugin_input": map[string]any{"method": method, "config": cfg}})
 	if err != nil {
 		return err
 	}
-	_, err = exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil)
-	return err
+	resJSON, err := exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil)
+	if err != nil {
+		return err
+	}
+	return tunnelReplyError(resJSON)
+}
+
+// tunnelReplyError decodes verb:tunnel's {error,name,config_path} reply and surfaces a non-empty
+// Error field as a Go error (nil-safe on an empty/undecodable payload — best-effort, matching the
+// caller's own best-effort warning framing). Shared by podTunnelOp (start/stop) so the fix applies
+// uniformly rather than being re-derived ad hoc at a second call site.
+func tunnelReplyError(resJSON []byte) error {
+	if len(resJSON) == 0 {
+		return nil
+	}
+	var rep struct {
+		Error string `json:"error,omitempty"`
+	}
+	if json.Unmarshal(resJSON, &rep) == nil && rep.Error != "" {
+		return errors.New(rep.Error)
+	}
+	return nil
 }
 
 // shellJoin renders an argv into a single shell-safe command string (each token kit.ShellQuote'd)

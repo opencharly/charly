@@ -45,6 +45,7 @@ const (
 	podConfigEncUnmountPlanKind   = "pod-config-enc-unmount-plan"
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
+	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
 )
 
 func hostBuildPodConfigListSidecars(_ context.Context, _ spec.PodConfigLoadDeployRequest, _ buildEngineContext) (spec.PodConfigListSidecarsReply, error) {
@@ -108,7 +109,7 @@ func hostBuildPodConfigResolveRef(_ context.Context, req spec.PodConfigResolveRe
 	if ov := resolveDeployResolvedImage(req.Box, req.Instance); ov != "" && kit.LocalImageExists("podman", ov) {
 		imageRef = ov
 	} else {
-		imageRef = resolveShellImageRef("", deployBoxName, req.Tag)
+		imageRef = kit.ResolveShellImageRef("", deployBoxName, req.Tag)
 	}
 	return spec.PodConfigResolveRefReply{DeployBoxName: deployBoxName, ImageRef: imageRef}, nil
 }
@@ -150,7 +151,7 @@ func hostBuildPodConfigMigrateSecrets(_ context.Context, req spec.PodConfigMigra
 	if err := json.Unmarshal(req.ConfigJSON, &dc); err != nil {
 		return spec.PodConfigMigrateSecretsReply{}, err
 	}
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigMigrateSecretsReply{}, err
 	}
@@ -166,7 +167,7 @@ func hostBuildPodConfigMigrateSecrets(_ context.Context, req spec.PodConfigMigra
 }
 
 func hostBuildPodConfigScrubCliEnv(_ context.Context, req spec.PodConfigScrubCliEnvRequest, _ buildEngineContext) (spec.PodConfigScrubCliEnvReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigScrubCliEnvReply{}, err
 	}
@@ -223,7 +224,7 @@ func hostBuildPodConfigBoxEngine(_ context.Context, req spec.PodConfigBoxEngineR
 }
 
 func hostBuildPodConfigTunnelResolve(_ context.Context, req spec.PodConfigTunnelResolveRequest, _ buildEngineContext) (spec.PodConfigTunnelResolveReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigTunnelResolveReply{}, err
 	}
@@ -284,7 +285,7 @@ func hostBuildPodConfigResolveSidecars(_ context.Context, req spec.PodConfigReso
 		if len(sc.Secret) == 0 {
 			continue
 		}
-		scSecrets, _ := ApplySecretRefresh(sc.Secret, req.RefreshSecret)
+		scSecrets, _ := deploykit.ApplySecretRefresh(sc.Secret, req.RefreshSecret)
 		scProvisioned, scFallback, scErr := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, scSecrets, req.AutoGen)
 		if scErr != nil {
 			continue // best-effort — mirrors the former in-Run() Warning-only handling
@@ -310,14 +311,14 @@ func hostBuildPodConfigResolveSidecars(_ context.Context, req spec.PodConfigReso
 }
 
 func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigProvisionSecretsRequest, _ buildEngineContext) (spec.PodConfigProvisionSecretsReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigProvisionSecretsReply{}, err
 	}
-	candyOwnedSecrets := CollectSecretsFromLabels(req.Box, meta.Secret)
+	candyOwnedSecrets := deploykit.CollectSecretsFromLabels(req.Box, meta.Secret)
 	credBackedSecrets, secretResolutions := CollectCandySecretAccepts(req.Box, req.Instance, &meta)
 	collectedSecrets := append(append([]deploykit.CollectedSecret{}, candyOwnedSecrets...), credBackedSecrets...)
-	collectedSecrets, _ = ApplySecretRefresh(collectedSecrets, req.RefreshSecret)
+	collectedSecrets, _ = deploykit.ApplySecretRefresh(collectedSecrets, req.RefreshSecret)
 	provisioned, fallbackEnv, err := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, collectedSecrets, req.AutoGen)
 	if err != nil {
 		return spec.PodConfigProvisionSecretsReply{}, err
@@ -396,11 +397,22 @@ func hostBuildPodConfigSaveDeployState(_ context.Context, req spec.PodConfigSave
 }
 
 func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSecretEnvRequest, _ buildEngineContext) (spec.PodConfigHookSecretEnvReply, error) {
-	var meta BoxMetadata
+	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigHookSecretEnvReply{}, err
 	}
 	return spec.PodConfigHookSecretEnvReply{Env: resolveHookSecretEnv(req.Box, req.Instance, &meta)}, nil
+}
+
+// hostBuildPodConfigCleanDeployEntry wraps deploykit.CleanDeployEntry VERBATIM (Cutover B unit 2
+// remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
+// marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
+// K4-exit family CleanDeployEntry's own callers document), so this narrow twin of
+// hostBuildPodConfigSaveDeployState stays host-side rather than forcing the wrong-shaped
+// deploy-config-save seam to fit (see #PodConfigCleanDeployEntryRequest's doc comment).
+func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCleanDeployEntryRequest, _ buildEngineContext) (spec.PodConfigCleanDeployEntryReply, error) {
+	deploykit.CleanDeployEntry(req.Box, req.Instance, marshalDeployNode)
+	return spec.PodConfigCleanDeployEntryReply{}, nil
 }
 
 var _ = func() bool {
@@ -426,5 +438,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigEncUnmountPlanKind, typedHostBuilder(podConfigEncUnmountPlanKind, hostBuildPodConfigEncUnmountPlan))
 	registerHostBuilder(podConfigContainerTunnelKind, typedHostBuilder(podConfigContainerTunnelKind, hostBuildPodConfigContainerTunnel))
 	registerHostBuilder(podConfigBoxEngineKind, typedHostBuilder(podConfigBoxEngineKind, hostBuildPodConfigBoxEngine))
+	registerHostBuilder(podConfigCleanDeployEntryKind, typedHostBuilder(podConfigCleanDeployEntryKind, hostBuildPodConfigCleanDeployEntry))
 	return true
 }()

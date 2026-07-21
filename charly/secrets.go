@@ -1,16 +1,11 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"os"
-	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"golang.org/x/term"
 )
@@ -20,58 +15,21 @@ import (
 // route through connectPluginByWord to verb:credential — the core provider registry, the
 // same clause-M coupling as enc.go (see its header). Registered FINAL/K5 inventory
 // alongside enc.go's InvokeProvider rewrite, not this wave.
-
-// generateRandomSecretToken returns `byteCount` random bytes encoded as
-// url-safe base64 (RFC 4648 §5). For byteCount=32 this produces a 44-char
-// string (43 base64 chars + 1 `=` pad).
 //
-// Url-safe base64 was chosen over hex because it is a strict superset of
-// what every secret consumer in the codebase needs:
-//   - Postgres / VNC / generic passwords: accept any string. Base64 has
-//     more entropy per character (6 bits vs 4) so 32 random bytes pack
-//     into 44 chars instead of hex's 64 chars.
-//   - Apache Airflow's AIRFLOW__CORE__FERNET_KEY: REQUIRES url-safe
-//     base64 of exactly 32 bytes (cryptography.fernet.Fernet's documented
-//     format). Hex strings are rejected with `binascii.Error: Invalid
-//     base64-encoded string`. This is the load-bearing fix — prior hex
-//     output forced every Fernet-using candy (airflow today, more
-//     tomorrow) to ship a workaround that regenerated the key.
-//   - gocryptfs / Podman / KeePassXC: accept any string; format-agnostic.
-//
-// Url-safe (vs standard base64) avoids `+` and `/` characters that would
-// need shell-escaping in `[Service] Environment=...` quadlet lines and
-// in `--password` CLI args. The `=` padding is benign in every consumer.
-//
-// All consumers in this codebase treat the return value as an opaque
-// string — none decode it back to bytes — so the format change is
-// invisible to existing keyring-stored secrets (which remain in
-// whatever format they were originally stored).
-func generateRandomSecretToken(byteCount int) string {
-	b := make([]byte, byteCount)
-	if _, err := rand.Read(b); err != nil {
-		panic("crypto/rand failed: " + err.Error())
-	}
-	return base64.URLEncoding.EncodeToString(b)
-}
-
-// promptPassword reads a password from the terminal without echo — the interactive
-// secret-entry path in ProvisionPodmanSecrets (a `charly config`-time operator prompt).
-// The `charly secrets` CLI moved to candy/plugin-secrets, but this in-deploy prompt stays
-// in core (it runs inside the deploy provisioning path, not the secrets CLI).
-func promptPassword(prompt string) (string, error) {
-	fmt.Fprint(os.Stderr, prompt)
-	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr)
-	if err != nil {
-		return "", fmt.Errorf("reading password: %w", err)
-	}
-	return string(pw), nil
-}
+// The portable leaf helpers (token generation, password prompting, podman-secret CRUD,
+// label reconstruction, credential-key mapping) live in sdk/deploykit/secret_probe.go
+// (Cutover B-1 fix round — a pr-validator FAIL caught these left duplicated in-file on
+// the first pass; every call site below now calls the deploykit copy, and the in-file
+// originals are deleted, per R3/R5). What stays HERE (core): ProvisionPodmanSecrets/
+// resolveSecretValue/CollectCandySecretAccepts/resolveHookSecretEnv/generateAndStoreSecret
+// — each calls ResolveCredential/DefaultCredentialStore directly or transitively (the
+// core provider registry), registered FINAL/K5 inventory alongside enc.go's credential
+// family.
 
 // generateAndStoreSecret generates a 32-byte url-safe base64 token (44
-// chars; Fernet-key-compatible — see generateRandomSecretToken), persists
-// it to the active credential store at (service, key), and returns the
-// value with the "auto-generated" source classification. Persistence
+// chars; Fernet-key-compatible — see deploykit.GenerateRandomSecretToken),
+// persists it to the active credential store at (service, key), and returns
+// the value with the "auto-generated" source classification. Persistence
 // failures are logged to stderr but not returned as errors — the
 // in-memory value is still usable for the current charly invocation.
 //
@@ -81,7 +39,7 @@ func promptPassword(prompt string) (string, error) {
 //   - ensureCandySecret (layer_secrets.go) — deploy-time secret_requires
 //     resolution on host/VM/SSH targets when the value is missing.
 func generateAndStoreSecret(service, key string) (val, source string) {
-	val = generateRandomSecretToken(32)
+	val = deploykit.GenerateRandomSecretToken(32)
 	if err := DefaultCredentialStore().Set(service, key, val); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not persist auto-generated secret %s/%s: %v\n",
 			service, key, err)
@@ -91,94 +49,19 @@ func generateAndStoreSecret(service, key string) (val, source string) {
 
 // LabelSecretEntry represents a secret requirement in an OCI image label.
 // Only metadata is stored — never the secret value. CUE-sourced in spec (boxmetadata.cue, P2B)
-// + aliased in-place; carried on BoxMetadata.Secret (ai.opencharly.secret).
+// + aliased in-place; carried on spec.BoxMetadata.Secret (ai.opencharly.secret).
 type LabelSecretEntry = spec.LabelSecretEntry
 
 // CollectedSecret (a fully-resolved secret ready for provisioning + the quadlet
-// Secret= directive) is a deploykit resolved-runtime type now, referenced directly
+// Secret= directive) is a deploykit resolved-runtime type, referenced directly
 // as deploykit.CollectedSecret — it moved to sdk/deploykit with the pod config-write
 // mechanism (P11). Service/Key/RotateOnConfig are populated by CollectCandySecretAccepts
 // for credential-store-backed secrets (secret_accepts / secret_requires); zero for
-// candy-owned secrets (the CollectSecretsFromLabels path). Service/Key override the
-// ResolveCredential lookup (defaults Service="charly/secret", Key=SecretName);
-// RotateOnConfig=true makes ProvisionPodmanSecrets bypass the podmanSecretExists
+// candy-owned secrets (the deploykit.CollectSecretsFromLabels path). Service/Key override
+// the ResolveCredential lookup (defaults Service="charly/secret", Key=SecretName);
+// RotateOnConfig=true makes ProvisionPodmanSecrets bypass the deploykit.PodmanSecretExists
 // short-circuit and rm+recreate every reconcile (candy-owned secrets keep it false —
 // you cannot re-init a live postgres cluster with a rotated password).
-
-// ListProvisionedSecretNames returns the engine-side podman secrets
-// provisioned for a box (the charly-<box>-* names, sidecar secrets
-// included), sorted — the charly-native replacement for ad-hoc
-// `podman secret ls` verification (surfaced on `charly status <box>` detail).
-func ListProvisionedSecretNames(engineBin, boxName string) []string {
-	out, err := exec.Command(engineBin, "secret", "ls", "--format", "{{.Name}}").Output()
-	if err != nil {
-		return nil
-	}
-	prefix := "charly-" + boxName + "-"
-	var names []string
-	for n := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if n != "" && strings.HasPrefix(n, prefix) {
-			names = append(names, n)
-		}
-	}
-	sort.Strings(names)
-	return names
-}
-
-// ApplySecretRefresh marks the named secrets (matched by their manifest
-// SecretName; the literal "all" matches every secret) RotateOnConfig for
-// THIS provisioning run, so ProvisionPodmanSecrets removes and recreates
-// their podman secrets — the charly-native replacement for the retired
-// ad-hoc `podman secret rm` re-provisioning path. Returns the requested
-// names that matched nothing so the caller can surface typos. NOTE: a
-// candy-owned auto-generated secret gets a NEW random value on refresh;
-// services that persisted the old value (an initialized database) must be
-// re-initialized by the operator.
-func ApplySecretRefresh(secrets []deploykit.CollectedSecret, refresh []string) ([]deploykit.CollectedSecret, []string) {
-	if len(refresh) == 0 {
-		return secrets, nil
-	}
-	all := false
-	hit := map[string]bool{}
-	for _, r := range refresh {
-		if r == "all" {
-			all = true
-			continue
-		}
-		hit[r] = false
-	}
-	for i := range secrets {
-		name := secrets[i].SecretName
-		if _, requested := hit[name]; all || requested {
-			secrets[i].RotateOnConfig = true
-			if _, requested := hit[name]; requested {
-				hit[name] = true
-			}
-		}
-	}
-	var unmatched []string
-	for name, matched := range hit {
-		if !matched {
-			unmatched = append(unmatched, name)
-		}
-	}
-	sort.Strings(unmatched)
-	return secrets, unmatched
-}
-
-// CollectSecretsFromLabels reconstructs secrets from image label metadata.
-func CollectSecretsFromLabels(boxName string, labelSecrets []LabelSecretEntry) []deploykit.CollectedSecret {
-	secrets := make([]deploykit.CollectedSecret, 0, len(labelSecrets))
-	for _, ls := range labelSecrets {
-		secrets = append(secrets, deploykit.CollectedSecret{
-			Name:       "charly-" + boxName + "-" + ls.Name,
-			Target:     ls.Target,
-			Env:        ls.Env,
-			SecretName: ls.Name,
-		})
-	}
-	return secrets
-}
 
 // ProvisionPodmanSecrets creates podman secrets from the credential store.
 // Returns the secrets that were successfully provisioned and any that fell back to env vars.
@@ -222,7 +105,7 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deployki
 		// CollectCandySecretAccepts for secret_accepts/secret_requires
 		// entries, whose whole point is to reflect the current credential
 		// store value on every reconcile. See plan §2.3.
-		if !s.RotateOnConfig && podmanSecretExists(engine, s.Name) {
+		if !s.RotateOnConfig && deploykit.PodmanSecretExists(engine, s.Name) {
 			fmt.Fprintf(os.Stderr, "  %-40s → kept (already provisioned)\n", s.Name)
 			provisioned = append(provisioned, s)
 			continue
@@ -250,7 +133,7 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deployki
 						prompt += fmt.Sprintf(" (%s)", s.Env)
 					}
 					prompt += ": "
-					entered, promptErr := promptPassword(prompt)
+					entered, promptErr := deploykit.PromptPassword(prompt)
 					if promptErr != nil {
 						fmt.Fprintf(os.Stderr, "  %-40s → prompt failed: %v\n", s.Name, promptErr)
 						continue
@@ -280,7 +163,7 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deployki
 			}
 		}
 
-		if err := ensurePodmanSecret(engine, s.Name, val); err != nil {
+		if err := deploykit.EnsurePodmanSecret(engine, s.Name, val); err != nil {
 			fmt.Fprintf(os.Stderr, "  %-40s → FAILED: %v\n", s.Name, err)
 			// Fall back to env var if available
 			if s.Env != "" {
@@ -299,15 +182,6 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deployki
 	}
 
 	return provisioned, fallbackEnv, nil
-}
-
-// SecretArgs returns --secret flags for container run (direct mode).
-func SecretArgs(secrets []deploykit.CollectedSecret) []string {
-	args := make([]string, 0, 2*len(secrets))
-	for _, s := range secrets {
-		args = append(args, "--secret", fmt.Sprintf("%s,target=%s", s.Name, s.Target))
-	}
-	return args
 }
 
 // resolveSecretValue looks up the value for a secret from the credential store.
@@ -344,7 +218,7 @@ func resolveSecretValue(s deploykit.CollectedSecret, boxName, instance string) (
 		envLookup = s.HostEnv
 	}
 	if envLookup != "" {
-		val, src := ResolveCredential(envLookup, credServiceForSecret(s.Env), credKeyForSecret(boxName, instance), "")
+		val, src := ResolveCredential(envLookup, deploykit.CredServiceForSecret(s.Env, CredServiceVNC), deploykit.CredKeyForSecret(boxName, instance), "")
 		if val != "" {
 			return val, src
 		}
@@ -387,7 +261,7 @@ type SecretResolution struct {
 // This function does NOT touch the podman secret store — that's the job of
 // ProvisionPodmanSecrets. It only reads from the credential store. No network
 // calls, no filesystem mutations, safe to run speculatively.
-func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
+func CollectCandySecretAccepts(boxName, instance string, meta *spec.BoxMetadata) (collected []deploykit.CollectedSecret, resolutions []SecretResolution) {
 	if meta == nil {
 		return nil, nil
 	}
@@ -451,7 +325,7 @@ func CollectCandySecretAccepts(boxName, instance string, meta *BoxMetadata) (col
 // a hook that consumes a secret (e.g. github-runner's registration token) would
 // otherwise never see it. Generic across every hook+secret candy (R3); inert
 // (returns nil) when the image declares no secrets or none resolve.
-func resolveHookSecretEnv(boxName, instance string, meta *BoxMetadata) []string {
+func resolveHookSecretEnv(boxName, instance string, meta *spec.BoxMetadata) []string {
 	collected, _ := CollectCandySecretAccepts(boxName, instance, meta)
 	var env []string
 	for _, s := range collected {
@@ -463,58 +337,4 @@ func resolveHookSecretEnv(boxName, instance string, meta *BoxMetadata) []string 
 		}
 	}
 	return env
-}
-
-// credServiceForSecret maps well-known env vars to credential services.
-func credServiceForSecret(envVar string) string {
-	switch envVar {
-	case "VNC_PASSWORD":
-		return CredServiceVNC
-	default:
-		return "charly/secret"
-	}
-}
-
-// credKeyForSecret returns the credential key for an image/instance pair.
-func credKeyForSecret(boxName, instance string) string {
-	if instance != "" {
-		return boxName + "-" + instance
-	}
-	return boxName
-}
-
-// podmanSecretExists checks whether a podman secret with the given name already exists.
-func podmanSecretExists(engine, name string) bool {
-	binary := kit.EngineBinary(engine)
-	cmd := exec.Command(binary, "secret", "inspect", name)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run() == nil
-}
-
-// ensurePodmanSecret creates or replaces a podman secret.
-func ensurePodmanSecret(engine, name, value string) error {
-	binary := kit.EngineBinary(engine)
-	// Remove existing secret (ignore error if doesn't exist)
-	rmCmd := exec.Command(binary, "secret", "rm", name)
-	rmCmd.Stderr = nil
-	_ = rmCmd.Run()
-
-	// Create new secret from stdin
-	createCmd := exec.Command(binary, "secret", "create", name, "-")
-	createCmd.Stdin = strings.NewReader(value)
-	if output, err := createCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("podman secret create %s: %w\n%s", name, err, strings.TrimSpace(string(output)))
-	}
-	return nil
-}
-
-// RemovePodmanSecrets removes podman secrets for an image (best-effort).
-func RemovePodmanSecrets(engine string, secrets []deploykit.CollectedSecret) {
-	binary := kit.EngineBinary(engine)
-	for _, s := range secrets {
-		cmd := exec.Command(binary, "secret", "rm", s.Name)
-		cmd.Stderr = nil
-		_ = cmd.Run()
-	}
 }

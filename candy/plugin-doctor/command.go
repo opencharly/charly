@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
@@ -840,7 +841,7 @@ func managerShort(manager string) string {
 // proactively instead of leaving the operator to hit the raw fusermount3 error at mount time.
 // A pure host op the plugin runs itself (os.ReadFile).
 func checkFuseAllowOther() DoctorCheckResult {
-	if fuseAllowOtherEnabled() {
+	if deploykit.FuseAllowOtherEnabled() {
 		return DoctorCheckResult{Name: "user_allow_other", Status: CheckOK, Detail: fuseConfPath}
 	}
 	return DoctorCheckResult{
@@ -851,20 +852,11 @@ func checkFuseAllowOther() DoctorCheckResult {
 	}
 }
 
-// fuseAllowOtherEnabled reports whether fuse.conf has an ACTIVE (uncommented, value-less)
-// `user_allow_other` line. An absent/unreadable file counts as not enabled.
-func fuseAllowOtherEnabled() bool {
-	data, err := os.ReadFile(fuseConfPath)
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.TrimSpace(line) == "user_allow_other" {
-			return true
-		}
-	}
-	return false
-}
+// fuseAllowOtherEnabled DELETED (Cutover B unit 2) — a duplicate of the now-shared
+// deploykit.FuseAllowOtherEnabled (sdk/deploykit/enc_probe.go); checkFuseAllowOther calls that
+// directly. fuseConfPath stays HERE as a plain path constant for the Detail/InstallHint message
+// text (not logic duplication — deploykit's own equivalent var is unexported and serves the
+// actual check, this one only formats a display string).
 
 // secretStorageChecks returns checks for the credential/secret storage subsystem, rendered from the
 // hostprobe seam's credential-health reply (the keyring + Secret Service probing lives in

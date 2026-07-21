@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // vm_qemu_client.go — host-side RPC wrappers for the direct-QEMU QMP shutdown ops. The govmm QMP
 // impl (formerly vm_qemu.go's qemuGracefulShutdown/qemuForceShutdown) moved to candy/plugin-vm;
@@ -16,7 +20,7 @@ func qemuForceShutdown(stateDir string) error {
 }
 
 func vmQemuShutdown(stateDir string, force bool) error {
-	raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "qemu-shutdown", StateDir: stateDir, Force: force})
+	raw, ok := invokeVmPluginEnv(spec.VmPluginEnv{VmOp: "qemu-shutdown", StateDir: stateDir, Force: force})
 	if !ok {
 		return fmt.Errorf("vm plugin unavailable (govmm QMP is out-of-process)")
 	}

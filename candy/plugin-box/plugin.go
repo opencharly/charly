@@ -4,9 +4,9 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves EIGHT command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/inspect/list/labels/merge` parse + dispatch here while
-// the retained core BoxCmd verbs — build/feature/reconcile/the authoring verbs — stay in core):
+// It serves NINE command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/inspect/list/labels/merge/reconcile` parse + dispatch
+// here while the retained core BoxCmd verbs — build/feature/the authoring verbs — stay in core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
@@ -34,6 +34,11 @@
 //     merge.auto) box off the resolved-project envelope, then reaches verb:oci DIRECTLY via
 //     InvokeProvider (the SAME F10 peer-dispatch leg candy/plugin-build's own post-build inline
 //     merge already uses) — zero core reentry (P14: relocated from charly/merge.go).
+//   - command:reconcile — `charly box reconcile`: aligns cross-repo `@github` git-tag pins to one
+//     target version per repo. Purely sdk/kit + sdk/deploykit + sdk/spec + stdlib YAML — zero
+//     HostBuild, zero InvokeProvider, zero core reentry (Cutover B unit 3+4: relocated from
+//     charly/reconcile.go, which had no core-only coupling at all — the cleanest of this wave's
+//     moves). See reconcile.go.
 //
 // NOT command:feature: `charly box feature run <image>` was ATTEMPTED here (P12a follow-up) and
 // REVERTED — nesting a second "feature" word under `box` panics RegisterBuiltinPluginUnit at
@@ -63,7 +68,7 @@ import (
 const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge", "reconcile"}
 
 // boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
 // in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string

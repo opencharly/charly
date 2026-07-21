@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -85,33 +84,6 @@ func ValidateEphemeralOnNode(name string, node *spec.BundleNode, errs *Validatio
 func ValidateVmNamingGuard(name string, errs *ValidationError) {
 	if strings.Contains(name, "-eph-") {
 		errs.Add("name %q contains reserved infix \"-eph-\"; this is reserved for ephemeral instance names — pick a different name", name)
-	}
-}
-
-// ValidateImportedSource checks the additional invariants for the
-// imported VmSource branch beyond what the #VmSource CUE schema already
-// covers (required-field presence + cross-arm exclusion). This adds
-// path/sanity checks that need filesystem access.
-func ValidateImportedSource(name string, src *VmSource, errs *ValidationError) {
-	if src.Kind != "imported" {
-		return
-	}
-	// disk_path should be absolute (relative paths can't be a stable
-	// libvirt-XML <disk source file=/>).
-	if src.DiskPath != "" && !strings.HasPrefix(src.DiskPath, "/") {
-		errs.Add("vm %q: source.disk_path %q must be absolute (libvirt requires absolute paths in <disk source file=/>)", name, src.DiskPath)
-	}
-}
-
-// ValidateEphemeralAcrossDeploy aggregates ephemeral / naming /
-// imported validation across an entire BundleConfig. Called from the
-// top-level Validate path.
-func ValidateEphemeralAcrossDeploy(dc *deploykit.BundleConfig, errs *ValidationError) {
-	if dc == nil {
-		return
-	}
-	for name, node := range dc.Bundle {
-		ValidateEphemeralOnNode(name, &node, errs)
 	}
 }
 

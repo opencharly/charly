@@ -14,8 +14,9 @@
 //     schema travels with the plugin.
 //
 // verb:tunnel is NOT a check verb in the usual sense — it is the externalized TUNNEL
-// EXECUTION backend. charly's core tunnel_plugin.go forwards TunnelStart / TunnelStop /
-// cloudflareTunnelSetup over this verb's Invoke envelope ({method,config}). It ALSO
+// EXECUTION backend. The pod-lifecycle plugins (candy/plugin-deploy-pod, candy/plugin-pod)
+// drive its start/stop/setup methods directly over this verb's Invoke envelope
+// ({method,config}) via InvokeProvider. It ALSO
 // carries a benign `plan` (dry-run) method — a `plugin: tunnel` check step returns the
 // EXACT tailscale/cloudflared argv it WOULD run WITHOUT exec, so a disposable bed proves
 // the registry dispatch + the TunnelConfig wire round-trip + the moved command-building
@@ -32,7 +33,7 @@
 	// creds-free dry-run that returns the argv the operation WOULD run (no exec).
 	method: string & !="" @go(Method)
 	// config — the resolved tunnel configuration to act on (byte-compatible with the
-	// core's TunnelConfig, sent by tunnel_plugin.go over the Invoke envelope).
+	// core's TunnelConfig, sent by the calling pod-lifecycle plugin over the Invoke envelope).
 	config?: #TunnelConfig @go(Config)
 	// expect — plan only: the expected argv command lines (space-joined). When set, the
 	// plan method compares the built argv against it (FAIL on mismatch); empty ⇒ the

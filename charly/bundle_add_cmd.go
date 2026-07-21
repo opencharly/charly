@@ -296,7 +296,7 @@ func (c *deployAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode, p
 			// resolvers that read node.Version (the k8s preresolver, the pod overlay
 			// build) pin the EXACT tag rather than re-resolving the short name by a
 			// newest-local-CalVer sort — the bed-scoped per-run tag #75, uniform with
-			// the plain-pod resolveShellImageRef(c.Tag) path.
+			// the plain-pod kit.ResolveShellImageRef(c.Tag) path.
 			node.Version = tag
 		}
 		if node.InstallOpts != nil {

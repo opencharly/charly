@@ -27,7 +27,7 @@ import (
 // + encPlanFor stay HOST-side (credential store + config reads a plugin cannot do); a passphrase
 // resolution failure fails the start, exactly as the former in-core ensureEncryptedMounts did.
 func resolvePodEncEnsure(box, instance string) (spec.RawBody, error) {
-	plan, err := encPlanFor(box, instance, "", box)
+	plan, err := deploykit.EncPlanFor(box, instance, "", box)
 	if err != nil || len(plan) == 0 {
 		return nil, nil // no encrypted mounts configured (load error swallowed, as before)
 	}
@@ -58,7 +58,7 @@ func resolvePodEncEnsure(box, instance string) (spec.RawBody, error) {
 // resolvePodEncUnmount builds the spec.EncExecInput (unmount) the plugin InvokeProviders verb:enc
 // with on `charly stop --unmount`, or nil when no encrypted volume is configured. Mirrors encUnmount.
 func resolvePodEncUnmount(box, instance string) (spec.RawBody, error) {
-	plan, err := encPlanFor(box, instance, "", deploykit.DeployStorageDir(box, instance))
+	plan, err := deploykit.EncPlanFor(box, instance, "", deploykit.DeployStorageDir(box, instance))
 	if err != nil || len(plan) == 0 {
 		return nil, nil
 	}
@@ -77,7 +77,7 @@ func resolvePodEncUnmount(box, instance string) (spec.RawBody, error) {
 func resolvePodTunnel(box, instance string) *spec.TunnelConfig {
 	dc := deploykit.LoadDeployConfigForRead("charly start tunnel")
 	ctrName := kit.ContainerNameInstance(box, instance)
-	imageRef := containerImage("podman", ctrName)
+	imageRef := kit.ContainerImage("podman", ctrName)
 	if imageRef == "" {
 		return nil
 	}

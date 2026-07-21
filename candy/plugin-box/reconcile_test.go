@@ -1,4 +1,4 @@
-package main
+package box
 
 import (
 	"os"
@@ -15,7 +15,7 @@ func TestImageReconcile_NewestReferenced(t *testing.T) {
 	dir := t.TempDir()
 	yml := "" +
 		"# top comment\n" +
-		"version: 2026.186.2323\n" +
+		"version: 2026.202.0105\n" +
 		"import:\n" +
 		"  - '@github.com/opencharly/charly/build.yml:v2026.141.1600'\n" +
 		"box:\n" +
@@ -37,8 +37,7 @@ func TestImageReconcile_NewestReferenced(t *testing.T) {
 	}
 	defer os.Chdir(cwd) //nolint:errcheck
 
-	cmd := &BoxReconcileCmd{}
-	if err := cmd.Run(); err != nil {
+	if err := dispatchReconcile(nil); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got, _ := os.ReadFile(path)
@@ -68,7 +67,7 @@ func TestImageReconcile_NewestReferenced(t *testing.T) {
 	}
 
 	// Idempotent: a second run rewrites nothing.
-	if err := cmd.Run(); err != nil {
+	if err := dispatchReconcile(nil); err != nil {
 		t.Fatalf("reconcile (2nd): %v", err)
 	}
 	got2, _ := os.ReadFile(path)
@@ -86,7 +85,7 @@ func TestImageReconcile_NewestReferenced(t *testing.T) {
 func TestImageReconcile_VendoredCandyRequires(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(
-		"version: 2026.186.2323\n"+
+		"version: 2026.202.0105\n"+
 			"box:\n  foo:\n    base: cachyos.cachyos\n    candy:\n"+
 			"      - '@github.com/opencharly/charly/candy/gnupg:v2026.144.0531'\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -96,7 +95,7 @@ func TestImageReconcile_VendoredCandyRequires(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(candyDir, "candy.yml"), []byte(
-		"candy:\n  name: keepassxc-keyring\n  version: 2026.186.2323\n  require:\n"+
+		"candy:\n  name: keepassxc-keyring\n  version: 2026.202.0105\n  require:\n"+
 			"    - '@github.com/opencharly/charly/candy/gnupg:v2026.141.1600' # vendored sibling\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +104,7 @@ func TestImageReconcile_VendoredCandyRequires(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chdir(cwd) //nolint:errcheck
-	if err := (&BoxReconcileCmd{}).Run(); err != nil {
+	if err := dispatchReconcile(nil); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got, _ := os.ReadFile(filepath.Join(candyDir, "candy.yml"))
@@ -127,7 +126,7 @@ func TestImageReconcile_SkipsSubmodules(t *testing.T) {
 	dir := t.TempDir()
 	// Root references gnupg at the newer pin (the reconcile target).
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(
-		"version: 2026.186.2323\n"+
+		"version: 2026.202.0105\n"+
 			"box:\n  foo:\n    base: fedora\n    candy:\n"+
 			"      - '@github.com/opencharly/charly/candy/gnupg:v2026.144.0531'\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -151,7 +150,7 @@ func TestImageReconcile_SkipsSubmodules(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chdir(cwd) //nolint:errcheck
-	if err := (&BoxReconcileCmd{}).Run(); err != nil {
+	if err := dispatchReconcile(nil); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	// The submodule's pin must be UNTOUCHED (left for the submodule's own reconcile).
@@ -165,7 +164,7 @@ func TestImageReconcile_SkipsSubmodules(t *testing.T) {
 func TestImageReconcile_NoPins(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"),
-		[]byte("version: 2026.186.2323\nimage:\n  foo:\n    base: fedora\n    candy: [agent-forwarding]\n"), 0o644); err != nil {
+		[]byte("version: 2026.202.0105\nimage:\n  foo:\n    base: fedora\n    candy: [agent-forwarding]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cwd, _ := os.Getwd()
@@ -173,7 +172,7 @@ func TestImageReconcile_NoPins(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chdir(cwd) //nolint:errcheck
-	if err := (&BoxReconcileCmd{}).Run(); err != nil {
+	if err := dispatchReconcile(nil); err != nil {
 		t.Fatalf("reconcile no-pins: %v", err)
 	}
 }

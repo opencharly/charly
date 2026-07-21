@@ -2,10 +2,12 @@ package main
 
 import (
 	"testing"
+
+	"github.com/opencharly/sdk/spec"
 )
 
 // TestCapabilityLabelCompleteness verifies every exported field on
-// BoxMetadata (aliased as Capabilities) has a CapabilityLabelMap entry.
+// spec.BoxMetadata (aliased as Capabilities) has a CapabilityLabelMap entry.
 // Adding a new capability field without a label mapping is a build break —
 // enforces the Part G invariant "every capability lives in an OCI label" so
 // that `charly bundle from-box` (Part F.10) can reconstruct the full contract
@@ -17,12 +19,12 @@ func TestCapabilityLabelCompleteness(t *testing.T) {
 }
 
 // TestCapabilitiesIsImageMetadataAlias asserts the type alias is zero-cost —
-// existing BoxMetadata consumers see the same struct under the
+// existing spec.BoxMetadata consumers see the same struct under the
 // Capabilities name.
 func TestCapabilitiesIsImageMetadataAlias(t *testing.T) {
 	var c Capabilities
 	c.Box = "test"
-	var m BoxMetadata = c //nolint:staticcheck // explicit type asserts Capabilities == BoxMetadata alias
+	var m spec.BoxMetadata = c //nolint:staticcheck // explicit type asserts Capabilities == spec.BoxMetadata alias
 	if m.Box != "test" {
 		t.Errorf("alias lost field value: %q", m.Box)
 	}

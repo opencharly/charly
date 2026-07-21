@@ -455,7 +455,7 @@ func (t *externalDeployTarget) prepareReverseState(ctx context.Context, plans []
 			switch s := step.(type) {
 			case *deploykit.ShellHookStep:
 				if s.EnvFile == "" && home != "" {
-					s.EnvFile = EnvdFilePath(home, s.CandyName)
+					s.EnvFile = kit.EnvdFilePath(home, s.CandyName)
 				}
 			case *deploykit.ServicePackagedStep:
 				s.PriorEnabled = venueUnitEnabled(ctx, t.exec, s.Unit, s.TargetScope)

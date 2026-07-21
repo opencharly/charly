@@ -29,6 +29,7 @@ import (
 	"time"
 
 	libvirt "github.com/digitalocean/go-libvirt"
+	"github.com/opencharly/sdk/spec"
 	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
@@ -135,15 +136,12 @@ func (t *VmTarget) EnsureRunning() error {
 // TunnelNeeded is true when the VmTarget was resolved over a remote
 // libvirt URI (qemu+ssh://…); callers must open an SSH-forwarded
 // local endpoint via charly/ssh_tunnel.go before dialing.
-type DisplayEndpoint struct {
-	Kind         string // "spice" | "vnc"
-	IsSocket     bool
-	SocketPath   string
-	Host         string
-	Port         int
-	Password     string
-	TunnelNeeded bool
-}
+//
+// DisplayEndpoint is spec.VmDisplayEndpoint (Cutover B unit 2, R-E4): this was a hand-written
+// twin of the SAME shape charly-core's decode struct duplicated independently — an SDD
+// violation (wire types are CUE-sourced without exception). Both now retype onto the ONE
+// generated def (sdk/schema/vmclient.cue), R3.
+type DisplayEndpoint = spec.VmDisplayEndpoint
 
 // uriNeedsTunnel reports whether a libvirt URI reaches the hypervisor over SSH
 // (qemu+ssh://…), in which case a SPICE/VNC endpoint must be SSH-forwarded to be

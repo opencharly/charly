@@ -3,10 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
@@ -70,45 +66,13 @@ func embeddedSidecarBodies() (map[string]json.RawMessage, error) {
 	return def.PluginKinds["sidecar"], nil
 }
 
-// findPodSidecarQuadlets returns the .container quadlets in qdir that belong
-// to the pod podName, identified by the load-bearing `Pod=<podName>.pod`
-// directive inside the quadlet's [Container] section. Filename-prefix
-// matching is NOT used because it collides with sibling instances of the
-// same image (e.g. charly-versa-ecovoyage.container is an instance of versa,
-// NOT a sidecar of pod charly-versa.pod). Only true pod members carry the
-// Pod= directive — sibling instances and standalone container deploys
-// do not. mainContainerFile (typically the main pod container's quadlet
-// filename) is excluded from the returned list because its lifecycle is
-// owned by the caller's main systemctl disable, not by the sidecar sweep.
-func findPodSidecarQuadlets(qdir, podName, mainContainerFile string) ([]string, error) {
-	expected := fmt.Sprintf("Pod=%s.pod", podName)
-	entries, err := os.ReadDir(qdir)
-	if err != nil {
-		return nil, err
-	}
-	var matches []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".container") {
-			continue
-		}
-		if name == mainContainerFile {
-			continue
-		}
-		content, rErr := os.ReadFile(filepath.Join(qdir, name))
-		if rErr != nil {
-			continue
-		}
-		for line := range strings.SplitSeq(string(content), "\n") {
-			if strings.TrimSpace(line) == expected {
-				matches = append(matches, name)
-				break
-			}
-		}
-	}
-	sort.Strings(matches)
-	return matches, nil
-}
+// findPodSidecarQuadlets DELETED (Cutover B unit 2, R1 dead-code catch surfaced while touching
+// this file for the sidecarConfigDir duplicate below): zero production callers anywhere in
+// charly/*.go — only its own now-deleted test exercised it. It scanned quadlet FILES for a
+// load-bearing `Pod=<podName>.pod` directive to enumerate sidecars; the actual production sweep
+// (charly remove's former quadlet-mode teardown, now candy/plugin-pod/remove_orchestration.go)
+// enumerates sidecar names from charly.yml directly via resolveSidecarNames instead — an earlier,
+// superseded approach that was never swept when its replacement landed.
 
 // HasTailscaleSidecar reports whether a name-keyed sidecar map (opaque bodies)
 // attaches the tailscale sidecar — a pure key-existence check.
@@ -117,10 +81,9 @@ func HasTailscaleSidecar(sidecars map[string]json.RawMessage) bool {
 	return ok
 }
 
-func sidecarConfigDir() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("determining config directory: %w", err)
-	}
-	return filepath.Join(configDir, "charly", "sidecar"), nil
-}
+// sidecarConfigDir DELETED (Cutover B unit 2, R1 divergence caught mid-flight): a byte-identical
+// duplicate of the ALREADY-EXISTING sdk/kit.SidecarConfigDir (kit/sidecar_naming.go), whose own
+// header comment falsely claimed "callers now import kit directly" — the SAME false-claim pattern
+// as the containerRunning/containerImage divergences already on record this cutover (a third
+// instance). Its only caller, the former podRemoveCmd's quadlet-mode sidecar-config-file sweep,
+// moved to candy/plugin-pod/remove_orchestration.go and now calls kit.SidecarConfigDir() directly.

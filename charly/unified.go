@@ -121,7 +121,9 @@ type UnifiedFile struct {
 	// Android (kind:android) — Android device substrates (an in-pod emulator
 	// or a remote/physical adb endpoint) onto which `apk:` packages install
 	// via a `target: android` deploy. Modeled on K8s (the device is the
-	// substrate; the apps ride in on the deploy's candies). See android_spec.go.
+	// substrate; the apps ride in on the deploy's candies): AndroidSpec and
+	// ApkPackageSpec are sdk/spec-generated types (spec.Android /
+	// spec.ApkPackageSpec), aliased for charly-core use in vmshared_aliases.go.
 	// Android (kind:android) templates are stored OPAQUELY (Cutover I) — resolved
 	// via uf.resolveAndroids(); the kernel never reads spec.Android fields off the map.
 	Android map[string]json.RawMessage `yaml:"android,omitempty" json:"android,omitempty"`

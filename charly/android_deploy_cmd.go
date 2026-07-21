@@ -176,7 +176,7 @@ func resolveAndroidDevice(spec *ResolvedAndroid, node *spec.BundleNode, path str
 		parent := path[:i]
 		container = "charly-" + kit.NestedContainerName(parent)
 		engine = kit.EngineBinary(engine)
-		if !containerRunning(engine, container) {
+		if !kit.ContainerRunning(engine, container) {
 			return AndroidDevice{}, fmt.Errorf("parent pod container %s is not running (start it before deploying the android device)", container)
 		}
 	} else {
@@ -226,7 +226,7 @@ func resolveAndroidHostPortRef(addr, path string, node *spec.BundleNode) (string
 	}
 	engine = kit.EngineBinary(engine)
 	container := "charly-" + kit.NestedContainerName(path[:i])
-	if !containerRunning(engine, container) {
+	if !kit.ContainerRunning(engine, container) {
 		return "", fmt.Errorf("parent pod container %s is not running (start it before deploying the android endpoint device)", container)
 	}
 	insp, err := kit.InspectContainer(engine, container)
