@@ -238,7 +238,7 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 	user := vmshared.ResolveCloudInitSSHUser(spec)
 	// Port + ssh alias key off the per-deploy DOMAIN IDENTITY (the live domain is charly-<domainID>);
 	// the spec + DEPLOY_NAME (k8s cluster context) stay keyed by the ENTITY.
-	port, err := resolveVmSshPort(spec, domainID)
+	port, err := deploykit.ResolveVmSshPort(spec, domainID)
 	if err != nil {
 		return liveResult{}, err
 	}
@@ -575,7 +575,7 @@ func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []sp
 		if !ok || lyr == nil {
 			continue
 		}
-		out = append(out, bakeableSteps(lyr.PlanSteps())...)
+		out = append(out, deploykit.BakeableSteps(lyr.PlanSteps())...)
 	}
 	return out
 }
@@ -771,9 +771,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // descending node.Children for each dotted segment (the SAME nested-tree shape
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
-// add <root>.<child>`. A leading "vm:" is stripped first via splitVmAddress (RCA #8/#9,
+// add <root>.<child>`. A leading "vm:" is stripped first via vmshared.SplitVmAddress (RCA #8/#9,
 // FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
-// resolveDelNode / vmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
+// resolveDelNode / vmshared.VmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
 // / `vm:<parent.child>`): without stripping it, `tree["vm:"+parts[0]]` never matches (the tree
 // is keyed by the plain name), so a "vm:"-prefixed dotted address silently resolved to
 // nothing here — deployNodePluginContext (this function's one caller) then collected ZERO
@@ -783,7 +783,7 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // fine while the CONNECT silently failed — the gap surfaced only later, when dispatch needed
 // the never-connected provider. Returns false when any segment is absent.
 func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
-	name, _ = splitVmAddress(name)
+	name, _ = vmshared.SplitVmAddress(name)
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {

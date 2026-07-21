@@ -17,7 +17,7 @@ import (
 func CollectBoxVolume(cfg *Config, layers map[string]spec.CandyReader, boxName string, home string, excludeNames map[string]bool) ([]deploykit.VolumeMount, error) {
 	// Collect all candy names from the box chain (outermost first) via the
 	// shared base-chain walk; propagate a resolution error as before.
-	allCandyNames, err := cfg.boxCandyChain(layers, boxName)
+	allCandyNames, err := deploykit.BoxCandyChain(cfg, layers, boxName)
 	if err != nil {
 		return nil, err
 	}

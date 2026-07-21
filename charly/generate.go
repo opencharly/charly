@@ -170,7 +170,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		tag = ComputeCalVer()
 	}
 
-	images, err := cfg.ResolveAllBox(tag, dir, opts)
+	images, err := ResolveAllBox(cfg, tag, dir, opts)
 	if err != nil {
 		return nil, err
 	}

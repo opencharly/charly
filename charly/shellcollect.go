@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -21,7 +22,7 @@ import (
 func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName string) *spec.LabelShellSet {
 	set := &spec.LabelShellSet{}
 
-	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
+	allCandyNames, _ := deploykit.BoxCandyChain(cfg, layers, boxName)
 	for _, candyName := range allCandyNames {
 		layer, ok := layers[candyName]
 		if !ok {

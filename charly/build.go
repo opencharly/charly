@@ -182,7 +182,7 @@ func pruneAfterBuild(dir string) {
 	if err != nil {
 		return
 	}
-	keep := resolveIntPtr(cfg.Defaults.KeepImages, nil, keepImagesFallback)
+	keep := resolveIntPtr(cfg.Defaults.KeepImages)
 	if keep > 0 {
 		if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
 			engine := kit.EngineBinary(rt.BuildEngine)
@@ -271,12 +271,12 @@ func (c *BuildCmd) checkRemoteRefsAndPivot() (bool, string, error) {
 // left them unset. A named fallback applies later if config is silent too.
 func (c *BuildCmd) resolveBuildTunables(def spec.BoxConfig) {
 	if c.Jobs == 0 {
-		c.Jobs = resolveIntPtr(def.Jobs, nil, 0)
+		c.Jobs = resolveIntPtr(def.Jobs)
 	}
 	if c.PodmanJobs == 0 {
-		c.PodmanJobs = resolveIntPtr(def.PodmanJobs, nil, 0)
+		c.PodmanJobs = resolveIntPtr(def.PodmanJobs)
 	}
-	c.podmanJobsCap = resolveIntPtr(def.PodmanJobsCap, nil, 0)
+	c.podmanJobsCap = resolveIntPtr(def.PodmanJobsCap)
 	if c.Cache == "" {
 		c.Cache = def.Cache
 	}

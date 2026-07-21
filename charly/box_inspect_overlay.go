@@ -37,7 +37,7 @@ func (c *InspectOverlayCmd) Run() error {
 	// Resolve the box FIRST (matching the former InspectCmd.runFromConfig ordering: a bad box name
 	// errors before any format renders, for both overlay formats).
 	calverTag := ComputeCalVer()
-	resolved, err := cfg.ResolveBox(c.Box, calverTag, dir, ResolveOpts{IncludeDisabled: c.IncludeDisabled})
+	resolved, err := ResolveBox(cfg, c.Box, calverTag, dir, ResolveOpts{IncludeDisabled: c.IncludeDisabled})
 	if err != nil {
 		return err
 	}

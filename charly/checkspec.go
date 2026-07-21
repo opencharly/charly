@@ -81,19 +81,6 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 	return isExternal
 }
 
-// stampStepIntentDo writes the keyword-derived do-mode onto a verb-carrying step's Op.IntentDo (via
-// the shared kit.StepDoMode derivation). It is the package-main entry the label bake (bakeableSteps)
-// calls so the baked ai.opencharly.description carries intent_do deterministically — formerly a SIDE
-// EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
-// moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
-// logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
-func stampStepIntentDo(s *spec.Step) {
-	if len(s.VerbsSet()) == 0 {
-		return
-	}
-	s.IntentDo = string(spec.StepDoMode(s))
-}
-
 // EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
 // wins (set by the enclosing Step at run/collect time), else the verb's
 // VerbCatalog default, else DoAssert.

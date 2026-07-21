@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
@@ -420,10 +421,10 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 			edges = append(edges, img.Base)
 		}
 		if len(img.Candy) > 0 {
-			edges = append(edges, c.effectiveBuilderForBox(name, img).AllBuilder()...)
+			edges = append(edges, buildkit.EffectiveBuilderForBox(c, name, img).AllBuilder()...)
 		}
 		for _, ref := range edges {
-			if _, tc, ok := c.resolveBoxRef(ref); ok {
+			if _, tc, ok := c.ResolveBoxRef(ref); ok {
 				if err := collectBox(tc, spec.LeafName(ref)); err != nil {
 					return err
 				}
@@ -432,7 +433,7 @@ func CollectRemoteRefsOpts(cfg *Config, layers map[string]spec.CandyReader, opts
 		return nil
 	}
 	if cfg != nil {
-		for _, imgName := range cfg.allBoxNames() {
+		for _, imgName := range cfg.AllBoxNames() {
 			img, _ := cfg.BoxConfig(imgName)
 			if !img.IsEnabled() && !opts.shouldIncludeDisabled(imgName) {
 				continue

@@ -12,7 +12,7 @@ import (
 // pure R-item every OCI-label-collector build-render consumer can share (host today, an
 // out-of-process build/deploy plugin tomorrow).
 func CollectHooks(cfg *Config, layers map[string]spec.CandyReader, boxName string) *HooksConfig {
-	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
+	allCandyNames, _ := deploykit.BoxCandyChain(cfg, layers, boxName)
 
 	candies := make([]spec.CandyReader, 0, len(allCandyNames))
 	for _, name := range allCandyNames {

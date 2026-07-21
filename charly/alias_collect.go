@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -47,7 +48,7 @@ func CollectBoxAlias(cfg *Config, layers map[string]spec.CandyReader, boxName st
 
 	// Resolve candies for this box (leaf-specific — aliases do NOT inherit from
 	// a base box; the shared boxDirectCandies walk).
-	resolved, err := cfg.boxDirectCandies(layers, boxName)
+	resolved, err := deploykit.BoxDirectCandies(cfg, layers, boxName)
 	if err != nil {
 		return nil, err
 	}
