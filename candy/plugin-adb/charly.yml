@@ -17,9 +17,12 @@ plugin-adb:
             (ResolveVerb → grpcProvider → invokeVerbProvider hands it the full
             desugared #Op) — and `target:
             android` resolves to this plugin's deploy:android provider over the E3b
-            reverse channel — the host preresolves the device endpoint + the apk specs
-            (android_deploy_preresolve.go) and ships them in DeployVenue.Substrate;
-            this plugin gates on boot then installs. Provides the full 12-method verb
+            reverse channel — THIS plugin's own preresolve.go (F6, FINAL/K5 unit 6a;
+            dispatched via the generalized deploy_preresolve.go:wireDeployPreresolver
+            seam) resolves the device endpoint + the apk specs, reaching the host's
+            "deploy-entity-resolve" HostBuild seam for the entity + Google-creds
+            lookup, and ships the result in DeployVenue.Substrate; this plugin gates
+            on boot then installs. Provides the full 12-method verb
             surface (devices/shell/install/install-app/uninstall/getprop/screencap/
             logcat-tail/wait-for-device/wait-ui-settled/current-focus/keyevent) plus
             the deploy substrate. The R10 consumer is the check-android-emulator-pod

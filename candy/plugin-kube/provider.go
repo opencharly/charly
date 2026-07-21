@@ -50,6 +50,9 @@ type provider struct{ pb.UnimplementedProviderServer }
 // box`), dispatches the method, and self-evaluates the matchers.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetClass() == "deploy" {
+		if req.GetOp() == sdk.OpPreresolve {
+			return invokeK8sPreresolve(ctx, req)
+		}
 		return invokeDeployK8s(req)
 	}
 	var op spec.Op

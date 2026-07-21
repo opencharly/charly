@@ -118,6 +118,20 @@ type ResolveOpts struct {
 	// pass entirely and InitSystems stays empty on every candy — correct only for a
 	// caller with no init-aware consumer downstream.
 	InitCfg *InitConfig
+	// DistroCfg / BuilderCfg are the project's build vocabulary (distro:/builder: —
+	// the SAME triple LoadBuildConfigForBox returns alongside InitCfg), threaded
+	// through so ResolveBox does not re-run LoadUnified on every call (FINAL/K5 unit
+	// 6a DI refactor: config.go's ResolveBox previously called LoadBuildConfigForBox
+	// itself — a REDUNDANT second full project load on top of the caller's own
+	// LoadConfig, and on EVERY iteration of a multi-box loop like ResolveAllBox,
+	// N reloads of the identical project-wide vocabulary). When nil, ResolveBox
+	// FALLS BACK to loading them itself (byte-identical to the prior behavior) — so
+	// this is purely additive: a caller that already has the triple (or loops over
+	// many boxes) sets it once and skips the redundant reload; every other caller is
+	// unaffected. ResolveAllBox is the primary beneficiary (loads once, threads to
+	// every ResolveBox call in its loop).
+	DistroCfg  *buildkit.DistroConfig
+	BuilderCfg *buildkit.BuilderConfig
 }
 
 // shouldIncludeDisabled reports whether name's disabled gate should be
@@ -131,6 +145,27 @@ func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
 		return true
 	}
 	return opts.IncludeDisabledNames[name]
+}
+
+// resolveBuildConfigTriple resolves the distro/builder config pair ResolveBox needs:
+// the caller-supplied opts.DistroCfg/BuilderCfg when present (FINAL/K5 unit 6a DI
+// refactor — ResolveAllBox loads it ONCE and threads it through every ResolveBox call
+// below instead of each of the N resolutions independently re-running
+// LoadBuildConfigForBox for the identical project-wide vocabulary), else the
+// byte-identical fallback load. Every caller must still supply a project dir
+// containing charly.yml; tests that need in-memory-only resolution use
+// testProjectDir(t). Extracted from ResolveBox to keep its cyclomatic complexity
+// within the project's lint ceiling.
+func (c *Config) resolveBuildConfigTriple(name, dir string, opts ResolveOpts) (*buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
+	distroCfg, builderCfg := opts.DistroCfg, opts.BuilderCfg
+	if distroCfg == nil && builderCfg == nil {
+		var err error
+		distroCfg, builderCfg, _, err = LoadBuildConfigForBox(dir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("image %s: %w", name, err)
+		}
+	}
+	return distroCfg, builderCfg, nil
 }
 
 // ResolveBox resolves a single box's configuration by applying defaults
@@ -271,12 +306,14 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 		resolved.FullTag = fmt.Sprintf("%s:%s", name, resolved.Tag)
 	}
 
-	// Resolve build config from charly.yml. Unconditional — caller must
-	// supply a project dir containing charly.yml. Tests that need
-	// in-memory-only resolution use testProjectDir(t).
-	distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
+	// Resolve build config: use the caller-supplied triple when present (opts.DistroCfg/
+	// BuilderCfg — FINAL/K5 unit 6a DI refactor), else fall back to loading it here
+	// (byte-identical to the prior unconditional-load behavior). Extracted to its own
+	// helper (mirroring ResolveAllBox's identical caller-supplied-vs-load branch) to
+	// keep ResolveBox's cyclomatic complexity within the project's lint ceiling.
+	distroCfg, builderCfg, err := c.resolveBuildConfigTriple(name, dir, opts)
 	if err != nil {
-		return nil, fmt.Errorf("image %s: %w", name, err)
+		return nil, err
 	}
 	resolved.DistroConfig = distroCfg
 	resolved.BuilderConfig = builderCfg
@@ -438,6 +475,19 @@ func (c *Config) resolveBuild(resolved *buildkit.ResolvedBox, img spec.BoxConfig
 // `--include-disabled` flag flips this for one-off operational rebuilds
 // without modifying authored config).
 func (c *Config) ResolveAllBox(calverTag string, dir string, opts ResolveOpts) (map[string]*buildkit.ResolvedBox, error) {
+	// Load the project's build vocabulary (distro:/builder:) ONCE and thread it through
+	// every ResolveBox call below (the loop, pullNamespacedBox, resolveNamespacedBases all
+	// take this SAME opts by value) — FINAL/K5 unit 6a DI refactor: without this, every one
+	// of the N box resolutions below independently re-ran LoadBuildConfigForBox (a full
+	// LoadUnified) for the IDENTICAL project-wide vocabulary. A caller that already set
+	// opts.DistroCfg/BuilderCfg keeps its own values (no override).
+	if opts.DistroCfg == nil && opts.BuilderCfg == nil {
+		distroCfg, builderCfg, _, err := LoadBuildConfigForBox(dir)
+		if err != nil {
+			return nil, fmt.Errorf("resolving build config: %w", err)
+		}
+		opts.DistroCfg, opts.BuilderCfg = distroCfg, builderCfg
+	}
 	resolved := make(map[string]*buildkit.ResolvedBox)
 	for _, name := range c.allBoxNames() {
 		img, _ := c.BoxConfig(name)

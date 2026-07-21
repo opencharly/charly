@@ -13,10 +13,13 @@ import (
 // deploy.go — the `deploy:android` SUBSTRATE provider (F1). candy/plugin-adb serves
 // BOTH the `adb:` check verb AND the `target: android` deploy substrate, so ALL
 // Android device interaction — the goadb wire, the apkeep+adb install path — lives in
-// this ONE plugin (R3, no duplicate installer). The host's android deploy preresolver
-// (charly/android_deploy_preresolve.go) resolves the device endpoint + collects the
-// apk install specs (committed-APK paths rewritten to ABSOLUTE host paths) and ships
-// them in DeployVenue.Substrate; this provider drives the device:
+// this ONE plugin (R3, no duplicate installer). THIS plugin's own android deploy
+// preresolver (preresolve.go, F6/FINAL-K5-unit-6a — dispatched via the generalized
+// deploy_preresolve.go:wireDeployPreresolver seam) resolves the device endpoint +
+// collects the apk install specs (committed-APK paths rewritten to ABSOLUTE host
+// paths, reaching the host's "deploy-entity-resolve" HostBuild seam for the entity +
+// Google-creds lookup) and ships them in DeployVenue.Substrate; this provider drives
+// the device:
 //
 //   - gate on sys.boot_completed (a real synchronization condition, not a sleep);
 //   - install each app, RETRYING past PackageManager post-boot init (the install

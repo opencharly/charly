@@ -37,8 +37,8 @@ import (
 
 // splitNamespaceRef/leafName are now sdk/spec.SplitNamespaceRef / spec.LeafName
 // (the generic namespace-ref VOCAB — pure string predicates with a consumer
-// set wider than the loader cone: config.go, k8s_deploy_preresolve.go,
-// refs.go). leafName is paired with resolveBoxRef's returned namespace
+// set wider than the loader cone: config.go, refs.go). leafName is paired
+// with resolveBoxRef's returned namespace
 // Config: together they give the key under which the resolved entity lives
 // in that Config's Box map.
 

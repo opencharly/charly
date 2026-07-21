@@ -121,16 +121,11 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 		extra["image"] = node.Image
 		extra["version"] = node.Version
 	}
-	// Consult the substrate's host-side prepare hook GENERICALLY (never a "vm" branch): vm ships the
-	// resolved spec.LifecyclePrepareInput (entity + ssh coords + prior state) under "prepare"; pod
-	// registers no hook. The plugin does the actual venue lifecycle — this is only the DATA it needs.
-	if hook, ok := lifecyclePrepareHookFor(l.prov.word); ok {
-		prep, herr := hook(name, dir, node)
-		if herr != nil {
-			return nil, fmt.Errorf("substrate %q prepare-venue: resolve prepare data: %w", l.prov.word, herr)
-		}
-		extra["prepare"] = prep
-	}
+	// No host-side "prepare" data injection (FINAL/K5 unit 6a, M4b — hard cutover): the deleted
+	// lifecyclePrepareHook indirection is gone. Every Lifecycle:true substrate ALREADY owns
+	// OpPrepareVenue in its own plugin, so it self-serves any LoadUnified-coupled data it needs via
+	// the generic "deploy-entity-resolve" HostBuild seam (candy/plugin-deploy-vm's vmPrepareVenue is
+	// the reference) instead of receiving it host-precomputed here.
 	res, err := l.lifecycleInvoke(ctx, sdk.OpPrepareVenue, name, dir, node, extra, kit.ShellExecutor{})
 	if err != nil {
 		return nil, err
@@ -143,7 +138,15 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 		fmt.Println(note)
 	}
 	// Persist the opaque deploy-entry State patch host-side (the plugin cannot touch charly.yml):
-	// pod ships {ResolvedImage}; vm ships {vm_state}. saveDeployState is the generic writer.
+	// pod ships {ResolvedImage}. saveDeployState is the generic writer, keyed by the RAW
+	// (unsanitized) deploy name — correct for pod's own plain top-level naming today. vm does
+	// NOT ship a State patch here (RCA #6, FINAL/K5 unit 6a, hard cutover): its PrepareVenue used
+	// to also ship {vm_state}, persisted through THIS generic path under the wrong (unsanitized)
+	// key — a second, independent writer racing candy/plugin-vm's own canonical
+	// "vm:"+VmDomainIdentity(name)-keyed persist (vm_create_orchestrate.go's hostConfigPersist),
+	// and for a NESTED (dotted) deploy name, poisoning the overlay on every subsequent load
+	// (charly/unified.go's validateDeploymentName dot-rejection). The vm substrate now owns its
+	// own persistence end to end — see candy/plugin-deploy-vm/lifecycle.go's PrepareVenue.
 	if len(reply.State) > 0 && !opts.DryRun {
 		var in deploykit.SaveDeployStateInput
 		if err := json.Unmarshal(reply.State, &in); err != nil {

@@ -9,7 +9,8 @@ You are in the **Go CLI** source for `charly`.
 - `/charly-internals:install-plan` — the InstallPlan IR + DeployTarget /
   OCITarget pipeline (before touching `install_plan.go`, `install_build.go`,
   `build_target_oci.go`, `deploy_target_*.go`, `k8s_generate.go`,
-  `k8s_deploy_preresolve.go`).
+  `deploy_preresolve.go`, `host_build_deploy_entity_resolve.go`,
+  `host_build_k8s_generate.go`).
 - `/charly-internals:capabilities` — the OCI-label capability contract.
 - `/charly-internals:generate-source` — what `charly box generate` emits.
 - Plus the renderer skills (`/charly-internals:vm-spec`, `cloud-init-renderer`,

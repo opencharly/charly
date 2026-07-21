@@ -6,39 +6,39 @@ package main
 // The `charly check run <bed>` R10 acceptance sequence (build → check box → deploy →
 // check live → fresh update → tear down) lives in the compiled-in command:check plugin
 // (candy/plugin-check); it drives the sequence over HostBuild("cli") + the check-bed
-// session seam. This file keeps only the loader/host Mechanisms a plugin (a separate
-// module importing only sdk) cannot perform and which the seam's session ops call:
-// the acceptance-depth resolver (bedCheckLevel), the
-// in-place-external classifier (bedExternalInPlace), the per-host deploy-override seed
-// (persistBedDeployOverrides), the nested-local-children apply (deployNestedLocalChildren),
-// and the readiness gates (waitForVmSshReady / waitForContainerReady). The former
-// bedVmDomains/acquireVmDomainLock pair (CHECK-wave bed-session spike) dissolved into
-// kit.BedVmDomains/kit.AcquireVmDomainLock — pure over an already-stamped spec.BundleNode, zero
-// core-state coupling, so it moved wholesale rather than staying behind this seam.
+// session seam. Narrowed at Cutover B unit 6b (the InvokeProvider-generalization family):
+// every caller of this file's functions was ALREADY core-only (host_build_check_bed.go,
+// bundle_members.go — no plugin calls them directly), so the orchestration
+// (persistBedDeployOverrides/deployNestedLocalChildren/waitForVmSshReady/
+// waitForContainerReady/bedCheckLevel's classifier) moved to sdk/deploykit/bed_session.go —
+// the SAME "portable orchestration in sdk, thin core call sites" pattern already applied to
+// the credential family. What stays here: bedExternalInPlace — the ONE genuinely
+// registry-coupled classification (isExternalDeploySubstrate queries the live provider
+// registry) — now computed HOST-SIDE ONCE and threaded as a plain `bool` parameter into
+// deploykit.PersistBedDeployOverrides (no new wire surface — there is no cross-process
+// consumer for this data today). The former bedVmDomains/acquireVmDomainLock pair
+// (CHECK-wave bed-session spike) dissolved into kit.BedVmDomains/kit.AcquireVmDomainLock
+// earlier — pure over an already-stamped spec.BundleNode, zero core-state coupling.
 
 import (
-	"bytes"
-	"context"
-	"fmt"
-	"os/exec"
-
-	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
-
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/spec"
 )
 
-// bedCheckLevel resolves the acceptance-depth rung for a bed from its box's
-// authored check_level (none → DefaultCheckLevel). VM / local beds carry no box
-// image, so they always run at the default rung.
+// bedCheckLevel resolves the acceptance-depth rung for a bed from its box's authored
+// check_level (none → DefaultCheckLevel). VM / local beds carry no box image, so they
+// always run at the default rung. Thin wrapper — the classifier lives in
+// deploykit.ResolveBedCheckLevel (unit 6b); this function's own job is resolving the box
+// ref against the loaded project (uf.ProjectConfig(), core-only) before delegating.
 func bedCheckLevel(uf *UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
-		return kit.DefaultCheckLevel
+		return deploykit.ResolveBedCheckLevel(false, "")
 	}
-	if bc, _, ok := uf.ProjectConfig().resolveBoxRef(node.Image); ok {
-		return kit.ResolveCheckLevel(bc.CheckLevel)
+	bc, _, ok := uf.ProjectConfig().resolveBoxRef(node.Image)
+	if !ok {
+		return deploykit.ResolveBedCheckLevel(false, "")
 	}
-	return kit.DefaultCheckLevel
+	return deploykit.ResolveBedCheckLevel(true, bc.CheckLevel)
 }
 
 // bedExternalInPlace reports whether a bed ROOT's substrate is an EXTERNAL deploy substrate
@@ -59,160 +59,29 @@ func bedExternalInPlace(target string) bool {
 	return isExternalDeploySubstrate(target) && deployTraitDescent(target).Venue != "container"
 }
 
-// persistBedDeployOverrides seeds the per-host charly.yml with a kind:check
-// bed's project-declared deploy-shaped fields (port / volume / env / tunnel /
-// security / network), its disposable/lifecycle classification, AND its
-// resource-arbitration role (preemptible holder / requires_exclusive /
-// requires_shared claimant), BEFORE the bed's `charly config` step runs. Seeding
-// the arbiter fields is what lets a bed/deploy MEMBER be an arbiter participant:
-// bringUpMembers persists each member here, then the member's `charly start`
-// reloads the per-host node and fires the arbiter off these fields (start.go →
-// acquireResourceForClaimant; preempt.go's holder gather) — without them a
-// member's requires_exclusive reloaded as [] and the arbiter silently no-op'd.
-// The folded bed node is the source of truth, but
-// `charly bundle add` / `charly config` otherwise source those fields from the IMAGE
-// LABELS and gate port writes behind an operator `-p` — so a bed's declared
-// `port:` remap would never reach the quadlet (it would fall back to the image
-// default and collide with any same-image deploy already bound to that port).
-// Seeding the per-host entry up front lets the existing
-// MergeDeployOntoMetadata → quadlet path honor the overrides with no new merge
-// logic; `charly config`'s own SetPorts-gated save then leaves the seeded port
-// untouched (it passes no `-p`). saveDeployState's per-field guards make
-// unset bed fields no-ops, so this is safe for beds that declare only a subset.
+// persistBedDeployOverrides is the thin core wrapper — the orchestration lives in
+// deploykit.PersistBedDeployOverrides (unit 6b). This function's own job is computing the
+// ONE genuinely registry-coupled classification (bedExternalInPlace, which queries the live
+// provider registry) and threading it through, plus supplying marshalDeployNode (the
+// K1-tied struct→node-form serializer core alone can call).
 func persistBedDeployOverrides(name string, node spec.BundleNode) {
-	// A GROUP bed (boxless root + sibling Members — the §3 cross-deployment
-	// shape) has NO root deployment to seed: its members each carry their own
-	// port/volume/env overrides (bringUpMembers persists every member), and the
-	// boxless root is never `charly config`'d. Persisting the group root here would
-	// write a MEMBERLESS bed (no box, no members — saveDeployState carries no
-	// member fields) that validateCheckBeds then HARD-REJECTS on the next overlay
-	// load ("no workload cross-ref and no sibling members"), poisoning every
-	// subsequent saveDeployState. So never persist a group bed root.
-	if node.IsGroup() {
-		return
-	}
-	// A LOCAL or EXTERNAL in-place bed never runs `charly config` (it applies candies
-	// in place during `charly bundle add`), so the whole reason persistBedDeployOverrides
-	// exists — seeding
-	// port/volume/env overrides BEFORE config — does not apply. Worse, a local bed's
-	// only persistable
-	// cross-ref is its `local:` template, which lives in the bed's OWN project; writing
-	// it into the GLOBAL per-host overlay makes that overlay un-loadable from every
-	// OTHER project (validateCheckBeds: "references local template … which is not
-	// defined"), poisoning concurrent/cross-project bed runs. Local deploys persist via
-	// the install ledger, not this bundle-map path, so skipping is also lossless.
-	if nodeTraits(&node).HostRooted || bedExternalInPlace(node.Target) { // local (host-rooted) or in-place external
-		return
-	}
-	deploykit.SaveDeployState(name, "", deploykit.SaveDeployStateInput{
-		Ports:         node.Port,
-		SetPorts:      len(node.Port) > 0,
-		Volume:        node.Volume,
-		Env:           node.Env,
-		CleanEnv:      true,
-		Tunnel:        node.Tunnel,
-		Security:      node.Security,
-		Network:       node.Network,
-		Box:           node.Image,
-		Target:        node.Target,
-		SetDisposable: true,
-		Disposable:    node.IsDisposable(),
-		SetLifecycle:  node.Lifecycle != "",
-		Lifecycle:     node.Lifecycle,
-		// Resource-arbitration role — so a group MEMBER (holder / claimant) can
-		// actually drive the arbiter after its `charly start` reloads this entry.
-		Preemptible:       node.Preemptible,
-		RequiresExclusive: node.RequiresExclusive,
-		RequiresShared:    node.RequiresShared,
-	}, marshalDeployNode)
+	deploykit.PersistBedDeployOverrides(name, node, bedExternalInPlace(node.Target), marshalDeployNode)
 }
 
-// deployNestedLocalChildren deploys a VM's nested target:local children via the
-// dotted-path dispatch, which applies each child's local-deploy candies INSIDE the
-// guest over the NestedExecutor (SSH).
-//
-// plugin-deploy-vm's PostApply brings up nested target:pod children as in-guest
-// quadlets, but it SKIPS target:local children — they carry no image, they apply
-// candies in place. Without this loop a nested local child never deploys, and a
-// deploy-scope check against it either fails or (worse) silently checks nothing.
-//
-// Both sites that own a VM venue call this: the isVM bed ROOT and bringUpMembers'
-// VM-member branch. They differ only in how a child deploy is executed (the root
-// wraps it in a recorded step(); a member shells out directly), so that is the
-// injected apply func.
+// deployNestedLocalChildren is the thin core wrapper — the orchestration lives in
+// deploykit.DeployNestedLocalChildren (unit 6b).
 func deployNestedLocalChildren(parent string, children map[string]*spec.BundleNode, apply func(childKey, dotted string) error) error {
-	for _, childKey := range deploykit.SortedNestedKeys(children) {
-		child := children[childKey]
-		if child == nil || !nodeTraits(child).HostRooted { // local (host-rooted shell venue) only
-			continue // container/vm children handled in-guest by plugin-deploy-vm's PostApply
-		}
-		if err := apply(childKey, parent+"."+childKey); err != nil {
-			return fmt.Errorf("deploy nested local child %s.%s: %w", parent, childKey, err)
-		}
-	}
-	return nil
+	return deploykit.DeployNestedLocalChildren(parent, children, apply)
 }
 
-// waitForVmSshReady gates on the VM being SSH-reachable AND cloud-init having
-// settled, using the SAME deterministic SSHExecutor preflight the VM check-live
-// path (check_cmd.go) and the external vm deploy walk run — NOT a fixed sleep. WaitForSSH
-// polls until sshd answers; WaitForCloudInit retries until an ssh connection
-// survives a `cloud-init status` poll (the deterministic cloud-init-settled
-// signal — so deploy-add never races a still-running first-boot pacman). vmName
-// is the kind:vm entity name. Best-effort: silent on timeout — the downstream
-// deploy-add surfaces the real error.
-// waitForVmSshReady polls the managed alias charly-<domainID> until the guest's sshd answers and
-// cloud-init settles. domainID is the per-deploy DOMAIN IDENTITY (the bed/member deploy name), not
-// the shared kind:vm entity — the alias the create path published.
+// waitForVmSshReady is the thin core wrapper — the orchestration lives in
+// deploykit.WaitForVmSshReady (unit 6b).
 func waitForVmSshReady(domainID string) {
-	gate := &kit.SSHExecutor{Host: kit.VmSshAlias(domainID), ConnectTimeout: 5}
-	ctx := context.Background()
-	if err := gate.WaitForSSH(ctx); err != nil {
-		return
-	}
-	_ = gate.WaitForCloudInit(ctx)
+	deploykit.WaitForVmSshReady(domainID)
 }
 
-// waitForContainerReady gates on the container being exec-able AND its
-// supervisord-managed children having left their transitional states, so a
-// one-shot check-live port/service probe never races a child that has not yet
-// bound. `charly start` returns when systemd reports the service active, but
-// supervisord's autostart children are still STARTING for a moment after. This
-// polls `supervisorctl status` until no child is STARTING/BACKOFF (a child binds
-// its port the instant it reaches RUNNING) instead of sleeping a fixed,
-// host-tuned interval. Images without supervisord settle immediately. Best-effort:
-// silent on timeout (the next check-live step surfaces the real failure).
+// waitForContainerReady is the thin core wrapper — the orchestration lives in
+// deploykit.WaitForContainerReady (unit 6b).
 func waitForContainerReady(bed string) {
-	containerName := "charly-" + bed
-	// supervisorStatus reports __NOSUP__ when the image has no supervisorctl, so
-	// "no supervisord" is distinguishable from "socket not up yet".
-	const supervisorStatus = `command -v supervisorctl >/dev/null 2>&1 || { echo __NOSUP__; exit 0; }; supervisorctl status 2>&1`
-	// MONOTONIC readiness via the unified pollUntil primitive (poll.go): the
-	// progress marker is the count of SETTLED children — it climbs as children
-	// reach RUNNING, so a slow startup under heavy parallel load is waited for
-	// (the no-progress watchdog resets on each new settled child); a child
-	// crash-looping back to BACKOFF drops the count below its high-water, so the
-	// watchdog correctly does NOT treat the flap as progress and the bed stalls
-	// out instead of hiding the fault. Replaces the fixed 30s deadline (the most
-	// load-fragile in the old set). Best-effort: silent on stall/cap (the next
-	// check-live step surfaces the real failure).
-	cfg := loadedReadiness().Wait("container-ready "+bed, PollLocal)
-	_ = pollUntil(context.Background(), cfg, func(actx context.Context) (bool, float64, error) {
-		if exec.CommandContext(actx, "podman", "exec", containerName, "true").Run() != nil {
-			return false, 0, nil // container not exec-able yet
-		}
-		out, _ := exec.CommandContext(actx, "podman", "exec", containerName, "sh", "-c", supervisorStatus).CombinedOutput()
-		if bytes.Contains(out, []byte("__NOSUP__")) {
-			return true, 0, nil // no supervisord — nothing to settle
-		}
-		settled := float64(bytes.Count(out, []byte("RUNNING")) + bytes.Count(out, []byte("STOPPED")) +
-			bytes.Count(out, []byte("EXITED")) + bytes.Count(out, []byte("FATAL")))
-		if bytes.Contains(out, []byte("STARTING")) || bytes.Contains(out, []byte("BACKOFF")) {
-			return false, settled, nil // children still coming up
-		}
-		if settled > 0 {
-			return true, settled, nil // supervisord answered + nothing transitional
-		}
-		return false, 0, nil // supervisord control socket not up yet
-	})
+	deploykit.WaitForContainerReady(bed)
 }

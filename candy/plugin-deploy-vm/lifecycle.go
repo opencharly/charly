@@ -6,16 +6,23 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
+
+// ephemeralRegisterKind is the generic "ephemeral-register" HostBuild seam
+// (charly/host_build_ephemeral_register.go) — a substrate-agnostic action noun (F11),
+// never a per-substrate word.
+const ephemeralRegisterKind = "ephemeral-register"
 
 // lifecycle.go — the host-side VM venue lifecycle, IMPLEMENTED in the plugin (M4b, clean). The plugin
 // runs ON the host (co-located) but out-of-process; it does the WHOLE venue lifecycle itself over
@@ -156,13 +163,124 @@ func vmCli(ctx context.Context, exec *sdk.Executor, capture, bestEffort bool, ar
 	return r, nil
 }
 
+// vmEntityForPrepare resolves the kind:vm ENTITY (the disk/spec source) for an Add/PrepareVenue:
+// node.From (the `vm:` cross-ref) wins; else a legacy "vm:<name>" deploy-key prefix; else the leaf
+// of a nested dotted path (stack.myvm -> myvm); else an error — no silent fallback to the raw
+// name, unlike the lifecycle-op helper vmEntity (Start/Stop/Status/... tolerate a same-as-entity
+// deploy name; PrepareVenue must resolve the REAL entity to LoadUnified-side-resolve its VmSpec).
+// Ported verbatim from the deleted charly/vm_lifecycle_preresolve.go's vmEntityForAdd (FINAL/K5
+// unit 6a, M4b vm-preresolve-body move) — the plugin now owns PrepareVenue's own entity
+// resolution instead of receiving it host-precomputed via the deleted lifecyclePrepareHook.
+func vmEntityForPrepare(node *spec.BundleNode, name string) (string, error) {
+	if node != nil && node.From != "" {
+		return string(node.From), nil
+	}
+	if strings.HasPrefix(name, "vm:") {
+		rest := strings.TrimPrefix(name, "vm:")
+		if rest == "" {
+			return "", fmt.Errorf("vm deploy %q: missing vm-name portion", name)
+		}
+		if before, _, ok := strings.Cut(rest, "/"); ok {
+			return before, nil
+		}
+		return rest, nil
+	}
+	if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
+		return name[idx+1:], nil
+	}
+	return "", fmt.Errorf("vm deploy %q: no `vm:` cross-ref and key is not a legacy vm:<name> form", name)
+}
+
+// entityResolve Invokes the "deploy-entity-resolve" HostBuild seam and decodes the reply — the
+// SAME generic seam candy/plugin-kube/preresolve.go's k8sEntityResolve already proves live (R3, no
+// per-substrate reinvention).
+func entityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployEntityResolveRequest) (spec.DeployEntityResolveReply, error) {
+	var out spec.DeployEntityResolveReply
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return out, err
+	}
+	resJSON, err := exec.HostBuild(ctx, "deploy-entity-resolve", reqJSON)
+	if err != nil {
+		return out, err
+	}
+	return out, json.Unmarshal(resJSON, &out)
+}
+
 // vmPrepareVenue runs the FULL host-side VM preflight itself (ssh-config stanza, auto-boot, guest
 // readiness waits, charly delivery) over generic seams, and returns the guest SSH venue descriptor +
-// the VmDeployState patch the host persists. Consumes only the host-resolved LifecyclePrepareInput.
+// the VmDeployState patch the host persists. RESOLVES its own LifecyclePrepareInput (FINAL/K5 unit
+// 6a, M4b): the deleted lifecyclePrepareHook host indirection is gone — the plugin ALREADY owns
+// OpPrepareVenue (it is the Lifecycle:true substrate), so it self-serves the LoadUnified-coupled
+// vmSpec via the generic "deploy-entity-resolve" seam (exactly like candy/plugin-kube/preresolve.go
+// already does for k8s/deploy entities) and resolves sshPort/stateDir/SSHUser/PriorState directly —
+// all pure sdk/deploykit + sdk/kit + sdk/vmshared, no LoadUnified coupling (the plugin is
+// CO-LOCATED on the host, not remote). The ONE piece that genuinely needs to stay host-side is the
+// ephemeral-registration Add-time side effect (systemd transient timer + panic-vs-warning
+// classification, RCA #5) — reached via the new generic "ephemeral-register" HostBuild seam
+// (charly/host_build_ephemeral_register.go), wrapping registerEphemeralIfMarked verbatim.
 func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
-	var in spec.LifecyclePrepareInput
-	if err := json.Unmarshal(p.Prepare, &in); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode prepare input: %w", err)
+	var node spec.BundleNode
+	_ = json.Unmarshal(p.Node, &node)
+
+	entity, err := vmEntityForPrepare(&node, p.Name)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: %w", err)
+	}
+	domainID := domainIdentity(p)
+
+	// Ephemeral lifecycle hook (the ONE Add-time host side effect the plugin cannot do itself —
+	// panic-safe TTL ordering). FIRST action, matching the deleted host-side vmLifecyclePrepare's
+	// own ordering. Consumes the MERGED node (never a charly.yml re-read). A panic-class error
+	// (RCA #5) fails the whole vm Add — the host-builder returns it verbatim.
+	ephemeralReqJSON, err := json.Marshal(spec.EphemeralRegisterRequest{Name: p.Name, Node: &node})
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: marshal ephemeral-register request: %w", err)
+	}
+	if _, err := exec.HostBuild(ctx, ephemeralRegisterKind, ephemeralReqJSON); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: ephemeral lifecycle registration: %w", err)
+	}
+
+	entityReply, err := entityResolve(ctx, exec, spec.DeployEntityResolveRequest{Kind: "vm", Name: entity, Dir: p.Dir})
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve vm entity %q: %w", entity, err)
+	}
+	var vm spec.ResolvedVm
+	if len(entityReply.EntityJSON) == 0 {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: kind:vm entity %q resolved to an empty value", entity)
+	}
+	if err := json.Unmarshal(entityReply.EntityJSON, &vm); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode resolved vm entity %q: %w", entity, err)
+	}
+
+	// Prior runtime state (instance-id, ssh_port, disk path) for idempotent reuse decisions — read
+	// DIRECTLY (the co-located plugin's own host-local file read, not a HostBuild hop; no
+	// LoadUnified coupling — pure sdk/deploykit, the SAME per-host overlay file every vm writer
+	// already persists under the canonical "vm:"+domainID key).
+	var prior *spec.VmDeployState
+	if entry, exists := deploykit.LoadDeployConfigForRead("plugin-deploy-vm prepare-venue").LookupKey("vm:" + domainID); exists && entry.VmState != nil {
+		prior = entry.VmState
+	}
+	var persistedPort int
+	if vm.SSH != nil && vm.SSH.PortAuto && prior != nil {
+		persistedPort = prior.SshPort
+	}
+	sshPort, err := kit.ResolveVmSshPort(&vm, domainID, persistedPort)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve ssh port: %w", err)
+	}
+
+	stateDir := filepath.Join(host.Home, ".local", "share", "charly", "vm", "charly-"+domainID)
+	in := spec.LifecyclePrepareInput{
+		Entity:         entity,
+		VM:             &vm,
+		SSHUser:        vmshared.ResolveCloudInitSSHUser(&vm),
+		SSHPort:        sshPort,
+		Alias:          kit.VmSshAlias(domainID),
+		SSHKeyPath:     filepath.Join(stateDir, "id_ed25519"),
+		KnownHostsPath: filepath.Join(stateDir, "known_hosts"),
+		StateDir:       stateDir,
+		PriorState:     prior,
 	}
 	if in.VM == nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: no resolved VmSpec in prepare input")
@@ -240,26 +358,22 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 		notes = append(notes, msg)
 	}
 
-	// (e) the VmDeployState patch (the host persists it via saveDeployState — the plugin can't touch
-	// charly.yml). Carry the prior instance-id/disk/seed forward (re-render stability).
-	smbios, cloudInit := vmshared.ResolveKeyInjectionChannels(in.VM)
-	state := spec.VmDeployState{
-		SshUser:               in.SSHUser,
-		SshPort:               in.SSHPort,
-		Backend:               in.VM.Backend,
-		KeyInjectionResolved:  &spec.VmKeyInjectionResolved{SMBIOS: smbios, CloudInit: cloudInit},
-		CharlyInstallStrategy: string(kit.ResolveCharlyInstallStrategy(charlyInstallStrategy(in.VM))),
-	}
-	if in.PriorState != nil {
-		state.InstanceID = in.PriorState.InstanceID
-		state.DiskPath = in.PriorState.DiskPath
-		state.SeedIso = in.PriorState.SeedIso
-	}
-	stateJSON, _ := json.Marshal(map[string]any{"Target": "vm", "VmState": &state, "VmCrossRef": in.Entity})
-
+	// (e) NO State patch shipped here (RCA #6, FINAL/K5 unit 6a — hard cutover, was: "the
+	// VmDeployState patch... the plugin can't touch charly.yml... Carry the prior instance-id/
+	// disk/seed forward"). That WAS a SECOND, independent writer of vm_state — this reply's State
+	// used to round-trip through substrate_lifecycle_grpc.go's generic PrepareVenue persist
+	// (deploykit.SaveDeployState), keyed by deploykit.ParseDeployKey(name) — the RAW, UNSANITIZED
+	// deploy name — never the canonical "vm:"+VmDomainIdentity(name) key
+	// candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist already writes authoritatively.
+	// For a NESTED deploy (a dotted name), that second write poisoned the per-host overlay: every
+	// SUBSEQUENT load hit validateDeploymentName's dot-rejection (charly/unified.go). The
+	// InstanceID/DiskPath/SeedIso carry-forward this used to do is now genuinely unnecessary — the
+	// canonical entry already holds them stably (populated by `charly vm create`'s own disk-build
+	// flow) and is never touched by anything else, so there is nothing to "carry forward" through
+	// a second writer. ONE writer, ONE key: the substrate (candy/plugin-vm, via
+	// vm_create_orchestrate.go) owns its own persistence end to end.
 	return marshalReply(spec.PrepareVenueReply{
 		Venue: spec.VenueDescriptor{Kind: "ssh", Host: in.Alias, ConnectTimeout: 10},
-		State: stateJSON,
 		Notes: notes,
 	})
 }

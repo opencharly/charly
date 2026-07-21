@@ -469,8 +469,13 @@ func validateDeploymentName(name, parentPath string) error {
 		full = parentPath + "." + name
 	}
 	if strings.Contains(name, ".") {
+		// This gate runs against BOTH authored charly.yml entries AND machine-written per-host
+		// overlay entries (RCA #6, FINAL/K5 unit 6a) — a prior message revision assumed only a
+		// human authored the offending key and told them to "Rename this entry," which is wrong
+		// advice for an entry a writer bug produced (nothing to manually rename; the fix is the
+		// writer). Kept source-agnostic: names the constraint, not a remedy that only fits one case.
 		return fmt.Errorf(
-			"deployment key %q contains '.' — the character is reserved for dotted-path addressing (charly bundle add a.b.c). Rename this entry in charly.yml",
+			"deployment key %q contains '.' — the character is reserved for dotted-path addressing (charly bundle add a.b.c), never a literal deploy-tree key",
 			full,
 		)
 	}

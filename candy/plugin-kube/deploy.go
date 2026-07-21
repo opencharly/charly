@@ -22,10 +22,12 @@ import (
 // The Kustomize GENERATOR moved into the compiled-in candy/plugin-k8sgen
 // (verb:k8sgen, C8/M13); charly's in-core GenerateK8sKustomize is a thin shim that
 // lifts the image Capabilities to ports/uid/gid, Invokes the generator's OpEmit,
-// then applies the host-side egress gate + disk I/O. So the host's k8s deploy
-// preresolver (charly/k8s_deploy_preresolve.go) GENERATES the egress-validated tree
-// and ships its overlay path in DeployVenue.Substrate (spec.K8sDeployVenue); this
-// provider does the LIVE cluster I/O it owns:
+// then applies the host-side egress gate + disk I/O, now reached over the host's
+// "k8s-generate-kustomize" HostBuild seam. THIS plugin's own k8s deploy preresolver
+// (preresolve.go, F6/FINAL-K5-unit-6a — dispatched via the generalized
+// deploy_preresolve.go:wireDeployPreresolver seam) GENERATES the egress-validated
+// tree and ships its overlay path in DeployVenue.Substrate (spec.K8sDeployVenue);
+// this provider does the LIVE cluster I/O it owns:
 //
 //   - `kubectl apply -k <overlay>` against the operator's kubeconfig (merged by
 //     K3sPostProvision for a k3s cluster) — the apply IS the deploy;

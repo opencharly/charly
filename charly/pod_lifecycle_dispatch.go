@@ -146,7 +146,7 @@ func registerLifecycleLivePlanHooks(word string, attach attachPlanResolver, logs
 }
 
 // registerLifecyclePlanHooks records the start/stop plan resolvers for a substrate word. Called at
-// package-var init (before any init(), race-free — like registerDeployPreresolver / the vm prepare hook).
+// package-var init (before any init(), race-free — like registerHostBuilder).
 func registerLifecyclePlanHooks(word string, start, stop podLifecyclePlanResolver) {
 	if word == "" {
 		return

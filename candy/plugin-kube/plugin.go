@@ -10,8 +10,11 @@
 // desugars to plugin/plugin_input; the method + kube-exclusive fields ride the input
 // map, validated against this plugin's own #KubeInput — and `target: k8s` resolves to
 // this plugin's deploy:k8s provider over
-// the E3b reverse channel (the host preresolves the cluster template + image
-// Capabilities → the egress-validated Kustomize tree, k8s_deploy_preresolve.go).
+// the E3b reverse channel — THIS plugin's own preresolve.go (F6, FINAL/K5 unit 6a;
+// dispatched via the generalized deploy_preresolve.go:wireDeployPreresolver seam)
+// resolves the cluster template + image Capabilities → the egress-validated
+// Kustomize tree, reaching the host's "deploy-entity-resolve" +
+// "k8s-generate-kustomize" HostBuild seams.
 // The goadb-analog of candy/plugin-adb: the FULL client-go/clientcmd/dynamic
 // dependency + the single kubectl-apply path live HERE (R3).
 //
@@ -43,7 +46,7 @@ func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.174.1200",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "kube", InputDef: "#KubeInput", Primary: "method"},
-			{Class: "deploy", Word: "k8s", InputDef: ""},
+			{Class: "deploy", Word: "k8s", InputDef: "", Preresolve: true},
 		},
 		schemaFS)
 }

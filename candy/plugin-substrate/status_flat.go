@@ -253,12 +253,19 @@ func (c *flatCollector) enrichOne(cs *spec.DeploymentStatus, bin string) {
 // libvirt-domain-derived entity name (the vm collector strips the charly- prefix) — the SAME name
 // deploykit.FindVmDeployNode matches by deploy NAME first, then by vm: cross-ref. Absence of a
 // deploy entry is normal: the libvirt domain still shows with Source:libvirt and no enrichment.
+//
+// RCA #14 (FINAL/K5 unit 6a): FindVmDeployNode now reports an AMBIGUOUS
+// fallback match (2+ same-base top-level vm deploys) as an error rather than
+// first-winning silently. Treated the same as "not found" here — a status
+// display row must never error a listing, and this is a best-effort
+// enrichment (the same "absence is normal" contract this doc comment already
+// states); the row still shows with Source:libvirt, just unenriched.
 func (c *flatCollector) enrichVmRow(cs *spec.DeploymentStatus, opts flatCollectOpts) {
 	if opts.Deploy == nil || opts.Deploy.Bundle == nil {
 		return
 	}
-	node, ok := deploykit.FindVmDeployNode(opts.Deploy.Bundle, cs.Image, cs.Image)
-	if !ok {
+	node, ok, err := deploykit.FindVmDeployNode(opts.Deploy.Bundle, cs.Image, cs.Image)
+	if !ok || err != nil {
 		return
 	}
 	if node.Network != "" {

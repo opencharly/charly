@@ -18,10 +18,10 @@ func TestCommandParent_NestsUnderBox(t *testing.T) {
 	}
 }
 
-// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the nine nested command
-// capabilities (generate/validate/new/pkg/inspect/list/labels/merge/reconcile), all class
-// "command", each with no InputDef (a command's args are pass-through tokens, not a structured
-// plugin_input).
+// TestNewMeta_DeclaresNestedCommands proves Describe advertises exactly the eleven nested command
+// capabilities (generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile — "build"
+// added FINAL/K5 unit 6a M4d, the CLI-only mirror of "pull"'s M4c move), all class "command", each
+// with no InputDef (a command's args are pass-through tokens, not a structured plugin_input).
 func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 	caps, err := NewMeta().Describe(context.Background(), &pb.Empty{})
 	if err != nil {
@@ -37,13 +37,13 @@ func TestNewMeta_DeclaresNestedCommands(t *testing.T) {
 		}
 		got[c.GetWord()] = true
 	}
-	for _, want := range []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge", "reconcile"} {
+	for _, want := range []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile"} {
 		if !got[want] {
 			t.Errorf("Describe missing command:%s (got %v)", want, got)
 		}
 	}
-	if len(caps.GetProvided()) != 9 {
-		t.Errorf("want 9 command capabilities, got %d", len(caps.GetProvided()))
+	if len(caps.GetProvided()) != 11 {
+		t.Errorf("want 11 command capabilities, got %d", len(caps.GetProvided()))
 	}
 }
 
@@ -116,6 +116,111 @@ func TestPkgGrammar_Parse(t *testing.T) {
 	}
 	if g.Out != "dist" {
 		t.Errorf("Out default = %q, want dist", g.Out)
+	}
+}
+
+// TestPullGrammar_Parse confirms `box pull` accepts the required box positional plus the two
+// optional --tag/--platform flags — byte-identical to the former static BoxPullCmd Kong leaf
+// (FINAL/K5 unit 6a M4c).
+func TestPullGrammar_Parse(t *testing.T) {
+	var g pullGrammar
+	if _, err := parseLeaf("pull", &g, []string{"jupyter", "--tag", "2026.100.0000", "--platform", "linux/amd64"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if g.Box != "jupyter" {
+		t.Errorf("Box = %q, want jupyter", g.Box)
+	}
+	if g.Tag != "2026.100.0000" {
+		t.Errorf("Tag = %q, want 2026.100.0000", g.Tag)
+	}
+	if g.Platform != "linux/amd64" {
+		t.Errorf("Platform = %q, want linux/amd64", g.Platform)
+	}
+}
+
+// TestPullGrammar_Parse_MinimalArgs confirms Tag/Platform default to empty (unset) when omitted —
+// dispatchPull relies on this to decide whether to forward them in the reentry argv.
+func TestPullGrammar_Parse_MinimalArgs(t *testing.T) {
+	var g pullGrammar
+	if _, err := parseLeaf("pull", &g, []string{"ghcr.io/opencharly/jupyter:v1"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if g.Box != "ghcr.io/opencharly/jupyter:v1" {
+		t.Errorf("Box = %q, want ghcr.io/opencharly/jupyter:v1", g.Box)
+	}
+	if g.Tag != "" {
+		t.Errorf("Tag = %q, want empty", g.Tag)
+	}
+	if g.Platform != "" {
+		t.Errorf("Platform = %q, want empty", g.Platform)
+	}
+}
+
+// TestBuildGrammar_Parse confirms `box build` accepts the optional boxes positional plus every one
+// of the nine flags — byte-identical to the former static BuildCmd Kong leaf (FINAL/K5 unit 6a
+// M4d).
+func TestBuildGrammar_Parse(t *testing.T) {
+	var g buildGrammar
+	args := []string{
+		"jupyter", "arch-builder",
+		"--push", "--tag", "2026.100.0000", "--platform", "linux/amd64",
+		"--cache", "registry", "--no-cache",
+		"--jobs", "8", "--podman-jobs", "2",
+		"--include-disabled", "--dev-local-pkg",
+	}
+	if _, err := parseLeaf("build", &g, args); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !reflect.DeepEqual(g.Boxes, []string{"jupyter", "arch-builder"}) {
+		t.Errorf("Boxes = %v, want [jupyter arch-builder]", g.Boxes)
+	}
+	if !g.Push {
+		t.Error("Push = false, want true")
+	}
+	if g.Tag != "2026.100.0000" {
+		t.Errorf("Tag = %q, want 2026.100.0000", g.Tag)
+	}
+	if g.Platform != "linux/amd64" {
+		t.Errorf("Platform = %q, want linux/amd64", g.Platform)
+	}
+	if g.Cache != "registry" {
+		t.Errorf("Cache = %q, want registry", g.Cache)
+	}
+	if !g.NoCache {
+		t.Error("NoCache = false, want true")
+	}
+	if g.Jobs != 8 {
+		t.Errorf("Jobs = %d, want 8", g.Jobs)
+	}
+	if g.PodmanJobs != 2 {
+		t.Errorf("PodmanJobs = %d, want 2", g.PodmanJobs)
+	}
+	if !g.IncludeDisabled {
+		t.Error("IncludeDisabled = false, want true")
+	}
+	if !g.DevLocalPkg {
+		t.Error("DevLocalPkg = false, want true")
+	}
+}
+
+// TestBuildGrammar_Parse_MinimalArgs confirms every flag defaults to its zero value when omitted —
+// dispatchBuild relies on this to decide which flags to forward in the reentry argv.
+func TestBuildGrammar_Parse_MinimalArgs(t *testing.T) {
+	var g buildGrammar
+	if _, err := parseLeaf("build", &g, nil); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(g.Boxes) != 0 {
+		t.Errorf("Boxes = %v, want empty", g.Boxes)
+	}
+	if g.Push || g.NoCache || g.IncludeDisabled || g.DevLocalPkg {
+		t.Errorf("bool flags = %+v, want all false", g)
+	}
+	if g.Tag != "" || g.Platform != "" || g.Cache != "" {
+		t.Errorf("string flags = %+v, want all empty", g)
+	}
+	if g.Jobs != 0 || g.PodmanJobs != 0 {
+		t.Errorf("int flags = %+v, want all zero", g)
 	}
 }
 

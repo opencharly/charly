@@ -278,18 +278,48 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 	}, nil
 }
 
+// resolveLeafVenue walks a (possibly dotted) name to its LEAF node — via the same
+// tree-walk resolveDeployNodeByPath already uses for dispatch/del — and reports the
+// LEAF's own venue trait. This answers "does the node the FULL path actually names
+// resolve as venue X", which is a different question than checking only the dotted
+// path's ROOT segment (the delegate-into-guest shape: "is the ROOT a venue we SSH
+// into, addressing something nested inside its guest"). RCA #12 (FINAL/K5 unit 6a):
+// checkVmTarget/checkLocalTarget originally checked ONLY the root, so a VM/local
+// venue nested as a Children entry UNDER a non-matching-venue parent (e.g. a target:vm
+// deploy nested under a target:pod parent — check-sidecar-pod.check-sidecar-pod-ephvm,
+// the first bed to put a vm in that position) was invisible to both classifiers and
+// fell through to the container default. Returns ok=false if the tree walk can't
+// resolve `name` to a real node (unknown name, orphaned dotted path, undotted name).
+func resolveLeafVenue(uf *UnifiedFile, name string) (node spec.BundleNode, venue string, ok bool) {
+	if uf == nil || uf.Bundle == nil || !strings.Contains(name, ".") {
+		return spec.BundleNode{}, "", false
+	}
+	n, found := resolveDeployNodeByPath(uf.Bundle, name)
+	if !found || n == nil {
+		return spec.BundleNode{}, "", false
+	}
+	return *n, nodeTraits(n).Venue, true
+}
+
 // checkVmTarget reports whether `name` resolves to a VM venue and, if so, the per-deploy DOMAIN
 // IDENTITY to SSH into (charly-<domainID> is the live libvirt domain + managed ssh alias). Covers a
 // direct kind:vm entity (its own name IS the domain identity), a kind:deployment with target:vm (the
-// deploy name, NOT its vm: entity — the domain is named after the deploy, P33), and a dotted path
-// whose root segment is a target:vm deployment (the parent deploy owns the domain). Shared by
-// checkLiveGather and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
+// deploy name, NOT its vm: entity — the domain is named after the deploy, P33), a dotted path whose
+// LEAF resolves to a target:vm deployment nested under a non-vm parent (RCA #12 — the deploy owns
+// its OWN domain, keyed off the full dotted path, matching every other vm-state write's canonical
+// vmDomainIdentity(name) scheme), and a dotted path whose ROOT segment is a target:vm deployment (the
+// parent deploy owns the domain — the delegate-into-guest shape, e.g. check-arch-vm.arch-host, where
+// the dotted suffix addresses something nested INSIDE that vm's guest, not another vm). Leaf checked
+// first: a leaf that is itself a vm is never a "delegate into it" address. Shared by checkLiveGather
+// and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
 func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 	if uf == nil {
 		return "", false
 	}
-	// Dotted: route through the root segment's VM substrate.
 	if idx := strings.Index(name, "."); idx > 0 {
+		if _, venue, ok := resolveLeafVenue(uf, name); ok && venue == "ssh" { // vm (ssh venue)
+			return vmDomainIdentity(name), true
+		}
 		root := name[:idx]
 		if entry, present := uf.Bundle[root]; present && nodeTraits(&entry).Venue == "ssh" { // vm (ssh venue)
 			return vmDomainIdentity(root), true
@@ -309,11 +339,11 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 	return "", false
 }
 
-// checkLocalTarget reports whether `name` (or its dotted root segment) is a
-// HOST-VENUE deployment — a `target: local` filesystem apply OR an EXTERNAL
-// out-of-process deploy (whose externalDeployTarget runs its deploy-scope probes
-// host-side via ShellExecutor, exactly like local) — and returns its node so the
-// caller can build the host/ssh executor via rootExecutorForDeployNode. Shared by
+// checkLocalTarget reports whether `name` (or its dotted LEAF, or its dotted root
+// segment) is a HOST-VENUE deployment — a `target: local` filesystem apply OR an
+// EXTERNAL out-of-process deploy (whose externalDeployTarget runs its deploy-scope
+// probes host-side via ShellExecutor, exactly like local) — and returns its node so
+// the caller can build the host/ssh executor via rootExecutorForDeployNode. Shared by
 // checkLiveGather and resolveCheckVenue (R3): one classifier routes an
 // external deploy to the host path for BOTH the declarative `charly check live`
 // and the interactive `charly check <verb>`, instead of the pod/container path
@@ -321,10 +351,6 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	if uf == nil || uf.Bundle == nil {
 		return spec.BundleNode{}, false
-	}
-	root := name
-	if idx := strings.Index(name, "."); idx > 0 {
-		root = name[:idx]
 	}
 	// A HOST-VENUE substrate runs its deploy-scope check probes on the host — a SHELL venue
 	// (local's own filesystem apply; k8s's host-side kubectl), a PARENT venue (android via
@@ -338,6 +364,21 @@ func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	// venue (vm) is NOT host-routed either — it is handled earlier by checkVmTarget (the guest
 	// SSHExecutor). (Masked while pod beds used fixed ports H:C==9222:9222; surfaced once they
 	// moved to auto-allocated host ports.)
+	//
+	// RCA #12 (FINAL/K5 unit 6a): checked ONLY the dotted root segment's venue,
+	// the same defect class as checkVmTarget — a host-venue child nested (Children,
+	// not Members) under a non-host-venue parent was invisible. Leaf checked first,
+	// same shared resolveLeafVenue walk; root fallback preserves any existing
+	// delegate-into-guest-shaped dotted addressing for a host-venue root.
+	if leaf, venue, ok := resolveLeafVenue(uf, name); ok {
+		if venue == "shell" || venue == "parent" || venue == "none" {
+			return leaf, true
+		}
+	}
+	root := name
+	if idx := strings.Index(name, "."); idx > 0 {
+		root = name[:idx]
+	}
 	if entry, present := uf.Bundle[root]; present {
 		if v := nodeTraits(&entry).Venue; v == "shell" || v == "parent" || v == "none" {
 			return entry, true

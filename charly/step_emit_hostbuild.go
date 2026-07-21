@@ -47,7 +47,7 @@ type stepEmitter func(req spec.StepEmitRequest, build buildEngineContext) (strin
 var stepEmitters = map[string]stepEmitter{}
 
 // registerStepEmitter records one host-coupled step kind's in-core fragment renderer. Panics on
-// a duplicate (a startup invariant, like registerHostBuilder / registerDeployPreresolver).
+// a duplicate (a startup invariant, like registerHostBuilder).
 func registerStepEmitter(word string, fn stepEmitter) {
 	if word == "" || fn == nil {
 		panic("registerStepEmitter: empty word or nil emitter")

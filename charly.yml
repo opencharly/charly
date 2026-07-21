@@ -508,9 +508,11 @@ check-k8s-deploy-app:
 # brought up name-sorted: check-k8s-deploy-cluster (a libvirt k3s VM reusing the
 # SAME k3s-vm entity + k3s-server candy check-k3s-vm proves) comes up FIRST and
 # merges its kubeconfig to context vm-k3s-vm; check-k8s-deploy-workload (a
-# `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the HOST
-# preresolver (k8s_deploy_preresolve.go) reads the box Capabilities + the vm-k3s-vm
-# cluster template and GENERATES an egress-validated Kustomize tree, then the
+# `target: k8s` deploy of check-k8s-deploy-app) comes up SECOND — at bring-up the
+# plugin's own preresolve.go (F6, FINAL/K5 unit 6a) reads the box Capabilities +
+# the vm-k3s-vm cluster template (via the host's "deploy-entity-resolve" +
+# "k8s-generate-kustomize" HostBuild seams) and GENERATES an egress-validated
+# Kustomize tree, then the
 # out-of-process plugin applies it with `kubectl --context vm-k3s-vm apply -k`. The
 # kube: checks under the cluster member (host-side probes; run after BOTH members are
 # up) assert the workload Deployment OBJECT landed — the externalized apply ran
@@ -710,6 +712,39 @@ check-sidecar-pod:
               command:
                 command: ${CHARLY_BIN} start check-sidecar-pod && ${CHARLY_BIN} status --json
                 in_container: false
+            - check: the NESTED ephemeral vm member (check-sidecar-pod-ephvm, tree position, sibling to the pod node above) registered its lifecycle through candy/plugin-bundle's OpEphemeralRegister (FINAL/K5 unit 6a, the ephemeral_lifecycle.go move) when `charly bundle add check-sidecar-pod` brought up the whole tree — the persisted EphemeralRuntime block in charly.yml AND the systemd TTL transient timer are the register-half proof. vm is the ONLY substrate whose Add path calls the ephemeral seam today (validate_ephemeral.go rejects pod/k8s ephemeral at load time, tracked to the bed-robustness batch). The TIMER conjunct runs FIRST so each conjunct's verdict is independently visible on failure (RCA #5). Asserted via the WHOLE-DUMP `bundle show` form (no positional box arg), NOT `bundle show <name>` — that single-arg lookup (deploykit.DeployKey, a bare pass-through) can never find a vm entry's per-host state, which every vm deploy persists under a "vm:"-prefixed, VmDomainIdentity-sanitized key (a PRE-EXISTING, universal gap unrelated to this cutover, registered to the bed-robustness batch — RCA in CHANGELOG). The grep anchors on the entry's OWN unique `deploy_address` marker (EphemeralRuntime.DeployAddress, FINAL/K5 unit 6a) — not any ephemeral marker anywhere in the dump — so this step is structurally unable to pass vacuously, and doubles as the DeployAddress field's own persistence proof. RCA #4 (unit 6a): the systemd-timer conjunct's grep pattern greps the STABLE PREFIX of the unit `registerTransientTimer` actually creates — `charly-bundle-del-<SanitizeUnitName(fullDottedDeployName)>-<unix-ts>` (sdk/deploykit's SanitizeUnitName, dots AND slashes to hyphens, applied to the FULL dotted deploy address, not the leaf name) — a bed-caught real bug in the assertion itself (registration was proven to fire correctly via a live leftover systemd timer; the pre-fix pattern used the leaf name alone and could never match). RCA #5 (unit 6a): the explicit del + clear-half round-trip this step pair USED TO prove is DROPPED here — `charly check live` is documented, intentional `VerifyOnly` (runs ONLY check:/agent-check: steps, NEVER run:/agent-run:), so a `run: bundle del ...` step between two check: steps NEVER EXECUTES during a check-live pass; that precondition was structurally unfireable regardless of keying/env. The persist/clear round-trip's CLEAR half is now proven by an orchestrator-driven LIVE PROBE instead (mutating round-trips are probe territory, idempotent state checks are check-live territory) — see CHANGELOG.
+              id: ephemeral-register-roundtrip
+              stdout:
+                - contains: EPHEMERAL-REGISTERED-OK
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                  systemctl --user list-timers 2>/dev/null | grep -q charly-bundle-del-check-sidecar-pod-check-sidecar-pod-ephvm &&
+                  ${CHARLY_BIN} bundle show 2>/dev/null | grep -q 'deploy_address:.*check-sidecar-pod\.check-sidecar-pod-ephvm' &&
+                  echo EPHEMERAL-REGISTERED-OK
+                in_container: false
+            - check: proves the FINAL/K5 unit 6a M4c "box pull" command-dispersal end to end — candy/plugin-box's new command-pull word (pullGrammar/dispatchPull) reenters the hidden core "__box-pull" command over the "cli" HostBuild seam, which still runs BoxPullCmd's UNCHANGED Run body (EnsureImagePresent). Targets check-k8s-deploy-app (the underlying BOX name check-sidecar-pod's pod image deploys — NOT the deploy name itself, which is not a resolvable box), already present in local storage from this bed's own image-build phase, so the pull is a genuine idempotent no-op — asserts EnsureImagePresent's own unchanged "present" line on stderr. Fails without the new grammar/dispatch/reentry chain actually working; mutates nothing.
+              id: box-pull-dispersal-roundtrip
+              exit_status: 0
+              stderr:
+                - contains: 'ensure-image:'
+                - contains: 'present'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} box pull check-k8s-deploy-app
+                in_container: false
+    check-sidecar-pod-ephvm:
+        vm:
+            from: eval-vm
+            ephemeral:
+                ttl: 30m
+        # NESTED under check-sidecar-pod (tree position, sibling to the pod: node above) so it
+        # is brought up automatically as part of `charly bundle add check-sidecar-pod` and torn
+        # down as part of the bed's own cleanup (or explicitly, mid-plan, by the steps above).
+        # 30m TTL keeps the systemd safety-net window well inside the bed's own run duration.
 # check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
 # Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers

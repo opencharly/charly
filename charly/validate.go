@@ -142,14 +142,6 @@ func validateBoxBaseFrom(cfg *Config, opts ResolveOpts, errs *ValidationError) {
 	}
 }
 
-// envVarNameToPodmanSecretSlug converts an env var name to the slug used in the podman secret name
-// (lowercase + underscores → hyphens). A CORE secrets helper (secrets.go), kept host-side when the
-// validate ENGINE moved to plugin-box (the plugin's validateSecretDeps carries its own copy across the
-// module boundary). Not validate-specific — it just historically lived here.
-func envVarNameToPodmanSecretSlug(envVarName string) string {
-	return strings.ReplaceAll(strings.ToLower(envVarName), "_", "-")
-}
-
 // validateVocabularyCollections validates each entity of the given collection
 // kinds in doc against its registered #Kind (validateEntityCUE), reporting every
 // failure via report. Shared by validateProjectCUESchemas (on-disk project
