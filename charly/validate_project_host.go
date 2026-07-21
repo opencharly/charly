@@ -156,7 +156,7 @@ func buildResolvedProjectTolerant(dir string, opts ResolveOpts) (*spec.ResolvedP
 //     folds validateVocabularyCollections — needs the on-disk manifest bytes + the cue library);
 //   - validateBuildAndDistro (the authored `build:` list on defaults + each box against the DYNAMIC
 //     distro-format vocab — both raw, neither on the envelope);
-//   - validateBoxBaseFrom (the base⊻from XOR reads raw pre-resolve cfg.eachBox; a base+from box fails
+//   - validateBoxBaseFrom (the base⊻from XOR reads raw pre-resolve cfg.EachBox; a base+from box fails
 //     ResolveBox and is tolerant-skipped from the envelope, so only the raw config catches it);
 //   - validateMergeConfig / validateBuildTunables (defaults.merge + per-box jobs/cache/keep_* tunables
 //     are dropped from ResolvedBoxView / have no Defaults on the envelope);
@@ -254,7 +254,7 @@ func fillValidateWordSets(rp *spec.ResolvedProject, lp *loadedProject) {
 		}
 	}
 	if lp.cfg != nil {
-		for _, img := range lp.cfg.eachBox {
+		for _, img := range lp.cfg.EachBox {
 			scanPlan(img.Plan)
 		}
 	}

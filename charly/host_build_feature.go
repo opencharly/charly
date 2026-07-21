@@ -62,7 +62,7 @@ func enumerateFeatures(dir, filter string) ([]spec.FeatureEntity, error) {
 			add("candy", name, layer.GetDescription(), layer.PlanSteps())
 		}
 	}
-	for _, name := range cfg.allBoxNames() {
+	for _, name := range cfg.AllBoxNames() {
 		img, _ := cfg.BoxConfig(name)
 		if img.Description != "" || len(img.Plan) > 0 {
 			add("box", name, img.Description, img.Plan)

@@ -35,7 +35,7 @@ func TestReservedWordRegistry_KindBijection(t *testing.T) {
 // TestReservedWordRegistry_VerbBijection proves VerbCatalog ⇄ spec.OpVerbs is a
 // bijection and that every verb is an authorable Op field, plus the failure paths.
 func TestReservedWordRegistry_VerbBijection(t *testing.T) {
-	if err := checkVerbBijection(VerbCatalog, spec.OpVerbs, spec.AuthoringVerbs); err != nil {
+	if err := checkVerbBijection(spec.VerbCatalog, spec.OpVerbs, spec.AuthoringVerbs); err != nil {
 		t.Fatalf("live verb registry is not a bijection: %v", err)
 	}
 
@@ -43,14 +43,14 @@ func TestReservedWordRegistry_VerbBijection(t *testing.T) {
 	verbsPlusGhost := append(append([]string{}, spec.OpVerbs...), "ghostverb")
 	// ghostverb is also not an authorable field, so it surfaces in two buckets;
 	// the missing-handler bucket is what we assert on.
-	if err := checkVerbBijection(VerbCatalog, verbsPlusGhost, spec.AuthoringVerbs); err == nil ||
+	if err := checkVerbBijection(spec.VerbCatalog, verbsPlusGhost, spec.AuthoringVerbs); err == nil ||
 		!strings.Contains(err.Error(), "ghostverb") {
 		t.Fatalf("expected verb bijection to FAIL for a spec verb with no handler, got: %v", err)
 	}
 
 	// A verb absent from spec.AuthoringVerbs (i.e. CUE doesn't know it as an Op
 	// field) must be reported as not-authorable.
-	if err := checkVerbBijection(VerbCatalog, spec.OpVerbs, []string{"file"}); err == nil ||
+	if err := checkVerbBijection(spec.VerbCatalog, spec.OpVerbs, []string{"file"}); err == nil ||
 		!strings.Contains(err.Error(), "not in spec.AuthoringVerbs") {
 		t.Fatalf("expected verb bijection to FAIL when verbs are not authorable, got: %v", err)
 	}

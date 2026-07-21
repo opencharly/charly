@@ -221,3 +221,21 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 func (c hostCheckContext) ResolveImageLabel(_ context.Context, label string) (string, error) {
 	return c.h.resolveImageLabel(label)
 }
+
+// resolveVNCPassword resolves a deployment's VNC ticket from the credential store (the
+// VNC_PASSWORD env override first, then the instance-specific then image-level key). It stays
+// HOST-side (folded from vnc_helpers.go, FLOOR-SLIM Unit 4) — the out-of-process plugin cannot
+// reach the credential store; resolveVerbGraphics hands the resolved password to the plugin via
+// the reverse-leg reply. wayvnc auth itself is provisioned at DEPLOY time (the wayvnc /
+// sway-desktop-vnc candy), not by the check verb.
+func resolveVNCPassword(boxName, instance string) string {
+	if instance != "" {
+		key := boxName + "-" + instance
+		val, _ := ResolveCredential("VNC_PASSWORD", CredServiceVNC, key, "")
+		if val != "" {
+			return val
+		}
+	}
+	val, _ := ResolveCredential("VNC_PASSWORD", CredServiceVNC, boxName, "")
+	return val
+}

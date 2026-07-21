@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -45,7 +46,7 @@ func DeployFromBox(opts DeployFromBoxOpts) (string, error) {
 	if engine == "" {
 		engine = "podman"
 	}
-	caps, err := CapabilitiesFromLabels(engine, opts.ImageRef)
+	caps, err := deploykit.CapabilitiesFromLabels(engine, opts.ImageRef)
 	if err != nil {
 		return "", fmt.Errorf("reading capabilities from %q: %w", opts.ImageRef, err)
 	}

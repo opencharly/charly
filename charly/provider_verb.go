@@ -21,7 +21,7 @@ import (
 // form), so the dispatch only ever deals with in-proc CheckVerbProviders here.
 type CheckVerbProvider interface {
 	Provider
-	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult
+	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) spec.CheckResult
 }
 
 // The EXTERNAL-CHARLY-VERBS kube/adb/appium/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are
@@ -102,7 +102,7 @@ func checkVerbProviderBijection(verbs []string) error {
 		// install verb authored as a check), so they need no CheckVerbProvider.
 		// (`command` was the lone check-dispatched installVerb; it left spec.OpVerbs in
 		// the command→plugin extraction, so this loop no longer sees it.)
-		if installVerbs[v] {
+		if spec.InstallVerbs[v] {
 			continue
 		}
 		p, ok := providerRegistry.resolve(ClassVerb, v)

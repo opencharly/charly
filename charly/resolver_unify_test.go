@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // These tests pin the resolver-unification cutover: every command's
 // box/local name resolution must descend import namespaces through the ONE
@@ -49,7 +53,7 @@ widget:
 func TestResolveImage_QualifiedDelegates(t *testing.T) {
 	root, cfg := fixtureNamespacedProject(t)
 
-	ri, err := cfg.ResolveBox("sub.widget", "test", root, ResolveOpts{})
+	ri, err := ResolveBox(cfg, "sub.widget", "test", root, ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox(\"sub.widget\") must resolve via namespace delegation: %v", err)
 	}
@@ -61,11 +65,11 @@ func TestResolveImage_QualifiedDelegates(t *testing.T) {
 	}
 
 	// Bare names still resolve in root, unchanged.
-	if _, err := cfg.ResolveBox("app", "test", root, ResolveOpts{}); err != nil {
+	if _, err := ResolveBox(cfg, "app", "test", root, ResolveOpts{}); err != nil {
 		t.Errorf("bare ResolveBox(\"app\") regressed: %v", err)
 	}
 	// A genuinely-missing namespace still errors clearly.
-	if _, err := cfg.ResolveBox("nope.widget", "test", root, ResolveOpts{}); err == nil {
+	if _, err := ResolveBox(cfg, "nope.widget", "test", root, ResolveOpts{}); err == nil {
 		t.Error("ResolveBox(\"nope.widget\") should error: no such namespace")
 	}
 }
@@ -77,13 +81,13 @@ func TestResolveImage_QualifiedDelegates(t *testing.T) {
 func TestFindImageByLeaf(t *testing.T) {
 	_, cfg := fixtureNamespacedProject(t)
 
-	if got, ok := cfg.findBoxByLeaf("app"); !ok || got != "app" {
+	if got, ok := cfg.FindBoxByLeaf("app"); !ok || got != "app" {
 		t.Errorf("findBoxByLeaf(\"app\") = %q,%v; want \"app\",true (root hit, bare)", got, ok)
 	}
-	if got, ok := cfg.findBoxByLeaf("widget"); !ok || got != "sub.widget" {
+	if got, ok := cfg.FindBoxByLeaf("widget"); !ok || got != "sub.widget" {
 		t.Errorf("findBoxByLeaf(\"widget\") = %q,%v; want \"sub.widget\",true (namespaced hit, qualified)", got, ok)
 	}
-	if got, ok := cfg.findBoxByLeaf("absent"); ok {
+	if got, ok := cfg.FindBoxByLeaf("absent"); ok {
 		t.Errorf("findBoxByLeaf(\"absent\") = %q,true; want \"\",false", got)
 	}
 }
@@ -97,7 +101,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	root, cfg := fixtureNamespacedProject(t)
 
 	// Without RequestedBoxes, sub.widget is not reachable, so not pulled.
-	base, err := cfg.ResolveAllBox("test", root, ResolveOpts{})
+	base, err := ResolveAllBox(cfg, "test", root, ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}
@@ -106,7 +110,7 @@ func TestResolveAllImage_RequestedQualifiedTarget(t *testing.T) {
 	}
 
 	// With it requested, it is pulled under its fully-qualified key.
-	withReq, err := cfg.ResolveAllBox("test", root, ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
+	withReq, err := ResolveAllBox(cfg, "test", root, ResolveOpts{RequestedBoxes: []string{"sub.widget"}})
 	if err != nil {
 		t.Fatalf("ResolveAllBox(RequestedImages): %v", err)
 	}
@@ -161,17 +165,17 @@ widget:
 	cfg := uf.ProjectConfig()
 
 	// Root-internal base IS followed.
-	if got := chainNames(cfg.walkBaseChain("child")); len(got) != 2 || got[0] != "child" || got[1] != "parent" {
+	if got := chainNames(cfg.WalkBaseChain("child")); len(got) != 2 || got[0] != "child" || got[1] != "parent" {
 		t.Errorf("walkBaseChain(\"child\") = %v; want [child, parent] (root-internal base followed)", got)
 	}
 	// Namespace-qualified base is NOT descended — the walk stops at the boundary
 	// so per-image collection doesn't double-count the separately-built base.
-	if got := chainNames(cfg.walkBaseChain("nschild")); len(got) != 1 || got[0] != "nschild" {
+	if got := chainNames(cfg.WalkBaseChain("nschild")); len(got) != 1 || got[0] != "nschild" {
 		t.Errorf("walkBaseChain(\"nschild\") = %v; want [nschild] (stops at namespaced base)", got)
 	}
 }
 
-func chainNames(nodes []baseChainNode) []string {
+func chainNames(nodes []spec.BaseChainNode) []string {
 	out := make([]string, len(nodes))
 	for i, n := range nodes {
 		out[i] = n.Name

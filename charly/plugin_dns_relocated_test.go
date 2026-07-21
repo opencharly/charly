@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // TestRelocatedDNSVerb_DispatchesViaKit proves the `dns` check verb — relocated to
 // candy/plugin-dns (a compiled-in kit candy) — dispatches through the providerRegistry
@@ -11,9 +15,9 @@ func TestRelocatedDNSVerb_DispatchesViaKit(t *testing.T) {
 	assertRelocatedVerbDispatch(t, "dns", []relocatedVerbCase{
 		// ModeBox, getent exit 0 (resolvable) + resolvable:true → pass.
 		{"getent-ok + resolvable:true", "getent hosts", 0, RunModeBox,
-			map[string]any{"dns": "localhost", "resolvable": true}, TestPass},
+			map[string]any{"dns": "localhost", "resolvable": true}, spec.StatusPass},
 		// ModeBox, getent exit 2 (not resolvable) + resolvable:false → pass.
 		{"getent-fail + resolvable:false", "getent hosts", 2, RunModeBox,
-			map[string]any{"dns": "no.such.host.invalid", "resolvable": false}, TestPass},
+			map[string]any{"dns": "no.such.host.invalid", "resolvable": false}, spec.StatusPass},
 	})
 }

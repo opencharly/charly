@@ -26,7 +26,7 @@ func TestRelocatedMountVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "findmnt", stdout: "proc proc rw,nosuid\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"mount": "/proc", "filesystem": "proc"}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
 

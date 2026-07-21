@@ -36,14 +36,14 @@ type hostVerbResolver struct {
 // CheckVerbProvider via its typed RunVerb (threaded the host CheckContext over the kit.Runner),
 // an out-of-process provider via the Invoke envelope (invokeVerbProvider). (_, false) means no
 // such verb is registered — the walk reports the op as an unknown-verb skip.
-func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (CheckResult, bool) {
+func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.CheckResult, bool) {
 	kind, err := op.Kind()
 	if err != nil {
-		return CheckResult{}, false
+		return spec.CheckResult{}, false
 	}
 	prov, ok := providerRegistry.ResolveVerb(kind)
 	if !ok {
-		return CheckResult{}, false
+		return spec.CheckResult{}, false
 	}
 	if cv, ok := prov.(CheckVerbProvider); ok {
 		return cv.RunVerb(ctx, h, op), true
@@ -55,7 +55,7 @@ func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (CheckResul
 
 // RunProvisionAct runs a do:act state-provision verb's create/configure act; (_, false) means
 // the verb has no act path (the walk falls through to the assert dispatch).
-func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *spec.Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *spec.Op, verb string) (spec.CheckResult, bool) {
 	return h.runProvisionAct(ctx, op, verb)
 }
 

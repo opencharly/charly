@@ -29,7 +29,7 @@ func TestRelocatedPackageVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "rpm -q", stdout: "INSTALLED", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "fedora"),
 		&spec.Op{PluginInput: map[string]any{"package": "bash", "installed": true}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
 
@@ -74,23 +74,23 @@ func TestPackageVerb_InfraFailureNotContentFalse(t *testing.T) {
 		t.Fatal("package verb not registered")
 	}
 	cv := prov.(CheckVerbProvider)
-	run := func(fe *fakeExecutor, wantInstalled bool) CheckResult {
+	run := func(fe *fakeExecutor, wantInstalled bool) spec.CheckResult {
 		return cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive, "arch"),
 			&spec.Op{PluginInput: map[string]any{"package": "bash", "installed": wantInstalled}})
 	}
 
 	// Genuine absent: probe printed ABSENT, exit 0. installed:false → pass.
-	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, false); res.Status != TestPass {
+	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, false); res.Status != spec.StatusPass {
 		t.Fatalf("absent-as-expected: want pass, got %v: %s", res.Status, res.Message)
 	}
 	// Genuine absent but wanted installed → a real content FAIL (installed=false).
-	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, true); res.Status != TestFail || !strings.Contains(res.Message, "installed=false") {
+	if res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "ABSENT", exit: 0}}}, true); res.Status != spec.StatusFail || !strings.Contains(res.Message, "installed=false") {
 		t.Fatalf("absent-but-wanted: want a content fail 'installed=false', got %v: %s", res.Status, res.Message)
 	}
 	// INFRA failure: exec died (exit 255, store error, no token). Must NOT be
 	// reported as installed=false — surfaced as an exec/infra failure.
 	res := run(&fakeExecutor{responses: []fakeResponse{{matchPrefix: "if rpm", stdout: "", exit: 255, stderr: "saving container state: writing container"}}}, true)
-	if res.Status != TestFail {
+	if res.Status != spec.StatusFail {
 		t.Fatalf("infra failure: want fail, got %v", res.Status)
 	}
 	if strings.Contains(res.Message, "installed=false") {

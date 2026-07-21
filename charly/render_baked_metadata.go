@@ -113,7 +113,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	meta.Hook = CollectHooks(g.Config, g.Candies, boxName)
 
 	// Description: three-section plan-shaped self-description.
-	meta.Description = CollectDescriptions(g.Config, g.Candies, boxName)
+	meta.Description = deploykit.CollectDescriptions(g.Config, g.Candies, boxName)
 
 	// Shell-init manifest.
 	meta.Shell = CollectShell(g.Config, g.Candies, boxName)

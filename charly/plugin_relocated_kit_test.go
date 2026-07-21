@@ -9,14 +9,14 @@ import (
 
 // relocatedVerbCase is one sub-case of a relocated-kit-verb dispatch test: a fakeExecutor
 // response (matched command prefix + exit code), the run mode, the authored PluginInput,
-// and the CheckStatus the verb must return.
+// and the spec.Status the verb must return.
 type relocatedVerbCase struct {
 	desc        string
 	matchPrefix string
 	exit        int
 	mode        RunMode
 	input       map[string]any
-	want        CheckStatus
+	want        spec.Status
 }
 
 // assertRelocatedVerbDispatch proves a check verb relocated to a compiled-in kit candy

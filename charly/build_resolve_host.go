@@ -221,7 +221,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		Jobs:            int64(resolveBuildJobs(c)),
 		PodmanJobs:      int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
 		Cache:           c.Cache,
-		KeepImages:      int64(resolveIntPtr(def.KeepImages, nil, keepImagesFallback)),
+		KeepImages:      int64(resolveIntPtr(def.KeepImages)),
 		ResolvedProject: rp,
 	}, nil
 }

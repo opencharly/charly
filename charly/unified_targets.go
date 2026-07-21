@@ -59,7 +59,7 @@ func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, 
 	results := runner.Run(ctx, filtered)
 	failed := 0
 	for _, r := range results {
-		if r.Status == TestFail {
+		if r.Status == spec.StatusFail {
 			failed++
 			id := ""
 			if r.Op != nil {

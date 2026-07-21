@@ -86,7 +86,7 @@ func (c *BoxPullCmd) Run() error {
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}
-			resolved, err := cfg.ResolveBox(c.Box, c.Tag, dir, ResolveOpts{})
+			resolved, err := ResolveBox(cfg, c.Box, c.Tag, dir, ResolveOpts{})
 			if err != nil {
 				return err
 			}

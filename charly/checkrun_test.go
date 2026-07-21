@@ -87,7 +87,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/redis-server", "exists": true, "mode": "0755", "filetype": "file"}},
 		})
-		if len(results) != 1 || results[0].Status != TestPass {
+		if len(results) != 1 || results[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", results[0])
 		}
 	})
@@ -100,7 +100,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/x", "mode": "0644"}},
 		})
-		if results[0].Status != TestFail || !strings.Contains(results[0].Message, "mode") {
+		if results[0].Status != spec.StatusFail || !strings.Contains(results[0].Message, "mode") {
 			t.Errorf("expected mode failure, got %+v", results[0])
 		}
 	})
@@ -113,7 +113,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/nope", "exists": false}},
 		})
-		if results[0].Status != TestPass {
+		if results[0].Status != spec.StatusPass {
 			t.Errorf("expected pass for absent-as-expected, got %+v", results[0])
 		}
 	})
@@ -126,7 +126,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/x", "exists": false}},
 		})
-		if results[0].Status != TestFail {
+		if results[0].Status != spec.StatusFail {
 			t.Errorf("expected fail, got %+v", results[0])
 		}
 	})
@@ -140,7 +140,7 @@ func TestRunner_FileVerb(t *testing.T) {
 		results := r.Run(context.Background(), []spec.Op{
 			{Plugin: "file", PluginInput: map[string]any{"file": "/etc/x", "contains": "fsfreeze-hook.d"}},
 		})
-		if results[0].Status != TestPass {
+		if results[0].Status != spec.StatusPass {
 			t.Errorf("expected pass (bare-scalar contains = substring), got %+v", results[0])
 		}
 	})
@@ -164,7 +164,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli ping"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -177,7 +177,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "status"}, Stdout: spec.MatcherList{{Op: "contains", Value: []any{"ready", "ok"}}}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -188,7 +188,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 			{matchPrefix: "fail-cmd", exit: 2},
 		}
 		res := r.Run(context.Background(), []spec.Op{cmdOp("fail-cmd")})
-		if res[0].Status != TestFail || !strings.Contains(res[0].Message, "exit=2") {
+		if res[0].Status != spec.StatusFail || !strings.Contains(res[0].Message, "exit=2") {
 			t.Errorf("expected exit failure, got %+v", res[0])
 		}
 	})
@@ -201,7 +201,7 @@ func TestRunner_CommandVerb(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "uptime"}, Stdout: spec.MatcherList{{Op: "matches", Value: `load average: [\d.]+`}}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -226,7 +226,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}, Stdout: spec.MatcherList{{Op: "equals", Value: "PONG"}}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v. fake calls: %v", res[0], fake.calls)
 		}
 	})
@@ -236,7 +236,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "command", PluginInput: map[string]any{"command": "redis-cli -p ${HOST_PORT:6379}"}},
 		})
-		if res[0].Status != TestSkip || !strings.Contains(res[0].Message, "unresolved") {
+		if res[0].Status != spec.StatusSkip || !strings.Contains(res[0].Message, "unresolved") {
 			t.Errorf("expected skip with unresolved, got %+v", res[0])
 		}
 	})
@@ -246,7 +246,7 @@ func TestRunner_VariableExpansion(t *testing.T) {
 func TestRunner_SkipFlag(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeLive)
 	res := r.Run(context.Background(), []spec.Op{{Plugin: "command", PluginInput: map[string]any{"command": "anything"}, Skip: true}})
-	if res[0].Status != TestSkip {
+	if res[0].Status != spec.StatusSkip {
 		t.Errorf("expected skip, got %+v", res[0])
 	}
 }
@@ -255,7 +255,7 @@ func TestRunner_SkipFlag(t *testing.T) {
 func TestRunner_EmptyCheck(t *testing.T) {
 	r, _ := newFakeRunner(t, RunModeLive)
 	res := r.Run(context.Background(), []spec.Op{{}})
-	if res[0].Status != TestFail || !strings.Contains(res[0].Message, "no verb") {
+	if res[0].Status != spec.StatusFail || !strings.Contains(res[0].Message, "no verb") {
 		t.Errorf("expected fail with 'no verb', got %+v", res[0])
 	}
 }

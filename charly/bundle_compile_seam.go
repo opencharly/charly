@@ -157,7 +157,7 @@ func (c *deployAddCmd) compileRefSelection(ref *DeployRef, cfg *Config, distroCf
 func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
 	_ = distroCfg
 	_ = builderCfg
-	img, err := cfg.ResolveBox(ref.Name, c.Tag, dir, ResolveOpts{})
+	img, err := ResolveBox(cfg, ref.Name, c.Tag, dir, ResolveOpts{})
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -238,7 +238,7 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 			img.BuilderConfig = builderCfg
 		}
 		if cfg != nil {
-			img.Builder = cfg.resolveEffectiveBuilder(img.Name, img.Distro, img.Base, img.IsExternalBase, img.Builder)
+			img.Builder = buildkit.ResolveEffectiveBuilder(cfg, img.Name, img.Distro, img.Base, img.IsExternalBase, img.Builder)
 		}
 	}
 	hostCtx := c.compileHostContext()

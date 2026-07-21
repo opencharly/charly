@@ -27,7 +27,7 @@ func TestRelocatedKernelParamVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "/proc/sys", stdout: "Linux\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"kernel-param": "kernel.ostype", "value": []any{"Linux"}}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
 

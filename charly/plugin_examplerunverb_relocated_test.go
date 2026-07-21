@@ -24,7 +24,7 @@ func TestRelocatedExamplerunverbVerb_DispatchesViaKit(t *testing.T) {
 	}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"marker": "runverb-xyz"}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("want pass, got %v: %s", res.Status, res.Message)
 	}
 	if !strings.Contains(res.Message, "runverb-xyz") || !strings.Contains(res.Message, "mode=live") {
