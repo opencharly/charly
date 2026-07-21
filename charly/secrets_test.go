@@ -10,51 +10,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-func TestCollectSecretsFromLabels(t *testing.T) {
-	labelSecrets := []LabelSecretEntry{
-		{Name: "api-key", Target: "/run/secrets/api_key", Env: "API_KEY"},
-		{Name: "vnc-password", Target: "/run/secrets/vnc_password"},
-	}
-
-	secrets := CollectSecretsFromLabels("my-image", labelSecrets)
-	if len(secrets) != 2 {
-		t.Fatalf("expected 2 secrets, got %d", len(secrets))
-	}
-
-	if secrets[0].Name != "charly-my-image-api-key" {
-		t.Errorf("secret[0].Name = %q, want %q", secrets[0].Name, "charly-my-image-api-key")
-	}
-	if secrets[0].Target != "/run/secrets/api_key" {
-		t.Errorf("secret[0].Target = %q", secrets[0].Target)
-	}
-	if secrets[0].Env != "API_KEY" {
-		t.Errorf("secret[0].Env = %q", secrets[0].Env)
-	}
-	if secrets[0].SecretName != "api-key" {
-		t.Errorf("secret[0].SecretName = %q", secrets[0].SecretName)
-	}
-
-	if secrets[1].Name != "charly-my-image-vnc-password" {
-		t.Errorf("secret[1].Name = %q", secrets[1].Name)
-	}
-}
-
-func TestSecretArgs(t *testing.T) {
-	secrets := []deploykit.CollectedSecret{
-		{Name: "charly-img-pass", Target: "/run/secrets/pass"},
-		{Name: "charly-img-user", Target: "/run/secrets/user"},
-	}
-	args := SecretArgs(secrets)
-	if len(args) != 4 {
-		t.Fatalf("expected 4 args, got %d: %v", len(args), args)
-	}
-	if args[0] != "--secret" || args[1] != "charly-img-pass,target=/run/secrets/pass" {
-		t.Errorf("args[0:2] = %v", args[0:2])
-	}
-	if args[2] != "--secret" || args[3] != "charly-img-user,target=/run/secrets/user" {
-		t.Errorf("args[2:4] = %v", args[2:4])
-	}
-}
+// TestCollectSecretsFromLabels / TestSecretArgs relocated to
+// sdk/deploykit/secret_probe_test.go (Cutover B-1 fix round — the functions
+// themselves moved there and are no longer duplicated in this package).
 
 func TestQuadletSecretDirectives(t *testing.T) {
 	cfg := deploykit.QuadletConfig{
@@ -167,30 +125,9 @@ func TestQuadletSecretEnvDirectives(t *testing.T) {
 	}
 }
 
-func TestCredServiceForSecret(t *testing.T) {
-	tests := []struct {
-		envVar string
-		want   string
-	}{
-		{"VNC_PASSWORD", CredServiceVNC},
-		{"CUSTOM_SECRET", "charly/secret"},
-	}
-	for _, tt := range tests {
-		got := credServiceForSecret(tt.envVar)
-		if got != tt.want {
-			t.Errorf("credServiceForSecret(%q) = %q, want %q", tt.envVar, got, tt.want)
-		}
-	}
-}
-
-func TestCredKeyForSecret(t *testing.T) {
-	if got := credKeyForSecret("my-image", ""); got != "my-image" {
-		t.Errorf("credKeyForSecret(my-image, '') = %q", got)
-	}
-	if got := credKeyForSecret("my-image", "work"); got != "my-image-work" {
-		t.Errorf("credKeyForSecret(my-image, work) = %q", got)
-	}
-}
+// TestCredServiceForSecret / TestCredKeyForSecret relocated to
+// sdk/deploykit/secret_probe_test.go alongside CredServiceForSecret/
+// CredKeyForSecret themselves.
 
 // ---------------------------------------------------------------------------
 // Step 4 tests: credential resolution for secret_accepts / secret_requires.
@@ -546,7 +483,7 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 
 	// Mirror the merge that both Run() and updateAllDeployedQuadlets must
 	// perform: start with candy-owned, append credential-backed.
-	candyOwned := CollectSecretsFromLabels("openwebui", meta.Secret)
+	candyOwned := deploykit.CollectSecretsFromLabels("openwebui", meta.Secret)
 	credBacked, _ := CollectCandySecretAccepts("openwebui", "", meta)
 	merged := append(slices.Clone(candyOwned), credBacked...)
 
@@ -571,7 +508,7 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 	}
 
 	// Credential-backed entries: RotateOnConfig must be true, so
-	// ProvisionPodmanSecrets bypasses the podmanSecretExists short-circuit
+	// ProvisionPodmanSecrets bypasses the deploykit.PodmanSecretExists short-circuit
 	// on every charly config and re-creates the podman secret with the latest
 	// credential store value.
 	for _, name := range []string{"TEST_CHARLY_CRED_ADMIN_PASSWORD", "TEST_CHARLY_CRED_ROUTEA"} {
@@ -593,30 +530,6 @@ func TestMergedSecretsIncludeCredentialBacked(t *testing.T) {
 	}
 }
 
-// TestApplySecretRefresh_NamedAllAndUnmatched (moved from box_labels_cmd_test.go, K3 reentry-class
-// dissolution — that file's own subjects, canonicalLabelKey/sortedLabelKeys, moved to
-// candy/plugin-box; this test covers ApplySecretRefresh, defined in secrets.go, so it belongs here).
-func TestApplySecretRefresh_NamedAllAndUnmatched(t *testing.T) {
-	base := []deploykit.CollectedSecret{
-		{Name: "charly-app-db-password", SecretName: "db-password"},
-		{Name: "charly-app-api-key", SecretName: "api-key"},
-	}
-
-	out, unmatched := ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), nil)
-	if len(unmatched) != 0 || out[0].RotateOnConfig || out[1].RotateOnConfig {
-		t.Fatal("no-op refresh must not rotate or report unmatched")
-	}
-
-	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"db-password", "nope"})
-	if !out[0].RotateOnConfig || out[1].RotateOnConfig {
-		t.Errorf("named refresh rotated wrong set: %+v", out)
-	}
-	if !reflect.DeepEqual(unmatched, []string{"nope"}) {
-		t.Errorf("unmatched = %v, want [nope]", unmatched)
-	}
-
-	out, unmatched = ApplySecretRefresh(append([]deploykit.CollectedSecret(nil), base...), []string{"all"})
-	if !out[0].RotateOnConfig || !out[1].RotateOnConfig || len(unmatched) != 0 {
-		t.Errorf("'all' refresh must rotate everything: %+v unmatched=%v", out, unmatched)
-	}
-}
+// TestApplySecretRefresh_NamedAllAndUnmatched relocated to
+// sdk/deploykit/secret_probe_test.go alongside ApplySecretRefresh itself
+// (Cutover B-1 fix round).

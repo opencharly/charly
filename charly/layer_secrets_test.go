@@ -48,7 +48,7 @@ func TestEnsureCandySecret_RequiredMissingAutoGenerates(t *testing.T) {
 		t.Errorf("expected source=auto-generated, got %q", source)
 	}
 	// 32 bytes url-safe base64 = 44 chars (Fernet-key compatible).
-	// See generateRandomSecretToken in secrets.go for rationale.
+	// See deploykit.GenerateRandomSecretToken for rationale.
 	if len(val) != 44 {
 		t.Errorf("expected 44-char url-safe base64 token, got %d chars: %q", len(val), val)
 	}

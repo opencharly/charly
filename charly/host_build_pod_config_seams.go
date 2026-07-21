@@ -285,7 +285,7 @@ func hostBuildPodConfigResolveSidecars(_ context.Context, req spec.PodConfigReso
 		if len(sc.Secret) == 0 {
 			continue
 		}
-		scSecrets, _ := ApplySecretRefresh(sc.Secret, req.RefreshSecret)
+		scSecrets, _ := deploykit.ApplySecretRefresh(sc.Secret, req.RefreshSecret)
 		scProvisioned, scFallback, scErr := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, scSecrets, req.AutoGen)
 		if scErr != nil {
 			continue // best-effort — mirrors the former in-Run() Warning-only handling
@@ -315,10 +315,10 @@ func hostBuildPodConfigProvisionSecrets(_ context.Context, req spec.PodConfigPro
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
 		return spec.PodConfigProvisionSecretsReply{}, err
 	}
-	candyOwnedSecrets := CollectSecretsFromLabels(req.Box, meta.Secret)
+	candyOwnedSecrets := deploykit.CollectSecretsFromLabels(req.Box, meta.Secret)
 	credBackedSecrets, secretResolutions := CollectCandySecretAccepts(req.Box, req.Instance, &meta)
 	collectedSecrets := append(append([]deploykit.CollectedSecret{}, candyOwnedSecrets...), credBackedSecrets...)
-	collectedSecrets, _ = ApplySecretRefresh(collectedSecrets, req.RefreshSecret)
+	collectedSecrets, _ = deploykit.ApplySecretRefresh(collectedSecrets, req.RefreshSecret)
 	provisioned, fallbackEnv, err := ProvisionPodmanSecrets(req.RunEngine, req.Box, req.Instance, collectedSecrets, req.AutoGen)
 	if err != nil {
 		return spec.PodConfigProvisionSecretsReply{}, err
