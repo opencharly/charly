@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/kit"
 )
 
 // checkrun_charly_verbs.go holds the shared host-side helpers the EXTERNAL
@@ -46,7 +48,7 @@ func (h *hostVerbResolver) resolveCheckApk(apk, origin string) (string, error) {
 		}
 		return "", fmt.Errorf("committed APK %q: candy %q is absent from the source scan (%d candies scanned) — cannot anchor the fixture", apk, key, len(candyDirs))
 	}
-	return resolveApkPath(apk, dir)
+	return kit.ResolveApkPath(apk, dir)
 }
 
 // noVmDisplayDeviceErr is the substring the VM-target resolver (charly/vm_target.go)

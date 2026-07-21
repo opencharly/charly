@@ -2,7 +2,10 @@ module github.com/opencharly/charly/candy/plugin-feature
 
 go 1.26.0
 
-require github.com/alecthomas/kong v1.15.0 // indirect
+require (
+	github.com/alecthomas/kong v1.15.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
+)
 
 require (
 	cuelang.org/go v0.16.1 // indirect

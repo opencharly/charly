@@ -4,9 +4,10 @@
 // compiled_plugins (the canonical placement, P15), or cmd/serve serves them OUT-OF-PROCESS when
 // they are not.
 //
-// It serves NINE command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
-// so `charly box generate/validate/new/pkg/inspect/list/labels/merge/reconcile` parse + dispatch
-// here while the retained core BoxCmd verbs — build/feature/the authoring verbs — stay in core):
+// It serves ELEVEN command capabilities, all NESTED under the `box` parent (CommandParent()=="box",
+// so `charly box generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile` parse +
+// dispatch here while the retained core BoxCmd verb — feature — and the authoring verbs stay in
+// core):
 //
 //   - command:generate — `charly box generate`: builds a spec.BuildRequest and InvokeProvider's the
 //     peer COMPILED-IN build:generate word (candy/plugin-build), which renders the .build/
@@ -20,6 +21,18 @@
 //     validate_graph.go / validate_check.go).
 //   - command:pkg — `charly box pkg`: reaches the hidden core `__box-pkg` reentry over
 //     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
+//   - command:pull — `charly box pull`: reaches the hidden core `__box-pull` reentry over
+//     HostBuild("cli") (FINAL/K5 unit 6a M4c, pull-first per the build/pull dispersal ruling —
+//     EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution,
+//     which is K1/K3-ENGINE family, not CLI-dispersal residue). The plugin owns ONLY the CLI
+//     grammar (pullGrammar, byte-identical to the former static BoxPullCmd Kong leaf) + reentry
+//     dispatch; BoxPullCmd's Run body is UNCHANGED, unmoved, still core-only.
+//   - command:build — `charly box build`: reaches the hidden core `__box-build` reentry over
+//     HostBuild("cli") (FINAL/K5 unit 6a M4d, the CLI-only mirror of the pull move — BuildCmd.Run()'s
+//     engine, the bootstrap-builder subsystem, remote-ref resolve/download, and retention pruning
+//     are K1/K3-ENGINE family, tracked to move with those waves, not this dispersal). The plugin owns
+//     ONLY the CLI grammar (buildGrammar, byte-identical to the former static BuildCmd Kong leaf) +
+//     reentry dispatch; BuildCmd's Run body is UNCHANGED, unmoved, still core-only.
 //   - command:inspect — `charly box inspect`: reads the generic spec.ResolvedProject envelope
 //     (HostBuild("resolved-project")) and prints the resolved box view — snake_case JSON by default,
 //     scalar/box-aggregate fields per --format. The deploy-overlay formats (tunnel/bind_mounts) reenter
@@ -68,7 +81,7 @@ import (
 const calver = "2026.198.2131"
 
 // boxCommandWords is the set of command words this plugin serves — all nested under `box`.
-var boxCommandWords = []string{"generate", "validate", "new", "pkg", "inspect", "list", "labels", "merge", "reconcile"}
+var boxCommandWords = []string{"generate", "validate", "new", "pkg", "pull", "build", "inspect", "list", "labels", "merge", "reconcile"}
 
 // boxListSubcommands is the `charly box list <sub>` catalog (F-CLI-NEST), matching listSubcommands
 // in inspect_list.go — hand-declared, not reflected, because dispatchList routes on a plain string

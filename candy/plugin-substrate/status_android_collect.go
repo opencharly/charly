@@ -49,8 +49,12 @@ type androidDeployNode struct {
 }
 
 // androidDevice is the resolved install handle for one android device (K5: a
-// plugin-local copy of charly/android_deploy_cmd.go's AndroidDevice — not an
-// alias, since charly/ types aren't importable from a plugin module).
+// plugin-local copy of the FORMER charly/android_deploy_cmd.go's AndroidDevice —
+// not an alias, since charly/ types aren't importable from a plugin module; that
+// core file was deleted in FINAL/K5 unit 6a's F6 move, whose OWN plugin-local
+// equivalent for the deploy-preresolve path now lives in
+// candy/plugin-adb/preresolve.go — this status-collector copy is a SEPARATE,
+// intentional duplicate serving `charly status`, not an alias of that one either).
 type androidDevice struct {
 	Engine      string
 	Container   string
@@ -188,8 +192,10 @@ func androidSpecFor(rp *spec.ResolvedProject, from string) *spec.ResolvedAndroid
 // and deploy context. Endpoint devices target a remote adb server; image
 // devices target an in-pod emulator. For a nested deploy (dotted path), the
 // in-pod container is the PARENT pod; for a top-level deploy it resolves by
-// image name. Faithful port of charly/android_deploy_cmd.go's
-// resolveAndroidDevice.
+// image name. Faithful port of the FORMER charly/android_deploy_cmd.go's
+// resolveAndroidDevice (deleted in FINAL/K5 unit 6a's F6 move; the equivalent for
+// the deploy-preresolve path is now candy/plugin-adb/preresolve.go's own
+// resolveAndroidDevice — a separate, intentional duplicate, not this one).
 func resolveAndroidDevice(ctx context.Context, aspec *spec.ResolvedAndroid, node *spec.Deploy, path string) (androidDevice, error) {
 	serial := aspec.EffectiveSerial()
 
@@ -296,7 +302,8 @@ func adbAddrForContainer(engine, containerName string) (string, error) {
 // findHostPort returns the first host-side port number bound to the given
 // container port. Looks for both "N" and "N/tcp" keys because podman inspect
 // emits the protocol-suffixed form. Pure engine-inspect arithmetic, ported
-// verbatim from charly/android_deploy_cmd.go.
+// verbatim from the FORMER charly/android_deploy_cmd.go (deleted in FINAL/K5 unit
+// 6a's F6 move).
 func findHostPort(insp *kit.ContainerInspection, containerPort int) (int, error) {
 	if insp.IsHostNetworked() {
 		return containerPort, nil

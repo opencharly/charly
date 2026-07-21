@@ -2,28 +2,34 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 )
 
 // vm_deploy_state.go — the charly.yml persistence half of the former bundle_add_cmd_vm.go
-// (P13-KERNEL): a plugin cannot touch the project's charly.yml directly (deploy_add_shared.go /
-// vm_lifecycle_preresolve.go's PrepareVenue seam persists the plugin's returned state HERE), so
-// these stay behind the config-persist HostBuild seam. The pure VM-spec helpers (SSH user/port
-// resolution) + the SSH ReverseRunner adapter moved to sdk/vmshared + sdk/kit respectively — see
-// vmshared.ResolveCloudInitSSHUser + kit.SSHReverseRunner + kit.ResolveVmSshPort.
+// (P13-KERNEL): a plugin cannot touch the project's charly.yml directly, so these stay behind the
+// config-persist HostBuild seam. RCA #6 (FINAL/K5 unit 6a) eliminated the second writer this
+// comment used to describe (a PrepareVenue-reply persist through substrate_lifecycle_grpc.go) —
+// candy/plugin-vm's own hostConfigPersist is the SOLE vm_state writer now, one writer, one key. The
+// pure VM-spec helpers (SSH user/port resolution) + the SSH ReverseRunner adapter moved to
+// sdk/vmshared + sdk/kit respectively — see vmshared.ResolveCloudInitSSHUser + kit.SSHReverseRunner
+// + kit.ResolveVmSshPort.
 
 // vmNameFromDeployName extracts the VM entity name from a deploy-key
 // in the legacy "vm:<name>[/<instance>]" form. Callers that hold a
 // schema-v4 deploy key (whose entity comes from the node's `vm:` field)
-// resolve the entity via vmEntityForAdd instead; this helper handles the
-// prefixed form (legacy refs + the "vm:<entity>" key the del path builds
-// for ledger/teardown keying). The `instance` suffix is preserved for
-// future per-instance addressing but currently unused.
+// resolve the entity via candy/plugin-deploy-vm's own vmEntityForPrepare
+// (FINAL/K5 unit 6a, M4b — the entity resolution moved with PrepareVenue's
+// own body) instead; this helper handles the prefixed form (legacy refs +
+// the "vm:<entity>" key the del path builds for ledger/teardown keying).
+// The `instance` suffix is preserved for future per-instance addressing but
+// currently unused.
 func vmNameFromDeployName(deployName string) (string, error) {
 	if !strings.HasPrefix(deployName, "vm:") {
 		return "", fmt.Errorf("VM deploy name must start with 'vm:' (got %q)", deployName)
@@ -36,6 +42,29 @@ func vmNameFromDeployName(deployName string) (string, error) {
 		return before, nil
 	}
 	return rest, nil
+}
+
+// splitVmAddress detects the "vm:"-prefixed CLI ADDRESSING form (`charly bundle add/del
+// vm:<name>` / `vm:<parent.child>`) and returns the address with that prefix stripped, plus
+// whether it was present. "vm:" here is an ADDRESSING HINT — "resolve this via the vm
+// substrate" — NEVER an identity itself; a caller that needs the plain (tree-lookup /
+// ledger-identity) form strips it via this helper, one which needs the sanitized dc.Bundle
+// key form still applies "vm:"+vmshared.VmDomainIdentity(...) separately (a DIFFERENT
+// canonical form — see vmLifecyclePostTeardown).
+//
+// The single source for this ONE convention (RCA #9, FINAL/K5 unit 6a, live-probe-caught):
+// resolveDeployNodeByPath (RCA #8), resolveDelNode, and hostBuildDeployNodeDelDispatch's name
+// normalization (RCA #9) each independently re-implemented `strings.HasPrefix(x, "vm:")`
+// before this helper existed — the THIRD such reimplementation is what triggered pulling it
+// out. NOT the same job as vmNameFromDeployName (which extracts the VM ENTITY and errors when
+// the prefix is ABSENT — a different, already-established, unchanged contract) or
+// vmshared.VmDomainIdentity (which sanitizes dots/slashes for a domain-identity STRING,
+// unconditionally, prefix or not — also unchanged).
+func splitVmAddress(name string) (plain string, isVm bool) {
+	if strings.HasPrefix(name, "vm:") {
+		return strings.TrimPrefix(name, "vm:"), true
+	}
+	return name, false
 }
 
 // resolveVmSshPort picks the host-side SSH port forward, reusing the persisted
@@ -107,10 +136,59 @@ func saveVmDeployState(deployName, vmEntity string, state *spec.VmDeployState) e
 			entry.From = vmName
 		}
 	}
+	// Ephemeral-registration ordering contract (RCA #7, FINAL/K5 unit 6a, live-probe-caught):
+	// registerEphemeralIfMarked (vm_lifecycle_preresolve.go) persists .VmState.Ephemeral under
+	// THIS SAME canonical key BEFORE `charly vm create`'s own state writes run (e.g. the
+	// port_auto persist) — RCA #6's key unification made this THE common case (the two writers
+	// never collided before, since Writer B's now-eliminated dual key hid the interaction). A
+	// caller's `state` here is NEVER told about ephemeral registration (that is a SEPARATE
+	// concern candy/plugin-bundle's ephemeral family owns), so a wholesale `entry.VmState =
+	// state` would silently ERASE a just-registered ephemeral block whenever the incoming state
+	// carries none. PRESERVE it explicitly — this is NOT a general deep-merge; every OTHER
+	// VmState field is still a full overwrite, exactly as before.
+	var priorEphemeral *spec.EphemeralRuntime
+	if entry.VmState != nil {
+		priorEphemeral = entry.VmState.Ephemeral
+	}
 	entry.VmState = state
+	if entry.VmState != nil && entry.VmState.Ephemeral == nil && priorEphemeral != nil {
+		entry.VmState.Ephemeral = priorEphemeral
+	}
 	dc.Bundle[deployName] = entry
 
+	// Self-healing prune (RCA #6, FINAL/K5 unit 6a): remove a stale dotted-key twin ELIMINATED
+	// Writer B (candy/plugin-deploy-vm's PrepareVenue, see substrate_lifecycle_grpc.go) left behind
+	// for THIS SAME domain in an existing overlay — nothing writes one anymore, but pre-fix
+	// overlays (real users', every bed record until now) still carry it, and it poisons every
+	// subsequent load (validateDeploymentName's dot-rejection, charly/unified.go). One-touch
+	// cleanup on the next write for this domain — no new migration machinery.
+	if pruned := pruneStaleVmDottedTwin(dc, deployName); pruned != "" {
+		fmt.Fprintf(os.Stderr, "note: pruned a stale per-host overlay entry %q for domain %q — left by a prior version's now-eliminated dotted-key vm-state write (canonical entry: %q)\n", pruned, vmshared.VmDomainIdentity(deployName), deployName)
+	}
+
 	return saveBundleConfigNodeForm(dc)
+}
+
+// pruneStaleVmDottedTwin removes and returns any OTHER dc.Bundle key that is a dotted deploy name
+// whose VmDomainIdentity sanitizes to the SAME domain identity as canonicalKey (also VmDomainIdentity-
+// sanitized) — the "stale twin" ELIMINATED Writer B left behind (RCA #6, FINAL/K5 unit 6a): a nested
+// (dotted) deploy's per-host state used to ALSO get written under its raw, unsanitized name, racing
+// this canonical "vm:"+VmDomainIdentity(name)-keyed write, and poisoning the whole overlay on every
+// subsequent load since a dotted key fails charly/unified.go's validateDeploymentName. Pulled out as
+// its own pure function purely for testability (saveVmDeployState itself needs the seam-coupled
+// deploykit.LoadBundleConfig, not unit-testable standalone). Returns "" when no twin is found.
+func pruneStaleVmDottedTwin(dc *deploykit.BundleConfig, canonicalKey string) string {
+	domainID := vmshared.VmDomainIdentity(canonicalKey)
+	for k := range dc.Bundle {
+		if k == canonicalKey || !strings.Contains(k, ".") {
+			continue
+		}
+		if vmshared.VmDomainIdentity(k) == domainID {
+			delete(dc.Bundle, k)
+			return k
+		}
+	}
+	return ""
 }
 
 // removeVmDeployEntry strips deploy.<deployName> from charly.yml.
@@ -167,10 +245,17 @@ func removeVmDeployEntry(deployName string) error {
 // for deployName targets. It handles the case where a bundle's name differs from
 // its `vm:<X>` runtime-state key:
 //
-//   - WRITE: the vm lifecycle hook's PrepareVenue persists vm_state via saveVmDeployState(dctx.Name)
-//     — keyed by the BUNDLE name (e.g. the kind:check VM bed bundle `check-k3s-vm`,
-//     which cross-refs `vm: k3s-vm`). (charly vm create's port_auto persist keys
-//     by the prefixed DOMAIN-IDENTITY form `vm:<domain>` — the deploy name, not the entity.)
+//   - WRITE (HISTORICAL — ELIMINATED, RCA #6, FINAL/K5 unit 6a): the vm lifecycle hook's
+//     PrepareVenue USED TO ALSO persist vm_state via the generic substrate_lifecycle_grpc.go
+//     seam, keyed by the BUNDLE name (e.g. the kind:check VM bed bundle `check-k3s-vm`, which
+//     cross-refs `vm: k3s-vm`) — a SECOND writer racing `charly vm create`'s canonical
+//     `vm:<domain>`-keyed persist, and for a NESTED (dotted) deploy name, poisoning the whole
+//     overlay on every subsequent load. candy/plugin-deploy-vm's PrepareVenue no longer ships
+//     vm_state at all (one writer, one key — see substrate_lifecycle_grpc.go), and
+//     saveVmDeployState self-heals a pre-fix dotted twin on its next write
+//     (pruneStaleVmDottedTwin). This function's teardown-side handling of the bundle-name key
+//     REMAINS — needed for a LEGACY overlay's leftover entry until it is torn down at least
+//     once, and for the DIRECT `charly vm destroy <entity>` path below.
 //   - REMOVE (deploy teardown): the vm plugin's OpPostTeardown ships BOTH the deploy-name key
 //     and `vm:<domain>` directly (never `vm:<entity>`), so a teardown removes ONLY this deploy's
 //     two entries and never a sibling bed sharing the entity. `charly vm destroy` builds

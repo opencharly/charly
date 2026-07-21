@@ -18,6 +18,8 @@ package main
 // the k3s-server candy — is connected before this merge dispatches.
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,23 +77,33 @@ func rewriteK3sServerToForward(retrievedPath, entityRef, deployName string) erro
 //     runner's --domain = VmDomainIdentity(deployName)). Keying off entityRef instead was
 //     the mismatch that silently dropped the allocation for every P33 bed (deploy != entity).
 func deployVMForwards(entityRef, deployName string) ([]string, error) {
-	uf, ok, err := LoadUnified(".")
-	if err != nil || !ok || uf == nil {
-		return nil, nil
-	}
 	// entityRef is either a "vm:<entity>" reference (the VM-deploy artifact key) or a
-	// bundle key whose node carries `from: <vm entity>`. Resolve the VM entity either way.
+	// bundle key whose node carries `from: <vm entity>`. Resolve the VM entity either way,
+	// through the generic "deploy-entity-resolve" host-builder (FINAL/K5 unit 6a) instead of
+	// LoadUnified directly — this file is core-only, so it calls the host-builder function
+	// in-process (no HostBuild/Executor round trip needed, unlike a plugin caller).
 	vmEntity := ""
 	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
 		vmEntity = e
-	} else if node := deploykit.FindBundleNode(uf.Bundle, entityRef); node != nil {
-		vmEntity = node.From
+	} else {
+		reply, err := hostBuildDeployEntityResolve(context.Background(), spec.DeployEntityResolveRequest{Kind: "bundle", Name: entityRef}, buildEngineContext{})
+		if err != nil || reply.Node == nil {
+			return nil, nil
+		}
+		vmEntity = reply.Node.From
 	}
 	if vmEntity == "" {
 		return nil, nil
 	}
-	vm, _ := resolveVmViaPlugin(uf.VM[vmEntity])
-	if vm == nil || vm.Network == nil {
+	vmReply, err := hostBuildDeployEntityResolve(context.Background(), spec.DeployEntityResolveRequest{Kind: "vm", Name: vmEntity}, buildEngineContext{})
+	if err != nil || len(vmReply.EntityJSON) == 0 {
+		return nil, nil
+	}
+	var vm spec.ResolvedVm
+	if err := json.Unmarshal(vmReply.EntityJSON, &vm); err != nil {
+		return nil, fmt.Errorf("deploy-entity-resolve: decode vm %q: %w", vmEntity, err)
+	}
+	if vm.Network == nil {
 		return nil, nil
 	}
 	key := "vm:" + vmDomainIdentity(deployName)

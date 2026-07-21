@@ -12,14 +12,12 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// BoxCmd groups build-mode commands that operate on charly.yml (or, in the
-// case of BoxPullCmd, resolve registry/tag via charly.yml and then fetch the
-// image into local storage so deploy-mode commands can read its OCI labels).
+// BoxCmd groups build-mode commands that operate on charly.yml.
 //
-// `charly box` is a SHARED command group: the RETAINED verbs below are the core
-// grammar spine (build → plugin-build; feature). The
-// generate/validate/new/pkg/inspect/list/labels/merge/reconcile verbs are contributed as NESTED
-// command providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
+// `charly box` is a SHARED command group: the RETAINED verb below is the core
+// grammar spine (feature). The
+// generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile verbs are contributed
+// as NESTED command providers by the COMPILED-IN candy/plugin-box, and the authoring verbs
 // (set/add-candy/rm-candy/fetch/refresh/write/cat) by the COMPILED-IN
 // candy/plugin-authoring (P14b) — each a command:<word> with
 // CommandParent()=="box", attached into the embedded kong.Plugins below. This
@@ -27,27 +25,35 @@ import (
 // external subcommands.
 type BoxCmd struct {
 	// Plugins carries the nested command providers whose CommandParent()=="box"
-	// (candy/plugin-box's generate/validate/new/pkg/inspect/list/labels/merge/reconcile +
-	// candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
+	// (candy/plugin-box's generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile
+	// + candy/plugin-authoring's set/add-candy/rm-candy/fetch/refresh/write/cat).
 	// main() sets this to collectExternalCommandPlugins()'s nestedByParent["box"]
 	// before kong.Parse.
 	kong.Plugins
 
-	Build   BuildCmd      `cmd:"" help:"Build container boxes"`
-	Pull    BoxPullCmd    `cmd:"" help:"Pull an image from its registry into local storage"`
 	Feature BoxFeatureCmd `cmd:"" help:"Run a box's baked plan steps as acceptance tests against a disposable container (Agent Driven Evaluation, build scope)"`
 }
 
-// MIGRATION INVENTORY (north-star §4.4): the RETAINED verbs above (build/pull/feature) are
-// UNTIL-K5 (command-dispersal — every CLI verb becomes a command plugin; main.go knows zero
-// verbs). Each moves to its own command:<word> plugin as its build/deploy-cone engine
-// externalizes (mirroring generate/validate/new/pkg/inspect/list/labels/merge/reconcile above,
-// P14-rest trace, 2026-07 — labels externalized fully in K3, merge externalized at P14, reconcile
-// externalized at Cutover B unit 3+4 [it had no core-only coupling at all — see
-// candy/plugin-box/reconcile.go], no host reentry left for any of the three; see
-// charly/labels.go + candy/plugin-box/merge_cmd.go + candy/plugin-box/reconcile.go): pkg_cmd.go
-// already documents its own UNTIL-K1 note; build/pull/feature are the remaining residue in this
-// struct.
+// MIGRATION INVENTORY (north-star §4.4): the RETAINED verb above (feature) is UNTIL-K5
+// (command-dispersal — every CLI verb becomes a command plugin; main.go knows zero verbs). Each
+// moves to its own command:<word> plugin as its build/deploy-cone engine externalizes (mirroring
+// generate/validate/new/pkg/pull/build/inspect/list/labels/merge/reconcile above, P14-rest trace,
+// 2026-07 — labels externalized fully in K3, merge externalized at P14, reconcile externalized at
+// Cutover B unit 3+4 [it had no core-only coupling at all — see candy/plugin-box/reconcile.go], no
+// host reentry left for any of the three; pull externalized at FINAL/K5 unit 6a M4c, build at M4d
+// [the CLI-only mirror of pull's move: BoxPullCmd/BuildCmd's OWN grammar/dispatch are now the
+// compiled-in candy/plugin-box `pull`/`build` words; both Run bodies are UNCHANGED and stay behind
+// the hidden `__box-pull`/`__box-build` reentries over HostBuild("cli")]; see charly/labels.go +
+// candy/plugin-box/merge_cmd.go + candy/plugin-box/reconcile.go + candy/plugin-box/box.go's
+// dispatchPull/dispatchBuild): pkg_cmd.go already documents its own UNTIL-K1 note; feature is the
+// remaining residue in this struct.
+//
+// ensure_image.go + remote_image.go + BuildCmd.Run()'s own internals (bootstrap-builder execution,
+// remote-ref resolve/download/scan, retention pruning) are NOT CLI-dispersal residue — the M4d
+// scoping trace (FINAL/K5 unit 6a) re-classified them from a K5-dispersal IOU to the K1/K3-ENGINE
+// family (loader/build-engine cone, moves with those waves, never a CLI-verb tail-end guess): both
+// EnsureImagePresent and RemoteImageContext.BuildImage construct + call BuildCmd.Run() DIRECTLY at
+// the Go level, never through Kong/CLI, so the command-dispersal move above does not touch them.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three

@@ -144,3 +144,295 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 		t.Error("unrelated bundle check-other-vm was wrongly removed (over-match)")
 	}
 }
+
+// TestPruneStaleVmDottedTwin is the regression test for the FINAL/K5 unit 6a RCA #6 finding: a
+// nested (dotted) deploy's per-host vm_state used to get written TWICE — once correctly under
+// "vm:"+VmDomainIdentity(name) (candy/plugin-vm's hostConfigPersist), once under the RAW dotted
+// name (the now-ELIMINATED Writer B — candy/plugin-deploy-vm's PrepareVenue, persisted via
+// substrate_lifecycle_grpc.go's generic seam) — poisoning the overlay on every subsequent load.
+// pruneStaleVmDottedTwin is the pure self-healing scan saveVmDeployState now runs on every write.
+func TestPruneStaleVmDottedTwin(t *testing.T) {
+	t.Run("removes a matching dotted twin", func(t *testing.T) {
+		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+			"check-sidecar-pod.check-sidecar-pod-ephvm":    {Target: "vm", VmState: &spec.VmDeployState{SshPort: 45551}},
+			"vm:check-sidecar-pod-check-sidecar-pod-ephvm": {Target: "vm", VmState: &spec.VmDeployState{SshPort: 33799}},
+		}}
+		got := pruneStaleVmDottedTwin(dc, "vm:check-sidecar-pod-check-sidecar-pod-ephvm")
+		if got != "check-sidecar-pod.check-sidecar-pod-ephvm" {
+			t.Errorf("pruneStaleVmDottedTwin() = %q, want the dotted twin's key", got)
+		}
+		if _, stillThere := dc.Bundle["check-sidecar-pod.check-sidecar-pod-ephvm"]; stillThere {
+			t.Error("dotted twin was not removed from dc.Bundle")
+		}
+		if _, canonical := dc.Bundle["vm:check-sidecar-pod-check-sidecar-pod-ephvm"]; !canonical {
+			t.Error("the canonical entry itself was wrongly removed")
+		}
+	})
+	t.Run("no twin present is a no-op", func(t *testing.T) {
+		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+			"vm:myapp": {Target: "vm"},
+		}}
+		if got := pruneStaleVmDottedTwin(dc, "vm:myapp"); got != "" {
+			t.Errorf("pruneStaleVmDottedTwin() = %q, want \"\" (nothing to prune)", got)
+		}
+	})
+	t.Run("does not over-match an unrelated dotted entry", func(t *testing.T) {
+		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+			"vm:myapp":                 {Target: "vm"},
+			"other-stack.other-member": {Target: "vm"}, // a DIFFERENT domain's dotted entry
+		}}
+		if got := pruneStaleVmDottedTwin(dc, "vm:myapp"); got != "" {
+			t.Errorf("pruneStaleVmDottedTwin() = %q, want \"\" (unrelated domain must survive)", got)
+		}
+		if _, survived := dc.Bundle["other-stack.other-member"]; !survived {
+			t.Error("unrelated dotted entry was wrongly pruned (over-match)")
+		}
+	})
+	t.Run("the canonical key itself is never pruned even though it is its own domain match", func(t *testing.T) {
+		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+			"vm:myapp": {Target: "vm"},
+		}}
+		pruneStaleVmDottedTwin(dc, "vm:myapp")
+		if _, ok := dc.Bundle["vm:myapp"]; !ok {
+			t.Error("the canonical entry was wrongly self-pruned")
+		}
+	})
+}
+
+// TestSaveVmDeployState_SelfHealsStaleDottedTwin is the end-to-end regression test: a real overlay
+// file carrying a pre-fix poisoned dotted twin gets healed the next time the canonical domain is
+// written, via a real saveVmDeployState call (no mocking — the same filesystem-backed pattern
+// TestSaveVmDeployState_ConcurrentWritersAllSurvive uses).
+func TestSaveVmDeployState_SelfHealsStaleDottedTwin(t *testing.T) {
+	overlay := filepath.Join(t.TempDir(), "charly.yml")
+	t.Setenv(DeployConfigEnv, overlay)
+
+	// Seed a pre-fix poisoned overlay: a dotted twin alongside (what will become) the canonical entry.
+	seed := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+		"check-sidecar-pod.check-sidecar-pod-ephvm": {Target: "vm", VmState: &spec.VmDeployState{SshPort: 45551}},
+	}}
+	if err := saveBundleConfigNodeForm(seed); err != nil {
+		t.Fatalf("seeding pre-fix overlay: %v", err)
+	}
+
+	// The canonical write — matches candy/plugin-vm's hostConfigPersist("vm:"+domainID, ...) call shape.
+	if err := saveVmDeployState("vm:check-sidecar-pod-check-sidecar-pod-ephvm", "eval-vm", &spec.VmDeployState{SshPort: 33799}); err != nil {
+		t.Fatalf("canonical write: %v", err)
+	}
+
+	dc, err := deploykit.LoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if _, stillPoisoned := dc.Bundle["check-sidecar-pod.check-sidecar-pod-ephvm"]; stillPoisoned {
+		t.Error("the stale dotted twin survived the canonical write — self-heal did not fire")
+	}
+	entry, ok := dc.Bundle["vm:check-sidecar-pod-check-sidecar-pod-ephvm"]
+	if !ok || entry.VmState == nil || entry.VmState.SshPort != 33799 {
+		t.Errorf("canonical entry missing or wrong after self-heal: %+v", entry)
+	}
+}
+
+// TestSaveVmDeployState_PreservesEphemeralOnSubsequentWrite is the regression test for the
+// FINAL/K5 unit 6a RCA #7 live-probe-caught bug: registerEphemeralIfMarked
+// (vm_lifecycle_preresolve.go) persists .VmState.Ephemeral under the canonical
+// "vm:"+domainID key BEFORE `charly vm create`'s own state writes (e.g. the port_auto persist)
+// run — RCA #6's key unification made this the COMMON ordering (the two writers never
+// collided on separate keys before). A naive wholesale `entry.VmState = state` would silently
+// ERASE the just-registered Ephemeral block, since the vm-create caller's state is never told
+// about ephemeral registration. Proven against a real overlay file — no mocking.
+func TestSaveVmDeployState_PreservesEphemeralOnSubsequentWrite(t *testing.T) {
+	overlay := filepath.Join(t.TempDir(), "charly.yml")
+	t.Setenv(DeployConfigEnv, overlay)
+
+	const key = "vm:check-sidecar-pod-check-sidecar-pod-ephvm"
+
+	// Step 1: the ephemeral registration write (mirrors persistEphemeralRuntime — seeds
+	// Target/From + an Ephemeral block, the FIRST write to a fresh overlay).
+	seed := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+		key: {
+			Target: "vm",
+			From:   "eval-vm",
+			VmState: &spec.VmDeployState{
+				Ephemeral: &spec.EphemeralRuntime{ID: "abc123", Status: "active", DeployAddress: "check-sidecar-pod.check-sidecar-pod-ephvm"},
+			},
+		},
+	}}
+	if err := saveBundleConfigNodeForm(seed); err != nil {
+		t.Fatalf("seeding ephemeral-registered overlay: %v", err)
+	}
+
+	// Step 2: `charly vm create`'s own state write — the SAME key, a state that knows NOTHING
+	// about the ephemeral block (this is the exact shape vm_create_orchestrate.go constructs).
+	if err := saveVmDeployState(key, "eval-vm", &spec.VmDeployState{SshPort: 41897, Backend: "auto"}); err != nil {
+		t.Fatalf("vm-create state write: %v", err)
+	}
+
+	dc, err := deploykit.LoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	entry, ok := dc.Bundle[key]
+	if !ok {
+		t.Fatal("canonical entry vanished")
+	}
+	if entry.VmState == nil {
+		t.Fatal("VmState vanished entirely")
+	}
+	if entry.VmState.SshPort != 41897 {
+		t.Errorf("SshPort = %d, want 41897 (the vm-create write's own field)", entry.VmState.SshPort)
+	}
+	if entry.VmState.Ephemeral == nil {
+		t.Fatal("Ephemeral block was ERASED by the subsequent vm-create write — the RCA #7 bug")
+	}
+	if entry.VmState.Ephemeral.ID != "abc123" {
+		t.Errorf("Ephemeral.ID = %q, want \"abc123\" (preserved from the register-time write)", entry.VmState.Ephemeral.ID)
+	}
+}
+
+// TestSaveVmDeployState_ReverseOrderingRoundTrips double-checks the REVERSE ordering (vm-create's
+// state write lands FIRST, ephemeral registration SECOND) still round-trips correctly —
+// persistEphemeralRuntime's own logic (candy/plugin-bundle/ephemeral.go) reads the EXISTING
+// node.VmState and only sets .Ephemeral on it, never wholesale-replacing, so this direction was
+// never at risk — this test documents and locks that in from the saveVmDeployState side (the
+// state-carrying half of the round-trip, which IS this file's concern).
+func TestSaveVmDeployState_ReverseOrderingRoundTrips(t *testing.T) {
+	overlay := filepath.Join(t.TempDir(), "charly.yml")
+	t.Setenv(DeployConfigEnv, overlay)
+
+	const key = "vm:reverse-order-vm"
+
+	// vm-create writes FIRST — no ephemeral knowledge yet.
+	if err := saveVmDeployState(key, "eval-vm", &spec.VmDeployState{SshPort: 50001}); err != nil {
+		t.Fatalf("vm-create state write: %v", err)
+	}
+	// A SECOND saveVmDeployState call carrying an Ephemeral block (mirrors what
+	// persistEphemeralRuntime effectively produces when it runs after vm-create: it reads the
+	// EXISTING entry, so the passed-in state already contains the merged prior fields).
+	if err := saveVmDeployState(key, "eval-vm", &spec.VmDeployState{SshPort: 50001, Ephemeral: &spec.EphemeralRuntime{ID: "xyz789", Status: "active"}}); err != nil {
+		t.Fatalf("ephemeral-carrying write: %v", err)
+	}
+
+	dc, err := deploykit.LoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	entry, ok := dc.Bundle[key]
+	if !ok || entry.VmState == nil {
+		t.Fatal("canonical entry missing")
+	}
+	if entry.VmState.SshPort != 50001 {
+		t.Errorf("SshPort = %d, want 50001", entry.VmState.SshPort)
+	}
+	if entry.VmState.Ephemeral == nil || entry.VmState.Ephemeral.ID != "xyz789" {
+		t.Errorf("Ephemeral = %+v, want ID=xyz789", entry.VmState.Ephemeral)
+	}
+}
+
+// TestSplitVmAddress is the table test for the FINAL/K5 unit 6a RCA #9 shared helper: the
+// SINGLE source for detecting/stripping the "vm:" CLI-addressing prefix, pulled out after the
+// THIRD independent reimplementation of the same `strings.HasPrefix(x, "vm:")` check
+// (resolveDeployNodeByPath/RCA #8, resolveDelNode, hostBuildDeployNodeDelDispatch/RCA #9).
+func TestSplitVmAddress(t *testing.T) {
+	cases := []struct {
+		name      string
+		addr      string
+		wantPlain string
+		wantIsVm  bool
+	}{
+		{"vm:-prefixed top-level", "vm:myvm", "myvm", true},
+		{"vm:-prefixed dotted (the RCA #8/#9 shape)", "vm:check-sidecar-pod.check-sidecar-pod-ephvm", "check-sidecar-pod.check-sidecar-pod-ephvm", true},
+		{"unprefixed top-level", "myvm", "myvm", false},
+		{"unprefixed dotted", "check-sidecar-pod.check-sidecar-pod-ephvm", "check-sidecar-pod.check-sidecar-pod-ephvm", false},
+		{"bare \"vm:\" with nothing after it", "vm:", "", true},
+		{"empty string", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plain, isVm := splitVmAddress(tc.addr)
+			if plain != tc.wantPlain || isVm != tc.wantIsVm {
+				t.Errorf("splitVmAddress(%q) = (%q, %v), want (%q, %v)", tc.addr, plain, isVm, tc.wantPlain, tc.wantIsVm)
+			}
+		})
+	}
+}
+
+// TestSplitVmAddress_LedgerIdentityRegression is the regression test for the FINAL/K5 unit 6a
+// RCA #9 live-probe-caught bug: `bundle del vm:<dotted-name>` silently no-op'd because
+// deploykit.ComputeDeployID hashes the deploy name VERBATIM, and the raw "vm:"-prefixed CLI
+// form hashed to a COMPLETELY DIFFERENT ID than the plain form the add-time tree walk used to
+// record the ledger entry (verified live: 6413f8070aaa6087 vs d81fff596411fea4 for the exact
+// same logical deployment). Proves splitVmAddress's stripped form produces the IDENTICAL
+// deployID as the plain add-time form — the fix hostBuildDeployNodeDelDispatch relies on.
+func TestSplitVmAddress_LedgerIdentityRegression(t *testing.T) {
+	const addTimeName = "check-sidecar-pod.check-sidecar-pod-ephvm"
+	const delTimeAddress = "vm:check-sidecar-pod.check-sidecar-pod-ephvm"
+
+	addID := deploykit.ComputeDeployID(addTimeName, nil, nil)
+
+	// The BUG, preserved as a documented negative case: computing the ID from the raw,
+	// unstripped CLI address produces a DIFFERENT id than the ledger was recorded under.
+	buggyDelID := deploykit.ComputeDeployID(delTimeAddress, nil, nil)
+	if buggyDelID == addID {
+		t.Fatalf("test assumption broken: the raw prefixed form no longer collides differently (got %q == %q) — re-verify ComputeDeployID's contract before trusting this regression test", buggyDelID, addID)
+	}
+
+	// THE FIX: strip via splitVmAddress before computing the ID — must match the add-time ID.
+	plain, isVm := splitVmAddress(delTimeAddress)
+	if !isVm {
+		t.Fatal("splitVmAddress did not recognize the vm: prefix")
+	}
+	fixedDelID := deploykit.ComputeDeployID(plain, nil, nil)
+	if fixedDelID != addID {
+		t.Errorf("ComputeDeployID(splitVmAddress(%q)) = %q, want %q (the add-time ID) — the ledger record would still be unreachable from the del path", delTimeAddress, fixedDelID, addID)
+	}
+}
+
+// TestVmLifecyclePostTeardown_UsesCanonicalKey is the regression test for the FINAL/K5 unit 6a
+// RCA #9 live-probe-caught bug: vmLifecyclePostTeardown used to look up the per-host overlay by
+// the RAW deploy name via a bare LookupKey exact match — but every vm writer persists under the
+// canonical "vm:"+VmDomainIdentity(name) key (dashes, not dots), so the raw name NEVER matched
+// and TeardownEphemeralLifecycle never fired. Proven end-to-end against a real overlay file: a
+// canonically-keyed ephemeral entry gets its Ephemeral block cleared by a single
+// vmLifecyclePostTeardown call, with no mocking of the dispatch chain.
+func TestVmLifecyclePostTeardown_UsesCanonicalKey(t *testing.T) {
+	overlay := filepath.Join(t.TempDir(), "charly.yml")
+	t.Setenv(DeployConfigEnv, overlay)
+
+	const dottedName = "check-sidecar-pod.check-sidecar-pod-ephvm"
+	const canonicalKey = "vm:check-sidecar-pod-check-sidecar-pod-ephvm"
+
+	seed := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+		canonicalKey: {
+			Target: "vm",
+			From:   "eval-vm",
+			VmState: &spec.VmDeployState{
+				SshPort: 12345,
+				Ephemeral: &spec.EphemeralRuntime{
+					ID:            "test-id",
+					Status:        "active",
+					DeployAddress: dottedName,
+				},
+			},
+		},
+	}}
+	if err := saveBundleConfigNodeForm(seed); err != nil {
+		t.Fatalf("seeding overlay: %v", err)
+	}
+
+	if err := vmLifecyclePostTeardown(dottedName, nil); err != nil {
+		t.Fatalf("vmLifecyclePostTeardown: %v", err)
+	}
+
+	dc, err := deploykit.LoadBundleConfig()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	entry, ok := dc.Bundle[canonicalKey]
+	if !ok {
+		t.Fatal("canonical entry vanished entirely — teardown should only clear Ephemeral, not the whole entry")
+	}
+	if entry.VmState != nil && entry.VmState.Ephemeral != nil {
+		t.Error("Ephemeral block was NOT cleared — the canonical-key lookup did not find the entry")
+	}
+}

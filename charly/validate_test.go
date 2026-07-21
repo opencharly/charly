@@ -56,19 +56,3 @@ func TestValidateBuildTunables(t *testing.T) {
 		})
 	}
 }
-
-// TestEnvVarNameToPodmanSecretSlug is a unit test for the host slug helper (still used by secrets.go).
-func TestEnvVarNameToPodmanSecretSlug(t *testing.T) {
-	cases := map[string]string{
-		"OPENROUTER_API_KEY":   "openrouter-api-key",
-		"IMMICH_API_KEY":       "immich-api-key",
-		"WEBUI_ADMIN_PASSWORD": "webui-admin-password",
-		"TS_AUTHKEY":           "ts-authkey",
-		"X":                    "x",
-	}
-	for in, want := range cases {
-		if got := envVarNameToPodmanSecretSlug(in); got != want {
-			t.Errorf("envVarNameToPodmanSecretSlug(%q) = %q, want %q", in, got, want)
-		}
-	}
-}

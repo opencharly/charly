@@ -500,7 +500,7 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec d
 		// The podman container `charly start`/the pod lifecycle creates is
 		// `charly-<flat-path>` (containerName's `charly-` prefix), so the nested
 		// executor MUST target that exact name — every other NestedContainerName
-		// consumer (android_deploy_cmd.go, check_venue.go, build_overlay.go)
+		// consumer (check_venue.go, build_overlay.go, candy/plugin-adb/preresolve.go)
 		// prepends `charly-`; omitting it here made a nested-child deploy exec into a
 		// nonexistent bare-named container (exit 125 "no such container").
 		name := "charly-" + kit.NestedContainerName(path)
@@ -542,16 +542,29 @@ func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 	if c.Name == "host" {
 		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
-	if strings.HasPrefix(c.Name, "vm:") {
-		return &spec.BundleNode{Target: "vm"}, "vm", nil
-	}
+	// RCA #9 (FINAL/K5 unit 6a, live-probe-caught): try the REAL tree resolution FIRST — now
+	// "vm:"-prefix-aware via resolveDeployNodeByPath's own splitVmAddress use (RCA #8) — instead
+	// of unconditionally short-circuiting to a synthetic Target-only placeholder for ANY
+	// "vm:"-prefixed name. The old unconditional shortcut meant a "vm:"-prefixed del NEVER saw
+	// the tree at all: it "resolved" successfully with a bare node (no From, no children), which
+	// masked the SEPARATE connect-preamble bug RCA #8 fixed (resolveDeployNodeByPath used to also
+	// fail to find the node) until dispatch itself failed. A real node also lets Del's teardown
+	// hooks see the deploy's actual From/Children, which the synthetic placeholder never carried.
 	if cwd, _ := os.Getwd(); cwd != "" {
 		if tree, _ := resolveTreeRoot(cwd); tree != nil {
-			if node, ok := tree[c.Name]; ok && node.Target != "" {
-				n := node
+			if node, ok := resolveDeployNodeByPath(tree, c.Name); ok && node.Target != "" {
+				n := *node
 				return &n, n.Target, nil
 			}
 		}
+	}
+	if _, isVm := splitVmAddress(c.Name); isVm {
+		// Fallback ONLY for a genuine tree-absence: a "vm:"-prefixed address with no matching
+		// tree entry (the deploy was removed from charly.yml, or never had one — e.g. a bare
+		// `charly vm create --domain` with no deploy entry). The synthetic Target-only
+		// placeholder is all we can offer; hostBuildDeployNodeDelDispatch's own name
+		// normalization (RCA #9) still targets the right domain identity regardless.
+		return &spec.BundleNode{Target: "vm"}, "vm", nil
 	}
 	if podDeploymentArtifactExists(c.Name) {
 		return &spec.BundleNode{Target: "pod"}, "pod", nil

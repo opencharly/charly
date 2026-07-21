@@ -92,11 +92,4 @@ const (
 func init() {
 	vmshared.ValidateEgress = ValidateEgress
 	vmshared.UnmarshalEmbeddedDefaults = unmarshalEmbeddedDefaults
-	vmshared.CreateInternalSnapshot = createInternalSnapshot
-	vmshared.DeleteInternalSnapshot = deleteInternalSnapshot
-	vmshared.RevertInternalSnapshot = revertInternalSnapshot
-	vmshared.PromoteInternalToExternal = promoteInternalToExternal
-	vmshared.CreateExternalSnapshot = createExternalSnapshot
-	vmshared.DeleteExternalSnapshot = deleteExternalSnapshot
-	vmshared.RevertExternalSnapshot = revertExternalSnapshot
 }

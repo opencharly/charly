@@ -26,12 +26,15 @@ import (
 // GENERIC seams: candy/plugin-deploy-pod builds the overlay via HostBuild("overlay") + drives the
 // container lifecycle via HostBuild("cli"); candy/plugin-deploy-vm publishes the ssh-config stanza +
 // guest waits + charly delivery via sdk/kit, boots/consoles the domain via HostBuild("cli"), and
-// deploys nested pods over the reverse channel — consuming ONLY the host-resolved DATA a substrate
-// prepare hook ships (lifecyclePrepareHook: vm ships spec.LifecyclePrepareInput — the same DATA-seam
-// shape as the deployPreresolvers below; pod registers none). NO substrate registers a compiled-in
-// lifecycle anymore, and NO vm lifecycle logic remains in core; local/android/k8s own no venue
-// lifecycle at all. A residual host cleanup a plugin cannot do (vm's ephemeral-lifecycle teardown)
-// stays behind a registered lifecyclePostTeardownHook the proxy consults GENERICALLY.
+// deploys nested pods over the reverse channel — self-serving any LoadUnified-coupled data its OWN
+// OpPrepareVenue needs via the generic "deploy-entity-resolve" HostBuild seam (FINAL/K5 unit 6a,
+// M4b — the former lifecyclePrepareHook host-side DATA-seam indirection, which used to
+// pre-resolve spec.LifecyclePrepareInput and thread it via a "prepare" params key, is DELETED; the
+// plugin resolves it itself now, exactly like the deployPreresolvers below already do for
+// k8s/android). NO substrate registers a compiled-in lifecycle anymore, and NO vm lifecycle logic
+// remains in core; local/android/k8s own no venue lifecycle at all. A residual host cleanup a
+// plugin cannot do (vm's ephemeral-lifecycle teardown) stays behind a registered
+// lifecyclePostTeardownHook the proxy consults GENERICALLY.
 type substrateLifecycle interface {
 	// PrepareVenue runs the host-side preflight for an Add/Update and returns the
 	// DeployExecutor the reverse channel serves — for vm the guest *SSHExecutor (after
@@ -90,8 +93,8 @@ type substrateLifecycle interface {
 }
 
 // substrateLifecycles maps an external deploy SUBSTRATE word → its host-side lifecycle
-// hook. Populated at package-var init time (before any init(), like registerDeployPreresolver
-// + registerDedicatedBuiltin), so the lookup is race-free.
+// hook. Populated at package-var init time (before any init(), like
+// registerDedicatedBuiltin), so the lookup is race-free.
 var (
 	substrateLifecyclesMu sync.RWMutex
 	substrateLifecycles   = map[string]substrateLifecycle{}

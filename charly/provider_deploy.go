@@ -32,7 +32,9 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 // externalized) and isExternalDeploySubstrate (a substrate kind is external iff
 // listed here) consult it — so the two gates can never disagree. GENERAL for all
 // 5 — ALL FIVE substrates now externalize; the ONLY substrate-specific piece is each one's
-// registered preresolver body (android_deploy_preresolve.go / k8s_deploy_preresolve.go) OR
+// registered preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
+// candy/plugin-kube/preresolve.go, dispatched via the generalized
+// deploy_preresolve.go:wireDeployPreresolver seam) OR
 // lifecycle hook (vm_deploy_lifecycle.go compiled-in; pod via candy/plugin-deploy-pod), never a branch in the
 // generic dispatch. local needs NEITHER — its plan walk + executor selection are the generic
 // externalDeployTarget path (the executor is Shell for host:local, SSH for host:user@machine

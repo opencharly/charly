@@ -5,30 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// enc.go — encrypted-volume in-core SHIM (C16a), narrowed by Cutover B unit 2: every
-// state-probe/plan-building function (resolveEncVolumeDir/isEncryptedInitialized/
-// isEncryptedMounted/fuseAllowOtherEnabled/encPlanFor/loadEncryptedVolume/encServiceFilename/
-// removeEncryptedVolumes/encStatus/askPassword) moved to sdk/deploykit (enc_probe.go) — they
-// were genuinely portable, no registry/credential coupling. verifyBindMounts/
-// hasEncryptedBindMounts/cipherPopulatedPlainEmpty were DELETED outright (dead code — zero
-// non-test callers; candy/plugin-deploy-pod already carries its own live copies,
-// config_setup_helpers.go's *Local functions). What remains is the genuinely registry/
-// credential-coupled core: encExecViaPlugin calls providerRegistry.resolve + invokeTyped
-// DIRECTLY (the host provider registry itself — clause-M kernel), and resolveEncPassphrase*/
-// awaitKeyringUnlockViaPlugin route through ResolveCredential/DefaultCredentialStore, which
-// are ALSO registry-coupled (connectPluginByWord to verb:credential). Neither is portable as
-// a bare move — becoming plugin-callable needs the sdk.Executor.InvokeProvider rewrite
-// candy/plugin-deploy-pod's podTunnelOp already proves the shape of, threaded through every
-// caller. Registered FINAL/K5 inventory (credential-sensitive, deliberately not attempted
-// without its own review).
+// enc.go — encrypted-volume in-core SHIM (C16a), narrowed by Cutover B unit 2 and further
+// by Cutover B unit 6b (the InvokeProvider-generalization family): every state-probe/
+// plan-building function (resolveEncVolumeDir/isEncryptedInitialized/isEncryptedMounted/
+// fuseAllowOtherEnabled/encPlanFor/loadEncryptedVolume/encServiceFilename/
+// removeEncryptedVolumes/encStatus/askPassword) moved to sdk/deploykit (enc_probe.go, unit 2),
+// and the passphrase-RESOLUTION orchestration (resolveEncPassphrase/
+// resolveEncPassphraseForMount/resolveEncPassphraseForMountWithResolver/retryUnavailable/
+// encNotStoredError) moved to sdk/deploykit (enc_passphrase.go, unit 6b) — it takes an
+// injected deploykit.CredentialAccess instead of calling ResolveCredential/
+// DefaultCredentialStore by name, so charly-core's thin wrappers below and a future
+// out-of-process caller share ONE implementation (R3). What remains genuinely core-only:
+// encExecViaPlugin (providerRegistry.resolve + invokeTyped — the host registry itself,
+// clause-M) and awaitKeyringUnlockViaPlugin (needs the CONCRETE core CredentialStore's
+// awaitUnlock/credentialAwaiter — threaded into deploykit's function as an injected
+// `waiter` closure, exactly like the resolver/reset closures it already took).
+
+// coreCredentialAccess bundles charly-core's ResolveCredential/DefaultCredentialStore adapter
+// (credential_plugin.go — itself registry-coupled, connectPluginByWordRef to verb:credential)
+// into the deploykit.CredentialAccess shape enc/secret orchestration in sdk/deploykit needs.
+func coreCredentialAccess() deploykit.CredentialAccess {
+	return deploykit.CredentialAccess{
+		Resolve: ResolveCredential,
+		Write:   func(service, key, value string) error { return DefaultCredentialStore().Set(service, key, value) },
+	}
+}
 
 // encExecViaPlugin resolves verb:enc and Invokes its OpExecute with the host-prelifted
 // plan. plugin-enc is compiled-in, so this is an in-proc JSON envelope (no socket) —
@@ -56,180 +62,24 @@ func encExecViaPlugin(in spec.EncExecInput) error {
 	return nil
 }
 
-// resolveEncPassphrase resolves the gocryptfs passphrase for an image.
-// Resolution order: GOCRYPTFS_PASSWORD env var → credential store (keyring/config) → auto-generate or interactive prompt.
+// resolveEncPassphrase resolves the gocryptfs passphrase for an image (thin wrapper —
+// the orchestration lives in deploykit.ResolveEncPassphrase, unit 6b).
 func resolveEncPassphrase(boxName string, autoGenerate bool) (string, error) {
-	// 1. Test/CI override
-	if pw := os.Getenv("GOCRYPTFS_PASSWORD"); pw != "" {
-		return pw, nil
-	}
-	// 2. Credential store (keyring / config)
-	if val, _ := ResolveCredential("", "charly/enc", boxName, ""); val != "" {
-		return val, nil
-	}
-	// 3. Auto-generate if requested
-	if autoGenerate {
-		generated := deploykit.GenerateRandomSecretToken(32)
-		store := DefaultCredentialStore()
-		if err := store.Set("charly/enc", boxName, generated); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not persist enc passphrase for %s: %v\n", boxName, err)
-		}
-		fmt.Fprintf(os.Stderr, "Generated encryption passphrase for %s\n", boxName)
-		return generated, nil
-	}
-	// 4. Interactive prompt
-	return deploykit.AskPassword("charly-"+boxName, "Passphrase for charly-"+boxName+":")
+	return deploykit.ResolveEncPassphrase(boxName, autoGenerate, coreCredentialAccess())
 }
 
-// encMountDeadline bounds how long resolveEncPassphraseForMount will retry
-// transient failures (source="unavailable") before giving up.
-// source="locked" does NOT use this — it uses event-driven DBus signal
-// waiting with no deadline (see awaitKeyringUnlockViaPlugin).
-var encMountDeadline = 2 * time.Minute
-
-// encMountPollPeriod is the interval between retry attempts for
-// source="unavailable" only.
-var encMountPollPeriod = 5 * time.Second
-
-// resolveEncPassphraseForMount resolves the gocryptfs passphrase with
-// backend-aware and failure-aware retry behavior.
-//
-// Under systemd (INVOCATION_ID set) with a keyring-capable backend:
-//   - If the store is temporarily locked ("locked") or unreachable
-//     ("unavailable"), retry every encMountPollPeriod until encMountDeadline
-//     elapses, then fail with a clear diagnostic.
-//   - If the store answered and the credential is NOT stored ("default"),
-//     fail immediately with an actionable error — no amount of polling
-//     will conjure a credential that was never stored.
-//
-// Explicit non-keyring backends under systemd: try resolve once, fail fast
-// if not found. No polling.
-//
-// Interactive callers fall back to resolveEncPassphrase which can prompt.
-//
-// Defect D fix: the previous implementation polled forever on src=="default"
-// and had no deadline, so a misconfigured keyring + TimeoutStartSec=0 quadlet
-// was unrecoverable without manual intervention. source="unavailable" is now
-// bounded at encMountDeadline; source="locked" waits indefinitely via DBus
-// signal subscription (zero CPU between events) until the user unlocks the
-// keyring; source="default" fails immediately. The DBus subscription itself
-// runs OUT-OF-PROCESS in candy/plugin-secrets (the Secret Service owner) —
-// charly's core no longer links godbus; see awaitKeyringUnlockViaPlugin.
+// resolveEncPassphraseForMount resolves the gocryptfs passphrase with backend-aware and
+// failure-aware retry behavior (thin wrapper — the orchestration lives in
+// deploykit.ResolveEncPassphraseForMount, unit 6b). Defect D fix (preserved): the previous
+// implementation polled forever on src=="default" and had no deadline, so a misconfigured
+// keyring + TimeoutStartSec=0 quadlet was unrecoverable without manual intervention.
+// source="unavailable" is bounded at deploykit.EncMountDeadline; source="locked" waits
+// indefinitely via DBus signal subscription (zero CPU between events, via
+// awaitKeyringUnlockViaPlugin below) until the user unlocks the keyring; source="default"
+// fails immediately.
 func resolveEncPassphraseForMount(boxName string) (string, error) {
-	if os.Getenv("INVOCATION_ID") == "" {
-		return resolveEncPassphrase(boxName, false)
-	}
 	backend := resolveSecretBackend()
-	resolver := func() (string, string) {
-		return ResolveCredential("", "charly/enc", boxName, "")
-	}
-	return resolveEncPassphraseForMountWithResolver(boxName, backend, resolver, resetDefaultCredentialStore, awaitKeyringUnlockViaPlugin)
-}
-
-// resolveEncPassphraseForMountWithResolver is the testable core of
-// resolveEncPassphraseForMount. It accepts a resolver closure, a reset
-// closure, and a waiter closure so tests can supply mock implementations
-// without touching global state, environment variables, or DBus.
-//
-// The waiter is called when source="locked" under a keyring-capable backend.
-// In production it is awaitKeyringUnlockViaPlugin (event-driven via DBus signals
-// running out-of-process in candy/plugin-secrets); in tests it is a fake that
-// returns immediately.
-func resolveEncPassphraseForMountWithResolver(
-	boxName, backend string,
-	resolver func() (value, source string),
-	reset func(),
-	waiter func(ctx context.Context, boxName string, resolver func() (string, string), reset func()) (string, string, error),
-) (string, error) {
-	usesWaitingBackend := backend == "" || backend == "auto" || backend == "keyring"
-
-	if !usesWaitingBackend {
-		val, src := resolver()
-		if val != "" {
-			return val, nil
-		}
-		return "", fmt.Errorf(
-			"encryption passphrase not found for charly/enc/%s (backend=%s, source=%s); "+
-				"store with `charly secrets set charly/enc %s` or switch backend with `charly settings set secret_backend auto`",
-			boxName, backend, src, boxName)
-	}
-
-	// Initial probe.
-	val, src := resolver()
-	if val != "" {
-		return val, nil
-	}
-
-	// source="default" is terminal — credential is not stored anywhere.
-	if src == "default" {
-		return "", encNotStoredError(boxName, backend, src)
-	}
-
-	// source="locked" — keyring present but locked. Wait indefinitely via
-	// DBus signal subscription (zero CPU cost between events).
-	if src == "locked" && waiter != nil {
-		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer cancel()
-		v, src2, err := waiter(ctx, boxName, resolver, reset)
-		if err != nil {
-			return "", fmt.Errorf("waiting for keyring unlock interrupted: %w", err)
-		}
-		if v != "" {
-			return v, nil
-		}
-		return "", encNotStoredError(boxName, backend, src2)
-	}
-
-	// source="unavailable" — transient backend probe failure. Bounded poll.
-	return retryUnavailable(boxName, backend, resolver, reset)
-}
-
-// encNotStoredError formats the terminal "credential not stored" error with
-// actionable remediation hints.
-func encNotStoredError(boxName, backend, src string) error {
-	return fmt.Errorf(
-		"encryption passphrase not available for charly/enc/%s "+
-			"(backend=%s, source=%s). "+
-			"Remediation: run `charly doctor` to check keyring health, "+
-			"store with `charly secrets set charly/enc %s`, "+
-			"or switch backend with `charly settings set secret_backend config`",
-		boxName, backend, src, boxName)
-}
-
-// retryUnavailable polls the resolver with a bounded deadline for transient
-// backend-probe failures (source="unavailable").
-func retryUnavailable(
-	boxName, backend string,
-	resolver func() (string, string),
-	reset func(),
-) (string, error) {
-	deadline := time.Now().Add(encMountDeadline)
-	attempt := 0
-	maxAttempts := max(int(encMountDeadline/encMountPollPeriod), 1)
-	for {
-		attempt++
-		val, src := resolver()
-		if val != "" {
-			return val, nil
-		}
-		retryable := src == "locked" || src == "unavailable"
-		if !retryable || !time.Now().Before(deadline) {
-			return "", fmt.Errorf(
-				"encryption passphrase not available for charly/enc/%s after %d attempt(s) "+
-					"(backend=%s, source=%s, waited up to %v). "+
-					"Remediation: run `charly doctor` to check keyring health, "+
-					"store with `charly secrets set charly/enc %s`, "+
-					"or switch backend with `charly settings set secret_backend config`",
-				boxName, attempt, backend, src, encMountDeadline, boxName)
-		}
-		fmt.Fprintf(os.Stderr,
-			"charly: waiting for credential store (charly-enc/%s, source=%s, attempt %d/%d)...\n",
-			boxName, src, attempt, maxAttempts)
-		time.Sleep(encMountPollPeriod)
-		if reset != nil {
-			reset()
-		}
-	}
+	return deploykit.ResolveEncPassphraseForMount(boxName, backend, coreCredentialAccess(), resetDefaultCredentialStore, awaitKeyringUnlockViaPlugin)
 }
 
 // awaitKeyringUnlockViaPlugin is the production keyring-unlock waiter wired into

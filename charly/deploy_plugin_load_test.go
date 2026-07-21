@@ -49,6 +49,16 @@ func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
 // check-arch-vm.arch-host` — a dotted name that is NOT a top-level tree key). Without this,
 // deployNodePluginContext surfaced no plugin words for the nested child and its substrate
 // word never loaded its provider (the "unknown target local" regression).
+//
+// The "vm:"-prefixed cases are the FINAL/K5 unit 6a RCA #8 live-probe-caught regression: a
+// "vm:"-prefixed CLI address (the established convention for `charly bundle del vm:<name>` /
+// `vm:<parent.child>`) used to resolve to NOTHING here, since the dotted-path split ran on the
+// RAW name with the prefix still attached (`tree["vm:"+segment]` never matches — the tree is
+// keyed by the plain name). deployNodePluginContext (this function's one caller) then collected
+// zero referenced plugin words, so loadDeployPlugins never connected the substrate provider —
+// resolveDelNode's OWN "vm:"-prefix shortcut (a synthetic Target-only placeholder that never
+// touches the tree) masked the miss until the LATER actual dispatch needed the never-connected
+// provider ("known substrate but its deploy provider is not connected").
 func TestResolveDeployNodeByPath(t *testing.T) {
 	tree := map[string]spec.BundleNode{
 		"check-arch-vm": {
@@ -65,13 +75,18 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 		wantOK     bool
 		wantTarget string
 	}{
-		{"pod-bed", true, "pod"},                   // bare top-level
-		{"check-arch-vm", true, "vm"},              // bare root with children
-		{"check-arch-vm.arch-host", true, "local"}, // dotted nested child — the failing case
-		{"check-arch-vm.web.db", true, "pod"},      // deep dotted path
-		{"nope", false, ""},                        // missing root
-		{"check-arch-vm.nope", false, ""},          // missing child
-		{"pod-bed.nope", false, ""},                // child of a childless node
+		{"pod-bed", true, "pod"},                      // bare top-level
+		{"check-arch-vm", true, "vm"},                 // bare root with children
+		{"check-arch-vm.arch-host", true, "local"},    // dotted nested child — the failing case
+		{"check-arch-vm.web.db", true, "pod"},         // deep dotted path
+		{"nope", false, ""},                           // missing root
+		{"check-arch-vm.nope", false, ""},             // missing child
+		{"pod-bed.nope", false, ""},                   // child of a childless node
+		{"vm:check-arch-vm", true, "vm"},              // RCA #8: "vm:"-prefixed top-level
+		{"vm:check-arch-vm.arch-host", true, "local"}, // RCA #8: "vm:"-prefixed dotted nested child
+		{"vm:check-arch-vm.web.db", true, "pod"},      // RCA #8: "vm:"-prefixed deep dotted path
+		{"vm:does-not-exist", false, ""},              // RCA #8: prefix stays honest on a real miss
+		{"vm:check-arch-vm.nope", false, ""},          // RCA #8: prefix stays honest on a missing child
 	}
 	for _, tc := range cases {
 		n, ok := resolveDeployNodeByPath(tree, tc.name)

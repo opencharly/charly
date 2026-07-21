@@ -21,10 +21,13 @@ plugin-kube:
             invokeVerbProvider hands it the full desugared #Op, after the host
             pre-resolves any `cluster:` profile to a concrete kube_context in the
             input map); `target: k8s` resolves to this
-            plugin's deploy:k8s provider over the E3b reverse channel — the host
-            preresolves the cluster template + image Capabilities into the
-            egress-validated Kustomize tree (k8s_deploy_preresolve.go) and this
-            plugin applies it. Provides the full 13-method probe surface
+            plugin's deploy:k8s provider over the E3b reverse channel — THIS
+            plugin's own preresolve.go (F6, FINAL/K5 unit 6a; dispatched via the
+            generalized deploy_preresolve.go:wireDeployPreresolver seam) resolves the
+            cluster template + image Capabilities into the egress-validated Kustomize
+            tree, reaching the host's "deploy-entity-resolve" + "k8s-generate-
+            kustomize" HostBuild seams, and this plugin applies it. Provides the full
+            13-method probe surface
             (nodes/wait-nodes/pods/wait-ready/ingress/ingressclass/storageclass/
             service/lb-external-ip/addons/apply/delete/raw), the deploy:k8s
             substrate, PLUS the internal merge-kubeconfig deploy seam (k3s_post.go's

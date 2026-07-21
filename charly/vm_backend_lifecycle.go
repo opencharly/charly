@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -118,16 +120,19 @@ func vmConfiguredBackend(vmName, rtBackend string) string {
 	if vmName == "" {
 		return rtBackend
 	}
-	if dir, err := os.Getwd(); err == nil {
-		if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-			if body, hit := uf.VM[vmName]; hit {
-				if spec, _ := resolveVmViaPlugin(body); spec != nil && spec.Backend != "" {
-					return spec.Backend
-				}
-			}
-		}
+	// Resolved through the generic "deploy-entity-resolve" host-builder (FINAL/K5 unit 6a)
+	// instead of LoadUnified directly — this file is core-only, so it calls the
+	// host-builder function in-process (no HostBuild/Executor round trip needed, unlike a
+	// plugin caller).
+	reply, err := hostBuildDeployEntityResolve(context.Background(), spec.DeployEntityResolveRequest{Kind: "vm", Name: vmName}, buildEngineContext{})
+	if err != nil || len(reply.EntityJSON) == 0 {
+		return rtBackend
 	}
-	return rtBackend
+	var vm spec.ResolvedVm
+	if err := json.Unmarshal(reply.EntityJSON, &vm); err != nil || vm.Backend == "" {
+		return rtBackend
+	}
+	return vm.Backend
 }
 
 // startLibvirtUserSession ensures the libvirt user-session daemon is

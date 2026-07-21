@@ -81,7 +81,7 @@ type hostBuilder func(ctx context.Context, specJSON []byte, build buildEngineCon
 var hostBuilders = map[string]hostBuilder{}
 
 // registerHostBuilder records one host-builder kind (F10). Panics on a duplicate (a startup
-// invariant, like registerStepEmitter / registerDeployPreresolver).
+// invariant, like registerStepEmitter).
 func registerHostBuilder(kind string, fn hostBuilder) {
 	if kind == "" || fn == nil {
 		panic("registerHostBuilder: empty kind or nil builder")
