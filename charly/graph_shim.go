@@ -23,16 +23,8 @@ import (
 // CycleError is the shared circular-dependency error, homed in deploykit now.
 type CycleError = deploykit.CycleError
 
-func ExpandCandy(requested []string, layers map[string]spec.CandyReader) ([]string, error) {
-	return deploykit.ExpandCandy(requested, layers)
-}
-
 func ResolveCandyOrder(requested []string, layers map[string]spec.CandyReader, parentCandies map[string]bool) ([]string, error) {
 	return deploykit.ResolveCandyOrder(requested, layers, parentCandies)
-}
-
-func BoxNeedsBuilder(img *buildkit.ResolvedBox, boxes map[string]*buildkit.ResolvedBox, layers map[string]spec.CandyReader) bool {
-	return deploykit.BoxNeedsBuilder(img, boxes, layers)
 }
 
 func boxDirectDeps(name string, img *buildkit.ResolvedBox, boxes map[string]*buildkit.ResolvedBox, includeFormatBuilders bool) []string {

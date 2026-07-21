@@ -142,8 +142,8 @@ func TestShellSnippetStep_ReverseOps(t *testing.T) {
 // reparse via ExtractMetadata-shaped logic. Catches drift between
 // in-memory shape and label-emit/extract pair.
 func TestLabelShellSet_RoundTrip(t *testing.T) {
-	original := &LabelShellSet{
-		Candy: []ShellEntry{
+	original := &spec.LabelShellSet{
+		Candy: []spec.ShellEntry{
 			{
 				Origin: "direnv",
 				ID:     "direnv",
@@ -160,7 +160,7 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var roundtripped LabelShellSet
+	var roundtripped spec.LabelShellSet
 	if err := json.Unmarshal(data, &roundtripped); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -182,12 +182,12 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 // TestMergeDeployShell_ReplaceByID — overlay with matching id replaces
 // the baked entry; non-matching id appends to Deploy.
 func TestMergeDeployShell_ReplaceByID(t *testing.T) {
-	baked := &LabelShellSet{
-		Candy: []ShellEntry{
+	baked := &spec.LabelShellSet{
+		Candy: []spec.ShellEntry{
 			{Origin: "direnv", ID: "direnv", Generic: &ShellSpec{Init: "default"}},
 		},
 	}
-	overlay := []ShellEntry{
+	overlay := []spec.ShellEntry{
 		{ID: "direnv", Generic: &ShellSpec{Init: "overridden"}},
 		{Origin: "deploy", Generic: &ShellSpec{Init: "fresh-deploy-entry"}},
 	}
@@ -203,12 +203,12 @@ func TestMergeDeployShell_ReplaceByID(t *testing.T) {
 // TestMergeDeployShell_SkipDropsBakedEntry — overlay with skip:true
 // (encoded as Generic + ByShell both nil) drops the matched entry.
 func TestMergeDeployShell_SkipDropsBakedEntry(t *testing.T) {
-	baked := &LabelShellSet{
-		Candy: []ShellEntry{
+	baked := &spec.LabelShellSet{
+		Candy: []spec.ShellEntry{
 			{Origin: "direnv", ID: "direnv", Generic: &ShellSpec{Init: "x"}},
 		},
 	}
-	overlay := []ShellEntry{
+	overlay := []spec.ShellEntry{
 		{ID: "direnv"}, // Generic + ByShell nil ⇒ skip signal
 	}
 	merged := MergeDeployShell(baked, overlay)
@@ -233,7 +233,7 @@ func TestExecutor_ResolveHome_Local(t *testing.T) {
 // TestDeployShellOverlay_YAMLParse — end-to-end YAML→DeployShellOverlay→
 // MergeDeployShell chain (Bed 6 of the R10 matrix). Asserts that a
 // deploy.yml-shape `shell:` block parses correctly through the custom
-// UnmarshalYAML AND merges as expected against a baked LabelShellSet.
+// UnmarshalYAML AND merges as expected against a baked spec.LabelShellSet.
 func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 	src := []byte(`
 - id: direnv
@@ -277,8 +277,8 @@ func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 	}
 
 	// Convert + merge against a baked set.
-	baked := &LabelShellSet{
-		Candy: []ShellEntry{
+	baked := &spec.LabelShellSet{
+		Candy: []spec.ShellEntry{
 			{
 				Origin:  "direnv",
 				ID:      "direnv",
@@ -294,7 +294,7 @@ func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 			},
 		},
 	}
-	merged := MergeDeployShell(baked, []ShellEntry{
+	merged := MergeDeployShell(baked, []spec.ShellEntry{
 		shellOverlayToEntry(&overlays[0]),
 		shellOverlayToEntry(&overlays[1]),
 		shellOverlayToEntry(&overlays[2]),

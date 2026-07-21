@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // SshCmd is the top-level `charly ssh` command group.
@@ -73,7 +74,7 @@ func runSshTunnel(vmName, uri string, forceTCP bool, kind string) error {
 	if !ok {
 		return fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}
-	var rr vmResolveResult
+	var rr spec.VmResolveResult
 	if err := json.Unmarshal(raw, &rr); err != nil {
 		return err
 	}

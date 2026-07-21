@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 
@@ -14,118 +13,10 @@ import (
 // TestEncryptedVolumeName / TestEncryptedCipherDir / TestEncryptedPlainDir moved to
 // sdk/deploykit (deploy_volume_backing_test.go) with the enc-path helpers in P11.
 
-func TestIsEncryptedInitialized(t *testing.T) {
-	// Non-existent directory
-	if isEncryptedInitialized("/nonexistent/cipher") {
-		t.Error("expected false for nonexistent directory")
-	}
-
-	// Directory without gocryptfs.conf
-	dir := t.TempDir()
-	if isEncryptedInitialized(dir) {
-		t.Error("expected false for dir without gocryptfs.conf")
-	}
-}
-
-func TestHasEncryptedBindMounts(t *testing.T) {
-	tests := []struct {
-		name   string
-		mounts []deploykit.ResolvedBindMount
-		want   bool
-	}{
-		{"nil", nil, false},
-		{"empty", []deploykit.ResolvedBindMount{}, false},
-		{"plain only", []deploykit.ResolvedBindMount{{Encrypted: false}}, false},
-		{"encrypted", []deploykit.ResolvedBindMount{{Encrypted: true}}, true},
-		{"mixed", []deploykit.ResolvedBindMount{{Encrypted: false}, {Encrypted: true}}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := hasEncryptedBindMounts(tt.mounts)
-			if got != tt.want {
-				t.Errorf("hasEncryptedBindMounts() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCryptoServiceFilename(t *testing.T) {
-	tests := []struct {
-		image string
-		want  string
-	}{
-		{"myapp", "charly-myapp-enc.service"},
-		{"openclaw", "charly-openclaw-enc.service"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.image, func(t *testing.T) {
-			got := encServiceFilename(tt.image)
-			if got != tt.want {
-				t.Errorf("encServiceFilename(%q) = %q, want %q", tt.image, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestVerifyBindMountsPlainDirMissing(t *testing.T) {
-	mounts := []deploykit.ResolvedBindMount{
-		{Name: "data", HostPath: "/nonexistent/path", ContPath: "/home/user/.myapp", Encrypted: false},
-	}
-	err := verifyBindMounts(mounts, "myapp")
-	if err == nil {
-		t.Fatal("expected error for missing host dir")
-	}
-	if !strings.Contains(err.Error(), "bind mount \"data\"") {
-		t.Errorf("error should reference bind mount name, got: %v", err)
-	}
-}
-
-func TestVerifyBindMountsPlainDirExists(t *testing.T) {
-	dir := t.TempDir()
-	mounts := []deploykit.ResolvedBindMount{
-		{Name: "data", HostPath: dir, ContPath: "/home/user/.myapp", Encrypted: false},
-	}
-	err := verifyBindMounts(mounts, "myapp")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestVerifyBindMountsEncryptedNotMounted(t *testing.T) {
-	// Mock isEncryptedMounted to always return false
-	orig := isEncryptedMounted
-	isEncryptedMounted = func(plainDir string) bool { return false }
-	defer func() { isEncryptedMounted = orig }()
-
-	mounts := []deploykit.ResolvedBindMount{
-		{Name: "secrets", HostPath: "/tmp/plain", ContPath: "/home/user/.secrets", Encrypted: true},
-	}
-	err := verifyBindMounts(mounts, "myapp")
-	if err == nil {
-		t.Fatal("expected error for unmounted encrypted volume")
-	}
-	if !strings.Contains(err.Error(), "not mounted") {
-		t.Errorf("error should mention 'not mounted', got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "charly config mount") {
-		t.Errorf("error should suggest 'charly config mount', got: %v", err)
-	}
-}
-
-func TestVerifyBindMountsEncryptedMounted(t *testing.T) {
-	// Mock isEncryptedMounted to always return true
-	orig := isEncryptedMounted
-	isEncryptedMounted = func(plainDir string) bool { return true }
-	defer func() { isEncryptedMounted = orig }()
-
-	mounts := []deploykit.ResolvedBindMount{
-		{Name: "secrets", HostPath: "/tmp/plain", ContPath: "/home/user/.secrets", Encrypted: true},
-	}
-	err := verifyBindMounts(mounts, "myapp")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
+// TestIsEncryptedInitialized / TestHasEncryptedBindMounts / TestCryptoServiceFilename /
+// TestVerifyBindMounts* relocated to sdk/deploykit/enc_probe_test.go (Cutover B unit 2) alongside
+// isEncryptedInitialized/hasEncryptedBindMounts/encServiceFilename/verifyBindMounts, all of which
+// moved there too (genuinely portable — no registry/credential coupling).
 
 // Build-time bind mount validation tests removed — validateBindMounts was deleted.
 // Volume backing is now a deploy-time concern (see deploy_test.go TestResolveVolumeBacking*).
@@ -241,48 +132,16 @@ func TestQuadletWithoutEncryptedMounts(t *testing.T) {
 
 // TestBuildShellArgsWithBindMounts / TestBuildShellArgsWithBindMountsPodman relocated to
 // candy/plugin-deploy-pod/resolve_f12_test.go (buildShellArgs moved, P13-KERNEL step-4(ii)).
-
-func TestBuildStartArgsWithBindMounts(t *testing.T) {
-	bindMounts := []deploykit.ResolvedBindMount{
-		{Name: "secrets", HostPath: "/enc/plain", ContPath: "/home/user/.secrets", Encrypted: true},
-	}
-	args := buildStartArgs("docker", "myapp:latest", 1000, 1000, nil, "charly-myapp", nil, bindMounts, false, "127.0.0.1", nil, SecurityConfig{}, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")
-
-	found := false
-	for i, arg := range args {
-		if arg == "-v" && i+1 < len(args) && args[i+1] == "/enc/plain:/home/user/.secrets" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected -v /enc/plain:/home/user/.secrets in args, got: %v", args)
-	}
-	// Docker should NOT have --userns
-	for _, arg := range args {
-		if arg == "--userns=keep-id:uid=1000,gid=1000" {
-			t.Error("docker should not have --userns=keep-id")
-		}
-	}
-}
-
-func TestBuildStartArgsWithBindMountsPodman(t *testing.T) {
-	bindMounts := []deploykit.ResolvedBindMount{
-		{Name: "secrets", HostPath: "/enc/plain", ContPath: "/home/user/.secrets", Encrypted: true},
-	}
-	args := buildStartArgs("podman", "myapp:latest", 1000, 1000, nil, "charly-myapp", nil, bindMounts, false, "127.0.0.1", nil, SecurityConfig{}, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")
-
-	found := slices.Contains(args, "--userns=keep-id:uid=1000,gid=1000")
-	if !found {
-		t.Errorf("expected --userns=keep-id:uid=1000,gid=1000 in podman args, got: %v", args)
-	}
-}
+// TestBuildStartArgsWithBindMounts / TestBuildStartArgsWithBindMountsPodman DELETED (Cutover B
+// unit 2): buildStartArgs was dead code (zero non-test callers — candy/plugin-deploy-pod's
+// resolve.go self-resolves the full start plan since P13-KERNEL step-4(ii)); their bind-mount
+// coverage now lives on candy/plugin-deploy-pod's own resolve.go equivalent.
 
 func TestCryptoPasswdRequiresUnmount(t *testing.T) {
-	// Mock isEncryptedMounted to return true (volume is mounted)
-	origMounted := isEncryptedMounted
-	isEncryptedMounted = func(plainDir string) bool { return true }
-	defer func() { isEncryptedMounted = origMounted }()
+	// Mock deploykit.IsEncryptedMounted to return true (volume is mounted)
+	origMounted := deploykit.IsEncryptedMounted
+	deploykit.IsEncryptedMounted = func(plainDir string) bool { return true }
+	defer func() { deploykit.IsEncryptedMounted = origMounted }()
 
 	boxName := "myapp"
 	// We can't call encPasswd() directly because loadEncryptedVolume needs deploy.yml,
@@ -294,7 +153,7 @@ func TestCryptoPasswdRequiresUnmount(t *testing.T) {
 
 	for _, m := range mounts {
 		plainDir := deploykit.EncryptedPlainDir(storagePath, boxName, m.Name)
-		if isEncryptedMounted(plainDir) {
+		if deploykit.IsEncryptedMounted(plainDir) {
 			err := fmt.Errorf("encrypted volume %q is still mounted; run 'charly config unmount %s' first", m.Name, boxName)
 			if !strings.Contains(err.Error(), "still mounted") {
 				t.Errorf("expected 'still mounted' in error, got: %v", err)
@@ -309,10 +168,10 @@ func TestCryptoPasswdRequiresUnmount(t *testing.T) {
 }
 
 func TestCryptoPasswdPasswordMismatch(t *testing.T) {
-	// Mock askPassword to return controlled values
-	origAsk := askPassword
+	// Mock deploykit.AskPassword to return controlled values
+	origAsk := deploykit.AskPassword
 	callCount := 0
-	askPassword = func(id, prompt string) (string, error) {
+	deploykit.AskPassword = func(id, prompt string) (string, error) {
 		callCount++
 		switch callCount {
 		case 1:
@@ -324,17 +183,17 @@ func TestCryptoPasswdPasswordMismatch(t *testing.T) {
 		}
 		return "", fmt.Errorf("unexpected call")
 	}
-	defer func() { askPassword = origAsk }()
+	defer func() { deploykit.AskPassword = origAsk }()
 
-	// Mock isEncryptedMounted to return false (all unmounted)
-	origMounted := isEncryptedMounted
-	isEncryptedMounted = func(plainDir string) bool { return false }
-	defer func() { isEncryptedMounted = origMounted }()
+	// Mock deploykit.IsEncryptedMounted to return false (all unmounted)
+	origMounted := deploykit.IsEncryptedMounted
+	deploykit.IsEncryptedMounted = func(plainDir string) bool { return false }
+	defer func() { deploykit.IsEncryptedMounted = origMounted }()
 
 	// Simulate the password check logic from Run()
-	oldPass, _ := askPassword("test-old", "Current passphrase:")
-	newPass, _ := askPassword("test-new", "New passphrase:")
-	confirmPass, _ := askPassword("test-confirm", "Confirm new passphrase:")
+	oldPass, _ := deploykit.AskPassword("test-old", "Current passphrase:")
+	newPass, _ := deploykit.AskPassword("test-new", "New passphrase:")
+	confirmPass, _ := deploykit.AskPassword("test-confirm", "Confirm new passphrase:")
 
 	_ = oldPass
 	if newPass != confirmPass {

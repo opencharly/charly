@@ -17,7 +17,7 @@ import (
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1/K3 — the repo-fetch/cache
 // machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1),
 // and BuildImage's delegation to BuildCmd is build-cone (K3). Consumers span both cones —
-// build.go, commands.go, ensure_image.go, image.go, shell.go, start.go, config_image.go
+// build.go, commands.go, ensure_image.go, image.go, config_image.go
 // (P14-rest trace, 2026-07) — so this moves together with the loader/build waves, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.
@@ -77,7 +77,7 @@ func ResolveRemoteImage(ref string, tag string) (*RemoteImageContext, error) {
 	}
 
 	// Build the registry image ref for pulling
-	imageRef := resolveShellImageRef(resolved.Registry, resolved.Name, tag)
+	imageRef := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, tag)
 
 	return &RemoteImageContext{
 		Ref:      *parsed,

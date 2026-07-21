@@ -1,11 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
-
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -28,51 +23,7 @@ func CollectHooks(cfg *Config, layers map[string]spec.CandyReader, boxName strin
 	return deploykit.MergeCandyHooks(candies)
 }
 
-// RunHook executes a hook script inside a running container.
-// Environment variables are passed via -e flags.
-// Returns nil on success, error on failure.
-func RunHook(engine, containerName, hookScript string, envVars []string) error {
-	if hookScript == "" {
-		return nil
-	}
-
-	args := []string{"exec"}
-	args = append(args, "-e", "CHARLY_CONTAINER_NAME="+containerName)
-	for _, env := range envVars {
-		args = append(args, "-e", env)
-	}
-	args = append(args, containerName, "sh", "-c", hookScript)
-
-	cmd := exec.Command(engine, args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-
-	fmt.Fprintf(os.Stderr, "Running hook in %s...\n", containerName)
-	return cmd.Run()
-}
-
-// removeVolumes removes all named volumes matching the image/instance prefix.
-func removeVolumes(engine, boxName, instance string) {
-	// Same per-deploy prefix the create side uses (deployVolumePrefix), so purge
-	// removes exactly this deploy's volumes and never a same-image sibling's.
-	prefix := deploykit.DeployVolumePrefix(boxName, instance)
-
-	out, err := exec.Command(engine, "volume", "ls", "--format", "{{.Name}}", "--filter", "name="+prefix).Output()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: listing volumes: %v\n", err)
-		return
-	}
-
-	for name := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if name == "" {
-			continue
-		}
-		rm := exec.Command(engine, "volume", "rm", name)
-		rm.Stderr = os.Stderr
-		if err := rm.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: removing volume %s: %v\n", name, err)
-		} else {
-			fmt.Fprintf(os.Stderr, "Removed volume %s\n", name)
-		}
-	}
-}
+// RunHook/removeVolumes DELETED (Cutover B unit 2 remove-verb completion) — both relocated
+// verbatim to candy/plugin-pod/remove_orchestration.go (runHook/removeVolumes); their only caller,
+// the former podRemoveCmd, moved there too. Confirmed portable (pure os/exec + sdk/deploykit, zero
+// core-registry coupling).

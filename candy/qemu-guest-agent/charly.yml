@@ -4,18 +4,19 @@ qemu-guest-agent:
         description: |
             QEMU guest agent — full host↔guest control channel with an application-consistent fsfreeze snapshot hook.
             Installs the qemu-guest-agent package (identical name on Arch/CachyOS
-            and Fedora), contributes the virtio-serial control channel, enables the
-            system service, and writes /etc/qemu/qemu-ga.conf pinning the full RPC
-            surface (guest-exec, guest-file-*, guest-fsfreeze-*, guest-set-* — the
-            package default blocks none). The fsfreeze hook dispatcher runs every
-            executable in /etc/qemu/fsfreeze-hook.d/ on freeze/thaw so the host can
-            take application-consistent snapshots. Every artifact — the qemu-ga
+            and Fedora), enables the system service, and writes
+            /etc/qemu/qemu-ga.conf pinning the full RPC surface (guest-exec,
+            guest-file-*, guest-fsfreeze-*, guest-set-* — the package default
+            blocks none). The fsfreeze hook dispatcher runs every executable in
+            /etc/qemu/fsfreeze-hook.d/ on freeze/thaw so the host can take
+            application-consistent snapshots. Every artifact — the qemu-ga
             binary, the package, the config, the executable dispatcher and its
             drop-in dir — is file- and command-checkable inside the built image.
+            The guest-side virtio-serial channel (`org.qemu.guest_agent.0`) is
+            declared on the VM ENTITY, not this candy — see the vm-libvirt
+            deploy's own `libvirt.devices.channels:`.
         package:
             - qemu-guest-agent
-        libvirt:
-            - <channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>
         service:
             - name: qemu-guest-agent
               use_packaged: qemu-guest-agent.service

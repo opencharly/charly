@@ -1,50 +1,55 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
-	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 )
 
-// podLogsCmd is the host-side reconstruction of the former LogsCmd (now command:logs in
-// candy/plugin-pod) — hostBuildPodLogs (host_build_pod_logs.go) runs its Run() body VERBATIM.
-// TRACKED P13-KERNEL EXIT: dispatchLifecycleTarget/LogsOpts/LifecycleTarget (deploy_target_unified.go,
-// pod_lifecycle_verb.go) are registered P13-KERNEL migration inventory (see start.go's header) —
-// this resolver moves through the same venue-scoped-executor-session seam when that wave lands.
-type podLogsCmd struct {
-	Box      string
-	Follow   bool
-	Instance string
-	Sidecar  string
-}
+// isTerminal reports whether stdout is connected to a terminal. Package-level var for testability.
+// Relocated from the deleted shell.go (Cutover B unit 2) — used by host_build_pod_lifecycle_dispatch.go's
+// hostBuildPodShell (the TTY-detection invariant documented there).
+var isTerminal = defaultIsTerminal
 
-func (c *podLogsCmd) Run() error {
-	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	// `charly logs` routes through the unified LifecycleTarget → OpLogs (F12): the host resolves the
-	// `journalctl`/`<engine> logs` stream command (resolvePodLogsPlan), the owning plugin streams it
-	// LIVE to the operator via exec.RunStream (stdio host-held). The former inline journalctl/podman
-	// logs exec was DELETED — its resolution moved to the host resolver, its stream to the executor leg.
-	lt, err := dispatchLifecycleTarget("logs", c.Box, c.Instance)
+func defaultIsTerminal() bool {
+	fi, err := os.Stdout.Stat()
 	if err != nil {
-		return err
+		return false
 	}
-	return lt.Logs(context.Background(), LogsOpts{Follow: c.Follow, Sidecar: c.Sidecar})
+	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-// podUpdateCmd is the host-side reconstruction of the former UpdateCmd (now command:update in
-// candy/plugin-pod) — hostBuildPodUpdate (host_build_pod_update.go) runs its Run() body
-// VERBATIM. TRACKED P13-KERNEL EXIT: dispatchByDeployTarget's resolveTreeRoot/
-// loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) are core Mechanisms (the
-// project loader + provider registry) a plugin cannot import or hold — this resolver moves
-// through the same venue-scoped-executor-session seam when that wave lands.
+// containerRunning/defaultContainerRunning DELETED (Cutover B unit 2, R1 divergence caught mid-flight):
+// this was a duplicate of the ALREADY-EXISTING sdk/kit.ContainerRunning (kit/container_probe.go,
+// relocated from this exact file's predecessor charly/shell.go per its OWN header comment, which
+// claimed callers "now import kit directly" — a false claim until this fix: android_deploy_cmd.go
+// and service.go were still calling the LOCAL var). Every caller now calls kit.ContainerRunning.
+
+// containerExists reports whether a container with the given name is present in the engine's
+// storage, RUNNING OR STOPPED (unlike containerRunning, which is false for a stopped container). A
+// bare `container inspect` succeeds for any existing container, so its exit status is the signal.
+// Relocated from the deleted shell.go (Cutover B unit 2) — still used by bundle_add_cmd.go.
+var containerExists = func(engine, name string) bool {
+	binary := kit.EngineBinary(engine)
+	return exec.Command(binary, "container", "inspect", name).Run() == nil
+}
+
+// stopTunnelForImage DELETED (Cutover B unit 2 remove-verb completion) — its only caller,
+// podRemoveCmd.Run() below, now has the tunnel already torn down BEFORE this seam runs:
+// candy/plugin-pod's RemoveCmd.Run() resolves the container's tunnel config via the EXISTING
+// pod-config-container-tunnel seam and stops it itself via verb:tunnel over InvokeProvider
+// (remove_tunnel.go), the same mechanism candy/plugin-deploy-pod's start/stop already use. No
+// remaining core caller dispatches a tunnel stop for the remove path — the former core
+// tunnel-dispatch adapter (tunnel.go's sibling file, now deleted) has zero callers left.
+
+// podUpdateCmd is the host-side dispatch struct for `charly update` (now command:update in
+// candy/plugin-pod). Cutover B unit 2: the plugin now performs the remote-ref/CanonicalizeDeployArg
+// validation itself (candy/plugin-pod's UpdateCmd.Run()) before reaching HostBuild("pod-update")
+// (host_build_pod_lifecycle_dispatch.go), which constructs this struct directly and calls
+// dispatchByDeployTarget() — no more Run()-VERBATIM reconstruction. dispatchByDeployTarget's
+// resolveTreeRoot/loadDeployPlugins/ResolveTarget (update_deploy_dispatch.go) remain core
+// Mechanisms (the project loader + provider registry) a plugin cannot import or hold.
 //
 // This verb handles the destroy-free update path for every target. The
 // first arg accepts EITHER a deploy name (looked up in charly.yml —
@@ -67,260 +72,20 @@ type podUpdateCmd struct {
 	DataFrom  string
 }
 
-// Run dispatches `charly update <name>` to the target-specific update
-// helper. The argument MUST resolve to a deploy entry in charly.yml
-// (project + user-overlay merged). There is NO legacy fall-through to
-// "treat the argument as an image name" — to refresh an image artifact
-// without restarting any deploy, use `charly box pull <name>`.
-//
-// The dispatch keeps ZERO duplicate code paths and ZERO silent
-// fallbacks. Every branch fails fast with an actionable error message.
-func (c *podUpdateCmd) Run() error {
-	if spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
-		return fmt.Errorf("remote refs are not accepted here; run 'charly box pull %s' first", c.Box)
-	}
-	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	return c.dispatchByDeployTarget()
-}
+// podRemoveCmd (+ purgeDeployArtifacts, dropOverlayImagesByRef, runPreRemoveHook,
+// resolveSidecarNames) DELETED (Cutover B unit 2 remove-verb completion, option (b) — full parity
+// with the other 6 verbs): the WHOLE orchestration is now candy/plugin-pod's
+// (remove_orchestration.go's runPodRemove, RemoveCmd.Run() in pod_cmd.go), confirmed portable
+// (pure os/exec + sdk/kit + sdk/deploykit, zero core-registry coupling — each of these functions
+// had EXACTLY ONE caller, this type). The two genuinely host-coupled axes (the credential-backed
+// hook env; the deploy-entry cleanup's registry-resugar) reach the host over their own narrow
+// seams (pod-config-hook-secret-env, the NEW pod-config-clean-deploy-entry —
+// host_build_pod_config_seams.go). The arbiter-release bracket alone remains under
+// hostBuildPodRemove ("pod-remove", host_build_pod_lifecycle_dispatch.go).
 
-// podRemoveCmd is the host-side reconstruction of the former RemoveCmd (now command:remove in
-// candy/plugin-pod) — hostBuildPodRemove (host_build_pod_remove.go) runs its Run() body VERBATIM.
-// TRACKED P13-KERNEL EXIT: deeply core-type-coupled (BoxMetadata/ExtractMetadata/sidecar
-// resolution/deploykit.CleanDeployEntry — not registry-bound, but not portable either), so it
-// stays behind the seam alongside start/stop/logs until the P13-KERNEL wave's
-// venue-scoped-executor-session seam lands.
-type podRemoveCmd struct {
-	Box        string
-	Instance   string
-	Purge      bool
-	KeepDeploy bool
-	Env        []string
-}
-
-func (c *podRemoveCmd) Run() error {
-	c.Box, c.Instance = deploykit.CanonicalizeDeployArg(c.Box, c.Instance)
-	// Releasing a persistent exclusive claim restores any holder this deploy
-	// preempted (no-op if no lease / gated by an outer orchestrator).
-	defer releaseResourceClaim(deploykit.DeployKey(c.Box, c.Instance))
-	boxName := kit.ResolveBoxName(c.Box)
-
-	// Stop tunnel before removing container (best-effort)
-	stopTunnelForImage(boxName, c.Instance)
-
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return err
-	}
-
-	// Resolve per-image engine from the per-host deploy config (no charly.yml dependency).
-	runEngine := deploykit.ResolveBoxEngineForDeploy(boxName, c.Instance, rt.RunEngine)
-	engine := kit.EngineBinary(runEngine)
-	containerName := kit.ContainerNameInstance(boxName, c.Instance)
-
-	// Run pre_remove hooks (best-effort, before stopping)
-	c.runPreRemoveHook(engine, containerName, boxName)
-
-	if rt.RunMode == "quadlet" {
-		svc := kit.ServiceNameInstance(boxName, c.Instance)
-		stop := exec.Command("systemctl", "--user", "stop", svc)
-		_ = stop.Run()
-
-		qdir, err := kit.QuadletDir()
-		if err != nil {
-			return err
-		}
-
-		qpath := filepath.Join(qdir, kit.QuadletFilenameInstance(boxName, c.Instance))
-		if err := os.Remove(qpath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("removing quadlet file: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "Removed %s\n", qpath)
-
-		// Remove pod file if it exists (sidecar mode)
-		podPath := filepath.Join(qdir, kit.PodQuadletFilenameInstance(boxName, c.Instance))
-		if err := os.Remove(podPath); err == nil {
-			fmt.Fprintf(os.Stderr, "Removed %s\n", podPath)
-		}
-
-		// Remove sidecar .container files (exact-name match, no prefix
-		// glob). Sources sidecar names from charly.yml — see
-		// resolveSidecarNames for why charly.yml is authoritative.
-		sidecarNames := resolveSidecarNames(boxName, c.Instance)
-		podBase := kit.PodNameInstance(boxName, c.Instance)
-		for _, sc := range sidecarNames {
-			scPath := filepath.Join(qdir, podBase+"-"+sc+".container")
-			if err := os.Remove(scPath); err == nil {
-				fmt.Fprintf(os.Stderr, "Removed %s\n", scPath)
-			}
-		}
-
-		// Remove sidecar config files. Naming convention is
-		// `<podBase>-<sidecar>-<purpose>.<ext>` (e.g.
-		// charly-foo-tailscale-serve.json). The prefix is
-		// anchored to the sidecar NAME so unrelated sidecars / bases
-		// can't match.
-		if scDir, scErr := sidecarConfigDir(); scErr == nil {
-			if entries, err := os.ReadDir(scDir); err == nil {
-				for _, sc := range sidecarNames {
-					scfPrefix := podBase + "-" + sc + "-"
-					for _, entry := range entries {
-						if strings.HasPrefix(entry.Name(), scfPrefix) {
-							scfPath := filepath.Join(scDir, entry.Name())
-							if err := os.Remove(scfPath); err == nil {
-								fmt.Fprintf(os.Stderr, "Removed %s\n", scfPath)
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Stop companion services before removing (best-effort)
-		stopTunnel := exec.Command("systemctl", "--user", "stop", deploykit.TunnelServiceFilename(boxName))
-		_ = stopTunnel.Run()
-		stopEnc := exec.Command("systemctl", "--user", "stop", encServiceFilename(boxName))
-		_ = stopEnc.Run()
-
-		svcDir, svcDirErr := kit.SystemdUserDir()
-		if svcDirErr == nil {
-			tunnelPath := filepath.Join(svcDir, deploykit.TunnelServiceFilename(boxName))
-			if err := os.Remove(tunnelPath); err == nil {
-				fmt.Fprintf(os.Stderr, "Removed %s\n", tunnelPath)
-			}
-			encPath := filepath.Join(svcDir, encServiceFilename(boxName))
-			if err := os.Remove(encPath); err == nil {
-				fmt.Fprintf(os.Stderr, "Removed %s\n", encPath)
-			}
-		}
-
-		cmd := exec.Command("systemctl", "--user", "daemon-reload")
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("systemctl daemon-reload failed: %w\n%s", err, strings.TrimSpace(string(output)))
-		}
-
-		fmt.Fprintf(os.Stderr, "Reloaded systemd user daemon\n")
-
-		// Clear any lingering failed state for main + companion services (best-effort)
-		for _, unit := range []string{
-			svc,
-			deploykit.TunnelServiceFilename(boxName),
-			encServiceFilename(boxName),
-		} {
-			rf := exec.Command("systemctl", "--user", "reset-failed", unit)
-			_ = rf.Run()
-		}
-
-		if c.Purge {
-			purgeDeployArtifacts(engine, boxName, c.Instance)
-		}
-		if !c.KeepDeploy {
-			deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
-		}
-		return nil
-	}
-
-	// Direct mode: stop + rm
-	name := kit.ContainerNameInstance(boxName, c.Instance)
-
-	stop := exec.Command(engine, "stop", name)
-	_ = stop.Run()
-
-	rm := exec.Command(engine, "rm", name)
-	_ = rm.Run()
-
-	fmt.Fprintf(os.Stderr, "Removed container %s\n", name)
-
-	if c.Purge {
-		purgeDeployArtifacts(engine, boxName, c.Instance)
-	}
-	if !c.KeepDeploy {
-		deploykit.CleanDeployEntry(boxName, c.Instance, marshalDeployNode)
-	}
-	return nil
-}
-
-// purgeDeployArtifacts removes everything `charly remove --purge` owns for a deploy: its named
-// podman volumes, its encrypted (gocryptfs) volumes, AND the synthesized <name>-overlay images an
-// add_candy: overlay build produced. The overlay drop was previously reached ONLY via the pod
-// substrate's PostTeardown (i.e. `charly bundle del`), so `charly remove --purge` — the teardown
-// path EVERY disposable pod check bed uses (check_bed_run.go's default cleanup) — leaked its overlay
-// image (dozens accumulated). Reuses kit.RemoveImagesByReference: the SAME exact-repo-matched drop
-// the pod plugin's podPostTeardown uses (R3), safe against a shared-image-ID over-match.
-func purgeDeployArtifacts(engine, boxName, instance string) {
-	removeVolumes(engine, boxName, instance)
-	removeEncryptedVolumes(boxName, instance)
-	dropOverlayImagesByRef(engine, deploykit.DeployKey(boxName, instance)+"-overlay")
-}
-
-// dropOverlayImagesByRef drops the <deploy-key>-overlay images an add_candy: overlay build
-// synthesized. A package var (defaulting to kit.RemoveImagesByReference) so a test can observe the
-// purge WIRING — that `charly remove --purge` targets the correct `<name>-overlay` reference —
-// without a live container engine.
-var dropOverlayImagesByRef = kit.RemoveImagesByReference
-
-// runPreRemoveHook runs pre_remove hooks (best-effort). Reads hooks from
-// the running container's OCI labels.
-func (c *podRemoveCmd) runPreRemoveHook(engine, containerName, boxName string) {
-	imageRef := containerImage(engine, containerName)
-	if imageRef == "" {
-		return
-	}
-	meta, metaErr := deploykit.ExtractMetadata(engine, imageRef)
-	if metaErr != nil || meta == nil || meta.Hook == nil || meta.Hook.PreRemove == "" {
-		return
-	}
-	// Pass credential-backed secrets (secret_accept/require) to the hook
-	// explicitly — scrubbed from c.Env, not reliably inherited via podman exec.
-	hookEnv := append(append([]string{}, c.Env...), resolveHookSecretEnv(boxName, c.Instance, meta)...)
-	if err := RunHook(engine, containerName, meta.Hook.PreRemove, hookEnv); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: pre_remove hook failed: %v\n", err)
-	}
-}
-
-// containerImageRef returns the image ref backing a running container
-// (.Config.Image via `<engine> inspect`). THE single container→image-ref
-// inspector — used wherever a command must read what a LIVE container is
-// actually running (mcp probes, service init detection, remove hooks,
-// direct-mode start). containerImage is the best-effort (""-on-error)
-// wrapper over it, so there is exactly one inspect implementation.
-func containerImageRef(engine, containerName string) (string, error) {
-	out, _, exit, err := kit.RunCaptureCmd(exec.Command(kit.EngineBinary(engine), "inspect", "--format", "{{.Config.Image}}", containerName))
-	if err != nil {
-		return "", fmt.Errorf("inspecting container %s: %w", containerName, err)
-	}
-	if exit != 0 {
-		return "", fmt.Errorf("inspect %s: exit %d", containerName, exit)
-	}
-	return strings.TrimSpace(out), nil
-}
-
-// containerImage returns the image ref for a running container, best-effort
-// ("" on error). Thin wrapper over containerImageRef.
-func containerImage(engine, containerName string) string {
-	ref, _ := containerImageRef(engine, containerName)
-	return ref
-}
-
-// resolveSidecarNames returns the sorted set of sidecar key names
-// attached to this deploy via charly.yml. charly.yml is the
-// authoritative source because sidecars only become attached via
-// `charly config --sidecar <name>` which writes them into the deploy
-// entry's `sidecar:` map. Image OCI labels carry sidecar TEMPLATES
-// but not "which sidecars are attached to THIS deploy on THIS host".
-// Returns nil when nothing is attached.
-func resolveSidecarNames(boxName, instance string) []string {
-	dc, err := deploykit.LoadBundleConfig()
-	if err != nil || dc == nil {
-		return nil
-	}
-	entry, ok := dc.Bundle[deploykit.DeployKey(boxName, instance)]
-	if !ok || len(entry.Sidecar) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(entry.Sidecar))
-	for name := range entry.Sidecar {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
+// containerImageRef/containerImage DELETED (Cutover B unit 2, R1 divergence caught mid-flight):
+// both were duplicates of the ALREADY-EXISTING sdk/kit.ContainerImageRef/kit.ContainerImage
+// (kit/container_image.go, relocated from THIS exact file per its own header comment, which
+// claimed callers "now import kit directly" — a false claim until this fix: commands.go itself,
+// check_endpoint_resolve.go, service.go, and pod_lifecycle_resolve.go were still calling the
+// LOCAL functions). Every caller now calls kit.ContainerImageRef/kit.ContainerImage.

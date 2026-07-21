@@ -91,15 +91,9 @@ func TestGenerateQuadletWithMemoryCaps(t *testing.T) {
 // with the CollectSecurity split (W9) — SecurityArgs/ResourceCapArgs/AppendUnique/
 // the byte-size helpers now live there exclusively.
 
-func TestBuildStartArgsWithPrivileged(t *testing.T) {
-	sec := SecurityConfig{Privileged: true}
-	args := buildStartArgs("docker", "myimage:latest", 0, 0, nil, "charly-myimage", nil, nil, false, "127.0.0.1", nil, sec, []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}, "/workspace")
-	found := slices.Contains(args, "--privileged")
-	if !found {
-		t.Errorf("expected --privileged in args: %v", args)
-	}
-}
-
+// TestBuildStartArgsWithPrivileged DELETED (Cutover B unit 2): buildStartArgs was dead code (zero
+// non-test callers — candy/plugin-deploy-pod's resolve.go self-resolves the full start plan since
+// P13-KERNEL step-4(ii)); its --privileged coverage now lives on that plugin's own resolve tests.
 // TestBuildShellArgsWithCapAdd relocated to candy/plugin-deploy-pod/resolve_f12_test.go
 // (buildShellArgs moved, P13-KERNEL step-4(ii)).
 

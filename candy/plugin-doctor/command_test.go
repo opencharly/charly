@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -217,13 +218,17 @@ func TestRunHardwareChecks(t *testing.T) {
 // plugin runs itself) reports OK when set and a WARNING + fix hint when missing.
 func TestCheckFuseAllowOther(t *testing.T) {
 	withFuseConf := func(body string) {
-		orig := fuseConfPath
-		t.Cleanup(func() { fuseConfPath = orig })
+		// checkFuseAllowOther's actual CHECK reads deploykit.FuseConfPath (the shared
+		// deploykit.FuseAllowOtherEnabled, Cutover B unit 2); this package's own fuseConfPath
+		// var now serves ONLY the Detail/InstallHint display text, so the test points the
+		// deploykit var to make the check itself observe the fixture.
+		orig := deploykit.FuseConfPath
+		t.Cleanup(func() { deploykit.FuseConfPath = orig })
 		p := filepath.Join(t.TempDir(), "fuse.conf")
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		fuseConfPath = p
+		deploykit.FuseConfPath = p
 	}
 
 	withFuseConf("user_allow_other\n")

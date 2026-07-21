@@ -51,3 +51,27 @@ func hostPodSeam(kind string, reqAny any) error {
 	_, err = cmdExec.HostBuild(cmdCtx, kind, reqJSON)
 	return err
 }
+
+// hostPodSeamReply is hostPodSeam's reply-capturing sibling (R3: mirrors
+// candy/plugin-deploy-pod/config_setup.go's identically-shaped `hostBuild` helper — that one is
+// package-private to plugin-deploy-pod, so this module needs its own copy rather than an import)
+// for the narrow case where the plugin itself must ACT on a seam's result (e.g.
+// resolveContainerTunnel in remove_tunnel.go, which the plugin then drives via InvokeProvider)
+// instead of letting the host print + report pass/fail alone.
+func hostPodSeamReply(kind string, reqAny, replyPtr any) error {
+	if cmdExec == nil {
+		return fmt.Errorf("pod %s: no host reverse channel (command not compiled-in?)", kind)
+	}
+	reqJSON, err := json.Marshal(reqAny)
+	if err != nil {
+		return err
+	}
+	resJSON, err := cmdExec.HostBuild(cmdCtx, kind, reqJSON)
+	if err != nil {
+		return err
+	}
+	if replyPtr == nil || len(resJSON) == 0 {
+		return nil
+	}
+	return json.Unmarshal(resJSON, replyPtr)
+}

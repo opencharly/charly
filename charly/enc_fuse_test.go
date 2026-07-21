@@ -6,47 +6,29 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// withFuseConf points fuseConfPath at a temp file containing body (or removes it when body ==
-// "\x00"), restoring the original path after the test.
+// withFuseConf points deploykit.FuseConfPath at a temp file containing body (or removes it when
+// body == "\x00"), restoring the original path after the test. FuseAllowOtherEnabled itself moved
+// to sdk/deploykit (Cutover B unit 2, enc_probe.go) — its own dedicated test coverage lives there
+// now (TestFuseAllowOtherEnabled); this file keeps ONLY the mock-pointing helper, since
+// TestEncExecViaPlugin_AllowOtherPreflight below still needs it to exercise charly-core's
+// encExecViaPlugin preflight.
 func withFuseConf(t *testing.T, body string) {
 	t.Helper()
-	orig := fuseConfPath
-	t.Cleanup(func() { fuseConfPath = orig })
+	orig := deploykit.FuseConfPath
+	t.Cleanup(func() { deploykit.FuseConfPath = orig })
 	if body == "\x00" {
-		fuseConfPath = filepath.Join(t.TempDir(), "absent-fuse.conf")
+		deploykit.FuseConfPath = filepath.Join(t.TempDir(), "absent-fuse.conf")
 		return
 	}
 	p := filepath.Join(t.TempDir(), "fuse.conf")
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fuseConfPath = p
-}
-
-func TestFuseAllowOtherEnabled(t *testing.T) {
-	cases := []struct {
-		name string
-		body string
-		want bool
-	}{
-		{"active", "# comment\nuser_allow_other\n#mount_max = 1000\n", true},
-		{"active-trailing-space", "  user_allow_other  \n", true},
-		{"commented", "#user_allow_other\n", false},
-		{"commented-spaced", "# user_allow_other - description line\n", false},
-		{"absent", "# nothing here\n#mount_max = 1000\n", false},
-		{"missing-file", "\x00", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			withFuseConf(t, c.body)
-			if got := fuseAllowOtherEnabled(); got != c.want {
-				t.Fatalf("fuseAllowOtherEnabled() = %v, want %v", got, c.want)
-			}
-		})
-	}
+	deploykit.FuseConfPath = p
 }
 
 // TestEncExecViaPlugin_AllowOtherPreflight proves the mount-method preflight fails FAST with the

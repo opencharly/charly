@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 )
 
 // check_endpoint_resolve.go — the generic host-endpoint reverse-legs (H part 2). Class-generic
@@ -89,7 +90,7 @@ func (h *hostVerbResolver) resolveVerbGraphics(kind string) (graphicsEndpoint, e
 	if !ok {
 		return graphicsEndpoint{}, fmt.Errorf("vm plugin unavailable (go-libvirt resolution is out-of-process)")
 	}
-	var rr vmResolveResult
+	var rr spec.VmResolveResult
 	if err := json.Unmarshal(raw, &rr); err != nil {
 		return graphicsEndpoint{}, fmt.Errorf("decode resolve: %w", err)
 	}
@@ -205,7 +206,7 @@ func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	imageRef, err := containerImageRef(engine, containerName)
+	imageRef, err := kit.ContainerImageRef(engine, containerName)
 	if err != nil {
 		return "", err
 	}

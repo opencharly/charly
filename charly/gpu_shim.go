@@ -41,7 +41,7 @@ var (
 // gpu_shim.go — the in-core SHIMS for GPU/VFIO host detection (cutover C11). The
 // sysfs/exec detection LOGIC moved into the COMPILED-IN candy/plugin-gpu (verb:gpu);
 // these shims resolve that provider and Invoke it, so the ~10 in-core consumers
-// (config_image.go/start.go/shell.go CDI-env sites, `charly doctor`, `charly vm gpu`,
+// (config_image.go CDI-env sites, `charly doctor`, `charly vm gpu`,
 // `charly vm create`, and gpu_allocate.go which already calls DetectVFIO) compile
 // against the SAME symbol names and are invisible above the shim. (The C9 driver-switch
 // shims below dispatch verb:gpu's DRIVER-SWITCH actions the same way.)

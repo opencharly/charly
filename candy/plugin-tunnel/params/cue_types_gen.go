@@ -9,7 +9,7 @@ type TunnelInput struct {
 	Method string `yaml:"method,omitempty" json:"method"`
 
 	// config — the resolved tunnel configuration to act on (byte-compatible with the
-	// core's TunnelConfig, sent by tunnel_plugin.go over the Invoke envelope).
+	// core's TunnelConfig, sent by the calling pod-lifecycle plugin over the Invoke envelope).
 	Config TunnelConfig `yaml:"config,omitempty" json:"config,omitempty"`
 
 	// expect — plan only: the expected argv command lines (space-joined). When set, the

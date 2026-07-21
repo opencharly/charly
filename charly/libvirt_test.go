@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
 
@@ -52,39 +51,5 @@ func TestIsDeviceElement(t *testing.T) {
 				t.Errorf("isDeviceElement(%q) = %v, want %v", tt.snippet, got, tt.isDevice)
 			}
 		})
-	}
-}
-
-func TestCollectLibvirtSnippets(t *testing.T) {
-	// Post-cutover, CollectLibvirtSnippets only harvests candy-level
-	// `libvirt:` fields (box-level `libvirt:` was deleted in the VM
-	// hard-cutover; box-level raw snippets now live on the paired
-	// kind:vm entity's spec.libvirt.snippets:).
-	cfg := &Config{
-		Box: boxMapOf(map[string]spec.BoxConfig{
-			"test-image": {
-				Candy: []string{"layer-a", "layer-b"},
-			},
-		}),
-	}
-	layers := map[string]spec.CandyReader{
-		"layer-a": testCandy("layer-a", spec.CandyModel{
-			Libvirt: []string{"<channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>"},
-		}, spec.CandyView{}),
-		"layer-b": testCandy("layer-b", spec.CandyModel{}, spec.CandyView{}),
-	}
-
-	snippets := CollectLibvirtSnippets(cfg, layers, "test-image")
-	if len(snippets) != 1 {
-		t.Fatalf("expected 1 snippet (layer-a only, box-level removed), got %d: %v", len(snippets), snippets)
-	}
-}
-
-func TestCollectLibvirtSnippets_NonexistentImage(t *testing.T) {
-	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{})}
-	layers := map[string]spec.CandyReader{}
-	snippets := CollectLibvirtSnippets(cfg, layers, "nonexistent")
-	if snippets != nil {
-		t.Fatalf("expected nil, got %v", snippets)
 	}
 }

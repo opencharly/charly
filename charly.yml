@@ -1,4 +1,4 @@
-version: 2026.186.2323
+version: 2026.202.0105
 # Canonical repo identity. After the 2026-06 box inversion main imports the three
 # active distro submodules (arch / cachyos / fedora) ONE-DIRECTIONALLY to reference
 # their relocated boxes; the submodules no longer import main as a namespace (they
@@ -659,6 +659,56 @@ check-sidecar-pod:
                 - runtime
               command:
                 command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: charly shell -c runs a ONE-SHOT non-interactive command through the consolidated pod-lifecycle-dispatch seam (charly shell → dispatchLifecycleTarget("shell",…) → LifecycleTarget.Attach, host_build_pod_lifecycle_dispatch.go's hostBuildPodShell) — the Cutover B unit 2 round-trip's shell coverage. A broken consolidation either fails the exec or drops the echoed marker from stdout.
+              id: shell-oneshot-roundtrip
+              exit_status: 0
+              stdout:
+                - contains: shell-roundtrip-ok
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} shell check-sidecar-pod -c "echo shell-roundtrip-ok"
+                in_container: false
+            - run: charly logs (bounded, non-follow) through the consolidated seam (charly logs → dispatchLifecycleTarget("logs",…) → LifecycleTarget.Logs, hostBuildPodLogs) — proves the logs verb still dispatches and returns after the file consolidation.
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} logs check-sidecar-pod
+                in_container: false
+            - run: charly logs -f (follow mode) BOUNDED by a shell-level `timeout` wrapper — proves follow-mode streaming through the SAME consolidated seam terminates cleanly under an external cutoff rather than hanging the bed run forever. Accepts ONLY exit 0 (the process exited on its own before the cutoff) or 124 (timeout(1)'s own signal-kill code, the expected/intended path) — any OTHER exit (a crash, a command-not-found, an unrelated failure) still FAILS the step; this is deliberately narrower than a bare `|| true`, which would mask every failure, not just timeout's. The step-level timeout field below (20 seconds) is a last-resort framework-side backstop.
+              exit_status: 0
+              timeout: 20s
+              context:
+                - runtime
+              command:
+                command: timeout 5 ${CHARLY_BIN} logs check-sidecar-pod -f; case $? in 0|124) true;; *) false;; esac
+                in_container: false
+            - run: charly update rebuilds/redeploys the artifact through dispatchByDeployTarget (update_deploy_dispatch.go, UNCHANGED by this cutover — reused as-is by the new consolidated seam's hostBuildPodUpdate) — proves the update path still works after the file consolidation.
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} update check-sidecar-pod
+                in_container: false
+            - run: charly remove --keep-deploy tears the pod down through candy/plugin-pod's FULLY-ported remove orchestration (RemoveCmd.Run() → remove_tunnel.go's tunnel-stop + remove_orchestration.go's runPodRemove, reaching the host only for the arbiter-release bracket, the credential-backed hook env, and the deploy-entry cleanup's registry-resugar) — keeps the charly.yml deploy entry so the very next step can recreate it, proving remove's fully-relocated orchestration still works end-to-end.
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} remove check-sidecar-pod --keep-deploy
+                in_container: false
+            - check: after remove→start the pod is running again — the round-trip's final assertion, proving the FULL consolidated pod-lifecycle-dispatch family (start/stop/shell/logs/update/remove/service) composes end-to-end, not just each verb in isolation.
+              id: sidecar-pod-roundtrip-final
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-sidecar-pod
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} start check-sidecar-pod && ${CHARLY_BIN} status --json
                 in_container: false
 # check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).

@@ -102,14 +102,14 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 
 	// Bed: deploy key differs from the baked image short-name. The merge must
 	// resolve the bed's OWN ResolvedPort, not the sibling "ollama" deploy.
-	bedMeta := &BoxMetadata{Box: "ollama", Port: []string{"11434"}}
+	bedMeta := &spec.BoxMetadata{Box: "ollama", Port: []string{"11434"}}
 	deploykit.MergeDeployOntoMetadata(bedMeta, dc, "check-cachyos-ollama-pod", "")
 	if len(bedMeta.Port) != 1 || bedMeta.Port[0] != "45434:11434" {
 		t.Errorf("bed merge: got Ports=%v, want [45434:11434] (must not pick up sibling 'ollama' deploy or the image default)", bedMeta.Port)
 	}
 
 	// Plain deploy: key == image short-name. Resolves its own entry as before.
-	plainMeta := &BoxMetadata{Box: "ollama", Port: []string{"11434"}}
+	plainMeta := &spec.BoxMetadata{Box: "ollama", Port: []string{"11434"}}
 	deploykit.MergeDeployOntoMetadata(plainMeta, dc, "ollama", "")
 	if len(plainMeta.Port) != 1 || plainMeta.Port[0] != "11434:11434" {
 		t.Errorf("plain merge: got Ports=%v, want [11434:11434]", plainMeta.Port)
@@ -117,7 +117,7 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 
 	// Instance deploy: "<base>/<instance>" key form resolves correctly.
 	dc.Bundle["selkies/work"] = spec.BundleNode{Image: "selkies", ResolvedPort: []string{"3001:3000"}}
-	instMeta := &BoxMetadata{Box: "selkies", Port: []string{"3000"}}
+	instMeta := &spec.BoxMetadata{Box: "selkies", Port: []string{"3000"}}
 	deploykit.MergeDeployOntoMetadata(instMeta, dc, "selkies", "work")
 	if len(instMeta.Port) != 1 || instMeta.Port[0] != "3001:3000" {
 		t.Errorf("instance merge: got Ports=%v, want [3001:3000]", instMeta.Port)
@@ -134,8 +134,8 @@ func TestMergeDeployOntoMetadata_KeyedByDeployNameNotImage(t *testing.T) {
 // change (zero migration). Keyed by deployVolumePrefix == container name.
 func TestMergeDeployOntoMetadata_VolumesScopedToDeployKey(t *testing.T) {
 	const vol = "charly-immich-ml-pgdata"
-	mk := func() *BoxMetadata {
-		return &BoxMetadata{Box: "immich-ml", Volume: []deploykit.VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
+	mk := func() *spec.BoxMetadata {
+		return &spec.BoxMetadata{Box: "immich-ml", Volume: []deploykit.VolumeMount{{VolumeName: vol, ContainerPath: "/data"}}}
 	}
 	for _, tc := range []struct {
 		name       string

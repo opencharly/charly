@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/spec"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -252,7 +253,7 @@ func stopVM(box, instance string, force bool) error {
 
 	switch backend {
 	case "libvirt":
-		raw, ok := invokeVmPluginEnv(vmPluginEnv{VmOp: "stop", VmName: name, Force: force})
+		raw, ok := invokeVmPluginEnv(spec.VmPluginEnv{VmOp: "stop", VmName: name, Force: force})
 		if !ok {
 			return fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
 		}

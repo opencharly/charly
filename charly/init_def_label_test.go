@@ -14,8 +14,10 @@ import (
 // build-resolved init contract is read from the embedded init: vocabulary,
 // baked (via the deploykit WriteLabels formatter — the #67 render-DRIVE emitter)
 // into the ai.opencharly.init_def label, parsed back by ExtractMetadata, and the
-// deploy reads — resolveEntrypointFromMeta + resolveInitDefFromMeta — return the
-// VOCAB values, not a hardcoded duplicate.
+// deploy read this file still covers — resolveInitDefFromMeta (the `charly service`
+// management-surface resolver, still charly-core) — returns the VOCAB values, not a
+// hardcoded duplicate. The sibling entrypoint-resolution read (resolveEntrypointFromMeta)
+// moved to candy/plugin-deploy-pod (Cutover B unit 2) and is covered there.
 func TestInitDefLabel_RoundTrip(t *testing.T) {
 	uf, err := embeddedDefaults()
 	if err != nil {
@@ -87,108 +89,10 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 		t.Errorf("parsed init_def = %+v, want %+v", *meta.InitDef, capDef)
 	}
 
-	// Deploy read 1: entrypoint comes from the label (the vocab entrypoint).
-	gotEntry := resolveEntrypointFromMeta(meta)
-	if !reflect.DeepEqual(gotEntry, def.Entrypoint) {
-		t.Errorf("resolveEntrypointFromMeta = %v, want vocab entrypoint %v", gotEntry, def.Entrypoint)
-	}
-
-	// Deploy read 2: management surface comes from the label.
-	gotDef, err := resolveInitDefFromMeta(meta)
-	if err != nil {
-		t.Fatalf("resolveInitDefFromMeta: %v", err)
-	}
-	if gotDef.ManagementTool != def.ManagementTool {
-		t.Errorf("management tool = %q, want %q", gotDef.ManagementTool, def.ManagementTool)
-	}
-	if !reflect.DeepEqual(gotDef.ManagementCommands, def.ManagementCommands) {
-		t.Errorf("management commands = %v, want %v", gotDef.ManagementCommands, def.ManagementCommands)
-	}
-}
-
-// TestResolveEntrypointFromMeta_LegacyLabelAbsent proves the wellKnownInitDefs
-// fallback still drives entrypoint resolution for pre-init_def-label images
-// (meta.InitDef nil): supervisord gets its entrypoint, systemd gets none
-// (boots via the image's own init).
-func TestResolveEntrypointFromMeta_LegacyLabelAbsent(t *testing.T) {
-	cases := []struct {
-		init string
-		want []string
-	}{
-		{"supervisord", []string{"supervisord", "-n", "-c", "/etc/supervisord.conf"}},
-		{"systemd", nil},
-		{"", []string{"sleep", "infinity"}},
-		{"unknown-legacy-init", []string{"sleep", "infinity"}},
-	}
-	for _, tc := range cases {
-		meta := &BoxMetadata{Init: tc.init} // InitDef intentionally nil
-		got := resolveEntrypointFromMeta(meta)
-		if !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("resolveEntrypointFromMeta(Init=%q, no label) = %v, want %v", tc.init, got, tc.want)
-		}
-	}
-}
-
-// TestResolveInitDefFromMeta_LegacyLabelAbsent proves the management-surface
-// fallback still resolves supervisord + systemd from wellKnownInitDefs when
-// the init_def label is absent, and errors on a truly unknown legacy init.
-func TestResolveInitDefFromMeta_LegacyLabelAbsent(t *testing.T) {
-	for _, tc := range []struct{ init, tool string }{
-		{"supervisord", "supervisorctl"},
-		{"systemd", "systemctl"},
-	} {
-		meta := &BoxMetadata{Init: tc.init} // InitDef nil → legacy fallback
-		def, err := resolveInitDefFromMeta(meta)
-		if err != nil {
-			t.Fatalf("resolveInitDefFromMeta(%q): %v", tc.init, err)
-		}
-		if def.ManagementTool != tc.tool {
-			t.Errorf("init %q: management tool = %q, want %q", tc.init, def.ManagementTool, tc.tool)
-		}
-	}
-
-	if _, err := resolveInitDefFromMeta(&BoxMetadata{Init: "vocab-only-custom"}); err == nil {
-		t.Error("resolveInitDefFromMeta with unknown init + no label should error")
-	}
-}
-
-// TestInitDefLabel_CustomInitAtRuntime proves the capability win: an init
-// system declared ONLY in the vocabulary (so absent from wellKnownInitDefs)
-// now resolves at RUNTIME via the baked label — the prior build-only
-// limitation is gone. Both the entrypoint and the management surface come
-// from meta.InitDef even though "myinit" has no registry entry.
-func TestInitDefLabel_CustomInitAtRuntime(t *testing.T) {
-	if _, ok := wellKnownInitDefs["myinit"]; ok {
-		t.Fatal("precondition: myinit must NOT be a well-known init")
-	}
-	meta := &BoxMetadata{
-		Init: "myinit",
-		InitDef: &CapabilityInitDef{
-			Entrypoint:         []string{"myinit", "--run", "/etc/myinit.conf"},
-			ManagementTool:     "myctl",
-			ManagementCommands: map[string]string{"status": "status", "restart": "restart {{.Service}}"},
-		},
-	}
-
-	gotEntry := resolveEntrypointFromMeta(meta)
-	if !reflect.DeepEqual(gotEntry, meta.InitDef.Entrypoint) {
-		t.Errorf("custom init entrypoint = %v, want %v (label-first, no registry entry)", gotEntry, meta.InitDef.Entrypoint)
-	}
-
-	gotDef, err := resolveInitDefFromMeta(meta)
-	if err != nil {
-		t.Fatalf("resolveInitDefFromMeta(custom): %v", err)
-	}
-	if gotDef.ManagementTool != "myctl" {
-		t.Errorf("custom init management tool = %q, want myctl", gotDef.ManagementTool)
-	}
-
-	// Render a management command end-to-end to prove the baked commands are usable.
-	rendered, err := initRenderManagementCommand(gotDef, "restart", "web")
-	if err != nil {
-		t.Fatalf("initRenderManagementCommand: %v", err)
-	}
-	if rendered != "restart web" {
-		t.Errorf("rendered restart command = %q, want %q", rendered, "restart web")
-	}
+	// Deploy read: resolveInitDefFromMeta itself moved to candy/plugin-pod/service_resolve.go
+	// (Cutover B unit 2 service-verb completion — the whole argv-building chain is now
+	// plugin-side); its label-first round-trip coverage + the legacy-fallback and
+	// custom-init-at-runtime cases live in candy/plugin-pod/service_resolve_test.go now. This
+	// test still proves the CORE half — bake (WriteLabels) → parse (ExtractMetadata) →
+	// meta.InitDef round-trips byte-for-byte (asserted above) — which is what stays charly-core.
 }

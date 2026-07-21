@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/deploykit"
 )
 
 // TestEncMount_ShortCircuit_AllMounted verifies defect C fix: when every
@@ -12,16 +14,16 @@ import (
 // keyring and potentially hung on a broken Secret Service provider).
 //
 // The test writes a minimal deploy.yml fixture declaring encrypted volumes
-// for an image, spies on isEncryptedMounted to report all mounted, and
+// for an image, spies on deploykit.IsEncryptedMounted to report all mounted, and
 // spies on resolveEncPassphraseForMount (via the encMountCalledPassphrase
 // test hook) to assert it was NOT called.
 func TestEncMount_ShortCircuit_AllMounted(t *testing.T) {
-	origMounted := isEncryptedMounted
-	defer func() { isEncryptedMounted = origMounted }()
+	origMounted := deploykit.IsEncryptedMounted
+	defer func() { deploykit.IsEncryptedMounted = origMounted }()
 
 	// Spy: report every plain dir as mounted.
 	calls := 0
-	isEncryptedMounted = func(plainDir string) bool {
+	deploykit.IsEncryptedMounted = func(plainDir string) bool {
 		calls++
 		return true
 	}
@@ -38,7 +40,7 @@ func TestEncMount_ShortCircuit_AllMounted(t *testing.T) {
 	// triggering a hang in resolveEncPassphraseForMount.
 	dir := t.TempDir()
 	deployPath := filepath.Join(dir, "deploy.yml")
-	deployYAML := `version: 2026.186.2323
+	deployYAML := `version: 2026.202.0105
 testimg:
   pod:
     image: testimg
@@ -77,14 +79,14 @@ testimg:
 	// Act: call encMount. If the short-circuit works, it should return nil
 	// quickly without calling resolveEncPassphraseForMount. We can't easily
 	// spy on resolveEncPassphraseForMount without refactoring, but the
-	// primary signal is that encMount returns nil and isEncryptedMounted
+	// primary signal is that encMount returns nil and deploykit.IsEncryptedMounted
 	// was called for each volume.
 	err := encMount("testimg", "", "")
 	if err != nil {
 		t.Fatalf("encMount returned error: %v", err)
 	}
 	if calls < 2 {
-		t.Errorf("isEncryptedMounted calls = %d, want ≥ 2 (one per volume)", calls)
+		t.Errorf("deploykit.IsEncryptedMounted calls = %d, want ≥ 2 (one per volume)", calls)
 	}
 }
 
@@ -95,18 +97,18 @@ testimg:
 // ultimately fail, but the failure mode itself proves the short-circuit
 // correctly abstained.
 func TestEncMount_NoShortCircuit_WhenOneUnmounted(t *testing.T) {
-	origMounted := isEncryptedMounted
-	defer func() { isEncryptedMounted = origMounted }()
+	origMounted := deploykit.IsEncryptedMounted
+	defer func() { deploykit.IsEncryptedMounted = origMounted }()
 
 	// Spy: report first volume mounted, second not mounted.
 	var seen []string
-	isEncryptedMounted = func(plainDir string) bool {
+	deploykit.IsEncryptedMounted = func(plainDir string) bool {
 		seen = append(seen, plainDir)
 		return len(seen) == 1 // only the first check returns true
 	}
 
 	dir := t.TempDir()
-	deployYAML := `version: 2026.186.2323
+	deployYAML := `version: 2026.202.0105
 testimg:
   pod:
     image: testimg
