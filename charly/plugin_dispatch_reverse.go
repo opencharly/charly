@@ -18,24 +18,14 @@ import (
 // behalf (F10) — the host is the dispatch BROKER (plugin→host→plugin), since it owns the registry.
 // An OUT-OF-PROCESS target is Invoked WITH the SAME venue executor + build context threaded onto a
 // fresh nested broker (executorInvoker.InvokeWithExecutor — the generalization of invokeStepExecute
-// from OpExecute-only to any op); an IN-PROC target (compiled-in/builtin) is Invoked directly.
-//
-// Lazy-connect (Cutover B unit 6b, InvokeProvider generalization): the target need NOT already be
-// registered. A registry miss falls through the SAME 3-tier fallback chain
-// connectPluginByWordRef already gives the host→plugin adapters (credential_plugin.go,
-// tunnel_plugin.go, …) — (1) already-registered, (2) a baked binary (connectBakedPlugin), (3) a
-// scoped build-from-source scan of the project's own candy closure — so a PLUGIN reaching a peer
-// that happens not to be loaded yet gets the same parity a host adapter already has. Only when all
-// three fail is the unresolved word a loud error.
+// from OpExecute-only to any op); an IN-PROC target (compiled-in/builtin) is Invoked directly. The
+// target must already be registered (loaded at deploy/check); an unresolved word is a loud error.
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
 	prov, ok := providerRegistry.resolve(class, word)
 	if !ok {
-		prov, ok = connectPluginByWordRef(class, word, "")
-	}
-	if !ok {
-		return nil, fmt.Errorf("InvokeProvider: no provider available for %s:%s (not registered, no baked binary, and no project-source candy provides it)", class, word)
+		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it)", class, word)
 	}
 	op := &Operation{Reserved: word, Op: req.GetOp(), Params: req.GetParamsJson(), Env: req.GetEnvJson()}
 	var (
