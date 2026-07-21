@@ -20,15 +20,30 @@ func cliModelLeafPaths(t *testing.T) map[string]bool {
 }
 
 // TestCLIModel_CoversCommands proves the CLI-export seam enumerates the command tree the
-// out-of-process MCP bridge reflects into tools — both hardcoded machinery (box.build,
-// version) and commands contributed via CommandProviders (ssh.tunnel.spice; `secrets` is an
-// EXTERNAL command now — candy/plugin-secrets — so it is absent from this builtin model, as
-// are the C15-externalized clean/settings/candy and the P14 command:alias — candy/plugin-alias —
-// see TestCommandProviders_ExtractedReachMCP. `version` stays a CORE command — pkg/arch's pkgver()
+// out-of-process MCP bridge reflects into tools — hardcoded machinery (version) and commands
+// contributed via CommandProviders (ssh.tunnel.spice; `secrets` is an EXTERNAL command now —
+// candy/plugin-secrets — so it is absent from this builtin model, as are the C15-externalized
+// clean/settings/candy and the P14 command:alias — candy/plugin-alias — see
+// TestCommandProviders_ExtractedReachMCP. `version` stays a CORE command — pkg/arch's pkgver()
 // stamps the package version via it — so it remains present here).
+//
+// `box.build` is DELIBERATELY not asserted here (FINAL/K5 unit 6a M4d): it used to reach this
+// model as a static BoxCmd Kong field; externalizing it (mirroring `pull`'s M4c move) drops it
+// from BOTH model-building paths — the static-struct walk (no longer a field) AND
+// declaringCommandHolders' dynamic walk, which folds in ONLY command-class capabilities that
+// declared a Subcommands catalog (F-CLI-NEST, `list`'s `boxListSubcommands` is the working
+// precedent) — a FLAT command with no declared children is excluded BY DESIGN
+// (TestBuildCLIModel_CheckAndBoxList's own comment documents this for `vm`). Verified LIVE
+// (2026-07, unit 6a) that this is NOT a regression unique to `build`: box.pkg/box.pull/
+// box.generate/box.validate/box.merge/box.reconcile/box.new/box.labels/box.inspect — every
+// OTHER already-externalized flat box verb — are ALSO absent from this model today, on `main`,
+// unasserted anywhere. `box.build` simply had a stale assertion nobody revisited across the nine
+// prior externalizations. Ten box verbs now share this same MCP-tool-discoverability gap —
+// registered as its own thematic batch item in CHANGELOG (a generic bare-leaf mechanism for a
+// flat command, not a per-command declared-catalog workaround), not fixed speculatively here.
 func TestCLIModel_CoversCommands(t *testing.T) {
 	paths := cliModelLeafPaths(t)
-	for _, want := range []string{"box.build", "ssh.tunnel.spice", "version"} {
+	for _, want := range []string{"ssh.tunnel.spice", "version"} {
 		if !paths[want] {
 			t.Errorf("CLI model missing leaf %q", want)
 		}

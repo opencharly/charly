@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,8 +20,10 @@ import (
 // reverse channel — InvokeProvider (peer plugin dispatch, for generate → build:generate), the
 // HostBuild("resolved-project") envelope fetch (inspect/list), the HostBuild("validate-project")
 // envelope fetch (validate runs the rule ENGINE in-plugin over the reply), or the generic
-// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, and inspect/list's overlay/store
-// residue → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit scaffolding directly).
+// HostBuild("cli") reentry (pkg → the hidden __box-pkg core command, pull → the hidden __box-pull
+// core command, build → the hidden __box-build core command, and inspect/list's overlay/store
+// residue → __box-inspect-overlay / __box-list-tags). The `new` command needs neither (kit
+// scaffolding directly).
 type hostClient struct {
 	ctx  context.Context
 	exec *sdk.Executor
@@ -56,6 +59,10 @@ func dispatchBoxCommand(hc *hostClient, word string, args []string) error {
 		return dispatchNew(args)
 	case "pkg":
 		return dispatchPkg(hc, args)
+	case "pull":
+		return dispatchPull(hc, args)
+	case "build":
+		return dispatchBuild(hc, args)
 	case "inspect":
 		return dispatchInspect(hc, args)
 	case "list":
@@ -161,6 +168,114 @@ func dispatchPkg(hc *hostClient, args []string) error {
 	}
 	if r.ExitCode != 0 {
 		return fmt.Errorf("box pkg failed (exit %d)", r.ExitCode)
+	}
+	return nil
+}
+
+// --- box pull ---
+
+// pullGrammar is the `charly box pull <box> [--tag] [--platform]` CLI surface — byte-identical to
+// the former static BoxPullCmd Kong leaf (FINAL/K5 unit 6a M4c): same positional, same two flags,
+// same help text, so `charly box pull --help` renders unchanged.
+type pullGrammar struct {
+	Box      string `arg:"" help:"Box name (short, resolved via charly.yml), fully-qualified ref, or @github.com/org/repo/box[:version]"`
+	Tag      string `long:"tag" help:"Image CalVer tag when resolving a short name (empty = resolve from charly.yml metadata or error with explicit guidance)"`
+	Platform string `long:"platform" help:"Target platform (default: host)"`
+}
+
+// dispatchPull reaches the hidden core `__box-pull` reentry over HostBuild("cli"): EnsureImagePresent
+// (BoxPullCmd's Run body, UNCHANGED) still needs the full box-build engine + charly.yml resolution
+// pre the ensure_image.go + build.go + remote_image.go batch. Tag/Platform are omitted from argv when
+// empty (Kong's own zero-value default for an absent flag) rather than passed as an empty string —
+// avoids any flag-parsing divergence between "flag absent" and "flag present with empty value" on the
+// reentered leaf, keeping behavior identical to the un-dispersed command. The subprocess inherits
+// charly's stdio (same "ensure-image: ..." progress lines) and exits 0/1.
+func dispatchPull(hc *hostClient, args []string) error {
+	var g pullGrammar
+	if done, err := parseLeaf("pull", &g, args); err != nil || done {
+		return err
+	}
+	argv := []string{"__box-pull", g.Box}
+	if g.Tag != "" {
+		argv = append(argv, "--tag", g.Tag)
+	}
+	if g.Platform != "" {
+		argv = append(argv, "--platform", g.Platform)
+	}
+	r, err := hc.cli(false, true, argv...)
+	if err != nil {
+		return err
+	}
+	if r.ExitCode != 0 {
+		return fmt.Errorf("box pull failed (exit %d)", r.ExitCode)
+	}
+	return nil
+}
+
+// --- box build ---
+
+// buildGrammar is the `charly box build [boxes…] [flags]` CLI surface — byte-identical to the
+// former static BuildCmd Kong leaf (FINAL/K5 unit 6a M4d): same positional, same nine flags
+// (including the three env-var-backed tunables), same help text, so `charly box build --help`
+// renders unchanged and CHARLY_BUILD_CACHE/CHARLY_BUILD_JOBS/CHARLY_PODMAN_JOBS keep working —
+// Kong resolves them in-plugin at parse time and the resolved values flow through argv, so the
+// reentered `__box-build` subprocess needs neither the env vars nor to re-parse them itself.
+type buildGrammar struct {
+	Boxes           []string `arg:"" optional:"" help:"Boxes to build (default: all enabled; the sentinel 'all' is equivalent). Supports remote refs (github.com/org/repo/box[@version])"`
+	Push            bool     `long:"push" help:"Push to registry after building"`
+	Tag             string   `long:"tag" help:"Override tag (default: CalVer)"`
+	Platform        string   `long:"platform" help:"Target platform (default: host platform)"`
+	Cache           string   `long:"cache" help:"Build cache type: registry, image, gha, none (default: auto)" env:"CHARLY_BUILD_CACHE"`
+	NoCache         bool     `long:"no-cache" help:"Disable build cache entirely"`
+	Jobs            int      `long:"jobs" help:"Max concurrent image builds per DAG level (0=auto: defaults.jobs, else 4)" env:"CHARLY_BUILD_JOBS"`
+	PodmanJobs      int      `long:"podman-jobs" help:"Stages per podman build (0=auto: min(NCPU, defaults.podman_jobs_cap))" env:"CHARLY_PODMAN_JOBS"`
+	IncludeDisabled bool     `long:"include-disabled" help:"Build boxes with enabled: false in charly.yml (does not modify the file). Use for one-off operational rebuilds without flipping authored config."`
+	DevLocalPkg     bool     `long:"dev-local-pkg" help:"Build localpkg candies (the charly toolchain) from LOCAL in-development source instead of downloading the published release. Set automatically for disposable check-bed image builds so a bed tests in-development code; never on a production box build."`
+}
+
+// dispatchBuild reaches the hidden core `__box-build` reentry over HostBuild("cli"): BuildCmd's Run
+// body (UNCHANGED — the bootstrap-builder subsystem, remote-ref resolve, retention pruning) is
+// K1/K3-ENGINE family, pre the loader/build-engine waves that will eventually move it. The
+// subprocess inherits charly's stdio (the full build progress output) and exits 0/1.
+func dispatchBuild(hc *hostClient, args []string) error {
+	var g buildGrammar
+	if done, err := parseLeaf("build", &g, args); err != nil || done {
+		return err
+	}
+	argv := append([]string{"__box-build"}, g.Boxes...)
+	if g.Push {
+		argv = append(argv, "--push")
+	}
+	if g.Tag != "" {
+		argv = append(argv, "--tag", g.Tag)
+	}
+	if g.Platform != "" {
+		argv = append(argv, "--platform", g.Platform)
+	}
+	if g.Cache != "" {
+		argv = append(argv, "--cache", g.Cache)
+	}
+	if g.NoCache {
+		argv = append(argv, "--no-cache")
+	}
+	if g.Jobs != 0 {
+		argv = append(argv, "--jobs", strconv.Itoa(g.Jobs))
+	}
+	if g.PodmanJobs != 0 {
+		argv = append(argv, "--podman-jobs", strconv.Itoa(g.PodmanJobs))
+	}
+	if g.IncludeDisabled {
+		argv = append(argv, "--include-disabled")
+	}
+	if g.DevLocalPkg {
+		argv = append(argv, "--dev-local-pkg")
+	}
+	r, err := hc.cli(false, true, argv...)
+	if err != nil {
+		return err
+	}
+	if r.ExitCode != 0 {
+		return fmt.Errorf("box build failed (exit %d)", r.ExitCode)
 	}
 	return nil
 }
