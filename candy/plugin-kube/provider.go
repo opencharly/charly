@@ -20,10 +20,11 @@ import (
 // Provider.Invoke) with the FULL #Op marshaled as params_json and a CheckEnv snapshot
 // as env; the kube-exclusive fields ride the desugared plugin input (params.KubeInput —
 // the per-verb fields left core #Op in the schema-compaction cutover). The SAME
-// provider also serves the k3s kubeconfig-merge the deploy seam needs: that caller
-// (k8s_plugin.go's invokeKubePlugin) builds a synthetic op ({method: merge-kubeconfig,
-// kubeconfig, kube_context} in the input map) and reads the result's Message. Because
-// the out-of-process verb path does NOT run the host-side matcher
+// provider also serves the k3s post-provision finalization the deploy seam needs: that
+// caller (k8s_plugin.go's invokeKubePluginWithBroker) builds a synthetic op ({method:
+// k3s-post-provision, artifact_key, deploy_name} in the input map) WITH a
+// reverse-channel broker and reads the result's Message. Because the out-of-process
+// verb path does NOT run the host-side matcher
 // pipeline, this Invoke OWNS the whole verdict:
 // dispatch the method, then evaluate the stdout/stderr/exit_status matchers itself
 // (via the shared sdk implementation — R3), and return the wire {status,message}
@@ -32,8 +33,8 @@ import (
 // kubeEnv is the plugin-side decode of the CheckEnv the host ships as
 // Operation.Env for a `kube:` check step (provider_checkenv.go) — only Mode/Box
 // matter here (kube probes a cluster, not a container, so it needs no container
-// resolution). The merge-kubeconfig deploy seam ships no env (the plugin reads the
-// kubeconfig path + context off the plugin input and uses os.UserHomeDir itself).
+// resolution). The k3s-post-provision deploy seam ships no env (the plugin reads the
+// artifact key / deploy name off the plugin input and uses os.UserHomeDir itself).
 type kubeEnv struct {
 	Box  string `json:"box"`
 	Mode string `json:"mode"` // "live" | "box"
@@ -45,7 +46,7 @@ type provider struct{ pb.UnimplementedProviderServer }
 // the `kube:` check verb AND the `deploy:k8s` SUBSTRATE (F1), distinguished by the
 // request's class: a "deploy" op runs `kubectl apply -k` against the host-generated
 // Kustomize tree (deploy.go); every other op is the `kube:` verb. It decodes the
-// full #Op + the env, handles the merge-kubeconfig deploy seam first, skips in box
+// full #Op + the env, handles the k3s-post-provision deploy seam first, skips in box
 // mode (cluster probes need a reachable cluster, never a disposable `charly check
 // box`), dispatches the method, and self-evaluates the matchers.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
@@ -72,13 +73,20 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 	kit.DecodeInput(op.PluginInput, &in)
 	method := in.Method
 
-	// merge-kubeconfig is the k3s deploy seam (NOT an authored check method): it
-	// merges the retrieved kubeconfig into ~/.kube/config and returns a short
-	// success message the host's invokeKubePlugin reads. No matcher pipeline.
-	if method == "merge-kubeconfig" {
-		msg, err := mergeKubeconfig(in.Kubeconfig, in.KubeContext)
+	// k3s-post-provision is the k3s deploy seam (S3, FINAL/K5 unit 6 — relocated
+	// wholesale from charly/k3s_post.go): retrieve-path check, guest-forward kubeconfig
+	// rewrite, and the kubeconfig merge. Dispatched WITH a reverse-channel broker (the
+	// host's k8s_plugin.go uses InvokeWithExecutor, mirroring the deploy:k8s preresolve
+	// leg) because the guest-forward rewrite needs the "deploy-entity-resolve" HostBuild
+	// seam for its LoadUnified-coupled VM lookup.
+	if method == "k3s-post-provision" {
+		exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
 		if err != nil {
-			return sdk.ResultJSON("fail", "kube: merge-kubeconfig: "+err.Error())
+			return sdk.ResultJSON("fail", "kube: k3s-post-provision: reach host reverse channel: "+err.Error())
+		}
+		msg, err := k3sPostProvision(ctx, exec, k3sPostProvisionParams{ArtifactKey: in.ArtifactKey, DeployName: in.DeployName})
+		if err != nil {
+			return sdk.ResultJSON("fail", "kube: k3s-post-provision: "+err.Error())
 		}
 		return sdk.ResultJSON("pass", msg)
 	}

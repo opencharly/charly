@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -43,6 +41,27 @@ type ProvisionActor interface {
 	RenderProvisionScript(op *spec.Op, distros []string) (string, bool)
 }
 
+// stepConstructCtx is the NARROW, hand-written (non-wire — it never crosses a process
+// boundary, so no CUE-sourcing debt) value TypedStepProvider.ConstructStep needs from
+// the compile-time layer/image context — the S5 fix for the R-item typed-shape leak a
+// core-defined interface previously carried (deploykit.CandyModel / *buildkit.ResolvedBox,
+// both explicitly-named R-item shapes per the plugin skill's boundary-law section). Built
+// once by compileActOp (which already resolves every field for its OWN OpStep/
+// ExternalPluginStep construction) and threaded through unchanged.
+type stepConstructCtx struct {
+	// RunAsUser is the ALREADY-RESOLVED run-as directive (deploykit.ResolveUserSpec's
+	// first return, computed by the caller from op.RunAs + the image's User/UID/GID/Home —
+	// ConstructStep needs the resolved directive, never the raw image identity).
+	RunAsUser string
+	// CandyName is the authoring candy's name (layer.GetName()).
+	CandyName string
+	// PkgFormat is the image's primary build format (img.Pkg) — SystemPackagesStep's Format.
+	PkgFormat string
+	// DistroTags is the image's resolved distro/build-format tag union (img.Tags) —
+	// SystemPackagesStep's package-name cascade (kit.ResolvePackageName).
+	DistroTags []string
+}
+
 // TypedStepProvider is the do:act half of a verb provider whose build/deploy install
 // timeline lowers into a TYPED InstallStep — NOT a RenderProvisionScript shell string.
 // The ONE current member is `service`: its act constructs a ServicePackagedStep whose
@@ -53,12 +72,13 @@ type ProvisionActor interface {
 // of falling through to a generic OpStep. LowersTo names the step kind (the now-removed
 // VerbSpec.LowersTo field's role — package/service were its only users, so the field was
 // deleted and the lowering target lives on the provider); ConstructStep builds the step
-// from the op's plugin_input. A TypedStepProvider therefore also "acts in build/deploy"
-// (opActsInBuildDeploy) even though it is not a ProvisionActor.
+// from the op's plugin_input plus the narrow stepConstructCtx (S5). A TypedStepProvider
+// therefore also "acts in build/deploy" (opActsInBuildDeploy) even though it is not a
+// ProvisionActor.
 type TypedStepProvider interface {
 	Provider
 	LowersTo() spec.StepKind
-	ConstructStep(op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep
+	ConstructStep(op *spec.Op, ctx stepConstructCtx) spec.InstallStep
 }
 
 // BuildEmitter is the build-context act half of a verb provider that renders its

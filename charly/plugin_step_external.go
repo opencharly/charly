@@ -78,6 +78,14 @@ func executeExternalPluginStep(ctx context.Context, s *deploykit.ExternalPluginS
 	var zero spec.DeployReply
 	prov, ok := providerRegistry.ResolveVerb(s.Op.Plugin)
 	if !ok {
+		// S2-consistent lazy-connect fallback (R3 — the SAME chain InvokeProvider's own
+		// registry miss falls back to, plugin_dispatch_reverse.go): a step reached via
+		// RunHostStep is a HOST-side dispatch on the calling plugin's behalf, so a verb
+		// declared in the project's candy closure but not yet connected by anything else
+		// resolves here too, instead of failing loud on a mere connect-ordering gap.
+		prov, ok = connectPluginByWordRef(ClassVerb, s.Op.Plugin, "")
+	}
+	if !ok {
 		return zero, fmt.Errorf("external plugin step %q: verb is not connected at deploy time", s.Op.Plugin)
 	}
 	inv, ok := prov.(executorInvoker)
@@ -103,6 +111,10 @@ func executeExternalPluginStep(ctx context.Context, s *deploykit.ExternalPluginS
 func executeExternalStep(ctx context.Context, s *deploykit.ExternalStep, plan *deploykit.InstallPlan, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
 	var zero spec.DeployReply
 	prov, ok := providerRegistry.resolve(ClassStep, s.Word)
+	if !ok {
+		// S2-consistent lazy-connect fallback — see executeExternalPluginStep above (R3).
+		prov, ok = connectPluginByWordRef(ClassStep, s.Word, "")
+	}
 	if !ok {
 		return zero, fmt.Errorf("external step %q: class:step provider not connected at deploy time", s.Word)
 	}

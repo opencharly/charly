@@ -25,9 +25,10 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 	}
 	switch req.Kind {
 	case "", "deploy", "bundle":
-		// "bundle" is the unit-6b-facing alias (k3s_post's deployVMForwards resolves an
-		// entityRef that may be a bundle key, needing the node's From field for one hop into
-		// a "vm" lookup) — same lookup as the default/"deploy" case, no separate mechanism.
+		// "bundle" is the unit-6b-facing alias (candy/plugin-kube's k3s_post.go
+		// deployVMForwards, S3, resolves an entityRef that may be a bundle key, needing the
+		// node's From field for one hop into a "vm" lookup) — same lookup as the
+		// default/"deploy" case, no separate mechanism.
 		tree, err := resolveTreeRoot(dir)
 		if err != nil {
 			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: resolve deploy tree: %w", err)

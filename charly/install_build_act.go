@@ -37,7 +37,12 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 		// verb (an authored external step KIND like examplestepkind).
 		if prov, ok := providerRegistry.ResolveVerb(op.Plugin); ok {
 			if stepprov, ok := prov.(TypedStepProvider); ok {
-				return stepprov.ConstructStep(op, layer, img)
+				return stepprov.ConstructStep(op, stepConstructCtx{
+					RunAsUser:  userDir,
+					CandyName:  layer.GetName(),
+					PkgFormat:  img.Pkg,
+					DistroTags: img.Tags,
+				})
 			}
 			// An EXTERNAL (out-of-process) plugin verb has no in-proc ProvisionActor
 			// shell — it EXECUTES its deploy-context effect at deploy over the E3b

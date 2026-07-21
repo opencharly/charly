@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
@@ -101,8 +100,8 @@ func (a kitVerbActStepAdapter) LowersTo() spec.StepKind {
 	return kitStepKindToCharly(a.sp.StepKind())
 }
 
-func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
-	return materializeStep(a.sp.ConstructStepDescriptor(op), op, layer, img)
+func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, ctx stepConstructCtx) spec.InstallStep {
+	return materializeStep(a.sp.ConstructStepDescriptor(op), ctx)
 }
 
 // kitStepKindToCharly maps the kit's StepKindName to charly's internal StepKind enum.
@@ -117,30 +116,30 @@ func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
 }
 
 // materializeStep rebuilds the real package-main InstallStep from a candy's
-// kit.StepDescriptor, computing the package-main-only inputs (the run-as-resolved scope,
-// the candy name) that the candy cannot. The load-bearing Reverse() lives on the built
-// step (package main), unchanged from the typed builtin verb's ConstructStep.
-func materializeStep(desc kit.StepDescriptor, op *spec.Op, layer deploykit.CandyModel, img *buildkit.ResolvedBox) spec.InstallStep {
-	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
+// kit.StepDescriptor plus the narrow stepConstructCtx (S5 — the run-as-resolved scope,
+// the candy name, and the image's package format/distro tags) that the candy cannot
+// compute itself. The load-bearing Reverse() lives on the built step (package main),
+// unchanged from the typed builtin verb's ConstructStep.
+func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
 	switch {
 	case desc.ServicePackaged != nil:
 		return &deploykit.ServicePackagedStep{
 			Unit:        desc.ServicePackaged.Unit,
-			TargetScope: deploykit.OpStepScope(userDir),
+			TargetScope: deploykit.OpStepScope(ctx.RunAsUser),
 			Enable:      desc.ServicePackaged.Enable,
-			CandyName:   layer.GetName(),
+			CandyName:   ctx.CandyName,
 		}
 	case desc.SystemPackages != nil:
 		// Repos/Copr/Options come from the top-level package cascade
 		// (compileSystemPackageSteps), NOT a per-op run: {package} step — match the
 		// pre-extraction lowering (Format + PhaseInstall + the cross-distro-resolved name).
 		return &deploykit.SystemPackagesStep{
-			Format:   img.Pkg,
+			Format:   ctx.PkgFormat,
 			Phase:    spec.PhaseInstall,
-			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, img.Tags)},
+			Packages: []string{kit.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, ctx.DistroTags)},
 		}
 	default:
-		panic("materializeStep: empty StepDescriptor for verb in candy " + layer.GetName())
+		panic("materializeStep: empty StepDescriptor for verb in candy " + ctx.CandyName)
 	}
 }
 

@@ -5,7 +5,9 @@ plugin-kube:
             OUT-OF-TREE charly plugin owning ALL Kubernetes cluster interaction: the
             `kube` cluster-probe check VERB, the `deploy:k8s` SUBSTRATE (the
             `target: k8s` workload deploy, F1 — `kubectl apply -k` on the
-            host-generated Kustomize tree), AND the k3s kubeconfig-merge the
+            host-generated Kustomize tree), AND the k3s post-provision finalization
+            (S3, FINAL/K5 unit 6 — relocated wholesale from charly/k3s_post.go: the
+            guest-forward kubeconfig rewrite + the ~/.kube/config merge) the
             k3s-server / target:k8s deploy seam needs — a standalone Go module
             (go.mod + main.go) that speaks the Kubernetes API (client-go dynamic +
             clientcmd) over go-plugin gRPC via the charly plugin SDK
@@ -30,10 +32,12 @@ plugin-kube:
             13-method probe surface
             (nodes/wait-nodes/pods/wait-ready/ingress/ingressclass/storageclass/
             service/lb-external-ip/addons/apply/delete/raw), the deploy:k8s
-            substrate, PLUS the internal merge-kubeconfig deploy seam (k3s_post.go's
-            kubeconfig merge into ~/.kube/config). The R10 consumers are the
-            check-k3s bed (the `kube:` verb, via the k3s-server candy) and the
-            check-k8s-deploy bed (the deploy:k8s substrate).
+            substrate, PLUS the internal k3s-post-provision deploy seam (this
+            plugin's own k3s_post.go: the guest-forward kubeconfig rewrite via the
+            "deploy-entity-resolve" HostBuild seam, then the kubeconfig merge into
+            ~/.kube/config). The R10 consumers are the check-k3s bed (the `kube:`
+            verb, via the k3s-server candy) and the check-k8s-deploy bed (the
+            deploy:k8s substrate).
         plugin:
             providers:
                 - verb:kube
