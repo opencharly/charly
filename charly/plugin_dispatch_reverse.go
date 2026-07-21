@@ -18,8 +18,9 @@ import (
 // InvokeProvider dispatches op on another provider (class, reserved) on the calling plugin's
 // behalf (F10) — the host is the dispatch BROKER (plugin→host→plugin), since it owns the registry.
 // An OUT-OF-PROCESS target is Invoked WITH a venue executor + build context threaded onto a
-// fresh nested broker (executorInvoker.InvokeWithExecutor — the generalization of invokeStepExecute
-// from OpExecute-only to any op); an IN-PROC target (compiled-in/builtin) is Invoked directly. The
+// fresh nested broker (executorInvoker.InvokeWithExecutor — the SAME nested-broker shape
+// RunHostStep's external-step dispatch drives too, generalized from a single fixed OpExecute call
+// to any class/op); an IN-PROC target (compiled-in/builtin) is Invoked directly. The
 // target is resolved from the registry, falling back to a LAZY CONNECT (S2) on a miss — the
 // target plugin need not have been referenced by anything ELSE already loaded; an unresolvable
 // word (registered nowhere AND not connectable from the project's own candy closure) is a loud
