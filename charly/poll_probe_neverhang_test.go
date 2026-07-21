@@ -58,7 +58,7 @@ func TestRunner_PerProbeNeverHang(t *testing.T) {
 		{Plugin: "command", PluginInput: map[string]any{"command": "echo healthy"}, Stdout: matcherEq("ok")}, // must still run after the wedge
 	}
 
-	done := make(chan []CheckResult, 1)
+	done := make(chan []kit.CheckResult, 1)
 	go func() { done <- r.Run(context.Background(), checks) }()
 
 	select {
@@ -66,11 +66,11 @@ func TestRunner_PerProbeNeverHang(t *testing.T) {
 		if len(results) != 2 {
 			t.Fatalf("want 2 results, got %d", len(results))
 		}
-		if results[0].Status != TestFail {
-			t.Errorf("wedged probe: want TestFail (cancelled at per-probe deadline), got %v (%s)", results[0].Status, results[0].Message)
+		if results[0].Status != spec.StatusFail {
+			t.Errorf("wedged probe: want spec.StatusFail (cancelled at per-probe deadline), got %v (%s)", results[0].Status, results[0].Message)
 		}
-		if results[1].Status != TestPass {
-			t.Errorf("probe after the wedge: want TestPass (pass continued), got %v (%s)", results[1].Status, results[1].Message)
+		if results[1].Status != spec.StatusPass {
+			t.Errorf("probe after the wedge: want spec.StatusPass (pass continued), got %v (%s)", results[1].Status, results[1].Message)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("r.Run hung on the wedged probe — per-probe never-hang not enforced (the whole-pass-guillotine regression)")

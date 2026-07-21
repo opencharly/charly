@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -124,7 +123,7 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// A class:step capability may DECLARE its install-step contract (F3): compileActOp builds an
 	// externalStep carrying the plugin-declared Scope/Venue/Gate/Emits.
 	if sc := c.GetStepContract(); m.class == ClassStep && sc != nil {
-		m.contract = &spec.StepContract{Scope: deploykit.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
+		m.contract = &spec.StepContract{Scope: spec.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
 	}
 	// A class:kind capability may declare it decodes a STRUCTURAL entity (F5): runPluginKind folds
 	// its spec.Deploy reply into uf.Bundle instead of landing a flat body opaquely.

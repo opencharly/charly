@@ -170,7 +170,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		tag = ComputeCalVer()
 	}
 
-	images, err := cfg.ResolveAllBox(tag, dir, opts)
+	images, err := ResolveAllBox(cfg, tag, dir, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -443,13 +443,6 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 // Used by the host render-prep's buildBakedMetadata (the env_candy + path_append labels).
 func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.ResolvedBox) []*kit.EnvConfig {
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
-}
-
-// buildStageContext creates the render context passed to a builder plugin's OpResolve leg (via deploykit.BuilderResolveInputFrom).
-// buildStageContext → deploykit.Generator.BuildStageContext (P8 shim). Used by the
-// host resolveInlineBuilderSeam (the render-seam reverse leg, #67).
-func (g *Generator) buildStageContext(layer spec.CandyReader, builderName string, builderDef *BuilderDef, img *buildkit.ResolvedBox, builderRef string) *spec.BuildStageContext {
-	return g.toDeploykit().BuildStageContext(layer, builderName, builderDef, img, builderRef)
 }
 
 // resolveStatus returns the effective status string. Empty defaults to "testing".

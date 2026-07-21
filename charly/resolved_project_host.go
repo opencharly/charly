@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -166,7 +167,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 
 	calver := ComputeCalVer()
 	resolvedBoxes := map[string]*buildkit.ResolvedBox{}
-	for _, name := range cfg.allBoxNames() {
+	for _, name := range cfg.AllBoxNames() {
 		img, ok := cfg.BoxConfig(name)
 		if !ok {
 			continue
@@ -190,7 +191,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 			rp.Boxes[name] = view
 			continue
 		}
-		resolved, err := cfg.ResolveBox(name, calver, dir, opts)
+		resolved, err := ResolveBox(cfg, name, calver, dir, opts)
 		if err != nil {
 			if diags == nil {
 				return nil, fmt.Errorf("resolving box %q: %w", name, err)
@@ -265,6 +266,14 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	if initCfg != nil {
 		rp.Init = initCfg.Init
 	}
+	// ExternalizedBuilders (the registry D-FACT: which builder words are served by an external
+	// out-of-process plugin) is a fixed constant, not project-derived, so the generic
+	// "resolved-project" seam populates it exactly like the "build-prep" (build_resolve_host.go) and
+	// "overlay" (build_overlay.go) seams already do — R3 single source, so a resolved-project
+	// CONSUMER (candy/plugin-installstep's OWN deploykit.Generator, built from THIS envelope) can
+	// dispatch a builder word (externalized vs a project-custom vocabulary builder) without a
+	// SEPARATE host round-trip for the fact.
+	rp.ExternalizedBuilders = externalizedBuilders
 
 	if uf != nil {
 		// kind TEMPLATES (validate localtemplates + check-include pod/vm arms + status k8s/adb).
@@ -292,7 +301,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// build ORDER + auto-intermediates (charly box list targets): ComputeIntermediates adds the
 	// auto-generated intermediate images; ResolveBoxOrder returns them dependency-ordered.
 	if inter, ierr := ComputeIntermediates(resolvedBoxes, layers, cfg, calver); ierr == nil {
-		if order, oerr := ResolveBoxOrder(inter, layers); oerr == nil {
+		if order, oerr := deploykit.ResolveBoxOrder(inter, layers); oerr == nil {
 			for _, name := range order {
 				bt := spec.BuildTarget{Name: name}
 				if b := inter[name]; b != nil {
@@ -318,12 +327,12 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 		return
 	}
 	visited[cfg] = true
-	for _, name := range cfg.allBoxNames() {
+	for _, name := range cfg.AllBoxNames() {
 		qualified := name
 		if prefix != "" {
 			qualified = prefix + "." + name
 		}
-		set := CollectDescriptions(cfg, layers, name)
+		set := deploykit.CollectDescriptions(cfg, layers, name)
 		if set == nil {
 			continue
 		}

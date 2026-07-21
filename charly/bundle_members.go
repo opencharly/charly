@@ -108,7 +108,7 @@ func validateMembers(uf *UnifiedFile) error {
 	for _, owner := range sortedDeployKeys(uf.Bundle) {
 		node := uf.Bundle[owner]
 		for _, memberKey := range sortedMemberKeys(node.Members) {
-			if err := validateDeploymentName(memberKey, owner+" (peer)"); err != nil {
+			if err := spec.ValidateDeploymentName(memberKey, owner+" (peer)"); err != nil {
 				return err
 			}
 			memberNode := node.Members[memberKey]

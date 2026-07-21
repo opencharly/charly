@@ -144,7 +144,7 @@ func boxKeys(m boxMap) []string {
 func boxMapOf(m map[string]spec.BoxConfig) boxMap {
 	out := make(boxMap, len(m))
 	for k, v := range m {
-		out[k] = encodeBox(v)
+		out[k] = spec.EncodeBox(v)
 	}
 	return out
 }

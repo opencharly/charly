@@ -38,7 +38,7 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 
 	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}
 	res := r.invokeVerbProvider(context.Background(), fake, "kube", op)
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("status=%v msg=%q, want pass", res.Status, res.Message)
 	}
 	if res.Message != "saw-op" {

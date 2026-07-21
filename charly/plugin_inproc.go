@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -66,7 +65,7 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 		// A COMPILED-IN command candy may NEST its command(s) under a parent command word
 		// (e.g. candy/plugin-box's generate/validate/… under `box`). The parent rides an
 		// optional Go interface on the plugin's own provider (the SAME srv-interface-detection
-		// pattern registerCompiledPlugin uses for spec.DocParser / kit.RefsDownloader), so
+		// pattern registerCompiledPlugin uses for spec.DocParser / spec.RefsDownloader), so
 		// the compiled-in inprocProvider surfaces it via capMeta.CommandParent() and
 		// collectExternalCommandPlugins nests the dynamic Kong subcommand under that parent. This
 		// is the compiled-in placement of nesting; an out-of-process command declares no parent
@@ -122,10 +121,10 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	if cs, ok := srv.(spec.CandyScanner); ok {
 		activeCandyScanner = cs
 	}
-	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via kit.RefsDownloader —
+	// A compiled-in refs plugin (P7) exposes the typed remote-repo DOWNLOAD via spec.RefsDownloader —
 	// wire it as the active fetch backend so EnsureRepoDownloaded dispatches every cache-miss download
 	// through it (no wire envelope). See candy/plugin-refs.
-	if rd, ok := srv.(kit.RefsDownloader); ok {
+	if rd, ok := srv.(spec.RefsDownloader); ok {
 		activeRefsDownloader = rd
 	}
 }

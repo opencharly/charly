@@ -16,7 +16,7 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 
 	op := &spec.Op{Plugin: "exampleprobe", PluginInput: map[string]any{"marker": "unit-marker"}}
 	res := r.runPluginVerb(context.Background(), op)
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("exampleprobe status=%v msg=%q, want pass", res.Status, res.Message)
 	}
 	if res.Message != "unit-marker" {
@@ -24,7 +24,7 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 	}
 
 	miss := r.runPluginVerb(context.Background(), &spec.Op{Plugin: "nonexistent-verb"})
-	if miss.Status != TestFail {
+	if miss.Status != spec.StatusFail {
 		t.Fatalf("unregistered plugin verb status=%v, want fail", miss.Status)
 	}
 }

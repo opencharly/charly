@@ -262,7 +262,7 @@ func resolveLocalName(name, projectDir string, preferKind RefKind) (*DeployRef, 
 		// deploy ref (`charly bundle add charly.<image>`) resolves the same way every
 		// other command resolves a box name. Bare names hit the root map
 		// exactly as the previous flat `uf.Box[name]` did.
-		if _, _, present := uf.ProjectConfig().resolveBoxRef(name); present {
+		if _, _, present := uf.ProjectConfig().ResolveBoxRef(name); present {
 			inImageYml = true
 			resolvedImgPath = imgYml
 		}

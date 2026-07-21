@@ -76,7 +76,7 @@ func TestDeployConfigLookup_PresentAndAbsent(t *testing.T) {
 
 // TestSaveDeployState_AbortOnInvalidExistingFile pins the post-2026-05-16
 // data-loss fix: when LoadBundleConfig returns an error (e.g. because
-// the file fails validateDeployRequiresBox), saveDeployState MUST
+// the file fails spec.ValidateDeployRequiresBox), saveDeployState MUST
 // ABORT and leave the file byte-identical — not silently construct a
 // fresh empty config and truncate the on-disk file.
 //
@@ -90,7 +90,7 @@ func TestSaveDeployState_AbortOnInvalidExistingFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	// Pre-existing deploy.yml that fails validateDeployRequiresBox —
+	// Pre-existing deploy.yml that fails spec.ValidateDeployRequiresBox —
 	// `legacy-entry` is target:pod but lacks the required `box:`.
 	initialYAML := `version: 2026.202.0105
 provides:

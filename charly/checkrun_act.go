@@ -34,9 +34,10 @@ import (
 
 // resolveProvisionScript resolves an op's state-provision verb to its ProvisionActor
 // and renders the act shell — the SINGLE Op→act-shell seam shared by the runtime act
-// path (runProvisionAct) AND every install-emit path: emitTasks' `case "plugin"` (the
-// box build via writeCandySteps→emitTasks, and the pod overlay via candy/plugin-installstep's
-// step:op OpEmit → the host step-emit seam → stepEmitOp → emitTasks) AND renderOpCommand
+// path (runProvisionAct) AND every install-emit path: deploykit.Generator.EmitTasks'
+// `case "plugin"` (the box build via WriteCandySteps→EmitTasks, and the pod overlay via
+// candy/plugin-installstep's step:op OpEmit rendering directly against its OWN
+// "resolved-project"-built deploykit.Generator's EmitTasks) AND renderOpCommand
 // (the local/vm deploy targets) — the
 // act-emit enabler, so a state-provision verb provisions identically whether run live,
 // baked into an image, or applied at deploy (R3).
@@ -71,10 +72,10 @@ func resolveProvisionScript(op *spec.Op, distros []string) (string, bool) {
 // provision renderer (an action verb whose handler already acts, or a pure
 // observe verb) so the caller falls through to the normal dispatch. Resolution
 // (incl. the `plugin:` indirection) is the shared resolveProvisionScript.
-func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (CheckResult, bool) {
+func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb string) (spec.CheckResult, bool) {
 	script, ok := resolveProvisionScript(c, h.kr.Distros())
 	if !ok {
-		return CheckResult{}, false
+		return spec.CheckResult{}, false
 	}
 	if h.kr.Mode() == RunModeBox {
 		return skipf(c, "do: act not meaningful under charly check box (no running target)"), true
@@ -131,6 +132,3 @@ func renderOpCommand(s *deploykit.OpStep) (string, error) {
 	}
 	return script, nil
 }
-
-// shQuoteArg single-quotes an argument for POSIX shell embedding (re-export).
-func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }

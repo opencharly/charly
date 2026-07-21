@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -96,7 +97,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 	}
 
 	// --- resolve user context (in order, parents first) ---
-	order, err := ResolveBoxOrder(gen.Boxes, gen.Candies)
+	order, err := deploykit.ResolveBoxOrder(gen.Boxes, gen.Candies)
 	if err != nil {
 		return spec.BuildResolveReply{Error: errString(fmt.Errorf("resolving box order: %w", err))}, nil
 	}
@@ -164,7 +165,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 	if len(c.Boxes) > 0 {
 		// order already resolved above
 	} else {
-		levels, err = ResolveBoxLevels(gen.Boxes, gen.Candies)
+		levels, err = deploykit.ResolveBoxLevels(gen.Boxes, gen.Candies)
 		if err != nil {
 			return spec.BuildResolveReply{Error: errString(err)}, nil
 		}
@@ -220,7 +221,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		Jobs:            int64(resolveBuildJobs(c)),
 		PodmanJobs:      int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
 		Cache:           c.Cache,
-		KeepImages:      int64(resolveIntPtr(def.KeepImages, nil, keepImagesFallback)),
+		KeepImages:      int64(resolveIntPtr(def.KeepImages)),
 		ResolvedProject: rp,
 	}, nil
 }
