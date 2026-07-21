@@ -1,26 +1,43 @@
 plugin-clean:
     candy:
-        version: 2026.181.0001
+        version: 2026.202.1400
         description: |-
             COMPILED-IN charly COMMAND-class plugin that OWNS the externalized `charly clean`
             CLI — the build-artifact retention/prune surface. The plugin owns the command end to
-            end: the flag grammar (--dry-run / --images / --check / --keep / --invalidate), the
-            category orchestration, the report output, and the local pkg/arch makepkg sweep
+            end: the flag grammar (--dry-run / --images / --check / --deep / --keep / --invalidate),
+            the category orchestration, the report output, and the local pkg/arch makepkg sweep
             (cleanMakepkgArtifacts — a single-caller pure file op moved out of core into the
             plugin). No plugin-specific command LOGIC is left in core.
 
+            --deep is the store-wide untagged/dangling-image purge category — the CLI-only-
+            interface gap-closing capability for issue #173: a multi-stage build's INTERMEDIATE
+            stage images are only ever labeled at the FINAL stage (WriteLabels emits at the end of
+            the last stage), so they accumulate as unlabeled dangling images the default
+            charly-labeled sweep (images/DanglingIDs, no flag needed) can never see. `--deep`
+            removes EVERY untagged image in local storage, respecting the SAME InUse/live-build
+            backstops as the default sweep (never a tagged image, never a container-referenced
+            one, never mid-build — see pruneDanglingImages/selectDanglingImages in
+            charly/retention.go); removing a dangling image also frees any layer blobs it alone
+            held (podman's overlay storage GCs an unreferenced layer on last-reference removal),
+            so this is EFFECTIVELY a dangling-image-plus-unused-layer prune. `--deep` NEVER fires
+            implicitly on a plain `charly clean` (R5: zero default-behavior change) — it is
+            strictly opt-in, mirroring `--images`/`--check`'s "runs ONLY this category" semantics.
+            `--deep --dry-run` is the safe default probe: it reports the would-remove count + the
+            total reclaimable bytes (DeepBytes, summed from each candidate's reported storage
+            Size) and touches nothing.
+
             The ONE thing the plugin cannot compute itself is the SHARED retention engine
-            (pruneImagesByRetention / pruneCheckRuns / pruneBuildCandyDirs / invalidateImageTags +
-            the charly-labeled image-tag CalVer/label inventory). That engine STAYS core
-            (charly/retention.go) because it is MULTI-CALLER — `charly box build`, `charly check
-            run`, and `charly box list tags` all use it — so duplicating it into the plugin would
-            violate R3. The plugin reaches it via the generic "retention" HostBuild seam
-            (charly/host_build_retention.go, spec.RetentionRequest → spec.RetentionReply), which
-            resolves the project retention defaults (keep_images / keep_check_runs via
-            ResolveRuntime + LoadConfig) host-side and returns the removed refs/dirs/paths +
-            effective counts. "retention" is a class-generic action noun, not a provider word
-            (F11). This is the same "plugin owns the logic + a generic seam for the core-coupled
-            bits" doctrine the vm + pod deploy plugins established.
+            (pruneImagesByRetention / pruneCheckRuns / pruneBuildCandyDirs / invalidateImageTags /
+            pruneDeepDanglingImages + the charly-labeled image-tag CalVer/label inventory). That
+            engine STAYS core (charly/retention.go) because it is MULTI-CALLER — `charly box
+            build`, `charly check run`, and `charly box list tags` all use it — so duplicating it
+            into the plugin would violate R3. The plugin reaches it via the generic "retention"
+            HostBuild seam (charly/host_build_retention.go, spec.RetentionRequest →
+            spec.RetentionReply), which resolves the project retention defaults (keep_images /
+            keep_check_runs via ResolveRuntime + LoadConfig) host-side and returns the removed
+            refs/dirs/paths + effective counts. "retention" is a class-generic action noun, not a
+            provider word (F11). This is the same "plugin owns the logic + a generic seam for the
+            core-coupled bits" doctrine the vm + pod deploy plugins established.
 
             clean is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
             Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
@@ -34,9 +51,10 @@ plugin-clean:
             → resolve(ClassCommand,"clean") → dispatchInProcCommand → Invoke(OpRun) with the
             threaded in-proc reverse channel), so NewMeta advertises command:clean while the
             served CUE schema carries no plugin_input (the args are plain CLI tokens). The R10
-            witness is the disposable check-commands-local bed: `charly clean --dry-run` exits 0
-            and prints the would-remove retention report, proving the externalized command + the
-            in-proc HostBuild retention dispatch end-to-end.
+            witness is the disposable check-commands-local bed: `charly clean --dry-run` AND
+            `charly clean --deep --dry-run` both exit 0 and print their would-remove reports,
+            proving the externalized command + the in-proc HostBuild retention dispatch end-to-end
+            for both the charly-labeled and the store-wide sweep.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-clean
             providers:
@@ -45,10 +63,11 @@ plugin-clean:
             - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
               # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
               # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-              # deterministic check every candy ships. The full `charly clean` end-to-end — the compiled-in
-              # in-proc HostBuild("retention") dispatch: `charly clean --dry-run` → exit 0 with the
-              # would-remove report — is exercised by the live R10 bed (check-commands-local).
-              check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end (the in-proc HostBuild retention dispatch) is exercised by the live R10 (check-commands-local)
+              # deterministic check every candy ships. The full `charly clean` end-to-end, INCLUDING
+              # --deep — the compiled-in in-proc HostBuild("retention") dispatch: `charly clean
+              # --dry-run` / `charly clean --deep --dry-run` → exit 0 with the would-remove report —
+              # is exercised by the live R10 bed (check-commands-local).
+              check: the clean command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly clean` end-to-end, INCLUDING --deep (the in-proc HostBuild retention dispatch), is exercised by the live R10 (check-commands-local)
               id: clean-module-present
               context:
                 - build

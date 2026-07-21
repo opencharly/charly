@@ -296,40 +296,95 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 	return removed, nil
 }
 
-// pruneDanglingCharlyImages removes UNTAGGED (dangling) charly-built images —
-// the residue tag-retention leaves behind (an untagged id) plus dead build
-// intermediates. Scope-guarded three ways: only images carrying the
-// ai.opencharly.box label (never a foreign image), only while NO build is live
-// (an intermediate may be a parent of an in-flight build), and `rmi` without
-// -f (a parent of a tagged image / an in-use id is refused and silently
-// skipped — the same backstop tag retention relies on).
-func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
-	if _, _, live := liveBuildFloor(); live > 0 {
-		return nil, nil // never delete images while any build is in flight
-	}
+// listDanglingImages lists every UNTAGGED (dangling) image in local storage — charly-built or
+// not. Package-level var for testability (same pattern as kit.ListLocalImages /
+// listContainerImageRefs): a test stubs this so the pure selection + dry-run logic in
+// pruneDanglingImages is deterministic without touching the real engine.
+var listDanglingImages = defaultListDanglingImages
+
+func defaultListDanglingImages(engine string) ([]kit.LocalImageInfo, error) {
 	out, err := exec.Command(kit.EngineBinary(engine), "images", "--all", "--filter", "dangling=true", "--format", "json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("listing dangling images: %w", err)
 	}
-	imgs, err := kit.ParseLocalImagesJSON(out)
-	if err != nil {
-		return nil, err
-	}
-	var removed []string
+	return kit.ParseLocalImagesJSON(out)
+}
+
+// selectDanglingImages is the PURE selection predicate behind both dangling-image sweeps: given
+// every listed dangling image, decide which are candidates for removal. onlyCharly=true is the
+// default `charly clean` sweep (only images carrying the ai.opencharly.box label — never a
+// foreign image); onlyCharly=false is the `charly clean --deep` store-wide sweep (every untagged
+// image, INCLUDING unlabeled multi-stage build intermediates — WriteLabels stamps
+// ai.opencharly.* only on the FINAL build stage, so an intermediate stage image is never
+// charly-labeled and is invisible to the default sweep; this is the R4-closing gap --deep
+// exists to close). No InUse check here: a dangling (untagged) image is essentially never a
+// running container's OWN image reference, and the real backstop is the unforced `rmi` at
+// removal time (below), which refuses anything still referenced by a container or a kept tag.
+func selectDanglingImages(imgs []kit.LocalImageInfo, onlyCharly bool) []kit.LocalImageInfo {
+	var out []kit.LocalImageInfo
 	for _, im := range imgs {
-		if im.Labels[spec.LabelBox] == "" {
+		if onlyCharly && im.Labels[spec.LabelBox] == "" {
 			continue // not charly-built
 		}
+		out = append(out, im)
+	}
+	return out
+}
+
+// pruneDanglingImages is the shared engine behind the charly-labeled dangling sweep (default
+// `charly clean`) and the store-wide `--deep` purge (`charly clean --deep`): list, select
+// (selectDanglingImages), then `rmi` each candidate — WITHOUT -f, so an image still referenced
+// by a container or held by an in-flight build is refused and silently skipped (the same
+// backstop tag retention relies on). Guarded like every other image-removing sweep in this file:
+// never while ANY build is live (an untagged intermediate may be a parent of an in-flight
+// build). Returns the removed (or would-remove, under dryRun) image IDs and the sum of their
+// reported Size in bytes — the "reclaimable" figure `--deep --dry-run` reports; a real run's
+// actually-freed bytes can differ slightly if `rmi` refuses a candidate the dry-run listed.
+func pruneDanglingImages(engine string, onlyCharly, dryRun bool) ([]string, int64, error) {
+	if _, _, live := liveBuildFloor(); live > 0 {
+		return nil, 0, nil // never delete images while any build is in flight
+	}
+	imgs, err := listDanglingImages(engine)
+	if err != nil {
+		return nil, 0, err
+	}
+	var removed []string
+	var totalBytes int64
+	for _, im := range selectDanglingImages(imgs, onlyCharly) {
 		if dryRun {
 			removed = append(removed, im.ID)
+			totalBytes += im.Size
 			continue
 		}
 		if err := exec.Command(kit.EngineBinary(engine), "rmi", im.ID).Run(); err != nil {
 			continue // parent of a kept image / in use — expected, keep
 		}
 		removed = append(removed, im.ID)
+		totalBytes += im.Size
 	}
-	return removed, nil
+	return removed, totalBytes, nil
+}
+
+// pruneDanglingCharlyImages removes UNTAGGED (dangling) charly-built images — the residue
+// tag-retention leaves behind (an untagged id) plus dead build intermediates that happen to
+// carry the ai.opencharly.box label. The default `charly clean` category; see
+// pruneDanglingImages for the shared engine.
+func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
+	ids, _, err := pruneDanglingImages(engine, true, dryRun)
+	return ids, err
+}
+
+// pruneDeepDanglingImages removes EVERY untagged (dangling) image in local storage — the
+// store-wide `charly clean --deep` category. Unlike pruneDanglingCharlyImages, it is NOT
+// restricted to the ai.opencharly.box label: a multi-stage build's intermediate stage images
+// (`FROM ... AS stagename`) are only ever labeled at the FINAL stage (WriteLabels emits at the
+// end of the last stage), so they accumulate as unlabeled dangling images no default-category
+// sweep can ever see — the gap this category exists to close. Removing a dangling image via
+// `rmi` also frees any layer blobs it alone referenced (podman's overlay storage GCs an
+// unreferenced layer the moment its last referencing image is removed), so this is EFFECTIVELY
+// a dangling-image-plus-unused-layer prune with a single engine call per image, not two.
+func pruneDeepDanglingImages(engine string, dryRun bool) ([]string, int64, error) {
+	return pruneDanglingImages(engine, false, dryRun)
 }
 
 // buildahStagingGlobs are the /var/tmp staging-dir patterns buildah/podman
