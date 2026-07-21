@@ -171,12 +171,6 @@ func (g *Generator) resolveInlineBuilderSeam(candyName, bName string, bDef *Buil
 	return reply.InlineFragment, nil
 }
 
-// emitTasks → deploykit.Generator.EmitTasks (P8 shim). Core resolves the render
-// state via toDeploykit() (seams wired) and delegates the byte-producing emit.
-func (g *Generator) emitTasks(b *strings.Builder, layer spec.CandyReader, img *buildkit.ResolvedBox, ops []spec.Op, buildDir, contextRelPrefix string) (string, error) {
-	return g.toDeploykit().EmitTasks(b, layer, img, ops, buildDir, contextRelPrefix)
-}
-
 // emitPluginFragment renders a plugin verb's BUILD-context Containerfile fragment
 // via the provider's OpEmit Invoke — placement-agnostic above the registry (in-proc
 // for a builtin, over go-plugin gRPC for an external connected by the build-time
@@ -193,20 +187,20 @@ func emitPluginFragment(prov Provider, op *spec.Op, img *buildkit.ResolvedBox) (
 	if img != nil {
 		distros = img.Tags
 	}
-	return invokeOpEmitFragment(context.Background(), prov, op.Plugin, params, distros)
+	return invokeOpEmitFragment(context.Background(), prov, op.Plugin, params, spec.BuildEnv{Distros: distros})
 }
 
 // invokeOpEmitFragment is the ONE OpEmit → EmitReply → empty-guard → Fragment path (R3),
 // shared by the build-context VERB emit (emitPluginFragment, via emitTasks) AND the
 // build-context external-STEP emit (ociEmitStep, F-STEP-EMIT). It Invokes
 // the provider's OpEmit with the already-marshalled params (a verb's plugin_input, or a
-// step's opaque Payload) and a spec.BuildEnv descriptor, decodes the EmitReply, and returns
-// the Containerfile fragment — failing LOUDLY on an empty fragment (a runtime-/deploy-only
+// step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the EmitReply,
+// and returns the Containerfile fragment — failing LOUDLY on an empty fragment (a runtime-/deploy-only
 // capability wrongly asked to build-emit; never bake nothing silently, R4). ctx MAY carry an
 // in-proc reverse channel (sdk.ContextWithExecutor) so a HOST-COUPLED plugin can call back
 // HostBuild during its OpEmit; a PURE plugin ignores it and returns the fragment directly.
-func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, params []byte, distros []string) (string, error) {
-	return invokeOpEmitFragmentOpt(ctx, prov, word, params, distros, false)
+func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, params []byte, env spec.BuildEnv) (string, error) {
+	return invokeOpEmitFragmentOpt(ctx, prov, word, params, env, false)
 }
 
 // invokeOpEmitFragmentOpt is the OpEmit → EmitReply → Fragment core shared by the guarding
@@ -216,8 +210,13 @@ func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, param
 // fragment, used by deploykit.OCITarget for a COMPILER-EMITTED typed step whose render is legitimately empty
 // for a given instance (an empty shell snippet, a packaged service with no overrides + enable=false,
 // a custom service with no unit text — exactly the cases the former the former in-core emit* returned nothing).
-func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, params []byte, distros []string, allowEmpty bool) (string, error) {
-	env, err := marshalJSON(spec.BuildEnv{Distros: distros})
+// env carries the caller-populated spec.BuildEnv descriptor — a plain verb emit sets only Distros;
+// the class:step emit (ociSpliceClassStepEmit) additionally sets Image/DevLocalPkg/ImageBuildDir/
+// ContextRelPrefix so a HOST-COUPLED step word (system-packages/builder/local-pkg-install/op) can
+// render its fragment directly against its OWN "resolved-project"-built deploykit.Generator, with
+// NO extra host round-trip beyond this ONE Invoke every word already receives.
+func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, params []byte, buildEnv spec.BuildEnv, allowEmpty bool) (string, error) {
+	env, err := marshalJSON(buildEnv)
 	if err != nil {
 		return "", fmt.Errorf("marshal build env: %w", err)
 	}

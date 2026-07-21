@@ -265,6 +265,14 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	if initCfg != nil {
 		rp.Init = initCfg.Init
 	}
+	// ExternalizedBuilders (the registry D-FACT: which builder words are served by an external
+	// out-of-process plugin) is a fixed constant, not project-derived, so the generic
+	// "resolved-project" seam populates it exactly like the "build-prep" (build_resolve_host.go) and
+	// "overlay" (build_overlay.go) seams already do — R3 single source, so a resolved-project
+	// CONSUMER (candy/plugin-installstep's OWN deploykit.Generator, built from THIS envelope) can
+	// dispatch a builder word (externalized vs a project-custom vocabulary builder) without a
+	// SEPARATE host round-trip for the fact.
+	rp.ExternalizedBuilders = externalizedBuilders
 
 	if uf != nil {
 		// kind TEMPLATES (validate localtemplates + check-include pod/vm arms + status k8s/adb).

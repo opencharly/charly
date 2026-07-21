@@ -78,7 +78,7 @@ func TestEmitTasks_UserCoalescing(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestEmitTasks_CommandEmitsRun(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestEmitTasks_UserSwitches(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEmitTasks_OrderPreserved(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestEmitTasks_ParentDirAutoInsert(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestEmitTasks_ParentDirSuppressedWhenDeclared(t *testing.T) {
 	}
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, dir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestEmitTasks_WriteStagesContent(t *testing.T) {
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	var b strings.Builder
 	buildDir := filepath.Join(dir, "test-img")
-	_, err := g.emitTasks(&b, layer, testResolvedBox(), ops, buildDir, ".build/test-img")
+	_, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), ops, buildDir, ".build/test-img")
 	if err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}

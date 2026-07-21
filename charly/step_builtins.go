@@ -24,12 +24,14 @@ package main
 //     preresolver reads ApkInstall at deploy, and Reboot's effect is its host-side guest reboot over
 //     RunHostStep → rebootVenueAndWait, unchanged).
 //   - The HOST-COUPLED SystemPackages (C1.2) + Builder (C1.3) + LocalPkgInstall (C1.4) + Op (C1.5)
-//     kinds — their OpEmit calls back the host's "step-emit" host-builder for a render they cannot do
-//     across the process boundary (SystemPackages needs the DistroDef-format templates; Builder needs
-//     the multi-stage buildStageContext + RenderTemplate engine; LocalPkgInstall calls deploykit's
-//     pure RenderLocalPkgImageInstall/BuildLocalPkgOnHost + host-dir staging; Op
-//     needs the RICHEST Generator.emitTasks per-verb render pipeline — COPY staging, op coalescing).
-//     See step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder, stepEmitLocalPkgInstall,
-//     stepEmitOp). Their DEPLOY legs (SystemPackages/Builder/LocalPkgInstall host-engine via
-//     RunHostStep → deploykit.RenderHostPackageCommand / runVenueBuilderStep / deploykit.ExecLocalPkgInstall;
-//     Op the act-OpStep resolveProvisionScript / renderOpCommand path) are likewise unchanged.
+//     kinds — the plugin renders these DIRECTLY against its OWN "resolved-project"-built
+//     deploykit.Generator (fetched ONCE per project dir via HostBuild("resolved-project"), cached)
+//     instead of calling back a host-side renderer (SystemPackages resolves the box's DistroDef from
+//     the envelope; Builder uses dg.BuildStageContext + kit.BuilderResolve/buildkit.RenderTemplate;
+//     LocalPkgInstall calls deploykit.RenderLocalPkgImageInstall directly — a pure function of the
+//     step + a few BuildEnv scalars; Op drives dg.EmitTasks, the RICHEST per-verb render pipeline —
+//     COPY staging, op coalescing). See candy/plugin-installstep/plugin.go (emitSystemPackages,
+//     emitBuilder, emitLocalPkgInstall, emitOp). Their DEPLOY legs (SystemPackages/Builder/
+//     LocalPkgInstall host-engine via RunHostStep → deploykit.RenderHostPackageCommand /
+//     runVenueBuilderStep / deploykit.ExecLocalPkgInstall; Op the act-OpStep resolveProvisionScript /
+//     renderOpCommand path) are likewise unchanged.

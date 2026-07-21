@@ -34,9 +34,10 @@ import (
 
 // resolveProvisionScript resolves an op's state-provision verb to its ProvisionActor
 // and renders the act shell — the SINGLE Op→act-shell seam shared by the runtime act
-// path (runProvisionAct) AND every install-emit path: emitTasks' `case "plugin"` (the
-// box build via writeCandySteps→emitTasks, and the pod overlay via candy/plugin-installstep's
-// step:op OpEmit → the host step-emit seam → stepEmitOp → emitTasks) AND renderOpCommand
+// path (runProvisionAct) AND every install-emit path: deploykit.Generator.EmitTasks'
+// `case "plugin"` (the box build via WriteCandySteps→EmitTasks, and the pod overlay via
+// candy/plugin-installstep's step:op OpEmit rendering directly against its OWN
+// "resolved-project"-built deploykit.Generator's EmitTasks) AND renderOpCommand
 // (the local/vm deploy targets) — the
 // act-emit enabler, so a state-provision verb provisions identically whether run live,
 // baked into an image, or applied at deploy (R3).
