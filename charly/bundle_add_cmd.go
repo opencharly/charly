@@ -543,7 +543,7 @@ func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 		return &spec.BundleNode{Target: "local"}, "local", nil
 	}
 	// RCA #9 (FINAL/K5 unit 6a, live-probe-caught): try the REAL tree resolution FIRST — now
-	// "vm:"-prefix-aware via resolveDeployNodeByPath's own splitVmAddress use (RCA #8) — instead
+	// "vm:"-prefix-aware via resolveDeployNodeByPath's own vmshared.SplitVmAddress use (RCA #8) — instead
 	// of unconditionally short-circuiting to a synthetic Target-only placeholder for ANY
 	// "vm:"-prefixed name. The old unconditional shortcut meant a "vm:"-prefixed del NEVER saw
 	// the tree at all: it "resolved" successfully with a bare node (no From, no children), which
@@ -558,7 +558,7 @@ func (c *deployDelCmd) resolveDelNode() (*spec.BundleNode, string, error) {
 			}
 		}
 	}
-	if _, isVm := splitVmAddress(c.Name); isVm {
+	if _, isVm := vmshared.SplitVmAddress(c.Name); isVm {
 		// Fallback ONLY for a genuine tree-absence: a "vm:"-prefixed address with no matching
 		// tree entry (the deploy was removed from charly.yml, or never had one — e.g. a bare
 		// `charly vm create --domain` with no deploy entry). The synthetic Target-only
@@ -769,7 +769,7 @@ func resolveVmEntity(deployName string, node *spec.BundleNode) string {
 		return node.From
 	}
 	if strings.HasPrefix(deployName, "vm:") {
-		if vmName, perr := vmNameFromDeployName(deployName); perr == nil {
+		if vmName, perr := vmshared.VmNameFromDeployName(deployName); perr == nil {
 			return vmName
 		}
 	}
