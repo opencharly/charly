@@ -37,7 +37,12 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 		// verb (an authored external step KIND like examplestepkind).
 		if prov, ok := providerRegistry.ResolveVerb(op.Plugin); ok {
 			if stepprov, ok := prov.(TypedStepProvider); ok {
-				return stepprov.ConstructStep(op, layer, img)
+				return stepprov.ConstructStep(op, stepConstructCtx{
+					RunAsUser:  userDir,
+					CandyName:  layer.GetName(),
+					PkgFormat:  img.Pkg,
+					DistroTags: img.Tags,
+				})
 			}
 			// An EXTERNAL (out-of-process) plugin verb has no in-proc ProvisionActor
 			// shell — it EXECUTES its deploy-context effect at deploy over the E3b
@@ -66,7 +71,8 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 			// DECLARING a StepContract (F3, e.g. examplestepkind). The opaque Payload is the op's
 			// plugin_input, and Scope/Venue/Gate come from the plugin's declared contract. The
 			// host walks it via the open default arm + dispatches OpExecute to the serving plugin
-			// (executeExternalStep). The C1.1 build-emit-only class:step words never reach here —
+			// (RunHostStep's invokeExternalStep → InvokeProvider). The C1.1 build-emit-only
+			// class:step words never reach here —
 			// `file` is a verb (handled above), and the other six (shell-hook/shell-snippet/
 			// service-packaged/service-custom/repo-change/apk-install) are compiler-emitted NATIVE
 			// step kinds, never authored as a `run: plugin:` op.
