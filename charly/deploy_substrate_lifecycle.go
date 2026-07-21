@@ -93,8 +93,8 @@ type substrateLifecycle interface {
 }
 
 // substrateLifecycles maps an external deploy SUBSTRATE word → its host-side lifecycle
-// hook. Populated at package-var init time (before any init(), like registerDeployPreresolver
-// + registerDedicatedBuiltin), so the lookup is race-free.
+// hook. Populated at package-var init time (before any init(), like
+// registerDedicatedBuiltin), so the lookup is race-free.
 var (
 	substrateLifecyclesMu sync.RWMutex
 	substrateLifecycles   = map[string]substrateLifecycle{}

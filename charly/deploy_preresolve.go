@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/opencharly/sdk/kit"
@@ -39,44 +38,28 @@ import (
 type deployPreresolver func(name, dir string, node *spec.BundleNode, plans []*spec.InstallPlan) (json.RawMessage, error)
 
 // deployPreresolvers maps an external deploy SUBSTRATE word → its host-side preresolver.
-// Populated at package-var init time (before any init(), like registerDedicatedBuiltin),
-// so the lookup is race-free.
+// Every entry today is WIRE-BACKED (F6, unit 6a): android and k8s — the only two
+// substrates that ever needed this hook — moved their preresolve bodies to
+// candy/plugin-adb and candy/plugin-kube, so registerPluginDeployPreresolver is
+// currently the SOLE writer. The map (and pluginPreresolverWords, tracking which
+// entries are wire-backed) stay keyed generically, not android/k8s-specific, so a
+// future substrate needing host-resolved venue data can register through the same
+// seam without a new mechanism.
 var (
-	deployPreresolversMu sync.RWMutex
-	deployPreresolvers   = map[string]deployPreresolver{}
-	// pluginPreresolverWords tracks which preresolvers are WIRE-BACKED (plugin-registered at
-	// load), so registerPluginDeployPreresolver may REPLACE one on reconnect but never shadow a
-	// compiled-in body (k8s/android).
+	deployPreresolversMu   sync.RWMutex
+	deployPreresolvers     = map[string]deployPreresolver{}
 	pluginPreresolverWords = map[string]bool{}
 )
 
-// registerDeployPreresolver records one COMPILED-IN substrate's preresolver (k8s/android). Panics
-// on a duplicate word (a startup invariant, like the registry's duplicate-provider panic).
-func registerDeployPreresolver(word string, fn deployPreresolver) {
-	if word == "" || fn == nil {
-		panic("registerDeployPreresolver: empty word or nil preresolver")
-	}
-	deployPreresolversMu.Lock()
-	defer deployPreresolversMu.Unlock()
-	if _, dup := deployPreresolvers[word]; dup {
-		panic(fmt.Sprintf("registerDeployPreresolver: duplicate preresolver for %q", word))
-	}
-	deployPreresolvers[word] = fn
-}
-
 // registerPluginDeployPreresolver records a WIRE-BACKED preresolver for an external deploy
-// substrate at plugin-load (F6), idempotently: a plugin reconnect REPLACES the prior wire-backed
-// body, but it never SHADOWS a compiled-in preresolver (k8s/android). The mirror of
-// registerPluginSubstrateLifecycle.
+// substrate at plugin-load (F6), idempotently: a plugin reconnect REPLACES the prior
+// wire-backed body for the same word. The mirror of registerPluginSubstrateLifecycle.
 func registerPluginDeployPreresolver(word string, fn deployPreresolver) {
 	if word == "" || fn == nil {
 		return
 	}
 	deployPreresolversMu.Lock()
 	defer deployPreresolversMu.Unlock()
-	if _, ok := deployPreresolvers[word]; ok && !pluginPreresolverWords[word] {
-		return // a compiled-in preresolver owns this word — never shadow it
-	}
 	deployPreresolvers[word] = fn
 	pluginPreresolverWords[word] = true
 }

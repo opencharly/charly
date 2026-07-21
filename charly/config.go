@@ -147,6 +147,27 @@ func (opts ResolveOpts) shouldIncludeDisabled(name string) bool {
 	return opts.IncludeDisabledNames[name]
 }
 
+// resolveBuildConfigTriple resolves the distro/builder config pair ResolveBox needs:
+// the caller-supplied opts.DistroCfg/BuilderCfg when present (FINAL/K5 unit 6a DI
+// refactor — ResolveAllBox loads it ONCE and threads it through every ResolveBox call
+// below instead of each of the N resolutions independently re-running
+// LoadBuildConfigForBox for the identical project-wide vocabulary), else the
+// byte-identical fallback load. Every caller must still supply a project dir
+// containing charly.yml; tests that need in-memory-only resolution use
+// testProjectDir(t). Extracted from ResolveBox to keep its cyclomatic complexity
+// within the project's lint ceiling.
+func (c *Config) resolveBuildConfigTriple(name, dir string, opts ResolveOpts) (*buildkit.DistroConfig, *buildkit.BuilderConfig, error) {
+	distroCfg, builderCfg := opts.DistroCfg, opts.BuilderCfg
+	if distroCfg == nil && builderCfg == nil {
+		var err error
+		distroCfg, builderCfg, _, err = LoadBuildConfigForBox(dir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("image %s: %w", name, err)
+		}
+	}
+	return distroCfg, builderCfg, nil
+}
+
 // ResolveBox resolves a single box's configuration by applying defaults
 func (c *Config) ResolveBox(name string, calverTag string, dir string, opts ResolveOpts) (*buildkit.ResolvedBox, error) {
 	// Namespace-aware entry: a qualified name (e.g. `charly.arch-builder`,
@@ -287,16 +308,12 @@ func (c *Config) ResolveBox(name string, calverTag string, dir string, opts Reso
 
 	// Resolve build config: use the caller-supplied triple when present (opts.DistroCfg/
 	// BuilderCfg — FINAL/K5 unit 6a DI refactor), else fall back to loading it here
-	// (byte-identical to the prior unconditional-load behavior). Every caller must
-	// still supply a project dir containing charly.yml. Tests that need
-	// in-memory-only resolution use testProjectDir(t).
-	distroCfg, builderCfg := opts.DistroCfg, opts.BuilderCfg
-	if distroCfg == nil && builderCfg == nil {
-		var err error
-		distroCfg, builderCfg, _, err = LoadBuildConfigForBox(dir)
-		if err != nil {
-			return nil, fmt.Errorf("image %s: %w", name, err)
-		}
+	// (byte-identical to the prior unconditional-load behavior). Extracted to its own
+	// helper (mirroring ResolveAllBox's identical caller-supplied-vs-load branch) to
+	// keep ResolveBox's cyclomatic complexity within the project's lint ceiling.
+	distroCfg, builderCfg, err := c.resolveBuildConfigTriple(name, dir, opts)
+	if err != nil {
+		return nil, err
 	}
 	resolved.DistroConfig = distroCfg
 	resolved.BuilderConfig = builderCfg
