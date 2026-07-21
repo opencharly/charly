@@ -35,12 +35,15 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 // against the served #AdbInput (the method enum + every adb-exclusive modifier moved
 // here from core #Op in the schema-compaction cutover); the deploy substrate keeps
 // its authoring contract on core #Android / the apk: format and carries an EMPTY
-// InputDef.
+// InputDef. Preresolve:true (F6, FINAL/K5 unit 6a) declares the wire-backed
+// OpPreresolve leg (preresolve.go) — the generalized host-side k8s/android/vm
+// preresolver dispatch (deploy_preresolve.go's wireDeployPreresolver) now reaches
+// THIS plugin instead of the deleted charly/android_deploy_preresolve.go body.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta("2026.180.0001",
 		[]sdk.ProvidedCapability{
 			{Class: "verb", Word: "adb", InputDef: "#AdbInput", Primary: "method"},
-			{Class: "deploy", Word: "android", InputDef: ""},
+			{Class: "deploy", Word: "android", InputDef: "", Preresolve: true},
 		},
 		schemaFS)
 }

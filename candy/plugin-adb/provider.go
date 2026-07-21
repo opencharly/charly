@@ -26,10 +26,14 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke runs one operation for the plugin's capabilities. The plugin serves BOTH
 // the `adb:` check verb AND the `deploy:android` SUBSTRATE (F1), distinguished by the
-// request's class: a "deploy" op drives the substrate install lifecycle (deploy.go);
-// every other op is the adb verb.
+// request's class: a "deploy" op drives the substrate install lifecycle (deploy.go) or,
+// for OpPreresolve (F6, FINAL/K5 unit 6a), the device+install-spec resolution
+// (preresolve.go); every other op is the adb verb.
 func (p provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetClass() == "deploy" {
+		if req.GetOp() == sdk.OpPreresolve {
+			return invokeAndroidPreresolve(ctx, req)
+		}
 		return invokeDeployAndroid(req)
 	}
 	return p.invokeVerb(ctx, req)

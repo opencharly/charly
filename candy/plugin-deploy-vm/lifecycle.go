@@ -240,26 +240,22 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 		notes = append(notes, msg)
 	}
 
-	// (e) the VmDeployState patch (the host persists it via saveDeployState — the plugin can't touch
-	// charly.yml). Carry the prior instance-id/disk/seed forward (re-render stability).
-	smbios, cloudInit := vmshared.ResolveKeyInjectionChannels(in.VM)
-	state := spec.VmDeployState{
-		SshUser:               in.SSHUser,
-		SshPort:               in.SSHPort,
-		Backend:               in.VM.Backend,
-		KeyInjectionResolved:  &spec.VmKeyInjectionResolved{SMBIOS: smbios, CloudInit: cloudInit},
-		CharlyInstallStrategy: string(kit.ResolveCharlyInstallStrategy(charlyInstallStrategy(in.VM))),
-	}
-	if in.PriorState != nil {
-		state.InstanceID = in.PriorState.InstanceID
-		state.DiskPath = in.PriorState.DiskPath
-		state.SeedIso = in.PriorState.SeedIso
-	}
-	stateJSON, _ := json.Marshal(map[string]any{"Target": "vm", "VmState": &state, "VmCrossRef": in.Entity})
-
+	// (e) NO State patch shipped here (RCA #6, FINAL/K5 unit 6a — hard cutover, was: "the
+	// VmDeployState patch... the plugin can't touch charly.yml... Carry the prior instance-id/
+	// disk/seed forward"). That WAS a SECOND, independent writer of vm_state — this reply's State
+	// used to round-trip through substrate_lifecycle_grpc.go's generic PrepareVenue persist
+	// (deploykit.SaveDeployState), keyed by deploykit.ParseDeployKey(name) — the RAW, UNSANITIZED
+	// deploy name — never the canonical "vm:"+VmDomainIdentity(name) key
+	// candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist already writes authoritatively.
+	// For a NESTED deploy (a dotted name), that second write poisoned the per-host overlay: every
+	// SUBSEQUENT load hit validateDeploymentName's dot-rejection (charly/unified.go). The
+	// InstanceID/DiskPath/SeedIso carry-forward this used to do is now genuinely unnecessary — the
+	// canonical entry already holds them stably (populated by `charly vm create`'s own disk-build
+	// flow) and is never touched by anything else, so there is nothing to "carry forward" through
+	// a second writer. ONE writer, ONE key: the substrate (candy/plugin-vm, via
+	// vm_create_orchestrate.go) owns its own persistence end to end.
 	return marshalReply(spec.PrepareVenueReply{
 		Venue: spec.VenueDescriptor{Kind: "ssh", Host: in.Alias, ConnectTimeout: 10},
-		State: stateJSON,
 		Notes: notes,
 	})
 }

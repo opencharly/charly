@@ -243,7 +243,10 @@ func (c *CheckLiveCmd) checkLiveVM() (liveResult, error) {
 		return liveResult{}, err
 	}
 
-	plan, user, port := c.loadVmCheckPlans(uf, dir, vmName, nestedLeaf, user, port)
+	plan, user, port, err := c.loadVmCheckPlans(uf, dir, vmName, nestedLeaf, user, port)
+	if err != nil {
+		return liveResult{}, err
+	}
 
 	// SSH connection details (User/Port/IdentityFile) live in the
 	// managed ssh-config Host stanza (charly-<domainID>) written at deploy
@@ -412,13 +415,43 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string
 		if entry, ok := uf.Bundle[c.Box]; ok && nodeTraits(&entry).Venue == "ssh" && entry.From != "" { // vm (ssh venue)
 			vmName = entry.From
 		} else if idx := strings.Index(c.Box, "."); idx > 0 {
-			root := c.Box[:idx]
-			if parent, present := uf.Bundle[root]; present && nodeTraits(&parent).Venue == "ssh" { // vm (ssh venue)
-				if parent.From != "" {
-					vmName = parent.From
+			// RCA #13 (FINAL/K5 unit 6a): leaf-first, via the shared RCA #12
+			// resolveLeafVenue walk — does the FULL dotted path resolve to a node
+			// that is ITSELF the vm (a Children-nested vm under a non-vm parent,
+			// e.g. check-sidecar-pod.check-sidecar-pod-ephvm)? If so, the domain
+			// stays keyed off the full path (already correct — domainKey defaults
+			// to c.Box); only the ENTITY (vmName) needed resolving.
+			// Falls through to the existing root-only branch (the delegate-into-
+			// guest shape, e.g. check-arch-vm.arch-host) when the leaf doesn't
+			// resolve as a vm.
+			if leaf, venue, ok := resolveLeafVenue(uf, c.Box); ok && venue == "ssh" { // vm (ssh venue)
+				if leaf.From != "" {
+					vmName = leaf.From
 				}
-				domainKey = root // the parent vm deploy owns the live domain
-				nestedLeaf = resolveNestedNode(uf.Bundle, c.Box)
+				// RCA #14 (FINAL/K5 unit 6a): nestedLeaf MUST be set here too —
+				// loadVmCheckPlans reads it to source the member's own Plan/
+				// AddCandy directly from the tree walk. Leaving it nil would fall
+				// through to deploykit.FindVmDeployNode's AMBIGUOUS top-level
+				// From-scan, which can (and did, nondeterministically — Go map
+				// iteration order per subprocess) pull in an UNRELATED same-base
+				// top-level vm's hoisted plan (see RCA #14 in CHANGELOG for the
+				// full flattenBundleVenues hoisting mechanism). The leaf's own
+				// Plan is empty here (any content it might author is relocated
+				// onto ITS OWN root's Plan at load time by flattenBundleVenues —
+				// registered to the bed-robustness batch, not fixed
+				// speculatively), which is the correct, proven-by-the-first-pass
+				// outcome for a member with no authored plan.
+				leafCopy := leaf
+				nestedLeaf = &leafCopy
+			} else {
+				root := c.Box[:idx]
+				if parent, present := uf.Bundle[root]; present && nodeTraits(&parent).Venue == "ssh" { // vm (ssh venue)
+					if parent.From != "" {
+						vmName = parent.From
+					}
+					domainKey = root // the parent vm deploy owns the live domain
+					nestedLeaf = resolveNestedNode(uf.Bundle, c.Box)
+				}
 			}
 		}
 	}
@@ -432,7 +465,7 @@ func (c *CheckLiveCmd) resolveVmTarget(uf *UnifiedFile) (vmName, domainID string
 // loadVmCheckPlans aggregates the VM deployment's check plan from the project
 // and per-machine deploy sources plus add_candy deploy-scope steps, returning
 // the merged plan and the SSH user/port (possibly overridden by local VmState).
-func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int) {
+func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nestedLeaf *spec.BundleNode, user string, port int) (plan []spec.Step, outUser string, outPort int, err error) {
 	outUser, outPort = user, port
 	// Two deploy sources for VMs:
 	//   - project-level: charly.yml / charly.yml `deployments.images["vm:<name>"]`
@@ -459,13 +492,21 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 		projectPlan = nestedLeaf.Plan
 		addCandies = nestedLeaf.AddCandy
 	} else if pc := uf.ProjectBundleConfig(); pc != nil {
-		if entry, ok := deploykit.FindVmDeployNode(pc.Bundle, c.Box, vmName); ok {
+		entry, ok, ferr := deploykit.FindVmDeployNode(pc.Bundle, c.Box, vmName)
+		if ferr != nil {
+			return nil, "", 0, fmt.Errorf("resolving project vm deploy plan for %q: %w", c.Box, ferr)
+		}
+		if ok {
 			projectPlan = entry.Plan
 			addCandies = entry.AddCandy
 		}
 	}
 	if dc := deploykit.LoadDeployConfigForRead("charly check vm"); dc != nil {
-		if entry, ok := deploykit.FindVmDeployNode(dc.Bundle, c.Box, vmName); ok {
+		entry, ok, ferr := deploykit.FindVmDeployNode(dc.Bundle, c.Box, vmName)
+		if ferr != nil {
+			return nil, "", 0, fmt.Errorf("resolving local vm deploy state for %q: %w", c.Box, ferr)
+		}
+		if ok {
 			localPlan = entry.Plan
 			if entry.VmState != nil {
 				if entry.VmState.SshUser != "" {
@@ -483,7 +524,7 @@ func (c *CheckLiveCmd) loadVmCheckPlans(uf *UnifiedFile, dir, vmName string, nes
 	// so ANY VM deploy — disposable bed OR persistent operator VM — that adds a
 	// candy automatically runs that candy's plan (R3).
 	plan = append(plan, collectAddCandySteps(uf, dir, addCandies)...)
-	return plan, outUser, outPort
+	return plan, outUser, outPort, nil
 }
 
 // vmHostdevCount returns how many <hostdev> passthrough devices the VM spec
@@ -730,8 +771,19 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // descending node.Children for each dotted segment (the SAME nested-tree shape
 // ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly bundle
-// add <root>.<child>`. Returns false when any segment is absent.
+// add <root>.<child>`. A leading "vm:" is stripped first via splitVmAddress (RCA #8/#9,
+// FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
+// resolveDelNode / vmNameFromDeployName already honor elsewhere (`charly bundle del vm:<name>`
+// / `vm:<parent.child>`): without stripping it, `tree["vm:"+parts[0]]` never matches (the tree
+// is keyed by the plain name), so a "vm:"-prefixed dotted address silently resolved to
+// nothing here — deployNodePluginContext (this function's one caller) then collected ZERO
+// referenced plugin words for the deploy, and its substrate provider was never connected by
+// loadDeployPlugins. resolveDelNode's OWN "vm:"-prefix shortcut masked the miss (it returns a
+// synthetic Target-only placeholder without touching the tree at all), so the del RESOLVED
+// fine while the CONNECT silently failed — the gap surfaced only later, when dispatch needed
+// the never-connected provider. Returns false when any segment is absent.
 func resolveDeployNodeByPath(tree map[string]spec.BundleNode, name string) (*spec.BundleNode, bool) {
+	name, _ = splitVmAddress(name)
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {

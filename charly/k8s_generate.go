@@ -6,9 +6,10 @@ package main
 // candy/plugin-k8sgen; this shim builds the pure-generation input from
 // K8sGenerateOpts, Invokes the plugin's OpEmit, then does the host-side disk I/O +
 // the egress gate (ValidateEgressValue, via the M16 egress shim) before the bytes
-// hit disk. Both in-core callers (the deploy:k8s preresolver in
-// k8s_deploy_preresolve.go and the source-less `charly bundle from-box --target k8s`
-// in k8s_deploy_from_box.go) keep calling GenerateK8sKustomize unchanged.
+// hit disk. Both in-core callers keep calling GenerateK8sKustomize unchanged: the
+// "k8s-generate-kustomize" HostBuild seam (host_build_k8s_generate.go, F6/FINAL-K5-
+// unit-6a — reached by the now-plugin-side deploy:k8s preresolver) and the
+// source-less `charly bundle from-box --target k8s` in k8s_deploy_from_box.go.
 //
 // host→plugin dispatch mirrors egress.go (plain resolve+Invoke). Compiled-in
 // placement keeps verb:k8sgen resolvable at deploy time with no connect step.
@@ -141,8 +142,9 @@ func writeYAML(path string, doc any) error {
 
 // defaultK8sOutputDir resolves the canonical output directory for emitted
 // kustomize trees, next to its GenerateK8sKustomize caller (moved from the
-// stray bundle_add_cmd_k8s.go): the deploy:k8s preresolver
-// (k8s_deploy_preresolve.go) and the source-less
+// stray bundle_add_cmd_k8s.go): the "k8s-generate-kustomize" HostBuild seam
+// (host_build_k8s_generate.go, F6/FINAL-K5-unit-6a — reached by the now-plugin-side
+// deploy:k8s preresolver) and the source-less
 // `charly bundle from-box --target k8s` path (k8s_deploy_from_box.go) both
 // default to it when their caller hasn't already resolved a project dir.
 func defaultK8sOutputDir() (string, error) {
