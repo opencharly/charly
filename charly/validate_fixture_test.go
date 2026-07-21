@@ -44,7 +44,7 @@ func writeValidateFixture(t *testing.T, files map[string]string) string {
 
 // fixtureGoodBox is the minimal valid box a broken-fixture variant mutates: a resolvable rpm box
 // composing candy/mycandy. Prepend the `version:` + `discover:` header so the loader scans candy/.
-const fixtureGoodBox = `version: 2026.201.2300
+const fixtureGoodBox = `version: 2026.202.0105
 discover:
   - path: candy
     recursive: true
@@ -127,7 +127,7 @@ func TestValidate_Success(t *testing.T) {
 // TestValidate_MissingCandy ← TestValidateMissingCandy. A box referencing a candy that does not exist.
 func TestValidate_MissingCandy(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -145,7 +145,7 @@ mybox:
 // TestValidate_MissingCandyTypo ← TestValidateMissingCandyWithTypo. A close (typo) name suggests a fix.
 func TestValidate_MissingCandyTypo(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -184,7 +184,7 @@ func TestValidate_UnknownDependency(t *testing.T) {
 // composition candy (only `candy:`) is legitimately content-less.
 func TestValidate_CandyIncludesNoInstallFiles(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -223,7 +223,7 @@ mybox:
 // TestValidate_CandyIncludesCycle ← TestValidateCandyIncludesCycle. Circular `candy:` composition.
 func TestValidate_CandyIncludesCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -333,7 +333,7 @@ func TestValidate_VolumesDuplicate(t *testing.T) {
 // TestValidate_AliasesValid ← TestValidateAliasesValid (candy + box aliases both valid).
 func TestValidate_AliasesValid(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -389,7 +389,7 @@ func TestValidate_AliasesInvalidName(t *testing.T) {
 // TestValidate_ImageAliasesDuplicate ← TestValidateImageAliasesDuplicate (box-level aliases).
 func TestValidate_ImageAliasesDuplicate(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -457,7 +457,7 @@ func TestValidate_ReposWithoutPackages(t *testing.T) {
 // TestValidate_AurWithoutAurBuilder ← TestValidateAurWithoutAurBuilder.
 func TestValidate_AurWithoutAurBuilder(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 arch-img:
   candy:
@@ -487,7 +487,7 @@ arch-img:
 // compiler skips the aur section entirely.
 func TestValidate_AurOnFedoraImageNoError(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 fedora-img:
   candy:
@@ -521,7 +521,7 @@ fedora-img:
 // validator must too.
 func TestValidate_AurOnArchImageWithoutAurInBuildFormats(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 arch-pac-only:
   candy:
@@ -552,7 +552,7 @@ arch-pac-only:
 // requires builder.pixi regardless of the image's build formats (detect_files, not detect_config).
 func TestValidate_PixiBuilderUnconditional(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 fedora-img:
   candy:
@@ -581,7 +581,7 @@ fedora-img:
 // TestValidate_ImageCycle ← TestValidateImageCycle. A box base cycle a→b→c→a.
 func TestValidate_ImageCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 a:
   candy:
     version: 2026.194.1200
@@ -613,7 +613,7 @@ c:
 // TestValidate_CandyCycle ← TestValidateCandyCycle. A candy `require:` cycle a→b→c→a.
 func TestValidate_CandyCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -660,7 +660,7 @@ mybox:
 // fail-first: two missing candies + one duplicate volume all surface together.
 func TestValidate_MultipleErrors(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -688,7 +688,7 @@ mybox:
 // problems (a missing candy) are skipped; --include-disabled would surface them.
 func TestValidate_SkipsDisabledImages(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 good:
   candy:
@@ -745,7 +745,7 @@ func TestValidate_RouteWithoutTraefik(t *testing.T) {
 // TestValidate_RouteWithTraefik ← TestValidateRouteWithTraefik.
 func TestValidate_RouteWithTraefik(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -786,7 +786,7 @@ func portRelayBox(withSocat bool) string {
 	if withSocat {
 		candies = "[supervisord, socat, svc]"
 	}
-	return `version: 2026.201.2300
+	return `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 mybox:
   candy:
@@ -893,7 +893,7 @@ func TestValidate_PortRelayMissingSocat(t *testing.T) {
 // volume no candy in the box declares.
 func TestValidate_DataEntryUnknownVolume(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 jupyter:
   candy:
@@ -930,7 +930,7 @@ jupyter:
 // whose volume matches a declared volume in the box's candy chain validates clean.
 func TestValidate_DataEntryKnownVolume(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 jupyter:
   candy:
@@ -1324,7 +1324,7 @@ func TestValidateOps_LibvirtClean(t *testing.T) {
 // TestValidateOps_Clean ← the same. A full valid candy plan + box plan produces no error.
 func TestValidateOps_Clean(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: 2026.201.2300
+		"charly.yml": `version: 2026.202.0105
 discover: [{path: candy, recursive: true}]
 redis-ml:
   candy:

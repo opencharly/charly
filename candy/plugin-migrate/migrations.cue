@@ -26,7 +26,7 @@ migrations: [
 		apply:        "compactNodeForm"
 	},
 	{
-		version: "2026.201.2300"
+		version: "2026.202.0105"
 		name:    "strip-candy-libvirt-field"
 		// candy-level libvirt: is a candy-body field, never authored on the
 		// per-host deploy overlay — no touches_host needed.

@@ -39,7 +39,7 @@ func TestCrossKindNameReuse_LoaderAcceptsAllKinds(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: 2026.201.2300
+	must(filepath.Join(dir, "charly.yml"), `version: 2026.202.0105
 defaults:
   registry: ghcr.io/example
 discover:
@@ -88,7 +88,7 @@ discover:
 
 	// --- Within ONE document: duplicate top-level name rejected. ---
 	dir2 := t.TempDir()
-	dupDoc := `version: 2026.201.2300
+	dupDoc := `version: 2026.202.0105
 redis:
   candy:
     base: fedora

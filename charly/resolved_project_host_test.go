@@ -217,7 +217,7 @@ func writeResolvedProjectFixtureProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(
-		"version: 2026.201.2300\n"+
+		"version: 2026.202.0105\n"+
 			"discover:\n"+
 			"    - path: candy\n"+
 			"      recursive: true\n"), 0o644); err != nil {

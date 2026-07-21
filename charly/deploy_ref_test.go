@@ -12,9 +12,9 @@ func TestResolveDeployRefLocalImage(t *testing.T) {
 	dir := t.TempDir()
 	// ResolveDeployRef calls LoadUnified, which accepts ONLY the unified
 	// node-form `<name>: {<kind>: <scalars>}`. Fixture uses the inline
-	// node-form box (version: 2026.201.2300).
+	// node-form box (version: 2026.202.0105).
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(`
-version: 2026.201.2300
+version: 2026.202.0105
 myimg:
   candy:
     base: fedora
@@ -44,7 +44,7 @@ candy:
 	}
 	// Also create charly.yml so the local-name resolver has something
 	// to search — but we don't add "ripgrep" to it, so it's candy-only.
-	_ = os.WriteFile(filepath.Join(dir, "charly.yml"), []byte("version: 2026.201.2300\nimage: {}\n"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "charly.yml"), []byte("version: 2026.202.0105\nimage: {}\n"), 0644)
 
 	got, err := ResolveDeployRef("ripgrep", dir)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestResolveDeployRefCrossKindNameReuse(t *testing.T) {
 	// and a candy directory is permitted; box-first vs candy-first precedence
 	// is decided by the caller, not a uniqueness error.
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(`
-version: 2026.201.2300
+version: 2026.202.0105
 dup:
   candy:
     base: fedora
@@ -116,7 +116,7 @@ dup:
 
 func TestResolveDeployRefUnknownName(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "charly.yml"), []byte("version: 2026.201.2300\nimage: {}\n"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "charly.yml"), []byte("version: 2026.202.0105\nimage: {}\n"), 0644)
 	_, err := ResolveDeployRef("nope", dir)
 	if err == nil {
 		t.Fatalf("expected not-found error, got nil")
