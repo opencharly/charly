@@ -131,7 +131,6 @@ var residueOwner = map[string]string{
 	"agent_config.go":               "P12",
 	"android_deploy_cmd.go":         "P11",
 	"android_deploy_preresolve.go":  "P11",
-	"android_spec.go":               "P11",
 	"arbiter_host.go":               "P15",
 	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b",
@@ -211,11 +210,9 @@ var residueOwner = map[string]string{
 	"k8s_deploy_preresolve.go":      "P11",
 	"k8s_generate.go":               "P11",
 	"k8s_plugin.go":                 "P11",
-	"labels.go":                     "P8b",
 	"layer_capabilities.go":         "P8b",
 	"layer_secrets.go":              "P8b",
 	"layers.go":                     "P8b",
-	"libvirt.go":                    "P11",
 	"local_spec.go":                 "P11",
 	"namespace.go":                  "P15",
 	"notify.go":                     "P15",
@@ -230,7 +227,6 @@ var residueOwner = map[string]string{
 	"preempt.go":                    "P15",
 	"privileged_runner.go":          "P15",
 	"readiness_config.go":           "P11",
-	"reconcile.go":                  "P15",
 	"refs.go":                       "P15",
 	"refs_threaded.go":              "P15",
 	"remote_image.go":               "P14",
@@ -242,20 +238,16 @@ var residueOwner = map[string]string{
 	"runtime_config_values.go":      "P15",
 	"secrets.go":                    "P11",
 	"security.go":                   "P11",
-	"service.go":                    "P11",
 	"service_render.go":             "P8b",
-	"shell.go":                      "P11",
 	"shell_profile.go":              "P8b",
 	"shellcollect.go":               "P11",
 	"sidecar.go":                    "P11",
 	"ssh.go":                        "P15",
-	"start.go":                      "P11",
 	"step_emit_hostbuild.go":        "P8b",
 	"substrate_template_resolve.go": "P15",
 	"tasks.go":                      "P8b",
 	"transfer.go":                   "P14",
 	"tunnel.go":                     "P15",
-	"tunnel_plugin.go":              "P15",
 	"uf_box_generic.go":             "P15",
 	"uf_candy_generic.go":           "P15",
 	"unified.go":                    "P15",
@@ -308,18 +300,26 @@ var residueOwner = map[string]string{
 	// and the orchestration it forwards to are P11 pod-deploy-surface residue —
 	"host_build_pod_config.go":       "P11",
 	"host_build_pod_config_seams.go": "P11",
-	"host_build_pod_logs.go":         "P11",
-	"host_build_pod_remove.go":       "P11",
-	"host_build_pod_service.go":      "P11",
-	"host_build_pod_shell.go":        "P11",
-	"host_build_pod_start.go":        "P11",
-	"host_build_pod_stop.go":         "P11",
-	"host_build_pod_update.go":       "P11",
 	// vm_deploy_state.go — renamed from bundle_add_cmd_vm.go (was P13); its
 	// surviving content is the charly.yml config-persist half of VM deploy add
 	// (config-write/lifecycle), the same substrate-persistence theme as the
 	// other P11 vm_*.go / config_write_host.go entries above.
 	"vm_deploy_state.go": "P11",
+	// host_build_pod_lifecycle_dispatch.go — Cutover B-1 (#169): the CONSOLIDATED
+	// replacement for the 7 deleted host_build_pod_{start,stop,shell,logs,update,
+	// service,remove}.go files above (host_build_pod_disposable.go is a separate
+	// concern and keeps its own file/entry). Re-derived from the tree, NOT from
+	// the file's own header comment (never trust code comments): every handler
+	// only CALLS a pre-existing floor Mechanism (dispatchLifecycleTarget /
+	// unified_targets.go's ResolveTarget) or the P15 arbiter (releaseResourceClaim,
+	// arbiter_host.go — itself residue, not floor, contradicting the header's
+	// "stays core" framing for the arbiter bracket) — the defines-vs-calls test
+	// makes this an R-item, not a Mechanism. Same shape and same P11 pod-deploy-
+	// surface classification as the 7 files it replaces; the file's own header
+	// already declines "settled STAYS-CORE precedent" status for its siblings,
+	// citing the deploy-dispatch boundary-law overrule (memory:
+	// deploy-resolution-67-gated-cone.md) — no re-escalation needed.
+	"host_build_pod_lifecycle_dispatch.go": "P11",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {
