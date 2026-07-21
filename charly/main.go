@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/proclifecycle"
+	"golang.org/x/term"
 )
 
 // CLI defines the command-line interface structure
@@ -223,9 +224,19 @@ func main() {
 	// command like `settings`, `version`, or `ssh tunnel`). Doing
 	// this AFTER Kong parse ensures --help / invalid-flag cases print
 	// locally; doing it BEFORE ctx.Run() ensures no local state is
-	// touched when we're about to forward the command.
+	// touched when we're about to forward the command. kit.ReexecOverSSH
+	// (S6, relocated from host_exec.go) is pure stdlib+sdk/kit — this
+	// dispatch glue resolves the two charly-core-only inputs (the active
+	// controller binary, this binary's CalVer identity) it cannot resolve
+	// itself and threads them in.
 	if shouldReexecForHost(&cli, ctx.Command()) {
-		os.Exit(ReexecOverSSH(&cli))
+		controllerBin, err := activeCharlyBinary()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "charly: --host %q: resolve active controller: %v\n", cli.Host, err)
+			os.Exit(2)
+		}
+		wantTTY := term.IsTerminal(int(os.Stdin.Fd()))
+		os.Exit(kit.ReexecOverSSH(cli.Host, cli.HostIdentityFile, cli.HostOption, controllerBin, CharlyVersion(), wantTTY))
 	}
 
 	// Resolve --repo before --dir. Both end up driving the same chdir

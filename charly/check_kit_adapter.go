@@ -116,10 +116,10 @@ func kitStepKindToCharly(k kit.StepKindName) spec.StepKind {
 }
 
 // materializeStep rebuilds the real package-main InstallStep from a candy's
-// kit.StepDescriptor plus the narrow stepConstructCtx (S5 — the run-as-resolved scope,
-// the candy name, and the image's package format/distro tags) that the candy cannot
-// compute itself. The load-bearing Reverse() lives on the built step (package main),
-// unchanged from the typed builtin verb's ConstructStep.
+// kit.StepDescriptor and the pre-resolved stepConstructCtx (the run-as-resolved scope,
+// the candy name, the image package format + distro tags — the 4 scalars this function
+// actually reads, never a full layer/img handle). The load-bearing Reverse() lives on
+// the built step (package main), unchanged from the typed builtin verb's ConstructStep.
 func materializeStep(desc kit.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
 	switch {
 	case desc.ServicePackaged != nil:

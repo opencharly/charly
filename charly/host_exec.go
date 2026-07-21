@@ -1,28 +1,24 @@
 package main
 
 // `charly --host <alias|user@host[:port]> <verb>` — re-exec charly on a
-// remote machine over SSH. main() checks for cli.Host != "" before dispatching
-// into Kong's ctx.Run() and, if set, calls ReexecOverSSH. Exit code propagates.
+// remote machine over SSH.
 //
-// S6 (FINAL/K5 unit 6, Cutover-B S3): the mechanism itself — argv rewriting, ssh
-// target parsing, and the `ssh` invocation — is 100% stdlib + already-sdk/kit
-// (kit.SSHExecutor, kit.EnsureCharlyInDeployVenue, kit.ShellQuote,
-// kit.LoadRuntimeConfig), so it relocated wholesale to sdk/kit/reexec_ssh.go. What
-// stays HERE is the "should I reexec THIS command path" decision (shouldReexecForHost
-// — it must run before Kong dispatches to anything, mirroring
-// plugin_command_prescan.go's pre-parse hooks — the SAME "decide-before-dispatch"
-// shape core already owns) and resolving the two core-only inputs the kit function
-// needs but cannot itself compute: activeCharlyBinary() (the controller's OWN
-// resolved path — inspects the running process) and CharlyVersion().
+// S6 (mechanical relocation, no design risk): ReexecOverSSH's body was 100%
+// stdlib+sdk/kit — zero core-only calls — so it moved wholesale to
+// sdk/kit/reexec_ssh.go (kit.ReexecOverSSH), mirroring the already-accepted
+// install_build_act.go DI-shell pattern (deploykit.CompileActOp = compileActOp).
+// The ONE thing that stays here is shouldReexecForHost's ~15-line decision (it
+// must run before Kong dispatches to ANYTHING, mirroring the already-accepted
+// precedent of plugin_command_prescan.go's pre-parse hooks — the same
+// decide-before-dispatch shape core already owns) plus main()'s dispatch glue,
+// which resolves the charly-core-only inputs (the active controller binary,
+// this binary's CalVer identity, and whether stdin is a terminal — the latter
+// kept OUT of sdk/kit deliberately: sdk/kit is imported by nearly every
+// out-of-tree plugin candy, so a new kit dependency on golang.org/x/term would
+// have rippled a go.sum update into ~38 candy modules for one ssh -tt flag)
+// and threads them into kit.ReexecOverSSH.
 
-import (
-	"fmt"
-	"os"
-	"strings"
-
-	"github.com/opencharly/sdk/kit"
-	"golang.org/x/term"
-)
+import "strings"
 
 // shouldReexecForHost returns true if charly should forward the current
 // invocation to a remote machine via SSH. False when:
@@ -46,20 +42,4 @@ func shouldReexecForHost(cli *CLI, cmdPath string) bool {
 		return false
 	}
 	return true
-}
-
-// ReexecOverSSH resolves the core-only inputs (the controller's own resolved binary
-// path + version) and delegates the whole mechanism to kit.ReexecOverSSH. See
-// sdk/kit/reexec_ssh.go for the argv rewrite / ssh-target-parse / ssh-invoke logic.
-func ReexecOverSSH(cli *CLI) int {
-	controllerBin, err := activeCharlyBinary()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "charly: --host %q: resolve active controller: %v\n", cli.Host, err)
-		return 2
-	}
-	return kit.ReexecOverSSH(kit.ReexecSSHOpts{
-		Host:             cli.Host,
-		HostIdentityFile: cli.HostIdentityFile,
-		HostOption:       cli.HostOption,
-	}, os.Args[1:], controllerBin, CharlyVersion(), term.IsTerminal(int(os.Stdin.Fd())))
 }

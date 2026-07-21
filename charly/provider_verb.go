@@ -41,25 +41,21 @@ type ProvisionActor interface {
 	RenderProvisionScript(op *spec.Op, distros []string) (string, bool)
 }
 
-// stepConstructCtx is the NARROW, hand-written (non-wire — it never crosses a process
-// boundary, so no CUE-sourcing debt) value TypedStepProvider.ConstructStep needs from
-// the compile-time layer/image context — the S5 fix for the R-item typed-shape leak a
-// core-defined interface previously carried (deploykit.CandyModel / *buildkit.ResolvedBox,
-// both explicitly-named R-item shapes per the plugin skill's boundary-law section). Built
-// once by compileActOp (which already resolves every field for its OWN OpStep/
-// ExternalPluginStep construction) and threaded through unchanged.
+// stepConstructCtx is the narrow, pre-resolved envelope TypedStepProvider.ConstructStep
+// consumes — the 4 scalar fields materializeStep actually reads, replacing a direct
+// leak of the R-item typed shapes deploykit.CandyModel + *buildkit.ResolvedBox into
+// this core-defined interface (the kernel/plugin boundary law: a core interface takes
+// scalars, never a concrete kind's typed shape). RunAsUser is the ALREADY-RESOLVED
+// user directive (deploykit.ResolveUserSpec's result) — the caller (compileActOp)
+// resolves op.RunAs against the image before calling ConstructStep, so no implementer
+// needs the full *buildkit.ResolvedBox merely to re-derive it. Hand-written, non-wire:
+// this value never crosses a process boundary (every TypedStepProvider is in-proc-only,
+// builtinVerbBase.Invoke errors for out-of-proc), so it carries no CUE-sourcing debt.
 type stepConstructCtx struct {
-	// RunAsUser is the ALREADY-RESOLVED run-as directive (deploykit.ResolveUserSpec's
-	// first return, computed by the caller from op.RunAs + the image's User/UID/GID/Home —
-	// ConstructStep needs the resolved directive, never the raw image identity).
-	RunAsUser string
-	// CandyName is the authoring candy's name (layer.GetName()).
-	CandyName string
-	// PkgFormat is the image's primary build format (img.Pkg) — SystemPackagesStep's Format.
-	PkgFormat string
-	// DistroTags is the image's resolved distro/build-format tag union (img.Tags) —
-	// SystemPackagesStep's package-name cascade (kit.ResolvePackageName).
-	DistroTags []string
+	RunAsUser  string   // deploykit.ResolveUserSpec(op.RunAs, img) result
+	CandyName  string   // layer.GetName()
+	PkgFormat  string   // img.Pkg
+	DistroTags []string // img.Tags
 }
 
 // TypedStepProvider is the do:act half of a verb provider whose build/deploy install
@@ -72,7 +68,7 @@ type stepConstructCtx struct {
 // of falling through to a generic OpStep. LowersTo names the step kind (the now-removed
 // VerbSpec.LowersTo field's role — package/service were its only users, so the field was
 // deleted and the lowering target lives on the provider); ConstructStep builds the step
-// from the op's plugin_input plus the narrow stepConstructCtx (S5). A TypedStepProvider
+// from the op's plugin_input + the pre-resolved stepConstructCtx. A TypedStepProvider
 // therefore also "acts in build/deploy" (opActsInBuildDeploy) even though it is not a
 // ProvisionActor.
 type TypedStepProvider interface {
