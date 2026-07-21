@@ -129,8 +129,6 @@ var kernelFloor = []floorEntry{
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
 	"agent_config.go":               "P12",
-	"android_deploy_cmd.go":         "P11",
-	"android_deploy_preresolve.go":  "P11",
 	"arbiter_host.go":               "P15",
 	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b",
@@ -185,7 +183,6 @@ var residueOwner = map[string]string{
 	"enc.go":                        "P11",
 	"engine.go":                     "P14",
 	"ensure_image.go":               "P8b",
-	"ephemeral_lifecycle.go":        "P11",
 	"filelock.go":                   "P15",
 	"format_config.go":              "P8b",
 	"generate.go":                   "P8b",
@@ -207,7 +204,6 @@ var residueOwner = map[string]string{
 	"k3s_post.go":                   "P11",
 	"k8s_config.go":                 "P11",
 	"k8s_deploy_from_box.go":        "P14",
-	"k8s_deploy_preresolve.go":      "P11",
 	"k8s_generate.go":               "P11",
 	"k8s_plugin.go":                 "P11",
 	"layer_capabilities.go":         "P8b",
@@ -259,7 +255,6 @@ var residueOwner = map[string]string{
 	"vm_lifecycle_preresolve.go":    "P11",
 	"vm_plugin_client.go":           "P11",
 	"vm_qemu_client.go":             "P11",
-	"vm_snapshot_client.go":         "P11",
 	"vmshared_aliases.go":           "P15",
 	"vnc_helpers.go":                "P12",
 	"volume_cp_tags_cmd.go":         "P11",
@@ -320,6 +315,47 @@ var residueOwner = map[string]string{
 	// citing the deploy-dispatch boundary-law overrule (memory:
 	// deploy-resolution-67-gated-cone.md) — no re-escalation needed.
 	"host_build_pod_lifecycle_dispatch.go": "P11",
+	// — FINAL/K5 unit 6 (#171, F6 preresolve + ephemeral cross-substrate move +
+	// credential/bed-session consolidation): 4 new charly/*.go files. Re-derived
+	// from the tree, NOT from any file's own header comment (never trust code
+	// comments — host_build_deploy_entity_resolve.go's own header claims its
+	// LoadUnified call is "a kernel Mechanism, R-E2 stands: it never moves
+	// wholesale," but LoadUnified's own defining file, unified.go, is ITSELF
+	// tracked P15 residue in this same table — a header asserting permanence for
+	// a call target this table already tracks as residue is exactly the
+	// incomplete-seam trap, not evidence).
+	//
+	// host_build_deploy_entity_resolve.go — the generalized "deploy-entity-
+	// resolve" HostBuild seam: its default/"bundle" case calls resolveTreeRoot
+	// (deploy_tree.go, P13), and its "k8s"/"android"/"vm" cases fold in the
+	// entity-lookup bodies formerly split across the three now-deleted P11 files
+	// (android_deploy_cmd.go, android_deploy_preresolve.go,
+	// k8s_deploy_preresolve.go — pruned above). Classified with the K4-C
+	// deploy-dispatch seam family (P13) per the defines-vs-calls test and the
+	// deploy-dispatch boundary-law precedent (memory:
+	// deploy-resolution-67-gated-cone.md) this PR's own prior reconciliation
+	// passes already applied to the sibling host_build_deploy_{tree_resolve,
+	// node_dispatch,node_del_dispatch,del_resolve,members,config_save}.go seams.
+	"host_build_deploy_entity_resolve.go": "P13",
+	// host_build_k8s_generate.go — single-purpose "k8s-generate-kustomize" seam
+	// wrapping k8s_generate.go's GenerateK8sKustomize (P11) and explicitly
+	// mirroring the deleted k8s_deploy_preresolve.go's (P11) TreeRoot
+	// computation; classified with its k8s-substrate predecessor, P11.
+	"host_build_k8s_generate.go": "P11",
+	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
+	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
+	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
+	// wrapping registerEphemeralIfMarked (deploy_add_shared.go) so the plugin
+	// can trigger the one host-only side effect it cannot do itself, and (b) the
+	// host→plugin dispatch into command:bundle's Op{Ephemeral,Teardown}
+	// legs. Both stay in the "ephemeral" cross-substrate lifecycle family — the
+	// SAME family as the still-present validate_ephemeral.go (P11) — rather than
+	// following the P13 shape their own comments compare themselves to
+	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
+	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
+	// over incidental mechanism-shape similarity to a P13 sibling.
+	"host_build_ephemeral_register.go": "P11",
+	"ephemeral_dispatch.go":            "P11",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {
