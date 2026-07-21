@@ -304,7 +304,7 @@ func ephemeralDeployDelArgv(name string) []string {
 // dotted) deployName directly. RCA #2 (FINAL/K5 unit 6a, the check-sidecar-pod bed's SECOND
 // failure): the raw dotted key round-tripped through kind discrimination fine after the
 // Target/From fix, but was then rejected by the loader's SEPARATE "a deployment key must not
-// contain '.'" check on the very next read (validateDeploymentName, charly/unified.go) — dots
+// contain '.'" check on the very next read (ValidateDeploymentName, sdk/spec/deploy_tree_validate.go) — dots
 // are reserved for dotted-PATH ADDRESSING (`charly bundle del a.b.c`), never a literal dc.Bundle
 // map key. Using the SAME key as saveVmDeployState has a bonus: ephemeral state and vm state
 // (ssh_port, disk_path) end up in ONE overlay entry instead of two — persistEphemeralRuntime's
