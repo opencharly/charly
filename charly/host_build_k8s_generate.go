@@ -18,7 +18,7 @@ import (
 const k8sGenerateKustomizeBuilderKind = "k8s-generate-kustomize"
 
 func hostBuildK8sGenerateKustomize(_ context.Context, req spec.K8sGenerateKustomizeRequest, _ buildEngineContext) (spec.K8sGenerateKustomizeReply, error) {
-	var caps Capabilities
+	var caps spec.BoxMetadata
 	if err := json.Unmarshal(req.CapsJSON, &caps); err != nil {
 		return spec.K8sGenerateKustomizeReply{}, fmt.Errorf("k8s-generate-kustomize: decode capabilities: %w", err)
 	}

@@ -131,6 +131,3 @@ func renderOpCommand(s *deploykit.OpStep) (string, error) {
 	}
 	return script, nil
 }
-
-// shQuoteArg single-quotes an argument for POSIX shell embedding (re-export).
-func shQuoteArg(v string) string { return kit.ShQuoteArg(v) }

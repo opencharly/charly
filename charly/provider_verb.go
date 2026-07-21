@@ -102,7 +102,7 @@ func checkVerbProviderBijection(verbs []string) error {
 		// install verb authored as a check), so they need no CheckVerbProvider.
 		// (`command` was the lone check-dispatched installVerb; it left spec.OpVerbs in
 		// the command→plugin extraction, so this loop no longer sees it.)
-		if installVerbs[v] {
+		if spec.InstallVerbs[v] {
 			continue
 		}
 		p, ok := providerRegistry.resolve(ClassVerb, v)

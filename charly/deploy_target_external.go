@@ -490,9 +490,9 @@ func reverseRunnerForExecutor(exec deploykit.DeployExecutor, existing kit.Revers
 // exit) reports "not enabled" (the safe default — teardown then disables, never spuriously
 // re-enables).
 func venueUnitEnabled(ctx context.Context, exec deploykit.DeployExecutor, unit string, scope spec.Scope) bool {
-	cmd := "systemctl is-enabled --quiet " + shQuoteArg(unit)
+	cmd := "systemctl is-enabled --quiet " + kit.ShQuoteArg(unit)
 	if scope == spec.ScopeUser {
-		cmd = "systemctl --user is-enabled --quiet " + shQuoteArg(unit)
+		cmd = "systemctl --user is-enabled --quiet " + kit.ShQuoteArg(unit)
 	}
 	_, _, exit, err := exec.RunCapture(ctx, cmd)
 	return err == nil && exit == 0
