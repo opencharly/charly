@@ -375,7 +375,7 @@ func collectChainDataEntries(g *Generator, boxName string) []spec.LabelDataEntry
 		if !ok {
 			break
 		}
-		resolved, _ := ResolveCandyOrder(imgDef.Candy, g.Candies, nil)
+		resolved, _ := deploykit.ResolveCandyOrder(imgDef.Candy, g.Candies, nil)
 		for _, candyName := range resolved {
 			if seenDataCandies[candyName] {
 				continue

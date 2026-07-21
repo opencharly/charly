@@ -19,6 +19,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -646,7 +647,7 @@ func filterBox(order []string, requested []string, boxes map[string]*buildkit.Re
 		}
 		needed[name] = true
 		img := boxes[name]
-		for _, dep := range boxDirectDeps(name, img, boxes, true) {
+		for _, dep := range deploykit.BoxDirectDeps(name, img, boxes, true) {
 			addDeps(dep)
 		}
 	}

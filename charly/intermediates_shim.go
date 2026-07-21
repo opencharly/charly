@@ -15,7 +15,10 @@ import (
 // charly/intermediates.go, which read *Config directly). This file keeps ONLY
 // the thin core entry point that lifts cfg.Defaults into a
 // deploykit.IntermediateDefaults value + the GlobalCandyOrder wrapper still
-// used by generate.go/resolved_project_host.go. Mirrors graph_shim.go.
+// used by generate.go/resolved_project_host.go. Was mirrored by graph_shim.go
+// (deleted in the FLOOR-SLIM mechanical batch — its 8 callers now call
+// deploykit.ResolveCandyOrder/ResolveBoxOrder/ResolveBoxLevels/CandyProvidedByBox/
+// BoxDirectDeps directly; CycleError likewise repoints to deploykit.CycleError).
 
 // ComputeIntermediates computes auto-generated intermediate images. It lifts
 // cfg.Defaults into a deploykit.IntermediateDefaults (the scalar fields the

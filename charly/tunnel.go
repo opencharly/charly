@@ -23,20 +23,21 @@ package main
 //     command builders + the TunnelPort.Backend() default all moved to sdk/deploykit /
 //     sdk/spec with the config-write mechanism in P11). The former hand-written wire
 //     mirror was deleted when the wire-type mandate was repaired (P11);
-//   - ValidPublicPorts — the allowed public serve ports, consulted by the resolution to
-//     validate a tunnel's public ports (the cloudflared config-path computation moved along
-//     with BoxConfigSetupCmd's orchestration to candy/plugin-deploy-pod's own tunnelConfigPath,
-//     P13-KERNEL direction-flip — no host-side copy needed anymore);
-//   - the resolution ResolveTunnelConfig / TunnelConfigFromMetadata / parseHostPorts /
-//     buildPortMapping / resolveProto — turn a charly.yml TunnelYAML (or image-label
-//     metadata) into a ready-to-execute TunnelConfig, still consumed by the
-//     pod-config-container-tunnel / pod-config-tunnel-resolve host-build seams.
+//   - the resolution ResolveTunnelConfig / TunnelConfigFromMetadata (and their pure
+//     helpers parseHostPorts / buildPortMapping / resolveProto) — turn a charly.yml
+//     TunnelYAML (or image-label metadata) into a ready-to-execute TunnelConfig. The
+//     resolution logic itself is a pure Mechanism (no host I/O, no globals) and moved
+//     to sdk/deploykit (FLOOR-SLIM mechanical batch); this file ALIASES the two
+//     entry points so the pod-config-container-tunnel / pod-config-tunnel-resolve
+//     host-build seams compile unchanged.
+//
+// ValidPublicPorts (a stale "allowed public serve ports" table) was DELETED in the same
+// batch — it had ZERO callers anywhere in the tree; the public-port ALLOW decision is
+// actually made by TunnelYAML.Public (the authored public/private port sets resolved
+// above), not by a fixed allowlist.
 
 import (
-	"fmt"
-	"os"
-	"strconv"
-
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -52,205 +53,10 @@ type (
 	TunnelConfig = spec.TunnelConfig
 )
 
-// ValidPublicPorts are the allowed external ports for Tailscale public access.
-var ValidPublicPorts = map[int]bool{443: true, 8443: true, 10000: true}
-
-// parseHostPorts extracts host-side ports from image port mappings via the
-// canonical ParsePortMapping. Unparseable entries are reported on stderr —
-// silent skipping was the root cause of an unrelated bug where tunnel rules
-// vanished without a diagnostic.
-func parseHostPorts(boxPorts []string) []int {
-	var result []int
-	for _, mapping := range boxPorts {
-		p, ok := ParsePortMapping(mapping)
-		if !ok {
-			fmt.Fprintf(os.Stderr,
-				"Warning: ignoring unparseable port mapping %q (expected forms: \"P\", \"H:C\", \"IP:H:C\")\n",
-				mapping)
-			continue
-		}
-		result = append(result, p.Host)
-	}
-	return result
-}
-
-// buildPortMapping builds a host→container port map from image port mappings.
-// Same loud-failure policy as parseHostPorts — see comment above.
-func buildPortMapping(boxPorts []string) map[int]int {
-	m := make(map[int]int, len(boxPorts))
-	for _, mapping := range boxPorts {
-		p, ok := ParsePortMapping(mapping)
-		if !ok {
-			fmt.Fprintf(os.Stderr,
-				"Warning: ignoring unparseable port mapping %q (expected forms: \"P\", \"H:C\", \"IP:H:C\")\n",
-				mapping)
-			continue
-		}
-		m[p.Host] = p.Container
-	}
-	return m
-}
-
-// resolveProto returns the backend scheme for a container port, defaulting to "http".
-// portProtos is string-keyed (the OCI-label wire form, P2B reshape) — index by the port as a string.
-func resolveProto(containerPort int, portProtos map[string]string) string {
-	if portProtos != nil {
-		if pp, ok := portProtos[strconv.Itoa(containerPort)]; ok {
-			return pp
-		}
-	}
-	return "http"
-}
-
-// ResolveTunnelConfig resolves a TunnelYAML into a TunnelConfig with defaults applied.
-// portProtos maps container port -> protocol ("http" or "tcp") from candy PortSpec data.
-// boxPorts is the list of image port mappings (e.g. "18789:18789", "443:18789").
-func ResolveTunnelConfig(t *spec.TunnelYAML, boxName string, dns string, _ map[string]spec.CandyReader, _ []string, portProtos map[string]string, boxPorts []string) *TunnelConfig {
-	if t == nil {
-		return nil
-	}
-
-	cfg := &TunnelConfig{
-		Provider: t.Provider,
-		BoxName:  boxName,
-	}
-
-	hostPorts := parseHostPorts(boxPorts)
-	hostToContainer := buildPortMapping(boxPorts)
-
-	// Determine public set
-	publicSet := make(map[int]bool)
-	publicHostnames := make(map[int]string)
-	if t.Public.All {
-		for _, p := range hostPorts {
-			publicSet[p] = true
-		}
-	}
-	for _, p := range t.Public.Ports {
-		publicSet[p] = true
-	}
-	for p, h := range t.Public.PortMap {
-		publicSet[p] = true
-		publicHostnames[p] = h
-	}
-
-	// Determine private set ("all" means all remaining ports not already public)
-	privateSet := make(map[int]bool)
-	if t.Private.All {
-		for _, p := range hostPorts {
-			if !publicSet[p] {
-				privateSet[p] = true
-			}
-		}
-	}
-	for _, p := range t.Private.Ports {
-		privateSet[p] = true
-	}
-
-	// Build TunnelPort slice (ordered by image port order)
-	for _, hp := range hostPorts {
-		if !publicSet[hp] && !privateSet[hp] {
-			continue // port not tunneled
-		}
-		cp := hp
-		if c, ok := hostToContainer[hp]; ok {
-			cp = c
-		}
-		proto := resolveProto(cp, portProtos)
-		cfg.Ports = append(cfg.Ports, TunnelPort{
-			Port:        hp,
-			BackendPort: hp,
-			Protocol:    proto,
-			Public:      publicSet[hp],
-			Hostname:    publicHostnames[hp],
-		})
-	}
-
-	// Cloudflare defaults
-	if cfg.Provider == "cloudflare" {
-		cfg.TunnelName = t.Tunnel
-		if cfg.TunnelName == "" {
-			cfg.TunnelName = "charly-" + boxName
-		}
-		cfg.Hostname = dns
-	}
-
-	return cfg
-}
-
-// TunnelConfigFromMetadata creates a TunnelConfig from image label metadata.
-// Unlike ResolveTunnelConfig, this doesn't need candy access since the tunnel
-// configuration is already stored in the label.
-func TunnelConfigFromMetadata(meta *spec.BoxMetadata) *TunnelConfig {
-	if meta == nil || meta.Tunnel == nil {
-		return nil
-	}
-
-	t := meta.Tunnel
-	cfg := &TunnelConfig{
-		Provider: t.Provider,
-		BoxName:  meta.Box,
-	}
-
-	hostPorts := parseHostPorts(meta.Port)
-	hostToContainer := buildPortMapping(meta.Port)
-
-	// Determine public set
-	publicSet := make(map[int]bool)
-	publicHostnames := make(map[int]string)
-	if t.Public.All {
-		for _, p := range hostPorts {
-			publicSet[p] = true
-		}
-	}
-	for _, p := range t.Public.Ports {
-		publicSet[p] = true
-	}
-	for p, h := range t.Public.PortMap {
-		publicSet[p] = true
-		publicHostnames[p] = h
-	}
-
-	// Determine private set
-	privateSet := make(map[int]bool)
-	if t.Private.All {
-		for _, p := range hostPorts {
-			if !publicSet[p] {
-				privateSet[p] = true
-			}
-		}
-	}
-	for _, p := range t.Private.Ports {
-		privateSet[p] = true
-	}
-
-	// Build TunnelPort slice
-	for _, hp := range hostPorts {
-		if !publicSet[hp] && !privateSet[hp] {
-			continue
-		}
-		cp := hp
-		if c, ok := hostToContainer[hp]; ok {
-			cp = c
-		}
-		proto := resolveProto(cp, meta.PortProto)
-		cfg.Ports = append(cfg.Ports, TunnelPort{
-			Port:        hp,
-			BackendPort: hp,
-			Protocol:    proto,
-			Public:      publicSet[hp],
-			Hostname:    publicHostnames[hp],
-		})
-	}
-
-	// Cloudflare defaults
-	if cfg.Provider == "cloudflare" {
-		cfg.TunnelName = t.Tunnel
-		if cfg.TunnelName == "" {
-			cfg.TunnelName = "charly-" + meta.Box
-		}
-		cfg.Hostname = meta.DNS
-	}
-
-	return cfg
-}
+// ResolveTunnelConfig / TunnelConfigFromMetadata are aliased straight through to the
+// pure sdk/deploykit resolution mechanism (FLOOR-SLIM mechanical batch) — see the file
+// header. No behavior change; the logic itself now lives in sdk/deploykit/tunnel_resolve.go.
+var (
+	ResolveTunnelConfig      = deploykit.ResolveTunnelConfig
+	TunnelConfigFromMetadata = deploykit.TunnelConfigFromMetadata
+)

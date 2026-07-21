@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -292,7 +293,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// build ORDER + auto-intermediates (charly box list targets): ComputeIntermediates adds the
 	// auto-generated intermediate images; ResolveBoxOrder returns them dependency-ordered.
 	if inter, ierr := ComputeIntermediates(resolvedBoxes, layers, cfg, calver); ierr == nil {
-		if order, oerr := ResolveBoxOrder(inter, layers); oerr == nil {
+		if order, oerr := deploykit.ResolveBoxOrder(inter, layers); oerr == nil {
 			for _, name := range order {
 				bt := spec.BuildTarget{Name: name}
 				if b := inter[name]; b != nil {
