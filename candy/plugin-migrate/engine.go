@@ -193,7 +193,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 	data, err := os.ReadFile(rootPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Fprintf(out, "no %s in %s — nothing to migrate\n", kit.UnifiedFileName, ctx.Dir)
+			_, _ = fmt.Fprintf(out, "no %s in %s — nothing to migrate\n", kit.UnifiedFileName, ctx.Dir)
 			return false, nil
 		}
 		return false, fmt.Errorf("reading %s: %w", rootPath, err)
@@ -221,7 +221,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 				// overlay already current
 			case !ook || ocv.Less(floor):
 				return false, fmt.Errorf(
-					"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this per-host overlay against the current schema (a current overlay carries `version: %s`).",
+					"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this per-host overlay against the current schema (a current overlay carries `version: %s`)",
 					ctx.HostDeployPath, oraw, floor, head, head)
 			default:
 				overlayVer, overlayLags = ocv, true
@@ -236,14 +236,14 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 			rootPath, ver, head)
 	case ok && fileVer == head:
 		if !overlayLags {
-			fmt.Fprintf(out, "already at schema %s; nothing to migrate\n", head)
+			_, _ = fmt.Fprintf(out, "already at schema %s; nothing to migrate\n", head)
 			return false, nil
 		}
 		// Project at head, overlay behind: fall through — the chain is
 		// idempotent on the already-migrated project and brings the overlay up.
 	case !ok || fileVer.Less(floor):
 		return false, fmt.Errorf(
-			"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this config against the current schema (a current config carries `version: %s`).",
+			"%s: schema %q predates the supported floor %s and cannot be migrated — the historical migration chain was removed at the %s baseline reset. Re-author this config against the current schema (a current config carries `version: %s`)",
 			rootPath, ver, floor, head, head)
 	}
 
@@ -279,7 +279,7 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 		}
 		if len(files) > 0 || hostChanged {
 			applied = append(applied, m.Name)
-			fmt.Fprintf(out, "applied %s (schema %s)\n", m.Name, m.Version)
+			_, _ = fmt.Fprintf(out, "applied %s (schema %s)\n", m.Name, m.Version)
 		}
 	}
 	stamped, serr := universalStamp(ctx, head, projectOnly)
@@ -288,9 +288,9 @@ func runMigrations(ctx *MigrateContext, projectOnly bool) (bool, error) {
 	}
 	changed := len(applied) > 0 || len(stamped) > 0
 	if changed {
-		fmt.Fprintf(out, "migrated to schema %s\n", head)
+		_, _ = fmt.Fprintf(out, "migrated to schema %s\n", head)
 	} else {
-		fmt.Fprintf(out, "nothing to migrate (already at schema %s)\n", head)
+		_, _ = fmt.Fprintf(out, "nothing to migrate (already at schema %s)\n", head)
 	}
 	return changed, nil
 }

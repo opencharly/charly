@@ -406,7 +406,8 @@ func reshapeTransformStep(st *yaml.Node) error {
 			break // the scalar method form stays (the primary shorthand)
 		}
 		m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		if v.Kind == yaml.ScalarNode {
+		switch v.Kind {
+		case yaml.ScalarNode:
 			// the scalar shorthand expands via the verb's PRIMARY (method for a
 			// live verb; e.g. http for the http probe verb)
 			wrapKey := reshapePrimaryOf[word]
@@ -415,7 +416,7 @@ func reshapeTransformStep(st *yaml.Node) error {
 			}
 			m.Content = append(m.Content,
 				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: wrapKey}, v)
-		} else if v.Kind == yaml.MappingNode {
+		case yaml.MappingNode:
 			m.Content = append(m.Content, v.Content...)
 		}
 		renames := reshapeVerbFieldRenames[word]

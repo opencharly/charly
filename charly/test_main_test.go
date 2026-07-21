@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	if err := os.Setenv("XDG_CONFIG_HOME", configHomeDir); err != nil {
-		os.RemoveAll(configHomeDir)
+		_ = os.RemoveAll(configHomeDir)
 		fmt.Fprintf(os.Stderr, "TestMain: set XDG_CONFIG_HOME: %v\n", err)
 		os.Exit(1)
 	}
@@ -68,6 +68,6 @@ func TestMain(m *testing.M) {
 	// os.Exit runs no deferred calls, so the temp-dir cleanup must happen BEFORE it,
 	// around the captured m.Run() code — not via defer.
 	code := m.Run()
-	os.RemoveAll(configHomeDir)
+	_ = os.RemoveAll(configHomeDir)
 	os.Exit(code)
 }
