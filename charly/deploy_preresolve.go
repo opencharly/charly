@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk"
@@ -82,7 +83,11 @@ func registerPluginDeployPreresolver(word string, fn deployPreresolver) {
 
 // wireDeployPreresolver builds a wire-backed preresolver that Invokes the plugin's OpPreresolve and
 // ships the returned opaque JSON in DeployVenue.Substrate — the generalization of the in-core
-// k8s/android preresolvers (F6).
+// k8s/android preresolvers (F6). Dispatches WITH a reverse-channel broker (kit.ShellExecutor{}, the
+// SAME "no live venue, just give me HostBuild access" idiom host_build_pod_config.go's
+// invokePodConfigOp already uses) — a moved preresolve BODY reaches the "deploy-entity-resolve"
+// HostBuild seam (unit 6a) for its LoadUnified-coupled lookups, which a plain gp.Invoke (no
+// broker) could not serve.
 func wireDeployPreresolver(gp *grpcProvider) deployPreresolver {
 	return func(name, dir string, node *spec.BundleNode, plans []*spec.InstallPlan) (json.RawMessage, error) {
 		var extra map[string]any
@@ -93,7 +98,9 @@ func wireDeployPreresolver(gp *grpcProvider) deployPreresolver {
 		if err != nil {
 			return nil, err
 		}
-		res, err := gp.Invoke(context.Background(), &Operation{Reserved: gp.word, Op: sdk.OpPreresolve, Params: pj})
+		res, err := gp.InvokeWithExecutor(context.Background(),
+			&Operation{Reserved: gp.word, Op: sdk.OpPreresolve, Params: pj},
+			kit.ShellExecutor{}, buildEngineContext{}, false, nil)
 		if err != nil {
 			return nil, err
 		}

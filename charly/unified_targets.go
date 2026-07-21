@@ -125,12 +125,15 @@ func runUnifiedTargetChecks(ctx context.Context, exec deploykit.DeployExecutor, 
 // `target: k8s` resolve to externalDeployTarget over the E3b reverse channel,
 // served out-of-process by candy/plugin-adb (deploy:android) and candy/plugin-kube
 // (deploy:k8s). There is no in-proc android/k8s UnifiedDeployTarget; the
-// substrate-specific inputs the host must resolve (the android device endpoint +
-// apk specs; the k8s image Capabilities + cluster template, used to GENERATE the
-// egress-validated Kustomize tree) are produced host-side by each substrate's
-// registered deploy preresolver (android_deploy_preresolve.go /
-// k8s_deploy_preresolve.go) and shipped in DeployVenue.Substrate. The plugin then
-// drives the live external system (the device / the cluster via kubectl).
+// substrate-specific inputs (the android device endpoint + apk specs; the k8s
+// image Capabilities + cluster template, used to GENERATE the egress-validated
+// Kustomize tree) are now produced PLUGIN-SIDE (F6, FINAL/K5 unit 6a — each
+// substrate's own preresolve.go, dispatched via the generalized
+// deploy_preresolve.go:wireDeployPreresolver seam), reaching the host ONLY
+// through the "deploy-entity-resolve" / "k8s-generate-kustomize" HostBuild seams
+// for the config it cannot resolve itself, and shipped in DeployVenue.Substrate.
+// The plugin then drives the live external system (the device / the cluster via
+// kubectl).
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

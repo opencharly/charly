@@ -15,8 +15,20 @@ func newVenueTestUF() *UnifiedFile {
 			"cachyos-gpu": {}, // bare kind:vm entity
 		}),
 		Bundle: map[string]spec.BundleNode{
-			"web-pod":     {Target: "pod"},
-			"k3s-vm":      {Target: "vm", From: "k3s-vm-entity"},
+			"web-pod": {Target: "pod", Children: map[string]*spec.BundleNode{
+				// RCA #12 (FINAL/K5 unit 6a): a target:vm CHILD nested under a
+				// non-vm (pod) parent — check-sidecar-pod.check-sidecar-pod-ephvm's
+				// exact shape. The leaf, not the root, is the vm.
+				"web-pod-vm":    {Target: "vm"},
+				"web-pod-local": {Target: "local"}, // same shape, local leaf under a pod root
+			}},
+			"k3s-vm": {Target: "vm", From: "k3s-vm-entity", Children: map[string]*spec.BundleNode{
+				// The preserved delegate-into-guest shape: the ROOT is the vm, the
+				// leaf is something else nested INSIDE that vm's guest — the leaf
+				// check must fall through to the root fallback here, not treat
+				// "inner-app" itself as a second vm.
+				"inner-app": {Target: "local"},
+			}},
 			"bare-vm-dep": {Target: "vm"}, // target:vm with no explicit Vm → falls back to key
 			"my-local":    {Target: "local"},
 			"remote-host": {Target: "local", Host: "user@box"},
@@ -34,8 +46,19 @@ func TestCheckVmTarget(t *testing.T) {
 		{"cachyos-gpu", "cachyos-gpu", true}, // kind:vm entity: its own name IS the domain identity
 		{"k3s-vm", "k3s-vm", true},           // target:vm deploy → the DEPLOY key (not entry.From "k3s-vm-entity")
 		{"bare-vm-dep", "bare-vm-dep", true}, // target:vm, no Vm → deploy key
-		{"k3s-vm.inner", "k3s-vm", true},     // dotted root is the target:vm deploy → its domain identity
+		{"k3s-vm.inner", "k3s-vm", true},     // dotted root is the target:vm deploy, leaf unresolvable → root fallback
+		// RCA #12: leaf-vm-under-pod — the pod ROOT is not a vm, but the LEAF
+		// (a Children entry) IS. domainID keys off the FULL dotted path, SANITIZED
+		// by vmDomainIdentity (vmshared.VmDomainIdentity: "." → "-") — the same
+		// canonical scheme every vm-state write already uses (RCA #6-#9).
+		{"web-pod.web-pod-vm", "web-pod-web-pod-vm", true},
+		// RCA #12 preserved precedent: root-vm-with-guest-suffix. The leaf
+		// ("inner-app") resolves but is NOT itself a vm (target:local, nested
+		// INSIDE k3s-vm's guest) → falls through to the root fallback, domain
+		// keyed off the VM ROOT, not the leaf — the check-arch-vm.arch-host shape.
+		{"k3s-vm.inner-app", "k3s-vm", true},
 		{"web-pod", "", false},               // pod is not a VM
+		{"web-pod.web-pod-local", "", false}, // leaf under a pod root that is itself local, not vm
 		{"my-local", "", false},              // local is not a VM
 		{"nonexistent", "", false},           // unknown
 	}
@@ -63,7 +86,12 @@ func TestCheckLocalTarget(t *testing.T) {
 	}{
 		{"my-local", true, ""},            // host:local (default shell)
 		{"remote-host", true, "user@box"}, // host:<remote> (ssh)
-		{"my-local.child", true, ""},      // dotted root is target:local
+		{"my-local.child", true, ""},      // dotted root is target:local, leaf unresolvable → root fallback
+		// RCA #12: local-leaf-under-pod — the pod ROOT is not host-venue, but the
+		// LEAF (a Children entry) IS (target:local). Same defect class as
+		// checkVmTarget's leaf-vm-under-pod case, same shared resolveLeafVenue fix.
+		{"web-pod.web-pod-local", true, ""},
+		{"web-pod.web-pod-vm", false, ""}, // leaf under a pod root that is itself a vm, not local
 		{"web-pod", false, ""},            // pod is not local
 		{"cachyos-gpu", false, ""},        // vm entity is not a local deploy
 		{"k3s-vm", false, ""},             // target:vm is not local

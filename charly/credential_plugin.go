@@ -16,7 +16,7 @@ import (
 // the `charly secrets` CLI, the GPG `.secrets` surface) lives OUT-OF-PROCESS in
 // candy/plugin-secrets — the C2 dep-shed removed github.com/zalando/go-keyring from
 // charly/go.mod. Every core credential consumer (enc.go, secrets.go, layer_secrets.go,
-// config_secret_migration.go, runtime_config.go, vnc_helpers.go, android_deploy_cmd.go,
+// config_secret_migration.go, runtime_config.go, vnc_helpers.go, host_build_deploy_entity_resolve.go,
 // migrate_charly_cutover4.go) keeps using the SAME CredentialStore interface + the SAME
 // ResolveCredential entry point; pluginCredentialStore forwards every call to
 // verb:credential over the provider registry (built from candy source on a dev host, or

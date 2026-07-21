@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
 // command.go is the command:bundle leg — the `charly bundle …` CLI, COMPILED-IN (F8). It dispatches
@@ -32,8 +33,75 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return runBundleCommand(ctx, req)
 	case sdk.OpCompile:
 		return runBundleCompile(ctx, req)
+	case sdk.OpEphemeralRegister:
+		return runEphemeralRegister(ctx, req)
+	case sdk.OpEphemeralTeardown:
+		return runEphemeralTeardown(ctx, req)
 	default:
 		return nil, fmt.Errorf("bundle: unsupported op %q", req.GetOp())
+	}
+}
+
+// runEphemeralRegister serves command:bundle's Invoke(OpEphemeralRegister): decode the
+// #EphemeralRegisterRequest and register the ephemeral instance (FINAL/K5 unit 6a — the
+// ephemeral_lifecycle.go move). Stashes the reverse-channel executor via setCommandContext
+// (mirroring runBundleCompile) so persistEphemeralRuntime's saveDeployConfig call can reach the
+// "deploy-config-save" HostBuild seam.
+func runEphemeralRegister(ctx context.Context, req *pb.InvokeRequest) (reply *pb.InvokeReply, retErr error) {
+	defer recoverEphemeralOpPanic(&retErr)
+	exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+	if err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-register: reach host reverse channel: %w", err)
+	}
+	setCommandContext(ctx, exec)
+	var r spec.EphemeralRegisterRequest
+	if err := json.Unmarshal(req.GetParamsJson(), &r); err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-register: decode request: %w", err)
+	}
+	if _, err := registerEphemeral(r.Node, r.Name); err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-register: %w", err)
+	}
+	replyJSON, err := json.Marshal(spec.EphemeralRegisterReply{})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.InvokeReply{ResultJson: replyJSON}, nil
+}
+
+// runEphemeralTeardown serves command:bundle's Invoke(OpEphemeralTeardown): decode the
+// #EphemeralTeardownRequest and tear down the ephemeral instance.
+func runEphemeralTeardown(ctx context.Context, req *pb.InvokeRequest) (reply *pb.InvokeReply, retErr error) {
+	defer recoverEphemeralOpPanic(&retErr)
+	exec, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+	if err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-teardown: reach host reverse channel: %w", err)
+	}
+	setCommandContext(ctx, exec)
+	var r spec.EphemeralTeardownRequest
+	if err := json.Unmarshal(req.GetParamsJson(), &r); err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-teardown: decode request: %w", err)
+	}
+	if err := teardownEphemeral(r.Node, r.Name); err != nil {
+		return nil, fmt.Errorf("bundle ephemeral-teardown: %w", err)
+	}
+	replyJSON, err := json.Marshal(spec.EphemeralTeardownReply{})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.InvokeReply{ResultJson: replyJSON}, nil
+}
+
+// recoverEphemeralOpPanic converts a recovered panic into an error carrying sdk.EphemeralPanicMarker,
+// assigning it to *errOut (the caller's named error return) instead of letting it crash or vanish.
+// RCA #5 (FINAL/K5 unit 6a): persistEphemeralRuntime's nil-map write panic was previously
+// UNRECOVERED anywhere in the call chain and never surfaced — the enclosing `charly bundle add`
+// reported PASS regardless. Placed at the OUTERMOST plugin-side entry point (runEphemeralRegister/
+// runEphemeralTeardown) so it catches a panic from ANYWHERE inside registerEphemeral/
+// teardownEphemeral, not just the one bug already found — a general safety net for this whole op
+// class, matching the "silent failure must become loud" pattern this cutover keeps finding.
+func recoverEphemeralOpPanic(errOut *error) {
+	if r := recover(); r != nil {
+		*errOut = fmt.Errorf("%s %v", sdk.EphemeralPanicMarker, r)
 	}
 }
 

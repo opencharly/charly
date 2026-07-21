@@ -19,6 +19,9 @@ package main
 
 // android and k8s are EXTERNAL deploy substrates (F1), served out-of-process by
 // candy/plugin-adb (deploy:android) / candy/plugin-kube (deploy:k8s). ResolveTarget routes
-// `target: android` / `target: k8s` to externalDeployTarget; the host-side substrate
-// preresolution (device-endpoint + apk specs; cluster template + Capabilities → the
-// generated Kustomize tree) lives in android_deploy_preresolve.go / k8s_deploy_preresolve.go.
+// `target: android` / `target: k8s` to externalDeployTarget; the substrate preresolution
+// (device-endpoint + apk specs; cluster template + Capabilities → the generated Kustomize
+// tree) is now driven PLUGIN-SIDE (F6, FINAL/K5 unit 6a — each plugin's own preresolve.go,
+// dispatched via the generalized deploy_preresolve.go:wireDeployPreresolver seam), reaching
+// the host ONLY through the "deploy-entity-resolve" / "k8s-generate-kustomize" HostBuild
+// seams for the config it cannot resolve itself.

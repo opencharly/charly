@@ -16,7 +16,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 
@@ -122,15 +124,42 @@ func retrieveArtifactsAndK3s(ctx context.Context, exec deploykit.DeployExecutor,
 
 // registerEphemeralIfMarked runs the ephemeral lifecycle registration
 // (systemd transient timer + parent-detection) when the dispatch-merged
-// node is ephemeral. FIRST action in vm/pod/k8s Add (panic-safe TTL
-// ordering). Consumes the merged node — does NOT re-read charly.yml.
-// Registration failure is logged (not fatal), matching the prior run*
-// behavior; the returned error is always nil today but kept for symmetry.
-func registerEphemeralIfMarked(node *spec.BundleNode, name string) {
+// node is ephemeral. Called as the FIRST action of vm's Add (panic-safe TTL
+// ordering) — the ONLY substrate that calls it today (vm_lifecycle_preresolve.go);
+// pod/k8s Add never reach it (a pre-existing gap, tracked to the bed-robustness
+// batch — see validate_ephemeral.go for the load-time guard that makes the gap
+// LOUD instead of silent). Consumes the merged node — does NOT re-read charly.yml.
+// Dispatches to command:bundle's OpEphemeralRegister (ephemeral_dispatch.go,
+// FINAL/K5 unit 6a) — the registration BODY moved to candy/plugin-bundle.
+//
+// RCA #5 (FINAL/K5 unit 6a, live-probe-caught): an ORDINARY registration error (e.g.
+// systemd-run missing — an expected condition) stays a soft, logged warning, matching the
+// prior run* behavior. A PANIC-CLASS error (sdk.EphemeralPanicMarker — the plugin's
+// recoverEphemeralOpPanic converts an unrecovered panic into this marker, since a bare Go
+// panic previously crashed silently or vanished before reaching this caller — team-lead's
+// probe caught a nil-map write panic in persistEphemeralRuntime that a bed run reported as
+// PASS) is NEVER a soft warning: it signals a genuine bug, so it is returned to FAIL the
+// whole Add — "a panicking registration must fail the add, not vanish."
+func registerEphemeralIfMarked(node *spec.BundleNode, name string) error {
 	if node == nil || !node.IsEphemeral() {
-		return
+		return nil
 	}
-	if _, regErr := RegisterEphemeralLifecycle(node, name); regErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: ephemeral lifecycle registration: %v\n", regErr)
+	regErr := RegisterEphemeralLifecycle(node, name)
+	if regErr == nil {
+		return nil
 	}
+	if isEphemeralPanicError(regErr) {
+		return fmt.Errorf("ephemeral lifecycle registration: %w", regErr)
+	}
+	fmt.Fprintf(os.Stderr, "warning: ephemeral lifecycle registration: %v\n", regErr)
+	return nil
+}
+
+// isEphemeralPanicError reports whether err was converted from a recovered panic (carries
+// sdk.EphemeralPanicMarker — candy/plugin-bundle's recoverEphemeralOpPanic) rather than an
+// ordinary registration condition. Pulled out as its own pure function purely for testability
+// (registerEphemeralIfMarked's own caller, RegisterEphemeralLifecycle, is seam-coupled — needs
+// the live provider registry — not unit-testable standalone).
+func isEphemeralPanicError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), sdk.EphemeralPanicMarker)
 }

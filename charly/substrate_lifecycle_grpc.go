@@ -143,7 +143,15 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 		fmt.Println(note)
 	}
 	// Persist the opaque deploy-entry State patch host-side (the plugin cannot touch charly.yml):
-	// pod ships {ResolvedImage}; vm ships {vm_state}. saveDeployState is the generic writer.
+	// pod ships {ResolvedImage}. saveDeployState is the generic writer, keyed by the RAW
+	// (unsanitized) deploy name — correct for pod's own plain top-level naming today. vm does
+	// NOT ship a State patch here (RCA #6, FINAL/K5 unit 6a, hard cutover): its PrepareVenue used
+	// to also ship {vm_state}, persisted through THIS generic path under the wrong (unsanitized)
+	// key — a second, independent writer racing candy/plugin-vm's own canonical
+	// "vm:"+VmDomainIdentity(name)-keyed persist (vm_create_orchestrate.go's hostConfigPersist),
+	// and for a NESTED (dotted) deploy name, poisoning the overlay on every subsequent load
+	// (charly/unified.go's validateDeploymentName dot-rejection). The vm substrate now owns its
+	// own persistence end to end — see candy/plugin-deploy-vm/lifecycle.go's PrepareVenue.
 	if len(reply.State) > 0 && !opts.DryRun {
 		var in deploykit.SaveDeployStateInput
 		if err := json.Unmarshal(reply.State, &in); err != nil {
