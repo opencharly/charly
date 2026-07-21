@@ -118,7 +118,7 @@ func dispatchGenerate(hc *hostClient, args []string) error {
 	if err != nil {
 		return err
 	}
-	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "generate", sdk.OpBuild, reqJSON, nil)
+	resJSON, err := hc.exec.InvokeProvider(hc.ctx, "build", "generate", sdk.OpBuild, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

@@ -54,7 +54,7 @@ func resolveAgentSpec(ex *sdk.Executor, ctx context.Context, bodies map[string]j
 	if err != nil {
 		return nil, err
 	}
-	out, err := ex.InvokeProvider(ctx, "kind", "agent", sdk.OpResolve, inJSON, nil)
+	out, err := ex.InvokeProvider(ctx, "kind", "agent", sdk.OpResolve, inJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, err
 	}

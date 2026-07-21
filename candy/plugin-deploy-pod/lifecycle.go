@@ -123,7 +123,7 @@ func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.I
 	}
 	plan := *planPtr
 	if len(plan.Enc) > 0 {
-		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil, sdk.InvokeProviderOpts{}); err != nil {
 			return nil, fmt.Errorf("plugin-deploy-pod start: mount encrypted volumes: %w", err)
 		}
 	}
@@ -162,7 +162,7 @@ func podStop(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.In
 		return nil, err
 	}
 	if len(plan.Enc) > 0 {
-		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil, sdk.InvokeProviderOpts{}); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: encrypted-volume unmount failed: %v\n", err)
 		}
 	}
@@ -221,7 +221,7 @@ func podTunnelOp(ctx context.Context, exec *sdk.Executor, method string, cfg *sp
 	if err != nil {
 		return err
 	}
-	resJSON, err := exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil)
+	resJSON, err := exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

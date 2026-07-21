@@ -102,7 +102,7 @@ func defaultListLibvirtCharlyDomains(ctx context.Context) ([]domainInfo, error) 
 	if err != nil {
 		return nil, fmt.Errorf("marshal list-domains request: %w", err)
 	}
-	out, err := exec.InvokeProvider(ctx, "verb", "libvirt", sdk.OpRun, nil, envJSON)
+	out, err := exec.InvokeProvider(ctx, "verb", "libvirt", sdk.OpRun, nil, envJSON, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return nil, nil // plugin absent/unreachable → no libvirt-backed VMs surface (graceful degrade)
 	}
