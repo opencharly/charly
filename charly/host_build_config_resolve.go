@@ -15,8 +15,10 @@ import (
 // command plugin (candy/plugin-vm's command:vm leg) owns its CLI handlers but cannot LoadUnified —
 // the config loader + runtime-settings store + backend probe are core Mechanisms (P2), and a plugin
 // imports only the sdk. So the host resolves the project config for one entity ONCE and ships it
-// back over the reverse channel, exactly as the deploy-time vmLifecyclePrepare seam ships
-// LifecyclePrepareInput to a substrate's OpPrepareVenue. The action noun is CLASS-GENERIC
+// back over the reverse channel, exactly as the "deploy-entity-resolve" seam ships a resolved
+// kind:vm entity to candy/plugin-deploy-vm's own OpPrepareVenue (FINAL/K5 unit 6a, M4b — the
+// deploy-time vmLifecyclePrepare host seam this comment used to reference is deleted; the plugin
+// self-serves via that seam instead). The action noun is CLASS-GENERIC
 // ("config-resolve"), never a substrate word (the F11 uniform-API gate forbids a provider word on
 // the host-builder surface) — the first consumer is command:vm, and the pod (P11) + bundle (P13)
 // command families reuse the SAME seam, extending the reply with their own resolved fields.
