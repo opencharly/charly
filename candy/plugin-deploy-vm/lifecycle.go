@@ -366,7 +366,7 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	// deploy name — never the canonical "vm:"+VmDomainIdentity(name) key
 	// candy/plugin-vm/vm_create_orchestrate.go's hostConfigPersist already writes authoritatively.
 	// For a NESTED deploy (a dotted name), that second write poisoned the per-host overlay: every
-	// SUBSEQUENT load hit validateDeploymentName's dot-rejection (charly/unified.go). The
+	// SUBSEQUENT load hit ValidateDeploymentName's dot-rejection (sdk/spec/deploy_tree_validate.go). The
 	// InstanceID/DiskPath/SeedIso carry-forward this used to do is now genuinely unnecessary — the
 	// canonical entry already holds them stably (populated by `charly vm create`'s own disk-build
 	// flow) and is never touched by anything else, so there is nothing to "carry forward" through

@@ -76,13 +76,6 @@ func parseEmbeddedInstallHints() map[string]map[string]string {
 	return doc.InstallHints
 }
 
-// InstallHint returns a distro-appropriate install command for the given binary.
-// Returns an empty string if no hint is available.
-func InstallHint(binary string) string {
-	distro := detectDistro()
-	return distro.installHint(binary)
-}
-
 func (d Distro) installHint(binary string) string {
 	if d.Manager == "" {
 		return binary

@@ -31,7 +31,7 @@ type K8sGenerateOpts struct {
 	Instance       string // "" for the bare overlay; non-empty for image/instance
 	ImageRef       string // fully qualified image ref (registry/name:tag)
 	Deploy         spec.BundleNode
-	Capabilities   *Capabilities
+	Capabilities   *spec.BoxMetadata
 	Cluster        *ResolvedK8s
 	OutputDir      string // usually <projectDir>/.opencharly/k8s
 }

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -25,6 +28,64 @@ import (
 // seam (deploykit.OCITarget.EmitStepOp → HostBuild("step-emit","oci-emit-step") → ociEmitStep).
 // Home/Distros are empty (the tests that need home resolution or per-step distros are rare; add a
 // dedicated constructor if one arises).
+// stubResolvedProject swaps the "resolved-project" host-builder for one that returns rp verbatim,
+// restoring the original on test cleanup. The 4 former HOST-COUPLED step-emit words
+// (system-packages/builder/local-pkg-install/op, K5-Unit-6b) no longer read the synthetic
+// buildEngineContext's Generator/Box/BuilderConfig/DistroCfg fields directly — candy/plugin-installstep
+// fetches a real "resolved-project" envelope and renders against it instead, so a test that needs to
+// feed it project structure (a resolved box, its distro/builder vocab, a candy) does so by stubbing
+// this seam, exactly like a real project load would populate it. The per-invocation scalars
+// (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) still ride the buildEngineContext passed to
+// ociTestTarget, unchanged.
+func stubResolvedProject(t *testing.T, rp spec.ResolvedProject) {
+	t.Helper()
+	orig, hadOrig := hostBuilders["resolved-project"]
+	hostBuilders["resolved-project"] = func(_ context.Context, _ []byte, _ buildEngineContext) ([]byte, error) {
+		return json.Marshal(rp)
+	}
+	t.Cleanup(func() {
+		if hadOrig {
+			hostBuilders["resolved-project"] = orig
+		} else {
+			delete(hostBuilders, "resolved-project")
+		}
+	})
+}
+
+// chdirTemp creates a fresh temp dir, chdirs into it for the test's duration (restored via
+// t.Cleanup), and returns its path. candy/plugin-installstep caches its "resolved-project"-built
+// *deploykit.Generator by os.Getwd() (genCache) — a test stubbing its OWN synthetic envelope needs
+// its OWN unique cwd, or the FIRST stubbed test to populate that cache key would leak its Generator
+// into every other stubbed test sharing the SAME (un-chdir'd) process cwd.
+func chdirTemp(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+	return dir
+}
+
+// stubRenderGen seeds the render-seam host-builder's OWN per-dir Generator cache
+// (renderGenCache, host_build_render_seam.go) with a synthetic *Generator carrying box, keyed on
+// dir. This is a SEPARATE cache from candy/plugin-installstep's own genCache/stubResolvedProject:
+// it backs the "render-seam" HostBuild kind (EmitPluginOp, inline-builder, ensure-builders) —
+// still genuinely host-coupled (a Go-level ProvisionActor type-assertion only charly core can
+// perform) — which a `run: plugin:` verb Op reaches via dg.EmitTasks' `case "plugin"` even when
+// the OUTER op-step render (system-packages/builder/local-pkg-install/op) no longer round-trips
+// through step-emit. Restored via t.Cleanup.
+func stubRenderGen(t *testing.T, dir string, box *buildkit.ResolvedBox) {
+	t.Helper()
+	gen := &Generator{Dir: dir, Boxes: map[string]*buildkit.ResolvedBox{box.Name: box}}
+	renderGenCache.Store(dir, gen)
+	t.Cleanup(func() { renderGenCache.Delete(dir) })
+}
+
 func ociTestTarget(build buildEngineContext) *deploykit.OCITarget {
 	return &deploykit.OCITarget{
 		EmitStepOp: func(step spec.InstallStep, plan *spec.InstallPlan, d []string) (string, error) {
@@ -60,6 +121,7 @@ func TestOCITargetEmitShellHook(t *testing.T) {
 }
 
 func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
+	chdirTemp(t)
 	// Legacy InstallTemplate set; PhaseTemplate returns it for (install, container).
 	distro := &spec.ResolvedDistro{
 		Format: map[string]*FormatDef{
@@ -68,7 +130,11 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 			},
 		},
 	}
-	tgt := ociTestTarget(buildEngineContext{DistroCfg: buildkit.WrapDistroDef(distro)})
+	stubResolvedProject(t, spec.ResolvedProject{
+		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
+		Boxes:  map[string]spec.ResolvedBoxView{"ripgrep-box": {Name: "ripgrep-box", Distro: []string{"test-distro"}}},
+	})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "ripgrep-box"}})
 	plan := &deploykit.InstallPlan{Candy: "ripgrep", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -89,6 +155,7 @@ func TestOCITargetEmitSystemPackagesWithLegacyTemplate(t *testing.T) {
 }
 
 func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
+	chdirTemp(t)
 	// Both legacy and new path set; new path must win.
 	distro := &spec.ResolvedDistro{
 		Format: map[string]*FormatDef{
@@ -102,7 +169,11 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 			},
 		},
 	}
-	tgt := ociTestTarget(buildEngineContext{DistroCfg: buildkit.WrapDistroDef(distro)})
+	stubResolvedProject(t, spec.ResolvedProject{
+		Distro: map[string]*spec.ResolvedDistro{"test-distro": distro},
+		Boxes:  map[string]spec.ResolvedBoxView{"foo-box": {Name: "foo-box", Distro: []string{"test-distro"}}},
+	})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "foo-box"}})
 	plan := &deploykit.InstallPlan{Candy: "foo", Steps: []spec.InstallStep{
 		&deploykit.SystemPackagesStep{
 			Format:   "rpm",
@@ -125,21 +196,24 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 	}
 }
 
-// TestOCITargetEmitBuilderInlineViaPlugin drives the FULL real chain the C1.3 externalization
-// introduces for an INLINE (cargo) builder: BuilderStep → deploykit.OCITarget.Emit → ociEmitStep →
-// pluginEmitStepWords[Builder]="builder" → spliceClassStepEmit("builder") → the compiled-in
-// candy/plugin-installstep OpEmit → emitViaHostBuild → HostBuild("step-emit",{Word:"builder"}) →
-// stepEmitBuilder (the in-core host build engine on the in-proc reverse channel) → inline render.
-// Since C10, an EXTERNALIZED inline builder (cargo) renders its InlineFragment via kit.BuilderResolve
-// (no longer the embedded vocabulary install_template — the bDef needs only Inline:true), so this
-// asserts kit's `cargo install --path /ctx` output. This is the exact in-proc chain a pod overlay
-// with an inline-builder add_candy runs host-side.
+// TestOCITargetEmitBuilderInlineViaPlugin drives the FULL real chain for an INLINE (cargo)
+// builder: BuilderStep → deploykit.OCITarget.Emit → ociEmitStep → pluginEmitStepWords[Builder]=
+// "builder" → ociSpliceClassStepEmit("builder") → the compiled-in candy/plugin-installstep OpEmit
+// → the plugin's OWN "resolved-project"-built deploykit.Generator (stubResolvedProject feeds the
+// synthetic project structure) → inline render. An EXTERNALIZED inline builder (cargo) renders its
+// InlineFragment via kit.BuilderResolve (the bDef needs only Inline:true), so this asserts kit's
+// `cargo install --path /ctx` output. This is the exact chain a pod overlay with an inline-builder
+// add_candy runs.
 func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
-	bc := &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
-		"cargo": {Inline: true},
-	}}
-	gen := &Generator{Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
-	tgt := ociTestTarget(buildEngineContext{BuilderConfig: bc, Box: &buildkit.ResolvedBox{UID: 1000, GID: 1000}, Generator: gen})
+	chdirTemp(t)
+	stubResolvedProject(t, spec.ResolvedProject{
+		Builder:              map[string]*spec.Builder{"cargo": {Inline: true}},
+		ExternalizedBuilders: map[string]bool{"cargo": true},
+		Boxes:                map[string]spec.ResolvedBoxView{"mytool-box": {Name: "mytool-box", UID: 1000, GID: 1000}},
+		CandyModels:          map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
+		Candies:              map[string]spec.CandyView{"mytool": {}},
+	})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "cargo", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -157,18 +231,23 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 
 // TestOCITargetEmitBuilderMultiStageViaPlugin drives the FULL real chain for a MULTI-STAGE
 // (pixi/npm/aur) builder. Same dispatch path as the inline test (through the compiled-in plugin's
-// OpEmit and the in-proc HostBuild), proving stepEmitBuilder reaches the threaded
-// Generator/BuilderConfig/Box build engine (buildEngineContext). Since C10, an EXTERNALIZED
-// multi-stage builder (pixi) renders its stage via kit.BuilderResolve (no longer an embedded
-// vocabulary stage template — the bDef needs only the "pixi" key present, the host still resolves the
-// builder ref from Box.Builder), so this asserts kit's stage: the `FROM <builder> AS <stage>` line +
-// the pixi cache-dir ENV line kit always emits.
+// OpEmit rendering directly against its resolved-project-built Generator), proving the plugin's
+// emitBuilder reaches dg.BuildStageContext with the box/candy the stubbed envelope carries. An
+// EXTERNALIZED multi-stage builder (pixi) renders its stage via kit.BuilderResolve (the bDef needs
+// only the "pixi" key present, the box's own Builder map resolves the builder ref), so this asserts
+// kit's stage: the `FROM <builder> AS <stage>` line + the pixi cache-dir ENV line kit always emits.
 func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
-	bc := &buildkit.BuilderConfig{Builder: map[string]*BuilderDef{
-		"pixi": {},
-	}}
-	gen := &Generator{Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
-	tgt := ociTestTarget(buildEngineContext{BuilderConfig: bc, Box: &buildkit.ResolvedBox{UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}, Generator: gen})
+	chdirTemp(t)
+	stubResolvedProject(t, spec.ResolvedProject{
+		Builder:              map[string]*spec.Builder{"pixi": {}},
+		ExternalizedBuilders: map[string]bool{"pixi": true},
+		Boxes: map[string]spec.ResolvedBoxView{"mytool-box": {
+			Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"},
+		}},
+		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
+		Candies:     map[string]spec.CandyView{"mytool": {}},
+	})
+	tgt := ociTestTarget(buildEngineContext{Box: &buildkit.ResolvedBox{Name: "mytool-box", UID: 1000, GID: 1000, Builder: map[string]string{"pixi": "ghcr.io/x/builder:latest"}}})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.BuilderStep{Builder: "pixi", CandyName: "mytool", Phase: spec.PhaseInstall},
 	}}
@@ -184,16 +263,14 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 	}
 }
 
-// TestOCITargetEmitLocalPkgInstallViaPlugin drives the FULL real chain the C1.4 externalization
-// introduces for a PRODUCTION localpkg install: LocalPkgInstallStep → deploykit.OCITarget.Emit → ociEmitStep →
-// pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → spliceClassStepEmit("local-pkg-install") →
-// the compiled-in candy/plugin-installstep OpEmit → emitViaHostBuild → HostBuild("step-emit",
-// {Word:"local-pkg-install"}) → stepEmitLocalPkgInstall (the in-core host localpkg build engine on
-// the in-proc reverse channel) → deploykit.RenderLocalPkgImageInstall. It asserts the release-download RUN the former
-// in-proc overlay-walker localpkg build-emit produced — the test FAILS without this change (there is no
-// in-proc LocalPkgInstall StepProvider; the plugin must serve step:local-pkg-install and the host must
-// register the step-emit renderer). This is the exact in-proc chain a pod overlay with a localpkg
-// add_candy runs host-side.
+// TestOCITargetEmitLocalPkgInstallViaPlugin drives the FULL real chain for a PRODUCTION localpkg
+// install: LocalPkgInstallStep → deploykit.OCITarget.Emit → ociEmitStep →
+// pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → ociSpliceClassStepEmit("local-pkg-install")
+// → the compiled-in candy/plugin-installstep OpEmit → deploykit.RenderLocalPkgImageInstall, called
+// DIRECTLY (a pure function of the step + the BuildEnv scalars — no resolved-project envelope
+// needed at all for this word). It asserts the release-download RUN the former in-proc
+// overlay-walker localpkg build-emit produced. This is the exact chain a pod overlay with a
+// localpkg add_candy runs.
 func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	lp := testPacLocalPkgDef()
 	lp.DownloadTemplate = "https://github.com/opencharly/charly/releases/latest/download/opencharly-${ARCH}.pkg.tar.zst"
@@ -216,20 +293,28 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 	}
 }
 
-// TestOCITargetEmitOpViaPlugin drives the FULL real chain the C1.5 externalization introduces for an
-// Op (task) step — the RICHEST build-emit, which drives Generator.emitTasks: OpStep → deploykit.OCITarget.Emit →
-// emitStep → pluginEmitStepWords[Op]="op" → spliceClassStepEmit("op") → the compiled-in
-// candy/plugin-installstep OpEmit → emitViaHostBuild → HostBuild("step-emit",{Word:"op"}) → stepEmitOp
-// (the in-core Generator.emitTasks engine on the in-proc reverse channel) → the per-verb emitters. It
-// asserts both a RUN (mkdir) and a COPY (from the layer scratch stage) — the test FAILS without this
-// change (there is no in-proc Op StepProvider after the cutover; the plugin must serve step:op and the
-// host must register the step-emit renderer + thread Generator/Box/BuildDir/ContextRelPrefix onto the
-// buildEngineContext). This is the exact in-proc chain a pod overlay with a run:/task add_candy runs
-// host-side.
+// TestOCITargetEmitOpViaPlugin drives the FULL real chain for an Op (task) step — the RICHEST
+// build-emit, which drives Generator.EmitTasks: OpStep → deploykit.OCITarget.Emit → ociEmitStep →
+// pluginEmitStepWords[Op]="op" → ociSpliceClassStepEmit("op") → the compiled-in
+// candy/plugin-installstep OpEmit → the plugin's OWN "resolved-project"-built deploykit.Generator
+// (stubResolvedProject feeds the synthetic box+candy) → dg.EmitTasks → the per-verb emitters. It
+// asserts both a RUN (mkdir) and a COPY (from the layer scratch stage). ImageBuildDir/
+// ContextRelPrefix (the inline-content staging anchor) ride the BuildEnv scalars from the
+// buildEngineContext passed to ociTestTarget, unchanged from before this cutover.
 func TestOCITargetEmitOpViaPlugin(t *testing.T) {
+	// testResolvedBox() reads fixtures relative to the package's testdata dir — capture it BEFORE
+	// chdirTemp changes the process cwd for the plugin's resolved-project cache-key isolation.
+	box := testResolvedBox()
+	chdirTemp(t)
 	dir := t.TempDir()
-	gen := &Generator{BuildDir: dir, Candies: map[string]spec.CandyReader{"mytool": testCandy("mytool", spec.CandyModel{}, spec.CandyView{})}}
-	tgt := ociTestTarget(buildEngineContext{Generator: gen, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
+	stubResolvedProject(t, spec.ResolvedProject{
+		Boxes: map[string]spec.ResolvedBoxView{"test-img": {
+			Name: "test-img", UID: 1000, GID: 1000, Home: "/home/user", User: "user",
+		}},
+		CandyModels: map[string]spec.CandyModel{"mytool": {Name: "mytool"}},
+		Candies:     map[string]spec.CandyView{"mytool": {}},
+	})
+	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: dir, ContextRelPrefix: ".build/mytool"})
 	plan := &deploykit.InstallPlan{Candy: "mytool", Steps: []spec.InstallStep{
 		&deploykit.OpStep{Op: &spec.Op{Mkdir: "/opt/foo"}, CandyName: "mytool", ResolvedUser: "root"},
 		&deploykit.OpStep{Op: &spec.Op{Copy: "bin/tool", To: "/opt/foo/tool"}, CandyName: "mytool", ResolvedUser: "root"},

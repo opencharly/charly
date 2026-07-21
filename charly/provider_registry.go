@@ -12,8 +12,8 @@ import (
 
 // providerRegistry is the ONE process-wide registry of Providers — the unified
 // dispatch surface the per-class built-in switches register into (kinds, verbs,
-// and deploy targets so far; VerbCatalog in reserved_registry.go remains the
-// verb-metadata map). An out-of-process live-container verb owns its own method
+// and deploy targets so far; spec.VerbCatalog, gated by reserved_registry.go's
+// checkVerbBijection, remains the verb-metadata map). An out-of-process live-container verb owns its own method
 // allowlist + required-modifier checks in its plugin (candy/plugin-*), enforced by
 // CUE on core #Op — there is no in-proc method-contract seam in charly anymore.
 // Built-ins register from init() (RegisterBuiltinProvider); plugins register

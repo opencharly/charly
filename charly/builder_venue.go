@@ -31,6 +31,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/proclifecycle"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -52,30 +53,29 @@ type buildEngineContext struct {
 	// template. Zero for an Invoke whose plan has no SystemPackagesStep.
 	DistroCfg *buildkit.DistroConfig
 
-	// The following are populated ONLY by the pod-overlay BUILD-emit path
-	// (the buildEngineContext), so the HOST-COUPLED Builder step-emitter
-	// (stepEmitBuilder, step_emit_hostbuild.go) can render a multi-stage / inline builder
-	// via the SAME buildStageContext + RenderTemplate pipeline the box build uses (R3, the
-	// C1.3 relocation of the Builder build-emit onto the step-emit seam), and the HOST-COUPLED
-	// LocalPkgInstall step-emitter (stepEmitLocalPkgInstall) can render the dev/prod localpkg
-	// IMAGE install via deploykit.RenderLocalPkgImageInstall (the C1.4 relocation). They are zero
-	// for every deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and
-	// the LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
+	// The following are populated ONLY by the pod-overlay BUILD-emit path (the
+	// buildEngineContext). They no longer feed an in-core renderer directly (the former
+	// HOST-COUPLED system-packages/builder/local-pkg-install/op step-emitters — C1.2-C1.5 — were
+	// relocated onto candy/plugin-installstep's OWN "resolved-project"-built deploykit.Generator,
+	// K5-Unit-6b): ociSpliceClassStepEmit (charly/oci_step_emit.go) reads Generator/Box to populate
+	// the class:step OpEmit's spec.BuildEnv scalars (Image=Box.Name, DevLocalPkg=Generator.DevLocalPkg)
+	// so the plugin can render without a per-render host round-trip. They are zero for every
+	// deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and the
+	// LocalPkgInstall DEPLOY leg is deploykit.ExecLocalPkgInstall (separate host-engine paths
 	// driven via RunHostStep), which read none of them.
-	Generator     *Generator
-	BuilderConfig *buildkit.BuilderConfig
-	Box           *buildkit.ResolvedBox
-	// ImageBuildDir is the per-image (pod-overlay) build dir — the imageDir the
-	// dev-mode localpkg build-emit stages a locally-built package into
-	// (deploykit's renderLocalPkgImageDevInstall). It is buildEngineContext.ImageBuildDir, NOT
-	// Generator.BuildDir (the overlay build dir differs from the project .build root). Zero for
-	// every deploy-leg context.
+	Generator *Generator
+	Box       *buildkit.ResolvedBox
+	// ImageBuildDir is the per-image (pod-overlay) build dir — rides the class:step OpEmit's
+	// BuildEnv.ImageBuildDir so candy/plugin-installstep's emitLocalPkgInstall can stage a
+	// dev-mode locally-built package the SAME way deploykit's renderLocalPkgImageDevInstall did. It
+	// is buildEngineContext.ImageBuildDir, NOT Generator.BuildDir (the overlay build dir differs
+	// from the project .build root). Zero for every deploy-leg context.
 	ImageBuildDir string
-	// ContextRelPrefix is the build-context-relative prefix for staged inline
-	// content — the datum the HOST-COUPLED Op step-emitter (stepEmitOp, step_emit_hostbuild.go)
-	// passes to Generator.emitTasks so a write: op stages its content-addressed COPY source
-	// under the correct .build/<image>/_inline path (the C1.5 relocation of the OpStep build-emit
-	// onto the step-emit seam). It is buildEngineContext.ContextRelPrefix. Zero for every deploy-leg context.
+	// ContextRelPrefix is the build-context-relative prefix for staged inline content — rides the
+	// class:step OpEmit's BuildEnv.ContextRelPrefix so candy/plugin-installstep's emitOp can pass it
+	// to dg.EmitTasks, staging a write: op's content-addressed COPY source under the correct
+	// .build/<image>/_inline path. It is buildEngineContext.ContextRelPrefix. Zero for every
+	// deploy-leg context.
 	ContextRelPrefix string
 }
 
@@ -188,8 +188,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 	if err != nil {
 		return fmt.Errorf("builder staging mkdir: %w", err)
 	}
-	RegisterTempCleanup(stageHost)
-	defer func() { _ = os.RemoveAll(stageHost); UnregisterTempCleanup(stageHost) }()
+	proclifecycle.RegisterTempCleanup(stageHost)
+	defer func() { _ = os.RemoveAll(stageHost); proclifecycle.UnregisterTempCleanup(stageHost) }()
 
 	bindMounts := map[string]string{venueHome: stageHost}
 	envVars := kit.UserScopeEnv(venueHome)
@@ -250,8 +250,8 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 	if err != nil {
 		return fmt.Errorf("tar staging mkdir: %w", err)
 	}
-	RegisterTempCleanup(tarDir)
-	defer func() { _ = os.RemoveAll(tarDir); UnregisterTempCleanup(tarDir) }()
+	proclifecycle.RegisterTempCleanup(tarDir)
+	defer func() { _ = os.RemoveAll(tarDir); proclifecycle.UnregisterTempCleanup(tarDir) }()
 	tarball := filepath.Join(tarDir, "artifacts.tar.gz")
 	tarArgs := append([]string{"-C", stageHost, "-czf", tarball}, transferDirs...)
 	tarCmd := exec.CommandContext(ctx, "tar", tarArgs...)

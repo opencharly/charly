@@ -26,7 +26,7 @@ func TestRelocatedFileVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "if [ -e", stdout: "exists=1|regular file|644|root|root\n", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"file": "/etc/hostname", "exists": true, "mode": "644", "owner": "root", "filetype": "file"}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
 

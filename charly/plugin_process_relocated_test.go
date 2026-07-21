@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/opencharly/sdk/spec"
+)
 
 // TestRelocatedProcessVerb_DispatchesViaKit proves the `process` check verb — relocated
 // to candy/plugin-process (a compiled-in kit candy) — dispatches through the SAME
@@ -13,9 +17,9 @@ func TestRelocatedProcessVerb_DispatchesViaKit(t *testing.T) {
 	assertRelocatedVerbDispatch(t, "process", []relocatedVerbCase{
 		// pgrep finds the process (exit 0) + running:true → pass.
 		{"found + running:true", "pgrep", 0, RunModeLive,
-			map[string]any{"process": "sleep", "running": true}, TestPass},
+			map[string]any{"process": "sleep", "running": true}, spec.StatusPass},
 		// pgrep does not find it (exit 1) + running:true → fail.
 		{"absent + running:true", "pgrep", 1, RunModeLive,
-			map[string]any{"process": "absent", "running": true}, TestFail},
+			map[string]any{"process": "absent", "running": true}, spec.StatusFail},
 	})
 }

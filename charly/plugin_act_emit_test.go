@@ -66,7 +66,7 @@ func TestEmitTasks_PluginAct_UnixGroup(t *testing.T) {
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawUnixGroupOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -98,7 +98,7 @@ func TestEmitTasks_PluginAct_File(t *testing.T) {
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawFileRunOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -186,7 +186,7 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
 	g := &Generator{BuildDir: dir}
 	var b strings.Builder
-	if _, err := g.emitTasks(&b, layer, testResolvedBox(), []spec.Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
+	if _, err := g.toDeploykit().EmitTasks(&b, layer, testResolvedBox(), []spec.Op{rawKernelParamOp()}, dir, ".build/test-img"); err != nil {
 		t.Fatalf("emitTasks: %v", err)
 	}
 	out := b.String()
@@ -201,16 +201,26 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 }
 
 // The OCI pod-overlay OpStep build-emit (C1.5) routes the RAW plugin act op through the FULL
-// step-emit chain: OpStep → deploykit.OCITarget.Emit → emitStep → pluginEmitStepWords[Op]="op" →
-// spliceClassStepEmit("op") → candy/plugin-installstep OpEmit → emitViaHostBuild →
-// HostBuild("step-emit",{Word:"op"}) → stepEmitOp → Generator.emitTasks `case "plugin"`. This proves
-// the pod-overlay build and the box build still share the ONE `case "plugin"` seam (no pre-conversion)
-// even after the OpStep build-emit externalized onto the step-emit host-builder.
+// step-emit chain: OpStep → deploykit.OCITarget.Emit → ociEmitStep → pluginEmitStepWords[Op]="op" →
+// ociSpliceClassStepEmit("op") → candy/plugin-installstep OpEmit → the plugin's OWN
+// "resolved-project"-built deploykit.Generator → dg.EmitTasks `case "plugin"`. This proves the
+// pod-overlay build and the box build still share the ONE `case "plugin"` seam (no pre-conversion)
+// even after the OpStep build-emit's HOST-COUPLED render moved off the step-emit host-builder.
 func TestEmitOp_PluginAct_UnixGroup_OCI(t *testing.T) {
-	dir := t.TempDir()
-	layer := testCandy("lyr", spec.CandyModel{}, spec.CandyView{})
-	g := &Generator{BuildDir: dir, Candies: map[string]spec.CandyReader{"lyr": layer}}
-	tgt := ociTestTarget(buildEngineContext{Generator: g, Box: testResolvedBox(), ImageBuildDir: dir, ContextRelPrefix: ".build/test-img"})
+	// testResolvedBox() reads fixtures relative to the package's testdata dir — capture it BEFORE
+	// chdirTemp changes the process cwd for the plugin's resolved-project cache-key isolation.
+	box := testResolvedBox()
+	cwd := chdirTemp(t)
+	stubResolvedProject(t, spec.ResolvedProject{
+		Boxes:       map[string]spec.ResolvedBoxView{"test-img": {Name: "test-img", UID: 1000, GID: 1000, Home: "/home/user", User: "user"}},
+		CandyModels: map[string]spec.CandyModel{"lyr": {Name: "lyr"}},
+		Candies:     map[string]spec.CandyView{"lyr": {}},
+	})
+	// The op is a `run: plugin: unix_group` act — its render reaches EmitPluginOp, the ONE
+	// render-seam that stays host-coupled (a Go-level ProvisionActor type-assertion), so it needs
+	// renderGenCache seeded too (a SEPARATE cache from the resolved-project stub above).
+	stubRenderGen(t, cwd, box)
+	tgt := ociTestTarget(buildEngineContext{Box: box, ImageBuildDir: cwd, ContextRelPrefix: ".build/test-img"})
 	op := rawUnixGroupOp()
 	plan := &deploykit.InstallPlan{Candy: "lyr", Steps: []spec.InstallStep{&deploykit.OpStep{Op: &op, CandyName: "lyr"}}}
 	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {

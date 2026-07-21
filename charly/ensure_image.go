@@ -122,7 +122,7 @@ func EnsureImagePresent(ctx context.Context, image string, cfg *Config, projectD
 		// `--pull=never` find the requested ref locally. Skipped when
 		// the input was already a short name (no pinned tag).
 		if cfg != nil {
-			if resolved, err := cfg.ResolveBox(short, "", projectDir, ResolveOpts{}); err == nil {
+			if resolved, err := ResolveBox(cfg, short, "", projectDir, ResolveOpts{}); err == nil {
 				produced := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, "")
 				if produced != "" && produced != image && kit.LooksLikeFullRef(image) {
 					if terr := podmanTagAlias(ctx, produced, image); terr != nil {
@@ -165,7 +165,7 @@ func resolveImageRefForEnsure(image string, cfg *Config, projectDir string) (str
 	if cfg == nil {
 		return "", fmt.Errorf("short name %q requires a project directory with charly.yml", image)
 	}
-	resolved, err := cfg.ResolveBox(image, "", projectDir, ResolveOpts{})
+	resolved, err := ResolveBox(cfg, image, "", projectDir, ResolveOpts{})
 	if err != nil {
 		return "", fmt.Errorf("resolving %q via charly.yml: %w", image, err)
 	}
@@ -249,11 +249,11 @@ func buildableShortName(image string, cfg *Config) string {
 	// names a buildable image as-is (the build path is namespace-aware); the
 	// leaf lookup below can never match a dotted ref (leaves are bare names).
 	if strings.Contains(work, ".") {
-		if _, _, ok := cfg.resolveBoxRef(work); ok {
+		if _, _, ok := cfg.ResolveBoxRef(work); ok {
 			return work
 		}
 	}
-	if q, ok := cfg.findBoxByLeaf(work); ok {
+	if q, ok := cfg.FindBoxByLeaf(work); ok {
 		return q
 	}
 	return ""

@@ -24,7 +24,7 @@ func TestRunner_Package(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -37,7 +37,7 @@ func TestRunner_Package(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "installed": true}},
 		})
-		if res[0].Status != TestFail {
+		if res[0].Status != spec.StatusFail {
 			t.Errorf("expected fail, got %+v", res[0])
 		}
 	})
@@ -51,7 +51,7 @@ func TestRunner_Package(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "package", PluginInput: map[string]any{"package": "redis", "version": []any{"7.0.5", "7.0.6"}}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -70,7 +70,7 @@ func TestRunner_Service(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "service", PluginInput: map[string]any{"service": "jupyter", "running": true}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -83,7 +83,7 @@ func TestRunner_Service(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "service", PluginInput: map[string]any{"service": "jupyter", "running": true}},
 		})
-		if res[0].Status != TestFail {
+		if res[0].Status != spec.StatusFail {
 			t.Errorf("expected fail, got %+v", res[0])
 		}
 	})
@@ -100,7 +100,7 @@ func TestRunner_ProcessPlugin(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "process", PluginInput: map[string]any{"process": "redis-server"}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("got %+v", res[0])
 		}
 	})
@@ -110,7 +110,7 @@ func TestRunner_ProcessPlugin(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "process", PluginInput: map[string]any{"process": "worm", "running": false}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("got %+v", res[0])
 		}
 	})
@@ -126,7 +126,7 @@ func TestRunner_DNSPlugin(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "dns", PluginInput: map[string]any{"dns": "localhost"}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -135,7 +135,7 @@ func TestRunner_DNSPlugin(t *testing.T) {
 		res := r.Run(context.Background(), []spec.Op{
 			{Plugin: "dns", PluginInput: map[string]any{"dns": "this-host-will-never-exist.invalid", "resolvable": false}},
 		})
-		if res[0].Status != TestPass {
+		if res[0].Status != spec.StatusPass {
 			t.Errorf("expected pass, got %+v", res[0])
 		}
 	})
@@ -152,7 +152,7 @@ func TestRunner_User(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "user", PluginInput: map[string]any{"user": "alice", "uid": 1000, "home": "/home/alice"}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("expected pass, got %+v", res[0])
 	}
 }
@@ -165,7 +165,7 @@ func TestRunner_User_UIDMismatch(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "user", PluginInput: map[string]any{"user": "alice", "uid": 1000}},
 	})
-	if res[0].Status != TestFail {
+	if res[0].Status != spec.StatusFail {
 		t.Errorf("expected fail, got %+v", res[0])
 	}
 }
@@ -181,7 +181,7 @@ func TestRunner_Group(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "unix_group", PluginInput: map[string]any{"unix_group": "docker", "gid": 999}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("got %+v", res[0])
 	}
 }
@@ -198,7 +198,7 @@ func TestRunner_Interface(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "interface", PluginInput: map[string]any{"interface": "eth0", "mtu": 1500, "addrs": []any{"10.0.0.5/24"}}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("got %+v", res[0])
 	}
 }
@@ -215,7 +215,7 @@ func TestRunner_KernelParam(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "net.ipv4.ip_forward", "value": "1"}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("got %+v", res[0])
 	}
 }
@@ -232,7 +232,7 @@ func TestRunner_Mount(t *testing.T) {
 	res := r.Run(context.Background(), []spec.Op{
 		{Plugin: "mount", PluginInput: map[string]any{"mount": "/data", "filesystem": "ext4", "mount_source": "/dev/sda1"}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("got %+v", res[0])
 	}
 }
@@ -248,7 +248,7 @@ func TestRunner_Addr(t *testing.T) {
 
 	r, _ := newFakeRunner(t, RunModeLive)
 	res := r.Run(context.Background(), []spec.Op{{Plugin: "addr", PluginInput: map[string]any{"addr": u}}})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("expected reachable, got %+v", res[0])
 	}
 
@@ -262,7 +262,7 @@ func TestRunner_Addr(t *testing.T) {
 	res = r.Run(context.Background(), []spec.Op{
 		{Plugin: "addr", PluginInput: map[string]any{"addr": addr, "reachable": false}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("expected unreachable-as-expected, got %+v", res[0])
 	}
 }
@@ -277,7 +277,7 @@ func TestRunner_MatchingPlugin(t *testing.T) {
 			"contains": map[string]any{"contains": "world"},
 		}},
 	})
-	if res[0].Status != TestPass {
+	if res[0].Status != spec.StatusPass {
 		t.Errorf("got %+v", res[0])
 	}
 }

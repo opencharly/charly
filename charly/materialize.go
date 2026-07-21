@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -154,11 +153,11 @@ func materializeDocStream(data []byte, srcLabel string, uf *UnifiedFile) error {
 			}
 			return fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
 		}
-		shape, err := kit.ClassifyDoc(&node)
+		shape, err := spec.ClassifyDoc(&node)
 		if err != nil {
 			return fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
 		}
-		if shape != kit.DocShapeNode {
+		if shape != spec.DocShapeNode {
 			continue
 		}
 		label := fmt.Sprintf("%s:doc%d", srcLabel, docIdx)
@@ -177,7 +176,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *UnifiedFile) error {
 		if len(directives) > 0 {
 			dirMap := &yaml.Node{Kind: yaml.MappingNode}
 			for k, v := range directives {
-				dirMap.Content = append(dirMap.Content, kit.ScalarNode(k), v)
+				dirMap.Content = append(dirMap.Content, spec.ScalarNode(k), v)
 			}
 			if derr := dirMap.Decode(&sub); derr != nil {
 				return fmt.Errorf("%s: decoding directives: %w", label, derr)

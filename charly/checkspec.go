@@ -10,7 +10,7 @@ import (
 // IsRuntimeOnlyVar / ExpandOpVars / ExpandAnyVars / CollectAnyStrings / the runtime-var
 // prefixes) lives ONCE in sdk/kit (checkvars_expand.go) so a plugin candy that runs a plan
 // expands ${VAR}s identically. package main references these directly as kit.X; the
-// check SEMANTICS that consult VerbCatalog (opEffectiveDo / opActsInBuildDeploy) stay below.
+// check SEMANTICS that consult spec.VerbCatalog (opEffectiveDo / opActsInBuildDeploy) stay below.
 
 // ---------------------------------------------------------------------------
 // Unified verb vocabulary — execution context, do-mode, and the VerbCatalog
@@ -24,122 +24,11 @@ import (
 // re-derivation), referenced directly here (K3, #39 — no local alias). An op's Context list
 // (or its VerbCatalog default) declares legality; the active engine supplies the running
 // context and skips ops whose context set does not include it (VenueSkip).
-
-// VerbSpec is the per-verb metadata in VerbCatalog. Contexts[0] is the
-// canonical default context. LowersTo names the InstallPlan step kind an
-// act-mode op of this verb lowers to ("" → a generic OpStep). Reversible marks
-// whether act-mode reversal is automatic (an auto ReverseOp); when false an
-// act-mode op needs an explicit `uninstall:` or is reversed via plan
-// teardown (live verbs) — enforced in validation.
-type VerbSpec struct {
-	Contexts   []spec.ExecContext
-	DefaultDo  spec.DoMode
-	Reversible bool
-	// LowersTo is gone — the ONLY verbs that lowered into a typed install step
-	// (package → SystemPackagesStep, service → ServicePackagedStep) are now extracted
-	// plugin verbs whose TypedStepProvider owns the lowering (LowersTo() + ConstructStep
-	// on the provider). No remaining VerbCatalog verb lowers into a typed step, so
-	// ActsInBuildDeploy reduces to the installVerbs membership test.
-}
-
-// HasContext reports whether the verb is legal in ctx.
-func (s VerbSpec) HasContext(ctx spec.ExecContext) bool {
-	return slices.Contains(s.Contexts, ctx)
-}
-
-var (
-	ctxBuildDeploy        = []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy}
-	ctxBuildDeployRuntime = []spec.ExecContext{spec.CtxBuild, spec.CtxDeploy, spec.CtxRuntime}
-)
-
-// VerbCatalog is the single source of truth for every verb's legality, default
-// do-mode, reversibility, and act-mode lowering target — one table driving
-// validation, dispatch, and lowering. Keys match spec.OpVerbs (gated by the
-// registry bijection in registry.go).
-var VerbCatalog = map[string]VerbSpec{
-	// install/build — imperative; build+deploy only (no live-runtime form).
-	"mkdir":    {ctxBuildDeploy, spec.DoAct, false},
-	"copy":     {ctxBuildDeploy, spec.DoAct, true}, // build → COPY, deploy → PutFile (venue-lowered)
-	"write":    {ctxBuildDeploy, spec.DoAct, true},
-	"link":     {ctxBuildDeploy, spec.DoAct, true},
-	"download": {ctxBuildDeploy, spec.DoAct, true},
-	"setcap":   {ctxBuildDeploy, spec.DoAct, false},
-	"build":    {ctxBuildDeploy, spec.DoAct, false},
-
-	// `command` is NOT here — it is an extracted plugin verb (plugin: command +
-	// #CommandInput). It left #OpVerb/spec.OpVerbs/VerbCatalog; the check dispatches via
-	// the generic `plugin:` verb and the act renders via the dedicated install-task
-	// emitCmd branch (`plugin == "command"` in emitTasks/renderOpCommand/
-	// opActsInBuildDeploy), preserving the full command build/deploy install path.
-
-	// file / package / service / unix_group / user / kernel-param / mount are extracted
-	// STATE-PROVISION verbs — each BOTH a check AND an act. They left #Op/spec.OpVerbs for
-	// their builtin plugin units (candy/plugin-{file,package,service,unix_group,
-	// user,kernel_param,mount}) and dispatch via the generic `plugin:` verb, so they have no
-	// VerbCatalog entry. `package` and `service` are the TYPED-STEP verbs: each act lowers
-	// into a SystemPackagesStep / ServicePackagedStep via the TypedStepProvider (its
-	// LowersTo() + ConstructStep now live on the provider, NOT this catalog) so the
-	// load-bearing reversals survive; file + the other four render at install emit via the
-	// act-emit enabler (resolveProvisionScript — file's act is the RUNTIME touch+chmod
-	// file-creation, distinct from the write/copy BUILD-time COPY directives). http /
-	// interface / addr are observe-only goss verbs likewise extracted
-	// (candy/plugin-{http,interface,addr}).
-
-	// live-container — runtime only. EVERY live-container verb is now an
-	// EXTERNAL-CHARLY-VERB served out-of-process; none has a VerbCatalog entry, and
-	// none is a field on core #Op. Each left #OpVerb/spec.OpVerbs/VerbCatalog (no in-proc
-	// CheckVerbProvider) and is authored as the generic `<word>: <input>` sugar, desugared
-	// to `plugin`/`plugin_input` before #Op validates; its method enum + input schema live
-	// in its own plugin's #<Word>Input def (served over Describe), NOT on core #Op (the
-	// authored YAML shape is unchanged — only the schema's HOME moved to the plugin). The
-	// registered external provider resolves at dispatch; each verb's context legality lives
-	// on the authored `context:` + the plugin's own box-mode skip, not this table. Per-verb
-	// specifics (candy that serves it; what the host pre-resolves):
-	// `wl` (candy/plugin-wl) — EXEC-based (like record/dbus), driving the venue's compositor
-	//   (wlrctl/grim/wtype/swaymsg) over the executor reverse channel; the screenshot PNG
-	//   pulls via GetFile.
-	// `dbus` (candy/plugin-dbus) — EXEC-based, driving the venue's session bus with gdbus
-	//   (never godbus — a STRUCTURAL externalization, not a dep-shed) over the reverse channel.
-	// `vnc` (candy/plugin-vnc) — the host pre-resolves the deployment's VNC endpoint
-	//   (container port 5900 or a VM's libvirt <graphics type='vnc'> listener) to a
-	//   host-reachable RFB address first.
-	// `cdp` (candy/plugin-cdp) — the host pre-resolves the deployment's CDP port 9222 to a
-	//   host-reachable DevTools base URL first.
-	// `record` (candy/plugin-record) — EXEC-based, driving the venue over the executor
-	//   reverse channel (RunCapture/GetFile).
-	// `mcp` (candy/plugin-mcp) — the host pre-resolves the deployment's declared mcp_provides
-	//   + the picked dial endpoint first.
-	// `libvirt` (candy/plugin-vm) — the host pre-resolves any VM display endpoint host-side.
-	// `kube` (candy/plugin-kube) — the host pre-resolves any --cluster profile to a
-	//   kubeconfig context first.
-	// `adb` (candy/plugin-adb) — the registered external provider resolves at dispatch.
-	// `appium` (candy/plugin-appium) — the registered external provider resolves at dispatch.
-	// `spice` (candy/plugin-spice) — the host pre-resolves the VM's live SPICE endpoint to a
-	//   dialable address first.
-
-	// meta.
-
-	// plugin — the generic plugin-verb discriminator. Its VALUE (Op.Plugin) is the
-	// reserved word served by a registered Provider (built-in or out-of-tree). The
-	// handler is runOne's providerRegistry.ResolveVerb dispatch; context is
-	// permissive (a plugin verb may probe at build/deploy/runtime — the plugin's
-	// own check declares where it applies). DoAssert (a check), not reversible.
-	"plugin": {ctxBuildDeployRuntime, spec.DoAssert, false},
-}
-
-// installVerbs are the verbs that render directly to a generic OpStep install
-// step (a Containerfile directive at build, a deploy shell command at deploy).
-// The verbs that lowered into a TYPED install step (package/service) are now extracted
-// plugin verbs whose TypedStepProvider owns the lowering — handled by opActsInBuildDeploy,
-// not this map.
-var installVerbs = map[string]bool{
-	"mkdir": true, "copy": true, "write": true, "link": true,
-	"download": true, "setcap": true, "build": true,
-	// `command` is NOT here — it is a plugin verb now; its build/deploy install path is
-	// the dedicated `plugin == "command"` emitCmd branch, accepted by opActsInBuildDeploy
-	// directly (not via this map, which is keyed by the verb the Op resolves to, never
-	// "command" again).
-}
+//
+// VerbSpec / VerbCatalog / InstallVerbs — the per-verb metadata DATA — moved to
+// sdk/spec/verb_context.go (FLOOR-SLIM Unit 4): pure static data, zero registry coupling.
+// The FUNCTIONS below that consult spec.VerbCatalog against the LIVE provider registry
+// (providerRegistry.ResolveVerb/ResolveStep, the core-only mechanism) stay here.
 
 // opActsInBuildDeploy reports whether the PLUGIN op c's act form has a real build/deploy install path.
 // The former non-plugin (install-verb) arm was removed with the validate ENGINE (task #60): the ONLY
@@ -192,19 +81,6 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 	return isExternal
 }
 
-// stampStepIntentDo writes the keyword-derived do-mode onto a verb-carrying step's Op.IntentDo (via
-// the shared kit.StepDoMode derivation). It is the package-main entry the label bake (bakeableSteps)
-// calls so the baked ai.opencharly.description carries intent_do deterministically — formerly a SIDE
-// EFFECT of the in-core validate mutating the shared structs, which died when the validate ENGINE
-// moved to candy/plugin-box (K3-D+). Kept here (checkspec.go already imports kit + owns the do-mode
-// logic) so description_collect.go needs no new kit import; verb-less agent-check steps stay empty.
-func stampStepIntentDo(s *spec.Step) {
-	if len(s.VerbsSet()) == 0 {
-		return
-	}
-	s.IntentDo = string(spec.StepDoMode(s))
-}
-
 // EffectiveDo returns the op's resolved do-mode: the keyword-stamped intentDo
 // wins (set by the enclosing Step at run/collect time), else the verb's
 // VerbCatalog default, else DoAssert.
@@ -215,8 +91,8 @@ func opEffectiveDo(c *spec.Op) spec.DoMode {
 	}
 	verb, err := c.Kind()
 	if err == nil {
-		if spec, ok := VerbCatalog[verb]; ok && spec.DefaultDo != "" {
-			return spec.DefaultDo
+		if vs, ok := spec.VerbCatalog[verb]; ok && vs.DefaultDo != "" {
+			return vs.DefaultDo
 		}
 	}
 	return spec.DoAssert
@@ -233,8 +109,8 @@ func opEffectiveContexts(c *spec.Op) []spec.ExecContext {
 		return out
 	}
 	if verb, err := c.Kind(); err == nil {
-		if spec, ok := VerbCatalog[verb]; ok {
-			return spec.Contexts
+		if vs, ok := spec.VerbCatalog[verb]; ok {
+			return vs.Contexts
 		}
 	}
 	return nil

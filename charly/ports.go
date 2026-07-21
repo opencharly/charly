@@ -37,7 +37,7 @@ var (
 )
 
 func CollectBoxPorts(cfg *Config, layers map[string]spec.CandyReader, boxName string) ([]string, error) {
-	names, err := cfg.boxCandyChain(layers, boxName)
+	names, err := deploykit.BoxCandyChain(cfg, layers, boxName)
 	if err != nil {
 		return nil, err
 	}

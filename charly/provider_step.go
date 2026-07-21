@@ -73,14 +73,16 @@ func stepProviderFor(kind spec.StepKind) (StepProvider, bool) {
 //     VIEW. apk-install and reboot are the NO-OP-emit members (Emits=false, empty fragment): an
 //     image build installs no apk / reboots nothing.
 //   - HOST-COUPLED (C1.2/C1.3/C1.4/C1.5): system-packages (C1.2) + builder (C1.3) +
-//     local-pkg-install (C1.4) + op (C1.5) — the plugin's OpEmit calls back the host's "step-emit"
-//     host-builder (HostBuild) for a render it cannot do across the process boundary
-//     (system-packages needs the DistroDef format templates; builder needs the multi-stage
-//     buildStageContext + RenderTemplate engine; local-pkg-install calls deploykit's pure
-//     RenderLocalPkgImageInstall/BuildLocalPkgOnHost + host-dir staging; op needs the
-//     RICHEST Generator.emitTasks per-verb render pipeline — COPY staging + op coalescing). See
-//     charly/step_emit_hostbuild.go (stepEmitSystemPackages, stepEmitBuilder,
-//     stepEmitLocalPkgInstall, stepEmitOp).
+//     local-pkg-install (C1.4) + op (C1.5) — the plugin renders these DIRECTLY against its OWN
+//     "resolved-project"-built deploykit.Generator (fetched ONCE per project dir via
+//     HostBuild("resolved-project"), cached) instead of calling back a host-side renderer: no
+//     per-render host round-trip (system-packages resolves the box's DistroDef from the envelope;
+//     builder uses dg.BuildStageContext + kit.BuilderResolve/buildkit.RenderTemplate;
+//     local-pkg-install calls deploykit.RenderLocalPkgImageInstall directly — a pure function of the
+//     step + a few BuildEnv scalars, no project structure needed at all; op drives dg.EmitTasks, the
+//     RICHEST per-verb render pipeline — COPY staging + op coalescing). See
+//     candy/plugin-installstep/plugin.go (emitSystemPackages, emitBuilder, emitLocalPkgInstall,
+//     emitOp).
 var pluginEmitStepWords = map[spec.StepKind]string{
 	spec.StepKindFile:            "file",
 	spec.StepKindShellHook:       "shell-hook",

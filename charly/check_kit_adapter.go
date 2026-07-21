@@ -58,9 +58,9 @@ type kitVerbAdapter struct {
 
 func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
 
-func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) CheckResult {
+func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) spec.CheckResult {
 	res := a.kv.RunVerb(ctx, hostCheckContext{h: h}, op)
-	return CheckResult{
+	return spec.CheckResult{
 		Op:      op,
 		Verb:    a.kv.Reserved(),
 		Status:  res.Status,

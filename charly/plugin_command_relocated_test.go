@@ -28,7 +28,7 @@ func TestRelocatedCommandVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "{ ", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"command": "true"}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("in-container: want pass, got %v: %s", res.Status, res.Message)
 	}
 
@@ -36,14 +36,14 @@ func TestRelocatedCommandVerb_DispatchesViaKit(t *testing.T) {
 	res2 := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"command": "echo charly-cmd-ok", "from_host": true},
 			Stdout: spec.MatcherList{{Op: "contains", Value: "charly-cmd-ok"}}})
-	if res2.Status != TestPass {
+	if res2.Status != spec.StatusPass {
 		t.Fatalf("host-foreground: want pass, got %v: %s", res2.Status, res2.Message)
 	}
 
 	// Background: real `sh -c 'sleep …'`, fire-and-forget → pass with a pid message.
 	res3 := cv.RunVerb(context.Background(), hostVerbResolverFor(nil, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"command": "sleep 0.2", "from_host": true, "background": true}})
-	if res3.Status != TestPass || !strings.Contains(res3.Message, "backgrounded") {
+	if res3.Status != spec.StatusPass || !strings.Contains(res3.Message, "backgrounded") {
 		t.Fatalf("background: want pass + backgrounded, got %v: %s", res3.Status, res3.Message)
 	}
 }

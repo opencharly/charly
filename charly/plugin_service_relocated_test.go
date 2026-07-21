@@ -29,7 +29,7 @@ func TestRelocatedServiceVerb_DispatchesViaKit(t *testing.T) {
 	fe := &fakeExecutor{responses: []fakeResponse{{matchPrefix: "supervisorctl status", exit: 0}}}
 	res := cv.RunVerb(context.Background(), hostVerbResolverFor(fe, RunModeLive),
 		&spec.Op{PluginInput: map[string]any{"service": "nginx", "running": true}})
-	if res.Status != TestPass {
+	if res.Status != spec.StatusPass {
 		t.Fatalf("check: want pass, got %v: %s", res.Status, res.Message)
 	}
 

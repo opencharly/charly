@@ -72,11 +72,11 @@ widget:
 	}
 	cfg := uf.ProjectConfig()
 	// Bare local name resolves in root.
-	if _, _, ok := cfg.resolveBoxRef("app"); !ok {
+	if _, _, ok := cfg.ResolveBoxRef("app"); !ok {
 		t.Error("bare ref 'app' did not resolve in root")
 	}
 	// Qualified ref descends into the namespace.
-	wImg, wCfg, ok := cfg.resolveBoxRef("sub.widget")
+	wImg, wCfg, ok := cfg.ResolveBoxRef("sub.widget")
 	if !ok {
 		t.Fatal("qualified ref 'sub.widget' did not resolve")
 	}
@@ -88,7 +88,7 @@ widget:
 	}
 	// app's base (sub.widget) must be classified INTERNAL (resolves via namespace),
 	// not mistaken for an external OCI URL.
-	ri, err := cfg.ResolveBox("app", "test", root, ResolveOpts{})
+	ri, err := ResolveBox(cfg, "app", "test", root, ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox(app): %v", err)
 	}
@@ -184,7 +184,7 @@ widget:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := cfg.ResolveAllBox("test", root, ResolveOpts{})
+	resolved, err := ResolveAllBox(cfg, "test", root, ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox must NOT fail when a namespaced base's builder ref points into the base's own namespace: %v", err)
 	}
@@ -262,7 +262,7 @@ fedora:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	resolved, err := cfg.ResolveAllBox("test", root, ResolveOpts{})
+	resolved, err := ResolveAllBox(cfg, "test", root, ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox: %v", err)
 	}

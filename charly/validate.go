@@ -71,7 +71,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts ResolveOpts, errs *
 	// resolved struct back to YAML and run it through the same ingest path the
 	// on-disk corpus uses. Skip disabled boxes exactly like the Go box
 	// validators (a disabled box's invalid fields are intentionally not flagged).
-	for name, box := range cfg.eachBox {
+	for name, box := range cfg.EachBox {
 		if !box.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -132,7 +132,7 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts ResolveOpts, errs *
 // validate`. Both seams call the ONE predicate BoxConfig.HasBaseFromConflict (R3).
 // Neither field set stays valid (a scratch box) — only BOTH is a conflict.
 func validateBoxBaseFrom(cfg *Config, opts ResolveOpts, errs *ValidationError) {
-	for name, img := range cfg.eachBox {
+	for name, img := range cfg.EachBox {
 		if !img.IsEnabled() && !opts.shouldIncludeDisabled(name) {
 			continue
 		}
@@ -228,7 +228,7 @@ func validateBuildAndDistro(cfg *Config, distroCfg *buildkit.DistroConfig, errs 
 	validateBuild("defaults", cfg.Defaults.Build)
 
 	// Validate per-image
-	for name, img := range cfg.eachBox {
+	for name, img := range cfg.EachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -290,7 +290,7 @@ func validateBuildTunables(cfg *Config, errs *ValidationError) {
 	}
 
 	check("defaults", cfg.Defaults)
-	for name, img := range cfg.eachBox {
+	for name, img := range cfg.EachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -313,7 +313,7 @@ func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *
 		}
 		if builder != "" {
 			// Namespace-aware: a defaults builder ref may be qualified (e.g. `charly.fedora-builder`).
-			builderImg, _, exists := cfg.resolveBoxRef(builder)
+			builderImg, _, exists := cfg.ResolveBoxRef(builder)
 			if !exists {
 				errs.Add("defaults.builder.%s: box %q not found", typ, builder)
 			} else if !builderImg.IsEnabled() {
@@ -322,7 +322,7 @@ func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *
 		}
 	}
 	// Validate each enabled image's builds:/builder: authored refs.
-	for boxName, img := range cfg.eachBox {
+	for boxName, img := range cfg.EachBox {
 		if !img.IsEnabled() {
 			continue
 		}
@@ -340,7 +340,7 @@ func validateBuilderRefs(cfg *Config, builderCfg *buildkit.BuilderConfig, errs *
 				continue
 			}
 			if builder != "" {
-				builderImg, _, exists := cfg.resolveBoxRef(builder)
+				builderImg, _, exists := cfg.ResolveBoxRef(builder)
 				if !exists {
 					errs.Add("box %q: builder.%s references %q which is not found", boxName, typ, builder)
 					continue

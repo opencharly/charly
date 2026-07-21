@@ -37,11 +37,11 @@ func hostBuildRetention(_ context.Context, req spec.RetentionRequest, _ buildEng
 	}
 
 	// Resolve retention counts: project defaults.keep_* over the fallbacks, then the --keep override.
-	keepImages := resolveIntPtr(nil, nil, keepImagesFallback)
-	keepCheck := resolveIntPtr(nil, nil, keepCheckRunsFallback)
+	keepImages := resolveIntPtr(nil)
+	keepCheck := resolveIntPtr(nil)
 	if cfg, cerr := LoadConfig(req.Dir); cerr == nil {
-		keepImages = resolveIntPtr(cfg.Defaults.KeepImages, nil, keepImagesFallback)
-		keepCheck = resolveIntPtr(cfg.Defaults.KeepCheckRuns, nil, keepCheckRunsFallback)
+		keepImages = resolveIntPtr(cfg.Defaults.KeepImages)
+		keepCheck = resolveIntPtr(cfg.Defaults.KeepCheckRuns)
 	}
 	if req.Keep > 0 {
 		keepImages, keepCheck = req.Keep, req.Keep

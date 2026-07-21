@@ -77,7 +77,7 @@ var internalOnlyVerbs = map[string]bool{"plugin": true}
 // CUE verb vocabulary (spec.OpVerbs) are in exact bijection, and that every
 // AUTHORED verb is also a member of the authorable Op vocabulary
 // (spec.AuthoringVerbs) — the internal-only verbs are exempt by design.
-func checkVerbBijection(catalog map[string]VerbSpec, verbs, authoring []string) error {
+func checkVerbBijection(catalog map[string]spec.VerbSpec, verbs, authoring []string) error {
 	want := setFromSlice(verbs)
 	auth := setFromSlice(authoring)
 	var missing, extra, notAuthorable []string
@@ -107,7 +107,7 @@ func checkVerbBijection(catalog map[string]VerbSpec, verbs, authoring []string) 
 // the CUE vocabulary has exactly one Go handler and vice versa — a fail-fast that
 // makes a schema/handler divergence impossible to ship.
 func init() {
-	if err := checkVerbBijection(VerbCatalog, spec.OpVerbs, spec.AuthoringVerbs); err != nil {
+	if err := checkVerbBijection(spec.VerbCatalog, spec.OpVerbs, spec.AuthoringVerbs); err != nil {
 		panic(err)
 	}
 }

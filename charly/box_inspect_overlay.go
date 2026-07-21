@@ -37,7 +37,7 @@ func (c *InspectOverlayCmd) Run() error {
 	// Resolve the box FIRST (matching the former InspectCmd.runFromConfig ordering: a bad box name
 	// errors before any format renders, for both overlay formats).
 	calverTag := ComputeCalVer()
-	resolved, err := cfg.ResolveBox(c.Box, calverTag, dir, ResolveOpts{IncludeDisabled: c.IncludeDisabled})
+	resolved, err := ResolveBox(cfg, c.Box, calverTag, dir, ResolveOpts{IncludeDisabled: c.IncludeDisabled})
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (c *InspectOverlayCmd) formatTunnel(cfg *Config, dir string, resolved *buil
 	}
 	portProtos := make(map[string]string)
 	boxPorts, _ := CollectBoxPorts(cfg, layers, c.Box)
-	tc := ResolveTunnelConfig(overlay.Tunnel, c.Box, "", layers, resolved.Candy, portProtos, boxPorts)
+	tc := deploykit.ResolveTunnelConfig(overlay.Tunnel, c.Box, "", layers, resolved.Candy, portProtos, boxPorts)
 	if tc == nil || len(tc.Ports) == 0 {
 		return
 	}

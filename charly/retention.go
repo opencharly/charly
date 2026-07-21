@@ -14,14 +14,10 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// Retention fallbacks — used ONLY when defaults.keep_images / keep_check_runs are
-// absent from config. Zero means "disabled" so third-party configs that never
-// declare the keys get NO surprise pruning. The repo's charly.yml opts in
-// (keep_images: 3, keep_check_runs: 3). See /charly-core:clean.
-const (
-	keepImagesFallback    = 0
-	keepCheckRunsFallback = 0
-)
+// Retention fallback: when defaults.keep_images / keep_check_runs are absent from config,
+// resolveIntPtr(nil) (config.go) resolves to 0, meaning "disabled" — so third-party configs that
+// never declare the keys get NO surprise pruning. The repo's charly.yml opts in (keep_images: 3,
+// keep_check_runs: 3). See /charly-core:clean.
 
 // listContainerImageRefs returns the set of image IDs and image refs currently
 // referenced by ANY container (running or stopped, incl. quadlet-managed

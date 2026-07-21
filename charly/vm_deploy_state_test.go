@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 
 	"github.com/opencharly/sdk/deploykit"
 )
@@ -145,59 +146,8 @@ func TestRemoveVmDeployEntry_RemovesBundleKeyedBedEntry(t *testing.T) {
 	}
 }
 
-// TestPruneStaleVmDottedTwin is the regression test for the FINAL/K5 unit 6a RCA #6 finding: a
-// nested (dotted) deploy's per-host vm_state used to get written TWICE — once correctly under
-// "vm:"+VmDomainIdentity(name) (candy/plugin-vm's hostConfigPersist), once under the RAW dotted
-// name (the now-ELIMINATED Writer B — candy/plugin-deploy-vm's PrepareVenue, persisted via
-// substrate_lifecycle_grpc.go's generic seam) — poisoning the overlay on every subsequent load.
-// pruneStaleVmDottedTwin is the pure self-healing scan saveVmDeployState now runs on every write.
-func TestPruneStaleVmDottedTwin(t *testing.T) {
-	t.Run("removes a matching dotted twin", func(t *testing.T) {
-		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-			"check-sidecar-pod.check-sidecar-pod-ephvm":    {Target: "vm", VmState: &spec.VmDeployState{SshPort: 45551}},
-			"vm:check-sidecar-pod-check-sidecar-pod-ephvm": {Target: "vm", VmState: &spec.VmDeployState{SshPort: 33799}},
-		}}
-		got := pruneStaleVmDottedTwin(dc, "vm:check-sidecar-pod-check-sidecar-pod-ephvm")
-		if got != "check-sidecar-pod.check-sidecar-pod-ephvm" {
-			t.Errorf("pruneStaleVmDottedTwin() = %q, want the dotted twin's key", got)
-		}
-		if _, stillThere := dc.Bundle["check-sidecar-pod.check-sidecar-pod-ephvm"]; stillThere {
-			t.Error("dotted twin was not removed from dc.Bundle")
-		}
-		if _, canonical := dc.Bundle["vm:check-sidecar-pod-check-sidecar-pod-ephvm"]; !canonical {
-			t.Error("the canonical entry itself was wrongly removed")
-		}
-	})
-	t.Run("no twin present is a no-op", func(t *testing.T) {
-		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-			"vm:myapp": {Target: "vm"},
-		}}
-		if got := pruneStaleVmDottedTwin(dc, "vm:myapp"); got != "" {
-			t.Errorf("pruneStaleVmDottedTwin() = %q, want \"\" (nothing to prune)", got)
-		}
-	})
-	t.Run("does not over-match an unrelated dotted entry", func(t *testing.T) {
-		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-			"vm:myapp":                 {Target: "vm"},
-			"other-stack.other-member": {Target: "vm"}, // a DIFFERENT domain's dotted entry
-		}}
-		if got := pruneStaleVmDottedTwin(dc, "vm:myapp"); got != "" {
-			t.Errorf("pruneStaleVmDottedTwin() = %q, want \"\" (unrelated domain must survive)", got)
-		}
-		if _, survived := dc.Bundle["other-stack.other-member"]; !survived {
-			t.Error("unrelated dotted entry was wrongly pruned (over-match)")
-		}
-	})
-	t.Run("the canonical key itself is never pruned even though it is its own domain match", func(t *testing.T) {
-		dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
-			"vm:myapp": {Target: "vm"},
-		}}
-		pruneStaleVmDottedTwin(dc, "vm:myapp")
-		if _, ok := dc.Bundle["vm:myapp"]; !ok {
-			t.Error("the canonical entry was wrongly self-pruned")
-		}
-	})
-}
+// TestPruneStaleVmDottedTwin moved to sdk/deploykit/vm_deploy_addressing_test.go (FLOOR-SLIM Unit
+// 3) — PruneStaleVmDottedTwin is now a pure deploykit function, not a charly-core one.
 
 // TestSaveVmDeployState_SelfHealsStaleDottedTwin is the end-to-end regression test: a real overlay
 // file carrying a pre-fix poisoned dotted twin gets healed the next time the canonical domain is
@@ -329,41 +279,18 @@ func TestSaveVmDeployState_ReverseOrderingRoundTrips(t *testing.T) {
 	}
 }
 
-// TestSplitVmAddress is the table test for the FINAL/K5 unit 6a RCA #9 shared helper: the
-// SINGLE source for detecting/stripping the "vm:" CLI-addressing prefix, pulled out after the
-// THIRD independent reimplementation of the same `strings.HasPrefix(x, "vm:")` check
-// (resolveDeployNodeByPath/RCA #8, resolveDelNode, hostBuildDeployNodeDelDispatch/RCA #9).
-func TestSplitVmAddress(t *testing.T) {
-	cases := []struct {
-		name      string
-		addr      string
-		wantPlain string
-		wantIsVm  bool
-	}{
-		{"vm:-prefixed top-level", "vm:myvm", "myvm", true},
-		{"vm:-prefixed dotted (the RCA #8/#9 shape)", "vm:check-sidecar-pod.check-sidecar-pod-ephvm", "check-sidecar-pod.check-sidecar-pod-ephvm", true},
-		{"unprefixed top-level", "myvm", "myvm", false},
-		{"unprefixed dotted", "check-sidecar-pod.check-sidecar-pod-ephvm", "check-sidecar-pod.check-sidecar-pod-ephvm", false},
-		{"bare \"vm:\" with nothing after it", "vm:", "", true},
-		{"empty string", "", "", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			plain, isVm := splitVmAddress(tc.addr)
-			if plain != tc.wantPlain || isVm != tc.wantIsVm {
-				t.Errorf("splitVmAddress(%q) = (%q, %v), want (%q, %v)", tc.addr, plain, isVm, tc.wantPlain, tc.wantIsVm)
-			}
-		})
-	}
-}
+// TestSplitVmAddress moved to sdk/vmshared/vm_deploy_addressing_test.go (FLOOR-SLIM Unit 3) —
+// SplitVmAddress is now a pure vmshared function, not a charly-core one.
 
 // TestSplitVmAddress_LedgerIdentityRegression is the regression test for the FINAL/K5 unit 6a
 // RCA #9 live-probe-caught bug: `bundle del vm:<dotted-name>` silently no-op'd because
 // deploykit.ComputeDeployID hashes the deploy name VERBATIM, and the raw "vm:"-prefixed CLI
 // form hashed to a COMPLETELY DIFFERENT ID than the plain form the add-time tree walk used to
 // record the ledger entry (verified live: 6413f8070aaa6087 vs d81fff596411fea4 for the exact
-// same logical deployment). Proves splitVmAddress's stripped form produces the IDENTICAL
-// deployID as the plain add-time form — the fix hostBuildDeployNodeDelDispatch relies on.
+// same logical deployment). Proves vmshared.SplitVmAddress's stripped form produces the
+// IDENTICAL deployID as the plain add-time form — the fix hostBuildDeployNodeDelDispatch relies
+// on. Kept charly-side (rather than moved with the pure function) since it exercises the
+// deploykit.ComputeDeployID interaction specifically, not the string-splitting logic alone.
 func TestSplitVmAddress_LedgerIdentityRegression(t *testing.T) {
 	const addTimeName = "check-sidecar-pod.check-sidecar-pod-ephvm"
 	const delTimeAddress = "vm:check-sidecar-pod.check-sidecar-pod-ephvm"
@@ -377,14 +304,15 @@ func TestSplitVmAddress_LedgerIdentityRegression(t *testing.T) {
 		t.Fatalf("test assumption broken: the raw prefixed form no longer collides differently (got %q == %q) — re-verify ComputeDeployID's contract before trusting this regression test", buggyDelID, addID)
 	}
 
-	// THE FIX: strip via splitVmAddress before computing the ID — must match the add-time ID.
-	plain, isVm := splitVmAddress(delTimeAddress)
+	// THE FIX: strip via vmshared.SplitVmAddress before computing the ID — must match the
+	// add-time ID.
+	plain, isVm := vmshared.SplitVmAddress(delTimeAddress)
 	if !isVm {
-		t.Fatal("splitVmAddress did not recognize the vm: prefix")
+		t.Fatal("vmshared.SplitVmAddress did not recognize the vm: prefix")
 	}
 	fixedDelID := deploykit.ComputeDeployID(plain, nil, nil)
 	if fixedDelID != addID {
-		t.Errorf("ComputeDeployID(splitVmAddress(%q)) = %q, want %q (the add-time ID) — the ledger record would still be unreachable from the del path", delTimeAddress, fixedDelID, addID)
+		t.Errorf("ComputeDeployID(vmshared.SplitVmAddress(%q)) = %q, want %q (the add-time ID) — the ledger record would still be unreachable from the del path", delTimeAddress, fixedDelID, addID)
 	}
 }
 

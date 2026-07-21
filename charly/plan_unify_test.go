@@ -33,7 +33,7 @@ func TestPlanUnify_CheckStepRuns(t *testing.T) {
 	if res[0].Keyword != string(kit.KwCheck) {
 		t.Errorf("keyword = %q, want check", res[0].Keyword)
 	}
-	if res[0].Result.Status != TestPass {
+	if res[0].Result.Status != spec.StatusPass {
 		t.Fatalf("check step should pass, got %v (%s)", res[0].Result.Status, res[0].Result.Message)
 	}
 }
@@ -56,14 +56,14 @@ func TestPlanUnify_VerifyOnlySkipsRun(t *testing.T) {
 		t.Fatalf("want 2 step results, got %d", len(res))
 	}
 	// The run: step is skipped (not executed) under verify-only.
-	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != TestSkip {
+	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != spec.StatusSkip {
 		t.Errorf("run: step should be skipped under VerifyOnly, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
 	}
 	if !strings.Contains(res[0].Result.Message, "verify-only") {
 		t.Errorf("skip reason should name verify-only, got %q", res[0].Result.Message)
 	}
 	// The check: step still runs and passes.
-	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != TestPass {
+	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != spec.StatusPass {
 		t.Errorf("check: step should run under VerifyOnly, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
 	}
 }
@@ -93,14 +93,14 @@ func TestPlanUnify_SkipDeterministicRunSkipsInstall(t *testing.T) {
 		t.Fatalf("want 3 step results, got %d", len(res))
 	}
 	// The deterministic run: install step is skipped (would FAIL with `false` if executed).
-	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != TestSkip {
+	if res[0].Keyword != string(kit.KwRun) || res[0].Result.Status != spec.StatusSkip {
 		t.Errorf("run: install step should be skipped under SkipDeterministicRun, got keyword=%q status=%v", res[0].Keyword, res[0].Result.Status)
 	}
 	if !strings.Contains(res[0].Result.Message, "install-timeline") {
 		t.Errorf("skip reason should name the install-timeline, got %q", res[0].Result.Message)
 	}
 	// The check: step still runs and passes.
-	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != TestPass {
+	if res[1].Keyword != string(kit.KwCheck) || res[1].Result.Status != spec.StatusPass {
 		t.Errorf("check: step should run, got keyword=%q status=%v", res[1].Keyword, res[1].Result.Status)
 	}
 	// agent-run: is NOT skipped as a deterministic install step — it reaches the

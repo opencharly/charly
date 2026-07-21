@@ -34,7 +34,7 @@ func bedCheckLevel(uf *UnifiedFile, node spec.BundleNode) string {
 	if node.Image == "" {
 		return deploykit.ResolveBedCheckLevel(false, "")
 	}
-	bc, _, ok := uf.ProjectConfig().resolveBoxRef(node.Image)
+	bc, _, ok := uf.ProjectConfig().ResolveBoxRef(node.Image)
 	if !ok {
 		return deploykit.ResolveBedCheckLevel(false, "")
 	}

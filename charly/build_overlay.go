@@ -106,7 +106,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		parentVolumes = parentNode.Volume
 	}
 
-	distroCfg, builderCfg, _, err := LoadDefaultBuildConfig(dir)
+	distroCfg, _, _, err := LoadDefaultBuildConfig(dir)
 	if err != nil {
 		return spec.OverlayBuildReply{}, fmt.Errorf("load build config: %w", err)
 	}
@@ -254,15 +254,16 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// deploykit.OCITarget.EmitStepOp seam calls HostBuild("step-emit", {Word:"oci-emit-step",
 	// Payload: OCIEmitStepParams{Dir, StepView, PlanView}, Distros}) per step; the emitter looks up
 	// this cache by Dir + calls ociEmitStep (the SAME single source of truth the in-core
-	// ociEmitStep delegated to). The build context mirrors the former in-core
-	// overlayOCITarget: DistroCfg/Generator/BuilderConfig/Box + ImageBuildDir/
-	// ContextRelPrefix = the overlay build dir (relative to the project root, so emitWrite's inline
-	// COPY prefix resolves, matching the full build's contextRelPrefix = buildDir convention).
+	// ociEmitStep delegated to), which threads Generator/Box's scalars onto the class:step OpEmit's
+	// BuildEnv for the four former HOST-COUPLED words (K5-Unit-6b — they render directly in
+	// candy/plugin-installstep now, off its OWN "resolved-project" envelope, not off
+	// DistroCfg/BuilderConfig here). ImageBuildDir/ContextRelPrefix = the overlay build dir
+	// (relative to the project root, so emitWrite's inline COPY prefix resolves, matching the full
+	// build's contextRelPrefix = buildDir convention).
 	overlayBuildDir := filepath.Join(".build", "overlay-"+deployName)
 	build := buildEngineContext{
 		DistroCfg:        buildkit.WrapDistroDef(podDistroDef),
 		Generator:        gen,
-		BuilderConfig:    builderCfg,
 		Box:              resolvedImg,
 		ImageBuildDir:    overlayBuildDir,
 		ContextRelPrefix: overlayBuildDir,

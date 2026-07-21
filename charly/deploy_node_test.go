@@ -115,7 +115,7 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 	deploy := map[string]spec.BundleNode{
 		"bad.name": {Target: "host"},
 	}
-	err := validateDeploymentTree(deploy)
+	err := spec.ValidateDeploymentTree(deploy)
 	if err == nil {
 		t.Fatal("expected error for '.' in deployment name")
 	}
