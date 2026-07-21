@@ -166,7 +166,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 
 	calver := ComputeCalVer()
 	resolvedBoxes := map[string]*buildkit.ResolvedBox{}
-	for _, name := range cfg.allBoxNames() {
+	for _, name := range cfg.AllBoxNames() {
 		img, ok := cfg.BoxConfig(name)
 		if !ok {
 			continue
@@ -190,7 +190,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 			rp.Boxes[name] = view
 			continue
 		}
-		resolved, err := cfg.ResolveBox(name, calver, dir, opts)
+		resolved, err := ResolveBox(cfg, name, calver, dir, opts)
 		if err != nil {
 			if diags == nil {
 				return nil, fmt.Errorf("resolving box %q: %w", name, err)
@@ -318,7 +318,7 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 		return
 	}
 	visited[cfg] = true
-	for _, name := range cfg.allBoxNames() {
+	for _, name := range cfg.AllBoxNames() {
 		qualified := name
 		if prefix != "" {
 			qualified = prefix + "." + name

@@ -119,7 +119,7 @@ func TestResolveImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := cfg.ResolveBox(tt.boxName, tt.calverTag, testProjectDir(t), ResolveOpts{})
+			resolved, err := ResolveBox(cfg, tt.boxName, tt.calverTag, testProjectDir(t), ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}
@@ -153,7 +153,7 @@ func TestResolveImageNotFound(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 
-	_, err = cfg.ResolveBox("nonexistent", "2026.045.1415", testProjectDir(t), ResolveOpts{})
+	_, err = ResolveBox(cfg, "nonexistent", "2026.045.1415", testProjectDir(t), ResolveOpts{})
 	if err == nil {
 		t.Error("ResolveBox() expected error for nonexistent image")
 	}
@@ -256,7 +256,7 @@ func TestResolveImageBuilders(t *testing.T) {
 	}
 
 	// Image with no explicit builder inherits defaults.builder
-	resolved, err := cfg.ResolveBox("uses-default", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err := ResolveBox(cfg, "uses-default", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -265,7 +265,7 @@ func TestResolveImageBuilders(t *testing.T) {
 	}
 
 	// Image with explicit builder overrides defaults per-type
-	resolved, err = cfg.ResolveBox("uses-custom", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = ResolveBox(cfg, "uses-custom", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"app": {Candy: []string{}},
 		}),
 	}
-	resolved, err = cfg2.ResolveBox("app", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = ResolveBox(cfg2, "app", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -303,7 +303,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"my-builder": {Candy: []string{}},
 		}),
 	}
-	resolved, err = cfg3.ResolveBox("my-builder", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = ResolveBox(cfg3, "my-builder", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -320,7 +320,7 @@ func TestResolveImageBuilders(t *testing.T) {
 			"child-img":   {Base: "base-img", Candy: []string{}},
 		}),
 	}
-	resolved, err = cfg4.ResolveBox("child-img", "test", testProjectDir(t), ResolveOpts{})
+	resolved, err = ResolveBox(cfg4, "child-img", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -370,7 +370,7 @@ func TestFullTag(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 
-	resolved, err := cfg.ResolveBox("base", "2026.045.1415", testProjectDir(t), ResolveOpts{})
+	resolved, err := ResolveBox(cfg, "base", "2026.045.1415", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveBox() error = %v", err)
 	}
@@ -404,7 +404,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// disabled-image is excluded from ResolveAllBox()
-	all, err := cfg.ResolveAllBox("test", testProjectDir(t), ResolveOpts{})
+	all, err := ResolveAllBox(cfg, "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Fatalf("ResolveAllBox() error = %v", err)
 	}
@@ -413,7 +413,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// ResolveBox returns error for disabled image
-	_, err = cfg.ResolveBox("disabled-image", "test", testProjectDir(t), ResolveOpts{})
+	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{})
 	if err == nil {
 		t.Error("ResolveBox() should return error for disabled image")
 	}
@@ -422,19 +422,19 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// Enabled images still work
-	_, err = cfg.ResolveBox("base", "test", testProjectDir(t), ResolveOpts{})
+	_, err = ResolveBox(cfg, "base", "test", testProjectDir(t), ResolveOpts{})
 	if err != nil {
 		t.Errorf("ResolveBox() unexpected error for enabled box: %v", err)
 	}
 
 	// --include-disabled (global) reaches the disabled image
-	_, err = cfg.ResolveBox("disabled-image", "test", testProjectDir(t), ResolveOpts{IncludeDisabled: true})
+	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{IncludeDisabled: true})
 	if err != nil {
 		t.Errorf("ResolveBox(IncludeDisabled=true) should succeed for disabled image, got: %v", err)
 	}
 
 	// --include-disabled scoped to a different name still rejects
-	_, err = cfg.ResolveBox("disabled-image", "test", testProjectDir(t), ResolveOpts{
+	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{
 		IncludeDisabled:      true,
 		IncludeDisabledNames: map[string]bool{"some-other-image": true},
 	})
@@ -443,7 +443,7 @@ func TestEnabledField(t *testing.T) {
 	}
 
 	// --include-disabled scoped to the requested name succeeds
-	_, err = cfg.ResolveBox("disabled-image", "test", testProjectDir(t), ResolveOpts{
+	_, err = ResolveBox(cfg, "disabled-image", "test", testProjectDir(t), ResolveOpts{
 		IncludeDisabled:      true,
 		IncludeDisabledNames: map[string]bool{"disabled-image": true},
 	})
@@ -546,7 +546,7 @@ func TestResolveImageDistroBaseChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := cfg.ResolveBox(tt.boxName, "test", testProjectDir(t), ResolveOpts{})
+			resolved, err := ResolveBox(cfg, tt.boxName, "test", testProjectDir(t), ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}
@@ -596,7 +596,7 @@ func TestResolveImageBuildBaseChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := cfg.ResolveBox(tt.boxName, "test", testProjectDir(t), ResolveOpts{})
+			resolved, err := ResolveBox(cfg, tt.boxName, "test", testProjectDir(t), ResolveOpts{})
 			if err != nil {
 				t.Fatalf("ResolveBox() error = %v", err)
 			}

@@ -30,6 +30,6 @@ func findLocalSpec(dir, name string) (*ResolvedLocal, error) {
 	// `local:` map exactly as before, while a qualified `local: <ns>.<tmpl>`
 	// ref descends into the imported namespace. resolveLocalRef tolerates a nil
 	// Local map, so the previous explicit nil-guard is no longer needed.
-	spec, _ := uf.ProjectConfig().resolveLocalRef(name)
+	spec, _ := resolveLocalRefFor(uf.ProjectConfig(), name)
 	return spec, nil
 }

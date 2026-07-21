@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -57,7 +58,7 @@ func bakeableSteps(plan []spec.Step) []spec.Step {
 func CollectDescriptions(cfg *Config, layers map[string]spec.CandyReader, boxName string) *spec.LabelDescriptionSet {
 	set := &spec.LabelDescriptionSet{}
 
-	allCandyNames, _ := cfg.boxCandyChain(layers, boxName)
+	allCandyNames, _ := deploykit.BoxCandyChain(cfg, layers, boxName)
 	for _, candyName := range allCandyNames {
 		layer, ok := layers[candyName]
 		if !ok {

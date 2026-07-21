@@ -666,7 +666,7 @@ func collectReferencedPluginWords(candies map[string]spec.CandyReader, boxes box
 		}
 	}
 	for _, raw := range boxes {
-		box, ok := decodeBox(raw)
+		box, ok := spec.DecodeBox(raw)
 		if !ok {
 			continue
 		}

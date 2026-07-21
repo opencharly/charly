@@ -386,7 +386,7 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 	// inside compileCandySelection); pod/k8s resolve the base image context here.
 	var baseImg *buildkit.ResolvedBox
 	if (target == "pod" || target == "k8s") && refStr != "" {
-		if baseResolved, rerr := cfg.ResolveBox(refStr, tag, dir, ResolveOpts{}); rerr == nil {
+		if baseResolved, rerr := ResolveBox(cfg, refStr, tag, dir, ResolveOpts{}); rerr == nil {
 			baseImg = baseResolved
 			if distroCfg != nil {
 				baseImg.DistroDef = distroCfg.ResolveDistro(baseImg.Distro)
@@ -623,7 +623,7 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 		aug := *cfg
 		aug.Box = make(boxMap, len(cfg.Box)+1)
 		maps.Copy(aug.Box, cfg.Box)
-		aug.Box["__charly_addlayer_fetch__"] = encodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
+		aug.Box["__charly_addlayer_fetch__"] = spec.EncodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
 		scanCfg = &aug
 		candyKey = deploykit.BareRef(ref.Raw)
 	}

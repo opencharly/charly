@@ -20,7 +20,7 @@ func CollectSecurity(cfg *Config, layers map[string]spec.CandyReader, boxName st
 	// Resolve the box's own candy tree (leaf-specific — security does NOT
 	// inherit from a base box; the shared boxDirectCandies walk). Fall back to
 	// the raw direct refs on a resolution error, as before.
-	allCandies, err := cfg.boxDirectCandies(layers, boxName)
+	allCandies, err := deploykit.BoxDirectCandies(cfg, layers, boxName)
 	if err != nil {
 		allCandies = img.Candy
 	}
