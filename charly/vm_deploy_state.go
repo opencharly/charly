@@ -13,19 +13,23 @@ import (
 )
 
 // vm_deploy_state.go — the charly.yml persistence half of the former bundle_add_cmd_vm.go
-// (P13-KERNEL): a plugin cannot touch the project's charly.yml directly (deploy_add_shared.go /
-// vm_lifecycle_preresolve.go's PrepareVenue seam persists the plugin's returned state HERE), so
-// these stay behind the config-persist HostBuild seam. The pure VM-spec helpers (SSH user/port
-// resolution) + the SSH ReverseRunner adapter moved to sdk/vmshared + sdk/kit respectively — see
-// vmshared.ResolveCloudInitSSHUser + kit.SSHReverseRunner + kit.ResolveVmSshPort.
+// (P13-KERNEL): a plugin cannot touch the project's charly.yml directly, so these stay behind the
+// config-persist HostBuild seam. RCA #6 (FINAL/K5 unit 6a) eliminated the second writer this
+// comment used to describe (a PrepareVenue-reply persist through substrate_lifecycle_grpc.go) —
+// candy/plugin-vm's own hostConfigPersist is the SOLE vm_state writer now, one writer, one key. The
+// pure VM-spec helpers (SSH user/port resolution) + the SSH ReverseRunner adapter moved to
+// sdk/vmshared + sdk/kit respectively — see vmshared.ResolveCloudInitSSHUser + kit.SSHReverseRunner
+// + kit.ResolveVmSshPort.
 
 // vmNameFromDeployName extracts the VM entity name from a deploy-key
 // in the legacy "vm:<name>[/<instance>]" form. Callers that hold a
 // schema-v4 deploy key (whose entity comes from the node's `vm:` field)
-// resolve the entity via vmEntityForAdd instead; this helper handles the
-// prefixed form (legacy refs + the "vm:<entity>" key the del path builds
-// for ledger/teardown keying). The `instance` suffix is preserved for
-// future per-instance addressing but currently unused.
+// resolve the entity via candy/plugin-deploy-vm's own vmEntityForPrepare
+// (FINAL/K5 unit 6a, M4b — the entity resolution moved with PrepareVenue's
+// own body) instead; this helper handles the prefixed form (legacy refs +
+// the "vm:<entity>" key the del path builds for ledger/teardown keying).
+// The `instance` suffix is preserved for future per-instance addressing but
+// currently unused.
 func vmNameFromDeployName(deployName string) (string, error) {
 	if !strings.HasPrefix(deployName, "vm:") {
 		return "", fmt.Errorf("VM deploy name must start with 'vm:' (got %q)", deployName)

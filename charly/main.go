@@ -68,6 +68,26 @@ type CLI struct {
 	// directly.
 	BoxPkg BoxPkgCmd `cmd:"" name:"__box-pkg" hidden:"" help:"internal: build native package artifacts (reentry behind box pkg)"`
 
+	// __box-build is the hidden core reentry point behind the COMPILED-IN candy/plugin-box
+	// command:build word (nested under `box`, build/pull dispersal — the CLI-only mirror of the
+	// pull move, M4d): the plugin owns the user-facing `charly box build` grammar + dispatch and
+	// reaches this over HostBuild("cli") — BuildCmd.Run()'s engine (bootstrap-builder, remote-ref
+	// resolution, retention pruning) is K1/K3-family (loader/build-engine cone), not CLI-dispersal
+	// residue, and stays core-only, unmoved. BuildCmd itself is UNCHANGED — only its Kong
+	// attachment point moved. EnsureImagePresent (ensure_image.go) and RemoteImageContext.BuildImage
+	// (remote_image.go) construct + call BuildCmd.Run() DIRECTLY at the Go level (never through
+	// Kong/CLI), so this reentry does not affect them at all.
+	BoxBuild BuildCmd `cmd:"" name:"__box-build" hidden:"" help:"internal: build container boxes (reentry behind box build)"`
+
+	// __box-pull is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pull
+	// word (nested under `box`, build/pull dispersal — pull-first per the standing ruling): the plugin
+	// owns the user-facing `charly box pull` grammar + dispatch and reaches this over HostBuild("cli")
+	// — EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution
+	// (BuildCmd.Run, cfg.ResolveBox, ResolveRemoteImage), all still core-only pre the ensure_image.go +
+	// build.go + remote_image.go batch. BoxPullCmd itself is UNCHANGED — only its Kong attachment point
+	// moved (was a direct BoxCmd field; now reached solely via this hidden reentry).
+	BoxPull BoxPullCmd `cmd:"" name:"__box-pull" hidden:"" help:"internal: pull/build-fallback an image (reentry behind box pull)"`
+
 	// __box-inspect-overlay / __box-list-tags are the hidden core reentry points behind the
 	// COMPILED-IN candy/plugin-box command:inspect / command:list words (nested under `box`). The
 	// plugin owns the user-facing grammar + reads the resolved-project envelope; these two reentries

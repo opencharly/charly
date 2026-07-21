@@ -725,6 +725,17 @@ check-sidecar-pod:
                   ${CHARLY_BIN} bundle show 2>/dev/null | grep -q 'deploy_address:.*check-sidecar-pod\.check-sidecar-pod-ephvm' &&
                   echo EPHEMERAL-REGISTERED-OK
                 in_container: false
+            - check: proves the FINAL/K5 unit 6a M4c "box pull" command-dispersal end to end — candy/plugin-box's new command-pull word (pullGrammar/dispatchPull) reenters the hidden core "__box-pull" command over the "cli" HostBuild seam, which still runs BoxPullCmd's UNCHANGED Run body (EnsureImagePresent). Targets check-k8s-deploy-app (the underlying BOX name check-sidecar-pod's pod image deploys — NOT the deploy name itself, which is not a resolvable box), already present in local storage from this bed's own image-build phase, so the pull is a genuine idempotent no-op — asserts EnsureImagePresent's own unchanged "present" line on stderr. Fails without the new grammar/dispatch/reentry chain actually working; mutates nothing.
+              id: box-pull-dispersal-roundtrip
+              exit_status: 0
+              stderr:
+                - contains: 'ensure-image:'
+                - contains: 'present'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} box pull check-k8s-deploy-app
+                in_container: false
     check-sidecar-pod-ephvm:
         vm:
             from: eval-vm

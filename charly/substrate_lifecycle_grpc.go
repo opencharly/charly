@@ -121,16 +121,11 @@ func (l grpcSubstrateLifecycle) PrepareVenue(ctx context.Context, name, dir stri
 		extra["image"] = node.Image
 		extra["version"] = node.Version
 	}
-	// Consult the substrate's host-side prepare hook GENERICALLY (never a "vm" branch): vm ships the
-	// resolved spec.LifecyclePrepareInput (entity + ssh coords + prior state) under "prepare"; pod
-	// registers no hook. The plugin does the actual venue lifecycle — this is only the DATA it needs.
-	if hook, ok := lifecyclePrepareHookFor(l.prov.word); ok {
-		prep, herr := hook(name, dir, node)
-		if herr != nil {
-			return nil, fmt.Errorf("substrate %q prepare-venue: resolve prepare data: %w", l.prov.word, herr)
-		}
-		extra["prepare"] = prep
-	}
+	// No host-side "prepare" data injection (FINAL/K5 unit 6a, M4b — hard cutover): the deleted
+	// lifecyclePrepareHook indirection is gone. Every Lifecycle:true substrate ALREADY owns
+	// OpPrepareVenue in its own plugin, so it self-serves any LoadUnified-coupled data it needs via
+	// the generic "deploy-entity-resolve" HostBuild seam (candy/plugin-deploy-vm's vmPrepareVenue is
+	// the reference) instead of receiving it host-precomputed here.
 	res, err := l.lifecycleInvoke(ctx, sdk.OpPrepareVenue, name, dir, node, extra, kit.ShellExecutor{})
 	if err != nil {
 		return nil, err
