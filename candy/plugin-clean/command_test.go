@@ -48,3 +48,52 @@ func TestCleanMakepkgArtifacts(t *testing.T) {
 		t.Errorf("dry-run must NOT remove src: %v", err)
 	}
 }
+
+// TestCleanCategories covers the --images/--check/--deep flag-resolution logic: the pre-existing
+// "any one of --images/--check given alone suppresses the other default categories" behavior stays
+// unchanged, and --deep NEVER fires implicitly on a plain `charly clean` (R5: no default-behavior
+// change) but joins the same "an explicit category was given" gate as --images/--check.
+func TestCleanCategories(t *testing.T) {
+	cases := []struct {
+		name                            string
+		images, check, deep             bool
+		wantImages, wantCheck, wantDeep bool
+		wantMakepkg                     bool
+	}{
+		{name: "no flags: full default sweep, deep excluded",
+			images: false, check: false, deep: false,
+			wantImages: true, wantCheck: true, wantDeep: false, wantMakepkg: true},
+		{name: "--images alone: only images",
+			images: true, check: false, deep: false,
+			wantImages: true, wantCheck: false, wantDeep: false, wantMakepkg: false},
+		{name: "--check alone: only check",
+			images: false, check: true, deep: false,
+			wantImages: false, wantCheck: true, wantDeep: false, wantMakepkg: false},
+		{name: "--images + --check: both, no makepkg",
+			images: true, check: true, deep: false,
+			wantImages: true, wantCheck: true, wantDeep: false, wantMakepkg: false},
+		{name: "--deep alone: only deep",
+			images: false, check: false, deep: true,
+			wantImages: false, wantCheck: false, wantDeep: true, wantMakepkg: false},
+		{name: "--deep + --images: both, check/makepkg excluded",
+			images: true, check: false, deep: true,
+			wantImages: true, wantCheck: false, wantDeep: true, wantMakepkg: false},
+		{name: "--deep + --check: both, images/makepkg excluded",
+			images: false, check: true, deep: true,
+			wantImages: false, wantCheck: true, wantDeep: true, wantMakepkg: false},
+		{name: "all three flags: everything but makepkg",
+			images: true, check: true, deep: true,
+			wantImages: true, wantCheck: true, wantDeep: true, wantMakepkg: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotImages, gotCheck, gotDeep, gotMakepkg := cleanCategories(c.images, c.check, c.deep)
+			if gotImages != c.wantImages || gotCheck != c.wantCheck || gotDeep != c.wantDeep || gotMakepkg != c.wantMakepkg {
+				t.Errorf("cleanCategories(%v,%v,%v) = (%v,%v,%v,%v), want (%v,%v,%v,%v)",
+					c.images, c.check, c.deep,
+					gotImages, gotCheck, gotDeep, gotMakepkg,
+					c.wantImages, c.wantCheck, c.wantDeep, c.wantMakepkg)
+			}
+		})
+	}
+}
