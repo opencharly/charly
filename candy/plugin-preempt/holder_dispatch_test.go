@@ -3,6 +3,7 @@ package preempt
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -171,32 +172,79 @@ func TestIsDomainNotFoundErr(t *testing.T) {
 }
 
 // fakeVmInvokeProviderClient is a minimal pb.ExecutorServiceClient test double: only
-// InvokeProvider is implemented (replies with a canned result_json), every other RPC panics if
-// called — since pluginHolderStart's VM branch touches ONLY InvokeProvider. Lets a test construct
-// a real *sdk.Executor (sdk.NewInProcExecutor) without a live candy/plugin-vm process, mirroring
+// InvokeProvider is implemented, and it is OP-AWARE — it decodes the request's env_json into
+// spec.VmPluginEnv and replies differently per VmOp (domainStateResult for "domain-state",
+// startResult for "start") — every other RPC panics if called, since pluginHolderStart's VM
+// branch touches ONLY InvokeProvider. Being op-aware is what makes this fake capable of
+// SIMULATING THE ACTUAL RACE WINDOW (see TestPluginHolderStart_VmRace_DomainGoneBetweenCheckAndAct
+// below): an op-BLIND fake that returns one canned reply regardless of which op fired cannot
+// discriminate the pre-fix check-then-act shape from the fixed shape at all — the pre-fix code's
+// domain-state pre-check would ALSO see the canned "not found" reply and take the SAME no-op path
+// coincidentally, proving nothing about the actual defect. Lets a test construct a real
+// *sdk.Executor (sdk.NewInProcExecutor) without a live candy/plugin-vm process, mirroring
 // candy/plugin-deploy-vm/lifecycle_test.go's fakeExecutorServiceClient pattern (R3 — same test
 // double shape, one per module since no test helper crosses the module boundary).
 type fakeVmInvokeProviderClient struct {
 	pb.ExecutorServiceClient
-	resultJSON []byte
+	domainStateResult []byte // reply for VmOp "domain-state" (the pre-fix code's existence pre-check)
+	startResult       []byte // reply for VmOp "start" (the act)
 }
 
 func (f *fakeVmInvokeProviderClient) InvokeProvider(ctx context.Context, in *pb.InvokeProviderRequest, opts ...grpc.CallOption) (*pb.InvokeReply, error) {
-	return &pb.InvokeReply{ResultJson: f.resultJSON}, nil
+	var env spec.VmPluginEnv
+	_ = json.Unmarshal(in.GetEnvJson(), &env)
+	switch env.VmOp {
+	case "domain-state":
+		return &pb.InvokeReply{ResultJson: f.domainStateResult}, nil
+	case "start":
+		return &pb.InvokeReply{ResultJson: f.startResult}, nil
+	default:
+		return &pb.InvokeReply{ResultJson: []byte(`{}`)}, nil
+	}
 }
 
-// TestPluginHolderStart_VmDomainNotFoundIsNoOp is the break-it-proven regression test for the
-// TOCTOU restore-race the validator RCA'd on check-preempt-vm-live: the fix eliminates the
-// separate existence pre-check entirely, so this test simply proves that a "domain not found"
-// reply FROM THE START RPC ITSELF (exactly what candy/plugin-vm's provider.go replies for a
-// domain destroyed by a concurrent teardown, or one that never existed — the two cases are now
-// indistinguishable BY DESIGN, which is the point: there is no longer a stale-observation window
-// for a race to land in) is treated as a clean no-op, not a hard error stranding the lease. FAILS
-// against the pre-fix code, which never even reached this point for a departed VM UNLESS the
-// stale pre-check's own race window happened to close the other way.
+// TestPluginHolderStart_VmRace_DomainGoneBetweenCheckAndAct is the DISCRIMINATING break-it-proven
+// regression test for the TOCTOU restore-race the validator RCA'd on check-preempt-vm-live. It
+// simulates the EXACT race window: the domain-state op (the pre-fix code's existence pre-check)
+// replies exists:true — the holder looks ALIVE at check time — but the start op (the act) replies
+// domain-not-found — the domain was destroyed by a concurrent teardown in the window between the
+// check and the act. Against the FIXED shape (this file's current pluginHolderStart, which never
+// calls domain-state for the VM branch at all — there is no check to race) this sequence still
+// produces a clean no-op, because the start RPC's OWN error is the sole signal. Against the
+// PRE-FIX shape (check-then-act: pluginHolderExists's domain-state call decided existence BEFORE
+// calling startVMPlugin) this exact sequence reproduces the bug: the pre-check said "exists", so
+// the old code proceeded to call start unconditionally, hit the real domain-not-found error, and
+// returned it as a HARD ERROR — stranding the lease. Verified: running this exact test body
+// against a restored copy of the pre-fix holder_dispatch.go (git show <pre-fix-commit>, the
+// version before this cutover's TOCTOU fix) FAILS with exactly that hard error; see the PR body
+// for the pasted verbatim old-shape FAIL alongside this file's new-shape PASS.
+func TestPluginHolderStart_VmRace_DomainGoneBetweenCheckAndAct(t *testing.T) {
+	fake := &fakeVmInvokeProviderClient{
+		domainStateResult: []byte(`{"exists":true,"running":true}`),
+		startResult:       []byte(`{"error":"starting VM charly-preempt-vm-holder: domain not found: Domain not found: no domain with matching name 'charly-preempt-vm-holder'"}`),
+	}
+	ex := sdk.NewInProcExecutor(fake)
+	addr := spec.HolderAddr{Target: "vm", Name: "preempt-vm-holder", Vm: "web-vm"}
+
+	var startErr error
+	stderr := captureStderr(t, func() {
+		startErr = pluginHolderStart(context.Background(), ex, addr)
+	})
+	if startErr != nil {
+		t.Fatalf("pluginHolderStart racing a domain destroyed between check and act must be a no-op success (else its lease strands forever); got: %v", startErr)
+	}
+	if !strings.Contains(stderr, "has departed") {
+		t.Fatalf("stderr = %q, want departed-holder diagnostic", stderr)
+	}
+}
+
+// TestPluginHolderStart_VmDomainNotFoundIsNoOp covers the simpler, non-racing case: the start RPC
+// itself replies domain-not-found (the domain was already long gone, no race involved) — still a
+// clean no-op. Kept alongside the discriminating race test above (which is the one that actually
+// distinguishes the fix from the bug); this one guards the base case.
 func TestPluginHolderStart_VmDomainNotFoundIsNoOp(t *testing.T) {
 	fake := &fakeVmInvokeProviderClient{
-		resultJSON: []byte(`{"error":"starting VM charly-preempt-vm-holder: domain not found: Domain not found: no domain with matching name 'charly-preempt-vm-holder'"}`),
+		startResult: []byte(`{"error":"starting VM charly-preempt-vm-holder: domain not found: Domain not found: no domain with matching name 'charly-preempt-vm-holder'"}`),
 	}
 	ex := sdk.NewInProcExecutor(fake)
 	addr := spec.HolderAddr{Target: "vm", Name: "preempt-vm-holder", Vm: "web-vm"}
@@ -218,7 +266,7 @@ func TestPluginHolderStart_VmDomainNotFoundIsNoOp(t *testing.T) {
 // mis-classified as departed and silently swallowed.
 func TestPluginHolderStart_VmOtherErrorPropagates(t *testing.T) {
 	fake := &fakeVmInvokeProviderClient{
-		resultJSON: []byte(`{"error":"starting VM charly-preempt-vm-holder: Requested operation is not valid: network 'default' is not active"}`),
+		startResult: []byte(`{"error":"starting VM charly-preempt-vm-holder: Requested operation is not valid: network 'default' is not active"}`),
 	}
 	ex := sdk.NewInProcExecutor(fake)
 	addr := spec.HolderAddr{Target: "vm", Name: "preempt-vm-holder", Vm: "web-vm"}
