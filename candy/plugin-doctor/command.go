@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	osexec "os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/opencharly/sdk"
@@ -371,7 +372,11 @@ func vfioChecks(reply spec.HostProbeReply) []DoctorCheckResult {
 		access := ""
 		if g.IOMMUGroup >= 0 {
 			grp = fmt.Sprintf("group %d", g.IOMMUGroup)
-			if reply.GroupAccessible[g.IOMMUGroup] {
+			// GroupAccessible is string-keyed (the SDD conversion reshaped
+			// the wire map from map[int]bool to map[string]bool — the SAME
+			// decimal-string keys encoding/json already produced for the
+			// former int-keyed map, so the wire bytes are unchanged).
+			if reply.GroupAccessible[strconv.Itoa(g.IOMMUGroup)] {
 				access = ", /dev/vfio rw"
 			} else {
 				access = fmt.Sprintf(", /dev/vfio/%d NOT accessible (charly udev install)", g.IOMMUGroup)

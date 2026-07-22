@@ -93,4 +93,3 @@ func parseEmbeddedDistroFamilyMap() map[string]string {
 	}
 	return doc.DistroFamilyMap
 }
-

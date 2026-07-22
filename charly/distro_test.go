@@ -71,4 +71,3 @@ ID=nixos`
 		t.Errorf("Manager = %q, want empty", d.Manager)
 	}
 }
-

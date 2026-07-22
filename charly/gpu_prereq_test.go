@@ -15,11 +15,13 @@ func TestGPUPrereqMissing(t *testing.T) {
 		"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}},
 		"test-lock":  {}, // a non-GPU arbitration token
 	}
+	// VFIOGpu is flattened (SDD conversion) — spread via the shared
+	// spec.NewVFIOGpu constructor instead of the former embedded-field literal.
 	nvidiaHost := func() spec.VFIOReport {
-		return spec.VFIOReport{GPUs: []spec.VFIOGpu{{VFIOPCIDevice: spec.VFIOPCIDevice{VendorID: "0x10de"}}}}
+		return spec.VFIOReport{GPUs: []spec.VFIOGpu{spec.NewVFIOGpu(spec.VFIOPCIDevice{VendorID: "0x10de"})}}
 	}
 	amdOnlyHost := func() spec.VFIOReport {
-		return spec.VFIOReport{GPUs: []spec.VFIOGpu{{VFIOPCIDevice: spec.VFIOPCIDevice{VendorID: "0x1002"}}}}
+		return spec.VFIOReport{GPUs: []spec.VFIOGpu{spec.NewVFIOGpu(spec.VFIOPCIDevice{VendorID: "0x1002"})}}
 	}
 	detectPanics := func() spec.VFIOReport { t.Fatal("detect must not run for a non-GPU bed"); return spec.VFIOReport{} }
 

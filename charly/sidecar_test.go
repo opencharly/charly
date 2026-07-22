@@ -50,4 +50,3 @@ func TestEmbeddedSidecarTemplates(t *testing.T) {
 		t.Errorf("secrets = %v, want [{ts-authkey TS_AUTHKEY}]", ts.Secret)
 	}
 }
-

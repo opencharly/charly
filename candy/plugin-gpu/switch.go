@@ -309,7 +309,11 @@ func gpuSwitchModeTolerant(vendor, mode string) (wedged bool, err error) {
 func examplePlanGpu() spec.VFIOGpu {
 	disp := spec.VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: spec.NvidiaVendorID, Class: "0x0300", ClassLabel: "VGA controller"}
 	aud := spec.VFIOPCIDevice{Addr: "0000:01:00.1", VendorID: spec.NvidiaVendorID, Class: "0x0403", ClassLabel: "Audio device"}
-	return spec.VFIOGpu{VFIOPCIDevice: disp, GroupMembers: []spec.VFIOPCIDevice{disp, aud}}
+	// VFIOGpu is flattened (SDD conversion) — spread via the shared
+	// spec.NewVFIOGpu constructor instead of the former embedded-field literal.
+	gpu := spec.NewVFIOGpu(disp)
+	gpu.GroupMembers = []spec.VFIOPCIDevice{disp, aud}
+	return gpu
 }
 
 // switchPlan returns the EXACT rebind commands for the target mode WITHOUT touching sysfs —

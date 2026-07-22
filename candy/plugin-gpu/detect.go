@@ -228,7 +228,10 @@ func scanVFIO(sysRoot, cmdlinePath string, classLabels map[string]string) spec.V
 		if !isDisplayClass(d.Class) {
 			continue
 		}
-		gpu := spec.VFIOGpu{VFIOPCIDevice: d}
+		// VFIOGpu is flattened (SDD conversion) — spread via the shared
+		// spec.NewVFIOGpu constructor instead of the former embedded-field
+		// literal.
+		gpu := spec.NewVFIOGpu(d)
 		for _, m := range iommuGroupMembers(sysRoot, d.IOMMUGroup) {
 			if md, ok := all[m]; ok {
 				gpu.GroupMembers = append(gpu.GroupMembers, md)

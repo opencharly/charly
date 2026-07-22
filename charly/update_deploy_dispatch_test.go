@@ -172,4 +172,3 @@ func TestNoteUpdateDisposability(t *testing.T) {
 		})
 	}
 }
-
