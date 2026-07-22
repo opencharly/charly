@@ -27,15 +27,20 @@ import (
 //     the HOST-forwarded port (the VM's network.port_forwards), so `kubectl`/`kube:`
 //     checks reach the API from the host — the port-forward allocation is
 //     LoadUnified-coupled (the deploy's persisted VmState + the kind:vm entity's
-//     declared forwards), so it reaches the host ONLY through the generic
-//     "deploy-entity-resolve" HostBuild seam (F10) over a broker-carrying Invoke.
+//     declared forwards), so it reaches the host ONLY through TWO generic
+//     HostBuild seams (F10) over a broker-carrying Invoke: "deploy-entity-resolve"
+//     for the kind:vm entity spec, and "config-resolve" for the persisted
+//     VmDeployState (port-forward allocation) — see deployVMForwards' own doc
+//     comment for why the persisted-state read specifically CANNOT go through a
+//     direct deploykit.LoadDeployConfigForRead call from this out-of-process
+//     plugin (an R10 bed regression this file once had).
 //  2. merge the (rewritten) kubeconfig into ~/.kube/config under a context named
 //     after the deploy — the clientcmd merge (mergeKubeconfig, merge.go) called
 //     directly, no separate host round-trip.
 //
 // Dispatched from charly/k8s_plugin.go's invokeKubePluginWithBroker — an
 // InvokeWithExecutor call, so this Invoke has a reverse-channel broker for the
-// HostBuild("deploy-entity-resolve") leg above.
+// HostBuild("deploy-entity-resolve")/HostBuild("config-resolve") legs above.
 
 // k3sPostProvisionParams is the {method: "k3s-post-provision", artifact_key,
 // deploy_name} plugin_input this method decodes (params.KubeInput's ArtifactKey /
@@ -122,7 +127,23 @@ func rewriteK3sServerToForward(ctx context.Context, exec *sdk.Executor, retrieve
 // Both LoadUnified-coupled lookups (resolving the deploy tree node, then the
 // kind:vm entity) route through the generic "deploy-entity-resolve" HostBuild seam
 // (F10) — the SAME seam charly/host_build_deploy_entity_resolve.go serves for the
-// preresolve leg (preresolve.go's k8sEntityResolve).
+// preresolve leg (preresolve.go's k8sEntityResolve). The persisted VmState
+// port-forward LEDGER read routes through the SIBLING "config-resolve" HostBuild
+// seam (candy/plugin-vm's own hostConfigResolve calls the identical seam for its
+// OWN VmState reuse) — NEVER a direct deploykit.LoadDeployConfigForRead call: that
+// helper's LoadBundleConfig degrades to an EMPTY config whenever
+// deploykit.DeployStateHost is nil, which it ALWAYS is inside this plugin's own
+// out-of-process (candy/plugin-kube is served over go-plugin gRPC, never
+// compiled-in) — DeployStateHost is wired ONLY by charly-core's own init(), so a
+// direct call here silently found nothing (a `LookupKey` miss, ok=false) every
+// single time regardless of what was actually persisted on disk, exactly the
+// silent-out-of-process-degradation class of bug the "deploy-config-save-state"
+// seam (Q2, S3b) was introduced to prevent for the WRITE half — this closes the
+// matching gap on the READ half. R10 bed regression: check-k8s-deploy's
+// bring-up-members failed with "auto port_forward \"auto:6443\" has no persisted
+// host-port allocation" even though `charly vm create`'s own persist (verified via
+// a live isolated CHARLY_DEPLOY_CONFIG repro, RDD) landed correctly and stayed
+// stable on disk throughout the run — the read, not the write, was broken.
 func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deployName string) ([]string, error) {
 	vmEntity := ""
 	if e, cut := strings.CutPrefix(entityRef, "vm:"); cut {
@@ -149,14 +170,41 @@ func deployVMForwards(ctx context.Context, exec *sdk.Executor, entityRef, deploy
 	if vm.Network == nil {
 		return nil, nil
 	}
-	key := "vm:" + vmshared.VmDomainIdentity(deployName)
+	domainID := vmshared.VmDomainIdentity(deployName)
+	key := "vm:" + domainID
 	var alloc map[string]int
-	if entry, ok := deploykit.LoadDeployConfigForRead("k3s kubeconfig forward").LookupKey(key); ok && entry.VmState != nil {
-		alloc = entry.VmState.PortForwards
+	if vmState, err := hostConfigResolveVmState(ctx, exec, domainID); err != nil {
+		return nil, fmt.Errorf("resolving persisted port-forward allocation for %q: %w", key, err)
+	} else if vmState != nil {
+		alloc = vmState.PortForwards
 	}
 	resolved, rerr := deploykit.ResolveDeployForwards(vm.Network.PortForwards, alloc)
 	if rerr != nil {
 		return nil, fmt.Errorf("deploy %q (vm_state key %q): %w", deployName, key, rerr)
 	}
 	return resolved, nil
+}
+
+// hostConfigResolveVmState fetches the persisted VmDeployState for the given "vm:<domainID>"
+// ledger key via the "config-resolve" HostBuild seam (the SAME seam candy/plugin-vm's own
+// hostConfigResolve uses for its OWN VmState reuse, R3 — one host-resident reader of the
+// per-host deploy overlay, never a direct deploykit.LoadDeployConfigForRead from an
+// out-of-process plugin, which cannot see the core-only deploykit.DeployStateHost wiring). The
+// heavier fields hostBuildConfigResolve also computes (backend probe, kind:vm entity resolution
+// keyed by req.Entity) are irrelevant here — domainID is never a real kind:vm entity name, so
+// that lookup harmlessly misses — only VmState is read.
+func hostConfigResolveVmState(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
+	reqJSON, err := json.Marshal(spec.ConfigResolveRequest{Entity: domainID})
+	if err != nil {
+		return nil, err
+	}
+	resJSON, err := exec.HostBuild(ctx, "config-resolve", reqJSON)
+	if err != nil {
+		return nil, err
+	}
+	var reply spec.ConfigResolveReply
+	if err := json.Unmarshal(resJSON, &reply); err != nil {
+		return nil, fmt.Errorf("config-resolve: decode reply: %w", err)
+	}
+	return reply.VmState, nil
 }
