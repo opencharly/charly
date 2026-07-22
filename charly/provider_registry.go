@@ -144,17 +144,13 @@ func (r *Registry) RegisterPluginProviders(ps []Provider, origin string, conn io
 		if err := r.register(p, origin); err != nil {
 			return err
 		}
-		// F6: a class:deploy provider declaring a venue lifecycle gets a wire-backed
-		// substrateLifecycle registered for its word, so externalDeployTarget (which calls only
-		// through the substrateLifecycle interface) drives the plugin's lifecycle transparently.
-		if gp, ok := p.(*grpcProvider); ok && gp.class == ClassDeployTarget {
-			if gp.lifecycle {
-				registerPluginSubstrateLifecycle(gp.word, grpcSubstrateLifecycle{prov: gp})
-			}
-			if gp.preresolve {
-				registerPluginDeployPreresolver(gp.word, wireDeployPreresolver(gp))
-			}
-		}
+		// F6 (S3b): a class:deploy provider's lifecycle/preresolve flags (gp.lifecycle/
+		// gp.preresolve, set from its Describe capability in buildUnit) need NO separate
+		// registration here anymore — pluginDeployTarget (unified_targets.go) reads them directly
+		// off the resolved *grpcProvider in ResolveTarget, and candy/plugin-bundle reaches the
+		// substrate's OpPrepareVenue/OpPreresolve itself via sdk.Executor.InvokeProvider. The
+		// former wire-backed substrateLifecycle/deployPreresolver registries (this loop used to
+		// populate them here) are deleted — nothing reads them anymore.
 	}
 	if conn != nil {
 		r.mu.Lock()

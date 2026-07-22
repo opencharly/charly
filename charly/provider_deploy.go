@@ -27,34 +27,48 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 // deploy-substrate kinds are served by an EXTERNAL out-of-process plugin instead
 // of a compiled-in DeployTargetProvider (F1 — the substrate-kind-plugin dispatch
 // seam). A word listed here has NO in-proc builtin: its grpcProvider registers at
-// plugin-load time and ResolveTarget routes target:<word> to externalDeployTarget
-// over the E3b reverse channel. Both checkDeployProviderBijection (in-proc XOR
-// externalized) and isExternalDeploySubstrate (a substrate kind is external iff
-// listed here) consult it — so the two gates can never disagree. GENERAL for all
-// 5 — ALL FIVE substrates now externalize; the ONLY substrate-specific piece is each one's
-// registered preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
-// candy/plugin-kube/preresolve.go, dispatched via the generalized
-// deploy_preresolve.go:wireDeployPreresolver seam) OR
-// lifecycle hook (vm_deploy_lifecycle.go compiled-in; pod via candy/plugin-deploy-pod), never a branch in the
-// generic dispatch. local needs NEITHER — its plan walk + executor selection are the generic
-// externalDeployTarget path (the executor is Shell for host:local, SSH for host:user@machine
-// — see ResolveTarget), so the plan VIEWS the host marshals already carry everything the
-// candy/plugin-deploy-local plugin needs.
+// plugin-load time and ResolveTarget (unified_targets.go) routes target:<word> to
+// the generic pluginDeployTarget (S3b), a thin data-only proxy that dispatches
+// EVERY verb (Add/Del/Test/Update/Start/Stop/Status/Logs/Shell/Attach/Rebuild) to
+// candy/plugin-bundle's Invoke(OpDeployDispatch), which reaches the substrate's own
+// out-of-process provider via sdk.Executor.InvokeProvider — never a direct E3b call
+// from core. Both checkDeployProviderBijection (in-proc XOR externalized) and
+// isExternalDeploySubstrate (a substrate kind is external iff listed here) consult
+// it — so the two gates can never disagree. GENERAL for all 5 — ALL FIVE substrates
+// now externalize; the ONLY substrate-specific piece is each one's registered
+// preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
+// candy/plugin-kube/preresolve.go, dispatched by candy/plugin-bundle's
+// preresolveSubstrate via InvokeProvider(OpPreresolve), S3b — the core-side
+// deploy_preresolve.go:wireDeployPreresolver registry it used to route through is
+// dissolved, since the caller is itself a plugin now) OR lifecycle hook
+// (lifecycleStartPlanHooks/lifecycleStopPlanHooks/lifecycleAttachPlanHooks,
+// pod_lifecycle_dispatch.go — pod only; vm registers none, see below), never a
+// branch in the generic dispatch. local needs NEITHER — its plan walk + executor
+// selection are the generic pluginDeployTarget path (the executor is Shell for
+// host:local, SSH for host:user@machine — see ResolveTarget), so the plan VIEWS
+// the host marshals already carry everything the candy/plugin-deploy-local plugin
+// needs.
 //
-// vm is served by candy/plugin-deploy-vm (kit.WalkPlans over the GUEST SSHExecutor). Unlike
-// local/android/k8s it owns a real venue LIFECYCLE, so it registers a substrateLifecycle
-// (vm_deploy_lifecycle.go): the host-side hook that boots the domain + builds the guest
-// SSHExecutor the reverse channel serves, runs the nested pod-in-guest orchestration, and
-// owns Start/Stop/Status/Logs/Shell/Rebuild + the ssh-config / charly.yml-entry / ephemeral
-// teardown bookkeeping. The deploy WALK is still external; only the venue lifecycle stays
-// host-side (the host-owns-the-engine principle).
+// vm is served by candy/plugin-deploy-vm (kit.WalkPlans over the GUEST SSHExecutor).
+// Unlike local/android/k8s it owns a real venue LIFECYCLE, implemented ENTIRELY
+// in the plugin (candy/plugin-deploy-vm/lifecycle.go): boots the domain, builds
+// the guest SSHExecutor the reverse channel serves, runs the nested pod-in-guest
+// orchestration, and owns Start/Stop/Status/Logs/Shell/Rebuild — reached the SAME
+// generic way as every other substrate (pluginDeployTarget → OpDeployDispatch →
+// InvokeProvider), no separate core-side substrateLifecycle registry. The
+// arbiter-claim bracket around vm's own `charly vm start`/`stop` reentry is vm's
+// OWN concern (never double-bracketed by arbiter_bracket.go, which is pod-scoped
+// only — see its doc comment); the ssh-config / charly.yml-entry / ephemeral
+// teardown bookkeeping is the vm's own hostBuildConfigPersist writer
+// (charly/vm_deploy_state.go).
 //
 // pod is served by candy/plugin-deploy-pod, but unlike vm its plugin WALKS NOTHING: pod bakes
-// its install steps INTO the image at build time, so its substrateLifecycle (the external
-// candy/plugin-deploy-pod, M4 + P11c) builds the overlay container image HOST-SIDE in PrepareVenue
-// via HostBuild("overlay") → the core prep+resolve seam (build_overlay.go) + the candy's own
-// deploykit.OCITarget render, and owns the container lifecycle (config/start/remove + the `charly
-// update` rebuild gate). The plugin's Invoke is a thin acknowledgment; the prep+resolve stays
+// its install steps INTO the image at build time, so its PrepareVenue (podPrepareVenue) builds
+// the overlay container image HOST-SIDE via HostBuild("overlay") → the core prep+resolve seam
+// (build_overlay.go) + the candy's own deploykit.OCITarget render, and owns the container
+// lifecycle (config/start/remove + the `charly update` rebuild gate) — reached the same generic
+// OpDeployDispatch path, with its Start/Stop/Attach further routing through pod_lifecycle_dispatch.go's
+// registered plan hooks (arbiter-bracketed by arbiter_bracket.go, S3b). The prep+resolve stays
 // core, the render is in the candy.
 var externalizedDeploySubstrates = map[string]bool{
 	"android": true,

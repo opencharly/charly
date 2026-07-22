@@ -18,7 +18,7 @@ import (
 // substrate. android has NO in-proc builtin (it was externalized), so before any
 // plugin is recognized it is NOT external; once the byte-gated prescan reads a
 // plugin manifest declaring deploy:android, isExternalDeploySubstrate("android")
-// flips true — which is what routes target:android to externalDeployTarget.
+// flips true — which is what routes target:android to pluginDeployTarget (S3b).
 func TestAndroidDeploySubstrate_Prescan(t *testing.T) {
 	// Save+restore the process-global declaration so the test is order-independent.
 	declaredDeployMu.Lock()
@@ -62,6 +62,6 @@ func TestAndroidDeploySubstrate_Prescan(t *testing.T) {
 		t.Fatal("prescan did not register deploy:android from the plugin manifest")
 	}
 	if !isExternalDeploySubstrate("android") {
-		t.Fatal("android must be an EXTERNAL substrate once deploy:android is recognized (F1) — this is what routes target:android to externalDeployTarget")
+		t.Fatal("android must be an EXTERNAL substrate once deploy:android is recognized (F1) — this is what routes target:android to pluginDeployTarget")
 	}
 }

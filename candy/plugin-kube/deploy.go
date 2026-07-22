@@ -24,8 +24,10 @@ import (
 // lifts the image Capabilities to ports/uid/gid, Invokes the generator's OpEmit,
 // then applies the host-side egress gate + disk I/O, now reached over the host's
 // "k8s-generate-kustomize" HostBuild seam. THIS plugin's own k8s deploy preresolver
-// (preresolve.go, F6/FINAL-K5-unit-6a — dispatched via the generalized
-// deploy_preresolve.go:wireDeployPreresolver seam) GENERATES the egress-validated
+// (preresolve.go, F6/FINAL-K5-unit-6a — dispatched directly by candy/plugin-bundle's
+// preresolveSubstrate via sdk.Executor.InvokeProvider(OpPreresolve), S3b — the
+// core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
+// through is dissolved) GENERATES the egress-validated
 // tree and ships its overlay path in DeployVenue.Substrate (spec.K8sDeployVenue);
 // this provider does the LIVE cluster I/O it owns:
 //

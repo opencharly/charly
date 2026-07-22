@@ -25,8 +25,9 @@ import (
 //     process so the HostBuild("cli")-forked `charly` children (hostBuildCli forks os.Args[0]
 //     in this process) inherit them.
 //
-// So the host stands up a SESSION keyed by bed name — the exact pattern grpcSubstrateLifecycle
-// uses (a package-level registry guarded by a mutex): `setup` inserts + acquires, `teardown`
+// So the host stands up a SESSION keyed by bed name — the same package-level-registry-guarded-
+// by-a-mutex pattern this codebase uses throughout for exactly this kind of live-handle
+// bookkeeping: `setup` inserts + acquires, `teardown`
 // removes + releases, and the compiled-in plugin's HostBuild calls all land in the SAME host
 // process so the live handles persist between ops. The `members-up`/`members-down`/`wait-ready`
 // ops are the mid-sequence host-coupled helpers that run AFTER the substrate deploys (so cannot

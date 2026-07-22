@@ -257,7 +257,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 	if err != nil {
 		return fmt.Errorf("resolve target: %w", err)
 	}
-	if tt, ok := utgt.(*externalDeployTarget); ok {
+	if tt, ok := utgt.(*pluginDeployTarget); ok {
 		tt.nodeOnly = c.NodeOnly
 	}
 

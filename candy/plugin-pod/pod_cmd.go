@@ -29,7 +29,7 @@ import (
 // HERE now. Two axes still reach the host, each over its own EXISTING narrow seam (no new
 // mechanism, R3): the credential-backed hook env (pod-config-hook-secret-env) and the deploy-entry
 // cleanup's registry-resugar (the NEW pod-config-clean-deploy-entry, a narrow twin of
-// pod-config-save-deploy-state — the existing deploy-config-save seam's shape doesn't fit, see
+// deploy-config-save-state — the existing deploy-config-save seam's shape doesn't fit, see
 // remove_orchestration.go's header for the demonstrated mismatch). The arbiter-release bracket
 // (CHARLY_PREEMPT_LEASE-gated host-process state) stays under the EXISTING "pod-remove" HostBuild
 // kind, deferred here as the LAST step — same shape as pod start/stop's own bracket.

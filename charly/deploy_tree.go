@@ -32,7 +32,7 @@ func deployTraitsFor(word string) *spec.DeployTraits {
 	if !ok {
 		// An external DEPLOY-class substrate (deploy:<word>) is served by a
 		// deploy-target plugin, NOT a KIND-class provider, so ResolveKind misses it.
-		// Its externalDeployTarget applies the deploy IN-PLACE and runs its deploy-scope
+		// Its pluginDeployTarget applies the deploy IN-PLACE and runs its deploy-scope
 		// probes host-side via ShellExecutor — the external-in-place venue (the "none"
 		// zero value; see #DeployTraits.Venue). Resolving it BY TRAIT (not a kind-word
 		// switch) keeps every consult site — checkLocalTarget above all — routing it

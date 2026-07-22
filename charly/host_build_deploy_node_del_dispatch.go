@@ -22,23 +22,21 @@ func hostBuildDeployNodeDelDispatch(_ context.Context, req spec.DeployNodeDelDis
 
 	// RCA #9 (FINAL/K5 unit 6a, live-probe-caught): "vm:" is a CLI ADDRESSING hint ("resolve
 	// via the vm substrate"), never an identity — strip it (vmshared.SplitVmAddress) BEFORE it becomes
-	// the deploy target's internal name. Left unstripped, t.name carries the raw "vm:"-prefixed
-	// CLI form, so t.deployID() (deploykit.ComputeDeployID(t.name, nil, nil), a bare SHA256 of
-	// t.name) never matches the hash the ADD-time tree walk computed from the plain form — a
-	// SILENT no-op teardown: externalDeployTarget.Del's ledger lookup finds no record under the
-	// mismatched ID and takes its "nothing recorded — idempotent teardown" branch, which is
-	// correct for a GENUINELY already-removed deploy but wrong here (verified live: the two
-	// forms hash to completely different IDs, 6413f8070aaa6087 vs d81fff596411fea4, for the
-	// exact same logical deployment).
+	// the deploy target's internal name. Left unstripped, the target's name carries the raw
+	// "vm:"-prefixed CLI form, so deploykit.ComputeDeployID(name, nil, nil) (a bare SHA256 of
+	// name) never matches the hash the ADD-time tree walk computed from the plain form — a
+	// SILENT no-op teardown: the Del path's ledger lookup (now candy/plugin-bundle's
+	// handleDeployDel, S3b) finds no record under the mismatched ID and takes its "nothing
+	// recorded — idempotent teardown" branch, which is correct for a GENUINELY already-removed
+	// deploy but wrong here (verified live: the two forms hash to completely different IDs,
+	// 6413f8070aaa6087 vs d81fff596411fea4, for the exact same logical deployment).
 	name, _ := vmshared.SplitVmAddress(req.Name)
 
 	utgt, err := ResolveTarget(resolveNode, name)
 	if err != nil {
 		return spec.DeployNodeDelDispatchReply{}, fmt.Errorf("deploy-node-del-dispatch: resolve target: %w", err)
 	}
-	if tt, ok := utgt.(*externalDeployTarget); ok {
-		// Mirrors deployDelCmd.Run's adapter setup — the CLI path never sets a revRunner
-		// (test-only injection; always nil for a real `charly bundle del`).
+	if tt, ok := utgt.(*pluginDeployTarget); ok {
 		tt.KeepRepoChanges = req.KeepRepoChanges
 		tt.KeepServices = req.KeepServices
 		tt.KeepImage = req.KeepImage

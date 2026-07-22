@@ -414,7 +414,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		Box: deployBoxName, Target: "pod",
 	}
 	inputJSON, _ := json.Marshal(saveInput)
-	if err := hostBuild(ctx, ex, podConfigSaveDeployStateKind, spec.PodConfigSaveDeployStateRequest{
+	if err := hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{
 		Box: c.Box, Instance: c.Instance, InputJSON: inputJSON,
 	}, nil); err != nil {
 		return err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
@@ -31,8 +32,8 @@ import (
 // none, e.g. a verb/kind Invoke with no deploy-context broker). A caller with no enclosing executor
 // of its own may instead supply a SELF-DESCRIBED venue via req.VenueDescriptorJson (a marshalled
 // spec.VenueDescriptor): the host re-materializes a FRESH DeployExecutor from it
-// (venueFromDescriptor, the SAME re-materialization a substrate lifecycle's OpPrepareVenue reply
-// already goes through) and threads THAT instead of s.exec. Absent — byte-identical prior
+// (kit.VenueFromDescriptor, the SAME re-materialization candy/plugin-bundle's own PrepareVenue
+// dispatch already goes through) and threads THAT instead of s.exec. Absent — byte-identical prior
 // behavior.
 //
 // S2 — the lazy-connect fallback. A registry MISS falls back to connectPluginByWordRef (the SAME
@@ -50,7 +51,11 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	word := req.GetReserved()
 	prov, ok := providerRegistry.resolve(class, word)
 	if !ok {
-		prov, ok = connectPluginByWordRef(class, word, "")
+		// S3b: an optional canonical-ref fallback (Pass-2) for a target NOT declared in the
+		// calling project's own candy closure (Pass-1, connectPluginByWordRef's default empty
+		// extraRef) — e.g. an out-of-tree builder a box/<distro> deploy needs but the calling
+		// project never references directly. Empty/absent — byte-identical S2 behavior.
+		prov, ok = connectPluginByWordRef(class, word, req.GetExtraRef())
 	}
 	if !ok {
 		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
@@ -70,7 +75,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			if derr := json.Unmarshal(vdj, &d); derr != nil {
 				return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
 			}
-			fresh, verr := venueFromDescriptor(d)
+			fresh, verr := kit.VenueFromDescriptor(d)
 			if verr != nil {
 				return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
 			}

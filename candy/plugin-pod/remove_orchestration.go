@@ -50,7 +50,7 @@ import (
 //   - the credential axis (runPreRemoveHook's secret-backed hook env) reuses
 //     pod-config-hook-secret-env, the SAME seam pod-config-setup already calls;
 //   - the registry-resugar axis (the deploy-entry cleanup) needs a NEW narrow twin,
-//     pod-config-clean-deploy-entry, mirroring pod-config-save-deploy-state's shape exactly —
+//     pod-config-clean-deploy-entry, mirroring deploy-config-save-state's shape exactly —
 //     the EXISTING deploy-config-save seam does NOT fit: it persists an already-loaded, whole,
 //     already-mutated BundleConfig (bundle import/reset's use case, no internal load, no lock, no
 //     entry-removal/provides-cleanup logic), whereas deploykit.CleanDeployEntry loads its OWN
@@ -62,7 +62,8 @@ import (
 // The arbiter-release bracket (releaseResourceClaim, gated on the host-process
 // CHARLY_PREEMPT_LEASE env var a placement-agnostic plugin cannot own) stays entirely host-side,
 // under the EXISTING "pod-remove" HostBuild kind — same shape as pod start/stop's own arbiter
-// bracket (substrate_lifecycle_grpc.go). RemoveCmd.Run() (pod_cmd.go) defers a call to it as the
+// bracket (charly/arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the
+// deploy-dispatch cluster moved). RemoveCmd.Run() (pod_cmd.go) defers a call to it as the
 // LAST step, mirroring the former `defer releaseResourceClaim(...)` at the top of podRemoveCmd.Run()
 // (a defer runs at function-return time regardless of path, so "call it last" here reproduces the
 // exact same "always runs, after everything else" semantics).

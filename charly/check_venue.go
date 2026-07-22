@@ -341,7 +341,7 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 
 // checkLocalTarget reports whether `name` (or its dotted LEAF, or its dotted root
 // segment) is a HOST-VENUE deployment — a `target: local` filesystem apply OR an
-// EXTERNAL out-of-process deploy (whose externalDeployTarget runs its deploy-scope
+// EXTERNAL out-of-process deploy (whose pluginDeployTarget adapter runs its deploy-scope
 // probes host-side via ShellExecutor, exactly like local) — and returns its node so
 // the caller can build the host/ssh executor via rootExecutorForDeployNode. Shared by
 // checkLiveGather and resolveCheckVenue (R3): one classifier routes an
@@ -355,7 +355,7 @@ func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	// A HOST-VENUE substrate runs its deploy-scope check probes on the host — a SHELL venue
 	// (local's own filesystem apply; k8s's host-side kubectl), a PARENT venue (android via
 	// the parent pod's published adb port), or the NONE / external-in-place venue (an EXTERNAL
-	// deploy-class substrate whose externalDeployTarget applies + probes host-side via
+	// deploy-class substrate whose pluginDeployTarget adapter applies + probes host-side via
 	// ShellExecutor, exactly like local). It is identified by the stamped venue TRAIT (P9),
 	// never the kind word. The CONTAINER venue (pod) is NOT host-routed — its check venue is the
 	// running container (published ports); a cdp/vnc/spice endpoint or a command/file probe

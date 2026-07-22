@@ -17,8 +17,8 @@ import (
 // charly's core go.mod.
 //
 // The dispatch is WITH the reverse-channel broker (InvokeWithExecutor, kit.ShellExecutor{}
-// — the "broker only, no live venue" idiom deploy_preresolve.go's wireDeployPreresolver
-// also uses), because the plugin's k3s-post-provision method (S3, FINAL/K5 unit 6 —
+// — the "broker only, no live venue" idiom candy/plugin-bundle's substrate preresolve
+// dispatch also uses, S3b), because the plugin's k3s-post-provision method (S3, FINAL/K5 unit 6 —
 // relocated wholesale from charly/k3s_post.go) needs the "deploy-entity-resolve"
 // HostBuild seam for its LoadUnified-coupled VM-forward lookup.
 

@@ -113,7 +113,8 @@ func hostBuildPodService(_ context.Context, req spec.PodServiceRequest, _ buildE
 // narrow seams (pod-config-hook-secret-env, pod-config-clean-deploy-entry). All that remains under
 // THIS "pod-remove" kind is the arbiter-release bracket — CHARLY_PREEMPT_LEASE-gated host-process
 // state a placement-agnostic plugin cannot own, the exact same reason pod start/stop's own arbiter
-// bracket (substrate_lifecycle_grpc.go) stays core. The plugin defers this call as its LAST step,
+// bracket (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go before the deploy-dispatch
+// cluster moved) stays core. The plugin defers this call as its LAST step,
 // reproducing the former core `defer releaseResourceClaim(...)`'s "always runs, after everything
 // else" semantics.
 func hostBuildPodRemove(_ context.Context, req spec.PodRemoveRequest, _ buildEngineContext) (spec.PodRemoveReply, error) {
