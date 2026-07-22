@@ -219,7 +219,7 @@ func TestArbiter_TransientLeaseLiveOwnerNotReconciled(t *testing.T) {
 		Tokens:     []string{"gpu"},
 		Shared:     true,
 		Transient:  true,
-		OwnerPID:   os.Getpid(),
+		OwnerPID:   int64(os.Getpid()),
 		OwnerStart: selfProcStart(),
 		Created:    "2026-01-01T00:00:00Z",
 	}}}
@@ -249,7 +249,7 @@ func TestArbiter_TransientLeaseDeadOwnerReconciled(t *testing.T) {
 		Tokens:     []string{"gpu"},
 		Shared:     true,
 		Transient:  true,
-		OwnerPID:   os.Getpid(),
+		OwnerPID:   int64(os.Getpid()),
 		OwnerStart: "0", // start-time mismatch ⇒ PID reused ⇒ owner gone
 		Preempted: []spec.PreemptedHolder{{
 			Addr:    spec.HolderAddr{Name: "h1", Target: "pod", Base: "h1"},

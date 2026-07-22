@@ -191,7 +191,7 @@ func (a *ResourceArbiter) AcquireExclusive(claimant string, tokens []string, cla
 		Transient:  transient,
 		Preempted:  toStop,
 		Created:    a.nowUTC(),
-		OwnerPID:   os.Getpid(),
+		OwnerPID:   int64(os.Getpid()),
 		OwnerStart: selfProcStart(),
 	}
 	ledger.Leases = append(ledger.Leases, lease)
@@ -269,7 +269,7 @@ func (a *ResourceArbiter) AcquireShared(claimant string, tokens []string, claimA
 		Transient:  transient,
 		Preempted:  toStop,
 		Created:    a.nowUTC(),
-		OwnerPID:   os.Getpid(),
+		OwnerPID:   int64(os.Getpid()),
 		OwnerStart: selfProcStart(),
 	}
 	ledger.Leases = append(ledger.Leases, lease)

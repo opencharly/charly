@@ -79,51 +79,53 @@ func pluginHolderStop(ctx context.Context, exec *sdk.Executor, addr spec.HolderA
 // holderStart. A DEPARTED holder (no container/quadlet or VM domain left — e.g. a torn-down
 // check-bed member) is a no-op success: nothing to restore, so its token frees rather than
 // stranding the lease forever.
+//
+// The VM branch does NOT pre-check existence before starting. An earlier version called
+// pluginHolderExists (a "domain-state" RPC) THEN startVMPlugin (a separate "start" RPC) — a
+// classic TOCTOU check-then-act: the bed's own sibling teardown step can destroy the domain in
+// the WINDOW between the two calls, since restoreHolders (triggered by the taker member's
+// removal) runs independently of the holder member's own teardown. Confirmed live: two
+// apparently-identical check-preempt-vm-live runs produced DIFFERENT outcomes — one took the
+// clean departed-holder no-op, the other hit libvirt's real "domain not found" as a HARD ERROR
+// with the lease left stranded — depending on exactly when the race landed. The fix ELIMINATES
+// the window instead of synchronizing it (R4: no retry/sleep — there is nothing to synchronize
+// once there is only one call): attempt the start UNCONDITIONALLY and fold the
+// departed-holder detection into the START RPC's OWN error reply (isDomainNotFoundErr) — a
+// domain that no longer exists surfaces the SAME "domain not found" text whether it never
+// existed, was already gone before this call, or was destroyed a microsecond before libvirt
+// processed the request; there is no longer a separate observation that can go stale.
 func pluginHolderStart(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) error {
-	if !pluginHolderExists(ctx, exec, addr) {
-		fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no container/quadlet or VM domain) — nothing to restore, freeing its lease\n", addr.Name)
-		return nil
-	}
 	if addr.Vm != "" {
-		return startVMPlugin(ctx, exec, vmDomainName(addr))
+		err := startVMPlugin(ctx, exec, vmDomainName(addr))
+		if err == nil {
+			return nil
+		}
+		if isDomainNotFoundErr(err) {
+			fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no VM domain) — nothing to restore, freeing its lease\n", addr.Name)
+			return nil
+		}
+		return err
+	}
+	if !pluginHolderExists(addr) {
+		fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no container/quadlet) — nothing to restore, freeing its lease\n", addr.Name)
+		return nil
 	}
 	return deploykit.StartPodService(addr.Base, addr.Instance)
 }
 
-// pluginHolderExists reports whether the holder's runtime object still exists (see holderExists
-// for the distinction this enables: a stopped-but-present holder is restored, a departed one is
-// not).
-func pluginHolderExists(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) bool {
-	if addr.Vm != "" {
-		name := vmDomainName(addr)
-		// The domain-state RPC's `ok` return means only "the call round-tripped" — the
-		// libvirt-plugin handler ALWAYS replies success and carries the real answer in the
-		// JSON `exists` field (a lookupDomain miss is a normal, error-free "not found" reply,
-		// never an RPC failure). A prior version of this check tested `ok` instead of `exists`
-		// — always true whenever the plugin was reachable, so a genuinely undefined domain
-		// (e.g. torn down by a sibling teardown step moments earlier) was never detected as
-		// departed, and the subsequent start attempt failed hard on "domain not found" instead
-		// of taking the no-op-departed path (caught live by check-preempt-vm-live's
-		// rebuild-members-down/cleanup-members cycle — FLOOR-SLIM-proper Unit-8B). When the RPC
-		// itself succeeds, ITS ANSWER IS DEFINITIVE — no falling through to the state-dir
-		// heuristic below, which can false-positive on lingering disk artifacts (`charly vm
-		// destroy` without `--disk` keeps the qcow2/seed.iso) for an already-undefined domain.
-		if raw, ok := invokeVmPluginOp(ctx, exec, "domain-state", name, ""); ok {
-			var st struct {
-				Exists bool `json:"exists"`
-			}
-			_ = json.Unmarshal(raw, &st)
-			return st.Exists
-		}
-		// RPC itself unreachable (plugin down) — best-effort fallback: a lingering state dir
-		// signals a direct-QEMU-backend VM that never involved libvirt at all.
-		if dir, err := vmDirPlugin(); err == nil {
-			if _, statErr := os.Stat(filepath.Join(dir, name)); statErr == nil {
-				return true
-			}
-		}
-		return false
-	}
+// isDomainNotFoundErr reports whether err is candy/plugin-vm's provider.go reply for a missing
+// libvirt domain on the start/stop VmOps (`{"error": "domain not found: " + err.Error()}` — a
+// lookupDomain miss is a normal, error-free RPC reply, never a transport failure; the "not
+// found" signal rides the reply's OWN error text). This is the departed-holder detection folded
+// into the act itself, replacing a separate pre-check that raced a concurrent teardown.
+func isDomainNotFoundErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "domain not found")
+}
+
+// pluginHolderExists reports whether a POD holder's runtime object (container/quadlet) still
+// exists — the pod-venue departed-holder guard (see pluginHolderStart's doc comment for why the
+// VM venue folds this detection into its start RPC's error instead of a separate pre-check).
+func pluginHolderExists(addr spec.HolderAddr) bool {
 	if active, _ := kit.QuadletExistsInstance(addr.Base, addr.Instance); active {
 		return true
 	}

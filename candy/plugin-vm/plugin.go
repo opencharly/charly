@@ -5,7 +5,7 @@
 //
 //   - verb:libvirt — the `charly check libvirt` probe verb plus the internal VM ops
 //     (domain-state / list-domains / resolve-spice / resolve-vnc / create / start / stop /
-//     destroy / snapshot-internal / qemu-shutdown / domain-xml / list-all-domains) the
+//     destroy / snapshot-internal / domain-xml / list-all-domains) the
 //     spice/vnc/ssh/status/preempt consumers + the vm deploy target dispatch through the registry.
 //
 //   - command:vm — `charly vm …` (build / create / start / stop / destroy / console / ssh /
@@ -37,7 +37,7 @@ func NewProvider() pb.ProviderServer { return &vmProvider{} }
 
 // NewMeta advertises BOTH capabilities via sdk.NewMeta: verb:libvirt (the libvirt check verb, nested
 // under `charly check` at runtime like kube/adb/appium) and command:vm (the `charly vm …` CLI). The
-// internal VM ops (resolution / lifecycle / snapshot / create / qemu-shutdown) ride Invoke via special
+// internal VM ops (resolution / lifecycle / snapshot / create) ride Invoke via special
 // VmOp words and are NOT Describe classes — the moved VM CLI handlers + the display/status/preempt
 // consumers dispatch them in-package / through the registry. The verb's plugin_input validates against
 // the served #LibvirtVerbInput (the method enum + every libvirt-exclusive modifier moved here from core
@@ -54,7 +54,7 @@ func NewMeta() pb.PluginMetaServer {
 
 // vmProvider is the out-of-process provider. Its Invoke dispatches the libvirt verb (the in-process
 // LibvirtCmd Kong tree) plus the internal VmOp-keyed ops (resolution / lifecycle / snapshot /
-// create / qemu-shutdown) that core RPCs.
+// create) that core RPCs.
 type vmProvider struct {
 	pb.UnimplementedProviderServer
 }
