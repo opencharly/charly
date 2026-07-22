@@ -50,4 +50,3 @@ func ResolveBoxEngine(cfg *Config, layers map[string]spec.CandyReader, boxName s
 
 	return globalRunEngine
 }
-

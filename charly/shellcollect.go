@@ -90,4 +90,3 @@ func shellConfigToEntry(cfg *spec.Shell, origin string) *spec.ShellEntry {
 	}
 	return entry
 }
-
