@@ -78,7 +78,7 @@ func arbiterAction(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, err
 	}
-	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil)
+	out, err := exec.InvokeProvider(ctx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, err
 	}

@@ -50,7 +50,7 @@ func podTunnelStop(cfg *spec.TunnelConfig) error {
 	if err != nil {
 		return err
 	}
-	resJSON, err := cmdExec.InvokeProvider(cmdCtx, "verb", "tunnel", sdk.OpRun, body, nil)
+	resJSON, err := cmdExec.InvokeProvider(cmdCtx, "verb", "tunnel", sdk.OpRun, body, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

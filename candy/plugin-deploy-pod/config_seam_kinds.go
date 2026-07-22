@@ -17,7 +17,6 @@ const (
 	podConfigEncMountsKind        = "pod-config-enc-mounts"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
-	podConfigSaveDeployStateKind  = "pod-config-save-deploy-state"
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
@@ -26,3 +25,10 @@ const (
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 )
+
+// deployConfigSaveStateKind is the substrate-neutral "deploy-config-save-state" HostBuild kind
+// (S3b, Q2 — was "pod-config-save-deploy-state" here too, until candy/plugin-bundle's generic
+// Add/Update apply body became a caller across every substrate). Kept in this same const list
+// (mirrors charly/host_build_deploy_config_save_state.go's registration) even though the name no
+// longer starts with "pod-config-" — the two original callers below are still in this candy.
+const deployConfigSaveStateKind = "deploy-config-save-state"

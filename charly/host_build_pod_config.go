@@ -17,8 +17,8 @@ import (
 // P13-KERNEL direction-flip: Setup/Remove's former ORCHESTRATION (BoxConfigSetupCmd/
 // BoxConfigRemoveCmd, config_image.go) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
 // sdk.OpConfigRemove) — hostBuildPodConfigSetup/Remove now FORWARD onward to the plugin (resolve
-// deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider/grpcSubstrateLifecycle
-// already use) instead of running the orchestration in-core; the plugin calls back the narrow
+// deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider uses, S1) instead of
+// running the orchestration in-core; the plugin calls back the narrow
 // "pod-config-*" seams in host_build_pod_config_seams.go for the host/loader/registry/
 // credential-coupled sub-steps. Status/Mount/Unmount/Passwd stay UNCHANGED — each is already a
 // one-line forward to enc.go (itself FINAL/K5-deferred registry-coupled inventory per its own

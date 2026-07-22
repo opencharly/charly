@@ -37,7 +37,6 @@ const (
 	podConfigEncMountsKind        = "pod-config-enc-mounts"
 	podConfigInjectEnvKind        = "pod-config-inject-env-provides"
 	podConfigInjectMCPKind        = "pod-config-inject-mcp-provides"
-	podConfigSaveDeployStateKind  = "pod-config-save-deploy-state"
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
@@ -387,15 +386,6 @@ func hostBuildPodConfigInjectMCP(_ context.Context, req spec.PodConfigInjectMCPP
 	return spec.PodConfigInjectMCPProvidesReply{Changed: changed}, nil
 }
 
-func hostBuildPodConfigSaveDeployState(_ context.Context, req spec.PodConfigSaveDeployStateRequest, _ buildEngineContext) (spec.PodConfigSaveDeployStateReply, error) {
-	var input deploykit.SaveDeployStateInput
-	if err := json.Unmarshal(req.InputJSON, &input); err != nil {
-		return spec.PodConfigSaveDeployStateReply{}, err
-	}
-	deploykit.SaveDeployState(req.Box, req.Instance, input, marshalDeployNode)
-	return spec.PodConfigSaveDeployStateReply{}, nil
-}
-
 func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSecretEnvRequest, _ buildEngineContext) (spec.PodConfigHookSecretEnvReply, error) {
 	var meta spec.BoxMetadata
 	if err := json.Unmarshal(req.MetaJSON, &meta); err != nil {
@@ -408,8 +398,9 @@ func hostBuildPodConfigHookSecretEnv(_ context.Context, req spec.PodConfigHookSe
 // remove-verb completion) — the registry-resugar axis of `charly remove`'s deploy-entry cleanup.
 // marshalDeployNode needs the host's plugin-primaries registry to resugar plan steps (the SAME
 // K4-exit family CleanDeployEntry's own callers document), so this narrow twin of
-// hostBuildPodConfigSaveDeployState stays host-side rather than forcing the wrong-shaped
-// deploy-config-save seam to fit (see #PodConfigCleanDeployEntryRequest's doc comment).
+// hostBuildDeployConfigSaveState (host_build_deploy_config_save_state.go) stays host-side rather
+// than forcing the wrong-shaped deploy-config-save seam to fit (see
+// #PodConfigCleanDeployEntryRequest's doc comment).
 func hostBuildPodConfigCleanDeployEntry(_ context.Context, req spec.PodConfigCleanDeployEntryRequest, _ buildEngineContext) (spec.PodConfigCleanDeployEntryReply, error) {
 	deploykit.CleanDeployEntry(req.Box, req.Instance, marshalDeployNode)
 	return spec.PodConfigCleanDeployEntryReply{}, nil
@@ -430,7 +421,6 @@ var _ = func() bool {
 	registerHostBuilder(podConfigEncMountsKind, typedHostBuilder(podConfigEncMountsKind, hostBuildPodConfigEncMounts))
 	registerHostBuilder(podConfigInjectEnvKind, typedHostBuilder(podConfigInjectEnvKind, hostBuildPodConfigInjectEnv))
 	registerHostBuilder(podConfigInjectMCPKind, typedHostBuilder(podConfigInjectMCPKind, hostBuildPodConfigInjectMCP))
-	registerHostBuilder(podConfigSaveDeployStateKind, typedHostBuilder(podConfigSaveDeployStateKind, hostBuildPodConfigSaveDeployState))
 	registerHostBuilder(podConfigHookSecretEnvKind, typedHostBuilder(podConfigHookSecretEnvKind, hostBuildPodConfigHookSecretEnv))
 	registerHostBuilder(podConfigSSHKeyKind, typedHostBuilder(podConfigSSHKeyKind, hostBuildPodConfigSSHKey))
 	registerHostBuilder(podConfigListSidecarsKind, typedHostBuilder(podConfigListSidecarsKind, hostBuildPodConfigListSidecars))

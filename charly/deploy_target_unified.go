@@ -10,13 +10,15 @@ package main
 //
 // Every `charly bundle add` / `charly bundle del` / `charly update` dispatches through
 // ResolveTarget (unified_targets.go) → an UnifiedDeployTarget adapter. ALL FIVE substrates
-// (local/vm/pod/k8s/android) are EXTERNAL — each resolves to the generic externalDeployTarget
-// over the executor reverse channel, served by its own out-of-process plugin. The pod-overlay
-// render + the VM disk build that once lived in core are now invoked HOST-SIDE from each
-// substrate's registered substrateLifecycle hook (pod/vm) or preresolver (android/k8s) — the
-// pod-overlay render moved to candy/plugin-deploy-pod (P11c), reached via HostBuild("overlay")
-// prep + HostBuild("step-emit","oci-emit-step") per-step dispatch. There is no per-kind dispatch
-// switch in the cmd files — the kind lives behind the adapter method.
+// (local/vm/pod/k8s/android) are EXTERNAL — each resolves to the generic pluginDeployTarget
+// (S3b), a thin data-only proxy dispatching to candy/plugin-bundle's Invoke(OpDeployDispatch),
+// which reaches the substrate's own out-of-process provider via sdk.Executor.InvokeProvider. The
+// pod-overlay render + the VM disk build that once lived in core are now invoked HOST-SIDE from
+// each substrate's lifecycle body (pod/vm, now living in candy/plugin-bundle's deploy_target.go)
+// or preresolver (android/k8s) — the pod-overlay render moved to candy/plugin-deploy-pod (P11c),
+// reached via HostBuild("overlay") prep + HostBuild("step-emit","oci-emit-step") per-step
+// dispatch. There is no per-kind dispatch switch in the cmd files — the kind lives behind the
+// adapter method.
 
 import (
 	"context"

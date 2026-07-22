@@ -1,11 +1,14 @@
 // Package deployvm is the charly DEPLOY plugin serving the `vm`
 // deploy SUBSTRATE — `target: vm` (a deployment applied INSIDE a running VM over SSH).
 // It is the vm-substrate sibling of candy/plugin-deploy-local: charly host-builds it and
-// serves it OUT-OF-PROCESS over go-plugin gRPC (LocalTransport), then externalDeployTarget
-// Invokes it (OpExecute) with the deployment's InstallPlan VIEWS + a venue descriptor, and
-// the host's executor served on the broker — for vm the GUEST SSHExecutor the host's vm
-// lifecycle hook (vm_deploy_lifecycle.go) built after booting the domain, waiting for sshd /
-// cloud-init, and ensuring charly is in the guest. The plugin dials BACK through the SDK
+// serves it OUT-OF-PROCESS over go-plugin gRPC (LocalTransport), then the generic
+// pluginDeployTarget (charly core, S3b — see CHANGELOG/2026.203.0212.md for the migration
+// this replaced) reaches it via candy/plugin-bundle's Invoke(OpDeployDispatch) →
+// sdk.Executor.InvokeProvider, which Invokes it (OpExecute) with the deployment's InstallPlan
+// VIEWS + a venue descriptor, and the host's executor served on the broker — for vm the GUEST
+// SSHExecutor THIS PLUGIN's OWN venue lifecycle (lifecycle.go's PrepareVenue) built after
+// booting the domain, waiting for sshd / cloud-init, and ensuring charly is in the guest (S3b —
+// no core-side lifecycle hook remains). The plugin dials BACK through the SDK
 // Executor and hands the plans to kit.WalkPlans — the ONE shared deploy walk:
 //
 //   - plugin-renderable steps (Op write/cmd/download, File, ShellHook + the env.d
@@ -89,7 +92,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, fmt.Errorf("plugin-deploy-vm: %w", err)
 	}
 
-	// The ledger record is keyed by the deploy name (the host's externalDeployTarget keys
+	// The ledger record is keyed by the deploy name (the host's plugin-side deploy target keys
 	// the DeployRecord on computeDeployID(name)); the candy field names the logical record
 	// whose aggregated ReverseOps drive teardown.
 	candy := venue.DeployName

@@ -10,11 +10,14 @@ import (
 )
 
 // merge.go holds the k3s kubeconfig-merge moved out of charly/k3s_post.go. The
-// host's K3sPostProvision (in `charly bundle add`) retrieves a k3s cluster's
-// kubeconfig, then dispatches a synthetic `kube: merge-kubeconfig` Op here (via
-// invokeKubePlugin) so the clientcmd merge — and therefore the
-// k8s.io/client-go/tools/clientcmd dependency — lives entirely in this plugin,
-// out of charly's core go.mod.
+// clientcmd merge lives entirely in this plugin, out of charly's core go.mod —
+// mergeKubeconfig is called directly by k3s_post.go's k3sPostProvision (S3, FINAL/K5
+// unit 6), the WHOLE k3s post-provision finalization this plugin now owns
+// end-to-end: charly's host-side K3sPostProvision (in `charly bundle add`)
+// dispatches ONE synthetic `kube: k3s-post-provision` Op (via
+// k8s_plugin.go's invokeKubePluginWithBroker) carrying the artifact key + deploy
+// name; this plugin retrieves the cached kubeconfig, rewrites its guest-forwarded
+// server, and merges it — no separate host-orchestrated merge round-trip.
 
 // mergeKubeconfig reads the retrieved kubeconfig and merges it into the operator's
 // ~/.kube/config under contextName. Existing entries with the same

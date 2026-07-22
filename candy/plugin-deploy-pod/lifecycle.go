@@ -16,7 +16,8 @@ import (
 )
 
 // lifecycle.go — the host-side POD venue lifecycle, externalized out of charly core (M4). The
-// generic grpcSubstrateLifecycle proxy Invokes these Ops over the reverse channel; the plugin runs
+// generic substrate lifecycle dispatch (now part of the plugin-side deploy target, S3b) Invokes
+// these Ops over the reverse channel; the plugin runs
 // ON the host but out-of-process, so it reaches the overlay BUILD engine (kept core) via
 // HostBuild("overlay") and drives the container lifecycle via HostBuild("cli") — never in-process
 // podman/Generator. PrepareVenue builds the overlay + returns a host-local shell venue; Start/Stop/
@@ -125,7 +126,7 @@ func podStart(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.I
 	}
 	plan := *planPtr
 	if len(plan.Enc) > 0 {
-		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil, sdk.InvokeProviderOpts{}); err != nil {
 			return nil, fmt.Errorf("plugin-deploy-pod start: mount encrypted volumes: %w", err)
 		}
 	}
@@ -164,7 +165,7 @@ func podStop(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.In
 		return nil, err
 	}
 	if len(plan.Enc) > 0 {
-		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil); err != nil {
+		if _, err := exec.InvokeProvider(ctx, "verb", "enc", sdk.OpExecute, plan.Enc, nil, sdk.InvokeProviderOpts{}); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: encrypted-volume unmount failed: %v\n", err)
 		}
 	}
@@ -223,7 +224,7 @@ func podTunnelOp(ctx context.Context, exec *sdk.Executor, method string, cfg *sp
 	if err != nil {
 		return err
 	}
-	resJSON, err := exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil)
+	resJSON, err := exec.InvokeProvider(ctx, "verb", "tunnel", sdk.OpRun, body, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

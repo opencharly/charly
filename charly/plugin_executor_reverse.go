@@ -213,11 +213,14 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	case *deploykit.ExternalPluginStep:
 		// A verb served by ANOTHER out-of-process plugin — the host stands up a SECOND
 		// reverse channel on THAT plugin's broker (a nested reverse channel, delegating to
-		// the SAME venue executor s.exec) and Invokes its OpExecute. executeExternalPluginStep
-		// is the SAME seam the in-proc deploy targets use (R3); plan is nil (the venue-name
-		// derivation only seeds a deterministic scratch dir, which the verb's plugin_input
-		// already supplies). The nested plugin's teardown ReverseOps ride the reply.
-		reply, rerr := executeExternalPluginStep(ctx, st, nil, s.exec, s.build)
+		// the SAME venue executor s.exec) and Invokes its OpExecute, via the SAME
+		// PLUGIN↔PLUGIN InvokeProvider leg (S4, R3) every other peer-invoke uses. The nested
+		// plugin's teardown ReverseOps ride the reply.
+		params, perr := marshalJSON(st.Op.PluginInput)
+		if perr != nil {
+			return &pb.HostStepReply{Error: fmt.Sprintf("external plugin step %q: marshal plugin_input: %v", st.Op.Plugin, perr)}, nil
+		}
+		reply, rerr := s.invokeExternalStep(ctx, ClassVerb, st.Op.Plugin, params)
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -243,10 +246,10 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		// An EXTERNAL (plugin-contributed) step kind (F3): "external:<word>". The host
 		// dispatches it to its serving class:step plugin's OpExecute over a nested reverse
 		// channel (delegating to the SAME venue executor s.exec) — the generalization of the
-		// ExternalPlugin arm above, but the provider is resolved by ClassStep and the params
-		// are the opaque Payload (executeExternalStep → invokeStepExecute, R3). The plugin's
-		// dynamic teardown ReverseOps ride the reply (record-and-replay).
-		reply, rerr := executeExternalStep(ctx, st, nil, s.exec, s.build)
+		// ExternalPlugin arm above via the SAME shared invokeExternalStep dispatch (S4, R3),
+		// but the provider is resolved by ClassStep and the params are the opaque Payload
+		// verbatim. The plugin's dynamic teardown ReverseOps ride the reply (record-and-replay).
+		reply, rerr := s.invokeExternalStep(ctx, ClassStep, st.Word, st.Payload)
 		if rerr != nil {
 			return &pb.HostStepReply{Error: rerr.Error()}, nil
 		}
@@ -263,6 +266,40 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 		return &pb.HostStepReply{Error: fmt.Sprintf("marshal reverse ops: %v", err)}, nil
 	}
 	return &pb.HostStepReply{ReverseOpsJson: revJSON}, nil
+}
+
+// invokeExternalStep is the shared OpExecute dispatch RunHostStep's ExternalPluginStep and
+// ExternalStep arms both use (S4, R3): it is the RunHostStep-local counterpart of the generic
+// PLUGIN↔PLUGIN InvokeProvider leg (plugin_dispatch_reverse.go) — literally calls it, since
+// RunHostStep already runs as a method on the SAME executorReverseServer InvokeProvider is
+// served from, so no wire hop is needed. params carries the opaque OpExecute payload (a
+// verb-step's marshalled plugin_input, or an external step kind's Payload verbatim); the venue
+// descriptor is always the zero spec.DeployVenue here (RunHostStep never threads a plan — the
+// verb/step's own params already carry whatever scratch-location identity it needs). Decodes
+// the reply into spec.DeployReply so the caller can fold its dynamic ReverseOps.
+func (s *executorReverseServer) invokeExternalStep(ctx context.Context, class ProviderClass, word string, params []byte) (spec.DeployReply, error) {
+	var zero spec.DeployReply
+	env, err := marshalJSON(spec.DeployVenue{})
+	if err != nil {
+		return zero, fmt.Errorf("external step %q: marshal venue: %w", word, err)
+	}
+	res, err := s.InvokeProvider(ctx, &pb.InvokeProviderRequest{
+		Class:      string(class),
+		Reserved:   word,
+		Op:         OpExecute,
+		ParamsJson: params,
+		EnvJson:    env,
+	})
+	if err != nil {
+		return zero, err
+	}
+	var reply spec.DeployReply
+	if res != nil && len(res.GetResultJson()) > 0 {
+		if err := json.Unmarshal(res.GetResultJson(), &reply); err != nil {
+			return zero, fmt.Errorf("external step %q: decode reply: %w", word, err)
+		}
+	}
+	return reply, nil
 }
 
 // rebootVenueAndWait reboots a charly-owned guest over the executor and waits for it to

@@ -13,7 +13,7 @@ import (
 // (the Reverse() rule stays ONCE in package main). The deploy-time-stateful kinds carry
 // faithful ops once the host has captured their state (EnvFile/PriorEnabled) before
 // projecting — exercised here by setting those fields, the same way
-// externalDeployTarget.prepareReverseState does on the live venue.
+// candy/plugin-bundle's prepareReverseState does on the live venue (S3b).
 func TestStepToView_CapturesReverseOps(t *testing.T) {
 	t.Run("file step → rm-file-system", func(t *testing.T) {
 		v := deploykit.StepToView(&deploykit.FileStep{Source: "/tmp/src", Dest: "/etc/marker", CandyName: "x"})

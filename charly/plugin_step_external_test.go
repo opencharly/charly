@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -56,10 +58,12 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 //
 //   - compileActOp lowers the run-step to an ExternalPluginStep (the routing seam:
 //     an external grpcProvider satisfies executorInvoker);
-//   - executeExternalPluginStep Invokes the plugin's OpExecute WITH the host's
-//     ExecutorService on the broker; the plugin dials back through the SDK
-//     (ExecutorFromInvoke) and writes the marker on the host venue, then RETURNS a
-//     DeployReply whose plugin-script reverse op the host would record in the ledger;
+//   - RunHostStep's ExternalPluginStep arm (S4: dispatches via invokeExternalStep →
+//     the SAME PLUGIN↔PLUGIN InvokeProvider leg every peer-invoke uses) Invokes the
+//     plugin's OpExecute WITH the host's ExecutorService on the broker; the plugin
+//     dials back through the SDK (ExecutorFromInvoke) and writes the marker on the
+//     host venue, then RETURNS a DeployReply whose plugin-script reverse op rides the
+//     RunHostStep reply;
 //   - runReverseOps replays that recorded op (the marker is gone).
 //
 // Builds + execs a real binary, so it is gated behind -short exactly like
@@ -99,8 +103,8 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	}
 
 	// Register the external verb provider into the GLOBAL registry so both the
-	// compileActOp routing seam and executeExternalPluginStep resolve it (the same
-	// path loadDeployPlugins sets up at deploy).
+	// compileActOp routing seam and RunHostStep's invokeExternalStep (via
+	// InvokeProvider) resolve it (the same path loadDeployPlugins sets up at deploy).
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "examplestep-step-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
@@ -123,26 +127,36 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	probe := filepath.Join(dir, "probe")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
-	// 4. Execute the step over the E3b reverse channel via the local ShellExecutor
-	//    (RunUser → bash -lc, no sudo) so the plugin's marker write runs for real.
-	plan := &deploykit.InstallPlan{Candy: layer.GetName()}
-	reply, err := executeExternalPluginStep(ctx, eps, plan, kit.ShellExecutor{}, buildEngineContext{})
+	// 4. Execute the step over the E3b reverse channel via RunHostStep (the real production
+	//    entry point a deploy plugin's kit.WalkPlans dials back into), backed by the local
+	//    ShellExecutor (RunUser → bash -lc, no sudo) so the plugin's marker write runs for
+	//    real. stepJSON round-trips the step through the SAME opaque view the wire carries.
+	stepJSON, err := marshalJSON(deploykit.StepToView(eps))
 	if err != nil {
-		t.Fatalf("executeExternalPluginStep: %v", err)
+		t.Fatal(err)
+	}
+	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
+	rep, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
+	if err != nil {
+		t.Fatalf("RunHostStep: %v", err)
+	}
+	if rep.GetError() != "" {
+		t.Fatalf("RunHostStep reply error: %s", rep.GetError())
 	}
 	mustExist(t, applied, "OpExecute did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "OpExecute did not write the probe marker over the reverse channel")
-	if len(reply.ReverseOps) != 1 || reply.ReverseOps[0].Kind != spec.ReverseOpPluginScript {
-		t.Fatalf("reply reverse ops = %+v, want exactly one plugin-script op (recorded for teardown)", reply.ReverseOps)
+	var reverseOps []spec.ReverseOp
+	if err := json.Unmarshal(rep.GetReverseOpsJson(), &reverseOps); err != nil {
+		t.Fatalf("decode reverse ops: %v", err)
 	}
-	if reply.Record.Candy != "plugin-example-step" {
-		t.Fatalf("reply record candy = %q, want %q", reply.Record.Candy, "plugin-example-step")
+	if len(reverseOps) != 1 || reverseOps[0].Kind != spec.ReverseOpPluginScript {
+		t.Fatalf("reply reverse ops = %+v, want exactly one plugin-script op (recorded for teardown)", reverseOps)
 	}
 
 	// 5. Teardown: replaying the recorded plugin-script reverse op removes the markers
 	//    (record-and-replay — the `charly bundle del` contract). Local runner (nil
 	//    Runner → local bash, user scope, no sudo).
-	kit.RunReverseOps(reply.ReverseOps, &deploykit.HostReverseExec{})
+	kit.RunReverseOps(reverseOps, &deploykit.HostReverseExec{})
 	mustNotExist(t, probe, "reverse op replay did not remove the probe marker")
 	mustNotExist(t, applied, "reverse op replay did not remove the applied marker")
 }

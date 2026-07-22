@@ -29,8 +29,9 @@ func NewProvider() pb.ProviderServer { return &provider{} }
 
 // NewMeta advertises deploy:examplelifecycle + the plugin's self-contained CUE schema
 // (via sdk.NewMeta → BuildCapabilities). The F6 lifecycle Ops are dispatched on the SAME
-// Provider.Invoke — no separate capability surface; the host registers a wire-backed
-// substrateLifecycle for this substrate at plugin-load.
+// Provider.Invoke — no separate capability surface; the host's plugin-side deploy target
+// (unified_targets.go) records this substrate's Lifecycle:true capability at plugin-load and
+// dispatches its Ops through the SAME generic deploy-dispatch path as every other substrate.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{{Class: "deploy", Word: "examplelifecycle", InputDef: "#ExamplelifecycleInput", Lifecycle: true, Preresolve: true}},

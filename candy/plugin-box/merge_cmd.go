@@ -127,7 +127,7 @@ func mergeOneBox(hc *hostClient, rp *spec.ResolvedProject, boxName string, g mer
 	if err != nil {
 		return err
 	}
-	replyJSON, err := hc.exec.InvokeProvider(hc.ctx, "verb", "oci", sdk.OpRun, reqJSON, envJSON)
+	replyJSON, err := hc.exec.InvokeProvider(hc.ctx, "verb", "oci", sdk.OpRun, reqJSON, envJSON, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

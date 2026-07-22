@@ -19,7 +19,7 @@ import (
 // code: the reference class:step plugin (candy/plugin-example-stepkind) is host-built + served
 // OUT-OF-PROCESS, its DECLARED StepContract is decoded from Describe (buildUnit), an external
 // step ("external:examplestepkind") round-trips through the opaque step view, and the host's
-// OPEN DEFAULT ARM in RunHostStep dispatches it (executeExternalStep → OpExecute over the E3b
+// OPEN DEFAULT ARM in RunHostStep dispatches it (invokeExternalStep → InvokeProvider → OpExecute over the E3b
 // reverse channel) so the plugin writes a marker on the real shell venue and returns a dynamic
 // teardown ReverseOp — NO compiled-in case for the word anywhere. Builds + execs a real binary,
 // gated behind -short like the other reverse-channel e2es.
@@ -111,7 +111,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll("/tmp/charly-examplestepkind") })
 
 	// Walk it via the host's RunHostStep OPEN DEFAULT ARM (stepFromView rebuilds the externalStep
-	// from the carried contract + Payload; executeExternalStep dispatches OpExecute to the plugin).
+	// from the carried contract + Payload; invokeExternalStep dispatches OpExecute to the plugin).
 	srv := &executorReverseServer{exec: kit.ShellExecutor{}}
 	reply, err := srv.RunHostStep(ctx, &pb.HostStepRequest{StepJson: stepJSON})
 	if err != nil {

@@ -219,7 +219,7 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 			return nil, err
 		}
 		inputJSON, _ := json.Marshal(deploykit.SaveDeployStateInput{Ports: ports, SetPorts: true})
-		_ = hostBuild(ctx, ex, podConfigSaveDeployStateKind, spec.PodConfigSaveDeployStateRequest{Box: box, Instance: instance, InputJSON: inputJSON}, nil)
+		_ = hostBuild(ctx, ex, deployConfigSaveStateKind, spec.DeployConfigSaveStateRequest{Box: box, Instance: instance, InputJSON: inputJSON}, nil)
 	}
 	if conflicts := kit.CheckPortAvailability(ports, rt.BindAddress, engine); len(conflicts) > 0 {
 		return nil, fmt.Errorf("port conflicts detected:%s", kit.FormatPortConflicts(conflicts, box))

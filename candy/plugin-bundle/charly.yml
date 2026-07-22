@@ -13,7 +13,8 @@ plugin-bundle:
             show/export/import/reset/status config-management ops) — where the host runs
             the existing deploy orchestration VERBATIM: the config loader + deploy ledger,
             the InstallPlan compiler, and the deploy-dispatch kernel (ResolveTarget →
-            externalDeployTarget over the executor reverse channel) all STAY core. `path`
+            the plugin-side deploy dispatcher over the executor reverse channel) all STAY
+            core. `path`
             resolves plugin-side via kit.DefaultDeployConfigPath (no seam). command:bundle
             is COMPILED-IN; its grammar is prescanned into the CLI.
         plugin:

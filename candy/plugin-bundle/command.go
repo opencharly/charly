@@ -20,9 +20,11 @@ import (
 // dry-run output working exactly as before. Mirrors candy/plugin-vm/command.go.
 
 // Invoke dispatches the COMPILED-IN (in-proc) command:bundle ops: OpRun (the `charly bundle …`
-// CLI pass-through) and OpCompile (the K4-B deploy-compile slice — the host's
+// CLI pass-through), OpCompile (the K4-B deploy-compile slice — the host's
 // compileNodePlans computes the per-node selection and Invokes OpCompile; runBundleCompile
-// re-hydrates the resolved-project envelope + loops deploykit.BuildDeployPlan). The retired
+// re-hydrates the resolved-project envelope + loops deploykit.BuildDeployPlan), and
+// OpDeployDispatch (S3b — the ONE generic envelope every former UnifiedDeployTarget/
+// LifecycleTarget method dispatches through, see deploy_target.go). The retired
 // K4-C spike's OpDispatch relay (dispatchNode's root-level Add nesting a second HostBuild call)
 // is superseded by the walk port (walk.go): the plugin now drives the WHOLE tree walk itself and
 // calls the deploy-tree-resolve / deploy-node-dispatch / deploy-members-* / deploy-del-resolve /
@@ -37,6 +39,8 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return runEphemeralRegister(ctx, req)
 	case sdk.OpEphemeralTeardown:
 		return runEphemeralTeardown(ctx, req)
+	case sdk.OpDeployDispatch:
+		return runDeployDispatch(ctx, req)
 	default:
 		return nil, fmt.Errorf("bundle: unsupported op %q", req.GetOp())
 	}
