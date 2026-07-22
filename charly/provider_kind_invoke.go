@@ -322,7 +322,8 @@ func validateKindValueCUE(gn *genericNode) error {
 	// TestInvokeProvider_LazyConnectFallback*), not just candy's known base⊻from disjunction
 	// issue — RDD-verified live via go test ./... catching each one. The correct fix needs
 	// per-field concreteness (or a narrower, kind/field-scoped check) rather than a blanket
-	// flip; tracked as a named follow-up, not silently dropped (see the batch's CHANGELOG).
+	// flip; tracked as its own named, registered program exit — the VALIDATION-CORRECTNESS
+	// BATCH — not silently dropped (see the batch's CHANGELOG and the program register).
 	if verr := entity.Unify(def).Validate(); verr != nil {
 		return fmt.Errorf("%s: %s", gn.disc, errors.Details(verr, nil))
 	}
