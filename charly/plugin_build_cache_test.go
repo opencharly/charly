@@ -60,6 +60,67 @@ func TestPluginBuildEnvNoGitSourceDoesNotInheritGitIdentity(t *testing.T) {
 	}
 }
 
+// TestPluginBuildVCSFlag_TestBinaryAlwaysSkipsAutoDetect is the charly#178
+// test-harness-fragility regression test. It uses a real Git-backed srcDir
+// (this checkout's own charly/ directory — pluginSourceHasGitRevision is
+// TRUE for it) to prove both halves of the fix:
+//   - isTestBinary=false (the production branch) still resolves to
+//     "-buildvcs=auto" — the pre-existing behavior for a real project's
+//     out-of-process plugin connect / bake_plugin: image embedding is
+//     UNCHANGED by this fix;
+//   - isTestBinary=true forces "-buildvcs=false" even though the SAME
+//     source has a real Git revision — the exact override that removes the
+//     git-status-walk race under this project's many linked worktrees
+//     (the reproducible "error obtaining VCS status: exit status 128"
+//     failures the PR validator reproduced 3x on charly#178's thread).
+//
+// pluginBuildVCSFlag (the wrapper buildPluginBinary actually calls) is
+// exercised too: since this IS a "go test" binary, testing.Testing() is
+// always true here, so it must resolve to "-buildvcs=false" against the
+// very same git-backed srcDir that would otherwise auto-detect — proving
+// the real call path (not just the pure decision function) carries the flag
+// through correctly.
+func TestPluginBuildVCSFlag_TestBinaryAlwaysSkipsAutoDetect(t *testing.T) {
+	srcDir, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := pluginBuildEnv(os.Environ(), srcDir)
+	if !pluginSourceHasGitRevision(srcDir, env) {
+		t.Fatalf("fixture precondition failed: %s is not classified as VCS-stampable", srcDir)
+	}
+
+	if got := pluginBuildVCSFlagForContext(srcDir, env, false); got != "-buildvcs=auto" {
+		t.Fatalf("production context (isTestBinary=false) on a real Git source: got %q, want -buildvcs=auto (this fix must not change production behavior)", got)
+	}
+	if got := pluginBuildVCSFlagForContext(srcDir, env, true); got != "-buildvcs=false" {
+		t.Fatalf("test-binary context (isTestBinary=true) on a real Git source: got %q, want -buildvcs=false (the race-causing auto-detect must be skipped)", got)
+	}
+
+	// The real call path: pluginBuildVCSFlag defers to testing.Testing(), which
+	// is unconditionally true inside this test binary.
+	if got := pluginBuildVCSFlag(srcDir, env); got != "-buildvcs=false" {
+		t.Fatalf("pluginBuildVCSFlag inside a test binary: got %q, want -buildvcs=false — the hardcoded argv flag (which GOFLAGS cannot override) must resolve to the safe value", got)
+	}
+}
+
+// TestPluginBuildVCSFlag_NoGitSourceStaysFalseRegardless proves a source with
+// no usable Git revision (an archive/copy, or a fresh t.TempDir()) always
+// gets "-buildvcs=false" in both contexts — nothing here changed for that case.
+func TestPluginBuildVCSFlag_NoGitSourceStaysFalseRegardless(t *testing.T) {
+	srcDir := t.TempDir()
+	env := pluginBuildEnv(os.Environ(), srcDir)
+	if pluginSourceHasGitRevision(srcDir, env) {
+		t.Fatalf("fixture precondition failed: %s was classified as VCS-stampable", srcDir)
+	}
+	if got := pluginBuildVCSFlagForContext(srcDir, env, false); got != "-buildvcs=false" {
+		t.Fatalf("production context on a non-Git source: got %q, want -buildvcs=false", got)
+	}
+	if got := pluginBuildVCSFlagForContext(srcDir, env, true); got != "-buildvcs=false" {
+		t.Fatalf("test-binary context on a non-Git source: got %q, want -buildvcs=false", got)
+	}
+}
+
 func TestFinalizeDeclaredKindConnectionsRetainsUnconnectedCause(t *testing.T) {
 	const word = "test-unconnected-kind"
 	original := declaredKindConnectErr

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/opencharly/sdk/spec"
 
@@ -291,18 +292,13 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	if st, statErr := os.Stat(filepath.Join(srcDir, "cmd", "serve")); statErr == nil && st.IsDir() {
 		target = "./cmd/serve"
 	}
-	buildVCS := "-buildvcs=false"
 	buildEnv := pluginBuildEnv(os.Environ(), srcDir)
-	if pluginSourceHasGitRevision(srcDir, buildEnv) {
-		buildVCS = "-buildvcs=auto"
-	}
+	buildVCS := pluginBuildVCSFlag(srcDir, buildEnv)
 	cmd := exec.CommandContext(ctx, "go", "build", buildVCS, "-o", binTmp, target)
 	cmd.Dir = srcDir
-	// A source with a real Git revision is VCS-stamped. An archive/copy without
-	// one cannot truthfully be stamped, so it is explicitly built without VCS
-	// metadata instead of borrowing an unrelated ancestor repository. Multiple
-	// source builds may run concurrently; their read-only Git status probes never
-	// refresh or write a shared index.
+	// Multiple source builds may run concurrently; their read-only Git status
+	// probes (when buildVCS selects -buildvcs=auto) never refresh or write a
+	// shared index.
 	cmd.Env = buildEnv
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
@@ -313,6 +309,49 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
 	}
 	return bin, nil
+}
+
+// pluginBuildVCSFlag picks the `go build -buildvcs=…` value for an out-of-process
+// plugin binary build. It defers to pluginBuildVCSFlagForContext with the REAL
+// test-binary state (testing.Testing(), Go stdlib — true only inside a "go
+// test"-built binary, never in a real `charly` build), so production callers
+// (a project's out-of-process plugin connect, and bake_plugin: image embedding)
+// see no behavior change while a test binary always gets the safe, non-racing
+// value. See pluginBuildVCSFlagForContext for the full rationale.
+func pluginBuildVCSFlag(srcDir string, env []string) string {
+	return pluginBuildVCSFlagForContext(srcDir, env, testing.Testing())
+}
+
+// pluginBuildVCSFlagForContext is the pure decision pluginBuildVCSFlag wraps,
+// parameterized on whether the caller is a test binary so both branches are
+// independently unit-testable (testing.Testing() is always true inside `go
+// test`, so a test cannot otherwise observe the production branch).
+//
+// Go's `-buildvcs=auto` walks `git status` on srcDir's repository to embed a
+// VCS revision stamp. Under this project's many linked worktrees, concurrent
+// test/bed runs each spawning their OWN `go build -buildvcs=auto` race that
+// git-status walk against sibling worktrees' git operations, producing
+// reproducible spurious "error obtaining VCS status: exit status 128"
+// failures (charly#178 test-harness RCA, reproduced 3x independently by the
+// PR validator). Passing `-buildvcs=false` as an explicit argv flag is the
+// correct fix — an explicit flag always wins over GOFLAGS, so an env-var
+// override could never have worked here; skipping the walk entirely in test
+// contexts removes the race at its source rather than retrying past it (R4).
+//
+// No code anywhere in this tree reads the embedded VCS stamp back out of a
+// plugin binary (grep for debug.ReadBuildInfo / vcs.revision / vcs.modified
+// finds zero consumers), so a test binary losing the stamp is not observable.
+// Production paths are never test binaries, so they keep the pre-existing
+// auto-detect-from-git-revision behavior unchanged — the stamp stays
+// available there for a future consumer without re-litigating this decision.
+func pluginBuildVCSFlagForContext(srcDir string, env []string, isTestBinary bool) string {
+	if isTestBinary {
+		return "-buildvcs=false"
+	}
+	if pluginSourceHasGitRevision(srcDir, env) {
+		return "-buildvcs=auto"
+	}
+	return "-buildvcs=false"
 }
 
 func pluginBuildEnv(base []string, srcDir string) []string {
