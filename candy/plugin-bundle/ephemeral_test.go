@@ -210,6 +210,54 @@ func TestDescentVenue(t *testing.T) {
 	}
 }
 
+// TestRegisterTransientTimerArgs_PinsWorkingDirectory is the regression test for the bed-robustness
+// batch item 1 bug: the ephemeral teardown timer NEVER worked (~21 recorded failures over weeks)
+// because the transient unit's ExecStart ran from the user systemd manager's default working
+// directory (the user's home), not the project directory the deploy was registered from — so the
+// self-exec'd `charly bundle del` could never find `charly.yml`. This test proves the constructed
+// systemd-run argv carries `--working-directory=<wd>` set to the CALLER's resolved directory (never
+// silently omitted, never defaulted to something else), and that argv ordering keeps the exe +
+// del-argv intact.
+func TestRegisterTransientTimerArgs_PinsWorkingDirectory(t *testing.T) {
+	got := registerTransientTimerArgs(
+		"charly-bundle-del-myapp-12345",
+		30*time.Minute,
+		"/home/user/projects/myproject",
+		"/usr/local/bin/charly",
+		[]string{"bundle", "del", "myapp", "--assume-yes"},
+	)
+	want := []string{
+		"--user",
+		"--unit=charly-bundle-del-myapp-12345",
+		"--on-active=30m0s",
+		"--working-directory=/home/user/projects/myproject",
+		"/usr/local/bin/charly",
+		"bundle", "del", "myapp", "--assume-yes",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("registerTransientTimerArgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("registerTransientTimerArgs()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	// Explicit assertion that the working-directory flag is present at all — the exact bug class
+	// (a silently-omitted flag) that produced the "no charly.yml found in /home/<user>" failure.
+	found := false
+	for _, a := range got {
+		if strings.HasPrefix(a, "--working-directory=") {
+			found = true
+			if a != "--working-directory=/home/user/projects/myproject" {
+				t.Errorf("--working-directory flag = %q, want pinned to the caller's resolved wd", a)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("registerTransientTimerArgs() omitted --working-directory — the transient unit would fall back to the user systemd manager's default (home dir), reproducing the original bug")
+	}
+}
+
 func TestEphemeralDeployDelArgv(t *testing.T) {
 	got := ephemeralDeployDelArgv("myapp")
 	want := []string{"bundle", "del", "myapp", "--assume-yes"}

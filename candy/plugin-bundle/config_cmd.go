@@ -21,6 +21,18 @@ import (
 // plan step via the host-owned pluginPrimaries registry, a live in-process table a separate
 // module cannot reach). IMPORT-PURITY: imports ONLY github.com/opencharly/sdk (deploykit/kit/
 // spec are subpackages); never charly/.
+//
+// Bed-robustness batch item 5 (the placement-dependent silent-no-op class): every READ below
+// goes through the package-local loadBundleConfig() (ephemeral.go), which resolves the per-host
+// overlay via the "pod-config-load-bundle" HostBuild seam — NEVER the raw deploykit.LoadBundleConfig()
+// (which no-ops errorlessly unless the calling process happens to have registered
+// deploykit.DeployStateHost at init — true ONLY while command:bundle stays compiled-in, a
+// per-BUILD placement fact, never an authoring guarantee). This was DORMANT (not an active bug)
+// because plugin-bundle is compiled-in TODAY, but every one of these 6 call sites would have
+// silently degraded to "no charly.yml configured" the moment plugin-bundle is ever built
+// out-of-process — exactly the failure mode plugin-deploy-vm's vmPrepareVenue hit for real
+// (lifecycle.go, same batch). Fixed prophylactically here rather than left for the next
+// placement change to rediscover.
 
 // fetchResolvedProject fetches the project envelope via the established HostBuild
 // ("resolved-project") seam — the SAME call compile.go's compileDeployPlans makes.
@@ -73,7 +85,7 @@ func filterDeployBox(dc *deploykit.BundleConfig, names []string) *deploykit.Bund
 
 // runBundleShow serves `charly bundle show [box]`.
 func runBundleShow(box, instance string) error {
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := loadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -105,7 +117,7 @@ func runBundleExport(boxes []string, output string, all bool) error {
 		}
 		dc = deploykit.ExportAllBox(rp)
 	} else {
-		loaded, err := deploykit.LoadBundleConfig()
+		loaded, err := loadBundleConfig()
 		if err != nil {
 			return err
 		}
@@ -145,7 +157,7 @@ func runBundleImport(files []string, replace bool, box string) error {
 
 	var base *deploykit.BundleConfig
 	if !replace {
-		existing, err := deploykit.LoadBundleConfig()
+		existing, err := loadBundleConfig()
 		if err != nil {
 			return err
 		}
@@ -163,7 +175,7 @@ func runBundleImport(files []string, replace bool, box string) error {
 			return fmt.Errorf("box %q not found in input files", box)
 		}
 		if !replace {
-			existing, _ := deploykit.LoadBundleConfig()
+			existing, _ := loadBundleConfig()
 			if existing != nil {
 				existing.Bundle[box] = entry
 				merged = existing
@@ -202,7 +214,7 @@ func runBundleReset(box, instance string) error {
 		return nil
 	}
 
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := loadBundleConfig()
 	if err != nil {
 		return err
 	}
@@ -235,7 +247,7 @@ func runBundleReset(box, instance string) error {
 
 // runBundleStatus serves `charly bundle status`.
 func runBundleStatus() error {
-	dc, err := deploykit.LoadBundleConfig()
+	dc, err := loadBundleConfig()
 	if err != nil {
 		return err
 	}

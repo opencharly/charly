@@ -59,7 +59,11 @@ func (c *VmCreateCmd) runVmSpecCreate(vmName string, spec *VmSpec, backend strin
 	if err != nil {
 		return err
 	}
-	vmStateDir := filepath.Join(home, ".local", "share", "charly", "vm", vmDomainName)
+	vmStateBase, err := vmDir()
+	if err != nil {
+		return err
+	}
+	vmStateDir := filepath.Join(vmStateBase, vmDomainName)
 	if err := os.MkdirAll(vmStateDir, 0o755); err != nil {
 		return err
 	}
@@ -300,7 +304,11 @@ func migrateStaleEntityAlias(home, entity string) {
 // state dir (charly-<domainName>) and the libvirt domain use, so the published alias, its identity
 // file, and its known_hosts all point at THIS domain's own state (never a sibling's).
 func publishVmSshAlias(home, domainName string, spec *VmSpec, rt VmRuntimeParams) error {
-	stateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+domainName)
+	vmStateBase, err := vmDir()
+	if err != nil {
+		return err
+	}
+	stateDir := filepath.Join(vmStateBase, "charly-"+domainName)
 	knownHostsPath := filepath.Join(stateDir, "known_hosts")
 	// Best-effort: ignore "no such file" on first-create.
 	_ = os.Remove(knownHostsPath)

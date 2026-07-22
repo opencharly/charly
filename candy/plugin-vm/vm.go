@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/opencharly/sdk/vmshared"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
@@ -60,13 +61,13 @@ func domainOr(box, domain string) string {
 	return box
 }
 
-// vmDir returns the directory for storing VM state (QEMU backend).
+// vmDir returns the directory for storing VM state (QEMU backend). Routes through
+// vmshared.VmStateRoot (bed-robustness batch item 6 — the CHARLY_VM_STATE_DIR worktree-scoping
+// override, closing the "global ~/.local/share/charly/vm non-worktree-scoping footgun") rather
+// than a hardcoded literal, so every VM state path in this process honors the same override
+// every other VM code path does.
 func vmDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "charly", "vm"), nil
+	return vmshared.VmStateRoot()
 }
 
 // ensureBootAutostartPrereqs makes a qemu:///session domain actually start at

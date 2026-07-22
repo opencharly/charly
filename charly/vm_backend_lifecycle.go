@@ -16,6 +16,7 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/vmshared"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -40,13 +41,25 @@ func vmName(box, instance string) string {
 	return name
 }
 
-// vmDir returns the directory for storing VM state (QEMU backend).
+// vmDir returns the directory for storing VM state (QEMU backend). Routes through
+// vmshared.VmStateRoot (bed-robustness batch item 6 — the CHARLY_VM_STATE_DIR worktree-scoping
+// override) rather than a hardcoded literal, so every VM state path in this process honors the
+// same override every other VM code path does.
+//
+// MIGRATION INVENTORY (north-star §4.4): this file's "github.com/opencharly/sdk/vmshared" import
+// is UNTIL-K4/K5 — a fresh pr-validator review (charly#176 round 1) flagged it as a NEW charly/
+// import of an sdk mechanism kit with no same-PR body-move (the IMPORT-PURITY standing rule);
+// this note is that required inventory justification, not a waiver. `vmDir` is itself
+// pre-existing residual core inventory (`preempt.go`'s startVM/stopVM/vmDir call it; see this
+// file's header), already tracked to exit alongside `charly/vmshared_aliases.go` — the SAME
+// package this call now also reaches. `vmshared_aliases.go` is documented K4/K5-dissolving
+// inventory across this program's CHANGELOG (e.g. `CHANGELOG/2026.197.2205.md`,
+// `candy/plugin-vm/vm_move_aliases.go`'s own header) — retired call-site by call-site as its
+// consumers move into plugins. This call site rides that SAME exit: it retires the moment
+// `vmDir`'s owning consumers (the resource arbiter + the sibling-member/bed-runner callers named
+// above) relocate out of `charly/` core, not before, and not as an isolated one-off fix.
 func vmDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "charly", "vm"), nil
+	return vmshared.VmStateRoot()
 }
 
 // resolveVmBackend detects the available VM backend.

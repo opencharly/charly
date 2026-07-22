@@ -132,11 +132,11 @@ func hostBuildVmBuild(_ context.Context, req spec.VmBuildRequest, _ buildEngineC
 	if err != nil {
 		return spec.VmBuildReply{}, err
 	}
-	home, err := os.UserHomeDir()
+	vmStateBase, err := vmDir()
 	if err != nil {
 		return spec.VmBuildReply{}, err
 	}
-	vmStateDir := filepath.Join(home, ".local", "share", "charly", "vm", "charly-"+boxName)
+	vmStateDir := filepath.Join(vmStateBase, "charly-"+boxName)
 	if err := os.MkdirAll(vmStateDir, 0o755); err != nil {
 		return spec.VmBuildReply{}, err
 	}

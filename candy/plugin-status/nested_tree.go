@@ -160,11 +160,31 @@ func nestedChildKind(child *deploykit.BundleNode) spec.SubstrateKind {
 	}
 }
 
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the shared
+// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam —
+// bed-robustness batch item 5, the DeployStateHost out-of-process-read audit — the operator ruling
+// extending the fix beyond plugin-deploy-vm/plugin-bundle to every unvetted grep hit in this
+// class, including this file, which this function's own header comment used to claim was fine to
+// call "exactly like the host did" — that claim was stale: sdk-portable does NOT mean
+// placement-safe, since deploykit.DeployStateHost is only ever registered by charly core's own
+// init(), never by an out-of-process plugin process). R3 hoist (charly#176 round 1): this used to
+// carry its own local marshal/HostBuild/unmarshal copy of the seam call, the SAME pattern
+// candy/plugin-substrate's status_flat.go, candy/plugin-bundle/ephemeral.go, and
+// candy/plugin-pod/remove_orchestration.go each independently carried — a fresh pr-validator
+// review correctly rejected the "plugin modules can't cross-import each other" justification for
+// landing a 3rd/4th copy of one pattern in a single cutover (an sdk kit IS exactly the mechanism
+// this project uses to share code across plugin module boundaries); sdk/deploykit's
+// LoadBundleConfigViaSeam is now the ONE shared implementation all four call. Returns (nil, nil)
+// on an absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+func loadBundleConfig(ex *sdk.Executor, ctx context.Context) (*deploykit.BundleConfig, error) {
+	return deploykit.LoadBundleConfigViaSeam(ctx, ex, "candy/plugin-status nested tree")
+}
+
 // mergedNestedRoots returns the declared deployment tree (project + per-machine overlay) — the
 // I/O half: fetch the project envelope + the operator's per-host overlay, then hand off to the
 // PURE mergedNestedRootsFrom. Mirrors candy/plugin-substrate's status_android_collect.go split
-// (fetchResolvedProject + deploykit.LoadBundleConfig() in the outer function,
-// collectAndroidDeployNodes as the pure plain-parameter function) exactly, R3.
+// (fetchResolvedProject + loadBundleConfig in the outer function, collectAndroidDeployNodes as the
+// pure plain-parameter function) exactly, R3.
 func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploykit.BundleNode, error) {
 	rp, err := resolvedProject(ex, ctx)
 	if err != nil {
@@ -172,7 +192,7 @@ func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploy
 	}
 	// Best-effort: absence of a per-machine overlay is normal (mirrors
 	// candy/plugin-substrate's newFlatCollector, K6, the same pattern).
-	perMachine, _ := deploykit.LoadBundleConfig()
+	perMachine, _ := loadBundleConfig(ex, ctx)
 	return mergedNestedRootsFrom(rp, perMachine), nil
 }
 
