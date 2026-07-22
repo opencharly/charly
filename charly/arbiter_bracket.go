@@ -15,18 +15,26 @@ var (
 // The former core-resident substrate lifecycle proxy's Start/Stop used to bracket the shared
 // resource-arbiter claim IN-LINE, around the substrate dispatch itself (acquire BEFORE OpStart, release ON THE FAILURE PATH,
 // release AFTER OpStop) — see the historical note this file's functions preserve verbatim below.
-// S3b moves the substrate DISPATCH (the actual OpStart/OpStop wire call) to candy/plugin-bundle,
-// but the bracket itself CANNOT move with it: the CHARLY_PREEMPT_LEASE mutex (preempt.go) is
-// process-ENV state — acquireResourceForClaimant sets it via os.Setenv, releaseResourceClaim reads
-// it via os.Getenv, and the whole point is that a NESTED `charly` subprocess (spawned by the SAME
-// outer invocation after the env is set) inherits it and skips re-acquiring. That property holds
-// ONLY when the acquiring code runs in the SAME OS process as the host `charly` binary — true
-// today only because plugin-bundle happens to be compiled-in (in-proc placement); an
-// out-of-process plugin's os.Setenv would never reach the host's env, silently breaking the
-// nested-subprocess skip for that placement. A mechanism that behaves correctly in only one of
-// the two placements every plugin must support (dual-placement by construction) is a defect, not
-// a stay-as-is case — so the bracket stays HERE, core-resident, wrapping the (now plugin-hosted)
-// dispatch rather than living inside it.
+// S3b moves the substrate DISPATCH (the actual OpStart/OpStop wire call) to candy/plugin-bundle;
+// this file keeps the bracket call sites for now (see MIGRATION INVENTORY below for the tracked
+// exit). The mechanism: the CHARLY_PREEMPT_LEASE mutex (preempt.go) is process-ENV state —
+// acquireResourceForClaimant sets it via os.Setenv, releaseResourceClaim reads it via os.Getenv,
+// and the whole point is that a NESTED `charly` subprocess (spawned by the SAME outer invocation
+// after the env is set) inherits it and skips re-acquiring. That property holds ONLY when the
+// acquiring code runs in the SAME OS process as the host `charly` binary — an out-of-process
+// plugin's own os.Setenv would never reach the host's env, so a bare in-plugin acquire/release
+// would silently break the nested-subprocess skip for that placement (dual-placement by
+// construction — every plugin must behave correctly compiled-in AND out-of-process).
+//
+// MIGRATION INVENTORY: this file (and the "What did NOT move" bracket call sites in
+// candy/plugin-bundle/deploy_target.go) is UNTIL-K4 (deploy-state/arbitration family) — it exits
+// via the SAME HostBuild-reverse-leg pattern this PR already applies to
+// host_build_deploy_config_save_state.go (Q2): the plugin calls back a HostBuild kind for its own
+// acquire/release around its own dispatch, so the actual os.Setenv/os.Getenv still EXECUTE in the
+// host process (preserving the nested-subprocess env-inheritance property) while OWNERSHIP of the
+// bracket call — deciding when to acquire/release, around which dispatch — moves plugin-side. Not
+// a "stays core forever" claim: a HostBuild reverse-leg is available today (the Q2 precedent
+// proves it), the restructure is scoped to the K4 wave.
 //
 // hasPlan gates whether the bracket applies at all — the CALLER (pluginDeployTarget.Start/Stop,
 // unified_targets.go) derives it directly from lifecycleStartPlanHooks[word] /

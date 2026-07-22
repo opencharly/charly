@@ -23,9 +23,14 @@ import (
 // the actual call graph, not assumed):
 //
 //   - The arbiter acquire/release BRACKET (Start/Stop) — CHARLY_PREEMPT_LEASE is a process-env
-//     mutex that only behaves correctly in the SAME OS process as the host; it stays core-resident
-//     (charly/arbiter_bracket.go), wrapping the dispatch call this file's handleStart/handleStop
-//     make, never living inside them.
+//     mutex that only behaves correctly in the SAME OS process as the host, so a bare in-plugin
+//     acquire/release would silently break the nested-subprocess env-inheritance skip for the
+//     out-of-process placement. `charly/arbiter_bracket.go` keeps the call sites TODAY (MIGRATION
+//     INVENTORY: UNTIL-K4, deploy-state/arbitration family — see that file's header), wrapping the
+//     dispatch call this file's handleStart/handleStop make; the tracked exit is the SAME
+//     HostBuild-reverse-leg pattern host_build_deploy_config_save_state.go already uses (Q2): a
+//     HostBuild kind the plugin calls back for its own acquire/release, so the actual
+//     os.Setenv/os.Getenv still run host-side while ownership of the bracket moves here.
 //   - The pod/vm Start/Stop/Attach/Logs PLAN-HOOK tables (charly/pod_lifecycle_dispatch.go) — pure
 //     ctx-opts marshals with zero core-only dependency of their own, so there is no reason to move
 //     them; the core-side dispatch caller reads them and threads the result as this file's
