@@ -30,7 +30,7 @@ func egressValidate(kind, label, mode, data string) error {
 	if err != nil {
 		return err
 	}
-	out, err := cmdExec.InvokeProvider(cmdCtx, "verb", "egress", sdk.OpValidate, params, nil)
+	out, err := cmdExec.InvokeProvider(cmdCtx, "verb", "egress", sdk.OpValidate, params, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return err
 	}

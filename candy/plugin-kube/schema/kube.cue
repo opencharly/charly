@@ -16,12 +16,16 @@
 // method name rides the input's `method` key (the former core #KubeMethod enum),
 // and every kube-exclusive modifier (name/namespace/label/cluster/manifest/
 // kube_kind/kube_context/kubeconfig/kube_count/kube_resource/kube_group/
-// kube_version/json) lives HERE. Only the genuinely SHARED step modifiers
-// (timeout, the exit_status/stdout/stderr matchers, context, …) stay on core #Op,
-// read off the step Op by the provider. The host preresolver still rewrites a
-// `cluster:` profile to a concrete `kube_context` — now into the input map
-// (charly/k8s_config.go) — and charly/k3s_post.go synthesizes the internal
-// {method: merge-kubeconfig, kubeconfig, kube_context} input.
+// kube_version/json/artifact_key/deploy_name) lives HERE. Only the genuinely SHARED
+// step modifiers (timeout, the exit_status/stdout/stderr matchers, context, …) stay
+// on core #Op, read off the step Op by the provider. The host preresolver still
+// rewrites a `cluster:` profile to a concrete `kube_context` — now into the input map
+// (charly/k8s_config.go) — and charly/k8s_plugin.go synthesizes the internal
+// {method: k3s-post-provision, artifact_key, deploy_name} input (S3, FINAL/K5 unit 6 —
+// the k3s post-provision finalization — kubeconfig retrieval, guest-forward rewrite,
+// and the kubeconfig merge — moved wholesale into this plugin from charly/k3s_post.go;
+// the VM-forward resolution reaches the host ONLY via the generic
+// "deploy-entity-resolve" HostBuild seam, over an InvokeWithExecutor-carried broker).
 //
 // SELF-CONTAINED: it references NO base def, so it compiles standalone (the SDK's
 // serve-side check + gengotypes) AND splices onto the base (base ++ plugin is a
@@ -35,9 +39,9 @@
 // method-exclusive modifiers.
 #KubeInput: {
 	// method — the kube method name (the former core #KubeMethod enum plus the
-	// internal merge-kubeconfig the host synthesizes; the verb's PRIMARY input
+	// internal k3s-post-provision the host synthesizes; the verb's PRIMARY input
 	// field, so `kube: nodes` desugars to {method: "nodes"}).
-	method: ("nodes" | "wait-nodes" | "pods" | "wait-ready" | "ingress" | "ingressclass" | "storageclass" | "service" | "lb-external-ip" | "addons" | "apply" | "delete" | "raw" | "merge-kubeconfig") @go(Method,type=string)
+	method: ("nodes" | "wait-nodes" | "pods" | "wait-ready" | "ingress" | "ingressclass" | "storageclass" | "service" | "lb-external-ip" | "addons" | "apply" | "delete" | "raw" | "k3s-post-provision") @go(Method,type=string)
 	// name / namespace / label — resource identity + selector.
 	name?:      string
 	namespace?: string
@@ -52,7 +56,7 @@
 	kube_kind?:  string @go(KubeKind)
 	kube_count?: int    @go(KubeCount,type=int)
 	// kubeconfig / kube_context — the cluster-selection pair (kubeconfig path +
-	// context; also the merge-kubeconfig payload).
+	// context) an authored step may set explicitly.
 	kubeconfig?:   string
 	kube_context?: string @go(KubeContext)
 	// kube_resource / kube_group / kube_version / json — the raw escape hatch's
@@ -61,4 +65,10 @@
 	kube_group?:    string @go(KubeGroup)
 	kube_version?:  string @go(KubeVersion)
 	json?:          bool   @go(JSON)
+	// artifact_key / deploy_name — the k3s-post-provision payload (S3, FINAL/K5 unit 6):
+	// artifact_key is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
+	// kubeconfig context); deploy_name is the real per-deploy (domain) identity the
+	// guest-forward port-forward lookup keys off. See charly/k8s_plugin.go.
+	artifact_key?: string @go(ArtifactKey)
+	deploy_name?:  string @go(DeployName)
 }

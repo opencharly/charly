@@ -2,8 +2,8 @@
 // deploy SUBSTRATE — `target: pod` (the DEFAULT substrate: a deployment run as a
 // container image via quadlet/podman). It is the pod-substrate sibling of
 // candy/plugin-deploy-vm: charly host-builds it and serves it OUT-OF-PROCESS over
-// go-plugin gRPC (LocalTransport), then externalDeployTarget Invokes it (OpExecute)
-// with the deployment's InstallPlan VIEWS + a venue descriptor, and the host's executor
+// go-plugin gRPC (LocalTransport), then the host's plugin-side deploy target Invokes it
+// (OpExecute) with the deployment's InstallPlan VIEWS + a venue descriptor, and the host's executor
 // served on the broker.
 //
 // Unlike deploy:vm (whose plugin WALKS the plan inside the guest), pod bakes its install

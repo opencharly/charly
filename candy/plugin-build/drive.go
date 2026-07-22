@@ -253,7 +253,7 @@ func (c driveConfig) mergeBox(ctx context.Context, ex *sdk.Executor, box spec.Bu
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
 		return
 	}
-	replyJSON, err := ex.InvokeProvider(ctx, "verb", "oci", sdk.OpRun, reqJSON, envJSON)
+	replyJSON, err := ex.InvokeProvider(ctx, "verb", "oci", sdk.OpRun, reqJSON, envJSON, sdk.InvokeProviderOpts{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: merge %s: %v\n", box.Name, err)
 		return

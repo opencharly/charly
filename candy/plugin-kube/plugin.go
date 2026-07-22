@@ -9,11 +9,14 @@
 // the provider registry exactly like a built-in — the authored `kube: <method>` sugar
 // desugars to plugin/plugin_input; the method + kube-exclusive fields ride the input
 // map, validated against this plugin's own #KubeInput — and `target: k8s` resolves to
-// this plugin's deploy:k8s provider over
-// the E3b reverse channel — THIS plugin's own preresolve.go (F6, FINAL/K5 unit 6a;
-// dispatched via the generalized deploy_preresolve.go:wireDeployPreresolver seam)
-// resolves the cluster template + image Capabilities → the egress-validated
-// Kustomize tree, reaching the host's "deploy-entity-resolve" +
+// this plugin's deploy:k8s provider, reached via candy/plugin-bundle's generic
+// Invoke(OpDeployDispatch) → sdk.Executor.InvokeProvider (S3b — was the core-side
+// pluginDeployTarget-over-E3b path before the deploy-dispatch cluster moved) — THIS
+// plugin's own preresolve.go (F6, FINAL/K5 unit 6a; dispatched directly by
+// candy/plugin-bundle's preresolveSubstrate via InvokeProvider(OpPreresolve), S3b —
+// the core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
+// through is dissolved) resolves the cluster template + image Capabilities → the
+// egress-validated Kustomize tree, reaching the host's "deploy-entity-resolve" +
 // "k8s-generate-kustomize" HostBuild seams.
 // The goadb-analog of candy/plugin-adb: the FULL client-go/clientcmd/dynamic
 // dependency + the single kubectl-apply path live HERE (R3).

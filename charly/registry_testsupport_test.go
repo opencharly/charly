@@ -18,12 +18,13 @@ import (
 // `-count>1` (which the concurrency-stress gate `go test -race -count=N ./charly/...` needs).
 //
 // It restores ALL the state a plugin registration mutates: the registry (byKey/origins/closers)
-// AND the deploy-substrate sub-registries a class:deploy plugin also wires (substrateLifecycles,
-// deployPreresolvers + pluginPreresolverWords) AND the parse-time pluginPrimaries desugar table
-// AND the process-wide plugin schema set (pluginSchemas: sources/inputDefs/unified) that a plugin
-// serving an authored input def fills via registerPluginUnitSchema. Only the registry itself
-// duplicate-ERRORS on re-register; the sub-registries and the schema set replace/append
-// idempotently, but restoring them keeps one test's substrate/preresolver/primary/schema from
+// AND the parse-time pluginPrimaries desugar table AND the process-wide plugin schema set
+// (pluginSchemas: sources/inputDefs/unified) that a plugin serving an authored input def fills via
+// registerPluginUnitSchema. (S3b: the former per-substrate lifecycle/preresolve sub-registries and
+// their word-index are deleted — see CHANGELOG/2026.203.0212.md; pluginDeployTarget reads
+// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider instead, so there is nothing
+// left to snapshot for them.) Only the registry itself duplicate-ERRORS on re-register; the schema
+// set replaces/appends idempotently, but restoring it keeps one test's schema registration from
 // bleeding into the next. Restoring pluginSchemas ALSO bounds its append-only `sources` slice under
 // `-count>N`: without it, a re-registering test re-appends its def on every run — safe only because
 // identical defs unify, but the slice (and every recompile of base ++ Σ) grows monotonically. With
@@ -34,15 +35,6 @@ func snapshotProviderState() func() {
 	origins := maps.Clone(providerRegistry.origins)
 	closers := append([]io.Closer(nil), providerRegistry.closers...)
 	providerRegistry.mu.Unlock()
-
-	substrateLifecyclesMu.Lock()
-	subLife := maps.Clone(substrateLifecycles)
-	substrateLifecyclesMu.Unlock()
-
-	deployPreresolversMu.Lock()
-	preres := maps.Clone(deployPreresolvers)
-	preresWords := maps.Clone(pluginPreresolverWords)
-	deployPreresolversMu.Unlock()
 
 	primaries := maps.Clone(pluginPrimaries)
 
@@ -58,15 +50,6 @@ func snapshotProviderState() func() {
 		providerRegistry.origins = origins
 		providerRegistry.closers = closers
 		providerRegistry.mu.Unlock()
-
-		substrateLifecyclesMu.Lock()
-		substrateLifecycles = subLife
-		substrateLifecyclesMu.Unlock()
-
-		deployPreresolversMu.Lock()
-		deployPreresolvers = preres
-		pluginPreresolverWords = preresWords
-		deployPreresolversMu.Unlock()
 
 		pluginPrimaries = primaries
 

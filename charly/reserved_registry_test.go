@@ -90,24 +90,15 @@ func TestReservedWordRegistry_DeployBijection(t *testing.T) {
 	}
 
 	// ALL FIVE are externalized substrates: in externalizedDeploySubstrates AND
-	// INTENTIONALLY without an in-proc DeployTargetProvider. vm/pod additionally register a
-	// substrateLifecycle hook (the host-side venue lifecycle), but that is NOT an in-proc
-	// DeployTargetProvider — they have no provider in the registry.
+	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
+	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
+	// per-substrate lifecycle registry left to assert against.
 	for _, w := range []string{"android", "k8s", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
 			t.Fatalf("%s must be in externalizedDeploySubstrates (the F1 source of truth)", w)
 		}
 		if _, ok := providerRegistry.resolve(ClassDeployTarget, w); ok {
 			t.Fatalf("%s must NOT have an in-proc DeployTargetProvider — it is externalized", w)
-		}
-	}
-	// NO substrate registers a COMPILED-IN venue lifecycle at init anymore: pod's + vm's are both
-	// WIRE-BACKED (candy/plugin-deploy-{pod,vm}, M4 — registered at plugin-load via
-	// registerPluginSubstrateLifecycle, so absent from this in-proc unit test); local/android/k8s own
-	// no venue lifecycle at all. substrateLifecycleFor therefore returns false for EVERY substrate here.
-	for _, w := range []string{"local", "android", "k8s", "pod", "vm"} {
-		if _, ok := substrateLifecycleFor(w); ok {
-			t.Errorf("%s must NOT register a compiled-in substrateLifecycle at init (pod+vm are wire-backed; local/android/k8s have none)", w)
 		}
 	}
 

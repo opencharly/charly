@@ -17,13 +17,15 @@ import (
 // LIFECYCLE END-TO-END on real code over the E3b reverse channel: the reference
 // external DEPLOY plugin (candy/plugin-example-deploy, its own Go module) is
 // host-built and served OUT-OF-PROCESS over go-plugin gRPC (LocalTransport, which
-// carries the GRPCBroker), routed through ResolveTarget to the externalDeployTarget
-// adapter, and driven through Add → Test → Update → Del:
+// carries the GRPCBroker), routed through ResolveTarget → pluginDeployTarget (S3b —
+// the thin data-only proxy dispatching to candy/plugin-bundle's Invoke(OpDeployDispatch),
+// which in turn reaches the substrate provider via its own sdk.Executor.InvokeProvider),
+// and driven through Add → Test → Update → Del:
 //
 //   - Add Invokes the provider (OpExecute) with the host's ExecutorService on the
 //     broker; the plugin dials back through the SDK (ExecutorFromInvoke) and writes
 //     TWO markers on the host venue, then RETURNS a DeployReply whose plugin-script
-//     reverse op + record the host persists in the (temp) install ledger;
+//     reverse op + record candy/plugin-bundle persists in the (temp) install ledger;
 //   - Test runs a host-side `file` check against the probe marker (no plugin call);
 //   - Update re-Invokes idempotently (markers stay, reverse op not duplicated);
 //   - Del replays the RECORDED plugin-script reverse op (markers gone, records deleted).
@@ -60,13 +62,12 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if len(unit.Providers) != 1 || unit.Providers[0].Class() != ClassDeployTarget || unit.Providers[0].Reserved() != "exampledeploy" {
 		t.Fatalf("providers = %+v, want exactly one deploy:exampledeploy", unit.Providers)
 	}
-	gp, ok := unit.Providers[0].(*grpcProvider)
-	if !ok {
+	if _, ok := unit.Providers[0].(*grpcProvider); !ok {
 		t.Fatalf("provider is %T, want *grpcProvider (the broker-carrying out-of-proc peer)", unit.Providers[0])
 	}
 
-	// E3-deploy consumer: register the external provider and confirm ResolveTarget
-	// routes target=exampledeploy to the externalDeployTarget adapter.
+	// E3-deploy consumer: register the external provider and confirm ResolveTarget routes
+	// target=exampledeploy to the pluginDeployTarget adapter (S3b).
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
@@ -74,14 +75,14 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}
-	if _, ok := routed.(*externalDeployTarget); !ok {
-		t.Fatalf("ResolveTarget routed external deploy to %T, want *externalDeployTarget", routed)
+	tgt, ok := routed.(*pluginDeployTarget)
+	if !ok {
+		t.Fatalf("ResolveTarget routed external deploy to %T, want *pluginDeployTarget", routed)
 	}
 
-	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is
-	//    private to this run), a TEMP ledger (never the operator's), and the local
-	//    ShellExecutor (RunUser → bash -lc, no sudo) so the plugin's marker write +
-	//    the recorded teardown run for real without a sudo prompt.
+	// 3. A real lifecycle target: a unique deploy name (so the /tmp scratch dir is private to
+	//    this run) and a TEMP ledger (never the operator's, threaded via pluginDeployTarget.paths
+	//    → req.LedgerRoot — S3b's wire-safe equivalent of the pre-move settable `paths` field).
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	root := t.TempDir()
 	paths := &kit.LedgerPaths{
@@ -90,20 +91,22 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 		Candies:  filepath.Join(root, "layers"),
 		LockFile: filepath.Join(root, ".lock"),
 	}
-	tgt := &externalDeployTarget{name: name, prov: gp, exec: kit.ShellExecutor{}, paths: paths}
+	tgt.name = name
+	tgt.paths = paths
 
 	dir := filepath.Join("/tmp", "charly-exampledeploy", name)
 	applied := filepath.Join(dir, "applied")
 	probe := filepath.Join(dir, "probe")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
-	// --- Add: reverse channel applies both markers; host records the ledger. ---
+	// --- Add: reverse channel applies both markers; candy/plugin-bundle records the ledger. ---
 	if err := tgt.Add(ctx, nil, nil, deploykit.EmitOpts{}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	mustExist(t, applied, "Add did not write the applied marker over the reverse channel")
 	mustExist(t, probe, "Add did not write the probe marker over the reverse channel")
-	rec, err := kit.ReadDeployRecord(paths, tgt.deployID())
+	deployID := deploykit.ComputeDeployID(name, nil, nil)
+	rec, err := kit.ReadDeployRecord(paths, deployID)
 	if err != nil || rec == nil {
 		t.Fatalf("Add did not write the deploy record: rec=%v err=%v", rec, err)
 	}
@@ -139,7 +142,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	}
 	mustNotExist(t, probe, "Del did not remove the probe marker (reverse op not replayed)")
 	mustNotExist(t, applied, "Del did not remove the applied marker (reverse op not replayed)")
-	if rec, _ := kit.ReadDeployRecord(paths, tgt.deployID()); rec != nil {
+	if rec, _ := kit.ReadDeployRecord(paths, deployID); rec != nil {
 		t.Fatal("Del did not delete the deploy record")
 	}
 	if crec, _ := kit.ReadCandyRecord(paths, "plugin-example-deploy"); crec != nil {

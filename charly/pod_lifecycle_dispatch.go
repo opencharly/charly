@@ -99,16 +99,18 @@ func podCmdOptsFromCtx(ctx context.Context) podCmdOpts {
 	return podCmdOpts{}
 }
 
-// pod_lifecycle_dispatch.go — the F6 HOST dispatch for the pod deep-body lifecycle (the K4 move,
-// P13-KERNEL step-4(ii) direction-flip). It marshals the RAW CLI opts (spec.PodStartOpts/
-// PodStopOpts/PodAttachOpts — the plugin now self-resolves the actual spec.PodLifecyclePlan from
-// these, candy/plugin-deploy-pod/resolve.go), threads them into the plugin's OpStart/OpStop
-// op.Params, and BRACKETS the shared arbiter claim around the op:
-// acquire BEFORE OpStart, release AFTER OpStop, and release ON THE FAILURE PATH (a start that errors
-// after acquire must not leak the claim). The CHARLY_PREEMPT_LEASE lease is host-process M state a
-// placement-agnostic plugin cannot own, so it stays the in-core proxy (acquireResourceForClaimant).
-// vm registers NO plan hook — it shells `charly vm start` and manages its own claim — so this bracket
-// is POD-SCOPED by construction (gated on a registered plan hook), never double-claiming a vm.
+// pod_lifecycle_dispatch.go — the F6 HOST-side plan-hook table for the pod deep-body lifecycle
+// (the K4 move, P13-KERNEL step-4(ii) direction-flip). These closures marshal the RAW CLI opts
+// (spec.PodStartOpts/PodStopOpts/PodAttachOpts — the plugin self-resolves the actual
+// spec.PodLifecyclePlan from these, candy/plugin-deploy-pod/resolve.go) into the payload
+// pluginDeployTarget.Start/Stop/Attach (unified_targets.go, S3b) threads as the dispatch request's
+// OptsJSON. hasPlan (lifecycleStartPlanHooks/… presence, keyed by word) ALSO gates whether the Q1
+// arbiter bracket applies — pluginDeployTarget.Start/Stop read the SAME map's `ok` boolean directly
+// (no separate mirror; see arbiter_bracket.go's doc comment for why the bracket itself stays
+// core-resident rather than living inside these closures — CHARLY_PREEMPT_LEASE is host-process
+// env state a placement-agnostic plugin cannot own). vm registers NO plan hook — it
+// shells `charly vm start` and manages its own claim — so the bracket is POD-SCOPED by
+// construction, never double-claiming a vm.
 
 // podLifecyclePlanResolver resolves + marshals the host-side PodLifecyclePlan for a deploy op. ctx
 // carries the direct-mode start opts (podStartOptsFromCtx) on the start path.
@@ -121,7 +123,7 @@ type attachPlanResolver func(ctx context.Context, box, instance string, cmd []st
 
 // logsPlanResolver resolves the host-side #PodLiveStdioPlan for the F12 `charly logs [-f]` op (the
 // resolved `journalctl`/`<engine> logs` stream command). A substrate with no logs resolver (vm) keeps
-// the plain opts-threaded OpLogs path (grpcSubstrateLifecycle.Logs).
+// the plain opts-threaded OpLogs path (pluginDeployTarget.Logs, S3b).
 type logsPlanResolver func(ctx context.Context, box, instance string, opts LogsOpts) (json.RawMessage, error)
 
 var (
@@ -164,9 +166,11 @@ func registerLifecyclePlanHooks(word string, start, stop podLifecyclePlanResolve
 // already on lifecycleParams.Name, instead of the host pre-resolving a spec.PodLifecyclePlan /
 // spec.PodLiveStdioPlan and threading the RESULT. The registered closures below therefore marshal
 // the plain CUE-generated opts types (spec.PodStartOpts/PodStopOpts/PodAttachOpts) — NOT a
-// resolved plan — reusing the SAME "plan" wire slot (lifecycleParams.Plan) unchanged: the map/
-// registration MECHANISM in substrate_lifecycle_grpc.go (the arbiter-claim bracket gated on
-// hasPlan) is untouched, only the payload CONTENT changes. Logs registers NO hook — Logs() already
+// resolved plan — reusing the SAME "plan" wire slot (lifecycleParams.Plan) unchanged: the
+// lifecycleStartPlanHooks/lifecycleStopPlanHooks registration MECHANISM (this file) and the
+// arbiter-claim bracket it gates (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go
+// before the deploy-dispatch cluster moved) are untouched, only the payload CONTENT changes.
+// Logs registers NO hook — Logs() already
 // threads its LogsOpts unconditionally (extra["opts"]), which is all candy/plugin-deploy-pod's
 // resolvePodLogsPlan needs (box/instance come from the deploy key on lifecycleParams.Name).
 var _ = func() bool {

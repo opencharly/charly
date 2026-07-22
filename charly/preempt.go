@@ -31,7 +31,8 @@ import (
 //      commands.go/vm_gpu_cmd.go — was STALE; none of those files call these shims anymore).
 //      The REAL, current callers are host_build_check_bed.go's bed arbiter lease
 //      (acquireResourceForClaimant), and — permanently, per the B-1 unit-2 IOU #4 ruling —
-//      substrate_lifecycle_grpc.go's + host_build_pod_lifecycle_dispatch.go's arbiter-release
+//      arbiter_bracket.go's (S3b — was substrate_lifecycle_grpc.go before the deploy-dispatch
+//      cluster moved) + host_build_pod_lifecycle_dispatch.go's arbiter-release
 //      brackets, which stay core-side BY DESIGN (gated on host-process CHARLY_PREEMPT_LEASE
 //      env state a placement-agnostic plugin cannot own). Because those two release call sites
 //      are permanent, the FULL proxy (not just a thin slice) stays core: each proxy method
@@ -62,7 +63,8 @@ const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 // --- the in-core arbiter PROXY (dispatches to the compiled-in verb:arbiter plugin) ----------
 
 // arbiterProxy is the in-core handle newResourceArbiter() returns to its current 3 callers
-// (host_build_check_bed.go, substrate_lifecycle_grpc.go, host_build_pod_lifecycle_dispatch.go
+// (host_build_check_bed.go, arbiter_bracket.go — S3b, was substrate_lifecycle_grpc.go before
+// the deploy-dispatch cluster moved — host_build_pod_lifecycle_dispatch.go
 // — re-verified at Cutover B unit 6b). Its methods dispatch to the compiled-in
 // candy/plugin-preempt (verb:arbiter) over an in-proc reverse channel — the arbiter runs there
 // and calls back for its host seams.

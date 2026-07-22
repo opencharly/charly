@@ -119,7 +119,7 @@ func ephemeralUnderlyingResourceAlive(ctx context.Context, exec *sdk.Executor, n
 		if merr != nil {
 			return true // can't build the request → conservative: assume alive
 		}
-		raw, ierr := exec.InvokeProvider(ctx, "verb", "libvirt", sdk.OpRun, nil, envJSON)
+		raw, ierr := exec.InvokeProvider(ctx, "verb", "libvirt", sdk.OpRun, nil, envJSON, sdk.InvokeProviderOpts{})
 		if ierr != nil {
 			return true // can't probe → conservative: assume alive
 		}

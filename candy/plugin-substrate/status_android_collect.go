@@ -434,7 +434,7 @@ func credentialGet(ctx context.Context, service, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	out, err := exec.InvokeProvider(ctx, "verb", "credential", sdk.OpRun, reqJSON, nil)
+	out, err := exec.InvokeProvider(ctx, "verb", "credential", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return "", err
 	}

@@ -257,7 +257,7 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 	if err != nil {
 		return fmt.Errorf("resolve target: %w", err)
 	}
-	if tt, ok := utgt.(*externalDeployTarget); ok {
+	if tt, ok := utgt.(*pluginDeployTarget); ok {
 		tt.nodeOnly = c.NodeOnly
 	}
 
@@ -466,7 +466,7 @@ func pathLeaf(path string) string {
 // switch on the concrete kind word (vm/pod/local/k8s/android never appear here) — so
 // this is legitimate D-data-driven dispatch, not an incomplete per-kind seam. Each case
 // CONSTRUCTS a live deploykit.DeployExecutor from that transport — structurally the SAME
-// shape as substrateLifecycle's already-sanctioned OpPrepareVenue->VenueDescriptor
+// shape as a Lifecycle:true substrate's already-sanctioned OpPrepareVenue->VenueDescriptor
 // pattern, just for a NESTED hop instead of the root venue.
 //
 // K4-C WALK PORT (landed): the tree WALK now runs plugin-side (candy/plugin-bundle/walk.go).

@@ -96,6 +96,7 @@ k3s-vm:
                 type: sha256
                 value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
+            distro: arch
         backend: libvirt
         disk_size: 20G
         ram: 4G
@@ -155,6 +156,7 @@ eval-vm:
                 type: sha256
                 value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
+            distro: arch
         backend: libvirt
         disk_size: 20G
         ram: 4G
@@ -192,6 +194,7 @@ eval-host-vm:
                 type: sha256
                 value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
+            distro: arch
         backend: libvirt
         disk_size: 20G
         ram: 6G
@@ -230,6 +233,7 @@ charly-vm:
                 type: sha256
                 value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
             base_user: arch
+            distro: arch
         backend: libvirt
         disk_size: 20G
         ram: 4G

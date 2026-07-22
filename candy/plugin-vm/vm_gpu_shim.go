@@ -48,7 +48,7 @@ func gpuProbeReply(in spec.GpuProbeInput) spec.GpuProbeReply {
 	if err != nil {
 		return out
 	}
-	res, err := cmdExec.InvokeProvider(cmdCtx, "verb", "gpu", sdk.OpRun, inJSON, nil)
+	res, err := cmdExec.InvokeProvider(cmdCtx, "verb", "gpu", sdk.OpRun, inJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: gpu probe %s: %v\n", in.Action, err)
 		return out
@@ -91,7 +91,7 @@ func gpuSwitchReply(in spec.GpuSwitchInput) spec.GpuSwitchReply {
 	if err != nil {
 		return out
 	}
-	res, err := cmdExec.InvokeProvider(cmdCtx, "verb", "gpu", sdk.OpRun, inJSON, nil)
+	res, err := cmdExec.InvokeProvider(cmdCtx, "verb", "gpu", sdk.OpRun, inJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: gpu switch %s: %v\n", in.Action, err)
 		return spec.GpuSwitchReply{Error: err.Error()}

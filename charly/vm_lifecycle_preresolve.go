@@ -21,7 +21,7 @@ import (
 )
 
 // vmAttachResolver builds the F12 #PodLiveStdioPlan for `charly shell <vm-deploy>` / `charly cmd
-// <vm-deploy>`: the vm's live venue executor is the guest *SSHExecutor (grpcSubstrateLifecycle.Attach
+// <vm-deploy>`: the vm's live venue executor is the guest *SSHExecutor (pluginDeployTarget's Attach
 // resolves it via the vm VenueExecutor), whose RunInteractive wraps the script in `ssh -t <alias>
 // [script]`. So the resolved script is just the in-guest command — the user's cmd joined, or empty for
 // a bare interactive login shell (matching `charly vm ssh <alias>`). tty is immaterial for ssh (`-t`

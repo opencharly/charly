@@ -8,8 +8,8 @@ plugin-example-deploy:
             the E3b ExecutorService reverse channel end-to-end for the deploy class,
             including the F2 executable deploy channel: charly's loader host-builds
             this candy's provider binary and serves it OUT-OF-PROCESS via
-            LocalTransport, then the externalDeployTarget Add Invokes it (OpExecute)
-            with the deployment's InstallPlan views — now carrying the serializable
+            LocalTransport, then the host's plugin-side deploy target's Add Invokes it
+            (OpExecute) with the deployment's InstallPlan views — now carrying the serializable
             per-step IR — plus a venue descriptor; the plugin dials BACK through the
             SDK Executor to (a) write apply/probe markers, (b) WALK + EXECUTE the
             plan's steps on the venue (the file-write step below + an env shell-hook),

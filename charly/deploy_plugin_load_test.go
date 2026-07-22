@@ -1,48 +1,15 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger proves the externalized vm
-// deploy writes the SELF-CONTAINED ledger INTO THE VENUE (the guest) over the executor — the
-// deploy + per-candy layer records + both ledger dirs — restoring what the in-proc
-// VmDeployTarget wrote via *Via(t.Exec) and what the bed's guest-ledger probes
-// (ah-deploy-recorded / ah-ledger-deploys-dir / ah-ledger-layers-dir) assert.
-func TestExternalDeployRecordVenueLedger_RemoteWritesGuestLedger(t *testing.T) {
-	fe := &recordingExec{} // a non-ShellExecutor venue → the remote (guest) write path
-	tgt := &externalDeployTarget{name: "check-arch-vm", prov: &grpcProvider{capMeta: capMeta{word: "vm", class: ClassDeployTarget}}, exec: fe}
-	plans := []*deploykit.InstallPlan{{Candy: "ripgrep", Version: "2026.1.1", DeployID: "abc1230000000000"}}
-	if err := tgt.recordVenueLedger(plans); err != nil {
-		t.Fatalf("recordVenueLedger: %v", err)
-	}
-	all := strings.Join(fe.userScripts, "\n")
-	if !strings.Contains(all, "installed/layers/ripgrep.json") {
-		t.Errorf("guest layer record not written via the executor:\n%s", all)
-	}
-	if !strings.Contains(all, "installed/deploys/abc1230000000000.json") {
-		t.Errorf("guest deploy record not written via the executor:\n%s", all)
-	}
-	if !strings.Contains(all, "installed/layers") || !strings.Contains(all, "installed/deploys") || !strings.Contains(all, "mkdir -p") {
-		t.Errorf("guest ledger dirs not created via the executor:\n%s", all)
-	}
-}
-
-// TestExternalDeployRecordVenueLedger_HostLocalIsNoop proves a HOST-LOCAL venue
-// (ShellExecutor) skips the venue write — recordDeploy already wrote the operator-side ledger
-// there, so the venue IS the host and a second write would be redundant.
-func TestExternalDeployRecordVenueLedger_HostLocalIsNoop(t *testing.T) {
-	tgt := &externalDeployTarget{name: "host-bed", prov: &grpcProvider{capMeta: capMeta{word: "local", class: ClassDeployTarget}}, exec: kit.ShellExecutor{}}
-	plans := []*deploykit.InstallPlan{{Candy: "direnv", DeployID: "deadbeef00000000"}}
-	if err := tgt.recordVenueLedger(plans); err != nil {
-		t.Fatalf("recordVenueLedger host-local: %v", err)
-	}
-}
+// TestExternalDeployRecordVenueLedger_* retired here (S3b): recordVenueLedger moved to
+// candy/plugin-bundle/deploy_target.go alongside the deploy-dispatch logic it belonged to (see
+// CHANGELOG/2026.203.0212.md) — see candy/plugin-bundle/deploy_target_test.go for the ported
+// tests (same behavior, same assertions).
 
 // TestResolveDeployNodeByPath proves the dotted-path resolution that lets the deploy-plugin
 // loader find a NESTED child deploy (the bed runner deploys arch-host via `charly bundle add

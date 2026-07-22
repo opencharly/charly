@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -62,98 +61,13 @@ func (externalPluginStepProvider) EmitOCI(step spec.InstallStep, _ *deploykit.In
 
 // The guest/host DEPLOY venue is no longer an in-proc Emit* method: BOTH target:local AND
 // target:vm externalized into candy/plugin-deploy-local / candy/plugin-deploy-vm, whose
-// kit.WalkPlans routes an ExternalPluginStep through the host's RunHostStep reverse leg —
-// the executeExternalPluginStep seam below (R3). EmitOCI (the pod-overlay build venue) is
-// the only remaining in-proc Emit* this provider implements.
-
-// executeExternalPluginStep Invokes the external plugin verb's OpExecute over the E3b
-// reverse channel and returns the decoded DeployReply (its ReverseOps recorded by the
-// caller). plugin_input rides op.Params UNWRAPPED (the SAME shape emitPluginFragment /
-// the externalDeployTarget marshal — R3), a spec.DeployVenue rides op.Env, and the
-// live executor is stood up on the broker by InvokeWithExecutor so the plugin runs its
-// effect on the real venue. The reverse channel is NOT rebootable here (a nested verb-step
-// never reboots the venue; only a RebootStep on a vm deploy does). Reached from the host's
-// RunHostStep when a deploy plugin walks an ExternalPluginStep (the nested reverse channel).
-func executeExternalPluginStep(ctx context.Context, s *deploykit.ExternalPluginStep, plan *deploykit.InstallPlan, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
-	var zero spec.DeployReply
-	prov, ok := providerRegistry.ResolveVerb(s.Op.Plugin)
-	if !ok {
-		return zero, fmt.Errorf("external plugin step %q: verb is not connected at deploy time", s.Op.Plugin)
-	}
-	inv, ok := prov.(executorInvoker)
-	if !ok {
-		// A non-external provider reached here — compileActOp only routes external
-		// grpcProviders to ExternalPluginStep, so this is an internal invariant breach,
-		// never an authoring error (those are caught at compileActOp / validate).
-		return zero, fmt.Errorf("external plugin step %q: verb has no deploy-context execute (not an out-of-process plugin)", s.Op.Plugin)
-	}
-	params, err := marshalJSON(s.Op.PluginInput)
-	if err != nil {
-		return zero, fmt.Errorf("external plugin step %q: marshal plugin_input: %w", s.Op.Plugin, err)
-	}
-	return invokeStepExecute(ctx, s.Op.Plugin, inv, params, externalStepVenueName(plan), exec, build)
-}
-
-// executeExternalStep dispatches an EXTERNAL (plugin-contributed) step kind (F3) to its
-// serving class:step provider's OpExecute over the reverse channel. Unlike
-// executeExternalPluginStep (a ClassVerb wrapped in the fixed ExternalPlugin kind, params =
-// plugin_input), the provider is resolved by ClassStep and the OpExecute params are the step's
-// OPAQUE Payload verbatim. Shares invokeStepExecute (R3); the reply's ReverseOps are recorded
-// by the caller (dynamic teardown).
-func executeExternalStep(ctx context.Context, s *deploykit.ExternalStep, plan *deploykit.InstallPlan, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
-	var zero spec.DeployReply
-	prov, ok := providerRegistry.resolve(ClassStep, s.Word)
-	if !ok {
-		return zero, fmt.Errorf("external step %q: class:step provider not connected at deploy time", s.Word)
-	}
-	inv, ok := prov.(executorInvoker)
-	if !ok {
-		return zero, fmt.Errorf("external step %q: provider has no deploy-context execute (not an out-of-process plugin)", s.Word)
-	}
-	return invokeStepExecute(ctx, s.Word, inv, s.Payload, externalStepVenueName(plan), exec, build)
-}
-
-// invokeStepExecute is the shared OpExecute dispatch for an external step (R3): it stands up
-// the live executor on the provider's go-plugin broker (InvokeWithExecutor), Invokes OpExecute
-// with the opaque params + a venue descriptor, and decodes the DeployReply (its ReverseOps the
-// caller records). Used by executeExternalPluginStep (verb-step) AND executeExternalStep
-// (plugin-contributed step kind).
-func invokeStepExecute(ctx context.Context, word string, inv executorInvoker, params []byte, venueName string, exec deploykit.DeployExecutor, build buildEngineContext) (spec.DeployReply, error) {
-	var zero spec.DeployReply
-	env, err := marshalJSON(spec.DeployVenue{DeployName: venueName})
-	if err != nil {
-		return zero, fmt.Errorf("external step %q: marshal venue: %w", word, err)
-	}
-	res, err := inv.InvokeWithExecutor(ctx,
-		&Operation{Reserved: word, Op: OpExecute, Params: params, Env: env}, exec, build, false, nil)
-	if err != nil {
-		return zero, err
-	}
-	var reply spec.DeployReply
-	if res != nil && len(res.JSON) > 0 {
-		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return zero, fmt.Errorf("external step %q: decode reply: %w", word, err)
-		}
-	}
-	return reply, nil
-}
-
-// externalStepVenueName derives the venue descriptor's DeployName from the plan's
-// identity (box name, else single-candy name, else the deploy-id hash) — the analogue
-// of the externalDeployTarget passing its deploy name, so a plugin can derive a
-// deterministic per-deploy scratch location.
-func externalStepVenueName(plan *deploykit.InstallPlan) string {
-	switch {
-	case plan == nil:
-		return ""
-	case plan.Box != "":
-		return plan.Box
-	case plan.Candy != "":
-		return plan.Candy
-	default:
-		return plan.DeployID
-	}
-}
+// kit.WalkPlans routes an ExternalPluginStep (or the F3 ExternalStep) through the host's
+// RunHostStep reverse leg, which dispatches OpExecute via the SAME PLUGIN↔PLUGIN
+// InvokeProvider leg (plugin_dispatch_reverse.go) every other peer-invoke uses — RunHostStep's
+// invokeExternalStep helper (plugin_executor_reverse.go) calls it directly, in-process (no wire
+// hop, since RunHostStep already runs on the executorReverseServer InvokeProvider is served
+// from). EmitOCI (the pod-overlay build venue) is the only remaining in-proc Emit* this
+// provider implements.
 
 // Self-register at package-var init (before any init(), so the per-class step bijection
 // gate in registry_bootstrap.go observes it without a cross-init race).

@@ -6,7 +6,7 @@ package params
 // method-exclusive modifiers.
 type KubeInput struct {
 	// method — the kube method name (the former core #KubeMethod enum plus the
-	// internal merge-kubeconfig the host synthesizes; the verb's PRIMARY input
+	// internal k3s-post-provision the host synthesizes; the verb's PRIMARY input
 	// field, so `kube: nodes` desugars to {method: "nodes"}).
 	Method string `yaml:"method,omitempty" json:"method"`
 
@@ -31,7 +31,7 @@ type KubeInput struct {
 	KubeCount int `yaml:"kube_count,omitempty" json:"kube_count,omitempty"`
 
 	// kubeconfig / kube_context — the cluster-selection pair (kubeconfig path +
-	// context; also the merge-kubeconfig payload).
+	// context) an authored step may set explicitly.
 	Kubeconfig string `yaml:"kubeconfig,omitempty" json:"kubeconfig,omitempty"`
 
 	KubeContext string `yaml:"kube_context,omitempty" json:"kube_context,omitempty"`
@@ -45,4 +45,12 @@ type KubeInput struct {
 	KubeVersion string `yaml:"kube_version,omitempty" json:"kube_version,omitempty"`
 
 	JSON bool `yaml:"json,omitempty" json:"json,omitempty"`
+
+	// artifact_key / deploy_name — the k3s-post-provision payload (S3, FINAL/K5 unit 6):
+	// artifact_key is the ENTITY-scoped identity (the shared per-VM cluster cache dir +
+	// kubeconfig context); deploy_name is the real per-deploy (domain) identity the
+	// guest-forward port-forward lookup keys off. See charly/k8s_plugin.go.
+	ArtifactKey string `yaml:"artifact_key,omitempty" json:"artifact_key,omitempty"`
+
+	DeployName string `yaml:"deploy_name,omitempty" json:"deploy_name,omitempty"`
 }

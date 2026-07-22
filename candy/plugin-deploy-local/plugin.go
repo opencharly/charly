@@ -2,7 +2,7 @@
 // `local` deploy SUBSTRATE — `target: local` (and `host: user@machine` SSH local) deploys.
 // It is the production consumer of the host-engine reverse channel: charly host-builds it
 // and serves it OUT-OF-PROCESS over go-plugin gRPC (LocalTransport), then
-// externalDeployTarget.Add Invokes it (OpExecute) with the deployment's InstallPlan VIEWS
+// the host's plugin-side deploy target's Add Invokes it (OpExecute) with the deployment's InstallPlan VIEWS
 // (the serializable per-step IR, with secrets injected + {{.Home}} resolved + each step's
 // teardown ops captured host-side) + a venue descriptor, and the host's executor served on
 // the broker (ShellExecutor for host:local, SSHExecutor for host:user@machine).
@@ -76,7 +76,7 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, fmt.Errorf("plugin-deploy-local: %w", err)
 	}
 
-	// The ledger record is keyed by the deploy name (the host's externalDeployTarget keys
+	// The ledger record is keyed by the deploy name (the host's plugin-side deploy target keys
 	// the DeployRecord on computeDeployID(name)); the candy field names the logical record
 	// whose aggregated ReverseOps drive teardown.
 	candy := venue.DeployName

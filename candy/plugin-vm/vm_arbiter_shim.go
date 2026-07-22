@@ -27,7 +27,7 @@ func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) 
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, err
 	}
-	out, err := cmdExec.InvokeProvider(cmdCtx, "verb", "arbiter", sdk.OpRun, params, nil)
+	out, err := cmdExec.InvokeProvider(cmdCtx, "verb", "arbiter", sdk.OpRun, params, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return spec.ArbiterInvokeReply{}, err
 	}
