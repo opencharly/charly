@@ -162,7 +162,11 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if err := hostBuild(ctx, ex, podConfigMigrateSecretsKind, spec.PodConfigMigrateSecretsRequest{
 		ConfigJSON: dcJSON, MetaJSON: ensureRep.MetaJSON, Box: c.Box, Instance: c.Instance,
 	}, &migRep); err == nil && len(migRep.ConfigJSON) > 0 {
-		_ = json.Unmarshal(migRep.ConfigJSON, &dc)
+		// A partial/failed decode here would leave dc a hybrid of the pre- and post-migration shape
+		// (json.Unmarshal can populate fields before erroring) — never silently discarded.
+		if err := json.Unmarshal(migRep.ConfigJSON, &dc); err != nil {
+			return fmt.Errorf("decoding migrated deploy config: %w", err)
+		}
 	}
 
 	var scrubRep spec.PodConfigScrubCliEnvReply
@@ -328,7 +332,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 	var provisioned []deploykit.CollectedSecret
 	if len(provRep.ProvisionedJSON) > 0 {
-		_ = json.Unmarshal(provRep.ProvisionedJSON, &provisioned)
+		if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
+			return fmt.Errorf("decoding provisioned secrets: %w", err)
+		}
 	}
 	for _, kv := range provRep.FallbackEnv {
 		envVars = appendEnvUnique(envVars, kv)
@@ -336,7 +342,13 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	if len(meta.SecretRequire) > 0 {
 		var resolutions []secretResolution
 		if len(provRep.ResolutionsJSON) > 0 {
-			_ = json.Unmarshal(provRep.ResolutionsJSON, &resolutions)
+			// A silently-discarded decode failure here would make checkMissingSecretRequires evaluate
+			// against an EMPTY resolutions list — indistinguishable from "nothing resolved yet" — and
+			// wrongly report every secret_require as missing, or worse, wrongly pass a genuinely-unmet
+			// requirement if the zero-value happens to satisfy the check.
+			if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
+				return fmt.Errorf("decoding secret resolutions: %w", err)
+			}
 		}
 		if err := checkMissingSecretRequires(c.Box, meta.SecretRequire, resolutions); err != nil {
 			return err
@@ -378,10 +390,14 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 			envVars = appendEnvUnique(envVars, kv)
 		}
 		if len(sidecarRep.PersistOverridesJSON) > 0 {
-			_ = json.Unmarshal(sidecarRep.PersistOverridesJSON, &deploySidecars)
+			if err := json.Unmarshal(sidecarRep.PersistOverridesJSON, &deploySidecars); err != nil {
+				return fmt.Errorf("decoding sidecar persist overrides: %w", err)
+			}
 		}
 		if len(sidecarRep.ResolvedSidecarsJSON) > 0 {
-			_ = json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars)
+			if err := json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars); err != nil {
+				return fmt.Errorf("decoding resolved sidecars: %w", err)
+			}
 		}
 	}
 	envVars = mergeEnvSlices(envVars, c.Env)

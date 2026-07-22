@@ -38,7 +38,14 @@ func egressValidate(kind, label, mode, data string) error {
 		Error string `json:"error"`
 	}
 	if len(out) > 0 {
-		_ = json.Unmarshal(out, &reply)
+		// A decode failure here must NOT be swallowed: reply.Error staying "" on malformed JSON would
+		// silently treat a corrupted egress-validation reply as "validation passed" — precisely the
+		// discarded-decode-errors class this fix closes, and load-bearing here since egress validation
+		// is what catches a genuinely-broken rendered libvirt domain XML / cloud-init seed BEFORE it
+		// reaches disk.
+		if err := json.Unmarshal(out, &reply); err != nil {
+			return errors.New("decode egress validate reply: " + err.Error())
+		}
 	}
 	if reply.Error != "" {
 		return errors.New(reply.Error)

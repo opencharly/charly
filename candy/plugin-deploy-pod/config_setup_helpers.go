@@ -590,7 +590,14 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		_ = hostBuild(ctx, ex, podConfigDetectDevicesKind, spec.PodConfigDetectDevicesRequest{}, &detectRep)
 		var detected spec.DetectedDevices
 		if len(detectRep.DetectedJSON) > 0 {
-			_ = json.Unmarshal(detectRep.DetectedJSON, &detected)
+			if err := json.Unmarshal(detectRep.DetectedJSON, &detected); err != nil {
+				// Matches this loop's established per-entry-failure convention (warn + continue to the
+				// next deploy — one broken entry must not abort the whole --update-all batch), rather
+				// than silently proceeding with an empty DetectedDevices (which would drop GPU device
+				// nodes from security.Devices for THIS entry only, without any signal that happened).
+				fmt.Fprintf(os.Stderr, "Warning: decoding detected devices for %s: %v\n", key, err)
+				continue
+			}
 		}
 
 		var deployVolumes []spec.DeployVolume
@@ -629,12 +636,21 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 		}, &provRep)
 		var provisioned []deploykit.CollectedSecret
 		if len(provRep.ProvisionedJSON) > 0 {
-			_ = json.Unmarshal(provRep.ProvisionedJSON, &provisioned)
+			if err := json.Unmarshal(provRep.ProvisionedJSON, &provisioned); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: decoding provisioned secrets for %s: %v\n", key, err)
+				continue
+			}
 		}
 		if len(meta.SecretRequire) > 0 {
 			var resolutions []secretResolution
 			if len(provRep.ResolutionsJSON) > 0 {
-				_ = json.Unmarshal(provRep.ResolutionsJSON, &resolutions)
+				// A silently-discarded decode failure here would leave resolutions empty, making every
+				// secret_require entry look unresolved (or, worse, look resolved if partial-decode
+				// left stale field state) — surfaced instead so this entry is skipped loudly.
+				if err := json.Unmarshal(provRep.ResolutionsJSON, &resolutions); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: decoding secret resolutions for %s: %v\n", key, err)
+					continue
+				}
 			}
 			missing := 0
 			for _, r := range resolutions {
@@ -675,7 +691,10 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 				continue
 			}
 			if len(sidecarRep.ResolvedSidecarsJSON) > 0 {
-				_ = json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars)
+				if err := json.Unmarshal(sidecarRep.ResolvedSidecarsJSON, &resolvedSidecars); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: decoding resolved sidecars for %s: %v\n", key, err)
+					continue
+				}
 			}
 			if len(resolvedSidecars) > 0 {
 				podName = kit.PodNameInstance(boxName, instance)

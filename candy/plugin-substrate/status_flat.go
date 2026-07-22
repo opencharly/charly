@@ -26,10 +26,51 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
+
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
+// "pod-config-load-bundle" HostBuild seam (bed-robustness batch item 5, the DeployStateHost
+// out-of-process-read audit — the operator ruling extending the fix beyond plugin-deploy-vm/
+// plugin-bundle to every unvetted grep hit in this class). candy/plugin-substrate is compiled-in
+// TODAY (in go.work's compiled_plugins list), so the sibling `deploykit.LoadBundleConfig()` direct
+// calls this replaces were CORRECT only by that per-BUILD placement accident — dual-placement is a
+// per-BUILD choice, never an authoring guarantee (the same reasoning already applied to
+// plugin-bundle's dormant twin, config_cmd.go). Mirrors candy/plugin-bundle/ephemeral.go's own
+// loadBundleConfig() (same seam, same PodConfigLoadDeployRequest/Reply shape) — this package
+// threads its executor via ctx (sdk.ExecutorForInvoke), the multi-call-per-process pattern this
+// VERB provider needs (unlike plugin-bundle's COMMAND-plugin package-var, which assumes exactly
+// one `charly bundle …` dispatch per process — unsafe to reuse here). Returns (nil, nil) on an
+// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+func loadBundleConfig(ctx context.Context) (*deploykit.BundleConfig, error) {
+	ex, err := sdk.ExecutorForInvoke(ctx, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load bundle config: reach host reverse channel: %w", err)
+	}
+	reqJSON, err := json.Marshal(spec.PodConfigLoadDeployRequest{Caller: "candy/plugin-substrate status"})
+	if err != nil {
+		return nil, fmt.Errorf("load bundle config: marshal request: %w", err)
+	}
+	resJSON, err := ex.HostBuild(ctx, "pod-config-load-bundle", reqJSON)
+	if err != nil {
+		return nil, fmt.Errorf("load bundle config: %w", err)
+	}
+	var rep spec.PodConfigLoadBundleReply
+	if err := json.Unmarshal(resJSON, &rep); err != nil {
+		return nil, fmt.Errorf("load bundle config: decode reply: %w", err)
+	}
+	if len(rep.ConfigJSON) == 0 {
+		return nil, nil
+	}
+	var dc deploykit.BundleConfig
+	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
+		return nil, fmt.Errorf("load bundle config: decode config: %w", err)
+	}
+	return &dc, nil
+}
 
 // runStatusFanout is the sdk.OpStatusCollectAll entry point (plugin.go): req.Single selects the
 // pod-scoped detail path (mirrors the former core status command's Collector.Single call);
@@ -39,7 +80,7 @@ func runStatusFanout(ctx context.Context, req spec.StatusSubstrateRequest) (spec
 	if err != nil {
 		return spec.StatusSubstrateReply{}, fmt.Errorf("status-fanout: resolve runtime: %w", err)
 	}
-	c := newFlatCollector(rt)
+	c := newFlatCollector(ctx, rt)
 
 	if req.Single {
 		ds, serr := c.collectSingle(ctx, req.Box, req.Instance)
@@ -75,9 +116,9 @@ type flatCollectOpts struct {
 // newFlatCollector wires up the runtime + cached deploy + quadlet dir. charly.yml validation
 // failures degrade gracefully (deploy lookups skipped, no error) — mirrors the former core
 // NewCollector exactly (a missing/invalid charly.yml is normal on a fresh host).
-func newFlatCollector(rt *kit.ResolvedRuntime) *flatCollector {
+func newFlatCollector(ctx context.Context, rt *kit.ResolvedRuntime) *flatCollector {
 	c := &flatCollector{rt: rt}
-	if dc, err := deploykit.LoadBundleConfig(); err == nil {
+	if dc, err := loadBundleConfig(ctx); err == nil {
 		c.deploy = dc
 	}
 	if qdir, err := deploykit.QuadletDir(); err == nil {

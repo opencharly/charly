@@ -1,6 +1,9 @@
 package vm
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // vm_engine_direct.go — the moved VM CLI handlers reach the libvirt/qemu ENGINE by a DIRECT in-package
 // call now (command:vm and verb:libvirt are the SAME compiled-in plugin), not the former host→plugin
@@ -31,12 +34,17 @@ func invokeVmCreate(req vmCreateReq) (json.RawMessage, bool) {
 	return invokeVmPluginEnv(vmEnv{VmOp: "create", Create: &req})
 }
 
-// vmPluginOpError decodes the `error` field from an op reply ("" = success).
+// vmPluginOpError decodes the `error` field from an op reply ("" = success). A decode failure is
+// itself surfaced as the returned error string — every call site treats "" as success, so silently
+// swallowing a malformed/corrupted reply here (the discarded-decode-errors defect this fix closes)
+// would have made every caller wrongly proceed as if a vm create/start/stop/… had SUCCEEDED.
 func vmPluginOpError(raw json.RawMessage) string {
 	var r struct {
 		Error string `json:"error"`
 	}
-	_ = json.Unmarshal(raw, &r)
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return fmt.Sprintf("decode vm plugin reply: %v", err)
+	}
 	return r.Error
 }
 

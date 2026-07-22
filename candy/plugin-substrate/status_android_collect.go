@@ -72,8 +72,10 @@ func collectAndroidStatus(ctx context.Context, req spec.SubstrateStatusRequest) 
 	}
 	// Best-effort: absence of a per-machine overlay is normal (mirrors
 	// newFlatCollector's own graceful handling of a missing/invalid charly.yml,
-	// status_flat.go, same package).
-	perMachine, _ := deploykit.LoadBundleConfig()
+	// status_flat.go, same package). Routed through the loadBundleConfig seam helper
+	// (status_flat.go) — bed-robustness batch item 5 — instead of calling
+	// deploykit.LoadBundleConfig() directly (placement-dependent silent-no-op out of process).
+	perMachine, _ := loadBundleConfig(ctx)
 
 	nodes := collectAndroidDeployNodes(rp, perMachine)
 	if len(nodes) == 0 {
@@ -225,7 +227,7 @@ func resolveAndroidDevice(ctx context.Context, aspec *spec.ResolvedAndroid, node
 			return androidDevice{}, fmt.Errorf("parent pod container %s is not running", container)
 		}
 	} else {
-		eng, name, err := resolveContainer(aspec.Box)
+		eng, name, err := resolveContainer(ctx, aspec.Box)
 		if err != nil {
 			return androidDevice{}, err
 		}
@@ -326,13 +328,13 @@ func findHostPort(insp *kit.ContainerInspection, containerPort int) (int, error)
 // android box device, verifying it is running. Ported from
 // charly/container.go's resolveContainer, simplified to the instance=""
 // call shape resolveAndroidDevice always uses.
-func resolveContainer(box string) (engine, name string, err error) {
+func resolveContainer(ctx context.Context, box string) (engine, name string, err error) {
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
 		return "", "", err
 	}
 	boxName := remoteRefName(box)
-	runEngine := deployEngineForBox(boxName, rt.RunEngine)
+	runEngine := deployEngineForBox(ctx, boxName, rt.RunEngine)
 	engine = kit.EngineBinary(runEngine)
 	name = kit.ContainerNameInstance(boxName, "")
 	if !containerRunning(engine, name) {
@@ -341,11 +343,18 @@ func resolveContainer(box string) (engine, name string, err error) {
 	return engine, name, nil
 }
 
-// deployEngineForBox mirrors charly/engine.go's ResolveBoxEngineForDeploy —
-// the per-machine deploy config's own engine override wins, falling back to
-// the global runtime engine.
-func deployEngineForBox(boxName, globalEngine string) string {
-	if entry, ok := deploykit.LoadDeployConfigForRead("resolveContainer").Lookup(boxName, ""); ok && entry.Engine != "" {
+// deployEngineForBox mirrors charly/engine.go's ResolveBoxEngineForDeploy — the per-machine
+// deploy config's own engine override wins, falling back to the global runtime engine. Routed
+// through the loadBundleConfig seam helper (status_flat.go, bed-robustness batch item 5) instead
+// of deploykit.LoadDeployConfigForRead (which itself calls the placement-dependent
+// deploykit.LoadBundleConfig() under the hood — out-of-process this silently degrades to "no
+// per-machine override" every time, never surfacing the genuine engine override).
+func deployEngineForBox(ctx context.Context, boxName, globalEngine string) string {
+	dc, err := loadBundleConfig(ctx)
+	if err != nil || dc == nil {
+		return globalEngine
+	}
+	if entry, ok := dc.Lookup(boxName, ""); ok && entry.Engine != "" {
 		return entry.Engine
 	}
 	return globalEngine

@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -160,11 +161,45 @@ func nestedChildKind(child *deploykit.BundleNode) spec.SubstrateKind {
 	}
 }
 
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
+// "pod-config-load-bundle" HostBuild seam (bed-robustness batch item 5, the DeployStateHost
+// out-of-process-read audit — the operator ruling extending the fix beyond plugin-deploy-vm/
+// plugin-bundle to every unvetted grep hit in this class, including this file, which this
+// function's own header comment used to claim was fine to call "exactly like the host did" — that
+// claim was stale: sdk-portable does NOT mean placement-safe, since deploykit.DeployStateHost is
+// only ever registered by charly core's own init(), never by an out-of-process plugin process).
+// Mirrors candy/plugin-substrate's status_flat.go loadBundleConfig (same seam, same
+// PodConfigLoadDeployRequest/Reply shape) — a separate copy since plugin modules cannot
+// cross-import each other. Returns (nil, nil) on an absent/empty overlay, matching
+// deploykit.LoadBundleConfig's own contract.
+func loadBundleConfig(ex *sdk.Executor, ctx context.Context) (*deploykit.BundleConfig, error) {
+	reqJSON, err := json.Marshal(spec.PodConfigLoadDeployRequest{Caller: "candy/plugin-status nested tree"})
+	if err != nil {
+		return nil, fmt.Errorf("load bundle config: marshal request: %w", err)
+	}
+	resJSON, err := ex.HostBuild(ctx, "pod-config-load-bundle", reqJSON)
+	if err != nil {
+		return nil, fmt.Errorf("load bundle config: %w", err)
+	}
+	var rep spec.PodConfigLoadBundleReply
+	if err := json.Unmarshal(resJSON, &rep); err != nil {
+		return nil, fmt.Errorf("load bundle config: decode reply: %w", err)
+	}
+	if len(rep.ConfigJSON) == 0 {
+		return nil, nil
+	}
+	var dc deploykit.BundleConfig
+	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
+		return nil, fmt.Errorf("load bundle config: decode config: %w", err)
+	}
+	return &dc, nil
+}
+
 // mergedNestedRoots returns the declared deployment tree (project + per-machine overlay) — the
 // I/O half: fetch the project envelope + the operator's per-host overlay, then hand off to the
 // PURE mergedNestedRootsFrom. Mirrors candy/plugin-substrate's status_android_collect.go split
-// (fetchResolvedProject + deploykit.LoadBundleConfig() in the outer function,
-// collectAndroidDeployNodes as the pure plain-parameter function) exactly, R3.
+// (fetchResolvedProject + loadBundleConfig in the outer function, collectAndroidDeployNodes as the
+// pure plain-parameter function) exactly, R3.
 func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploykit.BundleNode, error) {
 	rp, err := resolvedProject(ex, ctx)
 	if err != nil {
@@ -172,7 +207,7 @@ func mergedNestedRoots(ex *sdk.Executor, ctx context.Context) (map[string]deploy
 	}
 	// Best-effort: absence of a per-machine overlay is normal (mirrors
 	// candy/plugin-substrate's newFlatCollector, K6, the same pattern).
-	perMachine, _ := deploykit.LoadBundleConfig()
+	perMachine, _ := loadBundleConfig(ex, ctx)
 	return mergedNestedRootsFrom(rp, perMachine), nil
 }
 

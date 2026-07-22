@@ -53,7 +53,10 @@ func gpuProbeReply(in spec.GpuProbeInput) spec.GpuProbeReply {
 		fmt.Fprintf(os.Stderr, "warning: gpu probe %s: %v\n", in.Action, err)
 		return out
 	}
-	_ = json.Unmarshal(res, &out)
+	if err := json.Unmarshal(res, &out); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: gpu probe %s: decode reply: %v\n", in.Action, err)
+		return spec.GpuProbeReply{}
+	}
 	return out
 }
 
@@ -96,7 +99,10 @@ func gpuSwitchReply(in spec.GpuSwitchInput) spec.GpuSwitchReply {
 		fmt.Fprintf(os.Stderr, "warning: gpu switch %s: %v\n", in.Action, err)
 		return spec.GpuSwitchReply{Error: err.Error()}
 	}
-	_ = json.Unmarshal(res, &out)
+	if err := json.Unmarshal(res, &out); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: gpu switch %s: decode reply: %v\n", in.Action, err)
+		return spec.GpuSwitchReply{Error: err.Error()}
+	}
 	return out
 }
 
