@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -63,9 +62,13 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("plugin-deploy-vm %s: executor: %w", req.GetOp(), err)
 	}
 	var p lifecycleParams
-	_ = json.Unmarshal(req.GetParamsJson(), &p)
+	if err := json.Unmarshal(req.GetParamsJson(), &p); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm %s: decode params: %w", req.GetOp(), err)
+	}
 	var host spec.HostEnv
-	_ = json.Unmarshal(req.GetEnvJson(), &host)
+	if err := json.Unmarshal(req.GetEnvJson(), &host); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm %s: decode host env: %w", req.GetOp(), err)
+	}
 
 	switch req.GetOp() {
 	case sdk.OpPrepareVenue:
@@ -116,6 +119,21 @@ func vmAttach(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.I
 		return nil, fmt.Errorf("plugin-deploy-vm attach: %w", err)
 	}
 	return marshalReply(spec.PodExecReply{ExitCode: exit})
+}
+
+// vmStateBase resolves the root directory for per-VM host state (bed-robustness batch item 6 — the
+// CHARLY_VM_STATE_DIR worktree-scoping override, closing the "global ~/.local/share/charly/vm
+// non-worktree-scoping footgun"). This out-of-process plugin cannot call vmshared.VmStateRoot()'s
+// os.UserHomeDir() fallback path directly and expect it to agree with the HOST's own resolution in
+// every deployment topology, so hostHome (spec.HostEnv.Home, resolved authoritatively host-side and
+// shipped over the wire) is the fallback base when no override is set — env vars ARE inherited by
+// this child process (go-plugin launches it as a subprocess of the invoking charly), so
+// CHARLY_VM_STATE_DIR set in the operator's shell is visible here too.
+func vmStateBase(hostHome string) string {
+	if raw := strings.TrimSpace(os.Getenv(vmshared.VmStateDirEnv)); raw != "" && filepath.IsAbs(raw) {
+		return raw
+	}
+	return filepath.Join(hostHome, ".local", "share", "charly", "vm")
 }
 
 // domainIdentity resolves the per-deploy DOMAIN IDENTITY from the deploy name (p.Name) — the token
@@ -207,6 +225,33 @@ func entityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployEntit
 	return out, json.Unmarshal(resJSON, &out)
 }
 
+// resolvePriorVmState reads a domain's persisted VmDeployState (instance-id, ssh_port, disk path)
+// via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the DeployStateHost
+// out-of-process-read audit). Pulled out of vmPrepareVenue as its own function purely for
+// testability: unlike the rest of vmPrepareVenue (which needs a live "deploy-entity-resolve"
+// round trip + guest readiness waits — its coverage is the check-sidecar-pod / check-charly-vm
+// disposable-bed runtime gate), this ONE seam call is unit-testable with a minimal fake
+// *sdk.Executor, and the regression it guards is severe: candy/plugin-deploy-vm runs
+// out-of-process, so a direct deploykit.LoadDeployConfigForRead call here (the pre-fix shape)
+// NEVER touches the executor at all and ALWAYS silently returns an empty state — every domain
+// looked "never created before," discarding+re-creating the per-domain disk overlay on EVERY
+// `charly bundle add vm:<name>`, even for an already-running VM.
+func resolvePriorVmState(ctx context.Context, exec *sdk.Executor, domainID string) (*spec.VmDeployState, error) {
+	reqJSON, err := json.Marshal(spec.ConfigResolveRequest{Entity: domainID})
+	if err != nil {
+		return nil, fmt.Errorf("marshal config-resolve request: %w", err)
+	}
+	resJSON, err := exec.HostBuild(ctx, "config-resolve", reqJSON)
+	if err != nil {
+		return nil, err
+	}
+	var configReply spec.ConfigResolveReply
+	if err := json.Unmarshal(resJSON, &configReply); err != nil {
+		return nil, fmt.Errorf("decode config-resolve reply: %w", err)
+	}
+	return configReply.VmState, nil
+}
+
 // vmPrepareVenue runs the FULL host-side VM preflight itself (ssh-config stanza, auto-boot, guest
 // readiness waits, charly delivery) over generic seams, and returns the guest SSH venue descriptor +
 // the VmDeployState patch the host persists. RESOLVES its own LifecyclePrepareInput (FINAL/K5 unit
@@ -221,7 +266,9 @@ func entityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployEntit
 // (charly/host_build_ephemeral_register.go), wrapping registerEphemeralIfMarked verbatim.
 func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
 	var node spec.BundleNode
-	_ = json.Unmarshal(p.Node, &node)
+	if err := json.Unmarshal(p.Node, &node); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode node: %w", err)
+	}
 
 	entity, err := vmEntityForPrepare(&node, p.Name)
 	if err != nil {
@@ -254,23 +301,64 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	}
 
 	// Prior runtime state (instance-id, ssh_port, disk path) for idempotent reuse decisions — read
-	// DIRECTLY (the co-located plugin's own host-local file read, not a HostBuild hop; no
-	// LoadUnified coupling — pure sdk/deploykit, the SAME per-host overlay file every vm writer
-	// already persists under the canonical "vm:"+domainID key).
-	var prior *spec.VmDeployState
-	if entry, exists := deploykit.LoadDeployConfigForRead("plugin-deploy-vm prepare-venue").LookupKey("vm:" + domainID); exists && entry.VmState != nil {
-		prior = entry.VmState
+	// via the "config-resolve" HostBuild seam (bed-robustness batch item 5 — the placement-dependent
+	// silent-no-op class), NOT a direct deploykit.LoadDeployConfigForRead call. This plugin runs
+	// out-of-process (it is NOT in go.work's compiled_plugins list), so deploykit.DeployStateHost —
+	// the package var charly's core registers ONLY inside ITS OWN process at init — is NEVER
+	// registered in THIS process: a direct LoadDeployConfigForRead call here silently, ERRORLESSLY
+	// returns an EMPTY BundleConfig on every single invocation (LoadBundleConfig's
+	// `if DeployStateHost == nil { return nil, nil }` fast path), so `prior` was ALWAYS nil and
+	// `persistedPort` ALWAYS 0 — the domain was treated as "never created before" on EVERY
+	// prepare-venue call, including for an already-running VM, causing the reachability dial to
+	// probe the wrong (freshly-and-uselessly-allocated) port, ALWAYS miss, and ALWAYS re-trigger
+	// auto-boot's `vm create` — which discards and RE-CREATES the per-domain disk overlay on every
+	// call (`runVmSpecCreate`'s "Fresh overlay on every (re)create"), silently wiping guest state on
+	// every ordinary `charly bundle add vm:<name>`. The SAME "config-resolve" HostBuild seam
+	// candy/plugin-vm's hostConfigResolve already uses (keyed the identical way: Entity=domainID,
+	// consuming only .VmState) crosses back into the HOST process — which DOES have DeployStateHost
+	// registered — regardless of this plugin's own placement (in-proc or out-of-process alike).
+	prior, err := resolvePriorVmState(ctx, exec, domainID)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve prior deploy state: %w", err)
 	}
 	var persistedPort int
 	if vm.SSH != nil && vm.SSH.PortAuto && prior != nil {
 		persistedPort = prior.SshPort
 	}
-	sshPort, err := kit.ResolveVmSshPort(&vm, domainID, persistedPort)
-	if err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve ssh port: %w", err)
+
+	// R3/R4 (bed-robustness batch, item 2 — VM ssh-port dual-allocation race, confirmed real):
+	// `vm create` (candy/plugin-vm/vm_util_copies.go's resolveVmSshPort) is the SOLE authoritative
+	// allocator+persister for a domain's SSH port on a genuinely fresh domain (no persisted port
+	// yet) — its own resolve+persist+publish sequence is the ONE writer, matching the "ONE writer,
+	// ONE key" invariant this plugin's PrepareVenueReply.State omission already documents below.
+	// Previously this function ALSO allocated its own throwaway port here (via
+	// kit.ResolveVmSshPort with persistedPort=0) purely to pre-write an SSH-config stanza that
+	// auto-boot's `vm create` invocation would immediately overwrite with ITS OWN independently
+	// allocated port — two uncoordinated allocators picking possibly-DIFFERENT ports for the same
+	// resource, with the first allocation silently discarded. When auto-boot will run momentarily
+	// (PortAuto, no persisted port, autoboot not disabled), skip the pre-boot allocate+stanza-write
+	// entirely and let `vm create`'s own publishVmSshAlias be the ONE stanza writer — WaitForSSH
+	// below resolves purely via the ssh-config ALIAS (never a cached port number), so no re-read is
+	// needed afterward. A no-sleep, no-retry, single-allocator fix.
+	deferToAutoBoot := vm.SSH != nil && vm.SSH.PortAuto && persistedPort == 0
+
+	var sshPort int
+	var opts spec.LifecycleOpts
+	if len(p.Opts) > 0 {
+		if err := json.Unmarshal(p.Opts, &opts); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: decode opts: %w", err)
+		}
+	}
+	willAutoBoot := !opts.DryRun && os.Getenv("CHARLY_DEPLOY_NO_AUTOBOOT") == ""
+	deferToAutoBoot = deferToAutoBoot && willAutoBoot
+	if !deferToAutoBoot {
+		sshPort, err = kit.ResolveVmSshPort(&vm, domainID, persistedPort)
+		if err != nil {
+			return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: resolve ssh port: %w", err)
+		}
 	}
 
-	stateDir := filepath.Join(host.Home, ".local", "share", "charly", "vm", "charly-"+domainID)
+	stateDir := filepath.Join(vmStateBase(host.Home), "charly-"+domainID)
 	in := spec.LifecyclePrepareInput{
 		Entity:         entity,
 		VM:             &vm,
@@ -285,30 +373,40 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 	if in.VM == nil {
 		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: no resolved VmSpec in prepare input")
 	}
-	var opts spec.LifecycleOpts
-	_ = json.Unmarshal(p.Opts, &opts)
 
 	// (a) publish the managed ssh-config Host stanza + the Include line (host file I/O the co-located
-	// plugin does directly), so `ssh <alias>` resolves before any wait.
-	if err := kit.WriteVmSshStanza(host.Home, kit.VmSshStanza{
-		Alias:          in.Alias,
-		Hostname:       "127.0.0.1",
-		Port:           in.SSHPort,
-		User:           in.SSHUser,
-		IdentityFile:   in.SSHKeyPath,
-		KnownHostsFile: in.KnownHostsPath,
-	}); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: publish ssh-config stanza: %w", err)
-	}
-	if err := kit.EnsureSshConfigInclude(host.Home); err != nil {
-		return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: ensure ssh-config include: %w", err)
+	// plugin does directly), so `ssh <alias>` resolves before any wait. Skipped when auto-boot's own
+	// `vm create` will be the ONE writer of both the port allocation and the stanza (deferToAutoBoot).
+	if !deferToAutoBoot {
+		if err := kit.WriteVmSshStanza(host.Home, kit.VmSshStanza{
+			Alias:          in.Alias,
+			Hostname:       "127.0.0.1",
+			Port:           in.SSHPort,
+			User:           in.SSHUser,
+			IdentityFile:   in.SSHKeyPath,
+			KnownHostsFile: in.KnownHostsPath,
+		}); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: publish ssh-config stanza: %w", err)
+		}
+		if err := kit.EnsureSshConfigInclude(host.Home); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-vm prepare-venue: ensure ssh-config include: %w", err)
+		}
 	}
 
 	// (b) auto-boot: TCP-probe the SSH port; if unreachable, `charly vm build` + `charly vm create`
-	// via the cli seam. Skipped on DryRun / when CHARLY_DEPLOY_NO_AUTOBOOT is set.
-	if !opts.DryRun && os.Getenv("CHARLY_DEPLOY_NO_AUTOBOOT") == "" {
+	// via the cli seam. Skipped on DryRun / when CHARLY_DEPLOY_NO_AUTOBOOT is set. On a fresh domain
+	// (deferToAutoBoot) the port is not yet known — obviously unreachable — so the dial probe is
+	// skipped and auto-boot runs unconditionally; `vm create` performs the ONE ssh-port allocation.
+	if willAutoBoot {
+		reachable := false
 		addr := fmt.Sprintf("127.0.0.1:%d", in.SSHPort)
-		if conn, derr := net.DialTimeout("tcp", addr, 2*time.Second); derr != nil {
+		if !deferToAutoBoot {
+			if conn, derr := net.DialTimeout("tcp", addr, 2*time.Second); derr == nil {
+				reachable = true
+				_ = conn.Close()
+			}
+		}
+		if !reachable {
 			fmt.Fprintf(os.Stderr, "VM %q not reachable on %s — auto-booting via charly vm build/create...\n", in.Entity, addr)
 			// build the shared ENTITY base disk; create this DEPLOY's own domain (--domain) — a
 			// per-domain overlay + state so sibling beds sharing the entity never collide.
@@ -318,8 +416,6 @@ func vmPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams, 
 			if _, err := vmCli(ctx, exec, false, false, "vm", "create", in.Entity, "--domain", domainIdentity(p)); err != nil {
 				return nil, fmt.Errorf("auto-boot create %s: %w", in.Entity, err)
 			}
-		} else {
-			_ = conn.Close()
 		}
 	}
 
@@ -391,7 +487,9 @@ func charlyInstallStrategy(vm *spec.ResolvedVm) string {
 // executor). exec is the guest executor the proxy serves for PostApply.
 func vmPostApply(ctx context.Context, exec *sdk.Executor, p lifecycleParams, host spec.HostEnv) (*pb.InvokeReply, error) {
 	var node spec.BundleNode
-	_ = json.Unmarshal(p.Node, &node)
+	if err := json.Unmarshal(p.Node, &node); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-vm post-apply: decode node: %w", err)
+	}
 	if len(node.Children) == 0 {
 		return marshalReply(struct{}{})
 	}
@@ -482,7 +580,11 @@ func vmRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.
 		DryRun       bool `json:"DryRun"`
 		RebuildImage bool `json:"RebuildImage"`
 	}
-	_ = json.Unmarshal(p.Opts, &ropts)
+	if len(p.Opts) > 0 {
+		if err := json.Unmarshal(p.Opts, &ropts); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-vm rebuild: decode opts: %w", err)
+		}
+	}
 	entity := vmEntity(p)       // disk/spec SOURCE (the `vm build` arg + the create's entity positional)
 	domain := domainIdentity(p) // per-deploy DOMAIN IDENTITY (destroy/create/start THIS domain)
 	if ropts.DryRun {

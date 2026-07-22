@@ -96,7 +96,9 @@ func (vmProvider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 	}
 	var env vmEnv
 	if len(req.GetEnvJson()) > 0 {
-		_ = json.Unmarshal(req.GetEnvJson(), &env)
+		if err := json.Unmarshal(req.GetEnvJson(), &env); err != nil {
+			return sdk.ResultJSON("fail", "libvirt: decode env: "+err.Error())
+		}
 	}
 
 	// Internal VM-resolution RPC (the host's invokeVmPlugin path) — NOT a `libvirt:` verb check;

@@ -7,7 +7,10 @@ package substratekind
 //
 // Every dependency this needed turned out reachable without a new seam, mirroring the android
 // status collector's own precedent:
-//   - deploykit.LoadBundleConfig() is sdk-portable directly (no host round-trip).
+//   - the per-host deploy overlay reads through loadBundleConfig (status_flat.go) — the
+//     "pod-config-load-bundle" HostBuild seam, NOT deploykit.LoadBundleConfig() directly (bed-
+//     robustness batch item 5: a direct call silently degrades to an empty config out-of-process,
+//     since deploykit.DeployStateHost is only ever registered by charly core's own init()).
 //   - the pod/k8s liveness probes are plain podman/kubectl exec calls — no core coupling at all.
 //   - the vm liveness probe used charly-core's invokeVmPlugin (a private registry accessor); the
 //     portable equivalent is Executor.InvokeProvider("verb", "libvirt", sdk.OpRun, ...) — the SAME
@@ -31,7 +34,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -65,7 +67,12 @@ func runReapOrphansCLI(ctx context.Context, exec *sdk.Executor, args []string) e
 // race resolution: if a teardown is concurrently in progress, the second `charly bundle del
 // --assume-yes` no-ops on the already-removed pieces.
 func runReapOrphans(ctx context.Context, exec *sdk.Executor) error {
-	dc, err := deploykit.LoadBundleConfig()
+	// Routed through the loadBundleConfig seam helper (status_flat.go, bed-robustness batch
+	// item 5) instead of deploykit.LoadBundleConfig() directly — the exact "unvetted grep hit"
+	// this audit closes: reap-orphans exists specifically to clean up orphaned EPHEMERAL
+	// deploys (item 1's own subject), so a silently-empty read here would make `charly
+	// reap-orphans` find nothing to reap on EVERY invocation, out-of-process.
+	dc, err := loadBundleConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("loading charly.yml: %w", err)
 	}

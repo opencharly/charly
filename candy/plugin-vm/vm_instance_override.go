@@ -71,11 +71,11 @@ type VmInstanceOverride struct {
 // instance override file. The domainName is the libvirt/qemu
 // domain identifier (typically "charly-<vmEntityName>").
 func VmInstanceOverridePath(domainName string) (string, error) {
-	home, err := os.UserHomeDir()
+	base, err := vmDir()
 	if err != nil {
-		return "", fmt.Errorf("resolving home dir: %w", err)
+		return "", fmt.Errorf("resolving vm state dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "share", "charly", "vm", domainName, "instance.yml"), nil
+	return filepath.Join(base, domainName, "instance.yml"), nil
 }
 
 // LoadVmInstanceOverride reads the per-domain override file and

@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,29 +41,19 @@ import (
 // core dependencies (os/exec + os.Executable + a self-invoked `charly bundle del`) and needed no
 // seam even before this move — confirmed by the unit-1 design note this cutover executes.
 
-// loadBundleConfig reads the per-host deploy overlay via the "pod-config-load-bundle" HostBuild
-// seam (placement-invariant — works identically compiled-in or out-of-process), mirroring
-// candy/plugin-pod/remove_orchestration.go's resolveSidecarNames. Returns (nil, nil) on an
-// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+// loadBundleConfig reads the per-host deploy overlay via the shared
+// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam,
+// placement-invariant — works identically compiled-in or out-of-process). R3 hoist (charly#176
+// round 1): this used to re-derive the marshal/HostBuild/unmarshal sequence locally, the SAME
+// pattern candy/plugin-pod/remove_orchestration.go's resolveSidecarNames,
+// candy/plugin-status/nested_tree.go, and candy/plugin-substrate/status_flat.go each carried as
+// their own near-identical copy — a fresh pr-validator review correctly rejected landing a 3rd
+// and 4th copy of one pattern in a single cutover; sdk/deploykit.LoadBundleConfigViaSeam is now
+// the ONE shared implementation all four call. Returns (nil, nil) on an absent/empty overlay,
+// matching deploykit.LoadBundleConfig's own contract.
 func loadBundleConfig() (*deploykit.BundleConfig, error) {
-	var rep spec.PodConfigLoadBundleReply
-	if err := hostDeploySeamJSON(podConfigLoadBundleSeamKind, spec.PodConfigLoadDeployRequest{Caller: "command:bundle ephemeral lifecycle"}, &rep); err != nil {
-		return nil, err
-	}
-	if len(rep.ConfigJSON) == 0 {
-		return nil, nil
-	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
-		return nil, err
-	}
-	return &dc, nil
+	return deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, "command:bundle ephemeral lifecycle")
 }
-
-// podConfigLoadBundleSeamKind names the EXISTING "pod-config-load-bundle" HostBuild kind (no
-// shared Go const across modules — each consumer names its own, the established convention, e.g.
-// candy/plugin-pod/remove_orchestration.go's podConfigLoadBundleKind).
-const podConfigLoadBundleSeamKind = "pod-config-load-bundle"
 
 // ephemeralHandle captures the runtime state returned by registerEphemeral and consumed by
 // teardownEphemeral. Internal to this plugin — the host discards the register reply's payload
@@ -255,6 +244,16 @@ func ephemeralTimerUnitPrefix(deployName string) string {
 // registerTransientTimer creates a systemd-run --user --on-active=<ttl> transient unit that fires
 // `charly bundle del <deployName> --assume-yes` when the TTL elapses. Falls back to a no-op when
 // systemd-run is not available.
+//
+// RCA (bed-robustness batch, item 1 — weeks of failures, ~21 recorded): the transient unit fired
+// `charly bundle del <deployName>` with NO working directory pinned. A `--user` systemd-run unit's
+// ExecStart runs under the user systemd manager's OWN default WorkingDirectory — the user's home
+// (`/home/<user>`), NOT the cwd `charly bundle add` was invoked from — so the self-exec'd charly
+// resolved its project dir against `$HOME`, found no `charly.yml` there, and failed EVERY fire with
+// "no charly.yml found in /home/<user>". `os.Getwd()` at REGISTRATION time is the project directory
+// (main.go's `os.Chdir(cli.Dir)` has already run by the time any command body executes), so pinning
+// it via `--working-directory=<wd>` on the transient unit is the fix — the SAME primitive systemd-run
+// exposes for exactly this class of problem (no sleep/retry, no environment-variable workaround).
 func registerTransientTimer(deployName string, ttl time.Duration) (string, error) {
 	if _, err := exec.LookPath("systemd-run"); err != nil {
 		return "", fmt.Errorf("systemd-run not in PATH; TTL safety net disabled")
@@ -263,19 +262,34 @@ func registerTransientTimer(deployName string, ttl time.Duration) (string, error
 	if err != nil {
 		return "", fmt.Errorf("locating charly binary: %w", err)
 	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolving working directory: %w", err)
+	}
 	unitName := fmt.Sprintf("%s-%d", ephemeralTimerUnitPrefix(deployName), time.Now().Unix())
-	args := append([]string{
-		"--user",
-		"--unit=" + unitName,
-		"--on-active=" + ttl.String(),
-		exe,
-	}, ephemeralDeployDelArgv(deployName)...)
+	args := registerTransientTimerArgs(unitName, ttl, wd, exe, ephemeralDeployDelArgv(deployName))
 	cmd := exec.Command("systemd-run", args...)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("systemd-run: %w", err)
 	}
 	return unitName + ".timer", nil
+}
+
+// registerTransientTimerArgs builds the systemd-run argv registerTransientTimer shells out with —
+// pulled out as its own pure function purely for testability (registerTransientTimer itself shells
+// out to systemd-run, not unit-testable standalone). `--working-directory=<wd>` is the load-bearing
+// fix: without it the transient unit's ExecStart runs from the user systemd manager's default
+// WorkingDirectory (the user's home), never the project directory the deploy was registered from.
+func registerTransientTimerArgs(unitName string, ttl time.Duration, wd, exe string, delArgv []string) []string {
+	args := []string{
+		"--user",
+		"--unit=" + unitName,
+		"--on-active=" + ttl.String(),
+		"--working-directory=" + wd,
+		exe,
+	}
+	return append(args, delArgv...)
 }
 
 // cancelTransientTimer stops a previously registered transient unit. Best-effort.

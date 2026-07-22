@@ -56,7 +56,9 @@ func invokeLifecycle(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 		return nil, fmt.Errorf("plugin-deploy-pod %s: executor: %w", req.GetOp(), err)
 	}
 	var p lifecycleParams
-	_ = json.Unmarshal(req.GetParamsJson(), &p)
+	if err := json.Unmarshal(req.GetParamsJson(), &p); err != nil {
+		return nil, fmt.Errorf("plugin-deploy-pod %s: decode params: %w", req.GetOp(), err)
+	}
 
 	switch req.GetOp() {
 	case sdk.OpPrepareVenue:
@@ -274,7 +276,11 @@ func execErr(exec *sdk.Executor, ctx context.Context, script, label, target stri
 // alias so deployment-name-keyed commands resolve it when deploy-name != image-name.
 func podPrepareVenue(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb.InvokeReply, error) {
 	var opts spec.LifecycleOpts
-	_ = json.Unmarshal(p.Opts, &opts)
+	if len(p.Opts) > 0 {
+		if err := json.Unmarshal(p.Opts, &opts); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod prepare-venue: decode opts: %w", err)
+		}
+	}
 	reqJSON, err := json.Marshal(spec.OverlayBuildRequest{
 		Dir: p.Dir, DeployName: p.Name, Image: p.Image, Version: p.Version,
 		DryRun: opts.DryRun, AssumeYes: opts.AssumeYes, AllowRepoChanges: opts.AllowRepoChanges,
@@ -416,7 +422,11 @@ func podRebuild(ctx context.Context, exec *sdk.Executor, p lifecycleParams) (*pb
 		DryRun       bool `json:"DryRun"`
 		RebuildImage bool `json:"RebuildImage"`
 	}
-	_ = json.Unmarshal(p.Opts, &ropts)
+	if len(p.Opts) > 0 {
+		if err := json.Unmarshal(p.Opts, &ropts); err != nil {
+			return nil, fmt.Errorf("plugin-deploy-pod rebuild: decode opts: %w", err)
+		}
+	}
 	baseRef := p.Image
 	if baseRef == "" {
 		baseRef = p.Name
