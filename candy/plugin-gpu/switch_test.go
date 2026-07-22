@@ -16,13 +16,14 @@ import (
 // twoFnGPU is the canonical multifunction passthrough GPU: a VGA display function + its sibling
 // HDMI-audio function in one IOMMU group.
 func twoFnGPU() spec.VFIOGpu {
-	return spec.VFIOGpu{
-		VFIOPCIDevice: spec.VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: "0x10de", DeviceID: "0x2702", Class: "0x0300", Driver: "vfio-pci", IOMMUGroup: 13},
-		GroupMembers: []spec.VFIOPCIDevice{
-			{Addr: "0000:01:00.0", Class: "0x0300", ClassLabel: "VGA controller", Driver: "vfio-pci"},
-			{Addr: "0000:01:00.1", Class: "0x0403", ClassLabel: "Audio device", Driver: "vfio-pci"},
-		},
+	// VFIOGpu is flattened (SDD conversion) — spread via the shared
+	// spec.NewVFIOGpu constructor instead of the former embedded-field literal.
+	gpu := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: "0x10de", DeviceID: "0x2702", Class: "0x0300", Driver: "vfio-pci", IOMMUGroup: 13})
+	gpu.GroupMembers = []spec.VFIOPCIDevice{
+		{Addr: "0000:01:00.0", Class: "0x0300", ClassLabel: "VGA controller", Driver: "vfio-pci"},
+		{Addr: "0000:01:00.1", Class: "0x0403", ClassLabel: "Audio device", Driver: "vfio-pci"},
 	}
+	return gpu
 }
 
 func TestGpuModeFromDriver(t *testing.T) {
@@ -43,7 +44,7 @@ func TestCurrentGPUMode(t *testing.T) {
 	orig := gpuDisplayDriver
 	defer func() { gpuDisplayDriver = orig }()
 	gpuDisplayDriver = func(addr string) string { return "nvidia" }
-	gpu := spec.VFIOGpu{VFIOPCIDevice: spec.VFIOPCIDevice{Addr: "0000:01:00.0"}}
+	gpu := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:01:00.0"})
 	if got := currentGPUMode(gpu); got != spec.GpuModeNvidia {
 		t.Errorf("currentGPUMode = %q, want nvidia", got)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -68,10 +69,15 @@ func hostBuildHostProbe(_ context.Context, req spec.HostProbeRequest, _ buildEng
 	reply.Vfio = &vfio
 	reply.MemlockSoft, reply.MemlockHard = MemlockLimitBytes()
 	reply.VfioPciAvailable = vfioPciAvailable()
-	reply.GroupAccessible = map[int]bool{}
+	// GroupAccessible is string-keyed (the SDD conversion reshaped the wire map
+	// from map[int]bool to map[string]bool — CUE has no int-keyed-map
+	// construct; encoding/json already converts a map[int]bool's keys to their
+	// decimal string form on the wire, so this is a pure representation fix,
+	// zero wire-format change).
+	reply.GroupAccessible = map[string]bool{}
 	for _, g := range vfio.GPUs {
 		if g.IOMMUGroup >= 0 {
-			reply.GroupAccessible[g.IOMMUGroup] = VfioGroupAccessible(g.IOMMUGroup)
+			reply.GroupAccessible[strconv.Itoa(g.IOMMUGroup)] = VfioGroupAccessible(g.IOMMUGroup)
 		}
 	}
 

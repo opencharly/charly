@@ -12,22 +12,19 @@ import (
 // 0x10de) whose IOMMU group has two functions (the canonical RTX 4080 shape:
 // VGA + audio), plus an AMD display GPU that must NOT be selected.
 func nvidiaReport() VFIOReport {
+	// VFIOGpu is flattened (SDD conversion) — spread via the shared
+	// spec.NewVFIOGpu constructor instead of the former embedded-field literal.
+	nvidia := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: "0x10de", DeviceID: "0x2702", IOMMUGroup: 13, Driver: "vfio-pci"})
+	nvidia.GroupMembers = []VFIOPCIDevice{
+		{Addr: "0000:01:00.0", VendorID: "0x10de", IOMMUGroup: 13},
+		{Addr: "0000:01:00.1", VendorID: "0x10de", IOMMUGroup: 13},
+	}
+	amd := spec.NewVFIOGpu(spec.VFIOPCIDevice{Addr: "0000:19:00.0", VendorID: "0x1002", DeviceID: "0x13c0", IOMMUGroup: 25, Driver: "amdgpu"})
+	amd.GroupMembers = []VFIOPCIDevice{{Addr: "0000:19:00.0", VendorID: "0x1002", IOMMUGroup: 25}}
 	return VFIOReport{
 		IOMMUEnabled: true,
 		IOMMUKind:    "amd",
-		GPUs: []VFIOGpu{
-			{
-				VFIOPCIDevice: VFIOPCIDevice{Addr: "0000:01:00.0", VendorID: "0x10de", DeviceID: "0x2702", IOMMUGroup: 13, Driver: "vfio-pci"},
-				GroupMembers: []VFIOPCIDevice{
-					{Addr: "0000:01:00.0", VendorID: "0x10de", IOMMUGroup: 13},
-					{Addr: "0000:01:00.1", VendorID: "0x10de", IOMMUGroup: 13},
-				},
-			},
-			{
-				VFIOPCIDevice: VFIOPCIDevice{Addr: "0000:19:00.0", VendorID: "0x1002", DeviceID: "0x13c0", IOMMUGroup: 25, Driver: "amdgpu"},
-				GroupMembers:  []VFIOPCIDevice{{Addr: "0000:19:00.0", VendorID: "0x1002", IOMMUGroup: 25}},
-			},
-		},
+		GPUs:         []VFIOGpu{nvidia, amd},
 	}
 }
 
