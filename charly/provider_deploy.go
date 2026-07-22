@@ -55,7 +55,7 @@ var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
 // the guest SSHExecutor the reverse channel serves, runs the nested pod-in-guest
 // orchestration, and owns Start/Stop/Status/Logs/Shell/Rebuild — reached the SAME
 // generic way as every other substrate (pluginDeployTarget → OpDeployDispatch →
-// InvokeProvider), no separate core-side substrateLifecycle registry. The
+// InvokeProvider), no separate core-side lifecycle registry. The
 // arbiter-claim bracket around vm's own `charly vm start`/`stop` reentry is vm's
 // OWN concern (never double-bracketed by arbiter_bracket.go, which is pod-scoped
 // only — see its doc comment); the ssh-config / charly.yml-entry / ephemeral

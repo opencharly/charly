@@ -21,6 +21,12 @@ import (
 // dispatch also uses, S3b), because the plugin's k3s-post-provision method (S3, FINAL/K5 unit 6 —
 // relocated wholesale from charly/k3s_post.go) needs the "deploy-entity-resolve"
 // HostBuild seam for its LoadUnified-coupled VM-forward lookup.
+//
+// MIGRATION INVENTORY: this file's `kit` import (kit.ShellExecutor{}, the broker-only
+// dispatch idiom) is UNTIL-plugin-kube-externalization — it exits once
+// invokeKubePluginWithBroker's whole call chain (and the "deploy-entity-resolve" HostBuild
+// seam it depends on) moves into candy/plugin-kube itself, leaving no core-side broker
+// construction for this word.
 
 // resolveKubePlugin lazily build-connects candy/plugin-kube if the deploy path has
 // not already (the generic host-adapter seam, F7) and asserts it out-of-process

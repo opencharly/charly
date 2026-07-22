@@ -2,10 +2,11 @@ package main
 
 // unified_targets.go — The unified deploy-target abstraction.
 //
-// UnifiedDeployTarget/LifecycleTarget via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy that
-// replaced externalDeployTarget/grpcSubstrateLifecycle once their orchestration moved to
-// candy/plugin-bundle over the ONE generic sdk.OpDeployDispatch envelope, see
-// candy/plugin-bundle/deploy_target.go), and the ResolveTarget dispatcher. ALL FIVE substrates
+// UnifiedDeployTarget/LifecycleTarget via pluginDeployTarget (S3b — the thin, DATA-ONLY proxy left
+// behind once the deploy dispatch orchestration moved to candy/plugin-bundle over the ONE generic
+// sdk.OpDeployDispatch envelope, see candy/plugin-bundle/deploy_target.go and
+// CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
+// ALL FIVE substrates
 // (local/vm/pod/k8s/android) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
 // plain data (name/word/hasLifecycle/hasPreresolve/node) and a live venue executor, never a
 // core-private *grpcProvider (that type is constructed at plugin-CONNECT time — clause-M, cannot
@@ -19,7 +20,8 @@ package main
 //     (arbiter_bracket.go).
 //   - The pod Start/Stop/Attach/Logs plan-hook read (pod_lifecycle_dispatch.go) — pure ctx-opts
 //     marshals with zero core-only dependency of their own; reused unchanged, just called from
-//     here instead of from the deleted grpcSubstrateLifecycle.
+//     here instead of from the former core-resident substrate lifecycle proxy (deleted, S3b —
+//     see CHANGELOG/2026.203.0212.md).
 //
 // There is no per-kind dispatch switch in the cmd files — the kind lives behind the adapter
 // method.
@@ -119,8 +121,8 @@ type pluginDeployTarget struct {
 
 	// KeepRepoChanges / KeepServices / KeepImage are the `charly bundle del --keep-…` teardown
 	// gates, set by the del-command dispatcher (host_build_deploy_node_del_dispatch.go) via the
-	// SAME type-assertion pattern the pre-S3b externalDeployTarget used (Del's signature is the
-	// fixed UnifiedDeployTarget interface contract, with no room for extra params).
+	// SAME type-assertion pattern the pre-S3b former core-resident deploy target used (Del's
+	// signature is the fixed UnifiedDeployTarget interface contract, with no room for extra params).
 	KeepRepoChanges bool
 	KeepServices    bool
 	KeepImage       bool
@@ -131,8 +133,8 @@ type pluginDeployTarget struct {
 	build buildEngineContext
 
 	// paths OPTIONALLY overrides the ledger root — a TEST redirecting to a temp dir instead of the
-	// operator's real ~/.config/opencharly/installed/, mirroring the pre-S3b externalDeployTarget's
-	// settable `paths *kit.LedgerPaths` field exactly (same injection pattern, threaded to the
+	// operator's real ~/.config/opencharly/installed/, mirroring the pre-S3b former core-resident
+	// deploy target's settable `paths *kit.LedgerPaths` field exactly (same injection pattern, threaded to the
 	// plugin as req.LedgerRoot since a live *kit.LedgerPaths cannot cross the wire). nil (the
 	// default) — the plugin uses kit.DefaultLedgerPaths().
 	paths *kit.LedgerPaths
@@ -205,11 +207,11 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // applyParentExecOverride implements the FIX ROUND regression fix (R10 bed-found, S3b
 // follow-up): a NESTED external deploy with no lifecycle hook of its own (a
 // `local:`/`android:`/`k8s:` child under a vm/pod, tree position) must apply INSIDE the parent's
-// venue, never the operator host — mirrors the pre-move externalDeployTarget.apply's
-// `else if opts.ParentExec != nil { t.exec = opts.ParentExec }` swap exactly (deleted
-// charly/deploy_target_external.go:262; a lifecycle substrate, vm/pod, composes its OWN nested
-// venue INSIDE PrepareVenue instead, so this override is the non-lifecycle branch only — a no-op
-// when t.hasLifecycle or opts.ParentExec is nil).
+// venue, never the operator host — mirrors the pre-move former core-resident deploy target's
+// apply's `else if opts.ParentExec != nil { t.exec = opts.ParentExec }` swap exactly (see
+// CHANGELOG/2026.203.0212.md for the file this moved from; a lifecycle substrate, vm/pod,
+// composes its OWN nested venue INSIDE PrepareVenue instead, so this override is the non-lifecycle
+// branch only — a no-op when t.hasLifecycle or opts.ParentExec is nil).
 //
 // t.exec is mutated to the live parent executor: it becomes the executor threaded onto
 // candy/plugin-bundle's in-proc reverse channel (dispatchDeployTarget's `exec` param) for EVERY
@@ -349,8 +351,8 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.Inst
 		return fmt.Errorf("external deploy %q: marshal plans: %w", t.name, err)
 	}
 	// Marshals the SAME spec.LifecycleOpts shape Add() does (R3 — one wire shape for the shared
-	// handleDeployApply body both dispatch through, mirroring the pre-move externalDeployTarget.
-	// Update, which built a plain deploykit.EmitOpts from these exact 5 fields and passed it into
+	// handleDeployApply body both dispatch through, mirroring the pre-move former core-resident
+	// deploy target's Update, which built a plain deploykit.EmitOpts from these exact 5 fields and passed it into
 	// the SAME shared apply() body Add used, rather than a separate wire shape).
 	// RebuildImage is NEVER read by the apply body — it belongs to Rebuild's own
 	// spec.DeployTargetRebuildOpts — so it is deliberately NOT threaded here.
@@ -486,7 +488,7 @@ func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
 	return nil
 }
 
-// Attach mirrors the pre-S3b grpcSubstrateLifecycle.Attach exactly: a substrate registers an
+// Attach mirrors the pre-S3b former core-resident substrate lifecycle proxy's Attach exactly: a substrate registers an
 // attachPlanResolver (today only "pod", via pod_lifecycle_dispatch.go, and "vm", via
 // vm_lifecycle_preresolve.go's vmAttachResolver) — its ABSENCE is a hard error ("interactive
 // attach not supported"), never a silent fallback, since a hookless substrate has no way to

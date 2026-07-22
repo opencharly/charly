@@ -16,7 +16,8 @@ import (
 )
 
 // lifecycle.go — the host-side POD venue lifecycle, externalized out of charly core (M4). The
-// generic grpcSubstrateLifecycle proxy Invokes these Ops over the reverse channel; the plugin runs
+// generic substrate lifecycle dispatch (now part of the plugin-side deploy target, S3b) Invokes
+// these Ops over the reverse channel; the plugin runs
 // ON the host but out-of-process, so it reaches the overlay BUILD engine (kept core) via
 // HostBuild("overlay") and drives the container lifecycle via HostBuild("cli") — never in-process
 // podman/Generator. PrepareVenue builds the overlay + returns a host-local shell venue; Start/Stop/

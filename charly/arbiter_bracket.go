@@ -12,8 +12,8 @@ var (
 
 // arbiter_bracket.go — the core-resident arbiter acquire/release BRACKET (S3b, Unit-6 design Q1).
 //
-// grpcSubstrateLifecycle.Start/Stop used to bracket the shared resource-arbiter claim IN-LINE,
-// around the substrate dispatch itself (acquire BEFORE OpStart, release ON THE FAILURE PATH,
+// The former core-resident substrate lifecycle proxy's Start/Stop used to bracket the shared
+// resource-arbiter claim IN-LINE, around the substrate dispatch itself (acquire BEFORE OpStart, release ON THE FAILURE PATH,
 // release AFTER OpStop) — see the historical note this file's functions preserve verbatim below.
 // S3b moves the substrate DISPATCH (the actual OpStart/OpStop wire call) to candy/plugin-bundle,
 // but the bracket itself CANNOT move with it: the CHARLY_PREEMPT_LEASE mutex (preempt.go) is
@@ -41,10 +41,11 @@ var (
 // candy/plugin-bundle through the registry) bracketed by the shared resource-arbiter claim:
 // acquire BEFORE dispatch, release ON THE FAILURE PATH (a failed dispatch must not leak the
 // claim). The caller resolves the Start plan-hook BEFORE calling this function (a deliberate
-// reordering vs. the pre-move grpcSubstrateLifecycle.Start, which acquired first then released if
-// the plan-hook failed) — since a plan-hook failure means dispatch is never even attempted, no
-// claim needs to exist yet either way; the net outcome (no claim survives a plan-hook failure) is
-// identical, just reached by never acquiring rather than acquiring-then-releasing. node is
+// reordering vs. the pre-move former core-resident substrate lifecycle proxy's Start, which
+// acquired first then released if the plan-hook failed) — since a plan-hook failure means dispatch
+// is never even attempted, no claim needs to exist yet either way; the net outcome (no claim
+// survives a plan-hook failure) is identical, just reached by never acquiring rather than
+// acquiring-then-releasing. node is
 // required when hasPlan is true (the claim fields live on it); a nil node with hasPlan true is a
 // caller bug, treated as "no claim" rather than a panic.
 func arbiterBracketedStart(name string, node *spec.BundleNode, hasPlan bool, dispatch func() error) error {
@@ -62,8 +63,9 @@ func arbiterBracketedStart(name string, node *spec.BundleNode, hasPlan bool, dis
 }
 
 // arbiterBracketedStop runs dispatch (the substrate's actual Stop op) then releases the claim
-// AFTER, unconditionally (success or failure of the dispatch itself) — matching
-// grpcSubstrateLifecycle.Stop's "release the persistent claim after stop" comment. Deliberate
+// AFTER, unconditionally (success or failure of the dispatch itself) — matching the former
+// core-resident substrate lifecycle proxy's Stop's "release the persistent claim after stop"
+// behavior. Deliberate
 // simplification vs. the pre-move code: the prior in-line Stop skipped the release when its
 // SEPARATE plan-hook call (pre-dispatch) failed, but that distinction required observing the
 // plan-hook's own error before the substrate call — a signal that no longer exists once plan

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -21,7 +20,7 @@ import (
 // recovers this SAME executor via sdk.ExecutorForInvoke(ctx, brokerID) (ctx-first) and threads it
 // onward to the ACTUAL substrate provider via its own sdk.Executor.InvokeProvider (S1) — core
 // never touches the substrate's *grpcProvider directly once this call returns.
-func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequest, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool) (spec.DeployTargetDispatchReply, error) {
+func dispatchDeployTarget(ctx context.Context, req spec.DeployTargetDispatchRequest, exec spec.DeployExecutor, build buildEngineContext, rebootable bool) (spec.DeployTargetDispatchReply, error) {
 	prov, ok := providerRegistry.resolve(ClassCommand, "bundle")
 	if !ok {
 		return spec.DeployTargetDispatchReply{}, fmt.Errorf("deploy-dispatch %s: command:bundle provider not loaded (candy/plugin-bundle must be compiled in via compiled_plugins:)", req.Op)

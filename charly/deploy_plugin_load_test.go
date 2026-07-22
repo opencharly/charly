@@ -7,9 +7,9 @@ import (
 )
 
 // TestExternalDeployRecordVenueLedger_* retired here (S3b): recordVenueLedger moved to
-// candy/plugin-bundle/deploy_target.go alongside the externalDeployTarget logic it belonged to —
-// see candy/plugin-bundle/deploy_target_test.go for the ported tests (same behavior, same
-// assertions).
+// candy/plugin-bundle/deploy_target.go alongside the deploy-dispatch logic it belonged to (see
+// CHANGELOG/2026.203.0212.md) — see candy/plugin-bundle/deploy_target_test.go for the ported
+// tests (same behavior, same assertions).
 
 // TestResolveDeployNodeByPath proves the dotted-path resolution that lets the deploy-plugin
 // loader find a NESTED child deploy (the bed runner deploys arch-host via `charly bundle add

@@ -18,6 +18,12 @@ import (
 // the kind string + Go identifiers moved; deploykit.SaveDeployState's behavior is unchanged
 // (marshalDeployNode still resugars each plan step via the host-owned pluginPrimaries registry,
 // unreachable from a separate-module plugin — the reason this stays a HostBuild seam at all).
+//
+// MIGRATION INVENTORY: this file's `deploykit` import (SaveDeployStateInput +
+// SaveDeployState) is UNTIL-K4 — it exits with the K4 deploy-state family externalization
+// (deploy + config resolution moving to sdk/deploykit + the deploy/bundle plugins), at which
+// point marshalDeployNode's pluginPrimaries dependency either moves plugin-side too or this
+// whole HostBuild seam collapses into a direct plugin-side call.
 const deployConfigSaveStateKind = "deploy-config-save-state"
 
 func hostBuildDeployConfigSaveState(_ context.Context, req spec.DeployConfigSaveStateRequest, _ buildEngineContext) (spec.DeployConfigSaveStateReply, error) {

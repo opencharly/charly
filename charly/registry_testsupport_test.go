@@ -20,8 +20,8 @@ import (
 // It restores ALL the state a plugin registration mutates: the registry (byKey/origins/closers)
 // AND the parse-time pluginPrimaries desugar table AND the process-wide plugin schema set
 // (pluginSchemas: sources/inputDefs/unified) that a plugin serving an authored input def fills via
-// registerPluginUnitSchema. (S3b: the former deploy-substrate sub-registries — substrateLifecycles,
-// deployPreresolvers + pluginPreresolverWords — are deleted; pluginDeployTarget reads
+// registerPluginUnitSchema. (S3b: the former per-substrate lifecycle/preresolve sub-registries and
+// their word-index are deleted — see CHANGELOG/2026.203.0212.md; pluginDeployTarget reads
 // gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider instead, so there is nothing
 // left to snapshot for them.) Only the registry itself duplicate-ERRORS on re-register; the schema
 // set replaces/appends idempotently, but restoring it keeps one test's schema registration from

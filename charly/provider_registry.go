@@ -149,8 +149,9 @@ func (r *Registry) RegisterPluginProviders(ps []Provider, origin string, conn io
 		// registration here anymore — pluginDeployTarget (unified_targets.go) reads them directly
 		// off the resolved *grpcProvider in ResolveTarget, and candy/plugin-bundle reaches the
 		// substrate's OpPrepareVenue/OpPreresolve itself via sdk.Executor.InvokeProvider. The
-		// former wire-backed substrateLifecycle/deployPreresolver registries (this loop used to
-		// populate them here) are deleted — nothing reads them anymore.
+		// former wire-backed per-substrate lifecycle/preresolve registries (this loop used to
+		// populate them here — see CHANGELOG/2026.203.0212.md) are deleted — nothing reads them
+		// anymore.
 	}
 	if conn != nil {
 		r.mu.Lock()

@@ -66,7 +66,7 @@ type bedSession struct {
 
 var (
 	bedSessMu   sync.Mutex
-	bedSessions = map[string]*bedSession{} // keyed by bed name (mirror substrateLifecycle)
+	bedSessions = map[string]*bedSession{} // keyed by bed name (mirror the pluginDeployTarget dispatch keying)
 )
 
 // release unwinds a session's acquired handles in REVERSE order (lease → env → domain

@@ -94,7 +94,7 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	deployName := c.Box
 
 	// Connect the deployment's OUT-OF-TREE plugins before ResolveTarget, so an
-	// external deploy SUBSTRATE (the E3-deploy externalDeployTarget) resolves its
+	// external deploy SUBSTRATE (the E3-deploy plugin-side deploy target) resolves its
 	// grpcProvider for the rebuild — the SAME loadDeployPlugins bundle add / bundle
 	// del use (R3).
 	if err := loadDeployPlugins(dir, deployName, nil); err != nil {

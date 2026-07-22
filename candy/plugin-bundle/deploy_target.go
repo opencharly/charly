@@ -16,9 +16,9 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// deploy_target.go — the S3b move: the ORCHESTRATION bulk of the former charly-core
-// externalDeployTarget (deploy_target_external.go) + grpcSubstrateLifecycle
-// (substrate_lifecycle_grpc.go), ported here behind the ONE generic sdk.OpDeployDispatch
+// deploy_target.go — the S3b move: the ORCHESTRATION bulk of the former core-resident
+// deploy-target dispatcher and substrate lifecycle proxy (see CHANGELOG/2026.203.0212.md for the
+// full migration narrative), ported here behind the ONE generic sdk.OpDeployDispatch
 // selector. What did NOT move (per the Unit-6 design note's Q1-Q4 dispositions, verified against
 // the actual call graph, not assumed):
 //
@@ -41,9 +41,10 @@ import (
 // wrapper), recordVenueLedger, prepareReverseState, Del's ledger-read+teardown+PostTeardown,
 // ArtifactKey, PostApply, ready-to-dispatch Start/Stop/Status/Logs/Shell/Attach/Rebuild bodies.
 //
-// The type these methods used to hang off (externalDeployTarget / grpcSubstrateLifecycle) held a
-// core-private *grpcProvider — a shape that CANNOT move here (core constructs it at plugin-CONNECT
-// time, a clause-M mechanism). So every function below is constructed fresh, per dispatch call,
+// The type these methods used to hang off (the former core-resident deploy target / substrate
+// lifecycle proxy) held a core-private *grpcProvider — a shape that CANNOT move here (core
+// constructs it at plugin-CONNECT time, a clause-M mechanism). So every function below is
+// constructed fresh, per dispatch call,
 // from PLAIN DATA (word, name, node) + the *sdk.Executor this Invoke was given — never a stored
 // registry object. Reaching the ACTUAL substrate provider (candy/plugin-deploy-pod, -vm, -local,
 // candy/plugin-kube, candy/plugin-adb) goes through exec.InvokeProvider (S1) — placement-agnostic,
@@ -187,8 +188,9 @@ func resolveRootExecutor(req spec.DeployTargetDispatchRequest) (deploykit.Deploy
 
 // --- Add / Update — the shared "apply" body -------------------------------------------------
 
-// handleDeployApply is the substrate-generic core of Add/Update (mirrors externalDeployTarget.apply
-// + grpcSubstrateLifecycle.PrepareVenue). Secret injection, artifact retrieval, and --verify STAY
+// handleDeployApply is the substrate-generic core of Add/Update (mirrors the former core-resident
+// deploy target's apply body + substrate lifecycle proxy's PrepareVenue). Secret injection,
+// artifact retrieval, and --verify STAY
 // core-side (see the file header) — this handles ONLY the substrate-apply step: PrepareVenue (for
 // a lifecycle substrate), the views+venue marshal, the actual substrate dispatch, recordDeploy,
 // recordVenueLedger.
@@ -320,8 +322,9 @@ func handleDeployApply(ctx context.Context, exec *sdk.Executor, req spec.DeployT
 		return reply, err
 	}
 
-	// ArtifactKey (mirrors externalDeployTarget.Add's post-apply key lookup — independent of
-	// PrepareVenue's live venue, runs on a plain ShellExecutor{} like the pre-move code).
+	// ArtifactKey (mirrors the former core-resident deploy target's Add post-apply key lookup —
+	// independent of PrepareVenue's live venue, runs on a plain ShellExecutor{} like the pre-move
+	// code).
 	if req.HasLifecycle {
 		akJSON, err := lifecycleInvoke(ctx, exec, req.Word, sdk.OpArtifactKey, req.Name, "", req.Node, nil, nil, req.HostEnvJSON)
 		if err == nil && len(akJSON) > 0 {
@@ -388,8 +391,8 @@ func preresolveSubstrate(ctx context.Context, exec *sdk.Executor, req spec.Deplo
 	return exec.InvokeProvider(ctx, "deploy", req.Word, sdk.OpPreresolve, pj, nil, sdk.InvokeProviderOpts{})
 }
 
-// prepareReverseState is the Fork-A pre-pass (mirrors externalDeployTarget.prepareReverseState
-// exactly): resolve {{.Home}} + capture deploy-time-stateful reverse inputs on the LIVE local
+// prepareReverseState is the Fork-A pre-pass (mirrors the former core-resident deploy target's
+// prepareReverseState exactly): resolve {{.Home}} + capture deploy-time-stateful reverse inputs on the LIVE local
 // executor BEFORE the views are (re-)marshalled, so each step's host-computed Reverse() is
 // faithful. Skipped when the plan carries neither a home-token step nor a ServicePackagedStep (the
 // SAME guard the pre-move code used — an unconditional ResolveHome call is a live podman
@@ -453,8 +456,8 @@ func venueUnitEnabled(ctx context.Context, exec deploykit.DeployExecutor, unit s
 }
 
 // ledgerPathsFor resolves the ledger root — ledgerRoot overrides kit.DefaultLedgerPaths() when
-// non-empty (a TEST redirecting to a temp dir; the pre-S3b externalDeployTarget carried a settable
-// `paths *kit.LedgerPaths` field for exactly this, see req.LedgerRoot's doc comment in
+// non-empty (a TEST redirecting to a temp dir; the pre-S3b former core-resident deploy target
+// carried a settable `paths *kit.LedgerPaths` field for exactly this, see req.LedgerRoot's doc comment in
 // sdk/schema/seam.cue). Mirrors kit.DefaultLedgerPaths's own path derivation.
 func ledgerPathsFor(ledgerRoot string) (*kit.LedgerPaths, error) {
 	if ledgerRoot == "" {
@@ -527,7 +530,7 @@ func recordDeploy(name, word string, distroCfgJSON json.RawMessage, ledgerRoot s
 // (ShellExecutor), the venue-side ledger write for a remote venue (a vm guest, or a nested
 // target:local child).
 //
-// R10 bed-found bug #6 in this cluster's move: the pre-move externalDeployTarget.recordVenueLedger
+// R10 bed-found bug #6 in this cluster's move: the pre-move core function's recordVenueLedger
 // set DeployRecord.Target to the receiver's t.prov.word (the substrate word — "vm"/"local"/…).
 // The free-function port dropped that field entirely (no `word` parameter existed), leaving
 // Target as the zero value "". That passed silently until the egress schema's
@@ -579,8 +582,8 @@ func recordVenueLedger(exec deploykit.DeployExecutor, plans []*deploykit.Install
 
 // --- Del ---------------------------------------------------------------------------------
 
-// handleDeployDel replays the RECORDED ReverseOps for this deploy (mirrors
-// externalDeployTarget.Del exactly): read the ledger record, resolve the teardown executor +
+// handleDeployDel replays the RECORDED ReverseOps for this deploy (mirrors the former
+// core-resident deploy target's Del exactly): read the ledger record, resolve the teardown executor +
 // reverse runner (a lifecycle substrate supplies the guest/venue executor via VenueExecutor so the
 // ops replay IN the guest), replay via deploykit.TeardownHostDeploy, then the substrate's
 // PostTeardown host-side cleanup.
@@ -756,7 +759,7 @@ func handleDeployStatus(ctx context.Context, exec *sdk.Executor, req spec.Deploy
 
 // handleDeployExec serves OpShell (charly cmd — the K4 `charly service` non-interactive capture
 // leg) and OpAttach (charly shell/cmd's interactive live-stdio leg), which DIFFER in venue choice
-// exactly like the pre-move grpcSubstrateLifecycle did: Shell ALWAYS dispatches on a host-local
+// exactly like the former core-resident substrate lifecycle proxy did: Shell ALWAYS dispatches on a host-local
 // venue (nil venueDesc — the substrate's own ARGV already encodes the remote-exec mechanics, e.g.
 // `podman exec <ctr> …` / `virsh …`, so running it via the live guest venue would double-remote
 // it); Attach dispatches WITH the live venue (podAttach/vm's attach resolver run the interactive

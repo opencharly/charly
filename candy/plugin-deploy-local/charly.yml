@@ -6,8 +6,8 @@ plugin-deploy-local:
             `target: local` (host:local direct-shell) and `host: user@machine` (SSH)
             deploys. A standalone Go module (go.mod + main.go) served over go-plugin gRPC
             via the charly plugin SDK; charly's loader host-builds the provider binary and
-            connects it OUT-OF-PROCESS (LocalTransport). externalDeployTarget.Add Invokes
-            it (OpExecute) with the deployment's InstallPlan VIEWS (the serializable
+            connects it OUT-OF-PROCESS (LocalTransport). The host's plugin-side deploy target's
+            Add Invokes it (OpExecute) with the deployment's InstallPlan VIEWS (the serializable
             per-step IR, with secrets injected + {{.Home}} resolved + each step's teardown
             ops captured host-side) + a venue descriptor, and the host's executor served on
             the broker (ShellExecutor for host:local, SSHExecutor for host:user@machine).

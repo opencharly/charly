@@ -128,9 +128,9 @@ func TestResolveHomeSubstitutesAcrossSteps(t *testing.T) {
 }
 
 // TestPrepareReverseState_SkipsVenueExecForApkOnlyPlan retired here (S3b): prepareReverseState
-// moved to candy/plugin-bundle/deploy_target.go alongside the externalDeployTarget logic it
-// belonged to — see candy/plugin-bundle/deploy_target_test.go for the ported test (same behavior,
-// same guard).
+// moved to candy/plugin-bundle/deploy_target.go alongside the deploy-dispatch logic it
+// belonged to (see CHANGELOG/2026.203.0212.md) — see candy/plugin-bundle/deploy_target_test.go for
+// the ported test (same behavior, same guard).
 
 // The env.d-sourcing managed block (written to the DESTINATION user's home) and the
 // guest login-shell detection moved into the out-of-process kit.WalkPlans finalizer

@@ -15,6 +15,12 @@ import (
 // stands up for the calling plugin's Invoke, so any plugin running with a reverse channel
 // (deploy/step/check/build) can reach them — the generalization of the RunHostStep ExternalPlugin
 // arm (one fixed OpExecute step) to "invoke ANY provider/op" + "request a host build".
+//
+// MIGRATION INVENTORY: this file's `kit` import (kit.VenueFromDescriptor, the S1
+// venue-scoped-executor-session re-materialization below) is UNTIL-FLOOR-SLIM-proper — it
+// exits with the reverse-broker floor slimming, at which point the venue re-materialization
+// this seam performs moves into the generic reverse-channel broker mechanism itself (clause-M,
+// kernel-resident) rather than a per-file core call site.
 
 // InvokeProvider dispatches op on another provider (class, reserved) on the calling plugin's
 // behalf (F10) — the host is the dispatch BROKER (plugin→host→plugin), since it owns the registry.

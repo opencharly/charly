@@ -6,8 +6,9 @@ plugin-deploy-pod:
             `target: pod` (the DEFAULT substrate: a deployment run as a container image via
             quadlet/podman). A standalone Go module (go.mod + main.go) served over go-plugin
             gRPC via the charly plugin SDK; charly's loader host-builds the provider binary
-            and connects it OUT-OF-PROCESS (LocalTransport). externalDeployTarget Invokes it
-            (OpExecute) with the deployment's InstallPlan VIEWS + a venue descriptor and the
+            and connects it OUT-OF-PROCESS (LocalTransport). The host's plugin-side deploy
+            target Invokes it (OpExecute) with the deployment's InstallPlan VIEWS + a venue
+            descriptor and the
             host's executor served on the broker. Unlike deploy:vm (whose plugin WALKS the
             plan inside the guest), pod bakes its install steps INTO the image at BUILD time:
             the host's pod lifecycle hook (pod_deploy_lifecycle.go) drives the overlay

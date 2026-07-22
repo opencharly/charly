@@ -92,7 +92,7 @@ func TestReservedWordRegistry_DeployBijection(t *testing.T) {
 	// ALL FIVE are externalized substrates: in externalizedDeploySubstrates AND
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
-	// substrateLifecycle registry left to assert against.
+	// per-substrate lifecycle registry left to assert against.
 	for _, w := range []string{"android", "k8s", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
 			t.Fatalf("%s must be in externalizedDeploySubstrates (the F1 source of truth)", w)

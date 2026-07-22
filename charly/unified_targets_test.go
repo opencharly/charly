@@ -14,8 +14,8 @@ import (
 // `local:`/`android:`/`k8s:` deploy under a vm/pod, tree position — e.g. check-substrate's
 // check-substrate-member, check-group's check-group-member, check-builder-vm's
 // check-builder-member) silently ran its plan/step walk on the OPERATOR'S HOST instead of the
-// parent venue, because pluginDeployTarget.Add never restored the pre-S3b
-// externalDeployTarget.apply's `t.exec = opts.ParentExec` swap. This test asserts BOTH halves of
+// parent venue, because pluginDeployTarget.Add never restored the pre-S3b former core-resident
+// deploy target's apply's `t.exec = opts.ParentExec` swap. This test asserts BOTH halves of
 // the fix directly, without needing a live plugin round-trip: t.exec is mutated to the LIVE
 // parent executor, AND the returned venue_json describes that SAME executor — so a future
 // refactor that restores only one half (e.g. sets t.exec but forgets the wire-safe descriptor, or

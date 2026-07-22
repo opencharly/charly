@@ -144,7 +144,7 @@ func TestArbiterBracketedStop_NoReleaseWhenNoPlan(t *testing.T) {
 }
 
 // TestPluginDeployTargetStop_PlanHookFailureNeverReleases proves the "not-attempted" path
-// team-lead's parity review required (grpcSubstrateLifecycle.Stop, substrate_lifecycle_grpc.go
+// team-lead's parity review required (the former core-resident substrate lifecycle proxy's Stop,
 // pre-S3b: release was skipped ONLY on a pre-dispatch plan-hook failure — the substrate was NEVER
 // ASKED to stop, so the resource is presumably still running and the claim must survive; a wrong
 // "always release after Stop" would free the claim for a still-running resource, letting a second
