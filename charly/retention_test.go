@@ -240,3 +240,128 @@ func TestPruneBuildCandyDirs(t *testing.T) {
 		t.Errorf("removed %d, want 5: %v", len(removed), removed)
 	}
 }
+
+// TestSelectDanglingImages covers the pure selection predicate behind both dangling-image
+// sweeps: onlyCharly=true (the default `charly clean` sweep) keeps only images carrying the
+// ai.opencharly.box label; onlyCharly=false (the `charly clean --deep` store-wide sweep) keeps
+// EVERY listed image, including the unlabeled multi-stage build intermediates the default sweep
+// can never see (the --deep gap this category exists to close).
+func TestSelectDanglingImages(t *testing.T) {
+	imgs := []kit.LocalImageInfo{
+		{ID: "aaa", Labels: map[string]string{"ai.opencharly.box": "foo"}, Size: 100},
+		{ID: "bbb", Labels: map[string]string{}, Size: 200}, // no charly label — an unlabeled build intermediate
+		{ID: "ccc", Labels: map[string]string{"ai.opencharly.box": "bar"}, Size: 300},
+	}
+
+	onlyCharly := selectDanglingImages(imgs, true)
+	if len(onlyCharly) != 2 {
+		t.Fatalf("onlyCharly: selected %d, want 2 (aaa, ccc): %+v", len(onlyCharly), onlyCharly)
+	}
+	for _, im := range onlyCharly {
+		if im.ID == "bbb" {
+			t.Errorf("onlyCharly: unlabeled image bbb must be excluded")
+		}
+	}
+
+	deep := selectDanglingImages(imgs, false)
+	if len(deep) != 3 {
+		t.Fatalf("deep (onlyCharly=false): selected %d, want 3 (every listed image): %+v", len(deep), deep)
+	}
+}
+
+// TestPruneDanglingImages_Deep_DryRun covers the --deep dry-run path: every listed dangling
+// image (including the unlabeled one) is reported as a would-remove candidate, the reported Size
+// bytes are summed into the returned total, and — because it's a dry run — no rmi is attempted
+// (verified indirectly: the stubbed listDanglingImages is the only image-listing seam touched,
+// and the function returns cleanly with no engine error).
+func TestPruneDanglingImages_Deep_DryRun(t *testing.T) {
+	origList, origFloor := listDanglingImages, liveBuildFloor
+	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
+	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
+			{ID: "aaa", Labels: map[string]string{"ai.opencharly.box": "foo"}, Size: 1000},
+			{ID: "bbb", Labels: map[string]string{}, Size: 2000}, // unlabeled intermediate
+		}, nil
+	}
+
+	ids, totalBytes, err := pruneDanglingImages("podman", false, true)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("deep dry-run: removed %d ids, want 2: %v", len(ids), ids)
+	}
+	if totalBytes != 3000 {
+		t.Errorf("deep dry-run: totalBytes = %d, want 3000", totalBytes)
+	}
+}
+
+// TestPruneDanglingImages_CharlyOnly_DryRun covers the default (onlyCharly=true) dry-run path:
+// the unlabeled image is excluded from both the id list and the byte total — this is the
+// existing pruneDanglingCharlyImages behavior, now reached through the shared engine.
+func TestPruneDanglingImages_CharlyOnly_DryRun(t *testing.T) {
+	origList, origFloor := listDanglingImages, liveBuildFloor
+	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
+	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
+		return []kit.LocalImageInfo{
+			{ID: "aaa", Labels: map[string]string{"ai.opencharly.box": "foo"}, Size: 1000},
+			{ID: "bbb", Labels: map[string]string{}, Size: 2000}, // unlabeled — must be skipped
+		}, nil
+	}
+
+	ids, totalBytes, err := pruneDanglingImages("podman", true, true)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "aaa" {
+		t.Fatalf("charly-only dry-run: ids = %v, want [aaa]", ids)
+	}
+	if totalBytes != 1000 {
+		t.Errorf("charly-only dry-run: totalBytes = %d, want 1000 (bbb excluded)", totalBytes)
+	}
+
+	// pruneDanglingCharlyImages wraps the same shared engine with onlyCharly=true, dropping bytes.
+	wrapped, werr := pruneDanglingCharlyImages("podman", true)
+	if werr != nil {
+		t.Fatalf("pruneDanglingCharlyImages: %v", werr)
+	}
+	if len(wrapped) != 1 || wrapped[0] != "aaa" {
+		t.Fatalf("pruneDanglingCharlyImages: ids = %v, want [aaa]", wrapped)
+	}
+
+	// pruneDeepDanglingImages wraps the same shared engine with onlyCharly=false.
+	deepIDs, deepBytes, derr := pruneDeepDanglingImages("podman", true)
+	if derr != nil {
+		t.Fatalf("pruneDeepDanglingImages: %v", derr)
+	}
+	if len(deepIDs) != 2 {
+		t.Fatalf("pruneDeepDanglingImages: ids = %v, want 2 (both aaa and bbb)", deepIDs)
+	}
+	if deepBytes != 3000 {
+		t.Errorf("pruneDeepDanglingImages: totalBytes = %d, want 3000", deepBytes)
+	}
+}
+
+// TestPruneDeepDanglingImages_LiveBuildGuard proves --deep never touches storage while a build
+// is in flight — the same live-build protection every other image-removing sweep in this file
+// relies on. listDanglingImages is stubbed to fail the test if it's ever called: the guard must
+// short-circuit BEFORE listing.
+func TestPruneDeepDanglingImages_LiveBuildGuard(t *testing.T) {
+	origList, origFloor := listDanglingImages, liveBuildFloor
+	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
+	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{Year: 2026, Day: 1, HHMM: 1200}, true, 1 }
+	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
+		t.Fatal("listDanglingImages must not be called while a build is live")
+		return nil, nil
+	}
+
+	ids, totalBytes, err := pruneDeepDanglingImages("podman", true)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if ids != nil || totalBytes != 0 {
+		t.Errorf("live-build guard: got (%v, %d), want (nil, 0)", ids, totalBytes)
+	}
+}

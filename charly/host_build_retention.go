@@ -13,11 +13,14 @@ import (
 // command plugin (candy/plugin-clean), running ON the host but out-of-process, OWNS the clean command
 // (flag grammar, category orchestration, output, the pkg/arch makepkg sweep) and asks the host to run
 // the SHARED retention engine via Executor.HostBuild("retention", spec.RetentionRequest{...}). The
-// engine (pruneImagesByRetention / pruneBuildCandyDirs / pruneCheckRuns / invalidateImageTags) STAYS
-// core because it is multi-caller (charly box build, charly check run, charly box list tags all prune
-// too) + needs the core image inventory + OCI-label parsing — so it is reached via this generic action
-// noun, NOT a provider word (F11). This resolves the retention counts host-side (ResolveRuntime +
-// LoadConfig defaults + the --keep override) and returns the removed refs/dirs/paths + effective counts.
+// engine (pruneImagesByRetention / pruneBuildCandyDirs / pruneCheckRuns / invalidateImageTags /
+// pruneDeepDanglingImages) STAYS core because it is multi-caller (charly box build, charly check run,
+// charly box list tags all prune too) + needs the core image inventory + OCI-label parsing — so it is
+// reached via this generic action noun, NOT a provider word (F11). This resolves the retention counts
+// host-side (ResolveRuntime + LoadConfig defaults + the --keep override) and returns the removed
+// refs/dirs/paths + effective counts. req.Deep runs the store-wide untagged/dangling-image purge
+// category (`charly clean --deep`) — see pruneDeepDanglingImages (retention.go) for why it exists
+// alongside the charly-labeled sweep pruneImagesByRetention/pruneDanglingCharlyImages already run.
 const retentionBuilderKind = "retention"
 
 func hostBuildRetention(_ context.Context, req spec.RetentionRequest, _ buildEngineContext) (spec.RetentionReply, error) {
@@ -68,6 +71,14 @@ func hostBuildRetention(_ context.Context, req spec.RetentionRequest, _ buildEng
 			return spec.RetentionReply{Error: fmt.Sprintf("pruning check runs: %v", perr)}, nil
 		}
 		reply.CheckPaths = paths
+	}
+	if req.Deep {
+		ids, bytes, derr := pruneDeepDanglingImages(engineBin, req.DryRun)
+		if derr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("deep-purging dangling images: %v", derr)}, nil
+		}
+		reply.DeepIDs = ids
+		reply.DeepBytes = bytes
 	}
 	return reply, nil
 }
