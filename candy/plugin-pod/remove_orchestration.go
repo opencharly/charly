@@ -68,17 +68,18 @@ import (
 // (a defer runs at function-return time regardless of path, so "call it last" here reproduces the
 // exact same "always runs, after everything else" semantics).
 
-// podConfigHookSecretEnvKind / podConfigCleanDeployEntryKind / podConfigLoadBundleKind /
-// podConfigBoxEngineKind are wire kind strings for charly/host_build_pod_config_seams.go's
-// hostBuildPodConfigHookSecretEnv, hostBuildPodConfigCleanDeployEntry (NEW, this cutover),
-// hostBuildPodConfigLoadBundle, and hostBuildPodConfigBoxEngine (all four EXISTING except
-// CleanDeployEntry, reused as-is) — plain protocol literals (R3: kind names are wire strings, not
-// shared Go symbols, so each consuming module names its own const, same convention as
-// podConfigContainerTunnelKind in remove_tunnel.go).
+// podConfigHookSecretEnvKind / podConfigCleanDeployEntryKind / podConfigBoxEngineKind are wire
+// kind strings for charly/host_build_pod_config_seams.go's hostBuildPodConfigHookSecretEnv,
+// hostBuildPodConfigCleanDeployEntry (NEW, this cutover), and hostBuildPodConfigBoxEngine (both
+// EXISTING except CleanDeployEntry, reused as-is) — plain protocol literals (R3: kind names are
+// wire strings, not shared Go symbols, so each consuming module names its own const, same
+// convention as podConfigContainerTunnelKind in remove_tunnel.go). The sibling
+// "pod-config-load-bundle" kind is no longer named here — R3 hoist (charly#176 round 1):
+// resolveSidecarNames now calls the seam via sdk/deploykit.LoadBundleConfigViaSeam, which owns
+// that kind string itself (see this file's resolveSidecarNames doc comment).
 const (
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigCleanDeployEntryKind = "pod-config-clean-deploy-entry"
-	podConfigLoadBundleKind       = "pod-config-load-bundle"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 )
 
@@ -147,23 +148,25 @@ func purgeDeployArtifacts(engine, boxName, instance string) {
 
 // resolveSidecarNames returns the sorted set of sidecar key names attached to this deploy via
 // charly.yml. Relocated from charly/commands.go — its raw deploykit.LoadBundleConfig() call is
-// REROUTED through the EXISTING pod-config-load-bundle seam (an RDD-caught fix, see this file's
-// header): LoadBundleConfig silently no-ops unless deploykit.DeployStateHost is set, which happens
-// ONLY in charly-core's own init(), so a plugin calling it directly would silently see no sidecars
-// to clean up whenever NOT compiled into the charly-core process. Split into a thin seam-calling
-// wrapper (untested at unit level, same as every other pod-config-* seam call — proved live by the
-// disposable bed) and sidecarNamesFromBundleConfig, the pure extraction logic the ORIGINAL unit
-// test actually exercised, kept independently testable without a reverse channel.
+// REROUTED through the shared deploykit.LoadBundleConfigViaSeam helper (an RDD-caught fix, see
+// this file's header): LoadBundleConfig silently no-ops unless deploykit.DeployStateHost is set,
+// which happens ONLY in charly-core's own init(), so a plugin calling it directly would silently
+// see no sidecars to clean up whenever NOT compiled into the charly-core process. R3 hoist
+// (charly#176 round 1): this function used to carry its own local marshal/HostBuild/unmarshal
+// copy of the "pod-config-load-bundle" seam call — the SAME pattern
+// candy/plugin-bundle/ephemeral.go, candy/plugin-status/nested_tree.go, and
+// candy/plugin-substrate/status_flat.go each independently re-derived; sdk/deploykit's
+// LoadBundleConfigViaSeam is now the ONE shared implementation all four call. Kept as a thin
+// seam-calling wrapper (untested at unit level, same as every other pod-config-* seam call —
+// proved live by the disposable bed) around sidecarNamesFromBundleConfig, the pure extraction
+// logic the ORIGINAL unit test actually exercised, kept independently testable without a reverse
+// channel.
 func resolveSidecarNames(boxName, instance string) []string {
-	var rep spec.PodConfigLoadBundleReply
-	if err := hostPodSeamReply(podConfigLoadBundleKind, spec.PodConfigLoadDeployRequest{Caller: "charly remove sidecar sweep"}, &rep); err != nil || len(rep.ConfigJSON) == 0 {
+	dc, err := deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, "charly remove sidecar sweep")
+	if err != nil || dc == nil {
 		return nil
 	}
-	var dc deploykit.BundleConfig
-	if json.Unmarshal(rep.ConfigJSON, &dc) != nil {
-		return nil
-	}
-	return sidecarNamesFromBundleConfig(&dc, boxName, instance)
+	return sidecarNamesFromBundleConfig(dc, boxName, instance)
 }
 
 // sidecarNamesFromBundleConfig is the pure extraction logic pulled out of resolveSidecarNames so

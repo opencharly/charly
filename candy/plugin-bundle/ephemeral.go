@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,29 +41,19 @@ import (
 // core dependencies (os/exec + os.Executable + a self-invoked `charly bundle del`) and needed no
 // seam even before this move — confirmed by the unit-1 design note this cutover executes.
 
-// loadBundleConfig reads the per-host deploy overlay via the "pod-config-load-bundle" HostBuild
-// seam (placement-invariant — works identically compiled-in or out-of-process), mirroring
-// candy/plugin-pod/remove_orchestration.go's resolveSidecarNames. Returns (nil, nil) on an
-// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+// loadBundleConfig reads the per-host deploy overlay via the shared
+// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam,
+// placement-invariant — works identically compiled-in or out-of-process). R3 hoist (charly#176
+// round 1): this used to re-derive the marshal/HostBuild/unmarshal sequence locally, the SAME
+// pattern candy/plugin-pod/remove_orchestration.go's resolveSidecarNames,
+// candy/plugin-status/nested_tree.go, and candy/plugin-substrate/status_flat.go each carried as
+// their own near-identical copy — a fresh pr-validator review correctly rejected landing a 3rd
+// and 4th copy of one pattern in a single cutover; sdk/deploykit.LoadBundleConfigViaSeam is now
+// the ONE shared implementation all four call. Returns (nil, nil) on an absent/empty overlay,
+// matching deploykit.LoadBundleConfig's own contract.
 func loadBundleConfig() (*deploykit.BundleConfig, error) {
-	var rep spec.PodConfigLoadBundleReply
-	if err := hostDeploySeamJSON(podConfigLoadBundleSeamKind, spec.PodConfigLoadDeployRequest{Caller: "command:bundle ephemeral lifecycle"}, &rep); err != nil {
-		return nil, err
-	}
-	if len(rep.ConfigJSON) == 0 {
-		return nil, nil
-	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
-		return nil, err
-	}
-	return &dc, nil
+	return deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, "command:bundle ephemeral lifecycle")
 }
-
-// podConfigLoadBundleSeamKind names the EXISTING "pod-config-load-bundle" HostBuild kind (no
-// shared Go const across modules — each consumer names its own, the established convention, e.g.
-// candy/plugin-pod/remove_orchestration.go's podConfigLoadBundleKind).
-const podConfigLoadBundleSeamKind = "pod-config-load-bundle"
 
 // ephemeralHandle captures the runtime state returned by registerEphemeral and consumed by
 // teardownEphemeral. Internal to this plugin — the host discards the register reply's payload

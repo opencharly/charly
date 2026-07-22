@@ -32,44 +32,32 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the
-// "pod-config-load-bundle" HostBuild seam (bed-robustness batch item 5, the DeployStateHost
-// out-of-process-read audit — the operator ruling extending the fix beyond plugin-deploy-vm/
-// plugin-bundle to every unvetted grep hit in this class). candy/plugin-substrate is compiled-in
-// TODAY (in go.work's compiled_plugins list), so the sibling `deploykit.LoadBundleConfig()` direct
-// calls this replaces were CORRECT only by that per-BUILD placement accident — dual-placement is a
-// per-BUILD choice, never an authoring guarantee (the same reasoning already applied to
-// plugin-bundle's dormant twin, config_cmd.go). Mirrors candy/plugin-bundle/ephemeral.go's own
-// loadBundleConfig() (same seam, same PodConfigLoadDeployRequest/Reply shape) — this package
-// threads its executor via ctx (sdk.ExecutorForInvoke), the multi-call-per-process pattern this
-// VERB provider needs (unlike plugin-bundle's COMMAND-plugin package-var, which assumes exactly
-// one `charly bundle …` dispatch per process — unsafe to reuse here). Returns (nil, nil) on an
-// absent/empty overlay, matching deploykit.LoadBundleConfig's own contract.
+// loadBundleConfig reads the per-host deploy overlay (~/.config/charly/charly.yml) via the shared
+// deploykit.LoadBundleConfigViaSeam helper (the "pod-config-load-bundle" HostBuild seam —
+// bed-robustness batch item 5, the DeployStateHost out-of-process-read audit — the operator ruling
+// extending the fix beyond plugin-deploy-vm/plugin-bundle to every unvetted grep hit in this
+// class). candy/plugin-substrate is compiled-in TODAY (in go.work's compiled_plugins list), so the
+// sibling `deploykit.LoadBundleConfig()` direct calls this replaces were CORRECT only by that
+// per-BUILD placement accident — dual-placement is a per-BUILD choice, never an authoring
+// guarantee (the same reasoning already applied to plugin-bundle's dormant twin, config_cmd.go).
+// R3 hoist (charly#176 round 1): this used to carry its own local marshal/HostBuild/unmarshal copy
+// of the seam call, the SAME pattern candy/plugin-status/nested_tree.go,
+// candy/plugin-bundle/ephemeral.go, and candy/plugin-pod/remove_orchestration.go each
+// independently carried — a fresh pr-validator review correctly rejected the "plugin modules can't
+// cross-import each other" justification for landing a 3rd/4th copy of one pattern in a single
+// cutover; sdk/deploykit's LoadBundleConfigViaSeam is now the ONE shared implementation all four
+// call. This package still resolves its OWN executor via ctx (sdk.ExecutorForInvoke) before
+// delegating — the multi-call-per-process pattern this VERB provider needs (unlike plugin-bundle's
+// COMMAND-plugin package-var, which assumes exactly one `charly bundle …` dispatch per process —
+// unsafe to reuse here); HOW a caller obtains its executor stays outside the shared seam's
+// concern. Returns (nil, nil) on an absent/empty overlay, matching deploykit.LoadBundleConfig's
+// own contract.
 func loadBundleConfig(ctx context.Context) (*deploykit.BundleConfig, error) {
 	ex, err := sdk.ExecutorForInvoke(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("load bundle config: reach host reverse channel: %w", err)
 	}
-	reqJSON, err := json.Marshal(spec.PodConfigLoadDeployRequest{Caller: "candy/plugin-substrate status"})
-	if err != nil {
-		return nil, fmt.Errorf("load bundle config: marshal request: %w", err)
-	}
-	resJSON, err := ex.HostBuild(ctx, "pod-config-load-bundle", reqJSON)
-	if err != nil {
-		return nil, fmt.Errorf("load bundle config: %w", err)
-	}
-	var rep spec.PodConfigLoadBundleReply
-	if err := json.Unmarshal(resJSON, &rep); err != nil {
-		return nil, fmt.Errorf("load bundle config: decode reply: %w", err)
-	}
-	if len(rep.ConfigJSON) == 0 {
-		return nil, nil
-	}
-	var dc deploykit.BundleConfig
-	if err := json.Unmarshal(rep.ConfigJSON, &dc); err != nil {
-		return nil, fmt.Errorf("load bundle config: decode config: %w", err)
-	}
-	return &dc, nil
+	return deploykit.LoadBundleConfigViaSeam(ctx, ex, "candy/plugin-substrate status")
 }
 
 // runStatusFanout is the sdk.OpStatusCollectAll entry point (plugin.go): req.Single selects the
