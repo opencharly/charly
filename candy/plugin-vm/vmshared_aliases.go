@@ -94,11 +94,10 @@ var (
 // former core↔plugin byte-for-byte duplication (FU-10). These aliases keep the
 // package-main call sites unchanged.
 var (
-	qemuSystemBinary       = vmshared.QemuSystemBinary
-	libvirtSessionSocket   = vmshared.LibvirtSessionSocket
-	writeJSON              = vmshared.WriteJSON
-	isDeviceElement        = vmshared.IsDeviceElement
-	ValidateLibvirtSnippet = vmshared.ValidateLibvirtSnippet
+	qemuSystemBinary     = vmshared.QemuSystemBinary
+	libvirtSessionSocket = vmshared.LibvirtSessionSocket
+	writeJSON            = vmshared.WriteJSON
+	isDeviceElement      = vmshared.IsDeviceElement
 )
 
 const (
