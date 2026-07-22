@@ -711,20 +711,21 @@ func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 	return hostCtx
 }
 
-// preresolveBuildersInto runs the host-side builder PRE-PASS (builder_preresolve.go) and returns
-// hostCtx with BuilderContext populated, so the subsequent PURE BuildDeployPlan compile reads
-// pre-resolved builder data (stage context + teardown ops) and NEVER dials a builder plugin. The
-// pre-pass connects EXACTLY the externalized builder plugins the deploy's resolved closure triggers,
-// on-demand + distro-gated (so a fedora deploy never connects aur), using cfg/dir to scan + load
-// scoped to those words. A pre-pass error (an externalized builder whose plugin won't connect) is
-// FATAL, never a silent skip (R4). Called at every BuildDeployPlan compile site so the purity
-// invariant holds uniformly.
+// preresolveBuildersInto runs the host-side builder pre-pass CONNECT half (builder_preresolve.go,
+// FLOOR-SLIM-proper Unit-8) — it no longer populates hostCtx.BuilderContext itself (that RPC half
+// moved to candy/plugin-bundle's OWN preresolveBuilderContexts, called from compile.go's
+// compileDeployPlans over exec.InvokeProvider, which already holds a live executor + the
+// re-hydrated resolved-project envelope those RPCs need). What stays here is genuinely host-only:
+// ensuring EXACTLY the externalized builder plugins the deploy's resolved closure triggers are
+// build-connected BEFORE the compile is dispatched — on-demand + distro-gated (so a fedora deploy
+// never connects aur), using cfg/dir to scan + load scoped to those words (loadProjectPlugins /
+// ScanAllCandyWithConfigOpts are core-private project-loading mechanics no plugin can reach). A
+// connect error (an externalized builder whose plugin won't connect) is FATAL, never a silent skip
+// (R4). Called at every BuildDeployPlan compile site so the connectivity invariant holds uniformly.
 func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
-	bc, err := preresolveBuilderContexts(context.Background(), cfg, dir, order, layers, img)
-	if err != nil {
+	if err := ensureBuildersConnectedForOrder(context.Background(), cfg, dir, order, layers, img); err != nil {
 		return hostCtx, err
 	}
-	hostCtx.BuilderContext = bc
 	return hostCtx, nil
 }
 

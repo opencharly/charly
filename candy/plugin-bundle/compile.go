@@ -38,12 +38,13 @@ func runBundleCompile(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 		return nil, fmt.Errorf("bundle compile: reach host reverse channel: %w", err)
 	}
 	setCommandContext(ctx, exec)
-	return compileDeployPlans(ctx, req)
+	return compileDeployPlans(ctx, exec, req)
 }
 
-// compileDeployPlans re-hydrates the resolved-project envelope + the per-node selection, loops
+// compileDeployPlans re-hydrates the resolved-project envelope + the per-node selection, runs the
+// builder deploy-time pre-pass (FLOOR-SLIM-proper Unit-8 — see builder_preresolve.go), loops
 // deploykit.BuildDeployPlan, and returns the compiled plans as a marshalled DeployCompileReply.
-func compileDeployPlans(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var r spec.DeployCompileRequest
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &r); err != nil {
@@ -71,7 +72,7 @@ func compileDeployPlans(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 	// Re-hydrate the resolved box from its envelope view + the project vocab maps.
 	img := deploykit.NewSpecResolvedBox(r.BoxView, rp.Distro, rp.Builder)
 
-	// Re-hydrate the host-side HostContext (incl. the preresolved BuilderContext).
+	// Re-hydrate the host-side HostContext.
 	var hostCtx deploykit.HostContext
 	if len(r.HostContextJSON) > 0 {
 		if err := json.Unmarshal(r.HostContextJSON, &hostCtx); err != nil {
@@ -79,17 +80,35 @@ func compileDeployPlans(_ context.Context, req *pb.InvokeRequest) (*pb.InvokeRep
 		}
 	}
 
-	// Loop the pure compiler over the host-provided FINAL pruned candy order.
+	// Loop the pure compiler over the host-provided FINAL pruned candy order. Re-hydrate every
+	// candy's CandyModel ONCE up front (shared by the builder pre-pass below AND the compile
+	// loop, R3 — no double NewSpecCandyModel construction).
 	order := r.Order
-	plans := make([]*spec.InstallPlan, 0, len(order))
+	candyModels := make(map[string]spec.CandyReader, len(order))
 	for _, name := range order {
 		cm, cmOk := rp.CandyModels[name]
 		cv, cvOk := rp.Candies[name]
 		if !cmOk || !cvOk {
 			return nil, fmt.Errorf("bundle compile: candy %q not in resolved-project envelope (order=%v)", name, order)
 		}
-		model := deploykit.NewSpecCandyModel(cm, cv)
-		p, err := deploykit.BuildDeployPlan(model, img, hostCtx)
+		candyModels[name] = deploykit.NewSpecCandyModel(cm, cv)
+	}
+
+	// The deploy-time builder pre-pass (FLOOR-SLIM-proper Unit-8): populate
+	// hostCtx.BuilderContext BEFORE the pure compile loop below, using exec.InvokeProvider
+	// against the SAME builder plugins the host's own connect step (charly-core's
+	// ensureBuildersConnected) already build-connected. Replaces the host pre-populating this
+	// field on r.HostContextJSON.
+	builderCtx, err := preresolveBuilderContexts(ctx, exec, order, candyModels, rp.ExternalizedBuilders, img)
+	if err != nil {
+		return nil, fmt.Errorf("bundle compile: builder pre-pass: %w", err)
+	}
+	if builderCtx != nil {
+		hostCtx.BuilderContext = builderCtx
+	}
+	plans := make([]*spec.InstallPlan, 0, len(order))
+	for _, name := range order {
+		p, err := deploykit.BuildDeployPlan(candyModels[name], img, hostCtx)
 		if err != nil {
 			return nil, fmt.Errorf("bundle compile: BuildDeployPlan(%s): %w", name, err)
 		}

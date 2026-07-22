@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"maps"
 	"os"
@@ -164,11 +165,6 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	imgOld.DistroDef = distroCfg.ResolveDistro(imgOld.Distro)
 
 	boxView := projectResolvedBox(imgOld)
-	hostCtx := deploykit.HostContext{}
-	hostCtxJSON, err := json.Marshal(hostCtx)
-	if err != nil {
-		t.Fatalf("marshal host context: %v", err)
-	}
 
 	candidates := []string{"ripgrep", "dev-tools", "pre-commit"}
 	var exercised []string
@@ -180,13 +176,28 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 			t.Logf("fixture %q not present in layers; skipping", name)
 			continue
 		}
+		// FLOOR-SLIM-proper Unit-8: candy/plugin-bundle's own compileDeployPlans now ALWAYS runs
+		// the builder deploy-time pre-pass itself (over exec.InvokeProvider) before its BuildDeployPlan
+		// loop — the host no longer pre-populates hostCtx.BuilderContext at all (builder_preresolve.go
+		// keeps only the CONNECT step). So OLD must ALSO see a REAL, populated BuilderContext (computed
+		// here via the host's own STILL-live providerRegistry — this test process has the pixi/npm/
+		// cargo/aur plugins connected from ScanAllCandyWithConfig above) for the comparison to be
+		// apples-to-apples; an artificially-empty hostCtx on both sides would silently stop exercising
+		// the pixi-builder reverse_ops the "pre-commit" fixture is specifically chosen to cover.
+		hostCtx := deploykit.HostContext{BuilderContext: testPreresolveBuilderContext(t, cfg, dir, name, layer, imgOld)}
+		hostCtxJSON, err := json.Marshal(hostCtx)
+		if err != nil {
+			t.Fatalf("marshal host context (%s): %v", name, err)
+		}
 		// OLD: the former live host-compile (BuildDeployPlan over the runtime *Candy graph).
 		oldPlan, err := deploykit.BuildDeployPlan(layer, imgOld, hostCtx)
 		if err != nil {
 			t.Fatalf("OLD BuildDeployPlan(%s): %v", name, err)
 		}
-		// NEW: the K4-B plugin compile — host computes the selection, plugin re-hydrates the envelope
-		// + loops BuildDeployPlan + projects views, host re-materializes via PlanFromView.
+		// NEW: the K4-B plugin compile — host computes the selection, plugin re-hydrates the envelope,
+		// runs its OWN builder pre-pass (ignoring/recomputing hostCtxJSON.BuilderContext — production
+		// never sends one populated any more), loops BuildDeployPlan + projects views, host
+		// re-materializes via PlanFromView.
 		plans, err := (&deployAddCmd{}).compileViaPlugin(spec.DeployCompileRequest{
 			Dir:             dir,
 			BoxView:         boxView,
@@ -253,13 +264,20 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 	t.Run("can_fail", func(t *testing.T) {
 		perturbed := projectResolvedBox(imgOld)
 		perturbed.Home = "/home/OTHER"
+		// An empty HostContextJSON matches production reality post-Unit-8: the host no longer
+		// pre-populates BuilderContext at all — command:bundle's compileDeployPlans always
+		// recomputes it itself, regardless of what (if anything) rides the wire.
+		emptyHostCtxJSON, err := json.Marshal(deploykit.HostContext{})
+		if err != nil {
+			t.Fatalf("marshal empty host context: %v", err)
+		}
 		var broke bool
 		for _, name := range exercised {
 			plans, err := (&deployAddCmd{}).compileViaPlugin(spec.DeployCompileRequest{
 				Dir:             dir,
 				BoxView:         perturbed,
 				Order:           []string{name},
-				HostContextJSON: hostCtxJSON,
+				HostContextJSON: emptyHostCtxJSON,
 			})
 			if err != nil {
 				t.Fatalf("perturbed compileViaPlugin(%s): %v", name, err)
@@ -299,3 +317,81 @@ func mustMarshalJSON(t *testing.T, v any) []byte {
 
 // silence the os import if compilerTestProjectDir's cleanup is the only consumer in some build configs.
 var _ = os.Chdir
+
+// testPreresolveBuilderContext mirrors candy/plugin-bundle/builder_preresolve.go's
+// preresolveBuilderContexts for a SINGLE candy, but dispatches via the host's OWN
+// providerRegistry/Invoke (available in-process here, unlike a real plugin, which reaches the same
+// builder plugins via exec.InvokeProvider) — the FLOOR-SLIM-proper Unit-8 test-side twin that lets
+// this parity test's "OLD" comparison see the SAME real builder pre-resolution production now runs
+// exclusively plugin-side. ensureBuildersConnected is charly-core's own (unmoved) connect step —
+// same one preresolveBuildersInto calls in production.
+func testPreresolveBuilderContext(t *testing.T, cfg *Config, dir, name string, layer spec.CandyReader, img *buildkit.ResolvedBox) map[string]deploykit.BuilderPreresolved {
+	t.Helper()
+	needed := deploykit.DetectExternalizedBuilders([]string{name}, map[string]spec.CandyReader{name: layer}, externalizedBuilders, img)
+	if len(needed) == 0 {
+		return nil
+	}
+	if err := ensureBuildersConnected(context.Background(), cfg, dir, needed); err != nil {
+		// Connect can legitimately no-op-succeed here (every needed builder is already connected
+		// from ScanAllCandyWithConfig's project load above) — only fail loudly on a REAL gap.
+		for _, w := range needed {
+			if _, ok := providerRegistry.ResolveBuilder(w); !ok {
+				t.Fatalf("testPreresolveBuilderContext(%s): builder %q not connected: %v", name, w, err)
+			}
+		}
+	}
+	var out map[string]deploykit.BuilderPreresolved
+	for _, bName := range needed {
+		if img.BuilderConfig == nil {
+			continue
+		}
+		bDef := img.BuilderConfig.Builder[bName]
+		if bDef == nil || !deploykit.CandyNeedsBuilderStep(layer, bDef) {
+			continue
+		}
+		prov, ok := providerRegistry.ResolveBuilder(bName)
+		if !ok {
+			t.Fatalf("testPreresolveBuilderContext(%s): builder %q is externalized but not connected", name, bName)
+		}
+		in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: bName, Home: img.Home}
+		if bDef.DetectConfig != "" {
+			if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
+				in.Packages = append([]string(nil), sec.Packages...)
+				if raw, ok := sec.Raw["replaces"]; ok {
+					if list, ok := deploykit.StringSliceFromYAML(raw); ok {
+						in.Replaces = list
+					}
+				}
+			}
+		}
+		params, err := marshalJSON(in)
+		if err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): marshal collect-context input: %v", name, err)
+		}
+		res, err := prov.Invoke(context.Background(), &Operation{Reserved: bName, Op: OpCollectContext, Params: params})
+		if err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): builder %q collect-context: %v", name, bName, err)
+		}
+		var collectReply spec.BuilderCollectReply
+		if err := json.Unmarshal(res.JSON, &collectReply); err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): decode collect-context reply: %v", name, err)
+		}
+		revParams, err := marshalJSON(spec.BuilderReverseInput{Candy: layer.GetName(), Builder: bName, Context: collectReply.Context})
+		if err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): marshal reverse input: %v", name, err)
+		}
+		revRes, err := prov.Invoke(context.Background(), &Operation{Reserved: bName, Op: OpReverse, Params: revParams})
+		if err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): builder %q reverse: %v", name, bName, err)
+		}
+		var reverseReply spec.BuilderReverseReply
+		if err := json.Unmarshal(revRes.JSON, &reverseReply); err != nil {
+			t.Fatalf("testPreresolveBuilderContext(%s): decode reverse reply: %v", name, err)
+		}
+		if out == nil {
+			out = map[string]deploykit.BuilderPreresolved{}
+		}
+		out[deploykit.BuilderCtxKey(layer.GetName(), bName)] = deploykit.BuilderPreresolved{Context: collectReply.Context, Reverse: reverseReply.ReverseOps}
+	}
+	return out
+}
