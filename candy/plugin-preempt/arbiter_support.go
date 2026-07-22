@@ -1,7 +1,6 @@
 package preempt
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,7 +93,9 @@ func (a *ResourceArbiter) firstPoisonedToken(tokens []string) string {
 
 // ownerAlive reports whether the process that created a lease is still running, guarding PID
 // reuse by matching the recorded /proc start-time. pid<=0 (a pre-upgrade lease) reads not-alive.
-func ownerAlive(pid int, start string) bool {
+// pid is int64 (spec.PreemptLease.OwnerPID's CUE-generated wire type — a CUE `int` defaults to
+// Go int64; a real PID always fits).
+func ownerAlive(pid int64, start string) bool {
 	if pid <= 0 {
 		return false
 	}
@@ -106,7 +107,7 @@ func ownerAlive(pid int, start string) bool {
 }
 
 // procStartTime returns a process's kernel start-time (field 22 of /proc/<pid>/stat).
-func procStartTime(pid int) (string, error) {
+func procStartTime(pid int64) (string, error) {
 	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
 		return "", err
@@ -127,7 +128,7 @@ func procStartTime(pid int) (string, error) {
 // selfProcStart is the current process's start-time, stamped onto a lease for the PID-reuse cross
 // check. Best-effort ("" disables only the cross-check, never liveness).
 func selfProcStart() string {
-	st, _ := procStartTime(os.Getpid())
+	st, _ := procStartTime(int64(os.Getpid()))
 	return st
 }
 
@@ -233,18 +234,10 @@ func intersect(a, b []string) []string {
 	return out
 }
 
-// errStr / errFromString are the reverse-channel string<->error convention (used by the arbiter
-// Invoke replies + the host-seam decoders).
+// errStr is the reverse-channel error->string convention used by the arbiter's Invoke replies.
 func errStr(err error) string {
 	if err != nil {
 		return err.Error()
 	}
 	return ""
-}
-
-func errFromString(s string) error {
-	if s == "" {
-		return nil
-	}
-	return errors.New(s)
 }

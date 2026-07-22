@@ -48,8 +48,6 @@ type vmEnv struct {
 	// Snap carries a snapshot-internal op — the host orchestration (refcount/ledger in vm_snapshot.go)
 	// stays core; only the go-libvirt internal func runs here.
 	Snap *vmSnapInternalReq `json:"snap,omitempty"`
-	// StateDir is the direct-QEMU VM's state dir (the QMP socket) for the qemu-shutdown op (govmm QMP).
-	StateDir string `json:"state_dir,omitempty"`
 }
 
 // vmSnapInternalReq is the snapshot-internal op payload (the go-libvirt internal snapshot funcs).
@@ -419,19 +417,6 @@ func dispatchInternalOp(env vmEnv) (*pb.InvokeReply, error) {
 			names = append(names, d.Name)
 		}
 		return internalJSON(map[string]any{"names": names})
-
-	case "qemu-shutdown":
-		// Direct-QEMU graceful (system_powerdown) / force (quit) shutdown over govmm QMP.
-		var qerr error
-		if env.Force {
-			qerr = qemuForceShutdown(env.StateDir)
-		} else {
-			qerr = qemuGracefulShutdown(env.StateDir)
-		}
-		if qerr != nil {
-			return internalJSON(map[string]any{"error": qerr.Error()})
-		}
-		return internalJSON(map[string]any{"ok": true})
 
 	default:
 		return internalJSON(map[string]any{"error": "unknown internal vm op: " + env.VmOp})
