@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -174,78 +173,3 @@ func TestNoteUpdateDisposability(t *testing.T) {
 	}
 }
 
-// TestExtractQuadletImageLine guards the 2026-05-26 cross-pollution
-// fix on updateAllDeployedQuadlets. The function preserves the
-// operator-chosen Image= line on a sibling deploy when an unrelated
-// `charly update <bed>` triggers a cross-deploy env refresh; the test
-// covers the happy path (Image= present), the absent-Image= path
-// (caller falls back to fresh resolution), and the missing-file path
-// (caller falls back).
-func TestExtractQuadletImageLine(t *testing.T) {
-	dir := t.TempDir()
-	cases := []struct {
-		name    string
-		content string
-		want    string
-		wantErr bool
-	}{
-		{
-			name: "Image= present at top of [Container] block",
-			content: `[Unit]
-Description=x
-
-[Container]
-Image=ghcr.io/opencharly/versa:2026.135.1326
-ContainerName=charly-versa-ecovoyage
-`,
-			want: "ghcr.io/opencharly/versa:2026.135.1326",
-		},
-		{
-			name: "Image= with sidecar Pod= directive (still finds the right line)",
-			content: `[Container]
-Pod=charly-versa.pod
-Image=ghcr.io/tailscale/tailscale:latest
-ContainerName=charly-versa-tailscale
-`,
-			want: "ghcr.io/tailscale/tailscale:latest",
-		},
-		{
-			name: "no Image= line returns empty without error (caller falls back)",
-			content: `[Unit]
-Description=missing-image
-
-[Container]
-ContainerName=charly-broken
-`,
-			want: "",
-		},
-		{
-			name:    "missing file returns error",
-			content: "", // signal: don't create file
-			wantErr: true,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(dir, "test-"+tc.name+".container")
-			if tc.content != "" || tc.name != "missing file returns error" {
-				if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
-					t.Fatalf("write: %v", err)
-				}
-			}
-			got, err := extractQuadletImageLine(path)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tc.want {
-				t.Errorf("imageRef = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}

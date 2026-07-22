@@ -131,7 +131,7 @@ func TestQuadletSecretEnvDirectives(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // Step 4 tests: credential resolution for secret_accepts / secret_requires.
-// These exercise resolveSecretValue's new Service/Key override path and
+// These exercise deploykit.ResolveSecretValue's new Service/Key override path and
 // CollectCandySecretAccepts against an in-memory ConfigFileStore backed by a
 // temp directory. They do not touch podman (which would require a live
 // daemon); the RotateOnConfig short-circuit bypass is validated by the live
@@ -163,7 +163,7 @@ func withIsolatedCredentialStore(t *testing.T) *fakeCredentialStore {
 }
 
 // TestResolveSecretValueServiceKeyOverride — the new Service/Key override
-// path on resolveSecretValue queries the credential store at the exact path
+// path on deploykit.ResolveSecretValue queries the credential store at the exact path
 // the candy author requested (via `key: charly/api-key/routea`) and returns the
 // value verbatim. The default fallback chain is NOT used when both Service
 // and Key are set.
@@ -190,7 +190,7 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 		Key:            "routea",
 		RotateOnConfig: true,
 	}
-	val, src := resolveSecretValue(cs, "openwebui", "")
+	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", CredServiceVNC, ResolveCredential)
 	if val != "test-from-override" {
 		t.Errorf("resolveSecretValue value mismatch, source=%q", src)
 	}
@@ -200,7 +200,7 @@ func TestResolveSecretValueServiceKeyOverride(t *testing.T) {
 }
 
 // TestResolveSecretValueServiceKeyOverrideMissing — when the override path is
-// set but the credential store has no value there, resolveSecretValue returns
+// set but the credential store has no value there, deploykit.ResolveSecretValue returns
 // ("", "default") immediately without falling back to the legacy chain. This
 // matters for the secret_requires hard-fail path: we want the failure to be
 // visible at the exact key the candy author specified, not masked by a
@@ -222,7 +222,7 @@ func TestResolveSecretValueServiceKeyOverrideMissing(t *testing.T) {
 		Key:            "routeb", // override path is empty in the seeded store
 		RotateOnConfig: true,
 	}
-	val, src := resolveSecretValue(cs, "openwebui", "")
+	val, src := deploykit.ResolveSecretValue(cs, "openwebui", "", CredServiceVNC, ResolveCredential)
 	if val != "" {
 		t.Errorf("resolveSecretValue returned a non-empty value (source=%q) — the override branch must not fall through to the legacy chain", src)
 	}
@@ -247,7 +247,7 @@ func TestResolveSecretValueLegacyChainUnchanged(t *testing.T) {
 		SecretName: "db-password",
 		// Service / Key left empty — use legacy chain
 	}
-	val, _ := resolveSecretValue(cs, "immich", "")
+	val, _ := deploykit.ResolveSecretValue(cs, "immich", "", CredServiceVNC, ResolveCredential)
 	if val != "legacy-value" {
 		t.Errorf("legacy chain value = %q, want %q", val, "legacy-value")
 	}

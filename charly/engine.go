@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -11,11 +10,13 @@ import (
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
 // resolution → deploykit + the deploy/bundle plugins). ResolveBoxEngine (needs
-// *Config/layers via cfg.BoxConfig/ResolveCandyOrder) / ResolveBoxEngineFromDir (needs
-// LoadConfig) / ImageRuntime (a pure *kit.ResolvedRuntime copy, kept alongside its sibling
-// resolvers) are consumed from resolved_project_host.go and start.go — none movable in
-// isolation without also relocating the loader dependency. Stays core until the K4
-// deploy-cone wave moves the whole consumer set together.
+// *Config/layers via cfg.BoxConfig/ResolveCandyOrder) is consumed from
+// resolved_project_host.go — not movable in isolation without also relocating the loader
+// dependency. Stays core until the K4 deploy-cone wave moves the whole consumer set
+// together. (Its former siblings ImageRuntime and ResolveBoxEngineFromDir, and their
+// claimed resolved_project_host.go/start.go call sites, were dead-code-radical-removal-batch
+// deletions — zero real callers anywhere; start.go no longer exists, and
+// resolved_project_host.go never called either.)
 //
 // The per-deploy (no-charly.yml) twins ResolveBoxEngineForDeploy/ResolveBoxEngineFromMeta
 // used to be duplicated HERE too — a bare copy of sdk/deploykit's own versions
@@ -50,27 +51,3 @@ func ResolveBoxEngine(cfg *Config, layers map[string]spec.CandyReader, boxName s
 	return globalRunEngine
 }
 
-// ImageRuntime returns a copy of rt with RunEngine adjusted for the given image.
-// If imageEngine is empty or matches the existing RunEngine, returns the original runtime.
-func ImageRuntime(rt *kit.ResolvedRuntime, imageEngine string) *kit.ResolvedRuntime {
-	if imageEngine == "" || imageEngine == rt.RunEngine {
-		return rt
-	}
-	rtCopy := *rt
-	rtCopy.RunEngine = imageEngine
-	return &rtCopy
-}
-
-// ResolveBoxEngineFromDir resolves the run engine for an image using charly.yml
-// from the given directory. Falls back to globalEngine if no config is available.
-func ResolveBoxEngineFromDir(dir, boxName, globalEngine string) string {
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return globalEngine
-	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return globalEngine
-	}
-	return ResolveBoxEngine(cfg, layers, boxName, globalEngine)
-}

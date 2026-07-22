@@ -559,23 +559,6 @@ func withLocalRawRefs(opts ResolveOpts, localScanned map[string]spec.ScannedCand
 	return opts
 }
 
-// CandyNames returns a sorted list of candy names
-func CandyNames(layers map[string]spec.CandyReader) []string {
-	names := make([]string, 0, len(layers))
-	for name := range layers {
-		names = append(names, name)
-	}
-	kit.SortStrings(names)
-	return names
-}
-
-// ScanAllCandy scans local candies and all remote candies, returning a merged map.
-// Local candies are keyed by short name, remote candies by fully-qualified path.
-// Remote refs are collected from @-prefixed refs in the candy manifest and charly.yml.
-func ScanAllCandy(dir string) (map[string]spec.CandyReader, error) {
-	return ScanAllCandyWithConfig(dir, nil)
-}
-
 // ScanAllCandyWithConfig is the default-opts wrapper (enabled images only)
 // around ScanAllCandyWithConfigOpts. Most call sites (deploy-mode, runtime,
 // inspect) want enabled-only scanning and keep this two-arg form.

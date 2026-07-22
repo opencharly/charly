@@ -280,9 +280,9 @@ func TestScanRemoteCandies(t *testing.T) {
 }
 
 func TestScanAllCandiesNoRemote(t *testing.T) {
-	layers, err := ScanAllCandy("testdata")
+	layers, err := ScanAllCandyWithConfig("testdata", nil)
 	if err != nil {
-		t.Fatalf("ScanAllCandy() error = %v", err)
+		t.Fatalf("ScanAllCandyWithConfig() error = %v", err)
 	}
 
 	localCandies, err := ScanCandy("testdata")

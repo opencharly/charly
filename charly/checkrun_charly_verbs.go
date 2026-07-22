@@ -24,7 +24,8 @@ import (
 // fetched via @github (the SAME walk-up the deploy path uses, R3). The check's
 // Origin is "candy:<key>" where <key> is the candy MAP KEY (a bare name for a
 // local candy, the bare @github ref for a fetched one) — CandyDirs is keyed by
-// that same key (candySourceDirs), so the single lookup matches in both cases.
+// that same key (ScanAllCandyWithConfig + candyDirsFromScan, check_cmd.go), so the single
+// lookup matches in both cases.
 //
 // It FAILS HARD (returns an error) on every condition where the fixture cannot
 // be anchored — a non-candy origin (the step's Origin was lost upstream), an

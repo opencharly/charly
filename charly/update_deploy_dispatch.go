@@ -25,8 +25,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
@@ -121,32 +119,6 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 			deployName, node.Target)
 	}
 	return lt.Rebuild(context.Background(), RebuildOpts{RebuildImage: c.Build})
-}
-
-// quadletImageLineRe matches the `Image=<value>` directive on its own
-// line in a quadlet `.container` file. Multi-line mode (`(?m)`) anchors
-// `^` / `$` at line boundaries.
-var quadletImageLineRe = regexp.MustCompile(`(?m)^Image=.*$`)
-
-// extractQuadletImageLine returns the value of the `Image=<value>`
-// directive in the quadlet at `path`. Returns ("", error) when the file
-// cannot be read; returns ("", nil) when the file is readable but
-// contains no Image= directive (caller decides whether to fall back).
-// Used by updateAllDeployedQuadlets to preserve the operator-chosen
-// image ref across cross-deploy quadlet refreshes — see the bug-fix
-// note in that function for the cross-pollution case the bare
-// resolveShellImageRef lookup falls victim to when a sibling deploy's
-// alias tag has been re-tagged onto the base image.
-func extractQuadletImageLine(path string) (string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	m := quadletImageLineRe.FindString(string(content))
-	if m == "" {
-		return "", nil
-	}
-	return strings.TrimPrefix(m, "Image="), nil
 }
 
 // noteUpdateDisposability prints a one-line transparency note when an EXPLICIT

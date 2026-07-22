@@ -297,15 +297,6 @@ var _ = func() bool {
 	return true
 }()
 
-// podDeployEngine returns the container engine for a pod deploy node — node.Engine when set, else
-// "podman" (the default). Used by the overlay-image teardown.
-func podDeployEngine(node *spec.BundleNode) string {
-	if node != nil && node.Engine != "" {
-		return node.Engine
-	}
-	return "podman"
-}
-
 // overlayBuildContextCache holds the live overlay buildEngineContext per project dir for the
 // "step-emit" host-builder's "oci-emit-step" emitter (P11c). Populated by hostBuildOverlay's
 // prep+resolve (the overlay core *Generator + DistroDef/BuilderConfig/Box/ImageBuildDir/

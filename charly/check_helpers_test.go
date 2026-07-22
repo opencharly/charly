@@ -14,16 +14,16 @@ import (
 // hostVerbResolverFor builds a *hostVerbResolver over a kit.Runner with the given venue
 // executor + mode (+ optional distro tags) — the in-proc host CheckContext / verb-dispatch
 // source a compiled-in kit verb's RunVerb and the host provision/plugin helpers consume. In
-// production newCheckRunner builds one internally; a unit test dispatching a single verb (or a
-// host helper directly) wants the resolver.
+// production newCheckRunner builds one internally (a &hostVerbResolver{} struct literal); a
+// unit test dispatching a single verb (or a host helper directly) wants the resolver.
 func hostVerbResolverFor(exec deploykit.DeployExecutor, mode RunMode, distros ...string) *hostVerbResolver {
-	return newHostVerbResolver(kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros}))
+	return &hostVerbResolver{kr: kit.NewRunner(kit.RunnerConfig{Exec: exec, Mode: mode, Distros: distros})}
 }
 
 // hostVerbResolverWithCandyDirs builds a *hostVerbResolver over a kit.Runner carrying the given
 // committed-APK anchoring state — for exercising resolveCheckApk directly.
 func hostVerbResolverWithCandyDirs(dirs map[string]string, scanErr error) *hostVerbResolver {
-	return newHostVerbResolver(kit.NewRunner(kit.RunnerConfig{CandyDirs: dirs, CandyScanErr: scanErr}))
+	return &hostVerbResolver{kr: kit.NewRunner(kit.RunnerConfig{CandyDirs: dirs, CandyScanErr: scanErr})}
 }
 
 // testdataDir is the project directory used by test fixtures. Tests read

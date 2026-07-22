@@ -161,22 +161,6 @@ func TestValidateTextEgress_RenderedText(t *testing.T) {
 	}
 }
 
-func TestValidateXMLEgress_LibvirtDomain(t *testing.T) {
-	good := "<domain type='kvm'>\n  <name>vm1</name>\n  <memory unit='KiB'>8388608</memory>\n  <os><type>hvm</type></os>\n</domain>\n"
-	if err := ValidateXMLEgress("libvirt_domain_xml", "good domain", good); err != nil {
-		t.Fatalf("valid libvirt domain XML should pass, got: %v", err)
-	}
-	// teeth: an empty <name> is a malformed domain — koala decodes it, schema rejects.
-	bad := "<domain type='kvm'>\n  <name></name>\n  <memory unit='KiB'>8388608</memory>\n</domain>\n"
-	if err := ValidateXMLEgress("libvirt_domain_xml", "bad domain", bad); err == nil {
-		t.Fatal("libvirt domain XML with an empty <name> must be REJECTED, got nil")
-	}
-	// best-effort: junk that koala cannot decode must NOT hard-fail (defer to libvirt).
-	if err := ValidateXMLEgress("libvirt_domain_xml", "undecodable", "not xml at all <<<"); err != nil {
-		t.Fatalf("undecodable input should be best-effort skipped (nil), got: %v", err)
-	}
-}
-
 // TestRenderCloudInit_OutputValidatesAgainstSchema proves the renderer's real
 // output satisfies the egress gate end to end (RenderCloudInit returns the gate's
 // error directly, so a non-nil err here would mean charly emits cloud-init that

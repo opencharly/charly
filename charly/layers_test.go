@@ -13,6 +13,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// testBareRefs returns the bare map-key form of each ref, for assertions comparing a
+// candy's resolved Require list against an expected bare-name slice.
+func testBareRefs(refs []spec.CandyRefEntry) []string {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = r.Bare()
+	}
+	return out
+}
+
 func TestScanCandies(t *testing.T) {
 	layers, err := ScanCandy("testdata")
 	if err != nil {
@@ -119,7 +132,7 @@ func TestCandyPython(t *testing.T) {
 	if !python.HasFile("pixi.toml") {
 		t.Error("python should have pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(python.GetRequire()), []string{"pixi"}) {
+	if !reflect.DeepEqual(testBareRefs(python.GetRequire()), []string{"pixi"}) {
 		t.Errorf("python.Require = %v, want [pixi]", python.GetRequire())
 	}
 }
@@ -235,26 +248,6 @@ func TestHasInstallFiles(t *testing.T) {
 	for name, layer := range layers {
 		if !layer.HasInstallFiles() {
 			t.Errorf("candy %q should have install files", name)
-		}
-	}
-}
-
-func TestCandyNames(t *testing.T) {
-	layers, err := ScanCandy("testdata")
-	if err != nil {
-		t.Fatalf("ScanCandy() error = %v", err)
-	}
-
-	names := CandyNames(layers)
-	if len(names) != 7 {
-		t.Errorf("CandyNames() returned %d names, want 7", len(names))
-	}
-
-	// Should be sorted
-	for i := 0; i < len(names)-1; i++ {
-		if names[i] > names[i+1] {
-			t.Errorf("CandyNames() not sorted: %v", names)
-			break
 		}
 	}
 }
@@ -388,7 +381,7 @@ func TestCandyPixiLocked(t *testing.T) {
 	if locked.PixiManifest() != "pixi.toml" {
 		t.Errorf("pixi-locked.PixiManifest() = %q, want %q", locked.PixiManifest(), "pixi.toml")
 	}
-	if !reflect.DeepEqual(bareRefs(locked.GetRequire()), []string{"pixi"}) {
+	if !reflect.DeepEqual(testBareRefs(locked.GetRequire()), []string{"pixi"}) {
 		t.Errorf("pixi-locked.Require = %v, want [pixi]", locked.GetRequire())
 	}
 }
