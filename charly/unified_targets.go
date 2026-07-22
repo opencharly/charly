@@ -202,6 +202,48 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 	return reply, nil
 }
 
+// applyParentExecOverride implements the FIX ROUND regression fix (R10 bed-found, S3b
+// follow-up): a NESTED external deploy with no lifecycle hook of its own (a
+// `local:`/`android:`/`k8s:` child under a vm/pod, tree position) must apply INSIDE the parent's
+// venue, never the operator host — mirrors the pre-move externalDeployTarget.apply's
+// `else if opts.ParentExec != nil { t.exec = opts.ParentExec }` swap exactly (deleted
+// charly/deploy_target_external.go:262; a lifecycle substrate, vm/pod, composes its OWN nested
+// venue INSIDE PrepareVenue instead, so this override is the non-lifecycle branch only — a no-op
+// when t.hasLifecycle or opts.ParentExec is nil).
+//
+// t.exec is mutated to the live parent executor: it becomes the executor threaded onto
+// candy/plugin-bundle's in-proc reverse channel (dispatchDeployTarget's `exec` param) for EVERY
+// reverse leg this dispatch call drives (RunSystem/RunUser/RunHostStep/…). Because a live Go
+// interface value cannot itself cross the []byte wire to the plugin's decoded
+// spec.DeployTargetDispatchRequest, the SAME executor is ALSO flattened into the returned
+// venue_json (kit.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
+// (bundle_add_cmd.go) is always a plain *kit.SSHExecutor for a single vm-guest hop, never a
+// composed *kit.NestedExecutor, so it round-trips faithfully. The caller threads the result as
+// the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-bundle/deploy_target.go)
+// re-materializes the IDENTICAL guest venue instead of falling back to
+// deploykit.RootExecutorForDeployNode(req.Node), which — for a nested child carrying no `host:`
+// field of its own — silently defaults to the operator's host ShellExecutor (the bug: every
+// plain-vm nested child's plan/step walk ran on the OPERATOR'S HOST instead of the guest venue).
+//
+// Extracted as its own method (rather than inlined at the one call site) so the ordering
+// invariant — t.exec is ALWAYS mutated together with the returned venue_json, never one without
+// the other — has a single, directly unit-tested unit (unified_targets_test.go).
+func (t *pluginDeployTarget) applyParentExecOverride(opts deploykit.EmitOpts) json.RawMessage {
+	if t.hasLifecycle || opts.ParentExec == nil {
+		return nil
+	}
+	t.exec = opts.ParentExec
+	d := kit.DescriptorFromExecutor(opts.ParentExec)
+	if d.Kind == "" {
+		return nil
+	}
+	pj, err := json.Marshal(d)
+	if err != nil {
+		return nil
+	}
+	return pj
+}
+
 func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
 	if dctx != nil {
 		t.node = dctx.Node
@@ -243,6 +285,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 
 	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{
 		Op: "add", Dir: dir, PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON(),
+		VenueJSON: t.applyParentExecOverride(opts),
 	})
 	if err != nil {
 		return err

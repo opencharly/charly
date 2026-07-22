@@ -146,19 +146,16 @@ func lifecycleInvoke(ctx context.Context, exec *sdk.Executor, word, op, name, di
 	return exec.InvokeProvider(ctx, "deploy", word, op, pj, hostEnv, opts)
 }
 
-// venueDescriptorFromExecutor is the mechanical inverse of kit.VenueFromDescriptor — needed ONCE
-// here (not promoted to sdk/kit, R3-narrow: nowhere else constructs a descriptor FROM an already-
-// live executor) to report a hookless substrate's ROOT executor back to core in the dispatch
-// reply, so core re-materializes the SAME venue for --verify.
+// venueDescriptorFromExecutor reports a hookless substrate's ROOT executor back to core in the
+// dispatch reply (so core re-materializes the SAME venue for --verify) — a thin forward to the
+// shared kit.DescriptorFromExecutor. Promoted there (FIX ROUND, S3b follow-up) once a SECOND
+// caller needed this exact conversion: charly/unified_targets.go's pluginDeployTarget.Add now
+// converts a NESTED child's live ParentExec into venue_json before it crosses the wire (the
+// missing swap that made every plain-vm nested `local:`/`android:`/`k8s:` child apply on the
+// operator's host instead of the parent venue) — so the former single-caller "R3-narrow"
+// duplicate is no longer accurate; one function serves both directions' callers (R3).
 func venueDescriptorFromExecutor(exec deploykit.DeployExecutor) spec.VenueDescriptor {
-	switch e := exec.(type) {
-	case kit.ShellExecutor:
-		return spec.VenueDescriptor{Kind: "shell"}
-	case *kit.SSHExecutor:
-		return spec.VenueDescriptor{Kind: "ssh", User: e.User, Host: e.Host, Port: e.Port, Args: e.Args, ConnectTimeout: e.ConnectTimeout}
-	default:
-		return spec.VenueDescriptor{}
-	}
+	return kit.DescriptorFromExecutor(exec)
 }
 
 // resolveRootExecutor returns the LOCAL executor value this dispatch call should use for
