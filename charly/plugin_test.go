@@ -29,20 +29,15 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 	}
 }
 
-// TestValidatePluginCandy proves the builtin-provider assertion: a candy
-// declaring a registered builtin verb validates; one naming an unregistered
-// builtin or a malformed capability fails.
-func TestValidatePluginCandy(t *testing.T) {
-	ok := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"verb:exampleprobe"}}
-	if issues := validatePluginCandy("ex", ok); len(issues) != 0 {
-		t.Fatalf("registered builtin should validate, got %v", issues)
-	}
-	bad := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"verb:nonexistent"}}
-	if len(validatePluginCandy("bad", bad)) == 0 {
-		t.Fatalf("unregistered builtin provider should fail validation")
-	}
-	mal := &spec.Plugin{Source: "builtin", Providers: []spec.PluginCapability{"notacapability"}}
-	if len(validatePluginCandy("mal", mal)) == 0 {
-		t.Fatalf("malformed capability should fail validation")
-	}
-}
+// TestValidatePluginCandy DELETED (dead-code-radical-removal batch): its subject,
+// validatePluginCandy, was core's per-candy `plugin:` block validator — REMOVED from
+// the per-candy validation loop in c9befd83 (the K3-D+ engine move to candy/plugin-box)
+// alongside every other hand-rolled rule in that loop. Confirmed a live, coverage-
+// identical twin at candy/plugin-box/validate_rules.go (the `if v.IsPlugin { ... }`
+// block, whose own comment states it "Mirrors core splitCapability + validatePluginCandy
+// exactly") — same three checks: ≥1 provider declared, each capability well-formed
+// <class>:<word>, every builtin provider actually compiled in. (Aside, not itself a
+// regression: plugin-box's own test suite doesn't yet have a DEDICATED unit test for
+// this specific rule — worth a follow-up test-coverage addition, tracked separately,
+// since the rule itself is confirmed present and correct in the live validate_rules.go
+// code path exercised by every `charly box validate` run.)

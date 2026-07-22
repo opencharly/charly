@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -37,10 +36,15 @@ import (
 // path (runProvisionAct) AND every install-emit path: deploykit.Generator.EmitTasks'
 // `case "plugin"` (the box build via WriteCandySteps→EmitTasks, and the pod overlay via
 // candy/plugin-installstep's step:op OpEmit rendering directly against its OWN
-// "resolved-project"-built deploykit.Generator's EmitTasks) AND renderOpCommand
-// (the local/vm deploy targets) — the
-// act-emit enabler, so a state-provision verb provisions identically whether run live,
-// baked into an image, or applied at deploy (R3).
+// "resolved-project"-built deploykit.Generator's EmitTasks) AND the reverse-channel
+// RunHostStep handler (plugin_executor_reverse.go) that every out-of-process deploy
+// plugin's kit.WalkPlans drives an act-`plugin:` OpStep through — the local/vm/pod
+// deploy targets' actual act-emit path today (the former in-proc renderOpCommand
+// wrapper calling this same seam directly was a dead-code-radical-removal-batch
+// deletion — every deploy target is out-of-process now, so there is no more in-proc
+// deploy caller; RunHostStep's case *deploykit.OpStep below reaches this identical
+// seam) — so a state-provision verb provisions identically whether run live, baked
+// into an image, or applied at deploy (R3).
 //
 // It threads the plugin indirection: when the op's verb is the generic `plugin:`
 // discriminator, the ProvisionActor is the plugin word's provider (op.Plugin), NOT the
@@ -106,29 +110,3 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb
 // lowers into a TYPED SystemPackagesStep / ServicePackagedStep via the TypedStepProvider
 // (compileActOp), NOT this shell.
 
-// renderOpCommand turns a non-copy OpStep into a shell command. The structured verbs
-// (command/plugin:command/mkdir/link/setcap/write/download) render via the SHARED pure
-// kit.RenderOpCommand; an act-`plugin:` verb (a builtin ProvisionActor) renders via the
-// in-proc registry (resolveProvisionScript, above) — the SAME seam the build/runtime act
-// paths use (R3). copy is staged via the executor's PutFile, never rendered. The ONE
-// op→shell render copy is kit's; the in-proc deploy path calls this wrapper, an
-// out-of-process deploy plugin's kit.WalkPlans calls kit.RenderOpCommand directly.
-func renderOpCommand(s *deploykit.OpStep) (string, error) {
-	if s.Op == nil {
-		return "", fmt.Errorf("renderOpCommand: nil op")
-	}
-	if s.Op.Copy != "" {
-		return "", fmt.Errorf("copy: task must be staged via PutFile, not rendered")
-	}
-	if cmd, handled := kit.RenderOpCommand(s.Op, s.CtxPath, s.CandyVars); handled {
-		return cmd, nil
-	}
-	// Not a pure-renderable verb → an act-`plugin:` verb whose ProvisionActor shell needs
-	// the in-proc registry. ok=false means the verb has no act form (a run: step naming a
-	// non-act verb has no install path — a hard authoring error).
-	script, ok := resolveProvisionScript(s.Op, s.Distros)
-	if !ok {
-		return "", fmt.Errorf("run: plugin verb %q is not act-capable (no ProvisionActor)", s.Op.Plugin)
-	}
-	return script, nil
-}

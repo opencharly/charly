@@ -152,8 +152,10 @@ func buildResolvedProjectTolerant(dir string, opts ResolveOpts) (*spec.ResolvedP
 // RAW authored config a projection does not carry) over the loaded project, appending each finding as
 // an error-severity spec.Diagnostic. This is the ONLY validation left host-side after the engine moves
 // to plugin-box:
-//   - the CUE-schema conformance trio (validateCandyCUESchemas / validateProjectCUESchemas — which
-//     folds validateVocabularyCollections — needs the on-disk manifest bytes + the cue library);
+//   - the CUE-schema conformance pair (validateCandyCUESchemas / validateProjectCUESchemas — needs
+//     the on-disk manifest bytes + the cue library; the modern per-kind LOAD-time plugin gate now
+//     covers what the former validateVocabularyCollections did for non-box kinds — dead-code-radical-
+//     removal-batch deletion, c9befd83 already cut its production call site);
 //   - validateBuildAndDistro (the authored `build:` list on defaults + each box against the DYNAMIC
 //     distro-format vocab — both raw, neither on the envelope);
 //   - validateBoxBaseFrom (the base⊻from XOR reads raw pre-resolve cfg.EachBox; a base+from box fails

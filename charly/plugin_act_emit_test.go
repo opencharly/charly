@@ -1,19 +1,45 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // The act-emit enabler renders a run: step whose verb is a state-provision plugin
 // (plugin: <verb> + plugin_input, the provider implementing ProvisionActor) into shell at
 // install emit — the gap that opened once unix_group left #Op. Both install-emit paths
-// (renderOpCommand for the local/vm targets, and the OCI pod-overlay Op build-emit via the
-// step:op OpEmit → step-emit seam → emitTasks `case "plugin"`) reach the provider's
-// RenderProvisionScript via the shared resolveProvisionScript seam (R3).
+// (the reverse-channel RunHostStep for the local/vm/pod deploy targets — every deploy
+// target is out-of-process now, driven through kit.WalkPlans — and the OCI pod-overlay Op
+// build-emit via the step:op OpEmit → step-emit seam → emitTasks `case "plugin"`) reach
+// the provider's RenderProvisionScript via the shared resolveProvisionScript seam (R3).
+//
+// testRenderOpCommand replicates the former renderOpCommand wrapper's exact behavior
+// (dead-code-radical-removal-batch deletion — its "in-proc deploy path" caller class no
+// longer exists, since every deploy target is out-of-process; RunHostStep reaches this
+// identical resolveProvisionScript seam live in production) — kept test-local since the
+// tests below still want to exercise the SAME structured-verb-first, act-plugin-fallback
+// resolution renderOpCommand did, not just resolveProvisionScript in isolation.
+func testRenderOpCommand(s *deploykit.OpStep) (string, error) {
+	if s.Op == nil {
+		return "", fmt.Errorf("testRenderOpCommand: nil op")
+	}
+	if s.Op.Copy != "" {
+		return "", fmt.Errorf("copy: task must be staged via PutFile, not rendered")
+	}
+	if cmd, handled := kit.RenderOpCommand(s.Op, s.CtxPath, s.CandyVars); handled {
+		return cmd, nil
+	}
+	script, ok := resolveProvisionScript(s.Op, s.Distros)
+	if !ok {
+		return "", fmt.Errorf("run: plugin verb %q is not act-capable (no ProvisionActor)", s.Op.Plugin)
+	}
+	return script, nil
+}
 
 // unixGroupActStep is the canonical exercise op: a `run:` step authoring the extracted
 // unix_group verb as a plugin (groupadd checkgrp with gid 4242).
@@ -28,7 +54,7 @@ func unixGroupActStep() *deploykit.OpStep {
 // renderOpCommand (the local/vm deploy emit) turns a plugin: unix_group run-Op into the
 // idempotent groupadd shell.
 func TestRenderOpCommand_PluginAct_UnixGroup(t *testing.T) {
-	cmd, err := renderOpCommand(unixGroupActStep())
+	cmd, err := testRenderOpCommand(unixGroupActStep())
 	if err != nil {
 		t.Fatalf("renderOpCommand: %v", err)
 	}
@@ -44,8 +70,8 @@ func TestRenderOpCommand_PluginAct_UnixGroup(t *testing.T) {
 // the step (R4: no silent drop).
 func TestRenderOpCommand_PluginAct_NotActCapable(t *testing.T) {
 	s := &deploykit.OpStep{Op: &spec.Op{Plugin: "process", PluginInput: map[string]any{"process": "bash"}}}
-	if _, err := renderOpCommand(s); err == nil {
-		t.Fatalf("renderOpCommand(plugin: process) err=nil, want a not-act-capable error")
+	if _, err := testRenderOpCommand(s); err == nil {
+		t.Fatalf("testRenderOpCommand(plugin: process) err=nil, want a not-act-capable error")
 	}
 }
 
@@ -126,7 +152,7 @@ func TestRenderOpCommand_PluginAct_User(t *testing.T) {
 		Op:        &spec.Op{Plugin: "user", PluginInput: map[string]any{"user": "svc", "uid": 1500, "home": "/home/svc"}},
 		CandyName: "lyr",
 	}
-	cmd, err := renderOpCommand(s)
+	cmd, err := testRenderOpCommand(s)
 	if err != nil {
 		t.Fatalf("renderOpCommand: %v", err)
 	}
@@ -143,7 +169,7 @@ func TestRenderOpCommand_PluginAct_Mount(t *testing.T) {
 		Op:        &spec.Op{Plugin: "mount", PluginInput: map[string]any{"mount": "/mnt/data", "mount_source": "/dev/sdb1", "filesystem": "ext4"}},
 		CandyName: "lyr",
 	}
-	cmd, err := renderOpCommand(s)
+	cmd, err := testRenderOpCommand(s)
 	if err != nil {
 		t.Fatalf("renderOpCommand: %v", err)
 	}
@@ -162,7 +188,7 @@ func TestRenderOpCommand_PluginAct_KernelParam(t *testing.T) {
 		Op:        &spec.Op{Plugin: "kernel-param", PluginInput: map[string]any{"kernel-param": "vm.swappiness", "value": "10"}},
 		CandyName: "lyr",
 	}
-	cmd, err := renderOpCommand(s)
+	cmd, err := testRenderOpCommand(s)
 	if err != nil {
 		t.Fatalf("renderOpCommand: %v", err)
 	}

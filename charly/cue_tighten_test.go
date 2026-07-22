@@ -7,20 +7,37 @@ package main
 // against re-loosening. Each ACCEPT case guards against over-tightening.
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/errors"
 )
 
 // validateKindBody validates a YAML body AS an entity of `kind` (the body is the
 // entity's own fields, e.g. a single value of the `vm:`/`deploy:` map — the
-// built doc's root value IS the entity).
+// built doc's root value IS the entity). Validates CONCRETELY (not just closed) —
+// several REJECT cases below (e.g. a PCI hostdev missing its required slot/function)
+// only fail under concrete validation; validateEntityClosedCUE alone would silently
+// pass them. This inlines what the former validateEntityCUE did (dead-code-radical-
+// removal-batch deletion — its production callers were dead, but concrete validation
+// itself is very much alive: it's now also restored at the real load-time gate,
+// validateKindValueCUE in provider_kind_invoke.go, for the #<Kind>Value-gated kinds).
 func validateKindBody(t *testing.T, kind, yamlBody string) error {
 	t.Helper()
 	doc, err := cueDocFromYAML("t.yml", []byte(yamlBody))
 	if err != nil {
 		return err
 	}
-	return validateEntityCUE(kind, "t.yml:"+kind, doc)
+	def, ok := cueKindDef(kind)
+	if !ok {
+		return fmt.Errorf("t.yml:%s: no CUE schema registered for kind %q", kind, kind)
+	}
+	if verr := doc.Unify(def).Validate(cue.Concrete(true)); verr != nil {
+		return fmt.Errorf("t.yml:%s: %s", kind, errors.Details(verr, nil))
+	}
+	return nil
 }
 
 func TestCueTightening_RejectsAndAccepts(t *testing.T) {

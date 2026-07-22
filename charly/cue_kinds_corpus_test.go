@@ -115,7 +115,7 @@ func TestCueBox_Corpus(t *testing.T) {
 				t.Errorf("%s: ingest %q: %v", f, gn.name, cerr)
 				continue
 			}
-			if verr := validateEntityCUE("box", f, candy); verr != nil {
+			if verr := validateEntityClosedCUE("box", f, candy); verr != nil {
 				t.Errorf("FAIL %s", verr)
 				continue
 			}

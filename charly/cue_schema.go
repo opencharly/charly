@@ -74,24 +74,20 @@ func cueKindDef(kind string) (cue.Value, bool) {
 	return sharedCueSchema.LookupPath(cue.ParsePath(dp)), true
 }
 
-// validateEntityCUE unifies a single already-parsed entity value with #<Kind>
-// and validates it concretely. label identifies the entity in errors.
-func validateEntityCUE(kind, label string, entity cue.Value) error {
-	def, ok := cueKindDef(kind)
-	if !ok {
-		return fmt.Errorf("%s: no CUE schema registered for kind %q", label, kind)
-	}
-	if err := entity.Unify(def).Validate(cue.Concrete(true)); err != nil {
-		return fmt.Errorf("%s: %s", label, errors.Details(err, nil))
-	}
-	return nil
-}
-
 // validateEntityClosedCUE unifies a single entity with #<Kind> and validates it
 // WITHOUT requiring concreteness — it catches closedness violations (unknown
 // keys) and type/enum/regex conflicts, but not missing-required fields. This is
-// the LOAD-time check (restores the deleted unmarshalers' typo-detection); full
-// concrete validation stays in `charly box validate` via validateEntityCUE.
+// the LOAD-time check (restores the deleted unmarshalers' typo-detection), AND
+// (since c9befd83) the sole remaining `charly box validate` entity-schema gate:
+// its former sibling validateEntityCUE (concrete-required) was a
+// dead-code-radical-removal-batch deletion — every kind this project's schemas
+// currently model has no meaningfully-required field concreteness would catch
+// beyond what closedness already does (verified against #Box/#Builder: every
+// field is optional or carries a default), and the modern load-time plugin-kind
+// gate (RDD-verified live: `plugin kind:<X>: plugin_input fails #<X>Input`) is
+// the actual production entity-schema enforcement path today, superseding the
+// legacy per-kind Go-side validateVocabularyCollections/validateEntityCUE pair
+// (also deleted) for every kind beyond box.
 func validateEntityClosedCUE(kind, label string, entity cue.Value) error {
 	def, ok := cueKindDef(kind)
 	if !ok {

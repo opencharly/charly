@@ -20,7 +20,7 @@ func validateBoxEntityCUE(t *testing.T, yaml string) error {
 	if err != nil {
 		return err
 	}
-	return validateEntityCUE("box", "test.yml", doc.LookupPath(cue.ParsePath("box")))
+	return validateEntityClosedCUE("box", "test.yml", doc.LookupPath(cue.ParsePath("box")))
 }
 
 func TestBoxCUESchema_Readiness(t *testing.T) {
