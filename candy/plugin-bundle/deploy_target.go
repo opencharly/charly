@@ -714,8 +714,78 @@ func handleLifecycleSimple(ctx context.Context, exec *sdk.Executor, req spec.Dep
 			venueDesc = &d
 		}
 	}
-	_, err := lifecycleInvoke(ctx, exec, req.Word, op, req.Name, "", req.Node, extra, venueDesc, req.HostEnvJSON)
+
+	// The Q1 resource-arbiter bracket (FLOOR-SLIM-proper Unit-8, the K4-exit the former
+	// charly/arbiter_bracket.go tracked) — HasPlan + a non-nil Node is core's signal that this
+	// substrate's Start/Stop needs bracketing (today only "pod"). Decision logic lives in the
+	// pure, directly-testable runLifecycleBracket below; here we just wire the REAL HostBuild
+	// calls + the REAL dispatch into it.
+	err := runLifecycleBracket(op, req.HasPlan, req.Node,
+		func() error { return arbiterBracketAcquire(ctx, exec, req.Name, *req.Node) },
+		func() { _ = arbiterBracketRelease(ctx, exec, req.Name) },
+		func() error {
+			_, ierr := lifecycleInvoke(ctx, exec, req.Word, op, req.Name, "", req.Node, extra, venueDesc, req.HostEnvJSON)
+			return ierr
+		},
+	)
 	return reply, err
+}
+
+// runLifecycleBracket implements the Q1 resource-arbiter bracket's decision logic in isolation —
+// no exec, no wire types, pure control flow — so it round-trips in a unit test the same way the
+// deleted charly/arbiter_bracket_test.go used to test arbiterBracketedStart/Stop, just relocated
+// here alongside the ownership move (FLOOR-SLIM-proper Unit-8). "bracketed" requires HasPlan AND a
+// non-nil node (a nil node with HasPlan true is a caller bug, treated as "no claim" rather than
+// failing — the SAME defensive check the deleted file made) AND op being Start or Stop (Logs
+// shares this dispatch path but is never bracketed).
+//
+//   - Start: acquire BEFORE dispatch; on a dispatch failure, release ON THE FAILURE PATH (a failed
+//     start must not leak the claim); an acquire failure itself aborts before dispatch ever runs.
+//   - Stop: dispatch, then release AFTER unconditionally (success or failure) — the deliberate
+//     simplification the deleted file documented (a Stop-path error's safe default is to release
+//     rather than leak the lease).
+func runLifecycleBracket(op string, hasPlan bool, node *spec.Deploy, acquire func() error, release func(), dispatch func() error) error {
+	bracketed := hasPlan && node != nil && (op == sdk.OpStart || op == sdk.OpStop)
+	if !bracketed {
+		return dispatch()
+	}
+	if op == sdk.OpStart {
+		if err := acquire(); err != nil {
+			return err
+		}
+		if err := dispatch(); err != nil {
+			release()
+			return err
+		}
+		return nil
+	}
+	// op == sdk.OpStop
+	err := dispatch()
+	release()
+	return err
+}
+
+// arbiterBracketAcquire routes a Start dispatch's arbiter claim through the "arbiter-bracket-acquire"
+// HostBuild seam — see host_build_arbiter_bracket.go (core) for why the actual claim/env mutation
+// stays host-side.
+func arbiterBracketAcquire(ctx context.Context, exec *sdk.Executor, name string, node spec.Deploy) error {
+	reqJSON, err := json.Marshal(spec.ArbiterBracketAcquireRequest{Name: name, Node: node})
+	if err != nil {
+		return err
+	}
+	_, err = exec.HostBuild(ctx, "arbiter-bracket-acquire", reqJSON)
+	return err
+}
+
+// arbiterBracketRelease routes a Start/Stop dispatch's arbiter release through the
+// "arbiter-bracket-release" HostBuild seam.
+func arbiterBracketRelease(ctx context.Context, exec *sdk.Executor, name string) error {
+	reqJSON, err := json.Marshal(spec.ArbiterBracketReleaseRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	_, err = exec.HostBuild(ctx, "arbiter-bracket-release", reqJSON)
+	return err
 }
 
 // --- Status --------------------------------------------------------------------------------

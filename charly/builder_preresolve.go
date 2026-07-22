@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/opencharly/sdk/buildkit"
@@ -10,81 +9,38 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// builder_preresolve.go — the host-side build PRE-PASS that keeps BuildDeployPlan PURE.
+// builder_preresolve.go — the host-side CONNECT half of the builder deploy-time pre-pass
+// (FLOOR-SLIM-proper Unit-8). The actual per-(candy,builder) OpCollectContext/OpReverse RPCs — the
+// half that populates HostContext.BuilderContext — moved to candy/plugin-bundle's OWN
+// preresolveBuilderContexts (compile.go's compileDeployPlans calls it, via exec.InvokeProvider,
+// spike-proven live), since command:bundle already holds a live *sdk.Executor for its own
+// OpCompile Invoke and already re-hydrates the resolved-project envelope those RPCs need. What
+// STAYS here is genuinely host-only: loadProjectPlugins/ScanAllCandyWithConfigOpts are core-private
+// project-loading mechanics no plugin can reach, so charly-core must still ensure the exact
+// externalized builder plugin(s) a deploy's resolved closure triggers are build-connected BEFORE
+// dispatching the compile to the plugin (InvokeProvider's own lazy-connect fallback, S2, is a
+// safety net — not the primary connect path, for the same reason this pre-pass always scoped its
+// connect precisely rather than relying on a blanket "all four builder plugins" load).
 //
-// An externalized detection-builder's per-candy stage context + teardown ops live in its
-// out-of-process plugin (OpCollectContext / OpReverse). collectBuilderContext + BuilderStep.Reverse
-// used to type-assert an in-proc BuilderProvider, but BuildDeployPlan is a documented-pure compiler
-// (no I/O, no RPC) and BuilderStep.Reverse() runs host-side with no registry handle. So — exactly
-// like deploy_preresolve.go for external deploy substrates — the host resolves the
-// builder-specific payload BEFORE the pure compile and stashes it on HostContext.BuilderContext;
-// the pure compiler reads pre-populated data and NEVER dials a plugin.
-//
-// CONNECTION IS PRECISELY SCOPED + ON-DEMAND. The pre-pass detects exactly the builders the
-// deploy's RESOLVED closure triggers — applying the SAME distro/build-format gate the generator's
-// deploykit CandyNeedsBuilder applies, so a fedora deploy never connects aur (even when a multi-distro candy
+// CONNECTION IS PRECISELY SCOPED + ON-DEMAND. detects exactly the builders the deploy's RESOLVED
+// closure triggers — applying the SAME distro/build-format gate the generator's deploykit
+// CandyNeedsBuilder applies, so a fedora deploy never connects aur (even when a multi-distro candy
 // carries an aur: section for its arch variant), and a pixi-only deploy connects ONLY pixi. It then
 // build-connects just those plugins by their canonical ref (the same on-demand, scoped pattern as
 // connectPluginByWordRef, R3) — NOT a blanket "all four builder plugins" surfaced across an entire
 // box scan. A pure pod deploy (no add_candy) never reaches BuildDeployPlan, so it connects nothing.
 
-// builderPreresolved is one candy×builder's pre-resolved payload: the plugin's stage-context keys
-// (merged onto the base context by collectBuilderContext) + its teardown ops (stashed onto
-// BuilderStep.PreResolvedReverse so Reverse() is a pure getter).
-
-// builderCtxKey keys the pre-resolved map by candy name + builder word (NUL-joined — neither can
-// contain NUL, so the key is unambiguous).
-
-// (detectExternalizedBuilders relocated to sdk/deploykit as the shared
-// DetectExternalizedBuilders pkg func (K3-A, R3) — the SAME detection the box-build
-// render uses; preresolveBuilderContexts calls it over layers below.)
-
-// preresolveBuilderContexts connects the EXACT externalized builder plugins the deploy triggers
-// (on-demand, scoped) and RPCs each one's OpCollectContext + OpReverse for every (candy, builder)
-// in the deploy set, BEFORE the pure BuildDeployPlan compile. Returns the map
-// HostContext.BuilderContext carries. A custom candy builder (a builder: vocabulary def with no
-// externalized plugin) is skipped — collectBuilderContext gives it base-only context. An
-// externalized builder that cannot be connected fails LOUDLY (R4 — never a silent incomplete
-// teardown).
-func preresolveBuilderContexts(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (map[string]deploykit.BuilderPreresolved, error) {
+// ensureBuildersConnectedForOrder detects the externalized builders order's candies need (the SAME
+// deploykit.DetectExternalizedBuilders call the deleted host-side preresolveBuilderContexts made)
+// and build-connects them — so by the time the OpCompile Invoke reaches candy/plugin-bundle, its
+// own exec.InvokeProvider calls resolve against an already-connected provider (never depending
+// solely on InvokeProvider's S2 lazy-connect fallback).
+func ensureBuildersConnectedForOrder(ctx context.Context, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) error {
 	needed := deploykit.DetectExternalizedBuilders(order, layers, externalizedBuilders, img)
 	if len(needed) == 0 {
-		return nil, nil
+		return nil
 	}
-	if err := ensureBuildersConnected(ctx, cfg, dir, needed); err != nil {
-		return nil, err
-	}
-
-	var out map[string]deploykit.BuilderPreresolved
-	for _, candyName := range order {
-		layer := layers[candyName]
-		if layer == nil {
-			continue
-		}
-		for _, bName := range needed {
-			bDef := img.BuilderConfig.Builder[bName]
-			if bDef == nil || !deploykit.CandyNeedsBuilderStep(layer, bDef) {
-				continue
-			}
-			prov, ok := providerRegistry.ResolveBuilder(bName)
-			if !ok {
-				return nil, fmt.Errorf("candy %q: builder %q is externalized but its plugin is not connected (a plugin-load gap?)", candyName, bName)
-			}
-			collected, err := invokeBuilderCollect(ctx, prov, bName, layer, bDef, img)
-			if err != nil {
-				return nil, fmt.Errorf("candy %q: builder %q collect-context: %w", candyName, bName, err)
-			}
-			reverse, err := invokeBuilderReverse(ctx, prov, bName, layer.GetName(), collected)
-			if err != nil {
-				return nil, fmt.Errorf("candy %q: builder %q reverse: %w", candyName, bName, err)
-			}
-			if out == nil {
-				out = map[string]deploykit.BuilderPreresolved{}
-			}
-			out[deploykit.BuilderCtxKey(layer.GetName(), bName)] = deploykit.BuilderPreresolved{Context: collected, Reverse: reverse}
-		}
-	}
-	return out, nil
+	return ensureBuildersConnected(ctx, cfg, dir, needed)
 }
 
 // ensureBuildersConnected build-connects ONLY the not-yet-connected externalized builder plugins in
@@ -138,53 +94,4 @@ func ensureBuildersConnected(ctx context.Context, cfg *Config, dir string, words
 		}
 	}
 	return fmt.Errorf("externalized builder plugin(s) %v could not be connected (plugin candy not found / build failed)", missing)
-}
-
-// invokeBuilderCollect Invokes the builder plugin's OpCollectContext, returning the
-// builder-specific stage-context keys. The host fills the generic descriptor it can derive
-// without builder-specific knowledge: the candy/builder/home always, plus the builder's
-// detect-config package section (Packages/Replaces) used today only by aur.
-func invokeBuilderCollect(ctx context.Context, prov Provider, word string, layer spec.CandyReader, bDef *BuilderDef, img *buildkit.ResolvedBox) (map[string]any, error) {
-	in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: word, Home: img.Home}
-	if bDef.DetectConfig != "" {
-		if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
-			in.Packages = append([]string(nil), sec.Packages...)
-			if raw, ok := sec.Raw["replaces"]; ok {
-				if list, ok := deploykit.StringSliceFromYAML(raw); ok {
-					in.Replaces = list
-				}
-			}
-		}
-	}
-	params, err := marshalJSON(in)
-	if err != nil {
-		return nil, fmt.Errorf("marshal collect-context input: %w", err)
-	}
-	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: OpCollectContext, Params: params})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.BuilderCollectReply
-	if err := json.Unmarshal(res.JSON, &reply); err != nil {
-		return nil, fmt.Errorf("decode collect-context reply: %w", err)
-	}
-	return reply.Context, nil
-}
-
-// invokeBuilderReverse Invokes the builder plugin's OpReverse with the resolved stage context,
-// returning the teardown ops the host stashes on BuilderStep.PreResolvedReverse.
-func invokeBuilderReverse(ctx context.Context, prov Provider, word, candy string, stageContext map[string]any) ([]spec.ReverseOp, error) {
-	params, err := marshalJSON(spec.BuilderReverseInput{Candy: candy, Builder: word, Context: stageContext})
-	if err != nil {
-		return nil, fmt.Errorf("marshal reverse input: %w", err)
-	}
-	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: OpReverse, Params: params})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.BuilderReverseReply
-	if err := json.Unmarshal(res.JSON, &reply); err != nil {
-		return nil, fmt.Errorf("decode reverse reply: %w", err)
-	}
-	return reply.ReverseOps, nil
 }

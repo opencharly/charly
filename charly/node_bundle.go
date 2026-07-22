@@ -115,25 +115,31 @@ func isResourceDisc(d string) bool {
 	return resourceKindSet[d] || recognizedDeploySubstrate(d)
 }
 
-// bundleTargetForDisc maps a node discriminator to the BundleNode Target.
-// `group` is a targetless deploy group (no own workload target).
+// bundleTargetForDisc maps a node discriminator to the BundleNode Target — DATA-driven via
+// deployTraitsFor (P9's plugin-declared #DeployTraits, the D-clause fact every substrate word
+// resolves against), never a kind-word switch (the boundary law's self-test): a word with no
+// declared deploy traits is TARGETLESS (`group` — the only such word today; a plugin-declared
+// external deploy substrate DOES carry traits, the Venue="none" external-in-place default).
 func bundleTargetForDisc(d string) string {
-	switch d {
-	case "group":
-		return ""
-	default:
-		return d // pod | vm | k8s | local | android
+	if deployTraitsFor(d) == nil {
+		return "" // targetless (e.g. group — no own workload target)
 	}
+	return d // pod | vm | k8s | local | android | an external deploy substrate word
 }
 
 // setBundleCrossRef sets the deploy's cross-ref from a scalar discriminator value
-// (EDGE-INHERIT cutover B): a `pod:` scalar is the IMAGE the pod runs; a vm/k8s/
-// local/android scalar is the same-kind template the deploy inherits (`from:`).
+// (EDGE-INHERIT cutover B): DATA-driven via deployTraitsFor's ImageBacked trait (declared true
+// for pod alone, per the canonical #DeployTraits table) rather than a kind-word switch — an
+// image-backed substrate's scalar is the IMAGE it runs; every other substrate's scalar is the
+// same-kind template it inherits (`from:`). A targetless word (traits == nil) sets neither.
 func setBundleCrossRef(dn *spec.BundleNode, disc, ref string) {
-	switch disc {
-	case "pod":
+	traits := deployTraitsFor(disc)
+	if traits == nil {
+		return
+	}
+	if traits.ImageBacked {
 		dn.Image = ref
-	case "vm", "k8s", "local", "android":
+	} else {
 		dn.From = ref
 	}
 }

@@ -412,9 +412,12 @@ func (t *pluginDeployTarget) Status(ctx context.Context) (StatusInfo, error) {
 	return StatusInfo{State: reply.Status.State, Healthy: reply.Status.Healthy, Details: reply.Status.Details}, nil
 }
 
-// Start dispatches OpStart, bracketed by the Q1 arbiter claim (arbiter_bracket.go) when this
-// substrate registers a Start plan hook (today only "pod" — vm shells `charly vm start` and
-// manages its own claim). Calls the ACTUAL registered lifecycleStartPlanHooks[t.word] closure
+// Start dispatches OpStart. When this substrate registers a Start plan hook (today only "pod" —
+// vm shells `charly vm start` and manages its own claim) the request carries HasPlan=true, so
+// command:bundle's handleLifecycleSimple brackets its OWN dispatch with the Q1 resource-arbiter
+// claim (the arbiter-bracket-acquire/-release HostBuild seams, host_build_arbiter_bracket.go) —
+// FLOOR-SLIM-proper Unit-8's K4-exit: core no longer brackets the dispatch call itself (the
+// former arbiter_bracket.go). Calls the ACTUAL registered lifecycleStartPlanHooks[t.word] closure
 // (pod_lifecycle_dispatch.go, unmoved) rather than re-deriving its shape here — one source of
 // truth for what the hook produces, R3.
 func (t *pluginDeployTarget) Start(ctx context.Context) error {
@@ -431,13 +434,11 @@ func (t *pluginDeployTarget) Start(ctx context.Context) error {
 			return err
 		}
 	}
-	return arbiterBracketedStart(t.name, t.node, hasPlan, func() error {
-		_, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "start", OptsJSON: optsJSON})
-		return err
-	})
+	_, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "start", OptsJSON: optsJSON, HasPlan: hasPlan})
+	return err
 }
 
-// Stop mirrors Start — dispatches OpStop, bracketed by the Q1 arbiter release when this substrate
+// Stop mirrors Start — dispatches OpStop, HasPlan-flagged the same way when this substrate
 // registers a Stop plan hook, calling the ACTUAL registered lifecycleStopPlanHooks[t.word] closure.
 func (t *pluginDeployTarget) Stop(ctx context.Context) error {
 	if !t.hasLifecycle {
@@ -453,10 +454,8 @@ func (t *pluginDeployTarget) Stop(ctx context.Context) error {
 			return err
 		}
 	}
-	return arbiterBracketedStop(t.name, hasPlan, func() error {
-		_, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "stop", OptsJSON: optsJSON})
-		return err
-	})
+	_, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "stop", OptsJSON: optsJSON, HasPlan: hasPlan})
+	return err
 }
 
 func (t *pluginDeployTarget) Logs(ctx context.Context, opts LogsOpts) error {

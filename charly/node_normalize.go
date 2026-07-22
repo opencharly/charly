@@ -75,19 +75,16 @@ func normalizeNodeInto(gn *genericNode, uf *UnifiedFile) error {
 
 // isStandaloneResourceKind reports whether disc names one of the 5 substrate kinds
 // (pod/vm/k8s/local/android) — the kinds that are BOTH a standalone TEMPLATE (→ the typed
-// map uf.Pod/uf.VM/…) and a deploy (→ uf.Bundle). C2-substrate externalized their decode
-// PROVIDER to candy/plugin-substrate; this small explicit set is the core knowledge the
-// template/deploy fold needs (the typed maps + #<Kind>Value defs are inherently core). It
-// is the C2-substrate analogue of the former buildStandaloneResource switch (R5-deleted):
-// group is a structural kind too but is NOT here (it has no per-substrate template map —
-// it always folds to uf.Bundle). The SINGLE authority; keep in lockstep with
+// map uf.Pod/uf.VM/…) and a deploy (→ uf.Bundle). DATA-driven via deployTraitsFor (P9's
+// plugin-declared #DeployTraits) — the SAME kind-blind fact bundleTargetForDisc/setBundleCrossRef
+// (node_bundle.go) already resolve against — rather than a hand-kept kind-word switch (the
+// boundary law's self-test; this switch previously reincarnated the R5-deleted
+// buildStandaloneResource switch verbatim, a regression this fix closes for good). group is a
+// structural kind too but resolves false here — it declares no #DeployTraits (it has no
+// per-substrate template map; it always folds to uf.Bundle). Keep in lockstep with
 // decodeStandaloneTemplateJSON / foldStandaloneTemplateReply / substrateValueDef.
 func isStandaloneResourceKind(disc string) bool {
-	switch disc {
-	case "pod", "vm", "k8s", "local", "android":
-		return true
-	}
-	return false
+	return deployTraitsFor(disc) != nil
 }
 
 // isDeployShape reports whether a substrate node is a DEPLOY (vs a standalone template): a
