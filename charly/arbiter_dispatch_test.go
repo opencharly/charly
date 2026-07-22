@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/opencharly/sdk/spec"
@@ -67,35 +66,5 @@ func TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces(t *testing.T) {
 	ledger = sr.Ledger
 	if ledger != nil && len(ledger.Leases) != 0 {
 		t.Fatalf("lease should be gone after release, got %+v", ledger.Leases)
-	}
-}
-
-// TestHolderStart_DepartedHolderIsNoOp guards the stranded-lease fix: a holder whose
-// runtime object (container/quadlet or VM domain) no longer EXISTS — a departed holder,
-// e.g. a torn-down check-bed member — must make holderStart a NO-OP SUCCESS, not a hard
-// `podman start: no such container` error. The error path would make restoreHolders fail
-// and strand the lease FOREVER (no `charly preempt restore` could clear it, since it can
-// never restart a holder that is gone). A guaranteed-nonexistent deploy name exercises the
-// departed path deterministically without any live container. FAILS against the pre-fix
-// code (holderStart fell straight through to `<engine> start <nonexistent>`).
-func TestHolderStart_DepartedHolderIsNoOp(t *testing.T) {
-	addr := holderAddr{
-		Target:   "pod",
-		Name:     "charly-preempt-departed-holder-probe",
-		Base:     "preempt-departed-holder-probe-does-not-exist",
-		Instance: "",
-	}
-	if holderExists(addr) {
-		t.Fatalf("test precondition: holder %q must not exist", addr.Name)
-	}
-	var startErr error
-	stderr := captureStderr(t, func() {
-		startErr = holderStart(addr)
-	})
-	if startErr != nil {
-		t.Fatalf("holderStart on a DEPARTED holder must be a no-op success (else its lease strands forever); got: %v", startErr)
-	}
-	if !strings.Contains(stderr, "has departed") {
-		t.Fatalf("stderr = %q, want departed-holder diagnostic", stderr)
 	}
 }

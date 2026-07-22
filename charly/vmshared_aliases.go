@@ -73,7 +73,6 @@ var (
 	qemuSystemBinary               = vmshared.QemuSystemBinary
 	vmDiskDir                      = vmshared.VmDiskDir
 	vmDomainIdentity               = vmshared.VmDomainIdentity
-	killQemuByPID                  = vmshared.KillQemuByPID
 	libvirtSessionSocketWithProbes = vmshared.LibvirtSessionSocketWithProbes
 )
 

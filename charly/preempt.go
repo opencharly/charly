@@ -2,21 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -39,17 +33,28 @@ import (
 //      resolves verb:arbiter and Invokes it with an action-tagged spec.ArbiterInvokeInput (the
 //      generic core→verb registry bridge — core is not a plugin, so it cannot call InvokeProvider;
 //      the externalized command:preempt CLI reaches the arbiter over InvokeProvider instead).
-//   2. The 7 arbiter HOST-SEAM helper impls (gatherPreemptibleHolders / holderRunning /
-//      holderStop / holderStart / gatherResources / holderAddrFor / lookupVMClaimant +
-//      waitStoppedHost) the arbiter calls back for mid-logic via ExecutorService.HostArbiter
-//      (arbiter_host.go delegates here). These read the project config + drive the VM/pod
-//      lifecycle — host dependencies that cannot cross into the plugin module (two of them,
-//      gatherDeployNodes/gatherResources, also call LoadUnified directly — a second,
-//      independent K1-permanent reason they stay core, per R-E2).
+//   2. The 2 arbiter HOST-SEAM helper impls that remain genuinely K1-blocked
+//      (gatherPreemptibleHolders/gatherDeployNodes + gatherResources — both call LoadUnified
+//      directly, per R-E2) the arbiter calls back for mid-logic via ExecutorService.HostArbiter
+//      (arbiter_host.go delegates here). holderAddrFor + lookupVMClaimant stay host-side too —
+//      they are the in-core PROXY's own claim-address computation (acquireDispatch,
+//      lookupVMClaimant's vm-entity claimant search), read directly against LoadUnified's
+//      project config, never reached over the HostArbiter wire.
+//
+//   FLOOR-SLIM-proper Unit-8 moved the other 6 original host-seam impls (holderRunning/
+//   holderStop[+wait]/holderStart/holderExists/gpuSwitchModeTolerant/ensureCDIRoot/
+//   gpuCDIHolders/vmIsRunning/podIsRunning) DIRECTLY into candy/plugin-preempt
+//   (holder_dispatch.go) — they were reached over this seam only because their ORIGINAL
+//   implementation used charly-core-private mechanisms (providerRegistry,
+//   connectPluginByWordRef), which now dispatch instead via the class-agnostic
+//   sdk.Executor.InvokeProvider — never because the work itself needed a live LoadUnified
+//   project. The readiness-gated stop-wait (formerly waitStoppedHost) uses kit.ReadinessProvider
+//   directly in the plugin — the SAME project-aware resolver charly-core's own init() injects,
+//   shared in-process by this compiled-in placement, so no new host seam was needed for it either.
 //
 // Crash-safety, the lease ledger, poison markers, liveness (owner PID/start), and the
-// stop/flip/save sequencing all live in the plugin now; the host only supplies the config +
-// lifecycle + GPU-flip dependencies over the reverse channel.
+// stop/flip/save sequencing all live in the plugin now; the host only supplies the 2
+// LoadUnified-coupled config reads over the reverse channel.
 
 // holderAddr is spec.HolderAddr — the self-contained deployment address the host seams act on.
 type holderAddr = spec.HolderAddr
@@ -264,124 +269,6 @@ func holderAddrFor(name string, node spec.BundleNode) holderAddr {
 		}
 	}
 	return addr
-}
-
-func holderRunning(addr holderAddr) bool {
-	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
-		return vmIsRunning(vmName(addr.Vm, addr.Instance))
-	}
-	return podIsRunning(addr.Base, addr.Instance)
-}
-
-func holderStop(addr holderAddr) error {
-	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
-		return stopVM(addr.Vm, addr.Instance, false)
-	}
-	return deploykit.StopPodService(addr.Base, addr.Instance)
-}
-
-func holderStart(addr holderAddr) error {
-	// A DEPARTED holder — its container/quadlet or VM domain removed entirely (e.g. a
-	// torn-down check-bed member) — cannot be and need not be restored. Treating the
-	// missing runtime object as a hard start error would make restoreHolders fail and
-	// strand the lease FOREVER (no CLI could clear it — `charly preempt restore` would
-	// keep failing to restart a holder that no longer exists). A departed holder is a
-	// no-op success: nothing to restore, so its token frees.
-	if !holderExists(addr) {
-		fmt.Fprintf(os.Stderr, "preempt: holder %q has departed (no container/quadlet or VM domain) — nothing to restore, freeing its lease\n", addr.Name)
-		return nil
-	}
-	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
-		return startVM(addr.Vm, addr.Instance)
-	}
-	return deploykit.StartPodService(addr.Base, addr.Instance)
-}
-
-// holderExists reports whether the holder's runtime object still exists — a
-// container/quadlet (running or stopped) for a pod holder, or a defined libvirt
-// domain for a vm holder. Distinguishes a stopped-but-present holder (restore it)
-// from a departed one (free its lease). See holderStart.
-func holderExists(addr holderAddr) bool {
-	if deployTraitDescent(addr.Target).Venue == "ssh" { // vm (ssh venue)
-		if _, ok := invokeVmPlugin("domain-state", vmName(addr.Vm, addr.Instance), ""); ok {
-			return true
-		}
-		if dir, err := vmDir(); err == nil {
-			if _, statErr := os.Stat(filepath.Join(dir, vmName(addr.Vm, addr.Instance))); statErr == nil {
-				return true
-			}
-		}
-		return false
-	}
-	if active, _ := kit.QuadletExistsInstance(addr.Base, addr.Instance); active {
-		return true
-	}
-	engine := "podman"
-	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(addr.Base, addr.Instance, rt.RunEngine))
-	}
-	return exec.Command(engine, "container", "exists", kit.ContainerNameInstance(addr.Base, addr.Instance)).Run() == nil
-}
-
-// waitStoppedHost polls until the holder is no longer running (its resource is released), via
-// the readiness StopGate + pollUntil (cap-only at the config StopGrace). Returns immediately
-// when already down. The folded wait leg of the `stop` host seam — the readiness machinery
-// stays host-side, never crossing into the plugin.
-func waitStoppedHost(addr holderAddr) bool {
-	cfg := loadedReadiness().StopGate("stop " + addr.Name)
-	return pollUntil(context.Background(), cfg, func(context.Context) (bool, float64, error) {
-		return !holderRunning(addr), 0, nil
-	}) == nil
-}
-
-// vmIsRunning reports whether the named domain is running (libvirt state via the vm plugin,
-// then the qemu pidfile).
-func vmIsRunning(name string) bool {
-	if raw, ok := invokeVmPlugin("domain-state", name, ""); ok {
-		var st struct {
-			Running bool `json:"running"`
-		}
-		if json.Unmarshal(raw, &st) == nil && st.Running {
-			return true
-		}
-	}
-	dir, err := vmDir()
-	if err != nil {
-		return false
-	}
-	data, err := os.ReadFile(filepath.Join(dir, name, "qemu.pid"))
-	if err != nil {
-		return false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		return false
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
-}
-
-// podIsRunning reports whether a pod deployment is up (the quadlet service when one exists,
-// else the container's runtime state).
-func podIsRunning(base, instance string) bool {
-	if active, _ := kit.QuadletExistsInstance(base, instance); active {
-		svc := kit.ServiceNameInstance(base, instance)
-		out, _ := exec.Command("systemctl", "--user", "is-active", svc).Output()
-		return strings.TrimSpace(string(out)) == "active"
-	}
-	engine := "podman"
-	if rt, err := kit.ResolveRuntime(); err == nil {
-		engine = kit.EngineBinary(deploykit.ResolveBoxEngineForDeploy(base, instance, rt.RunEngine))
-	}
-	name := kit.ContainerNameInstance(base, instance)
-	out, err := exec.Command(engine, "inspect", "--format", "{{.State.Running}}", name).CombinedOutput()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "true"
 }
 
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
