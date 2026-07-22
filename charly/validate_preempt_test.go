@@ -10,9 +10,9 @@ import (
 )
 
 // validate_preempt_test.go — core-side tests for the preempt helpers that STAY in core after the
-// arbiter's C9 move: the node validator (ValidatePreemptibleOnNode) + the config-time GPU-consumer
-// predicate (deployNodeSharesGPU, gpu_imply.go). The arbiter's own tests relocated to
-// candy/plugin-preempt.
+// arbiter's C9 move: the node validator (ValidatePreemptibleOnNode). The arbiter's own tests
+// relocated to candy/plugin-preempt. (The former deployNodeSharesGPU, gpu_imply.go, and its
+// dedicated test here were a dead-code-radical-removal-batch deletion — zero real callers.)
 
 // A node may not claim a resource BOTH exclusively and shared (the arbiter dispatches on one or
 // the other; the driver modes are mutually exclusive).
@@ -74,28 +74,4 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 			t.Fatalf("pod node must never trigger the exclusive-venue GPU check, got: %q", errs.Error())
 		}
 	})
-}
-
-// deployNodeSharesGPU reports whether a deploy node claims a SHARED resource backed by a gpu
-// selector — so config_image emits the CDI `--device` even while the card is still vfio-bound.
-func TestDeployNodeSharesGPU(t *testing.T) {
-	resources := map[string]*ResolvedResource{
-		"nvidia-gpu": {Gpu: &ResolvedGpuSelector{Vendor: "0x10de"}},
-		"abstract":   {}, // no gpu selector
-	}
-	cases := []struct {
-		name string
-		node spec.BundleNode
-		want bool
-	}{
-		{"gpu-backed shared token", spec.BundleNode{RequiresShared: []string{"nvidia-gpu"}}, true},
-		{"selector-less shared token", spec.BundleNode{RequiresShared: []string{"abstract"}}, false},
-		{"no shared claim", spec.BundleNode{}, false},
-		{"exclusive is not shared", spec.BundleNode{RequiresExclusive: []string{"nvidia-gpu"}}, false},
-	}
-	for _, tc := range cases {
-		if got := deployNodeSharesGPU(tc.node, resources); got != tc.want {
-			t.Errorf("%s: deployNodeSharesGPU = %v, want %v", tc.name, got, tc.want)
-		}
-	}
 }

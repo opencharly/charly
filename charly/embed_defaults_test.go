@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"cuelang.org/go/cue"
 )
 
 // TestEmbeddedDefaults_SchemaConformance proves the node-form embedded defaults
@@ -230,9 +231,17 @@ amd-gpu:
 
 // TestProjectVocabOverride_IsSchemaValidated proves the Req #2 boundary: a
 // project's vocabulary override is validated against the SAME #Kind schemas as
-// the embedded defaults (validateVocabularyCollections — the shared helper). An
-// unknown key (typo) in a project builder override is rejected by the closed
-// #Builder, exactly as it would be in the embedded charly.yml.
+// the embedded defaults. An unknown key (typo) in a project builder override is
+// rejected by the closed #Builder, exactly as it would be in the embedded
+// charly.yml — and exactly as the live `plugin kind:builder: plugin_input fails
+// #BuilderInput` load-time gate rejects it for a real `charly box validate` run
+// (RDD-verified live: a scratch project with this exact fixture fails to load).
+// validateVocabularyCollections (the former direct-call subject here) was a
+// dead-code-radical-removal-batch deletion — its own production caller
+// (validateProjectCUESchemas) was already intentionally cut in c9befd83 (the
+// legacy root-shape collection format it validated is now HARD-REJECTED before
+// reaching validation), and this test now exercises the same closed-schema
+// rejection via validateEntityClosedCUE directly, the still-live sibling.
 func TestProjectVocabOverride_IsSchemaValidated(t *testing.T) {
 	proj := []byte(`version: ` + LatestSchemaVersion().String() + `
 builder:
@@ -243,10 +252,8 @@ builder:
 	if err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
-	var viol []string
-	validateVocabularyCollections(doc, []string{"builder"}, "proj.yml",
-		func(format string, args ...any) { viol = append(viol, fmt.Sprintf(format, args...)) })
-	if len(viol) == 0 {
+	entity := doc.LookupPath(cue.ParsePath("builder.badbuilder"))
+	if verr := validateEntityClosedCUE("builder", "proj.yml:builder.badbuilder", entity); verr == nil {
 		t.Error("expected closed #Builder to reject unknown key bogus_field in a project builder override")
 	}
 }

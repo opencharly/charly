@@ -63,15 +63,6 @@ func newCheckRunner(cfg kit.RunnerConfig) *kit.Runner {
 	return kr
 }
 
-// newHostVerbResolver wraps a kit.Runner in the host verb resolver — the verb-dispatch seam
-// plus the reverse-leg host machinery (endpoint/graphics/cluster/image-label resolution,
-// out-of-process verb Invoke) and the per-Invoke endpoint cleanups. newCheckRunner builds one
-// internally; this constructor is the direct entry a compiled-in kit verb's RunVerb needs
-// (the host CheckContext source) when dispatched outside a full runner build.
-func newHostVerbResolver(kr *kit.Runner) *hostVerbResolver {
-	return &hostVerbResolver{kr: kr}
-}
-
 // deployExecOf recovers the concrete DeployExecutor a kit.Runner was built with. The runner
 // stores its venue executor as the narrow kit.Executor (kit cannot import DeployExecutor), but
 // every check runner is constructed with a DeployExecutor, so the widening assertion succeeds;

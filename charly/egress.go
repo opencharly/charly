@@ -74,9 +74,3 @@ func validateTextEgress(label, text string) error {
 // Inject charly's egress-schema validation into the ledger's record-write path
 // (sdk/kit has no egress subsystem — it calls the kit.ValidateRecord seam).
 func init() { kit.ValidateRecord = ValidateEgressValue }
-
-// ValidateXMLEgress validates a rendered XML artifact (the libvirt domain XML); the plugin
-// koala-decodes it best-effort (a decode failure defers to libvirt's authoritative gate).
-func ValidateXMLEgress(kind, label, xmlStr string) error {
-	return egressValidate(kind, label, "xml", xmlStr)
-}

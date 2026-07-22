@@ -51,11 +51,3 @@ func TestEmbeddedSidecarTemplates(t *testing.T) {
 	}
 }
 
-func TestHasTailscaleSidecar(t *testing.T) {
-	if HasTailscaleSidecar(nil) {
-		t.Error("nil should return false")
-	}
-	if !HasTailscaleSidecar(map[string]json.RawMessage{"tailscale": json.RawMessage("{}")}) {
-		t.Error("tailscale should return true")
-	}
-}

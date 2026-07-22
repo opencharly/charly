@@ -181,42 +181,6 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 
 // TestMergeDeployShell_ReplaceByID — overlay with matching id replaces
 // the baked entry; non-matching id appends to Deploy.
-func TestMergeDeployShell_ReplaceByID(t *testing.T) {
-	baked := &spec.LabelShellSet{
-		Candy: []spec.ShellEntry{
-			{Origin: "direnv", ID: "direnv", Generic: &ShellSpec{Init: "default"}},
-		},
-	}
-	overlay := []spec.ShellEntry{
-		{ID: "direnv", Generic: &ShellSpec{Init: "overridden"}},
-		{Origin: "deploy", Generic: &ShellSpec{Init: "fresh-deploy-entry"}},
-	}
-	merged := MergeDeployShell(baked, overlay)
-	if len(merged.Candy) != 1 || merged.Candy[0].Generic.Init != "overridden" {
-		t.Errorf("replace by id: %+v", merged.Candy)
-	}
-	if len(merged.Deploy) != 1 || merged.Deploy[0].Generic.Init != "fresh-deploy-entry" {
-		t.Errorf("append to deploy: %+v", merged.Deploy)
-	}
-}
-
-// TestMergeDeployShell_SkipDropsBakedEntry — overlay with skip:true
-// (encoded as Generic + ByShell both nil) drops the matched entry.
-func TestMergeDeployShell_SkipDropsBakedEntry(t *testing.T) {
-	baked := &spec.LabelShellSet{
-		Candy: []spec.ShellEntry{
-			{Origin: "direnv", ID: "direnv", Generic: &ShellSpec{Init: "x"}},
-		},
-	}
-	overlay := []spec.ShellEntry{
-		{ID: "direnv"}, // Generic + ByShell nil ⇒ skip signal
-	}
-	merged := MergeDeployShell(baked, overlay)
-	if len(merged.Candy) != 0 {
-		t.Errorf("skip should drop entry: %+v", merged.Candy)
-	}
-}
-
 // TestExecutor_ResolveHome_Local — ShellExecutor.ResolveHome returns
 // $HOME for empty user and a sensible value for an explicit user.
 func TestExecutor_ResolveHome_Local(t *testing.T) {
@@ -230,10 +194,11 @@ func TestExecutor_ResolveHome_Local(t *testing.T) {
 	}
 }
 
-// TestDeployShellOverlay_YAMLParse — end-to-end YAML→DeployShellOverlay→
-// MergeDeployShell chain (Bed 6 of the R10 matrix). Asserts that a
-// deploy.yml-shape `shell:` block parses correctly through the custom
-// UnmarshalYAML AND merges as expected against a baked spec.LabelShellSet.
+// TestDeployShellOverlay_YAMLParse asserts that a deploy.yml-shape `shell:`
+// block parses correctly through DeployShellOverlay's custom UnmarshalYAML.
+// (The former merge-against-a-baked-spec.LabelShellSet half of this test
+// exercised MergeDeployShell/shellOverlayToEntry, deleted in the
+// dead-code-radical-removal batch as zero-real-caller dead code.)
 func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 	src := []byte(`
 - id: direnv
@@ -274,54 +239,6 @@ func TestDeployShellOverlay_YAMLParse(t *testing.T) {
 	o3 := overlays[2]
 	if !o3.Skip {
 		t.Errorf("o3.Skip = false")
-	}
-
-	// Convert + merge against a baked set.
-	baked := &spec.LabelShellSet{
-		Candy: []spec.ShellEntry{
-			{
-				Origin:  "direnv",
-				ID:      "direnv",
-				Generic: &ShellSpec{Init: "default-direnv"},
-				ByShell: map[string]*ShellSpec{
-					"fish": {Init: "default-fish-snippet"},
-				},
-			},
-			{
-				Origin:  "agent-forwarding",
-				ID:      "agent-forwarding:bash",
-				Generic: &ShellSpec{Init: "agent-forwarding-default"},
-			},
-		},
-	}
-	merged := MergeDeployShell(baked, []spec.ShellEntry{
-		shellOverlayToEntry(&overlays[0]),
-		shellOverlayToEntry(&overlays[1]),
-		shellOverlayToEntry(&overlays[2]),
-	})
-	// direnv entry should now reflect the overlay's fish override.
-	if len(merged.Candy) == 0 || merged.Candy[0].ID != "direnv" {
-		t.Fatalf("direnv entry missing: %+v", merged.Candy)
-	}
-	if merged.Candy[0].ByShell["fish"] == nil || !strings.Contains(merged.Candy[0].ByShell["fish"].Init, "--no-prompt") {
-		t.Errorf("direnv.fish overlay not applied: %+v", merged.Candy[0].ByShell)
-	}
-	// agent-forwarding:bash should be GONE (skipped).
-	for _, e := range merged.Candy {
-		if e.ID == "agent-forwarding:bash" {
-			t.Errorf("agent-forwarding:bash should be skipped: %+v", e)
-		}
-	}
-	// Fresh deploy-scope entry should be in Deploy.
-	foundFresh := false
-	for _, e := range merged.Deploy {
-		if e.Origin == "deploy" && e.ByShell["bash"] != nil &&
-			strings.Contains(e.ByShell["bash"].Init, "PROJECT_VAR") {
-			foundFresh = true
-		}
-	}
-	if !foundFresh {
-		t.Errorf("fresh deploy-scope overlay missing: %+v", merged.Deploy)
 	}
 }
 

@@ -74,13 +74,6 @@ func embeddedSidecarBodies() (map[string]json.RawMessage, error) {
 // enumerates sidecar names from charly.yml directly via resolveSidecarNames instead — an earlier,
 // superseded approach that was never swept when its replacement landed.
 
-// HasTailscaleSidecar reports whether a name-keyed sidecar map (opaque bodies)
-// attaches the tailscale sidecar — a pure key-existence check.
-func HasTailscaleSidecar(sidecars map[string]json.RawMessage) bool {
-	_, ok := sidecars["tailscale"]
-	return ok
-}
-
 // sidecarConfigDir DELETED (Cutover B unit 2, R1 divergence caught mid-flight): a byte-identical
 // duplicate of the ALREADY-EXISTING sdk/kit.SidecarConfigDir (kit/sidecar_naming.go), whose own
 // header comment falsely claimed "callers now import kit directly" — the SAME false-claim pattern

@@ -10,8 +10,10 @@ import (
 // TestAMDGFXVersionParsing (parseKFDGFXVersion) + TestGpuUsableViaCDI (gpuUsableViaCDI)
 // moved to candy/plugin-gpu/detect_test.go alongside those detection primitives
 // (cutover C11). The tests here exercise the KEPT-core surface: the DetectHostDevices
-// shim var (swapped with a fake), the DetectedDevices struct, and the pure env/group
-// helpers (appendAutoDetectedEnv / appendEnvUnique / appendGroupsForAMDGPU).
+// shim var (swapped with a fake) and the DetectedDevices struct. (appendAutoDetectedEnv
+// and appendGroupsForAMDGPU, and the tests solely exercising them, were a
+// dead-code-radical-removal-batch deletion — zero real callers anywhere; appendEnvUnique
+// remains live via a different real caller.)
 
 func TestDetectHostDevicesWithGPU(t *testing.T) {
 	orig := DetectHostDevices
@@ -165,52 +167,6 @@ func TestDetectHostDevicesWithBothGPUs(t *testing.T) {
 	}
 }
 
-func TestAMDGPUGroupInjection(t *testing.T) {
-	detected := DetectedDevices{
-		AMDGPU:  true,
-		Devices: []string{"/dev/kfd", "/dev/dri/renderD128"},
-	}
-
-	sec := SecurityConfig{}
-	sec.Devices = deploykit.AppendUnique(sec.Devices, detected.Devices...)
-	if detected.AMDGPU {
-		sec.GroupAdd = appendGroupsForAMDGPU(sec.GroupAdd)
-	}
-
-	// Check keep-groups was added
-	wantGroups := []string{"keep-groups"}
-	if !reflect.DeepEqual(sec.GroupAdd, wantGroups) {
-		t.Errorf("GroupAdd = %v, want %v", sec.GroupAdd, wantGroups)
-	}
-
-	// Check it appears in SecurityArgs
-	args := deploykit.SecurityArgs(sec)
-	hasKeepGroups := false
-	for i, a := range args {
-		if a == "--group-add" && i+1 < len(args) && args[i+1] == "keep-groups" {
-			hasKeepGroups = true
-		}
-	}
-	if !hasKeepGroups {
-		t.Error("expected --group-add keep-groups in SecurityArgs")
-	}
-}
-
-func TestAMDGPUGroupsIdempotent(t *testing.T) {
-	// Already has keep-groups — should not duplicate
-	groups := appendGroupsForAMDGPU([]string{"keep-groups"})
-	if len(groups) != 1 || groups[0] != "keep-groups" {
-		t.Errorf("expected [keep-groups] unchanged, got %v", groups)
-	}
-
-	// Empty — should add keep-groups
-	groups = appendGroupsForAMDGPU(nil)
-	want := []string{"keep-groups"}
-	if !reflect.DeepEqual(groups, want) {
-		t.Errorf("expected %v, got %v", want, groups)
-	}
-}
-
 func TestAMDGPUGroupsInQuadlet(t *testing.T) {
 	cfg := deploykit.QuadletConfig{
 		BoxName:     "test-amd",
@@ -265,68 +221,6 @@ func TestRenderNodeNoDevices(t *testing.T) {
 	detected := DetectHostDevices()
 	if detected.RenderNode != "" {
 		t.Errorf("RenderNode = %q, want empty", detected.RenderNode)
-	}
-}
-
-func TestAppendAutoDetectedEnv(t *testing.T) {
-	detected := DetectedDevices{
-		AMDGPU:        true,
-		AMDGFXVersion: "11.0.0",
-		RenderNode:    "/dev/dri/renderD128",
-	}
-
-	env := appendAutoDetectedEnv(nil, detected)
-	if len(env) != 3 {
-		t.Fatalf("expected 3 env vars, got %d: %v", len(env), env)
-	}
-	if env[0] != "HSA_OVERRIDE_GFX_VERSION=11.0.0" {
-		t.Errorf("env[0] = %q, want HSA_OVERRIDE_GFX_VERSION=11.0.0", env[0])
-	}
-	if env[1] != "DRINODE=/dev/dri/renderD128" {
-		t.Errorf("env[1] = %q, want DRINODE=/dev/dri/renderD128", env[1])
-	}
-	if env[2] != "DRI_NODE=/dev/dri/renderD128" {
-		t.Errorf("env[2] = %q, want DRI_NODE=/dev/dri/renderD128", env[2])
-	}
-}
-
-func TestAppendAutoDetectedEnvNoGPU(t *testing.T) {
-	detected := DetectedDevices{}
-	env := appendAutoDetectedEnv([]string{"FOO=bar"}, detected)
-	if len(env) != 1 {
-		t.Fatalf("expected 1 env var (no injection), got %d: %v", len(env), env)
-	}
-}
-
-func TestAppendAutoDetectedEnvUserOverride(t *testing.T) {
-	detected := DetectedDevices{
-		AMDGPU:        true,
-		AMDGFXVersion: "11.0.0",
-		RenderNode:    "/dev/dri/renderD128",
-	}
-
-	// User already set DRINODE — auto-detect should NOT override
-	env := []string{"DRINODE=/dev/dri/renderD129"}
-	env = appendAutoDetectedEnv(env, detected)
-
-	// Should have 3 vars: user DRINODE + HSA + DRI_NODE (auto)
-	if len(env) != 3 {
-		t.Fatalf("expected 3 env vars, got %d: %v", len(env), env)
-	}
-	if env[0] != "DRINODE=/dev/dri/renderD129" {
-		t.Errorf("user DRINODE should be preserved, got %q", env[0])
-	}
-}
-
-func TestAppendAutoDetectedEnvRenderNodeOnly(t *testing.T) {
-	// No AMD GPU, but render node detected (e.g., Intel GPU)
-	detected := DetectedDevices{
-		RenderNode: "/dev/dri/renderD128",
-	}
-
-	env := appendAutoDetectedEnv(nil, detected)
-	if len(env) != 2 {
-		t.Fatalf("expected 2 env vars (DRINODE + DRI_NODE), got %d: %v", len(env), env)
 	}
 }
 

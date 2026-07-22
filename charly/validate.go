@@ -102,8 +102,12 @@ func validateProjectCUESchemas(cfg *Config, dir string, opts ResolveOpts, errs *
 	// former root-shape collection validator — a HARDCODED per-kind `collectionKinds` word list driving
 	// validateVocabularyCollections over non-node-form files — was DELETED as an unreachable dead legacy
 	// arm (task #60 CONDITION-1: the kernel carries no compiled-in concrete-kind word list; the load gate
-	// owns the rejection). What LOAD leaves lenient is each entity's ASSEMBLED plan STEPS, so the node-form
-	// step-typo gate (validateNodeFormSteps against the closed #Step/#Op) stays here.
+	// owns the rejection). validateVocabularyCollections itself (and its sibling validateEntityCUE) were
+	// FULLY deleted in the dead-code-radical-removal batch — RDD-verified live that the modern per-kind
+	// LOAD-time plugin gate (`plugin kind:<X>: plugin_input fails #<X>Input`) is the actual production
+	// entity-schema enforcement for every non-box collection kind today. What LOAD leaves lenient is each
+	// entity's ASSEMBLED plan STEPS, so the node-form step-typo gate (validateNodeFormSteps against the
+	// closed #Step/#Op) stays here.
 	rootFiles := []string{filepath.Join(dir, UnifiedFileName)}
 	if boxRoots, _ := filepath.Glob(filepath.Join(dir, "box", "*", UnifiedFileName)); len(boxRoots) > 0 {
 		rootFiles = append(rootFiles, boxRoots...)
@@ -138,31 +142,6 @@ func validateBoxBaseFrom(cfg *Config, opts ResolveOpts, errs *ValidationError) {
 		}
 		if img.HasBaseFromConflict() {
 			errs.Add("box %q: from: and base: are mutually exclusive (set one; omit both for a scratch box)", name)
-		}
-	}
-}
-
-// validateVocabularyCollections validates each entity of the given collection
-// kinds in doc against its registered #Kind (validateEntityCUE), reporting every
-// failure via report. Shared by validateProjectCUESchemas (on-disk project
-// files) and the embedded-default schema-conformance gate
-// (TestEmbeddedDefaults_SchemaConformance) so a project's vocabulary and the
-// binary-embedded vocabulary validate through the IDENTICAL path (R3).
-func validateVocabularyCollections(doc cue.Value, kinds []string, srcLabel string, report func(format string, args ...any)) {
-	for _, kind := range kinds {
-		m := doc.LookupPath(cue.ParsePath(kind))
-		if !m.Exists() {
-			continue
-		}
-		it, ferr := m.Fields()
-		if ferr != nil {
-			continue
-		}
-		for it.Next() {
-			label := fmt.Sprintf("%s:%s.%s", srcLabel, kind, it.Selector().String())
-			if verr := validateEntityCUE(kind, label, it.Value()); verr != nil {
-				report("%v", verr)
-			}
 		}
 	}
 }

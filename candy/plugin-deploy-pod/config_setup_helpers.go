@@ -748,8 +748,9 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 	return nil
 }
 
-// extractQuadletImageLine mirrors charly-core update_deploy_dispatch.go's function of the same
-// name — pure regex read of an on-disk quadlet file.
+// extractQuadletImageLine was ported from charly-core's update_deploy_dispatch.go; that copy
+// became a dead-code-radical-removal-batch deletion (zero real callers) — THIS copy is the
+// live one. Pure regex read of an on-disk quadlet file.
 func extractQuadletImageLine(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -976,8 +977,9 @@ func buildStartArgs(engine, imageRef string, uid, gid int, ports []string, name 
 	return args
 }
 
-// appendGroupsForAMDGPU / appendAutoDetectedEnv / appendEnvUnique mirror charly-core devices.go's
-// functions of the same name.
+// appendGroupsForAMDGPU / appendAutoDetectedEnv / appendEnvUnique were ported from
+// charly-core's devices.go; that copy became a dead-code-radical-removal-batch deletion
+// (zero real callers once pod config-setup moved here) — THIS copy is the live one.
 func appendGroupsForAMDGPU(groups []string) []string {
 	for _, g := range groups {
 		if g == "keep-groups" {

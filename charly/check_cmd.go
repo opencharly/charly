@@ -580,21 +580,6 @@ func collectAddCandySteps(uf *UnifiedFile, dir string, addCandies []string) []sp
 	return out
 }
 
-// candySourceDirs builds a candy-name → source-dir map for anchoring relative
-// committed-APK paths in adb/appium checks against the authoring candy's tree
-// (local or @github-fetched). A scan error is RETURNED, never swallowed: the
-// caller stores it on the Runner so resolveCheckApk can fail an apk check with
-// the REAL cause ("candy source-dir scan failed: …") instead of a misleading
-// "no such file" — and an apk-free check is unaffected (it never consults the
-// map).
-func candySourceDirs(dir string, cfg *Config) (map[string]string, error) {
-	candyMap, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("scanning candy source dirs: %w", err)
-	}
-	return candyDirsFromScan(candyMap), nil
-}
-
 // candyDirsFromScan extracts the candy-name → SourceDir map from a scanned candy
 // set. Keyed by the candy MAP KEY — the check's Origin form: a bare name for a
 // local candy ("sshd"), the bare @github ref for a fetched one

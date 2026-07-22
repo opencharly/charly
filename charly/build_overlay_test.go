@@ -14,19 +14,6 @@ import (
 // moved out to candy/plugin-deploy-pod and is exercised end-to-end by the check-pod R10 bed; only
 // the overlay engine + its live-input carrier remain here.
 
-// TestPodDeployEngine proves the engine fallback: node.Engine when set, else "podman".
-func TestPodDeployEngine(t *testing.T) {
-	if got := podDeployEngine(nil); got != "podman" {
-		t.Errorf("podDeployEngine(nil) = %q, want podman", got)
-	}
-	if got := podDeployEngine(&spec.BundleNode{}); got != "podman" {
-		t.Errorf("podDeployEngine(empty) = %q, want podman", got)
-	}
-	if got := podDeployEngine(&spec.BundleNode{Engine: "docker"}); got != "docker" {
-		t.Errorf("podDeployEngine(docker) = %q, want docker", got)
-	}
-}
-
 // TestOverlayHostBuilderRegistered proves the overlay build goes through the uniform F10
 // hostBuilders registry: the "overlay" kind (the pod-substrate sibling of "image"/"containerfiles"/
 // "cli") is registered at package-var init. The externalized pod plugin's HostBuild("overlay")

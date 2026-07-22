@@ -1,9 +1,9 @@
 package main
 
-// ports.go — the Config/Candy-coupled (CollectBoxPorts) + deploy-config-coupled
-// (SavePortOverride) port helpers that STAY in charly core per the plan (Config is a
-// kernel Mechanism, runtime Candy stays core). The pure port-mapping helpers moved to
-// sdk/kit in P4; charly binds onto them below.
+// ports.go — the Config/Candy-coupled (CollectBoxPorts) port helpers that STAY in charly
+// core per the plan (Config is a kernel Mechanism, runtime Candy stays core). The pure
+// port-mapping helpers moved to sdk/kit in P4; charly binds onto them below. (The former
+// SavePortOverride was a dead-code-radical-removal-batch deletion — zero callers anywhere.)
 
 import (
 	"sort"
@@ -76,18 +76,4 @@ func CollectBoxPorts(cfg *Config, layers map[string]spec.CandyReader, boxName st
 		out = append(out, s)
 	}
 	return out, nil
-}
-
-func SavePortOverride(box, instance string, ports []string) error {
-	dc, err := deploykit.LoadDeployConfigForWrite("SavePortOverride")
-	if err != nil {
-		return err
-	}
-
-	key := deploykit.DeployKey(box, instance)
-	overlay := dc.Bundle[key]
-	overlay.Port = ports
-	dc.Bundle[key] = overlay
-
-	return saveBundleConfigNodeForm(dc)
 }

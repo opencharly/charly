@@ -28,12 +28,6 @@ func ProvisionPodmanSecrets(engine, boxName, instance string, secrets []deployki
 	return deploykit.ProvisionPodmanSecrets(engine, boxName, instance, secrets, autoGenerate, CredServiceVNC, coreCredentialAccess())
 }
 
-// resolveSecretValue is the thin core wrapper — the orchestration lives in
-// deploykit.ResolveSecretValue (unit 6b).
-func resolveSecretValue(s deploykit.CollectedSecret, boxName, instance string) (value, source string) {
-	return deploykit.ResolveSecretValue(s, boxName, instance, CredServiceVNC, ResolveCredential)
-}
-
 // SecretResolution is the core-facing alias of the moved orchestration's result type
 // (deploykit.SecretResolution, unit 6b) — preserves the SecretResolution name existing
 // callers (Step 5/6's checkMissingSecretRequires) use.

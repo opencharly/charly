@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 )
@@ -76,34 +75,12 @@ func parseEmbeddedInstallHints() map[string]map[string]string {
 	return doc.InstallHints
 }
 
-func (d Distro) installHint(binary string) string {
-	if d.Manager == "" {
-		return binary
-	}
-	if pkgMap, ok := installHints[binary]; ok {
-		// Try exact distro ID first
-		if pkg, ok := pkgMap[d.ID]; ok {
-			// AUR packages include their own install command
-			if strings.Contains(pkg, "AUR:") {
-				return strings.TrimSpace(pkg[strings.Index(pkg, "AUR:")+4:])
-			}
-			return fmt.Sprintf("%s %s", d.Manager, pkg)
-		}
-		// Try distro family
-		family := distroFamily(d.ID)
-		if pkg, ok := pkgMap[family]; ok {
-			if strings.Contains(pkg, "AUR:") {
-				return strings.TrimSpace(pkg[strings.Index(pkg, "AUR:")+4:])
-			}
-			return fmt.Sprintf("%s %s", d.Manager, pkg)
-		}
-	}
-	return fmt.Sprintf("%s %s", d.Manager, binary)
-}
-
 // distroFamilyMap maps a host distro ID to its base family for install-hint package-name
 // lookup, read from the distro_family_map directive in the embedded charly.yml (Phase 4:
-// data moved out of Go). An unlisted distro maps to itself (see distroFamily).
+// data moved out of Go). Populated for the reply.DistroFamilyMap wire field
+// (host_build_hostprobe.go) — candy/plugin-doctor's own distroFamily/installHint methods
+// consume it there now; the former core-side installHint/distroFamily copies (superseded,
+// zero real callers) were a dead-code-radical-removal-batch deletion.
 var distroFamilyMap = parseEmbeddedDistroFamilyMap()
 
 func parseEmbeddedDistroFamilyMap() map[string]string {
@@ -117,11 +94,3 @@ func parseEmbeddedDistroFamilyMap() map[string]string {
 	return doc.DistroFamilyMap
 }
 
-// distroFamily maps distro IDs to their base family for install hint lookup. An unlisted
-// distro maps to itself.
-func distroFamily(id string) string {
-	if fam, ok := distroFamilyMap[id]; ok {
-		return fam
-	}
-	return id
-}

@@ -196,7 +196,7 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 	case *deploykit.OpStep:
 		// An act-verb OpStep (a `run: plugin: <verb>` whose builtin ProvisionActor shell
 		// needs the in-proc registry). resolveProvisionScript is the SAME Op→act-shell seam
-		// the in-proc deploy path (renderOpCommand) uses (R3). A NON-act OpStep
+		// the build-emit path (deploykit.Generator.EmitTasks' `case "plugin"`) uses (R3). A NON-act OpStep
 		// (mkdir/copy/write/link/setcap/download/cmd/plugin:command) is plugin-renderable and
 		// must NOT arrive here — ok=false is a loud plugin-walk bug.
 		script, ok := resolveProvisionScript(st.Op, st.Distros)

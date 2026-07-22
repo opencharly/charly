@@ -12,23 +12,11 @@ import (
 // The GPU DRIVER-SWITCH primitive (the vfio<->nvidia sysfs rebind) moved into candy/plugin-gpu
 // (see gpu_shim.go's driver-switch shims). What REMAINS host-side is the logic that reads the
 // project config (BundleNode / ResourceDef) to decide whether a deploy CONSUMES the nvidia GPU
-// — used by two in-core consumers that cannot move: config_image.go (whether to emit the CDI
-// `--device nvidia.com/gpu=all` on a pod at bring-up) and the arbiter's acquire shim
-// (withImpliedGPUShared auto-promotes a GPU-consuming pod to a SHARED claimant). These operate
-// on the package-main config types + the DetectGPU shim, so they stay in core.
-
-// deployNodeSharesGPU reports whether a deploy node claims a SHARED resource backed by a gpu
-// selector — so it must get the GPU device (`--device nvidia.com/gpu=all` via CDI) in its
-// quadlet/run args EVEN when the host card is currently vfio-bound, because the arbiter flips
-// it to nvidia at start.
-func deployNodeSharesGPU(node spec.BundleNode, resources map[string]*ResolvedResource) bool {
-	for _, tok := range node.RequiredShared() {
-		if rdef := resources[tok]; rdef != nil && rdef.Gpu != nil {
-			return true
-		}
-	}
-	return false
-}
+// — used by the arbiter's acquire shim (withImpliedGPUShared auto-promotes a GPU-consuming pod
+// to a SHARED claimant). This operates on the package-main config types + the DetectGPU shim, so
+// it stays in core. (Its former sibling deployNodeSharesGPU, and its claimed config_image.go
+// consumer, was a dead-code-radical-removal-batch deletion — zero real callers; config_image.go
+// never called it.)
 
 // nvidiaTokenFromResources returns the `resource:` token whose gpu selector matches the NVIDIA
 // PCI vendor — the arbitration token the auto-detected nvidia GPU device maps onto. "" when no

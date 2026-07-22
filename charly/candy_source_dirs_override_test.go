@@ -7,8 +7,8 @@ import (
 )
 
 // TestCandySourceDirs_OverrideAnchorsRemoteApk is the integration guard for the
-// box/<distro> bed apk path: candySourceDirs(box/cachyos, cfg) under
-// CHARLY_REPO_OVERRIDE (the dev-localpkg local-candy override) MUST map the
+// box/<distro> bed apk path: ScanAllCandyWithConfig(box/cachyos, cfg) + candyDirsFromScan
+// under CHARLY_REPO_OVERRIDE (the dev-localpkg local-candy override) MUST map the
 // override-resolved remote android candy by its @github BARE REF — the exact key
 // the baked check Origin carries — to a SourceDir under the override root, so
 // resolveCheckApk anchors the committed `./tests/data/ApiDemos-debug.apk`. This
@@ -41,10 +41,11 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 		t.Fatalf("LoadUnified(box/cachyos): ok=%v err=%v", ok, err)
 	}
 	cfg := uf.ProjectConfig()
-	dirs, scanErr := candySourceDirs(boxCachyos, cfg)
+	candyMap, scanErr := ScanAllCandyWithConfig(boxCachyos, cfg)
 	if scanErr != nil {
 		t.Fatalf("candySourceDirs scan failed: %v", scanErr)
 	}
+	dirs := candyDirsFromScan(candyMap)
 
 	const key = "github.com/opencharly/charly/candy/android-emulator-layer"
 	src, found := dirs[key]

@@ -23,19 +23,6 @@ import (
 // sites now reference spec.ParsedRef / spec.ParseRemoteRef / spec.IsRemoteImageRef directly
 // (ZERO-ALIASES — no alias reintroduced here).
 
-// bareRefs returns the bare map-key form of each ref — for the consumers that
-// resolve a candy list against the candy map.
-func bareRefs(refs []deploykit.CandyRef) []string {
-	if len(refs) == 0 {
-		return nil
-	}
-	out := make([]string, len(refs))
-	for i, r := range refs {
-		out[i] = r.Bare()
-	}
-	return out
-}
-
 // Candy-version resolution is per-entity, not per-git-tag: the `@github…:vTAG`
 // suffix is ONLY the FETCH coordinate (which commit to clone). The authority is
 // the candy's own `version:` field, read AFTER fetch and arbitrated by

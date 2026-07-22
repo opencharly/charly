@@ -33,5 +33,5 @@ package main
 //     COPY staging, op coalescing). See candy/plugin-installstep/plugin.go (emitSystemPackages,
 //     emitBuilder, emitLocalPkgInstall, emitOp). Their DEPLOY legs (SystemPackages/Builder/
 //     LocalPkgInstall host-engine via RunHostStep → deploykit.RenderHostPackageCommand /
-//     runVenueBuilderStep / deploykit.ExecLocalPkgInstall; Op the act-OpStep resolveProvisionScript /
-//     renderOpCommand path) are likewise unchanged.
+//     runVenueBuilderStep / deploykit.ExecLocalPkgInstall; Op the act-OpStep RunHostStep
+//     resolveProvisionScript path) are likewise unchanged.

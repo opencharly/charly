@@ -5,11 +5,12 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
-	"github.com/opencharly/sdk/spec"
 )
 
-// deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers +
-// shellOverlayToEntry. The deploy STATE-MODEL body (LoadBundleConfig / SaveBundleConfig /
+// deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers.
+// (The former shellOverlayToEntry was a dead-code-radical-removal-batch deletion — zero
+// real callers; MergeDeployShell, its only consumer, was deleted alongside it.) The deploy
+// STATE-MODEL body (LoadBundleConfig / SaveBundleConfig /
 // LoadDeployConfigForRead / LoadDeployConfigForWrite / MergeDeployOntoMetadata /
 // CleanDeployEntry / SaveDeployState / ExportAllBox + the deploykit.SaveDeployStateInput type +
 // the pure helpers scopeVolumesToDeployKey / descriptionInfo / isSameBaseBox / removeBySource /
@@ -108,39 +109,3 @@ var DeployConfigPath = kit.DefaultDeployConfigPath
 // allowed`) was concurrent beds racing the shared read-modify-write of this one file.
 const DeployConfigEnv = kit.DeployConfigEnv
 
-// ToShellEntry converts a charly.yml overlay into the LabelShell
-// spec.ShellEntry shape consumed by MergeDeployShell.
-func shellOverlayToEntry(o *DeployShellOverlay) spec.ShellEntry {
-	entry := spec.ShellEntry{
-		Origin:   o.Origin,
-		ID:       o.ID,
-		Priority: o.Priority,
-	}
-	if !o.Skip {
-		hasGeneric := o.Init != "" || len(o.PathAppend) > 0 || o.Path != ""
-		if hasGeneric {
-			entry.Generic = &ShellSpec{
-				Init:       o.Init,
-				PathAppend: append([]string(nil), o.PathAppend...),
-				Path:       o.Path,
-			}
-		}
-		if len(o.ByShell()) > 0 {
-			entry.ByShell = make(map[string]*ShellSpec, len(o.ByShell()))
-			for k, v := range o.ByShell() {
-				if v == nil {
-					continue
-				}
-				entry.ByShell[k] = &ShellSpec{
-					Init:       v.Init,
-					PathAppend: append([]string(nil), v.PathAppend...),
-					Path:       v.Path,
-				}
-			}
-		}
-	}
-	// Skip == true → leave Generic/ByShell nil; MergeDeployShell's
-	// replaceShellEntryByID treats both-nil as the "drop matched entry"
-	// signal.
-	return entry
-}

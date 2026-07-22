@@ -106,31 +106,20 @@ type deployAddCmd struct {
 	builderImageOverride string
 }
 
-// deployDelCmd is the host-side orchestration for `charly bundle del <name>`.
-// The CLI GRAMMAR moved to the command:bundle plugin (candy/plugin-bundle); this struct
-// is reconstructed from spec.DeployDelRequest by the deploy-del host-build seam.
+// deployDelCmd resolves a `charly bundle del <name>` target node — the deploy-del-resolve
+// host seam's ONE responsibility (resolveDelNode). The CLI GRAMMAR moved to the
+// command:bundle plugin (candy/plugin-bundle); this struct is reconstructed from
+// spec.DeployDelRequest by hostBuildDeployDelResolve, which populates only Name — the actual
+// teardown EXECUTION (the reverse-ops replay, the AssumeYes/KeepRepoChanges/KeepServices/
+// KeepImage/DryRun flags, and the ReverseExecutor dispatch) now lives in
+// host_build_deploy_node_del_dispatch.go's hostBuildDeployNodeDelDispatch. (This struct's
+// former AssumeYes/KeepRepoChanges/KeepServices/KeepImage/DryRun/Runner fields plus its
+// kit.ReverseExecutor-satisfying methods were a dead-code-radical-removal-batch deletion —
+// never populated by the one real construction site, zero real callers of the methods; the
+// live ReverseExecutor implementor is deploykit.HostReverseExec via TeardownHostDeploy.)
 type deployDelCmd struct {
 	Name string
-
-	AssumeYes       bool
-	KeepRepoChanges bool
-	KeepServices    bool
-	KeepImage       bool
-	DryRun          bool
-
-	// Runner routes reverse ops to the right privilege context. It is
-	// carried onto the resolved the local deploy target by Run before Del. Nil
-	// falls back to the local-exec path in reverse_ops.go. Set programmatically
-	// by host-side teardown callers, never authored on the CLI.
-	Runner kit.ReverseRunner
 }
-
-// deployDelCmd satisfies kit.ReverseExecutor via thin wrappers — keeps the
-// flag-accessor protocol decoupled from the concrete command type.
-func (c *deployDelCmd) ReverseDryRun() bool              { return c.DryRun }
-func (c *deployDelCmd) ReverseKeepRepoChanges() bool     { return c.KeepRepoChanges }
-func (c *deployDelCmd) ReverseKeepServices() bool        { return c.KeepServices }
-func (c *deployDelCmd) ReverseRunner() kit.ReverseRunner { return c.Runner }
 
 // deployDelArgv returns the argv (everything AFTER the charly binary) for a
 // non-interactive `charly bundle del <name>`: the verb, the name, and the ONE valid

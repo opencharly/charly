@@ -312,6 +312,18 @@ func validateKindValueCUE(gn *genericNode) error {
 	if err != nil {
 		return err
 	}
+	// KNOWN GAP (RCA'd during the dead-code-radical-removal batch, NOT introduced by it — the
+	// now-deleted validateEntityCUE was the only concrete check and it already had zero
+	// production callers before this batch touched anything): non-concrete validation here
+	// lets a required-but-unset field slip through (e.g. a vm PCI hostdev's slot/function).
+	// A blanket cue.Concrete(true) fix was attempted and REVERTED — it broke 9+ real cases
+	// across vm/pod/local/k8s/candy (TestCueKinds_Corpus, TestBundleCompileParity_*,
+	// TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*, TestBuildDeployPlan*,
+	// TestInvokeProvider_LazyConnectFallback*), not just candy's known base⊻from disjunction
+	// issue — RDD-verified live via go test ./... catching each one. The correct fix needs
+	// per-field concreteness (or a narrower, kind/field-scoped check) rather than a blanket
+	// flip; tracked as its own named, registered program exit — the VALIDATION-CORRECTNESS
+	// BATCH — not silently dropped (see the batch's CHANGELOG and the program register).
 	if verr := entity.Unify(def).Validate(); verr != nil {
 		return fmt.Errorf("%s: %s", gn.disc, errors.Details(verr, nil))
 	}

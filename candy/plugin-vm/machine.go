@@ -62,47 +62,6 @@ func EnsureMachine() (string, error) {
 	return rootfulConn, nil
 }
 
-// RootfulEngine returns the engine command and args for rootful container execution.
-// For docker: returns ["docker"] (already rootful via daemon).
-// For podman with machine: returns ["podman", "--connection", "charly"].
-// For podman with sudo: returns ["sudo", "podman"].
-// For native: returns [engine] as-is.
-func RootfulEngine(engine, rootfulMode string) ([]string, error) {
-	if engine == "docker" {
-		return []string{"docker"}, nil
-	}
-
-	switch rootfulMode {
-	case "native":
-		return []string{engine}, nil
-	case "sudo":
-		return []string{"sudo", engine}, nil
-	case "machine":
-		conn, err := EnsureMachine()
-		if err != nil {
-			return nil, err
-		}
-		return []string{engine, "--connection", conn}, nil
-	case "auto", "":
-		rootless, err := IsRootless()
-		if err != nil {
-			// Can't determine — assume rootful
-			return []string{engine}, nil
-		}
-		if !rootless {
-			return []string{engine}, nil
-		}
-		// Rootless podman — use machine
-		conn, err := EnsureMachine()
-		if err != nil {
-			return nil, err
-		}
-		return []string{engine, "--connection", conn}, nil
-	default:
-		return nil, fmt.Errorf("unknown engine.rootful mode %q (valid: auto, machine, sudo, native)", rootfulMode)
-	}
-}
-
 func listMachines() ([]podmanMachineInfo, error) {
 	out, err := exec.Command("podman", "machine", "list", "--format", "json").Output()
 	if err != nil {

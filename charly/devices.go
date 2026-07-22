@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -13,9 +12,8 @@ import (
 //     pci_class_labels) — kept in core because `charly doctor`'s device report reads
 //     devicePatterns, so one source stays here and the Detect* shims (gpu_shim.go)
 //     thread the tables into the plugin via GpuProbeInput (R3 — no duplicate copy);
-//   - the pure, host-INDEPENDENT env/group helpers the deploy paths call
-//     (appendAutoDetectedEnv / appendEnvUnique / appendGroupsForAMDGPU /
-//     LogDetectedDevices).
+//   - the pure, host-INDEPENDENT env/group helper the deploy paths call
+//     (appendEnvUnique) and LogDetectedDevices.
 // The sysfs/exec detection PRIMITIVES (DetectGPU / DetectAMDGPU / DetectVFIO /
 // DetectHostDevices / EnsureCDI / MemlockLimitBytes / VfioGroupAccessible + their
 // impls + the VFIOReport/VFIOGpu/VFIOPCIDevice/DetectedDevices types) now live in
@@ -106,29 +104,6 @@ func LogDetectedDevices(detected DetectedDevices) {
 	if len(parts) > 0 {
 		fmt.Fprintf(os.Stderr, "Auto-detected devices: %s\n", strings.Join(parts, ", "))
 	}
-}
-
-// appendGroupsForAMDGPU adds "keep-groups" for AMD GPU access. Podman's
-// keep-groups preserves all host supplementary groups (video, render, etc.)
-// inside the container. It is mutually exclusive with explicit group names.
-func appendGroupsForAMDGPU(groups []string) []string {
-	if slices.Contains(groups, "keep-groups") {
-		return groups
-	}
-	return append(groups, "keep-groups")
-}
-
-// appendAutoDetectedEnv injects GPU-related env vars from auto-detection results.
-// Uses appendEnvUnique so user-supplied env vars always take priority.
-func appendAutoDetectedEnv(envVars []string, detected DetectedDevices) []string {
-	if detected.AMDGPU && detected.AMDGFXVersion != "" {
-		envVars = appendEnvUnique(envVars, "HSA_OVERRIDE_GFX_VERSION="+detected.AMDGFXVersion)
-	}
-	if detected.RenderNode != "" {
-		envVars = appendEnvUnique(envVars, "DRINODE="+detected.RenderNode)
-		envVars = appendEnvUnique(envVars, "DRI_NODE="+detected.RenderNode)
-	}
-	return envVars
 }
 
 // appendEnvUnique appends an env var (KEY=VALUE) to a slice only if the key

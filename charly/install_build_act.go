@@ -51,7 +51,7 @@ func compileActOp(op *spec.Op, layer deploykit.CandyModel, img *buildkit.Resolve
 			// The discriminator is the executorInvoker capability, which only the
 			// grpcProvider (broker-carrying out-of-proc peer) satisfies — so `command`
 			// and every built-in ProvisionActor verb fall through to the OpStep path
-			// below (renderOpCommand), unchanged. The build-context counterpart
+			// below (RunHostStep's resolveProvisionScript leg), unchanged. The build-context counterpart
 			// (emitTasks `case "plugin"`) stays the box-build seam; this is the
 			// DEPLOY-context (Local/VM) + pod-overlay (OCI) leg.
 			if _, ok := prov.(executorInvoker); ok {
