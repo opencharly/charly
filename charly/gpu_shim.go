@@ -1,50 +1,34 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"os"
-	"strings"
-
 	"github.com/opencharly/sdk/spec"
 )
 
-// --- GPU driver-switch consts + pure helpers, aliased from spec (cutover C9) ---
+// --- GPU pure helpers, aliased from spec ------------------------------------------------------
 //
-// The DRIVER-SWITCH logic moved into candy/plugin-gpu; a handful of core sites (vm_gpu_cmd
-// shims, the arbiter mode-math seam, gpu_allocate) still name these values/helpers, so core
-// aliases the ONE spec copy (R3 — no duplicate, no drift).
+// nvidiaVendorID is still consumed in-core (gpu_imply.go's GPU-implied-shared check);
+// normalizePCIVendor/selectGPUByVendor by gpu_allocate.go's auto-allocation. The driver-MODE
+// consts (vfio/nvidia) and host-driver-name consts are consumed ONLY by the DRIVER-SWITCH path,
+// which is entirely out-of-core now (candy/plugin-gpu + candy/plugin-vm + candy/plugin-preempt
+// dispatch verb:gpu peer-to-peer) — no in-core alias needed for those.
 
-const (
-	gpuModeVfio       = spec.GpuModeVfio
-	gpuModeNvidia     = spec.GpuModeNvidia
-	nvidiaVendorID    = spec.NvidiaVendorID
-	hostDriverDisplay = spec.HostDriverDisplay
-	hostDriverAudio   = spec.HostDriverAudio
-	hostDriverVfio    = spec.HostDriverVfio
-)
-
-// errGPUSwitchWedged is the driver-switch wedge sentinel (spec.ErrGPUSwitchWedged). The
-// gpu shims re-wrap it from the plugin's GpuSwitchReply.Wedged bool so callers (vm_gpu_cmd)
-// keep matching with errors.Is.
-var errGPUSwitchWedged = spec.ErrGPUSwitchWedged
+const nvidiaVendorID = spec.NvidiaVendorID
 
 // normalizePCIVendor / selectGPUByVendor are the pure GPU-selection helpers (spec) used by
-// auto-allocation (gpu_allocate.go) + vm_gpu_cmd; kept as package-var aliases so those call
-// sites are unchanged.
+// auto-allocation (gpu_allocate.go); kept as package-var aliases so those call sites are
+// unchanged.
 var (
 	normalizePCIVendor = spec.NormalizePCIVendor
 	selectGPUByVendor  = spec.SelectGPUByVendor
 )
 
-// gpu_shim.go — the in-core SHIMS for GPU/VFIO host detection (cutover C11). The
+// gpu_shim.go — the in-core SHIMS for GPU/VFIO host DETECTION (cutover C11). The
 // sysfs/exec detection LOGIC moved into the COMPILED-IN candy/plugin-gpu (verb:gpu);
-// these shims resolve that provider and Invoke it, so the ~10 in-core consumers
-// (config_image.go CDI-env sites, `charly doctor`, `charly vm gpu`,
-// `charly vm create`, and gpu_allocate.go which already calls DetectVFIO) compile
-// against the SAME symbol names and are invisible above the shim. (The C9 driver-switch
-// shims below dispatch verb:gpu's DRIVER-SWITCH actions the same way.)
+// these shims resolve that provider and Invoke it, so the in-core consumers
+// (config_image.go CDI-env sites, `charly doctor`, `charly vm create`, and
+// gpu_allocate.go which already calls DetectVFIO) compile against the SAME symbol names
+// and are invisible above the shim. The DRIVER-SWITCH path (vfio<->nvidia rebind) has NO
+// in-core shim — every consumer (`charly vm gpu`, the arbiter) dispatches verb:gpu directly.
 //
 // host→plugin dispatch mirrors k8sgen/egress (plain resolve+Invoke). Compiled-in
 // placement keeps verb:gpu resolvable with no connect step and runs the probe IN-PROC
@@ -138,56 +122,13 @@ func detectAMDGFXVersion() string {
 	return gpuProbeReply(spec.GpuProbeInput{Action: "amd-gfx-version"}).Str
 }
 
-// --- GPU DRIVER-SWITCH shims (cutover C9) -----------------------------------------
+// --- GPU DRIVER-SWITCH ---------------------------------------------------------------------
 //
-// The vfio<->nvidia rebind primitive moved into candy/plugin-gpu (1B). These shims resolve
-// verb:gpu and Invoke the DRIVER-SWITCH actions (spec.GpuSwitchInput/GpuSwitchReply), so the
-// consumers — `charly vm gpu` (vm_gpu_cmd.go) + the arbiter's switchMode/ensureCDI host-seams
-// (arbiter_host.go) — call the SAME symbol names and are invisible above the shim (R3). Same
-// resolve+Invoke pattern as the detection shims above.
-
-// gpuSwitchReply resolves verb:gpu and Invokes it with a driver-switch action. A miss (charly
-// built without candy/plugin-gpu) degrades to a zero reply + a loud stderr note, matching the
-// detection shims' never-crash contract.
-func gpuSwitchReply(in spec.GpuSwitchInput) spec.GpuSwitchReply {
-	prov, ok := providerRegistry.resolve(ClassVerb, "gpu")
-	if !ok {
-		fmt.Fprintln(os.Stderr, "warning: gpu plugin (verb:gpu) not registered — charly built without candy/plugin-gpu; GPU driver-switch unavailable")
-		return spec.GpuSwitchReply{}
-	}
-	// Best-effort with an error CARRIER: any dispatch failure rides reply.Error so
-	// switchReplyErr surfaces it (a switch failure must never be silently dropped).
-	reply, err := invokeTyped[spec.GpuSwitchInput, spec.GpuSwitchReply](context.Background(), prov, "gpu", OpRun, in)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: gpu switch %s: %v\n", in.Action, err)
-		return spec.GpuSwitchReply{Error: err.Error()}
-	}
-	return reply
-}
-
-// switchReplyErr maps a GpuSwitchReply's op result to an error: a wedge re-wraps
-// errGPUSwitchWedged (so errors.Is matches across the process boundary); a non-wedge failure
-// is the plain reply error; success is nil.
-func switchReplyErr(r spec.GpuSwitchReply) error {
-	if r.Wedged {
-		if d := strings.TrimSpace(r.Error); d != "" {
-			return fmt.Errorf("%w\n%s", errGPUSwitchWedged, d)
-		}
-		return errGPUSwitchWedged
-	}
-	if r.Error != "" {
-		return errors.New(r.Error)
-	}
-	return nil
-}
-
-// gpuSwitchModeTolerant flips the vendor-matched card's group to mode, TOLERANT of an absent
-// card (the arbiter's switchMode seam — a claim stays portable across GPU/no-GPU hosts).
-// Returns wedged so the arbiter can carry the wedge over its own reverse channel + poison.
-func gpuSwitchModeTolerant(vendor, mode string) (wedged bool, err error) {
-	r := gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionMode, Vendor: vendor, Mode: mode})
-	return r.Wedged, switchReplyErr(r)
-}
-
-// ensureCDIRoot (re)generates /etc/cdi/nvidia.yaml as root after a flip to nvidia.
-func ensureCDIRoot() { gpuSwitchReply(spec.GpuSwitchInput{Action: spec.GpuSwitchActionEnsureCDI}) }
+// The vfio<->nvidia rebind primitive lives in candy/plugin-gpu (1B). Every DRIVER-SWITCH
+// consumer now dispatches verb:gpu directly rather than through an in-core shim: `charly vm
+// gpu` (candy/plugin-vm's vm_gpu_shim.go) and the arbiter's switchMode/ensureCDI (FLOOR-SLIM-
+// proper Unit-8 moved these into candy/plugin-preempt/holder_dispatch.go, using the
+// class-agnostic sdk.Executor.InvokeProvider) both call verb:gpu peer-to-peer. No in-core
+// driver-switch shim remains — only the pure detection shims above (gpuProbeReply and its
+// consumers), which stay because `charly doctor`/`config_image.go`/`gpu_allocate.go` are
+// genuinely in-core callers.

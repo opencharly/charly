@@ -1,7 +1,6 @@
 package preempt
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -233,18 +232,10 @@ func intersect(a, b []string) []string {
 	return out
 }
 
-// errStr / errFromString are the reverse-channel string<->error convention (used by the arbiter
-// Invoke replies + the host-seam decoders).
+// errStr is the reverse-channel error->string convention used by the arbiter's Invoke replies.
 func errStr(err error) string {
 	if err != nil {
 		return err.Error()
 	}
 	return ""
-}
-
-func errFromString(s string) error {
-	if s == "" {
-		return nil
-	}
-	return errors.New(s)
 }

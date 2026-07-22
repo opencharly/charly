@@ -10,11 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 
-	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 	"golang.org/x/crypto/ssh"
@@ -24,40 +21,32 @@ import (
 // survives the P10 VM-CLI move to candy/plugin-vm. The CLI command handlers
 // (VmCmd + the Create/Start/Stop/Destroy/List/Console/Ssh tree) moved into the
 // plugin; these shared helpers stay because non-CLI core consumers still call
-// them: the config-resolve seam (host_build_config_resolve.go), the resource
-// arbiter (preempt.go — startVM/stopVM/vmDir), the sibling-member + bed runners
-// (bundle_members.go / check_bed_run.go — startLibvirtUserSession), and the
-// container SSH-key helpers (config_image.go / vm_cloud_image.go). The K5 vm
+// them: the config-resolve seam (host_build_config_resolve.go — vmConfiguredBackend),
+// the sibling-member + bed runners (bundle_members.go / check_bed_run.go —
+// startLibvirtUserSession), the container SSH-key helpers (config_image.go /
+// vm_cloud_image.go), and the qcow2-VM host-build seam (host_build_vm_build.go —
+// vmDir, for the per-entity state dir it creates before staging the disk/seed
+// ISO). The FORMER resource-arbiter consumer (preempt.go's startVM/stopVM/vmName
+// holder start/stop) moved into candy/plugin-preempt (FLOOR-SLIM-proper Unit-8)
+// with its own vmName/start/stop implementation dispatching verb:libvirt
+// directly via InvokeProvider — so those symbols, and their qemu-backend-only
+// support cluster (vm_qemu_client.go, vm_plugin_client.go's op-reply decoders,
+// vmshared_aliases.go's killQemuByPID), are DELETED here (R5): the CLI's own
+// startVM/stopVM equivalent lives entirely in candy/plugin-vm and never called
+// back into this file's copy. `vmDir` itself STAYS — host_build_vm_build.go is a
+// genuinely separate, still-live consumer (confirmed via git grep across the
+// FULL merged tree, including the just-landed bed-robustness batch) — and now
+// routes through vmshared.VmStateRoot() (the CHARLY_VM_STATE_DIR worktree-scoping
+// override bed-robustness's batch, charly#176, unified every other VM-state path
+// onto), so candy/plugin-preempt's own vmDirPlugin (holder_dispatch.go) matches
+// it symmetrically rather than duplicating the un-scoped literal. The K5 vm
 // status collector (candy/plugin-substrate/status_vm.go) does NOT call
 // resolveVmBackend — it reaches candy/plugin-vm's verb:libvirt directly over
 // InvokeProvider and gates on vmshared.LibvirtSessionSocket() instead.
 
-// vmName returns the VM name for an image and optional instance.
-func vmName(box, instance string) string {
-	name := "charly-" + box
-	if instance != "" {
-		name += "-" + instance
-	}
-	return name
-}
-
-// vmDir returns the directory for storing VM state (QEMU backend). Routes through
-// vmshared.VmStateRoot (bed-robustness batch item 6 — the CHARLY_VM_STATE_DIR worktree-scoping
-// override) rather than a hardcoded literal, so every VM state path in this process honors the
-// same override every other VM code path does.
-//
-// MIGRATION INVENTORY (north-star §4.4): this file's "github.com/opencharly/sdk/vmshared" import
-// is UNTIL-K4/K5 — a fresh pr-validator review (charly#176 round 1) flagged it as a NEW charly/
-// import of an sdk mechanism kit with no same-PR body-move (the IMPORT-PURITY standing rule);
-// this note is that required inventory justification, not a waiver. `vmDir` is itself
-// pre-existing residual core inventory (`preempt.go`'s startVM/stopVM/vmDir call it; see this
-// file's header), already tracked to exit alongside `charly/vmshared_aliases.go` — the SAME
-// package this call now also reaches. `vmshared_aliases.go` is documented K4/K5-dissolving
-// inventory across this program's CHANGELOG (e.g. `CHANGELOG/2026.197.2205.md`,
-// `candy/plugin-vm/vm_move_aliases.go`'s own header) — retired call-site by call-site as its
-// consumers move into plugins. This call site rides that SAME exit: it retires the moment
-// `vmDir`'s owning consumers (the resource arbiter + the sibling-member/bed-runner callers named
-// above) relocate out of `charly/` core, not before, and not as an isolated one-off fix.
+// vmDir returns the root directory for storing VM state (QEMU backend), honoring the
+// CHARLY_VM_STATE_DIR worktree-scoping override (bed-robustness batch item 6) — the SAME
+// override every other VM-state path in this process now goes through.
 func vmDir() (string, error) {
 	return vmshared.VmStateRoot()
 }
@@ -190,124 +179,6 @@ var startLibvirtUserSession = func() {
 	if _, err := exec.LookPath("virsh"); err == nil {
 		_ = exec.Command("virsh", "-c", "qemu:///session", "list").Run()
 	}
-}
-
-// startVM starts a previously-created VM by image+instance, dispatching by
-// backend (libvirt domain start / re-exec the stored qemu command). Shared
-// by the plugin's `charly vm start` handler and the resource arbiter
-// (charly/preempt.go) so the holder-restart path runs the exact same lifecycle
-// code as `charly vm start`.
-func startVM(box, instance string) error {
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return err
-	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
-
-	name := vmName(box, instance)
-
-	switch backend {
-	case "libvirt":
-		raw, ok := invokeVmPlugin("start", name, "")
-		if !ok {
-			return fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
-		}
-		if e := vmPluginOpError(raw); e != "" {
-			return fmt.Errorf("starting VM %s: %s", name, e)
-		}
-		if vmPluginOpFlag(raw, "already_running") {
-			fmt.Fprintf(os.Stderr, "VM %s is already running\n", name)
-		} else {
-			fmt.Fprintf(os.Stderr, "Started VM %s\n", name)
-		}
-	case "qemu":
-		dir, err := vmDir()
-		if err != nil {
-			return err
-		}
-		stateDir := filepath.Join(dir, name)
-		cmdFile := filepath.Join(stateDir, "command")
-		data, err := os.ReadFile(cmdFile)
-		if err != nil {
-			return fmt.Errorf("VM %s not found — run 'charly vm create %s' first", name, box)
-		}
-		parts := strings.Fields(string(data))
-		if len(parts) < 2 {
-			return fmt.Errorf("invalid stored command for VM %s", name)
-		}
-		cmd := exec.Command(parts[0], parts[1:]...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("qemu start failed: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "Started VM %s\n", name)
-	}
-	return nil
-}
-
-// stopVM stops a running VM by image+instance. force=false performs a
-// graceful ACPI shutdown (disk + definition preserved — the "stopped, but
-// not depleted" semantic the resource arbiter relies on); force=true
-// destroys/kills it. Shared by the plugin's `charly vm stop` handler and the
-// resource arbiter (charly/preempt.go), which always calls it with force=false
-// so a preempted holder is gracefully shut down and remains restartable.
-func stopVM(box, instance string, force bool) error {
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return err
-	}
-
-	backend, err := resolveVmBackend(vmConfiguredBackend(box, rt.VmBackend))
-	if err != nil {
-		return err
-	}
-
-	name := vmName(box, instance)
-
-	switch backend {
-	case "libvirt":
-		raw, ok := invokeVmPluginEnv(spec.VmPluginEnv{VmOp: "stop", VmName: name, Force: force})
-		if !ok {
-			return fmt.Errorf("VM %s: vm plugin unavailable (go-libvirt is out-of-process)", name)
-		}
-		if e := vmPluginOpError(raw); e != "" {
-			return fmt.Errorf("stopping VM %s: %s", name, e)
-		}
-		fmt.Fprintf(os.Stderr, "Stopped VM %s\n", name)
-	case "qemu":
-		dir, err := vmDir()
-		if err != nil {
-			return err
-		}
-		stateDir := filepath.Join(dir, name)
-		if force {
-			// Try QMP quit first, fall back to process kill
-			if err := qemuForceShutdown(stateDir); err != nil {
-				// Fallback: kill via PID
-				killQemuByPID(stateDir)
-			}
-		} else {
-			// Graceful ACPI shutdown via QMP
-			if err := qemuGracefulShutdown(stateDir); err != nil {
-				// Fallback: SIGTERM via PID
-				pidFile := filepath.Join(stateDir, "qemu.pid")
-				if data, readErr := os.ReadFile(pidFile); readErr == nil {
-					if pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data))); parseErr == nil {
-						if proc, findErr := os.FindProcess(pid); findErr == nil {
-							_ = proc.Signal(syscall.SIGTERM)
-						}
-					}
-				}
-			}
-		}
-		fmt.Fprintf(os.Stderr, "Stopped VM %s\n", name)
-	}
-	return nil
 }
 
 // resolveSSHPubKey resolves the --ssh-key flag to a public key string.

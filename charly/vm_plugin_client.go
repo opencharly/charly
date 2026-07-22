@@ -8,11 +8,15 @@ import (
 )
 
 // vm_plugin_client.go is the HOST→plugin client for the internal VM-resolution ops. The go-libvirt
-// impl moved OUT of charly's core into the out-of-process candy/plugin-vm; the spice/vnc/ssh/status/
-// preempt consumers that used to connectLibvirt / ResolveVmTarget directly now call invokeVmPlugin,
-// which RPCs the vm plugin (the verb:libvirt provider) and decodes the structured result. Graceful
+// impl moved OUT of charly's core into the out-of-process candy/plugin-vm; the spice/vnc/ssh/status
+// consumers that used to connectLibvirt / ResolveVmTarget directly now call invokeVmPlugin, which
+// RPCs the vm plugin (the verb:libvirt provider) and decodes the structured result. Graceful
 // degrade (ok=false) when the plugin is absent — the dependent core path then falls back / no-ops,
-// rather than failing to compile (the plan's "core reaches the plugin through the registry").
+// rather than failing to compile (the plan's "core reaches the plugin through the registry"). The
+// FORMER preempt consumer (charly/preempt.go's holderStop/holderStart/vmIsRunning) moved into
+// candy/plugin-preempt (FLOOR-SLIM-proper Unit-8) — it now dispatches verb:libvirt directly via
+// sdk.Executor.InvokeProvider(ExtraRef: vmPluginCandyRef()), never through this core-only client
+// (connectPluginByWordRef + Operation are core-private, a kernel Mechanism a plugin cannot call).
 //
 // Cutover B unit 2 (R-E4): the wire shapes (spec.VmPluginEnv / spec.VmSnapInternalReq /
 // spec.VmDisplayEndpoint / spec.VmResolveResult) are now CUE-sourced (sdk/schema/vmclient.cue) —
@@ -29,28 +33,6 @@ import (
 // result. ok=false when the plugin is absent (graceful degrade) or the call errored.
 func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
 	return invokeVmPluginEnv(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
-}
-
-// vmPluginOpError decodes the `error` field from a lifecycle op reply ("" = success).
-func vmPluginOpError(raw json.RawMessage) string {
-	var r struct {
-		Error string `json:"error"`
-	}
-	_ = json.Unmarshal(raw, &r)
-	return r.Error
-}
-
-// vmPluginOpFlag reports whether the plugin's reply carries a true boolean under key.
-// The idempotent lifecycle ops report WHAT they actually did — "already_running" from
-// start, "already_gone" from destroy — so the CLI can say so instead of claiming an
-// action it never took.
-func vmPluginOpFlag(raw json.RawMessage, key string) bool {
-	var r map[string]any
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return false
-	}
-	b, _ := r[key].(bool)
-	return b
 }
 
 // vmPluginCandyRef is the canonical @github ref to the external VM plugin candy (candy/plugin-vm,

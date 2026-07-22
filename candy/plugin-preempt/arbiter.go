@@ -44,18 +44,23 @@ type ResourceArbiter struct {
 	nowUTC     func() string
 }
 
-// newArbiter wires the production seams to the host over the reverse channel (exec).
+// newArbiter wires the production seams. `gather`/`resources` stay on the HostArbiter reverse
+// channel — the ONLY 2 of the original 8 host seams that are genuinely K1-blocked (LoadUnified
+// project-config coupled); the other 6 (running/stop/start/switchMode/ensureCDI/gpuCDI) are
+// FLOOR-SLIM-proper Unit-8's MOVE — they run directly in this plugin (holder_dispatch.go), using
+// `exec` only for the class-agnostic InvokeProvider dispatch to the libvirt/gpu plugins, never a
+// host callback.
 func newArbiter(ctx context.Context, exec *sdk.Executor) *ResourceArbiter {
 	return &ResourceArbiter{
 		ledgerPath: preemptLedgerPath(),
 		gather:     func() []spec.HolderDescriptor { return hostGather(ctx, exec) },
-		running:    func(a spec.HolderAddr) bool { return hostRunning(ctx, exec, a) },
-		stop:       func(a spec.HolderAddr) error { return hostStop(ctx, exec, a) },
-		start:      func(a spec.HolderAddr) error { return hostStart(ctx, exec, a) },
+		running:    func(a spec.HolderAddr) bool { return pluginHolderRunning(ctx, exec, a) },
+		stop:       func(a spec.HolderAddr) error { return pluginHolderStop(ctx, exec, a) },
+		start:      func(a spec.HolderAddr) error { return pluginHolderStart(ctx, exec, a) },
 		resources:  func() map[string]string { return hostResources(ctx, exec) },
-		switchMode: func(v, m string) (bool, error) { return hostSwitchMode(ctx, exec, v, m) },
-		ensureCDI:  func() { hostEnsureCDI(ctx, exec) },
-		gpuCDI:     func() []spec.HolderAddr { return hostGpuCDIHolders(ctx, exec) },
+		switchMode: func(v, m string) (bool, error) { return pluginSwitchMode(ctx, exec, v, m) },
+		ensureCDI:  func() { pluginEnsureCDI(ctx, exec) },
+		gpuCDI:     func() []spec.HolderAddr { return pluginGpuCDIHolders() },
 		nowUTC:     func() string { return time.Now().UTC().Format(time.RFC3339) },
 	}
 }
@@ -112,68 +117,6 @@ func hostResources(ctx context.Context, exec *sdk.Executor) map[string]string {
 	var r spec.ArbiterResourcesReply
 	_ = json.Unmarshal(out, &r)
 	return r.Gpu
-}
-
-func hostRunning(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) bool {
-	params, _ := json.Marshal(spec.ArbiterHolderReq{Addr: addr})
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamRunning, params)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: running seam: %v\n", err)
-		return false
-	}
-	var r spec.ArbiterBoolReply
-	_ = json.Unmarshal(out, &r)
-	return r.Bool
-}
-
-func hostStop(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) error {
-	params, _ := json.Marshal(spec.ArbiterHolderReq{Addr: addr})
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamStop, params)
-	if err != nil {
-		return err
-	}
-	var r spec.ArbiterErrReply
-	_ = json.Unmarshal(out, &r)
-	return errFromString(r.Error)
-}
-
-func hostStart(ctx context.Context, exec *sdk.Executor, addr spec.HolderAddr) error {
-	params, _ := json.Marshal(spec.ArbiterHolderReq{Addr: addr})
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamStart, params)
-	if err != nil {
-		return err
-	}
-	var r spec.ArbiterErrReply
-	_ = json.Unmarshal(out, &r)
-	return errFromString(r.Error)
-}
-
-func hostSwitchMode(ctx context.Context, exec *sdk.Executor, vendor, mode string) (bool, error) {
-	params, _ := json.Marshal(spec.ArbiterSwitchReq{Vendor: vendor, Mode: mode})
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamSwitch, params)
-	if err != nil {
-		return false, err
-	}
-	var r spec.ArbiterSwitchReply
-	_ = json.Unmarshal(out, &r)
-	return r.Wedged, errFromString(r.Error)
-}
-
-func hostEnsureCDI(ctx context.Context, exec *sdk.Executor) {
-	if _, err := exec.HostArbiter(ctx, spec.ArbiterSeamEnsureCDI, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: ensureCDI seam: %v\n", err)
-	}
-}
-
-func hostGpuCDIHolders(ctx context.Context, exec *sdk.Executor) []spec.HolderAddr {
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamGpuCDI, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: gpuCDI seam: %v\n", err)
-		return nil
-	}
-	var r spec.ArbiterGpuCDIReply
-	_ = json.Unmarshal(out, &r)
-	return r.Holders
 }
 
 // --- acquire -----------------------------------------------------------------------------------
