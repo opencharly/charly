@@ -163,12 +163,6 @@ const (
 	VerdictSkipped   Verdict = "skipped"
 )
 
-// AllVerdicts lists every verdict in reporting order.
-var AllVerdicts = []Verdict{
-	VerdictSolved, VerdictUnchanged, VerdictRegressed,
-	VerdictTampered, VerdictRetagged, VerdictAdded, VerdictSkipped,
-}
-
 // StepState summarizes one step's state at a point in time (baseline or
 // post-iteration). Present==false means the step was absent from that set.
 type StepState struct {
