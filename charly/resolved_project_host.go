@@ -228,6 +228,16 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 		rp.Boxes[name] = view
 	}
 
+	// K1-unblock wave 2: namespace-qualified box views (`ns.name`), so a consumer resolving a
+	// possibly-namespace-qualified box reference (mirroring the ALREADY-established BoxPlans
+	// qualified-key pattern below) can do a presence/view check off THIS envelope alone, without
+	// LoadUnified access. Purely ADDITIVE (root-scoped rp.Boxes entries are untouched; a qualified
+	// key can never collide with a bare name) and BEST-EFFORT — mirrors fillBoxPlans's own
+	// tolerance: an unresolvable namespaced box (e.g. one referencing a builder not reachable from
+	// THIS project's build context) is skipped, never aborts the whole envelope, even when the
+	// root-box loop above runs fail-fast (diags == nil).
+	fillNamespacedBoxes(cfg, "", calver, dir, opts, &rp.Boxes, map[*Config]bool{})
+
 	for name, c := range layers {
 		if c == nil {
 			continue
@@ -365,24 +375,85 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 	}
 }
 
+// fillNamespacedBoxes populates *out with a namespace-QUALIFIED spec.ResolvedBoxView (`fedora.jupyter`,
+// or `ns1.ns2.name` for a nested import) for every box reachable from cfg's import namespaces,
+// recursively (cfg's OWN boxes are filled by the root loop in projectResolvedProjectWithBoxes — this
+// only adds the namespaced ones, matching fillBoxPlans's exact prefix-recursion shape and its SAME
+// layers/visited-cycle-guard contract). A namespaced box that fails to resolve (e.g. references a
+// builder unreachable from the root project's build context) is SKIPPED, never fatal — this fill is
+// best-effort/additive by design, unlike the root-box loop's optional fail-fast (diags == nil) mode,
+// because a namespace's own box graph may be only PARTIALLY reachable from THIS project's resolve
+// context.
+func fillNamespacedBoxes(cfg *Config, prefix, calver, dir string, opts ResolveOpts, out *map[string]spec.ResolvedBoxView, visited map[*Config]bool) {
+	if cfg == nil || visited[cfg] {
+		return
+	}
+	visited[cfg] = true
+	for ns, sub := range cfg.Namespaces {
+		if sub == nil {
+			continue
+		}
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
+		for _, name := range sub.AllBoxNames() {
+			img, ok := sub.BoxConfig(name)
+			if !ok || (!img.IsEnabled() && !opts.shouldIncludeDisabled(name)) {
+				continue
+			}
+			resolved, err := ResolveBox(sub, name, calver, dir, opts)
+			if err != nil {
+				continue
+			}
+			view := projectResolvedBox(resolved)
+			if *out == nil {
+				*out = map[string]spec.ResolvedBoxView{}
+			}
+			(*out)[child+"."+name] = view
+		}
+		fillNamespacedBoxes(sub, child, calver, dir, opts, out, visited)
+	}
+}
+
 // projectTemplates decodes the uf.Local/K8s/Pod/VM/Android raw template maps (map[string]json.RawMessage)
 // into the existing spec kind types — the resolved kind-template maps validate/check-include/status read.
-// Returns nil when no template kind is present.
+// Returns nil when no template kind is present. K1-unblock wave 2: ALSO recurses into uf.Namespaces,
+// mirroring fillBoxPlans's prefix-accumulation pattern exactly, so a namespace-qualified template ref
+// (`local: <ns>.<tmpl>`, `kind:k8s` entity `<ns>.<name>`, …) is visible in the envelope too — previously
+// only root-level names were. Purely ADDITIVE (qualified keys never collide with a bare name, since a
+// bare name can never contain "."), so every existing root-scoped consumer is unaffected.
 func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
-	if uf == nil {
+	t := &spec.ProjectTemplates{}
+	fillNamespacedTemplates(uf, "", t, map[*UnifiedFile]bool{})
+	if t.Local == nil && t.K8s == nil && t.Pod == nil && t.VM == nil && t.Android == nil {
 		return nil
 	}
-	t := &spec.ProjectTemplates{}
+	return t
+}
+
+// fillNamespacedTemplates recursively copies uf's OWN template maps (qualified by prefix) into t, then
+// descends into uf.Namespaces with the accumulated prefix. The visited set guards the pointer-keyed
+// namespace cache against a self-referential cycle (mirrors fillBoxPlans's own guard).
+func fillNamespacedTemplates(uf *UnifiedFile, prefix string, t *spec.ProjectTemplates, visited map[*UnifiedFile]bool) {
+	if uf == nil || visited[uf] {
+		return
+	}
+	visited[uf] = true
 	// KIND-BLIND copy: the raw template bytes ride into the envelope verbatim as opaque RawBody. The
 	// host NEVER decodes them into a concrete spec.<Kind> (that would be per-kind knowledge in the
 	// kernel — a boundary-law violation the TestNoConcreteKindInKernel gate catches). The consuming
 	// PLUGINS decode a RawBody into the concrete kind they need.
 	cp := func(src map[string]json.RawMessage, dst *map[string]spec.RawBody) {
 		for name, raw := range src {
+			qualified := name
+			if prefix != "" {
+				qualified = prefix + "." + name
+			}
 			if *dst == nil {
 				*dst = make(map[string]spec.RawBody, len(src))
 			}
-			(*dst)[name] = raw
+			(*dst)[qualified] = raw
 		}
 	}
 	cp(uf.Local, &t.Local)
@@ -390,10 +461,13 @@ func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
 	cp(uf.Pod, &t.Pod)
 	cp(uf.VM, &t.VM)
 	cp(uf.Android, &t.Android)
-	if t.Local == nil && t.K8s == nil && t.Pod == nil && t.VM == nil && t.Android == nil {
-		return nil
+	for ns, sub := range uf.Namespaces {
+		child := ns
+		if prefix != "" {
+			child = prefix + "." + ns
+		}
+		fillNamespacedTemplates(sub, child, t, visited)
 	}
-	return t
 }
 
 // buildResolvedProjectFromDir is the load+project entry the "resolved-project" host-builder wraps and
