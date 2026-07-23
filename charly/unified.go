@@ -189,6 +189,16 @@ type UnifiedFile struct {
 	// Box["cachyos"]. Bare refs inside a namespace resolve within that
 	// namespace first (Go package-member semantics). See charly/namespace.go.
 	Namespaces map[string]*UnifiedFile `yaml:"-"`
+
+	// RootDir is this UnifiedFile's OWN base directory — the dir its root document's SrcDir names
+	// (materializeLoadedProject, materialize.go). NOT authored; set once per materialize, for BOTH
+	// the top-level project (matching the dir LoadUnified(dir) was called with) AND each mounted
+	// namespace (K1-unblock wave 2, R1 fix — see fillNamespacedBoxes's doc comment): a namespace's
+	// own local candy scan (subUF.projectCandiesScanned) needs THIS directory, not the caller's
+	// outer project dir, to correctly resolve a discovered candy's relative From: path (set
+	// relative to ITS OWN rootDir by materializeDiscoveredNode, not the caller's). Empty for a
+	// project-less / synthetic UnifiedFile.
+	RootDir string `yaml:"-"`
 }
 
 // ImportEntry, ImportList, DiscoverConfig, and ScanSpec are the kind-blind

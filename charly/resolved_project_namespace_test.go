@@ -16,11 +16,11 @@ import (
 func writeNamespaceImportFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: 2026.202.0105
+	writeFixture(t, root, "charly.yml", `version: `+LatestSchemaVersion().String()+`
 import:
   - fedora: ./fedora.yml
 `)
-	writeFixture(t, root, "fedora.yml", `version: 2026.202.0105
+	writeFixture(t, root, "fedora.yml", `version: `+LatestSchemaVersion().String()+`
 jupyter:
     candy:
         base: quay.io/fedora/fedora:43
