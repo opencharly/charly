@@ -312,20 +312,78 @@ func validateKindValueCUE(gn *genericNode) error {
 	if err != nil {
 		return err
 	}
-	// KNOWN GAP (RCA'd during the dead-code-radical-removal batch, NOT introduced by it — the
-	// now-deleted validateEntityCUE was the only concrete check and it already had zero
-	// production callers before this batch touched anything): non-concrete validation here
-	// lets a required-but-unset field slip through (e.g. a vm PCI hostdev's slot/function).
-	// A blanket cue.Concrete(true) fix was attempted and REVERTED — it broke 9+ real cases
-	// across vm/pod/local/k8s/candy (TestCueKinds_Corpus, TestBundleCompileParity_*,
-	// TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*, TestBuildDeployPlan*,
-	// TestInvokeProvider_LazyConnectFallback*), not just candy's known base⊻from disjunction
-	// issue — RDD-verified live via go test ./... catching each one. The correct fix needs
-	// per-field concreteness (or a narrower, kind/field-scoped check) rather than a blanket
-	// flip; tracked as its own named, registered program exit — the VALIDATION-CORRECTNESS
-	// BATCH — not silently dropped (see the batch's CHANGELOG and the program register).
-	if verr := entity.Unify(def).Validate(); verr != nil {
+	// The formerly-KNOWN GAP here (RCA'd during the dead-code-radical-removal batch, NOT
+	// introduced by it — the now-deleted validateEntityCUE was the only concrete check and it
+	// already had zero production callers before that batch touched anything): this gate is
+	// CLOSEDNESS-only (no cue.Concrete(true)), so a required-but-unset field slips through
+	// silently (e.g. a vm PCI hostdev's slot/function). A blanket cue.Concrete(true) fix was
+	// attempted and REVERTED — it broke 9 real cases across vm/pod/local/k8s/candy
+	// (TestCueKinds_Corpus, TestBundleCompileParity_*, TestPreresolveActiveInitInto_*,
+	// TestCompileServiceSteps_*, TestBuildDeployPlan*, TestInvokeProvider_LazyConnectFallback*)
+	// because those transitively load the REAL repo-root charly.yml, which legitimately
+	// carries non-concrete/disjunctive constructs elsewhere in the document (candy's
+	// base⊻from disjunction and others) that a document-wide concrete check trips on.
+	//
+	// VALIDATION-CORRECTNESS BATCH fix: closedness stays document-wide and non-concrete
+	// (unchanged below); concreteness is enforced NARROWLY, only at the one proven gap
+	// (validateKindValueConcrete), never blanket. See that function's doc comment for the
+	// scoping rationale and how to extend it if a future gap is proven elsewhere.
+	merged := entity.Unify(def)
+	if verr := merged.Validate(); verr != nil {
 		return fmt.Errorf("%s: %s", gn.disc, errors.Details(verr, nil))
+	}
+	if verr := validateKindValueConcrete(gn.disc, merged); verr != nil {
+		return verr
+	}
+	return nil
+}
+
+// validateKindValueConcrete enforces CONCRETENESS narrowly, at exactly the one RDD-proven gap
+// closedness-only validation misses: a `vm:` libvirt PCI hostdev whose `source.{domain,bus,
+// slot,function}` were never supplied. The CUE schema (#LibvirtHostdev, sdk/schema/vm.cue)
+// already declares these fields required — conditionally, via `if type == "pci"` — but
+// requiring a field's TYPE (e.g. #LibvirtPCIHex) without also requiring it be CONCRETE lets an
+// entirely-unsupplied field unify down to the bare type constraint, which closedness-only
+// Validate() accepts as "not an error" (only cue.Concrete(true) treats an unresolved type
+// constraint as incomplete). This is intentionally scoped to ONE list, at ONE path, for ONE
+// kind — never a blanket document-wide cue.Concrete(true) (see validateKindValueCUE's comment
+// for why that breaks 9 real cases). No corpus entity (root charly.yml or any box/<distro>
+// charly.yml) currently authors a `libvirt.devices.hostdevs` entry at all — GPU-passthrough
+// hostdevs are auto-detected and injected into the per-host instance.yml overlay at `charly vm
+// create` time, never authored directly in a project's charly.yml — so this check runs
+// unconditionally at the SAME load-time gate as the closedness check above with zero risk to
+// any currently-passing config; it only ever fires for an OPERATOR who explicitly authors a
+// static (non-auto-detected) PCI hostdev and omits part of its address.
+//
+// Extending this for a future proven gap (per the validation-correctness batch's mandate: a
+// per-field concreteness or kind/field-scoped check, never a blanket flip): add another
+// narrowly-scoped block below, gated on the SPECIFIC kind + path the RDD spike proved broken —
+// never generalize into a document-wide sweep speculatively.
+func validateKindValueConcrete(kind string, merged cue.Value) error {
+	if kind != "vm" {
+		return nil
+	}
+	hostdevs := merged.LookupPath(cue.ParsePath("libvirt.devices.hostdevs"))
+	if !hostdevs.Exists() {
+		return nil // no hostdevs authored at all — nothing to require concrete
+	}
+	iter, ierr := hostdevs.List()
+	if ierr != nil {
+		return nil // not iterable as a list — the closedness gate above already caught the shape error
+	}
+	for i := 0; iter.Next(); i++ {
+		hd := iter.Value()
+		typ, terr := hd.LookupPath(cue.ParsePath("type")).String()
+		if terr != nil || typ != "pci" {
+			continue // only a PCI hostdev's source.{domain,bus,slot,function} are conditionally required
+		}
+		for _, field := range [...]string{"domain", "bus", "slot", "function"} {
+			fv := hd.LookupPath(cue.ParsePath("source." + field))
+			if verr := fv.Validate(cue.Concrete(true)); verr != nil {
+				return fmt.Errorf("vm: libvirt.devices.hostdevs[%d] (type: pci): source.%s must be a concrete PCI hex address, got %s: %s",
+					i, field, fv, errors.Details(verr, nil))
+			}
+		}
 	}
 	return nil
 }

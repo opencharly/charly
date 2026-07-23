@@ -19,7 +19,7 @@
 # Kept in lockstep with the superproject check-local closure (candy/check-local-layer,
 # candy/examplestep-deploy-consumer, candy/plugin-example-step, candy/plugin-deploy-local).
 # NOT discovered by the superproject — `check/` is not on its `discover:` path.
-version: 2026.202.0105
+version: 2026.203.2359
 discover:
     - path: candy
       recursive: true

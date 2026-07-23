@@ -20,7 +20,6 @@ type (
 	CacheMountDef          = vmshared.CacheMountDef
 	CandyArtifact          = vmshared.CandyArtifact
 	CloudInitRuntimeParams = vmshared.CloudInitRuntimeParams
-	DeployShellOverlay     = vmshared.DeployShellOverlay
 	DeployVolumeConfig     = vmshared.DeployVolumeConfig
 	EphemeralRuntime       = vmshared.EphemeralRuntime
 	FormatDef              = vmshared.FormatDef
