@@ -57,7 +57,7 @@ func pluginCheckRunBox(ex *sdk.Executor, ctx context.Context, req spec.CheckRunR
 	if d := kit.DescriptorFromExecutor(executor); d.Kind != "" {
 		venueDesc = &d
 	}
-	runner := newPluginCheckRunner(ex, ctx, verbEnvWire{
+	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 		Mode:      "box",
 		Distros:   meta.Distro,
 		VenueKind: executor.Kind(),

@@ -27,19 +27,32 @@ import (
 // any opened ssh -L forward (VM/ssh venue) for post-Invoke teardown. Empty addr + nil err
 // = no live venue (box-mode / no-box) — the verb's own no-endpoint skip then fires.
 func (h *hostVerbResolver) resolveVerbEndpoint(port int) (string, error) {
-	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
-		return "", nil
+	addr, cleanup, err := resolveVerbEndpointFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), port)
+	if cleanup != nil {
+		h.endpointCleanups = append(h.endpointCleanups, cleanup)
 	}
-	venue, err := resolveCheckVenue(h.kr.Box(), h.kr.Instance())
+	return addr, err
+}
+
+// resolveVerbEndpointFor is resolveVerbEndpoint's box/instance/mode-parameterized core (K1-unblock
+// W3 Unit B, R3 extraction): the SAME resolution, usable by any caller that has box/instance/mode
+// scalars but no live *kit.Runner — specifically charly/plugin_dispatch_reverse.go's InvokeProvider
+// detached CheckContext for a CheckVerbProvider target dispatched from a plugin. Returns the
+// opened endpoint's cleanup func (nil when none was opened) for the caller's OWN cleanup-list
+// bookkeeping — hostVerbResolver's list, or the detached context's own.
+func resolveVerbEndpointFor(box, instance string, mode RunMode, port int) (addr string, cleanup func(), err error) {
+	if box == "" || mode == RunModeBox {
+		return "", nil, nil
+	}
+	venue, err := resolveCheckVenue(box, instance)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	ep, err := resolveCheckEndpoint(venue, port)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	h.endpointCleanups = append(h.endpointCleanups, ep.Close)
-	return ep.Addr, nil
+	return ep.Addr, ep.Close, nil
 }
 
 // graphicsEndpoint is the host-resolved dialable VM graphics endpoint (the in-proc twin of
@@ -199,10 +212,16 @@ func (c hostCheckContext) ResolveClusterContext(_ context.Context, cluster strin
 // baked ai.opencharly.mcp_provide label but cannot reach the podman engine / OCI metadata.
 // Empty value (no live deployment, or the label absent) is a valid result.
 func (h *hostVerbResolver) resolveImageLabel(label string) (string, error) {
-	if h.kr.Box() == "" || h.kr.Mode() == RunModeBox {
+	return resolveImageLabelFor(h.kr.Box(), h.kr.Instance(), h.kr.Mode(), label)
+}
+
+// resolveImageLabelFor is resolveImageLabel's box/instance/mode-parameterized core (K1-unblock W3
+// Unit B, R3 extraction) — see resolveVerbEndpointFor's doc comment for the shared rationale.
+func resolveImageLabelFor(box, instance string, mode RunMode, label string) (string, error) {
+	if box == "" || mode == RunModeBox {
 		return "", nil
 	}
-	engine, containerName, err := deploykit.ResolveContainer(h.kr.Box(), h.kr.Instance())
+	engine, containerName, err := deploykit.ResolveContainer(box, instance)
 	if err != nil {
 		return "", err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
@@ -67,30 +68,85 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
 	}
 	op := &Operation{Reserved: word, Op: req.GetOp(), Params: req.GetParamsJson(), Env: req.GetEnvJson()}
+	// The venue executor every branch below may need: the caller's own threaded executor (s.exec),
+	// or — when the caller holds none of its own (S1) — one freshly re-materialized from a
+	// caller-supplied self-description (req.VenueDescriptorJson). Resolved ONCE, shared by the
+	// CheckVerbProvider branch (new) and the pre-existing executorInvoker branch.
+	exec := s.exec
+	if vdj := req.GetVenueDescriptorJson(); len(vdj) > 0 {
+		var d spec.VenueDescriptor
+		if derr := json.Unmarshal(vdj, &d); derr != nil {
+			return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
+		}
+		fresh, verr := kit.VenueFromDescriptor(d)
+		if verr != nil {
+			return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
+		}
+		exec = fresh
+	}
 	var (
 		res *Result
 		err error
 	)
-	if inv, isInv := prov.(executorInvoker); isInv {
-		// OUT-OF-PROCESS target: thread a venue executor + build onto a nested reverse channel
-		// (the nested-broker round-trip — the one-level RunHostStep ExternalPlugin arm,
-		// generalized to any class/op).
-		exec := s.exec
-		if vdj := req.GetVenueDescriptorJson(); len(vdj) > 0 {
-			var d spec.VenueDescriptor
-			if derr := json.Unmarshal(vdj, &d); derr != nil {
-				return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
+	switch {
+	case class == ClassVerb:
+		if cv, isCV := prov.(CheckVerbProvider); isCV {
+			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
+			// compiled-in/builtin check verb) dispatches via RunVerb with a live host
+			// CheckContext, never the generic Invoke — builtinVerbBase.Invoke is a deliberate
+			// always-error stub (provider_verb.go), matching hostVerbResolver.RunVerb's own
+			// normal-flow branch exactly (dispatch on the CAPABILITY CLASS, never a verb word —
+			// F11-clean). charly's CheckVerbProvider.RunVerb is hard-typed to *hostVerbResolver
+			// (not an interface), so the remote caller's context is built by constructing a
+			// MINIMAL *kit.Runner from the request's env snapshot (decoded into the SAME
+			// CUE-sourced spec.CheckEnv sdk/checkverb.go's out-of-process decode and
+			// candy/plugin-check's marshal already share) and wrapping it in the SAME
+			// hostVerbResolver/hostCheckContext this branch's normal (in-proc) callers use — R3:
+			// reuses every existing host-only resolve leg (endpoint/graphics/cluster/image-label)
+			// unchanged, no parallel CheckContext implementation. verbs/grammar/plan state are
+			// never touched by RunVerb (only by RunPlan/RunOne), so leaving them nil is safe.
+			var env spec.CheckEnv
+			if len(req.GetEnvJson()) > 0 {
+				_ = json.Unmarshal(req.GetEnvJson(), &env)
 			}
-			fresh, verr := kit.VenueFromDescriptor(d)
-			if verr != nil {
-				return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
+			var op2 spec.Op
+			if len(req.GetParamsJson()) > 0 {
+				if derr := json.Unmarshal(req.GetParamsJson(), &op2); derr != nil {
+					return nil, fmt.Errorf("InvokeProvider %s:%s: decode op: %w", class, word, derr)
+				}
 			}
-			exec = fresh
+			mode := RunModeLive
+			if env.Mode == "box" {
+				mode = RunModeBox
+			}
+			minimalRunner := kit.NewRunner(kit.RunnerConfig{
+				Exec:        exec,
+				Mode:        mode,
+				Box:         env.Box,
+				Instance:    env.Instance,
+				Distros:     env.Distros,
+				DialTimeout: time.Duration(env.DialTimeoutNs),
+			})
+			hvr := &hostVerbResolver{kr: minimalRunner}
+			cr := cv.RunVerb(ctx, hvr, &op2)
+			hvr.runEndpointCleanups()
+			resJSON, merr := json.Marshal(cr)
+			if merr != nil {
+				return nil, fmt.Errorf("InvokeProvider %s:%s: marshal result: %w", class, word, merr)
+			}
+			return &pb.InvokeReply{ResultJson: resJSON}, nil
 		}
-		res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
-	} else {
-		// IN-PROC target (compiled-in / builtin): a direct Invoke, no broker needed.
-		res, err = prov.Invoke(ctx, op)
+		fallthrough
+	default:
+		if inv, isInv := prov.(executorInvoker); isInv {
+			// OUT-OF-PROCESS target: thread the venue executor + build onto a nested reverse
+			// channel (the nested-broker round-trip — the one-level RunHostStep ExternalPlugin
+			// arm, generalized to any class/op).
+			res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
+		} else {
+			// IN-PROC target (compiled-in / builtin, non-verb): a direct Invoke, no broker needed.
+			res, err = prov.Invoke(ctx, op)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("InvokeProvider %s:%s op=%s: %w", class, word, op.Op, err)

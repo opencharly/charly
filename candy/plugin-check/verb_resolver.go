@@ -24,10 +24,13 @@ package check
 // Wire shapes mirrored EXACTLY from the two existing production callers of this same dispatch
 // (not invented): the op/params/env marshal matches charly/provider_checkenv.go's
 // invokeVerbProvider (Reserved=word, Op=sdk.OpRun, Params=marshal(*spec.Op),
-// Env=marshal(checkEnvWire)); the env struct shape matches sdk/checkverb.go's private
-// checkEnvWire (Box/Instance/Mode/Distros/VenueKind/DialTimeoutNs) — mirrored here rather than
-// exported because promoting it to a shared/CUE-sourced type is a follow-up polish item once the
-// full six-arm wiring lands, not blocking for this spike.
+// Env=marshal(spec.CheckEnv)). spec.CheckEnv is CUE-sourced (sdk/schema/checkresult.cue's
+// #CheckEnv, K1-unblock W3 Unit B) — the ONE generated shape this file, sdk/checkverb.go's
+// out-of-process decode, charly/provider_checkenv.go's host-side CheckEnv, and
+// charly/plugin_dispatch_reverse.go's InvokeProvider detached-CheckContext construction all
+// share (a hand-mirrored per-consumer struct was this design's first draft — corrected before
+// the six-arm fan-out multiplied its consumers, per SDD's standing no-hand-written-wire-types
+// rule).
 
 import (
 	"context"
@@ -42,17 +45,6 @@ import (
 // constant, not a wire type; InvokeProvider's class param is untyped on the wire.
 const classVerb = "verb"
 
-// verbEnvWire mirrors sdk/checkverb.go's private checkEnvWire byte-for-byte (same JSON tags) —
-// the established wire shape the host's out-of-process verb-serve path already decodes.
-type verbEnvWire struct {
-	Box           string   `json:"box"`
-	Instance      string   `json:"instance"`
-	Mode          string   `json:"mode"`
-	Distros       []string `json:"distros"`
-	VenueKind     string   `json:"venue_kind"`
-	DialTimeoutNs int64    `json:"dial_timeout_ns"`
-}
-
 // pluginVerbResolver is a kit.VerbResolver backed by Executor.InvokeProvider — the plugin-side
 // counterpart of charly's core-private hostVerbResolver. venueDesc is this plugin's own
 // self-resolved check venue (Unit A's resolveCheckVenue), threaded as the S1 VenueDescriptor so
@@ -61,7 +53,7 @@ type verbEnvWire struct {
 type pluginVerbResolver struct {
 	ex        *sdk.Executor
 	ctx       context.Context
-	env       verbEnvWire
+	env       spec.CheckEnv
 	venueDesc *spec.VenueDescriptor
 }
 

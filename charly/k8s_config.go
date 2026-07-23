@@ -71,6 +71,14 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 // (no matching kind:k8s profile) is a valid result — the plugin falls back to the kubeconfig
 // current-context (the same behavior the in-tree restConfig had).
 func (h *hostVerbResolver) resolveClusterContext(cluster string) (string, error) {
+	return resolveClusterContextFor(cluster)
+}
+
+// resolveClusterContextFor is resolveClusterContext's h-free core (K1-unblock W3 Unit B, R3
+// extraction) — it never actually read hostVerbResolver state, so this is a straight lift, not a
+// parameterization: usable directly by charly/plugin_dispatch_reverse.go's InvokeProvider
+// detached CheckContext for a CheckVerbProvider target dispatched from a plugin.
+func resolveClusterContextFor(cluster string) (string, error) {
 	if cluster == "" {
 		return "", nil
 	}

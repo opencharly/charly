@@ -26,7 +26,7 @@ import (
 // carries. Mirrors charly/checkrun.go's newCheckRunner: the caller fills cfg with the per-site
 // fields (Exec/Mode/Env/Box/... and, for a live cross-deployment pass, TargetResolver/HostVars);
 // Verbs/Grammar/ProbeTimeout are always set here, never by the caller.
-func newPluginCheckRunner(ex *sdk.Executor, ctx context.Context, env verbEnvWire, venueDesc *spec.VenueDescriptor, cfg kit.RunnerConfig) *kit.Runner {
+func newPluginCheckRunner(ex *sdk.Executor, ctx context.Context, env spec.CheckEnv, venueDesc *spec.VenueDescriptor, cfg kit.RunnerConfig) *kit.Runner {
 	cfg.Verbs = &pluginVerbResolver{ex: ex, ctx: ctx, env: env, venueDesc: venueDesc}
 	cfg.Grammar = pluginPlanGrammar{}
 	if cfg.ProbeTimeout == 0 {
