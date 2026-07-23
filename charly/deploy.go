@@ -8,8 +8,12 @@ import (
 )
 
 // deploy.go — the deploy KEY→image RESOLVERS + the DeployConfigPath/Env seam pointers.
-// (The former shellOverlayToEntry was a dead-code-radical-removal-batch deletion — zero
-// real callers; MergeDeployShell, its only consumer, was deleted alongside it.) The deploy
+// (The former shellOverlayToEntry/MergeDeployShell were deleted as dead code — zero
+// real callers — and the field they served, #Deploy.shell, was itself retired outright
+// by the validation-correctness batch: it had NO production consumer anywhere in this
+// repo's history, so removing the authoring surface was the honest fix rather than
+// finishing a never-wired feature. See sdk/schema/version.cue's #SchemaVersion history
+// comment + the "strip-deploy-shell-overlay" migration-table entry.) The deploy
 // STATE-MODEL body (LoadBundleConfig / SaveBundleConfig /
 // LoadDeployConfigForRead / LoadDeployConfigForWrite / MergeDeployOntoMetadata /
 // CleanDeployEntry / SaveDeployState / ExportAllBox + the deploykit.SaveDeployStateInput type +

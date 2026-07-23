@@ -107,8 +107,9 @@ type migrationOp struct {
 // var below validates hook names during var initialization, which precedes every
 // init() but follows this literal in dependency order).
 var goHooks = map[string]func(*yaml.Node) bool{
-	"compactNodeForm":        compactNodeForm,        // the schema-compaction reshaper (reshape_compact.go)
-	"stripCandyLibvirtField": stripCandyLibvirtField, // candy-level libvirt: field removal (reshape_strip_candy_libvirt.go)
+	"compactNodeForm":         compactNodeForm,         // the schema-compaction reshaper (reshape_compact.go)
+	"stripCandyLibvirtField":  stripCandyLibvirtField,  // candy-level libvirt: field removal (reshape_strip_candy_libvirt.go)
+	"stripDeployShellOverlay": stripDeployShellOverlay, // deploy-scope shell: overlay field removal (reshape_strip_deploy_shell.go)
 }
 
 // migrationTable is the validated, ascending-ordered step list, loaded once at
