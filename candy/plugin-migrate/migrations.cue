@@ -33,7 +33,7 @@ migrations: [
 		apply: "stripCandyLibvirtField"
 	},
 	{
-		version: "2026.203.2359"
+		version: "2026.204.1223"
 		name:    "strip-deploy-shell-overlay"
 		// the deploy-scope shell: overlay is authorable on a per-host
 		// charly.yml deploy entry too (as well as a project charly.yml) —

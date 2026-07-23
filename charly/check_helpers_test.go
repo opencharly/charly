@@ -85,7 +85,7 @@ func testProjectDir(t interface {
 	tmpdir := t.TempDir()
 	// Reuse testdata's build.yml (and testdata itself as the helper's dir when
 	// the caller didn't need tmpdir specifically) — it's a complete fixture.
-	root := []byte("version: 2026.203.2359\nimport: [build.yml]\n")
+	root := []byte("version: 2026.204.1223\nimport: [build.yml]\n")
 	if err := os.WriteFile(filepath.Join(tmpdir, "charly.yml"), root, 0644); err != nil {
 		t.Fatalf("writing charly.yml: %v", err)
 	}

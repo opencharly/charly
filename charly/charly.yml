@@ -1,4 +1,4 @@
-version: 2026.203.2359
+version: 2026.204.1223
 # providers — the registry membership manifest (provider class -> the words it
 # contributes). Read at init (registry_bootstrap.go) to drive built-in provider
 # registration from THIS embedded default config instead of a hardcoded Go list. A

@@ -61,21 +61,11 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	}
 	// F7/C8: a kind declaring Validates serves a DEEP OpValidate check BEYOND the static CUE
 	// input-def gate above — the host dispatches it and surfaces error-severity Diagnostics as a
-	// load failure. A kind that does not declare it pays nothing (no extra round-trip).
-	if vc, ok := prov.(spec.ValidatingKindCarrier); ok && vc.IsValidatingKind() {
-		vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpValidate, Params: paramsJSON})
-		if verr != nil {
-			return fmt.Errorf("node %q: plugin kind %q validate: %w", gn.name, gn.disc, verr)
-		}
-		var diags spec.Diagnostics
-		if vres != nil && len(vres.JSON) > 0 {
-			if err := json.Unmarshal(vres.JSON, &diags); err != nil {
-				return fmt.Errorf("node %q: plugin kind %q validate: decode diagnostics: %w", gn.name, gn.disc, err)
-			}
-		}
-		if diags.HasErrors() {
-			return fmt.Errorf("node %q: kind %q validation failed: %s", gn.name, gn.disc, formatKindDiagnostics(diags))
-		}
+	// load failure. A kind that does not declare it pays nothing (no extra round-trip). Shared
+	// with foldSubstrateKind (R3) — the SAME kind-blind dispatch, driven purely by the
+	// capability's declared Validates flag, never a per-kind branch in host code.
+	if err := dispatchKindOpValidate(prov, gn, paramsJSON); err != nil {
+		return err
 	}
 	// F5 authored-member input-threading: a STRUCTURAL kind's authored RESOURCE-MEMBER
 	// children are pre-decoded HOST-SIDE via the SAME core buildBundleNode recursion the
@@ -137,6 +127,34 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	return nil
 }
 
+// dispatchKindOpValidate runs a kind's declared F7/C8 deep OpValidate check (Validates=true) and
+// returns an error if the plugin reports any error-severity spec.Diagnostics item; a kind that
+// does NOT declare Validates pays nothing (no extra round-trip, no error). Kind-blind by
+// construction — entirely driven by the capability's own declared Validates flag (never a
+// per-kind branch in host code, per the kernel/plugin boundary law) — so it is shared VERBATIM
+// by the flat op.Params kind path (runPluginKind) and the rich-value host-pre-decoded substrate
+// path (foldSubstrateKind), rather than each re-implementing the same dispatch (R3).
+func dispatchKindOpValidate(prov Provider, gn *genericNode, paramsJSON json.RawMessage) error {
+	vc, ok := prov.(spec.ValidatingKindCarrier)
+	if !ok || !vc.IsValidatingKind() {
+		return nil
+	}
+	vres, verr := prov.Invoke(context.Background(), &Operation{Reserved: gn.disc, Op: OpValidate, Params: paramsJSON})
+	if verr != nil {
+		return fmt.Errorf("node %q: plugin kind %q validate: %w", gn.name, gn.disc, verr)
+	}
+	var diags spec.Diagnostics
+	if vres != nil && len(vres.JSON) > 0 {
+		if err := json.Unmarshal(vres.JSON, &diags); err != nil {
+			return fmt.Errorf("node %q: plugin kind %q validate: decode diagnostics: %w", gn.name, gn.disc, err)
+		}
+	}
+	if diags.HasErrors() {
+		return fmt.Errorf("node %q: kind %q validation failed: %s", gn.name, gn.disc, formatKindDiagnostics(diags))
+	}
+	return nil
+}
+
 // The word→#<Kind>Value CUE-def map the host value gate consults is spec.KindValueDefs
 // — CUE-DERIVED from the #<X>Value defs (schema/node.cue) by schemagen (clause D of the
 // kernel/plugin boundary law: kind-recognition data loaded from CUE, NOT a compiled-in
@@ -164,6 +182,21 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 	if err := validateKindValueCUE(gn); err != nil {
 		return fmt.Errorf("node %q: %w", gn.name, err)
+	}
+	// F7/C8: dispatch the substrate's declared deep OpValidate check (today ONLY the "vm"
+	// capability declares Validates:true, for the PCI-hostdev-concreteness check
+	// validateKindValueCUE's closedness-only gate cannot express — see that function's
+	// comment). Kind-blind: driven purely by the resolved provider's own Validates flag, so
+	// this call is a complete no-op for pod/k8s/local/android (and would be for vm too, if it
+	// ever stopped declaring Validates). The RAW authored body is the natural input — the
+	// SAME body the flat op.Params path validates against — since the concreteness check
+	// only needs to see which fields were actually authored, not the canonicalized value.
+	rawBody, err := entityBodyJSON(gn)
+	if err != nil {
+		return err
+	}
+	if err := dispatchKindOpValidate(prov, gn, rawBody); err != nil {
+		return err
 	}
 	deployShape := isDeployShape(gn) || len(resourceChildren(gn)) > 0
 	var env spec.StructuralKindLoadEnv
@@ -312,78 +345,31 @@ func validateKindValueCUE(gn *genericNode) error {
 	if err != nil {
 		return err
 	}
-	// The formerly-KNOWN GAP here (RCA'd during the dead-code-radical-removal batch, NOT
-	// introduced by it — the now-deleted validateEntityCUE was the only concrete check and it
-	// already had zero production callers before that batch touched anything): this gate is
-	// CLOSEDNESS-only (no cue.Concrete(true)), so a required-but-unset field slips through
-	// silently (e.g. a vm PCI hostdev's slot/function). A blanket cue.Concrete(true) fix was
-	// attempted and REVERTED — it broke 9 real cases across vm/pod/local/k8s/candy
-	// (TestCueKinds_Corpus, TestBundleCompileParity_*, TestPreresolveActiveInitInto_*,
-	// TestCompileServiceSteps_*, TestBuildDeployPlan*, TestInvokeProvider_LazyConnectFallback*)
-	// because those transitively load the REAL repo-root charly.yml, which legitimately
-	// carries non-concrete/disjunctive constructs elsewhere in the document (candy's
-	// base⊻from disjunction and others) that a document-wide concrete check trips on.
-	//
-	// VALIDATION-CORRECTNESS BATCH fix: closedness stays document-wide and non-concrete
-	// (unchanged below); concreteness is enforced NARROWLY, only at the one proven gap
-	// (validateKindValueConcrete), never blanket. See that function's doc comment for the
-	// scoping rationale and how to extend it if a future gap is proven elsewhere.
+	// KNOWN GAP, CLOSED via a PLUGIN, not a kernel patch (RCA'd during the
+	// dead-code-radical-removal batch, NOT introduced by it — the now-deleted
+	// validateEntityCUE was the only concrete check and it already had zero production
+	// callers before that batch touched anything): this gate is CLOSEDNESS-only (no
+	// cue.Concrete(true)), so a required-but-unset field slips through silently (e.g. a vm
+	// PCI hostdev's slot/function). A blanket cue.Concrete(true) fix was attempted and
+	// REVERTED — it broke 9 real cases across vm/pod/local/k8s/candy (TestCueKinds_Corpus,
+	// TestBundleCompileParity_*, TestPreresolveActiveInitInto_*, TestCompileServiceSteps_*,
+	// TestBuildDeployPlan*, TestInvokeProvider_LazyConnectFallback*) because those
+	// transitively load the REAL repo-root charly.yml, which legitimately carries
+	// non-concrete/disjunctive constructs elsewhere in the document (candy's base⊻from
+	// disjunction and others) that a document-wide concrete check trips on. A first attempt
+	// at a NARROW, kind/field-scoped fix landed it here in the kernel (a hand `if kind !=
+	// "vm"` branch + a hardcoded field path) — an architecture-review finding overruled
+	// that placement: per the kernel/plugin boundary law, ANY kernel branch/switch encoding
+	// concrete-kind semantic knowledge (which fields a `type: pci` hostdev needs) is BY
+	// DEFINITION an R-item that leaked into core, never a kept exception, regardless of how
+	// narrowly it's scoped. The CORRECT placement is the F7/C8 deep OpValidate capability
+	// (`ProvidedCapability.Validates`) exactly the "checks CUE cannot express" case it
+	// exists for — see candy/plugin-substrate's "vm" capability (validate_vm.go), dispatched
+	// kind-blindly from foldSubstrateKind via dispatchKindOpValidate. This gate therefore
+	// stays closedness-only, unchanged, forever — concreteness lives in the plugin.
 	merged := entity.Unify(def)
 	if verr := merged.Validate(); verr != nil {
 		return fmt.Errorf("%s: %s", gn.disc, errors.Details(verr, nil))
-	}
-	if verr := validateKindValueConcrete(gn.disc, merged); verr != nil {
-		return verr
-	}
-	return nil
-}
-
-// validateKindValueConcrete enforces CONCRETENESS narrowly, at exactly the one RDD-proven gap
-// closedness-only validation misses: a `vm:` libvirt PCI hostdev whose `source.{domain,bus,
-// slot,function}` were never supplied. The CUE schema (#LibvirtHostdev, sdk/schema/vm.cue)
-// already declares these fields required — conditionally, via `if type == "pci"` — but
-// requiring a field's TYPE (e.g. #LibvirtPCIHex) without also requiring it be CONCRETE lets an
-// entirely-unsupplied field unify down to the bare type constraint, which closedness-only
-// Validate() accepts as "not an error" (only cue.Concrete(true) treats an unresolved type
-// constraint as incomplete). This is intentionally scoped to ONE list, at ONE path, for ONE
-// kind — never a blanket document-wide cue.Concrete(true) (see validateKindValueCUE's comment
-// for why that breaks 9 real cases). No corpus entity (root charly.yml or any box/<distro>
-// charly.yml) currently authors a `libvirt.devices.hostdevs` entry at all — GPU-passthrough
-// hostdevs are auto-detected and injected into the per-host instance.yml overlay at `charly vm
-// create` time, never authored directly in a project's charly.yml — so this check runs
-// unconditionally at the SAME load-time gate as the closedness check above with zero risk to
-// any currently-passing config; it only ever fires for an OPERATOR who explicitly authors a
-// static (non-auto-detected) PCI hostdev and omits part of its address.
-//
-// Extending this for a future proven gap (per the validation-correctness batch's mandate: a
-// per-field concreteness or kind/field-scoped check, never a blanket flip): add another
-// narrowly-scoped block below, gated on the SPECIFIC kind + path the RDD spike proved broken —
-// never generalize into a document-wide sweep speculatively.
-func validateKindValueConcrete(kind string, merged cue.Value) error {
-	if kind != "vm" {
-		return nil
-	}
-	hostdevs := merged.LookupPath(cue.ParsePath("libvirt.devices.hostdevs"))
-	if !hostdevs.Exists() {
-		return nil // no hostdevs authored at all — nothing to require concrete
-	}
-	iter, ierr := hostdevs.List()
-	if ierr != nil {
-		return nil // not iterable as a list — the closedness gate above already caught the shape error
-	}
-	for i := 0; iter.Next(); i++ {
-		hd := iter.Value()
-		typ, terr := hd.LookupPath(cue.ParsePath("type")).String()
-		if terr != nil || typ != "pci" {
-			continue // only a PCI hostdev's source.{domain,bus,slot,function} are conditionally required
-		}
-		for _, field := range [...]string{"domain", "bus", "slot", "function"} {
-			fv := hd.LookupPath(cue.ParsePath("source." + field))
-			if verr := fv.Validate(cue.Concrete(true)); verr != nil {
-				return fmt.Errorf("vm: libvirt.devices.hostdevs[%d] (type: pci): source.%s must be a concrete PCI hex address, got %s: %s",
-					i, field, fv, errors.Details(verr, nil))
-			}
-		}
 	}
 	return nil
 }

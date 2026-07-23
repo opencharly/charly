@@ -84,15 +84,18 @@ func CliMain(args []string) int {
 // Each declares InputDef:"" — the rich substrate value is validated HOST-SIDE against the
 // KEPT #<Kind>Value core def (runPluginKind → validateStandaloneKindValueCUE), NOT by this
 // served schema. The self-contained #SubstrateKindLoad def exists only to satisfy the
-// non-empty-schema load gate + document the seam. Also advertises command:reap-orphans and
-// verb:status-fanout (K6) — an INTERNAL-ONLY verb (never authored in a check plan, never a CLI
-// subcommand; reached solely by the host's "status-substrate" HostBuild forward via
-// providerRegistry.resolve + Invoke), mirroring the existing verb:libvirt/verb:credential/
-// verb:arbiter internal-dispatch precedent.
+// non-empty-schema load gate + document the seam. ONLY "vm" additionally declares
+// Validates:true (F7/C8) — its deep OpValidate check (validate_vm.go) closes the one proven
+// gap the host's closedness-only value gate cannot express (PCI-hostdev field concreteness);
+// pod/k8s/local/android declare no deep check and pay no extra OpValidate round-trip. Also
+// advertises command:reap-orphans and verb:status-fanout (K6) — an INTERNAL-ONLY verb (never
+// authored in a check plan, never a CLI subcommand; reached solely by the host's
+// "status-substrate" HostBuild forward via providerRegistry.resolve + Invoke), mirroring the
+// existing verb:libvirt/verb:credential/verb:arbiter internal-dispatch precedent.
 func NewMeta() pb.PluginMetaServer {
 	caps := make([]sdk.ProvidedCapability, 0, len(substrateWords)+2)
 	for _, w := range substrateWords {
-		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, DeployTraits: substrateTraits[w]})
+		caps = append(caps, sdk.ProvidedCapability{Class: "kind", Word: w, Structural: true, Validates: w == "vm", DeployTraits: substrateTraits[w]})
 	}
 	caps = append(caps, sdk.ProvidedCapability{Class: "command", Word: "reap-orphans"})
 	caps = append(caps, sdk.ProvidedCapability{Class: "verb", Word: "status-fanout"})
@@ -133,6 +136,22 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return &pb.InvokeReply{}, nil
 	case sdk.OpLoad:
 		return substrateLoad(req)
+	case sdk.OpValidate:
+		// F7/C8: the deep check ONLY the "vm" capability declares (Validates:true, NewMeta) —
+		// the host dispatches this kind-blindly, so a defensive check here (never a host-side
+		// branch) confirms the word matches what this file actually implements.
+		if req.GetReserved() != "vm" {
+			return nil, fmt.Errorf("plugin-substrate: OpValidate unsupported for word %q (only %q declares Validates)", req.GetReserved(), "vm")
+		}
+		diags, verr := validateVmDeep(req.GetParamsJson())
+		if verr != nil {
+			return nil, verr
+		}
+		out, merr := json.Marshal(diags)
+		if merr != nil {
+			return nil, fmt.Errorf("plugin-substrate: marshal diagnostics: %w", merr)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
 	case sdk.OpResolve:
 		// The substrate-template de-type (Cutover I): project an opaque local:/android:
 		// TEMPLATE body into a Resolved* envelope the kernel consumes.
