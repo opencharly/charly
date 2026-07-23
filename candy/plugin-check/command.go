@@ -40,9 +40,19 @@ func dispatchCheckCLI(args []string) error {
 // hostCheckRun asks the host to build the venue + run a check plan via the generic "check-run"
 // HostBuild kind, returning the per-step results the CheckCmd handlers format. cmdExec is nil on the
 // out-of-process CliMain path (no reverse channel) → a clear error.
+//
+// K1-unblock W3 Unit B (mid-flight, transitional): Mode:"box" now dispatches to this plugin's OWN
+// pluginCheckRunBox instead of the host's "check-run" HostBuild arm — the first of six arms moved.
+// The other five modes still route to the host; this dual-mode dispatch is a legal Hard-Cutover
+// mid-flight state (CLAUDE.md "Hard Cutover by Default") and is deleted (along with
+// charly/host_build_check_run.go's hostCheckRunBox) once every arm has moved, before the R10
+// acceptance run.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
+	}
+	if req.Mode == "box" {
+		return pluginCheckRunBox(cmdExec, cmdCtx, req)
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
