@@ -45,8 +45,8 @@ func TestMigrationTable_CompactNodeForm(t *testing.T) {
 // `libvirt:` field removal as a project-only (non-touches_host) apply: goHook
 // entry, strictly after compact-node-form.
 func TestMigrationTable_StripCandyLibvirtField(t *testing.T) {
-	if len(migrationTable) != 2 {
-		t.Fatalf("migration table should carry exactly 2 entries, got %d", len(migrationTable))
+	if len(migrationTable) != 3 {
+		t.Fatalf("migration table should carry exactly 3 entries, got %d", len(migrationTable))
 	}
 	m := migrationTable[1]
 	if m.Name != "strip-candy-libvirt-field" || m.Apply != "stripCandyLibvirtField" || m.TouchesHost {
@@ -57,6 +57,23 @@ func TestMigrationTable_StripCandyLibvirtField(t *testing.T) {
 	}
 	if !migrationTable[0].Version.Less(m.Version) {
 		t.Errorf("strip-candy-libvirt-field version %s must be strictly after compact-node-form %s", m.Version, migrationTable[0].Version)
+	}
+}
+
+// TestMigrationTable_StripDeployShellOverlay: the table carries the deploy-scope
+// `shell:` overlay field removal as a touches_host apply: goHook entry (the field
+// was authorable on the per-host charly.yml too), strictly after
+// strip-candy-libvirt-field.
+func TestMigrationTable_StripDeployShellOverlay(t *testing.T) {
+	m := migrationTable[2]
+	if m.Name != "strip-deploy-shell-overlay" || m.Apply != "stripDeployShellOverlay" || !m.TouchesHost {
+		t.Errorf("unexpected third table entry: %+v", m)
+	}
+	if _, ok := goHooks[m.Apply]; !ok {
+		t.Errorf("hook %q not registered in goHooks", m.Apply)
+	}
+	if !migrationTable[1].Version.Less(m.Version) {
+		t.Errorf("strip-deploy-shell-overlay version %s must be strictly after strip-candy-libvirt-field %s", m.Version, migrationTable[1].Version)
 	}
 }
 
@@ -113,6 +130,68 @@ func TestStripCandyLibvirtField_RemovesCandyLevelOnly(t *testing.T) {
 	}
 	if doc.VmLibvirt.Vm.Libvirt == nil {
 		t.Error("the vm entity's own libvirt: domain config was incorrectly removed")
+	}
+	if _, changed2 := applyTransform(t, m, out); changed2 {
+		t.Error("second pass changed an already-migrated doc")
+	}
+}
+
+// TestStripDeployShellOverlay_RemovesSequenceValuedOnly: the reshaper removes ONLY
+// a direct, SEQUENCE-valued `shell:` key (the retired deploy-scope overlay),
+// leaving a candy's own MAPPING-valued `shell:` (#Shell intrinsic init) on a
+// DIFFERENT entity completely untouched — the exact ambiguity a blanket
+// scope-scoped delete_key op would have gotten wrong (see the hook's header).
+func TestStripDeployShellOverlay_RemovesSequenceValuedOnly(t *testing.T) {
+	m := migration{Name: "t", Apply: "stripDeployShellOverlay"}
+	in := "" +
+		"mydeploy:\n" +
+		"  pod:\n" +
+		"    image: x\n" +
+		"    shell:\n" +
+		"    - id: direnv\n" +
+		"      bash:\n" +
+		"        init: direnv hook bash\n" +
+		"mycandy:\n" +
+		"  candy:\n" +
+		"    version: 2026.149.1200\n" +
+		"    description: d\n" +
+		"    shell:\n" +
+		"      init: export FOO=bar\n" +
+		"    plan:\n" +
+		"    - check: c\n" +
+		"      file: /x\n"
+	out, changed := applyTransform(t, m, in)
+	if !changed {
+		t.Fatal("expected the deploy-scope sequence-valued shell: field to be removed")
+	}
+	var doc struct {
+		MyDeploy struct {
+			Pod struct {
+				Image string           `yaml:"image"`
+				Shell []map[string]any `yaml:"shell"`
+			} `yaml:"pod"`
+		} `yaml:"mydeploy"`
+		MyCandy struct {
+			Candy struct {
+				Shell map[string]any   `yaml:"shell"`
+				Plan  []map[string]any `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"mycandy"`
+	}
+	if err := yaml.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("reparse: %v\n%s", err, out)
+	}
+	if doc.MyDeploy.Pod.Shell != nil {
+		t.Errorf("deploy-scope sequence-valued shell: survived: %v", doc.MyDeploy.Pod.Shell)
+	}
+	if doc.MyDeploy.Pod.Image != "x" {
+		t.Errorf("unrelated pod field damaged: %v", doc.MyDeploy.Pod.Image)
+	}
+	if doc.MyCandy.Candy.Shell == nil {
+		t.Error("the candy's own mapping-valued shell: field was incorrectly removed")
+	}
+	if len(doc.MyCandy.Candy.Plan) != 1 || doc.MyCandy.Candy.Plan[0]["file"] != "/x" {
+		t.Errorf("the candy's own plan was damaged: %v", doc.MyCandy.Candy.Plan)
 	}
 	if _, changed2 := applyTransform(t, m, out); changed2 {
 		t.Error("second pass changed an already-migrated doc")

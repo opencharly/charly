@@ -223,7 +223,6 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 	desc := "testing"
 	sec := []vmshared.DeploySecretConfig{{Name: "test"}}
 	sd := map[string]json.RawMessage{"side": json.RawMessage(`{"image":"img"}`)}
-	shl := []DeployShellOverlay{{ID: "x"}}
 	k8s := &K8sDeployConfig{Namespace: "test-ns"}
 	res := &vmshared.DeployResources{}
 	exp := &vmshared.DeployExpose{Host: "example.com", TLS: true}
@@ -237,7 +236,6 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		ForwardGpgAgent: &tr,
 		ForwardSshAgent: &tr,
 		Sidecar:         sd,
-		Shell:           shl,
 		Kubernetes:      k8s,
 		Kind:            "service",
 		Replica:         3,
@@ -265,7 +263,6 @@ func TestMergeDeployConfigsPreservesAllFields(t *testing.T) {
 		{"ForwardGpgAgent", got.ForwardGpgAgent == nil || !*got.ForwardGpgAgent},
 		{"ForwardSshAgent", got.ForwardSshAgent == nil || !*got.ForwardSshAgent},
 		{"Sidecar", len(got.Sidecar) != 1},
-		{"Shell", len(got.Shell) != 1},
 		{"Kubernetes", got.Kubernetes == nil},
 		{"Kind", got.Kind != "service"},
 		{"Replica", got.Replica != 3},

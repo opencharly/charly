@@ -32,4 +32,13 @@ migrations: [
 		// per-host deploy overlay — no touches_host needed.
 		apply: "stripCandyLibvirtField"
 	},
+	{
+		version: "2026.204.1223"
+		name:    "strip-deploy-shell-overlay"
+		// the deploy-scope shell: overlay is authorable on a per-host
+		// charly.yml deploy entry too (as well as a project charly.yml) —
+		// touches_host so the per-host config is swept as well.
+		touches_host: true
+		apply:        "stripDeployShellOverlay"
+	},
 ]

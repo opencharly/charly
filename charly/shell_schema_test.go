@@ -179,8 +179,6 @@ func TestLabelShellSet_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestMergeDeployShell_ReplaceByID — overlay with matching id replaces
-// the baked entry; non-matching id appends to Deploy.
 // TestExecutor_ResolveHome_Local — ShellExecutor.ResolveHome returns
 // $HOME for empty user and a sensible value for an explicit user.
 func TestExecutor_ResolveHome_Local(t *testing.T) {
@@ -191,54 +189,6 @@ func TestExecutor_ResolveHome_Local(t *testing.T) {
 	}
 	if home == "" {
 		t.Fatal("empty home")
-	}
-}
-
-// TestDeployShellOverlay_YAMLParse asserts that a deploy.yml-shape `shell:`
-// block parses correctly through DeployShellOverlay's custom UnmarshalYAML.
-// (The former merge-against-a-baked-spec.LabelShellSet half of this test
-// exercised MergeDeployShell/shellOverlayToEntry, deleted in the
-// dead-code-radical-removal batch as zero-real-caller dead code.)
-func TestDeployShellOverlay_YAMLParse(t *testing.T) {
-	src := []byte(`
-- id: direnv
-  fish:
-    init: |
-      direnv hook fish | source --no-prompt
-- origin: deploy
-  bash:
-    init: |
-      export PROJECT_VAR=workstation
-- id: agent-forwarding:bash
-  skip: true
-`)
-	var overlays []DeployShellOverlay
-	if err := decodeViaCUEForTest(t, string(src), &overlays); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(overlays) != 3 {
-		t.Fatalf("expected 3 overlays, got %d", len(overlays))
-	}
-	// First entry replaces direnv:fish.
-	o1 := overlays[0]
-	if o1.ID != "direnv" {
-		t.Errorf("o1.ID = %q", o1.ID)
-	}
-	if o1.ByShell()["fish"] == nil || !strings.Contains(o1.ByShell()["fish"].Init, "--no-prompt") {
-		t.Errorf("o1.ByShell()[fish]: %+v", o1.ByShell())
-	}
-	// Second is a fresh deploy-scope entry.
-	o2 := overlays[1]
-	if o2.Origin != "deploy" {
-		t.Errorf("o2.Origin = %q", o2.Origin)
-	}
-	if o2.ByShell()["bash"] == nil {
-		t.Errorf("o2 missing bash sub-block")
-	}
-	// Third is a skip.
-	o3 := overlays[2]
-	if !o3.Skip {
-		t.Errorf("o3.Skip = false")
 	}
 }
 

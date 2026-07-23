@@ -92,7 +92,7 @@ func TestSaveDeployState_AbortOnInvalidExistingFile(t *testing.T) {
 	}
 	// Pre-existing deploy.yml that fails spec.ValidateDeployRequiresBox —
 	// `legacy-entry` is target:pod but lacks the required `box:`.
-	initialYAML := `version: 2026.202.0105
+	initialYAML := `version: 2026.204.1223
 provides:
     env:
         - name: SOME_URL
@@ -141,7 +141,7 @@ func TestSaveDeployState_PersistsImageAndTargetForNewEntry(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	initialYAML := `version: 2026.202.0105
+	initialYAML := `version: 2026.204.1223
 existing-deploy:
     pod:
         image: existing-image
@@ -196,7 +196,7 @@ func TestSaveDeployState_DoesNotClobberExistingImageTarget(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	initialYAML := `version: 2026.202.0105
+	initialYAML := `version: 2026.204.1223
 existing:
     pod:
         image: pinned-image-ref:1.2.3
@@ -368,7 +368,7 @@ func TestBundleNode_DisposableFalseRoundTrip(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "charly"), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	src := `version: 2026.202.0105
+	src := `version: 2026.204.1223
 locked-pod:
     pod:
         image: foo
@@ -462,7 +462,7 @@ func TestRemoveVmDeployEntry_SelectiveAndIdempotent(t *testing.T) {
 	}
 	// Seed: the disposable bed VM to remove, plus a running preemptible
 	// operator workstation and an unrelated pod deploy that must both survive.
-	initialYAML := `version: 2026.202.0105
+	initialYAML := `version: 2026.204.1223
 vm:k3s-vm:
     vm:
         from: k3s-vm

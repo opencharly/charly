@@ -14,10 +14,17 @@ import (
 // Section assignment:
 //   - Each candy's `shell:` (intrinsic + per-shell sub-blocks) → Candy.
 //   - Box-level `shell:` → Box.
-//   - Deploy-scope defaults from charly.yml are not yet expressed —
-//     reserved for future use. (The former MergeDeployShell/replaceShellEntryByID
-//     deploy-time overlay merger, and shellOverlayToEntry which fed it, were a
-//     dead-code-radical-removal-batch deletion — zero real callers anywhere.)
+//   - Deploy is never populated: the deploy-scope `shell:` overlay authoring
+//     field (#Deploy.shell / DeployShellOverlay) was RETIRED outright by the
+//     validation-correctness batch — its would-be merge (MergeDeployShell/
+//     shellOverlayToEntry) never had a production caller anywhere in this
+//     repo's history (RDD-verified via full git-log archaeology, not just
+//     the dead-code-radical-removal-batch deletion that finally deleted the
+//     unreachable helper), so the honest fix was removing the never-wired
+//     authoring surface rather than finishing a half-built feature. The
+//     LabelShellSet.Deploy wire section itself stays (a stable three-section
+//     label shape a future, properly-designed feature could populate), just
+//     permanently empty until one exists.
 //
 // Returns nil if every section is empty.
 func CollectShell(cfg *Config, layers map[string]spec.CandyReader, boxName string) *spec.LabelShellSet {

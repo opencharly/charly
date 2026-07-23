@@ -14,7 +14,7 @@ import (
 // expected fields.
 func TestLoadUnified_LocalMap_Inline(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: 2026.202.0105
+	src := `version: 2026.204.1223
 dev-workstation:
   local:
     description: Dev workstation
@@ -59,7 +59,7 @@ dev-workstation:
 // on a deployment that still uses the legacy target:host spelling.
 func TestLoadUnified_RejectLegacyTargetHost(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: 2026.202.0105
+	src := `version: 2026.204.1223
 deploy:
   my-laptop:
     target: host
