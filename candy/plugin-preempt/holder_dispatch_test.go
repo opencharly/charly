@@ -18,10 +18,11 @@ import (
 
 // holder_dispatch_test.go — unit coverage for the FLOOR-SLIM-proper Unit-8 MOVE: the 6 arbiter
 // host-seam impls (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) that relocated from
-// charly/preempt.go + charly/arbiter_host.go + charly/gpu_shim.go into this plugin
-// (holder_dispatch.go). Real coverage for the moved code — NOT a rerun of a throwaway spike
-// test — per the pod-venue (target="") paths, which need no live exec.HostArbiter / InvokeProvider
-// round-trip to exercise (a departed pod holder never reaches the VM/InvokeProvider branch).
+// charly/preempt.go + charly/arbiter_host.go (deleted, K1-unblock wave 1) + charly/gpu_shim.go
+// into this plugin (holder_dispatch.go). Real coverage for the moved code — NOT a rerun of a
+// throwaway spike test — per the pod-venue (target="") paths, which need no live
+// exec.InvokeProvider round-trip to exercise (a departed pod holder never reaches the
+// VM/InvokeProvider branch).
 
 // captureStderr runs fn with os.Stderr redirected to a pipe and returns whatever was written —
 // the plugin-side twin of charly's own captureStderr test helper (R3: one copy per module, since

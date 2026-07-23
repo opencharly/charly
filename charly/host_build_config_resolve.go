@@ -56,6 +56,9 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// decodes; they are resolved into locals here so applyCueDefaults runs on the typed value first.
 	var vm *VmSpec
 	var resources map[string]*ResolvedResource
+	var claimant string
+	var claimantNode spec.BundleNode
+	var hasClaimant bool
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok && uf != nil {
 		if uf.VM != nil {
 			vm, _ = resolveVmViaPlugin(uf.VM[req.Entity])
@@ -64,6 +67,12 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 			}
 		}
 		resources = uf.resolveResources()
+		// The exclusive-resource claimant (requires_exclusive) the handler acquires a preempt
+		// lease for — K1-unblock wave 1: the portable deploykit.FindVMClaimant (also used
+		// plugin-side by candy/plugin-preempt off the resolved-project envelope, R3) replaces the
+		// former core-only lookupVMClaimant, over the SAME per-host-overlay-merged tree.
+		claimant, claimantNode, hasClaimant = deploykit.FindVMClaimant(
+			deploykit.MergedDeployTree(uf.Bundle, "vm config-resolve"), req.Entity)
 	}
 
 	// Effective backend: the entity's `backend:` pin (vmConfiguredBackend) resolved against the live
@@ -74,8 +83,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	}
 	reply.Backend = backend
 
-	// The exclusive-resource claimant (requires_exclusive) the handler acquires a preempt lease for.
-	if claimant, claimantNode, hasClaimant := lookupVMClaimant(req.Entity); hasClaimant {
+	if hasClaimant {
 		reply.Claimant = claimant
 		reply.ClaimantNode = &claimantNode
 	}

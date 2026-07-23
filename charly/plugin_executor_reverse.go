@@ -41,25 +41,6 @@ type executorReverseServer struct {
 	live *overlayBuildInputs
 }
 
-// HostArbiter is the C9 resource-arbiter reverse leg: the COMPILED-IN candy/plugin-preempt
-// (verb:arbiter) calls back mid-logic for its 2 remaining genuinely K1-blocked host
-// dependencies (gather/resources — both LoadUnified-coupled; the other 6 original seams moved
-// into the plugin itself, FLOOR-SLIM-proper Unit-8). It decodes the action-tagged request and
-// delegates to the stateless arbiterHostServer. ALWAYS served — like HostBuild / InvokeProvider —
-// because the arbiter is now reached over TWO reverse-channel topologies: the in-core proxy's
-// executor AND a compiled-in command:preempt calling InvokeProvider(verb:arbiter) over the
-// generic command dispatch's bare executor. The seam impls are stateless (touch no s.exec), so serving
-// it unconditionally is inert on every non-arbiter channel (only verb:arbiter ever sends this RPC) —
-// strictly cleaner than injecting arbiter-specific wiring into the generic command dispatch. A seam OP
-// failure rides the seam's own reply; the RPC error field is reserved for infra failure (bad action).
-func (s *executorReverseServer) HostArbiter(ctx context.Context, req *pb.HostArbiterRequest) (*pb.HostArbiterReply, error) {
-	out, err := newArbiterHostServer().dispatch(req.GetAction())
-	if err != nil {
-		return &pb.HostArbiterReply{Error: err.Error()}, nil
-	}
-	return &pb.HostArbiterReply{ResultJson: out}, nil
-}
-
 func (s *executorReverseServer) Venue(context.Context, *pb.Empty) (*pb.VenueReply, error) {
 	return &pb.VenueReply{Venue: s.exec.Venue()}, nil
 }

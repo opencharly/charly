@@ -16,10 +16,11 @@ import (
 // command.go — the externalized `charly preempt` command (status / restore). The plugin OWNS the CLI
 // grammar + the lease-table formatting; it reaches the arbiter — its OWN peer capability verb:arbiter
 // (compiled-in) — DIRECTLY via InvokeProvider over the in-proc reverse channel. No hidden `__preempt-*`
-// forward, no in-core proxy hop: command:preempt → InvokeProvider → verb:arbiter → (HostArbiter → core
-// host seams). preempt is the first compiled-in COMMAND that reaches a peer VERB plugin over
-// InvokeProvider (the HostBuild commands reach a terminal host builder; this reaches another plugin).
-// COMPILED-IN because Invoke(OpRun) needs the reverse channel; out-of-process CliMain errors.
+// forward, no in-core proxy hop: command:preempt → InvokeProvider → verb:arbiter → (InvokeProvider /
+// HostBuild("resolved-project") → core host seams). preempt is the first compiled-in COMMAND that
+// reaches a peer VERB plugin over InvokeProvider (the HostBuild commands reach a terminal host
+// builder; this reaches another plugin). COMPILED-IN because Invoke(OpRun) needs the reverse
+// channel; out-of-process CliMain errors.
 
 const preemptUsage = `usage: charly preempt <status | restore [claimant]>`
 

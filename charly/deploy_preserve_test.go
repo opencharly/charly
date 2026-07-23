@@ -116,7 +116,12 @@ vm:check-cachyos-gpu-vm:
 // a PER-HOST preemptible (a local deploy property) override the committed
 // project profile that lacks it — so `requires_exclusive` beds can preempt the
 // operator's workstation only where the operator opted in, without committing
-// the flag.
+// the flag. K1-unblock wave 1: the arbiter's own gather (formerly core-only
+// gatherDeployNodes) moved to candy/plugin-preempt, reading the project half via
+// HostBuild("resolved-project") and merging it host-independently via the portable
+// deploykit.MergedDeployTree — this test exercises that SAME portable merge against a
+// real on-disk project + per-host XDG_CONFIG_HOME overlay (LoadUnified supplies the project
+// half exactly as the "resolved-project" HostBuild seam does host-side).
 func TestGatherDeployNodesPerHostWins(t *testing.T) {
 	proj := t.TempDir()
 	// Committed project: cachyos-gpu, NO preemptible.
@@ -146,7 +151,11 @@ cachyos-gpu:
 	}
 	t.Chdir(proj)
 
-	nodes := gatherDeployNodes()
+	uf, ok, err := LoadUnified(proj)
+	if err != nil || !ok || uf == nil {
+		t.Fatalf("LoadUnified(%q): ok=%v err=%v", proj, ok, err)
+	}
+	nodes := deploykit.MergedDeployTree(uf.Bundle, "test")
 	node, ok := nodes["cachyos-gpu"]
 	if !ok {
 		t.Fatal("cachyos-gpu not gathered")

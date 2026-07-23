@@ -73,13 +73,12 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 	// RPC (even a generically-named one) must be added here CONSCIOUSLY — and if it were named after
 	// a plugin, the word scan above would also catch it. This arm catches the "added a per-plugin
 	// RPC" regression directly.
-	// HostArbiter (C9) is a class-generic, action-multiplexed reverse-op class (the resource-arbiter
-	// host-seam channel: config gather/resources + deploy running/stop/start + the GPU driver flip),
-	// added CONSCIOUSLY like RunHostStep / InvokeProvider / HostBuild. Its NAME is not a provider word
-	// (the word-scan above proves "hostarbiter" ∉ the universe), and its per-call detail is DATA (the
-	// action string + spec params), never API shape — the F11 contract.
+	// HostArbiter (C9) was a class-generic, action-multiplexed reverse-op class (the resource-arbiter
+	// host-seam channel) — RETIRED by K1-unblock wave 1: its last 2 actions (gather/resources) now
+	// read the generic HostBuild("resolved-project") envelope instead, so the bespoke RPC (and its
+	// request/reply proto messages) is deleted rather than kept around unused.
 	assertMethodSet(t, "ExecutorService", pb.ExecutorService_ServiceDesc,
-		"Venue", "RunSystem", "RunUser", "PutFile", "RunCapture", "GetFile", "RunHostStep", "InvokeProvider", "HostBuild", "HostArbiter",
+		"Venue", "RunSystem", "RunUser", "PutFile", "RunCapture", "GetFile", "RunHostStep", "InvokeProvider", "HostBuild",
 		// F12 live-stdio legs — class-generic action nouns (the interactive/stream siblings of
 		// RunCapture), never a provider word: RunInteractive drives `charly shell`/`charly cmd`,
 		// RunStream drives `charly logs --follow`.
