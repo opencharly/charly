@@ -30,13 +30,14 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 		}},
 	}
 	layer := pixiCandy(t, "c")
+	ctx, ex := testConstructStepExecutor()
 
 	// (a) Pre-resolved by the (simulated) pre-pass: the compiler must read it verbatim — no RPC.
 	wantRev := []spec.ReverseOp{{Kind: spec.ReverseOpPixiEnvRemove, Targets: []string{"myenv"}, Scope: spec.ScopeUser, Extra: map[string]string{"layer": "c"}}}
 	pre := deploykit.HostContext{BuilderContext: map[string]deploykit.BuilderPreresolved{
 		deploykit.BuilderCtxKey("c", "pixi"): {Context: map[string]any{"env_name": "myenv"}, Reverse: wantRev},
 	}}
-	plan, err := deploykit.BuildDeployPlan(layer, img, pre)
+	plan, err := deploykit.BuildDeployPlan(ctx, ex, layer, img, pre)
 	if err != nil {
 		t.Fatalf("BuildDeployPlan (pre-resolved): %v", err)
 	}
@@ -53,7 +54,7 @@ func TestBuildDeployPlan_BuilderPurity_NoPluginRPC(t *testing.T) {
 
 	// (b) No pre-pass (HostContext{}): the compiler still succeeds with base-only context + nil
 	// teardown — it never dials a plugin (none is connected here), proving purity.
-	plan2, err := deploykit.BuildDeployPlan(layer, img, deploykit.HostContext{})
+	plan2, err := deploykit.BuildDeployPlan(ctx, ex, layer, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan (no pre-pass): %v", err)
 	}
@@ -155,7 +156,8 @@ func TestBuildDeployPlanRipgrep(t *testing.T) {
 		t.Skip("ripgrep layer not present in fixtures")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(ripgrep, img, deploykit.HostContext{})
+	ctx, ex := testConstructStepExecutor()
+	plan, err := deploykit.BuildDeployPlan(ctx, ex, ripgrep, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -206,7 +208,8 @@ func TestBuildDeployPlanDevTools(t *testing.T) {
 		t.Skip("dev-tools layer not present in fixtures")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(dt, img, deploykit.HostContext{})
+	ctx, ex := testConstructStepExecutor()
+	plan, err := deploykit.BuildDeployPlan(ctx, ex, dt, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}
@@ -245,7 +248,8 @@ func TestBuildDeployPlanPixiCandy(t *testing.T) {
 		t.Skip("pre-commit doesn't have pixi.toml (fixture changed)")
 	}
 
-	plan, err := deploykit.BuildDeployPlan(pc, img, deploykit.HostContext{})
+	ctx, ex := testConstructStepExecutor()
+	plan, err := deploykit.BuildDeployPlan(ctx, ex, pc, img, deploykit.HostContext{})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}

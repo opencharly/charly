@@ -131,8 +131,14 @@ type UnifiedFile struct {
 	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
 	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
 	// PluginKinds["agent"] as an OPAQUE body. The kernel never types it: the harness
-	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve
-	// (resolveAgentViaPlugin) — the agent de-type, Cutover E. See agent_config.go.
+	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve — the
+	// agent de-type, Cutover E. Every consumer now reaches this catalog PLUGIN-SIDE
+	// (candy/plugin-check's checkproject.go exposes it as rp.AgentBodies off the
+	// resolved-project envelope; candy/plugin-check/agent.go's resolveAgentSpec
+	// Invokes candy/plugin-agent's OpResolve directly, shared by the harness AND the
+	// deploy-scope feature-run grader, K1-unblock wave arm 2) — the former
+	// core-side catalog resolver had its one caller move plugin-side and was
+	// deleted with it.
 
 	// PluginKinds holds entities of KINDS contributed by plugins (a kind the core
 	// has no typed map for). Decoded via the plugin's Invoke envelope
@@ -189,6 +195,16 @@ type UnifiedFile struct {
 	// Box["cachyos"]. Bare refs inside a namespace resolve within that
 	// namespace first (Go package-member semantics). See charly/namespace.go.
 	Namespaces map[string]*UnifiedFile `yaml:"-"`
+
+	// RootDir is this UnifiedFile's OWN base directory — the dir its root document's SrcDir names
+	// (materializeLoadedProject, materialize.go). NOT authored; set once per materialize, for BOTH
+	// the top-level project (matching the dir LoadUnified(dir) was called with) AND each mounted
+	// namespace (K1-unblock wave 2, R1 fix — see fillNamespacedBoxes's doc comment): a namespace's
+	// own local candy scan (subUF.projectCandiesScanned) needs THIS directory, not the caller's
+	// outer project dir, to correctly resolve a discovered candy's relative From: path (set
+	// relative to ITS OWN rootDir by materializeDiscoveredNode, not the caller's). Empty for a
+	// project-less / synthetic UnifiedFile.
+	RootDir string `yaml:"-"`
 }
 
 // ImportEntry, ImportList, DiscoverConfig, and ScanSpec are the kind-blind

@@ -2,13 +2,14 @@ package check
 
 // watchdog.go — score-progress watchdog for the AI runner (P12: relocated verbatim
 // from charly/check_watchdog.go — pure; the injected Prober body drives the "score"
-// check-run mode in the plugin instead of an in-core RunCheckLive).
+// check-run mode, which itself dispatches to this plugin's own pluginRunCheckLive
+// since K1-unblock wave arm 3 — no in-core RunCheckLive remains).
 //
 // Bounds each iteration by SCORING PROGRESS rather than wall clock:
 //
 //  1. Every CheckInterval (default 5 min), Run probes the live deployments via the
-//     supplied Prober (typically the "score" host seam against the iter's in-scope
-//     plan steps).
+//     supplied Prober (typically the "score" check-run mode against the iter's
+//     in-scope plan steps).
 //  2. OnTick fires after every probe with the current observation (host-side stderr
 //     logging, NOT into any AI-visible surface).
 //  3. If the score has not increased in NoImprovementTimeout (default 30 min), Run

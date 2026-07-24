@@ -20,7 +20,7 @@ func TestCompileRunStep_PackagePluginLowersToSystemPackagesWithReversals(t *test
 		Plugin:      "package",
 		PluginInput: map[string]any{"package": "redis"},
 	}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 
 	var sp *deploykit.SystemPackagesStep
 	for _, s := range steps {
@@ -94,7 +94,7 @@ func TestCompileRunStep_ServicePluginLowersToServicePackagedWithReversals(t *tes
 		Plugin:      "service",
 		PluginInput: map[string]any{"service": "sshd"},
 	}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 
 	var sp *deploykit.ServicePackagedStep
 	for _, s := range steps {
@@ -141,7 +141,7 @@ func TestServicePluginActEmitsIntoBoxBuild(t *testing.T) {
 		PluginInput: map[string]any{"service": "sshd"},
 		Context:     []string{"build"},
 	}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 	tgt := ociTestTarget(buildEngineContext{})
 	plan := &deploykit.InstallPlan{Candy: "x", Steps: steps}
 	if err := tgt.Emit([]*deploykit.InstallPlan{plan}, deploykit.EmitOpts{}); err != nil {
@@ -166,7 +166,7 @@ func TestCompileActOp_VerbWordWinsOverCollidingStepWord(t *testing.T) {
 		PluginInput: map[string]any{"file": "/etc/check-local-marker", "exists": true},
 		Context:     []string{"deploy"},
 	}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 	if len(steps) != 1 {
 		t.Fatalf("want exactly 1 compiled step, got %d (%#v)", len(steps), steps)
 	}
@@ -190,7 +190,7 @@ func TestCompileOpSteps_FoldsBuildContextRunStepNotCheck(t *testing.T) {
 		{Run: "install vim", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "vim"}, Context: []string{"build"}}},
 		{Check: "vim present", Op: spec.Op{Plugin: "file", PluginInput: map[string]any{"file": "/usr/bin/vim", "exists": true}}}, // a check: step → not folded
 	}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 	pkgCount := 0
 	for _, s := range steps {
 		if _, ok := s.(*deploykit.SystemPackagesStep); ok {
@@ -208,7 +208,7 @@ func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
 	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{
 		{Run: "run", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, Context: []string{"runtime"}}},
 	}}, spec.CandyView{})
-	if steps := deploykit.CompileOpSteps(layer, testResolvedBox()); len(steps) != 0 {
+	if steps := testCompileOpSteps(t, layer); len(steps) != 0 {
 		t.Fatalf("runtime-only run: step must not be folded into the build plan, got %d steps", len(steps))
 	}
 }
@@ -217,7 +217,7 @@ func TestCompileOpSteps_DoesNotFoldRuntimeOnlyRunStep(t *testing.T) {
 // OpStep — it must NOT be dropped, and the run-as user drives scope.
 func TestCompileOpSteps_RunCommandLowersToOpStep(t *testing.T) {
 	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{{Run: "run cmd", Op: spec.Op{Plugin: "command", PluginInput: map[string]any{"command": "echo hi"}, RunAs: "root"}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 	if len(steps) != 1 {
 		t.Fatalf("run: command dropped: %d steps", len(steps))
 	}

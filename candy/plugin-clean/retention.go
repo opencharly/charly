@@ -1,10 +1,24 @@
-package main
+package clean
+
+// retention.go — the SHARED retention ENGINE (image-tag / build-candy / check-run pruning +
+// the --deep store-wide dangling-image purge + the charly-labeled image-tag inventory).
+// Relocated from charly/retention.go (K1-alpha core-minimization): this candy is the ONE
+// owner now. `charly clean`'s own CLI (command.go) calls runRetention directly — no wire
+// hop, same package. The three remaining core callers (`charly box build`'s post-build
+// prune, `charly box list tags`, and the check harness's post-run prune) reach it via
+// verb:retention — the same "core adapter resolves+Invokes a compiled-in plugin word"
+// pattern verb:credential/verb:gpu/verb:tunnel already use (charly/retention_plugin.go).
+//
+// Retention fallback: when defaults.keep_images / keep_check_runs are absent from config,
+// the core adapter resolves 0 ("disabled") so third-party configs get no surprise pruning.
+// The repo's charly.yml opts in (keep_images: 3, keep_check_runs: 3). See /charly-core:clean.
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,10 +28,103 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// Retention fallback: when defaults.keep_images / keep_check_runs are absent from config,
-// resolveIntPtr(nil) (config.go) resolves to 0, meaning "disabled" — so third-party configs that
-// never declare the keys get NO surprise pruning. The repo's charly.yml opts in (keep_images: 3,
-// keep_check_runs: 3). See /charly-core:clean.
+// runRetention dispatches one verb:retention request to the requested category(ies) and
+// returns the reply. Mirrors the former charly/host_build_retention.go dispatch, plus the
+// new `list` (charly box list tags) and `build_prune` (the narrow post-build-only scope)
+// actions this relocation adds. req.KeepImages/req.KeepCheckRuns arrive PRE-RESOLVED (the
+// caller's defaults.keep_images/keep_check_runs, 0 = disabled) — this engine never reads
+// charly.yml itself, it only ever runs the podman/filesystem side of retention (R3: config
+// resolution stays with whoever can LoadConfig — core call sites resolve in-process, the
+// plugin's own CLI + plugin-check's post-run hook fetch it via the small
+// "retention-defaults" HostBuild seam, the ONE thing this engine genuinely cannot compute).
+func runRetention(req spec.RetentionRequest) spec.RetentionReply {
+	engineBin, err := resolveEngineBinary()
+	if err != nil {
+		return spec.RetentionReply{Error: err.Error()}
+	}
+
+	// --invalidate: targeted image-tag invalidation ONLY (matches the CLI's early return).
+	if req.Invalidate != "" {
+		refs, ierr := invalidateImageTags(engineBin, req.Invalidate, req.DryRun)
+		if ierr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("invalidating image tags: %v", ierr)}
+		}
+		return spec.RetentionReply{ImageRefs: refs}
+	}
+
+	// list: the read-only tag inventory (`charly box list tags`) — nothing removed.
+	if req.List {
+		groups, lerr := charlyImageTags(engineBin)
+		if lerr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("listing image tags: %v", lerr)}
+		}
+		return spec.RetentionReply{TagGroups: flattenTagGroups(groups)}
+	}
+
+	keepImages, keepCheck := req.KeepImages, req.KeepCheckRuns
+	if req.Keep > 0 {
+		keepImages, keepCheck = req.Keep, req.Keep
+	}
+
+	// build_prune: the narrow post-`charly box build` scope — tag retention + stale
+	// .build/_candy staging dirs ONLY, matching the historic pruneAfterBuild behavior
+	// exactly (never the fuller dangling-image/staging sweep the `images` category runs).
+	if req.BuildPrune {
+		reply := spec.RetentionReply{KeepImages: keepImages}
+		refs, perr := pruneImagesByRetention(engineBin, keepImages, req.DryRun)
+		if perr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning images: %v", perr)}
+		}
+		reply.ImageRefs = refs
+		reply.BuildDirs = pruneBuildCandyDirs(filepath.Join(req.Dir, ".build"), keepImages, req.DryRun)
+		return reply
+	}
+
+	reply := spec.RetentionReply{KeepImages: keepImages, KeepCheckRuns: keepCheck}
+
+	if req.Images {
+		refs, perr := pruneImagesByRetention(engineBin, keepImages, req.DryRun)
+		if perr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning images: %v", perr)}
+		}
+		reply.ImageRefs = refs
+		dangling, derr := pruneDanglingCharlyImages(engineBin, req.DryRun)
+		if derr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning dangling images: %v", derr)}
+		}
+		reply.DanglingIDs = dangling
+		reply.StagingDirs = pruneBuildahStaging(req.DryRun)
+		reply.BuildDirs = pruneBuildCandyDirs(filepath.Join(req.Dir, ".build"), keepImages, req.DryRun)
+	}
+	if req.Check {
+		paths, perr := pruneCheckRuns(filepath.Join(req.Dir, ".check"), keepCheck, req.DryRun)
+		if perr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("pruning check runs: %v", perr)}
+		}
+		reply.CheckPaths = paths
+	}
+	if req.Deep {
+		ids, bytes, derr := pruneDeepDanglingImages(engineBin, req.DryRun)
+		if derr != nil {
+			return spec.RetentionReply{Error: fmt.Sprintf("deep-purging dangling images: %v", derr)}
+		}
+		reply.DeepIDs = ids
+		reply.DeepBytes = bytes
+	}
+	return reply
+}
+
+// resolveEngineBinary resolves the container engine binary via kit.ResolveRuntime — the
+// same resolver every other engine-shelling site uses.
+func resolveEngineBinary() (string, error) {
+	rt, err := kit.ResolveRuntime()
+	if err != nil {
+		return "", err
+	}
+	return kit.EngineBinary(rt.BuildEngine), nil
+}
+
+// --- image-tag inventory (charlyImageTags + support) -------------------------------------
 
 // listContainerImageRefs returns the set of image IDs and image refs currently
 // referenced by ANY container (running or stopped, incl. quadlet-managed
@@ -74,33 +181,19 @@ func imageInUse(im kit.LocalImageInfo, ids, refs map[string]bool) bool {
 
 // imageLabelCalVer parses the image's ai.opencharly.version label (the
 // content-derived EffectiveVersion) — the PRIMARY retention ordering key.
-func imageLabelCalVer(im kit.LocalImageInfo) (CalVer, bool) {
-	return ParseCalVer(im.Labels[spec.LabelVersion])
+func imageLabelCalVer(im kit.LocalImageInfo) (kit.CalVer, bool) {
+	return kit.ParseCalVer(im.Labels[spec.LabelVersion])
 }
 
-// pruneImagesByRetention keeps the newest keepN build TAGS per
-// `ai.opencharly.box` group and removes the older ones. Tags are ordered by
-// the `ai.opencharly.version` CalVer label (PRIMARY) then the `:YYYY.DDD.HHMM`
-// build TAG (TIEBREAKER); because the label is content-stable, the tag is what
-// distinguishes the newest builds.
-//
-// Retention is per TAG, not per image entry. Older tags are `rmi`'d
-// INDIVIDUALLY — so when several tags share one image id, the kept tags hold
-// the id alive and the just-built (newest) tag is always retained. (The earlier
-// per-entry form removed an entry's whole Names array, which deleted kept tags
-// and could wipe the just-built image when content-stable rebuilds piled many
-// tags onto one id — see CHANGELOG/.) Tags whose image is referenced by a
-// container are skipped, and `rmi` runs WITHOUT `-f` as a backstop. keepN <= 0
-// disables (no-op). Returns the refs removed (or that would be, when dryRun).
-// imageTagInfo is one locally stored tag of a charly-labeled image —
-// the shared inventory row behind retention pruning, `charly box list tags`,
-// and `charly clean --invalidate`.
+// imageTagInfo is one locally stored tag of a charly-labeled image — the shared
+// inventory row behind retention pruning, `charly box list tags`, and
+// `charly clean --invalidate`.
 type imageTagInfo struct {
 	Ref         string
 	ID          string
-	LabelCalVer CalVer
+	LabelCalVer kit.CalVer
 	OkLabel     bool
-	TagCalVer   CalVer
+	TagCalVer   kit.CalVer
 	OkTag       bool
 	InUse       bool
 }
@@ -132,7 +225,7 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 				continue
 			}
 			seenRef[ref] = true
-			tcv, okT := ParseCalVer(kit.ExtractCalVerTag(ref))
+			tcv, okT := kit.ParseCalVer(kit.ExtractCalVerTag(ref))
 			groups[short] = append(groups[short], imageTagInfo{
 				Ref: ref, ID: normImageID(im.ID), LabelCalVer: lcv, OkLabel: okL,
 				TagCalVer: tcv, OkTag: okT, InUse: inUse,
@@ -156,31 +249,55 @@ func charlyImageTags(engine string) (map[string][]imageTagInfo, error) {
 	return groups, nil
 }
 
+// flattenTagGroups presents charlyImageTags' grouped inventory as the verb:retention
+// `list` reply payload: boxes sorted alphabetically, tags within each box in the
+// group's existing newest-first order.
+func flattenTagGroups(groups map[string][]imageTagInfo) []spec.TagInfo {
+	boxes := make([]string, 0, len(groups))
+	for b := range groups {
+		boxes = append(boxes, b)
+	}
+	sort.Strings(boxes)
+	var out []spec.TagInfo
+	for _, b := range boxes {
+		for _, t := range groups[b] {
+			version := "-"
+			if t.OkLabel {
+				version = t.LabelCalVer.String()
+			}
+			out = append(out, spec.TagInfo{Box: b, Ref: t.Ref, Version: version, InUse: t.InUse})
+		}
+	}
+	return out
+}
+
+// --- live-build-floor + image-tag retention ------------------------------------------------
+
 // liveBuildFloor is a package-level var for testability — the same seam
 // kit.ListLocalImages / listContainerImageRefs use. It reads the HOST-GLOBAL
 // build-activity lock dir (~/.cache/charly/locks/builds, shared across every
-// worktree on the host), so a retention test that does NOT stub it is
-// non-deterministic: a concurrent build in ANOTHER process holds a lock, the
-// live-build protection engages, and the test's expected pruning silently does
-// not happen. A test stubs this to a fixed (no-live-build) result so the
-// retention decision under test is deterministic regardless of host build
-// activity.
+// worktree on the host, written by charly core's acquireBuildActivityLock), so a
+// retention test that does NOT stub it is non-deterministic: a concurrent build in
+// ANOTHER process holds a lock, the live-build protection engages, and the test's
+// expected pruning silently does not happen. A test stubs this to a fixed
+// (no-live-build) result so the retention decision under test is deterministic
+// regardless of host build activity.
 var liveBuildFloor = defaultLiveBuildFloor
 
-// defaultLiveBuildFloor scans the build-activity locks (acquireBuildActivityLock): a
+// defaultLiveBuildFloor scans the build-activity locks (kit.BuildActivityDir): a
 // lock file whose flock is ACQUIRABLE is stale (its build died) and is reaped;
 // a HELD one is a LIVE build whose recorded generate CalVer floors every FROM
 // pin it may still resolve. Returns the minimum live CalVer, whether that floor
 // is usable, and the live-build count — a live lock with an unreadable CalVer
 // forces floorOK=false, so the caller protects everything.
-func defaultLiveBuildFloor() (floor CalVer, floorOK bool, live int) {
-	dir, err := buildActivityDir()
+func defaultLiveBuildFloor() (floor kit.CalVer, floorOK bool, live int) {
+	dir, err := kit.BuildActivityDir()
 	if err != nil {
-		return CalVer{}, false, 0
+		return kit.CalVer{}, false, 0
 	}
 	ents, err := os.ReadDir(dir)
 	if err != nil {
-		return CalVer{}, false, 0
+		return kit.CalVer{}, false, 0
 	}
 	haveFloor := false
 	floorOK = true
@@ -189,16 +306,16 @@ func defaultLiveBuildFloor() (floor CalVer, floorOK bool, live int) {
 			continue
 		}
 		p := filepath.Join(dir, e.Name())
-		if rel, lerr := acquireFileLock(p, false); lerr == nil {
+		if rel, lerr := kit.AcquireFileLock(p, false); lerr == nil {
 			_ = rel()
 			_ = os.Remove(p) // stale — its build died without releasing
 			continue
 		}
 		live++
-		var cv CalVer
+		var cv kit.CalVer
 		ok := false
 		if b, rerr := os.ReadFile(p); rerr == nil {
-			cv, ok = ParseCalVer(strings.TrimSpace(string(b)))
+			cv, ok = kit.ParseCalVer(strings.TrimSpace(string(b)))
 		}
 		if !ok {
 			floorOK = false
@@ -209,7 +326,7 @@ func defaultLiveBuildFloor() (floor CalVer, floorOK bool, live int) {
 		}
 	}
 	if live == 0 {
-		return CalVer{}, false, 0
+		return kit.CalVer{}, false, 0
 	}
 	if !haveFloor {
 		floorOK = false
@@ -225,7 +342,7 @@ func defaultLiveBuildFloor() (floor CalVer, floorOK bool, live int) {
 // (b) an image's LAST local tag is never removed (an outright mid-build image
 // deletion corrupts buildah's layer store — the layer-not-known/SIGSEGV
 // variant the fan-out surfaced).
-func retentionRemovable(c imageTagInfo, idx, keepN int, floor CalVer, floorOK bool, live int, lastTag bool) bool {
+func retentionRemovable(c imageTagInfo, idx, keepN int, floor kit.CalVer, floorOK bool, live int, lastTag bool) bool {
 	if idx < keepN {
 		return false // keep the newest keepN tags
 	}
@@ -296,6 +413,8 @@ func pruneImagesByRetention(engine string, keepN int, dryRun bool) ([]string, er
 	return removed, nil
 }
 
+// --- dangling-image sweeps (default charly-labeled + --deep store-wide) --------------------
+
 // listDanglingImages lists every UNTAGGED (dangling) image in local storage — charly-built or
 // not. Package-level var for testability (same pattern as kit.ListLocalImages /
 // listContainerImageRefs): a test stubs this so the pure selection + dry-run logic in
@@ -341,10 +460,7 @@ func selectDanglingImages(imgs []kit.LocalImageInfo, onlyCharly bool) []kit.Loca
 // reported Size in bytes. This byte total is an UPPER BOUND on actual reclaimed disk, NOT a
 // prediction: podman's per-image Size counts every layer the image references, and dangling
 // images routinely SHARE layers with images that stay (retained tags, other dangling images) —
-// removing one image frees only the layers it held UNIQUELY. RDD-verified live: a --deep purge
-// removing 68 untagged images reported ~92.6 GiB via this sum but only ~4.6 GiB of disk was
-// actually freed, because most of those bytes were shared with ~3,400 remaining images. Callers
-// present this total as "up to", never as a firm reclaim prediction.
+// removing one image frees only the layers it held UNIQUELY.
 func pruneDanglingImages(engine string, onlyCharly, dryRun bool) ([]string, int64, error) {
 	if _, _, live := liveBuildFloor(); live > 0 {
 		return nil, 0, nil // never delete images while any build is in flight
@@ -381,13 +497,9 @@ func pruneDanglingCharlyImages(engine string, dryRun bool) ([]string, error) {
 
 // pruneDeepDanglingImages removes EVERY untagged (dangling) image in local storage — the
 // store-wide `charly clean --deep` category. Unlike pruneDanglingCharlyImages, it is NOT
-// restricted to the ai.opencharly.box label: a multi-stage build's intermediate stage images
-// (`FROM ... AS stagename`) are only ever labeled at the FINAL stage (WriteLabels emits at the
-// end of the last stage), so they accumulate as unlabeled dangling images no default-category
-// sweep can ever see — the gap this category exists to close. Removing a dangling image via
-// `rmi` also frees any layer blobs it alone referenced (podman's overlay storage GCs an
-// unreferenced layer the moment its last referencing image is removed), so this is EFFECTIVELY
-// a dangling-image-plus-unused-layer prune with a single engine call per image, not two.
+// restricted to the ai.opencharly.box label. Removing a dangling image via `rmi` also frees
+// any layer blobs it alone referenced, so this is EFFECTIVELY a dangling-image-plus-unused-
+// layer prune with a single engine call per image, not two.
 func pruneDeepDanglingImages(engine string, dryRun bool) ([]string, int64, error) {
 	return pruneDanglingImages(engine, false, dryRun)
 }
@@ -432,6 +544,8 @@ func pruneBuildahStaging(dryRun bool) []string {
 	return removed
 }
 
+// --- check-run + build-candy staging retention ----------------------------------------------
+
 // pruneCheckRuns trims each bed/score subdir of checkDir to the newest keepN run
 // artifacts: CalVer-named run dirs (bed runs), `runs/<id>` dirs (score
 // iterations), and `result-<calver>.yml` files. NOTES.md and any other file are
@@ -474,7 +588,7 @@ func pruneOneCheckDir(bedDir string, keepN int, dryRun bool) ([]string, error) {
 			continue // durable memory — never prune
 		}
 		if c.IsDir() {
-			if _, ok := ParseCalVer(name); ok {
+			if _, ok := kit.ParseCalVer(name); ok {
 				calverDirs = append(calverDirs, name)
 			} else if name == "runs" {
 				hasRuns = true
@@ -502,12 +616,12 @@ func pruneOneCheckDir(bedDir string, keepN int, dryRun bool) ([]string, error) {
 func removeOldestByCalVer(parent string, names []string, keepN int, prefix, suffix string, dryRun bool) []string {
 	type dated struct {
 		name string
-		cv   CalVer
+		cv   kit.CalVer
 	}
 	var items []dated
 	for _, n := range names {
 		core := strings.TrimSuffix(strings.TrimPrefix(n, prefix), suffix)
-		if cv, ok := ParseCalVer(core); ok {
+		if cv, ok := kit.ParseCalVer(core); ok {
 			items = append(items, dated{n, cv})
 		}
 	}
@@ -613,4 +727,52 @@ func pruneBuildCandyDirs(buildDir string, keepN int, dryRun bool) []string {
 		removed = append(removed, removeOldestByCalVer(candyRoot, dirs, keepN, name+".", "", dryRun)...)
 	}
 	return removed
+}
+
+// --- targeted image-tag invalidation (`charly clean --invalidate`) -------------------------
+
+// matchImageGlob matches a glob against a full image ref OR its last path
+// segment (repo:tag), so 'charly-fedora-2*' matches
+// 'ghcr.io/opencharly/charly-fedora-2…:tag' without the registry prefix.
+func matchImageGlob(glob, ref string) bool {
+	last := ref
+	if i := strings.LastIndex(last, "/"); i >= 0 {
+		last = last[i+1:]
+	}
+	full, _ := path.Match(glob, ref)
+	short, _ := path.Match(glob, last)
+	return full || short
+}
+
+// invalidateImageTags removes every charly-labeled image tag matching the
+// glob (full ref or its last path segment) — targeted cache invalidation
+// for stale intermediates, replacing ad-hoc `podman rmi '<glob>'`. The
+// retention safety rules apply unchanged: in-use images are skipped and
+// `rmi` runs without -f as the backstop.
+func invalidateImageTags(engine, glob string, dryRun bool) ([]string, error) {
+	groups, err := charlyImageTags(engine)
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, tags := range groups {
+		for _, t := range tags {
+			if !matchImageGlob(glob, t.Ref) {
+				continue
+			}
+			if t.InUse {
+				continue
+			}
+			if dryRun {
+				removed = append(removed, t.Ref)
+				continue
+			}
+			if err := exec.Command(kit.EngineBinary(engine), "rmi", t.Ref).Run(); err != nil {
+				continue // in-use backstop — engine refuses, same as retention
+			}
+			removed = append(removed, t.Ref)
+		}
+	}
+	sort.Strings(removed)
+	return removed, nil
 }

@@ -8,7 +8,7 @@ package main
 //  1. The `on:` step modifier (Check.On) dispatches a probe against a named
 //     DRIVER deployment instead of the subject under test. Its wiring into
 //     `charly check live` lives here (liveTargetResolver); the per-step swap is in
-//     checkrun.go runOne; the harness path wires its own resolveScoringChain.
+//     checkrun.go runOne; the harness path wires its own scoring-chain resolver (candy/plugin-check's pluginResolveScoringChain).
 //
 //  2. The unified ${HOST:<member>} address variable lets the driven probe TARGET
 //     a SIBLING member over the shared `charly` network or the host. The presence
@@ -120,8 +120,12 @@ func resolveHostVars(refs []string, instance string) (map[string]string, []func(
 // closeHostCleanups / collectHostRefs / splitHostKey (P12a follow-up) moved to
 // sdk/kit (hostrefs.go) alongside it — all pure over spec.Op / kit.HostVar, with
 // zero core state; this file's callers (resolveHostVarsForChecks, resolveHostVars,
-// check_cmd.go, check_runner_live.go) stay core (they drive live venue resolution)
-// and call kit.CloseHostCleanups / kit.CollectHostRefs / kit.SplitHostKey.
+// check_cmd.go's still-core local-deploy-scope path) stay core (they drive live venue
+// resolution) and call kit.CloseHostCleanups / kit.CollectHostRefs / kit.SplitHostKey.
+// (The former charly/check_runner_live.go caller relocated plugin-side as
+// candy/plugin-check/score_live.go — K1-unblock wave arm 3 — and ported its OWN
+// resolveHostVarsForSteps twin in candy/plugin-check/members.go, an independent
+// plugin-side function of the same name/shape, not a cross-package call into this one.)
 
 // liveTargetResolver builds the `on:` DRIVER venue resolver used by `charly check live`
 // (and kind:check beds, which drive `charly check live`); venueResolver (planrun_adapter.go)

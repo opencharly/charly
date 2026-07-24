@@ -16,24 +16,14 @@ import (
 // Operation.Env. It carries only what a marshallable verb needs; verbs that reach
 // host-side Runner internals (http/port-reachable/kill) stay in-process and are
 // never routed to an out-of-proc provider.
-type CheckEnv struct {
-	Box      string `json:"box"`
-	Instance string `json:"instance"`
-	Mode     string `json:"mode"` // "live" | "box"
-	// ContainerName is the HOST-AUTHORITATIVE container name for the deployment under
-	// test (charly-<box>[_<instance>], with registry-ref stripping) — computed by the
-	// host so an out-of-process verb (e.g. the external appium plugin) reaches the
-	// running container's engine inspect / cp without re-deriving charly's naming
-	// convention. Empty for an image-context (box-mode) run or a venue with no box.
-	ContainerName string   `json:"container_name"`
-	Distros       []string `json:"distros"`
-	Venue         string   `json:"venue"`      // r.Exec.Venue()
-	VenueKind     string   `json:"venue_kind"` // r.Exec.Kind()
-	// DialTimeoutNs is the engine's per-dial ceiling (r.DialTimeout) in nanoseconds — the
-	// kit.CheckContext.DialTimeout() leg for an out-of-process host-coupled check verb (a
-	// plain scalar, so it rides the snapshot rather than the CheckContextService channel).
-	DialTimeoutNs int64 `json:"dial_timeout_ns,omitempty"`
-}
+//
+// CUE-sourced (K1-unblock W3 Unit B, sdk/schema/checkresult.cue's #CheckEnv) — the SAME
+// generated shape sdk/checkverb.go's out-of-process decode, candy/plugin-check's
+// InvokeProvider-backed VerbResolver marshal, and this file's own InvokeProvider detached-
+// CheckContext construction (plugin_dispatch_reverse.go) all share, replacing what were three
+// independently hand-maintained mirrors of the same wire contract with one CUE def + one
+// generated struct (R3/SDD).
+type CheckEnv = spec.CheckEnv
 
 func runModeName(m RunMode) string {
 	switch m {

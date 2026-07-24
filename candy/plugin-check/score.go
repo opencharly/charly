@@ -7,10 +7,11 @@ package check
 // The scoring unit is the check:/agent-check: STEP, keyed by step id
 // (kit.EffectiveStepID). The scoring result model — spec.CheckRunResults /
 // spec.StepScore / spec.ScoreSummary — is a CUE-sourced sdk WIRE TYPE: ONE
-// definition serves both the "score" host seam reply (kit.CheckRunReply.Score) AND
-// this plugin scorer (no alias). RunCheckLive itself STAYS core (registry/venue
-// coupled) and is reached via the "score" check-run mode; only the pure
-// parser/classifier/baseline math lives here.
+// definition serves both the "score" check-run mode's reply (kit.CheckRunReply.Score)
+// AND this plugin scorer (no alias). RunCheckLive itself moved plugin-side in
+// K1-unblock wave arm 3 (score_live.go's pluginRunCheckLive, dispatched directly by
+// Mode:"score" — no host round-trip); only the pure parser/classifier/baseline math
+// lives here, unchanged.
 
 import (
 	"crypto/sha256"
@@ -25,7 +26,7 @@ import (
 )
 
 // scoredPlanOrigin is the fixed origin used to derive step ids so that
-// synthesizeScoreBaseline and the host "score"-mode RunCheckLive produce matching
+// synthesizeScoreBaseline and the "score"-mode pluginRunCheckLive produce matching
 // ids.
 const scoredPlanOrigin = "plan"
 
@@ -205,12 +206,12 @@ func Classify(pre, post StepState) Verdict {
 }
 
 // ---------------------------------------------------------------------------
-// Pre-AI baseline synthesis (from charly/check_runner_live.go)
+// Pre-AI baseline synthesis (originally from charly/check_runner_live.go, now deleted)
 // ---------------------------------------------------------------------------
 
 // synthesizeScoreBaseline builds the pre-AI baseline from the scored steps, marking
 // each check:/agent-check: step status: fail at baseline. IDs match the
-// declaration-order ids the host "score"-mode RunCheckLive emits.
+// declaration-order ids the "score"-mode pluginRunCheckLive (score_live.go) emits.
 func synthesizeScoreBaseline(scoreName string, plan []spec.Step) ([]spec.StepScore, map[string]string, map[string]string) {
 	_ = scoreName
 	var out []spec.StepScore

@@ -1,16 +1,17 @@
 package check
 
-// agent.go — the harness's AGENT-spec access (P12). The kind:agent RESOLVER +
-// grader STAY core; the harness needs (a) to resolve an opaque agent body → a
-// generic spec.AgentExecSpec and (b) the pure launch/version/timeout helpers that
-// operate on that resolved spec.
+// agent.go — the harness's AGENT-spec access (P12; the check-run harness's OWN grader wiring,
+// K1-unblock wave arm 2, joined this file's callers with feature_run_gather.go). The plugin needs
+// (a) to resolve an opaque agent body → a generic spec.AgentExecSpec and (b) the pure
+// launch/version/timeout helpers that operate on that resolved spec.
 //
-// (a) is candy/plugin-agent's OpResolve leg (the agent de-type, Cutover E): the
-// plugin gets the opaque kind:agent catalog from the resolved-project envelope
-// (AgentBodies) and dispatches it back through the host registry to
-// InvokeProvider(kind:agent, OpResolve) — the SAME provider core's resolveAgentViaPlugin
-// calls, so the name-selection + default application is single-sourced in the agent
-// plugin, NOT re-implemented here. (b) are pure Go helpers over the resolved spec.
+// (a) is candy/plugin-agent's OpResolve leg (the agent de-type, Cutover E): this plugin gets the
+// opaque kind:agent catalog from the resolved-project envelope (AgentBodies) and dispatches it
+// back through the host registry to InvokeProvider(kind:agent, OpResolve) directly — the ONE
+// resolve call every consumer here (synccreds.go, runlocal.go, feature_run_gather.go's
+// pluginCheckRunFeatureLive grader) shares (R3), so the name-selection + default application is
+// single-sourced in the agent plugin, NOT re-implemented here. (b) are pure Go helpers over the
+// resolved spec.
 
 import (
 	"context"
@@ -44,8 +45,7 @@ const DefaultAgentTimeout = ""
 
 // resolveAgentSpec selects + resolves the named agent (or the sole entry when name
 // == "") from the OPAQUE catalog via candy/plugin-agent's OpResolve leg over the
-// host registry (InvokeProvider(kind:agent, OpResolve)) — the SAME provider core's
-// resolveAgentViaPlugin uses. Returns the generic AgentExecSpec.
+// host registry (InvokeProvider(kind:agent, OpResolve)). Returns the generic AgentExecSpec.
 func resolveAgentSpec(ex *sdk.Executor, ctx context.Context, bodies map[string]json.RawMessage, name string) (*spec.AgentExecSpec, error) {
 	if ex == nil {
 		return nil, fmt.Errorf("charly check: agent resolution requires compiled-in placement (the reverse channel is unavailable out-of-process)")

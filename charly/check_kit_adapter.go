@@ -88,7 +88,8 @@ func (a kitVerbActAdapter) RenderProvisionScript(op *spec.Op, distros []string) 
 // build/deploy act lowers into a typed InstallStep, not a shell. It adds the package-main
 // TypedStepProvider role (LowersTo + ConstructStep), materializing the candy's
 // kit.StepDescriptor into the real ServicePackagedStep / SystemPackagesStep — so
-// compileActOp lowers it exactly as the typed builtin verb did, and the load-bearing
+// hostBuildConstructStep (the "construct-step" seam handler) lowers it exactly as
+// the typed builtin verb did, and the load-bearing
 // Reverse() stays in package main. Embeds kitVerbActAdapter (service/package are also
 // ProvisionActors — the runtime act-shell half).
 type kitVerbActStepAdapter struct {
@@ -185,7 +186,7 @@ func registerCompiledCheckVerb(kv kit.CheckVerbProvider, meta pb.PluginMetaServe
 	// register the act-aware variant so the act dispatch (resolveProvisionScript) resolves
 	// its RenderProvisionScript. A pure check verb stays the plain adapter (no act role).
 	// A TYPED-STEP verb (service/package) additionally implements kit.StepProvider — wrap
-	// the act variant once more so compileActOp resolves it as a TypedStepProvider.
+	// the act variant once more so hostBuildConstructStep resolves it as a TypedStepProvider.
 	if pa, ok := kv.(kit.ProvisionActor); ok {
 		act := kitVerbActAdapter{kitVerbAdapter: base, pa: pa}
 		prov = act

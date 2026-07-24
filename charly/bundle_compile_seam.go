@@ -70,8 +70,8 @@ func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*deplo
 }
 
 // preresolveActiveInitInto preresolves a MachineVenue compile's active init system ONCE per
-// whole-deploy (alongside preresolveBuildersInto's builder pre-pass), so compileServiceSteps
-// (install_build_services.go) never re-derives it per-candy nor falls back to the
+// whole-deploy (alongside preresolveBuildersInto's builder pre-pass), so
+// deploykit.CompileServiceSteps never re-derives it per-candy nor falls back to the
 // container-oriented InitConfig.ResolveInitSystem auto-detect heuristic — proven WRONG for a
 // machine venue by a live probe (2026-07-20): a plain custom-exec service entry matches BOTH the
 // systemd and supervisord ServiceSchema (both carry a non-empty ServiceTemplate), so auto-detect
@@ -121,8 +121,13 @@ func resolveActiveInitByName(initCfg *InitConfig) (string, *ResolvedInit, error)
 
 // compileSelectionViaPlugin is the ONE per-unit helper: project the resolved box, marshal the
 // host-side HostContext, build the DeployCompileRequest, and re-materialize the plans. tag is the
-// image CalVer pin (for the plan Version field when the candy carries no version).
-func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.ResolvedBoxView, order []string, hostCtx deploykit.HostContext, tag string) ([]*deploykit.InstallPlan, error) {
+// image CalVer pin (for the plan Version field when the candy carries no version). extraCandyRefs
+// is the add_candy:/--add-candy ref this compile call's own candy set was widened with (nil for a
+// primary image/box compile) — threaded through so the plugin's OWN resolved-project re-fetch
+// widens the SAME way (RCA'd K1-alpha regression: a remote add-candy resolved host-side via
+// scanCandiesForRef's synthetic-augmented scan never reached the plugin's independent envelope
+// fetch, "candy not in resolved-project envelope").
+func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.ResolvedBoxView, order []string, hostCtx deploykit.HostContext, tag string, extraCandyRefs []string) ([]*deploykit.InstallPlan, error) {
 	hostCtxJSON, err := json.Marshal(hostCtx)
 	if err != nil {
 		return nil, fmt.Errorf("compile: marshal host context: %w", err)
@@ -133,6 +138,7 @@ func (c *deployAddCmd) compileSelectionViaPlugin(dir string, boxView spec.Resolv
 		Order:           order,
 		HostContextJSON: hostCtxJSON,
 		Tag:             tag,
+		ExtraCandyRefs:  extraCandyRefs,
 	})
 }
 
@@ -185,7 +191,7 @@ func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCf
 			compileOrder = append(compileOrder, name)
 		}
 	}
-	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), compileOrder, hostCtx, c.Tag)
+	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), compileOrder, hostCtx, c.Tag, nil)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -251,7 +257,13 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 	if err != nil {
 		return nil, "", nil, err
 	}
-	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), order, hostCtx, c.Tag)
+	// ref.Raw (this call's own candy — the compile target itself, whether a standalone candy
+	// deploy or an add_candy: on a pod/k8s base) widens the plugin's OWN resolved-project
+	// re-fetch the SAME way scanCandiesForRef widened THIS scan above — a REMOTE ref is never
+	// reachable from any box's image closure, so without this the plugin's independent envelope
+	// fetch never discovers it (RCA'd K1-alpha regression: check-addcandy-pod/check-stepkind-
+	// emit-pod, "candy not in resolved-project envelope").
+	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), order, hostCtx, c.Tag, []string{ref.Raw})
 	if err != nil {
 		return nil, "", nil, err
 	}

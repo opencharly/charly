@@ -63,11 +63,25 @@ func (c *BundleAddCmd) Run() error {
 	}
 
 	// When rootNode is nil (ref-based deploy with no charly.yml entry, e.g. `charly bundle add
-	// foo ./path/to/box.yml`) fall through to the single-dispatch path — path "" mirrors the
-	// PRE-PORT behavior exactly (deployName still resolves to c.Name host-side, since the
-	// deploy-node-dispatch seam only overrides deployName when path != "").
+	// foo ./path/to/box.yml`, OR the literal "host" name, which never has a tree entry) fall
+	// through to the single-dispatch path.
+	//
+	// R1 fix (found live while RDD-verifying an unrelated K5-A/W4 cutover): this used to pass
+	// path="" unconditionally, on the claim that "deployName still resolves to c.Name host-side"
+	// — FALSE in the current (post-P13-walk-port) architecture, where the host reconstructs a
+	// FRESH deployAddCmd per dispatch from req.Path alone (runDeployNodeDispatch), so an empty
+	// path meant BOTH the deploy name AND classifyNodeTarget's "host"/"local" literal check were
+	// lost — EVERY ref-based `charly bundle add <name> <ref>` with no existing charly.yml entry
+	// (INCLUDING the literal `host` form) resolved target "pod" (the unconditional fallback) and
+	// deployName "", then failed ResolveTarget with `deployment "": target "pod" ... not
+	// connected` — a total block for this whole call shape. Reproduced live on this branch,
+	// BEFORE this fix, for both `bundle add host <candy>` and `bundle add <fresh-name> <ref>`
+	// (see this repo's CHANGELOG for the pasted repro). Passing c.Name as path lets
+	// classifyNodeTarget's pathLeaf(path) check work (path="host" → target "local") and
+	// compileNode's/dispatchNode's `if path != "" { deployName = path }` carry the real name
+	// through — node stays nil (no charly.yml entry to resolve).
 	if rootNode == nil {
-		return c.dispatchOne("", nil, nil, nil)
+		return c.dispatchOne(c.Name, nil, nil, nil)
 	}
 
 	// --node-only dispatches just the resolved node, skipping the nested tree walk. A VM root
@@ -129,28 +143,50 @@ func sortedChildKeys(children map[string]*spec.BundleNode) []string {
 }
 
 // dispatchOne invokes the deploy-node-dispatch seam for ONE tree position.
+// target/vmEntity/ref/add_candy/tag/the resolved gate opts are ALL RESOLVED
+// HERE (classifyNodeTarget/resolveVmEntity/resolveNodeOverlays/
+// resolveNodeTemplate, W4 pure-helpers relocation, node_resolve.go) — pure
+// functions of node+path+CLI-flags with no executor dependency (the ONE
+// LoadUnified-coupled piece, the kind:local template lookup inside
+// resolveNodeTemplate, reaches back to the host over the EXISTING
+// "deploy-entity-resolve" seam) — so the host-side dispatch no longer
+// recomputes any of them; it trusts every field as sent.
 func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorPaths []string, ancestorNodes []spec.BundleNode) error {
+	target := deploykit.ClassifyNodeTarget(node, path)
+	vmEntity := resolveVmEntity(path, node)
+
+	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node)
+	if err != nil {
+		return err
+	}
+	addCandies, opts, err = resolveNodeTemplate(target, path, node, addCandies, opts)
+	if err != nil {
+		return err
+	}
+
 	return hostDeploySeamJSON("deploy-node-dispatch", spec.DeployNodeDispatchRequest{
 		Path:             path,
 		Node:             node,
 		AncestorPaths:    ancestorPaths,
 		AncestorNodes:    ancestorNodes,
-		Ref:              c.Ref,
-		AddCandy:         c.AddCandy,
-		Tag:              c.Tag,
+		Ref:              refStr,
+		AddCandy:         addCandies,
+		Tag:              tag,
 		DryRun:           c.DryRun,
 		NodeOnly:         c.NodeOnly,
 		Format:           c.Format,
-		Pull:             c.Pull,
-		Verify:           c.Verify,
-		WithServices:     c.WithServices,
-		AllowRepoChanges: c.AllowRepoChanges,
-		AllowRootTasks:   c.AllowRootTasks,
-		SkipIncompatible: c.SkipIncompatible,
-		BuilderImage:     c.BuilderImage,
+		Pull:             opts.Pull,
+		Verify:           opts.Verify,
+		WithServices:     opts.WithServices,
+		AllowRepoChanges: opts.AllowRepoChanges,
+		AllowRootTasks:   opts.AllowRootTasks,
+		SkipIncompatible: opts.SkipIncompatible,
+		BuilderImage:     opts.BuilderImageOverride,
 		AssumeYes:        c.AssumeYes,
 		Disposable:       c.Disposable,
 		Lifecycle:        c.Lifecycle,
+		Target:           target,
+		VmEntity:         vmEntity,
 	}, nil)
 }
 

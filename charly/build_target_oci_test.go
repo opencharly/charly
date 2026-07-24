@@ -15,15 +15,17 @@ import (
 )
 
 // Tests for the pod-overlay step-emit dispatch (charly/oci_step_emit.go's ociEmitStep — the
-// single source of truth after the P11c overlay-walker relocation to sdk/deploykit). The former
-// core overlay walker struct is GONE (the kind-blind walker now lives in sdk/deploykit/oci_target.go
-// as deploykit.OCITarget); these tests exercise the REAL core dispatch through the SAME seam the
-// candy uses in production: a deploykit.OCITarget whose EmitStepOp delegates to ociEmitStep. The
-// walker's `# Layer:` headers + home resolution are preserved (mirrors the former in-core overlay
-// walker Emit); the per-step fragment comes from ociEmitStep — byte-identical to the pre-move core
-// render (the dispatch is UNCHANGED).
+// Go-object-typed test entry point after the P11c overlay-walker relocation to sdk/deploykit; the
+// dispatch DECISION itself relocated further, into candy/plugin-installstep's "oci-dispatch" word,
+// K5-A item 2). The former core overlay walker struct is GONE (the kind-blind walker now lives in
+// sdk/deploykit/oci_target.go as deploykit.OCITarget); these tests exercise the REAL dispatch
+// through the SAME seam the candy uses in production: a deploykit.OCITarget whose EmitStepOp
+// delegates to ociEmitStep → dispatchOCIStep → the plugin's "oci-dispatch". The walker's
+// `# Layer:` headers + home resolution are preserved (mirrors the former in-core overlay walker
+// Emit); the per-step fragment is byte-identical to the pre-relocation render (the dispatch's
+// OBSERVABLE behavior is unchanged; only its placement moved).
 
-// ociTestTarget constructs a deploykit.OCITarget wired to the core ociEmitStep dispatch over the
+// ociTestTarget constructs a deploykit.OCITarget wired to the ociEmitStep dispatch over the
 // given host buildEngineContext, so the tests exercise the real dispatch through the production
 // seam (deploykit.OCITarget.EmitStepOp → HostBuild("step-emit","oci-emit-step") → ociEmitStep).
 // Home/Distros are empty (the tests that need home resolution or per-step distros are rare; add a
@@ -197,8 +199,9 @@ func TestOCITargetEmitSystemPackagesPrefersNewPhases(t *testing.T) {
 }
 
 // TestOCITargetEmitBuilderInlineViaPlugin drives the FULL real chain for an INLINE (cargo)
-// builder: BuilderStep → deploykit.OCITarget.Emit → ociEmitStep → pluginEmitStepWords[Builder]=
-// "builder" → ociSpliceClassStepEmit("builder") → the compiled-in candy/plugin-installstep OpEmit
+// builder: BuilderStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
+// candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Builder]="builder" →
+// InvokeProvider("step","builder") → the compiled-in candy/plugin-installstep OpEmit
 // → the plugin's OWN "resolved-project"-built deploykit.Generator (stubResolvedProject feeds the
 // synthetic project structure) → inline render. An EXTERNALIZED inline builder (cargo) renders its
 // InlineFragment via kit.BuilderResolve (the bDef needs only Inline:true), so this asserts kit's
@@ -264,9 +267,10 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 }
 
 // TestOCITargetEmitLocalPkgInstallViaPlugin drives the FULL real chain for a PRODUCTION localpkg
-// install: LocalPkgInstallStep → deploykit.OCITarget.Emit → ociEmitStep →
-// pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → ociSpliceClassStepEmit("local-pkg-install")
-// → the compiled-in candy/plugin-installstep OpEmit → deploykit.RenderLocalPkgImageInstall, called
+// install: LocalPkgInstallStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
+// candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[LocalPkgInstall]="local-pkg-install"
+// → InvokeProvider("step","local-pkg-install") → the compiled-in candy/plugin-installstep OpEmit →
+// deploykit.RenderLocalPkgImageInstall, called
 // DIRECTLY (a pure function of the step + the BuildEnv scalars — no resolved-project envelope
 // needed at all for this word). It asserts the release-download RUN the former in-proc
 // overlay-walker localpkg build-emit produced. This is the exact chain a pod overlay with a
@@ -295,7 +299,8 @@ func TestOCITargetEmitLocalPkgInstallViaPlugin(t *testing.T) {
 
 // TestOCITargetEmitOpViaPlugin drives the FULL real chain for an Op (task) step — the RICHEST
 // build-emit, which drives Generator.EmitTasks: OpStep → deploykit.OCITarget.Emit → ociEmitStep →
-// pluginEmitStepWords[Op]="op" → ociSpliceClassStepEmit("op") → the compiled-in
+// dispatchOCIStep → candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Op]="op" →
+// InvokeProvider("step","op") → the compiled-in
 // candy/plugin-installstep OpEmit → the plugin's OWN "resolved-project"-built deploykit.Generator
 // (stubResolvedProject feeds the synthetic box+candy) → dg.EmitTasks → the per-verb emitters. It
 // asserts both a RUN (mkdir) and a COPY (from the layer scratch stage). ImageBuildDir/

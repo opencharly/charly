@@ -13,8 +13,10 @@ import (
 
 // deploy_target_pod_test.go — guards the pod-overlay BUILD path's host-side invariants after the
 // P11c overlay-BUILD dissolution. The core pod overlay target struct + its render assembly MOVED to
-// the candy (candy/plugin-deploy-pod/overlay.go); the per-step dispatch (ociEmitStep) stays core
-// (charly/oci_step_emit.go). These tests exercise the core dispatch (ociEmitStep) + the host-side
+// the candy (candy/plugin-deploy-pod/overlay.go); the per-step dispatch ENTRY POINT (ociEmitStep)
+// stays core (charly/oci_step_emit.go) as a thin forwarder — the dispatch DECISION itself relocated
+// to candy/plugin-installstep's "oci-dispatch" word (K5-A item 2). These tests exercise the host-side
+// dispatch entry point (ociEmitStep) + the host-side
 // staging (Generator.createRemoteCandyCopies, called by hostBuildOverlay's prep) the candy's
 // render depends on. The candy's full buildOverlay (Containerfile assembly + podman build) is
 // covered by the candy's own tests + the orchestrator's `charly check run check-pod` bed (the R8
@@ -23,8 +25,8 @@ import (
 // TestPodOverlayInlineCopyResolvesUnderContext guards the add_candy-on-pod overlay build's
 // context-prefix invariant: a write: step's inline content is staged to <BuildDir>/_inline/<candy>/<hash>
 // and the matching Containerfile COPY references it relative to the build context. The overlay
-// dispatch (ociEmitStep → ociSpliceClassStepEmit → candy/plugin-installstep's emitOp → dg.EmitTasks
-// → emitWrite) must thread ContextRelPrefix == ImageBuildDir (the overlay build dir, relative to
+// dispatch (ociEmitStep → dispatchOCIStep → candy/plugin-installstep's "oci-dispatch" → emitOp →
+// dg.EmitTasks → emitWrite) must thread ContextRelPrefix == ImageBuildDir (the overlay build dir, relative to
 // the build-context root) via the BuildEnv scalars; with an empty ContextRelPrefix the COPY drops
 // the build-dir prefix and resolves to a non-existent path, failing the overlay build with
 // `COPY … _inline/<candy>/<hash>: stat: no such file or directory`. Regression for that failure;

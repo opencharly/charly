@@ -15,9 +15,11 @@
 // plugin's own preresolve.go (F6, FINAL/K5 unit 6a; dispatched directly by
 // candy/plugin-bundle's preresolveSubstrate via InvokeProvider(OpPreresolve), S3b —
 // the core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
-// through is dissolved) resolves the cluster template + image Capabilities → the
-// egress-validated Kustomize tree, reaching the host's "deploy-entity-resolve" +
-// "k8s-generate-kustomize" HostBuild seams.
+// through is dissolved) resolves the cluster template + image Capabilities and GENERATES the
+// egress-validated Kustomize tree ITSELF (materialize.go, K5-A item 6 — verb:k8sgen/verb:egress
+// reached peer-to-peer via InvokeProvider, disk I/O done here directly; no host round trip),
+// reaching the host ONLY for the "deploy-entity-resolve" HostBuild seam (the LoadUnified-coupled
+// cluster/node lookup this plugin cannot do itself).
 // The goadb-analog of candy/plugin-adb: the FULL client-go/clientcmd/dynamic
 // dependency + the single kubectl-apply path live HERE (R3).
 //

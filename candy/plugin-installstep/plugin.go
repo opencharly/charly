@@ -95,6 +95,12 @@ const (
 	wordBuilder         = "builder"
 	wordLocalPkgInstall = "local-pkg-install"
 	wordOp              = "op"
+	// wordOCIDispatch (K5-A item 2) is the FULL core provider-registry dispatch relocated from
+	// charly/oci_step_emit.go: given ANY InstallStep's wire view (not just this plugin's own 12
+	// kinds), decide which peer class:step/class:verb provider renders the pod-overlay fragment and
+	// dispatch to it via the generic reverse-channel DescribeProvider (cached metadata) +
+	// InvokeProvider (dispatch) legs. See oci_dispatch.go.
+	wordOCIDispatch = "oci-dispatch"
 )
 
 // hostCoupledStepWords is the set of step words whose OpEmit needs more than the bare step VIEW to
@@ -141,6 +147,10 @@ func NewMeta() pb.PluginMetaServer {
 			emit(wordBuilder, true),
 			emit(wordLocalPkgInstall, true),
 			emit(wordOp, true),
+			// oci-dispatch (K5-A item 2) always attempts to emit — the per-target Emits gate lives
+			// INSIDE the dispatch (dispatchClassStep consults the TARGET's own declared contract via
+			// DescribeProvider), not on this wrapper capability itself.
+			emit(wordOCIDispatch, true),
 		},
 		schemaFS)
 }
@@ -153,6 +163,11 @@ type provider struct{ pb.UnimplementedProviderServer }
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != opEmit {
 		return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
+	}
+	// oci-dispatch (K5-A item 2): the FULL core provider-registry dispatch for ANY InstallStep kind
+	// (not just this plugin's own 12 words) — see oci_dispatch.go.
+	if req.GetReserved() == wordOCIDispatch {
+		return emitOCIDispatch(ctx, req)
 	}
 	// The HOST-COUPLED kinds (system-packages C1.2, builder C1.3, local-pkg-install C1.4, op C1.5)
 	// render directly against the resolved-project envelope (or, for local-pkg-install, purely off
@@ -195,11 +210,11 @@ var genCache sync.Map // string (dir) -> *deploykit.Generator
 // cache miss: HostBuild("resolved-project") (the SAME generic envelope seam candy/plugin-box /
 // candy/plugin-bundle / candy/plugin-check already consume) → deploykit.NewRenderGeneratorFromProject
 // (the SAME shared construction source candy/plugin-build + candy/plugin-deploy-pod use, R3/DRY).
-func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool) (*deploykit.Generator, error) {
+func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool, extraCandyRefs []string) (*deploykit.Generator, error) {
 	if cached, ok := genCache.Load(dir); ok {
 		return cached.(*deploykit.Generator), nil
 	}
-	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir})
+	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir, ExtraCandyRefs: extraCandyRefs})
 	if err != nil {
 		return nil, fmt.Errorf("marshal resolved-project request: %w", err)
 	}
@@ -275,7 +290,7 @@ func emitHostCoupled(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if err != nil {
 		return nil, fmt.Errorf("plugin-installstep: resolve project dir: %w", err)
 	}
-	dg, err := getGenerator(ctx, exec, dir, env.DevLocalPkg)
+	dg, err := getGenerator(ctx, exec, dir, env.DevLocalPkg, env.ExtraCandyRefs)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-installstep: %q: %w", req.GetReserved(), err)
 	}

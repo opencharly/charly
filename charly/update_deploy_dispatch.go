@@ -8,10 +8,20 @@ package main
 // former UpdateCmd — now command:update in candy/plugin-pod) so the
 // user-facing surface is just one verb.
 //
-// TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20): resolveTreeRoot/
-// loadDeployPlugins/ResolveTarget are core Mechanisms (the project loader + provider
-// registry) a plugin cannot import or hold — this file moves through the same
-// venue-scoped-executor-session seam when that wave lands.
+// TRACKED P13-KERNEL EXIT (DEPLOY-wave audit, 2026-07-20; R1-corrected 2026-07-23 —
+// K1-UNBLOCK wave-4 spike): resolveTreeRoot/loadDeployPlugins/ResolveTarget were
+// framed here as blocked on a NOT-YET-BUILT "venue-scoped-executor-session seam" —
+// that framing is now STALE. The seam already exists and is live: InvokeProvider's
+// caller-supplied VenueDescriptorJson self-description (plugin_dispatch_reverse.go)
+// already lets an out-of-process cold-start caller materialize a fresh executor with
+// NO incoming executor of its own, and a COMPILED-IN candy/plugin-bundle (dual-
+// placement, same host process) can construct one directly via the already-portable
+// sdk/deploykit.RootExecutorForDeployNode — no IPC round-trip needed at all for the
+// common local-target case. This file's dispatch kernel moving is therefore
+// straightforward-but-large RELOCATION work (resolved-project envelope for the
+// deploy tree + the two portable executor-construction primitives above +
+// InvokeProvider for cross-plugin calls), not mechanism invention — see the
+// K1-UNBLOCK program's wave-4 spike findings for the full trace.
 //
 // Critical semantic: NONE of the dispatchers below regenerate the
 // user-overlay deploy entry (no `charly bundle add` / `charly config` calls

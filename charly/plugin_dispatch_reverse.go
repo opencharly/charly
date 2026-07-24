@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -52,6 +54,24 @@ import (
 // no-op — proven safe (no deadlock, no flag corruption) by
 // TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlock. No new guard is
 // introduced; the fallback is a plain reuse of the existing chain.
+
+// executorInvoker is the capability to Invoke a deploy/step/builder op WITH the E3b
+// reverse channel: the provider stands up the host's ExecutorService on the go-plugin
+// broker and the out-of-process plugin dials back to run shell/SSH ops on the live
+// venue. Only *grpcProvider (the broker-carrying out-of-proc peer) implements it — a
+// built-in verb runs in-proc and has no out-of-proc execute. Relocated here (K5-A item 2)
+// from the now-deleted charly/plugin_step_external.go, whose SOLE OTHER content
+// (externalPluginStepProvider, StepKindExternalPlugin's in-proc EmitOCI) is gone — the
+// pod-overlay build-emit dispatch for that kind relocated into candy/plugin-installstep's
+// "oci-dispatch" word, leaving zero live callers of EmitOCI/StepProvider. executorInvoker
+// itself is unrelated to that removal — it is InvokeProvider's OWN out-of-process/in-proc
+// discriminator (mirrors the build-context BuildEmitter marker interface, provider_verb.go)
+// and is consumed by host_build_construct_step.go, host_build_pod_config.go,
+// k8s_generate.go, and provider_checkenv.go.
+type executorInvoker interface {
+	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
+}
+
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
@@ -67,30 +87,85 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
 	}
 	op := &Operation{Reserved: word, Op: req.GetOp(), Params: req.GetParamsJson(), Env: req.GetEnvJson()}
+	// The venue executor every branch below may need: the caller's own threaded executor (s.exec),
+	// or — when the caller holds none of its own (S1) — one freshly re-materialized from a
+	// caller-supplied self-description (req.VenueDescriptorJson). Resolved ONCE, shared by the
+	// CheckVerbProvider branch (new) and the pre-existing executorInvoker branch.
+	exec := s.exec
+	if vdj := req.GetVenueDescriptorJson(); len(vdj) > 0 {
+		var d spec.VenueDescriptor
+		if derr := json.Unmarshal(vdj, &d); derr != nil {
+			return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
+		}
+		fresh, verr := kit.VenueFromDescriptor(d)
+		if verr != nil {
+			return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
+		}
+		exec = fresh
+	}
 	var (
 		res *Result
 		err error
 	)
-	if inv, isInv := prov.(executorInvoker); isInv {
-		// OUT-OF-PROCESS target: thread a venue executor + build onto a nested reverse channel
-		// (the nested-broker round-trip — the one-level RunHostStep ExternalPlugin arm,
-		// generalized to any class/op).
-		exec := s.exec
-		if vdj := req.GetVenueDescriptorJson(); len(vdj) > 0 {
-			var d spec.VenueDescriptor
-			if derr := json.Unmarshal(vdj, &d); derr != nil {
-				return nil, fmt.Errorf("InvokeProvider %s:%s: decode venue descriptor: %w", class, word, derr)
+	switch class {
+	case ClassVerb:
+		if cv, isCV := prov.(CheckVerbProvider); isCV {
+			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
+			// compiled-in/builtin check verb) dispatches via RunVerb with a live host
+			// CheckContext, never the generic Invoke — builtinVerbBase.Invoke is a deliberate
+			// always-error stub (provider_verb.go), matching hostVerbResolver.RunVerb's own
+			// normal-flow branch exactly (dispatch on the CAPABILITY CLASS, never a verb word —
+			// F11-clean). charly's CheckVerbProvider.RunVerb is hard-typed to *hostVerbResolver
+			// (not an interface), so the remote caller's context is built by constructing a
+			// MINIMAL *kit.Runner from the request's env snapshot (decoded into the SAME
+			// CUE-sourced spec.CheckEnv sdk/checkverb.go's out-of-process decode and
+			// candy/plugin-check's marshal already share) and wrapping it in the SAME
+			// hostVerbResolver/hostCheckContext this branch's normal (in-proc) callers use — R3:
+			// reuses every existing host-only resolve leg (endpoint/graphics/cluster/image-label)
+			// unchanged, no parallel CheckContext implementation. verbs/grammar/plan state are
+			// never touched by RunVerb (only by RunPlan/RunOne), so leaving them nil is safe.
+			var env spec.CheckEnv
+			if len(req.GetEnvJson()) > 0 {
+				_ = json.Unmarshal(req.GetEnvJson(), &env)
 			}
-			fresh, verr := kit.VenueFromDescriptor(d)
-			if verr != nil {
-				return nil, fmt.Errorf("InvokeProvider %s:%s: materialize venue: %w", class, word, verr)
+			var op2 spec.Op
+			if len(req.GetParamsJson()) > 0 {
+				if derr := json.Unmarshal(req.GetParamsJson(), &op2); derr != nil {
+					return nil, fmt.Errorf("InvokeProvider %s:%s: decode op: %w", class, word, derr)
+				}
 			}
-			exec = fresh
+			mode := RunModeLive
+			if env.Mode == "box" {
+				mode = RunModeBox
+			}
+			minimalRunner := kit.NewRunner(kit.RunnerConfig{
+				Exec:        exec,
+				Mode:        mode,
+				Box:         env.Box,
+				Instance:    env.Instance,
+				Distros:     env.Distros,
+				DialTimeout: time.Duration(env.DialTimeoutNs),
+			})
+			hvr := &hostVerbResolver{kr: minimalRunner}
+			cr := cv.RunVerb(ctx, hvr, &op2)
+			hvr.runEndpointCleanups()
+			resJSON, merr := json.Marshal(cr)
+			if merr != nil {
+				return nil, fmt.Errorf("InvokeProvider %s:%s: marshal result: %w", class, word, merr)
+			}
+			return &pb.InvokeReply{ResultJson: resJSON}, nil
 		}
-		res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
-	} else {
-		// IN-PROC target (compiled-in / builtin): a direct Invoke, no broker needed.
-		res, err = prov.Invoke(ctx, op)
+		fallthrough
+	default:
+		if inv, isInv := prov.(executorInvoker); isInv {
+			// OUT-OF-PROCESS target: thread the venue executor + build onto a nested reverse
+			// channel (the nested-broker round-trip — the one-level RunHostStep ExternalPlugin
+			// arm, generalized to any class/op).
+			res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
+		} else {
+			// IN-PROC target (compiled-in / builtin, non-verb): a direct Invoke, no broker needed.
+			res, err = prov.Invoke(ctx, op)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("InvokeProvider %s:%s op=%s: %w", class, word, op.Op, err)
@@ -120,6 +195,37 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 		return &pb.HostBuildReply{Error: err.Error()}, nil
 	}
 	return &pb.HostBuildReply{ResultJson: result}, nil
+}
+
+// DescribeProvider returns the CACHED capability metadata for another provider (class, word) —
+// the metadata twin of InvokeProvider (K5-A item 2): a plugin needs to make a ROUTING decision
+// about a peer provider (e.g. "does class:step word X declare Emits=true?") without holding its
+// own copy of the provider registry, and without paying a live Invoke round-trip merely to ask a
+// question about capability shape. capMeta (embedded in both grpcProvider and inprocProvider) IS
+// the cache — populated ONCE at connect/register time via buildCapMeta — so this is a plain
+// in-memory lookup + carrier-interface read, never a fresh Describe RPC to the target. found=false
+// for an unresolvable (class, word) — mirrors InvokeProvider's own "not connected" outcome, but as
+// a query result rather than an RPC error (a routing decision often wants to distinguish
+// not-found from a transport failure, not treat both alike). Scoped to StepContract today — the
+// ONE cached sub-shape oci_step_emit.go's relocation needs; extend with more capMeta-carried
+// fields only when a real consumer needs them (never speculatively).
+func (s *executorReverseServer) DescribeProvider(_ context.Context, req *pb.DescribeProviderRequest) (*pb.DescribeProviderReply, error) {
+	prov, ok := providerRegistry.resolve(ProviderClass(req.GetClass()), req.GetWord())
+	if !ok {
+		return &pb.DescribeProviderReply{Found: false}, nil
+	}
+	reply := &pb.DescribeProviderReply{Found: true}
+	if carrier, ok := prov.(spec.StepContractCarrier); ok {
+		if sc, ok := carrier.DeclaredStepContract(); ok {
+			reply.StepContract = &pb.StepContract{
+				Scope: sc.Scope.String(),
+				Venue: int32(sc.Venue),
+				Gate:  string(sc.Gate),
+				Emits: sc.Emits,
+			}
+		}
+	}
+	return reply, nil
 }
 
 // hostBuilder runs a host-side build for one kind: it interprets specJSON, runs the build engine

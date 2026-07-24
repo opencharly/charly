@@ -38,17 +38,57 @@ func dispatchCheckCLI(args []string) error {
 }
 
 // hostCheckRun asks the host to build the venue + run a check plan via the generic "check-run"
-// HostBuild kind, returning the per-step results the CheckCmd handlers format. cmdExec is nil on the
-// out-of-process CliMain path (no reverse channel) → a clear error.
+// HostBuild kind, returning the per-step results the CheckCmd handlers format, using the
+// package-level cmdCtx (valid for the whole `charly check ...` command dispatch). cmdExec is nil
+// on the out-of-process CliMain path (no reverse channel) → a clear error.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
+	return hostCheckRunCtx(cmdCtx, req)
+}
+
+// hostCheckRunCtx is hostCheckRun with an EXPLICIT ctx — the seam harness_loop.go's scoreLive
+// needs (a watchdog probe's own bounded context, not the package-level cmdCtx that spans the
+// whole command dispatch). Both entry points route through this SAME Mode switch (R3 — one
+// dispatch, not two).
+//
+// K1-unblock wave: dispatch is now COMPLETE. Mode:"box"/"live"/"feature-live"/"score" dispatch to
+// this plugin's OWN pluginCheckRunBox/Live/FeatureLive/Score bodies. Mode:"preflight" forwards to
+// the host's "check-run" HostBuild arm (charly/host_build_check_run.go's hostCheckRunPreflight) —
+// the ONE surviving host-anchored body, kept there because its image-ensure leg
+// (EnsureImagePresent) needs the project *Config + BuildCmd's local-build fallback, both deeply
+// host/loader-coupled with no sdk-portable equivalent (see that file's header comment). A nominal
+// "feature-box" mode exists in the wire enum but has ZERO callers through this seam (`charly box
+// feature run` calls the CLI-free hostFeatureBox engine directly — see feature_run_gather.go's
+// header), so it is deliberately NOT cased here — reaching it would be a caller bug, not a
+// routable mode. The former dual-mode fallback (a bare default forwarding EVERY uncased mode to
+// the host) is retired: every mode is now an explicit case or an explicit unknown-mode error.
+func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
 	}
+	switch req.Mode {
+	case "box":
+		return pluginCheckRunBox(cmdExec, ctx, req)
+	case "live":
+		return pluginCheckRunLive(cmdExec, ctx, req)
+	case "feature-live":
+		return pluginCheckRunFeatureLive(cmdExec, ctx, req)
+	case "score":
+		return pluginCheckRunScore(cmdExec, ctx, req)
+	case "preflight":
+		return pluginCheckRunPreflight(cmdExec, ctx, req)
+	}
+	return kit.CheckRunReply{}, fmt.Errorf("check-run: unknown mode %q", req.Mode)
+}
+
+// pluginCheckRunPreflight forwards the "preflight" mode to the host's "check-run" HostBuild seam —
+// see hostCheckRunCtx's header for why this ONE mode stays host-anchored (EnsureImagePresent's
+// *Config/BuildCmd coupling).
+func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	out, err := cmdExec.HostBuild(cmdCtx, "check-run", reqJSON)
+	out, err := ex.HostBuild(ctx, "check-run", reqJSON)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
@@ -115,18 +155,36 @@ func bedCliReq(ex *sdk.Executor, ctx context.Context, req spec.CliRequest) (spec
 	return reply, nil
 }
 
-// hostRetention runs the SHARED check-run prune engine over the existing "retention" host seam
-// (pruneCheckRuns STAYS core — multi-caller: box build / check run / list tags all prune). The
+// hostRetention runs the SHARED check-run prune engine, now owned by candy/plugin-clean
+// (K1-alpha core-minimization relocation — retention.go, reached via verb:retention). The
 // harness dispatcher defers a {Check:true, Dir} call so `.check/<name>/` is trimmed to
-// keep_check_runs after a run; the host resolves the keep-count (Defaults.KeepCheckRuns + the
-// fallback) itself, so this seam — not the check projection — owns retention (R3). The plugin prints
+// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) cannot LoadConfig
+// itself, so it FIRST fetches the resolved defaults.keep_check_runs via the small
+// "retention-defaults" HostBuild seam (the ONE thing the retention engine genuinely cannot
+// compute), then reaches candy/plugin-clean's verb:retention over the PLUGIN↔PLUGIN
+// InvokeProvider peer-dispatch leg (F10) with the resolved count filled in. The plugin prints
 // the "Pruned N (keep_check_runs=K)" line from reply.CheckPaths/KeepCheckRuns.
 func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequest) (spec.RetentionReply, error) {
+	defReqJSON, err := json.Marshal(spec.RetentionRequest{Dir: req.Dir})
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	defOut, err := ex.HostBuild(ctx, "retention-defaults", defReqJSON)
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	var defaults spec.RetentionReply
+	if err := json.Unmarshal(defOut, &defaults); err != nil {
+		return spec.RetentionReply{}, fmt.Errorf("retention-defaults: decode reply: %w", err)
+	}
+	req.KeepImages = defaults.KeepImages
+	req.KeepCheckRuns = defaults.KeepCheckRuns
+
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return spec.RetentionReply{}, err
 	}
-	out, err := ex.HostBuild(ctx, "retention", reqJSON)
+	out, err := ex.InvokeProvider(ctx, "verb", "retention", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return spec.RetentionReply{}, err
 	}
@@ -135,4 +193,17 @@ func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequ
 		return spec.RetentionReply{}, fmt.Errorf("retention: decode reply: %w", err)
 	}
 	return reply, nil
+}
+
+// checkLoadPlugins triggers the host's UNCHANGED plugin-connect engine (resolveCheckRunnerContext)
+// over the thin "check-load-plugins" seam, so any out-of-process verb candy a live plan's steps
+// reference is connected (registered in this host process's providerRegistry) BEFORE the plugin
+// dispatches those steps via InvokeProvider. Best-effort by design (mirrors the core original's own
+// graceful degrade): a connect failure surfaces loudly later, at actual verb dispatch, never here.
+func checkLoadPlugins(ex *sdk.Executor, ctx context.Context, name, dir string) {
+	reqJSON, err := json.Marshal(spec.CheckLoadPluginsRequest{Name: name, Dir: dir})
+	if err != nil {
+		return
+	}
+	_, _ = ex.HostBuild(ctx, "check-load-plugins", reqJSON)
 }

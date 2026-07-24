@@ -6,22 +6,27 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// DeployTargetProvider is the typed in-process form of a deploy-target Provider:
-// it resolves a BundleNode to the UnifiedDeployTarget that adds/dels/updates it.
-// Every built-in target (local/vm/pod/k8s/android) implements it; ResolveTarget
-// resolves the node's derived target word through providerRegistry and calls
-// ResolveTarget — the legacy-alias normalization + the dispatch switch are gone (C3).
-type DeployTargetProvider interface {
-	Provider
-	ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, error)
-}
-
 // deployTargetWords is the canonical deploy-target set (the cross-ref-inferred
-// node.Target values). Every word is also a kind (a deploy target is a deployable
-// kind), so the bijection ties this list to the CUE kind vocabulary — it cannot
-// drift from spec.KindWords — AND asserts each is served EITHER by an in-proc
-// DeployTargetProvider OR by an external out-of-process plugin (externalizedDeploySubstrates).
-var deployTargetWords = []string{"local", "vm", "pod", "k8s", "android"}
+// node.Target values) — DERIVED from spec.ResourceKinds (R3: no hand-duplicated list to
+// drift from the CUE vocabulary) minus "group", the ONE ResourceKinds entry that is a
+// targetless deploy GROUP (a node placed under another, never itself a `target:` value —
+// see /charly-core:deploy "group: is EXCLUSIVELY a targetless deploy group"). Every
+// remaining word is asserted served by an external out-of-process plugin
+// (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
+// in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
+// type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
+// `git grep 'func.*ResolveTarget(node \*spec.BundleNode'` matches only the package-level
+// dispatcher itself — and deleted).
+var deployTargetWords = func() []string {
+	out := make([]string, 0, len(spec.ResourceKinds))
+	for _, k := range spec.ResourceKinds {
+		if k == "group" {
+			continue
+		}
+		out = append(out, k)
+	}
+	return out
+}()
 
 // externalizedDeploySubstrates is THE single source of truth for which canonical
 // deploy-substrate kinds are served by an EXTERNAL out-of-process plugin instead
@@ -82,6 +87,16 @@ var externalizedDeploySubstrates = map[string]bool{
 // to the candy SUBPATH of the plugin that serves it (in the default project repo). It is the
 // substrate→plugin-candy companion of externalizedDeploySubstrates: that set says a word is
 // external; this map says WHICH candy serves it.
+//
+// SDD CUE-sourcing spike (K1-α, settled — do not re-open without new evidence): this map does
+// NOT need CUE-sourcing. It is neither authored config (no user ever writes it in a charly.yml)
+// nor a wire type (nothing marshals it across a host<->plugin boundary), so it falls outside the
+// SDD mandate's scope entirely — the same bucket as sdk/spec's documented hand-written exceptions
+// (charly_names.go aliases, devices.go's devicePatterns), not a `cue exp gengotypes` candidate.
+// Its one drift-relevant property — these KEYS matching the real deploy-substrate vocabulary — is
+// ALREADY live-gated at process init() by checkDeployProviderBijection against deployTargetWords,
+// itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
+// hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
 	"local":   "candy/plugin-deploy-local",
 	"vm":      "candy/plugin-deploy-vm",
@@ -107,42 +122,24 @@ func externalDeploySubstratePluginRef(word string) (string, bool) {
 	return "@" + spec.DefaultProjectRepo + "/" + sub, true
 }
 
-// checkDeployProviderBijection: every canonical deploy-target word is a valid deployable
-// kind (⊆ spec.ResourceKinds — the "word is known" invariant; the substrate kinds
-// pod/vm/k8s/local/android are ResourceKinds even after C2-substrate dropped them from
-// KindWords, since they are externalized to candy/plugin-substrate and no longer carry a
-// #Node arm) AND is served by EXACTLY ONE of {an in-proc DeployTargetProvider, an external
-// plugin (externalizedDeploySubstrates)} — never both (XOR), never neither. Run in the same
-// init() that registers (after registration), avoiding the alphabetical race. An externalized
-// word legitimately has NO provider at process start (its grpcProvider connects later at load).
+// checkDeployProviderBijection: every canonical deploy-target word is served by an
+// EXTERNAL out-of-process plugin (externalizedDeploySubstrates) that also names its
+// canonical plugin candy (externalDeploySubstratePlugins), so a box/<distro> submodule
+// can auto-inject the ref and resolve the substrate word. There is no in-proc
+// DeployTargetProvider concept anymore — the former interface + its ResolveTarget
+// type-assertion branch in unified_targets.go were confirmed dead (zero implementers)
+// and deleted; ALL FIVE substrates externalize today. Run in the same init() that
+// registers (after registration), avoiding the alphabetical race. An externalized word
+// legitimately has NO provider at process start (its grpcProvider connects later at load).
 func checkDeployProviderBijection() error {
-	kinds := map[string]bool{}
-	for _, k := range spec.ResourceKinds {
-		kinds[k] = true
-	}
 	var problems []string
 	for _, w := range deployTargetWords {
-		if !kinds[w] {
-			problems = append(problems, w+" (not a spec.ResourceKinds kind)")
+		if !externalizedDeploySubstrates[w] {
+			problems = append(problems, w+" (deployTargetWords entry not marked externalized — no in-proc DeployTargetProvider concept exists to serve it instead)")
+			continue
 		}
-		p, hasBuiltin := providerRegistry.resolve(ClassDeployTarget, w)
-		ext := externalizedDeploySubstrates[w]
-		switch {
-		case ext && hasBuiltin:
-			problems = append(problems, w+" (externalized substrate must NOT also have an in-proc DeployTargetProvider)")
-		case ext && !hasBuiltin:
-			// OK — served out-of-process by an external plugin connected at load time. It MUST
-			// also name its canonical plugin candy so a box/<distro> submodule can auto-inject
-			// the ref (externalDeploySubstratePluginRef) and resolve the substrate word.
-			if _, ok := externalDeploySubstratePlugins[w]; !ok {
-				problems = append(problems, w+" (externalized substrate has no externalDeploySubstratePlugins entry — a submodule can't discover its plugin candy)")
-			}
-		case !ext && !hasBuiltin:
-			problems = append(problems, w+" (no DeployTargetProvider and not an externalized substrate)")
-		default: // !ext && hasBuiltin
-			if _, ok := p.(DeployTargetProvider); !ok {
-				problems = append(problems, w+" (registered but not a DeployTargetProvider)")
-			}
+		if _, ok := externalDeploySubstratePlugins[w]; !ok {
+			problems = append(problems, w+" (externalized substrate has no externalDeploySubstratePlugins entry — a submodule can't discover its plugin candy)")
 		}
 	}
 	if len(problems) > 0 {

@@ -44,6 +44,15 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *UnifiedFile, byID 
 	if lp.ID != 0 {
 		byID[lp.ID] = merged
 	}
+	// RootDir (K1-unblock wave 2, R1 fix): this project's OWN base directory, from its root
+	// document's SrcDir — the SAME dir every OTHER doc's mergeUnified(merged, &sub, d.SrcDir) call
+	// below already threads per-document; the root document (lp.Docs[0], always present for both
+	// the top-level project and a mounted namespace) names the project's own directory. See
+	// UnifiedFile.RootDir's doc comment for why a namespace needs this (subUF.projectCandiesScanned
+	// must resolve a discovered candy's relative From: path against ITS OWN dir, not the caller's).
+	if len(lp.Docs) > 0 {
+		merged.RootDir = lp.Docs[0].SrcDir
+	}
 	// 1. Documents (root + flat imports) — root-wins merge, in walk order.
 	for i := range lp.Docs {
 		d := &lp.Docs[i]

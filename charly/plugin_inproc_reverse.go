@@ -67,3 +67,7 @@ func (c *inprocExecutorClient) InvokeProvider(ctx context.Context, in *pb.Invoke
 func (c *inprocExecutorClient) HostBuild(ctx context.Context, in *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
 	return c.srv.HostBuild(ctx, in)
 }
+
+func (c *inprocExecutorClient) DescribeProvider(ctx context.Context, in *pb.DescribeProviderRequest, _ ...grpc.CallOption) (*pb.DescribeProviderReply, error) {
+	return c.srv.DescribeProvider(ctx, in)
+}

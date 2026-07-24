@@ -96,11 +96,13 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 	}
 }
 
-// TestResolveDottedAgentProvisionedVenue (Risk 5b) proves resolveScoringChain /
-// ResolveDeployChain reach a 3-level agent-provisioned venue
-// (vm → pod → pod) written into a scratch deploy-tree map — without a live
-// connection (the chain is built, not dialed). This is the unit-level proof the
-// coordinator's R10 live bed round-trip will exercise end-to-end.
+// TestResolveDottedAgentProvisionedVenue (Risk 5b) proves ResolveDeployChain reaches a 3-level
+// agent-provisioned venue (vm → pod → pod) written into a scratch deploy-tree map — without a
+// live connection (the chain is built, not dialed). This is the unit-level proof the
+// coordinator's R10 live bed round-trip will exercise end-to-end. The SCORER half of this test
+// (the AI harness's scoring-chain resolver routing the same dotted venue) moved to
+// candy/plugin-check/score_live_test.go's TestPluginResolveDottedAgentProvisionedVenue
+// (K1-unblock wave arm 3 — the scoring-chain resolver itself moved plugin-side).
 func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 	roots := map[string]spec.BundleNode{
 		"nested-check-vm": {
@@ -135,31 +137,6 @@ func TestResolveDottedAgentProvisionedVenue(t *testing.T) {
 	}
 	if chain == nil {
 		t.Fatalf("ResolveDeployChain(%q): nil chain", dotted)
-	}
-
-	// resolveScoringChain (the scorer entry point) must route the dotted venue
-	// through ResolveDeployChain and return a chain too.
-	sc, scErr := resolveScoringChain(stampTestDescents(roots), dotted)
-	if scErr != nil {
-		t.Fatalf("resolveScoringChain(%q): %v", dotted, scErr)
-	}
-	if sc == nil {
-		t.Fatalf("resolveScoringChain(%q): nil chain", dotted)
-	}
-}
-
-// TestResolveBareAgentProvisionedVenue proves a bare agent-provisioned venue
-// (the common iterate-bench case, e.g. `os`) resolves via resolveScoringChain's
-// bare-name fallback to the `charly-<name>` container the agent deploys —
-// without any top-level bundle entry (agent-provisioned members are not folded).
-func TestResolveBareAgentProvisionedVenue(t *testing.T) {
-	roots := map[string]spec.BundleNode{} // os is NOT a top-level entry (not folded)
-	sc, err := resolveScoringChain(stampTestDescents(roots), "os")
-	if err != nil {
-		t.Fatalf("resolveScoringChain(os): %v", err)
-	}
-	if sc == nil {
-		t.Fatalf("resolveScoringChain(os): nil chain (bare-name fallback failed)")
 	}
 }
 

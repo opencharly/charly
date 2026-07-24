@@ -7,10 +7,11 @@
 // sdk.Serve. One provider, two placements; the schema travels with the plugin over
 // Describe either way.
 //
-// The RESOLUTION half of the tunnel subsystem STAYS in charly's core
-// (charly/tunnel.go: ResolveTunnelConfig / TunnelConfigFromMetadata; the pure
-// schemeTarget/tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to
-// sdk/deploykit with the emitter in P11). Only the
+// The RESOLUTION half of the tunnel subsystem lives in sdk/deploykit/tunnel_resolve.go
+// (ResolveTunnelConfig / TunnelConfigFromMetadata + the pure schemeTarget/tailscaleFlag/
+// isTCPFamily helpers the quadlet emitter shares, FLOOR-SLIM mechanical batch — charly/
+// tunnel.go, the former core home, carried nothing but dead aliases and was deleted).
+// Only the
 // EXECUTION leg lives HERE: the pod-lifecycle plugins that resolve a TunnelConfig
 // (candy/plugin-deploy-pod for start/stop, candy/plugin-pod for remove — Cutover B unit 2,
 // the former core dispatch adapter that used to sit between them is deleted) drive this

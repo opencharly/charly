@@ -74,7 +74,7 @@ func runDeployNodeDispatch(req spec.DeployNodeDispatchRequest) error {
 		c.Format = "table"
 	}
 
-	return c.dispatchNode(req.Path, req.Node, parentExec, dir)
+	return c.dispatchNode(req.Path, req.Node, parentExec, dir, req.Target, req.VmEntity)
 }
 
 var _ = func() bool {

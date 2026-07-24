@@ -53,7 +53,13 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	}
 
 	// Fetch the resolved-project envelope via the established HostBuild("resolved-project") seam.
-	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir})
+	// ExtraCandyRefs (an --add-candy / add_candy: ref this compile call's own candy set was
+	// widened with, host-side) widens the ENVELOPE's scan the SAME way, so a remote add-candy
+	// (never reachable from any box's image closure) is actually present in rp.Candies/
+	// rp.CandyModels below — RCA'd K1-alpha regression: the host's own scan (scanCandiesForRef)
+	// and this envelope re-fetch used to run independently, so a remote add-candy resolved
+	// host-side never reached here at all.
+	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs})
 	if err != nil {
 		return nil, fmt.Errorf("bundle compile: marshal envelope request: %w", err)
 	}
@@ -108,7 +114,7 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	}
 	plans := make([]*spec.InstallPlan, 0, len(order))
 	for _, name := range order {
-		p, err := deploykit.BuildDeployPlan(candyModels[name], img, hostCtx)
+		p, err := deploykit.BuildDeployPlan(ctx, exec, candyModels[name], img, hostCtx)
 		if err != nil {
 			return nil, fmt.Errorf("bundle compile: BuildDeployPlan(%s): %w", name, err)
 		}

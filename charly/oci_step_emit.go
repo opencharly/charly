@@ -3,115 +3,41 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// oci_step_emit.go — the CORE pod-overlay step-emit dispatch, relocated out of
-// build_target_oci.go's deploykit.OCITarget methods (P11c) into standalone funcs so the deploykit.OCITarget
-// WALKER can live in sdk/deploykit (the walker delegates here through the "oci-emit-step"
-// render-seam). This is the kind-blind host-side M-mechanism that STAYS core: it resolves
-// each InstallStep kind through the providerRegistry + Invokes the class:step plugin OpEmit
-// (spliceClassStepEmit) or the in-proc StepProvider.EmitOCI (ExternalPlugin), reusing the
-// EXACT former in-core emitStep/spliceClassStepEmit logic — so the rendered fragment is
-// byte-identical to the pre-move core render (byte-parity by construction, mirroring #67's
-// render-seam contract). The live host-side buildEngineContext (the overlay *Generator +
-// DistroDef/BuilderConfig/Box/ImageBuildDir/ContextRelPrefix, cached by hostBuildOverlay's
-// prep+resolve) is passed in as `build`; a live *Generator cannot cross the wire, so the
-// "oci-emit-step" render-seam looks it up from the per-dir overlayBuildContextCache. `build`'s
-// scalars (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) ride the class:step OpEmit's BuildEnv
-// (ociSpliceClassStepEmit); the four former HOST-COUPLED step-emitters (system-packages/builder/
-// local-pkg-install/op) render DIRECTLY in candy/plugin-installstep against its OWN
-// "resolved-project"-built deploykit.Generator — there is no more in-core render for them.
-
-// ociEmitStep renders ONE InstallStep's pod-overlay Containerfile fragment via the core
-// provider-registry dispatch. It is the single source of truth (R3): the transitional in-core
-// ociEmitStep delegates here, and (after the walker moves to sdk/deploykit) the candy's
-// deploykit.OCITarget reaches it through the "oci-emit-step" render-seam. The returned fragment
-// has its trailing newline normalized (matching the former per-arm t.buf behaviour); an empty
-// return is a deploy-only / VenueSkip step (records nothing). `build` carries the host-side
-// buildEngineContext whose scalars ride onto the class:step OpEmit's BuildEnv (Image/DevLocalPkg/
-// ImageBuildDir/ContextRelPrefix) for the HOST-COUPLED words (system-packages/builder/local-pkg/op),
-// which render directly in the plugin — no in-core renderer is consulted for them.
-func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []string, build buildEngineContext) (string, error) {
-	var (
-		frag string
-		err  error
-	)
-	switch {
-	case deploykit.IsExternalStepKind(step.Kind()):
-		// F-STEP-EMIT: an authored external step ("external:<word>") — its serving provider is a
-		// class:step plugin keyed on the trimmed word; OpEmit bakes its build-context fragment
-		// (Emits=true) or is a no-op (Emits=false, deploy-only). allowEmpty=false: an authored
-		// external step MUST produce a fragment.
-		s := step.(*deploykit.ExternalStep)
-		frag, err = ociSpliceClassStepEmit(s.Word, s.Payload, distros, false, build)
-	case pluginEmitStepWords[step.Kind()] != "":
-		// C1.1–C1.6: the 12 compiler-emitted kinds whose build-emit externalized to the
-		// compiled-in class:step plugin candy/plugin-installstep. Route by kind→word, passing
-		// the compiler's step VIEW (stepToView) as the opaque OpEmit payload (the SAME
-		// serialization the deploy walk consumes, R3). allowEmpty=true: a legitimately-empty
-		// render (empty snippet / no-op service) is tolerated; a no-op-emit kind (apk/reboot,
-		// Emits=false) is skipped inside ociSpliceClassStepEmit.
-		word := pluginEmitStepWords[step.Kind()]
-		payload, merr := marshalJSON(deploykit.StepToView(step))
-		if merr != nil {
-			return "", fmt.Errorf("oci-emit-step: marshal %s step view: %w", step.Kind(), merr)
-		}
-		frag, err = ociSpliceClassStepEmit(word, payload, distros, true, build)
-	default:
-		// The ONE remaining in-proc StepProvider kind (ExternalPlugin — a plugin-verb run:
-		// step). EmitOCI returns the fragment (P11c decoupled it from the the walker buffer).
-		prov, ok := stepProviderFor(step.Kind())
-		if !ok {
-			return "", fmt.Errorf("oci-emit-step: unknown step kind %q", step.Kind())
-		}
-		frag, err = prov.EmitOCI(step, plan, build)
-	}
-	if err != nil {
-		return "", err
-	}
-	if frag == "" {
-		return "", nil
-	}
-	if !strings.HasSuffix(frag, "\n") {
-		frag += "\n"
-	}
-	return frag, nil
-}
-
-// ociSpliceClassStepEmit resolves the class:step provider serving `word`, consults its DECLARED
-// StepContract.Emits, and — when the step emits — Invokes OpEmit with the opaque payload and
-// returns the rendered Containerfile fragment verbatim (R3). Shared by the AUTHORED external
-// step (allowEmpty=false) and the 12 COMPILER-EMITTED typed step kinds whose build-emit
-// externalized to candy/plugin-installstep (allowEmpty=true). A provider declaring Emits=false is
-// a DEPLOY-ONLY step (no build fragment) → returns "".
+// oci_step_emit.go — the host-side half of the pod-overlay step-emit dispatch. K5-A item 2
+// relocated the FULL core provider-registry dispatch (~130 LOC of registry-consult + StepContract
+// gating + Invoke logic) into candy/plugin-installstep's "oci-dispatch" word
+// (candy/plugin-installstep/oci_dispatch.go) — the SAME plugin that already serves the other 12
+// compiler-emitted kinds' build-emit, so the
+// dispatch DECISION (which peer provider renders a given step) now lives alongside the words it
+// routes to, reached via the class-generic DescribeProvider (cached metadata, K5-A item 1) +
+// InvokeProvider (dispatch) reverse-channel legs instead of a direct in-core providerRegistry
+// consult. What remains here is the THIN forwarding half every out-of-process caller
+// (candy/plugin-deploy-pod, via deploykit.OCITarget.EmitStepOp → HostBuild("step-emit",
+// "oci-emit-step")) still needs: resolve the compiled-in "oci-dispatch" provider, thread the SAME
+// in-proc reverse channel + host-side buildEngineContext the former host-only dispatch used to
+// thread (so a HOST-COUPLED peer's own OpEmit can still call back HostBuild — the
+// "resolved-project" envelope seam, K5-Unit-6b), and Invoke.
 //
-// The Invoke ctx carries an IN-PROC reverse channel (sdk.ContextWithExecutor + executorReverseServer,
-// the SAME one dispatchBuild threads for the compiled-in build:box plugin, R3), threaded with the
-// host-side buildEngineContext (`build`), so a HOST-COUPLED step can call back HostBuild
-// ("resolved-project") for the project structure it needs. The per-invocation scalars `build` already
-// carries (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) ride the SAME OpEmit Invoke's BuildEnv —
-// no separate round-trip: a HOST-COUPLED step's OpEmit builds its OWN deploykit.Generator from the
-// resolved-project envelope and renders directly (candy/plugin-installstep), rather than calling back
-// a host-side renderer.
-func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allowEmpty bool, build buildEngineContext) (string, error) {
-	prov, ok := providerRegistry.resolve(ClassStep, word)
+// dispatchOCIStep is the single source of truth (R3): charly/step_emit_hostbuild.go's
+// stepEmitOCIEmitStep (the production "oci-emit-step" render-seam handler) and ociEmitStep (below,
+// a Go-object-typed compatibility wrapper existing unit tests drive directly) both funnel through it.
+
+// dispatchOCIStep forwards ONE pod-overlay step's rendering to candy/plugin-installstep's
+// "oci-dispatch" word: marshal the step/plan WIRE VIEWS + the caller's Distros/build-context
+// scalars as the OpEmit payload/env, Invoke, and return the rendered fragment verbatim. `build`
+// carries the host-side buildEngineContext whose scalars ride the class:step OpEmit's BuildEnv
+// (Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix) — see candy/plugin-installstep's package doc
+// for which words are HOST-COUPLED vs PURE.
+func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanView, distros []string, build buildEngineContext) (string, error) {
+	prov, ok := providerRegistry.resolve(ClassStep, "oci-dispatch")
 	if !ok {
-		return "", fmt.Errorf("oci-emit-step: class:step provider %q not connected at build time", word)
-	}
-	emits := false
-	if carrier, ok := prov.(spec.StepContractCarrier); ok {
-		if sc, ok := carrier.DeclaredStepContract(); ok {
-			emits = sc.Emits
-		}
-	}
-	if !emits {
-		// A deploy-only step (like apk on an image build): recorded, not baked.
-		return "", nil
+		return "", fmt.Errorf("oci-emit-step: class:step provider %q not connected at build time", "oci-dispatch")
 	}
 	ctx := sdk.ContextWithExecutor(context.Background(),
 		sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{build: build}}))
@@ -121,10 +47,38 @@ func ociSpliceClassStepEmit(word string, payload []byte, distros []string, allow
 	}
 	if build.Generator != nil {
 		env.DevLocalPkg = build.Generator.DevLocalPkg
+		// Thread the host's OWN original add_candy refs (hostBuildOverlay constructed this
+		// Generator with ResolveOpts.ExtraCandyRefs = the deploy's add_candy: refs, possibly
+		// REMOTE/qualified — e.g. "@github.com/…:vTAG") as ExtraCandyRefs, so
+		// candy/plugin-installstep's getGenerator widens ITS OWN independent "resolved-project"
+		// re-fetch the SAME way. This must be the ORIGINAL refs, NOT a re-derivation from
+		// build.Generator.Candies's map KEYS: those keys are the SCAN RESULT's bare candy names
+		// (ScanAllCandyWithConfigOpts's combined map is bare-keyed even for a remote candy), and
+		// re-passing a bare name as an ExtraCandyRefs entry is a silent no-op (addRef gates on
+		// IsRemoteCandyRef) — the bug this replaces: the bare-keys version never actually widened
+		// the second fetch, so a remote add_candy candy was STILL absent from the plugin's own
+		// envelope and candyByName's fallback still missed (RCA'd K1-alpha regression:
+		// check-addcandy-pod's overlay-deploy path, "task emit: candy %q not found").
+		env.ExtraCandyRefs = build.Generator.ExtraCandyRefs
 	}
-	frag, err := invokeOpEmitFragmentOpt(ctx, prov, word, payload, env, allowEmpty)
+	params, err := marshalJSON(deploykit.OCIEmitStepParams{StepView: stepView, PlanView: planView})
 	if err != nil {
-		return "", fmt.Errorf("class:step %q build-emit: %w", word, err)
+		return "", fmt.Errorf("oci-emit-step: marshal dispatch params: %w", err)
+	}
+	frag, err := invokeOpEmitFragmentOpt(ctx, prov, "oci-dispatch", params, env, true)
+	if err != nil {
+		return "", fmt.Errorf("oci-dispatch: %w", err)
 	}
 	return frag, nil
+}
+
+// ociEmitStep is a Go-object-typed compatibility wrapper over dispatchOCIStep: it serializes step
+// and plan to their wire views (the SAME serialization the production "oci-emit-step" caller
+// already sends) and forwards through the identical seam. Kept for the existing unit-test suite
+// (apk_format_test.go, build_target_oci_test.go, localpkg_test.go, plugin_externalstep_e2e_test.go),
+// which drives ociEmitStep with concrete spec.InstallStep/deploykit.InstallPlan values rather than
+// pre-marshaled wire views — a real, non-mocked path through the SAME relocated dispatch, not a
+// parallel implementation (R3).
+func ociEmitStep(step spec.InstallStep, plan *deploykit.InstallPlan, distros []string, build buildEngineContext) (string, error) {
+	return dispatchOCIStep(deploykit.StepToView(step), deploykit.WireView(plan), distros, build)
 }

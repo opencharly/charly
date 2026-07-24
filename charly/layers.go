@@ -590,7 +590,21 @@ func ScanAllCandyWithConfigOpts(dir string, cfg *Config, opts ResolveOpts) (map[
 	if err != nil {
 		return nil, err
 	}
+	return scanCandyFromLocal(localScanned, cfg, opts)
+}
 
+// scanCandyFromLocal is ScanAllCandyWithConfigOpts's step-2-onward body (remote-ref collect,
+// fix-point fetch, per-entity-version arbitration, host-completion + finalize), factored out (R1
+// fix, K1-unblock wave 2) so a caller that already has a DIFFERENT source of localScanned —
+// specifically fillNamespacedBoxes, whose namespace-local candy set comes from
+// subUF.projectCandiesScanned(dir), NOT scanLocalCandies(dir) (which always re-loads the ROOT
+// project, ignoring cfg — see fillNamespacedBoxes's doc comment) — reaches the SAME remote-fetch
+// pipeline instead of duplicating it. Behavior-identical to the pre-split function for the ONE
+// existing caller above (localScanned computed the same way, same steps 2-5 in the same order).
+// Takes no dir: every step here (remote-ref collect, fetch, arbitration, finalize) operates
+// purely on localScanned + cfg + opts — the caller-specific dir (root vs a namespace's own)
+// is needed only to PRODUCE localScanned, never inside this step-2-onward body (unparam-caught).
+func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, opts ResolveOpts) (map[string]spec.CandyReader, error) {
 	// 2. Collect remote refs from @-prefixed candy references, PLUS every local candy's raw
 	// (pre-finalize) require:/candy: refs — see withLocalRawRefs' doc comment for why the
 	// wrapped-view walk CollectRemoteRefsOpts does on its own can't discover these alone.

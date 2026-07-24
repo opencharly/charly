@@ -41,6 +41,19 @@ type Generator struct {
 	// in NewGenerator regardless — only the per-box emission loop is scoped.
 	RequestedBoxes []string
 
+	// ExtraCandyRefs is the ORIGINAL ResolveOpts.ExtraCandyRefs this Generator was
+	// constructed with (a pod-overlay deploy's add_candy: refs, possibly REMOTE/
+	// qualified — e.g. "@github.com/…:vTAG"). Candies (bare-keyed, post-scan) cannot
+	// stand in for this: a bare candy NAME re-passed as an ExtraCandyRefs entry is a
+	// silent no-op for a remote candy (ScanAllCandyWithConfigOpts's addRef gates on
+	// IsRemoteCandyRef), so a SECOND, INDEPENDENT resolved-project re-fetch (e.g.
+	// candy/plugin-installstep's own getGenerator, reached via dispatchOCIStep's
+	// BuildEnv.ExtraCandyRefs) needs the ORIGINAL qualified refs, not a re-derivation
+	// from this Generator's own scan result. RCA'd K1-alpha regression: an overlay
+	// build's OpStep emit ("task emit: candy %q not found") for a remote add_candy
+	// candy — see oci_step_emit.go's dispatchOCIStep.
+	ExtraCandyRefs []string
+
 	// DevLocalPkg, when true, makes localpkg candies (the charly toolchain) build
 	// from LOCAL in-development source instead of downloading the published
 	// release. Set ONLY for disposable check-bed image builds (the check-bed runner
@@ -199,6 +212,7 @@ func NewGenerator(dir string, tag string, opts ResolveOpts) (*Generator, error) 
 		Containerfiles: make(map[string]string),
 		GlobalOrder:    globalOrder,
 		RequestedBoxes: opts.RequestedBoxes,
+		ExtraCandyRefs: opts.ExtraCandyRefs,
 	}
 
 	// Derive each image's content-stable identity (ai.opencharly.version)

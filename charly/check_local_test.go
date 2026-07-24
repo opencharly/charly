@@ -12,8 +12,11 @@ import (
 // surface that picks an executor for a `target: local` deployment now routes
 // through ONE selection (rootExecutorForDeployNode) and ONE chain case (the
 // `local` arm of AppendHopForFlatPath), instead of assuming a container. Each
-// test FAILS against the pre-cutover code (no helper; no `local` chain case;
-// resolveScoringChain fabricating an charly-<pod> container for a local target).
+// test FAILS against the pre-cutover code (no helper; no `local` chain case).
+// The THIRD historical test in this file, TestResolveScoringChain_Local (pinning the AI
+// harness's scoring-chain resolver not fabricating an charly-<pod> container for a local
+// target), moved to candy/plugin-check/score_live_test.go's TestPluginResolveScoringChain_Local
+// (K1-unblock wave arm 3 — the scoring-chain resolver itself moved plugin-side).
 
 func TestRootExecutorForDeployNode(t *testing.T) {
 	// nil node → host shell.
@@ -77,30 +80,5 @@ func TestResolveDeployChain_LocalNoHop(t *testing.T) {
 	}
 	if _, ok := chain.(kit.ShellExecutor); !ok {
 		t.Errorf("local node added a hop: chain = %T, want ShellExecutor (no hop)", chain)
-	}
-}
-
-// TestResolveScoringChain_Local: a flat score/bed target that resolves to a
-// `target: local` node must run on the host venue, NOT a fabricated
-// charly-<pod> container. Pre-cutover this returned a podman-exec NestedExecutor.
-func TestResolveScoringChain_Local(t *testing.T) {
-	roots := map[string]spec.BundleNode{
-		"localbed": {Target: "local"},
-		"podbed":   {Target: "pod"},
-	}
-	exec, err := resolveScoringChain(stampTestDescents(roots), "localbed")
-	if err != nil {
-		t.Fatalf("local bed: %v", err)
-	}
-	if _, ok := exec.(kit.ShellExecutor); !ok {
-		t.Errorf("local bed → %T, want ShellExecutor (host venue, not a container)", exec)
-	}
-	// A pod target still routes to a container chain (no regression).
-	exec, err = resolveScoringChain(stampTestDescents(roots), "podbed")
-	if err != nil {
-		t.Fatalf("pod bed: %v", err)
-	}
-	if _, ok := exec.(*kit.NestedExecutor); !ok {
-		t.Errorf("pod bed → %T, want *NestedExecutor (container chain)", exec)
 	}
 }

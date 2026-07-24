@@ -33,15 +33,26 @@ type K8sPatchTarget struct {
 // reverse-leg the out-of-process candy/plugin-kube provider pulls) — the plugin cannot reach the
 // project loader itself. Also consumed by k8s_deploy_from_box.go (source-less
 // `charly bundle from-box --target k8s`).
+//
+// K1-unblock wave 2: name is resolved through projectTemplates' namespace-qualified template map
+// (the SAME projection resolved_project_host.go's "resolved-project" envelope ships, minus the
+// full box-resolution cost that envelope also pays — projectTemplates is a cheap raw-byte copy, no
+// ResolveBox calls) instead of a bare uf.K8s[name] lookup. This is a genuine functional fix, not
+// just a relocation: the bare lookup never supported a namespace-qualified `--cluster ns.name`
+// profile at all; the namespace-flattened map does.
 func findK8sSpec(dir, name string) *ResolvedK8s {
 	if dir == "" || name == "" {
 		return nil
 	}
 	uf, _, err := LoadUnified(dir)
-	if err != nil || uf == nil || uf.K8s == nil {
+	if err != nil || uf == nil {
 		return nil
 	}
-	body, ok := uf.K8s[name]
+	t := projectTemplates(uf)
+	if t == nil || t.K8s == nil {
+		return nil
+	}
+	body, ok := t.K8s[name]
 	if !ok {
 		return nil
 	}
@@ -60,6 +71,14 @@ func findK8sSpec(dir, name string) *ResolvedK8s {
 // (no matching kind:k8s profile) is a valid result — the plugin falls back to the kubeconfig
 // current-context (the same behavior the in-tree restConfig had).
 func (h *hostVerbResolver) resolveClusterContext(cluster string) (string, error) {
+	return resolveClusterContextFor(cluster)
+}
+
+// resolveClusterContextFor is resolveClusterContext's h-free core (K1-unblock W3 Unit B, R3
+// extraction) — it never actually read hostVerbResolver state, so this is a straight lift, not a
+// parameterization: usable directly by charly/plugin_dispatch_reverse.go's InvokeProvider
+// detached CheckContext for a CheckVerbProvider target dispatched from a plugin.
+func resolveClusterContextFor(cluster string) (string, error) {
 	if cluster == "" {
 		return "", nil
 	}

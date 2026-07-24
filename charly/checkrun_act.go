@@ -108,4 +108,4 @@ func (h *hostVerbResolver) runProvisionAct(ctx context.Context, c *spec.Op, verb
 // `run: {plugin: package}` / `run: {plugin: service}` step the check Runner executes,
 // plus the box-build emitTasks `case "plugin"` seam) — their build/deploy install timeline
 // lowers into a TYPED SystemPackagesStep / ServicePackagedStep via the TypedStepProvider
-// (compileActOp), NOT this shell.
+// (hostBuildConstructStep, the "construct-step" seam handler), NOT this shell.

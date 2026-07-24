@@ -312,10 +312,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 	}
 
 	artifactEnv := deploykit.BuildArtifactEnv(secretEnv, t.node)
-	artifactKey := t.name
-	if reply.ArtifactKey != "" {
-		artifactKey = reply.ArtifactKey
-	}
+	artifactKey := t.artifactKeyFrom(reply)
 	if err := retrieveArtifactsAndK3s(ctx, t.venueExecutor(), candyList, artifactKey, t.name, artifactEnv, opts); err != nil {
 		return fmt.Errorf("external deploy %q: retrieving candy artifacts: %w", t.name, err)
 	}
@@ -354,6 +351,18 @@ func (t *pluginDeployTarget) venueExecutor() deploykit.DeployExecutor {
 	return exec
 }
 
+// artifactKeyFrom resolves the ENTITY-scoped artifact key a dispatch reply carries, falling
+// back to the deploy's own name — the SAME fallback Add and Update both need (R3, shared here
+// rather than re-inlined per call site) for retrieveArtifactsAndK3s / K3sPostProvision, which key
+// the shared per-VM cluster cache dir + kubeconfig context off it (deployVMForwards' doc comment
+// covers why this differs from t.name, the per-DEPLOY/domain identity used alongside it).
+func (t *pluginDeployTarget) artifactKeyFrom(reply spec.DeployTargetDispatchReply) string {
+	if reply.ArtifactKey != "" {
+		return reply.ArtifactKey
+	}
+	return t.name
+}
+
 func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.InstallPlan, opts UpdateOpts) error {
 	views := make([]spec.InstallPlanView, 0, len(plans))
 	for _, p := range plans {
@@ -378,8 +387,39 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*deploykit.Inst
 	if err != nil {
 		return err
 	}
-	_, err = t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "update", PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON()})
-	return err
+	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "update", PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON()})
+	if err != nil {
+		return err
+	}
+	if opts.DryRun {
+		return nil
+	}
+	// R1 fix (K1-alpha regression): Add() re-establishes a k3s-server deploy's kubeconfig
+	// server-port rewrite via K3sPostProvision (retrieveArtifactsAndK3s's artifactRegisterHandlers
+	// dispatch) — Update() never did, so a fresh `charly update` on a k8s-deploy's k3s-server
+	// member left the merged ~/.kube/config context pointing at whatever host-forwarded port was
+	// current the LAST time Add ran. Re-running the SAME idempotent post-provision here keeps
+	// kubectl/`kube:` checks working across a rebuild without re-retrieving the artifact itself
+	// (its content is unchanged; only the forwarded port can move).
+	//
+	// Gated on the kube plugin ALREADY being connected (a pure providerRegistry.ResolveVerb
+	// lookup — no connect attempt, no side effect): unlike Add, which only reaches
+	// K3sPostProvision when the deploy's OWN candy list declares `register: kubeconfig`
+	// (deploy_add_shared.go's artifactRegisterHandlers), Update has no candyList to run that same
+	// check against. Calling K3sPostProvision unconditionally hard-errors for every OTHER deploy
+	// kind (pod/local/no-k3s) with "kube plugin not loaded" — resolveKubePlugin's connect failure
+	// is a hard error there, not the graceful no-op K3sPostProvision's own doc comment promises
+	// for a merely-absent kubeconfig FILE (caught by TestExternalDeployPlugin_
+	// ReverseChannelEndToEnd, a plain fixture with no candy/plugin-kube composed at all). A
+	// k3s-server deploy's plugin connects during the update path's own plugin-loading (mirroring
+	// Add's collectReferencedPluginWords/loadProjectPlugins), so the registry already reflects
+	// whether THIS deploy actually needs it.
+	if _, ok := providerRegistry.ResolveVerb("kube"); ok {
+		if err := K3sPostProvision(t.artifactKeyFrom(reply), t.name); err != nil {
+			return fmt.Errorf("external deploy %q: re-establishing k3s port-forwards: %w", t.name, err)
+		}
+	}
+	return nil
 }
 
 // Test runs the deploy-scope checks against the host venue. The plugin is NOT involved — the
@@ -563,9 +603,6 @@ func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, err
 	prov, ok := providerRegistry.ResolveDeploy(node.Target)
 	if !ok {
 		return nil, unresolvedDeployTargetError(name, node.Target)
-	}
-	if dp, ok := prov.(DeployTargetProvider); ok {
-		return dp.ResolveTarget(node, name)
 	}
 	// An OUT-OF-PROCESS deploy provider (a grpcProvider, Invoke-only) drives the deploy lifecycle
 	// via candy/plugin-bundle's Invoke(OpDeployDispatch) — S3b. The executor is chosen by the

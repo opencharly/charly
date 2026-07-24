@@ -16,7 +16,7 @@ package main
 //      the root node.Plan: checkrun.go runOne (deterministic check-live,
 //      per-step venue swap) and check_runner_live.go (iterate scoring, venue
 //      bucketing). The stamped venue resolves to a live executor via
-//      resolveScoringChain / ResolveDeployChain / the run TargetResolver.
+//      the plugin scorer's chain resolver / ResolveDeployChain / the run TargetResolver.
 //
 // A direct step under a pure GROUP root (no workload container) is a hard
 // error — a group has no venue of its own; place the step under a member.
@@ -76,7 +76,7 @@ func flattenBundleOne(root *spec.BundleNode, rootName string) error {
 // hoistVenueSubtree stamps venuePath onto every step of `node`, appends those
 // steps to root.Plan, clears node.Plan (so the steps run once, from the root
 // plan), and recurses into node's nested children (dotted) and any sub-members
-// (bare). venuePath is the dotted address that resolveScoringChain /
+// (bare). venuePath is the dotted address the plugin scorer's chain resolver /
 // ResolveDeployChain resolve.
 func hoistVenueSubtree(root, node *spec.BundleNode, venuePath string) {
 	if node == nil {
