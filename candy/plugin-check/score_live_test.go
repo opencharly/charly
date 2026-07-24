@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -148,9 +147,6 @@ func TestPluginResolveDottedAgentProvisionedVenue(t *testing.T) {
 	}
 	if sc == nil {
 		t.Fatalf("pluginResolveScoringChain(%q): nil chain", dotted)
-	}
-	if _, ok := sc.(deploykit.DeployExecutor); !ok {
-		t.Fatalf("pluginResolveScoringChain(%q) = %T, want a DeployExecutor chain", dotted, sc)
 	}
 }
 

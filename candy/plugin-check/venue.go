@@ -154,25 +154,6 @@ func sshForwardEndpoint(e *kit.SSHExecutor, port int) (*CheckEndpoint, error) {
 	return nil, fmt.Errorf("ssh -L forward to %s:%d did not become ready: %w", dest, port, perr)
 }
 
-// venueRunSilent runs a command on the venue discarding output, returning an error on non-zero
-// exit.
-func venueRunSilent(ex deploykit.DeployExecutor, script string) error {
-	_, _, exit, err := ex.RunCapture(context.Background(), script)
-	if err != nil {
-		return err
-	}
-	if exit != 0 {
-		return fmt.Errorf("command exited %d", exit)
-	}
-	return nil
-}
-
-// venueHasTool reports whether `tool` is on PATH on the venue.
-func venueHasTool(ex deploykit.DeployExecutor, tool string) bool {
-	_, _, exit, err := ex.RunCapture(context.Background(), "command -v "+tool+" >/dev/null 2>&1")
-	return err == nil && exit == 0
-}
-
 // isHostNetworked reports whether the container runs with --network=host (no port mappings to
 // probe).
 func isHostNetworked(engine, containerName string) bool {
