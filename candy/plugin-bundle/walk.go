@@ -143,34 +143,50 @@ func sortedChildKeys(children map[string]*spec.BundleNode) []string {
 }
 
 // dispatchOne invokes the deploy-node-dispatch seam for ONE tree position.
-// target/vmEntity are pre-resolved HERE (classifyNodeTarget/resolveVmEntity,
-// W4 pure-helpers relocation) — pure functions of node+path with no
-// LoadUnified/executor dependency — so the host-side dispatch no longer
-// recomputes them.
+// target/vmEntity/ref/add_candy/tag/the resolved gate opts are ALL RESOLVED
+// HERE (classifyNodeTarget/resolveVmEntity/resolveNodeOverlays/
+// resolveNodeTemplate, W4 pure-helpers relocation, node_resolve.go) — pure
+// functions of node+path+CLI-flags with no executor dependency (the ONE
+// LoadUnified-coupled piece, the kind:local template lookup inside
+// resolveNodeTemplate, reaches back to the host over the EXISTING
+// "deploy-entity-resolve" seam) — so the host-side dispatch no longer
+// recomputes any of them; it trusts every field as sent.
 func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorPaths []string, ancestorNodes []spec.BundleNode) error {
+	target := deploykit.ClassifyNodeTarget(node, path)
+	vmEntity := resolveVmEntity(path, node)
+
+	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node)
+	if err != nil {
+		return err
+	}
+	addCandies, opts, err = resolveNodeTemplate(target, path, node, addCandies, opts)
+	if err != nil {
+		return err
+	}
+
 	return hostDeploySeamJSON("deploy-node-dispatch", spec.DeployNodeDispatchRequest{
 		Path:             path,
 		Node:             node,
 		AncestorPaths:    ancestorPaths,
 		AncestorNodes:    ancestorNodes,
-		Ref:              c.Ref,
-		AddCandy:         c.AddCandy,
-		Tag:              c.Tag,
+		Ref:              refStr,
+		AddCandy:         addCandies,
+		Tag:              tag,
 		DryRun:           c.DryRun,
 		NodeOnly:         c.NodeOnly,
 		Format:           c.Format,
-		Pull:             c.Pull,
-		Verify:           c.Verify,
-		WithServices:     c.WithServices,
-		AllowRepoChanges: c.AllowRepoChanges,
-		AllowRootTasks:   c.AllowRootTasks,
-		SkipIncompatible: c.SkipIncompatible,
-		BuilderImage:     c.BuilderImage,
+		Pull:             opts.Pull,
+		Verify:           opts.Verify,
+		WithServices:     opts.WithServices,
+		AllowRepoChanges: opts.AllowRepoChanges,
+		AllowRootTasks:   opts.AllowRootTasks,
+		SkipIncompatible: opts.SkipIncompatible,
+		BuilderImage:     opts.BuilderImageOverride,
 		AssumeYes:        c.AssumeYes,
 		Disposable:       c.Disposable,
 		Lifecycle:        c.Lifecycle,
-		Target:           deploykit.ClassifyNodeTarget(node, path),
-		VmEntity:         resolveVmEntity(path, node),
+		Target:           target,
+		VmEntity:         vmEntity,
 	}, nil)
 }
 

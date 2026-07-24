@@ -153,37 +153,34 @@ func deployDelArgv(name string) []string {
 // at the root. Non-nil means "this node is a child of something" —
 // its target composes a NestedExecutor over parentExec.
 func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor, dir, target, vmEntity string) error {
-	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node, parentExec)
-	if err != nil {
-		return err
-	}
+	// The per-node emit opts, ref string, add-candy list, tag, AND target/
+	// vmEntity classification are ALL RESOLVED PLUGIN-SIDE now (resolveNodeOverlays
+	// / resolveNodeTemplate / classifyNodeTarget / resolveVmEntity — W4 pure-helpers
+	// relocation, candy/plugin-bundle/node_resolve.go: all pure functions of
+	// node+path with no LoadUnified/executor dependency) and threaded in via the
+	// deploy-node-dispatch request (c's own fields, populated from the request by
+	// runDeployNodeDispatch) — the host no longer recomputes any of them. c.emitOpts()
+	// below reflects the FINAL resolved gate values (WithServices/AllowRepoChanges/…),
+	// not raw CLI ones; only ParentExec/Path are filled in HERE, because a live
+	// DeployExecutor can never cross the wire. The candy compiler needs vmEntity to
+	// build plans against the GUEST's distro/format (apt/dnf on debian/fedora) rather
+	// than the operator host's (cachyos→pac).
+	opts := c.emitOpts()
+	opts.ParentExec = parentExec
+	opts.Path = path
+	refStr := c.Ref
+	addCandies := c.AddCandy
+	tag := c.Tag
+	c.vmEntity = vmEntity
 
 	cfg, distroCfg, builderCfg, err := loadConfigForDeploy(dir)
 	if err != nil {
 		return err
 	}
 
-	// target + the kind:vm entity this node targets (if any) are RESOLVED
-	// PLUGIN-SIDE (classifyNodeTarget/resolveVmEntity, W4 pure-helpers
-	// relocation — candy/plugin-bundle's node_resolve.go) and threaded in via
-	// the deploy-node-dispatch request; both are pure functions of node+path
-	// with no LoadUnified/executor dependency, so the host no longer
-	// recomputes them. The candy compiler needs vmEntity to build plans
-	// against the GUEST's distro/format (apt/dnf on debian/fedora) rather
-	// than the operator host's (cachyos→pac).
-	c.vmEntity = vmEntity
-
-	// Resolve a kind:local template, when referenced. Template fields
-	// (candies + install_opts + env) merge BENEATH deployment-level
-	// overrides — so the precedence is CLI > deployment > template.
-	addCandies, opts, err = resolveNodeTemplate(target, path, dir, node, addCandies, opts)
-	if err != nil {
-		return err
-	}
-
 	// Capture the deploy's effective builder-image override (CLI --builder-image
-	// over install_opts.builder_image, already merged in opts) so the compile
-	// methods seed hostCtx.BuilderImage — see the builderImageOverride field.
+	// over install_opts.builder_image, already merged plugin-side into opts) so the
+	// compile methods seed hostCtx.BuilderImage — see the builderImageOverride field.
 	c.builderImageOverride = opts.BuilderImageOverride
 
 	plans, base, candySet, err := c.compileNodePlans(target, refStr, tag, path, addCandies, cfg, distroCfg, builderCfg, dir)
@@ -262,78 +259,15 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 	return utgt.Add(context.Background(), dctx, plans, opts)
 }
 
-// resolveNodeOverlays computes the per-node emit opts, ref string, add-candy
-// list and tag, applying the charly.yml entry's field overlays on top of the
-// CLI flags. On the root this matches the pre-v2 behavior; on children the
-// fields come from the child node (not c.Name's top-level entry). Returns an
-// error only when neither a <ref> nor a charly.yml entry resolves a ref.
-func (c *deployAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor) (deploykit.EmitOpts, string, []string, string, error) {
-	opts := c.emitOpts()
-	opts.ParentExec = parentExec
-	opts.Path = path
-	// Note: opts.ParentNode is populated by the walker when available.
-
-	refStr := c.Ref
-	addCandies := append([]string(nil), c.AddCandy...)
-	tag := c.Tag
-	if node != nil {
-		if node.Version != "" {
-			tag = node.Version
-		} else if tag != "" {
-			// Propagate an explicit --tag onto the in-memory node so downstream
-			// resolvers that read node.Version (the k8s preresolver, the pod overlay
-			// build) pin the EXACT tag rather than re-resolving the short name by a
-			// newest-local-CalVer sort — the bed-scoped per-run tag #75, uniform with
-			// the plain-pod kit.ResolveShellImageRef(c.Tag) path.
-			node.Version = tag
-		}
-		if node.InstallOpts != nil {
-			opts = deploykit.InstallOptsApplyTo(node.InstallOpts, opts)
-		}
-		if len(addCandies) == 0 && len(node.AddCandy) > 0 {
-			addCandies = append([]string(nil), node.AddCandy...)
-		}
-	}
-	if refStr == "" {
-		if node == nil {
-			return opts, "", addCandies, tag, fmt.Errorf("charly bundle add: no <ref> and charly.yml has no entry for %q", path)
-		}
-		// Schema v3: prefer the explicit `box:` cross-ref when set,
-		// so deployment names like "sway-pod" don't need to match a
-		// box name. Falls back to the deploy key for legacy entries.
-		switch {
-		case node.Image != "":
-			refStr = node.Image
-		default:
-			refStr = deploykit.PathLeaf(path)
-		}
-	}
-	return opts, refStr, addCandies, tag, nil
-}
-
-// resolveNodeTemplate merges a referenced kind:local template into addCandies
-// and opts. Template fields merge BENEATH deployment-level overrides — the
-// precedence is CLI > deployment > template — because InstallOptsConfig.ApplyTo
-// is fill-empty, so applying the template's opts after the deployment's leaves
-// the deployment's values intact and only fills the gaps.
-func resolveNodeTemplate(target, path, dir string, node *spec.BundleNode, addCandies []string, opts deploykit.EmitOpts) ([]string, deploykit.EmitOpts, error) {
-	if target == "local" && node != nil && node.From != "" {
-		tmpl, ferr := findLocalSpec(dir, node.From)
-		if ferr != nil {
-			return addCandies, opts, fmt.Errorf("deployment %q: resolving kind:local template %q: %w", path, node.From, ferr)
-		}
-		if tmpl == nil {
-			return addCandies, opts, fmt.Errorf("deployment %q: unknown kind:local template %q", path, node.From)
-		}
-		// Prepend template candies; deployment add_candy are appended.
-		merged := append([]string(nil), tmpl.Candy...)
-		merged = append(merged, addCandies...)
-		addCandies = merged
-		// Fill install_opts gaps from the template.
-		opts = deploykit.InstallOptsApplyTo(tmpl.InstallOpts, opts)
-	}
-	return addCandies, opts, nil
-}
+// resolveNodeOverlays and resolveNodeTemplate moved to
+// candy/plugin-bundle/node_resolve.go (W4 pure-helpers relocation): both are
+// (almost entirely) pure functions of node+path/CLI flags — resolveNodeOverlays'
+// only host-only pieces (ParentExec/Path) are filled in directly by
+// dispatchNode above instead; resolveNodeTemplate's one genuinely host-only
+// piece (the LoadUnified-coupled findLocalSpec lookup) now reaches back over
+// the EXISTING "deploy-entity-resolve" seam's new kind="local" case
+// (host_build_deploy_entity_resolve.go) rather than calling findLocalSpec
+// directly — findLocalSpec itself is UNCHANGED, only its caller moved.
 
 // compileNodePlans compiles the InstallPlans for a node, dispatching on the
 // classified target. Target-only deploys (local, vm, android) don't compile a

@@ -38,6 +38,27 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: no deploy entry %q", req.Name)
 		}
 		return spec.DeployEntityResolveReply{Node: &n}, nil
+	case "local":
+		// W4 pure-helpers relocation: candy/plugin-bundle's resolveNodeTemplate needs the
+		// LoadUnified-coupled kind:local template lookup (findLocalSpec) but nothing else — the
+		// merge-into-addCandies/opts logic around it is pure and runs plugin-side. Unlike
+		// k8s/android below, "not found" is NOT collapsed into an error here: findLocalSpec
+		// itself distinguishes a genuine load failure (err != nil) from "no entry by that name"
+		// (nil, nil) — preserved by returning an EMPTY reply (no EntityJSON, no error) for the
+		// latter, so the plugin can produce its OWN "unknown kind:local template" message rather
+		// than a generic seam-level one.
+		spc, err := findLocalSpec(dir, req.Name)
+		if err != nil {
+			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: resolving kind:local template %q: %w", req.Name, err)
+		}
+		if spc == nil {
+			return spec.DeployEntityResolveReply{}, nil
+		}
+		b, err := json.Marshal(spc)
+		if err != nil {
+			return spec.DeployEntityResolveReply{}, err
+		}
+		return spec.DeployEntityResolveReply{EntityJSON: b}, nil
 	case "k8s":
 		spc := findK8sSpec(dir, req.Name)
 		if spc == nil {
