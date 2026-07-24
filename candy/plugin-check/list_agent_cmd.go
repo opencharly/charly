@@ -1,10 +1,12 @@
 package check
 
 // list_agent_cmd.go — `charly check list-ai` (P12 Unit iv). Prints the project's
-// configured agents (the AI-CLI catalog). PrintAgents relocates here from
-// charly/agent_config.go; the OPAQUE kind:agent catalog is read off the resolved-project
-// envelope's AgentBodies (the host's uf.PluginKinds["agent"]). The kind:agent
-// RESOLVER + the grader STAY core.
+// configured agents (the AI-CLI catalog). PrintAgents relocates here from the
+// former core-side agent catalog helper; the OPAQUE kind:agent catalog is read off
+// the resolved-project envelope's AgentBodies (the host's uf.PluginKinds["agent"]).
+// The kind:agent RESOLVER + the grader are BOTH plugin-side now (agent.go's
+// resolveAgentSpec, shared by the harness and the feature-run grader — K1-unblock
+// wave arm 2 deleted the last core-side resolver).
 
 import (
 	"encoding/json"

@@ -64,16 +64,14 @@ codex:
 		t.Errorf("claude.OutputFormat = %q, want %q", claude.OutputFormat, "stream-json")
 	}
 
-	// (3) resolveAgentViaPlugin resolves a known name through the REAL compiled-in
-	// provider (ResolveKind → Invoke(OpResolve)) — the live-dispatch seam the harness
-	// uses, with the plugin applying defaults (prompt_via → argv).
-	execSpec, name, err := resolveAgentViaPlugin(uf.PluginKinds["agent"], "claude")
-	if err != nil {
-		t.Fatalf("resolveAgentViaPlugin(claude): %v", err)
-	}
-	if name != "claude" || execSpec == nil || execSpec.PromptVia != "argv" {
-		t.Fatalf("resolveAgentViaPlugin returned name=%q spec=%v, want claude with default prompt_via", name, execSpec)
-	}
+	// (3) The live compiled-in provider dispatch (ResolveKind → Invoke(OpResolve),
+	// applying defaults like prompt_via → argv) — formerly proven here via a
+	// core-side catalog resolver — is now exercised ONLY plugin-side:
+	// candy/plugin-check/agent.go's resolveAgentSpec reaches the SAME
+	// kind/"agent"/OpResolve dispatch via Executor.InvokeProvider, which needs
+	// a live reverse-channel Executor a unit test cannot construct in isolation —
+	// proven instead by any live `charly check feature run` bed carrying an
+	// `agent:` catalog + grader (R10, not a core unit test).
 }
 
 // TestValidateIterateBed_RejectsUnknownAgent proves the LOAD-BEARING guard survives

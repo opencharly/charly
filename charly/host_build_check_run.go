@@ -28,12 +28,6 @@ const checkRunBuilderKind = "check-run"
 
 func hostBuildCheckRun(ctx context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
 	switch req.Mode {
-	case "box":
-		return hostCheckRunBox(ctx, req)
-	case "feature-box":
-		return hostCheckRunFeatureBox(ctx, req)
-	case "feature-live":
-		return hostCheckRunFeatureLive(ctx, req)
 	case "score":
 		return hostCheckRunScore(ctx, req)
 	case "preflight":
@@ -86,64 +80,16 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.Che
 	return kit.CheckRunReply{}, nil
 }
 
-// hostCheckRunBox runs a pure-box check: a disposable container built from the image, build-scope
-// steps only (RunModeBox). It is CheckBoxCmd.Run's engine (ExtractMetadata → checkBoxContainerChain
-// venue → NewRunner → RunPlan) minus the CLI parse + the text/yaml reporters (which live in the plugin).
-// The reply carries []StepResult verbatim so the plugin's kit formatters produce byte-identical
-// output to the former in-core CheckBoxCmd.
-func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	rt, err := kit.ResolveRuntime()
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	imageRef, err := kit.ResolveLocalImageRef(rt.RunEngine, req.Image)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	meta, err := deploykit.ExtractMetadata(rt.RunEngine, imageRef)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
-		return kit.CheckRunReply{Image: imageRef, NoSteps: true}, nil
-	}
-
-	// PURE-BOX: always a disposable container, build-context steps only (RunModeBox skips
-	// deploy/runtime-context steps). No autodetect, no fallback — the mode is explicit.
-	// Mirrors CheckBoxCmd.Run's engine exactly (minus the CLI parse + reporters, which live
-	// in candy/plugin-check), so the reply's []StepResult formats byte-identically.
-	// R44 Option A: ONE persistent container + per-step `podman exec` (checkBoxContainerChain),
-	// not a `podman run --rm` per step — O(N)→O(1) container setups so the passwd-setup store
-	// race is minimized; a residual create failure returns an infra error → INFRA exit class.
-	executor, teardown, err := deploykit.CheckBoxContainerChain(rt.RunEngine, imageRef)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	defer teardown()
-	resolver := kit.ResolveCheckVarsBuild(meta)
-	env, hasRuntime := resolverEnv(resolver)
-	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:       executor,
-		Mode:       RunModeBox,
-		Env:        env,
-		HasRuntime: hasRuntime,
-		Distros:    meta.Distro,
-		VerifyOnly: true,
-	})
-
-	stepResults := kit.RunPlan(context.Background(), runner, meta.Description, false)
-	return kit.CheckRunReply{Image: imageRef, Steps: stepResults}, nil
-}
-
-// hostCheckRunFeatureBox is the "feature-box" atom arm: build-scope ADE acceptance over
-// req.Image (SkipDeterministicRun; no grader — prose-only steps stay advisory).
-func hostCheckRunFeatureBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	return hostFeatureBox(req)
-}
-
-// hostFeatureBox is the CLI-free engine of BoxFeatureRunCmd.Run: run the image's baked plan
-// against a disposable container, deterministic steps only (SkipDeterministicRun skips the
-// build-time install run: steps). Shared by the atom arm and the CLI shell (BoxFeatureRunCmd).
+// hostFeatureBox is the CLI-free engine of BoxFeatureRunCmd.Run (charly/check_feature_run.go): run
+// the image's baked plan against a disposable container, deterministic steps only
+// (SkipDeterministicRun skips the build-time install run: steps). `charly box feature run` stays a
+// still-core CLI leaf (box.go's Kong grammar, box-command-word collision with candy/plugin-feature —
+// see check_feature_run.go's header for why) and calls this DIRECTLY as an in-process Go function,
+// never through the check-run HostBuild seam — Mode:"feature-box" has NO other caller (traced
+// during K1-unblock wave arm 2: `charly check feature run` is deploy-scope only, Mode:"feature-live",
+// wired plugin-side; a plugin-side "feature-box" twin would be unreachable dead code and was
+// deliberately not built — see candy/plugin-check/feature_run_gather.go's header), so this stays
+// the ONE live implementation, unmoved.
 func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	rt, err := kit.ResolveRuntime()
 	if err != nil {
@@ -167,7 +113,7 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if err := kit.ValidateTagExpr(req.Tag); err != nil {
 		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
 	}
-	// R44 Option A (mirrors hostCheckRunBox): ONE persistent container + `podman exec` per step.
+	// R44 Option A: ONE persistent container + `podman exec` per step.
 	executor, teardown, err := deploykit.CheckBoxContainerChain(rt.RunEngine, imageRef)
 	if err != nil {
 		return kit.CheckRunReply{}, err
@@ -184,89 +130,6 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	})
 	results := kit.RunPlan(context.Background(), runner, meta.Description, req.Strict)
 	return kit.CheckRunReply{Image: imageRef, Steps: results, Header: fmt.Sprintf("Feature run (image, build scope): %s", imageRef)}, nil
-}
-
-// hostCheckRunFeatureLive is the "feature-live" atom arm: deploy-scope ADE acceptance against
-// the running deployment req.Name, wiring the host-side agent grader (resolveGraderAgent →
-// AgentGrader) unless req.NoAgent.
-func hostCheckRunFeatureLive(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	return hostFeatureLive(req)
-}
-
-// hostFeatureLive is the CLI-free engine of CheckFeatureRunCmd.Run: run the deployment image's
-// baked plan against the running container, deterministic check: steps + the host-side agent
-// grader for prose-only steps (unless req.NoAgent). The grader runs INSIDE the host-side plan
-// walk (it needs LoadUnified + the kind:agent CLI), so it stays behind the seam. Shared by the
-// atom arm and the CLI shell (CheckFeatureRunCmd).
-func hostFeatureLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	engine, containerName, err := deploykit.ResolveContainer(req.Name, req.Instance)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	dir, _ := os.Getwd()
-	var projectCfg *Config
-	if uf, ok, _ := LoadUnified(dir); ok && uf != nil {
-		projectCfg = uf.ProjectConfig()
-	}
-	imageRef := resolveDeployBoxName(req.Name, req.Instance)
-	resolvedRef, err := resolveImageRefForEnsure(imageRef, projectCfg, dir)
-	if err != nil {
-		return kit.CheckRunReply{}, fmt.Errorf("resolving deploy box %q: %w", imageRef, err)
-	}
-	meta, err := deploykit.ExtractMetadata(engine, resolvedRef)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	if meta == nil || meta.Description == nil || meta.Description.IsEmpty() {
-		return kit.CheckRunReply{NoSteps: true}, nil
-	}
-	var deployOverlay *spec.BundleNode
-	if dc := deploykit.LoadDeployConfigForRead("charly check feature run"); dc != nil {
-		if entry, ok := dc.Bundle[deploykit.DeployKey(req.Name, req.Instance)]; ok {
-			deployOverlay = &entry
-		} else if entry, ok := dc.Bundle[req.Name]; ok {
-			deployOverlay = &entry
-		}
-	}
-	resolver, _ := kit.ResolveCheckVarsRuntime(meta, deployOverlay, engine, req.Name, containerName, req.Instance)
-	resolver = stampCharlyBin(resolver)
-	// validateTagExpr still VALIDATES --tag's syntax (a malformed expression errors here);
-	// applying the parsed filter to the plan walk is a known, tracked gap — see the
-	// P12a cutover notes on kit.RunPlan's tag-filter no-op (RCA'd, non-blocking, routed
-	// to the next check-correctness thematic batch) — kit.RunPlan takes no filter param.
-	if err := kit.ValidateTagExpr(req.Tag); err != nil {
-		return kit.CheckRunReply{}, fmt.Errorf("parsing --tag: %w", err)
-	}
-	rctx := resolveCheckRunnerContext(req.Name, dir, projectCfg)
-	env, hasRuntime := resolverEnv(resolver)
-	var grader kit.StepGrader
-	if !req.NoAgent {
-		ai, aerr := resolveGraderAgent(dir, req.Agent)
-		if aerr != nil {
-			return kit.CheckRunReply{}, aerr
-		}
-		grader = &kit.AgentGrader{Agent: ai, Target: req.Name, Instance: req.Instance, Timeout: req.Timeout}
-	}
-	runner := newCheckRunner(kit.RunnerConfig{
-		Exec:                 deploykit.ContainerChain(engine, containerName),
-		Mode:                 RunModeLive,
-		Env:                  env,
-		HasRuntime:           hasRuntime,
-		Distros:              meta.Distro,
-		Box:                  req.Name,
-		Instance:             req.Instance,
-		SkipDeterministicRun: true,
-		CandyDirs:            rctx.CandyDirs,
-		CandyScanErr:         rctx.CandyScanErr,
-		Grader:               grader,
-	})
-	results := kit.RunPlan(context.Background(), runner, meta.Description, req.Strict)
-	grading := "agent-graded prose"
-	if req.NoAgent {
-		grading = "deterministic-only"
-	}
-	header := fmt.Sprintf("Feature run (deploy scope, %s): %s (container: %s)", grading, meta.Box, containerName)
-	return kit.CheckRunReply{Image: meta.Box, Steps: results, Header: header}, nil
 }
 
 // Register the check-run host-builder at package-var init (before any init(), like the

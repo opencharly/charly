@@ -131,8 +131,14 @@ type UnifiedFile struct {
 	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
 	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
 	// PluginKinds["agent"] as an OPAQUE body. The kernel never types it: the harness
-	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve
-	// (resolveAgentViaPlugin) — the agent de-type, Cutover E. See agent_config.go.
+	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve — the
+	// agent de-type, Cutover E. Every consumer now reaches this catalog PLUGIN-SIDE
+	// (candy/plugin-check's checkproject.go exposes it as rp.AgentBodies off the
+	// resolved-project envelope; candy/plugin-check/agent.go's resolveAgentSpec
+	// Invokes candy/plugin-agent's OpResolve directly, shared by the harness AND the
+	// deploy-scope feature-run grader, K1-unblock wave arm 2) — the former
+	// core-side catalog resolver had its one caller move plugin-side and was
+	// deleted with it.
 
 	// PluginKinds holds entities of KINDS contributed by plugins (a kind the core
 	// has no typed map for). Decoded via the plugin's Invoke envelope

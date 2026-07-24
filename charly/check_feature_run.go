@@ -1,18 +1,20 @@
 package main
 
 // check_feature_run.go — the `charly box feature run <image>` Agent Driven
-// Evaluation (ADE) acceptance runner (the core box-grammar CLI leaf) + the shared
-// step-reporting / grader-resolution helpers.
+// Evaluation (ADE) acceptance runner (the core box-grammar CLI leaf).
 //
 // The DEPLOY-scope `charly check feature run <deployment>` CLI leaf moved to the
 // compiled-in command:check plugin (candy/plugin-check); its CLI-free engine
-// (hostFeatureLive, wiring the host-side agent grader) lives behind the check-run
-// seam (host_build_check_run.go). This file keeps the BUILD-scope `charly box
-// feature run` leaf — which stays in the box grammar (image.go) — plus
-// resolveGraderAgent (the kind:agent catalog resolution the grader needs, loader-
-// coupled). The former reportSteps/stepFailCount/validateTagExpr helpers dissolved
-// into kit.ReportStepResultsCount / kit.ValidateTagExpr (CHECK-wave) — all three were
-// pure wrappers with zero core-state coupling.
+// (pluginCheckRunFeatureLive, wiring the host-side agent grader via agent.go's
+// resolveAgentSpec) lives entirely plugin-side now
+// (candy/plugin-check/feature_run_gather.go, K1-unblock wave arm 2) — including the
+// grader-catalog resolution the former core-side helpers provided; the core
+// engine + its dedicated grader-catalog resolver were deleted with their one
+// caller. This file keeps only the BUILD-scope `charly box feature run` leaf, which
+// stays in the box grammar (image.go). The former reportSteps/stepFailCount/
+// validateTagExpr helpers dissolved into kit.ReportStepResultsCount /
+// kit.ValidateTagExpr (CHECK-wave) — all three were pure wrappers with zero
+// core-state coupling.
 //
 // P12a follow-up ATTEMPTED moving BoxFeatureCmd/BoxFeatureRunCmd to candy/plugin-box
 // as a 7th `box`-nested command word (CommandParent()=="box") — mirroring
@@ -39,25 +41,6 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// resolveGraderAgent loads the project's `agent:` catalog and resolves the named
-// AI (or the sole entry when name is empty). Errors clearly when no AI is
-// configured so the operator knows to add one or pass --no-agent.
-func resolveGraderAgent(dir, name string) (*spec.AgentExecSpec, error) {
-	uf, ok, err := LoadUnified(dir)
-	if err != nil {
-		return nil, fmt.Errorf("loading project for the ai: catalog: %w", err)
-	}
-	bodies := uf.PluginKinds["agent"]
-	if !ok || uf == nil || len(bodies) == 0 {
-		return nil, fmt.Errorf("agent grader needs a kind:agent entry (an `agent:` map in check.yml); add one or pass --no-agent for deterministic-only")
-	}
-	ai, _, err := resolveAgentViaPlugin(bodies, name)
-	if err != nil {
-		return nil, err
-	}
-	return ai, nil
-}
-
 // ---------------------------------------------------------------------------
 // charly box feature run <image>  (BUILD scope)
 // ---------------------------------------------------------------------------
@@ -82,8 +65,11 @@ type BoxFeatureRunCmd struct {
 }
 
 func (c *BoxFeatureRunCmd) Run() error {
-	// Transitional CLI shell over the CLI-free engine (hostFeatureBox), the same one the
-	// "feature-box" atom arm calls — engine is the single source, ZERO behavior change.
+	// Direct in-process call to the CLI-free engine (hostFeatureBox, host_build_check_run.go) —
+	// the box grammar stays core (see the package header), so this never crosses the check-run
+	// HostBuild seam. Mode:"feature-box" has no OTHER caller (traced during K1-unblock wave arm
+	// 2 — `charly check feature run` is deploy-scope only, Mode:"feature-live") — this call site
+	// is the ONE live consumer of hostFeatureBox.
 	reply, err := hostFeatureBox(spec.CheckRunRequest{Mode: "feature-box", Image: c.Image, Tag: c.Tag, Strict: c.Strict})
 	if err != nil {
 		return err

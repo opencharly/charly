@@ -41,12 +41,15 @@ func dispatchCheckCLI(args []string) error {
 // HostBuild kind, returning the per-step results the CheckCmd handlers format. cmdExec is nil on the
 // out-of-process CliMain path (no reverse channel) → a clear error.
 //
-// K1-unblock wave (mid-flight, transitional): Mode:"box" (Unit B) and Mode:"live" (arm 1) now
-// dispatch to this plugin's OWN pluginCheckRunBox / pluginCheckRunLive instead of the host's
-// "check-run" HostBuild arm — two of six arms moved. The remaining four modes still route to the
-// host; this dual-mode dispatch is a legal Hard-Cutover mid-flight state (CLAUDE.md "Hard Cutover
-// by Default") and is deleted (along with their charly/host_build_check_run.go arms) once every
-// arm has moved, before the R10 acceptance run.
+// K1-unblock wave (mid-flight, transitional): Mode:"box"/"live"/"feature-live" now dispatch to
+// this plugin's OWN pluginCheckRunBox/Live/FeatureLive instead of the host's "check-run" HostBuild
+// arm — three of five LIVE-reachable arms moved (a nominal "feature-box" mode exists in the wire
+// enum but has ZERO callers through this seam — `charly box feature run` calls the CLI-free
+// hostFeatureBox engine directly — so there is no arm to move there; see feature_run_gather.go's
+// header). The remaining two modes ("score", "preflight") still route to the host; this dual-mode
+// dispatch is a legal Hard-Cutover mid-flight state (CLAUDE.md "Hard Cutover by Default") and is
+// deleted (along with their charly/host_build_check_run.go arms) once every arm has moved, before
+// the R10 acceptance run.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
@@ -56,6 +59,8 @@ func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 		return pluginCheckRunBox(cmdExec, cmdCtx, req)
 	case "live":
 		return pluginCheckRunLive(cmdExec, cmdCtx, req)
+	case "feature-live":
+		return pluginCheckRunFeatureLive(cmdExec, cmdCtx, req)
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {

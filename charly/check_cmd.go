@@ -14,12 +14,14 @@ import (
 )
 
 // check_cmd.go — the residual host-side check-project plumbing after the K1-unblock wave's "live"
-// arm moved to candy/plugin-check/live_gather.go (pluginCheckRunLive, wired via
-// host_build_check_run.go's Mode:"live" short-circuit in candy/plugin-check/command.go). What
-// remains here is used by the STILL-host-resident arms (feature-live via host_build_check_run.go's
-// hostFeatureLive, the new "check-load-plugins" seam in host_build_check_load_plugins.go) and by
-// the external `target: local` deploy's own --verify path (unified_targets.go), which are NOT part
-// of the "live" check-run mode and stay core for now.
+// and "feature-live" arms moved to candy/plugin-check (live_gather.go's pluginCheckRunLive,
+// feature_run_gather.go's pluginCheckRunFeatureLive — both wired via command.go's Mode
+// short-circuit; "feature-box" was traced and never had a live caller through this seam — see
+// feature_run_gather.go's header). What remains here is used by the new "check-load-plugins" seam
+// (host_build_check_load_plugins.go), by the still-core `charly box feature run` CLI leaf
+// (check_feature_run.go's hostFeatureBox call), and by the external `target: local` deploy's own
+// --verify path (unified_targets.go) — none of which is part of the "live"/"feature-live" check-run
+// modes reached via the check-run seam, so they stay core.
 
 // The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
 // the sdk (sdk.CheckFailExitCode / sdk.CheckSkippedExitCode); the plugin/main signal it

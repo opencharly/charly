@@ -1,8 +1,8 @@
 package check
 
-// run_box.go — K1-unblock W3 Unit B: pluginCheckRunBox, the plugin-resident port of
-// charly/host_build_check_run.go's hostCheckRunBox (the "box" mode arm of the "check-run"
-// HostBuild dispatch — the FIRST of six arms to move, chosen as the simplest/most
+// run_box.go — K1-unblock W3 Unit B: pluginCheckRunBox, the plugin-resident port of the former
+// core "box" mode arm of the "check-run" HostBuild dispatch (deleted with this move) — the FIRST
+// of six arms to move, chosen as the simplest/most
 // self-contained: no deploy/venue-tree resolution, no cross-deployment addressing, just a
 // disposable build-context container). Ported unchanged in substance — every call this arm
 // makes was ALREADY sdk-portable (kit.ResolveRuntime/ResolveLocalImageRef,
@@ -20,7 +20,7 @@ import (
 )
 
 // pluginCheckRunBox runs a pure-box check: a disposable container built from the image,
-// build-scope steps only (RunModeBox). Mirrors hostCheckRunBox's engine exactly (minus nothing —
+// build-scope steps only (RunModeBox). Mirrors the former in-core engine exactly (minus nothing —
 // the CLI parse + reporters already live here, in check_cmd.go), so the reply's []StepResult
 // formats byte-identically to the former in-core arm.
 func pluginCheckRunBox(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
