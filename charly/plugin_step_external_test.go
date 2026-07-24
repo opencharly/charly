@@ -42,11 +42,11 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 	if userStep.Scope() != spec.ScopeUser {
 		t.Fatalf("Scope(1000:1000) = %v, want ScopeUser", userStep.Scope())
 	}
-
-	// The step kind has a registered StepProvider (the dedicated-builtin bijection).
-	if _, ok := stepProviderFor(spec.StepKindExternalPlugin); !ok {
-		t.Fatal("StepKindExternalPlugin has no registered StepProvider (registerDedicatedBuiltin not wired)")
-	}
+	// StepKindExternalPlugin's pod-overlay build-emit is an unconditional Go-level type-switch arm
+	// in candy/plugin-installstep's "oci-dispatch" word (K5-A item 2) — it has no ClassStep registry
+	// entry to check anymore (the former externalPluginStepProvider/EmitOCI is deleted, R1: zero live
+	// callers after the relocation). checkStepProviderBijection (provider_step.go) is the compile-time
+	// bijection proof for this kind now; see TestDedicatedProviders_BulkStepResolveAndAbsent.
 }
 
 // TestExternalPluginStep_ReverseChannelEndToEnd proves the STEP DEPLOY-EXECUTE leg

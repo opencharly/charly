@@ -166,8 +166,9 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 
 // TestOCITargetLocalPkgNilContractEmitsNothing proves a localpkg step with NO LocalPkg
 // contract (LocalPkg==nil — a distro with no localpkg-capable format) renders nothing at image
-// build. The build-emit routes through the FULL plugin chain (ociEmitStep →
-// pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" → ociSpliceClassStepEmit →
+// build. The build-emit routes through the FULL plugin chain (ociEmitStep → dispatchOCIStep →
+// candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[LocalPkgInstall]="local-pkg-install" →
+// InvokeProvider("step","local-pkg-install") →
 // candy/plugin-installstep OpEmit → deploykit.RenderLocalPkgImageInstall, called directly — a
 // pure function of the step + the BuildEnv scalars, no project structure needed), which returns
 // "" for a nil LocalPkg — so ociEmitStep succeeds and returns nothing.

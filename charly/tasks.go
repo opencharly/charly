@@ -211,10 +211,11 @@ func invokeOpEmitFragment(ctx context.Context, prov Provider, word string, param
 // for a given instance (an empty shell snippet, a packaged service with no overrides + enable=false,
 // a custom service with no unit text — exactly the cases the former the former in-core emit* returned nothing).
 // env carries the caller-populated spec.BuildEnv descriptor — a plain verb emit sets only Distros;
-// the class:step emit (ociSpliceClassStepEmit) additionally sets Image/DevLocalPkg/ImageBuildDir/
-// ContextRelPrefix so a HOST-COUPLED step word (system-packages/builder/local-pkg-install/op) can
-// render its fragment directly against its OWN "resolved-project"-built deploykit.Generator, with
-// NO extra host round-trip beyond this ONE Invoke every word already receives.
+// the pod-overlay dispatch forward (dispatchOCIStep, charly/oci_step_emit.go) additionally sets
+// Image/DevLocalPkg/ImageBuildDir/ContextRelPrefix so a HOST-COUPLED step word
+// (system-packages/builder/local-pkg-install/op) can render its fragment directly against its OWN
+// "resolved-project"-built deploykit.Generator, with NO extra host round-trip beyond this ONE
+// Invoke every word already receives.
 func invokeOpEmitFragmentOpt(ctx context.Context, prov Provider, word string, params []byte, buildEnv spec.BuildEnv, allowEmpty bool) (string, error) {
 	env, err := marshalJSON(buildEnv)
 	if err != nil {

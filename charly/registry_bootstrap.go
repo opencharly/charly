@@ -29,7 +29,7 @@ import (
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
 // validating their rich value host-side against the KEPT #<Kind>Value / #CandyValue def
 // (validateKindValueCUE). So spec.KindWords is now EMPTY and checkKindProviderBijection over it is a
-// no-op. See candy/plugin-deploy-local, plugin_step_external.go, candy/plugin-candy-kind.
+// no-op. See candy/plugin-deploy-local, plugin_command_ssh.go, candy/plugin-candy-kind.
 var builtinProviderInstances = []Provider{
 	// verbs (ClassVerb) — none of the extracted verbs are here: each is a dedicated plugin
 	// UNIT that self-registers via RegisterBuiltinPluginUnit, absent from both this slice and
@@ -61,15 +61,19 @@ var builtinProviderInstances = []Provider{
 	// deploy targets (ClassDeployTarget) — ALL self-register from their dedicated
 	// plugin_deploy_<name>.go files (the externalizable dedicated-provider pattern):
 	// local, pod, vm, k8s, android.
-	// steps (ClassStep) — the ONE remaining in-proc step provider self-registers from its dedicated
-	// plugin_step_external.go file: ExternalPlugin. EVERY other builtin step kind's BUILD-emit
-	// externalized to the compiled-in class:step plugin candy/plugin-installstep — NO in-proc
-	// StepProvider, routed by pluginEmitStepWords: the PURE kinds (C1.1 file/shell-hook/shell-snippet/
+	// steps (ClassStep) — there is NO in-proc StepProvider at all anymore (K5-A item 2 deleted the
+	// category entirely, including the former ExternalPlugin dedicated provider — zero live callers
+	// once its EmitOCI dispatch relocated). EVERY builtin step kind's BUILD-emit dispatch DECISION
+	// lives in the compiled-in class:step plugin candy/plugin-installstep's "oci-dispatch" word,
+	// routed by pluginEmitStepWords for 12 kinds (the PURE C1.1 file/shell-hook/shell-snippet/
 	// service-packaged/service-custom/repo-change/apk-install + C1.6 reboot — apk-install & reboot are
-	// no-op-emit, Emits=false) format their fragment directly from the step VIEW; the HOST-COUPLED
-	// SystemPackages (C1.2) + Builder (C1.3) + LocalPkgInstall (C1.4) + Op (C1.5) OpEmit calls back the
-	// host's "step-emit" host-builder. Their deploy leg stays sdk/kit.WalkPlans (reboot's is
-	// the host-side guest reboot over RunHostStep → rebootVenueAndWait).
+	// no-op-emit, Emits=false — format their fragment directly from the step VIEW; the HOST-COUPLED
+	// SystemPackages (C1.2) + Builder (C1.3) + LocalPkgInstall (C1.4) + Op (C1.5) render directly
+	// against the plugin's OWN "resolved-project"-built deploykit.Generator, no host round-trip,
+	// K5-Unit-6b) and by an unconditional Go-level type-switch arm for the 13th kind (ExternalPlugin —
+	// dispatched to its class:verb provider via InvokeProvider, no registry entry needed). Their
+	// deploy leg stays sdk/kit.WalkPlans (reboot's is the host-side guest reboot over RunHostStep →
+	// rebootVenueAndWait).
 	// builders (ClassBuilder) — the four detection-builders (aur/pixi/cargo/npm) are EXTERNAL
 	// out-of-process plugin candies (candy/plugin-builder-<word>): their build-time multi-stage
 	// is resolved by the plugin's OpResolve leg (C10, kit.BuilderResolve, spliced by

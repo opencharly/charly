@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -53,6 +54,24 @@ import (
 // no-op — proven safe (no deadlock, no flag corruption) by
 // TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlock. No new guard is
 // introduced; the fallback is a plain reuse of the existing chain.
+
+// executorInvoker is the capability to Invoke a deploy/step/builder op WITH the E3b
+// reverse channel: the provider stands up the host's ExecutorService on the go-plugin
+// broker and the out-of-process plugin dials back to run shell/SSH ops on the live
+// venue. Only *grpcProvider (the broker-carrying out-of-proc peer) implements it — a
+// built-in verb runs in-proc and has no out-of-proc execute. Relocated here (K5-A item 2)
+// from the now-deleted charly/plugin_step_external.go, whose SOLE OTHER content
+// (externalPluginStepProvider, StepKindExternalPlugin's in-proc EmitOCI) is gone — the
+// pod-overlay build-emit dispatch for that kind relocated into candy/plugin-installstep's
+// "oci-dispatch" word, leaving zero live callers of EmitOCI/StepProvider. executorInvoker
+// itself is unrelated to that removal — it is InvokeProvider's OWN out-of-process/in-proc
+// discriminator (mirrors the build-context BuildEmitter marker interface, provider_verb.go)
+// and is consumed by host_build_construct_step.go, host_build_pod_config.go,
+// k8s_generate.go, and provider_checkenv.go.
+type executorInvoker interface {
+	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
+}
+
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()

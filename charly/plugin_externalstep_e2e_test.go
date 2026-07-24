@@ -71,6 +71,29 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
 
+	// K5-A item 2 spike proof: DescribeProvider against a REAL out-of-process gRPC-connected
+	// provider (not the hand-constructed fake in plugin_dispatch_reverse_describe_test.go) — proves
+	// capMeta populated via the ACTUAL Describe/buildUnit pipeline (not a direct struct literal)
+	// round-trips through the RPC identically to the plugin's own advertised contract above.
+	{
+		s := &executorReverseServer{}
+		reply, err := s.DescribeProvider(context.Background(), &pb.DescribeProviderRequest{Class: string(ClassStep), Word: "examplestepkind"})
+		if err != nil {
+			t.Fatalf("DescribeProvider (real out-of-process provider): %v", err)
+		}
+		if !reply.GetFound() {
+			t.Fatal("DescribeProvider: Found = false for a just-registered real provider")
+		}
+		got := reply.GetStepContract()
+		if got == nil {
+			t.Fatal("DescribeProvider: StepContract = nil, want the plugin's declared contract")
+		}
+		if got.GetScope() != sc.Scope.String() || got.GetVenue() != int32(sc.Venue) || got.GetGate() != string(sc.Gate) || got.GetEmits() != sc.Emits {
+			t.Fatalf("DescribeProvider StepContract = %+v, want {Scope:%q Venue:%d Gate:%q Emits:%v} (the plugin's OWN declared contract, re-derived via the real connect pipeline)",
+				got, sc.Scope.String(), sc.Venue, sc.Gate, sc.Emits)
+		}
+	}
+
 	// The hostBuildConstructStep ROUTING seam (the "construct-step" HostBuild handler, K5-A
 	// item 1): a `run: plugin: examplestepkind` op whose provider is a class:step grpcProvider
 	// declaring a StepContract lowers to an externalStep carrying the DECLARED contract + the

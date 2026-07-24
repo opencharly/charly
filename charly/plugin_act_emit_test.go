@@ -227,8 +227,9 @@ func TestEmitTasks_PluginAct_KernelParam(t *testing.T) {
 }
 
 // The OCI pod-overlay OpStep build-emit (C1.5) routes the RAW plugin act op through the FULL
-// step-emit chain: OpStep → deploykit.OCITarget.Emit → ociEmitStep → pluginEmitStepWords[Op]="op" →
-// ociSpliceClassStepEmit("op") → candy/plugin-installstep OpEmit → the plugin's OWN
+// step-emit chain: OpStep → deploykit.OCITarget.Emit → ociEmitStep → dispatchOCIStep →
+// candy/plugin-installstep's "oci-dispatch" → pluginEmitStepWords[Op]="op" →
+// InvokeProvider("step","op") → candy/plugin-installstep OpEmit → the plugin's OWN
 // "resolved-project"-built deploykit.Generator → dg.EmitTasks `case "plugin"`. This proves the
 // pod-overlay build and the box build still share the ONE `case "plugin"` seam (no pre-conversion)
 // even after the OpStep build-emit's HOST-COUPLED render moved off the step-emit host-builder.
