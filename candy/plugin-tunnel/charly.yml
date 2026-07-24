@@ -12,11 +12,12 @@ plugin-tunnel:
             go-plugin gRPC by the cmd/serve shim (host-built + connected via LocalTransport)
             when it is not. Placement is invisible above the provider registry.
 
-            The RESOLUTION half of the tunnel subsystem STAYS in charly's core
-            (charly/tunnel.go: ResolveTunnelConfig / TunnelConfigFromMetadata + the
+            The RESOLUTION half of the tunnel subsystem lives in sdk/deploykit/tunnel_resolve.go
+            (ResolveTunnelConfig / TunnelConfigFromMetadata + the
             tunnelConfigPath the systemd unit references; the pure schemeTarget/
-            tailscaleFlag/isTCPFamily helpers the quadlet emitter shares moved to
-            sdk/deploykit with the emitter in P11). Only the EXECUTION leg lives
+            tailscaleFlag/isTCPFamily helpers the quadlet emitter shares, FLOOR-SLIM
+            mechanical batch — charly/tunnel.go, the former core home, carried nothing
+            but dead aliases and was deleted). Only the EXECUTION leg lives
             HERE: the pod-lifecycle plugins that resolve a TunnelConfig via the
             pod-config-container-tunnel / pod-config-tunnel-resolve host-build seams
             (candy/plugin-deploy-pod for start/stop, candy/plugin-pod for remove — Cutover B
