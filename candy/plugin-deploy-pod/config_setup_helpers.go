@@ -339,7 +339,10 @@ func loadProjectVolume(ctx context.Context, ex *sdk.Executor, box, instance stri
 // persistDeployVolumes mirrors persistResourceCaps' Security-write shape for Volume: seeds the
 // per-host overlay entry's Volume field with a project-declared volume override, exactly as a
 // --volume flag would, so the declaration takes effect on every subsequent read (charly config
-// status, the enc mount/unmount plan, …) without re-resolving the project each time.
+// status, the enc mount/unmount plan, …) without re-resolving the project each time. Also stamps
+// VolumeProjectChecked=true — the project consult happened THIS call, regardless of outcome — so
+// resolveDeployVolumes never repeats it (see that function's doc for why this bit must be
+// distinct from "the overlay entry exists").
 func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, c *spec.PodConfigSetupRequest, volumes []spec.DeployVolume) error {
 	if *dc == nil {
 		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
@@ -350,6 +353,7 @@ func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.
 	key := deploykit.DeployKey(c.Box, c.Instance)
 	entry := (*dc).Bundle[key]
 	entry.Volume = volumes
+	entry.VolumeProjectChecked = true
 	(*dc).Bundle[key] = entry
 	return saveBundle(ctx, ex, *dc)
 }
@@ -366,19 +370,21 @@ func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.
 // bind mount was never established (the check-enc-pod R10 regression). dc is a pointer-to-pointer
 // so a project-declared hit can seed a previously-nil overlay, mirroring persistResourceCaps.
 //
-// The project fallback fires ONLY when NO per-host overlay entry exists yet for this deploy key
-// (a genuinely first-time `charly config`) — never merely because the overlay's OWN Volume field
-// happens to be empty. RCA'd 2026-07-24 (val-volfix): the first cut of this fix gated the
-// fallback on `len(deployVolumes) == 0`, which is ALSO true for the overwhelmingly common case of
-// an ALREADY-CONFIGURED, genuinely volume-less deploy (any sibling group member whose overlay
-// entry was created for ports/resources but never carries a volume) — so EVERY subsequent
-// `charly config`/`charly update` re-config of such a deploy re-triggered the project's
-// HostBuild("pod-config-project-volume") seam (a full LoadUnified project resolution) on every
-// single call, a redundant per-call cost this function's ORIGINAL (pre-volume-fallback) shape
-// never paid. Gating on overlay-key PRESENCE instead restores that original zero-lookup path for
-// every already-configured deploy (the overlay is authoritative once written, exactly like
-// persistResourceCaps' resolved caps and ResolveDeployPorts' resolved_port — R3, same pattern)
-// while still catching a project-declared volume on the deploy's genuine first config.
+// The project fallback fires ONLY when overlay.VolumeProjectChecked is NOT yet set for this
+// deploy key — an explicit "the project has already been consulted once" bit, NEVER a proxy
+// like overlay-key EXISTENCE or `len(overlay.Volume) == 0`. Both those proxies are ambiguous:
+// the SAME per-host overlay entry is ALSO written by unrelated Setup stages before
+// resolveDeployVolumes ever runs (the port-resolution block in config_setup.go creates the key
+// with a resolved ResolvedPort the moment a deploy has ANY container port, and
+// persistResourceCaps writes it when a memory/cpu flag is set) — so "the key exists with an
+// empty Volume" is produced by BOTH "an unrelated write already happened" (project never
+// consulted; a project-declared volume on a PORTED deploy would be silently dropped on its
+// FIRST config — the round-3 BLOCKING regression this fix closes, RCA'd 2026-07-24) AND
+// "the project WAS consulted and genuinely declares nothing" (re-querying it every subsequent
+// `charly config`/`charly update` is the round-2 regression this fix ALSO must keep closed).
+// VolumeProjectChecked is the one bit that distinguishes them, set unconditionally by
+// persistDeployVolumes below on every project consult regardless of its result — mirroring
+// resolved_port/resolved_image's "charly-written state, never authored" pattern (R3, same shape).
 func resolveDeployVolumes(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigSetupRequest, dc **deploykit.BundleConfig) ([]spec.DeployVolume, error) {
 	deployVolumes := parseVolumeFlags(c)
 	if len(deployVolumes) == 0 {
@@ -388,24 +394,24 @@ func resolveDeployVolumes(ctx context.Context, ex *sdk.Executor, c *spec.PodConf
 		return deployVolumes, nil
 	}
 	if *dc != nil {
-		if overlay, ok := (*dc).Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
-			// Already configured at least once: the overlay is authoritative, whether or not
-			// it carries a volume. Never re-consult the project on this path (the perf/
-			// correctness regression this fix closes).
+		if overlay, ok := (*dc).Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok && overlay.VolumeProjectChecked {
+			// The project has already been consulted once for this key: the overlay is
+			// authoritative, whether or not it carries a volume. Never re-consult the
+			// project on this path (the round-2 perf/correctness regression this bit closes).
 			return overlay.Volume, nil
 		}
 	}
-	// Genuinely first-time config for this deploy key: consult the project as the last
-	// fallback. A hit is persisted so every subsequent call takes the branch above instead.
+	// The project has NOT yet been consulted for this key (whether or not an overlay entry
+	// exists for OTHER reasons — ports, resource caps): consult it now, exactly once. The
+	// result — found or not — is persisted below so every subsequent call takes the branch
+	// above instead, regardless of what else touches this overlay entry in the meantime.
 	projectVolumes, err := loadProjectVolume(ctx, ex, c.Box, c.Instance)
 	if err != nil {
 		return nil, fmt.Errorf("resolving project-declared volumes: %w", err)
 	}
-	if len(projectVolumes) > 0 {
-		deployVolumes = projectVolumes
-		if err := persistDeployVolumes(ctx, ex, dc, c, deployVolumes); err != nil {
-			return nil, fmt.Errorf("persisting project-declared volumes: %w", err)
-		}
+	deployVolumes = projectVolumes
+	if err := persistDeployVolumes(ctx, ex, dc, c, deployVolumes); err != nil {
+		return nil, fmt.Errorf("persisting project-declared volumes: %w", err)
 	}
 	return deployVolumes, nil
 }
