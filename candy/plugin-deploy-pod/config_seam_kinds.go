@@ -24,6 +24,7 @@ const (
 	podConfigEncUnmountPlanKind   = "pod-config-enc-unmount-plan"
 	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
+	podConfigProjectVolumeKind    = "pod-config-project-volume"
 )
 
 // deployConfigSaveStateKind is the substrate-neutral "deploy-config-save-state" HostBuild kind
