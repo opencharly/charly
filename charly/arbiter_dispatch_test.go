@@ -8,13 +8,14 @@ import (
 
 // arbiter_dispatch_test.go — the C9 externalized-arbiter DISPATCH integration test: it drives the
 // EXACT path the check-runner uses at bed bring-up (acquireResourceForClaimant → the in-core proxy
-// → the compiled-in candy/plugin-preempt verb:arbiter → the HostArbiter reverse channel → the
-// gather/resources host seams → the lease ledger), then proves the lease SURFACES via the arbiter
-// status dispatch (the generic core→verb registry bridge; the externalized `charly preempt status`
-// reaches it via InvokeProvider instead). This is what the seam-faked unit suite (which tests
-// the arbiter LOGIC in-plugin) cannot cover: the compiled-in dispatch + reverse-channel round-trip
-// + real persistence. It is the resource-free (ZERO GPU) analogue of the check-preempt-arbiter-pod
-// bed, hermetic (temp HOME for the ledger, temp cwd so no project holders/resources are gathered).
+// → the compiled-in candy/plugin-preempt verb:arbiter → HostBuild("resolved-project") for its
+// gather/resources reads (K1-unblock wave 1) → the lease ledger), then proves the lease SURFACES
+// via the arbiter status dispatch (the generic core→verb registry bridge; the externalized `charly
+// preempt status` reaches it via InvokeProvider instead). This is what the seam-faked unit suite
+// (which tests the arbiter LOGIC in-plugin) cannot cover: the compiled-in dispatch + reverse-channel
+// round-trip + real persistence. It is the resource-free (ZERO GPU) analogue of the
+// check-preempt-arbiter-pod bed, hermetic (temp HOME for the ledger, temp cwd so no project
+// holders/resources are gathered).
 //
 // This unit test drives the DIRECT-claimant acquire shim (requires_exclusive on the node the shim
 // sees) in isolation — the arbiter DISPATCH + reverse-channel + persistence path, seam-free. The
@@ -34,7 +35,7 @@ func TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces(t *testing.T) {
 
 	// The runner's bed-arbiter path: acquire an exclusive claim for the bed. A SELECTOR-LESS
 	// token (no resource: gpu def) → applyMode SKIPS the device flip (ZERO GPU) but the lease is
-	// STILL persisted through the compiled-in verb:arbiter over the HostArbiter reverse channel.
+	// STILL persisted through the compiled-in verb:arbiter over the InvokeProvider dispatch.
 	lease, err := acquireExclusiveForClaimant(claimant, node, true)
 	if err != nil {
 		t.Fatalf("acquireExclusiveForClaimant through externalized verb:arbiter: %v", err)

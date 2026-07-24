@@ -254,6 +254,16 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 		}
 	}
 
+	// K1-unblock wave 1: resolved `resource:` kind entities. ResolvedResource is an intra-spec
+	// alias (spec.ResolvedResource, resource_resolve.go), so this is a straight assignment — no
+	// re-projection needed. The former sole consumer of this data (charly/arbiter_host.go's
+	// "resources" HostArbiter seam) is retired in favor of reading it off THIS envelope.
+	if uf != nil {
+		if resources := uf.resolveResources(); len(resources) > 0 {
+			rp.Resources = resources
+		}
+	}
+
 	// build VOCABULARY (the validate ENGINE consumer): the embedded distro/builder/init sections.
 	// DistroDef=spec.ResolvedDistro, BuilderDef=spec.Builder, ResolvedInit=spec.ResolvedInit, so the
 	// maps assign straight into the pinned envelope members.
