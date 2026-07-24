@@ -54,7 +54,7 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 		// re-fetch the SAME way. This must be the ORIGINAL refs, NOT a re-derivation from
 		// build.Generator.Candies's map KEYS: those keys are the SCAN RESULT's bare candy names
 		// (ScanAllCandyWithConfigOpts's combined map is bare-keyed even for a remote candy), and
-        // re-passing a bare name as an ExtraCandyRefs entry is a silent no-op (addRef gates on
+		// re-passing a bare name as an ExtraCandyRefs entry is a silent no-op (addRef gates on
 		// IsRemoteCandyRef) — the bug this replaces: the bare-keys version never actually widened
 		// the second fetch, so a remote add_candy candy was STILL absent from the plugin's own
 		// envelope and candyByName's fallback still missed (RCA'd K1-alpha regression:
