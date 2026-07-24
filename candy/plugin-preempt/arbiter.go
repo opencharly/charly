@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
@@ -20,8 +21,11 @@ import (
 // LOGIC: acquire/release exclusive+shared leases, stop + restore holders, the crash-safe lease
 // ledger, GPU-resource poisoning, owner liveness, and the driver-mode arbitration math. Its host
 // DEPENDENCIES (project config, VM/pod lifecycle, the GPU driver flip) it CANNOT hold across the
-// module boundary — it reaches them mid-logic over the ExecutorService.HostArbiter reverse
-// channel (the 8 host seams: gather/resources/running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI).
+// module boundary — it reaches them via TWO generic reverse legs: gather/resources over
+// Executor.HostBuild("resolved-project") (K1-unblock wave 1; the former bespoke
+// ExecutorService.HostArbiter reverse RPC is deleted), the other 6
+// (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) over Executor.InvokeProvider
+// (FLOOR-SLIM-proper Unit-8, holder_dispatch.go).
 //
 // The 9 seam fields on ResourceArbiter are INJECTABLE so the unit suite fakes them (the
 // seam-faked tests relocated from charly/preempt_test.go); newArbiter wires the production seams
@@ -30,7 +34,7 @@ import (
 
 // ResourceArbiter coordinates exclusive host-resource access. The seams are injected so unit
 // tests fake holder discovery + lifecycle without a live host; newArbiter wires them to the
-// HostArbiter reverse channel.
+// generic reverse-channel legs (HostBuild for gather/resources, InvokeProvider for the rest).
 type ResourceArbiter struct {
 	ledgerPath string
 	gather     func() []spec.HolderDescriptor          // candidate preemptible holders (host-projected)
@@ -44,12 +48,13 @@ type ResourceArbiter struct {
 	nowUTC     func() string
 }
 
-// newArbiter wires the production seams. `gather`/`resources` stay on the HostArbiter reverse
-// channel — the ONLY 2 of the original 8 host seams that are genuinely K1-blocked (LoadUnified
-// project-config coupled); the other 6 (running/stop/start/switchMode/ensureCDI/gpuCDI) are
-// FLOOR-SLIM-proper Unit-8's MOVE — they run directly in this plugin (holder_dispatch.go), using
-// `exec` only for the class-agnostic InvokeProvider dispatch to the libvirt/gpu plugins, never a
-// host callback.
+// newArbiter wires the production seams. `gather`/`resources` read the generic
+// HostBuild("resolved-project") envelope (K1-unblock wave 1 — the ONLY 2 of the original 8 host
+// seams that are genuinely K1-blocked, LoadUnified project-config coupled — no longer need a
+// bespoke reverse RPC to reach it); the other 6 (running/stop/start/switchMode/ensureCDI/gpuCDI)
+// are FLOOR-SLIM-proper Unit-8's MOVE — they run directly in this plugin (holder_dispatch.go),
+// using `exec` only for the class-agnostic InvokeProvider dispatch to the libvirt/gpu plugins,
+// never a host callback.
 func newArbiter(ctx context.Context, exec *sdk.Executor) *ResourceArbiter {
 	return &ResourceArbiter{
 		ledgerPath: preemptLedgerPath(),
@@ -95,28 +100,68 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 	}
 }
 
-// --- host-seam calls over the reverse channel ------------------------------------------------
+// --- resolved-project reads (K1-unblock wave 1) ------------------------------------------------
+//
+// gather/resources used to be the ONLY 2 of the original 8 host seams that were genuinely
+// K1-blocked (LoadUnified project-config coupled) — reached over the bespoke
+// ExecutorService.HostArbiter "gather"/"resources" RPCs (charly/arbiter_host.go). Both now read
+// off the SAME generic HostBuild("resolved-project") envelope every other resolved-project
+// consumer uses (candy/plugin-check, candy/plugin-substrate, candy/plugin-installstep, …) and do
+// their OWN filtering/projection in-plugin via the portable sdk/deploykit helpers — no bespoke
+// per-capability host seam remains for either. This retires the HostArbiter "gather"/"resources"
+// actions entirely (see arbiter_host.go).
 
 func hostGather(ctx context.Context, exec *sdk.Executor) []spec.HolderDescriptor {
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamGather, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: gather seam: %v\n", err)
-		return nil
-	}
-	var r spec.ArbiterGatherReply
-	_ = json.Unmarshal(out, &r)
-	return r.Holders
+	tree := resolvedDeployTree(ctx, exec, "preempt gather")
+	return deploykit.FilterPreemptibleHolders(tree)
 }
 
 func hostResources(ctx context.Context, exec *sdk.Executor) map[string]string {
-	out, err := exec.HostArbiter(ctx, spec.ArbiterSeamResources, nil)
+	rp, err := resolvedProject(ctx, exec)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "preempt: resources seam: %v\n", err)
+		fmt.Fprintf(os.Stderr, "preempt: resolved-project (resources): %v\n", err)
 		return nil
 	}
-	var r spec.ArbiterResourcesReply
-	_ = json.Unmarshal(out, &r)
-	return r.Gpu
+	return deploykit.GpuVendorTokens(rp.Resources)
+}
+
+// resolvedProject fetches + decodes the generic resolved-project envelope over the reverse
+// channel (the SAME HostBuild kind every other resolved-project consumer reads), for the
+// project rooted at the plugin's current working directory (empty Dir = host cwd).
+func resolvedProject(ctx context.Context, exec *sdk.Executor) (*spec.ResolvedProject, error) {
+	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{})
+	if err != nil {
+		return nil, err
+	}
+	out, err := exec.HostBuild(ctx, "resolved-project", reqJSON)
+	if err != nil {
+		return nil, err
+	}
+	var rp spec.ResolvedProject
+	if err := json.Unmarshal(out, &rp); err != nil {
+		return nil, fmt.Errorf("resolved-project: decode reply: %w", err)
+	}
+	return &rp, nil
+}
+
+// resolvedDeployTree is the arbiter's project deploy tree — the resolved-project envelope's
+// Deploy field (rp.Deploy, itself uf.Bundle projected verbatim) merged with the per-host
+// deploy-config overlay, exactly as the former core-only gatherDeployNodes merged them. Errors
+// degrade to an empty tree (never fail the caller) — mirroring the former LoadUnified(".")
+// graceful-degrade (project-less invocations, e.g. a bare `charly preempt status`, are legal).
+func resolvedDeployTree(ctx context.Context, exec *sdk.Executor, context string) map[string]spec.BundleNode {
+	rp, err := resolvedProject(ctx, exec)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "preempt: resolved-project (%s): %v\n", context, err)
+		rp = &spec.ResolvedProject{}
+	}
+	project := make(map[string]spec.BundleNode, len(rp.Deploy))
+	for name, node := range rp.Deploy {
+		if node != nil {
+			project[name] = *node
+		}
+	}
+	return deploykit.MergedDeployTree(project, context)
 }
 
 // --- acquire -----------------------------------------------------------------------------------

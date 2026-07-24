@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -25,21 +24,31 @@ import (
 //      commands.go/vm_gpu_cmd.go — was STALE; none of those files call these shims anymore).
 //      The REAL, current callers are host_build_check_bed.go's bed arbiter lease
 //      (acquireResourceForClaimant), and — permanently, per the B-1 unit-2 IOU #4 ruling —
-//      arbiter_bracket.go's (S3b — was substrate_lifecycle_grpc.go before the deploy-dispatch
-//      cluster moved) + host_build_pod_lifecycle_dispatch.go's arbiter-release
-//      brackets, which stay core-side BY DESIGN (gated on host-process CHARLY_PREEMPT_LEASE
-//      env state a placement-agnostic plugin cannot own). Because those two release call sites
-//      are permanent, the FULL proxy (not just a thin slice) stays core: each proxy method
-//      resolves verb:arbiter and Invokes it with an action-tagged spec.ArbiterInvokeInput (the
-//      generic core→verb registry bridge — core is not a plugin, so it cannot call InvokeProvider;
-//      the externalized command:preempt CLI reaches the arbiter over InvokeProvider instead).
-//   2. The 2 arbiter HOST-SEAM helper impls that remain genuinely K1-blocked
-//      (gatherPreemptibleHolders/gatherDeployNodes + gatherResources — both call LoadUnified
-//      directly, per R-E2) the arbiter calls back for mid-logic via ExecutorService.HostArbiter
-//      (arbiter_host.go delegates here). holderAddrFor + lookupVMClaimant stay host-side too —
-//      they are the in-core PROXY's own claim-address computation (acquireDispatch,
-//      lookupVMClaimant's vm-entity claimant search), read directly against LoadUnified's
-//      project config, never reached over the HostArbiter wire.
+//      host_build_arbiter_bracket.go's (the F10 HostBuild seam candy/plugin-bundle's
+//      arbiter-bracket-acquire/-release dispatch calls, FLOOR-SLIM-proper Unit-8; was
+//      arbiter_bracket.go core-resident before that move) + host_build_pod_lifecycle_dispatch.go's
+//      arbiter-release brackets, which stay core-side BY DESIGN (gated on host-process
+//      CHARLY_PREEMPT_LEASE env state a placement-agnostic plugin cannot own). Because those two
+//      release call sites are permanent, the FULL proxy (not just a thin slice) stays core: each
+//      proxy method resolves verb:arbiter and Invokes it with an action-tagged
+//      spec.ArbiterInvokeInput (the generic core→verb registry bridge — core is not a plugin, so
+//      it cannot call InvokeProvider; the externalized command:preempt CLI reaches the arbiter
+//      over InvokeProvider instead).
+//   2. gatherResources — the ONE arbiter host dependency that remains genuinely K1-blocked
+//      (LoadUnified-coupled), and ONLY because it has core-internal callers OUTSIDE the arbiter
+//      (gpu_allocate.go/gpu_imply.go — the operator-deferred GPU auto-allocation exception, not
+//      K-wave inventory). The arbiter itself no longer reaches it: candy/plugin-preempt reads
+//      resources off the generic HostBuild("resolved-project") envelope (rp.Resources) instead.
+//
+//   K1-unblock wave 1 retired the ExecutorService.HostArbiter reverse RPC entirely (the former
+//   "2 genuinely K1-blocked HostArbiter seams" — gather/resources): candy/plugin-preempt now
+//   reads its deploy tree + resources off HostBuild("resolved-project") and does its own
+//   holder-filtering/VM-claimant-lookup in-plugin via the portable sdk/deploykit helpers
+//   (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree), the SAME functions
+//   host_build_config_resolve.go's VM-claimant lookup now shares (R3). charly/arbiter_host.go,
+//   the HostArbiter RPC method + its request/reply proto messages, and the local
+//   gatherDeployNodes/gatherPreemptibleHolders/lookupVMClaimant/holderAddrFor/sortedHolderKeys
+//   functions are all DELETED.
 //
 //   FLOOR-SLIM-proper Unit-8 moved the other 6 original host-seam impls (holderRunning/
 //   holderStop[+wait]/holderStart/holderExists/gpuSwitchModeTolerant/ensureCDIRoot/
@@ -53,11 +62,8 @@ import (
 //   shared in-process by this compiled-in placement, so no new host seam was needed for it either.
 //
 // Crash-safety, the lease ledger, poison markers, liveness (owner PID/start), and the
-// stop/flip/save sequencing all live in the plugin now; the host only supplies the 2
-// LoadUnified-coupled config reads over the reverse channel.
-
-// holderAddr is spec.HolderAddr — the self-contained deployment address the host seams act on.
-type holderAddr = spec.HolderAddr
+// stop/flip/save sequencing all live in the plugin now; the host only supplies the ONE remaining
+// LoadUnified-coupled config read (gatherResources, for its non-arbiter GPU-allocation callers).
 
 // envPreemptLeaseHeld is set by the OUTERMOST claim-bringing `charly` invocation (a check-bed
 // run, or a standalone `charly vm create`/`charly start`) so the nested `charly` subprocesses it
@@ -68,9 +74,8 @@ const envPreemptLeaseHeld = "CHARLY_PREEMPT_LEASE"
 // --- the in-core arbiter PROXY (dispatches to the compiled-in verb:arbiter plugin) ----------
 
 // arbiterProxy is the in-core handle newResourceArbiter() returns to its current 3 callers
-// (host_build_check_bed.go, arbiter_bracket.go — S3b, was substrate_lifecycle_grpc.go before
-// the deploy-dispatch cluster moved — host_build_pod_lifecycle_dispatch.go
-// — re-verified at Cutover B unit 6b). Its methods dispatch to the compiled-in
+// (host_build_check_bed.go, host_build_arbiter_bracket.go, host_build_pod_lifecycle_dispatch.go —
+// re-verified at Cutover B unit 6b). Its methods dispatch to the compiled-in
 // candy/plugin-preempt (verb:arbiter) over an in-proc reverse channel — the arbiter runs there
 // and calls back for its host seams.
 type arbiterProxy struct{}
@@ -78,11 +83,12 @@ type arbiterProxy struct{}
 func newResourceArbiter() *arbiterProxy { return &arbiterProxy{} }
 
 // arbiterInvoke resolves verb:arbiter and Invokes it with an action-tagged input, threading the
-// IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over HostArbiter
-// (now an always-served generic seam — plugin_executor_reverse.go) — the SAME dispatchBuild
-// in-proc-executor pattern (build.go). Infra failures (no plugin, marshal, invoke) are returned as a
-// Go error; a per-action OP failure rides reply.Error. This is the generic core→verb registry bridge
-// the core lease-lifecycle callers use (core is not a plugin, so it cannot call InvokeProvider).
+// IN-PROC reverse channel onto the ctx so the plugin's Invoke reaches its host seams over
+// InvokeProvider/HostBuild (always-served generic seams — plugin_executor_reverse.go) — the SAME
+// dispatchBuild in-proc-executor pattern (build.go). Infra failures (no plugin, marshal, invoke)
+// are returned as a Go error; a per-action OP failure rides reply.Error. This is the generic
+// core→verb registry bridge the core lease-lifecycle callers use (core is not a plugin, so it
+// cannot call InvokeProvider itself).
 func arbiterInvoke(in spec.ArbiterInvokeInput) (spec.ArbiterInvokeReply, error) {
 	prov, ok := providerRegistry.resolve(ClassVerb, "arbiter")
 	if !ok {
@@ -168,7 +174,7 @@ func acquireDispatch(action, claimant string, tokens []string, node spec.BundleN
 		Action:    action,
 		Claimant:  claimant,
 		Tokens:    tokens,
-		ClaimAddr: holderAddrFor(claimant, node),
+		ClaimAddr: deploykit.HolderAddrFor(claimant, node),
 		Transient: transient,
 	})
 	if err != nil {
@@ -212,64 +218,19 @@ func releaseResourceClaim(claimant string) {
 	}
 }
 
-// --- the arbiter HOST-SEAM impls (the arbiter calls these back over HostArbiter) ------------
-
-// gatherDeployNodes returns every deploy node visible to the current invocation: the current
-// project's deploy map (committed charly.yml, includes folded check beds) as the BASE, with the
-// operator's per-host ~/.config/charly/charly.yml overlay merged ON TOP (the overlay WINS on a
-// name clash — it carries local-only `preemptible:`, a PER-HOST decision). Keyed by deploy name.
-func gatherDeployNodes() map[string]spec.BundleNode {
-	out := map[string]spec.BundleNode{}
-	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
-		maps.Copy(out, uf.Bundle)
-	}
-	if dc := deploykit.LoadDeployConfigForRead("charly preempt"); dc != nil {
-		for name, node := range dc.Bundle {
-			out[name] = deploykit.MergeBundleNode(out[name], node)
-		}
-	}
-	return out
-}
-
-// gatherPreemptibleHolders is gatherDeployNodes filtered to the preemptible holders (the
-// candidate set the arbiter may stop).
-func gatherPreemptibleHolders() map[string]spec.BundleNode {
-	out := map[string]spec.BundleNode{}
-	for name, node := range gatherDeployNodes() {
-		if node.IsPreemptible() {
-			out[name] = node
-		}
-	}
-	return out
-}
-
-// lookupVMClaimant finds a deploy/check node that targets the given kind:vm entity and declares
-// requires_exclusive — the claimant a standalone `charly vm create/stop/destroy <entity>`
-// acquires/releases an exclusive lease for. ok=false when none exists.
-func lookupVMClaimant(vmEntity string) (string, spec.BundleNode, bool) {
-	for name, node := range gatherDeployNodes() {
-		if deployTraitDescent(node.Target).Venue == "ssh" && node.From == vmEntity && len(node.RequiredExclusive()) > 0 { // vm (ssh venue)
-			return name, node, true
-		}
-	}
-	return "", spec.BundleNode{}, false
-}
-
-func holderAddrFor(name string, node spec.BundleNode) holderAddr {
-	base, instance := deploykit.ParseDeployKey(name)
-	target := node.Target
-	if target == "" {
-		target = "pod"
-	}
-	addr := holderAddr{Name: name, Target: target, Base: base, Instance: instance}
-	if deployTraitDescent(target).Venue == "ssh" { // vm (ssh venue)
-		addr.Vm = node.From
-		if addr.Vm == "" {
-			addr.Vm = base
-		}
-	}
-	return addr
-}
+// --- the arbiter HOST-SEAM impl that remains genuinely K1-blocked ---------------------------
+//
+// K1-unblock wave 1 retired gatherDeployNodes/gatherPreemptibleHolders/lookupVMClaimant/
+// holderAddrFor from this file entirely: candy/plugin-preempt now reads its deploy tree off the
+// generic HostBuild("resolved-project") envelope (rp.Deploy) instead of a bespoke HostArbiter
+// "gather" RPC, and does its own holder-filtering + VM-claimant lookup in-plugin via the portable
+// sdk/deploykit helpers (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree —
+// the SAME functions host_build_config_resolve.go's VM-claimant lookup now shares, R3). The
+// ExecutorService.HostArbiter reverse RPC itself is deleted (sdk/protocol/schema/plugin.cue).
+//
+// gatherResources is the ONE function in this family that stays here: it has core-internal
+// callers OUTSIDE the arbiter (gpu_allocate.go, gpu_imply.go — the operator-deferred GPU
+// auto-allocation exception, not K-wave inventory; see charly/devices.go), so it cannot move.
 
 // gatherResources loads the token -> ResourceDef map (the gpu selector that drives the mode
 // flip) from the project charly.yml. nil when none / unreadable.
@@ -294,17 +255,6 @@ func dedupeNonEmpty(in []string) []string {
 		seen[s] = true
 		out = append(out, s)
 	}
-	return out
-}
-
-// sortedHolderKeys returns the sorted keys of a holder map (the gather projection iterates
-// deterministically).
-func sortedHolderKeys(m map[string]spec.BundleNode) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
 	return out
 }
 
