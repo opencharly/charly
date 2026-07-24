@@ -22,16 +22,18 @@ import (
 // (mirroring candy/plugin-deploy-pod/lifecycle.go's ALREADY-LIVE start/stop pattern), so those
 // leaves dispatch verb:enc / verb:credential DIRECTLY, no core round-trip needed.
 //
-// What remains genuinely core-only, because it is STILL called from the pod-config-enc-mounts
-// seam (host_build_pod_config_seams.go, the `charly config setup`/Setup-orchestration family —
-// a DIFFERENT, out-of-this-wave family per the wave γ scoping map) and from
-// pod_lifecycle_resolve.go's resolvePodEncEnsure (the START-lifecycle plan-builder — also out of
-// this wave's scope, its own future fold-in): encExecViaPlugin (providerRegistry.resolve +
-// invokeTyped — the host registry itself, clause-M), coreCredentialAccess (the credential-store
-// adapter those two callers' resolveEncPassphrase/ensureEncryptedMounts still need),
-// resolveEncPassphrase (the ensure-path, non-mount passphrase resolution), encUnmount (still
-// called by hostBuildPodConfigEncMounts), and ensureEncryptedMounts (the `charly start`
-// transparent-setup path).
+// What remains genuinely core-only: it is STILL called from the pod-config-enc-mounts seam
+// (host_build_pod_config_seams.go, the `charly config setup`/Setup-orchestration family — a
+// DIFFERENT, out-of-this-wave family per the wave γ scoping map). The START-lifecycle plan
+// builders (former pod_lifecycle_resolve.go's resolvePodEncEnsure/resolvePodEncUnmount/
+// resolvePodTunnel) moved to candy/plugin-deploy-pod (enc_tunnel_resolve.go, wave γ — the SAME
+// InvokeProvider extension this file's header already describes for the CLI leaves), so
+// pod_lifecycle_resolve.go is DELETED; the Setup family below is the only remaining caller of
+// this file's core-only surface: encExecViaPlugin (providerRegistry.resolve + invokeTyped — the
+// host registry itself, clause-M), coreCredentialAccess (the credential-store adapter
+// resolveEncPassphrase/ensureEncryptedMounts still need), resolveEncPassphrase (the ensure-path,
+// non-mount passphrase resolution), encUnmount (still called by hostBuildPodConfigEncMounts), and
+// ensureEncryptedMounts (the `charly start` transparent-setup path).
 
 // coreCredentialAccess bundles charly-core's ResolveCredential/DefaultCredentialStore adapter
 // (credential_plugin.go — itself registry-coupled, connectPluginByWordRef to verb:credential)

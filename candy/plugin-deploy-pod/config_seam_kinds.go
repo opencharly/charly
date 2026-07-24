@@ -20,9 +20,6 @@ const (
 	podConfigHookSecretEnvKind    = "pod-config-hook-secret-env"
 	podConfigSSHKeyKind           = "pod-config-ssh-key"
 	podConfigListSidecarsKind     = "pod-config-list-sidecars"
-	podConfigEncEnsurePlanKind    = "pod-config-enc-ensure-plan"
-	podConfigEncUnmountPlanKind   = "pod-config-enc-unmount-plan"
-	podConfigContainerTunnelKind  = "pod-config-container-tunnel"
 	podConfigBoxEngineKind        = "pod-config-box-engine"
 )
 

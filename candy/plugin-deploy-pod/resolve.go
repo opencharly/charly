@@ -50,6 +50,10 @@ func resolvePodStartQuadlet(ctx context.Context, ex *sdk.Executor, box, instance
 	if err != nil {
 		return nil, err
 	}
+	dc, err := loadDeploy(ctx, ex, "charly start")
+	if err != nil {
+		return nil, err
+	}
 	plan := &spec.PodLifecyclePlan{
 		Mode:          "quadlet",
 		SvcName:       kit.ServiceNameInstance(box, instance),
@@ -59,19 +63,13 @@ func resolvePodStartQuadlet(ctx context.Context, ex *sdk.Executor, box, instance
 	}
 	// Encrypted-volume mounts are skipped in direct-deploy mode (those require systemd-run --scope).
 	if !directDeploy {
-		var encRep spec.PodConfigEncEnsurePlanReply
-		if err := hostBuild(ctx, ex, podConfigEncEnsurePlanKind, spec.PodConfigEncEnsurePlanRequest{Box: box, Instance: instance}, &encRep); err != nil {
+		encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance)
+		if err != nil {
 			return nil, err
 		}
-		plan.Enc = encRep.EncJSON
+		plan.Enc = encJSON
 	}
-	var tRep spec.PodConfigContainerTunnelReply
-	if err := hostBuild(ctx, ex, podConfigContainerTunnelKind, spec.PodConfigContainerTunnelRequest{Box: box, Instance: instance}, &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-		var tc spec.TunnelConfig
-		if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-			plan.Tunnel = &tc
-		}
-	}
+	plan.Tunnel = resolvePodTunnelPlan(dc, box, instance)
 	return plan, nil
 }
 
@@ -180,8 +178,8 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	network := meta.Network
 	entrypoint := resolveEntrypointFromMeta(meta)
 
-	var encRep spec.PodConfigEncEnsurePlanReply
-	if err := hostBuild(ctx, ex, podConfigEncEnsurePlanKind, spec.PodConfigEncEnsurePlanRequest{Box: box, Instance: instance}, &encRep); err != nil {
+	encJSON, err := resolvePodEncEnsurePlan(ctx, ex, dc, box, instance)
+	if err != nil {
 		return nil, err
 	}
 	if err := deploykit.VerifyBindMounts(bindMounts, box); err != nil {
@@ -241,18 +239,11 @@ func resolvePodStartDirect(ctx context.Context, ex *sdk.Executor, box, instance 
 	workDir := deploykit.ResolveWorkingDir(volumes, bindMounts, home, box, instance)
 	argv := buildStartArgs(engine, imageRef, uid, gid, ports, name, volumes, bindMounts, detected.GPU, rt.BindAddress, envVars, security, entrypoint, workDir, resolvedNetwork)
 
-	var tRep spec.PodConfigContainerTunnelReply
-	var tunnel *spec.TunnelConfig
-	if err := hostBuild(ctx, ex, podConfigContainerTunnelKind, spec.PodConfigContainerTunnelRequest{Box: box, Instance: instance}, &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-		var tc spec.TunnelConfig
-		if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-			tunnel = &tc
-		}
-	}
+	tunnel := resolvePodTunnelPlan(dc, box, instance)
 
 	return &spec.PodLifecyclePlan{
 		Mode: "direct", ContainerName: name, RunArgv: argv, EngineBin: kit.EngineBinary(engine),
-		Enc: encRep.EncJSON, Tunnel: tunnel,
+		Enc: encJSON, Tunnel: tunnel,
 	}, nil
 }
 
@@ -267,20 +258,16 @@ func resolvePodStopPlan(ctx context.Context, ex *sdk.Executor, box, instance str
 	if err != nil {
 		return nil, err
 	}
-	var tRep spec.PodConfigContainerTunnelReply
-	var tunnel *spec.TunnelConfig
-	if err := hostBuild(ctx, ex, podConfigContainerTunnelKind, spec.PodConfigContainerTunnelRequest{Box: box, Instance: instance}, &tRep); err == nil && len(tRep.TunnelJSON) > 0 {
-		var tc spec.TunnelConfig
-		if json.Unmarshal(tRep.TunnelJSON, &tc) == nil {
-			tunnel = &tc
-		}
+	dc, err := loadDeploy(ctx, ex, "charly stop")
+	if err != nil {
+		return nil, err
 	}
 	plan := &spec.PodLifecyclePlan{
 		ContainerName: kit.ContainerNameInstance(box, instance),
 		SvcName:       kit.ServiceNameInstance(box, instance),
 		EngineBin:     kit.EngineBinary(engine),
 		Unmount:       unmount,
-		Tunnel:        tunnel,
+		Tunnel:        resolvePodTunnelPlan(dc, box, instance),
 	}
 	if quadletActive {
 		plan.Mode = "quadlet"
@@ -288,11 +275,11 @@ func resolvePodStopPlan(ctx context.Context, ex *sdk.Executor, box, instance str
 		plan.Mode = "direct"
 	}
 	if unmount {
-		var encRep spec.PodConfigEncUnmountPlanReply
-		if err := hostBuild(ctx, ex, podConfigEncUnmountPlanKind, spec.PodConfigEncUnmountPlanRequest{Box: box, Instance: instance}, &encRep); err != nil {
+		encJSON, err := resolvePodEncUnmountPlan(dc, box, instance)
+		if err != nil {
 			return nil, err
 		}
-		plan.Enc = encRep.EncJSON
+		plan.Enc = encJSON
 	}
 	return plan, nil
 }
