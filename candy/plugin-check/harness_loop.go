@@ -10,11 +10,11 @@ package check
 // plan). The only loop bound is plateau detection.
 //
 // Core-Mechanism coupling is routed through the host seams: live plan SCORING
-// (RunCheckLive, registry/venue-coupled) rides the "score" check-run mode
-// (scoreLive); the per-iteration `charly box build` / `charly check box` reentry
-// rides HostBuild("cli") (buildImageFn / runCharlyImageTestFn); the AI runner exec,
-// the orphan-bash defense, and the fixture-pod probe are generic OS tools run
-// plugin-locally.
+// (scoreLive, Mode:"score") dispatches DIRECTLY to this plugin's own pluginRunCheckLive
+// (score_live.go, K1-unblock wave arm 3 — no host round-trip); the per-iteration
+// `charly box build` / `charly check box` reentry rides HostBuild("cli")
+// (buildImageFn / runCharlyImageTestFn); the AI runner exec, the orphan-bash defense,
+// and the fixture-pod probe are generic OS tools run plugin-locally.
 
 import (
 	"context"

@@ -1,20 +1,21 @@
 package check
 
-// live_scoring.go — K1-unblock W3 Unit A: the runner-INDEPENDENT half of
+// live_scoring.go — originally K1-unblock W3 Unit A: the runner-INDEPENDENT half of the former
 // charly/check_runner_live.go's live-scoring machinery (topo-sort / same-venue bucketing /
 // dependency-cascade skip / ephemeral-deploy classification). Pure over spec.Step +
 // map[string]spec.BundleNode — no core-only dependency, confirmed by reading the original in
 // full: none of these touch newCheckRunner.
 //
-// NOT ported (stay charly/check_runner_live.go, Unit B territory): RunCheckLive/
-// scoreOnePodBucket/resolveScoringChain — they construct a kit.Runner via newCheckRunner, whose
-// cfg.Verbs = &hostVerbResolver{} holds the core-private providerRegistry (the clause-M
-// plugin-word-dispatch mechanism); moving them needs the new "check-run-execute" HostBuild leaf.
+// RunCheckLive/scoreOnePodBucket/resolveScoringChain — the runner-DEPENDENT half this file's
+// header used to describe as NOT-yet-portable — were ported in K1-unblock wave arm 3 as
+// score_live.go's pluginRunCheckLive/pluginScoreOneVenueBucket/pluginResolveScoringChain, once
+// newPluginCheckRunner (the InvokeProvider-backed kit.Runner constructor, W3 Unit B / the nil-Exec
+// fix) made the plugin-side runner construction possible; charly/check_runner_live.go is deleted.
 //
 // Also NOT ported: RenderPlanYAML / isScored / scoredPlanOrigin — the plugin already carries its
-// own copies (harness_loop.go / score.go); charly/check_runner_live.go's RenderPlanYAML is
-// confirmed DEAD (zero callers anywhere in package main) and is deleted, not moved, when this
-// family's core files are cut over.
+// own copies (harness_loop.go / score.go); the former charly/check_runner_live.go's RenderPlanYAML
+// was confirmed DEAD (zero callers anywhere in package main) and was deleted, not moved, along
+// with the rest of that file (arm 3).
 
 import (
 	"fmt"

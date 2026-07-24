@@ -13,9 +13,9 @@ package check
 // K1-unblock wave arm 1: vmHostdevCount + the checkLive* family (pod/vm/local/group) + their
 // dispatcher landed plugin-side too — see live_gather.go (pluginVmHostdevCount,
 // pluginCheckLivePod/VM/Local/Group, pluginCheckRunLive). STILL core-only (used by the
-// still-host-resident feature-live arm + the "check-load-plugins" seam, and by the external
-// `target: local` deploy's own --verify path — none of which is part of the "live" check-run
-// mode): resolveCheckRunnerContext, deployNodePluginContext, checkLocalDeployScope,
+// "check-load-plugins" seam and the external `target: local` deploy's own --verify path — neither
+// is part of any check-run Mode this package dispatches): resolveCheckRunnerContext,
+// deployNodePluginContext, checkLocalDeployScope,
 // runLocalDeployScopePlan (charly/check_cmd.go).
 
 import (

@@ -15,13 +15,13 @@ package check
 // vmshared.VmDomainIdentity is the WHOLE of the "no new mechanism" claim for this file (RDD-
 // confirmed by reading sdk/vmshared_aliases.go's own alias table before this move).
 //
-// This file is a self-contained LIBRARY of venue-resolution building blocks; Unit B (the
-// "check-run-execute" HostBuild leaf) is what WIRES the live-check gather orchestration
-// (checkLiveGather/checkLivePod/checkLiveVM/checkLiveLocal/checkLiveGroup, still host-resident in
-// charly/check_cmd.go pending that mechanism) to call into it. Landing this file alone is
-// necessary-but-not-sufficient — see the K1-unblock wave notes; it ships wired together with Unit
-// B in the same cutover, never as an independently-provable increment (the CALLERS that construct
-// a live check run stay host-resident until Unit B's mechanism exists).
+// This file is a self-contained LIBRARY of venue-resolution building blocks, consumed by every
+// live-check gather orchestration function this package now carries directly: live_gather.go's
+// pluginCheckRunLive/pluginCheckLivePod/pluginCheckLiveVM/pluginCheckLiveLocal/pluginCheckLiveGroup
+// (K1-unblock wave arm 1, the plugin-side ports of the former charly/check_cmd.go's
+// checkLiveGather/checkLivePod/checkLiveVM/checkLiveLocal/checkLiveGroup) and score_live.go's
+// pluginRunCheckLive family (arm 3). Unit B's InvokeProvider-backed newPluginCheckRunner (the
+// "check-run" verb-dispatch mechanism) is what made every one of those wirings possible.
 
 import (
 	"context"
