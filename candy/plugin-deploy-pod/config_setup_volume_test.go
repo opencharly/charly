@@ -136,6 +136,40 @@ func TestResolveDeployVolumes_OverlayWinsOverProject(t *testing.T) {
 	}
 }
 
+// TestResolveDeployVolumes_AlreadyConfiguredVolumeLessSkipsProjectLookup is the conditional-lookup
+// regression test (RCA'd 2026-07-24, val-volfix): an ALREADY-CONFIGURED deploy — an overlay entry
+// exists for this deploy key (e.g. a sibling group member whose overlay was created for ports/
+// resources during its initial `charly bundle add`) but carries NO volume — must take the
+// ORIGINAL zero-lookup path on every subsequent `charly config`/`charly update` re-config: the
+// project seam must NEVER fire again. This FAILS on the pre-fix shape (which gated the project
+// fallback on `len(deployVolumes) == 0`, true here too, so it re-triggered a full project
+// LoadUnified on every single re-config of every volume-less already-configured deploy — a
+// redundant per-call cost breaking `charly config` for group members under load, and a
+// correctness hazard whenever that seam errors in a context the original zero-lookup path never
+// exercised). The fake has no project-volume reply configured, so a call would panic.
+func TestResolveDeployVolumes_AlreadyConfiguredVolumeLessSkipsProjectLookup(t *testing.T) {
+	fake := &fakeVolumeExecutorServiceClient{}
+	ex := sdk.NewInProcExecutor(fake)
+	c := &spec.PodConfigSetupRequest{Box: "preempt-vm-taker", Instance: ""}
+	dc := &deploykit.BundleConfig{Bundle: map[string]spec.BundleNode{
+		// The key EXISTS (this member was configured before — e.g. its ports were resolved),
+		// but its Volume field is the zero value: exactly the "already-configured, volume-less"
+		// shape the regression covers.
+		deploykit.DeployKey("preempt-vm-taker", ""): {ResolvedPort: []string{"8080:8080"}},
+	}}
+
+	got, err := resolveDeployVolumes(context.Background(), ex, c, &dc)
+	if err != nil {
+		t.Fatalf("resolveDeployVolumes() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("resolveDeployVolumes() = %+v, want empty — this member's overlay declares no volume", got)
+	}
+	if len(fake.calls) != 0 {
+		t.Errorf("resolveDeployVolumes() HostBuild calls = %v, want none — an already-configured deploy must never re-consult the project merely because its overlay Volume is empty", fake.calls)
+	}
+}
+
 // TestResolveDeployVolumes_CLIFlagWinsOverProject asserts precedence: a CLI --volume flag wins
 // over the project declaration, and the project seam is NEVER consulted.
 func TestResolveDeployVolumes_CLIFlagWinsOverProject(t *testing.T) {
