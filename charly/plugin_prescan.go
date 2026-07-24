@@ -60,7 +60,7 @@ var (
 	// declarations name — learned POST-SCAN alongside the verbs (registerExternalVerbsFromCandies),
 	// so a `run: plugin: <step-word>` step (a class:step plugin — F3's external step KIND) validates
 	// as a DEPLOY-capable act in standalone `charly box validate` WITHOUT connecting the plugin
-	// (compileActOp lowers it to an externalStep at deploy). Same additive/best-effort contract as
+	// (hostBuildConstructStep lowers it to an externalStep at deploy). Same additive/best-effort contract as
 	// declaredExternalVerb; shares declaredDeployMu.
 	declaredExternalStep = map[string]bool{}
 	// declaredExternalCommand holds the external (out-of-tree) COMMAND words a project's candy

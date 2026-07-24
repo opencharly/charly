@@ -135,7 +135,8 @@ func TestBuildDeployPlanLocalPkgOrdering(t *testing.T) {
 		},
 	}, spec.CandyView{})
 	img := &buildkit.ResolvedBox{Name: "host-adhoc", Home: "/root", User: "root", Pkg: "pac", DistroDef: testPacDistroDef()}
-	plan, err := deploykit.BuildDeployPlan(l, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
+	ctx, ex := testConstructStepExecutor()
+	plan, err := deploykit.BuildDeployPlan(ctx, ex, l, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 	if err != nil {
 		t.Fatalf("BuildDeployPlan: %v", err)
 	}

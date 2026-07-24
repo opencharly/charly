@@ -5,9 +5,8 @@ package main
 //
 // S6 (mechanical relocation, no design risk): ReexecOverSSH's body was 100%
 // stdlib+sdk/kit — zero core-only calls — so it moved wholesale to
-// sdk/kit/reexec_ssh.go (kit.ReexecOverSSH), mirroring the already-accepted
-// install_build_act.go DI-shell pattern (deploykit.CompileActOp = compileActOp).
-// The ONE thing that stays here is shouldReexecForHost's ~15-line decision (it
+// sdk/kit/reexec_ssh.go (kit.ReexecOverSSH). The ONE thing that stays here is
+// shouldReexecForHost's ~15-line decision (it
 // must run before Kong dispatches to ANYTHING, mirroring the already-accepted
 // precedent of plugin_command_prescan.go's pre-parse hooks — the same
 // decide-before-dispatch shape core already owns) plus main()'s dispatch glue,

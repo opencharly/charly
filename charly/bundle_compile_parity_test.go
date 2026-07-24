@@ -190,7 +190,8 @@ func TestBundleCompileParity_PluginRoundTrip(t *testing.T) {
 			t.Fatalf("marshal host context (%s): %v", name, err)
 		}
 		// OLD: the former live host-compile (BuildDeployPlan over the runtime *Candy graph).
-		oldPlan, err := deploykit.BuildDeployPlan(layer, imgOld, hostCtx)
+		oldCtx, oldEx := testConstructStepExecutor()
+		oldPlan, err := deploykit.BuildDeployPlan(oldCtx, oldEx, layer, imgOld, hostCtx)
 		if err != nil {
 			t.Fatalf("OLD BuildDeployPlan(%s): %v", name, err)
 		}

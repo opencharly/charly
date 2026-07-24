@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -39,4 +41,30 @@ func pixiCandy(t *testing.T, name string) spec.CandyReader {
 		t.Fatalf("write pixi.toml: %v", err)
 	}
 	return testCandy(name, spec.CandyModel{SourceDir: dir}, spec.CandyView{})
+}
+
+// testConstructStepExecutor returns the SAME in-proc reverse-channel executor
+// bundle_compile_seam.go's compileViaPlugin threads onto the ctx it hands
+// command:bundle's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
+// exercising deploykit.BuildDeployPlan/CompileOpSteps directly (in-process, package
+// main) needs a REAL executor reaching the provider registry for any `run: plugin:
+// <word>` op, exactly as the real compile path does — the "construct-step" HostBuild
+// seam has no other way to be reached from a plain function call.
+func testConstructStepExecutor() (context.Context, *sdk.Executor) {
+	ex := sdk.NewInProcExecutor(&inprocExecutorClient{srv: &executorReverseServer{}})
+	return sdk.ContextWithExecutor(context.Background(), ex), ex
+}
+
+// testCompileOpSteps drives deploykit.CompileOpSteps with a fresh
+// testConstructStepExecutor + testResolvedBox() — the fixed shape every
+// compile-timeline test in this package used before K5-A item 1 threaded ctx/exec
+// through CompileOpSteps. t.Fatalf's on error so callers don't have to.
+func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []deploykit.InstallStep {
+	t.Helper()
+	ctx, ex := testConstructStepExecutor()
+	steps, err := deploykit.CompileOpSteps(ctx, ex, layer, testResolvedBox())
+	if err != nil {
+		t.Fatalf("CompileOpSteps: %v", err)
+	}
+	return steps
 }

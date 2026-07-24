@@ -42,7 +42,7 @@ func opActsInBuildDeploy(c *spec.Op) bool {
 		return true
 	}
 	// A class:STEP plugin word (F3's external step KIND) lowers to an externalStep that ACTS at DEPLOY
-	// (compileActOp resolve(ClassStep) → externalStep → OpExecute). Recognized via a connected ClassStep
+	// (hostBuildConstructStep resolve(ClassStep) → externalStep → OpExecute). Recognized via a connected ClassStep
 	// provider OR a post-scan declaration (standalone `charly box validate`, where the step plugin is not
 	// connected) — the step analogue of the verb handling below.
 	if _, ok := providerRegistry.ResolveStep(c.Plugin); ok {

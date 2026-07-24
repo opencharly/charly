@@ -71,15 +71,32 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
 
-	// The compileActOp ROUTING seam: a `run: plugin: examplestepkind` op whose provider is a
-	// class:step grpcProvider declaring a StepContract lowers to an externalStep carrying the
-	// DECLARED contract + the opaque payload (NOT an OpStep / ExternalPluginStep). Using the
-	// compiled step (not a hand-built one) proves the FULL authoring → compile → wire path.
+	// The hostBuildConstructStep ROUTING seam (the "construct-step" HostBuild handler, K5-A
+	// item 1): a `run: plugin: examplestepkind` op whose provider is a class:step grpcProvider
+	// declaring a StepContract lowers to an externalStep carrying the DECLARED contract + the
+	// opaque payload (NOT an OpStep / ExternalPluginStep). Using the compiled step (not a
+	// hand-built one) proves the FULL authoring → compile → wire path.
 	op := &spec.Op{Plugin: "examplestepkind", PluginInput: map[string]any{"marker": "EXTERNAL-STEPKIND-E2E"}}
-	routed := compileActOp(op, testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{}), &buildkit.ResolvedBox{Tags: []string{"fedora"}})
+	layer := testCandy("plugin-example-stepkind", spec.CandyModel{}, spec.CandyView{})
+	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
+	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
+	constructReply, err := hostBuildConstructStep(context.Background(), spec.ConstructStepRequest{
+		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),
+		ResolvedUser: userDir, PkgFormat: img.Pkg, DistroTags: img.Tags,
+	}, buildEngineContext{})
+	if err != nil {
+		t.Fatalf("hostBuildConstructStep: %v", err)
+	}
+	if constructReply.Step == nil {
+		t.Fatalf("hostBuildConstructStep returned no step — want an externalStep")
+	}
+	routed, err := deploykit.StepFromView(*constructReply.Step)
+	if err != nil {
+		t.Fatalf("StepFromView: %v", err)
+	}
 	step, ok := routed.(*deploykit.ExternalStep)
 	if !ok {
-		t.Fatalf("compileActOp routed a class:step plugin to %T, want *externalStep", routed)
+		t.Fatalf("hostBuildConstructStep routed a class:step plugin to %T, want *externalStep", routed)
 	}
 	if step.Word != "examplestepkind" || step.ScopeV != spec.ScopeUser || step.VenueV != spec.VenueHostNative || step.GateV != spec.GateNone {
 		t.Fatalf("externalStep contract = {%q, %v, %v, %v}, want {examplestepkind, ScopeUser, VenueHostNative, GateNone}", step.Word, step.ScopeV, step.VenueV, step.GateV)

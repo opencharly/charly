@@ -13,7 +13,7 @@ import (
 
 // The var-substitution + user-spec render helpers, the inline-content stager, and
 // the per-verb Containerfile-line emitters all live in sdk/deploykit (tasks_emit.go);
-// every caller (here and in check_kit_adapter.go / install_build_act.go) references
+// every caller (here and in check_kit_adapter.go / host_build_construct_step.go) references
 // deploykit.TaskKnownNames / deploykit.ResolveUserSpec / deploykit.EmitCmd / etc.
 // directly (K3 ZERO-ALIASES dissolution).
 
