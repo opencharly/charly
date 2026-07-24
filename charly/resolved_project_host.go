@@ -278,7 +278,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// namespace's OWN candy scan — see its doc comment for why this closes a real
 	// `charly box validate` regression the root-only fill left namespaced boxes exposed to).
 	if uf != nil {
-		fillNamespacedBoxes(uf, "", calver, dir, opts, rp, map[*UnifiedFile]bool{})
+		fillNamespacedBoxes(uf, initCfg, "", calver, dir, opts, rp, map[*UnifiedFile]bool{})
 	}
 
 	if uf != nil && len(uf.Bundle) > 0 {
@@ -448,7 +448,7 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *UnifiedFile, initCfg *InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
@@ -462,6 +462,7 @@ func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts Resol
 			child = prefix + "." + ns
 		}
 		sub := subUF.ProjectConfig()
+		var nsLayers map[string]spec.CandyReader
 		// subUF.projectCandiesScanned(subUF.RootDir) is the CORRECT local-candy source (reads
 		// subUF.Candy directly — no re-load, no directory mismatch; see this function's doc
 		// comment) fed into the SAME remote-fetch pipeline ScanAllCandyWithConfigOpts's root-scope
@@ -476,7 +477,8 @@ func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts Resol
 			nsDir = dir
 		}
 		if localScanned, lErr := subUF.projectCandiesScanned(nsDir); lErr == nil {
-			if nsLayers, err := scanCandyFromLocal(localScanned, sub, opts); err == nil {
+			if scanned, err := scanCandyFromLocal(localScanned, sub, opts); err == nil {
+				nsLayers = scanned
 				for name, c := range nsLayers {
 					if c == nil {
 						continue
@@ -496,6 +498,18 @@ func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts Resol
 				}
 			}
 		}
+		// Resolve EVERY box in this namespace's own config first (so a sibling-base lookup —
+		// parentCandies via deploykit.CandyProvidedByBox — resolves against an ALREADY-populated
+		// map, mirroring NewGenerator+renderPrepAll's two-phase shape for the root project), then
+		// render-prep each one through the SAME renderPrepBox the root project uses (R3 — no
+		// duplicated logic): a namespaced box that participates in ANOTHER project's build (e.g. a
+		// builder/base referenced via `builder: <ns>.<name>` / `base: <ns>.<name>`, like
+		// box/cachyos's `arch.arch`/`arch.arch-builder`) needs the SAME build-render caches
+		// (BakedMetadata, RenderCandyOrder, …) a root box gets from renderPrepAll — without them,
+		// WriteLabels panics on a nil BakedMetadata the moment `charly box generate`/`build` reaches
+		// it (RCA'd K1-alpha regression: this fill previously called bare ResolveBox only, which
+		// never populates the render-render caches at all).
+		subBoxes := map[string]*buildkit.ResolvedBox{}
 		for _, name := range sub.AllBoxNames() {
 			img, ok := sub.BoxConfig(name)
 			if !ok || (!img.IsEnabled() && !opts.shouldIncludeDisabled(name)) {
@@ -505,13 +519,43 @@ func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts Resol
 			if err != nil {
 				continue
 			}
-			view := projectResolvedBox(resolved)
-			if rp.Boxes == nil {
-				rp.Boxes = map[string]spec.ResolvedBoxView{}
-			}
-			rp.Boxes[child+"."+name] = view
+			subBoxes[name] = resolved
 		}
-		fillNamespacedBoxes(subUF, child, calver, dir, opts, rp, visited)
+		if len(subBoxes) > 0 {
+			tempGen := &Generator{Config: sub, Candies: nsLayers, InitConfig: initCfg, Dir: dir, Boxes: subBoxes}
+			for name, resolved := range subBoxes {
+				fullKey := child + "." + name
+				// A box the CURRENT build actually needs (e.g. box/cachyos's `cachyos-pacstrap-
+				// builder` basing on `arch.arch`) is ALREADY correctly present in rp.Boxes by this
+				// point — the build-prep seam's own buildkit.ResolveAllBox->resolveNamespacedBases
+				// pull (demand-driven, requalifying Base/Builder to the fully-qualified ancestor,
+				// e.g. arch-builder's `base: arch` -> `arch.arch`) plus this function caller's own
+				// auto-intermediates fold already added it, render-prepped, with correctly
+				// requalified cross-references. THIS loop's bare `ResolveBox(sub, name, …)` does
+				// NOT requalify Base/Builder (they stay namespace-relative, e.g. plain "arch") — a
+				// harmless orientation-only gap for boxes nobody's build actually uses (never fed
+				// to Generate(order), so a stale Base never gets dereferenced), but overwriting an
+				// ALREADY-correct entry with this uncorrected one breaks the real build the moment
+				// Generate resolves that box's base image (RCA'd K1-alpha regression #2: fixing
+				// WriteLabels's nil BakedMetadata via render-prep here, uncovered THIS pre-existing
+				// gap one layer deeper — ResolveBaseImage panics on the non-requalified `arch`
+				// lookup finding no such key in dg.Boxes). Never overwrite a demand-pulled entry.
+				if _, exists := rp.Boxes[fullKey]; exists {
+					continue
+				}
+				// Best-effort, matching this fill's existing tolerance: a namespaced box whose
+				// render-prep fails (e.g. a required capability missing) is projected WITHOUT the
+				// render caches rather than dropped outright — it just can't be USED as a builder/
+				// base stage, exactly as before this fix for every OTHER box in this loop.
+				_ = renderPrepBox(tempGen, name)
+				view := projectResolvedBox(resolved)
+				if rp.Boxes == nil {
+					rp.Boxes = map[string]spec.ResolvedBoxView{}
+				}
+				rp.Boxes[fullKey] = view
+			}
+		}
+		fillNamespacedBoxes(subUF, initCfg, child, calver, dir, opts, rp, visited)
 	}
 }
 
