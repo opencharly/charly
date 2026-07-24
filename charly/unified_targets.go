@@ -549,9 +549,6 @@ func ResolveTarget(node *spec.BundleNode, name string) (UnifiedDeployTarget, err
 	if !ok {
 		return nil, unresolvedDeployTargetError(name, node.Target)
 	}
-	if dp, ok := prov.(DeployTargetProvider); ok {
-		return dp.ResolveTarget(node, name)
-	}
 	// An OUT-OF-PROCESS deploy provider (a grpcProvider, Invoke-only) drives the deploy lifecycle
 	// via candy/plugin-bundle's Invoke(OpDeployDispatch) — S3b. The executor is chosen by the
 	// node's host: field via the SHARED selector rootExecutorForDeployNode (R3): ShellExecutor
