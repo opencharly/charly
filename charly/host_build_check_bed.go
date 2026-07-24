@@ -311,7 +311,8 @@ func bedSessionSetup(req spec.CheckBedRequest) (spec.CheckBedReply, error) {
 		IsLocal:        isLocal,
 		IsGroup:        isGroup,
 		IsExternal:     isExternal,
-		Image:          node.Image,  // "" for vm/local/group
+		Image:          node.Image, // "" for vm/local/group
+		HasAddCandy:    len(node.AddCandy) > 0,
 		VMTemplate:     node.From,   // vm bed template (the ENTITY — `charly vm build` builds off this)
 		BedDomain:      s.bedDomain, // per-deploy live domain (`charly vm create/destroy/start … --domain <this>`)
 		ImageTag:       s.imageTag,

@@ -16,6 +16,19 @@ func TestBundleDiscForEntity_PodWorkloadNotGroup(t *testing.T) {
 		{"resolved_port -> pod", "resolved_port:\n  - 36531:2222\n  - 39391:3000\n", "pod"},
 		{"image -> pod", "image: ghcr.io/opencharly/x:latest\n", "pod"},
 		{"authored port -> pod", "port:\n  - 8080:80\n", "pod"},
+		// K5-A item 2 overlay-plans-fix bed (check-pod-overlay) live-bed-caught this THIRD instance
+		// of the same bug class: a BRAND-NEW pod deploy's FIRST-EVER add_candy: overlay build
+		// persists a PrepareVenue State patch carrying ONLY ResolvedImage (candy/plugin-deploy-pod's
+		// podPrepareVenue never also sets Box/Image on that patch), so entry.Image stays empty and
+		// none of the three ORIGINAL indicators fire — misclassifying the pod as "group" and
+		// corrupting charly.yml the moment the add_candy overlay-plans wiring fix (unified_targets.go)
+		// finally let the overlay build run for the first time ever.
+		{"resolved_image -> pod", "resolved_image: check-pod-overlay-overlay:abc123\n", "pod"},
+		// FOURTH instance of the same bug class, caught by the SAME overlay-plans-fix bed run against
+		// a fresh worktree carrying the concurrently-landed Deploy.VolumeProjectChecked wire field: a
+		// brand-new pod deploy's FIRST-EVER `charly config` persists a State patch carrying ONLY
+		// VolumeProjectChecked (no Image/port yet either), again falling through every prior indicator.
+		{"volume_project_checked -> pod", "volume_project_checked: true\n", "pod"},
 		{"no workload -> group", "disposable: true\n", "group"},
 		{"explicit host target -> local", "target: host\n", "local"},
 		{"explicit pod target -> pod", "target: pod\n", "pod"},
