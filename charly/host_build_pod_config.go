@@ -11,8 +11,8 @@ import (
 )
 
 // host_build_pod_config.go — the "pod-config-<leaf>" F10 host-builders. The `charly config …`
-// command's CLI GRAMMAR lives in command:config (candy/plugin-pod, the DEPLOY wave); each leaf
-// forwards its flags via its own HostBuild("pod-config-<leaf>") seam.
+// command's CLI GRAMMAR lives in command:config (candy/plugin-pod, the DEPLOY wave); Setup/
+// Remove forward their flags via their own HostBuild("pod-config-<leaf>") seam.
 //
 // P13-KERNEL direction-flip: Setup/Remove's former ORCHESTRATION (BoxConfigSetupCmd/
 // BoxConfigRemoveCmd, config_image.go) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
@@ -20,16 +20,14 @@ import (
 // deploy:pod + InvokeWithExecutor, the SAME primitive InvokeProvider uses, S1) instead of
 // running the orchestration in-core; the plugin calls back the narrow
 // "pod-config-*" seams in host_build_pod_config_seams.go for the host/loader/registry/
-// credential-coupled sub-steps. Status/Mount/Unmount/Passwd stay UNCHANGED — each is already a
-// one-line forward to enc.go (itself FINAL/K5-deferred registry-coupled inventory per its own
-// header), nothing to port.
+// credential-coupled sub-steps. Status/Mount/Unmount/Passwd's seams (and their BoxConfig*Cmd
+// core bodies) are DELETED (wave γ): those leaves now dispatch verb:enc/verb:credential
+// DIRECTLY from candy/plugin-pod (enc_cmd.go) via InvokeProvider — the same ALREADY-LIVE pattern
+// candy/plugin-deploy-pod/lifecycle.go proves for the start/stop path — no core round-trip left
+// to seam.
 const (
-	podConfigSetupBuilderKind   = "pod-config-setup"
-	podConfigStatusBuilderKind  = "pod-config-status"
-	podConfigMountBuilderKind   = "pod-config-mount"
-	podConfigUnmountBuilderKind = "pod-config-unmount"
-	podConfigPasswdBuilderKind  = "pod-config-passwd"
-	podConfigRemoveBuilderKind  = "pod-config-remove"
+	podConfigSetupBuilderKind  = "pod-config-setup"
+	podConfigRemoveBuilderKind = "pod-config-remove"
 )
 
 // invokePodConfigOp connects deploy:pod on-demand (using deployPodPluginCandyRef's
@@ -72,26 +70,6 @@ func hostBuildPodConfigSetup(ctx context.Context, req spec.PodConfigSetupRequest
 	return rep, nil
 }
 
-func hostBuildPodConfigStatus(_ context.Context, req spec.PodConfigStatusRequest, _ buildEngineContext) (spec.PodConfigStatusReply, error) {
-	cmd := BoxConfigStatusCmd{Box: req.Box, Instance: req.Instance}
-	return spec.PodConfigStatusReply{}, cmd.Run()
-}
-
-func hostBuildPodConfigMount(_ context.Context, req spec.PodConfigMountRequest, _ buildEngineContext) (spec.PodConfigMountReply, error) {
-	cmd := BoxConfigMountCmd{Box: req.Box, Volume: req.Volume, Instance: req.Instance}
-	return spec.PodConfigMountReply{}, cmd.Run()
-}
-
-func hostBuildPodConfigUnmount(_ context.Context, req spec.PodConfigUnmountRequest, _ buildEngineContext) (spec.PodConfigUnmountReply, error) {
-	cmd := BoxConfigUnmountCmd{Box: req.Box, Volume: req.Volume, Instance: req.Instance}
-	return spec.PodConfigUnmountReply{}, cmd.Run()
-}
-
-func hostBuildPodConfigPasswd(_ context.Context, req spec.PodConfigPasswdRequest, _ buildEngineContext) (spec.PodConfigPasswdReply, error) {
-	cmd := BoxConfigPasswdCmd{Box: req.Box, Instance: req.Instance}
-	return spec.PodConfigPasswdReply{}, cmd.Run()
-}
-
 func hostBuildPodConfigRemove(ctx context.Context, req spec.PodConfigRemoveRequest, _ buildEngineContext) (spec.PodConfigRemoveReply, error) {
 	var rep spec.PodConfigRemoveReply
 	reqJSON, err := marshalJSON(req)
@@ -110,10 +88,6 @@ func hostBuildPodConfigRemove(ctx context.Context, req spec.PodConfigRemoveReque
 
 var _ = func() bool {
 	registerHostBuilder(podConfigSetupBuilderKind, typedHostBuilder(podConfigSetupBuilderKind, hostBuildPodConfigSetup))
-	registerHostBuilder(podConfigStatusBuilderKind, typedHostBuilder(podConfigStatusBuilderKind, hostBuildPodConfigStatus))
-	registerHostBuilder(podConfigMountBuilderKind, typedHostBuilder(podConfigMountBuilderKind, hostBuildPodConfigMount))
-	registerHostBuilder(podConfigUnmountBuilderKind, typedHostBuilder(podConfigUnmountBuilderKind, hostBuildPodConfigUnmount))
-	registerHostBuilder(podConfigPasswdBuilderKind, typedHostBuilder(podConfigPasswdBuilderKind, hostBuildPodConfigPasswd))
 	registerHostBuilder(podConfigRemoveBuilderKind, typedHostBuilder(podConfigRemoveBuilderKind, hostBuildPodConfigRemove))
 	return true
 }()

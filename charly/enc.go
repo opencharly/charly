@@ -4,27 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// enc.go — encrypted-volume in-core SHIM (C16a), narrowed by Cutover B unit 2 and further
-// by Cutover B unit 6b (the InvokeProvider-generalization family): every state-probe/
-// plan-building function (resolveEncVolumeDir/isEncryptedInitialized/isEncryptedMounted/
-// fuseAllowOtherEnabled/encPlanFor/loadEncryptedVolume/encServiceFilename/
-// removeEncryptedVolumes/encStatus/askPassword) moved to sdk/deploykit (enc_probe.go, unit 2),
-// and the passphrase-RESOLUTION orchestration (resolveEncPassphrase/
-// resolveEncPassphraseForMount/resolveEncPassphraseForMountWithResolver/retryUnavailable/
-// encNotStoredError) moved to sdk/deploykit (enc_passphrase.go, unit 6b) — it takes an
-// injected deploykit.CredentialAccess instead of calling ResolveCredential/
-// DefaultCredentialStore by name, so charly-core's thin wrappers below and a future
-// out-of-process caller share ONE implementation (R3). What remains genuinely core-only:
-// encExecViaPlugin (providerRegistry.resolve + invokeTyped — the host registry itself,
-// clause-M) and awaitKeyringUnlockViaPlugin (needs the CONCRETE core CredentialStore's
-// awaitUnlock/credentialAwaiter — threaded into deploykit's function as an injected
-// `waiter` closure, exactly like the resolver/reset closures it already took).
+// enc.go — encrypted-volume in-core SHIM (C16a), narrowed by Cutover B unit 2, Cutover B unit
+// 6b (the InvokeProvider-generalization family), and wave γ (the config-time CLI port): every
+// state-probe/plan-building function (resolveEncVolumeDir/isEncryptedInitialized/
+// isEncryptedMounted/fuseAllowOtherEnabled/encPlanFor/loadEncryptedVolume/encServiceFilename/
+// removeEncryptedVolumes/encStatus/askPassword) moved to sdk/deploykit (enc_probe.go, unit 2);
+// the passphrase-RESOLUTION orchestration moved to sdk/deploykit (enc_passphrase.go, unit 6b);
+// and the CLI-invoked `charly config status/mount/unmount/passwd` LEAVES (encMount/encStatus/
+// encPasswd + their mount-side passphrase resolution: resolveEncPassphraseForMount/
+// awaitKeyringUnlockViaPlugin) moved wholesale to candy/plugin-pod (enc_cmd.go, wave γ) — that
+// plugin already holds a real reverse-channel *sdk.Executor with InvokeProvider capability
+// (mirroring candy/plugin-deploy-pod/lifecycle.go's ALREADY-LIVE start/stop pattern), so those
+// leaves dispatch verb:enc / verb:credential DIRECTLY, no core round-trip needed.
+//
+// What remains genuinely core-only, because it is STILL called from the pod-config-enc-mounts
+// seam (host_build_pod_config_seams.go, the `charly config setup`/Setup-orchestration family —
+// a DIFFERENT, out-of-this-wave family per the wave γ scoping map) and from
+// pod_lifecycle_resolve.go's resolvePodEncEnsure (the START-lifecycle plan-builder — also out of
+// this wave's scope, its own future fold-in): encExecViaPlugin (providerRegistry.resolve +
+// invokeTyped — the host registry itself, clause-M), coreCredentialAccess (the credential-store
+// adapter those two callers' resolveEncPassphrase/ensureEncryptedMounts still need),
+// resolveEncPassphrase (the ensure-path, non-mount passphrase resolution), encUnmount (still
+// called by hostBuildPodConfigEncMounts), and ensureEncryptedMounts (the `charly start`
+// transparent-setup path).
 
 // coreCredentialAccess bundles charly-core's ResolveCredential/DefaultCredentialStore adapter
 // (credential_plugin.go — itself registry-coupled, connectPluginByWordRef to verb:credential)
@@ -68,90 +75,9 @@ func resolveEncPassphrase(boxName string, autoGenerate bool) (string, error) {
 	return deploykit.ResolveEncPassphrase(boxName, autoGenerate, coreCredentialAccess())
 }
 
-// resolveEncPassphraseForMount resolves the gocryptfs passphrase with backend-aware and
-// failure-aware retry behavior (thin wrapper — the orchestration lives in
-// deploykit.ResolveEncPassphraseForMount, unit 6b). Defect D fix (preserved): the previous
-// implementation polled forever on src=="default" and had no deadline, so a misconfigured
-// keyring + TimeoutStartSec=0 quadlet was unrecoverable without manual intervention.
-// source="unavailable" is bounded at deploykit.EncMountDeadline; source="locked" waits
-// indefinitely via DBus signal subscription (zero CPU between events, via
-// awaitKeyringUnlockViaPlugin below) until the user unlocks the keyring; source="default"
-// fails immediately.
-func resolveEncPassphraseForMount(boxName string) (string, error) {
-	backend := resolveSecretBackend()
-	return deploykit.ResolveEncPassphraseForMount(boxName, backend, coreCredentialAccess(), resetDefaultCredentialStore, awaitKeyringUnlockViaPlugin)
-}
-
-// awaitKeyringUnlockViaPlugin is the production keyring-unlock waiter wired into
-// resolveEncPassphraseForMount (source="locked"). The Secret Service (godbus) lives
-// OUT-OF-PROCESS in candy/plugin-secrets, so the event-driven DBus PropertiesChanged
-// subscription + the backstop re-probe run THERE: this delegates to the active store's
-// awaitUnlock, which RPCs verb:credential `await-unlock` and BLOCKS until the keyring
-// unlocks or ctx is cancelled. ctx carries the core's SIGINT/SIGTERM cancellation, which
-// gRPC propagates to the plugin's Invoke so `systemctl stop` ends the wait cleanly.
-//
-// The resolver/reset closures are unused here — the plugin re-probes its OWN store across
-// the process boundary; they remain on the waiter seam for the in-core retry paths and the
-// test fakes. A store that cannot await (only a non-keyring test fake reaches this, since
-// the production store is always the keyring-capable pluginCredentialStore) is a loud error.
-func awaitKeyringUnlockViaPlugin(
-	ctx context.Context,
-	boxName string,
-	_ func() (string, string),
-	_ func(),
-) (string, string, error) {
-	store := DefaultCredentialStore()
-	aw, ok := store.(credentialAwaiter)
-	if !ok {
-		return "", "", fmt.Errorf("active credential store %q cannot wait for keyring unlock", store.Name())
-	}
-	return aw.awaitUnlock(ctx, "charly/enc", boxName)
-}
-
-// encMount mounts encrypted volumes for an image.
-// If volume is non-empty, only that volume is mounted.
-// Uses resolveEncPassphraseForMount which waits for keyring unlock under systemd.
-//
-// Fast path: if every requested volume is already mounted (scope units still
-// alive from a previous mount), return nil without querying the credential
-// store at all. This makes service restarts resilient to keyring breakage —
-// the most common operational case is "restart when everything is still
-// mounted", and it has no passphrase dependency.
-func encMount(boxName, instance, volume string) error {
-	plan, err := deploykit.EncPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
-	if err != nil {
-		return err
-	}
-
-	// Fast path: if every requested volume is already mounted, skip the passphrase
-	// lookup entirely (host-prelifted mount state, so a broken keyring never blocks a
-	// restart-when-everything-is-mounted).
-	requested := len(plan)
-	mounted := 0
-	for _, p := range plan {
-		if p.Mounted {
-			mounted++
-		}
-	}
-	if requested > 0 && mounted == requested {
-		fmt.Fprintf(os.Stderr, "All encrypted volumes for %s already mounted (%d/%d)\n", boxName, mounted, requested)
-		return nil
-	}
-
-	passphrase, err := resolveEncPassphraseForMount(boxName)
-	if err != nil {
-		return err
-	}
-	return encExecViaPlugin(spec.EncExecInput{
-		Method:     spec.EncMethodMount,
-		ImageID:    "charly-" + boxName,
-		BoxName:    boxName,
-		Passphrase: passphrase,
-		Volumes:    plan,
-	})
-}
-
-// encUnmount unmounts encrypted volumes for an image.
+// encUnmount unmounts encrypted volumes for an image. Still core-resident: called by
+// hostBuildPodConfigEncMounts (host_build_pod_config_seams.go), the `charly config setup`
+// Setup-orchestration family — a different family than wave γ's CLI-leaf port, not yet folded in.
 // If volume is non-empty, only that volume is unmounted.
 func encUnmount(boxName, instance, volume string) error {
 	plan, err := deploykit.EncPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
@@ -162,61 +88,6 @@ func encUnmount(boxName, instance, volume string) error {
 		Method:  spec.EncMethodUnmount,
 		ImageID: "charly-" + boxName,
 		BoxName: boxName,
-		Volumes: plan,
-	})
-}
-
-// encStatus prints the status of encrypted bind mounts for an image. Thin forward to the
-// portable deploykit implementation (Cutover B unit 2).
-func encStatus(boxName, instance string) error {
-	return deploykit.EncStatus(boxName, instance)
-}
-
-// encPasswd changes the gocryptfs password for all encrypted volumes of an image.
-func encPasswd(boxName, instance string) error {
-	plan, err := deploykit.EncPlanFor(boxName, instance, "", deploykit.DeployStorageDir(boxName, instance))
-	if err != nil {
-		return err
-	}
-
-	if len(plan) == 0 {
-		return fmt.Errorf("image %q has no encrypted bind mounts", boxName)
-	}
-
-	// All volumes must be unmounted before changing password.
-	for _, m := range plan {
-		if m.Mounted {
-			return fmt.Errorf("encrypted volume %q is still mounted; run 'charly config unmount %s' first", m.Name, boxName)
-		}
-	}
-
-	volID := "charly-" + boxName
-
-	oldPass, err := deploykit.AskPassword(volID+"-old", "Current passphrase:")
-	if err != nil {
-		return err
-	}
-
-	newPass, err := deploykit.AskPassword(volID+"-new", "New passphrase:")
-	if err != nil {
-		return err
-	}
-
-	confirmPass, err := deploykit.AskPassword(volID+"-confirm", "Confirm new passphrase:")
-	if err != nil {
-		return err
-	}
-
-	if newPass != confirmPass {
-		return fmt.Errorf("new passphrase and confirmation do not match")
-	}
-
-	return encExecViaPlugin(spec.EncExecInput{
-		Method:  spec.EncMethodPasswd,
-		ImageID: volID,
-		BoxName: boxName,
-		OldPass: oldPass,
-		NewPass: newPass,
 		Volumes: plan,
 	})
 }

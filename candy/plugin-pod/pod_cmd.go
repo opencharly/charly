@@ -460,7 +460,7 @@ type ConfigStatusCmd struct {
 }
 
 func (c *ConfigStatusCmd) Run() error {
-	return hostPodSeam("pod-config-status", spec.PodConfigStatusRequest{Box: c.Box, Instance: c.Instance})
+	return pluginEncStatus(c.Box, c.Instance)
 }
 
 // ConfigMountCmd mounts encrypted volumes.
@@ -471,7 +471,7 @@ type ConfigMountCmd struct {
 }
 
 func (c *ConfigMountCmd) Run() error {
-	return hostPodSeam("pod-config-mount", spec.PodConfigMountRequest{Box: c.Box, Volume: c.Volume, Instance: c.Instance})
+	return pluginEncMount(c.Box, c.Instance, c.Volume)
 }
 
 // ConfigUnmountCmd unmounts encrypted volumes.
@@ -482,7 +482,7 @@ type ConfigUnmountCmd struct {
 }
 
 func (c *ConfigUnmountCmd) Run() error {
-	return hostPodSeam("pod-config-unmount", spec.PodConfigUnmountRequest{Box: c.Box, Volume: c.Volume, Instance: c.Instance})
+	return pluginEncUnmount(c.Box, c.Instance, c.Volume)
 }
 
 // ConfigPasswdCmd changes the gocryptfs password.
@@ -492,7 +492,7 @@ type ConfigPasswdCmd struct {
 }
 
 func (c *ConfigPasswdCmd) Run() error {
-	return hostPodSeam("pod-config-passwd", spec.PodConfigPasswdRequest{Box: c.Box, Instance: c.Instance})
+	return pluginEncPasswd(c.Box, c.Instance)
 }
 
 // ConfigRemoveCmd removes a quadlet service (replaces charly disable).

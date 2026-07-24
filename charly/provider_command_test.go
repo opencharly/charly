@@ -182,14 +182,15 @@ func TestCommandProviders_DeployLifecycleCommands(t *testing.T) {
 // CHARLY_PREEMPT_LEASE-gated arbiter release (remove) — via the CONSOLIDATED
 // host_build_pod_lifecycle_dispatch.go (replacing the former per-verb podStartCmd/podStopCmd/
 // podLogsCmd/podShellCmd/podUpdateCmd/podServiceCmd/podRemoveCmd core reconstructions for all
-// seven verbs). config_image.go's BoxConfigStatusCmd/BoxConfigMountCmd/BoxConfigUnmountCmd/BoxConfigPasswdCmd
-// (Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
-// OpConfigRemove, the P13-KERNEL direction-flip) — over HostBuild("pod-start")/
-// HostBuild("pod-stop")/HostBuild("pod-logs")/HostBuild("pod-remove")/HostBuild("pod-shell")/
-// HostBuild("pod-service")/HostBuild("pod-config-setup")/HostBuild("pod-config-status")/
-// HostBuild("pod-config-mount")/HostBuild("pod-config-unmount")/HostBuild("pod-config-passwd")/
-// HostBuild("pod-config-remove")/HostBuild("pod-update"). (End-to-end CLI dispatch is
-// exercised live — see the DEPLOY wave report — and by the R10 bed roster.)
+// seven verbs) — over HostBuild("pod-start")/HostBuild("pod-stop")/HostBuild("pod-logs")/
+// HostBuild("pod-remove")/HostBuild("pod-shell")/HostBuild("pod-service")/HostBuild("pod-update").
+// Setup/Remove instead FORWARD onward to the deploy:pod plugin's sdk.OpConfigSetup/
+// OpConfigRemove (the P13-KERNEL direction-flip) over HostBuild("pod-config-setup")/
+// HostBuild("pod-config-remove"). command:config's other four leaves — Status/Mount/Unmount/
+// Passwd — no longer route through core at all (wave γ): candy/plugin-pod's enc_cmd.go
+// dispatches verb:enc/verb:credential DIRECTLY via InvokeProvider, the same ALREADY-LIVE pattern
+// candy/plugin-deploy-pod/lifecycle.go proves for the start/stop path. (End-to-end CLI dispatch
+// is exercised live — see the DEPLOY wave report — and by the R10 bed roster.)
 func TestCommandCompileIn_PodInProc(t *testing.T) {
 	for _, word := range []string{"start", "stop", "restart", "logs", "remove", "shell", "service", "volume", "cp", "config", "update"} {
 		prov, ok := providerRegistry.resolve(ClassCommand, word)
