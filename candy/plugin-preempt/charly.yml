@@ -12,10 +12,13 @@ plugin-preempt:
                 poisoning (device_lock-wedge containment), owner liveness, and the vfio<->nvidia
                 driver-mode arbitration math (arbiter.go + arbiter_support.go). The arbiter reaches
                 its HOST dependencies — the project config, the VM/pod lifecycle, the GPU driver
-                flip — that it cannot hold across the module boundary over the
-                ExecutorService.HostArbiter reverse channel (the 7 host seams: gather / resources /
-                running / stop[+wait] / start / switchMode / ensureCDI, served in charly by
-                arbiter_host.go). The in-core PROXY (charly/preempt.go newResourceArbiter +
+                flip — that it cannot hold across the module boundary over TWO generic reverse
+                legs: gather/resources read the generic Executor.HostBuild("resolved-project")
+                envelope (K1-unblock wave 1 — the former bespoke arbiter reverse-RPC channel
+                + its host handler are DELETED); the other 6
+                (running / stop[+wait] / start / switchMode / ensureCDI / gpuCDI) run over
+                Executor.InvokeProvider (FLOOR-SLIM-proper Unit-8, holder_dispatch.go — a prior
+                cutover). The in-core PROXY (charly/preempt.go newResourceArbiter +
                 acquire*/release* shims) is the generic core→verb registry bridge the core
                 LEASE-LIFECYCLE consumers (check-bed runner, start, vm, commands, vm_gpu_cmd) compile
                 through, invisible above the shim (R3).
@@ -40,7 +43,7 @@ plugin-preempt:
             (test-lock) + a requires_exclusive claimant, so AcquireExclusive -> holdersToStop ->
             stopHolders+wait -> lease persisted -> applyMode SKIPS (no gpu selector) -> claim, then
             teardown -> ReleaseClaimant -> restoreHolders, all THROUGH the externalized dispatch +
-            the HostArbiter reverse channel.
+            the resolved-project envelope (gather/resources) + InvokeProvider (the rest).
         plugin:
             source: github.com/opencharly/charly/candy/plugin-preempt
             providers:
@@ -51,7 +54,7 @@ plugin-preempt:
               # it mirrors candy/plugin-gpu's gpu-module-present: a trivial build-context `plugin: command`
               # (the built-in command CHECK verb) running `true`, proving the host can build + compile in the
               # module. The full arbiter dispatch (acquire/preempt/release through verb:arbiter + the
-              # HostArbiter reverse channel) is exercised by the live R10 bed (check-preempt-arbiter-pod);
+              # resolved-project envelope / InvokeProvider reverse legs) is exercised by the live R10 bed (check-preempt-arbiter-pod);
               # the `charly preempt status` CLI end-to-end by the Go e2e + the live R10.
               check: the resource-arbiter plugin ships a buildable Go module the host compiles in; the full arbiter acquire/preempt/release dispatch + the `charly preempt` CLI are exercised by the live R10 (check-preempt-arbiter-pod) + the Go e2e
               id: preempt-module-present

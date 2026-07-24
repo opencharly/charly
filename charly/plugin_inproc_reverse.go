@@ -67,7 +67,3 @@ func (c *inprocExecutorClient) InvokeProvider(ctx context.Context, in *pb.Invoke
 func (c *inprocExecutorClient) HostBuild(ctx context.Context, in *pb.HostBuildRequest, _ ...grpc.CallOption) (*pb.HostBuildReply, error) {
 	return c.srv.HostBuild(ctx, in)
 }
-
-func (c *inprocExecutorClient) HostArbiter(ctx context.Context, in *pb.HostArbiterRequest, _ ...grpc.CallOption) (*pb.HostArbiterReply, error) {
-	return c.srv.HostArbiter(ctx, in)
-}
