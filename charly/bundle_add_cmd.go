@@ -341,12 +341,26 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		// Mark each plan's own candy (plus transitive deps) as overlay
 		// candies so the Pod target picks them ALL up — not just the
 		// user-facing ref name (k3s-server without its k3s base dep).
-		overlayNames := make([]string, 0, len(alPlans))
+		overlayNames := make([]string, 0, len(alPlans)+1)
 		for _, p := range alPlans {
 			if p.Candy != "" {
 				overlayNames = append(overlayNames, p.Candy)
 			}
 		}
+		// ALSO carry the ORIGINAL authored add_candy ref `al` (possibly REMOTE/qualified, e.g.
+		// "@github.com/…:vTAG") alongside the bare resolved candy name(s) above. collectOverlayCandies
+		// unions every plan's AddCandies into ResolveOpts.ExtraCandyRefs to widen TWO SEPARATE,
+		// INDEPENDENT resolved-project re-fetches downstream (hostBuildOverlay's own overlay
+		// Generator/envelope + candy/plugin-installstep's getGenerator) — a bare candy name there is a
+		// silent no-op for a REMOTE ref (ScanAllCandyWithConfigOpts's addRef gates on
+		// IsRemoteCandyRef), so without the qualified ref itself those re-fetches never actually fetch
+		// a remote add_candy candy at all, even though it correctly resolved HERE at compile time
+		// (RCA'd K1-alpha regression: check-addcandy-pod's overlay-deploy path, "task emit: candy %q
+		// not found"). A bare-name `al` (a local candy) is a harmless duplicate of the entries above;
+		// every consumer of AddCandies (collectOverlayCandies, candyByName's fallback,
+		// ResolveInitSystem's candyOrder walk) already tolerates an unresolvable extra entry by
+		// skipping it.
+		overlayNames = append(overlayNames, al)
 		for _, p := range alPlans {
 			p.AddCandies = append(p.AddCandies, overlayNames...)
 		}
