@@ -74,6 +74,9 @@ func (f *fakeExecutorServiceClient) RunHostStep(context.Context, *pb.HostStepReq
 func (f *fakeExecutorServiceClient) InvokeProvider(context.Context, *pb.InvokeProviderRequest, ...grpc.CallOption) (*pb.InvokeReply, error) {
 	panic("unused")
 }
+func (f *fakeExecutorServiceClient) DescribeProvider(context.Context, *pb.DescribeProviderRequest, ...grpc.CallOption) (*pb.DescribeProviderReply, error) {
+	panic("unused")
+}
 
 // TestDeployVMForwards_ReadsPersistedAllocationViaConfigResolveSeam is the regression test for
 // the R10 check-k8s-deploy bed failure: "auto port_forward \"auto:6443\" has no persisted
