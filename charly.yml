@@ -755,26 +755,28 @@ check-pod-overlay:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the pod-overlay step-emit dispatch relocation (K5-A item 2): the FULL
-            per-kind dispatch DECISION (which peer provider renders a compiler-emitted
-            InstallStep's pod-overlay Containerfile fragment) relocated out of
-            charly/oci_step_emit.go entirely, into the compiled-in class:step plugin
-            candy/plugin-installstep's new "oci-dispatch" word — which resolves its target
-            via the class-generic DescribeProvider (cached StepContract metadata, no live
-            Invoke) + InvokeProvider (dispatch) reverse-channel legs instead of a direct
-            in-core providerRegistry consult. add_candy: [ripgrep] forces the overlay
-            Containerfile synthesis (hostBuildOverlay + deploykit.OCITarget) to actually
-            run: ripgrep's `package:` field compiles to a SystemPackagesStep (the
-            HOST-COUPLED "system-packages" word), so EmitStepOp reaches the relocated
-            dispatch via HostBuild("step-emit","oci-emit-step") for a REAL host-coupled
-            kind, not a synthetic one. This is NON-VACUOUS: a mis-relocated dispatch (the
-            wrong word resolved, a dropped StepContract.Emits gate, or broken
-            build-context ctx-threading so candy/plugin-installstep's own
-            HostBuild("resolved-project") call-back fails) breaks the OVERLAY BUILD ITSELF
-            — `charly bundle add`/`charly update` fails before the pod ever reaches
-            steady state, and ripgrep is verified installed INSIDE the running overlay
-            image (proving the emitted fragment was not merely well-formed but actually
-            baked in and functional).
+            R10 for add_candy: on a pod: deploy — the FIRST disposable bed in this repo to
+            combine the pod substrate with add_candy:, and the acceptance gate for the
+            three-bug fix that makes the feature work end-to-end for the first time: (1)
+            hostBuildOverlay's ctx-threaded plans carrier (overlayBuildInputs) is now seeded
+            in production at (*pluginDeployTarget).Add, so the overlay's candy scan actually
+            sees add_candy: [ripgrep] instead of an empty plan list; (2) the overlay's
+            first-ever PrepareVenue state-save (ResolvedImage, and separately a first-ever
+            `charly config` volume-persist, VolumeProjectChecked) no longer falls through
+            bundleDiscForEntity's pod-workload check to "group", which used to corrupt
+            charly.yml on the next read; (3) the check-bed runner's config/start steps no
+            longer force --tag <base-build-tag> for an add_candy bed (CheckBedReply.HasAddCandy),
+            so they deploy the just-built overlay instead of clobbering it with the un-overlaid
+            base image. ripgrep's `package:` field compiles to a SystemPackagesStep, so
+            add_candy: [ripgrep] forces a REAL overlay Containerfile synthesis
+            (hostBuildOverlay + deploykit.OCITarget), not a synthetic no-op. This is
+            NON-VACUOUS both initially and across a genuine `charly update` fresh rebuild
+            (the bed runner's own post-rebuild check-live pass, extended by this same
+            cutover to cover every runtime pod bed — not only ones with nested children —
+            re-evaluates this plan's checks against the ACTUALLY-rebuilt container, not a
+            same-pass no-op): any of the three bugs regressing breaks the overlay build
+            itself or drops ripgrep from the running container, on EITHER the initial deploy
+            or the fresh rebuild.
         add_candy:
             - ripgrep
         plan:
@@ -788,23 +790,8 @@ check-pod-overlay:
               command:
                 command: ${CHARLY_BIN} status --json
                 in_container: false
-            - check: ripgrep (an add_candy overlay layer whose `package:` field compiles to a SystemPackagesStep) is installed + functional INSIDE the running overlay container — proving the relocated pod-overlay dispatch (candy/plugin-installstep's "oci-dispatch" word, resolved via DescribeProvider/InvokeProvider) actually rendered the HOST-COUPLED system-packages fragment and baked it into the image
+            - check: ripgrep (an add_candy overlay layer whose `package:` field compiles to a SystemPackagesStep) is installed + functional INSIDE the running overlay container — proving the overlay-plans ctx-seed fix actually threaded add_candy's compiled plan into the overlay build, baking a REAL host-coupled system-packages fragment into the image (not a synthetic no-op). Re-evaluated by the bed runner's post-rebuild check-live pass against the container produced by a genuine `charly update`, so this SAME assertion is the fresh-rebuild's own non-vacuous proof too — no separate embedded rebuild step is needed in this plan.
               id: pod-overlay-ripgrep-installed
-              exit_status: 0
-              stdout:
-                - matches: "ripgrep [0-9]"
-              command:
-                command: rg --version
-                in_container: true
-            - run: charly update rebuilds the overlay + redeploys through the SAME relocated dispatch — proves the fresh-rebuild path (not merely a cached first build) still resolves candy/plugin-installstep's "oci-dispatch" correctly
-              exit_status: 0
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} update check-pod-overlay
-                in_container: false
-            - check: after the fresh-rebuild, ripgrep is STILL installed + functional in the (re-)overlaid container — the fresh-rebuild's own non-vacuous proof
-              id: pod-overlay-ripgrep-installed-post-rebuild
               exit_status: 0
               stdout:
                 - matches: "ripgrep [0-9]"

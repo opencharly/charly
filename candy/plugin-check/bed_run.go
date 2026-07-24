@@ -490,13 +490,21 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		if err := step("update", "update", name); err != nil {
 			return fail("update %s: %w", name, err)
 		}
-		// For a nested bed, the fresh rebuild discards the substrate's children, so
-		// re-apply + re-check-live to actually re-verify on the rebuild.
-		if d.RunRuntime && !isInPlace && len(d.ChildKeys) > 0 {
+		// EVERY runtime, non-in-place bed gets a genuine post-rebuild check-live pass — not just
+		// ones with nested children. Before this fix, a childless bed's `checkLiveTree` call was
+		// gated on `len(d.ChildKeys) > 0`, so its OWN deploy-level plan checks (a `check:` step
+		// asserting the running container's state — e.g. check-pod-overlay's ripgrep-installed
+		// assertion) were never re-evaluated after `charly update`: the SAME single check-live pass
+		// that ran before `update` was the only one the whole 12-step bed run ever executed, so a
+		// regression that broke ONLY the fresh-rebuild path (as distinct from the initial-deploy
+		// path) would still show 100% green (a live-bed-validator finding on charly#186's
+		// check-pod-overlay — "a gate that cannot fail on the change proves nothing", R10). For a
+		// NESTED bed, the fresh rebuild additionally discards the substrate's children, so those
+		// must be explicitly re-applied first (a VM's own update recreates the domain — the qcow2
+		// disk + nested pod's persistent in-guest quadlet auto-starts on the fresh boot, so only a
+		// wait is needed; non-VM nested children must be redeployed).
+		if d.RunRuntime && !isInPlace {
 			if d.IsVM {
-				// `charly update` recreated the domain; the qcow2 disk (and the nested
-				// pod's persistent in-guest quadlet) persists, so it auto-starts on the
-				// fresh boot — just wait for ssh, then the rebuild check-live proves it.
 				waitReady()
 			} else {
 				waitReady()
