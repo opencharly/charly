@@ -749,6 +749,55 @@ check-sidecar-pod:
         # is brought up automatically as part of `charly bundle add check-sidecar-pod` and torn
         # down as part of the bed's own cleanup (or explicitly, mid-plan, by the steps above).
         # 30m TTL keeps the systemd safety-net window well inside the bed's own run duration.
+check-pod-overlay:
+    pod:
+        image: check-k8s-deploy-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for add_candy: on a pod: deploy — the FIRST disposable bed in this repo to
+            combine the pod substrate with add_candy:, and the acceptance gate for the
+            three-bug fix that makes the feature work end-to-end for the first time: (1)
+            hostBuildOverlay's ctx-threaded plans carrier (overlayBuildInputs) is now seeded
+            in production at (*pluginDeployTarget).Add, so the overlay's candy scan actually
+            sees add_candy: [ripgrep] instead of an empty plan list; (2) the overlay's
+            first-ever PrepareVenue state-save (ResolvedImage, and separately a first-ever
+            `charly config` volume-persist, VolumeProjectChecked) no longer falls through
+            bundleDiscForEntity's pod-workload check to "group", which used to corrupt
+            charly.yml on the next read; (3) the check-bed runner's config/start steps no
+            longer force --tag <base-build-tag> for an add_candy bed (CheckBedReply.HasAddCandy),
+            so they deploy the just-built overlay instead of clobbering it with the un-overlaid
+            base image. ripgrep's `package:` field compiles to a SystemPackagesStep, so
+            add_candy: [ripgrep] forces a REAL overlay Containerfile synthesis
+            (hostBuildOverlay + deploykit.OCITarget), not a synthetic no-op. This is
+            NON-VACUOUS both initially and across a genuine `charly update` fresh rebuild
+            (the bed runner's own post-rebuild check-live pass, extended by this same
+            cutover to cover every runtime pod bed — not only ones with nested children —
+            re-evaluates this plan's checks against the ACTUALLY-rebuilt container, not a
+            same-pass no-op): any of the three bugs regressing breaks the overlay build
+            itself or drops ripgrep from the running container, on EITHER the initial deploy
+            or the fresh rebuild.
+        add_candy:
+            - ripgrep
+        plan:
+            - check: command=charly status --json
+              id: pod-overlay-running
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-pod-overlay
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: ripgrep (an add_candy overlay layer whose `package:` field compiles to a SystemPackagesStep) is installed + functional INSIDE the running overlay container — proving the overlay-plans ctx-seed fix actually threaded add_candy's compiled plan into the overlay build, baking a REAL host-coupled system-packages fragment into the image (not a synthetic no-op). Re-evaluated by the bed runner's post-rebuild check-live pass against the container produced by a genuine `charly update`, so this SAME assertion is the fresh-rebuild's own non-vacuous proof too — no separate embedded rebuild step is needed in this plan.
+              id: pod-overlay-ripgrep-installed
+              exit_status: 0
+              stdout:
+                - matches: "ripgrep [0-9]"
+              command:
+                command: rg --version
+                in_container: true
 # check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
 # Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers
@@ -1954,7 +2003,7 @@ check-preempt-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's host dependencies flow over the always-served HostArbiter leg) — no hidden core-command forward, no in-core proxy hop. status exits 0 with a well-formed lease table naming no lease owned by THIS bed (sibling beds' transient leases are legitimate under a parallel roster) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end. The live `restore`/reconcile step is intentionally omitted (it reads the operator's global lease ledger, so an eval bed must not run it); its reconcile→gather/start path stays covered by the Go e2e (TestArbiter_ReconcileStrandedRestores + TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed.
+            Sole proof of the externalized `charly preempt` COMMAND (candy/plugin-preempt, command:preempt), COMPILED-IN and owning the CLI + lease-table formatting. A disposable kind:local deploy on host: local runs `charly preempt status` host-side: the compiled-in command's Invoke(OpRun) reaches its peer verb:arbiter DIRECTLY via InvokeProvider over the in-proc reverse channel (the arbiter's own host dependencies flow over TWO generic reverse legs — gather/resources over the resolved-project envelope, the rest over InvokeProvider; see candy/plugin-preempt's own description) — no hidden core-command forward, no in-core proxy hop. status exits 0 with a well-formed lease table naming no lease owned by THIS bed (sibling beds' transient leases are legitimate under a parallel roster) — proving the externalized command + the InvokeProvider peer-dispatch end-to-end. The live `restore`/reconcile step is intentionally omitted (it reads the operator's global lease ledger, so an eval bed must not run it); its reconcile→gather/start path stays covered by the Go e2e (TestArbiter_ReconcileStrandedRestores + TestArbiterExternalizedDispatch_AcquirePersistsAndSurfaces) + the check-preempt-arbiter-pod bed.
         plan:
             - check: command=charly preempt status exits 0 and names no lease owned by THIS bed — bed-owned scoping, because a concurrent sibling bed's transient lease is legitimate (a global no-leases assertion can never hold under a parallel roster)
               id: preempt-status-runs

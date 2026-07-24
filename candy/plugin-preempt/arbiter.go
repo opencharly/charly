@@ -23,7 +23,7 @@ import (
 // DEPENDENCIES (project config, VM/pod lifecycle, the GPU driver flip) it CANNOT hold across the
 // module boundary — it reaches them via TWO generic reverse legs: gather/resources over
 // Executor.HostBuild("resolved-project") (K1-unblock wave 1; the former bespoke
-// ExecutorService.HostArbiter reverse RPC is deleted), the other 6
+// arbiter reverse-RPC channel is deleted), the other 6
 // (running/stop[+wait]/start/switchMode/ensureCDI/gpuCDI) over Executor.InvokeProvider
 // (FLOOR-SLIM-proper Unit-8, holder_dispatch.go).
 //
@@ -103,13 +103,13 @@ func invokeArbiter(ctx context.Context, exec *sdk.Executor, in spec.ArbiterInvok
 // --- resolved-project reads (K1-unblock wave 1) ------------------------------------------------
 //
 // gather/resources used to be the ONLY 2 of the original 8 host seams that were genuinely
-// K1-blocked (LoadUnified project-config coupled) — reached over the bespoke
-// ExecutorService.HostArbiter "gather"/"resources" RPCs (charly/arbiter_host.go). Both now read
+// K1-blocked (LoadUnified project-config coupled) — reached over a bespoke pair of
+// "gather"/"resources" reverse RPCs served by a now-deleted host handler. Both now read
 // off the SAME generic HostBuild("resolved-project") envelope every other resolved-project
 // consumer uses (candy/plugin-check, candy/plugin-substrate, candy/plugin-installstep, …) and do
 // their OWN filtering/projection in-plugin via the portable sdk/deploykit helpers — no bespoke
-// per-capability host seam remains for either. This retires the HostArbiter "gather"/"resources"
-// actions entirely (see arbiter_host.go).
+// per-capability host seam remains for either. This retires the bespoke "gather"/"resources"
+// reverse-RPC actions entirely.
 
 func hostGather(ctx context.Context, exec *sdk.Executor) []spec.HolderDescriptor {
 	tree := resolvedDeployTree(ctx, exec, "preempt gather")

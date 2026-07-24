@@ -285,6 +285,21 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *DeployContext, plans
 		return fmt.Errorf("external deploy %q: marshal opts: %w", t.name, err)
 	}
 
+	// Seed the overlay-build inputs onto ctx (severe pre-existing bug fix): overlayBuildInputs
+	// carries the LIVE plans + the live, non-serializable parentExec/parentNode (a nested
+	// pod-in-pod's parent venue) — a genuine in-process ctx carrier (a live-interface field can
+	// never cross the wire, so this is NOT a CUE-wire type; see build_overlay.go's doc). This is
+	// the ONLY point in the Add call chain that holds both the live `plans` slice AND
+	// opts.ParentExec/ParentNode before the ctx is threaded (unbroken, in-proc) all the way to
+	// candy/plugin-deploy-pod's HostBuild("overlay",...) call. Before this fix, NOTHING in
+	// production ever seeded overlayBuildInputs — only build_overlay_test.go hand-constructed it —
+	// so a pod deploy's add_candy: overlay build always saw an EMPTY plan list
+	// (hostBuildOverlay's collectOverlayCandies(plans) returned []), silently baking NOTHING from
+	// the extra candies into the image. Every pod substrate reaches this seam (harmless for
+	// non-pod targets: `.live` is read only by the "overlay" HostBuild, which only
+	// candy/plugin-deploy-pod's podPrepareVenue ever calls).
+	ctx = withOverlayBuildInputs(ctx, &overlayBuildInputs{plans: plans, parentExec: opts.ParentExec, parentNode: opts.ParentNode})
+
 	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{
 		Op: "add", Dir: dir, PlansJSON: plansJSON, OptsJSON: optsJSON, DistroCfgJSON: t.distroCfgJSON(),
 		VenueJSON: t.applyParentExecOverride(opts),
