@@ -107,8 +107,8 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		res *Result
 		err error
 	)
-	switch {
-	case class == ClassVerb:
+	switch class {
+	case ClassVerb:
 		if cv, isCV := prov.(CheckVerbProvider); isCV {
 			// K1-unblock W3 Unit B (operator ruling "path (a)"): a CheckVerbProvider target (a
 			// compiled-in/builtin check verb) dispatches via RunVerb with a live host
