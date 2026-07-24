@@ -178,6 +178,37 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 	return &pb.HostBuildReply{ResultJson: result}, nil
 }
 
+// DescribeProvider returns the CACHED capability metadata for another provider (class, word) —
+// the metadata twin of InvokeProvider (K5-A item 2): a plugin needs to make a ROUTING decision
+// about a peer provider (e.g. "does class:step word X declare Emits=true?") without holding its
+// own copy of the provider registry, and without paying a live Invoke round-trip merely to ask a
+// question about capability shape. capMeta (embedded in both grpcProvider and inprocProvider) IS
+// the cache — populated ONCE at connect/register time via buildCapMeta — so this is a plain
+// in-memory lookup + carrier-interface read, never a fresh Describe RPC to the target. found=false
+// for an unresolvable (class, word) — mirrors InvokeProvider's own "not connected" outcome, but as
+// a query result rather than an RPC error (a routing decision often wants to distinguish
+// not-found from a transport failure, not treat both alike). Scoped to StepContract today — the
+// ONE cached sub-shape oci_step_emit.go's relocation needs; extend with more capMeta-carried
+// fields only when a real consumer needs them (never speculatively).
+func (s *executorReverseServer) DescribeProvider(_ context.Context, req *pb.DescribeProviderRequest) (*pb.DescribeProviderReply, error) {
+	prov, ok := providerRegistry.resolve(ProviderClass(req.GetClass()), req.GetWord())
+	if !ok {
+		return &pb.DescribeProviderReply{Found: false}, nil
+	}
+	reply := &pb.DescribeProviderReply{Found: true}
+	if carrier, ok := prov.(spec.StepContractCarrier); ok {
+		if sc, ok := carrier.DeclaredStepContract(); ok {
+			reply.StepContract = &pb.StepContract{
+				Scope: sc.Scope.String(),
+				Venue: int32(sc.Venue),
+				Gate:  string(sc.Gate),
+				Emits: sc.Emits,
+			}
+		}
+	}
+	return reply, nil
+}
+
 // hostBuilder runs a host-side build for one kind: it interprets specJSON, runs the build engine
 // (with the host buildEngineContext), and returns the opaque result JSON. The seam M13/M14 register
 // the image/kustomize builders onto.
