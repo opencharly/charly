@@ -208,17 +208,37 @@ func pluginEncExec(in spec.EncExecInput) error {
 	return nil
 }
 
-// pluginEncStatus prints encrypted-volume status. Pure forward to the portable deploykit
-// implementation — zero credential coupling (mirrors charly/enc.go's encStatus 1:1).
+// loadPodBundleConfig fetches the per-host BundleConfig over the EXISTING
+// "pod-config-load-bundle" seam (deploykit.LoadBundleConfigViaSeam) rather than letting
+// EncPlanFor/EncStatus reach the placement-dependent bare deploykit.LoadBundleConfig()
+// themselves — the same fix candy/plugin-pod/remove_orchestration.go's resolveSidecarNames
+// already applies for the same latent-bug class (R3, no new seam invented). Safe today
+// because command:config is compiled-in-only, but routing through the seam means a future
+// out-of-process placement fails loudly (a real error) instead of silently degrading to
+// "no encrypted volumes" — exactly the historical bug this class of fix exists to prevent.
+func loadPodBundleConfig(caller string) (*deploykit.BundleConfig, error) {
+	return deploykit.LoadBundleConfigViaSeam(cmdCtx, cmdExec, caller)
+}
+
+// pluginEncStatus prints encrypted-volume status — zero credential coupling (mirrors
+// charly/enc.go's encStatus 1:1), routed through the seam-aware EncStatusFromConfig.
 func pluginEncStatus(boxName, instance string) error {
-	return deploykit.EncStatus(boxName, instance)
+	dc, err := loadPodBundleConfig("charly config status")
+	if err != nil {
+		return err
+	}
+	return deploykit.EncStatusFromConfig(dc, boxName, instance)
 }
 
 // pluginEncMount mounts encrypted volumes for an image (direct port of charly/enc.go's encMount).
 // Fast path preserved BYTE-IDENTICAL: if every requested volume is already mounted, return nil
 // without querying the credential store at all (keyring-resilient restart).
 func pluginEncMount(boxName, instance, volume string) error {
-	plan, err := deploykit.EncPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
+	dc, err := loadPodBundleConfig("charly config mount")
+	if err != nil {
+		return err
+	}
+	plan, err := deploykit.EncPlanForConfig(dc, boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -250,7 +270,11 @@ func pluginEncMount(boxName, instance, volume string) error {
 
 // pluginEncUnmount unmounts encrypted volumes for an image (direct port of enc.go's encUnmount).
 func pluginEncUnmount(boxName, instance, volume string) error {
-	plan, err := deploykit.EncPlanFor(boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
+	dc, err := loadPodBundleConfig("charly config unmount")
+	if err != nil {
+		return err
+	}
+	plan, err := deploykit.EncPlanForConfig(dc, boxName, instance, volume, deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -262,10 +286,30 @@ func pluginEncUnmount(boxName, instance, volume string) error {
 	})
 }
 
+// pluginAskPassword resolves one `charly config passwd` prompt: an env var override takes
+// priority over the interactive systemd-ask-password prompt deploykit.AskPassword drives —
+// the SAME "1. Test/CI override" precedent deploykit.ResolveEncPassphrase's GOCRYPTFS_PASSWORD
+// check already establishes for the mount path (enc_passphrase.go), extended here since
+// encPasswd's triple prompt (old/new/confirm) had no such hook. Lets an R10 check bed exercise
+// `charly config passwd` end-to-end non-interactively (GOCRYPTFS_OLD_PASSWORD +
+// GOCRYPTFS_NEW_PASSWORD, the latter answering both the new-passphrase AND confirm prompts —
+// correct automation behavior, since a real operator would type the identical value twice
+// too). Interactive use (both env vars unset) is completely unaffected.
+func pluginAskPassword(envVar, id, prompt string) (string, error) {
+	if v := os.Getenv(envVar); v != "" {
+		return v, nil
+	}
+	return deploykit.AskPassword(id, prompt)
+}
+
 // pluginEncPasswd changes the gocryptfs password for all encrypted volumes of an image (direct
 // port of enc.go's encPasswd, byte-identical mount-guard + triple-prompt behavior).
 func pluginEncPasswd(boxName, instance string) error {
-	plan, err := deploykit.EncPlanFor(boxName, instance, "", deploykit.DeployStorageDir(boxName, instance))
+	dc, err := loadPodBundleConfig("charly config passwd")
+	if err != nil {
+		return err
+	}
+	plan, err := deploykit.EncPlanForConfig(dc, boxName, instance, "", deploykit.DeployStorageDir(boxName, instance))
 	if err != nil {
 		return err
 	}
@@ -280,15 +324,15 @@ func pluginEncPasswd(boxName, instance string) error {
 
 	volID := "charly-" + boxName
 
-	oldPass, err := deploykit.AskPassword(volID+"-old", "Current passphrase:")
+	oldPass, err := pluginAskPassword("GOCRYPTFS_OLD_PASSWORD", volID+"-old", "Current passphrase:")
 	if err != nil {
 		return err
 	}
-	newPass, err := deploykit.AskPassword(volID+"-new", "New passphrase:")
+	newPass, err := pluginAskPassword("GOCRYPTFS_NEW_PASSWORD", volID+"-new", "New passphrase:")
 	if err != nil {
 		return err
 	}
-	confirmPass, err := deploykit.AskPassword(volID+"-confirm", "Confirm new passphrase:")
+	confirmPass, err := pluginAskPassword("GOCRYPTFS_NEW_PASSWORD", volID+"-confirm", "Confirm new passphrase:")
 	if err != nil {
 		return err
 	}
