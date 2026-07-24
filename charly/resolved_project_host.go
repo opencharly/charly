@@ -476,7 +476,7 @@ func fillNamespacedBoxes(uf *UnifiedFile, prefix, calver, dir string, opts Resol
 			nsDir = dir
 		}
 		if localScanned, lErr := subUF.projectCandiesScanned(nsDir); lErr == nil {
-			if nsLayers, err := scanCandyFromLocal(localScanned, sub, nsDir, opts); err == nil {
+			if nsLayers, err := scanCandyFromLocal(localScanned, sub, opts); err == nil {
 				for name, c := range nsLayers {
 					if c == nil {
 						continue
