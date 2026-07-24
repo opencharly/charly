@@ -749,6 +749,68 @@ check-sidecar-pod:
         # is brought up automatically as part of `charly bundle add check-sidecar-pod` and torn
         # down as part of the bed's own cleanup (or explicitly, mid-plan, by the steps above).
         # 30m TTL keeps the systemd safety-net window well inside the bed's own run duration.
+check-pod-overlay:
+    pod:
+        image: check-k8s-deploy-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for the pod-overlay step-emit dispatch relocation (K5-A item 2): the FULL
+            per-kind dispatch DECISION (which peer provider renders a compiler-emitted
+            InstallStep's pod-overlay Containerfile fragment) relocated out of
+            charly/oci_step_emit.go entirely, into the compiled-in class:step plugin
+            candy/plugin-installstep's new "oci-dispatch" word — which resolves its target
+            via the class-generic DescribeProvider (cached StepContract metadata, no live
+            Invoke) + InvokeProvider (dispatch) reverse-channel legs instead of a direct
+            in-core providerRegistry consult. add_candy: [ripgrep] forces the overlay
+            Containerfile synthesis (hostBuildOverlay + deploykit.OCITarget) to actually
+            run: ripgrep's `package:` field compiles to a SystemPackagesStep (the
+            HOST-COUPLED "system-packages" word), so EmitStepOp reaches the relocated
+            dispatch via HostBuild("step-emit","oci-emit-step") for a REAL host-coupled
+            kind, not a synthetic one. This is NON-VACUOUS: a mis-relocated dispatch (the
+            wrong word resolved, a dropped StepContract.Emits gate, or broken
+            build-context ctx-threading so candy/plugin-installstep's own
+            HostBuild("resolved-project") call-back fails) breaks the OVERLAY BUILD ITSELF
+            — `charly bundle add`/`charly update` fails before the pod ever reaches
+            steady state, and ripgrep is verified installed INSIDE the running overlay
+            image (proving the emitted fragment was not merely well-formed but actually
+            baked in and functional).
+        add_candy:
+            - ripgrep
+        plan:
+            - check: command=charly status --json
+              id: pod-overlay-running
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-pod-overlay
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: ripgrep (an add_candy overlay layer whose `package:` field compiles to a SystemPackagesStep) is installed + functional INSIDE the running overlay container — proving the relocated pod-overlay dispatch (candy/plugin-installstep's "oci-dispatch" word, resolved via DescribeProvider/InvokeProvider) actually rendered the HOST-COUPLED system-packages fragment and baked it into the image
+              id: pod-overlay-ripgrep-installed
+              exit_status: 0
+              stdout:
+                - matches: "ripgrep [0-9]"
+              command:
+                command: rg --version
+                in_container: true
+            - run: charly update rebuilds the overlay + redeploys through the SAME relocated dispatch — proves the fresh-rebuild path (not merely a cached first build) still resolves candy/plugin-installstep's "oci-dispatch" correctly
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} update check-pod-overlay
+                in_container: false
+            - check: after the fresh-rebuild, ripgrep is STILL installed + functional in the (re-)overlaid container — the fresh-rebuild's own non-vacuous proof
+              id: pod-overlay-ripgrep-installed-post-rebuild
+              exit_status: 0
+              stdout:
+                - matches: "ripgrep [0-9]"
+              command:
+                command: rg --version
+                in_container: true
 # check-local-vm — GUEST-AS-HOST (the host-invocable OUTER vm bed; the INNER guest bed it
 # runs stays named `check-local`, a top-level host:local deploy in the pruned guest project).
 # Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers

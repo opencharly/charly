@@ -91,6 +91,24 @@ func withRunTag(args []string, tag string) []string {
 	return append(args, "--tag", tag)
 }
 
+// configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
+// steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
+// built + persisted (resolved via resolveDeployResolvedImage, now correctly discriminated as a
+// pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
+// ref. Passing --tag here would force config/start to deploy <base-image>:<imageTag> (an
+// existing, but WRONG, un-overlaid reference), silently dropping every add_candy candy from the
+// running container. A non-overlay bed (hasAddCandy=false) keeps --tag unchanged (no regression):
+// its freshness proof IS the base image's own build tag, exactly as before this fix.
+func configStartArgs(name, imageTag string, hasAddCandy bool) (configArgs, startArgs []string) {
+	configArgs = []string{"config", name}
+	startArgs = []string{"start", name}
+	if !hasAddCandy {
+		configArgs = withRunTag(configArgs, imageTag)
+		startArgs = withRunTag(startArgs, imageTag)
+	}
+	return configArgs, startArgs
+}
+
 // runTaggedImageRef returns the exact OCI image reference produced by the
 // bed's `box build --tag`. Artifact verification must consume this reference,
 // not re-resolve the untagged logical box name: an older locally cached bed
@@ -380,10 +398,11 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// kind:local + external apply candies in place during deploy add; pod beds
 		// need `charly config` + `charly start`.
 		if !isInPlace {
-			if err := step("config", withRunTag([]string{"config", name}, d.ImageTag)...); err != nil {
+			configArgs, startArgs := configStartArgs(name, d.ImageTag, d.HasAddCandy)
+			if err := step("config", configArgs...); err != nil {
 				return fail("config %s: %w", name, err)
 			}
-			if err := step("start", withRunTag([]string{"start", name}, d.ImageTag)...); err != nil {
+			if err := step("start", startArgs...); err != nil {
 				return fail("start %s: %w", name, err)
 			}
 			waitReady()
