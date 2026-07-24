@@ -94,8 +94,21 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	// in-handler via applyCueDefaults. Order-independent vs
 	// the plugin's instance-override / GPU-alloc merge: those touch ONLY libvirt: overlays, never a
 	// defaulted field, and applyCueDefaults fills only unset fields (user values preserved by unify).
+	//
+	// R1 fix (found while verifying an unrelated K5-A cutover — every `charly vm create`/`vm build`
+	// was hard-failing): resolveVmViaPlugin's *VmSpec carries the substrate-template opaque echo
+	// (ResolvedVm.Raw, the SAME "raw:" passthrough ResolvedK8s/ResolvedLocal also carry) — but #vm's
+	// CUE schema is CLOSED over the AUTHORED shape and declares no `raw:` field, so re-marshaling the
+	// whole struct here for the unify-with-defaults round-trip failed unify with "raw: field not
+	// allowed" on EVERY vm entity. applyCueDefaults' contract is schema-declared-field defaulting
+	// only, so the opaque echo is cleared for the round-trip and restored on the vm value the plugin
+	// actually receives (Raw is unrelated to firmware/network-mode/cpu-mode defaulting).
 	if vm != nil {
-		if err := applyCueDefaults("vm", vm); err != nil {
+		savedRaw := vm.Raw
+		vm.Raw = nil
+		err := applyCueDefaults("vm", vm)
+		vm.Raw = savedRaw
+		if err != nil {
 			return spec.ConfigResolveReply{}, fmt.Errorf("applying vm defaults for %q: %w", req.Entity, err)
 		}
 	}
