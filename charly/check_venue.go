@@ -202,8 +202,9 @@ type CheckVenue struct {
 func (v *CheckVenue) IsContainer() bool { return v != nil && v.Kind == "container" }
 
 // resolveCheckVenue maps an `charly check` verb's <name> argument to an execution
-// venue, mirroring the live-check dispatch order (checkLiveGather) so the SAME name
-// resolves the SAME way for declarative and interactive verbs:
+// venue, mirroring the live-check dispatch order (candy/plugin-check/live_gather.go's
+// pluginCheckRunLive) so the SAME name resolves the SAME way for declarative and interactive
+// verbs:
 //
 //	"."                         → the local host (ShellExecutor).
 //	kind:vm entity / target:vm  → SSHExecutor over the managed charly-<vm> alias
@@ -310,8 +311,9 @@ func resolveLeafVenue(uf *UnifiedFile, name string) (node spec.BundleNode, venue
 // vmDomainIdentity(name) scheme), and a dotted path whose ROOT segment is a target:vm deployment (the
 // parent deploy owns the domain — the delegate-into-guest shape, e.g. check-arch-vm.arch-host, where
 // the dotted suffix addresses something nested INSIDE that vm's guest, not another vm). Leaf checked
-// first: a leaf that is itself a vm is never a "delegate into it" address. Shared by checkLiveGather
-// and resolveCheckVenue (R3 — one classifier, no per-call-site re-derivation).
+// first: a leaf that is itself a vm is never a "delegate into it" address. Mirrors
+// candy/plugin-check/venue.go's own plugin-side checkVmTarget (R3 — one classifier PER SIDE of the
+// kernel/plugin boundary, no per-call-site re-derivation within either).
 func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 	if uf == nil {
 		return "", false
@@ -343,11 +345,11 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 // segment) is a HOST-VENUE deployment — a `target: local` filesystem apply OR an
 // EXTERNAL out-of-process deploy (whose pluginDeployTarget adapter runs its deploy-scope
 // probes host-side via ShellExecutor, exactly like local) — and returns its node so
-// the caller can build the host/ssh executor via rootExecutorForDeployNode. Shared by
-// checkLiveGather and resolveCheckVenue (R3): one classifier routes an
-// external deploy to the host path for BOTH the declarative `charly check live`
-// and the interactive `charly check <verb>`, instead of the pod/container path
-// (which would fail at resolveContainer with "container ... is not running").
+// the caller can build the host/ssh executor via rootExecutorForDeployNode. Mirrors
+// candy/plugin-check/venue.go's own plugin-side checkLocalTarget (R3): one classifier PER SIDE
+// routes an external deploy to the host path for the interactive `charly check <verb>` (here) and
+// the declarative `charly check live` (plugin-side), instead of the pod/container path (which
+// would fail at resolveContainer with "container ... is not running").
 func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
 	if uf == nil || uf.Bundle == nil {
 		return spec.BundleNode{}, false

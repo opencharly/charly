@@ -30,8 +30,6 @@ func hostBuildCheckRun(ctx context.Context, req spec.CheckRunRequest, _ buildEng
 	switch req.Mode {
 	case "box":
 		return hostCheckRunBox(ctx, req)
-	case "live":
-		return hostCheckRunLive(ctx, req)
 	case "feature-box":
 		return hostCheckRunFeatureBox(ctx, req)
 	case "feature-live":
@@ -135,35 +133,6 @@ func hostCheckRunBox(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunR
 
 	stepResults := kit.RunPlan(context.Background(), runner, meta.Description, false)
 	return kit.CheckRunReply{Image: imageRef, Steps: stepResults}, nil
-}
-
-// hostCheckRunLive is the "live" atom arm: a full-stack run against a running deployment
-// resolved by req.Name. The host classifies vm/pod/local/group INTERNALLY (checkLiveGather),
-// so the plugin stays kind-blind — it sends ONE Mode:"live" and gets back the pre-formatted
-// kind-specific Header + Steps (or, for a nested-pod-in-VM leaf, the verbatim guest Passthrough).
-func hostCheckRunLive(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	return hostCheckLive(req)
-}
-
-// hostCheckLive is the CLI-free live engine: it classifies req.Name and runs the matching
-// per-path gather (checkLivePod/VM/Local/Group via checkLiveGather), then maps the internal
-// liveResult onto the wire reply. It is the SINGLE source the atom arm (here) and the CLI
-// (CheckLiveCmd.Run → runPod/runVm/runLocalCheck/runGroupCheck) share. The request carries no
-// format field — the plugin formats the returned Steps itself — so a nested-pod guest defaults
-// to text here (the interactive CLI preserves --format via c.Format on its own path).
-func hostCheckLive(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	c := &CheckLiveCmd{Box: req.Name, Instance: req.Instance, Section: req.Section, Filter: req.Filter}
-	res, err := c.checkLiveGather()
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	reply := kit.CheckRunReply{Steps: res.Steps, Header: res.Header, Passthrough: res.Passthrough}
-	if res.NoPlan {
-		// The kind-specific no-plan message (pod "…defined for this image." vs vm/local/group
-		// "…to run.") normalizes to the wire NoSteps flag; the plugin prints its own line.
-		reply.NoSteps = true
-	}
-	return reply, nil
 }
 
 // hostCheckRunFeatureBox is the "feature-box" atom arm: build-scope ADE acceptance over

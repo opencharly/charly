@@ -41,18 +41,21 @@ func dispatchCheckCLI(args []string) error {
 // HostBuild kind, returning the per-step results the CheckCmd handlers format. cmdExec is nil on the
 // out-of-process CliMain path (no reverse channel) → a clear error.
 //
-// K1-unblock W3 Unit B (mid-flight, transitional): Mode:"box" now dispatches to this plugin's OWN
-// pluginCheckRunBox instead of the host's "check-run" HostBuild arm — the first of six arms moved.
-// The other five modes still route to the host; this dual-mode dispatch is a legal Hard-Cutover
-// mid-flight state (CLAUDE.md "Hard Cutover by Default") and is deleted (along with
-// charly/host_build_check_run.go's hostCheckRunBox) once every arm has moved, before the R10
-// acceptance run.
+// K1-unblock wave (mid-flight, transitional): Mode:"box" (Unit B) and Mode:"live" (arm 1) now
+// dispatch to this plugin's OWN pluginCheckRunBox / pluginCheckRunLive instead of the host's
+// "check-run" HostBuild arm — two of six arms moved. The remaining four modes still route to the
+// host; this dual-mode dispatch is a legal Hard-Cutover mid-flight state (CLAUDE.md "Hard Cutover
+// by Default") and is deleted (along with their charly/host_build_check_run.go arms) once every
+// arm has moved, before the R10 acceptance run.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
 	}
-	if req.Mode == "box" {
+	switch req.Mode {
+	case "box":
 		return pluginCheckRunBox(cmdExec, cmdCtx, req)
+	case "live":
+		return pluginCheckRunLive(cmdExec, cmdCtx, req)
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -145,4 +148,17 @@ func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequ
 		return spec.RetentionReply{}, fmt.Errorf("retention: decode reply: %w", err)
 	}
 	return reply, nil
+}
+
+// checkLoadPlugins triggers the host's UNCHANGED plugin-connect engine (resolveCheckRunnerContext)
+// over the thin "check-load-plugins" seam, so any out-of-process verb candy a live plan's steps
+// reference is connected (registered in this host process's providerRegistry) BEFORE the plugin
+// dispatches those steps via InvokeProvider. Best-effort by design (mirrors the core original's own
+// graceful degrade): a connect failure surfaces loudly later, at actual verb dispatch, never here.
+func checkLoadPlugins(ex *sdk.Executor, ctx context.Context, name, dir string) {
+	reqJSON, err := json.Marshal(spec.CheckLoadPluginsRequest{Name: name, Dir: dir})
+	if err != nil {
+		return
+	}
+	_, _ = ex.HostBuild(ctx, "check-load-plugins", reqJSON)
 }
