@@ -207,14 +207,9 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	security := meta.Security
 	network := meta.Network
 
-	deployVolumes := parseVolumeFlags(c)
-	if len(deployVolumes) == 0 {
-		deployVolumes = parseVolumeEnv(c.Box)
-	}
-	if len(deployVolumes) == 0 && dc != nil {
-		if overlay, ok := dc.Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok {
-			deployVolumes = overlay.Volume
-		}
+	deployVolumes, err := resolveDeployVolumes(ctx, ex, c, &dc)
+	if err != nil {
+		return err
 	}
 
 	volumes, bindMounts := deploykit.ResolveVolumeBacking(c.Box, c.Instance, meta.Volume, deployVolumes, meta.Home, rt.EncryptedStoragePath, rt.VolumesPath)
@@ -355,7 +350,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 		}
 	}
 
-	charlyBin, _ := os.Executable()
+	charlyBin := resolveHostCharlyBin(c.HostEnvJSON)
 	isKeyring := provRep.IsKeyring
 
 	var sidecarRep spec.PodConfigResolveSidecarsReply
@@ -547,7 +542,7 @@ func runConfig(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, c
 	}
 
 	if c.UpdateAll {
-		if err := updateAllDeployedQuadlets(ctx, ex, rt, deploykit.DeployKey(c.Box, c.Instance)); err != nil {
+		if err := updateAllDeployedQuadlets(ctx, ex, rt, deploykit.DeployKey(c.Box, c.Instance), charlyBin); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not update all quadlets: %v\n", err)
 		}
 	}

@@ -23,3 +23,45 @@ func TestRunTaggedImageRefPinsArtifactCheckToBedBuild(t *testing.T) {
 		t.Fatalf("runTaggedImageRef() without tag = %q, want logical image unchanged", got)
 	}
 }
+
+// TestConfigStartArgs_AddCandyOmitsTag proves the K5-A item 2 overlay-plans-fix companion bug fix
+// (bug 3 of 3, check-pod-overlay's R10): an add_candy: overlay bed's config/start steps must NOT
+// pass --tag <base-build-tag> — doing so forces config/start to deploy the un-overlaid base image
+// (hostBuildPodConfigResolveRef's explicit-ref-wins contract bypasses resolveDeployResolvedImage),
+// silently dropping every add_candy candy from the running container. A non-overlay bed's
+// freshness proof is unchanged (still --tag'd) — no regression for the common case.
+func TestConfigStartArgs_AddCandyOmitsTag(t *testing.T) {
+	const name, tag = "check-pod-overlay", "check-pod-overlay-2026.205.1032"
+
+	configArgs, startArgs := configStartArgs(name, tag, true)
+	wantNoTag := []string{"config", name}
+	if !equalArgs(configArgs, wantNoTag) {
+		t.Errorf("configStartArgs(add_candy=true) config args = %v, want %v (no --tag)", configArgs, wantNoTag)
+	}
+	wantNoTagStart := []string{"start", name}
+	if !equalArgs(startArgs, wantNoTagStart) {
+		t.Errorf("configStartArgs(add_candy=true) start args = %v, want %v (no --tag)", startArgs, wantNoTagStart)
+	}
+
+	configArgs, startArgs = configStartArgs(name, tag, false)
+	wantTagged := []string{"config", name, "--tag", tag}
+	if !equalArgs(configArgs, wantTagged) {
+		t.Errorf("configStartArgs(add_candy=false) config args = %v, want %v (--tag kept, no regression)", configArgs, wantTagged)
+	}
+	wantTaggedStart := []string{"start", name, "--tag", tag}
+	if !equalArgs(startArgs, wantTaggedStart) {
+		t.Errorf("configStartArgs(add_candy=false) start args = %v, want %v (--tag kept, no regression)", startArgs, wantTaggedStart)
+	}
+}
+
+func equalArgs(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}

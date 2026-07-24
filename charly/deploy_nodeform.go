@@ -122,14 +122,24 @@ func bundleDiscForEntity(body *yaml.Node) string {
 		return "local"
 	case "":
 		// An empty target with a POD-WORKLOAD indicator (an image: field, a resolved pod-port
-		// map, or an authored port:) is a POD — the DEFAULT substrate — NOT a targetless group.
-		// A `group:` deploy carries only MEMBERS and no own workload; misclassifying an
-		// image-backed pod as a group writes its pod-only resolved_port under `group:`, which
-		// #GroupInput rejects at the next load (the 2026-07 `charly config <image-ref>` config
-		// corruption). A truly targetless deploy (members only, no workload) stays a group.
+		// map, an authored port:, a resolved_image: — the add_candy: overlay ref a pod's
+		// PrepareVenue persists — or volume_project_checked: — the project-declared volume
+		// persist marker) is a POD — the DEFAULT substrate — NOT a targetless group. A `group:`
+		// deploy carries only MEMBERS and no own workload; misclassifying an image-backed pod as
+		// a group writes its pod-only field under `group:`, which #GroupInput rejects at the next
+		// load (the 2026-07 `charly config <image-ref>` config corruption; its sibling found by the
+		// overlay-plans-fix bed for resolved_image; and this one, found by the SAME bed against a
+		// fresh worktree carrying the concurrently-landed VolumeProjectChecked wire field — a
+		// BRAND-NEW pod deploy's FIRST-EVER `charly config` persists a State patch carrying ONLY
+		// VolumeProjectChecked before Image/port ever land, so the same fall-through repeats for
+		// each new pod-only field this check doesn't yet name — every occurrence closes the SAME
+		// way: add the field here). A truly targetless deploy (members only, no workload) stays
+		// a group.
 		if kit.FindMappingValue(body, "image") != nil ||
+			kit.FindMappingValue(body, "resolved_image") != nil ||
 			kit.FindMappingValue(body, "resolved_port") != nil ||
-			kit.FindMappingValue(body, "port") != nil {
+			kit.FindMappingValue(body, "port") != nil ||
+			kit.FindMappingValue(body, "volume_project_checked") != nil {
 			return "pod"
 		}
 		return "group"
