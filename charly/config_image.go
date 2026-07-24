@@ -10,59 +10,19 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// config_image.go — the residual charly-core body behind `charly config`'s enc-only leaves +
-// the loader-coupled provides-injection helpers. P13-KERNEL direction-flip: BoxConfigSetupCmd
-// and BoxConfigRemoveCmd (the config-setup/remove ORCHESTRATION — resolveDeployRef,
-// prepareQuadletEnv, resolveSidecars, runConfig, runConfigDirect, parseVolumeFlags,
-// persistResourceCaps, directPodmanArgs, directDeployMarker*, IsDirectDeploy,
-// checkMissingEnvRequires/checkMissingSecretRequires/warnMissingMCPRequires,
-// updateAllDeployedQuadlets) moved to candy/plugin-deploy-pod (sdk.OpConfigSetup/
-// sdk.OpConfigRemove — see host_build_pod_config.go + host_build_pod_config_seams.go). What
-// stays: Status/Mount/Unmount/Passwd (already one-line forwards to enc.go, itself FINAL/K5-
-// deferred registry-coupled inventory) + injectEnvProvides/injectMCPProvides (loader-coupled —
-// called from the pod-config-inject-env-provides/pod-config-inject-mcp-provides seam handlers).
-
-// BoxConfigStatusCmd shows encrypted volume status.
-type BoxConfigStatusCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *BoxConfigStatusCmd) Run() error {
-	return encStatus(c.Box, c.Instance)
-}
-
-// BoxConfigMountCmd mounts encrypted volumes.
-type BoxConfigMountCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Volume   string `long:"volume" help:"Only mount this volume (by name)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *BoxConfigMountCmd) Run() error {
-	return encMount(c.Box, c.Instance, c.Volume)
-}
-
-// BoxConfigUnmountCmd unmounts encrypted volumes.
-type BoxConfigUnmountCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Volume   string `long:"volume" help:"Only unmount this volume (by name)"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *BoxConfigUnmountCmd) Run() error {
-	return encUnmount(c.Box, c.Instance, c.Volume)
-}
-
-// BoxConfigPasswdCmd changes the gocryptfs password.
-type BoxConfigPasswdCmd struct {
-	Box      string `arg:"" help:"Box name"`
-	Instance string `short:"i" long:"instance" help:"Instance name"`
-}
-
-func (c *BoxConfigPasswdCmd) Run() error {
-	return encPasswd(c.Box, c.Instance)
-}
+// config_image.go — the residual charly-core body behind the loader-coupled provides-injection
+// helpers. P13-KERNEL direction-flip: BoxConfigSetupCmd and BoxConfigRemoveCmd (the
+// config-setup/remove ORCHESTRATION — resolveDeployRef, prepareQuadletEnv, resolveSidecars,
+// runConfig, runConfigDirect, parseVolumeFlags, persistResourceCaps, directPodmanArgs,
+// directDeployMarker*, IsDirectDeploy, checkMissingEnvRequires/checkMissingSecretRequires/
+// warnMissingMCPRequires, updateAllDeployedQuadlets) moved to candy/plugin-deploy-pod
+// (sdk.OpConfigSetup/sdk.OpConfigRemove — see host_build_pod_config.go +
+// host_build_pod_config_seams.go). Status/Mount/Unmount/Passwd (formerly BoxConfigStatusCmd/
+// BoxConfigMountCmd/BoxConfigUnmountCmd/BoxConfigPasswdCmd, one-line forwards to enc.go) moved
+// wholesale to candy/plugin-pod (enc_cmd.go, wave γ) — command:config's leaves now dispatch
+// verb:enc/verb:credential directly via InvokeProvider, no core round-trip. What stays:
+// injectEnvProvides/injectMCPProvides (loader-coupled — called from the
+// pod-config-inject-env-provides/pod-config-inject-mcp-provides seam handlers).
 
 // injectEnvProvides resolves env_provides templates and stores them in charly.yml provides.env.
 // Returns true if any env vars were added or changed.
