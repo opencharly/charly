@@ -91,6 +91,24 @@ func withRunTag(args []string, tag string) []string {
 	return append(args, "--tag", tag)
 }
 
+// configStartArgs builds the `charly config`/`charly start` argv for a pod bed's config+start
+// steps. An add_candy: overlay bed's FRESH artifact to verify is the overlay `deploy-add` just
+// built + persisted (resolved via resolveDeployResolvedImage, now correctly discriminated as a
+// pod entry — the bundleDiscForEntity resolved_image fix) — NOT the base image's own --tag build
+// ref. Passing --tag here would force config/start to deploy <base-image>:<imageTag> (an
+// existing, but WRONG, un-overlaid reference), silently dropping every add_candy candy from the
+// running container. A non-overlay bed (hasAddCandy=false) keeps --tag unchanged (no regression):
+// its freshness proof IS the base image's own build tag, exactly as before this fix.
+func configStartArgs(name, imageTag string, hasAddCandy bool) (configArgs, startArgs []string) {
+	configArgs = []string{"config", name}
+	startArgs = []string{"start", name}
+	if !hasAddCandy {
+		configArgs = withRunTag(configArgs, imageTag)
+		startArgs = withRunTag(startArgs, imageTag)
+	}
+	return configArgs, startArgs
+}
+
 // runTaggedImageRef returns the exact OCI image reference produced by the
 // bed's `box build --tag`. Artifact verification must consume this reference,
 // not re-resolve the untagged logical box name: an older locally cached bed
@@ -380,10 +398,11 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		// kind:local + external apply candies in place during deploy add; pod beds
 		// need `charly config` + `charly start`.
 		if !isInPlace {
-			if err := step("config", withRunTag([]string{"config", name}, d.ImageTag)...); err != nil {
+			configArgs, startArgs := configStartArgs(name, d.ImageTag, d.HasAddCandy)
+			if err := step("config", configArgs...); err != nil {
 				return fail("config %s: %w", name, err)
 			}
-			if err := step("start", withRunTag([]string{"start", name}, d.ImageTag)...); err != nil {
+			if err := step("start", startArgs...); err != nil {
 				return fail("start %s: %w", name, err)
 			}
 			waitReady()
@@ -471,13 +490,21 @@ func runCheckBed(ctx context.Context, ex *sdk.Executor, name string, opts bedRun
 		if err := step("update", "update", name); err != nil {
 			return fail("update %s: %w", name, err)
 		}
-		// For a nested bed, the fresh rebuild discards the substrate's children, so
-		// re-apply + re-check-live to actually re-verify on the rebuild.
-		if d.RunRuntime && !isInPlace && len(d.ChildKeys) > 0 {
+		// EVERY runtime, non-in-place bed gets a genuine post-rebuild check-live pass — not just
+		// ones with nested children. Before this fix, a childless bed's `checkLiveTree` call was
+		// gated on `len(d.ChildKeys) > 0`, so its OWN deploy-level plan checks (a `check:` step
+		// asserting the running container's state — e.g. check-pod-overlay's ripgrep-installed
+		// assertion) were never re-evaluated after `charly update`: the SAME single check-live pass
+		// that ran before `update` was the only one the whole 12-step bed run ever executed, so a
+		// regression that broke ONLY the fresh-rebuild path (as distinct from the initial-deploy
+		// path) would still show 100% green (a live-bed-validator finding on charly#186's
+		// check-pod-overlay — "a gate that cannot fail on the change proves nothing", R10). For a
+		// NESTED bed, the fresh rebuild additionally discards the substrate's children, so those
+		// must be explicitly re-applied first (a VM's own update recreates the domain — the qcow2
+		// disk + nested pod's persistent in-guest quadlet auto-starts on the fresh boot, so only a
+		// wait is needed; non-VM nested children must be redeployed).
+		if d.RunRuntime && !isInPlace {
 			if d.IsVM {
-				// `charly update` recreated the domain; the qcow2 disk (and the nested
-				// pod's persistent in-guest quadlet) persists, so it auto-starts on the
-				// fresh boot — just wait for ssh, then the rebuild check-live proves it.
 				waitReady()
 			} else {
 				waitReady()
