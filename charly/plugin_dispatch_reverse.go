@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -53,6 +54,24 @@ import (
 // no-op — proven safe (no deadlock, no flag corruption) by
 // TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlock. No new guard is
 // introduced; the fallback is a plain reuse of the existing chain.
+
+// executorInvoker is the capability to Invoke a deploy/step/builder op WITH the E3b
+// reverse channel: the provider stands up the host's ExecutorService on the go-plugin
+// broker and the out-of-process plugin dials back to run shell/SSH ops on the live
+// venue. Only *grpcProvider (the broker-carrying out-of-proc peer) implements it — a
+// built-in verb runs in-proc and has no out-of-proc execute. Relocated here (K5-A item 2)
+// from the now-deleted charly/plugin_step_external.go, whose SOLE OTHER content
+// (externalPluginStepProvider, StepKindExternalPlugin's in-proc EmitOCI) is gone — the
+// pod-overlay build-emit dispatch for that kind relocated into candy/plugin-installstep's
+// "oci-dispatch" word, leaving zero live callers of EmitOCI/StepProvider. executorInvoker
+// itself is unrelated to that removal — it is InvokeProvider's OWN out-of-process/in-proc
+// discriminator (mirrors the build-context BuildEmitter marker interface, provider_verb.go)
+// and is consumed by host_build_construct_step.go, host_build_pod_config.go,
+// k8s_generate.go, and provider_checkenv.go.
+type executorInvoker interface {
+	InvokeWithExecutor(ctx context.Context, op *Operation, exec deploykit.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
+}
+
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
@@ -176,6 +195,37 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 		return &pb.HostBuildReply{Error: err.Error()}, nil
 	}
 	return &pb.HostBuildReply{ResultJson: result}, nil
+}
+
+// DescribeProvider returns the CACHED capability metadata for another provider (class, word) —
+// the metadata twin of InvokeProvider (K5-A item 2): a plugin needs to make a ROUTING decision
+// about a peer provider (e.g. "does class:step word X declare Emits=true?") without holding its
+// own copy of the provider registry, and without paying a live Invoke round-trip merely to ask a
+// question about capability shape. capMeta (embedded in both grpcProvider and inprocProvider) IS
+// the cache — populated ONCE at connect/register time via buildCapMeta — so this is a plain
+// in-memory lookup + carrier-interface read, never a fresh Describe RPC to the target. found=false
+// for an unresolvable (class, word) — mirrors InvokeProvider's own "not connected" outcome, but as
+// a query result rather than an RPC error (a routing decision often wants to distinguish
+// not-found from a transport failure, not treat both alike). Scoped to StepContract today — the
+// ONE cached sub-shape oci_step_emit.go's relocation needs; extend with more capMeta-carried
+// fields only when a real consumer needs them (never speculatively).
+func (s *executorReverseServer) DescribeProvider(_ context.Context, req *pb.DescribeProviderRequest) (*pb.DescribeProviderReply, error) {
+	prov, ok := providerRegistry.resolve(ProviderClass(req.GetClass()), req.GetWord())
+	if !ok {
+		return &pb.DescribeProviderReply{Found: false}, nil
+	}
+	reply := &pb.DescribeProviderReply{Found: true}
+	if carrier, ok := prov.(spec.StepContractCarrier); ok {
+		if sc, ok := carrier.DeclaredStepContract(); ok {
+			reply.StepContract = &pb.StepContract{
+				Scope: sc.Scope.String(),
+				Venue: int32(sc.Venue),
+				Gate:  string(sc.Gate),
+				Emits: sc.Emits,
+			}
+		}
+	}
+	return reply, nil
 }
 
 // hostBuilder runs a host-side build for one kind: it interprets specJSON, runs the build engine

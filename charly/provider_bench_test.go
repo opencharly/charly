@@ -10,16 +10,19 @@ import (
 // EVERY-KIND-IS-A-PLUGIN plan's "E3 perf-RDD spike — the go/no-go gate for the
 // whole vision"). The architecture's load-bearing invariant: a BUILT-IN provider
 // dispatches through its typed fast path (CheckVerbProvider.RunVerb /
-// KindProvider.DecodeNode / DeployTargetProvider.ResolveTarget / StepProvider.Emit*),
+// KindProvider.DecodeNode / DeployTargetProvider.ResolveTarget),
 // which NEVER marshals the Op into the serializable Invoke
 // envelope — the JSON envelope (marshalJSON, provider.go) is paid ONLY out-of-process
 // (provider_checkenv.go: a CheckVerbProvider takes RunVerb; only a non-CheckVerbProvider
 // out-of-proc plugin falls through to invokeVerbProvider's marshalJSON). If a builtin
 // ever stopped taking the typed branch, every in-proc op would pay the hop — the exact
 // regression the spike gated against. The verb class is the canonical, most-exercised
-// fork; every other class (kind/deploy/step/builder) follows the identical
-// typed-builtin / serializable-external split (provider.go). These tests FAIL on
-// regression; the benchmarks quantify the envelope tax the typed path avoids.
+// fork; every other class with an in-proc typed builtin (kind/deploy/builder) follows the
+// identical typed-builtin / serializable-external split (provider.go) — the step class no
+// longer has one (K5-A item 2 externalized its LAST in-proc kind, ExternalPlugin, to
+// candy/plugin-installstep; every step-emit now pays the class:step Invoke path uniformly,
+// with no in-proc fast path to protect). These tests FAIL on regression; the benchmarks
+// quantify the envelope tax the typed path avoids.
 
 // benchOp is a representative goss-verb Op (the file verb's authored shape).
 func benchOp() *spec.Op {

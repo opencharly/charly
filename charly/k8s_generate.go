@@ -1,18 +1,20 @@
 package main
 
-// k8s_generate.go — the in-core SHIM for Kustomize generation (C8/M13). The
-// manifest GENERATOR (generateWorkload / generatePodSpec / generateService /
-// generatePVCs / generateIngress / checkToProbe / …) moved into the COMPILED-IN
-// candy/plugin-k8sgen; this shim builds the pure-generation input from
-// K8sGenerateOpts, Invokes the plugin's OpEmit, then does the host-side disk I/O +
-// the egress gate (ValidateEgressValue, via the M16 egress shim) before the bytes
-// hit disk. Both in-core callers keep calling GenerateK8sKustomize unchanged: the
-// "k8s-generate-kustomize" HostBuild seam (host_build_k8s_generate.go, F6/FINAL-K5-
-// unit-6a — reached by the now-plugin-side deploy:k8s preresolver) and the
-// source-less `charly bundle from-box --target k8s` in k8s_deploy_from_box.go.
-//
-// host→plugin dispatch mirrors egress.go (plain resolve+Invoke). Compiled-in
-// placement keeps verb:k8sgen resolvable at deploy time with no connect step.
+// k8s_generate.go — the in-core DISPATCH SHIM for Kustomize generation (K5-A item 6). The
+// manifest GENERATOR (generateWorkload / generatePodSpec / generateService / generatePVCs /
+// generateIngress / checkToProbe / …) lives in the COMPILED-IN candy/plugin-k8sgen; the WRITE +
+// egress-VALIDATE sequence that used to run here too (disk I/O, the ValidateEgressValue gate)
+// relocated into candy/plugin-kube's materializeKustomize (candy/plugin-kube/materialize.go) —
+// reached peer-to-peer via InvokeProvider, no host round trip needed (the generator is pure, and
+// plugin-kube is a same-host subprocess with direct disk access). This file's ONLY remaining job
+// is the core→plugin DISPATCH for the ONE caller that has no venue of its own: the source-less
+// `charly bundle from-box --target k8s` path (k8s_deploy_from_box.go). It threads a throwaway
+// kit.ShellExecutor{} purely to stand up the InvokeWithExecutor broker candy/plugin-kube needs to
+// reach verb:k8sgen/verb:egress — the "cold-start" pattern (a caller with no real venue still
+// needs SOME broker for its callee to reach peer providers). The deploy:k8s preresolve leg
+// (candy/plugin-kube/preresolve.go) calls materializeKustomize DIRECTLY (same package, no
+// dispatch needed — it already holds a live venue executor from its own Invoke). The former
+// "k8s-generate-kustomize" HostBuild seam (host_build_k8s_generate.go) is DELETED.
 
 import (
 	"context"
@@ -21,8 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
-	"gopkg.in/yaml.v3"
 )
 
 // K8sGenerateOpts carries the inputs a Kustomize emit needs.
@@ -36,11 +39,9 @@ type K8sGenerateOpts struct {
 	OutputDir      string // usually <projectDir>/.opencharly/k8s
 }
 
-// GenerateK8sKustomize materializes the Kustomize tree on disk. Returns the
-// absolute path to the overlay that `kubectl apply -k` should target. The pure
-// generation runs in candy/plugin-k8sgen (verb:k8sgen / OpEmit); this shim owns the
-// guards, the caps→ports/uid/gid lift, the disk I/O, the raw-manifest copy, and the
-// egress gate.
+// GenerateK8sKustomize dispatches to candy/plugin-kube's deploy:k8s OpEmit (materializeKustomize)
+// for the source-less from-box path — the ONE remaining core caller with no venue of its own.
+// Returns the absolute path to the overlay that `kubectl apply -k` should target.
 func GenerateK8sKustomize(opts K8sGenerateOpts) (string, error) {
 	if opts.DeploymentName == "" {
 		return "", fmt.Errorf("deployment name is required")
@@ -52,101 +53,51 @@ func GenerateK8sKustomize(opts K8sGenerateOpts) (string, error) {
 		return "", fmt.Errorf("cluster profile is required (kubernetes.cluster: not set?)")
 	}
 
-	// Build the pure-generation input (caps lifted to ports/uid/gid host-side).
-	input := spec.K8sGenInput{
-		DeploymentName: opts.DeploymentName,
-		Instance:       opts.Instance,
-		ImageRef:       opts.ImageRef,
-		Deploy:         opts.Deploy,
-		// Ship the cluster body OPAQUELY (Cutover K) — candy/plugin-k8sgen decodes it.
-		ClusterRaw: opts.Cluster.Raw,
-		Ports:      opts.Capabilities.Port,
-		UID:        opts.Capabilities.UID,
-		GID:        opts.Capabilities.GID,
-		OutputDir:  opts.OutputDir,
+	capsJSON, err := json.Marshal(opts.Capabilities)
+	if err != nil {
+		return "", fmt.Errorf("marshal capabilities: %w", err)
+	}
+	req := spec.K8sGenerateKustomizeRequest{
+		Name:        opts.DeploymentName,
+		ImageRef:    opts.ImageRef,
+		Node:        &opts.Deploy,
+		CapsJSON:    capsJSON,
+		ClusterJSON: opts.Cluster.Raw,
+		OutputDir:   opts.OutputDir,
+	}
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("marshal k8s materialize request: %w", err)
 	}
 
-	prov, ok := providerRegistry.resolve(ClassVerb, "k8sgen")
+	prov, ok := providerRegistry.ResolveDeploy("k8s")
 	if !ok {
-		return "", fmt.Errorf("k8sgen plugin (verb:k8sgen) not registered — charly built without candy/plugin-k8sgen")
+		return "", fmt.Errorf("k8s deploy provider (deploy:k8s) not registered — charly built without candy/plugin-kube")
 	}
-	params, err := marshalJSON(input)
+	inv, ok := prov.(executorInvoker)
+	if !ok {
+		return "", fmt.Errorf("k8s deploy provider is in-proc; deploy:k8s OpEmit requires an out-of-process broker")
+	}
+	// No real venue is involved in generating a Kustomize tree — kit.ShellExecutor{} only stands
+	// up the broker candy/plugin-kube needs internally to reach verb:k8sgen/verb:egress.
+	res, err := inv.InvokeWithExecutor(context.Background(),
+		&Operation{Reserved: "k8s", Op: sdk.OpEmit, Params: reqJSON}, kit.ShellExecutor{}, buildEngineContext{}, false, nil)
 	if err != nil {
-		return "", fmt.Errorf("k8sgen marshal input: %w", err)
+		return "", fmt.Errorf("k8s materialize invoke: %w", err)
 	}
-	res, err := prov.Invoke(context.Background(), &Operation{Reserved: "k8sgen", Op: OpEmit, Params: params})
-	if err != nil {
-		return "", fmt.Errorf("k8sgen invoke: %w", err)
-	}
-	var reply spec.K8sGenReply
+	var reply spec.K8sGenerateKustomizeReply
 	if res != nil && len(res.JSON) > 0 {
 		if err := json.Unmarshal(res.JSON, &reply); err != nil {
-			return "", fmt.Errorf("k8sgen decode reply: %w", err)
+			return "", fmt.Errorf("k8s materialize decode reply: %w", err)
 		}
 	}
-
-	root := filepath.Join(opts.OutputDir, opts.DeploymentName)
-	// Always (re)emit base from scratch — it's computed from inputs every time to
-	// avoid stale artifacts. Overlays are additive.
-	if err := os.RemoveAll(filepath.Join(root, "base")); err != nil {
-		return "", fmt.Errorf("cleaning base dir: %w", err)
-	}
-
-	// Materialize each generated manifest: egress-validate, then write.
-	for _, f := range reply.Files {
-		full := filepath.Join(root, f.RelPath)
-		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
-			return "", err
-		}
-		var doc any
-		if err := json.Unmarshal(f.Doc, &doc); err != nil {
-			return "", fmt.Errorf("decoding generated %q: %w", f.RelPath, err)
-		}
-		if err := ValidateEgressValue(f.EgressKind, f.RelPath, doc); err != nil {
-			return "", err
-		}
-		if err := writeYAML(full, doc); err != nil {
-			return "", err
-		}
-	}
-
-	// Copy raw manifests from deployment.kubernetes.raw into base/raw/ verbatim
-	// (the generator registered their kustomize resource paths; the host owns the
-	// file copy since the generator does no disk I/O).
-	if opts.Deploy.Kubernetes != nil && len(opts.Deploy.Kubernetes.Raw) > 0 {
-		rawDir := filepath.Join(root, "base", "raw")
-		if err := os.MkdirAll(rawDir, 0755); err != nil {
-			return "", err
-		}
-		for _, src := range opts.Deploy.Kubernetes.Raw {
-			data, err := os.ReadFile(src)
-			if err != nil {
-				return "", fmt.Errorf("reading raw manifest %q: %w", src, err)
-			}
-			if err := os.WriteFile(filepath.Join(rawDir, filepath.Base(src)), data, 0644); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	return filepath.Join(root, reply.OverlayRelPath), nil
+	return reply.OverlayPath, nil
 }
 
-func writeYAML(path string, doc any) error {
-	out, err := yaml.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("marshaling %s: %w", path, err)
-	}
-	return os.WriteFile(path, out, 0644)
-}
-
-// defaultK8sOutputDir resolves the canonical output directory for emitted
-// kustomize trees, next to its GenerateK8sKustomize caller (moved from the
-// stray bundle_add_cmd_k8s.go): the "k8s-generate-kustomize" HostBuild seam
-// (host_build_k8s_generate.go, F6/FINAL-K5-unit-6a — reached by the now-plugin-side
-// deploy:k8s preresolver) and the source-less
-// `charly bundle from-box --target k8s` path (k8s_deploy_from_box.go) both
-// default to it when their caller hasn't already resolved a project dir.
+// defaultK8sOutputDir resolves the canonical output directory for emitted kustomize trees, for
+// the ONE remaining core caller (k8s_deploy_from_box.go) that hasn't already resolved a project
+// dir. candy/plugin-kube carries its OWN copy (materialize.go) for its own callers — this one
+// cannot be shared across the process boundary.
 func defaultK8sOutputDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {

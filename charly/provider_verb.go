@@ -46,8 +46,9 @@ type ProvisionActor interface {
 // leak of the R-item typed shapes deploykit.CandyModel + *buildkit.ResolvedBox into
 // this core-defined interface (the kernel/plugin boundary law: a core interface takes
 // scalars, never a concrete kind's typed shape). RunAsUser is the ALREADY-RESOLVED
-// user directive (deploykit.ResolveUserSpec's result) — the caller (compileActOp)
-// resolves op.RunAs against the image before calling ConstructStep, so no implementer
+// user directive (deploykit.ResolveUserSpec's result) — the caller
+// (hostBuildConstructStep, the "construct-step" seam handler) resolves op.RunAs
+// against the image before calling ConstructStep, so no implementer
 // needs the full *buildkit.ResolvedBox merely to re-derive it. Hand-written, non-wire:
 // this value never crosses a process boundary (every TypedStepProvider is in-proc-only,
 // builtinVerbBase.Invoke errors for out-of-proc), so it carries no CUE-sourcing debt.
@@ -62,8 +63,9 @@ type stepConstructCtx struct {
 // timeline lowers into a TYPED InstallStep — NOT a RenderProvisionScript shell string.
 // The ONE current member is `service`: its act constructs a ServicePackagedStep whose
 // Reverse() records the LOAD-BEARING reversals (ReverseOpServiceDisable / RestoreEnabled
-// / RemoveDropin) a shell string would drop. compileActOp resolves a `plugin:` verb's
-// provider and, when it implements this, returns ConstructStep (the typed step flows
+// / RemoveDropin) a shell string would drop. hostBuildConstructStep (the "construct-step"
+// seam handler) resolves a `plugin:` verb's provider and, when it implements this,
+// returns ConstructStep (the typed step flows
 // through the SAME ServicePackagedStep.Emit{OCI,Local,VM} + Reverse() as before) instead
 // of falling through to a generic OpStep. LowersTo names the step kind (the now-removed
 // VerbSpec.LowersTo field's role — package/service were its only users, so the field was

@@ -42,11 +42,11 @@ func TestExternalPluginStep_Derivations(t *testing.T) {
 	if userStep.Scope() != spec.ScopeUser {
 		t.Fatalf("Scope(1000:1000) = %v, want ScopeUser", userStep.Scope())
 	}
-
-	// The step kind has a registered StepProvider (the dedicated-builtin bijection).
-	if _, ok := stepProviderFor(spec.StepKindExternalPlugin); !ok {
-		t.Fatal("StepKindExternalPlugin has no registered StepProvider (registerDedicatedBuiltin not wired)")
-	}
+	// StepKindExternalPlugin's pod-overlay build-emit is an unconditional Go-level type-switch arm
+	// in candy/plugin-installstep's "oci-dispatch" word (K5-A item 2) — it has no ClassStep registry
+	// entry to check anymore (the former externalPluginStepProvider/EmitOCI is deleted, R1: zero live
+	// callers after the relocation). checkStepProviderBijection (provider_step.go) is the compile-time
+	// bijection proof for this kind now; see TestDedicatedProviders_BulkStepResolveAndAbsent.
 }
 
 // TestExternalPluginStep_ReverseChannelEndToEnd proves the STEP DEPLOY-EXECUTE leg
@@ -112,14 +112,29 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 	marker := fmt.Sprintf("teststep-%d", time.Now().UnixNano())
 	op := &spec.Op{Plugin: "examplestep", PluginInput: map[string]any{"marker": marker}}
 
-	// 3. The routing seam: compileActOp lowers a `run: plugin: examplestep` op whose
-	//    provider is an external grpcProvider to an ExternalPluginStep (not an OpStep).
+	// 3. The routing seam: hostBuildConstructStep (the "construct-step" HostBuild handler,
+	//    K5-A item 1) lowers a `run: plugin: examplestep` op whose provider is an external
+	//    grpcProvider to an ExternalPluginStep (not an OpStep).
 	layer := testCandy("examplestep-deploy-consumer", spec.CandyModel{}, spec.CandyView{})
 	img := &buildkit.ResolvedBox{Tags: []string{"fedora"}}
-	step := compileActOp(op, layer, img)
+	userDir, _ := deploykit.ResolveUserSpec(op.RunAs, img)
+	reply, err := hostBuildConstructStep(ctx, spec.ConstructStepRequest{
+		Op: *op, CandyName: layer.GetName(), CandySourceDir: layer.GetSourceDir(),
+		ResolvedUser: userDir, PkgFormat: img.Pkg, DistroTags: img.Tags,
+	}, buildEngineContext{})
+	if err != nil {
+		t.Fatalf("hostBuildConstructStep: %v", err)
+	}
+	if reply.Step == nil {
+		t.Fatalf("hostBuildConstructStep returned no step — want an ExternalPluginStep")
+	}
+	step, err := deploykit.StepFromView(*reply.Step)
+	if err != nil {
+		t.Fatalf("StepFromView: %v", err)
+	}
 	eps, ok := step.(*deploykit.ExternalPluginStep)
 	if !ok {
-		t.Fatalf("compileActOp routed external plugin verb to %T, want *ExternalPluginStep", step)
+		t.Fatalf("hostBuildConstructStep routed external plugin verb to %T, want *ExternalPluginStep", step)
 	}
 
 	dir := filepath.Join("/tmp", "charly-examplestep", marker)

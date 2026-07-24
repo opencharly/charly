@@ -13,7 +13,7 @@ import (
 // virtnetworkd.socket on Fedora/Arch vs the monolithic libvirtd.socket on
 // Debian/Ubuntu, whose libvirt is built without the split daemons) without a
 // <name>-host sibling candy (CLAUDE.md R3). These tests pin its semantics and
-// prove compileServiceSteps emits the right daemon set per (distro, init).
+// prove deploykit.CompileServiceSteps emits the right daemon set per (distro, init).
 
 func TestServiceEntryAppliesToDistro(t *testing.T) {
 	cases := []struct {
@@ -80,7 +80,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("debian systemd (vm) enables only libvirtd.socket", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
-		steps := compileServiceSteps(layer, img, deploykit.HostContext{MachineVenue: true})
+		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		if len(units) != 1 || units[0] != "libvirtd.socket" {
 			t.Fatalf("debian systemd packaged units = %v, want [libvirtd.socket]", units)
@@ -94,7 +94,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("fedora systemd (vm) enables the modular sockets", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
-		steps := compileServiceSteps(layer, img, deploykit.HostContext{MachineVenue: true})
+		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true})
 		units := packagedUnits(steps)
 		want := map[string]bool{"virtqemud.socket": true, "virtnetworkd.socket": true}
 		if len(units) != 2 || !want[units[0]] || !want[units[1]] {
@@ -104,7 +104,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("debian supervisord (oci) runs only the libvirtd exec daemon", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "debian-coder", Distro: []string{"debian:13", "debian"}}
-		steps := compileServiceSteps(layer, img, deploykit.HostContext{})
+		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{})
 		if len(packagedUnits(steps)) != 0 {
 			t.Fatalf("debian supervisord must emit no packaged units, got %v", packagedUnits(steps))
 		}
@@ -115,7 +115,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 
 	t.Run("fedora supervisord (oci) runs the two modular exec daemons", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "fedora-coder", Distro: []string{"fedora:43", "fedora"}}
-		steps := compileServiceSteps(layer, img, deploykit.HostContext{})
+		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{})
 		if n := customServiceCount(steps); n != 2 {
 			t.Fatalf("fedora supervisord custom steps = %d, want 2 (virtqemud + virtnetworkd)", n)
 		}
@@ -130,7 +130,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	t.Run("vm deploy: guest img wins over operator host distro", func(t *testing.T) {
 		img := &buildkit.ResolvedBox{Name: "vm-adhoc", Distro: []string{"debian:13", "debian"}}
 		// The exact hostCtx a vm deploy carries: Target=host, Distro=<operator>.
-		steps := compileServiceSteps(layer, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
+		steps := testCompileServiceSteps(t, layer, img, deploykit.HostContext{MachineVenue: true, Distro: "arch"})
 		units := packagedUnits(steps)
 		if len(units) != 1 || units[0] != "libvirtd.socket" {
 			t.Fatalf("vm-on-arch-host packaged units = %v, want [libvirtd.socket] (guest wins, NOT operator arch)", units)

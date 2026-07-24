@@ -108,7 +108,7 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	}
 	plans := make([]*spec.InstallPlan, 0, len(order))
 	for _, name := range order {
-		p, err := deploykit.BuildDeployPlan(candyModels[name], img, hostCtx)
+		p, err := deploykit.BuildDeployPlan(ctx, exec, candyModels[name], img, hostCtx)
 		if err != nil {
 			return nil, fmt.Errorf("bundle compile: BuildDeployPlan(%s): %w", name, err)
 		}

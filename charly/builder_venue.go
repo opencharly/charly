@@ -57,7 +57,7 @@ type buildEngineContext struct {
 	// buildEngineContext). They no longer feed an in-core renderer directly (the former
 	// HOST-COUPLED system-packages/builder/local-pkg-install/op step-emitters — C1.2-C1.5 — were
 	// relocated onto candy/plugin-installstep's OWN "resolved-project"-built deploykit.Generator,
-	// K5-Unit-6b): ociSpliceClassStepEmit (charly/oci_step_emit.go) reads Generator/Box to populate
+	// K5-Unit-6b): dispatchOCIStep (charly/oci_step_emit.go) reads Generator/Box to populate
 	// the class:step OpEmit's spec.BuildEnv scalars (Image=Box.Name, DevLocalPkg=Generator.DevLocalPkg)
 	// so the plugin can render without a per-render host round-trip. They are zero for every
 	// deploy-leg buildEngineContext — the Builder DEPLOY leg is runVenueBuilderStep and the

@@ -100,11 +100,13 @@ func TestPreresolveActiveInitInto_MachineVenue_ResolvesSystemd(t *testing.T) {
 }
 
 // TestCompileServiceSteps_PrefersPreresolvedActiveInit closes the loop end-to-end:
-// compileServiceSteps (install_build_services.go) must consume the seam-preresolved
-// hostCtx.ActiveInit, not silently fall through to its own lazy os.Getwd()-based lookup — proven
-// by moving cwd to an empty temp dir (no charly.yml at all, so the fallback lookup would return
-// false and leave UnitText empty) BEFORE calling compileServiceSteps. A rendered UnitText can only
-// have come from the preresolved value.
+// deploykit.CompileServiceSteps must render from the seam-preresolved hostCtx.ActiveInit. K5-A
+// item 1 increment B DELETED the former lazy os.Getwd()-based LoadBuildConfigForBox fallback
+// entirely (it was already dead in production — candy/plugin-bundle's compileDeployPlans always
+// receives a pre-resolved ActiveInit), so this test's empty-temp-dir cwd no longer "proves the
+// fallback wasn't taken" (there is no fallback left to take) — it now just confirms the render
+// still works correctly with no charly.yml anywhere on disk, i.e. the render genuinely depends on
+// ONLY the preresolved value, nothing filesystem-adjacent.
 func TestCompileServiceSteps_PrefersPreresolvedActiveInit(t *testing.T) {
 	isolateProviderRegistry(t)
 	dir, cleanupProject := compilerTestProjectDir(t)
@@ -132,7 +134,7 @@ func TestCompileServiceSteps_PrefersPreresolvedActiveInit(t *testing.T) {
 	}}, spec.CandyView{})
 	img := &buildkit.ResolvedBox{Name: "sentinel-box", Distro: []string{"fedora:43", "fedora"}}
 
-	steps := compileServiceSteps(layer, img, hostCtx)
+	steps := testCompileServiceSteps(t, layer, img, hostCtx)
 	var custom *deploykit.ServiceCustomStep
 	for _, s := range steps {
 		if cs, ok := s.(*deploykit.ServiceCustomStep); ok {

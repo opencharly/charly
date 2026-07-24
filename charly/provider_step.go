@@ -1,130 +1,60 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// StepProvider is the typed in-process form of an InstallStep Provider: it emits one step
-// to the ONE remaining in-proc venue — the OCI image build (the pod-overlay add_candy:
-// Containerfile synthesis). Every InstallStep kind implements it; the dispatch resolves the
-// step through providerRegistry.ResolveStep(step.Kind()) and calls EmitOCI, which preserves
-// the build venue's exact behaviour.
-//
-// There is NO EmitLocal and NO EmitVM: BOTH target:local AND target:vm externalized (into
-// candy/plugin-deploy-local / candy/plugin-deploy-vm), whose out-of-process kit.WalkPlans
-// executes every step on the venue (the plugin-renderable kinds via the F2 reverse legs,
-// the host-engine kinds via RunHostStep) — so the in-proc per-deploy-step dispatch is gone.
-// The sole remaining in-proc StepProvider consumer is the pod-overlay step dispatch
-// (charly/oci_step_emit.go's ociEmitStep — the host "oci-emit-step" render-seam handler; the
-// deploykit.OCITarget WALKER itself lives in sdk/deploykit as of P11c, with no in-core instance).
-type StepProvider interface {
-	Provider
-	// EmitOCI renders one step's BUILD-venue (pod-overlay Containerfile) fragment. It RETURNS
-	// the fragment (the caller splices it) rather than writing to an the walker buffer — the
-	// deploykit.OCITarget walker now lives in sdk/deploykit (P11c) and the in-core dispatch has no
-	// deploykit.OCITarget instance, so returning the string decouples the StepProvider from the buffer
-	// (the former t.buf.WriteString). build carries the host-side buildEngineContext (Box for
-	// the plugin verb's distros, etc.) the host reconstructs from the cached overlay Generator.
-	// The fragment includes any trailing newline; an empty return is a no-op (a deploy-only
-	// step records nothing).
-	EmitOCI(step spec.InstallStep, plan *deploykit.InstallPlan, build buildEngineContext) (string, error)
-}
+// provider_step.go — the pod-overlay build-emit BIJECTION gate. K5-A item 2 relocated the FULL
+// per-kind dispatch DECISION (which peer renders a given InstallStep's Containerfile fragment) out
+// of core entirely, into candy/plugin-installstep's "oci-dispatch" word — including the ONE
+// remaining kind that used to have an in-proc StepProvider (ExternalPlugin, formerly
+// externalPluginStepProvider.EmitOCI in charly/plugin_step_external.go). That file, the StepProvider
+// interface, builtinStepBase, and stepProviderFor are DELETED (R1/R2: EmitOCI's relocation made them
+// genuinely dead — zero remaining callers — not merely "no longer the primary path"; the F11
+// zero-per-kind-residue self-test caught this). ExternalPlugin's build-emit is now an
+// UNCONDITIONAL Go-level type-switch arm in candy/plugin-installstep/oci_dispatch.go
+// (dispatchExternalPluginVerb), needing no registry entry at all — the plugin resolves ITS
+// class:verb target directly via InvokeProvider, bypassing the (now-deleted) ClassStep
+// "ExternalPlugin" registration entirely.
 
-// builtinStepBase supplies the in-proc-only Provider half (Class + a stub Invoke)
-// for every built-in step provider.
-type builtinStepBase struct{}
+// pluginEmitStepWords is the host-side alias for deploykit.PluginEmitStepWords (K5-A item 2): the
+// map RELOCATED to sdk/deploykit so the plugin-side "oci-dispatch" word (candy/plugin-installstep)
+// can consult the SAME kind→word vocabulary the host's checkStepProviderBijection uses — R3, one
+// source of truth for the 12 compiler-emitted kinds' build-emit word mapping. See
+// deploykit.PluginEmitStepWords for the full doc (categories, host-coupled vs pure).
+var pluginEmitStepWords = deploykit.PluginEmitStepWords
 
-func (builtinStepBase) Class() ProviderClass { return ClassStep }
-func (builtinStepBase) Invoke(context.Context, *Operation) (*Result, error) {
-	return nil, fmt.Errorf("built-in install step is in-process only (no out-of-proc Invoke)")
-}
-
-// stepProviderFor resolves an InstallStep kind to its StepProvider.
-func stepProviderFor(kind spec.StepKind) (StepProvider, bool) {
-	prov, ok := providerRegistry.ResolveStep(string(kind))
-	if !ok {
-		return nil, false
-	}
-	sp, ok := prov.(StepProvider)
-	return sp, ok
-}
-
-// allStepKinds is the fixed InstallStep IR vocabulary (Go-internal; steps are not a
-// user-authored CUE vocab). EVERY kind here round-trips through stepToView/stepFromView (the
-// deploy view, exercised by step_view_test); the bijection below asserts each kind is SERVED —
-// either by a compiled-in in-proc StepProvider, or (for the pluginEmitStepWords set) by a
-// compiled-in class:step plugin's build-emit.
-
-// pluginEmitStepWords maps the builtin InstallStep kinds whose BUILD-emit externalized to the
-// lowercase-hyphenated class:step plugin word that serves their pod-overlay OpEmit
-// (candy/plugin-installstep). These kinds have NO in-proc StepProvider — ociEmitStep routes
-// them here, serializing the step VIEW as the OpEmit payload. Their DEPLOY leg is unchanged
-// (sdk/kit.WalkPlans renders them from the same view; reboot's is the host-side guest
-// reboot over RunHostStep → rebootVenueAndWait). apk-install's and reboot's plugin declare
-// Emits=false (no build fragment); every other word Emits=true.
-//
-// Two sub-categories, distinguished by whether the OpEmit render needs the host build engine:
-//   - PURE (C1.1 + C1.6): file/shell-hook/shell-snippet/service-packaged/service-custom/repo-change/
-//     apk-install (C1.1) + reboot (C1.6) — the plugin formats the fragment directly from the step
-//     VIEW. apk-install and reboot are the NO-OP-emit members (Emits=false, empty fragment): an
-//     image build installs no apk / reboots nothing.
-//   - HOST-COUPLED (C1.2/C1.3/C1.4/C1.5): system-packages (C1.2) + builder (C1.3) +
-//     local-pkg-install (C1.4) + op (C1.5) — the plugin renders these DIRECTLY against its OWN
-//     "resolved-project"-built deploykit.Generator (fetched ONCE per project dir via
-//     HostBuild("resolved-project"), cached) instead of calling back a host-side renderer: no
-//     per-render host round-trip (system-packages resolves the box's DistroDef from the envelope;
-//     builder uses dg.BuildStageContext + kit.BuilderResolve/buildkit.RenderTemplate;
-//     local-pkg-install calls deploykit.RenderLocalPkgImageInstall directly — a pure function of the
-//     step + a few BuildEnv scalars, no project structure needed at all; op drives dg.EmitTasks, the
-//     RICHEST per-verb render pipeline — COPY staging + op coalescing). See
-//     candy/plugin-installstep/plugin.go (emitSystemPackages, emitBuilder, emitLocalPkgInstall,
-//     emitOp).
-var pluginEmitStepWords = map[spec.StepKind]string{
-	spec.StepKindFile:            "file",
-	spec.StepKindShellHook:       "shell-hook",
-	spec.StepKindShellSnippet:    "shell-snippet",
-	spec.StepKindServicePackaged: "service-packaged",
-	spec.StepKindServiceCustom:   "service-custom",
-	spec.StepKindRepoChange:      "repo-change",
-	spec.StepKindApkInstall:      "apk-install",
-	spec.StepKindReboot:          "reboot",
-	spec.StepKindSystemPackages:  "system-packages",
-	spec.StepKindBuilder:         "builder",
-	spec.StepKindLocalPkgInstall: "local-pkg-install",
-	spec.StepKindOp:              "op",
-}
-
-// checkStepProviderBijection asserts every InstallStep kind is SERVED. A kind in
+// checkStepProviderBijection asserts every InstallStep kind is SERVED. The 12 kinds in
 // pluginEmitStepWords must resolve to a compiled-in class:step plugin declaring a StepContract
-// (its build-emit); every other kind must resolve to an in-proc StepProvider (its EmitOCI). Run in
-// the same init() that registers, after registration (the compiled-in plugins register first —
-// plugins_generated.go's init precedes registry_bootstrap.go's alphabetically, the SAME ordering
-// checkVerbProviderBijection relies on).
+// (its build-emit); the ONE remaining kind (ExternalPlugin) needs NO registry entry at all — its
+// build-emit is an unconditional Go-level type-switch arm in candy/plugin-installstep's
+// "oci-dispatch" word, verified by compilation (deploykit.AllStepKinds is a closed, compile-time
+// enumeration) rather than a runtime registry lookup. Run in the same init() that registers, after
+// registration (the compiled-in plugins register first — plugins_generated.go's init precedes
+// registry_bootstrap.go's alphabetically, the SAME ordering checkVerbProviderBijection relies on).
 func checkStepProviderBijection() error {
 	var missing []string
 	for _, k := range deploykit.AllStepKinds {
-		if word, isPlugin := pluginEmitStepWords[k]; isPlugin {
-			p, ok := providerRegistry.resolve(ClassStep, word)
-			if !ok {
-				missing = append(missing, fmt.Sprintf("%s (externalized build-emit; class:step plugin %q not registered)", k, word))
-				continue
-			}
-			if _, ok := p.(spec.StepContractCarrier); !ok {
-				missing = append(missing, fmt.Sprintf("%s (class:step provider %q declares no StepContract)", k, word))
-			}
+		if k == deploykit.StepKindExternalPlugin {
+			// Handled unconditionally by candy/plugin-installstep's oci-dispatch Go-level switch;
+			// no ClassStep registry entry exists (or is needed) for this kind anymore.
 			continue
 		}
-		p, ok := providerRegistry.resolve(ClassStep, string(k))
+		word, isPlugin := pluginEmitStepWords[k]
+		if !isPlugin {
+			missing = append(missing, fmt.Sprintf("%s (not in pluginEmitStepWords and not StepKindExternalPlugin — an uncategorized kind)", k))
+			continue
+		}
+		p, ok := providerRegistry.resolve(ClassStep, word)
 		if !ok {
-			missing = append(missing, string(k))
+			missing = append(missing, fmt.Sprintf("%s (externalized build-emit; class:step plugin %q not registered)", k, word))
 			continue
 		}
-		if _, ok := p.(StepProvider); !ok {
-			missing = append(missing, string(k)+" (registered but not a StepProvider)")
+		if _, ok := p.(spec.StepContractCarrier); !ok {
+			missing = append(missing, fmt.Sprintf("%s (class:step provider %q declares no StepContract)", k, word))
 		}
 	}
 	if len(missing) > 0 {

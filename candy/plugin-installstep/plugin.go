@@ -95,6 +95,12 @@ const (
 	wordBuilder         = "builder"
 	wordLocalPkgInstall = "local-pkg-install"
 	wordOp              = "op"
+	// wordOCIDispatch (K5-A item 2) is the FULL core provider-registry dispatch relocated from
+	// charly/oci_step_emit.go: given ANY InstallStep's wire view (not just this plugin's own 12
+	// kinds), decide which peer class:step/class:verb provider renders the pod-overlay fragment and
+	// dispatch to it via the generic reverse-channel DescribeProvider (cached metadata) +
+	// InvokeProvider (dispatch) legs. See oci_dispatch.go.
+	wordOCIDispatch = "oci-dispatch"
 )
 
 // hostCoupledStepWords is the set of step words whose OpEmit needs more than the bare step VIEW to
@@ -141,6 +147,10 @@ func NewMeta() pb.PluginMetaServer {
 			emit(wordBuilder, true),
 			emit(wordLocalPkgInstall, true),
 			emit(wordOp, true),
+			// oci-dispatch (K5-A item 2) always attempts to emit — the per-target Emits gate lives
+			// INSIDE the dispatch (dispatchClassStep consults the TARGET's own declared contract via
+			// DescribeProvider), not on this wrapper capability itself.
+			emit(wordOCIDispatch, true),
 		},
 		schemaFS)
 }
@@ -153,6 +163,11 @@ type provider struct{ pb.UnimplementedProviderServer }
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != opEmit {
 		return &pb.InvokeReply{ResultJson: []byte("{}")}, nil
+	}
+	// oci-dispatch (K5-A item 2): the FULL core provider-registry dispatch for ANY InstallStep kind
+	// (not just this plugin's own 12 words) — see oci_dispatch.go.
+	if req.GetReserved() == wordOCIDispatch {
+		return emitOCIDispatch(ctx, req)
 	}
 	// The HOST-COUPLED kinds (system-packages C1.2, builder C1.3, local-pkg-install C1.4, op C1.5)
 	// render directly against the resolved-project envelope (or, for local-pkg-install, purely off

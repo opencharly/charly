@@ -83,7 +83,12 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 		// F12 live-stdio legs — class-generic action nouns (the interactive/stream siblings of
 		// RunCapture), never a provider word: RunInteractive drives `charly shell`/`charly cmd`,
 		// RunStream drives `charly logs --follow`.
-		"RunInteractive", "RunStream")
+		"RunInteractive", "RunStream",
+		// K5-A item 2: DescribeProvider — the metadata twin of InvokeProvider (dispatch) and
+		// HostBuild (host-side build). Class-generic (class/word are the REQUEST's plain DATA
+		// fields, never named in the RPC method itself — the same shape InvokeProvider already
+		// proves compliant).
+		"DescribeProvider")
 	assertMethodSet(t, "CheckContextService", pb.CheckContextService_ServiceDesc,
 		"HTTPDo", "AddBackground", "ResolveEndpoint", "ResolveGraphicsEndpoint", "ResolveClusterContext",
 		"ResolveImageLabel")

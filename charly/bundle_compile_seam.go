@@ -70,8 +70,8 @@ func (c *deployAddCmd) compileViaPlugin(req spec.DeployCompileRequest) ([]*deplo
 }
 
 // preresolveActiveInitInto preresolves a MachineVenue compile's active init system ONCE per
-// whole-deploy (alongside preresolveBuildersInto's builder pre-pass), so compileServiceSteps
-// (install_build_services.go) never re-derives it per-candy nor falls back to the
+// whole-deploy (alongside preresolveBuildersInto's builder pre-pass), so
+// deploykit.CompileServiceSteps never re-derives it per-candy nor falls back to the
 // container-oriented InitConfig.ResolveInitSystem auto-detect heuristic — proven WRONG for a
 // machine venue by a live probe (2026-07-20): a plain custom-exec service entry matches BOTH the
 // systemd and supervisord ServiceSchema (both carry a non-empty ServiceTemplate), so auto-detect

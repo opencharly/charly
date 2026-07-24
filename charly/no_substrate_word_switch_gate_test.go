@@ -43,7 +43,7 @@ func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 		"node_normalize.go":  true,
 		"node_bundle.go":     true,
 		"deploy_nodeform.go": true,
-		"bundle_add_cmd.go":  true, // classifyNodeTarget (word-producing) + `target` string dispatch (not `.Target`)
+		"bundle_add_cmd.go":  true, // `target` string dispatch (not `.Target`); classifyNodeTarget itself moved to deploykit.ClassifyNodeTarget (W4)
 		"plugin_prescan.go":  true, // recognizedDeploySubstrate registry gate
 		// deploykit lib: findVmDeploy reads the PERSISTED deploy state, where
 		// node.Descent is stripped on save (deploy_state.go: "loader-DERIVED,

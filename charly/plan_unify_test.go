@@ -126,7 +126,7 @@ func TestPlanUnify_RunStepLowersToInstallStepAndReverses(t *testing.T) {
 	// now an extracted plugin verb (plugin: package + plugin_input), whose TypedStepProvider
 	// lowers the run-act into the same SystemPackagesStep.
 	layer := testCandy("x", spec.CandyModel{Plan: []spec.Step{{Run: "install redis", Op: spec.Op{Plugin: "package", PluginInput: map[string]any{"package": "redis"}}}}}, spec.CandyView{})
-	steps := deploykit.CompileOpSteps(layer, testResolvedBox())
+	steps := testCompileOpSteps(t, layer)
 
 	var sp *deploykit.SystemPackagesStep
 	for _, s := range steps {
