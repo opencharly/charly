@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check semantic parity between the independent Claude and Codex rulebooks and
-the generated per-harness developer profiles (Claude, Codex, Kimi)."""
+"""Check policy parity between the harness adapter and generic agent rulebook,
+plus the generated per-harness developer profiles."""
 
 from __future__ import annotations
 
@@ -20,6 +20,63 @@ SKILL_REF = re.compile(
 )
 GITLINK_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
 BARE_ROOT_GO_GATE = re.compile(r"(?m)^\s*(?:`)?go (?:test|vet|build) \./\.\.\.(?:`)?\s*$")
+NONCANONICAL_ATTRIBUTION_TEMPLATE = re.compile(
+    r"(?:Assisted-by: <Harness>\s+\(<Provider Full Model Name>;\s+<confidence>\)"
+    r"|Assisted-by: <Harness>\s+<Full Model Name>\s+\(<confidence>\)"
+    r"|Assisted-by: <Harness>\s+<Provider Full Model Name>\s+\(<tier>\))"
+)
+ATTRIBUTION_TEMPLATE = (
+    "Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)"
+)
+SHARED_POLICY_MARKERS = (
+    "Candyboxing",
+    "Risk Driven Development (RDD)",
+    "Memory Hygiene",
+    "Agent Driven Evaluation (ADE)",
+    "Schema Driven Design (SDD)",
+    "Prioritize Clean Architecture Above All Else",
+    "The kernel/plugin boundary law",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R8",
+    "R9",
+    "R10",
+    "Disposable-Only Autonomy",
+    "Hard Cutover by Default",
+    "Post-Execution Policies",
+    "Acceptance checklist",
+    "Agents, Workflows & Teams",
+    "AI Attribution",
+    "Key Rules",
+    "Where things are documented",
+    "pr-validator",
+    "root-cause-analyzer",
+    "task build:binary",
+    "disposable: true",
+    "direct push to `main`",
+    "one phase",
+    "Any rule violation forbids commit",
+)
+CONFIDENCE_TIERS = (
+    "fully tested and validated",
+    "analysed on a live system",
+    "documentation reviewed",
+    "syntax check only",
+    "theoretical suggestion",
+)
+FORBIDDEN_GENERIC_RULEBOOK_MARKERS = (
+    "Codex",
+    "CODEX_HOME",
+    ".codex",
+    "Claude Code",
+    "Kimi Code",
+    "~/.kimi-code",
+)
 GitRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -49,6 +106,40 @@ def current_markdown_names(
 def task_dry_plan_contains(stdout: str, stderr: str, command: str) -> bool:
     """Check Task's compiled plan regardless of its documented output stream."""
     return command in f"{stdout}\n{stderr}"
+
+
+def rulebook_contract_errors(adapter: str, generic: str) -> list[str]:
+    """Return semantic contract drift between the two standalone rulebooks."""
+    errors: list[str] = []
+    documents = (("CLAUDE.md", adapter), ("AGENTS.md", generic))
+    for marker in SHARED_POLICY_MARKERS:
+        for name, text in documents:
+            if marker.lower() not in text.lower():
+                errors.append(f"{name} is missing shared policy marker {marker!r}")
+    for name, text in documents:
+        if ATTRIBUTION_TEMPLATE not in text:
+            errors.append(f"{name} is missing the canonical attribution template")
+        for tier in CONFIDENCE_TIERS:
+            if tier not in text:
+                errors.append(f"{name} is missing confidence tier {tier!r}")
+    for marker in FORBIDDEN_GENERIC_RULEBOOK_MARKERS:
+        if marker in generic:
+            errors.append(
+                f"AGENTS.md contains harness-specific policy marker {marker!r}"
+            )
+    return errors
+
+
+def attribution_contract_errors(
+    label: str, text: str, *, require_canonical: bool = False
+) -> list[str]:
+    """Return current-policy attribution-shape errors for one document."""
+    errors: list[str] = []
+    if NONCANONICAL_ATTRIBUTION_TEMPLATE.search(text):
+        errors.append(f"{label} contains a noncanonical attribution placeholder")
+    if require_canonical and ATTRIBUTION_TEMPLATE not in text:
+        errors.append(f"{label} is missing the canonical attribution template")
+    return errors
 
 
 def current_markdown(repository: pathlib.Path) -> list[pathlib.Path]:
@@ -362,6 +453,46 @@ def self_test() -> None:
     assert not BARE_ROOT_GO_GATE.search("go test ./..\n")
     assert not BARE_ROOT_GO_GATE.search("cd charly && go test ./...\n")
 
+    contract_fixture = "\n".join(
+        (*SHARED_POLICY_MARKERS, ATTRIBUTION_TEMPLATE, *CONFIDENCE_TIERS)
+    )
+    assert not rulebook_contract_errors(contract_fixture, contract_fixture)
+
+    wrong_template = contract_fixture.replace(
+        ATTRIBUTION_TEMPLATE,
+        "Assisted-by: <Harness> (<Provider Full Model Name>; <confidence>)",
+    )
+    template_errors = rulebook_contract_errors(contract_fixture, wrong_template)
+    assert any("canonical attribution template" in error for error in template_errors)
+
+    missing_tier = contract_fixture.replace("theoretical suggestion", "")
+    tier_errors = rulebook_contract_errors(contract_fixture, missing_tier)
+    assert any("confidence tier" in error for error in tier_errors)
+
+    missing_policy = contract_fixture.replace("Disposable-Only Autonomy", "")
+    policy_errors = rulebook_contract_errors(contract_fixture, missing_policy)
+    assert any("shared policy marker" in error for error in policy_errors)
+
+    branded_generic = f"{contract_fixture}\nCodex"
+    branded_errors = rulebook_contract_errors(contract_fixture, branded_generic)
+    assert any("harness-specific policy marker" in error for error in branded_errors)
+
+    assert attribution_contract_errors(
+        "fixture",
+        "Assisted-by: <Harness> <Full Model Name> (<confidence>)",
+    )
+    assert attribution_contract_errors(
+        "fixture",
+        "Assisted-by: <Harness> <Provider Full Model Name> (<tier>)",
+    )
+    assert attribution_contract_errors(
+        "fixture",
+        "Assisted-by: <Harness> (<Provider Full Model Name>; <confidence>)",
+    )
+    assert not attribution_contract_errors(
+        "fixture", ATTRIBUTION_TEMPLATE, require_canonical=True
+    )
+
 
 def validate_codex_project_agents(root: pathlib.Path, errors: list[str]) -> None:
     """Validate the project-scoped Codex configuration and validator role."""
@@ -426,56 +557,42 @@ def main() -> int:
     if sys.argv[1:] == ["--self-test"]:
         print("agent configuration validator self-test passed")
         return 0
-    claude_path = ROOT / "CLAUDE.md"
-    codex_path = ROOT / "AGENTS.md"
-    claude = claude_path.read_text()
-    codex = codex_path.read_text()
+    adapter_path = ROOT / "CLAUDE.md"
+    generic_path = ROOT / "AGENTS.md"
+    adapter = adapter_path.read_text()
+    generic = generic_path.read_text()
     errors: list[str] = []
     validate_codex_project_agents(ROOT, errors)
 
-    claude_rows = dispatcher(claude_path)
-    codex_rows = dispatcher(codex_path)
-    if claude_rows != codex_rows:
-        limit = max(len(claude_rows), len(codex_rows))
+    adapter_rows = dispatcher(adapter_path)
+    generic_rows = dispatcher(generic_path)
+    if adapter_rows != generic_rows:
+        limit = max(len(adapter_rows), len(generic_rows))
         for index in range(limit):
-            left = claude_rows[index] if index < len(claude_rows) else None
-            right = codex_rows[index] if index < len(codex_rows) else None
+            left = adapter_rows[index] if index < len(adapter_rows) else None
+            right = generic_rows[index] if index < len(generic_rows) else None
             if left != right:
-                errors.append(f"dispatcher row {index + 1}: Claude={left} Codex={right}")
+                errors.append(
+                    f"dispatcher row {index + 1}: adapter={left} generic={right}"
+                )
 
-    mandatory = (
-        "Risk Driven Development (RDD)",
-        "Agent Driven Evaluation (ADE)",
-        "Schema Driven Design (SDD)",
-        "R1",
-        "R2",
-        "R3",
-        "R4",
-        "R5",
-        "R6",
-        "R7",
-        "R8",
-        "R9",
-        "R10",
-        "Acceptance checklist",
-        "AI Attribution",
-        "pr-validator",
-        "root-cause-analyzer",
-    )
-    for term in mandatory:
-        if term.lower() not in claude.lower():
-            errors.append(f"CLAUDE.md is missing mandatory policy marker {term!r}")
-        if term.lower() not in codex.lower():
-            errors.append(f"AGENTS.md is missing mandatory policy marker {term!r}")
+    errors.extend(rulebook_contract_errors(adapter, generic))
 
-    forbidden = (
-        "Codex does not read `AGENTS.md`",
-        "Codex adapter",
-        "canonical project rulebook is `CLAUDE.md`",
+    operational_attribution_paths = (
+        ROOT / "plugins" / "internals" / "agents" / "pr-validator.md",
+        ROOT / "plugins" / "internals" / "skills" / "git-workflow" / "SKILL.md",
     )
-    for phrase in forbidden:
-        if phrase.lower() in codex.lower():
-            errors.append(f"AGENTS.md contains obsolete delegation text: {phrase!r}")
+    for path in operational_attribution_paths:
+        try:
+            text = path.read_text()
+        except OSError as error:
+            errors.append(f"attribution policy surface is unreadable: {error}")
+            continue
+        errors.extend(
+            attribution_contract_errors(
+                str(path.relative_to(ROOT)), text, require_canonical=True
+            )
+        )
 
     plugins_root = ROOT / "plugins"
     known = {
@@ -496,7 +613,11 @@ def main() -> int:
             relative = path.relative_to(repository)
             if "CHANGELOG" in relative.parts:
                 continue
-            for plugin, name in SKILL_REF.findall(path.read_text()):
+            text = path.read_text()
+            errors.extend(
+                attribution_contract_errors(str(path.relative_to(ROOT)), text)
+            )
+            for plugin, name in SKILL_REF.findall(text):
                 if plugin in known_plugins and (plugin, name) not in known:
                     errors.append(
                         f"{path.relative_to(ROOT)} references missing /charly-{plugin}:{name}"
@@ -510,7 +631,10 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"validated {len(claude_rows)} equivalent R0 dispatcher rows and mandatory policy markers")
+    print(
+        f"validated {len(adapter_rows)} equivalent R0 dispatcher rows, "
+        "shared policy contract, and attribution templates"
+    )
     return 0
 
 
