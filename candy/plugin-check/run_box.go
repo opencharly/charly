@@ -2,9 +2,9 @@ package check
 
 // run_box.go — K1-unblock W3 Unit B: pluginCheckRunBox, the plugin-resident port of the former
 // core "box" mode arm of the "check-run" HostBuild dispatch (deleted with this move) — the FIRST
-// of six arms to move, chosen as the simplest/most
-// self-contained: no deploy/venue-tree resolution, no cross-deployment addressing, just a
-// disposable build-context container). Ported unchanged in substance — every call this arm
+// of six arms to move, chosen as the simplest/most self-contained: no deploy/venue-tree
+// resolution, no cross-deployment addressing, just a disposable build-context container. Ported
+// unchanged in substance — every call this arm
 // makes was ALREADY sdk-portable (kit.ResolveRuntime/ResolveLocalImageRef,
 // deploykit.ExtractMetadata/CheckBoxContainerChain, kit.ResolveCheckVarsBuild/RunPlan); the
 // ONLY core-only piece was newCheckRunner, replaced by this package's own
@@ -53,15 +53,11 @@ func pluginCheckRunBox(ex *sdk.Executor, ctx context.Context, req spec.CheckRunR
 	// The box-context venue is the SAME single-hop deploykit.ContainerChain shape (via
 	// CheckBoxContainerChain) that resolveCheckVenue produces for a live pod — round-trips
 	// through the "container" VenueDescriptor kind (W3 Unit B's sdk leg) exactly the same way.
-	var venueDesc *spec.VenueDescriptor
-	if d := kit.DescriptorFromExecutor(executor); d.Kind != "" {
-		venueDesc = &d
-	}
 	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 		Mode:      "box",
 		Distros:   meta.Distro,
 		VenueKind: executor.Kind(),
-	}, venueDesc, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:       executor,
 		Mode:       kit.ModeBox,
 		Env:        env,

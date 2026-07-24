@@ -136,17 +136,13 @@ func pluginCheckLivePod(ex *sdk.Executor, ctx context.Context, rp *spec.Resolved
 	defer kit.CloseHostCleanups(hostCleanups)
 
 	execChain := deploykit.ContainerChain(engine, containerName)
-	var venueDesc *spec.VenueDescriptor
-	if d := kit.DescriptorFromExecutor(execChain); d.Kind != "" {
-		venueDesc = &d
-	}
 	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 		Mode:      "live",
 		Box:       req.Name,
 		Instance:  req.Instance,
 		Distros:   meta.Distro,
 		VenueKind: execChain.Kind(),
-	}, venueDesc, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:           execChain,
 		Mode:           kit.ModeLive,
 		Env:            env,
@@ -330,6 +326,14 @@ func pluginCheckLiveVM(ex *sdk.Executor, ctx context.Context, rp *spec.ResolvedP
 
 	checkLoadPlugins(ex, ctx, req.Name, dir)
 
+	// newPluginCheckRunner's VerbResolver reads THIS runner's live Exec() (a back-reference,
+	// plugin_runner.go) on every out-of-process verb dispatch, so `executor` — a plain
+	// (non-dotted) VM target's *kit.SSHExecutor, or the dotted nested chain above — is
+	// automatically threaded as the InvokeProvider S1 VenueDescriptor with no per-site
+	// computation needed here (RCA'd live: check-k3s-vm SIGSEGV'd on a nil cc.Exec() inside a
+	// `command:` step on a VM target — the former static-venueDesc-at-construction design left
+	// the reverse-channel's own ambient-executor fallback in play, which is nil for a top-level
+	// `charly check ...` command Invoke).
 	envVars, hasRuntime := pluginResolverEnv(resolver)
 	hostVars, hostCleanups := resolveHostVarsForSteps(ex, ctx, dir, plan, req.Instance)
 	defer kit.CloseHostCleanups(hostCleanups)
@@ -339,7 +343,7 @@ func pluginCheckLiveVM(ex *sdk.Executor, ctx context.Context, rp *spec.ResolvedP
 		Instance:  req.Instance,
 		Venue:     domainID,
 		VenueKind: "vm",
-	}, nil, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:           executor,
 		Mode:           kit.ModeLive,
 		Env:            envVars,
@@ -451,7 +455,7 @@ func pluginRunLocalDeployScopePlan(ex *sdk.Executor, ctx context.Context, rp *sp
 		Box:       image,
 		Instance:  instance,
 		VenueKind: exec.Kind(),
-	}, nil, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:           exec,
 		Mode:           kit.ModeLive,
 		Env:            env,
@@ -494,7 +498,7 @@ func pluginCheckLiveGroup(ex *sdk.Executor, ctx context.Context, rp *spec.Resolv
 		Box:       req.Name,
 		Instance:  req.Instance,
 		VenueKind: "shell",
-	}, nil, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:           kit.ShellExecutor{},
 		Mode:           kit.ModeLive,
 		Env:            env,

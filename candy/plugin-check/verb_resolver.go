@@ -46,15 +46,19 @@ import (
 const classVerb = "verb"
 
 // pluginVerbResolver is a kit.VerbResolver backed by Executor.InvokeProvider — the plugin-side
-// counterpart of charly's core-private hostVerbResolver. venueDesc is this plugin's own
-// self-resolved check venue (Unit A's resolveCheckVenue), threaded as the S1 VenueDescriptor so
-// the host materializes the SAME venue for an out-of-process target without this plugin needing
-// its own executor-threaded incoming Invoke.
+// counterpart of charly's core-private hostVerbResolver. kr is the back-reference to the *kit.Runner
+// this resolver was installed on (wired by newPluginCheckRunner, mirroring
+// charly/checkrun.go's hvr.kr = kr), so RunVerb reads the runner's CURRENT executor — including
+// one SwapVenue retargeted mid-plan — on every call, threading it as the S1 VenueDescriptor so the
+// host materializes the SAME live venue for an out-of-process target without this plugin needing
+// its own executor-threaded incoming Invoke. A STATIC field set once at construction (the former
+// design) went stale the instant SwapVenue retargeted the runner for a cross-deployment or
+// GROUP-member step — RCA'd live via a nil cc.Exec() crash on a VM target's `command:` step.
 type pluginVerbResolver struct {
-	ex        *sdk.Executor
-	ctx       context.Context
-	env       spec.CheckEnv
-	venueDesc *spec.VenueDescriptor
+	ex  *sdk.Executor
+	ctx context.Context
+	env spec.CheckEnv
+	kr  *kit.Runner
 }
 
 var _ kit.VerbResolver = (*pluginVerbResolver)(nil)
@@ -76,8 +80,12 @@ func (r *pluginVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.Che
 		return spec.CheckResult{Status: spec.StatusFail, Message: "verb " + word + ": marshal env: " + err.Error()}, true
 	}
 	opts := sdk.InvokeProviderOpts{}
-	if r.venueDesc != nil {
-		opts.VenueDescriptor = r.venueDesc
+	if r.kr != nil {
+		if de, ok := r.kr.Exec().(spec.DeployExecutor); ok {
+			if d := kit.DescriptorFromExecutor(de); d.Kind != "" {
+				opts.VenueDescriptor = &d
+			}
+		}
 	}
 	resultJSON, err := r.ex.InvokeProvider(ctx, classVerb, word, sdk.OpRun, params, envJSON, opts)
 	if err != nil {

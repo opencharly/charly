@@ -87,17 +87,13 @@ func pluginCheckRunFeatureLive(ex *sdk.Executor, ctx context.Context, req spec.C
 		grader = &kit.AgentGrader{Agent: ai, Target: req.Name, Instance: req.Instance, Timeout: req.Timeout}
 	}
 	execChain := deploykit.ContainerChain(engine, containerName)
-	var venueDesc *spec.VenueDescriptor
-	if d := kit.DescriptorFromExecutor(execChain); d.Kind != "" {
-		venueDesc = &d
-	}
 	runner := newPluginCheckRunner(ex, ctx, spec.CheckEnv{
 		Mode:      "feature-live",
 		Box:       req.Name,
 		Instance:  req.Instance,
 		Distros:   meta.Distro,
 		VenueKind: execChain.Kind(),
-	}, venueDesc, kit.RunnerConfig{
+	}, kit.RunnerConfig{
 		Exec:                 execChain,
 		Mode:                 kit.ModeLive,
 		Env:                  env,
