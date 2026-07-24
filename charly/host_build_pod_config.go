@@ -58,6 +58,12 @@ func invokePodConfigOp(ctx context.Context, op string, reqJSON []byte) ([]byte, 
 
 func hostBuildPodConfigSetup(ctx context.Context, req spec.PodConfigSetupRequest, _ buildEngineContext) (spec.PodConfigSetupReply, error) {
 	var rep spec.PodConfigSetupReply
+	// hostEnvJSON() is computed HERE (in core), never plugin-side — the SAME R10 bed-found bug
+	// class documented on #DeployTargetDispatchRequest.host_env_json: a plugin's own
+	// os.Executable() resolves to the PLUGIN binary, not the charly CLI, for an out-of-process
+	// placement. Setup needs the real charly binary path for the encrypted-mount ExecStartPre
+	// line it emits (deploykit.QuadletConfig.CharlyBin).
+	req.HostEnvJSON = hostEnvJSON()
 	reqJSON, err := marshalJSON(req)
 	if err != nil {
 		return rep, err

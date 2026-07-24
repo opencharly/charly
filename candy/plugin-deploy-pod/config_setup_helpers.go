@@ -30,6 +30,26 @@ func sidecarTemplatesOf(dc *deploykit.BundleConfig) map[string]json.RawMessage {
 	return dc.Sidecar
 }
 
+// resolveHostCharlyBin decodes the HOST-resolved charly binary path from the caller's
+// host_env_json (spec.HostEnv, populated by hostBuildPodConfigSetup via core's own hostEnvJSON()
+// helper). NEVER call os.Executable() here instead: from inside this out-of-process plugin that
+// resolves to the PLUGIN's OWN binary path, not the charly CLI — the exact defect the R10
+// bed-found bug on #DeployTargetDispatchRequest.host_env_json already documents for the
+// lifecycle-Op family, which Setup's quadlet emission (deploykit.QuadletConfig.CharlyBin, the
+// encrypted-mount ExecStartPre line) shared until now. Falls back to os.Executable() only as a
+// last resort (an old core build that predates the host_env_json wiring) so a missing seam
+// degrades to the pre-fix behavior rather than an empty path.
+func resolveHostCharlyBin(hostEnvJSON []byte) string {
+	if len(hostEnvJSON) > 0 {
+		var env spec.HostEnv
+		if err := json.Unmarshal(hostEnvJSON, &env); err == nil && env.CharlyBin != "" {
+			return env.CharlyBin
+		}
+	}
+	bin, _ := os.Executable()
+	return bin
+}
+
 // secretDepNames mirrors charly/config_secret_migration.go's secretDepNames.
 func secretDepNames(meta *spec.BoxMetadata) []string {
 	if meta == nil || (len(meta.SecretRequire) == 0 && len(meta.SecretAccept) == 0) {
@@ -294,6 +314,108 @@ func persistResourceCaps(ctx context.Context, ex *sdk.Executor, dc **deploykit.B
 	return saveBundle(ctx, ex, *dc)
 }
 
+// loadProjectVolume resolves the deploy's PROJECT-declared `volume:` override — the entity as
+// authored in the PROJECT's own charly.yml (e.g. a disposable check bed's `volume: [{name:
+// enc-data, type: encrypted}]`) — which the per-host overlay `loadDeploy` reads (LoadBundleConfig,
+// ~/.config/charly/charly.yml) never carries on its own. Genuinely loader-coupled (LoadUnified is
+// a core Mechanism a plugin cannot import), so it calls back the narrow "pod-config-project-volume"
+// seam. Returns (nil, nil) when the project declares no override for this deploy (or there is no
+// project at all — the labels-only deploy path).
+func loadProjectVolume(ctx context.Context, ex *sdk.Executor, box, instance string) ([]spec.DeployVolume, error) {
+	var rep spec.PodConfigProjectVolumeReply
+	if err := hostBuild(ctx, ex, podConfigProjectVolumeKind, spec.PodConfigProjectVolumeRequest{Box: box, Instance: instance}, &rep); err != nil {
+		return nil, err
+	}
+	if len(rep.VolumeJSON) == 0 {
+		return nil, nil
+	}
+	var volumes []spec.DeployVolume
+	if err := json.Unmarshal(rep.VolumeJSON, &volumes); err != nil {
+		return nil, err
+	}
+	return volumes, nil
+}
+
+// persistDeployVolumes mirrors persistResourceCaps' Security-write shape for Volume: seeds the
+// per-host overlay entry's Volume field with a project-declared volume override, exactly as a
+// --volume flag would, so the declaration takes effect on every subsequent read (charly config
+// status, the enc mount/unmount plan, …) without re-resolving the project each time. Also stamps
+// VolumeProjectChecked=true — the project consult happened THIS call, regardless of outcome — so
+// resolveDeployVolumes never repeats it (see that function's doc for why this bit must be
+// distinct from "the overlay entry exists").
+func persistDeployVolumes(ctx context.Context, ex *sdk.Executor, dc **deploykit.BundleConfig, c *spec.PodConfigSetupRequest, volumes []spec.DeployVolume) error {
+	if *dc == nil {
+		*dc = &deploykit.BundleConfig{Bundle: make(map[string]spec.BundleNode)}
+	}
+	if (*dc).Bundle == nil {
+		(*dc).Bundle = make(map[string]spec.BundleNode)
+	}
+	key := deploykit.DeployKey(c.Box, c.Instance)
+	entry := (*dc).Bundle[key]
+	entry.Volume = volumes
+	entry.VolumeProjectChecked = true
+	(*dc).Bundle[key] = entry
+	return saveBundle(ctx, ex, *dc)
+}
+
+// resolveDeployVolumes computes the deployVolumes list Setup applies for this run, in priority
+// order: CLI --volume/--bind/--encrypt flags > the CHARLY_VOLUMES_<BOX> env var > the per-host
+// overlay's existing Volume entry > the deploy's PROJECT-declared `volume:` override (a hit on
+// this LAST fallback is persisted into the overlay via persistDeployVolumes, exactly as a
+// --volume flag would, so the declaration takes effect and every subsequent read resolves it
+// without re-consulting the project). This is the exact fallback chain the volume-persistence gap
+// left incomplete: a project-declared deploy-level `volume:` (e.g. a disposable check bed's
+// `volume: [{type: encrypted}]` in box/<distro>/charly.yml) previously reached NONE of these — CLI
+// flags, env, and the overlay were all silent on it — so it was silently dropped and the encrypted
+// bind mount was never established (the check-enc-pod R10 regression). dc is a pointer-to-pointer
+// so a project-declared hit can seed a previously-nil overlay, mirroring persistResourceCaps.
+//
+// The project fallback fires ONLY when overlay.VolumeProjectChecked is NOT yet set for this
+// deploy key — an explicit "the project has already been consulted once" bit, NEVER a proxy
+// like overlay-key EXISTENCE or `len(overlay.Volume) == 0`. Both those proxies are ambiguous:
+// the SAME per-host overlay entry is ALSO written by unrelated Setup stages before
+// resolveDeployVolumes ever runs (the port-resolution block in config_setup.go creates the key
+// with a resolved ResolvedPort the moment a deploy has ANY container port, and
+// persistResourceCaps writes it when a memory/cpu flag is set) — so "the key exists with an
+// empty Volume" is produced by BOTH "an unrelated write already happened" (project never
+// consulted; a project-declared volume on a PORTED deploy would be silently dropped on its
+// FIRST config — the round-3 BLOCKING regression this fix closes, RCA'd 2026-07-24) AND
+// "the project WAS consulted and genuinely declares nothing" (re-querying it every subsequent
+// `charly config`/`charly update` is the round-2 regression this fix ALSO must keep closed).
+// VolumeProjectChecked is the one bit that distinguishes them, set unconditionally by
+// persistDeployVolumes below on every project consult regardless of its result — mirroring
+// resolved_port/resolved_image's "charly-written state, never authored" pattern (R3, same shape).
+func resolveDeployVolumes(ctx context.Context, ex *sdk.Executor, c *spec.PodConfigSetupRequest, dc **deploykit.BundleConfig) ([]spec.DeployVolume, error) {
+	deployVolumes := parseVolumeFlags(c)
+	if len(deployVolumes) == 0 {
+		deployVolumes = parseVolumeEnv(c.Box)
+	}
+	if len(deployVolumes) > 0 {
+		return deployVolumes, nil
+	}
+	if *dc != nil {
+		if overlay, ok := (*dc).Bundle[deploykit.DeployKey(c.Box, c.Instance)]; ok && overlay.VolumeProjectChecked {
+			// The project has already been consulted once for this key: the overlay is
+			// authoritative, whether or not it carries a volume. Never re-consult the
+			// project on this path (the round-2 perf/correctness regression this bit closes).
+			return overlay.Volume, nil
+		}
+	}
+	// The project has NOT yet been consulted for this key (whether or not an overlay entry
+	// exists for OTHER reasons — ports, resource caps): consult it now, exactly once. The
+	// result — found or not — is persisted below so every subsequent call takes the branch
+	// above instead, regardless of what else touches this overlay entry in the meantime.
+	projectVolumes, err := loadProjectVolume(ctx, ex, c.Box, c.Instance)
+	if err != nil {
+		return nil, fmt.Errorf("resolving project-declared volumes: %w", err)
+	}
+	deployVolumes = projectVolumes
+	if err := persistDeployVolumes(ctx, ex, dc, c, deployVolumes); err != nil {
+		return nil, fmt.Errorf("persisting project-declared volumes: %w", err)
+	}
+	return deployVolumes, nil
+}
+
 // directDeployMarker + its dir/path/write/remove/IsDirectDeploy mirror the former charly-core
 // functions VERBATIM — plain ~/.config/charly/direct/<name>.json I/O, host-independent of
 // placement (the plugin runs on the same host).
@@ -525,8 +647,11 @@ func provisionData(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntim
 }
 
 // updateAllDeployedQuadlets mirrors the former charly-core function of the same name (moved
-// wholesale, invoked from the setup flow's --update-all leaf via the SAME seams).
-func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, skipBox string) error {
+// wholesale, invoked from the setup flow's --update-all leaf via the SAME seams). charlyBin is
+// the HOST-resolved charly binary path (resolveHostCharlyBin, threaded from the caller's own
+// c.HostEnvJSON) — never re-derived here via os.Executable(), which would resolve to the PLUGIN
+// binary for this out-of-process placement (the same bug class documented on resolveHostCharlyBin).
+func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.ResolvedRuntime, skipBox string, charlyBin string) error {
 	var loadRep spec.PodConfigLoadBundleReply
 	if err := hostBuild(ctx, ex, podConfigLoadBundleKind, spec.PodConfigLoadDeployRequest{}, &loadRep); err != nil || len(loadRep.ConfigJSON) == 0 {
 		return nil
@@ -663,7 +788,6 @@ func updateAllDeployedQuadlets(ctx context.Context, ex *sdk.Executor, rt *kit.Re
 			}
 		}
 
-		charlyBin, _ := os.Executable()
 		isKeyring := provRep.IsKeyring
 
 		var tunnelCfg *spec.TunnelConfig
