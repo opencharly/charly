@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -65,6 +66,22 @@ func testCompileOpSteps(t *testing.T, layer spec.CandyReader) []deploykit.Instal
 	steps, err := deploykit.CompileOpSteps(ctx, ex, layer, testResolvedBox())
 	if err != nil {
 		t.Fatalf("CompileOpSteps: %v", err)
+	}
+	return steps
+}
+
+// testCompileServiceSteps drives deploykit.CompileServiceSteps with a fresh
+// testConstructStepExecutor — every service-compile test in this package used a bare
+// 3-arg call before K5-A item 1 increment B threaded ctx/exec through
+// CompileServiceSteps (needed for the rare systemd-custom-entry render leg, over the
+// "render-service" seam; the packaged/supervisord paths never touch it).
+// t.Fatalf's on error so callers don't have to.
+func testCompileServiceSteps(t *testing.T, layer spec.CandyReader, img *buildkit.ResolvedBox, hostCtx deploykit.HostContext) []deploykit.InstallStep {
+	t.Helper()
+	ctx, ex := testConstructStepExecutor()
+	steps, err := deploykit.CompileServiceSteps(ctx, ex, layer, img, hostCtx)
+	if err != nil {
+		t.Fatalf("CompileServiceSteps: %v", err)
 	}
 	return steps
 }

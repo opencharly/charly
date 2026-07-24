@@ -87,6 +87,16 @@ var externalizedDeploySubstrates = map[string]bool{
 // to the candy SUBPATH of the plugin that serves it (in the default project repo). It is the
 // substrate→plugin-candy companion of externalizedDeploySubstrates: that set says a word is
 // external; this map says WHICH candy serves it.
+//
+// SDD CUE-sourcing spike (K1-α, settled — do not re-open without new evidence): this map does
+// NOT need CUE-sourcing. It is neither authored config (no user ever writes it in a charly.yml)
+// nor a wire type (nothing marshals it across a host<->plugin boundary), so it falls outside the
+// SDD mandate's scope entirely — the same bucket as sdk/spec's documented hand-written exceptions
+// (charly_names.go aliases, devices.go's devicePatterns), not a `cue exp gengotypes` candidate.
+// Its one drift-relevant property — these KEYS matching the real deploy-substrate vocabulary — is
+// ALREADY live-gated at process init() by checkDeployProviderBijection against deployTargetWords,
+// itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
+// hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
 	"local":   "candy/plugin-deploy-local",
 	"vm":      "candy/plugin-deploy-vm",
