@@ -210,11 +210,11 @@ var genCache sync.Map // string (dir) -> *deploykit.Generator
 // cache miss: HostBuild("resolved-project") (the SAME generic envelope seam candy/plugin-box /
 // candy/plugin-bundle / candy/plugin-check already consume) → deploykit.NewRenderGeneratorFromProject
 // (the SAME shared construction source candy/plugin-build + candy/plugin-deploy-pod use, R3/DRY).
-func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool) (*deploykit.Generator, error) {
+func getGenerator(ctx context.Context, exec *sdk.Executor, dir string, devLocalPkg bool, extraCandyRefs []string) (*deploykit.Generator, error) {
 	if cached, ok := genCache.Load(dir); ok {
 		return cached.(*deploykit.Generator), nil
 	}
-	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir})
+	reqJSON, err := json.Marshal(spec.ResolvedProjectRequest{Dir: dir, ExtraCandyRefs: extraCandyRefs})
 	if err != nil {
 		return nil, fmt.Errorf("marshal resolved-project request: %w", err)
 	}
@@ -290,7 +290,7 @@ func emitHostCoupled(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRepl
 	if err != nil {
 		return nil, fmt.Errorf("plugin-installstep: resolve project dir: %w", err)
 	}
-	dg, err := getGenerator(ctx, exec, dir, env.DevLocalPkg)
+	dg, err := getGenerator(ctx, exec, dir, env.DevLocalPkg, env.ExtraCandyRefs)
 	if err != nil {
 		return nil, fmt.Errorf("plugin-installstep: %q: %w", req.GetReserved(), err)
 	}

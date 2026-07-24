@@ -47,6 +47,20 @@ func dispatchOCIStep(stepView spec.InstallStepView, planView spec.InstallPlanVie
 	}
 	if build.Generator != nil {
 		env.DevLocalPkg = build.Generator.DevLocalPkg
+		// Thread the host's OWN already-widened candy set (hostBuildOverlay constructed this
+		// Generator with ResolveOpts.ExtraCandyRefs = the deploy's add_candy: refs) as
+		// ExtraCandyRefs, so candy/plugin-installstep's getGenerator widens ITS OWN independent
+		// "resolved-project" re-fetch the SAME way — without this, an add_candy candy (never
+		// reachable from any box's image closure) is present in build.Generator.Candies but absent
+		// from the plugin's separate envelope, and candyByName's remote-candy fallback still
+		// misses (RCA'd K1-alpha regression: check-addcandy-pod's overlay-deploy path).
+		if len(build.Generator.Candies) > 0 {
+			refs := make([]string, 0, len(build.Generator.Candies))
+			for name := range build.Generator.Candies {
+				refs = append(refs, name)
+			}
+			env.ExtraCandyRefs = refs
+		}
 	}
 	params, err := marshalJSON(deploykit.OCIEmitStepParams{StepView: stepView, PlanView: planView})
 	if err != nil {
