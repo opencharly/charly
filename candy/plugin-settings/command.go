@@ -2,27 +2,31 @@ package settings
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/opencharly/sdk"
-	"github.com/opencharly/sdk/spec"
+	"github.com/opencharly/sdk/kit"
 )
 
 // command.go — the externalized `charly settings` command. The plugin OWNS the get/set/list/reset/path
-// subcommand grammar + the output; the config subsystem (read/write ~/.config/charly/config.yml + the
-// credential store + engine/runtime resolution) stays in core and is reached via the generic "settings"
-// HostBuild seam. No hidden core-command forward.
+// subcommand grammar + the output AND the config subsystem itself (config.go, wave γ — ported from
+// charly/runtime_config_values.go + charly/host_build_settings.go): read/write
+// ~/.config/charly/config.yml is pure sdk/kit file I/O, and the credential-store touches
+// (vnc.password.*, secret_backend) dispatch verb:credential directly via InvokeProvider. No core
+// round-trip left — the former "settings" HostBuild seam is retired.
 //
 // settings is COMPILED-IN (charly.yml compiled_plugins): its Invoke(OpRun) runs in charly's process and
-// gets the in-proc reverse channel (dispatchInProcCommand threads it), so HostBuild("settings") reaches
-// the host config subsystem. The out-of-process CliMain path has no reverse channel, so it errors.
+// gets the in-proc reverse channel (dispatchInProcCommand threads it), giving exec its InvokeProvider
+// capability. The out-of-process CliMain path has no reverse channel, so the credential-touching ops
+// error cleanly (config.go's credentialCall nil-exec guard); get/set/list/reset/path on non-credential
+// keys work even there, since they are pure kit.LoadRuntimeConfig/SaveRuntimeConfig file I/O.
 
 const settingsUsage = `usage: charly settings <get <key> | set <key> <value> | list | path | reset [key]>`
 
-// runSettingsCLI dispatches the settings subcommand (the first token) and drives the config op over the
-// "settings" HostBuild seam, then formats output exactly as the former in-core settings subtree did.
+// runSettingsCLI dispatches the settings subcommand (the first token) directly against the
+// ported config subsystem (config.go), then formats output exactly as the former in-core
+// settings subtree did.
 func runSettingsCLI(ctx context.Context, exec *sdk.Executor, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", settingsUsage)
@@ -33,33 +37,33 @@ func runSettingsCLI(ctx context.Context, exec *sdk.Executor, args []string) erro
 		if len(rest) != 1 {
 			return fmt.Errorf("usage: charly settings get <key>")
 		}
-		reply, err := hostSettings(ctx, exec, spec.SettingsRequest{Op: "get", Key: rest[0]})
+		val, err := resolveSettingsGet(ctx, exec, rest[0])
 		if err != nil {
 			return err
 		}
-		fmt.Println(reply.Value)
+		fmt.Println(val)
 	case "set":
 		if len(rest) != 2 {
 			return fmt.Errorf("usage: charly settings set <key> <value>")
 		}
-		if _, err := hostSettings(ctx, exec, spec.SettingsRequest{Op: "set", Key: rest[0], Value: rest[1]}); err != nil {
+		if err := SetConfigValue(ctx, exec, rest[0], rest[1]); err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Set %s = %s\n", rest[0], rest[1])
 	case "list":
-		reply, err := hostSettings(ctx, exec, spec.SettingsRequest{Op: "list"})
+		vals, err := ListConfigValues()
 		if err != nil {
 			return err
 		}
-		for _, v := range reply.Entries {
+		for _, v := range vals {
 			fmt.Printf("%-15s %-10s (%s)\n", v.Key, v.Value, v.Source)
 		}
 	case "path":
-		reply, err := hostSettings(ctx, exec, spec.SettingsRequest{Op: "path"})
+		path, err := kit.RuntimeConfigPath()
 		if err != nil {
 			return err
 		}
-		fmt.Println(reply.Value)
+		fmt.Println(path)
 	case "reset":
 		key := ""
 		if len(rest) == 1 {
@@ -67,7 +71,7 @@ func runSettingsCLI(ctx context.Context, exec *sdk.Executor, args []string) erro
 		} else if len(rest) > 1 {
 			return fmt.Errorf("usage: charly settings reset [key]")
 		}
-		if _, err := hostSettings(ctx, exec, spec.SettingsRequest{Op: "reset", Key: key}); err != nil {
+		if err := ResetConfigValue(ctx, exec, key); err != nil {
 			return err
 		}
 		if key == "" {
@@ -79,28 +83,4 @@ func runSettingsCLI(ctx context.Context, exec *sdk.Executor, args []string) erro
 		return fmt.Errorf("unknown settings subcommand %q\n%s", sub, settingsUsage)
 	}
 	return nil
-}
-
-// hostSettings runs one config-subsystem op over the generic "settings" HostBuild kind. exec is nil on
-// the out-of-process cliMain path (no reverse channel) → a clear error.
-func hostSettings(ctx context.Context, exec *sdk.Executor, req spec.SettingsRequest) (spec.SettingsReply, error) {
-	if exec == nil {
-		return spec.SettingsReply{}, fmt.Errorf("charly settings requires compiled-in placement (the settings host seam is unavailable out-of-process)")
-	}
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return spec.SettingsReply{}, err
-	}
-	resJSON, err := exec.HostBuild(ctx, "settings", reqJSON)
-	if err != nil {
-		return spec.SettingsReply{}, err
-	}
-	var reply spec.SettingsReply
-	if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
-		return spec.SettingsReply{}, uerr
-	}
-	if reply.Error != "" {
-		return spec.SettingsReply{}, fmt.Errorf("%s", reply.Error)
-	}
-	return reply, nil
 }

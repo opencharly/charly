@@ -67,9 +67,6 @@ func (f *fakeCredentialStore) resolve(service, key string) (value, source string
 	return "", "default"
 }
 
-// reset is a no-op for the in-memory fake (no keyring to re-probe).
-func (f *fakeCredentialStore) reset() {}
-
 // installFakeCredentialStore injects a fresh in-memory store as the active credential
 // store and clears it on cleanup. Returns the store for direct seeding.
 func installFakeCredentialStore(t *testing.T) *fakeCredentialStore {

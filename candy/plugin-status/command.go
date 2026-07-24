@@ -87,7 +87,7 @@ func runStatusCLI(ctx context.Context, exec *sdk.Executor, args []string) error 
 
 // hostStatusSubstrate runs the status-collection engine over the generic "status-substrate"
 // HostBuild kind. exec is nil on the out-of-process CliMain path (no reverse channel) → a clear
-// error, mirroring plugin-settings' hostSettings.
+// error, mirroring plugin-settings' credentialCall nil-exec guard (config.go).
 func hostStatusSubstrate(ctx context.Context, exec *sdk.Executor, req spec.StatusSubstrateRequest) (spec.StatusSubstrateReply, error) {
 	if exec == nil {
 		return spec.StatusSubstrateReply{}, fmt.Errorf("charly status requires compiled-in placement (the status-substrate host seam is unavailable out-of-process)")
