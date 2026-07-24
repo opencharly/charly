@@ -188,6 +188,12 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		return err
 	}
 
+	// UNTIL-K1-loader: the deployID/AddCandies stamping below STAYS host-side —
+	// it is inseparably sequenced after compileNodePlans (loadConfigForDeploy ->
+	// LoadUnified, genuinely K1-loader-family-coupled), so it moves plugin-side
+	// only when a future K1-loader wave carves loadConfigForDeploy's own
+	// LoadUnified coupling. Not W4 scope (registered separately; W4's pure
+	// helpers relocation deliberately stopped short of this).
 	deployID := deploykit.ComputeDeployID(base, candySet, addCandies)
 	for _, p := range plans {
 		p.DeployID = deployID
