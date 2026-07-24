@@ -64,7 +64,7 @@ func foldMembers(uf *UnifiedFile) error {
 			// top-level addressable entry → no auto bring-up, and no cross-bed name
 			// collision (the same venue name, e.g. `os`, recurs across iterate
 			// beds). The scorer reaches its `charly-<name>` container via
-			// resolveScoringChain's bare-name fallback.
+			// the plugin scorer's bare-name fallback (candy/plugin-check's pluginResolveScoringChain).
 			if memberNode.AgentProvisioned {
 				continue
 			}

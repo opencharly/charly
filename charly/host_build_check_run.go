@@ -10,54 +10,27 @@ import (
 	"github.com/opencharly/sdk/spec"
 )
 
-// host_build_check_run.go — the generic "check-run" F10 host-builder (P12). command:check
-// (candy/plugin-check) owns the `charly check` CLI + output formatting, but RUNNING a plan
-// against a venue is a composite of core host-serving Mechanisms a plugin (a separate module
-// importing only sdk) cannot perform: the venue→executor construction, the OCI-label plan
-// extraction (ExtractMetadata), and the plan-walk's verb dispatch through the provider registry
-// (the in-core VerbResolver). So the plugin resolves its intent into a spec.CheckRunRequest and
-// the host builds the venue + runs the kit-Runner + returns the per-step results — exactly as
-// command:vm forwards `vm build` to HostBuild("vm-build"). The action noun is CLASS-GENERIC
+// host_build_check_run.go — the "check-run" F10 host-builder (P12), now serving EXACTLY ONE mode:
+// "preflight" (K1-unblock wave — box/live/feature-live/score all dispatch plugin-side now, see
+// candy/plugin-check/command.go's hostCheckRunCtx header). Preflight's image-ensure leg
+// (EnsureImagePresent, charly/ensure_image.go) needs the project *Config + BuildCmd's local-build
+// fallback — both deeply host/loader-coupled with no sdk-portable equivalent, so this ONE arm stays
+// host-anchored (the same reasoning as hostFeatureBox below). The action noun is CLASS-GENERIC
 // ("check-run"), never a substrate word (the F11 uniform-API gate).
 //
 // It returns RESULT DATA only (the []StepResult the plugin formats + tallies into an exit
 // code); the plugin owns the CLI parse, the "Image:" header, the text/yaml/tap reporters, and
-// the exit-code mapping (CheckFailExitCode). The engine (Runner / plan walk / registry dispatch)
-// stays a host-serving atom, consumed here.
+// the exit-code mapping (CheckFailExitCode).
 const checkRunBuilderKind = "check-run"
-
-func hostBuildCheckRun(ctx context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
-	switch req.Mode {
-	case "score":
-		return hostCheckRunScore(ctx, req)
-	case "preflight":
-		return hostCheckRunPreflight(ctx, req)
-	default:
-		return kit.CheckRunReply{}, fmt.Errorf("check-run: unknown mode %q", req.Mode)
-	}
-}
-
-// hostCheckRunScore is the "score" atom arm (P12 Wave-2 AI harness): it walks the SUBSTITUTED
-// scoring plan carried in req.Plan (nonce-carrying, NOT the OCI-baked plan the "live" mode
-// extracts) against the live deployments its check:/agent-check: steps target via each step's
-// loader-derived Op.Venue, returning the per-step verdicts in reply.Score. RunCheckLive stays a
-// host-serving atom (its topo/pod-bucket/ephemeral-wrap build is registry/venue-coupled); the
-// plugin harness owns the scoring math (Classify, fingerprints) over the returned *CheckRunResults.
-func hostCheckRunScore(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
-	results, err := RunCheckLive(ctx, req.Name, req.Name, req.Plan)
-	if err != nil {
-		return kit.CheckRunReply{}, err
-	}
-	return kit.CheckRunReply{Score: results}, nil
-}
 
 // hostCheckRunPreflight is the "preflight" atom arm: for a host-target iterate entity, ensure every
 // image the score's plan steps spawn is present in local storage BEFORE the harness runner walks
 // them. The include-EXPANDED scored plan is computed PLUGIN-SIDE off the resolved-project envelope
 // (candy/plugin-check's include-splicer, which owns the plan expansion) and threaded here as
 // req.Plan; the host runs the R3-shared EnsureImagePresent (via ensureScoreImages) over it and
-// returns an empty reply.
-func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
+// returns an empty reply. Registered directly as the "check-run" host-builder (single-mode kind —
+// the former Mode switch collapsed once every other mode moved plugin-side).
+func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
 	dir := req.Dir
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -135,6 +108,6 @@ func hostFeatureBox(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 // Register the check-run host-builder at package-var init (before any init(), like the
 // config-resolve / cli / vm-build builders).
 var _ = func() bool {
-	registerHostBuilder(checkRunBuilderKind, typedHostBuilder(checkRunBuilderKind, hostBuildCheckRun))
+	registerHostBuilder(checkRunBuilderKind, typedHostBuilder(checkRunBuilderKind, hostCheckRunPreflight))
 	return true
 }()

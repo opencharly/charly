@@ -38,35 +38,57 @@ func dispatchCheckCLI(args []string) error {
 }
 
 // hostCheckRun asks the host to build the venue + run a check plan via the generic "check-run"
-// HostBuild kind, returning the per-step results the CheckCmd handlers format. cmdExec is nil on the
-// out-of-process CliMain path (no reverse channel) → a clear error.
-//
-// K1-unblock wave (mid-flight, transitional): Mode:"box"/"live"/"feature-live" now dispatch to
-// this plugin's OWN pluginCheckRunBox/Live/FeatureLive instead of the host's "check-run" HostBuild
-// arm — three of five LIVE-reachable arms moved (a nominal "feature-box" mode exists in the wire
-// enum but has ZERO callers through this seam — `charly box feature run` calls the CLI-free
-// hostFeatureBox engine directly — so there is no arm to move there; see feature_run_gather.go's
-// header). The remaining two modes ("score", "preflight") still route to the host; this dual-mode
-// dispatch is a legal Hard-Cutover mid-flight state (CLAUDE.md "Hard Cutover by Default") and is
-// deleted (along with their charly/host_build_check_run.go arms) once every arm has moved, before
-// the R10 acceptance run.
+// HostBuild kind, returning the per-step results the CheckCmd handlers format, using the
+// package-level cmdCtx (valid for the whole `charly check ...` command dispatch). cmdExec is nil
+// on the out-of-process CliMain path (no reverse channel) → a clear error.
 func hostCheckRun(req spec.CheckRunRequest) (kit.CheckRunReply, error) {
+	return hostCheckRunCtx(cmdCtx, req)
+}
+
+// hostCheckRunCtx is hostCheckRun with an EXPLICIT ctx — the seam harness_loop.go's scoreLive
+// needs (a watchdog probe's own bounded context, not the package-level cmdCtx that spans the
+// whole command dispatch). Both entry points route through this SAME Mode switch (R3 — one
+// dispatch, not two).
+//
+// K1-unblock wave: dispatch is now COMPLETE. Mode:"box"/"live"/"feature-live"/"score" dispatch to
+// this plugin's OWN pluginCheckRunBox/Live/FeatureLive/Score bodies. Mode:"preflight" forwards to
+// the host's "check-run" HostBuild arm (charly/host_build_check_run.go's hostCheckRunPreflight) —
+// the ONE surviving host-anchored body, kept there because its image-ensure leg
+// (EnsureImagePresent) needs the project *Config + BuildCmd's local-build fallback, both deeply
+// host/loader-coupled with no sdk-portable equivalent (see that file's header comment). A nominal
+// "feature-box" mode exists in the wire enum but has ZERO callers through this seam (`charly box
+// feature run` calls the CLI-free hostFeatureBox engine directly — see feature_run_gather.go's
+// header), so it is deliberately NOT cased here — reaching it would be a caller bug, not a
+// routable mode. The former dual-mode fallback (a bare default forwarding EVERY uncased mode to
+// the host) is retired: every mode is now an explicit case or an explicit unknown-mode error.
+func hostCheckRunCtx(ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	if cmdExec == nil {
 		return kit.CheckRunReply{}, fmt.Errorf("charly check requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
 	}
 	switch req.Mode {
 	case "box":
-		return pluginCheckRunBox(cmdExec, cmdCtx, req)
+		return pluginCheckRunBox(cmdExec, ctx, req)
 	case "live":
-		return pluginCheckRunLive(cmdExec, cmdCtx, req)
+		return pluginCheckRunLive(cmdExec, ctx, req)
 	case "feature-live":
-		return pluginCheckRunFeatureLive(cmdExec, cmdCtx, req)
+		return pluginCheckRunFeatureLive(cmdExec, ctx, req)
+	case "score":
+		return pluginCheckRunScore(cmdExec, ctx, req)
+	case "preflight":
+		return pluginCheckRunPreflight(cmdExec, ctx, req)
 	}
+	return kit.CheckRunReply{}, fmt.Errorf("check-run: unknown mode %q", req.Mode)
+}
+
+// pluginCheckRunPreflight forwards the "preflight" mode to the host's "check-run" HostBuild seam —
+// see hostCheckRunCtx's header for why this ONE mode stays host-anchored (EnsureImagePresent's
+// *Config/BuildCmd coupling).
+func pluginCheckRunPreflight(ex *sdk.Executor, ctx context.Context, req spec.CheckRunRequest) (kit.CheckRunReply, error) {
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}
-	out, err := cmdExec.HostBuild(cmdCtx, "check-run", reqJSON)
+	out, err := ex.HostBuild(ctx, "check-run", reqJSON)
 	if err != nil {
 		return kit.CheckRunReply{}, err
 	}

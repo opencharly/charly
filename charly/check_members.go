@@ -8,7 +8,7 @@ package main
 //  1. The `on:` step modifier (Check.On) dispatches a probe against a named
 //     DRIVER deployment instead of the subject under test. Its wiring into
 //     `charly check live` lives here (liveTargetResolver); the per-step swap is in
-//     checkrun.go runOne; the harness path wires its own resolveScoringChain.
+//     checkrun.go runOne; the harness path wires its own scoring-chain resolver (candy/plugin-check's pluginResolveScoringChain).
 //
 //  2. The unified ${HOST:<member>} address variable lets the driven probe TARGET
 //     a SIBLING member over the shared `charly` network or the host. The presence

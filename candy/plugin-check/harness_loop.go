@@ -221,26 +221,14 @@ func findCharlyForCheck() string {
 	return "charly"
 }
 
-// scoreLive walks the substituted scoring plan against the live deployments via the
-// "score" check-run host seam (RunCheckLive stays a host atom; the plugin owns the
-// scoring math over the returned *CheckRunResults). Uses the package cmdExec (valid
-// for the whole command dispatch) + the passed ctx so a watchdog probe honours its
-// own context.
+// scoreLive walks the substituted scoring plan against the live deployments via the "score"
+// check-run mode (pluginCheckRunScore, score_live.go — K1-unblock wave arm 3). Dispatches through
+// hostCheckRunCtx (command.go) with its OWN ctx (not the package-level cmdCtx that spans the whole
+// command dispatch) so a watchdog probe honours its own bounded context.
 func scoreLive(ctx context.Context, scoreName string, plan []spec.Step) (*spec.CheckRunResults, error) {
-	if cmdExec == nil {
-		return nil, fmt.Errorf("charly check: scoring requires compiled-in placement (the check-run host seam is unavailable out-of-process)")
-	}
-	reqJSON, err := json.Marshal(spec.CheckRunRequest{Mode: "score", Name: scoreName, Plan: plan})
+	reply, err := hostCheckRunCtx(ctx, spec.CheckRunRequest{Mode: "score", Name: scoreName, Plan: plan})
 	if err != nil {
 		return nil, err
-	}
-	out, err := cmdExec.HostBuild(ctx, "check-run", reqJSON)
-	if err != nil {
-		return nil, err
-	}
-	var reply kit.CheckRunReply
-	if err := json.Unmarshal(out, &reply); err != nil {
-		return nil, fmt.Errorf("check-run score: decode reply: %w", err)
 	}
 	if reply.Score == nil {
 		return &spec.CheckRunResults{}, nil
