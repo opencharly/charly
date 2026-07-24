@@ -143,6 +143,10 @@ func sortedChildKeys(children map[string]*spec.BundleNode) []string {
 }
 
 // dispatchOne invokes the deploy-node-dispatch seam for ONE tree position.
+// target/vmEntity are pre-resolved HERE (classifyNodeTarget/resolveVmEntity,
+// W4 pure-helpers relocation) — pure functions of node+path with no
+// LoadUnified/executor dependency — so the host-side dispatch no longer
+// recomputes them.
 func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorPaths []string, ancestorNodes []spec.BundleNode) error {
 	return hostDeploySeamJSON("deploy-node-dispatch", spec.DeployNodeDispatchRequest{
 		Path:             path,
@@ -165,6 +169,8 @@ func (c *BundleAddCmd) dispatchOne(path string, node *spec.BundleNode, ancestorP
 		AssumeYes:        c.AssumeYes,
 		Disposable:       c.Disposable,
 		Lifecycle:        c.Lifecycle,
+		Target:           deploykit.ClassifyNodeTarget(node, path),
+		VmEntity:         resolveVmEntity(path, node),
 	}, nil)
 }
 

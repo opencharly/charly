@@ -39,7 +39,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
@@ -153,7 +152,7 @@ func deployDelArgv(name string) []string {
 // parentExec is the DeployExecutor of the enclosing environment; nil
 // at the root. Non-nil means "this node is a child of something" —
 // its target composes a NestedExecutor over parentExec.
-func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor, dir string) error {
+func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentExec deploykit.DeployExecutor, dir, target, vmEntity string) error {
 	opts, refStr, addCandies, tag, err := c.resolveNodeOverlays(path, node, parentExec)
 	if err != nil {
 		return err
@@ -164,15 +163,15 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 		return err
 	}
 
-	target := classifyNodeTarget(node, path)
-
-	// Resolve the kind:vm entity this node targets (if any) so the candy
-	// compiler builds plans against the GUEST's distro/format (apt/dnf on
-	// debian/fedora) rather than the operator host's (cachyos→pac). The
-	// `vm:` deploy-key prefix was the ONLY signal before — it missed every
-	// kind:check bed and charly.yml target:vm entry whose name isn't
-	// "vm:"-prefixed, routing them through syntheticHostBox → pacman.
-	c.vmEntity = resolveVmEntity(c.Name, node)
+	// target + the kind:vm entity this node targets (if any) are RESOLVED
+	// PLUGIN-SIDE (classifyNodeTarget/resolveVmEntity, W4 pure-helpers
+	// relocation — candy/plugin-bundle's node_resolve.go) and threaded in via
+	// the deploy-node-dispatch request; both are pure functions of node+path
+	// with no LoadUnified/executor dependency, so the host no longer
+	// recomputes them. The candy compiler needs vmEntity to build plans
+	// against the GUEST's distro/format (apt/dnf on debian/fedora) rather
+	// than the operator host's (cachyos→pac).
+	c.vmEntity = vmEntity
 
 	// Resolve a kind:local template, when referenced. Template fields
 	// (candies + install_opts + env) merge BENEATH deployment-level
@@ -306,7 +305,7 @@ func (c *deployAddCmd) resolveNodeOverlays(path string, node *spec.BundleNode, p
 		case node.Image != "":
 			refStr = node.Image
 		default:
-			refStr = pathLeaf(path)
+			refStr = deploykit.PathLeaf(path)
 		}
 	}
 	return opts, refStr, addCandies, tag, nil
@@ -416,33 +415,16 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 	return plans, base, candySet, nil
 }
 
-// classifyNodeTarget picks the target discriminator for a node. Uses
-// node.Target when non-empty (canonical pod|vm|k8s|local|android, set from
-// the node-form kind by bundleTargetForDisc).
-//
-// For ref-based deploys with no charly.yml entry (e.g. `charly bundle add
-// foo ./box.yml` where foo isn't declared), the deploy name itself
-// is the hint: literal `host` → host target; anything else → pod.
-// The legacy `vm:<name>` name-prefix heuristic was removed — VM
-// deploys are now always tree-backed with explicit target:vm.
-func classifyNodeTarget(node *spec.BundleNode, path string) string {
-	if node != nil && node.Target != "" {
-		return node.Target
-	}
-	if pathLeaf(path) == "host" || pathLeaf(path) == "local" {
-		return "local"
-	}
-	return "pod"
-}
-
-// pathLeaf returns the last segment of a dotted path. "foo.bar.baz"
-// → "baz"; "foo" → "foo"; "" → "".
-func pathLeaf(path string) string {
-	if idx := strings.LastIndexByte(path, '.'); idx >= 0 {
-		return path[idx+1:]
-	}
-	return path
-}
+// classifyNodeTarget and pathLeaf moved to sdk/deploykit (W4 pure-helpers
+// relocation) — both pure functions of node+path, promoted there (not to
+// candy/plugin-bundle alone) because TWO call sites need them: this file's
+// deriveChildExecutorForPath (deriving the ANCESTOR executor chain,
+// host-side, registry-coupled) and candy/plugin-bundle's walk.go (classifying
+// the CURRENT node before dispatch, plugin-side) — deploykit.ClassifyNodeTarget
+// / deploykit.PathLeaf are the ONE shared source (R3), never a duplicated
+// per-side copy. The current-node result rides
+// spec.DeployNodeDispatchRequest.Target/.VmEntity across the wire; the host
+// trusts it as sent rather than recomputing.
 
 // deriveChildExecutorForPath builds the child executor for a nested node:
 // it supplies the current node's flattened container name (derived from the
@@ -473,11 +455,13 @@ func deriveChildExecutorForPath(path string, node *spec.BundleNode, parentExec d
 	if !node.HasChildren() {
 		return parentExec, nil
 	}
-	// P9: classifyNodeTarget produces the child's substrate WORD (dispatch classification,
-	// with the ref-based host/local pathLeaf fallback); the executor HOP is then selected by
-	// that word's DECLARED descent transport (the same closed nesting vocabulary
-	// AppendHopForFlatPath consumes), never by a second switch on the kind word.
-	switch deployTraitDescent(classifyNodeTarget(node, path)).Transport {
+	// P9: deploykit.ClassifyNodeTarget produces the child's substrate WORD (dispatch
+	// classification, with the ref-based host/local PathLeaf fallback — W4 pure-helpers
+	// relocation moved this pure function to sdk/deploykit, shared with candy/plugin-bundle's
+	// own classification of the CURRENT node, R3); the executor HOP is then selected by that
+	// word's DECLARED descent transport (the same closed nesting vocabulary AppendHopForFlatPath
+	// consumes), never by a second switch on the kind word.
+	switch deployTraitDescent(deploykit.ClassifyNodeTarget(node, path)).Transport {
 	case "none":
 		// local (host-rooted shell) + android (parent venue) share the parent venue: android
 		// reaches the device via published ports / the endpoint; no executor hop.
@@ -748,23 +732,11 @@ func syntheticHostBox() *buildkit.ResolvedBox {
 	return img
 }
 
-// resolveVmEntity returns the kind:vm entity a deploy targets, or "" when it
-// targets no VM. A node's explicit `vm:` cross-ref wins (kind:check beds and
-// charly.yml target:vm entries, whose names are NOT "vm:"-prefixed); otherwise
-// the "vm:<name>" deploy-key prefix (the CLI `charly bundle add vm:<name>` form).
-// This is the single signal the candy compiler uses to pick syntheticVmBox
-// over syntheticHostBox — the prefix alone missed bed/target:vm deploys.
-func resolveVmEntity(deployName string, node *spec.BundleNode) string {
-	if node != nil && node.From != "" {
-		return node.From
-	}
-	if strings.HasPrefix(deployName, "vm:") {
-		if vmName, perr := vmshared.VmNameFromDeployName(deployName); perr == nil {
-			return vmName
-		}
-	}
-	return ""
-}
+// resolveVmEntity moved to candy/plugin-bundle's node_resolve.go (W4
+// pure-helpers relocation) — a pure function of deployName+node, now computed
+// plugin-side and threaded in via spec.DeployNodeDispatchRequest.VmEntity
+// (consumed as dispatchNode's vmEntity parameter). This is the single signal
+// the candy compiler uses to pick syntheticVmBox over syntheticHostBox below.
 
 // syntheticVmBox returns a ResolvedBox tuned for `charly bundle add
 // vm:<name>` — the User/UID/GID/Home fields come from the VM spec's SSH
