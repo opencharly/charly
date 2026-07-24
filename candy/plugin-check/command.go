@@ -155,18 +155,36 @@ func bedCliReq(ex *sdk.Executor, ctx context.Context, req spec.CliRequest) (spec
 	return reply, nil
 }
 
-// hostRetention runs the SHARED check-run prune engine over the existing "retention" host seam
-// (pruneCheckRuns STAYS core — multi-caller: box build / check run / list tags all prune). The
+// hostRetention runs the SHARED check-run prune engine, now owned by candy/plugin-clean
+// (K1-alpha core-minimization relocation — retention.go, reached via verb:retention). The
 // harness dispatcher defers a {Check:true, Dir} call so `.check/<name>/` is trimmed to
-// keep_check_runs after a run; the host resolves the keep-count (Defaults.KeepCheckRuns + the
-// fallback) itself, so this seam — not the check projection — owns retention (R3). The plugin prints
+// keep_check_runs after a run. This plugin (like plugin-clean's own CLI) cannot LoadConfig
+// itself, so it FIRST fetches the resolved defaults.keep_check_runs via the small
+// "retention-defaults" HostBuild seam (the ONE thing the retention engine genuinely cannot
+// compute), then reaches candy/plugin-clean's verb:retention over the PLUGIN↔PLUGIN
+// InvokeProvider peer-dispatch leg (F10) with the resolved count filled in. The plugin prints
 // the "Pruned N (keep_check_runs=K)" line from reply.CheckPaths/KeepCheckRuns.
 func hostRetention(ex *sdk.Executor, ctx context.Context, req spec.RetentionRequest) (spec.RetentionReply, error) {
+	defReqJSON, err := json.Marshal(spec.RetentionRequest{Dir: req.Dir})
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	defOut, err := ex.HostBuild(ctx, "retention-defaults", defReqJSON)
+	if err != nil {
+		return spec.RetentionReply{}, err
+	}
+	var defaults spec.RetentionReply
+	if err := json.Unmarshal(defOut, &defaults); err != nil {
+		return spec.RetentionReply{}, fmt.Errorf("retention-defaults: decode reply: %w", err)
+	}
+	req.KeepImages = defaults.KeepImages
+	req.KeepCheckRuns = defaults.KeepCheckRuns
+
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return spec.RetentionReply{}, err
 	}
-	out, err := ex.HostBuild(ctx, "retention", reqJSON)
+	out, err := ex.InvokeProvider(ctx, "verb", "retention", sdk.OpRun, reqJSON, nil, sdk.InvokeProviderOpts{})
 	if err != nil {
 		return spec.RetentionReply{}, err
 	}

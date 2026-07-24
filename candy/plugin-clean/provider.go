@@ -7,24 +7,45 @@ import (
 
 	"github.com/opencharly/sdk"
 	pb "github.com/opencharly/sdk/proto"
+	"github.com/opencharly/sdk/spec"
 )
 
-// provider.go — the Invoke(OpRun) surface for the COMPILED-IN command:clean placement. The host's
-// command dispatch (provider_command_external.go dispatchInProcCommand) invokes this in-process with
-// the pass-through args + the threaded in-proc reverse channel, so runCleanCLI can HostBuild the
-// shared "retention" engine that stays in core. (The out-of-process placement fork/execs the binary →
-// cliMain, which has no reverse channel and errors — clean is compiled-in.)
+// provider.go — the Invoke surface for BOTH capabilities this plugin serves: the COMPILED-IN
+// command:clean CLI placement, and verb:retention — the peer/core-adapter entry point into the
+// retention ENGINE (retention.go) this plugin now OWNS (K1-alpha core-minimization relocation,
+// mirroring verb:credential/verb:gpu/verb:tunnel). The host's command dispatch
+// (provider_command_external.go dispatchInProcCommand) invokes command:clean in-process with the
+// pass-through args + the threaded in-proc reverse channel, so runCleanCLI can HostBuild the ONE
+// remaining host-coupled piece ("retention-defaults"). verb:retention is invoked directly by
+// core adapters (charly/retention_plugin.go) and by peer plugins (candy/plugin-check's post-run
+// prune, over InvokeProvider) with an ALREADY-RESOLVED spec.RetentionRequest — no reverse channel
+// needed for that leg, so it works whether clean is compiled-in or (in principle) out-of-process.
 
 type provider struct{ pb.UnimplementedProviderServer }
 
-// Invoke runs `charly clean` in-process for the compiled-in command:clean placement: it decodes the
-// pass-through args, recovers the reverse-channel executor from the ctx (threaded by the host command
-// dispatch), and runs the clean logic — which reaches the shared retention engine via HostBuild. It
-// RETURNS the error so a non-zero exit propagates.
+// Invoke dispatches by the requested word: "clean" (command:clean, OpRun, pass-through CLI args)
+// or "retention" (verb:retention, OpRun, a spec.RetentionRequest) — RETURNS the error for
+// command:clean so a non-zero exit propagates; verb:retention never errors the RPC itself, it
+// reports failure via spec.RetentionReply.Error (matching the former host_build_retention.go
+// HostBuild-handler contract every caller already decodes).
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpRun {
 		return nil, fmt.Errorf("plugin-clean: unsupported op %q (want %q)", req.GetOp(), sdk.OpRun)
 	}
+	switch req.GetReserved() {
+	case "retention":
+		return invokeRetention(req)
+	case "clean":
+		return invokeCleanCLI(ctx, req)
+	default:
+		return nil, fmt.Errorf("plugin-clean: unsupported word %q", req.GetReserved())
+	}
+}
+
+// invokeCleanCLI runs `charly clean` in-process for the compiled-in command:clean placement: it
+// decodes the pass-through args, recovers the reverse-channel executor from the ctx (threaded by
+// the host command dispatch), and runs the CLI.
+func invokeCleanCLI(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	var in struct {
 		Args []string `json:"args"`
 	}
@@ -41,4 +62,22 @@ func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeRe
 		return nil, rerr
 	}
 	return &pb.InvokeReply{}, nil
+}
+
+// invokeRetention decodes a spec.RetentionRequest, runs the local engine (retention.go), and
+// marshals the spec.RetentionReply back — the verb:retention entry point every core adapter and
+// peer plugin (candy/plugin-check) reaches via resolve+Invoke / InvokeProvider.
+func invokeRetention(req *pb.InvokeRequest) (*pb.InvokeReply, error) {
+	var in spec.RetentionRequest
+	if len(req.GetParamsJson()) > 0 {
+		if err := json.Unmarshal(req.GetParamsJson(), &in); err != nil {
+			return nil, fmt.Errorf("plugin-clean: decode retention request: %w", err)
+		}
+	}
+	reply := runRetention(in)
+	out, err := json.Marshal(reply)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-clean: encode retention reply: %w", err)
+	}
+	return &pb.InvokeReply{ResultJson: out}, nil
 }

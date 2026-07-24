@@ -7,15 +7,16 @@ package main
 // (this file's own bare duplicate of deploykit.ResolveSidecarContainer) dissolved into that
 // deploykit twin (CHECK-wave container-resolve dedup) — its 2 callers (cmd.go,
 // pod_lifecycle_resolve.go) now call deploykit.ResolveSidecarContainer directly.
+//
+// The tag INVENTORY (charlyImageTags) + invalidateImageTags/matchImageGlob relocated to
+// candy/plugin-clean's retention engine (K1-alpha core-minimization) — ListTagsCmd now reaches
+// it via verb:retention (retention_plugin.go's listCharlyImageTags), the SAME peer/core-adapter
+// pattern verb:credential/verb:gpu/verb:tunnel already use.
 
 import (
 	"fmt"
-	"os/exec"
-	"path"
+	"os"
 	"sort"
-	"strings"
-
-	"github.com/opencharly/sdk/kit"
 )
 
 // ListTagsCmd lists the locally stored CalVer tags of charly-built images,
@@ -27,83 +28,38 @@ type ListTagsCmd struct {
 }
 
 func (c *ListTagsCmd) Run() error {
-	rt, err := kit.ResolveRuntime()
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	groups, err := charlyImageTags(rt.RunEngine)
+	tags, err := listCharlyImageTags(dir)
 	if err != nil {
 		return err
 	}
-	boxes := make([]string, 0, len(groups))
-	for b := range groups {
-		if c.Box != "" && b != c.Box {
+	byBox := map[string][]int{}
+	for i, t := range tags {
+		if c.Box != "" && t.Box != c.Box {
 			continue
 		}
-		boxes = append(boxes, b)
+		byBox[t.Box] = append(byBox[t.Box], i)
 	}
-	if len(boxes) == 0 {
+	if len(byBox) == 0 {
 		return fmt.Errorf("no locally stored charly images%s", map[bool]string{true: " for box " + c.Box, false: ""}[c.Box != ""])
+	}
+	boxes := make([]string, 0, len(byBox))
+	for b := range byBox {
+		boxes = append(boxes, b)
 	}
 	sort.Strings(boxes)
 	for _, b := range boxes {
-		for _, t := range groups[b] {
+		for _, i := range byBox[b] {
+			t := tags[i]
 			inUse := ""
 			if t.InUse {
 				inUse = "\t(in use)"
 			}
-			version := "-"
-			if t.OkLabel {
-				version = t.LabelCalVer.String()
-			}
-			fmt.Printf("%s\t%s\t%s%s\n", b, t.Ref, version, inUse)
+			fmt.Printf("%s\t%s\t%s%s\n", t.Box, t.Ref, t.Version, inUse)
 		}
 	}
 	return nil
-}
-
-// matchImageGlob matches a glob against a full image ref OR its last path
-// segment (repo:tag), so 'charly-fedora-2*' matches
-// 'ghcr.io/opencharly/charly-fedora-2…:tag' without the registry prefix.
-func matchImageGlob(glob, ref string) bool {
-	last := ref
-	if i := strings.LastIndex(last, "/"); i >= 0 {
-		last = last[i+1:]
-	}
-	full, _ := path.Match(glob, ref)
-	short, _ := path.Match(glob, last)
-	return full || short
-}
-
-// invalidateImageTags removes every charly-labeled image tag matching the
-// glob (full ref or its last path segment) — targeted cache invalidation
-// for stale intermediates, replacing ad-hoc `podman rmi '<glob>'`. The
-// retention safety rules apply unchanged: in-use images are skipped and
-// `rmi` runs without -f as the backstop.
-func invalidateImageTags(engine, glob string, dryRun bool) ([]string, error) {
-	groups, err := charlyImageTags(engine)
-	if err != nil {
-		return nil, err
-	}
-	var removed []string
-	for _, tags := range groups {
-		for _, t := range tags {
-			if !matchImageGlob(glob, t.Ref) {
-				continue
-			}
-			if t.InUse {
-				continue
-			}
-			if dryRun {
-				removed = append(removed, t.Ref)
-				continue
-			}
-			if err := exec.Command(kit.EngineBinary(engine), "rmi", t.Ref).Run(); err != nil {
-				continue // in-use backstop — engine refuses, same as retention
-			}
-			removed = append(removed, t.Ref)
-		}
-	}
-	sort.Strings(removed)
-	return removed, nil
 }
