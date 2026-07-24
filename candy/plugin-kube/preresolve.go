@@ -19,11 +19,13 @@ import (
 // spec.K8sDeployVenue carrying the overlay path — the SAME payload the host used to build
 // directly, now assembled here. The image-ref + capabilities resolution is pure sdk/kit +
 // sdk/deploykit (this plugin runs as a host subprocess with direct local podman storage
-// access, per plugin.go's own doc) — only the LoadUnified-coupled cluster/node lookup (the
-// "deploy-entity-resolve" seam) and the egress-gated Kustomize GENERATION itself (the
-// "k8s-generate-kustomize" seam, wrapping charly/k8s_generate.go's GenerateK8sKustomize —
-// core-only glue that STAYS in charly/, shared with the non-moving `charly bundle
-// from-box --target k8s` path) reach the host.
+// access, per plugin.go's own doc). Only the LoadUnified-coupled cluster/node lookup (the
+// "deploy-entity-resolve" HostBuild seam) reaches the host; the egress-gated Kustomize
+// GENERATION itself is done ENTIRELY here (materialize.go, K5-A item 6 — verb:k8sgen/verb:egress
+// reached peer-to-peer via InvokeProvider, disk I/O done directly by this plugin) — no host round
+// trip. The from-box source-less path (`charly bundle from-box --target k8s`,
+// charly/k8s_deploy_from_box.go) reaches this SAME materializeKustomize via a dedicated OpEmit
+// dispatch (provider.go), R3 dedup.
 
 // k8sPreresolveParams decodes the host's marshalDeployOpParams envelope (name/dir/node/plans —
 // the SAME ad-hoc shape every OpPreresolve dispatch carries; k8s does not consume plans).
@@ -105,9 +107,11 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		return nil, fmt.Errorf("deploy %q: marshal capabilities: %w", p.Name, err)
 	}
 
-	// Generate the egress-validated Kustomize tree via the "k8s-generate-kustomize" seam
-	// (wraps charly/k8s_generate.go's GenerateK8sKustomize — core-only, unchanged).
-	genReqJSON, err := json.Marshal(spec.K8sGenerateKustomizeRequest{
+	// Generate the egress-validated Kustomize tree DIRECTLY (K5-A item 6 — no host round trip:
+	// materializeKustomize Invokes verb:k8sgen + verb:egress peer-to-peer via this SAME `exec`
+	// and does its own disk I/O, since this plugin is a same-host subprocess with direct disk
+	// access; the former "k8s-generate-kustomize" HostBuild seam is retired).
+	genReply, err := materializeKustomize(ctx, exec, spec.K8sGenerateKustomizeRequest{
 		Name:        p.Name,
 		ImageRef:    imageRef,
 		Node:        node,
@@ -115,15 +119,7 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 		ClusterJSON: clusterReply.EntityJSON,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("deploy %q: marshal k8s-generate-kustomize request: %w", p.Name, err)
-	}
-	genReplyJSON, err := exec.HostBuild(ctx, "k8s-generate-kustomize", genReqJSON)
-	if err != nil {
 		return nil, fmt.Errorf("deploy %q: generating kustomize: %w", p.Name, err)
-	}
-	var genReply spec.K8sGenerateKustomizeReply
-	if err := json.Unmarshal(genReplyJSON, &genReply); err != nil {
-		return nil, fmt.Errorf("deploy %q: decode k8s-generate-kustomize reply: %w", p.Name, err)
 	}
 
 	var cluster resolvedK8sView
@@ -146,8 +142,8 @@ func invokeK8sPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.Invoke
 
 // resolvedK8sView is the narrow subset of the opaque ResolvedK8s entity this preresolve body
 // needs (just KubeconfigContext, for the returned K8sDeployVenue) — decoded from the SAME
-// "deploy-entity-resolve" kind="k8s" reply the "k8s-generate-kustomize" seam ALSO receives
-// (as opaque ClusterJSON), so both consumers read the identical host-resolved cluster spec.
+// "deploy-entity-resolve" kind="k8s" reply materializeKustomize ALSO receives (as opaque
+// ClusterJSON, via ClusterRaw), so both consumers read the identical host-resolved cluster spec.
 type resolvedK8sView struct {
 	KubeconfigContext string `json:"kubeconfig_context"`
 }

@@ -20,11 +20,13 @@ import (
 // duplicate kube path).
 //
 // The Kustomize GENERATOR moved into the compiled-in candy/plugin-k8sgen
-// (verb:k8sgen, C8/M13); charly's in-core GenerateK8sKustomize is a thin shim that
-// lifts the image Capabilities to ports/uid/gid, Invokes the generator's OpEmit,
-// then applies the host-side egress gate + disk I/O, now reached over the host's
-// "k8s-generate-kustomize" HostBuild seam. THIS plugin's own k8s deploy preresolver
-// (preresolve.go, F6/FINAL-K5-unit-6a — dispatched directly by candy/plugin-bundle's
+// (verb:k8sgen, C8/M13). The write+egress-validate sequence that used to be a thin
+// in-core shim (charly's GenerateK8sKustomize, reached over the former
+// "k8s-generate-kustomize" HostBuild seam) is now DONE HERE (materialize.go, K5-A
+// item 6): verb:k8sgen/verb:egress are reached peer-to-peer via InvokeProvider, and
+// this plugin — a same-host subprocess with direct disk access — does its own
+// MkdirAll/WriteFile. THIS plugin's own k8s deploy preresolver (preresolve.go,
+// F6/FINAL-K5-unit-6a — dispatched directly by candy/plugin-bundle's
 // preresolveSubstrate via sdk.Executor.InvokeProvider(OpPreresolve), S3b — the
 // core-side deploy_preresolve.go:wireDeployPreresolver registry it used to route
 // through is dissolved) GENERATES the egress-validated

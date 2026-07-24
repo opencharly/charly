@@ -51,8 +51,13 @@ type provider struct{ pb.UnimplementedProviderServer }
 // box`), dispatches the method, and self-evaluates the matchers.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetClass() == "deploy" {
-		if req.GetOp() == sdk.OpPreresolve {
+		switch req.GetOp() {
+		case sdk.OpPreresolve:
 			return invokeK8sPreresolve(ctx, req)
+		case sdk.OpEmit:
+			// K5-A item 6: the from-box source-less path's entry point into the SAME
+			// generate+write+validate logic OpPreresolve below uses (materialize.go, R3).
+			return invokeK8sMaterialize(ctx, req)
 		}
 		return invokeDeployK8s(req)
 	}

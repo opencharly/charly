@@ -30,5 +30,7 @@ package main
 // dispatched directly by candy/plugin-bundle via sdk.Executor.InvokeProvider(OpPreresolve) —
 // S3b dissolved the former core-side deploy_preresolve.go registry, since the caller is now
 // itself a plugin and no longer needs a host-side registry indirection), reaching the host
-// ONLY through the "deploy-entity-resolve" / "k8s-generate-kustomize" HostBuild seams for the
-// config it cannot resolve itself.
+// ONLY through the "deploy-entity-resolve" HostBuild seam for the LoadUnified-coupled config it
+// cannot resolve itself. The Kustomize tree GENERATION + WRITE + egress-VALIDATE (formerly the
+// "k8s-generate-kustomize" HostBuild seam) is fully plugin-side now (K5-A item 6,
+// candy/plugin-kube/materialize.go) — no host round trip.
