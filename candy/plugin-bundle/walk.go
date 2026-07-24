@@ -63,11 +63,25 @@ func (c *BundleAddCmd) Run() error {
 	}
 
 	// When rootNode is nil (ref-based deploy with no charly.yml entry, e.g. `charly bundle add
-	// foo ./path/to/box.yml`) fall through to the single-dispatch path — path "" mirrors the
-	// PRE-PORT behavior exactly (deployName still resolves to c.Name host-side, since the
-	// deploy-node-dispatch seam only overrides deployName when path != "").
+	// foo ./path/to/box.yml`, OR the literal "host" name, which never has a tree entry) fall
+	// through to the single-dispatch path.
+	//
+	// R1 fix (found live while RDD-verifying an unrelated K5-A/W4 cutover): this used to pass
+	// path="" unconditionally, on the claim that "deployName still resolves to c.Name host-side"
+	// — FALSE in the current (post-P13-walk-port) architecture, where the host reconstructs a
+	// FRESH deployAddCmd per dispatch from req.Path alone (runDeployNodeDispatch), so an empty
+	// path meant BOTH the deploy name AND classifyNodeTarget's "host"/"local" literal check were
+	// lost — EVERY ref-based `charly bundle add <name> <ref>` with no existing charly.yml entry
+	// (INCLUDING the literal `host` form) resolved target "pod" (the unconditional fallback) and
+	// deployName "", then failed ResolveTarget with `deployment "": target "pod" ... not
+	// connected` — a total block for this whole call shape. Reproduced live on this branch,
+	// BEFORE this fix, for both `bundle add host <candy>` and `bundle add <fresh-name> <ref>`
+	// (see this repo's CHANGELOG for the pasted repro). Passing c.Name as path lets
+	// classifyNodeTarget's pathLeaf(path) check work (path="host" → target "local") and
+	// compileNode's/dispatchNode's `if path != "" { deployName = path }` carry the real name
+	// through — node stays nil (no charly.yml entry to resolve).
 	if rootNode == nil {
-		return c.dispatchOne("", nil, nil, nil)
+		return c.dispatchOne(c.Name, nil, nil, nil)
 	}
 
 	// --node-only dispatches just the resolved node, skipping the nested tree walk. A VM root
