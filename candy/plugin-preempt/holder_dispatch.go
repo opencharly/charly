@@ -22,7 +22,7 @@ import (
 // holder_dispatch.go — FLOOR-SLIM-proper Unit-8's arbiter_host.go/preempt.go MOVE: the
 // per-holder lifecycle dispatch (running/stop[+wait]/start, the GPU driver-mode flip, and the
 // GPU-CDI reclaim scan) that used to reach BACK to the host over 6 of the (then) 8
-// ExecutorService.HostArbiter seams (running/stop/start/switchMode/ensureCDI/gpuCDI) now runs
+// arbiter host seams (running/stop/start/switchMode/ensureCDI/gpuCDI) now runs
 // HERE, IN the plugin — none of it is actually K1-blocked (LoadUnified-coupled); each function
 // was reached over the host seam only because its ORIGINAL implementation used
 // charly-core-private mechanisms (providerRegistry, the connectPluginByWordRef/deployTraitDescent
@@ -35,8 +35,8 @@ import (
 //
 // What genuinely remains K1-blocked: `gather` (holder filtering) and `resources` — both now read
 // off the generic HostBuild("resolved-project") envelope instead (K1-unblock wave 1, which
-// retired the ExecutorService.HostArbiter reverse RPC entirely) — see arbiter.go's newArbiter for
-// the two hostGather/hostResources wires.
+// retired the former bespoke arbiter reverse-RPC channel entirely) — see arbiter.go's newArbiter
+// for the two hostGather/hostResources wires.
 //
 // The ORIGINAL per-holder venue discriminator was `deployTraitDescent(addr.Target).Venue ==
 // "ssh"` — a charly-core-PRIVATE registry call (providerRegistry.ResolveKind). The SAME fact is

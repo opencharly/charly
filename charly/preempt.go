@@ -40,13 +40,13 @@ import (
 //      K-wave inventory). The arbiter itself no longer reaches it: candy/plugin-preempt reads
 //      resources off the generic HostBuild("resolved-project") envelope (rp.Resources) instead.
 //
-//   K1-unblock wave 1 retired the ExecutorService.HostArbiter reverse RPC entirely (the former
-//   "2 genuinely K1-blocked HostArbiter seams" — gather/resources): candy/plugin-preempt now
+//   K1-unblock wave 1 retired the former bespoke arbiter reverse-RPC channel entirely (the
+//   "2 genuinely K1-blocked seams" it carried — gather/resources): candy/plugin-preempt now
 //   reads its deploy tree + resources off HostBuild("resolved-project") and does its own
 //   holder-filtering/VM-claimant-lookup in-plugin via the portable sdk/deploykit helpers
 //   (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree), the SAME functions
-//   host_build_config_resolve.go's VM-claimant lookup now shares (R3). charly/arbiter_host.go,
-//   the HostArbiter RPC method + its request/reply proto messages, and the local
+//   host_build_config_resolve.go's VM-claimant lookup now shares (R3). The former host handler,
+//   its reverse-RPC method + request/reply proto messages, and the local
 //   gatherDeployNodes/gatherPreemptibleHolders/lookupVMClaimant/holderAddrFor/sortedHolderKeys
 //   functions are all DELETED.
 //
@@ -222,11 +222,11 @@ func releaseResourceClaim(claimant string) {
 //
 // K1-unblock wave 1 retired gatherDeployNodes/gatherPreemptibleHolders/lookupVMClaimant/
 // holderAddrFor from this file entirely: candy/plugin-preempt now reads its deploy tree off the
-// generic HostBuild("resolved-project") envelope (rp.Deploy) instead of a bespoke HostArbiter
-// "gather" RPC, and does its own holder-filtering + VM-claimant lookup in-plugin via the portable
+// generic HostBuild("resolved-project") envelope (rp.Deploy) instead of a bespoke "gather"
+// reverse RPC, and does its own holder-filtering + VM-claimant lookup in-plugin via the portable
 // sdk/deploykit helpers (FilterPreemptibleHolders/FindVMClaimant/HolderAddrFor/MergedDeployTree —
 // the SAME functions host_build_config_resolve.go's VM-claimant lookup now shares, R3). The
-// ExecutorService.HostArbiter reverse RPC itself is deleted (sdk/protocol/schema/plugin.cue).
+// former bespoke arbiter reverse-RPC channel itself is deleted (sdk/protocol/schema/plugin.cue).
 //
 // gatherResources is the ONE function in this family that stays here: it has core-internal
 // callers OUTSIDE the arbiter (gpu_allocate.go, gpu_imply.go — the operator-deferred GPU
