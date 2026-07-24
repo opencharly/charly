@@ -1,4 +1,4 @@
-package main
+package clean
 
 import (
 	"os"
@@ -8,6 +8,37 @@ import (
 
 	"github.com/opencharly/sdk/kit"
 )
+
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertExists(t *testing.T, p string) {
+	t.Helper()
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("expected %s to exist: %v", p, err)
+	}
+}
+
+func assertGone(t *testing.T, p string) {
+	t.Helper()
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Errorf("expected %s to be gone, stat err=%v", p, err)
+	}
+}
 
 func img(id, name, short, version string) kit.LocalImageInfo {
 	return kit.LocalImageInfo{
@@ -28,9 +59,8 @@ func TestPruneImagesByRetention(t *testing.T) {
 	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
 	// Stub the build-activity floor to "no live build" so the retention decision under
 	// test is deterministic regardless of a concurrent host build holding a lock in the
-	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
-	// host-global lock dir and made the test fail whenever another build ran concurrently).
-	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	// shared build-activity dir.
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
 
 	kit.ListLocalImages = func(string) ([]kit.LocalImageInfo, error) {
 		return []kit.LocalImageInfo{
@@ -66,11 +96,7 @@ func TestPruneImagesByRetention(t *testing.T) {
 func TestPruneImagesByRetention_SharedID(t *testing.T) {
 	origList, origCtr, origFloor := kit.ListLocalImages, listContainerImageRefs, liveBuildFloor
 	defer func() { kit.ListLocalImages, listContainerImageRefs, liveBuildFloor = origList, origCtr, origFloor }()
-	// Stub the build-activity floor to "no live build" so the retention decision under
-	// test is deterministic regardless of a concurrent host build holding a lock in the
-	// shared build-activity dir (the defect this fix closes — an unstubbed floor read the
-	// host-global lock dir and made the test fail whenever another build ran concurrently).
-	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
 
 	allTags := []string{
 		"ghcr/check-pod:2026.150.0827",
@@ -182,20 +208,6 @@ func TestPruneCheckRuns_DryRunAndDisabled(t *testing.T) {
 	}
 }
 
-func assertExists(t *testing.T, p string) {
-	t.Helper()
-	if _, err := os.Stat(p); err != nil {
-		t.Errorf("expected %s to exist: %v", p, err)
-	}
-}
-
-func assertGone(t *testing.T, p string) {
-	t.Helper()
-	if _, err := os.Stat(p); !os.IsNotExist(err) {
-		t.Errorf("expected %s to be gone, stat err=%v", p, err)
-	}
-}
-
 // TestPruneBuildCandyDirs covers the versioned .build/_candy/<candy>.<version>/
 // retention (keep newest N per candy) + the legacy .build/_layers/ removal.
 func TestPruneBuildCandyDirs(t *testing.T) {
@@ -271,13 +283,11 @@ func TestSelectDanglingImages(t *testing.T) {
 
 // TestPruneDanglingImages_Deep_DryRun covers the --deep dry-run path: every listed dangling
 // image (including the unlabeled one) is reported as a would-remove candidate, the reported Size
-// bytes are summed into the returned total, and — because it's a dry run — no rmi is attempted
-// (verified indirectly: the stubbed listDanglingImages is the only image-listing seam touched,
-// and the function returns cleanly with no engine error).
+// bytes are summed into the returned total, and — because it's a dry run — no rmi is attempted.
 func TestPruneDanglingImages_Deep_DryRun(t *testing.T) {
 	origList, origFloor := listDanglingImages, liveBuildFloor
 	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
-	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
 	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
 		return []kit.LocalImageInfo{
 			{ID: "aaa", Labels: map[string]string{"ai.opencharly.box": "foo"}, Size: 1000},
@@ -303,7 +313,7 @@ func TestPruneDanglingImages_Deep_DryRun(t *testing.T) {
 func TestPruneDanglingImages_CharlyOnly_DryRun(t *testing.T) {
 	origList, origFloor := listDanglingImages, liveBuildFloor
 	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
-	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{}, false, 0 }
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{}, false, 0 }
 	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
 		return []kit.LocalImageInfo{
 			{ID: "aaa", Labels: map[string]string{"ai.opencharly.box": "foo"}, Size: 1000},
@@ -344,6 +354,28 @@ func TestPruneDanglingImages_CharlyOnly_DryRun(t *testing.T) {
 	}
 }
 
+// TestMatchImageGlob_FullRefAndLastSegment relocated from
+// charly/volume_cp_tags_cmd_test.go (K1-alpha core-minimization: matchImageGlob moved
+// with the rest of the retention engine).
+func TestMatchImageGlob_FullRefAndLastSegment(t *testing.T) {
+	ref := "ghcr.io/opencharly/charly-fedora-2026-abc:2026.160.0100"
+	cases := []struct {
+		glob string
+		want bool
+	}{
+		{"charly-fedora-2*", true},                     // last-segment glob (the documented cache-invalidation form)
+		{"ghcr.io/opencharly/charly-fedora-2*", true},  // full-ref glob
+		{"charly-fedora-2026-abc:2026.160.0100", true}, // exact last segment
+		{"charly-debian-*", false},                     // different box
+		{"*selkies*", false},                           // path.Match: '*' does not cross unmatched text boundaries here
+	}
+	for _, c := range cases {
+		if got := matchImageGlob(c.glob, ref); got != c.want {
+			t.Errorf("matchImageGlob(%q, %q) = %v, want %v", c.glob, ref, got, c.want)
+		}
+	}
+}
+
 // TestPruneDeepDanglingImages_LiveBuildGuard proves --deep never touches storage while a build
 // is in flight — the same live-build protection every other image-removing sweep in this file
 // relies on. listDanglingImages is stubbed to fail the test if it's ever called: the guard must
@@ -351,7 +383,7 @@ func TestPruneDanglingImages_CharlyOnly_DryRun(t *testing.T) {
 func TestPruneDeepDanglingImages_LiveBuildGuard(t *testing.T) {
 	origList, origFloor := listDanglingImages, liveBuildFloor
 	defer func() { listDanglingImages, liveBuildFloor = origList, origFloor }()
-	liveBuildFloor = func() (CalVer, bool, int) { return CalVer{Year: 2026, Day: 1, HHMM: 1200}, true, 1 }
+	liveBuildFloor = func() (kit.CalVer, bool, int) { return kit.CalVer{Year: 2026, Day: 1, HHMM: 1200}, true, 1 }
 	listDanglingImages = func(string) ([]kit.LocalImageInfo, error) {
 		t.Fatal("listDanglingImages must not be called while a build is live")
 		return nil, nil

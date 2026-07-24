@@ -6,24 +6,9 @@ import (
 	"github.com/opencharly/sdk/kit"
 )
 
-func TestMatchImageGlob_FullRefAndLastSegment(t *testing.T) {
-	ref := "ghcr.io/opencharly/charly-fedora-2026-abc:2026.160.0100"
-	cases := []struct {
-		glob string
-		want bool
-	}{
-		{"charly-fedora-2*", true},                     // last-segment glob (the documented cache-invalidation form)
-		{"ghcr.io/opencharly/charly-fedora-2*", true},  // full-ref glob
-		{"charly-fedora-2026-abc:2026.160.0100", true}, // exact last segment
-		{"charly-debian-*", false},                     // different box
-		{"*selkies*", false},                           // path.Match: '*' does not cross unmatched text boundaries here
-	}
-	for _, c := range cases {
-		if got := matchImageGlob(c.glob, ref); got != c.want {
-			t.Errorf("matchImageGlob(%q, %q) = %v, want %v", c.glob, ref, got, c.want)
-		}
-	}
-}
+// TestMatchImageGlob_FullRefAndLastSegment relocated to
+// candy/plugin-clean/retention_test.go (K1-alpha core-minimization: matchImageGlob
+// moved with the rest of the retention engine).
 
 func TestSidecarContainerNameInstance_Shape(t *testing.T) {
 	if got := kit.SidecarContainerNameInstance("selkies-labwc", "", "tailscale"); got != "charly-selkies-labwc-tailscale" {

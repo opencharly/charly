@@ -163,40 +163,14 @@ func (c *BuildCmd) Run() error {
 	}
 
 	// Reusable-artifact retention (host POST-step; skipped for push): prune old
-	// CalVer tags + stale .build/_candy dirs down to defaults.keep_images. It is
-	// host-side (podman image tooling, shared with `charly clean`) and runs
-	// AFTER the candy build drive completes, under the activity lock held above.
+	// CalVer tags + stale .build/_candy dirs down to defaults.keep_images, via
+	// verb:retention (candy/plugin-clean — retention_plugin.go's pruneAfterBuild,
+	// K1-alpha core-minimization relocation). Runs AFTER the candy build drive
+	// completes, under the activity lock held above.
 	if !c.Push {
 		pruneAfterBuild(dir)
 	}
 	return nil
-}
-
-// pruneAfterBuild runs the post-build retention prune host-side (best-effort,
-// warn-only): old-CalVer image-tag retention (keep_images) + stale build-staging
-// dir cleanup. It reads keep_images from a lightweight project-config load (the
-// full model already prepped in build-prep; this is a cheap charly.yml read)
-// and resolves the engine via ResolveRuntime. Runs after the candy build drive
-// (build:box) completes.
-func pruneAfterBuild(dir string) {
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return
-	}
-	keep := resolveIntPtr(cfg.Defaults.KeepImages)
-	if keep > 0 {
-		if rt, rtErr := kit.ResolveRuntime(); rtErr == nil {
-			engine := kit.EngineBinary(rt.BuildEngine)
-			if removed, err := pruneImagesByRetention(engine, keep, false); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: image retention prune: %v\n", err)
-			} else if len(removed) > 0 {
-				fmt.Fprintf(os.Stderr, "Pruned %d old image tag(s) (keep_images=%d)\n", len(removed), keep)
-			}
-		}
-	}
-	if removed := pruneBuildCandyDirs(filepath.Join(dir, ".build"), keep, false); len(removed) > 0 {
-		fmt.Fprintf(os.Stderr, "Pruned %d build-staging dir(s) under .build/_candy\n", len(removed))
-	}
 }
 
 // dispatchBoxBuild routes `charly box build` through its compiled-in plugin word (build:box) over

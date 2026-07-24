@@ -42,28 +42,15 @@ func acquireFileLock(path string, blocking bool) (release func() error, err erro
 // working copies and corrupt each other. Keyed by sha256(srcDir) under the user cache so the
 // lock file never pollutes the repo working tree.
 
-// buildActivityDir is the user-scope directory of LIVE build-activity locks —
-// one flocked nonce file per in-flight `charly box build` engine run.
-func buildActivityDir() (string, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("build-activity dir: %w", err)
-	}
-	dir := filepath.Join(cache, "charly", "locks", "builds")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("build-activity dir: %w", err)
-	}
-	return dir, nil
-}
-
 // acquireBuildActivityLock registers this build invocation as LIVE for its whole
 // duration: a flocked nonce file whose CONTENT is the build's generate CalVer —
-// the floor of every FROM pin its generated Containerfiles carry. Image-tag
-// retention (pruneImagesByRetention) consults the live set so a completing
-// sibling build can never untag a pin an in-flight build still resolves — the
-// retention-untag race the concurrent bed fan-out surfaced.
+// the floor of every FROM pin its generated Containerfiles carry. The externalized
+// retention engine (candy/plugin-clean, reached via verb:retention) consults the
+// SAME live set (kit.BuildActivityDir) so a completing sibling build can never
+// untag a pin an in-flight build still resolves — the retention-untag race the
+// concurrent bed fan-out surfaced.
 func acquireBuildActivityLock(calver string) (func() error, error) {
-	dir, err := buildActivityDir()
+	dir, err := kit.BuildActivityDir()
 	if err != nil {
 		return nil, err
 	}
