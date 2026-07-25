@@ -191,9 +191,9 @@ func (c *CheckRunCmd) runIterateEntity(reply checkProjection, cwd string) error 
 		// installs candies only; container images that plan steps spawn need pulling /
 		// building first. The image-set DISCOVERY (dedup + sort over the include-expanded
 		// plan) is pure and runs HERE (preflightImageCandidates, CHECK-cone move); only the
-		// two genuinely host-loader-coupled bits — the agent-provisioned filter (needs the
-		// loaded project tree) and EnsureImagePresent (the R3-shared build-engine helper)
-		// — ride the "preflight" check-run mode's Filter field.
+		// one genuinely host-loader-coupled bit — the agent-provisioned filter (needs the
+		// loaded project tree) — rides the "preflight" check-run mode's Filter field
+		// alongside dispatchBuildEnsure (the R3-shared build-engine helper).
 		if !c.DryRun {
 			if images := preflightImageCandidates(reply.Plan); len(images) > 0 {
 				if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd, Filter: images}); err != nil {

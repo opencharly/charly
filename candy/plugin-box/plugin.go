@@ -23,8 +23,9 @@
 //     HostBuild("cli") (the localpkg build engine needs the host build context, pre-K1).
 //   - command:pull — `charly box pull`: reaches the hidden core `__box-pull` reentry over
 //     HostBuild("cli") (FINAL/K5 unit 6a M4c, pull-first per the build/pull dispersal ruling —
-//     EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution,
-//     which is K1/K3-ENGINE family, not CLI-dispersal residue). The plugin owns ONLY the CLI
+//     BoxPullCmd's ensure-image work is now dispatchBuildEnsure, core-min wave 3, which itself
+//     dispatches into the compiled-in candy/plugin-build build:ensure word rather than running
+//     the orchestration in-core). The plugin owns ONLY the CLI
 //     grammar (pullGrammar, byte-identical to the former static BoxPullCmd Kong leaf) + reentry
 //     dispatch; BoxPullCmd's Run body is UNCHANGED, unmoved, still core-only.
 //   - command:build — `charly box build`: reaches the hidden core `__box-build` reentry over

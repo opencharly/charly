@@ -621,8 +621,8 @@ func detectHostContext() deploykit.HostContext {
 // reaches an out-of-process deploy's builder-step image resolution. Empty override →
 // the unchanged path (resolveBuilderImage falls through to img.Builder). The ref (e.g.
 // a namespaced fedora.fedora-builder) is resolved to a concrete image later by
-// BuilderRun → EnsureImagePresent (builder_run.go), so it need not be a full registry
-// ref.
+// BuilderRun → dispatchBuildEnsure (builder_venue.go's injected closures, core-min
+// wave 3), so it need not be a full registry ref.
 func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 	hostCtx := detectHostContext()
 	if c.builderImageOverride != "" {

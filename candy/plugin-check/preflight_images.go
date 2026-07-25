@@ -15,7 +15,7 @@ import (
 // pullable image; an agent-provisioned venue is an image the AI builds in-run — NEITHER is
 // filterable here (both need the loaded project tree, which this plugin does not hold), so
 // the host's "ensure-images" seam re-checks agent-provisioned status per candidate before
-// calling EnsureImagePresent (R4: never silently over-trust a plugin-computed candidate).
+// calling dispatchBuildEnsure (R4: never silently over-trust a plugin-computed candidate).
 
 // preflightImageCandidates walks plan's step venues and returns the distinct, sorted set of
 // non-dotted venue names — the candidate images the host-side "ensure-images" seam should

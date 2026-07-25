@@ -24,7 +24,7 @@ type executorReverseServer struct {
 	pb.UnimplementedExecutorServiceServer
 	exec deploykit.DeployExecutor
 	// build is the host BUILD-ENGINE context (project Config + dir) the RunHostStep host-engine
-	// leg needs to run a BuilderStep's host build (EnsureImagePresent + BuilderRun resolve
+	// leg needs to run a BuilderStep's host build (dispatchBuildEnsure + BuilderRun resolve
 	// a short / namespace-qualified builder image and fall back to a local `charly box
 	// build`). Zero value for a verb/kind/deploy Invoke that never drives RunHostStep.
 	build buildEngineContext
@@ -116,7 +116,7 @@ func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequ
 // RunHostStep is the HOST-ENGINE channel leg (the generalization of the former F3 build channel): an
 // OUT-OF-PROCESS deploy/step plugin walking an InstallPlan hits one of the six step kinds
 // it CANNOT execute itself because each needs in-core host machinery that cannot move into
-// the leaf plugin/kit package — BuilderStep (podman / BuilderRun / EnsureImagePresent),
+// the leaf plugin/kit package — BuilderStep (podman / BuilderRun / dispatchBuildEnsure),
 // LocalPkgInstallStep (makepkg + pacman/dnf/apt), SystemPackagesStep (the format's
 // phase.install.host template, rendered from the project DistroConfig), an act-verb OpStep
 // (a builtin ProvisionActor shell that needs the in-proc provider registry), an
