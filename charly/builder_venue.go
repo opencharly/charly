@@ -13,12 +13,14 @@ package main
 //
 // The dep-builder engine itself (deploykit.BuildDepPkgsOnHost → kit.BuilderRun → podman) is a
 // PURE sdk/deploykit function (W3) — this file's ONE remaining core dependency is the injected
-// image-resolve/ensure closures (resolveImageRefForEnsure / EnsureImagePresent → `charly box
-// build`, a genuine loader action), which this function closes over build.Cfg/build.ProjectDir
-// and passes in. This function is the orchestration that drives the dep-builder against a venue
-// executor — the SAME body the VM target used (extracted verbatim, behavior-preserving), so an
-// out-of-process deploy/step plugin driving a BuilderStep over the RunHostStep reverse channel
-// runs the IDENTICAL machinery a built-in VM deploy runs — no second implementation.
+// image-resolve/ensure closures: resolveImageRefForEnsure (the pure, project-coupled RESOLVE,
+// still core — host_build_box_ref_resolve.go) and dispatchBuildEnsure (the ensure-image drive
+// itself, core-min wave 3, DISPATCHED into the compiled-in candy/plugin-build build:ensure word
+// rather than run in-core), which this function closes over build.Cfg/build.ProjectDir and passes
+// in. This function is the orchestration that drives the dep-builder against a venue executor —
+// the SAME body the VM target used (extracted verbatim, behavior-preserving), so an out-of-process
+// deploy/step plugin driving a BuilderStep over the RunHostStep reverse channel runs the IDENTICAL
+// machinery a built-in VM deploy runs — no second implementation.
 
 import (
 	"context"
@@ -37,7 +39,7 @@ import (
 
 // buildEngineContext is the host-ENGINE context the reverse channel carries so the
 // host-served RunHostStep leg can run the in-core machinery a HOST-ENGINE step kind needs:
-// a BuilderStep's host build (EnsureImagePresent + BuilderRun need the project Config + dir
+// a BuilderStep's host build (dispatchBuildEnsure + BuilderRun need the project Config + dir
 // to resolve a short / namespace-qualified builder image and to fall back to a local
 // `charly box build`), and a SystemPackagesStep's host package-install render (the format's
 // phase.install.host template lives in the resolved DistroConfig). The deploy lifecycle
@@ -133,7 +135,7 @@ func runVenueBuilderStep(ctx context.Context, exec deploykit.DeployExecutor, ven
 	matches, err := deploykit.BuildDepPkgsOnHost(ctx, s.LocalPkg, s.BuilderDef, image, deploykit.ExtractStringSlice(s.RawStageContext, "packages"), s.CandyDir,
 		func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
 		func(ctx context.Context, img string) error {
-			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
+			return dispatchBuildEnsure(ctx, img, build.ProjectDir, "", "")
 		},
 		opts)
 	if err != nil {
@@ -215,7 +217,7 @@ func runVenueHomeArtifactBuilder(ctx context.Context, dexec deploykit.DeployExec
 		// ResolveImage/EnsureImage closures (sdk/deploykit/localpkg.go).
 		ResolveImage: func(img string) (string, error) { return resolveImageRefForEnsure(img, build.Cfg, build.ProjectDir) },
 		EnsureImage: func(ctx context.Context, img string) error {
-			return EnsureImagePresent(ctx, img, build.Cfg, build.ProjectDir)
+			return dispatchBuildEnsure(ctx, img, build.ProjectDir, "", "")
 		},
 	})
 	if len(out) > 0 {

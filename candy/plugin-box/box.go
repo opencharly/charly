@@ -183,9 +183,10 @@ type pullGrammar struct {
 	Platform string `long:"platform" help:"Target platform (default: host)"`
 }
 
-// dispatchPull reaches the hidden core `__box-pull` reentry over HostBuild("cli"): EnsureImagePresent
-// (BoxPullCmd's Run body, UNCHANGED) still needs the full box-build engine + charly.yml resolution
-// pre the ensure_image.go + build.go + remote_image.go batch. Tag/Platform are omitted from argv when
+// dispatchPull reaches the hidden core `__box-pull` reentry over HostBuild("cli"): BoxPullCmd's Run
+// body (UNCHANGED) still needs the project-directory resolution `charly box pull` runs from — the
+// ensure-image ORCHESTRATION itself (core-min wave 3) now lives in candy/plugin-build's build:ensure
+// word, reached via dispatchBuildEnsure. Tag/Platform are omitted from argv when
 // empty (Kong's own zero-value default for an absent flag) rather than passed as an empty string —
 // avoids any flag-parsing divergence between "flag absent" and "flag present with empty value" on the
 // reentered leaf, keeping behavior identical to the un-dispersed command. The subprocess inherits

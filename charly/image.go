@@ -48,12 +48,17 @@ type BoxCmd struct {
 // dispatchPull/dispatchBuild): pkg_cmd.go already documents its own UNTIL-K1 note; feature is the
 // remaining residue in this struct.
 //
-// ensure_image.go + remote_image.go + BuildCmd.Run()'s own internals (bootstrap-builder execution,
-// remote-ref resolve/download/scan, retention pruning) are NOT CLI-dispersal residue — the M4d
-// scoping trace (FINAL/K5 unit 6a) re-classified them from a K5-dispersal IOU to the K1/K3-ENGINE
-// family (loader/build-engine cone, moves with those waves, never a CLI-verb tail-end guess): both
-// EnsureImagePresent and RemoteImageContext.BuildImage construct + call BuildCmd.Run() DIRECTLY at
-// the Go level, never through Kong/CLI, so the command-dispersal move above does not touch them.
+// remote_image.go + BuildCmd.Run()'s own internals (bootstrap-builder execution, remote-ref
+// resolve/download/scan, retention pruning) are NOT CLI-dispersal residue — the M4d scoping trace
+// (FINAL/K5 unit 6a) re-classified them from a K5-dispersal IOU to the K1/K3-ENGINE family
+// (loader/build-engine cone, moves with those waves, never a CLI-verb tail-end guess):
+// RemoteImageContext.BuildImage constructs + calls BuildCmd.Run() DIRECTLY at the Go level, never
+// through Kong/CLI (still true for the CLI-reentry `charly box build @ref` path — buildRemote in
+// build.go), so the command-dispersal move above does not touch it. The former core ensure-image helper
+// (core-min wave 3, build-engine cluster relocation) is DELETED — its ensure-image ORCHESTRATION
+// moved to candy/plugin-build's build:ensure word, dispatched via dispatchBuildEnsure
+// (dispatch_build_ensure.go), which is itself a thin, CLI-independent host helper — not part of
+// this command-dispersal accounting at all.
 
 // BoxPullCmd fetches an image from its registry into the local container
 // engine so deploy-mode commands can read its OCI labels. Accepts three
@@ -72,17 +77,18 @@ type BoxPullCmd struct {
 
 func (c *BoxPullCmd) Run() error {
 	// `charly box pull` is the operator-facing alias for the canonical
-	// EnsureImagePresent path: pull from registry, fall back to a
-	// local build when the identifier maps to a project charly.yml
-	// entry. Same contract as BuilderRun, the check preflight, and
-	// EnsureImage in transfer.go (R3, no per-command divergence).
+	// dispatchBuildEnsure path (candy/plugin-build's build:ensure word): pull
+	// from registry, fall back to a local build when the identifier maps to
+	// a project charly.yml entry. Same contract as BuilderRun, the check
+	// preflight, and EnsureImage in transfer.go (R3, no per-command
+	// divergence).
 	dir, _ := os.Getwd()
-	cfg, _ := LoadConfig(dir)
 	if c.Tag != "" {
 		// Tag override: only meaningful for short-name input. Resolve
 		// the canonical short-name ref FIRST so the build-fallback
 		// path picks up the requested tag.
 		if !kit.LooksLikeFullRef(c.Box) && !spec.IsRemoteImageRef(kit.StripURLScheme(c.Box)) {
+			cfg, _ := LoadConfig(dir)
 			if cfg == nil {
 				return fmt.Errorf("short name %q with --tag requires a project directory with charly.yml", c.Box)
 			}
@@ -91,10 +97,10 @@ func (c *BoxPullCmd) Run() error {
 				return err
 			}
 			ref := kit.ResolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
-			return EnsureImagePresent(context.Background(), ref, cfg, dir)
+			return dispatchBuildEnsure(context.Background(), ref, dir, "", "")
 		}
 	}
-	return EnsureImagePresent(context.Background(), c.Box, cfg, dir)
+	return dispatchBuildEnsure(context.Background(), c.Box, dir, "", "")
 }
 
 // kit.LooksLikeFullRef (P12a: relocated to sdk/kit/local_image.go — it had 4

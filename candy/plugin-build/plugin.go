@@ -39,18 +39,19 @@ const calver = "2026.182.1600"
 // NewProvider returns the build-drive provider for in-proc registration or out-of-proc serving.
 func NewProvider() pb.ProviderServer { return &provider{} }
 
-// NewMeta advertises the two build-drive capabilities (Class "build", words "box" +
-// "generate", Phase "build") + the plugin's self-contained CUE schema (via sdk.NewMeta →
-// BuildCapabilities). InputDef is "" for both: the BuildRequest is HOST-constructed (by
-// BuildCmd / the box command plugin candy/plugin-box's generate handler), never user-authored
-// in charly.yml, so there is no plugin_input
-// to validate against a served schema. The self-contained #BuildDispatch def exists only
-// to satisfy the non-empty-schema load gate + document the seam.
+// NewMeta advertises the three build-drive capabilities (Class "build", words "box" +
+// "generate" + "ensure", Phase "build") + the plugin's self-contained CUE schema (via
+// sdk.NewMeta → BuildCapabilities). InputDef is "" for all three: the BuildRequest /
+// BuildEnsureRequest is HOST-constructed (by BuildCmd / dispatchBuildEnsure / the box command
+// plugin candy/plugin-box's generate handler), never user-authored in charly.yml, so there is
+// no plugin_input to validate against a served schema. The self-contained #BuildDispatch def
+// exists only to satisfy the non-empty-schema load gate + document the seam.
 func NewMeta() pb.PluginMetaServer {
 	return sdk.NewMeta(calver,
 		[]sdk.ProvidedCapability{
 			{Class: "build", Word: "box", Phase: sdk.PhaseBuild},
 			{Class: "build", Word: "generate", Phase: sdk.PhaseBuild},
+			{Class: "build", Word: "ensure", Phase: sdk.PhaseBuild},
 		},
 		schemaFS)
 }
@@ -59,29 +60,50 @@ type provider struct{ pb.UnimplementedProviderServer }
 
 // Invoke handles OpBuild for the build words. It resolves the host reverse channel
 // (sdk.ExecutorForInvoke — the in-proc context executor when compiled-in, the go-plugin broker
-// when served out-of-process), decodes the host-constructed spec.BuildRequest (req.ParamsJson),
-// and drives the build: build:box runs the full build/merge/push drive (runBoxBuild), build:generate
-// renders the Containerfile tree host-side and returns the written paths (runBoxGenerate). Both
-// resolve + merge over HostBuild but run podman IN the candy. A build FAILURE rides
-// spec.BuildReply.Error inside the returned JSON (the RPC succeeds); an infrastructure failure
-// (no executor, unknown op/word) is returned as a Go error.
+// when served out-of-process) and drives the requested word: build:box runs the full
+// build/merge/push drive (runBoxBuild), build:generate renders the Containerfile tree host-side
+// and returns the written paths (runBoxGenerate) — both decode a host-constructed
+// spec.BuildRequest and resolve+merge over HostBuild but run podman IN the candy. build:ensure
+// (core-min wave 3, build-engine cluster relocation) decodes a spec.BuildEnsureRequest instead
+// and drives the ensure-image orchestration (runBoxEnsure): ensure an image is present in local
+// podman storage, falling back to a local (or remote-cached) build reached via the SAME
+// in-process runBoxBuild this Invoke already owns for the box word — no new build seam. A build
+// FAILURE rides spec.BuildReply.Error / spec.BuildEnsureReply.Error inside the returned JSON (the
+// RPC succeeds); an infrastructure failure (no executor, unknown op/word) is returned as a Go
+// error.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	if req.GetOp() != sdk.OpBuild {
 		return nil, fmt.Errorf("build: unsupported op %q (only %q)", req.GetOp(), sdk.OpBuild)
 	}
 	word := req.GetReserved()
-	if word != "box" && word != "generate" {
-		return nil, fmt.Errorf("build: unknown build word %q (want box|generate)", word)
+	if word != "box" && word != "generate" && word != "ensure" {
+		return nil, fmt.Errorf("build: unknown build word %q (want box|generate|ensure)", word)
 	}
+	ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
+	if err != nil {
+		return nil, fmt.Errorf("build %q: reach host reverse channel: %w", word, err)
+	}
+
+	if word == "ensure" {
+		var ereq spec.BuildEnsureRequest
+		if len(req.GetParamsJson()) > 0 {
+			if err := json.Unmarshal(req.GetParamsJson(), &ereq); err != nil {
+				return nil, fmt.Errorf("build ensure: decode BuildEnsureRequest: %w", err)
+			}
+		}
+		ensureErr := runBoxEnsure(ctx, ex, ereq)
+		out, err := json.Marshal(spec.BuildEnsureReply{Error: errString(ensureErr)})
+		if err != nil {
+			return nil, fmt.Errorf("build ensure: encode reply: %w", err)
+		}
+		return &pb.InvokeReply{ResultJson: out}, nil
+	}
+
 	var breq spec.BuildRequest
 	if len(req.GetParamsJson()) > 0 {
 		if err := json.Unmarshal(req.GetParamsJson(), &breq); err != nil {
 			return nil, fmt.Errorf("build %q: decode BuildRequest: %w", word, err)
 		}
-	}
-	ex, err := sdk.ExecutorForInvoke(ctx, req.GetExecutorBrokerId())
-	if err != nil {
-		return nil, fmt.Errorf("build %q: reach host reverse channel: %w", word, err)
 	}
 
 	var written []string

@@ -76,18 +76,19 @@ type CLI struct {
 	// reaches this over HostBuild("cli") — BuildCmd.Run()'s engine (bootstrap-builder, remote-ref
 	// resolution, retention pruning) is K1/K3-family (loader/build-engine cone), not CLI-dispersal
 	// residue, and stays core-only, unmoved. BuildCmd itself is UNCHANGED — only its Kong
-	// attachment point moved. EnsureImagePresent (ensure_image.go) and RemoteImageContext.BuildImage
-	// (remote_image.go) construct + call BuildCmd.Run() DIRECTLY at the Go level (never through
-	// Kong/CLI), so this reentry does not affect them at all.
+	// attachment point moved. The former core ensure-image-helper direct Go-level
+	// BuildCmd.Run() constructions (core-min wave 3) are GONE: the ensure-image ORCHESTRATION now
+	// lives in candy/plugin-build's build:ensure word, which reaches the build fallback via its
+	// OWN in-process build:box drive — never through Kong/CLI, so this reentry is unaffected.
 	BoxBuild BuildCmd `cmd:"" name:"__box-build" hidden:"" help:"internal: build container boxes (reentry behind box build)"`
 
 	// __box-pull is the hidden core reentry point behind the COMPILED-IN candy/plugin-box command:pull
 	// word (nested under `box`, build/pull dispersal — pull-first per the standing ruling): the plugin
-	// owns the user-facing `charly box pull` grammar + dispatch and reaches this over HostBuild("cli")
-	// — EnsureImagePresent's build-fallback needs the full box-build engine + charly.yml resolution
-	// (BuildCmd.Run, cfg.ResolveBox, ResolveRemoteImage), all still core-only pre the ensure_image.go +
-	// build.go + remote_image.go batch. BoxPullCmd itself is UNCHANGED — only its Kong attachment point
-	// moved (was a direct BoxCmd field; now reached solely via this hidden reentry).
+	// owns the user-facing `charly box pull` grammar + dispatch and reaches this over HostBuild("cli").
+	// BoxPullCmd.Run (core-min wave 3) now DELEGATES its ensure-image work to dispatchBuildEnsure
+	// (candy/plugin-build's build:ensure word) rather than running the pull/build-fallback orchestration
+	// in-core — BoxPullCmd itself is otherwise UNCHANGED, and its Kong attachment point stays this
+	// hidden reentry (was a direct BoxCmd field before build/pull dispersal).
 	BoxPull BoxPullCmd `cmd:"" name:"__box-pull" hidden:"" help:"internal: pull/build-fallback an image (reentry behind box pull)"`
 
 	// __box-inspect-overlay / __box-list-tags are the hidden core reentry points behind the

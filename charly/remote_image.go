@@ -17,7 +17,7 @@ import (
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K1/K3 — the repo-fetch/cache
 // machinery (EnsureRepoDownloaded, LoadConfig, ScanAllCandyWithConfig) is loader-cone (K1),
 // and BuildImage's delegation to BuildCmd is build-cone (K3). Consumers span both cones —
-// build.go, commands.go, ensure_image.go, image.go, config_image.go
+// build.go, commands.go, host_build_box_ref_resolve.go, image.go, config_image.go
 // (P14-rest trace, 2026-07) — so this moves together with the loader/build waves, not alone.
 
 // RemoteImageContext holds the resolved state of a remote image reference.
