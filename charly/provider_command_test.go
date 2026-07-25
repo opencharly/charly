@@ -315,10 +315,11 @@ func TestCommandProviders_ExtractedReachMCP(t *testing.T) {
 	if paths["feature.list"] {
 		t.Error("feature.list unexpectedly present in the builtin CLI model — `feature` is now an external command (candy/plugin-feature, the third welded-command externalization), not a builtin CommandProvider")
 	}
-	// clean + settings + candy are now COMPILED-IN and OWN their commands (candy/plugin-clean +
-	// candy/plugin-settings reach their shared core engine over a generic HostBuild seam; candy owns
-	// its yaml.Node logic itself, sharing only the generic kit.SetByDotPath / kit.MappingChild — no
-	// hidden core command for any). All are absent from this builtin-only model — a compiled-in command
+	// clean + settings + candy are now COMPILED-IN and OWN their commands (candy/plugin-clean reaches
+	// the shared core engine over the "retention" HostBuild seam; candy/plugin-settings owns its config
+	// subsystem directly, the "settings" seam retired; candy owns its yaml.Node logic itself, sharing
+	// only the generic kit.SetByDotPath / kit.MappingChild — no hidden core command for any). All are
+	// absent from this builtin-only model — a compiled-in command
 	// is a DYNAMIC holder (collectExternalCommandPlugins), never a builtin CommandProvider.
 	// NOTE: `version` is DELIBERATELY NOT here — it was excluded from C15 (pkg/arch's pkgver()
 	// stamps the package version via `bin/charly version`), so it stays a CORE command and IS
