@@ -946,32 +946,46 @@ func (uf *UnifiedFile) Android() map[string]json.RawMessage { return uf.PluginKi
 // resolveInits projects the name-keyed init-system vocabulary from
 // uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via
 // candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
-// kernel never types the bodies. A bad entry is skipped rather than poisoning the
-// vocabulary (cf. decodePluginKindMap).
+// kernel never types the bodies.
 func (uf *UnifiedFile) resolveInits() map[string]*ResolvedInit {
+	return resolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
+}
+
+// resolvePluginKindViaPlugin projects uf.PluginKinds[kind] (opaque bodies) into *T value
+// envelopes via resolve, a per-body plugin OpResolve leg — the ONE shared loop every
+// "resolve a plugin-kind catalog through its OpResolve leg" accessor uses (K1 unit-2 follow-up,
+// R3): resolveDistros/resolveResources/resolveInits/resolveAndroids each formerly hand-rolled the
+// identical "range bodies { resolve; skip on err/nil; assign }" shape, differing only in the
+// PluginKinds key and which per-body resolveXViaPlugin function to call — those differences are
+// now the only per-kind code left (one line each), never a duplicated loop. A bad entry is
+// skipped rather than poisoning the whole vocabulary (cf. the sibling decodePluginKindMap, which
+// decodes a self-contained body directly with NO plugin round-trip — a different mechanism for
+// kinds like Builder whose body needs no plugin-side resolution).
+func resolvePluginKindViaPlugin[T any](uf *UnifiedFile, kind string, resolve func(json.RawMessage) (*T, error)) map[string]*T {
 	if uf == nil {
 		return nil
 	}
-	bodies := uf.PluginKinds["init"]
+	bodies := uf.PluginKinds[kind]
 	if len(bodies) == 0 {
 		return nil
 	}
-	out := make(map[string]*ResolvedInit, len(bodies))
+	out := make(map[string]*T, len(bodies))
 	for name, body := range bodies {
-		ri, err := resolveInitConfigViaPlugin(body)
-		if err != nil || ri == nil {
+		v, err := resolve(body)
+		if err != nil || v == nil {
 			continue
 		}
-		out[name] = ri
+		out[name] = v
 	}
 	return out
 }
 
 // decodePluginKindMap reconstructs the typed name-keyed map[string]*T for a plugin kind
 // from uf.PluginKinds[kind] (each body the canonical spec.T JSON the kind plugin's Invoke
-// produced). Shared by the build-vocabulary accessors (Distros/Builders/Inits/Resources)
-// — the build-vocab analogue of Agents()/Sidecars(); a bad entry is skipped rather than
-// poisoning the whole vocabulary. Returns nil when the kind has no entities.
+// produced) via a PLAIN json.Unmarshal — no plugin OpResolve round-trip, for a kind whose body
+// is already self-contained (Builder). Compare resolvePluginKindViaPlugin above, its sibling for
+// kinds that DO need a plugin-side resolve leg (Distro/Resource/Init/Android). A bad entry is
+// skipped rather than poisoning the whole vocabulary. Returns nil when the kind has no entities.
 func decodePluginKindMap[T any](uf *UnifiedFile, kind string) map[string]*T {
 	if uf == nil {
 		return nil

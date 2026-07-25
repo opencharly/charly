@@ -17,25 +17,11 @@ type (
 )
 
 // resolveResources projects uf.PluginKinds["resource"] (opaque bodies) into
-// *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg. A bad
-// entry is skipped rather than poisoning the vocabulary (cf. decodePluginKindMap).
+// *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg
+// (resolvePluginKindViaPlugin, unified.go — the shared loop every plugin-resolved kind
+// accessor uses).
 func (uf *UnifiedFile) resolveResources() map[string]*ResolvedResource {
-	if uf == nil {
-		return nil
-	}
-	bodies := uf.PluginKinds["resource"]
-	if len(bodies) == 0 {
-		return nil
-	}
-	out := make(map[string]*ResolvedResource, len(bodies))
-	for name, body := range bodies {
-		rr, err := resolveResourceViaPlugin(body)
-		if err != nil || rr == nil {
-			continue
-		}
-		out[name] = rr
-	}
-	return out
+	return resolvePluginKindViaPlugin(uf, "resource", resolveResourceViaPlugin)
 }
 
 func resolveResourceViaPlugin(body json.RawMessage) (*ResolvedResource, error) {

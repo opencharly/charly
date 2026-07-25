@@ -22,23 +22,8 @@ func resolveDistroViaPlugin(body json.RawMessage) (*spec.ResolvedDistro, error) 
 }
 
 // resolveDistros projects uf.PluginKinds["distro"] (opaque bodies) into *DistroDef
-// envelopes via the plugin. A bad entry is skipped rather than poisoning the
-// vocabulary (cf. decodePluginKindMap).
+// envelopes via the plugin (resolvePluginKindViaPlugin, unified.go — the shared loop
+// every plugin-resolved kind accessor uses).
 func (uf *UnifiedFile) resolveDistros() map[string]*spec.ResolvedDistro {
-	if uf == nil {
-		return nil
-	}
-	bodies := uf.PluginKinds["distro"]
-	if len(bodies) == 0 {
-		return nil
-	}
-	out := make(map[string]*spec.ResolvedDistro, len(bodies))
-	for name, body := range bodies {
-		d, err := resolveDistroViaPlugin(body)
-		if err != nil || d == nil {
-			continue
-		}
-		out[name] = d
-	}
-	return out
+	return resolvePluginKindViaPlugin(uf, "distro", resolveDistroViaPlugin)
 }
