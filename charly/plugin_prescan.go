@@ -83,20 +83,6 @@ var (
 	declaredKind = map[string]bool{}
 )
 
-// recognizedKind reports whether word names a kind the loader may treat as an entity
-// discriminator: EITHER a connected kind provider (built-in / compiled-in / already-loaded
-// external) OR a pre-scanned external declaration (F4). The kind analogue of
-// recognizedDeploySubstrate (R3) — used by classifyDisc + normalizeNodeInto so a
-// declared-but-not-yet-connected external kind classifies + decodes.
-func recognizedKind(word string) bool {
-	if _, ok := providerRegistry.ResolveKind(word); ok {
-		return true
-	}
-	declaredDeployMu.RLock()
-	defer declaredDeployMu.RUnlock()
-	return declaredKind[word]
-}
-
 // recognizedStructuralKind reports whether `word` resolves to a CONNECTED provider that decodes a
 // STRUCTURAL entity (F5) — a plugin kind whose OpLoad reply is a spec.Deploy member tree the host
 // folds into uf.Bundle. Precisely EXCLUDES FLAT plugin kinds and the tier-1 kinds (distro/builder/

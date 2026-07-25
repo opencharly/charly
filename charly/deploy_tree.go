@@ -18,6 +18,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -77,7 +78,7 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 	return kit.DescentFromTraits(deployTraitsFor(word))
 }
 
-func stampBundleDescents(uf *UnifiedFile) {
+func stampBundleDescents(uf *loaderkit.UnifiedFile) {
 	if uf == nil {
 		return
 	}
@@ -94,7 +95,7 @@ func stampBundleDescents(uf *UnifiedFile) {
 // Called by the walker when it knows the full dotted path.
 
 // resolveTreeRoot returns the DeploymentsSection's Images map from
-// the merged UnifiedFile + local overlay, ready for dotted-path
+// the merged loaderkit.UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.
 func resolveTreeRoot(dir string) (map[string]spec.BundleNode, error) {

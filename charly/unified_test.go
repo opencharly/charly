@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // helper — write a file under root, creating parent directories as needed
@@ -128,7 +130,7 @@ fedora:
 	if len(uf.Defaults.Build) != 1 || uf.Defaults.Build[0] != "rpm" {
 		t.Errorf("Defaults.Build = %v, want [rpm]", uf.Defaults.Build)
 	}
-	if uf.Distros()["fedora"] == nil {
+	if Distros(uf)["fedora"] == nil {
 		t.Error("Distros.fedora missing")
 	}
 	if _, ok := uf.Box["fedora"]; !ok {
@@ -244,7 +246,7 @@ discover:
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
 	}
-	if err := uf.ApplyDiscover(root); err != nil {
+	if err := ApplyDiscover(uf, root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
 	if _, ok := uf.Candy["chrome"]; !ok {
@@ -275,10 +277,10 @@ chrome:
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
 	}
-	if err := uf.ApplyDiscover(root); err != nil {
+	if err := ApplyDiscover(uf, root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
-	il, ok := decodeInlineCandy(uf.Candy["chrome"])
+	il, ok := loaderkit.DecodeInlineCandy(uf.Candy["chrome"])
 	if !ok {
 		t.Fatal("candy.chrome missing")
 	}
@@ -347,7 +349,7 @@ discover:
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
 	}
-	if err := uf.ApplyDiscover(root); err != nil {
+	if err := ApplyDiscover(uf, root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
 	if _, ok := uf.Candy["widget"]; !ok {
@@ -372,7 +374,7 @@ discover:
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
 	}
-	if err := uf.ApplyDiscover(root); err != nil {
+	if err := ApplyDiscover(uf, root); err != nil {
 		t.Fatalf("ApplyDiscover: %v", err)
 	}
 	if _, ok := uf.Box["myimg"]; !ok {

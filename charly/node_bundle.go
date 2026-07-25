@@ -21,14 +21,17 @@ import (
 )
 
 // buildBundleNodeInto builds gn into a BundleNode and registers it in the
-// Deploy (bundle) map.
-func buildBundleNodeInto(gn *genericNode, uf *UnifiedFile) error {
+// Deploy (bundle) map. acc is the K1-unit-1 spec.MaterializedProject accumulator
+// (see runPluginKind's doc comment, provider_kind_invoke.go) — this function only
+// ever touched the Bundle field, so the retype from *loaderkit.UnifiedFile carries no
+// behavior change.
+func buildBundleNodeInto(gn *genericNode, acc *spec.MaterializedProject) error {
 	dn, err := buildBundleNode(gn)
 	if err != nil {
 		return err
 	}
-	ensureMap(&uf.Bundle)
-	uf.Bundle[gn.name] = *dn
+	ensureMap(&acc.Bundle)
+	acc.Bundle[gn.name] = *dn
 	return nil
 }
 

@@ -2,17 +2,19 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // KindProvider is the typed in-process form of a kind Provider: it decodes a
-// node-form value into its entity on the UnifiedFile. Every built-in kind
+// node-form value into its entity on the loaderkit.UnifiedFile. Every built-in kind
 // implements it; normalizeNodeInto resolves the node's discriminator through
 // providerRegistry and calls DecodeNode — the per-kind decode switch is gone (C2).
 // CueDefPath names the CUE entity def the value validates against (the former
 // reservedKindHandlers map, folded onto the provider — R3).
 type KindProvider interface {
 	Provider
-	DecodeNode(gn *genericNode, uf *UnifiedFile) error
+	DecodeNode(gn *genericNode, uf *loaderkit.UnifiedFile) error
 	CueDefPath() string
 }
 

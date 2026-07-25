@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,7 +36,7 @@ func normalizeAgentDoc(t *testing.T, doc string) error {
 	if err != nil {
 		return err
 	}
-	uf := &UnifiedFile{}
+	uf := &loaderkit.UnifiedFile{}
 	for _, gn := range nodes {
 		if err := normalizeNodeInto(gn, uf); err != nil {
 			return err
@@ -80,7 +81,7 @@ func nodeFormRejected(doc string) bool {
 	// (now an open struct) to the HOST-SIDE loader (runPluginKind → foldCandyKind /
 	// foldSubstrateKind → validateKindValueCUE). Exercise the full node decode so a candy /
 	// substrate value typo (an unknown inline field) is still caught by this "rejected?" helper.
-	uf := &UnifiedFile{}
+	uf := &loaderkit.UnifiedFile{}
 	for _, gn := range nodes {
 		if normalizeNodeInto(gn, uf) != nil {
 			return true

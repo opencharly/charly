@@ -101,6 +101,16 @@ func (*provider) ScanRemoteCandy(repoDir, repoPath string, wantRefs map[string]b
 	return loaderkit.ScanRemoteCandy(repoDir, repoPath, wantRefs, parseManifest)
 }
 
+// MaterializeNode implements spec.Materializer — the typed per-node kind-decode DISPATCH policy
+// the host calls once per parsed entity node (compiled-in, no wire envelope): the NOT-FOUND
+// fallback (route to the bundle builder / defer-during-connect-pass / warn-and-skip / hard error)
+// delegating to the ONE copy in sdk/loaderkit. The actual registry resolve + provider dispatch
+// stays host-side, reached through seams.DecodeEntity/BuildBundleEntity (boundary law clause M —
+// this candy never touches the registry directly). K1 unit 1.
+func (*provider) MaterializeNode(pn spec.ParsedNode, t spec.Threaded, seams spec.MaterializeSeams, acc *spec.MaterializedProject) error {
+	return loaderkit.Materialize(pn, t, seams, acc)
+}
+
 // Invoke serves the out-of-process placement. The compiled-in placement uses the typed ParseDoc
 // above; the wire OpLoad path (carrying the document + threaded data as JSON) lands with
 // out-of-process loader support.

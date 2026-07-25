@@ -138,11 +138,13 @@ architecture.
 
 ## The kernel/plugin boundary law
 
-Core is a generic plugin host. It owns only plugin loading, prescan/dispatch,
-kind materialization, provider transport, and the reverse-channel broker.
-Concrete kinds, schemas, validation, resolution, build, deploy, and check
-behavior belong in plugin candies or SDK kits. A concrete-kind need creates a
-plugin; a cross-plugin need creates a generic host seam.
+Core is a generic plugin host. It owns only plugin loading, prescan/dispatch
+(including the per-node kind-decode registry resolve + provider invoke a
+plugin's Materializer seam calls back into — the fold/not-found POLICY itself
+is a plugin), provider transport, and the reverse-channel broker. Concrete
+kinds, schemas, validation, resolution, build, deploy, and check behavior
+belong in plugin candies or SDK kits. A concrete-kind need creates a plugin; a
+cross-plugin need creates a generic host seam.
 
 Core imports only permitted contract surfaces, gains no kind-word switches or
 per-kind maps, and never adds or grows alias files. The CUE schema remains the

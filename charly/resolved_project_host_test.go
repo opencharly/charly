@@ -82,8 +82,8 @@ func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal ResolvedBoxView: %v", err)
 	}
-	var boxMap, viewMap map[string]json.RawMessage
-	if err := json.Unmarshal(boxJSON, &boxMap); err != nil {
+	var boxMapVar, viewMap map[string]json.RawMessage
+	if err := json.Unmarshal(boxJSON, &boxMapVar); err != nil {
 		t.Fatalf("unmarshal ResolvedBox: %v", err)
 	}
 	if err := json.Unmarshal(viewJSON, &viewMap); err != nil {
@@ -96,7 +96,7 @@ func TestProjectResolvedBox_CompleteAndNoCacheLeak(t *testing.T) {
 	}
 
 	// Completeness: box inspect's serialized field set ⊆ the projection, value-for-value.
-	for k, bv := range boxMap {
+	for k, bv := range boxMapVar {
 		ck := canonKey(k)
 		vv, ok := viewCanon[ck]
 		if !ok {

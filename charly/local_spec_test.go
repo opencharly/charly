@@ -10,7 +10,7 @@ import (
 )
 
 // TestLoadUnified_LocalMap_Inline verifies that an charly.yml with
-// an inline `local:` map round-trips into UnifiedFile.Local with the
+// an inline `local:` map round-trips into loaderkit.UnifiedFile.Local with the
 // expected fields.
 func TestLoadUnified_LocalMap_Inline(t *testing.T) {
 	dir := t.TempDir()
@@ -33,9 +33,9 @@ dev-workstation:
 	if !ok || uf == nil {
 		t.Fatal("expected unified file to load")
 	}
-	body, exists := uf.Local["dev-workstation"]
+	body, exists := uf.Local()["dev-workstation"]
 	if !exists {
-		t.Fatalf("expected dev-workstation in uf.Local; got %+v", uf.Local)
+		t.Fatalf("expected dev-workstation in uf.Local(); got %+v", uf.Local())
 	}
 	spec, rerr := resolveLocalViaPlugin(body)
 	if rerr != nil || spec == nil {

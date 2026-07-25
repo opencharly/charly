@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -43,7 +44,7 @@ const diagSeverityError = "error"
 type loadedProject struct {
 	cfg        *Config
 	layers     map[string]spec.CandyReader
-	uf         *UnifiedFile // nil when absent or its load/discover errored
+	uf         *loaderkit.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *buildkit.DistroConfig
 	builderCfg *buildkit.BuilderConfig
 	initCfg    *buildkit.InitConfig
@@ -112,7 +113,7 @@ func loadProjectForResolve(dir string, opts ResolveOpts, diags *spec.Diagnostics
 		}
 		addLoadDiag(diags, uerr)
 	} else if present {
-		if derr := uf.ApplyDiscover(dir); derr != nil {
+		if derr := ApplyDiscover(uf, dir); derr != nil {
 			if diags == nil {
 				return nil, derr
 			}

@@ -8,6 +8,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/errors"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -17,31 +18,37 @@ import (
 // (provider_checkenv.go). A BUILT-IN kind uses the typed DecodeNode fast path (no
 // JSON, provider_kind.go); an external plugin kind, which the core has no Go type
 // for, validates the NAMELESS authored body against its SERVED .cue and returns its
-// canonical entity JSON, stored in uf.PluginKinds[kind][name]. The entity NAME is
+// canonical entity JSON, stored in acc.PluginKinds[kind][name]. The entity NAME is
 // the node KEY (gn.name) — never part of the validated body, so #<Kind>Input is
 // untouched — threaded here from the node key into the storage key, so a consumer
 // can look the entity up by name and the merge is root-wins override
 // (mergePluginKindsMap). The split (typed builtin / serializable envelope external)
 // keeps the per-entity decode hot path zero-JSON for builtins — the E3 envelope is
 // paid only out-of-process. Transport-invisible above the registry.
-func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
+//
+// acc is the K1-unit-1 spec.MaterializedProject accumulator (the entity-map subset
+// of *loaderkit.UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/K8s/Local/Android/
+// Bundle/PluginKinds), threaded from the MaterializeSeams.DecodeEntity callback
+// (loader_threaded.go) rather than a full *loaderkit.UnifiedFile — this dispatch never needed
+// Import/Discover/Namespaces/etc, so the retype carries no behavior change.
+func runPluginKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject) error {
 	// C2-substrate: a substrate structural kind (pod/vm/k8s/local/android) is decoded
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
-	// plugin schema — see foldSubstrateKind) and folds into uf.Bundle (deploy) or the typed
+	// plugin schema — see foldSubstrateKind) and folds into acc.Bundle (deploy) or the typed
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
 	// group-style / flat kinds below take — its value is validated host-side against the KEPT
 	// #<Kind>Value def.
 	if isStandaloneResourceKind(gn.disc) {
-		return foldSubstrateKind(prov, gn, uf)
+		return foldSubstrateKind(prov, gn, acc)
 	}
 	// C2-candy: the `candy` box⊻layer factory kind is decoded HOST-SIDE by the
 	// bootstrap-critical candyIsImage + buildCandy (which STAY core — the discovered-candy
-	// pre-check calls them directly), then folded into uf.Box (IMAGE) or uf.Candy (LAYER).
+	// pre-check calls them directly), then folded into acc.Box (IMAGE) or acc.Candy (LAYER).
 	// Like substrate, its rich core-referencing value can neither ride op.Params nor a
 	// self-contained plugin schema, so it is host-validated against the KEPT #CandyValue def
 	// and the plugin (candy/plugin-candy) is a pure ECHO. See foldCandyKind.
 	if gn.disc == "candy" {
-		return foldCandyKind(prov, gn, uf)
+		return foldCandyKind(prov, gn, acc)
 	}
 	paramsJSON, err := entityBodyJSON(gn)
 	if err != nil {
@@ -94,21 +101,21 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		return fmt.Errorf("node %q: plugin kind %q: %w", gn.name, gn.disc, err)
 	}
 	// F5: a STRUCTURAL kind's OpLoad returns a spec.Deploy (BundleNode) member tree the host
-	// folds into uf.Bundle — the SAME map a builtin structural kind's DecodeNode populates
+	// folds into acc.Bundle — the SAME map a builtin structural kind's DecodeNode populates
 	// (buildBundleNodeInto), so the entity participates in deploy/check exactly like a builtin
-	// pod/group/candy. A FLAT kind (F4) lands its opaque body in uf.PluginKinds, unchanged.
+	// pod/group/candy. A FLAT kind (F4) lands its opaque body in acc.PluginKinds, unchanged.
 	if structural {
 		var dn spec.BundleNode
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: structural kind %q reply decode: %w", gn.name, gn.disc, err)
 		}
-		if uf.Bundle == nil {
-			uf.Bundle = map[string]spec.BundleNode{}
+		if acc.Bundle == nil {
+			acc.Bundle = map[string]spec.BundleNode{}
 		}
-		uf.Bundle[gn.name] = dn
+		acc.Bundle[gn.name] = dn
 		return nil
 	}
-	// A FLAT (non-structural) kind's body is opaque (uf.PluginKinds) — it has NO member tree, and
+	// A FLAT (non-structural) kind's body is opaque (acc.PluginKinds) — it has NO member tree, and
 	// assembleEntityBody skips entity children, so any authored resource-member child would be
 	// SILENTLY DROPPED. Reject loudly instead (the parser admits members under any external kind;
 	// this is where a flat kind's members are caught, F5 authored-member input-threading).
@@ -117,13 +124,13 @@ func runPluginKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 			return fmt.Errorf("node %q: kind %q is not structural — it cannot nest resource-member children (%q); declare Structural:true to reconstruct authored members", gn.name, gn.disc, ch.name)
 		}
 	}
-	if uf.PluginKinds == nil {
-		uf.PluginKinds = map[string]map[string]json.RawMessage{}
+	if acc.PluginKinds == nil {
+		acc.PluginKinds = map[string]map[string]json.RawMessage{}
 	}
-	if uf.PluginKinds[gn.disc] == nil {
-		uf.PluginKinds[gn.disc] = map[string]json.RawMessage{}
+	if acc.PluginKinds[gn.disc] == nil {
+		acc.PluginKinds[gn.disc] = map[string]json.RawMessage{}
 	}
-	uf.PluginKinds[gn.disc][gn.name] = out.JSON
+	acc.PluginKinds[gn.disc][gn.name] = out.JSON
 	return nil
 }
 
@@ -175,11 +182,11 @@ func dispatchKindOpValidate(prov Provider, gn *genericNode, paramsJSON json.RawM
 // genericNode tree); (3) pre-decodes the CANONICAL node via the core buildBundleNode (deploy)
 // / decodeStandaloneTemplateJSON (template) — the SINGLE decode source of truth (R3); (4)
 // threads it to the plugin's OpLoad via op.Env (spec.StructuralKindLoadEnv.Standalone); (5)
-// folds the plugin's ECHO into uf.Bundle (deploy) or the typed template map uf.Pod/uf.VM/…
+// folds the plugin's ECHO into acc.Bundle (deploy) or the typed template map acc.Pod/acc.VM/…
 // (template — the C2-substrate TEMPLATE fold arm extending F5's deploy-only fold). RDD proved
 // the canonical value round-trips through JSON byte-faithfully, so this is byte-equivalent to
 // the former in-proc standaloneKind decode (buildBundleNodeInto / buildStandaloneResource).
-func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
+func foldSubstrateKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject) error {
 	if err := validateKindValueCUE(gn); err != nil {
 		return fmt.Errorf("node %q: %w", gn.name, err)
 	}
@@ -226,15 +233,15 @@ func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		if err := json.Unmarshal(out.JSON, &dn); err != nil {
 			return fmt.Errorf("node %q: substrate deploy reply decode: %w", gn.name, err)
 		}
-		ensureMap(&uf.Bundle)
-		uf.Bundle[gn.name] = dn
+		ensureMap(&acc.Bundle)
+		acc.Bundle[gn.name] = dn
 		return nil
 	}
-	return foldStandaloneTemplateReply(gn.disc, gn.name, out.JSON, uf)
+	return foldStandaloneTemplateReply(gn.disc, gn.name, out.JSON, acc)
 }
 
 // foldCandyKind decodes a `candy` box⊻layer node HOST-SIDE and folds candy/plugin-candy's echo
-// into uf.Box (a full IMAGE — base:/from:) or uf.Candy (a LAYER fragment) (C2-candy). The candy
+// into acc.Box (a full IMAGE — base:/from:) or acc.Candy (a LAYER fragment) (C2-candy). The candy
 // value is rich + core-referencing (#Candy/#Box with host-canonicalized shorthand), so — like
 // substrate — it can neither ride op.Params nor be validated by a self-contained plugin schema.
 // So the host: (1) validates the authored value against the KEPT #CandyValue def; (2) runs the
@@ -243,9 +250,9 @@ func foldSubstrateKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 // R3; the "bootstrap cycle" that blocked an EXTERNAL candy plugin does NOT exist for the
 // COMPILED-IN plugin-candy, registered at init before any LoadUnified); (3) threads the canonical
 // spec.Box (image) / spec.Candy (layer) to the plugin's OpLoad via op.Env; (4) folds the plugin's
-// ECHO into uf.Box / uf.Candy. RDD proved a canonical spec.Box / spec.Candy round-trips through
+// ECHO into acc.Box / acc.Candy. RDD proved a canonical spec.Box / spec.Candy round-trips through
 // JSON byte-faithfully, so this is byte-equivalent to the former in-proc candyKind decode.
-func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
+func foldCandyKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject) error {
 	if err := validateKindValueCUE(gn); err != nil {
 		return fmt.Errorf("node %q: %w", gn.name, err)
 	}
@@ -277,14 +284,21 @@ func foldCandyKind(prov Provider, gn *genericNode, uf *UnifiedFile) error {
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", gn.name, err)
 		}
-		uf.SetBox(gn.name, b)
+		// The acc.Box[name]=EncodeBox(b) inline write below is exactly what loaderkit.UnifiedFile.SetBox
+		// does (uf_box_generic.go) — that method lives on *loaderkit.UnifiedFile, which acc (a
+		// spec.MaterializedProject) is not, so this dispatch inlines the SAME spec.EncodeBox call.
+		ensureMap(&acc.Box)
+		acc.Box[gn.name] = spec.EncodeBox(b)
 		return nil
 	}
 	var c spec.CandyYAML
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", gn.name, err)
 	}
-	uf.SetCandy(gn.name, &InlineCandy{CandyYAML: c})
+	// Mirrors loaderkit.UnifiedFile.SetCandy (uf_candy_generic.go) — loaderkit.EncodeInlineCandy(*loaderkit.InlineCandy) stays
+	// core-private (loaderkit.InlineCandy embeds spec.CandyYAML), reused verbatim.
+	ensureMap(&acc.Candy)
+	acc.Candy[gn.name] = loaderkit.EncodeInlineCandy(&loaderkit.InlineCandy{CandyYAML: c})
 	return nil
 }
 

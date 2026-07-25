@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
@@ -36,9 +37,9 @@ func candyIsImage(gn *genericNode) bool {
 	return false
 }
 
-// buildCandy turns a `candy`-discriminator genericNode into an InlineCandy. The
+// buildCandy turns a `candy`-discriminator genericNode into an loaderkit.InlineCandy. The
 // candy name is the node name (the entity-map key), returned alongside.
-func buildCandy(gn *genericNode) (name string, ic *InlineCandy, err error) {
+func buildCandy(gn *genericNode) (name string, ic *loaderkit.InlineCandy, err error) {
 	if gn.disc != "candy" {
 		return "", nil, fmt.Errorf("buildCandy: node %q is not a candy (disc %q)", gn.name, gn.disc)
 	}
@@ -52,5 +53,5 @@ func buildCandy(gn *genericNode) (name string, ic *InlineCandy, err error) {
 	// Name is the node KEY in node-form (the migration moves a legacy body
 	// `name:` up to the key), so stamp it — the decoded body carries no `name:`.
 	c.Name = gn.name
-	return gn.name, &InlineCandy{CandyYAML: c}, nil
+	return gn.name, &loaderkit.InlineCandy{CandyYAML: c}, nil
 }

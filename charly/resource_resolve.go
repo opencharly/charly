@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -17,25 +18,11 @@ type (
 )
 
 // resolveResources projects uf.PluginKinds["resource"] (opaque bodies) into
-// *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg. A bad
-// entry is skipped rather than poisoning the vocabulary (cf. decodePluginKindMap).
-func (uf *UnifiedFile) resolveResources() map[string]*ResolvedResource {
-	if uf == nil {
-		return nil
-	}
-	bodies := uf.PluginKinds["resource"]
-	if len(bodies) == 0 {
-		return nil
-	}
-	out := make(map[string]*ResolvedResource, len(bodies))
-	for name, body := range bodies {
-		rr, err := resolveResourceViaPlugin(body)
-		if err != nil || rr == nil {
-			continue
-		}
-		out[name] = rr
-	}
-	return out
+// *ResolvedResource envelopes via candy/plugin-resource's OpResolve leg
+// (loaderkit.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind
+// accessor uses).
+func resolveResources(uf *loaderkit.UnifiedFile) map[string]*ResolvedResource {
+	return loaderkit.ResolvePluginKindViaPlugin(uf, "resource", resolveResourceViaPlugin)
 }
 
 func resolveResourceViaPlugin(body json.RawMessage) (*ResolvedResource, error) {

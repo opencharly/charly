@@ -42,7 +42,7 @@ discover:
 		t.Fatalf("LoadUnified with node-form discovery: %v", err)
 	}
 	cfg := uf.ProjectConfig()
-	cands, err := uf.ProjectCandies(dir)
+	cands, err := ProjectCandies(uf, dir)
 	if err != nil {
 		t.Fatalf("ProjectCandies: %v", err)
 	}

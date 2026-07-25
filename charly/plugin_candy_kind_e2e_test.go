@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
@@ -55,16 +56,16 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
             - redis
 `
 	imgGn := candyNodeFromYAML(t, imgDoc)
-	var ufImg UnifiedFile
-	if err := foldCandyKind(prov, imgGn, &ufImg); err != nil {
+	var accImg spec.MaterializedProject
+	if err := foldCandyKind(prov, imgGn, &accImg); err != nil {
 		t.Fatalf("foldCandyKind (image): %v", err)
 	}
-	bc, ok := ufImg.BoxConfig("my-image")
+	bc, ok := spec.BoxConfigFrom(accImg.Box, "my-image")
 	if !ok {
-		t.Fatalf("image shape not folded into uf.Box; boxes=%v", boxKeys(ufImg.Box))
+		t.Fatalf("image shape not folded into acc.Box; boxes=%v", boxKeys(accImg.Box))
 	}
-	if ufImg.Candy["my-image"] != nil {
-		t.Fatal("image shape also landed in uf.Candy — must be uf.Box ONLY")
+	if accImg.Candy["my-image"] != nil {
+		t.Fatal("image shape also landed in acc.Candy — must be acc.Box ONLY")
 	}
 	var baseBox spec.BoxConfig
 	if err := decodeNodeValue(imgGn, &baseBox); err != nil {
@@ -89,16 +90,16 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
               command: "true"
 `
 	layerGn := candyNodeFromYAML(t, layerDoc)
-	var ufLayer UnifiedFile
-	if err := foldCandyKind(prov, layerGn, &ufLayer); err != nil {
+	var accLayer spec.MaterializedProject
+	if err := foldCandyKind(prov, layerGn, &accLayer); err != nil {
 		t.Fatalf("foldCandyKind (layer): %v", err)
 	}
-	ic, ok := decodeInlineCandy(ufLayer.Candy["my-layer"])
+	ic, ok := loaderkit.DecodeInlineCandy(accLayer.Candy["my-layer"])
 	if !ok {
-		t.Fatalf("layer shape not folded into uf.Candy; candies=%v", mapKeys(ufLayer.Candy))
+		t.Fatalf("layer shape not folded into acc.Candy; candies=%v", mapKeys(accLayer.Candy))
 	}
-	if _, dup := ufLayer.Box["my-layer"]; dup {
-		t.Fatal("layer shape also landed in uf.Box — must be uf.Candy ONLY")
+	if _, dup := accLayer.Box["my-layer"]; dup {
+		t.Fatal("layer shape also landed in acc.Box — must be acc.Candy ONLY")
 	}
 	_, baseIc, err := buildCandy(layerGn)
 	if err != nil {

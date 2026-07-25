@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -63,7 +64,7 @@ func TestReservedWordRegistry_VerbBijection(t *testing.T) {
 func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 	for _, kind := range spec.KindWords {
 		gn := &genericNode{name: "probe-" + kind, disc: kind, discClass: "entity"}
-		uf := &UnifiedFile{}
+		uf := &loaderkit.UnifiedFile{}
 		err := normalizeNodeInto(gn, uf)
 		// A real handler arm may return a decode error on the empty probe node,
 		// but it must NEVER return the "unsupported discriminator" sentinel — that

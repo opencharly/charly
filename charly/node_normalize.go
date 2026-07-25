@@ -1,77 +1,32 @@
 package main
 
-// node_normalize.go — the normalizer dispatcher: turn a parsed genericNode into
-// its domain struct and register it in the UnifiedFile. This is the node-form
-// authoring surface's decode path, and the ONLY one: the legacy kind-keyed
-// routing (the kind-first decode + per-kind document wrappers) was DELETED in the
-// #NodeDoc-sole-gate cutover — a legacy kind-keyed / root-shape document is now
-// hard-rejected at kit.ClassifyDoc with a `charly migrate` hint. Every kind flows
-// through the ONE generic value-decoder (node_build.go),
-// so node-form yields the exact same domain structs the kind-first decode
-// produced (proven by the *_RoundTrip tests).
+// node_normalize.go — kind-decode SUPPORT helpers consumed by the TRUE clause-M dispatch
+// (provider_kind_invoke.go's runPluginKind/foldSubstrateKind, node_bundle.go's
+// buildBundleNodeInto) — the standalone-template shape detection + fold, plus the generic
+// ensureMap helper. This file is the CORE-RESIDENT half of the node-form kind-decode split;
+// its former per-node DISPATCH ORCHESTRATOR (normalizeNodeInto — the not-found policy: route
+// to the bundle builder / defer-during-connect-pass / warn-and-skip / hard error) MOVED to
+// candy/plugin-loader as the spec.Materializer seam (K1 unit 1, #46) — see
+// charly/loader_threaded.go (hostMaterializeSeams/decodeEntityViaRegistry/
+// buildBundleEntityViaRegistry) + sdk/loaderkit/materialize.go. The former in-proc KindProvider
+// fast path that normalizeNodeInto also carried was DEAD code (spec.KindWords has been
+// permanently empty since every authoring kind externalized — see provider_kind.go) and was NOT
+// ported; the plugin's DecodeEntity seam call always dispatches via runPluginKind now, exactly
+// as it already did in production (R1/R2 dead-code cleanup folded into this cutover).
+//
+// The legacy kind-keyed routing (the kind-first decode + per-kind document wrappers) was
+// DELETED in the #NodeDoc-sole-gate cutover — a legacy kind-keyed / root-shape document is now
+// hard-rejected at kit.ClassifyDoc with a `charly migrate` hint. Every kind flows through the
+// ONE generic value-decoder (node_build.go), so node-form yields the exact same domain structs
+// the kind-first decode produced (proven by the *_RoundTrip tests).
 
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
+	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
-
-// normalizeNodeInto decodes one top-level entity node into uf's matching map by
-// resolving the node's discriminator to its provider — the per-kind decode switch is
-// gone (C2). The ONLY in-proc KindProvider left is candy (plugin_candy.go, the box⊻layer
-// factory); every other kind routes to runPluginKind: the tier-1 kinds + group
-// (candy/plugin-group) + the 5 substrate kinds pod/vm/k8s/local/android
-// (candy/plugin-substrate — C2-substrate). runPluginKind folds a group-style reply into
-// uf.Bundle and a substrate reply into uf.Bundle (deploy shape) or the typed template map
-// uf.Pod/uf.VM/… (template shape — the C2-substrate TEMPLATE fold arm). buildBundleNode
-// (node_bundle.go) / decodeStandaloneTemplateJSON (below) are the SINGLE host-side decode
-// path both the deploy and template shapes share (R3).
-func normalizeNodeInto(gn *genericNode, uf *UnifiedFile) error {
-	prov, ok := providerRegistry.ResolveKind(gn.disc)
-	if !ok {
-		// An external DEPLOY substrate word (e.g. `exampledeploy`) at a deploy's edge
-		// is not a KIND — it routes to the bundle builder, the same path the
-		// deploy-shape kinds (pod/vm/k8s/local/android/group) take. Recognized via a
-		// connected OR pre-scanned deploy provider (plugin_prescan.go), so the bed
-		// parses before the out-of-process provider connects (loadProjectPlugins);
-		// the actual Add still dispatches through the connected grpcProvider.
-		if recognizedDeploySubstrate(gn.disc) {
-			return buildBundleNodeInto(gn, uf)
-		}
-		// An external KIND (F4): declared by a project plugin candy whose out-of-process
-		// provider has not registered. During the connect pre-pass's nested scan
-		// (inKindConnectPass) the provider is not connected YET — DEFER (skip, no error) so the
-		// nested ScanCandy/LoadUnified succeeds; the OUTER load decodes it after
-		// connectDeclaredKindPlugins runs (depth-0, before this). OUTSIDE the pre-pass the
-		// connect already ran, so a still-missing provider means the plugin FAILED to build or
-		// connect (e.g. a minimal container with no Go toolchain). GRACEFULLY SKIP the node with
-		// a loud warning — never a hard load error — so read-only commands (box list, validate)
-		// still work in a degraded environment. The kind is warned, not silently dropped; a
-		// deploy/build that actually USES this kind resolves the entity by name and fails loudly
-		// there (the node is absent), so the missing provider is never masked where it matters.
-		if recognizedKind(gn.disc) {
-			if inKindConnectPass() {
-				return nil
-			}
-			if err := declaredKindConnectError(gn.disc); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: node %q: kind %q provider build/connect failed: %v; skipping the node — any command that uses it will fail loudly at that point\n", gn.name, gn.disc, err)
-				return nil
-			}
-			fmt.Fprintf(os.Stderr, "Warning: node %q: kind %q is declared by a plugin whose provider did not connect (build/connect failed); skipping the node — any command that uses it will fail loudly at that point\n", gn.name, gn.disc)
-			return nil
-		}
-		return fmt.Errorf("node %q: unsupported discriminator %q", gn.name, gn.disc)
-	}
-	// Built-in kind: the typed DecodeNode fast path (no JSON). External plugin kind:
-	// the serializable Invoke envelope (runPluginKind) — the E3 generalization of the
-	// verb dual-path to the kind class.
-	if kp, ok := prov.(KindProvider); ok {
-		return kp.DecodeNode(gn, uf)
-	}
-	return runPluginKind(prov, gn, uf)
-}
 
 // isStandaloneResourceKind reports whether disc names one of the 5 substrate kinds
 // (pod/vm/k8s/local/android) — the kinds that are BOTH a standalone TEMPLATE (→ the typed
@@ -125,35 +80,26 @@ func decodeStandaloneTemplateJSON(gn *genericNode) (json.RawMessage, error) {
 	return entityBodyJSON(gn)
 }
 
-// foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into the
-// right typed template map by kind — the C2-substrate TEMPLATE fold arm (the standalone
-// counterpart of runPluginKind's deploy fold into uf.Bundle). The former in-proc path
-// decoded straight into the map (buildStandaloneResource → decodePtrInto); here the
-// canonical value round-trips through the plugin first (RDD-proven byte-faithful).
-func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, uf *UnifiedFile) error {
-	switch disc {
-	case "vm":
-		return foldOpaqueTemplateReply(name, replyJSON, &uf.VM)
-	case "pod":
-		return foldOpaqueTemplateReply(name, replyJSON, &uf.Pod)
-	case "k8s":
-		return foldOpaqueTemplateReply(name, replyJSON, &uf.K8s)
-	case "local":
-		return foldOpaqueTemplateReply(name, replyJSON, &uf.Local)
-	case "android":
-		return foldOpaqueTemplateReply(name, replyJSON, &uf.Android)
+// foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into
+// acc.PluginKinds[disc][name] — the C2-substrate TEMPLATE fold arm (the standalone counterpart of
+// runPluginKind's deploy fold into acc.Bundle). GENERIC by construction (K1 unit 1 follow-up): no
+// per-kind-word switch — every standalone-template kind (vm/pod/k8s/local/android) folds into the
+// SAME map[disc][name] shape PluginKinds already uses for every other templated kind
+// (distro/builder/init/sidecar/resource/agent), so a new standalone-template kind needs no core
+// edit here. The former in-proc path decoded straight into a dedicated typed map
+// (buildStandaloneResource → decodePtrInto, then a per-kind switch after the plugin round-trip);
+// here the canonical value round-trips through the plugin first (RDD-proven byte-faithful) and
+// lands generically. acc is the spec.MaterializedProject accumulator (see runPluginKind's doc
+// comment). disc is validated by the caller (foldSubstrateKind only reaches here for a kind
+// isStandaloneResourceKind already confirmed), so no error return is needed.
+func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, acc *spec.MaterializedProject) error {
+	if acc.PluginKinds == nil {
+		acc.PluginKinds = map[string]map[string]json.RawMessage{}
 	}
-	return fmt.Errorf("node %q: %q is not a standalone resource kind", name, disc)
-}
-
-// foldOpaqueTemplateReply stores the echoed template JSON VERBATIM at name in *m —
-// the opaque counterpart for de-typed substrate templates (local/android, Cutover I):
-// the kernel keeps the body opaque and resolves it via candy/plugin-substrate on read.
-func foldOpaqueTemplateReply(name string, replyJSON json.RawMessage, m *map[string]json.RawMessage) error {
-	if *m == nil {
-		*m = map[string]json.RawMessage{}
+	if acc.PluginKinds[disc] == nil {
+		acc.PluginKinds[disc] = map[string]json.RawMessage{}
 	}
-	(*m)[name] = replyJSON
+	acc.PluginKinds[disc][name] = replyJSON
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -114,7 +115,7 @@ func rawCandyPair(r spec.CandyReader) (spec.CandyModel, spec.CandyView, bool) {
 // ResolveBox failure appends a spec.Diagnostic and SKIPS that box, so validate runs on a broken
 // project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
 // aggregate empty), so the tolerant branch is confined to the ResolveBox call.
-func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
 }
 
@@ -162,7 +163,7 @@ func projectBoxAggregates(cfg *Config, layers map[string]spec.CandyReader, name 
 // on the ResolvedBoxView. When nil (the validate/inspect path), boxes are resolved fresh.
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *loaderkit.UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	// R1 fix (K1-unblock wave 2): pre-populate opts.DistroCfg/BuilderCfg from the ALREADY-LOADED
@@ -278,7 +279,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// namespace's OWN candy scan — see its doc comment for why this closes a real
 	// `charly box validate` regression the root-only fill left namespaced boxes exposed to).
 	if uf != nil {
-		fillNamespacedBoxes(uf, initCfg, "", calver, dir, opts, rp, map[*UnifiedFile]bool{})
+		fillNamespacedBoxes(uf, initCfg, "", calver, dir, opts, rp, map[*loaderkit.UnifiedFile]bool{})
 	}
 
 	if uf != nil && len(uf.Bundle) > 0 {
@@ -296,7 +297,7 @@ func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyRe
 	// re-projection needed. The former sole consumer of this data (the arbiter's now-deleted
 	// "resources" host seam) is retired in favor of reading it off THIS envelope.
 	if uf != nil {
-		if resources := uf.resolveResources(); len(resources) > 0 {
+		if resources := resolveResources(uf); len(resources) > 0 {
 			rp.Resources = resources
 		}
 	}
@@ -411,7 +412,7 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 // best-effort/additive by design, unlike the root-box loop's optional fail-fast (diags == nil) mode,
 // because a namespace's own box graph may be only PARTIALLY reachable from THIS project's resolve
 // context.
-// fillNamespacedBoxes recurses uf.Namespaces (a *UnifiedFile tree — R1 fix, same wave: NOT
+// fillNamespacedBoxes recurses uf.Namespaces (a *loaderkit.UnifiedFile tree — R1 fix, same wave: NOT
 // cfg.Namespaces, see below), adding a qualified spec.ResolvedBoxView for every namespaced box to
 // rp.Boxes, AND folding that namespace's OWN candy set into rp.Candies/rp.CandyModels —
 // bare-ref-keyed, exactly like the root-scope fill above — so a namespaced box's candy dependency
@@ -430,13 +431,13 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 // not found") on every namespaced box, confirmed via a live origin/main-vs-this-branch comparison
 // (zero such errors on origin/main with the identical box submodules checked out).
 //
-// Why *UnifiedFile, not *Config (an R1 correction to this fix's OWN first draft): a first attempt
+// Why *loaderkit.UnifiedFile, not *Config (an R1 correction to this fix's OWN first draft): a first attempt
 // called ScanAllCandyWithConfigOpts(dir, sub, opts) — but that function's LOCAL-candy discovery
 // (scanLocalCandies) re-invokes LoadUnified(dir) FRESH, ignoring its cfg parameter entirely, so it
 // just redundantly re-scanned the ROOT project and never found a namespace-LOCAL discover:-found
 // candy (e.g. box/arch/candy/arch-pac-test) at all — it worked only by coincidence for a
 // cross-repo @github-pinned ref (resolved via a from: path already absolute by the time it's
-// discovered). uf.Namespaces[ns] is a *UnifiedFile carrying its OWN already-materialized .Candy map
+// discovered). uf.Namespaces[ns] is a *loaderkit.UnifiedFile carrying its OWN already-materialized .Candy map
 // (populated by the ORIGINAL LoadUnified walk's per-namespace discover fold — the SAME data
 // sub.AllBoxNames()/ResolveBox(sub,...) already prove reachable for BOXES), so
 // uf.Namespaces[ns].ProjectCandies(dir) reads it directly — no second filesystem walk, no directory
@@ -448,7 +449,7 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *loaderkit.UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*loaderkit.UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
@@ -463,7 +464,7 @@ func fillNamespacedBoxes(uf *UnifiedFile, initCfg *buildkit.InitConfig, prefix, 
 		}
 		sub := subUF.ProjectConfig()
 		var nsLayers map[string]spec.CandyReader
-		// subUF.projectCandiesScanned(subUF.RootDir) is the CORRECT local-candy source (reads
+		// projectCandiesScanned(subUF, subUF.RootDir) is the CORRECT local-candy source (reads
 		// subUF.Candy directly — no re-load, no directory mismatch; see this function's doc
 		// comment) fed into the SAME remote-fetch pipeline ScanAllCandyWithConfigOpts's root-scope
 		// caller uses (scanCandyFromLocal — R3, one pipeline, not a duplicate), so a namespace's
@@ -471,12 +472,12 @@ func fillNamespacedBoxes(uf *UnifiedFile, initCfg *buildkit.InitConfig, prefix, 
 		// pins. subUF.RootDir (not the outer dir) is REQUIRED here: a discovered candy's From:
 		// path is relative to the NAMESPACE's own root dir (materializeDiscoveredNode), not the
 		// caller's — falls back to the outer dir when RootDir is unset (a synthetic/test
-		// UnifiedFile with no walk-assigned dir; matches this function's pre-fix behavior there).
+		// loaderkit.UnifiedFile with no walk-assigned dir; matches this function's pre-fix behavior there).
 		nsDir := subUF.RootDir
 		if nsDir == "" {
 			nsDir = dir
 		}
-		if localScanned, lErr := subUF.projectCandiesScanned(nsDir); lErr == nil {
+		if localScanned, lErr := projectCandiesScanned(subUF, nsDir); lErr == nil {
 			if scanned, err := scanCandyFromLocal(localScanned, sub, opts); err == nil {
 				nsLayers = scanned
 				for name, c := range nsLayers {
@@ -566,9 +567,9 @@ func fillNamespacedBoxes(uf *UnifiedFile, initCfg *buildkit.InitConfig, prefix, 
 // (`local: <ns>.<tmpl>`, `kind:k8s` entity `<ns>.<name>`, …) is visible in the envelope too — previously
 // only root-level names were. Purely ADDITIVE (qualified keys never collide with a bare name, since a
 // bare name can never contain "."), so every existing root-scoped consumer is unaffected.
-func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
+func projectTemplates(uf *loaderkit.UnifiedFile) *spec.ProjectTemplates {
 	t := &spec.ProjectTemplates{}
-	fillNamespacedTemplates(uf, "", t, map[*UnifiedFile]bool{})
+	fillNamespacedTemplates(uf, "", t, map[*loaderkit.UnifiedFile]bool{})
 	if t.Local == nil && t.K8s == nil && t.Pod == nil && t.VM == nil && t.Android == nil {
 		return nil
 	}
@@ -578,7 +579,7 @@ func projectTemplates(uf *UnifiedFile) *spec.ProjectTemplates {
 // fillNamespacedTemplates recursively copies uf's OWN template maps (qualified by prefix) into t, then
 // descends into uf.Namespaces with the accumulated prefix. The visited set guards the pointer-keyed
 // namespace cache against a self-referential cycle (mirrors fillBoxPlans's own guard).
-func fillNamespacedTemplates(uf *UnifiedFile, prefix string, t *spec.ProjectTemplates, visited map[*UnifiedFile]bool) {
+func fillNamespacedTemplates(uf *loaderkit.UnifiedFile, prefix string, t *spec.ProjectTemplates, visited map[*loaderkit.UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
@@ -599,11 +600,11 @@ func fillNamespacedTemplates(uf *UnifiedFile, prefix string, t *spec.ProjectTemp
 			(*dst)[qualified] = raw
 		}
 	}
-	cp(uf.Local, &t.Local)
-	cp(uf.K8s, &t.K8s)
-	cp(uf.Pod, &t.Pod)
-	cp(uf.VM, &t.VM)
-	cp(uf.Android, &t.Android)
+	cp(uf.Local(), &t.Local)
+	cp(uf.K8s(), &t.K8s)
+	cp(uf.Pod(), &t.Pod)
+	cp(uf.VM(), &t.VM)
+	cp(uf.Android(), &t.Android)
 	for ns, sub := range uf.Namespaces {
 		child := ns
 		if prefix != "" {

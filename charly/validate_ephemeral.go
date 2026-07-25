@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -100,11 +101,11 @@ func ValidateVmNamingGuard(name string, errs *ValidationError) {
 // validateEphemeralUnified is the unified-loader entry point for ephemeral
 // deploy handling (mirrors validatePreemptibleUnified): it auto-promotes
 // disposable:true on ephemeral entries and validates the ephemeral / vm-naming
-// invariants across a UnifiedFile's Bundle map. Both the project charly.yml's
+// invariants across a loaderkit.UnifiedFile's Bundle map. Both the project charly.yml's
 // inline deploy: entries AND the per-host ~/.config/charly/charly.yml flow
 // through here, so the promotion + checks apply once, one path (R3) — the old
 // LoadBundleConfig ran these only on the per-host file.
-func validateEphemeralUnified(uf *UnifiedFile) error {
+func validateEphemeralUnified(uf *loaderkit.UnifiedFile) error {
 	if uf == nil {
 		return nil
 	}

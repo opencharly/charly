@@ -46,7 +46,7 @@ func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.Builde
 	if !present {
 		return nil, nil, nil, noCharlyYmlErr(dir)
 	}
-	return uf.ProjectDistroConfig(), uf.ProjectBuilderConfig(), uf.ProjectInitConfig(), nil
+	return ProjectDistroConfig(uf), ProjectBuilderConfig(uf), ProjectInitConfig(uf), nil
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.

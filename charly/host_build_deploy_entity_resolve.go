@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -88,10 +89,10 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 		if err != nil {
 			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: loading charly.yml: %w", err)
 		}
-		if !ok || uf.VM == nil {
+		if !ok || uf.VM() == nil {
 			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: no charly.yml or no kind:vm entities declared")
 		}
-		body, ok := uf.VM[req.Name]
+		body, ok := uf.VM()[req.Name]
 		if !ok {
 			return spec.DeployEntityResolveReply{}, fmt.Errorf("deploy-entity-resolve: no kind:vm entity named %q", req.Name)
 		}
@@ -122,7 +123,7 @@ var _ = func() bool {
 // the "deploy-entity-resolve" seam.
 func findAndroidSpec(dir, name string) *ResolvedAndroid {
 	uf, ok, err := LoadUnified(dir)
-	if err != nil || !ok || uf == nil || uf.Android == nil {
+	if err != nil || !ok || uf == nil || uf.Android() == nil {
 		return nil
 	}
 	return lookupAndroidSpec(uf, name)
@@ -133,11 +134,11 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 // lives in candy/plugin-substrate/status_android_collect.go's androidSpecFor, a SEPARATE
 // plugin-local copy since a plugin cannot import charly/ types; this copy now serves ONLY the
 // "deploy-entity-resolve" seam).
-func lookupAndroidSpec(uf *UnifiedFile, name string) *ResolvedAndroid {
-	if uf == nil || uf.Android == nil || name == "" {
+func lookupAndroidSpec(uf *loaderkit.UnifiedFile, name string) *ResolvedAndroid {
+	if uf == nil || uf.Android() == nil || name == "" {
 		return nil
 	}
-	body, ok := uf.Android[name]
+	body, ok := uf.Android()[name]
 	if !ok {
 		return nil
 	}

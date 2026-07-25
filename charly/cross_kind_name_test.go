@@ -78,7 +78,7 @@ discover:
 	if _, present := cfg.Box["redis"]; !present {
 		t.Errorf("box.redis missing; boxes present: %v", boxConfigKeys(cfg))
 	}
-	cands, err := uf.ProjectCandies(dir)
+	cands, err := ProjectCandies(uf, dir)
 	if err != nil {
 		t.Fatalf("ProjectCandies: %v", err)
 	}

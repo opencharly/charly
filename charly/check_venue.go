@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
@@ -291,7 +292,7 @@ func resolveCheckVenue(name, instance string) (*CheckVenue, error) {
 // the first bed to put a vm in that position) was invisible to both classifiers and
 // fell through to the container default. Returns ok=false if the tree walk can't
 // resolve `name` to a real node (unknown name, orphaned dotted path, undotted name).
-func resolveLeafVenue(uf *UnifiedFile, name string) (node spec.BundleNode, venue string, ok bool) {
+func resolveLeafVenue(uf *loaderkit.UnifiedFile, name string) (node spec.BundleNode, venue string, ok bool) {
 	if uf == nil || uf.Bundle == nil || !strings.Contains(name, ".") {
 		return spec.BundleNode{}, "", false
 	}
@@ -314,7 +315,7 @@ func resolveLeafVenue(uf *UnifiedFile, name string) (node spec.BundleNode, venue
 // first: a leaf that is itself a vm is never a "delegate into it" address. Mirrors
 // candy/plugin-check/venue.go's own plugin-side checkVmTarget (R3 — one classifier PER SIDE of the
 // kernel/plugin boundary, no per-call-site re-derivation within either).
-func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
+func checkVmTarget(uf *loaderkit.UnifiedFile, name string) (domainID string, ok bool) {
 	if uf == nil {
 		return "", false
 	}
@@ -328,8 +329,8 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 		}
 		return "", false
 	}
-	if uf.VM != nil {
-		if _, present := uf.VM[name]; present {
+	if uf.VM() != nil {
+		if _, present := uf.VM()[name]; present {
 			return vmDomainIdentity(name), true
 		}
 	}
@@ -350,7 +351,7 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 // routes an external deploy to the host path for the interactive `charly check <verb>` (here) and
 // the declarative `charly check live` (plugin-side), instead of the pod/container path (which
 // would fail at resolveContainer with "container ... is not running").
-func checkLocalTarget(uf *UnifiedFile, name string) (spec.BundleNode, bool) {
+func checkLocalTarget(uf *loaderkit.UnifiedFile, name string) (spec.BundleNode, bool) {
 	if uf == nil || uf.Bundle == nil {
 		return spec.BundleNode{}, false
 	}

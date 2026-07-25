@@ -65,16 +65,16 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")
 	}
-	var uf UnifiedFile
-	if err := foldSubstrateKind(prov, depGn, &uf); err != nil {
+	var acc spec.MaterializedProject
+	if err := foldSubstrateKind(prov, depGn, &acc); err != nil {
 		t.Fatalf("foldSubstrateKind (deploy): %v", err)
 	}
-	bn, ok := uf.Bundle["substrate-dep"]
+	bn, ok := acc.Bundle["substrate-dep"]
 	if !ok {
-		t.Fatalf("deploy shape not folded into uf.Bundle; keys %v", bundleKeysFor(&uf))
+		t.Fatalf("deploy shape not folded into acc.Bundle; keys %v", bundleKeysForAcc(&acc))
 	}
-	if uf.Pod["substrate-dep"] != nil {
-		t.Fatal("deploy shape also landed in uf.Pod — must be uf.Bundle ONLY")
+	if acc.PluginKinds["pod"]["substrate-dep"] != nil {
+		t.Fatal("deploy shape also landed in acc.PluginKinds[\"pod\"] — must be acc.Bundle ONLY")
 	}
 	baseBn, err := buildBundleNode(depGn)
 	if err != nil {
@@ -101,16 +101,16 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if !ok {
 		t.Fatal("vm kind must resolve to the compiled-in candy/plugin-substrate provider")
 	}
-	var uf2 UnifiedFile
-	if err := foldSubstrateKind(vprov, tmplGn, &uf2); err != nil {
+	var acc2 spec.MaterializedProject
+	if err := foldSubstrateKind(vprov, tmplGn, &acc2); err != nil {
 		t.Fatalf("foldSubstrateKind (template): %v", err)
 	}
-	vm, ok := uf2.VM["substrate-tmpl"]
+	vm, ok := acc2.PluginKinds["vm"]["substrate-tmpl"]
 	if !ok {
-		t.Fatalf("template shape not folded into uf.VM; VM is %+v", uf2.VM)
+		t.Fatalf("template shape not folded into acc.PluginKinds[\"vm\"]; got %+v", acc2.PluginKinds["vm"])
 	}
-	if _, dup := uf2.Bundle["substrate-tmpl"]; dup {
-		t.Fatal("template shape also landed in uf.Bundle — must be uf.VM ONLY")
+	if _, dup := acc2.Bundle["substrate-tmpl"]; dup {
+		t.Fatal("template shape also landed in acc.Bundle — must be acc.PluginKinds[\"vm\"] ONLY")
 	}
 	// The template canonicalizes GENERICALLY (entityBodyJSON — no concrete-kind type,
 	// Cutover N); the plugin echoes it byte-faithfully. Baseline against the same generic
@@ -134,4 +134,14 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if mustJSON(t, &fromFold) != mustJSON(t, &fromBase) {
 		t.Fatal("TEMPLATE fold and generic pre-decode must decode to the same ResolvedVm")
 	}
+}
+
+// bundleKeysForAcc mirrors bundleKeysFor (plugin_structkind_e2e_test.go) for the
+// spec.MaterializedProject accumulator these K1-unit-1-retyped dispatch functions now take.
+func bundleKeysForAcc(acc *spec.MaterializedProject) []string {
+	out := make([]string, 0, len(acc.Bundle))
+	for k := range acc.Bundle {
+		out = append(out, k)
+	}
+	return out
 }

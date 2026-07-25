@@ -38,7 +38,7 @@ defaults:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	// distro/builder are plugin kinds now; read the vocab back via the accessors.
-	distros, builders := uf.Distros(), uf.Builders()
+	distros, builders := Distros(uf), Builders(uf)
 	for _, d := range []string{"fedora", "arch"} {
 		if distros[d] == nil {
 			t.Errorf("embedded distro %q missing with no build.yml import", d)
@@ -72,7 +72,7 @@ mydistro:
 		t.Fatalf("LoadUnified: %v", err)
 	}
 	// distro is a plugin kind now; read the vocab back via the Distros() accessor.
-	distros := uf.Distros()
+	distros := Distros(uf)
 	// Override: the project's fedora (version "99") WINS over the embedded fedora
 	// (version "43"). The marker is a valid #Distro.version (numeric per the schema
 	// regex) — the legacy "marker99" was rejected by the node-form load gate.
@@ -103,21 +103,21 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 	}
 	// Build vocabulary view — distro/builder/resource are plugin kinds now, read back
 	// via the accessors (over def.PluginKinds) from the SAME parse.
-	distros := def.Distros()
+	distros := Distros(def)
 	for _, d := range []string{"fedora", "arch"} {
 		if distros[d] == nil {
 			t.Errorf("embedded distro %q missing from unified parse", d)
 		}
 	}
-	if def.Builders()["pixi"] == nil {
+	if Builders(def)["pixi"] == nil {
 		t.Error("embedded builder pixi missing from unified parse")
 	}
-	if def.resolveResources()["nvidia-gpu"] == nil {
+	if resolveResources(def)["nvidia-gpu"] == nil {
 		t.Error("embedded resource nvidia-gpu missing from unified parse")
 	}
 	// Sidecar-template view — sidecar is a plugin kind (candy/plugin-sidecar); the
 	// embedded tailscale template is an OPAQUE body in def.PluginKinds["sidecar"]
-	// from the SAME parse, the SAME UnifiedFile.
+	// from the SAME parse, the SAME loaderkit.UnifiedFile.
 	body, ok := def.PluginKinds["sidecar"]["tailscale"]
 	if !ok {
 		t.Fatal("embedded sidecar tailscale missing from unified parse")
@@ -192,7 +192,7 @@ amd-gpu:
 	}
 
 	// builder/init/resource are plugin kinds now; read each vocab back via its accessor.
-	builders, inits, resources := uf.Builders(), uf.resolveInits(), uf.resolveResources()
+	builders, inits, resources := Builders(uf), resolveInits(uf), resolveResources(uf)
 
 	// builder: override wins WHOLESALE (gap-fill replaces, never deep-merges), a
 	// new entry coexists, an untouched embedded entry survives.

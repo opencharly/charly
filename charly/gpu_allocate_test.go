@@ -95,7 +95,7 @@ some-lock:
 	if err != nil {
 		t.Fatalf("LoadUnified resource plugin kind: %v", err)
 	}
-	resources := uf.resolveResources()
+	resources := resolveResources(uf)
 	if resources["nvidia-gpu"] == nil || resources["nvidia-gpu"].Gpu == nil ||
 		resources["nvidia-gpu"].Gpu.Vendor != "0x10de" {
 		t.Fatalf("resource nvidia-gpu did not parse: %#v", resources["nvidia-gpu"])

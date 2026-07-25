@@ -25,6 +25,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -34,7 +35,7 @@ import (
 // before foldMembers (which promotes members to top-level, mutating the map)
 // and before validateCheckBeds/validateIterateBed (which count root Plan
 // checks).
-func flattenBundleVenues(uf *UnifiedFile) error {
+func flattenBundleVenues(uf *loaderkit.UnifiedFile) error {
 	if uf == nil || len(uf.Bundle) == 0 {
 		return nil
 	}
@@ -103,7 +104,7 @@ func hoistVenueSubtree(root, node *spec.BundleNode, venuePath string) {
 // the host-target image preflight to SKIP venues whose image the AI builds
 // in-run (they are not pullable). Agent-provisioned members are not folded to
 // top-level, so the lookup walks each bed's in-tree members/children.
-func venueIsAgentProvisioned(uf *UnifiedFile, venue string) bool {
+func venueIsAgentProvisioned(uf *loaderkit.UnifiedFile, venue string) bool {
 	if uf == nil || venue == "" {
 		return false
 	}

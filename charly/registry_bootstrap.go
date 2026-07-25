@@ -57,7 +57,8 @@ var builtinProviderInstances = []Provider{
 	// (candy/plugin-candy-kind, C2-candy — candyIsImage + buildCandy → uf.Box/uf.Candy, the
 	// bootstrap-critical routing that STAYS core) are all COMPILED-IN plugins. So spec.KindWords is
 	// EMPTY and checkKindProviderBijection over it is a no-op (every kind resolves via its ClassKind
-	// provider — recognizedKind — not a #Node arm nor an in-proc KindProvider).
+	// provider — providerRegistry.ResolveKind, threaded to the loader plugin's Materializer seam as
+	// the spec.Threaded.Kinds snapshot — not a #Node arm nor an in-proc KindProvider).
 	// deploy targets (ClassDeployTarget) — ALL self-register from their dedicated
 	// plugin_deploy_<name>.go files (the externalizable dedicated-provider pattern):
 	// local, pod, vm, k8s, android.
