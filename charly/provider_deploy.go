@@ -62,8 +62,10 @@ var deployTargetWords = func() []string {
 // generic way as every other substrate (pluginDeployTarget → OpDeployDispatch →
 // InvokeProvider), no separate core-side lifecycle registry. The
 // arbiter-claim bracket around vm's own `charly vm start`/`stop` reentry is vm's
-// OWN concern (never double-bracketed by arbiter_bracket.go, which is pod-scoped
-// only — see its doc comment); the ssh-config / charly.yml-entry / ephemeral
+// OWN concern (never double-bracketed by the Q1 resource-arbiter bracket in
+// candy/plugin-bundle's runLifecycleBracket, which is gated on the DECLARED
+// bracketed_lifecycle trait — pod-only, see deployTraitsFor's doc comment); the
+// ssh-config / charly.yml-entry / ephemeral
 // teardown bookkeeping is the vm's own hostBuildConfigPersist writer
 // (charly/vm_deploy_state.go).
 //
@@ -73,8 +75,9 @@ var deployTargetWords = func() []string {
 // (build_overlay.go) + the candy's own deploykit.OCITarget render, and owns the container
 // lifecycle (config/start/remove + the `charly update` rebuild gate) — reached the same generic
 // OpDeployDispatch path, with its Start/Stop/Attach further routing through pod_lifecycle_dispatch.go's
-// registered plan hooks (arbiter-bracketed by arbiter_bracket.go, S3b). The prep+resolve stays
-// core, the render is in the candy.
+// registered plan hooks (arbiter-bracketed by candy/plugin-bundle's runLifecycleBracket, gated on
+// pod's declared bracketed_lifecycle trait, S3b). The prep+resolve stays core, the render is in
+// the candy.
 // Derived from deployTargetWords (itself CUE-derived from spec.ResourceKinds), not a hand-written
 // literal (deploy-cone cutover 1, task #21): a hardcoded per-kind Go map is an un-gameable-self-test
 // R-item leak even when every entry happens to be true today — the boundary law's clause-D bucket is

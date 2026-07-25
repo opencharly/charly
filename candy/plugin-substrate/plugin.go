@@ -54,9 +54,12 @@ var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
 // every consult site reads the behaviour off node.Descent BY TRAIT — never by switching on the
 // kind word. Canonical table (Appendix B): pod=container+image_backed+image_context;
 // vm=ssh+machine_venue+exclusive_venue; local=shell+machine_venue; k8s=shell+image_context+
-// leaf_only; android=parent; a zero-value word = external-in-place.
+// leaf_only; android=parent; a zero-value word = external-in-place. pod additionally declares
+// bracketed_lifecycle (deploy-cone cutover 1, item 1): its Start/Stop accept direct-mode CLI
+// opts AND need the Q1 resource-arbiter claim bracketed — vm manages its own venue lifecycle +
+// resource claim via `charly vm start`/`stop`, so it leaves this false.
 var substrateTraits = map[string]*spec.DeployTraits{
-	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true},
+	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true, BracketedLifecycle: true},
 	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
 	"local":   {Venue: "shell", MachineVenue: true},
 	"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},

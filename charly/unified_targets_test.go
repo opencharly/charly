@@ -98,3 +98,28 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 		}
 	})
 }
+
+// TestPluginDeployTarget_BracketedLifecycle is the regression test for the deploy-cone cutover 1
+// item-1 fix: Start/Stop's "does this substrate need the Q1 resource-arbiter bracket" signal must
+// come from the DECLARED #DeployTraits.bracketed_lifecycle stamped onto node.Descent (P9) — never
+// from a word comparison, and never silently default to bracketed for a nil/un-stamped node.
+func TestPluginDeployTarget_BracketedLifecycle(t *testing.T) {
+	cases := []struct {
+		name string
+		node *spec.BundleNode
+		want bool
+	}{
+		{"nil node (ref-based deploy, no charly.yml entry)", nil, false},
+		{"node with nil Descent (un-stamped)", &spec.BundleNode{}, false},
+		{"node with Descent but bracketed_lifecycle unset (e.g. vm)", &spec.BundleNode{Descent: &spec.DescentDescriptor{Venue: "ssh"}}, false},
+		{"node with bracketed_lifecycle=true (pod)", &spec.BundleNode{Descent: &spec.DescentDescriptor{Venue: "container", BracketedLifecycle: true}}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tgt := &pluginDeployTarget{node: c.node}
+			if got := tgt.bracketedLifecycle(); got != c.want {
+				t.Fatalf("bracketedLifecycle() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
