@@ -77,7 +77,7 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedF
 		// Imports are already resolved + flattened into lp.Docs by the walk — drop the sub's Import
 		// so the merge never re-processes them (the former mergeUnifiedDocs cleared sub.Import too).
 		sub.Import = nil
-		normalizeV4Aliases(&sub)
+		loaderkit.NormalizeV4Aliases(&sub)
 		mergeUnified(merged, &sub, d.SrcDir)
 	}
 	// 2. Discovered manifests (explicit-entry-wins), applied after the documents.
@@ -202,7 +202,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *loaderkit.UnifiedFil
 			return fmt.Errorf("%s: %w", label, err)
 		}
 		sub.Import = nil
-		normalizeV4Aliases(&sub)
+		loaderkit.NormalizeV4Aliases(&sub)
 		mergeUnified(uf, &sub, "")
 	}
 	return nil

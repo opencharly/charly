@@ -91,127 +91,33 @@ type DeploymentsSection struct {
 // Loader entry point.
 // -----------------------------------------------------------------------------
 
-// gateSchemaVersion enforces the load-time schema-version contract: a config
-// NEWER than this binary supports → "update charly"; an OLDER/absent/non-CalVer
-// version → the `charly migrate` hint. Shared by the early pre-parse gate (root's
-// raw version) and the post-merge gate (merged version) so both speak identically.
-func gateSchemaVersion(root, version string) error {
-	fileVer, verOK := ParseCalVer(version)
-	switch {
-	case verOK && LatestSchemaVersion().Less(fileVer):
-		// Written for a NEWER schema than this binary understands; `charly migrate`
-		// only moves forward to THIS binary's HEAD, so the binary itself is behind.
-		return fmt.Errorf(
-			"%s: config schema %s is newer than this charly supports (max %s). Update charly (reinstall the latest opencharly package, or run 'task build:binary' from a fresh checkout and use ./bin/charly)",
-			root, version, LatestSchemaVersion(),
-		)
-	case !verOK || fileVer.Less(LatestSchemaVersion()):
-		return fmt.Errorf(
-			"%s: schema %s is required (found %q). Run: charly migrate",
-			root, LatestSchemaVersion(), version,
-		)
-	}
-	return nil
-}
+// gateSchemaVersion / normalizeV4Aliases (K1 keystone, task #24 unit 2) relocated
+// to sdk/loaderkit — see loaderkit.GateSchemaVersion (called only from
+// loaderkit.LoadUnified now) / loaderkit.NormalizeV4Aliases (called directly by
+// materialize.go's per-document fold).
 
+// LoadUnified (K1 keystone, task #24 unit 2) is now a THIN WRAPPER: the
+// kind-blind orchestration (bootstrap phase, schema gates, walk, materialize,
+// venue flatten, member fold, descent stamp, the validation chain) relocated to
+// loaderkit.LoadUnified. Every step that touches the provider registry, or is a
+// standing K5-final-decision core file (foldMembers/validateMembers,
+// bundle_members.go), is threaded through as a seam — this wrapper's only job is
+// building that loaderkit.LoadSeams from charly-core's existing host-coupled
+// functions.
 func LoadUnified(dir string) (*loaderkit.UnifiedFile, bool, error) {
-	root := filepath.Join(dir, UnifiedFileName)
-	if !kit.FileExists(root) {
-		return nil, false, nil
-	}
-	// F9 BOOTSTRAP PHASE: invoke bootstrap-phase plugins on the RAW root config bytes FIRST — before
-	// the early schema gate AND before the walk — so a bootstrap plugin's rewrite reaches both. The
-	// transformed bytes are threaded into the walk as the root override so it PARSES them (not a
-	// stale disk re-read). A read error is tolerated: the walk then reads the root from disk (no
-	// bootstrap / early gate), exactly as before. Today only the no-op candy/plugin-example-bootstrap
-	// registers here; a no-op (or none) returns the bytes unchanged → identity.
-	var rootData []byte
-	if data, rerr := os.ReadFile(root); rerr == nil {
-		data = runBootstrapPhase(data)
-		// EARLY schema-version gate: a below-HEAD (or absent) root `version:` is rejected with the
-		// `charly migrate` hint BEFORE any shape parsing — so an out-of-date config never reaches
-		// node-form CUE validation (a confusing type error instead of the migrate hint).
-		var vdoc yaml.Node
-		if yaml.Unmarshal(data, &vdoc) == nil {
-			ver := ""
-			if vn := kit.MapValue(kit.MappingRoot(&vdoc), "version"); vn != nil {
-				ver = vn.Value
-			}
-			if err := gateSchemaVersion(root, ver); err != nil {
-				return nil, true, err
-			}
-		}
-		rootData = data
-	}
-	// THE KIND-BLIND WALK (sdk/loaderkit, reached exclusively via the registered loader plugin's
-	// spec.ProjectWalker — charly core imports no sdk mechanism kit, #46): import queue + discover +
-	// namespaced-import mounts + per-document parse → a generic spec.LoadedProject. No materialize,
-	// no merge — those are the registry-coupled host half below (boundary law). The root's
-	// repo-identity cycle-break seed + the six kind-blind host seams live in hostWalkProject
-	// (loader_threaded.go).
-	lp, err := hostWalkProject(dir, rootData)
-	if err != nil {
-		return nil, true, err
-	}
-	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *loaderkit.UnifiedFile, exactly as
-	// the former inline loadUnifiedInto did (materializeLoadedProject, materialize.go).
-	merged := &loaderkit.UnifiedFile{}
-	if err := materializeLoadedProject(&lp, merged, map[int64]*loaderkit.UnifiedFile{}); err != nil {
-		return nil, true, err
-	}
-	normalizeV4Aliases(merged)
-	if err := gateSchemaVersion(root, merged.Version); err != nil {
-		return nil, true, err
-	}
-	// Stamp each plan step's execution VENUE from its bundle-tree position and
-	// hoist member/child steps into the root bundle's flat Plan. MUST run before
-	// foldMembers (which mutates the Bundle map by promoting members to
-	// top-level) and before validateCheckBeds/validateIterateBed (which count
-	// the root Plan's check: steps). After this, both runner entry points read
-	// the venue-stamped root Plan.
-	if err := flattenBundleVenues(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	// A check bed IS a `disposable: true` bundle in the Bundle map (the separate
-	// kind:check block was removed in the node-form cutover) — no folding needed;
-	// CheckBeds() derives the bed set from the disposable bundles directly.
-	// Fold sibling members (companion deployments) into the Bundle map as
-	// addressable top-level entries (inheriting the owner's disposability) so
-	// the SAME deploy verbs bring them up/down. Runs BEFORE validateDeploymentTree
-	// (so folded members get the same deploy validation). Agent-provisioned
-	// members are SKIPPED by foldMembers (the AI deploys them in-run).
-	if err := foldMembers(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	// Auto-promote disposable on ephemeral entries + validate the ephemeral /
-	// vm-naming invariants. Consolidated here from the old per-host-only
-	// LoadBundleConfig (R3 — one path), so the project charly.yml's inline
-	// deploy: entries get the same promotion + checks. Runs after the folds so
-	// folded beds/peers are covered, before validateDeploymentTree.
-	// Stamp every deploy node's venue-hop descent-descriptor (the descent de-type,
-	// Cutover H) — uniformly here, after ALL structural kinds have folded into
-	// uf.Bundle, so the kernel's deploy chain descends by TRANSPORT and never
-	// switches on the substrate kind word.
-	stampBundleDescents(merged)
-	if err := validateEphemeralUnified(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	if err := spec.ValidateDeploymentTree(merged.Bundle); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	if err := validateCheckBeds(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	if err := validateAndroidDevices(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	if err := validateMembers(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	if err := validatePreemptibleUnified(merged); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", root, err)
-	}
-	return merged, true, nil
+	return loaderkit.LoadUnified(dir, loaderkit.LoadSeams{
+		RunBootstrapPhase:        runBootstrapPhase,
+		WalkProject:              hostWalkProject,
+		MaterializeLoadedProject: materializeLoadedProject,
+		FlattenBundleVenues:      flattenBundleVenues,
+		FoldMembers:              foldMembers,
+		StampBundleDescents:      stampBundleDescents,
+		ValidateEphemeral:        validateEphemeralUnified,
+		ValidateCheckBeds:        validateCheckBeds,
+		ValidateAndroidDevices:   validateAndroidDevices,
+		ValidateMembers:          validateMembers,
+		ValidatePreemptible:      validatePreemptibleUnified,
+	})
 }
 
 // validateDeploymentTree / validateDeployRequiresBox / validateDeploymentChildren /
@@ -271,15 +177,6 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // -----------------------------------------------------------------------------
 // Merge helpers.
 // -----------------------------------------------------------------------------
-
-// normalizeV4Aliases — RETIRED by the field-singular cutover (2026-05).
-// Dual `Images`/`ImageSingular` and `Deploys`/`DeploySingular` fields
-// collapsed into single canonical singular fields with matching yaml
-// tags. Function kept as a no-op so external callers don't break;
-// remove on next refactor pass.
-func normalizeV4Aliases(u *loaderkit.UnifiedFile) {
-	_ = u
-}
 
 // mergeUnified merges src into dst such that dst's existing values WIN on
 // conflict at the same leaf (root-wins). This means when materializeLoadedProject
