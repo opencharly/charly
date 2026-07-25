@@ -60,9 +60,15 @@ func marshalDeployNode(name string, node *spec.Deploy) (*yaml.Node, error) {
 // (marshalDeployNode) as the per-entry callback. This is the ONE charly/ call site for
 // the deploy-state writer (R3): every charly/ deploy-lifecycle path that persists the
 // per-host overlay calls this helper instead of deploykit.SaveBundleConfig directly.
-// Tracked K4-exit inventory: the marshal + this helper live in charly/ core until K4
-// moves the deploy-lifecycle consumers to their plugin homes (plugin-bundle /
-// plugin-deploy-pod / plugin-check).
+//
+// Tracked K4-exit inventory — the NAMED exit (K4 unit C RDD spike, core-min wave 3):
+// deploykit.SaveBundleConfig itself is already callable by any compiled-in plugin (the
+// process-global DeployStateHost registration is shared); this helper + marshalDeployNode
+// stay core ONLY because marshalBundleNode's resugarPlan needs pluginPrimaryFor — a
+// charly-package-private, registry-derived lookup with no sdk exposure today. Deferred
+// until a K4 slice's plugin-side code actually needs to call SaveBundleConfig itself (see
+// deploy_nodeform.go's header for the proven HOW — extending spec.ResolvedProject with a
+// Primaries map[string]string field).
 func saveBundleConfigNodeForm(dc *deploykit.BundleConfig) error {
 	return deploykit.SaveBundleConfig(dc, marshalDeployNode)
 }

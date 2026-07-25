@@ -11,9 +11,10 @@ import (
 // relocation): a kind:check bed (and any deploy.yml target:vm entry) names
 // its VM via the node's `vm:` cross-ref, NOT a "vm:"-prefixed deploy name.
 // Before the fix the candy compiler only recognized the "vm:" prefix, so a
-// bed fell through to syntheticHostBox (host distro → pac) and the deploy
-// ran `pacman` on a debian/fedora guest. resolveVmEntity must surface
-// node.From so syntheticVmBox is reached.
+// bed fell through to the plain host-adhoc synthetic box (host distro → pac)
+// and the deploy ran `pacman` on a debian/fedora guest. resolveVmEntity must
+// surface node.From so the guest-tuned synthetic vm box (candy_select.go's
+// syntheticVmBoxFromEnvelope, K4 unit B) is reached.
 func TestResolveVmEntity(t *testing.T) {
 	cases := []struct {
 		name       string

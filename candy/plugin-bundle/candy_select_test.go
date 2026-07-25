@@ -1,62 +1,66 @@
-package main
+package bundle
 
 import (
 	"reflect"
 	"testing"
 
-	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// TestSyntheticVmImageDistroFormat is the regression guard for the
-// non-arch VM deploy bug: syntheticVmBox used to hardcode
-// Distro:["arch"]/Pkg:"pac"/BuildFormats:["pac"] for EVERY non-root VM, so
-// a candy deploy (and the `charly` localpkg) onto a debian/ubuntu/fedora guest
-// ran `pacman` and failed with exit 127. The fix derives the guest's real
-// distro + primary package format from the VM spec — bootstrap `distro:` or
-// cloud_image `base_user:` — so apt/dnf is used on those guests.
+// candy_select_test.go — relocated (K4 unit B, core-min wave 3) from the DELETED
+// charly/synthetic_vm_image_test.go: the regression guard for the non-arch VM deploy bug moves
+// with its function. buildVmSyntheticBox is the pure field-derivation half of
+// syntheticVmBoxFromEnvelope split out specifically so this coverage needs no live kind:vm
+// provider RPC.
+
+// TestBuildVmSyntheticBoxDistroFormat is the regression guard for the non-arch VM deploy bug: the
+// synthetic VM box used to hardcode Distro:["arch"]/Pkg:"pac"/BuildFormats:["pac"] for EVERY
+// non-root VM, so a candy deploy (and the `charly` localpkg) onto a debian/ubuntu/fedora guest ran
+// `pacman` and failed with exit 127. The fix derives the guest's real distro + primary package
+// format from the VM spec — bootstrap `distro:` or cloud_image `base_user:` — so apt/dnf is used
+// on those guests.
 //
 // Without the fix every row below would resolve Pkg="pac" and FAIL.
-func TestSyntheticVmImageDistroFormat(t *testing.T) {
-	distroCfg := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"arch":    {Format: map[string]*FormatDef{"pac": {}, "aur": {Secondary: true}}},
+func TestBuildVmSyntheticBoxDistroFormat(t *testing.T) {
+	distro := map[string]*spec.ResolvedDistro{
+		"arch":    {Format: map[string]*spec.Format{"pac": {}, "aur": {Secondary: true}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true}, // pulls arch package sections
-		"debian":  {Format: map[string]*FormatDef{"deb": {}}},
+		"debian":  {Format: map[string]*spec.Format{"deb": {}}},
 		"ubuntu":  {Inherits: "debian"}, // inherits debian's deb FORMAT, NOT its packages
-		"fedora":  {Format: map[string]*FormatDef{"rpm": {}}},
-	}}
+		"fedora":  {Format: map[string]*spec.Format{"rpm": {}}},
+	}
 
 	cases := []struct {
 		name       string
-		spec       *VmSpec
+		vmSpec     *spec.ResolvedVm
 		wantUser   string
 		wantPkg    string
 		wantDistro []string
 	}{
 		{
 			name:       "debian debootstrap (bootstrap distro)",
-			spec:       &VmSpec{Source: VmSource{Kind: "bootstrap", Distro: "debian"}, SSH: &VmSSH{User: "debian"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "debian"}, SSH: &spec.VmSSH{User: "debian"}},
 			wantUser:   "debian",
 			wantPkg:    "deb",
 			wantDistro: []string{"debian"},
 		},
 		{
 			name:       "ubuntu debootstrap (inherits debian -> deb)",
-			spec:       &VmSpec{Source: VmSource{Kind: "bootstrap", Distro: "ubuntu"}, SSH: &VmSSH{User: "ubuntu"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "ubuntu"}, SSH: &spec.VmSSH{User: "ubuntu"}},
 			wantUser:   "ubuntu",
 			wantPkg:    "deb",
 			wantDistro: []string{"ubuntu"},
 		},
 		{
 			name:       "fedora cloud (base_user)",
-			spec:       &VmSpec{Source: VmSource{Kind: "cloud_image", BaseUser: "fedora"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "fedora"}},
 			wantUser:   "fedora",
 			wantPkg:    "rpm",
 			wantDistro: []string{"fedora"},
 		},
 		{
 			name:       "arch cloud (base_user)",
-			spec:       &VmSpec{Source: VmSource{Kind: "cloud_image", BaseUser: "arch"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", BaseUser: "arch"}},
 			wantUser:   "arch",
 			wantPkg:    "pac",
 			wantDistro: []string{"arch"},
@@ -66,7 +70,7 @@ func TestSyntheticVmImageDistroFormat(t *testing.T) {
 			// to [cachyos, arch] — an `arch:` candy block reaches the cachyos VM.
 			// Pkg is still the resolved pac primary (aur is secondary, skipped).
 			name:       "cachyos bootstrap (inherit_packages -> [cachyos, arch], pac primary)",
-			spec:       &VmSpec{Source: VmSource{Kind: "bootstrap", Distro: "cachyos"}, SSH: &VmSSH{User: "cachyos"}},
+			vmSpec:     &spec.ResolvedVm{Source: spec.VmSource{Kind: "bootstrap", Distro: "cachyos"}, SSH: &spec.VmSSH{User: "cachyos"}},
 			wantUser:   "cachyos",
 			wantPkg:    "pac",
 			wantDistro: []string{"cachyos", "arch"},
@@ -75,7 +79,7 @@ func TestSyntheticVmImageDistroFormat(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			img := syntheticVmBox(tc.spec, distroCfg)
+			img := buildVmSyntheticBox(tc.vmSpec, distro)
 			if img.User != tc.wantUser {
 				t.Errorf("User = %q, want %q", img.User, tc.wantUser)
 			}
@@ -98,17 +102,13 @@ func TestSyntheticVmImageDistroFormat(t *testing.T) {
 	}
 }
 
-// resolveVmEntity moved to candy/plugin-bundle/node_resolve.go (W4
-// pure-helpers relocation); its regression coverage moved with it — see
-// candy/plugin-bundle/node_resolve_test.go's TestResolveVmEntity.
-
-// TestSyntheticVmImageRootFallback: a bootc VM with no SSH user resolves to
-// the root branch (System scope, /root home), unchanged by the distro fix.
-func TestSyntheticVmImageRootFallback(t *testing.T) {
-	distroCfg := &buildkit.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"fedora": {Format: map[string]*FormatDef{"rpm": {}}},
-	}}
-	img := syntheticVmBox(&VmSpec{Source: VmSource{Kind: "bootc"}}, distroCfg)
+// TestBuildVmSyntheticBoxRootFallback: a bootc VM with no SSH user resolves to the root branch
+// (System scope, /root home), unchanged by the distro fix.
+func TestBuildVmSyntheticBoxRootFallback(t *testing.T) {
+	distro := map[string]*spec.ResolvedDistro{
+		"fedora": {Format: map[string]*spec.Format{"rpm": {}}},
+	}
+	img := buildVmSyntheticBox(&spec.ResolvedVm{Source: spec.VmSource{Kind: "bootc"}}, distro)
 	if img.User != "root" {
 		t.Errorf("User = %q, want root", img.User)
 	}

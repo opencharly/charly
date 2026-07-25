@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opencharly/sdk"
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	pb "github.com/opencharly/sdk/proto"
 	"github.com/opencharly/sdk/spec"
@@ -59,7 +60,13 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 	// rp.CandyModels below — RCA'd K1-alpha regression: the host's own scan (scanCandiesForRef)
 	// and this envelope re-fetch used to run independently, so a remote add-candy resolved
 	// host-side never reached here at all.
-	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs})
+	// IncludeDisabled (BOX-REF shape only): mirrors the OLD host ResolveBox(cfg, ref.Name, …) call,
+	// which never checked IsEnabled at all — enabled-filtering is a ResolveAllBox/listing concern,
+	// not a by-name-resolve one. Without this, an explicitly-named `enabled: false` box would be
+	// ABSENT from rp.Boxes (the envelope's box loop skips disabled boxes by default) even though
+	// the OLD code resolved it fine. Zero cost today (zero disabled boxes exist repo-wide) —
+	// future-proofing, not a live behavior change.
+	envReq, err := json.Marshal(spec.ResolvedProjectRequest{Dir: r.Dir, ExtraCandyRefs: r.ExtraCandyRefs, IncludeDisabled: r.BoxRef != ""})
 	if err != nil {
 		return nil, fmt.Errorf("bundle compile: marshal envelope request: %w", err)
 	}
@@ -75,10 +82,8 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 		return nil, fmt.Errorf("bundle compile: decode resolved-project envelope: %w", err)
 	}
 
-	// Re-hydrate the resolved box from its envelope view + the project vocab maps.
-	img := deploykit.NewSpecResolvedBox(r.BoxView, rp.Distro, rp.Builder)
-
-	// Re-hydrate the host-side HostContext.
+	// Re-hydrate the host-side HostContext (ALWAYS host-computed — unchanged for both
+	// selection shapes; see #DeployCompileRequest's doc comment).
 	var hostCtx deploykit.HostContext
 	if len(r.HostContextJSON) > 0 {
 		if err := json.Unmarshal(r.HostContextJSON, &hostCtx); err != nil {
@@ -86,10 +91,39 @@ func compileDeployPlans(ctx context.Context, exec *sdk.Executor, req *pb.InvokeR
 		}
 	}
 
-	// Loop the pure compiler over the host-provided FINAL pruned candy order. Re-hydrate every
-	// candy's CandyModel ONCE up front (shared by the builder pre-pass below AND the compile
-	// loop, R3 — no double NewSpecCandyModel construction).
-	order := r.Order
+	// Three selection SHAPES (K4 unit B): CandyRef set → the plugin resolves the standalone-candy
+	// order + synthetic box itself from the envelope (candy_select.go); BoxRef set → the plugin
+	// resolves the primary box view + candy order itself from the envelope (box_select.go);
+	// otherwise the BOX-VIEW shape (unchanged, add_candy-on-pod/k8s) trusts the host-provided
+	// BoxView/Order.
+	var img *buildkit.ResolvedBox
+	var order []string
+	switch {
+	case r.CandyRef != "":
+		var selErr error
+		order, img, selErr = resolveCandySelection(ctx, exec, &rp, r)
+		if selErr != nil {
+			return nil, fmt.Errorf("bundle compile: %w", selErr)
+		}
+		// Mirrors the OLD host compileCandySelection/compileBoxSelection's pruneContainerInitForSystemd
+		// call — the SAME pure sdk/deploykit function (R3), applied here because order is now
+		// plugin-computed for this shape (the BOX-VIEW shape still prunes host-side before sending Order).
+		order = deploykit.PruneContainerInitForSystemd(order, hostCtx)
+	case r.BoxRef != "":
+		var selErr error
+		img, order, selErr = resolveBoxSelection(&rp, r)
+		if selErr != nil {
+			return nil, fmt.Errorf("bundle compile: %w", selErr)
+		}
+		order = deploykit.PruneContainerInitForSystemd(order, hostCtx)
+	default:
+		img = deploykit.NewSpecResolvedBox(r.BoxView, rp.Distro, rp.Builder)
+		order = r.Order
+	}
+
+	// Loop the pure compiler over the FINAL pruned candy order. Re-hydrate every candy's
+	// CandyModel ONCE up front (shared by the builder pre-pass below AND the compile loop, R3 —
+	// no double NewSpecCandyModel construction).
 	candyModels := make(map[string]spec.CandyReader, len(order))
 	for _, name := range order {
 		cm, cmOk := rp.CandyModels[name]

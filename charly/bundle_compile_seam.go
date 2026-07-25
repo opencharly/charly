@@ -1,18 +1,35 @@
 package main
 
-// bundle_compile_seam.go — the K4-B host-side deploy-COMPILE seam. The InstallPlan compile loop
-// (BuildDeployPlan) moved out of charly/ core into candy/plugin-bundle (the command:bundle plugin's
-// OpCompile leg); the kernel/plugin boundary law puts a kind-blind MECHANISM that is NOT one of the
-// four in-core M's into a plugin. The host now ONLY computes the per-node SELECTION — the resolved
-// box (authored OR synthetic) projected to a spec.ResolvedBoxView, the FINAL pruned candy order,
-// the host-side deploykit.HostContext incl. the preresolved BuilderContext — and Invokes the plugin's
-// OpCompile with a spec.DeployCompileRequest. The plugin re-hydrates the resolved-project envelope
-// itself via HostBuild("resolved-project") (the established #67 seam — it does NOT receive the whole
-// project in the request), re-hydrates the box vocab via deploykit.NewSpecResolvedBox and each candy
-// model via deploykit.NewSpecCandyModel, loops deploykit.BuildDeployPlan over the host-provided
-// order, and returns []spec.InstallPlanView. The host re-materializes []*InstallPlan from the views
-// via deploykit.PlanFromView. The compile CALL SITE no longer lives in core (R5: the old
-// compilePlans/compileBoxPlans/compileCandyPlans/compileCandyPlansWithContext loop bodies are deleted).
+// bundle_compile_seam.go — the K4-B/K4-unit-B host-side deploy-COMPILE seam. The InstallPlan
+// compile loop (BuildDeployPlan) moved out of charly/ core into candy/plugin-bundle (the
+// command:bundle plugin's OpCompile leg); the kernel/plugin boundary law puts a kind-blind
+// MECHANISM that is NOT one of the four in-core M's into a plugin. The plugin re-hydrates the
+// resolved-project envelope itself via HostBuild("resolved-project") (the established #67 seam
+// — it does NOT receive the whole project in the request), loops deploykit.BuildDeployPlan over
+// the resolved order, and returns []spec.InstallPlanView. The host re-materializes
+// []*InstallPlan from the views via deploykit.PlanFromView.
+//
+// Three selection SHAPES share the ONE OpCompile request (see #DeployCompileRequest's doc
+// comment, sdk/schema/seam.cue, for the authoritative discrimination):
+//   - BOX-VIEW (compileCandyOnBoxSelection, add_candy on an ALREADY-RESOLVED base image,
+//     ctx!=nil) — UNCHANGED: the host still resolves the base image + candy order + builder
+//     pre-connect here (the base image itself is a separate host-side ResolveBox result with no
+//     envelope-only path yet), projects a spec.ResolvedBoxView, and sends box_view+order.
+//   - CANDY (compileStandaloneCandySelection, the target:local/vm standalone-candy shape, K4 unit
+//     B candy-half) — the plugin resolves the candy order + synthetic box itself off the
+//     envelope; the host sends only candy_ref/vm_entity.
+//   - BOX-REF (compileBoxSelection, the primary pod/k8s image shape, K4 unit B box-half) — the
+//     plugin resolves the box view + candy order itself off the envelope (rp.Boxes[box_ref] IS
+//     the SAME ResolvedBoxView the host used to project host-side before this move); the host
+//     sends only box_ref.
+//
+// R5: the old compilePlans/compileBoxPlans/compileCandyPlans/compileCandyPlansWithContext loop
+// bodies, plus the CANDY/BOX-REF shapes' host-side selection computation (ResolveBox,
+// ScanAllCandyWithConfig, deploykit.ResolveCandyOrder, the synthetic box constructors, the
+// builder pre-connect) are ALL deleted for those two shapes — see compileStandaloneCandySelection
+// / compileBoxSelection's own doc comments for why the builder pre-connect specifically is
+// provably redundant (candy/plugin-bundle's preresolveBuilderContexts already S2-lazy-connects
+// unconditionally), not merely relocated.
 
 import (
 	"context"
@@ -156,53 +173,125 @@ func (c *deployAddCmd) compileRefSelection(ref *DeployRef, cfg *Config, distroCf
 	return c.compileCandySelection(ref, cfg, distroCfg, builderCfg, dir, nil)
 }
 
-// compileBoxSelection mirrors the OLD compileBoxPlans: resolve the box, scan candies, resolve the
-// topological order, prune for systemd, preresolve builders, then compile via the plugin. The
-// plugin receives only the NON-nil candies (the OLD loop skipped layers[name]==nil); candySet is
-// the FULL systemd-pruned order (the OLD return value), preserving deployID/overlay provenance.
+// compileBoxSelection is the K4-unit-B box-half shape: a primary pod/k8s image deploy. No
+// host-side ResolveBox, no ScanAllCandyWithConfig, no candy-order resolve, no builder
+// pre-connect — candy/plugin-bundle's box_select.go resolves the box view + candy order itself
+// off the SAME resolved-project envelope it already fetches for the compile loop (rp.Boxes[box_ref]
+// IS the ResolvedBoxView the host used to build host-side, just read directly instead of
+// re-derived — R3), and its ALREADY-EXISTING preresolveBuilderContexts (compile.go,
+// unconditional for every OpCompile) already S2-lazy-connects the SAME externalized builder
+// plugins ensureBuildersConnectedForOrder used to pre-connect host-side (verified live, K4 unit
+// B: an exhaustive repo grep found zero pod/k8s box deploy needing a builder outside the calling
+// project's own candy closure). Only the LoadUnified-coupled init-vocabulary lookup
+// (preresolveActiveInitInto, for hostCtx) stays host, same as the candy-half.
 func (c *deployAddCmd) compileBoxSelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
+	_ = cfg
 	_ = distroCfg
 	_ = builderCfg
-	img, err := ResolveBox(cfg, ref.Name, c.Tag, dir, ResolveOpts{})
-	if err != nil {
-		return nil, "", nil, err
-	}
-	layers, err := ScanAllCandyWithConfig(dir, cfg)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	order, err := deploykit.ResolveCandyOrder(img.Candy, layers, nil)
-	if err != nil {
-		return nil, "", nil, err
-	}
 	hostCtx := c.compileHostContext()
-	hostCtx, err = preresolveActiveInitInto(hostCtx, dir)
+	hostCtx, err := preresolveActiveInitInto(hostCtx, dir)
 	if err != nil {
 		return nil, "", nil, err
 	}
-	order = pruneContainerInitForSystemd(order, hostCtx)
-	hostCtx, err = preresolveBuildersInto(hostCtx, cfg, dir, order, layers, img)
+	hostCtxJSON, err := json.Marshal(hostCtx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("compile: marshal host context: %w", err)
+	}
+	plans, err := c.compileViaPlugin(spec.DeployCompileRequest{
+		Dir:             dir,
+		BoxRef:          ref.Name,
+		HostContextJSON: hostCtxJSON,
+		Tag:             c.Tag,
+	})
 	if err != nil {
 		return nil, "", nil, err
 	}
-	compileOrder := make([]string, 0, len(order))
-	for _, name := range order {
-		if layers[name] != nil {
-			compileOrder = append(compileOrder, name)
+	// The compiled candy set for deployID/overlay provenance — mirrors compileStandaloneCandySelection's
+	// same derivation: plans preserve the plugin's topo-sorted order (BuildDeployPlan loops `order`
+	// in sequence), so reading each plan's own Candy name back reconstructs it without needing the
+	// reply to separately carry CandySet.
+	order := make([]string, 0, len(plans))
+	for _, p := range plans {
+		if p.Candy != "" {
+			order = append(order, p.Candy)
 		}
 	}
-	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), compileOrder, hostCtx, c.Tag, nil)
+	return plans, ref.Name, order, nil
+}
+
+// compileCandySelection dispatches to the box-context add_candy path (ctx != nil, UNCHANGED — an
+// add_candy: on a pod/k8s base, compiled against the already-resolved base image) or the
+// standalone-candy path (ctx == nil, K4 unit B — candy/plugin-bundle now resolves the candy
+// order + synthetic host/vm box ITSELF, off the resolved-project envelope it already fetches; see
+// compileStandaloneCandySelection). base is ref.Name for BOTH (the OLD return value), NOT the
+// plugin's reply Base (which is boxView.Name).
+func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string, ctx *buildkit.ResolvedBox) ([]*deploykit.InstallPlan, string, []string, error) {
+	if ctx == nil {
+		return c.compileStandaloneCandySelection(ref, dir)
+	}
+	return c.compileCandyOnBoxSelection(ref, cfg, distroCfg, builderCfg, dir, ctx)
+}
+
+// compileStandaloneCandySelection is the K4-unit-B candy-only shape: a `target: local`/`vm`/every
+// external-substrate deploy with NO base image. No host-side candy scan, no synthetic-box
+// construction, no builder pre-connect — the plugin does ALL of that itself off the SAME
+// resolved-project envelope it already fetches for the compile loop (candy/plugin-bundle's
+// candy_select.go), and its ALREADY-EXISTING builder pre-pass (preresolveBuilderContexts,
+// compile.go) already S2-lazy-connects the SAME externalized builder plugins
+// ensureBuildersConnectedForOrder used to pre-connect host-side — unconditionally, for every
+// compile call, box or candy alike (verified: all 4 builder plugin candies for this repo live in
+// its own candy/ dir, always in the calling project's own closure S2's Pass-1 scans; a
+// cross-repo/box-submodule builder ref, if ever needed, has its OWN Pass-2 fallback via
+// InvokeProviderOpts.ExtraRef — unused today, not a gap this move introduces). Only the
+// LoadUnified-coupled init-vocabulary lookup (preresolveActiveInitInto, for hostCtx) stays host,
+// since hostCtx.ActiveInitName/ActiveInit are ALWAYS host-computed for both selection shapes (see
+// #DeployCompileRequest's doc comment).
+func (c *deployAddCmd) compileStandaloneCandySelection(ref *DeployRef, dir string) ([]*deploykit.InstallPlan, string, []string, error) {
+	hostCtx := c.compileHostContext()
+	hostCtx, err := preresolveActiveInitInto(hostCtx, dir)
 	if err != nil {
 		return nil, "", nil, err
 	}
-	return plans, img.Name, order, nil
+	hostCtxJSON, err := json.Marshal(hostCtx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("compile: marshal host context: %w", err)
+	}
+	// c.vmEntity is threaded TOLERANTLY (RCA'd live via check-preempt-local): resolveVmEntity
+	// sets it from node.From unconditionally, not only for a genuine vm cross-ref — a `local:`
+	// node's kind:local template ref lands here too. The plugin tries it against its own
+	// rp.Templates.VM and falls through to a plain host box on a miss (candy_select.go's
+	// syntheticBoxForCandySelection) — never a hard requirement, matching the OLD host-side
+	// syntheticVmBox call site's own tolerant lookup exactly.
+	plans, err := c.compileViaPlugin(spec.DeployCompileRequest{
+		Dir:             dir,
+		CandyRef:        ref.Raw,
+		VmEntity:        c.vmEntity,
+		HostContextJSON: hostCtxJSON,
+		Tag:             c.Tag,
+		ExtraCandyRefs:  []string{ref.Raw},
+	})
+	if err != nil {
+		return nil, "", nil, err
+	}
+	// The compiled candy set for deployID/overlay provenance — mirrors what the OLD
+	// deploykit.ResolveCandyOrder([]string{candyKey}, layers, nil) call returned, read back off
+	// each compiled plan's own Candy name (the SAME source compileBoxSelection's compileOrder
+	// filter already trusts).
+	order := make([]string, 0, len(plans))
+	for _, p := range plans {
+		if p.Candy != "" {
+			order = append(order, p.Candy)
+		}
+	}
+	return plans, ref.Name, order, nil
 }
 
-// compileCandySelection mirrors the OLD compileCandyPlans (ctx==nil, a standalone candy deploy
-// picking the synthetic host/VM image template) and compileCandyPlansWithContext (ctx!=nil, an
-// add_candy compiled against a pod/k8s base image's context). base is ref.Name for BOTH (the OLD
-// return value), NOT the plugin's reply Base (which is boxView.Name).
-func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string, ctx *buildkit.ResolvedBox) ([]*deploykit.InstallPlan, string, []string, error) {
+// compileCandyOnBoxSelection is the UNCHANGED add_candy-on-pod/k8s shape (ctx != nil): compile
+// against the ALREADY-RESOLVED base image's context. Host-side selection (scan+order+builder
+// pre-connect) is unavoidable here — ctx (the base image) is itself a host-resolved
+// *buildkit.ResolvedBox from compileNodePlans' ResolveBox call, so there is no envelope-only path
+// to it yet (a K4 box-half concern, out of this slice's scope).
+func (c *deployAddCmd) compileCandyOnBoxSelection(ref *DeployRef, cfg *Config, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, dir string, ctx *buildkit.ResolvedBox) ([]*deploykit.InstallPlan, string, []string, error) {
 	layers, candyKey, err := c.scanCandiesForRef(ref, cfg, dir)
 	if err != nil {
 		return nil, "", nil, err
@@ -211,41 +300,12 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("resolving deps for %s: %w", ref.Raw, err)
 	}
-	var img *buildkit.ResolvedBox
-	if ctx != nil {
-		// add_candy on a pod/k8s deploy: compile against the base image's context.
-		img = ctx
-		if distroCfg != nil && img.DistroDef == nil {
-			img.DistroDef = distroCfg.ResolveDistro(img.Distro)
-		}
-		if builderCfg != nil && img.BuilderConfig == nil {
-			img.BuilderConfig = builderCfg
-		}
-	} else {
-		// Standalone candy deploy: pick the synthetic image template matching the target so
-		// `${USER}` AND the package format resolve correctly (the guest user + guest distro/format
-		// for a VM target, the operator host's for everything else).
-		if c.vmEntity != "" {
-			if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM() != nil {
-				if body, present := uf.VM()[c.vmEntity]; present {
-					if vmspec, err := resolveVmViaPlugin(body); err == nil && vmspec != nil {
-						img = syntheticVmBox(vmspec, distroCfg)
-					}
-				}
-			}
-		}
-		if img == nil {
-			img = syntheticHostBox()
-		}
-		if distroCfg != nil {
-			img.DistroDef = distroCfg.ResolveDistro(img.Distro)
-		}
-		if builderCfg != nil {
-			img.BuilderConfig = builderCfg
-		}
-		if cfg != nil {
-			img.Builder = buildkit.ResolveEffectiveBuilder(cfg, img.Name, img.Distro, img.Base, img.IsExternalBase, img.Builder)
-		}
+	img := ctx
+	if distroCfg != nil && img.DistroDef == nil {
+		img.DistroDef = distroCfg.ResolveDistro(img.Distro)
+	}
+	if builderCfg != nil && img.BuilderConfig == nil {
+		img.BuilderConfig = builderCfg
 	}
 	hostCtx := c.compileHostContext()
 	hostCtx, err = preresolveActiveInitInto(hostCtx, dir)
@@ -257,12 +317,11 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 	if err != nil {
 		return nil, "", nil, err
 	}
-	// ref.Raw (this call's own candy — the compile target itself, whether a standalone candy
-	// deploy or an add_candy: on a pod/k8s base) widens the plugin's OWN resolved-project
-	// re-fetch the SAME way scanCandiesForRef widened THIS scan above — a REMOTE ref is never
-	// reachable from any box's image closure, so without this the plugin's independent envelope
-	// fetch never discovers it (RCA'd K1-alpha regression: check-addcandy-pod/check-stepkind-
-	// emit-pod, "candy not in resolved-project envelope").
+	// ref.Raw (this call's own candy — the add_candy: overlay target itself) widens the plugin's
+	// OWN resolved-project re-fetch the SAME way scanCandiesForRef widened THIS scan above — a
+	// REMOTE ref is never reachable from any box's image closure, so without this the plugin's
+	// independent envelope fetch never discovers it (RCA'd K1-alpha regression: check-addcandy-pod/
+	// check-stepkind-emit-pod, "candy not in resolved-project envelope").
 	plans, err := c.compileSelectionViaPlugin(dir, projectResolvedBox(img), order, hostCtx, c.Tag, []string{ref.Raw})
 	if err != nil {
 		return nil, "", nil, err

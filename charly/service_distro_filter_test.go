@@ -122,7 +122,7 @@ func TestCompileServiceSteps_DistroDivergentDaemons(t *testing.T) {
 	})
 
 	// Regression guard for the R10 failure: a `target: vm` deploy compiles the
-	// plan with the GUEST img (syntheticVmBox → img.Distro=[debian:13,debian])
+	// plan with the GUEST img (the synthetic vm box → img.Distro=[debian:13,debian])
 	// but detectHostContext() defaults hostCtx.MachineVenue=true + the OPERATOR's
 	// distro (e.g. "arch"). The service filter MUST scope to the guest (img),
 	// NOT the operator host — else it keeps the modular [fedora,arch] virtqemud
@@ -154,7 +154,7 @@ func TestServiceRenderDistros_ImgIsAuthoritative(t *testing.T) {
 			want:    []string{"debian:13", "debian"},
 		},
 		{
-			// Host deploy: img (from syntheticHostBox) == the operator chain;
+			// Host deploy: img (from the synthetic host box) == the operator chain;
 			// byte-identical to the old hostCtx.Distro path, plus the full chain
 			// (so cachyos also matches `arch:` entries).
 			name:    "host deploy uses the operator img chain",

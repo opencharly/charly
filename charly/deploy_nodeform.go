@@ -13,12 +13,22 @@ package main
 // This is the struct-body → node-form transform fused into ONE pass (no intermediate
 // legacy-body, no separate migrate step) — the redesign K5-Unit-1 Option A landed: the
 // pre-K5 two-step (a struct marshal with re-injected target/nested/peer, then a separate
-// transform) is replaced by this single canonical marshal. Tracked K4-exit inventory:
-// the marshal lives in charly/ core until
-// K4 moves the deploy-lifecycle consumers to their plugin homes (plugin-bundle /
-// plugin-deploy-pod); the violation K5 fixed was it sitting in a kind-blind KIT, not
-// core (an R-item in core tracked-for-extraction is the legitimate transient K-wave
-// state).
+// transform) is replaced by this single canonical marshal.
+//
+// Tracked K4-exit inventory — the NAMED exit (K4 unit C RDD spike, core-min wave 3):
+// deploykit.LoadBundleConfig/SaveBundleConfig + kit.AcquireFileLock/DefaultDeployConfigPath
+// are ALREADY fully sdk-portable (a COMPILED-IN plugin shares charly's process-global
+// deploykit.DeployStateHost registration, so the flock+load+save SHELL needs no seam at
+// all). The ONE thing keeping this file's marshalBundleNode/marshalDeployNode (the
+// SaveBundleConfig marshalNode callback) core-resident is resugarPlan's pluginPrimaryFor
+// lookup (node_desugar.go) — a charly-package-PRIVATE map grown from the connected-provider
+// registry, not exposed via any sdk package today. The proven HOW (spiked, not yet built):
+// extend spec.ResolvedProject (the "resolved-project" envelope) with a
+// `Primaries map[string]string` field — the SAME D-clause kind-recognition data
+// loaderThreaded() already snapshots for the LOAD path (spec.Threaded.Primaries), just also
+// exposed SAVE-side. That is a new CUE-sourced wire field (an sdk producer leg + schema
+// regen), so it is deliberately NOT built until a K4 slice actually needs it — see
+// deploy_state_host.go's saveBundleConfigNodeForm for the same note at its call site.
 
 import (
 	"gopkg.in/yaml.v3"

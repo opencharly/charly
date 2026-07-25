@@ -269,11 +269,16 @@ func (c *deployAddCmd) dispatchNode(path string, node *spec.BundleNode, parentEx
 // candy/plugin-bundle/node_resolve.go (W4 pure-helpers relocation): both are
 // (almost entirely) pure functions of node+path/CLI flags — resolveNodeOverlays'
 // only host-only pieces (ParentExec/Path) are filled in directly by
-// dispatchNode above instead; resolveNodeTemplate's one genuinely host-only
-// piece (the LoadUnified-coupled findLocalSpec lookup) now reaches back over
-// the EXISTING "deploy-entity-resolve" seam's new kind="local" case
-// (host_build_deploy_entity_resolve.go) rather than calling findLocalSpec
-// directly — findLocalSpec itself is UNCHANGED, only its caller moved.
+// dispatchNode above instead. resolveNodeTemplate's one genuinely host-only
+// piece (the kind:local template lookup) no longer calls back to the host at
+// all for the lookup itself (K4 unit A, core-min wave 3): it reads the
+// template body off the ALREADY-established "resolved-project" envelope
+// (Templates.Local) and projects it via the kind:local provider's own
+// OpResolve leg, entirely plugin-side — see node_resolve.go's
+// lookupLocalTemplate. The "deploy-entity-resolve" seam's former kind="local"
+// case is deleted (dead — that was its only caller); findLocalSpec itself is
+// UNCHANGED and still serves check_cmd.go's live-gather path, unrelated to
+// this dispatch cone.
 
 // compileNodePlans compiles the InstallPlans for a node, dispatching on the
 // classified target. Target-only deploys (local, vm, android) don't compile a
@@ -310,8 +315,9 @@ func (c *deployAddCmd) compileNodePlans(target, refStr, tag, path string, addCan
 		}
 	}
 
-	// Only host/vm targets use syntheticHostBox / syntheticVmBox (handled
-	// inside compileCandySelection); pod/k8s resolve the base image context here.
+	// Only pod/k8s targets resolve a base image context here; host/vm targets' synthetic box now
+	// builds entirely plugin-side (candy/plugin-bundle/candy_select.go, K4 unit B) inside
+	// compileStandaloneCandySelection's compile dispatch.
 	var baseImg *buildkit.ResolvedBox
 	if (target == "pod" || target == "k8s") && refStr != "" {
 		if baseResolved, rerr := ResolveBox(cfg, refStr, tag, dir, ResolveOpts{}); rerr == nil {
@@ -564,27 +570,14 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 	return layers, candyKey, nil
 }
 
-// pruneContainerInitForSystemd drops the `supervisord` candy (the CONTAINER
-// init system) from a resolved DEPLOY candy order when the target is systemd
-// (host / vm). On a systemd target the OS init is the one and only init system
-// — every candy's `service:` entries render as systemd units — so pulling in
-// supervisord is wrong (it lands installed-but-unused, a second init). Pod/k8s
-// deploys and OCI image builds keep supervisord (it IS their init), so this
-// only affects host/vm deploys. Candies that `require: supervisord` purely for
-// graph ordering are unaffected at runtime — their services run under systemd
-// regardless of whether the supervisord package is present.
+// pruneContainerInitForSystemd relocated to sdk/deploykit (K4 unit B, core-min wave 3) — a pure
+// function of order+HostContext.MachineVenue with no core-only dependency, now shared (R3) by this
+// file's compileCandyOnBoxSelection (unchanged, the add_candy-on-pod/k8s box-VIEW shape) AND
+// candy/plugin-bundle's candy_select.go/box_select.go (both the candy_ref and box_ref shapes
+// prune plugin-side now, in compile.go, after resolving their own order). See
+// deploykit.PruneContainerInitForSystemd's doc comment for the full rationale.
 func pruneContainerInitForSystemd(order []string, hostCtx deploykit.HostContext) []string {
-	if !hostCtx.MachineVenue {
-		return order
-	}
-	out := make([]string, 0, len(order))
-	for _, n := range order {
-		if n == "supervisord" {
-			continue
-		}
-		out = append(out, n)
-	}
-	return out
+	return deploykit.PruneContainerInitForSystemd(order, hostCtx)
 }
 
 func (c *deployAddCmd) printPlans(plans []*deploykit.InstallPlan, opts deploykit.EmitOpts) error {
@@ -648,7 +641,14 @@ func (c *deployAddCmd) compileHostContext() deploykit.HostContext {
 // never connects aur), using cfg/dir to scan + load scoped to those words (loadProjectPlugins /
 // ScanAllCandyWithConfigOpts are core-private project-loading mechanics no plugin can reach). A
 // connect error (an externalized builder whose plugin won't connect) is FATAL, never a silent skip
-// (R4). Called at every BuildDeployPlan compile site so the connectivity invariant holds uniformly.
+// (R4). Called at ONLY the compileCandyOnBoxSelection compile site now (the add_candy-on-pod/k8s
+// box-VIEW shape, still resolving order/img host-side). Neither compileStandaloneCandySelection
+// NOR compileBoxSelection (K4 unit B, candy-half and box-half) calls this or
+// ensureBuildersConnectedForOrder anymore — candy/plugin-bundle's own preresolveBuilderContexts
+// (compile.go, unconditional for every OpCompile) already S2-lazy-connects
+// the SAME externalized builder plugins via exec.InvokeProvider, so a second host-side pre-connect
+// for that path would be pure duplication (verified live: all 4 builder plugin candies for this
+// repo live in its own candy/ dir, always reachable via S2's project-closure scan).
 func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir string, order []string, layers map[string]spec.CandyReader, img *buildkit.ResolvedBox) (deploykit.HostContext, error) {
 	if err := ensureBuildersConnectedForOrder(context.Background(), cfg, dir, order, layers, img); err != nil {
 		return hostCtx, err
@@ -656,102 +656,17 @@ func preresolveBuildersInto(hostCtx deploykit.HostContext, cfg *Config, dir stri
 	return hostCtx, nil
 }
 
-// syntheticHostBox returns a minimal ResolvedBox suitable for
-// compiling a single-candy plan against the host. Used when the user
-// invokes `charly bundle add host <candy-ref>` without a containing image.
-//
-// UID/GID/User/Home come from the operator's own process so a candy
-// task carrying `user: ${USER}` resolves to the operator (not root).
-// Without this, resolveUserSpec's `${USER}` branch returns img.UID
-// which would default to 0 — quietly routing the task through
-// ScopeSystem (sudo), installing user-scoped tooling like
-// `cargo install` to /root/.cargo/bin instead of $HOME/.cargo/bin.
-func syntheticHostBox() *buildkit.ResolvedBox {
-	hd, _ := DetectHostDistro()
-	img := &buildkit.ResolvedBox{
-		Name:         "host-adhoc",
-		Home:         os.Getenv("HOME"),
-		User:         os.Getenv("USER"),
-		UID:          os.Getuid(),
-		GID:          os.Getgid(),
-		BuildFormats: []string{},
-	}
-	if hd != nil {
-		img.Distro = append(img.Distro, hd.Tags...)
-		if hint := hd.FormatHint(); hint != "" {
-			img.Pkg = hint
-			img.BuildFormats = []string{hint}
-		}
-	}
-	return img
-}
-
-// resolveVmEntity moved to candy/plugin-bundle's node_resolve.go (W4
-// pure-helpers relocation) — a pure function of deployName+node, now computed
-// plugin-side and threaded in via spec.DeployNodeDispatchRequest.VmEntity
-// (consumed as dispatchNode's vmEntity parameter). This is the single signal
-// the candy compiler uses to pick syntheticVmBox over syntheticHostBox below.
-
-// syntheticVmBox returns a ResolvedBox tuned for `charly bundle add
-// vm:<name>` — the User/UID/GID/Home fields come from the VM spec's SSH
-// config (not the host's env), so `${USER}` in a candy's `user:` field
-// resolves to the GUEST user (e.g. `arch`) and task scope classification
-// dispatches user-scoped tasks to RunUser (bare ssh bash -s) instead of
-// RunSystem (ssh sudo bash -s). Without this, `cargo install taplo-cli`
-// under the pre-commit candy ends up in /root/.cargo/bin/ instead of
-// /home/<user>/.cargo/bin/, and $HOME-anchored candy tests fail.
-//
-// The guest's distro + primary package format are resolved from the VM
-// spec (NOT hardcoded), so a candy deploy onto a debian/ubuntu/fedora VM
-// installs its packages — and the `charly` localpkg — through the guest's own
-// package manager (apt/dnf) instead of pacman. The distro key is the
-// bootstrap `distro:` field (debootstrap/pacstrap VMs) or, for cloud_image
-// VMs, the base_user (cloud images name the default account after the
-// distro: arch/debian/ubuntu/fedora); the format (pac/deb/rpm) comes from
-// the resolved DistroDef's PrimaryFormat.
-//
-// Cloud-image VMs conventionally use uid/gid 1000 for the first non-root
-// user (cloud-init's adopt path respects that). bootc VMs default to
-// root, in which case we fall back to the same syntheticHostBox()
-// semantics (System scope, no per-user path).
-func syntheticVmBox(spec *VmSpec, distroCfg *buildkit.DistroConfig) *buildkit.ResolvedBox {
-	user := vmshared.ResolveCloudInitSSHUser(spec)
-	if user == "" || user == "root" {
-		img := syntheticHostBox()
-		img.Name = "vm-adhoc"
-		img.User = "root"
-		img.Home = "/root"
-		return img
-	}
-	img := &buildkit.ResolvedBox{
-		Name: "vm-adhoc",
-		User: user,
-		UID:  1000,
-		GID:  1000,
-		Home: "/home/" + user,
-	}
-	distroKey := spec.Source.Distro
-	if distroKey == "" {
-		distroKey = spec.Source.BaseUser
-	}
-	if distroKey != "" {
-		if def := distroCfg.ResolveDistro([]string{distroKey}); def != nil {
-			// Full most-specific-first chain (e.g. [ubuntu:24.04, ubuntu]) so a
-			// target:vm deploy reaches per-version tag sections, not only the bare
-			// distro tag — image/VM parity for the distro-cascade resolver. Then
-			// expand inherit_packages: ancestors (a cachyos VM → [cachyos, arch]
-			// so `arch:` candy blocks reach it), mirroring the image-resolve path.
-			img.Distro = distroCfg.ExpandPackageInheritance(buildkit.DistroTagChain(distroKey, def.Version))
-			if pf := def.PrimaryFormat(); pf != "" {
-				img.Pkg = pf
-				img.BuildFormats = []string{pf}
-			}
-		} else {
-			img.Distro = []string{distroKey}
-		}
-	}
-	return img
-}
+// syntheticHostBox / syntheticVmBox / resolveVmEntity (host-side) DELETED (K4 unit B, core-min
+// wave 3, R5 hard cutover — dead code, zero remaining callers after
+// compileStandaloneCandySelection moved the standalone-candy synthetic-box construction
+// plugin-side): the equivalent logic now lives in candy/plugin-bundle/candy_select.go
+// (syntheticHostBoxFromEnvelope / syntheticVmBoxFromEnvelope), reading the resolved-project
+// envelope instead of a live *buildkit.DistroConfig/LoadUnified. resolveVmEntity's plugin-side
+// twin (candy/plugin-bundle/node_resolve.go, W4) is unaffected — this comment previously named the
+// now-deleted host copy as ITS consumer, which was already stale (W4 already made the plugin-side
+// resolveVmEntity the sole reader of vmEntity via spec.DeployNodeDispatchRequest.VmEntity; the
+// host-side syntheticVmBox merely happened to be a DOWNSTREAM consumer of that same field via
+// c.vmEntity, not the function this comment described).
 
 // resolveDistroDef returns the DistroDef for a given distro tag.
 func resolveDistroDef(cfg *buildkit.DistroConfig, distroTag string) *spec.ResolvedDistro {

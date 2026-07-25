@@ -12,9 +12,12 @@ import (
 
 // bundle_compile_seam_test.go — the P13-KERNEL step-3 systemd-hardcode fix's seam-path coverage.
 // install_build_test.go exercises deploykit.BuildDeployPlan directly (the pure compiler), entirely
-// bypassing bundle_compile_seam.go's per-whole-deploy selection computers (compileBoxSelection /
+// bypassing bundle_compile_seam.go's per-whole-deploy compile entry points (compileBoxSelection /
 // compileCandySelection) — zero prior coverage of the by-name, existence-checked active-init
-// preresolve added there. These tests exercise that seam file's own new code directly.
+// preresolve (preresolveActiveInitInto) each of them still calls before dispatching to the plugin
+// (K4 unit B moved the CANDY/BOX-REF order+box selection itself plugin-side, but hostCtx
+// construction — including this preresolve — stays host-side for every shape). These tests
+// exercise that seam file's own new code directly.
 
 // TestResolveActiveInitByName_MissingSystemd_HardErrors proves the fixed behavior: a MachineVenue
 // compile whose build vocabulary declares NO "systemd" init entry hard-errors (naming "systemd")
