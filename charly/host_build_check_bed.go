@@ -37,9 +37,10 @@ import (
 // The op bodies call the SHARED core helpers runCheckBed uses (bedGPUPrereqMissing,
 // acquireFileLock, bedVmDomains/acquireVmDomainLock, selfSuperprojectOverridePair/
 // mergeRepoOverrides, acquireResourceForClaimant, startLibvirtUserSession,
-// persistBedDeployOverrides, bringUpMembers/tearDownMembers, waitForVmSshReady/
-// waitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY core (shared
-// with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never aliased).
+// persistBedDeployOverrides, bringUpMembers/tearDownMembers, deploykit.WaitForVmSshReady/
+// deploykit.WaitForContainerReady, bedCheckLevel/bedCheckLiveRefs/…) — those helpers STAY
+// core (shared with runCheckBed + bundle_add_cmd; K-wave relocation inventory, never
+// aliased).
 //
 // TRANSITIONAL host seam — dies at K5: post-loaderkit the plugin holds its own flock via
 // sdk/kit (filelock/install_ledger/deployconfig, the delivered K4-B state family), computes the
@@ -134,9 +135,9 @@ func hostBuildCheckBed(_ context.Context, req spec.CheckBedRequest, _ buildEngin
 		if nodeTraits(&s.node).Venue == "ssh" { // vm (ssh venue)
 			// Wait on the per-deploy DOMAIN IDENTITY (charly-<bedDomain> is the live domain +
 			// managed ssh alias, post-P33), NOT the shared kind:vm entity (node.From).
-			waitForVmSshReady(s.bedDomain)
+			deploykit.WaitForVmSshReady(s.bedDomain)
 		} else {
-			waitForContainerReady(req.Bed)
+			deploykit.WaitForContainerReady(req.Bed)
 		}
 		return spec.CheckBedReply{}, nil
 	case "teardown":
@@ -378,8 +379,9 @@ func bedRunImageTag(bed, calver string) string {
 }
 
 // bedLocalChildKeys is the HOST-ROOTED (kind:local) subset of a node's nested children, in
-// sortedNestedKeys order — the set a VM root deploys host-side (mirroring deployNestedLocalChildren:
-// a VM's nested CONTAINER children are deployed in-guest by plugin-deploy-vm's PostApply, so a
+// sortedNestedKeys order — the set a VM root deploys host-side (mirroring
+// deploykit.DeployNestedLocalChildren: a VM's nested CONTAINER children are deployed
+// in-guest by plugin-deploy-vm's PostApply, so a
 // host-side re-deploy would be wrong).
 func bedLocalChildKeys(children map[string]*spec.BundleNode) []string {
 	var out []string
