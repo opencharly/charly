@@ -328,8 +328,8 @@ func checkVmTarget(uf *UnifiedFile, name string) (domainID string, ok bool) {
 		}
 		return "", false
 	}
-	if uf.VM != nil {
-		if _, present := uf.VM[name]; present {
+	if uf.VM() != nil {
+		if _, present := uf.VM()[name]; present {
 			return vmDomainIdentity(name), true
 		}
 	}

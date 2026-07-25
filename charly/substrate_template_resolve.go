@@ -111,11 +111,11 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 // (task #60 — the host's only caller, validateLocalTemplates, moved to plugin-box, which decodes
 // Templates.Local itself off the resolved-project envelope).
 func (uf *UnifiedFile) resolveAndroids() map[string]*ResolvedAndroid {
-	if uf == nil || len(uf.Android) == 0 {
+	if uf == nil || len(uf.Android()) == 0 {
 		return nil
 	}
-	out := make(map[string]*ResolvedAndroid, len(uf.Android))
-	for name, body := range uf.Android {
+	out := make(map[string]*ResolvedAndroid, len(uf.Android()))
+	for name, body := range uf.Android() {
 		r, err := resolveAndroidViaPlugin(body)
 		if err != nil || r == nil {
 			continue

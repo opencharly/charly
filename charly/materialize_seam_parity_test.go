@@ -59,20 +59,17 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	}
 
 	// Byte-equivalence across the two independent loads, field by field, for every map the
-	// Materializer/dispatch chain writes (Box/Candy/VM/Pod/K8s/Local/Android/Bundle/PluginKinds —
-	// PluginKinds is json:"-" on UnifiedFile so it's compared explicitly, not via a whole-struct
-	// marshal which would silently skip it).
+	// Materializer/dispatch chain writes: Box/Candy/Bundle (dedicated fields) + PluginKinds (which
+	// ALSO now carries the 5 standalone-substrate-TEMPLATE kinds vm/pod/k8s/local/android — K1
+	// unit-1 follow-up, foldStandaloneTemplateReply's generic fold, node_normalize.go). PluginKinds
+	// is json:"-" on UnifiedFile so it's compared explicitly, not via a whole-struct marshal which
+	// would silently skip it.
 	fields := []struct {
 		name string
 		a, b any
 	}{
 		{"Box", uf1.Box, uf2.Box},
 		{"Candy", uf1.Candy, uf2.Candy},
-		{"VM", uf1.VM, uf2.VM},
-		{"Pod", uf1.Pod, uf2.Pod},
-		{"K8s", uf1.K8s, uf2.K8s},
-		{"Local", uf1.Local, uf2.Local},
-		{"Android", uf1.Android, uf2.Android},
 		{"Bundle", uf1.Bundle, uf2.Bundle},
 		{"PluginKinds", uf1.PluginKinds, uf2.PluginKinds},
 	}

@@ -599,11 +599,11 @@ func fillNamespacedTemplates(uf *UnifiedFile, prefix string, t *spec.ProjectTemp
 			(*dst)[qualified] = raw
 		}
 	}
-	cp(uf.Local, &t.Local)
-	cp(uf.K8s, &t.K8s)
-	cp(uf.Pod, &t.Pod)
-	cp(uf.VM, &t.VM)
-	cp(uf.Android, &t.Android)
+	cp(uf.Local(), &t.Local)
+	cp(uf.K8s(), &t.K8s)
+	cp(uf.Pod(), &t.Pod)
+	cp(uf.VM(), &t.VM)
+	cp(uf.Android(), &t.Android)
 	for ns, sub := range uf.Namespaces {
 		child := ns
 		if prefix != "" {

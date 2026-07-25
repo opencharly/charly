@@ -58,14 +58,12 @@ func parsedNodeToGeneric(pn spec.ParsedNode) (*genericNode, error) {
 // is a cheap map-header copy, not a deep copy) and copies the result back after.
 func materializeNodeInto(pn spec.ParsedNode, uf *UnifiedFile) error {
 	acc := spec.MaterializedProject{
-		Box: uf.Box, Candy: uf.Candy, VM: uf.VM, Pod: uf.Pod, K8s: uf.K8s,
-		Local: uf.Local, Android: uf.Android, Bundle: uf.Bundle, PluginKinds: uf.PluginKinds,
+		Box: uf.Box, Candy: uf.Candy, Bundle: uf.Bundle, PluginKinds: uf.PluginKinds,
 	}
 	if err := requireMaterializer().MaterializeNode(pn, loaderThreaded(), hostMaterializeSeams(), &acc); err != nil {
 		return err
 	}
-	uf.Box, uf.Candy, uf.VM, uf.Pod, uf.K8s, uf.Local, uf.Android, uf.Bundle, uf.PluginKinds =
-		acc.Box, acc.Candy, acc.VM, acc.Pod, acc.K8s, acc.Local, acc.Android, acc.Bundle, acc.PluginKinds
+	uf.Box, uf.Candy, uf.Bundle, uf.PluginKinds = acc.Box, acc.Candy, acc.Bundle, acc.PluginKinds
 	return nil
 }
 

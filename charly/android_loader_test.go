@@ -31,7 +31,7 @@ pixel9a-36:
 	}
 	got := lookupAndroidSpec(uf, "pixel9a-36")
 	if got == nil {
-		t.Fatalf("android node-form entity not registered in uf.Android; got %v", uf.Android)
+		t.Fatalf("android node-form entity not registered in uf.Android(); got %v", uf.Android())
 	}
 	if got.Box != "android-emulator" || got.Device != "pixel_9a" || got.ApiLevel != 36 {
 		t.Errorf("android spec round-trip wrong: %+v", got)
@@ -91,7 +91,9 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 
 	// android bed referencing a defined device → ok.
 	uf3 := &UnifiedFile{
-		Android: rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
+		PluginKinds: map[string]map[string]json.RawMessage{
+			"android": rawTemplateMap(map[string]*AndroidSpec{"dev": {Box: "android-emulator"}}),
+		},
 		Bundle: map[string]spec.BundleNode{
 			"bed": {Target: "android", From: "dev", Disposable: new(true)},
 		},

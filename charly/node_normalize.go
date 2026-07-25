@@ -80,36 +80,26 @@ func decodeStandaloneTemplateJSON(gn *genericNode) (json.RawMessage, error) {
 	return entityBodyJSON(gn)
 }
 
-// foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into the
-// right typed template map by kind — the C2-substrate TEMPLATE fold arm (the standalone
-// counterpart of runPluginKind's deploy fold into acc.Bundle). The former in-proc path
-// decoded straight into the map (buildStandaloneResource → decodePtrInto); here the
-// canonical value round-trips through the plugin first (RDD-proven byte-faithful). acc is the
-// K1-unit-1 spec.MaterializedProject accumulator (see runPluginKind's doc comment).
+// foldStandaloneTemplateReply folds candy/plugin-substrate's ECHOED template JSON into
+// acc.PluginKinds[disc][name] — the C2-substrate TEMPLATE fold arm (the standalone counterpart of
+// runPluginKind's deploy fold into acc.Bundle). GENERIC by construction (K1 unit 1 follow-up): no
+// per-kind-word switch — every standalone-template kind (vm/pod/k8s/local/android) folds into the
+// SAME map[disc][name] shape PluginKinds already uses for every other templated kind
+// (distro/builder/init/sidecar/resource/agent), so a new standalone-template kind needs no core
+// edit here. The former in-proc path decoded straight into a dedicated typed map
+// (buildStandaloneResource → decodePtrInto, then a per-kind switch after the plugin round-trip);
+// here the canonical value round-trips through the plugin first (RDD-proven byte-faithful) and
+// lands generically. acc is the spec.MaterializedProject accumulator (see runPluginKind's doc
+// comment). disc is validated by the caller (foldSubstrateKind only reaches here for a kind
+// isStandaloneResourceKind already confirmed), so no error return is needed.
 func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, acc *spec.MaterializedProject) error {
-	switch disc {
-	case "vm":
-		return foldOpaqueTemplateReply(name, replyJSON, &acc.VM)
-	case "pod":
-		return foldOpaqueTemplateReply(name, replyJSON, &acc.Pod)
-	case "k8s":
-		return foldOpaqueTemplateReply(name, replyJSON, &acc.K8s)
-	case "local":
-		return foldOpaqueTemplateReply(name, replyJSON, &acc.Local)
-	case "android":
-		return foldOpaqueTemplateReply(name, replyJSON, &acc.Android)
+	if acc.PluginKinds == nil {
+		acc.PluginKinds = map[string]map[string]json.RawMessage{}
 	}
-	return fmt.Errorf("node %q: %q is not a standalone resource kind", name, disc)
-}
-
-// foldOpaqueTemplateReply stores the echoed template JSON VERBATIM at name in *m —
-// the opaque counterpart for de-typed substrate templates (local/android, Cutover I):
-// the kernel keeps the body opaque and resolves it via candy/plugin-substrate on read.
-func foldOpaqueTemplateReply(name string, replyJSON json.RawMessage, m *map[string]json.RawMessage) error {
-	if *m == nil {
-		*m = map[string]json.RawMessage{}
+	if acc.PluginKinds[disc] == nil {
+		acc.PluginKinds[disc] = map[string]json.RawMessage{}
 	}
-	(*m)[name] = replyJSON
+	acc.PluginKinds[disc][name] = replyJSON
 	return nil
 }
 

@@ -226,8 +226,8 @@ func (c *deployAddCmd) compileCandySelection(ref *DeployRef, cfg *Config, distro
 		// `${USER}` AND the package format resolve correctly (the guest user + guest distro/format
 		// for a VM target, the operator host's for everything else).
 		if c.vmEntity != "" {
-			if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM != nil {
-				if body, present := uf.VM[c.vmEntity]; present {
+			if uf, ok, _ := LoadUnified(dir); ok && uf != nil && uf.VM() != nil {
+				if body, present := uf.VM()[c.vmEntity]; present {
 					if vmspec, err := resolveVmViaPlugin(body); err == nil && vmspec != nil {
 						img = syntheticVmBox(vmspec, distroCfg)
 					}

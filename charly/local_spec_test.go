@@ -33,9 +33,9 @@ dev-workstation:
 	if !ok || uf == nil {
 		t.Fatal("expected unified file to load")
 	}
-	body, exists := uf.Local["dev-workstation"]
+	body, exists := uf.Local()["dev-workstation"]
 	if !exists {
-		t.Fatalf("expected dev-workstation in uf.Local; got %+v", uf.Local)
+		t.Fatalf("expected dev-workstation in uf.Local(); got %+v", uf.Local())
 	}
 	spec, rerr := resolveLocalViaPlugin(body)
 	if rerr != nil || spec == nil {

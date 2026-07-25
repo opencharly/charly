@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
@@ -11,9 +12,11 @@ import (
 // shared check-verb resolver must distinguish.
 func newVenueTestUF() *UnifiedFile {
 	return &UnifiedFile{
-		VM: rawTemplateMap(map[string]*VmSpec{
-			"cachyos-gpu": {}, // bare kind:vm entity
-		}),
+		PluginKinds: map[string]map[string]json.RawMessage{
+			"vm": rawTemplateMap(map[string]*VmSpec{
+				"cachyos-gpu": {}, // bare kind:vm entity
+			}),
+		},
 		Bundle: map[string]spec.BundleNode{
 			"web-pod": {Target: "pod", Children: map[string]*spec.BundleNode{
 				// RCA #12 (FINAL/K5 unit 6a): a target:vm CHILD nested under a

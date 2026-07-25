@@ -94,9 +94,8 @@ type UnifiedFile struct {
 	// Box is the generic kind-keyed IMAGE map (P6): name → opaque marshaled BoxConfig; consumers
 	// decode the authored BoxConfig via the accessors in uf_box_generic.go (the kernel holds no
 	// per-kind TYPE). Config.Box shares this map.
-	Box   boxMap                     `yaml:"box,omitempty" json:"box,omitempty"`
-	Candy candyMap                   `yaml:"candy,omitempty" json:"candy,omitempty"`
-	VM    map[string]json.RawMessage `yaml:"vm,omitempty" json:"vm,omitempty"`
+	Box   boxMap   `yaml:"box,omitempty" json:"box,omitempty"`
+	Candy candyMap `yaml:"candy,omitempty" json:"candy,omitempty"`
 	// Field-singular cutover: legacy `Deploys *DeploymentsSection
 	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
 	// the canonical singular surface; the wrapper's `Provides` migrates
@@ -105,28 +104,12 @@ type UnifiedFile struct {
 	Provides *deploykit.ProvidesConfig  `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Schema v4: first-class target template maps (singular keys).
-	// Pod (kind:pod) templates are stored OPAQUELY (the pod-template de-type,
-	// Cutover J); the kernel never reads spec.Pod fields off the map — consuming
-	// PLUGINS decode a body into the concrete kind they need.
-	Pod map[string]json.RawMessage `yaml:"pod,omitempty" json:"pod,omitempty"`
-	// K8s (kind:k8s) cluster templates are stored OPAQUELY (the k8s substrate-value
-	// de-type, Cutover K) — resolved via resolveK8sViaPlugin; the full cluster model
-	// rides opaquely to candy/plugin-k8sgen, never typed in the kernel.
-	K8s map[string]json.RawMessage `yaml:"k8s,omitempty" json:"k8s,omitempty"`
-	// Local (kind:local) templates are stored OPAQUELY (the substrate-template
-	// de-type, Cutover I) — candy/plugin-substrate's OpResolve owns spec.Local;
-	// the kernel resolves via uf.resolveLocals(), never reading fields off the map.
-	Local map[string]json.RawMessage `yaml:"local,omitempty" json:"local,omitempty"`
-
-	// Android (kind:android) — Android device substrates (an in-pod emulator
-	// or a remote/physical adb endpoint) onto which `apk:` packages install
-	// via a `target: android` deploy. Modeled on K8s (the device is the
-	// substrate; the apps ride in on the deploy's candies): AndroidSpec and
-	// ApkPackageSpec are sdk/spec-generated types (spec.Android /
-	// spec.ApkPackageSpec), aliased for charly-core use in vmshared_aliases.go.
-	// Android (kind:android) templates are stored OPAQUELY (Cutover I) — resolved
-	// via uf.resolveAndroids(); the kernel never reads spec.Android fields off the map.
-	Android map[string]json.RawMessage `yaml:"android,omitempty" json:"android,omitempty"`
+	// VM/Pod/K8s/Local/Android (K1 unit-1 follow-up) are NO LONGER dedicated stored fields — they
+	// fold into PluginKinds[disc][name] like every other templated kind (distro/builder/init/
+	// sidecar/resource/agent already do), so the fold has no per-kind-word branch to pick a
+	// destination (foldStandaloneTemplateReply, node_normalize.go). The VM()/Pod()/K8s()/Local()/
+	// Android() methods below are DERIVED accessors reading PluginKinds — the same pattern as the
+	// Distros()/Builders()/Inits() accessors further down this file — not stored data.
 
 	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
 	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
@@ -471,14 +454,12 @@ func mergeUnified(dst, src *UnifiedFile, srcDir string) {
 	}
 	mergeRawTemplateMap(&dst.Box, src.Box)
 	mergeRawTemplateMap(&dst.Candy, src.Candy)
-	mergeRawTemplateMap(&dst.VM, src.VM)
-	mergeRawTemplateMap(&dst.Pod, src.Pod)
-	mergeRawTemplateMap(&dst.K8s, src.K8s)
-	mergeRawTemplateMap(&dst.Local, src.Local)
-	mergeRawTemplateMap(&dst.Android, src.Android)
 	// PluginKinds carries every plugin-extracted kind — the build vocabulary
-	// (distro/builder/init/resource), the Calamares target, and sidecar/agent/module/
-	// package-group — merged once here (root-wins, name-keyed override). The former
+	// (distro/builder/init/resource), the Calamares target, sidecar/agent/module/
+	// package-group, AND (K1 unit-1 follow-up) the 5 standalone-substrate-TEMPLATE kinds
+	// vm/pod/k8s/local/android (formerly 5 separate mergeRawTemplateMap calls into dedicated
+	// fields — now subsumed here too, since they fold into PluginKinds[disc][name] like every
+	// other templated kind) — merged once here (root-wins, name-keyed override). The former
 	// mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeTargetMap calls
 	// are subsumed by this one generic merge.
 	mergePluginKindsMap(&dst.PluginKinds, src.PluginKinds)
@@ -627,21 +608,21 @@ func validateCheckBeds(uf *UnifiedFile) error {
 			if node.From == "" {
 				return fmt.Errorf("kind:check bed %q (target: vm) must set `vm: <entity>`", name)
 			}
-			if _, ok := uf.VM[node.From]; !ok {
+			if _, ok := uf.VM()[node.From]; !ok {
 				return fmt.Errorf("kind:check bed %q references vm entity %q which is not defined", name, node.From)
 			}
 		case "local":
 			if node.From == "" {
 				return fmt.Errorf("kind:check bed %q (target: local) must set `local: <template>`", name)
 			}
-			if _, ok := uf.Local[node.From]; !ok {
+			if _, ok := uf.Local()[node.From]; !ok {
 				return fmt.Errorf("kind:check bed %q references local template %q which is not defined", name, node.From)
 			}
 		case "android":
 			if node.From == "" {
 				return fmt.Errorf("kind:check bed %q (target: android) must set `android: <device>`", name)
 			}
-			if _, ok := uf.Android[node.From]; !ok {
+			if _, ok := uf.Android()[node.From]; !ok {
 				return fmt.Errorf("kind:check bed %q references android device %q which is not defined", name, node.From)
 			}
 		default:
@@ -924,7 +905,7 @@ func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Conf
 	c := &Config{
 		Defaults: uf.Defaults,
 		Box:      images,
-		Local:    uf.Local,
+		Local:    uf.Local(),
 		Sidecar:  uf.PluginKinds["sidecar"], // opaque bodies; candy/plugin-sidecar resolves them
 	}
 	cache[uf] = c // cache BEFORE recursing (cycle break)
@@ -955,6 +936,20 @@ func (uf *UnifiedFile) Distros() map[string]*spec.ResolvedDistro {
 func (uf *UnifiedFile) Builders() map[string]*BuilderDef {
 	return decodePluginKindMap[BuilderDef](uf, "builder")
 }
+
+// VM/Pod/K8s/Local/Android are DERIVED accessors over uf.PluginKinds[disc] (K1 unit-1
+// follow-up) — the 5 standalone-substrate-TEMPLATE kinds no longer get a dedicated stored field
+// (foldStandaloneTemplateReply, node_normalize.go, folds every one of them into PluginKinds
+// generically, with no per-kind-word switch); these methods are the read-side mirror, matching
+// the SAME pattern Distros()/Builders() above already use for the tier-1 kinds. Each returns the
+// opaque name→body map for its kind (nil when none configured) — the kernel never decodes the
+// bodies itself; consuming PLUGINS decode a body into the concrete kind they need
+// (resolveVmViaPlugin / resolveK8sViaPlugin / resolveLocals / resolveAndroids).
+func (uf *UnifiedFile) VM() map[string]json.RawMessage      { return uf.PluginKinds["vm"] }
+func (uf *UnifiedFile) Pod() map[string]json.RawMessage     { return uf.PluginKinds["pod"] }
+func (uf *UnifiedFile) K8s() map[string]json.RawMessage     { return uf.PluginKinds["k8s"] }
+func (uf *UnifiedFile) Local() map[string]json.RawMessage   { return uf.PluginKinds["local"] }
+func (uf *UnifiedFile) Android() map[string]json.RawMessage { return uf.PluginKinds["android"] }
 
 // resolveInits projects the name-keyed init-system vocabulary from
 // uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via

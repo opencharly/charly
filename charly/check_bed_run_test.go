@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,9 @@ func TestValidateCheckBeds_VmRefMustResolve(t *testing.T) {
 		t.Fatalf("expected missing-vm-ref error, got %v", err)
 	}
 	ok := &UnifiedFile{
-		VM: rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
+		PluginKinds: map[string]map[string]json.RawMessage{
+			"vm": rawTemplateMap(map[string]*VmSpec{"k3s-vm": {}}),
+		},
 		Bundle: map[string]spec.BundleNode{
 			"check-k3s-vm": {Target: "vm", From: "k3s-vm", Disposable: new(true)},
 		},
@@ -81,7 +84,9 @@ func TestValidateCheckBeds_LocalRefMustResolve(t *testing.T) {
 		t.Fatalf("expected missing-local-ref error, got %v", err)
 	}
 	ok := &UnifiedFile{
-		Local: rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
+		PluginKinds: map[string]map[string]json.RawMessage{
+			"local": rawTemplateMap(map[string]*LocalSpec{"check-local": {}}),
+		},
 		Bundle: map[string]spec.BundleNode{
 			"check-local": {Target: "local", From: "check-local", Disposable: new(true)},
 		},

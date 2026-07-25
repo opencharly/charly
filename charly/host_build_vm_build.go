@@ -43,10 +43,10 @@ func noVmEntityErr(boxName string) error {
 // resolveVmBuildEntity loads the project + resolves boxName's kind:vm entity into a *VmSpec.
 func resolveVmBuildEntity(dir, boxName string) (*VmSpec, error) {
 	uf, ok, ufErr := LoadUnified(dir)
-	if ufErr != nil || !ok || uf.VM == nil {
+	if ufErr != nil || !ok || uf.VM() == nil {
 		return nil, noVmEntityErr(boxName)
 	}
-	body, hit := uf.VM[boxName]
+	body, hit := uf.VM()[boxName]
 	if !hit {
 		return nil, noVmEntityErr(boxName)
 	}

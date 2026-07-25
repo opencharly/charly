@@ -48,7 +48,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 		RunEngine:   rt.RunEngine,
 	}
 
-	// The kind:vm entity + resources (uf.VM[entity] via the substrate-template resolver + the
+	// The kind:vm entity + resources (uf.VM()[entity] via the substrate-template resolver + the
 	// resource de-type). Graceful-degrade when there is no project (a project-less `charly vm …`):
 	// the reply carries only the runtime settings + the backend probe, matching the former in-core
 	// handler's `if uf, ok := LoadUnified(dir); ok` branch. VM + Resources are hand-written runtime
@@ -60,9 +60,9 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 	var claimantNode spec.BundleNode
 	var hasClaimant bool
 	if uf, ok, ufErr := LoadUnified(dir); ufErr == nil && ok && uf != nil {
-		if uf.VM != nil {
-			vm, _ = resolveVmViaPlugin(uf.VM[req.Entity])
-			for name := range uf.VM {
+		if uf.VM() != nil {
+			vm, _ = resolveVmViaPlugin(uf.VM()[req.Entity])
+			for name := range uf.VM() {
 				reply.VmEntities = append(reply.VmEntities, name)
 			}
 		}

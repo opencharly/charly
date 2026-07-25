@@ -73,8 +73,8 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if !ok {
 		t.Fatalf("deploy shape not folded into acc.Bundle; keys %v", bundleKeysForAcc(&acc))
 	}
-	if acc.Pod["substrate-dep"] != nil {
-		t.Fatal("deploy shape also landed in acc.Pod — must be acc.Bundle ONLY")
+	if acc.PluginKinds["pod"]["substrate-dep"] != nil {
+		t.Fatal("deploy shape also landed in acc.PluginKinds[\"pod\"] — must be acc.Bundle ONLY")
 	}
 	baseBn, err := buildBundleNode(depGn)
 	if err != nil {
@@ -105,12 +105,12 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if err := foldSubstrateKind(vprov, tmplGn, &acc2); err != nil {
 		t.Fatalf("foldSubstrateKind (template): %v", err)
 	}
-	vm, ok := acc2.VM["substrate-tmpl"]
+	vm, ok := acc2.PluginKinds["vm"]["substrate-tmpl"]
 	if !ok {
-		t.Fatalf("template shape not folded into acc.VM; VM is %+v", acc2.VM)
+		t.Fatalf("template shape not folded into acc.PluginKinds[\"vm\"]; got %+v", acc2.PluginKinds["vm"])
 	}
 	if _, dup := acc2.Bundle["substrate-tmpl"]; dup {
-		t.Fatal("template shape also landed in acc.Bundle — must be acc.VM ONLY")
+		t.Fatal("template shape also landed in acc.Bundle — must be acc.PluginKinds[\"vm\"] ONLY")
 	}
 	// The template canonicalizes GENERICALLY (entityBodyJSON — no concrete-kind type,
 	// Cutover N); the plugin echoes it byte-faithfully. Baseline against the same generic
