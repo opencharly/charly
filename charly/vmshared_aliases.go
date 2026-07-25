@@ -51,8 +51,8 @@ var readinessResolve = vmshared.ResolveReadiness
 // once a consumer census showed candy/plugin-enc, candy/plugin-secrets,
 // candy/plugin-vm, candy/plugin-oci, and sdk/deploykit/localpkg.go all call
 // them directly (never through this alias), making cleanup.go a genuinely
-// shared leaf rather than a charly-core-only dependency. charly/main.go,
-// builder_venue.go, and privileged_runner.go now import
+// shared leaf rather than a charly-core-only dependency. charly/main.go and
+// builder_venue.go now import
 // github.com/opencharly/sdk/proclifecycle directly (NO-NEW-ALIASES: no
 // re-export here).
 var (

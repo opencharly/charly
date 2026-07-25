@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -88,22 +87,6 @@ func TestBuildableShortName_RemoteRef(t *testing.T) {
 	cfg := &Config{Box: boxMapOf(map[string]spec.BoxConfig{"x": {}})}
 	if got := buildableShortName("@github.com/owner/repo/x:tag", cfg); got != "" {
 		t.Errorf("expected '' for remote ref, got %q", got)
-	}
-}
-
-// TestEnsureScoreImages_NilUnifiedFile returns nil (no-op).
-func TestEnsureScoreImages_NilUnifiedFile(t *testing.T) {
-	if err := ensureScoreImages(context.Background(), nil, nil, ""); err != nil {
-		t.Errorf("nil unified file should be a no-op, got %v", err)
-	}
-}
-
-// TestEnsureScoreImages_EmptyPlan returns nil — no pod-targeted steps means no
-// images to ensure.
-func TestEnsureScoreImages_EmptyPlan(t *testing.T) {
-	uf := &loaderkit.UnifiedFile{}
-	if err := ensureScoreImages(context.Background(), nil, uf, ""); err != nil {
-		t.Errorf("plan with no pod-targeted steps should be a no-op, got %v", err)
 	}
 }
 

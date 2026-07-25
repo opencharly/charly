@@ -37,8 +37,8 @@ type BuildFile struct {
 // LoadUnified) rather than following a format_config: pointer.
 //
 // The init section is optional: projects without an `inits:` block return a
-// nil *InitConfig (no init system, no entrypoint beyond the base image default).
-func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
+// nil *buildkit.InitConfig (no init system, no entrypoint beyond the base image default).
+func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *buildkit.InitConfig, error) {
 	uf, present, err := LoadUnified(dir)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("loading charly.yml: %w", err)
@@ -50,6 +50,6 @@ func LoadBuildConfigForBox(dir string) (*buildkit.DistroConfig, *buildkit.Builde
 }
 
 // LoadDefaultBuildConfig is retained as an alias for the single-argument form.
-func LoadDefaultBuildConfig(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *InitConfig, error) {
+func LoadDefaultBuildConfig(dir string) (*buildkit.DistroConfig, *buildkit.BuilderConfig, *buildkit.InitConfig, error) {
 	return LoadBuildConfigForBox(dir)
 }

@@ -152,12 +152,13 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	if m.class == ClassKind {
 		if dt := c.GetDeployTraits(); dt != nil {
 			m.traits = &spec.DeployTraits{
-				Venue:          dt.GetVenue(),
-				ImageBacked:    dt.GetImageBacked(),
-				ImageContext:   dt.GetImageContext(),
-				MachineVenue:   dt.GetMachineVenue(),
-				ExclusiveVenue: dt.GetExclusiveVenue(),
-				LeafOnly:       dt.GetLeafOnly(),
+				Venue:              dt.GetVenue(),
+				ImageBacked:        dt.GetImageBacked(),
+				ImageContext:       dt.GetImageContext(),
+				MachineVenue:       dt.GetMachineVenue(),
+				ExclusiveVenue:     dt.GetExclusiveVenue(),
+				LeafOnly:           dt.GetLeafOnly(),
+				BracketedLifecycle: dt.GetBracketedLifecycle(),
 			}
 		}
 	}

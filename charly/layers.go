@@ -434,7 +434,7 @@ func looksLikeDistroOrFormatKey(key string) bool {
 // ResolveOpts.InitCfg's doc comment). Byte-identical logic to the pre-move
 // *Candy.InitSystems population, retargeted at scanned[name].Model.Service /
 // .Model.SourceDir / .View.InitSystems.
-func PopulateCandyInitSystem(scanned map[string]spec.ScannedCandy, initCfg *InitConfig) {
+func PopulateCandyInitSystem(scanned map[string]spec.ScannedCandy, initCfg *buildkit.InitConfig) {
 	if initCfg == nil {
 		return
 	}
@@ -522,7 +522,7 @@ func completeCandyRunOps(m *spec.CandyModel, v *spec.CandyView) {
 // so calling this twice against the SAME map with different initCfg values (the throwaway
 // nil-initCfg call ScanAllCandyWithConfigOpts makes for CollectRemoteRefsOpts's edge-walk,
 // then the real opts.InitCfg call at the end) is safe.
-func finalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *InitConfig) map[string]spec.CandyReader {
+func finalizeScannedCandies(scanned map[string]spec.ScannedCandy, initCfg *buildkit.InitConfig) map[string]spec.CandyReader {
 	PopulateCandyInitSystem(scanned, initCfg)
 	out := make(map[string]spec.CandyReader, len(scanned))
 	for name, sc := range scanned {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -128,7 +129,7 @@ func TestRenderRelayTemplate(t *testing.T) {
 		RelayTemplate: relayTmpl,
 	}
 
-	conf, err := initRenderRelayTemplate(def, 9222, "chrome", 1)
+	conf, err := deploykit.InitRenderRelayTemplate(def, 9222, "chrome", 1)
 	if err != nil {
 		t.Fatalf("RenderRelayTemplate() error = %v", err)
 	}

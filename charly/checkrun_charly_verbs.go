@@ -1,12 +1,6 @@
 package main
 
-import (
-	"fmt"
-	"path/filepath"
-	"strings"
-
-	"github.com/opencharly/sdk/kit"
-)
+import "github.com/opencharly/sdk/kit"
 
 // checkrun_charly_verbs.go holds the shared host-side helpers the EXTERNAL
 // live-container check verbs (cdp/wl/vnc/dbus/mcp/record/kube/adb/appium/spice/libvirt)
@@ -18,38 +12,14 @@ import (
 // plugin calls. What remains here is the small host-side surface a marshalled plugin
 // cannot compute for itself.
 
-// resolveCheckApk resolves a relative committed-APK path (the external adb / appium plugin's
-// install / install-app `apk: ./tests/data/...`) against the AUTHORING candy's
-// source tree, so a check resolves its fixture whether the candy is local OR
-// fetched via @github (the SAME walk-up the deploy path uses, R3). The check's
-// Origin is "candy:<key>" where <key> is the candy MAP KEY (a bare name for a
-// local candy, the bare @github ref for a fetched one) — CandyDirs is keyed by
-// that same key (ScanAllCandyWithConfig + candyDirsFromScan, check_cmd.go), so the single
-// lookup matches in both cases.
-//
-// It FAILS HARD (returns an error) on every condition where the fixture cannot
-// be anchored — a non-candy origin (the step's Origin was lost upstream), an
-// absent CandyDirs entry (the candy scan failed or did not see this candy), or a
-// file missing under the candy tree. There is NO fallback and NO silent
-// cwd-relative pass-through: a wrong CandyDirs must surface here, not be patched
-// over into a misleading downstream "no such file".
+// resolveCheckApk is the thin hostVerbResolver wrapper around the shared
+// kit.ResolveCommittedApk (CHECK-cone move, sdk/kit/apk_path.go) — anchoring a relative
+// committed-APK path against the AUTHORING candy's source tree, so a check resolves its
+// fixture whether the candy is local OR fetched via @github. This wrapper's sole job is
+// supplying the two host-only inputs the pure resolver needs: h.kr.CandyDirs() (from
+// ScanAllCandyWithConfig + candyDirsFromScan, check_cmd.go) and h.kr.CandyScanErr().
 func (h *hostVerbResolver) resolveCheckApk(apk, origin string) (string, error) {
-	if apk == "" || filepath.IsAbs(apk) {
-		return apk, nil
-	}
-	key, ok := strings.CutPrefix(origin, "candy:")
-	if !ok {
-		return "", fmt.Errorf("committed APK %q has origin %q, not a candy origin — cannot anchor it to a candy source tree (the step's candy Origin was not propagated)", apk, origin)
-	}
-	candyDirs := h.kr.CandyDirs()
-	dir := candyDirs[key]
-	if dir == "" {
-		if h.kr.CandyScanErr() != nil {
-			return "", fmt.Errorf("committed APK %q (candy %q): candy source-dir scan failed: %w", apk, key, h.kr.CandyScanErr())
-		}
-		return "", fmt.Errorf("committed APK %q: candy %q is absent from the source scan (%d candies scanned) — cannot anchor the fixture", apk, key, len(candyDirs))
-	}
-	return kit.ResolveApkPath(apk, dir)
+	return kit.ResolveCommittedApk(apk, origin, h.kr.CandyDirs(), h.kr.CandyScanErr())
 }
 
 // noVmDisplayDeviceErr is the substring the VM-target resolver (charly/vm_target.go)

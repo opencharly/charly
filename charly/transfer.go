@@ -11,9 +11,9 @@ import (
 // transfer.go — cross-engine image transfer + the generic "ensure present" fallback chain.
 //
 // MIGRATION INVENTORY (north-star §4.4): this file is UNTIL-K4 (deploy + config
-// resolution → deploykit + the deploy/bundle plugins). Both consumers —
-// pod_lifecycle_resolve.go and config_image.go — are deploy-cone files (P14-rest
-// trace, 2026-07); EnsureImage/loadProjectCfgFromCwd move together with them.
+// resolution → deploykit + the deploy/bundle plugins). Its consumer
+// config_image.go is a deploy-cone file (P14-rest
+// trace, 2026-07); EnsureImage/loadProjectCfgFromCwd move together with it.
 
 // EnsureImage ensures the image is available in the run engine's local store.
 // Three-tier fallback (each step independent):

@@ -7,12 +7,15 @@ package main
 // check live → fresh update → tear down) lives in the compiled-in command:check plugin
 // (candy/plugin-check); it drives the sequence over HostBuild("cli") + the check-bed
 // session seam. Narrowed at Cutover B unit 6b (the InvokeProvider-generalization family):
-// every caller of this file's functions was ALREADY core-only (host_build_check_bed.go,
-// bundle_members.go — no plugin calls them directly), so the orchestration
-// (persistBedDeployOverrides/deployNestedLocalChildren/waitForVmSshReady/
-// waitForContainerReady/bedCheckLevel's classifier) moved to sdk/deploykit/bed_session.go —
-// the SAME "portable orchestration in sdk, thin core call sites" pattern already applied to
-// the credential family. What stays here: bedExternalInPlace — the ONE genuinely
+// the orchestration (persistBedDeployOverrides/bedCheckLevel's classifier) moved to
+// sdk/deploykit/bed_session.go — the SAME "portable orchestration in sdk, thin core call
+// sites" pattern already applied to the credential family. The former core-side 1-line
+// pass-through wrappers for the nested-local-children deploy, the VM-ssh-ready wait, and
+// the container-ready wait were DELETED (P12/P14 core-minimization dedup sweep): every
+// caller (bundle_members.go, host_build_check_bed.go) now calls the corresponding
+// deploykit.* function directly — the wrappers added indirection with zero behavior and
+// had no plugin caller that needed a core-side name (R3/R5). What stays here: bedCheckLevel
+// (needs the loaded *UnifiedFile — K1-gated) and bedExternalInPlace — the ONE genuinely
 // registry-coupled classification (isExternalDeploySubstrate queries the live provider
 // registry) — now computed HOST-SIDE ONCE and threaded as a plain `bool` parameter into
 // deploykit.PersistBedDeployOverrides (no new wire surface — there is no cross-process
@@ -67,22 +70,4 @@ func bedExternalInPlace(target string) bool {
 // K1-tied struct→node-form serializer core alone can call).
 func persistBedDeployOverrides(name string, node spec.BundleNode) {
 	deploykit.PersistBedDeployOverrides(name, node, bedExternalInPlace(node.Target), marshalDeployNode)
-}
-
-// deployNestedLocalChildren is the thin core wrapper — the orchestration lives in
-// deploykit.DeployNestedLocalChildren (unit 6b).
-func deployNestedLocalChildren(parent string, children map[string]*spec.BundleNode, apply func(childKey, dotted string) error) error {
-	return deploykit.DeployNestedLocalChildren(parent, children, apply)
-}
-
-// waitForVmSshReady is the thin core wrapper — the orchestration lives in
-// deploykit.WaitForVmSshReady (unit 6b).
-func waitForVmSshReady(domainID string) {
-	deploykit.WaitForVmSshReady(domainID)
-}
-
-// waitForContainerReady is the thin core wrapper — the orchestration lives in
-// deploykit.WaitForContainerReady (unit 6b).
-func waitForContainerReady(bed string) {
-	deploykit.WaitForContainerReady(bed)
 }

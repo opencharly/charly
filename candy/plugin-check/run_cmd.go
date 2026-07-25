@@ -189,13 +189,16 @@ func (c *CheckRunCmd) runIterateEntity(reply checkProjection, cwd string) error 
 	case targetKindHost:
 		// Test-bed image preflight (host target): the deploy that prepared the host
 		// installs candies only; container images that plan steps spawn need pulling /
-		// building first. Rides the "preflight" check-run mode (ensureScoreImages STAYS
-		// core — the R3-shared EnsureImagePresent).
+		// building first. The image-set DISCOVERY (dedup + sort over the include-expanded
+		// plan) is pure and runs HERE (preflightImageCandidates, CHECK-cone move); only the
+		// two genuinely host-loader-coupled bits — the agent-provisioned filter (needs the
+		// loaded project tree) and EnsureImagePresent (the R3-shared build-engine helper)
+		// — ride the "preflight" check-run mode's Filter field.
 		if !c.DryRun {
-			// Thread the plugin-side include-expanded plan (reply.Plan) so the host preflight ensures
-			// every step-venue image without re-running the include-splicer core-side (it moved here).
-			if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd, Plan: reply.Plan}); err != nil {
-				return err
+			if images := preflightImageCandidates(reply.Plan); len(images) > 0 {
+				if _, err := hostCheckRun(spec.CheckRunRequest{Mode: "preflight", Name: c.Name, Dir: cwd, Filter: images}); err != nil {
+					return err
+				}
 			}
 		}
 		return runLocalInProcess(args, cwd)

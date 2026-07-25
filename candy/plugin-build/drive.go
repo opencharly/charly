@@ -113,6 +113,12 @@ func runBoxBuild(ctx context.Context, ex *sdk.Executor, req spec.BuildRequest) (
 		boxByName[b.Name] = b
 	}
 
+	// Privileged builder-bootstrap for every `from: builder:` image in the set, staged up
+	// front (matches the former host-side pre-pass ordering) before the podman build loop.
+	if err := bootstrapImages(ctx, ex, buildDir(req.Dir), cfg.EngineName, reply.Boxes); err != nil {
+		return nil, err
+	}
+
 	builtBoxes, err := cfg.buildImages(ctx, ex, reply, boxByName, containerfiles)
 	if err != nil {
 		return nil, err

@@ -47,7 +47,7 @@ type loadedProject struct {
 	uf         *loaderkit.UnifiedFile // nil when absent or its load/discover errored
 	distroCfg  *buildkit.DistroConfig
 	builderCfg *buildkit.BuilderConfig
-	initCfg    *InitConfig
+	initCfg    *buildkit.InitConfig
 	version    string
 	empty      bool
 }

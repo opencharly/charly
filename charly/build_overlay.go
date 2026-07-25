@@ -220,7 +220,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 		return spec.OverlayBuildReply{}, fmt.Errorf("loading project for overlay envelope: %w", lperr)
 	}
 	if !lp.empty {
-		var initCfg *InitConfig
+		var initCfg *buildkit.InitConfig
 		if gen != nil {
 			initCfg = gen.InitConfig
 		} else {

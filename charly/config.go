@@ -115,7 +115,7 @@ type ResolveOpts struct {
 	// caller with no init-aware consumer downstream.
 	//
 	// NEVER read by the moved buildkit resolvers either — same rationale as ExtraCandyRefs.
-	InitCfg *InitConfig
+	InitCfg *buildkit.InitConfig
 	// DistroCfg / BuilderCfg are the project's build vocabulary (distro:/builder: —
 	// the SAME triple LoadBuildConfigForBox returns alongside InitCfg), threaded
 	// through so ResolveBox does not re-run LoadUnified on every call (FINAL/K5 unit

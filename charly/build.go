@@ -4,22 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"slices"
-	"sort"
 	"strings"
-	"text/template"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/buildkit"
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
 )
@@ -74,21 +68,6 @@ func ensureBuilderImageBuilt(engine, builderRef string) (string, error) {
 	return resolved, nil
 }
 
-// normalizeBoxArgs canonicalises the positional box selection shared by
-// `charly box build` and `charly box generate`. The lone sentinel `all`
-// (case-insensitive) collapses to nil — i.e. "every enabled box" — so
-// `charly box build all` / `charly box generate all` behave identically to the
-// bare no-argument form. Any other slice (including a literal "all" alongside
-// other names) passes through unchanged: the sentinel fires ONLY when it is the
-// sole argument, so a box that happens to be named "all" is still reachable via
-// an explicit two-name invocation.
-func normalizeBoxArgs(boxes []string) []string {
-	if len(boxes) == 1 && strings.EqualFold(boxes[0], "all") {
-		return nil
-	}
-	return boxes
-}
-
 // boxResolveOpts builds the ResolveOpts that scope a generate/build to a set of
 // explicitly-named boxes. It is the SINGLE source of the box-selection rule for
 // both `charly box build` and `charly box generate` (R3): an empty slice means
@@ -116,7 +95,7 @@ func (c *BuildCmd) Run() error {
 	// Normalize the `all` sentinel to nil BEFORE any per-name interpretation
 	// (remote-ref dispatch, include-passthrough, the resolver) so every surface
 	// agrees that "no specific boxes" means "all enabled".
-	c.Boxes = normalizeBoxArgs(c.Boxes)
+	c.Boxes = buildkit.NormalizeBoxArgs(c.Boxes)
 
 	handled, dir, err := c.checkRemoteRefsAndPivot()
 	if handled {
@@ -257,252 +236,9 @@ func (c *BuildCmd) resolveBuildTunables(def spec.BoxConfig) {
 	}
 }
 
-// pacstrapMicroarchRe matches pacman microarchitecture-level tokens (e.g.
-// x86_64_v3) embedded in a repo Server URL. CachyOS's cachyos-v3 repos serve
-// such packages; pacman rejects them unless the matching token is in
-// Architecture.
-var pacstrapMicroarchRe = regexp.MustCompile(`x86_64_v[0-9]+`)
-
-// renderPacstrapExtraConf builds the pacman.conf fragment appended to
-// /etc/pacman.conf inside the bootstrap container before `pacstrap` runs. It is
-// the SINGLE source of truth for both the image bootstrap path
-// (runPrivilegedBootstrap) and the VM bootstrap path (vm_bootstrap.go) — these
-// previously each open-coded the rendering and drifted: the VM path dropped the
-// per-repo SigLevel, so a SigLevel=Never repo (CachyOS) fell back to the
-// default Required and `pacman -Sy` failed with "GPGME error: No data /
-// corrupted PGP signature". Both paths now share this function.
-//
-// It emits, in order:
-//  1. an [options] Architecture directive whenever any repo Server declares a
-//     microarch variant (e.g. x86_64_v3). pacman's default Architecture (auto →
-//     x86_64) otherwise rejects those packages with "package architecture is
-//     not valid". Architecture is cumulative in pacman, so appending this to
-//     the base config widens the accepted set rather than replacing it.
-//  2. each [repo] block with its Server and (when set) SigLevel.
-func renderPacstrapExtraConf(p *PacstrapDef) string {
-	if p == nil || len(p.ExtraRepos) == 0 {
-		return ""
-	}
-	seen := map[string]bool{}
-	var microarch []string
-	for _, r := range p.ExtraRepos {
-		for _, m := range pacstrapMicroarchRe.FindAllString(r.Server, -1) {
-			if !seen[m] {
-				seen[m] = true
-				microarch = append(microarch, m)
-			}
-		}
-	}
-	sort.Strings(microarch)
-
-	var b strings.Builder
-	if len(microarch) > 0 {
-		fmt.Fprintf(&b, "[options]\nArchitecture = x86_64 %s\n", strings.Join(microarch, " "))
-	}
-	for _, r := range p.ExtraRepos {
-		fmt.Fprintf(&b, "[%s]\nServer = %s\n", r.Name, r.Server)
-		if r.SigLevel != "" {
-			fmt.Fprintf(&b, "SigLevel = %s\n", r.SigLevel)
-		}
-	}
-	return b.String()
-}
-
-// renderRuntimePacmanConf renders the booted-guest /etc/pacman.conf for a
-// pacstrap distro. `runtime_pacman_conf` is a Go text/template evaluated
-// against the PacstrapDef, so the repo list is derived from the SINGLE
-// `extra_repo` source (`{{ range .ExtraRepos }}`) rather than a second
-// hand-maintained verbatim copy — eliminating the install-vs-runtime drift
-// that left a stale `cachyos-extra` (HTML-stub mirror) in one surface. The
-// template adds only the runtime-specific framing ([options] header + Arch
-// core/extra). A legacy verbatim config (no template actions) renders to
-// itself. Returns "" when unset; surfaces malformed-template errors.
-func renderRuntimePacmanConf(p *PacstrapDef) (string, error) {
-	if p == nil || strings.TrimSpace(p.RuntimePacmanConf) == "" {
-		return "", nil
-	}
-	tmpl, err := template.New("runtime_pacman_conf").Parse(p.RuntimePacmanConf)
-	if err != nil {
-		return "", fmt.Errorf("parsing runtime_pacman_conf template: %w", err)
-	}
-	var b strings.Builder
-	if err := tmpl.Execute(&b, p); err != nil {
-		return "", fmt.Errorf("rendering runtime_pacman_conf: %w", err)
-	}
-	return b.String(), nil
-}
-
-func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *buildkit.ResolvedBox) error {
-	if !strings.HasPrefix(img.From, "builder:") {
-		return nil
-	}
-	builderName := strings.TrimPrefix(img.From, "builder:")
-	if img.BootstrapBuilderImage == "" {
-		return fmt.Errorf("box %s: from: builder:%s requires bootstrap_builder_image: in charly.yml", boxName, builderName)
-	}
-	if img.BuilderConfig == nil {
-		return fmt.Errorf("box %s: charly.yml builder: section is empty", boxName)
-	}
-	builder, ok := img.BuilderConfig.Builder[builderName]
-	if !ok {
-		return fmt.Errorf("box %s: builder %q is not declared in charly.yml", boxName, builderName)
-	}
-	if !builder.IsBootstrap() {
-		return fmt.Errorf("box %s: builder %q is not kind: bootstrap (got kind=%q)", boxName, builderName, builder.Kind)
-	}
-	if img.DistroDef == nil {
-		return fmt.Errorf("box %s: distro %v has no resolved DistroDef", boxName, img.Distro)
-	}
-
-	output := builder.OutputArtifact
-	if output == "" {
-		output = "/out/rootfs.tar.gz"
-	}
-	outDest := filepath.Join(dir, ".build", boxName, fmt.Sprintf("%s.tar.gz", builderName))
-
-	// Skip rebuild when the staged tarball is already present and the
-	// builder image hash hasn't changed. Cheap stat is enough for now;
-	// content-addressing is a future optimization.
-	if _, err := os.Stat(outDest); err == nil {
-		fmt.Fprintf(os.Stderr, "Bootstrap %s already staged at %s — skipping\n", builderName, outDest)
-		return nil
-	}
-
-	// Resolve the builder image ref. Internal kind:box names get
-	// resolved to the newest local CalVer tag via the same machinery
-	// as `charly shell <name>` so build never tries to pull a `:latest`
-	// that charly doesn't emit.
-	// Resolve + auto-build the bootstrap builder image on demand (fully automatic).
-	builderRef, err := ensureBuilderImageBuilt(engine, img.BootstrapBuilderImage)
-	if err != nil {
-		return err
-	}
-
-	ctx := struct {
-		Distro            *spec.ResolvedDistro
-		Packages          []string
-		ExtraPacmanConf   string
-		RuntimePacmanConf string
-		ExtraAptSources   string
-		Arch              string
-		Variant           string
-	}{
-		Distro:   img.DistroDef,
-		Packages: bootstrapPackagesForBox(img),
-	}
-	// CachyOS et al. need extra repo blocks (+ an Architecture directive for
-	// microarch repos) injected into pacman.conf before pacstrap so the new
-	// packages resolve from the right repos. Shared with the VM bootstrap path.
-	// RuntimePacmanConf is rendered from the SAME extra_repo source (single
-	// source of truth) and written into the booted guest's /etc/pacman.conf.
-	if img.DistroDef != nil {
-		ctx.ExtraPacmanConf = renderPacstrapExtraConf(img.DistroDef.Pacstrap)
-		runtimeConf, rerr := renderRuntimePacmanConf(img.DistroDef.Pacstrap)
-		if rerr != nil {
-			return rerr
-		}
-		ctx.RuntimePacmanConf = runtimeConf
-	}
-	// Debian-family security/backports apt sources injected before stage-2.
-	if img.DistroDef.Debootstrap != nil && len(img.DistroDef.Debootstrap.ExtraRepos) > 0 {
-		var b strings.Builder
-		for _, r := range img.DistroDef.Debootstrap.ExtraRepos {
-			suite := r.Suite
-			if suite == "" {
-				suite = img.DistroDef.Debootstrap.Suite
-			}
-			components := r.Components
-			if components == "" {
-				components = img.DistroDef.Debootstrap.Components
-				if components == "" {
-					components = "main"
-				}
-			}
-			fmt.Fprintf(&b, "echo 'deb %s %s %s' > /target/etc/apt/sources.list.d/%s.list\n", r.URL, suite, components, r.Name)
-		}
-		ctx.ExtraAptSources = b.String()
-	}
-
-	script, err := renderBootstrapScript(builder, ctx)
-	if err != nil {
-		return fmt.Errorf("rendering bootstrap script for %s: %w", boxName, err)
-	}
-
-	fmt.Fprintf(os.Stderr, "\n--- Bootstrap (%s) for %s ---\n", builderName, boxName)
-	if err := RunPrivileged(PrivilegedRun{
-		Image:      builderRef,
-		Script:     script,
-		OutputPath: output,
-		OutputDest: outDest,
-	}); err != nil {
-		return fmt.Errorf("running %s for %s: %w", builderName, boxName, err)
-	}
-	fmt.Fprintf(os.Stderr, "Wrote %s\n", outDest)
-	return nil
-}
-
-// bootstrapPackagesForBox returns base + per-image bootstrap packages.
-// Per-image overrides aren't currently surfaced via charly.yml; this
-// returns just the distro defaults for now.
-//
-// Mirrors baseBootstrapPackages in vm_bootstrap.go but at the OCI-image
-// build path (the box config `from: builder:<name>` consumers). Same dispatch
-// rules: Pacstrap.BasePackages for pacstrap-flavored, Debootstrap.BasePackages
-// for debootstrap-flavored.
-func bootstrapPackagesForBox(img *buildkit.ResolvedBox) []string {
-	if img.DistroDef == nil {
-		return nil
-	}
-	if img.DistroDef.Pacstrap != nil {
-		return img.DistroDef.Pacstrap.BasePackages
-	}
-	if img.DistroDef.Debootstrap != nil {
-		return img.DistroDef.Debootstrap.BasePackages
-	}
-	return nil
-}
-
-// podmanJobsCapFallback is the ceiling on the auto-computed
-// `podman build --jobs` value, used ONLY when defaults.podman_jobs_cap is
-// absent from project config. The operative ceiling is
-// charly.yml `defaults.podman_jobs_cap`; this conservative constant just
-// keeps configs that don't declare the key on a safe value. The per-build
-// override is --podman-jobs / CHARLY_PODMAN_JOBS. (See CHANGELOG/ for the
-// podman-5.7.x blob-reuse SIGABRT race that originally motivated a hard cap.)
-const podmanJobsCapFallback = 4
-
 // jobsFallback is the outer image-level concurrency (images per DAG level)
 // used when neither --jobs / CHARLY_BUILD_JOBS nor defaults.jobs is set.
 const jobsFallback = 4
-
-// numCPU is a package-level alias for runtime.NumCPU so tests can inject
-// a fixed value via the init in build_jobs_test.go.
-var numCPU = runtime.NumCPU
-
-// resolvePodmanJobs returns the --jobs value to pass to `podman build`.
-// An explicit override (>0, from --podman-jobs / CHARLY_PODMAN_JOBS /
-// defaults.podman_jobs) wins. Otherwise the value is CPU-proportional,
-// capped at `cap` (defaults.podman_jobs_cap, else podmanJobsCapFallback):
-// min(numCPU(), cap). A cap < 1 falls back to podmanJobsCapFallback.
-func resolvePodmanJobs(override, jobsCap int) int {
-	if override > 0 {
-		return override
-	}
-	if jobsCap < 1 {
-		jobsCap = podmanJobsCapFallback
-	}
-	n := numCPU()
-	if n < jobsCap {
-		return n
-	}
-	return jobsCap
-}
-
-// hostPlatform returns the host platform in OCI format.
-func hostPlatform() string {
-	arch := runtime.GOARCH
-	return "linux/" + arch
-}
 
 // detectRemoteIncludePassthrough inspects cwd's charly.yml for a
 // single `@github.com/owner/repo/...charly.yml:ref` include. If
@@ -596,49 +332,6 @@ func (c *BuildCmd) buildRemote(ref string) error {
 	return ctx.BuildImage(nil, tag)
 }
 
-// filterBox filters the build order to only include the requested images
-// and their dependencies.
-func filterBox(order []string, requested []string, boxes map[string]*buildkit.ResolvedBox) ([]string, error) {
-	// Validate requested images exist
-	for _, name := range requested {
-		if _, ok := boxes[name]; !ok {
-			return nil, fmt.Errorf("unknown box %q", name)
-		}
-	}
-
-	// Collect requested images and their transitive deps (Base + format builders +
-	// BootstrapBuilderImage). Routed through boxDirectDeps in graph.go so this
-	// walker stays in lockstep with ResolveBoxOrder + ResolveBoxLevels — see
-	// the helper's docstring for the rationale (2026-05 cachyos-pacstrap-builder
-	// regression). includeFormatBuilders=true here unconditionally because filtered
-	// build sets must always include format-builder images that the requested
-	// targets need at build time, regardless of BoxNeedsBuilder.
-	needed := make(map[string]bool)
-	var addDeps func(name string)
-	addDeps = func(name string) {
-		if needed[name] {
-			return
-		}
-		needed[name] = true
-		img := boxes[name]
-		for _, dep := range deploykit.BoxDirectDeps(name, img, boxes, true) {
-			addDeps(dep)
-		}
-	}
-	for _, name := range requested {
-		addDeps(name)
-	}
-
-	// Filter order preserving dependency order
-	var filtered []string
-	for _, name := range order {
-		if needed[name] {
-			filtered = append(filtered, name)
-		}
-	}
-	return filtered, nil
-}
-
 // ensureCharlyBinaryFresh rebuilds candy/charly/bin/charly when any image whose
 // resolved candy chain includes the `charly` candy is in scope for the
 // current build. Without this, podman build would COPY whatever stale
@@ -684,7 +377,7 @@ func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox,
 		return nil
 	}
 
-	upToDate, err := charlyBinaryUpToDate(binPath, srcDir)
+	upToDate, err := buildkit.CharlyBinaryUpToDate(binPath, srcDir)
 	if err == nil && upToDate {
 		return nil
 	}
@@ -700,40 +393,4 @@ func ensureCharlyBinaryFresh(dir string, boxes map[string]*buildkit.ResolvedBox,
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-// charlyBinaryUpToDate returns true when binPath exists and is newer than
-// every .go file under srcDir. Returns (false, nil) for any file system
-// state that warrants a rebuild (missing binary, missing source dir).
-func charlyBinaryUpToDate(binPath, srcDir string) (bool, error) {
-	binStat, err := os.Stat(binPath)
-	if err != nil {
-		return false, nil
-	}
-	binMtime := binStat.ModTime()
-	upToDate := true
-	walkErr := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if info.ModTime().After(binMtime) {
-			upToDate = false
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	if walkErr != nil {
-		return false, walkErr
-	}
-	return upToDate, nil
 }

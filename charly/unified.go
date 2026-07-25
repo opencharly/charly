@@ -598,14 +598,14 @@ func ProjectBuilderConfig(uf *loaderkit.UnifiedFile) *buildkit.BuilderConfig {
 	return &buildkit.BuilderConfig{Builder: builders}
 }
 
-// ProjectInitConfig returns the *InitConfig equivalent (inits: section), decoding the
-// build vocabulary from the init plugin kind (uf.PluginKinds via resolveInits(uf)).
-func ProjectInitConfig(uf *loaderkit.UnifiedFile) *InitConfig {
+// ProjectInitConfig returns the *buildkit.InitConfig equivalent (inits: section), decoding
+// the build vocabulary from the init plugin kind (uf.PluginKinds via resolveInits(uf)).
+func ProjectInitConfig(uf *loaderkit.UnifiedFile) *buildkit.InitConfig {
 	inits := resolveInits(uf)
 	if len(inits) == 0 {
 		return nil
 	}
-	return &InitConfig{Init: inits}
+	return &buildkit.InitConfig{Init: inits}
 }
 
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL

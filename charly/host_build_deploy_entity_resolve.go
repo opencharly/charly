@@ -79,8 +79,7 @@ func hostBuildDeployEntityResolve(_ context.Context, req spec.DeployEntityResolv
 		if err != nil {
 			return spec.DeployEntityResolveReply{}, err
 		}
-		email, token := resolveAndroidGoogleCreds(spc.GoogleAccount)
-		b, err := json.Marshal(spec.AndroidEntityResolution{SpecJSON: specJSON, GoogleEmail: email, GoogleToken: token})
+		b, err := json.Marshal(spec.AndroidEntityResolution{SpecJSON: specJSON})
 		if err != nil {
 			return spec.DeployEntityResolveReply{}, err
 		}
@@ -148,28 +147,4 @@ func lookupAndroidSpec(uf *loaderkit.UnifiedFile, name string) *ResolvedAndroid 
 		return nil
 	}
 	return r
-}
-
-// resolveAndroidGoogleCreds reads the apkeep google-play credentials from the credential store
-// using the device's google_account secret-key refs (or the GOOGLE_ACCOUNT_EMAIL /
-// GOOGLE_AAS_TOKEN defaults). Empty when unset. Relocated from the deleted
-// android_deploy_cmd.go (FINAL/K5 unit 6a): the credential-STORE touch (DefaultCredentialStore →
-// verb:credential) is core-only, so this ONE small piece stays behind the
-// "deploy-entity-resolve" seam while the REST of android_deploy_cmd.go's device-resolution logic
-// (container/engine-inspect based, no LoadUnified/credential coupling) moved to
-// candy/plugin-adb/preresolve.go.
-func resolveAndroidGoogleCreds(ga *AndroidGoogleAccount) (email, token string) {
-	emailKey, tokenKey := "GOOGLE_ACCOUNT_EMAIL", "GOOGLE_AAS_TOKEN"
-	if ga != nil {
-		if ga.EmailSecret != "" {
-			emailKey = ga.EmailSecret
-		}
-		if ga.TokenSecret != "" {
-			tokenKey = ga.TokenSecret
-		}
-	}
-	store := DefaultCredentialStore()
-	email, _ = store.Get("charly/secret", emailKey)
-	token, _ = store.Get("charly/secret", tokenKey)
-	return email, token
 }
