@@ -423,13 +423,13 @@ func (c *BuildCmd) runPrivilegedBootstrap(engine, dir, boxName string, img *buil
 		ctx.ExtraAptSources = b.String()
 	}
 
-	script, err := renderBootstrapScript(builder, ctx)
+	script, err := buildkit.RenderBootstrapScript(builder, ctx)
 	if err != nil {
 		return fmt.Errorf("rendering bootstrap script for %s: %w", boxName, err)
 	}
 
 	fmt.Fprintf(os.Stderr, "\n--- Bootstrap (%s) for %s ---\n", builderName, boxName)
-	if err := RunPrivileged(PrivilegedRun{
+	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
 		Image:      builderRef,
 		Script:     script,
 		OutputPath: output,

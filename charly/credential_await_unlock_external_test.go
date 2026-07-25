@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // TestCredentialAwaitUnlock_ExternalEndToEnd is the LIVE proof that the externalized
@@ -48,7 +50,7 @@ func TestCredentialAwaitUnlock_ExternalEndToEnd(t *testing.T) {
 	//    (one class:word per line).
 	pluginDir := t.TempDir()
 	staged := filepath.Join(pluginDir, "plugin-secrets")
-	if err := copyFileBytes(bin, staged); err != nil {
+	if err := buildkit.CopyFileBytes(bin, staged); err != nil {
 		t.Fatalf("stage plugin binary: %v", err)
 	}
 	if err := os.Chmod(staged, 0o755); err != nil {

@@ -426,7 +426,7 @@ func (g *Generator) emitBakedPlugins(b *strings.Builder, boxName string, candyOr
 			if err := os.MkdirAll(stageDir, 0o755); err != nil {
 				return fmt.Errorf("candy %q: bake_plugin %q: stage dir: %w", candyName, key, err)
 			}
-			if err := copyFileBytes(binPath, filepath.Join(stageDir, binName)); err != nil {
+			if err := buildkit.CopyFileBytes(binPath, filepath.Join(stageDir, binName)); err != nil {
 				return fmt.Errorf("candy %q: bake_plugin %q: stage binary: %w", candyName, key, err)
 			}
 			ctxRel := fmt.Sprintf(".build/%s/.plugins/%s", boxName, binName)
