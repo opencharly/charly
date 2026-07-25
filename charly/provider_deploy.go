@@ -75,13 +75,12 @@ var deployTargetWords = func() []string {
 // OpDeployDispatch path, with its Start/Stop/Attach further routing through pod_lifecycle_dispatch.go's
 // registered plan hooks (arbiter-bracketed by arbiter_bracket.go, S3b). The prep+resolve stays
 // core, the render is in the candy.
-var externalizedDeploySubstrates = map[string]bool{
-	"android": true,
-	"k8s":     true,
-	"local":   true,
-	"pod":     true,
-	"vm":      true,
-}
+// Derived from deployTargetWords (itself CUE-derived from spec.ResourceKinds), not a hand-written
+// literal (deploy-cone cutover 1, task #21): a hardcoded per-kind Go map is an un-gameable-self-test
+// R-item leak even when every entry happens to be true today — the boundary law's clause-D bucket is
+// CUE/config-loaded data, never a compiled-in literal. setFromSlice's map[string]bool result stays
+// mutable, so reserved_registry_test.go's delete/restore probe of one entry still works unchanged.
+var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 
 // externalDeploySubstratePlugins maps each first-party EXTERNALIZED deploy-substrate word
 // to the candy SUBPATH of the plugin that serves it (in the default project repo). It is the

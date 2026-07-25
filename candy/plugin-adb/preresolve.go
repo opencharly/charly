@@ -79,7 +79,11 @@ func invokeAndroidPreresolve(ctx context.Context, req *pb.InvokeRequest) (*pb.In
 		return nil, fmt.Errorf("deploy %q: decode kind:android spec: %w", p.Name, err)
 	}
 
-	dev, err := resolveAndroidDevice(&spc, node, p.Name, res.GoogleEmail, res.GoogleToken)
+	// The google-play credentials are resolved HERE, peer-to-peer via verb:credential
+	// (InvokeProvider) — no longer threaded through the "deploy-entity-resolve" seam.
+	email, token := resolveGoogleCreds(ctx, exec, spc.GoogleAccount)
+
+	dev, err := resolveAndroidDevice(&spc, node, p.Name, email, token)
 	if err != nil {
 		return nil, fmt.Errorf("deploy %q: resolving android device %q: %w", p.Name, node.From, err)
 	}
@@ -122,8 +126,8 @@ func hostEntityResolve(ctx context.Context, exec *sdk.Executor, req spec.DeployE
 }
 
 // androidDevice is a resolved install target — enough to address a specific Android device (an
-// in-pod emulator or a remote adb endpoint) over the wire. GoogleEmail/GoogleToken arrive
-// HOST-RESOLVED (the credential-store touch stays behind the "deploy-entity-resolve" seam).
+// in-pod emulator or a remote adb endpoint) over the wire. GoogleEmail/GoogleToken are resolved
+// by THIS plugin (resolveGoogleCreds, credential_shim.go) via a direct verb:credential peer call.
 type androidDevice struct {
 	Engine      string
 	Container   string
@@ -157,8 +161,7 @@ func adbAddrForContainer(engine, containerName string) (string, error) {
 }
 
 // resolveAndroidDevice builds the androidDevice install handle from the spec and deploy context.
-// email/token arrive already host-resolved (the credential-store touch happened behind the
-// "deploy-entity-resolve" seam, before this call).
+// email/token arrive already resolved by the caller (resolveGoogleCreds, via verb:credential).
 func resolveAndroidDevice(spc *spec.ResolvedAndroid, node *spec.Deploy, path, email, token string) (androidDevice, error) {
 	serial := spc.EffectiveSerial()
 
