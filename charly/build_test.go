@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/vmshared"
 )
 
@@ -29,13 +30,13 @@ func TestFilterImages(t *testing.T) {
 	order := []string{"fedora", "ubuntu", "fedora-test"}
 
 	// Request only fedora-test — should pull in fedora as dependency
-	filtered, err := filterBox(order, []string{"fedora-test"}, images)
+	filtered, err := deploykit.FilterBox(order, []string{"fedora-test"}, images)
 	if err != nil {
-		t.Fatalf("filterBox() error: %v", err)
+		t.Fatalf("deploykit.FilterBox() error: %v", err)
 	}
 	want := []string{"fedora", "fedora-test"}
 	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("filterBox() = %v, want %v", filtered, want)
+		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
 	}
 }
 
@@ -43,7 +44,7 @@ func TestFilterImagesUnknown(t *testing.T) {
 	images := map[string]*buildkit.ResolvedBox{
 		"fedora": {Name: "fedora", IsExternalBase: true},
 	}
-	_, err := filterBox([]string{"fedora"}, []string{"nonexistent"}, images)
+	_, err := deploykit.FilterBox([]string{"fedora"}, []string{"nonexistent"}, images)
 	if err == nil {
 		t.Error("expected error for unknown image")
 	}
@@ -71,13 +72,13 @@ func TestFilterImagesIncludesBuilder(t *testing.T) {
 	order := []string{"builder", "fedora", "app"}
 
 	// Request only app — should pull in fedora (base) and builder
-	filtered, err := filterBox(order, []string{"app"}, images)
+	filtered, err := deploykit.FilterBox(order, []string{"app"}, images)
 	if err != nil {
-		t.Fatalf("filterBox() error: %v", err)
+		t.Fatalf("deploykit.FilterBox() error: %v", err)
 	}
 	want := []string{"builder", "fedora", "app"}
 	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("filterBox() = %v, want %v", filtered, want)
+		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
 	}
 }
 
@@ -113,21 +114,21 @@ func TestFilterImagesIncludesBootstrapBuilder(t *testing.T) {
 
 	order := []string{"arch", "cachyos-pacstrap-builder", "cachyos", "app"}
 
-	filtered, err := filterBox(order, []string{"app"}, images)
+	filtered, err := deploykit.FilterBox(order, []string{"app"}, images)
 	if err != nil {
-		t.Fatalf("filterBox() error: %v", err)
+		t.Fatalf("deploykit.FilterBox() error: %v", err)
 	}
 	want := []string{"arch", "cachyos-pacstrap-builder", "cachyos", "app"}
 	if !reflect.DeepEqual(filtered, want) {
-		t.Errorf("filterBox() = %v, want %v", filtered, want)
+		t.Errorf("deploykit.FilterBox() = %v, want %v", filtered, want)
 	}
 }
 
 func TestHostPlatform(t *testing.T) {
-	p := hostPlatform()
+	p := buildkit.HostPlatform()
 	// Should start with linux/
 	if p != "linux/amd64" && p != "linux/arm64" {
-		t.Logf("hostPlatform() = %q (non-standard arch, that's OK)", p)
+		t.Logf("buildkit.HostPlatform() = %q (non-standard arch, that's OK)", p)
 	}
 }
 
@@ -143,7 +144,7 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 		{Name: "cachyos-core-v3", Server: "https://mirror.cachyos.org/repo/x86_64_v3/$repo", SigLevel: "Never"},
 		{Name: "cachyos", Server: "https://mirror.cachyos.org/repo/$arch/$repo", SigLevel: "Never"},
 	}}
-	got := renderPacstrapExtraConf(cachyos)
+	got := buildkit.RenderPacstrapExtraConf(cachyos)
 	if !strings.Contains(got, "[options]\nArchitecture = x86_64 x86_64_v3\n") {
 		t.Errorf("missing/incorrect Architecture directive for x86_64_v3 repos:\n%s", got)
 	}
@@ -155,10 +156,10 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 	}
 
 	// nil / empty → empty fragment (no spurious [options]).
-	if s := renderPacstrapExtraConf(nil); s != "" {
+	if s := buildkit.RenderPacstrapExtraConf(nil); s != "" {
 		t.Errorf("nil PacstrapDef should render empty, got %q", s)
 	}
-	if s := renderPacstrapExtraConf(&PacstrapDef{}); s != "" {
+	if s := buildkit.RenderPacstrapExtraConf(&PacstrapDef{}); s != "" {
 		t.Errorf("no-repos PacstrapDef should render empty, got %q", s)
 	}
 
@@ -166,7 +167,7 @@ func TestRenderPacstrapExtraConf(t *testing.T) {
 	plain := &PacstrapDef{ExtraRepos: []vmshared.PacstrapRepo{
 		{Name: "extra", Server: "https://example.org/repo/$arch/$repo"},
 	}}
-	got = renderPacstrapExtraConf(plain)
+	got = buildkit.RenderPacstrapExtraConf(plain)
 	if strings.Contains(got, "[options]") {
 		t.Errorf("plain repo should not emit [options]/Architecture, got:\n%s", got)
 	}
@@ -200,7 +201,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 		t.Errorf("runtime_pacman_conf must derive its repo list from extra_repo via {{ range .ExtraRepos }} (single source), got:\n%s", cachyos.Pacstrap.RuntimePacmanConf)
 	}
 	// Render it the way the bootstrap paths do.
-	rc, err := renderRuntimePacmanConf(cachyos.Pacstrap)
+	rc, err := buildkit.RenderRuntimePacmanConf(cachyos.Pacstrap)
 	if err != nil {
 		t.Fatalf("renderRuntimePacmanConf: %v", err)
 	}
@@ -218,7 +219,7 @@ func TestCachyosRuntimePacmanConf(t *testing.T) {
 	if strings.Contains(rc, "cachyos-extra") {
 		t.Errorf("runtime_pacman_conf must NOT include cachyos-extra:\n%s", rc)
 	}
-	if strings.Contains(renderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
+	if strings.Contains(buildkit.RenderPacstrapExtraConf(cachyos.Pacstrap), "cachyos-extra") {
 		t.Errorf("install (extra_repo) config must NOT include cachyos-extra either — single source of truth")
 	}
 }

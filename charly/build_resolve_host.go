@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -50,7 +51,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		dir = cwd
 	}
 
-	boxes := normalizeBoxArgs(req.Boxes)
+	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 	c := &BuildCmd{
 		Boxes:           boxes,
 		Tag:             req.Tag,
@@ -102,7 +103,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		return spec.BuildResolveReply{Error: errString(fmt.Errorf("resolving box order: %w", err))}, nil
 	}
 	if len(gen.RequestedBoxes) > 0 {
-		order, err = filterBox(order, gen.RequestedBoxes, gen.Boxes)
+		order, err = deploykit.FilterBox(order, gen.RequestedBoxes, gen.Boxes)
 		if err != nil {
 			return spec.BuildResolveReply{Error: errString(fmt.Errorf("scoping generation to requested boxes: %w", err))}, nil
 		}
@@ -156,7 +157,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 
 	platform := c.Platform
 	if platform == "" && !c.Push {
-		platform = hostPlatform()
+		platform = buildkit.HostPlatform()
 	}
 
 	// Resolve the build order: filtered → sequential Order; full → level-parallel
@@ -219,7 +220,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		Levels:          levels,
 		Boxes:           descriptors,
 		Jobs:            int64(resolveBuildJobs(c)),
-		PodmanJobs:      int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
+		PodmanJobs:      int64(buildkit.ResolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
 		Cache:           c.Cache,
 		KeepImages:      int64(resolveIntPtr(def.KeepImages)),
 		ResolvedProject: rp,
