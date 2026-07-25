@@ -52,15 +52,6 @@ type credentialHealther interface {
 	health() (*CredentialHealth, error)
 }
 
-// credentialAwaiter is the event-driven keyring-unlock seam: a store that can BLOCK until its
-// keyring unlocks implements it (enc.go's encrypted-volume mount path drives it when a resolve
-// returns source="locked"). The out-of-process pluginCredentialStore satisfies it by RPCing
-// verb:credential `await-unlock` — the godbus PropertiesChanged subscription runs IN the plugin
-// (the Secret Service owner), which is what sheds godbus from charly's core.
-type credentialAwaiter interface {
-	awaitUnlock(ctx context.Context, service, key string) (value, source string, err error)
-}
-
 // credentialInput / credentialReply / CredentialHealth are the verb:credential wire forms,
 // byte-compatible with candy/plugin-secrets (verb_credential.go).
 type credentialInput struct {
