@@ -21,7 +21,7 @@ import (
 // The per-deploy (no-charly.yml) twins ResolveBoxEngineForDeploy/ResolveBoxEngineFromMeta
 // used to be duplicated HERE too — a bare copy of sdk/deploykit's own versions
 // (deploykit/box_engine.go) — dissolved in the CHECK-wave container-resolve dedup: every
-// caller (commands.go, config_image.go, preempt.go, service.go, pod_lifecycle_resolve.go)
+// caller (commands.go, config_image.go, preempt.go, service.go)
 // now calls deploykit.ResolveBoxEngineForDeploy/FromMeta directly. The deploykit file's own
 // header comment claiming "preempt.go, resolved_project_host.go, status_collector.go —
 // direct deploykit.ResolveBoxEngineForDeploy calls" was FALSE for preempt.go before this fix
