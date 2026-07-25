@@ -24,13 +24,16 @@ import (
 const checkRunBuilderKind = "check-run"
 
 // hostCheckRunPreflight is the "preflight" atom arm: for a host-target iterate entity, ensure every
-// image the score's plan steps spawn is present in local storage BEFORE the harness runner walks
-// them. The include-EXPANDED scored plan is computed PLUGIN-SIDE off the resolved-project envelope
-// (candy/plugin-check's include-splicer, which owns the plan expansion) and threaded here as
-// req.Plan; the host runs the R3-shared EnsureImagePresent (via ensureScoreImages) over it and
-// returns an empty reply. Registered directly as the "check-run" host-builder (single-mode kind —
-// the former Mode switch collapsed once every other mode moved plugin-side).
-func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
+// candidate image in req.Filter (the deduplicated, sorted image set the plugin's
+// preflightImageCandidates already discovered from the include-EXPANDED scored plan —
+// CHECK-cone move, candy/plugin-check/preflight_images.go) is present in local storage BEFORE the
+// harness runner walks them. What stays host-side is exactly the two genuinely
+// host-loader-coupled bits a plugin cannot do itself: the agent-provisioned filter (needs the
+// loaded project's full bundle tree, venueIsAgentProvisioned) and EnsureImagePresent (the
+// R3-shared build-engine helper — *Config + BuildCmd's local-build fallback). Registered directly
+// as the "check-run" host-builder (single-mode kind — the former Mode switch collapsed once every
+// other mode moved plugin-side).
+func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buildEngineContext) (kit.CheckRunReply, error) {
 	dir := req.Dir
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -47,8 +50,15 @@ func hostCheckRunPreflight(_ context.Context, req spec.CheckRunRequest, _ buildE
 	if _, has := uf.Bundle[req.Name]; !has {
 		return kit.CheckRunReply{}, fmt.Errorf("check-run preflight: no entity %q in %s", req.Name, dir)
 	}
-	if err := ensureScoreImages(context.Background(), req.Plan, uf, dir); err != nil {
-		return kit.CheckRunReply{}, err
+	cfg := uf.ProjectConfig()
+	fmt.Fprintf(os.Stderr, "preflight: ensuring %d image(s) present in podman storage\n", len(req.Filter))
+	for _, ref := range req.Filter {
+		if venueIsAgentProvisioned(uf, ref) {
+			continue
+		}
+		if err := EnsureImagePresent(ctx, ref, cfg, dir); err != nil {
+			return kit.CheckRunReply{}, fmt.Errorf("preflight: %w", err)
+		}
 	}
 	return kit.CheckRunReply{}, nil
 }

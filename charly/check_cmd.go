@@ -283,7 +283,7 @@ func runLocalDeployScopePlan(dir string, node *spec.BundleNode, image, instance 
 	if herr != nil || home == "" {
 		home = os.Getenv("HOME")
 	}
-	resolver := newRuntimeCheckVarResolver(map[string]string{
+	resolver := kit.NewRuntimeCheckVarResolver(map[string]string{
 		"IMAGE":    image,
 		"INSTANCE": instance,
 		"USER":     user,
