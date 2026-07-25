@@ -59,9 +59,6 @@ var kernelFloor = []floorEntry{
 	{"cue_normalize.go", "M — the CUE-loader shorthand canonicalizer (a materialize decode helper, kind-blind)"},
 	{"cue_schema.go", "M — the per-entity CUE validator (validateKindValueCUE) the host materialize consults by word; kind-blind registry dispatch"},
 	{"deploy_builtins.go", "B — the deploy-target provider signpost (all five substrates are external; a registry seed)"},
-	{"deploy_preresolve.go", "M — the general per-substrate deploy preresolver hook (OpPreresolve dispatch, kind-blind)"},
-	{"deploy_substrate_lifecycle.go", "M — the substrateLifecycle interface (the wire broker's venue-lifecycle contract, kind-blind)"},
-	{"deploy_target_external.go", "M — externalDeployTarget, the out-of-process substrate adapter over the executor reverse channel (wire broker)"},
 	{"deploy_target_unified.go", "M — the UnifiedDeployTarget / LifecycleTarget interface (the broker's deploy-routing contract, kind-blind)"},
 	{"devices.go", "GPU — hardware-blocked fold (C14); would fold into plugin-gpu under P15 once GPU R10 is possible"},
 	{"gpu_allocate.go", "GPU — hardware-blocked fold (C14); revisitable on GPU hardware"},
@@ -91,7 +88,6 @@ var kernelFloor = []floorEntry{
 	{"plugin_loader.go", "M — the plugin-unit load gate (plugin loading)"},
 	{"plugin_prescan.go", "M — the byte-gated additive parse prescan (prescan-dispatch: substrate/command/kind words)"},
 	{"plugin_provider_common.go", "M — shared provider wiring (plugin loading)"},
-	{"plugin_step_external.go", "M — the ExternalPluginStep OpExecute reverse leg (wire broker leg)"},
 	{"plugin_transport.go", "M — the InProc/Local transport pair (plugin loading)"},
 	{"plugins_generated.go", "B — the compiled-in pluginsgen registry output (reproducibility-gated; a registry seed)"},
 	{"provider.go", "M — the Provider interface (transport-invisible; plugin loading)"},
@@ -108,8 +104,6 @@ var kernelFloor = []floorEntry{
 	{"provider_verb.go", "M — the verb-class dispatch (word→plugin dispatch)"},
 	{"registry_bootstrap.go", "B — the provider-registry seed that must exist before any plugin loads"},
 	{"reserved_registry.go", "B/D/M — the CUE-derived reserved-word sets (D), the VerbCatalog dispatch (M), and normalizeNodeInto (materialize); a bootstrap root"},
-	{"step_builtins.go", "B — the compiled-in step-kind dispatch seed"},
-	{"substrate_lifecycle_grpc.go", "M — the grpcSubstrateLifecycle proxy (wire broker venue-lifecycle leg, kind-blind)"},
 	{"unified_targets.go", "M — the ResolveTarget deploy dispatcher + externalDeployTarget adapter (wire broker deploy routing, kind-blind)"},
 	{"verb_builtins.go", "B — the compiled-in verb dispatch seed"},
 	{"version.go", "D — the CalVer computation (kind-recognition/identity data)"},
@@ -147,6 +141,15 @@ var kernelFloor = []floorEntry{
 	{"pod_lifecycle_dispatch.go", "M — the F6 host-plan-hook word-table + arbiter-bracket host-process env gating (CHARLY_PREEMPT_LEASE; kind-blind)"},
 	{"pod_lifecycle_verb.go", "M — the pod-lifecycle verb dispatch (F6 host-plan-hook; kind-blind)"},
 	{"vm_plugin_client.go", "M — the host to plugin libvirt client (InvokeProvider dispatch; wire broker)"},
+	{"deploy_target_dispatch.go", "M — the deploy-target dispatch F10 host-builder to command:bundle OpDeployDispatch (one envelope, all substrates; kind-blind)"},
+	{"dispatch_build_ensure.go", "M — the build:ensure in-proc reverse-channel dispatch to plugin-build (mirrors build.go dispatchBuild; kind-blind)"},
+	{"host_build_arbiter_bracket.go", "M — the arbiter-bracket F10 host-builder (os.Setenv CHARLY_PREEMPT_LEASE must run in THE host process; kind-blind)"},
+	{"host_build_box_ref_resolve.go", "M — the box-ref-resolve host-only piece of build:ensure (generic BoxRefResolveRequest; orchestration moved to plugin-build)"},
+	{"host_build_check_load_plugins.go", "M — the check-load-plugins host seam (plugin-LOADING, an in-core M; connects an out-of-proc candy)"},
+	{"host_build_construct_step.go", "M — the construct-step host-builder (registry-resolve of run: plugin: word; clause-M mechanism)"},
+	{"host_build_deploy_config_save_state.go", "M — the deploy-config-save-state substrate-neutral F10 host-builder (generic deploy-state persist)"},
+	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
+	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -162,8 +165,6 @@ var kernelFloor = []floorEntry{
 //	P14  — status collectors / alias / scaffold / OCI registry+merge → plugins
 //	P15  — residual folds + HostArbiter deletion + K1 loader-orchestration + K5 seam-death + misc CLI utils
 var residueOwner = map[string]string{
-	"agent_config.go":               "P12",
-	"arbiter_host.go":               "P15",
 	"builder_preresolve.go":         "P8b",
 	"builder_venue.go":              "P8b",
 	"build.go":                      "P8b",
@@ -176,9 +177,7 @@ var residueOwner = map[string]string{
 	"check_bed_run.go":              "P12",
 	"check_cmd.go":                  "P12",
 	"check_feature_run.go":          "P12",
-	"check_image_preflight.go":      "P12",
 	"check_members.go":              "P12",
-	"check_runner_live.go":          "P12",
 	"checkrun_charly_verbs.go":      "P12",
 	"check_venue.go":                "P12",
 	"cmd.go":                        "P15",
@@ -186,7 +185,6 @@ var residueOwner = map[string]string{
 	"config.go":                     "P15",
 	"config_image.go":               "P11",
 	"config_secret_migration.go":    "P13",
-	"container.go":                  "P12",
 	"credential_plugin.go":          "P15",
 	"cue_defaults.go":               "P15",
 	"cue_node.go":                   "P15",
@@ -209,8 +207,6 @@ var residueOwner = map[string]string{
 	"hooks.go":                      "P11",
 	"host_build_bake_plugins.go":    "P8b",
 	"host_build_render_seam.go":     "P8b",
-	"host_build_retention.go":       "P15",
-	"host_build_settings.go":        "P15",
 	"host_build_vm_build.go":        "P8b",
 	"host_exec.go":                  "P15",
 	"image.go":                      "P14",
@@ -236,7 +232,6 @@ var residueOwner = map[string]string{
 	"plugin_providers_cmd.go":       "P15",
 	"ports.go":                      "P11",
 	"preempt.go":                    "P15",
-	"privileged_runner.go":          "P15",
 	"readiness_config.go":           "P11",
 	"refs.go":                       "P15",
 	"refs_threaded.go":              "P15",
@@ -244,9 +239,7 @@ var residueOwner = map[string]string{
 	"render_baked_metadata.go":      "P8b",
 	"render_prep.go":                "P8b",
 	"resource_resolve.go":           "P15",
-	"retention.go":                  "P15",
 	"run_subcommand.go":             "P15",
-	"runtime_config_values.go":      "P15",
 	"secrets.go":                    "P11",
 	"security.go":                   "P11",
 	"service_render.go":             "P8b",
@@ -258,9 +251,6 @@ var residueOwner = map[string]string{
 	"substrate_template_resolve.go": "P15",
 	"tasks.go":                      "P8b",
 	"transfer.go":                   "P14",
-	"tunnel.go":                     "P15",
-	"uf_box_generic.go":             "P15",
-	"uf_candy_generic.go":           "P15",
 	"unified.go":                    "P15",
 	"update_deploy_dispatch.go":     "P11",
 	"validate.go":                   "P15",
@@ -268,7 +258,6 @@ var residueOwner = map[string]string{
 	"validate_preempt.go":           "P13",
 	"vm_backend_lifecycle.go":       "P11",
 	"vm_lifecycle_preresolve.go":    "P11",
-	"vm_qemu_client.go":             "P11",
 	"vmshared_aliases.go":           "P15",
 	"volume_cp_tags_cmd.go":         "P11",
 	"volumes.go":                    "P11",
@@ -279,7 +268,6 @@ var residueOwner = map[string]string{
 	"config_write_host.go":     "P11",
 	"intermediates_shim.go":    "P8b",
 	"oci_plugin.go":            "P14",
-	"pod_lifecycle_resolve.go": "P11",
 	"resolved_project_host.go": "P8b",
 	"status_substrate_host.go": "P14",
 	"validate_project_host.go": "P15",
@@ -339,7 +327,6 @@ var residueOwner = map[string]string{
 	// wrapping k8s_generate.go's GenerateK8sKustomize (P11) and explicitly
 	// mirroring the deleted k8s_deploy_preresolve.go's (P11) TreeRoot
 	// computation; classified with its k8s-substrate predecessor, P11.
-	"host_build_k8s_generate.go": "P11",
 	// host_build_ephemeral_register.go + ephemeral_dispatch.go — split of the
 	// deleted ephemeral_lifecycle.go (P11, pruned above): the register/teardown
 	// BODY moved to candy/plugin-bundle, leaving (a) a thin HostBuild seam
@@ -352,7 +339,9 @@ var residueOwner = map[string]string{
 	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
 	// over incidental mechanism-shape similarity to a P13 sibling.
-	"ephemeral_dispatch.go": "P11",
+	"ephemeral_dispatch.go":            "P11",
+	"host_build_retention_defaults.go": "P15",
+	"retention_plugin.go":              "P15",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {
