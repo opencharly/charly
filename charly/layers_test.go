@@ -531,7 +531,7 @@ func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testi
 		t.Fatal(err)
 	}
 
-	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+	initCfg := &buildkit.InitConfig{Init: map[string]*ResolvedInit{
 		"supervisord": {
 			CandyFields:   []string{"service"},
 			ServiceSchema: &spec.InitServiceSchema{SupportsPackaged: true},

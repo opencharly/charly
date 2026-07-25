@@ -108,7 +108,7 @@ func preresolveActiveInitInto(hostCtx deploykit.HostContext, dir string) (deploy
 // supervisord-exclusion for MachineVenue candy order); a future exclusive/machine-venue substrate
 // declaring a different init names it via the tracked declared-venue-init trait, never a second
 // hardcoded string here.
-func resolveActiveInitByName(initCfg *InitConfig) (string, *ResolvedInit, error) {
+func resolveActiveInitByName(initCfg *buildkit.InitConfig) (string, *ResolvedInit, error) {
 	if initCfg == nil {
 		return "", nil, fmt.Errorf("machine-venue deploy requires the \"systemd\" init system, but the project's build vocabulary declares no init: section at all")
 	}

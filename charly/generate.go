@@ -24,7 +24,7 @@ type Generator struct {
 	// (ActiveInit/ResolveInitSystem) runs over Candies + candyOrder and lives
 	// on the Generator — one project init config threaded to the build + pod-
 	// overlay emit sites, NOT carried on each ResolvedBox (decoupled in P3).
-	InitConfig     *InitConfig
+	InitConfig     *buildkit.InitConfig
 	Tag            string
 	Boxes          map[string]*buildkit.ResolvedBox
 	BuildDir       string
