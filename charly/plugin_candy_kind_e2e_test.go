@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 
 	"gopkg.in/yaml.v3"
@@ -93,7 +94,7 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	if err := foldCandyKind(prov, layerGn, &accLayer); err != nil {
 		t.Fatalf("foldCandyKind (layer): %v", err)
 	}
-	ic, ok := decodeInlineCandy(accLayer.Candy["my-layer"])
+	ic, ok := loaderkit.DecodeInlineCandy(accLayer.Candy["my-layer"])
 	if !ok {
 		t.Fatalf("layer shape not folded into acc.Candy; candies=%v", mapKeys(accLayer.Candy))
 	}

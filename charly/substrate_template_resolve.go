@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -107,10 +108,10 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 }
 
 // resolveAndroids projects the whole opaque android template map into resolved envelopes
-// (resolvePluginKindViaPlugin, unified.go — the shared loop every plugin-resolved kind accessor
+// (loaderkit.ResolvePluginKindViaPlugin — the shared loop every plugin-resolved kind accessor
 // uses). Its sibling resolveLocals died with the validate ENGINE (task #60 — the host's only
 // caller, validateLocalTemplates, moved to plugin-box, which decodes Templates.Local itself off
 // the resolved-project envelope).
-func (uf *UnifiedFile) resolveAndroids() map[string]*ResolvedAndroid {
-	return resolvePluginKindViaPlugin(uf, "android", resolveAndroidViaPlugin)
+func resolveAndroids(uf *loaderkit.UnifiedFile) map[string]*ResolvedAndroid {
+	return loaderkit.ResolvePluginKindViaPlugin(uf, "android", resolveAndroidViaPlugin)
 }

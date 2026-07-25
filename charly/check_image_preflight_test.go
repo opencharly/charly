@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -100,7 +101,7 @@ func TestEnsureScoreImages_NilUnifiedFile(t *testing.T) {
 // TestEnsureScoreImages_EmptyPlan returns nil — no pod-targeted steps means no
 // images to ensure.
 func TestEnsureScoreImages_EmptyPlan(t *testing.T) {
-	uf := &UnifiedFile{}
+	uf := &loaderkit.UnifiedFile{}
 	if err := ensureScoreImages(context.Background(), nil, uf, ""); err != nil {
 		t.Errorf("plan with no pod-targeted steps should be a no-op, got %v", err)
 	}

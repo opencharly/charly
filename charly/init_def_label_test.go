@@ -23,7 +23,7 @@ func TestInitDefLabel_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embeddedDefaults: %v", err)
 	}
-	ic := uf.ProjectInitConfig()
+	ic := ProjectInitConfig(uf)
 	if ic == nil || ic.Init["supervisord"] == nil {
 		t.Fatal("embedded vocabulary missing supervisord init def")
 	}

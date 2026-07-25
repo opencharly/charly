@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,7 +48,7 @@ func TestRunPluginKind_DecodesViaEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse rejected the plugin kind (loader-recognition gap): %v", err)
 	}
-	uf := &UnifiedFile{}
+	uf := &loaderkit.UnifiedFile{}
 	for _, gn := range nodes {
 		if err := normalizeNodeInto(gn, uf); err != nil {
 			t.Fatalf("normalizeNodeInto: %v", err)

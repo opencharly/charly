@@ -20,14 +20,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"github.com/opencharly/sdk/vmshared"
 )
 
 // androidTestUF wraps a raw android template map into the PluginKinds shape
-// UnifiedFile.Android() now reads (K1 unit-1 follow-up — no dedicated field).
-func androidTestUF(m map[string]json.RawMessage) *UnifiedFile {
-	return &UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{"android": m}}
+// loaderkit.UnifiedFile.Android() now reads (K1 unit-1 follow-up — no dedicated field).
+func androidTestUF(m map[string]json.RawMessage) *loaderkit.UnifiedFile {
+	return &loaderkit.UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{"android": m}}
 }
 
 // TestBoxBaseFromXOR_RejectsConflict proves a box authoring BOTH base: and from:

@@ -3,6 +3,8 @@ package main
 import (
 	_ "embed"
 	"fmt"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // embeddedCharlyDefaults is the binary's DEFAULT config, compiled into the charly
@@ -16,15 +18,15 @@ import (
 //go:embed charly.yml
 var embeddedCharlyDefaults []byte
 
-// embeddedDefaults parses the binary-embedded node-form defaults into a UnifiedFile
+// embeddedDefaults parses the binary-embedded node-form defaults into a loaderkit.UnifiedFile
 // through the SAME per-document routing (kit.ClassifyDoc → #NodeDoc gate → parse →
 // materialize) that every on-disk charly.yml document flows through — via
 // materializeDocStream (materialize.go), the in-memory counterpart of the sdk/loaderkit Walk
 // mechanism (the embedded vocab has no imports/discover/namespaces, so it needs no file walk).
 // The embedded default is just another node-form config that happens to live in the
 // binary. Parsed fresh on each call so no mutable state is shared across loads.
-func embeddedDefaults() (*UnifiedFile, error) {
-	var uf UnifiedFile
+func embeddedDefaults() (*loaderkit.UnifiedFile, error) {
+	var uf loaderkit.UnifiedFile
 	if err := materializeDocStream(embeddedCharlyDefaults, "charly defaults (embedded)", &uf); err != nil {
 		return nil, fmt.Errorf("parsing embedded defaults: %w", err)
 	}
@@ -46,7 +48,7 @@ func embeddedDefaults() (*UnifiedFile, error) {
 // (materialize.go) for the root AND every namespace child it materializes, so each
 // project/namespace inherits the default vocabulary + sidecar templates. (Replaces the
 // former explicit mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeSidecarMap calls.)
-func applyEmbeddedDefaults(uf *UnifiedFile) error {
+func applyEmbeddedDefaults(uf *loaderkit.UnifiedFile) error {
 	def, err := embeddedDefaults()
 	if err != nil {
 		return err

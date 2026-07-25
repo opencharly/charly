@@ -548,7 +548,7 @@ func (c *deployAddCmd) scanCandiesForRef(ref *DeployRef, cfg *Config, dir string
 	candyKey := ref.Name
 	if ref.Source == RefSourceRemote {
 		aug := *cfg
-		aug.Box = make(boxMap, len(cfg.Box)+1)
+		aug.Box = make(spec.BoxMap, len(cfg.Box)+1)
 		maps.Copy(aug.Box, cfg.Box)
 		aug.Box["__charly_addlayer_fetch__"] = spec.EncodeBox(spec.BoxConfig{Candy: []string{ref.Raw}})
 		scanCfg = &aug

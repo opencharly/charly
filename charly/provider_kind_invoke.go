@@ -8,6 +8,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/errors"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -26,9 +27,9 @@ import (
 // paid only out-of-process. Transport-invisible above the registry.
 //
 // acc is the K1-unit-1 spec.MaterializedProject accumulator (the entity-map subset
-// of *UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/K8s/Local/Android/
+// of *loaderkit.UnifiedFile this dispatch ever touches — Box/Candy/VM/Pod/K8s/Local/Android/
 // Bundle/PluginKinds), threaded from the MaterializeSeams.DecodeEntity callback
-// (loader_threaded.go) rather than a full *UnifiedFile — this dispatch never needed
+// (loader_threaded.go) rather than a full *loaderkit.UnifiedFile — this dispatch never needed
 // Import/Discover/Namespaces/etc, so the retype carries no behavior change.
 func runPluginKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject) error {
 	// C2-substrate: a substrate structural kind (pod/vm/k8s/local/android) is decoded
@@ -283,8 +284,8 @@ func foldCandyKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", gn.name, err)
 		}
-		// The acc.Box[name]=EncodeBox(b) inline write below is exactly what UnifiedFile.SetBox
-		// does (uf_box_generic.go) — that method lives on *UnifiedFile, which acc (a
+		// The acc.Box[name]=EncodeBox(b) inline write below is exactly what loaderkit.UnifiedFile.SetBox
+		// does (uf_box_generic.go) — that method lives on *loaderkit.UnifiedFile, which acc (a
 		// spec.MaterializedProject) is not, so this dispatch inlines the SAME spec.EncodeBox call.
 		ensureMap(&acc.Box)
 		acc.Box[gn.name] = spec.EncodeBox(b)
@@ -294,10 +295,10 @@ func foldCandyKind(prov Provider, gn *genericNode, acc *spec.MaterializedProject
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", gn.name, err)
 	}
-	// Mirrors UnifiedFile.SetCandy (uf_candy_generic.go) — encodeInlineCandy(*InlineCandy) stays
-	// core-private (InlineCandy embeds spec.CandyYAML), reused verbatim.
+	// Mirrors loaderkit.UnifiedFile.SetCandy (uf_candy_generic.go) — loaderkit.EncodeInlineCandy(*loaderkit.InlineCandy) stays
+	// core-private (loaderkit.InlineCandy embeds spec.CandyYAML), reused verbatim.
 	ensureMap(&acc.Candy)
-	acc.Candy[gn.name] = encodeInlineCandy(&InlineCandy{CandyYAML: c})
+	acc.Candy[gn.name] = loaderkit.EncodeInlineCandy(&loaderkit.InlineCandy{CandyYAML: c})
 	return nil
 }
 

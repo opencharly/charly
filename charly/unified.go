@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,170 +50,25 @@ const UnifiedFileName = kit.UnifiedFileName
 // (CUE-owned via spec.SchemaVersion) is the HEAD value; the LoadUnified gate
 // refuses anything older with a hint pointing at `charly migrate`.
 
-// UnifiedFile is the full schema of a single unified-format YAML document.
-// Every field is optional — a file with only `distro:` is valid (typical for
-// the embedded build vocabulary, charly/charly.yml); a file with only `deploy:` is valid (typical
-// for a charly.yml-style include); etc.
-//
-// Schema version 2 consolidates the legacy vms.yml + charly.yml split into one
-// charly.yml file carrying both `vm:` (singular) and `deployments:` at the
-// root. The top-level `vm:` key replaces the legacy `vms:` (plural). See
-// `charly migrate` for the one-shot migration from v1.
-type UnifiedFile struct {
-	Version string `yaml:"version,omitempty" json:"version,omitempty"`
-	// Repo is this project's canonical repo identity (e.g.
-	// "github.com/opencharly/charly"). Optional; only meaningful on the ROOT
-	// file. It lets the import-namespace loader break mutual-import cycles by
-	// repo identity: a transitive import of THIS repo (at ANY pinned version)
-	// resolves to the local working tree instead of fetching a divergent pinned
-	// snapshot, so the root's namespace pins win. When unset, the loader falls
-	// back to `git remote origin` inference (see sdk/loaderkit/repo_identity.go, since W9's
-	// ns_identity.go relocation).
-	Repo string `yaml:"repo,omitempty" json:"repo,omitempty"`
-	// Import is the SINGLE composition statement (the legacy `include:` key
-	// was deleted in the 2026-05 import-namespace cutover). A list whose
-	// items are either a bare string (flat import into THIS root namespace —
-	// same-repo file splits + shared build vocabulary) or a single-key
-	// map `alias: ref` (a namespaced child import — cross-repo entity
-	// cherry-pick, referenced qualified as `alias.entry`). See kit.ImportList.
-	Import   kit.ImportList     `yaml:"import,omitempty" json:"import,omitempty"`
-	Discover kit.DiscoverConfig `yaml:"discover,omitempty" json:"discover,omitempty"`
-	// The build-vocabulary kinds (distro/builder/init) are no longer typed core maps:
-	// each was extracted into a dedicated plugin kind (candy/plugin-distro /
-	// candy/plugin-builder / the candy/plugin-init candy), so a `distro:`/`builder:`/`init:` node
-	// (incl. the binary-embedded build vocabulary) lands in PluginKinds. The name-keyed
-	// map[string]*XDef the generator/format code consumes is reconstructed on demand by
-	// the Distros() / Builders() / Inits() accessors (RESOLVING the opaque bodies via each
-	// kind plugin's OpResolve leg into the value envelope — DistroDef = spec.ResolvedDistro,
-	// InitDef → ResolvedInit, …) and projected via ProjectDistroConfig /
-	// ProjectBuilderConfig / ProjectInitConfig. The binary-embedded default vocabulary
-	// merges UNDER a project's own entries via the generic root-wins mergePluginKindsMap
-	// (applyEmbeddedDefaults). See unified.go Distros()/Builders()/Inits().
-	Defaults spec.BoxConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-	// Field-singular cutover (2026-05): legacy plural `Images yaml:"images"`
-	// deleted; the singular `Box yaml:"box"` is the canonical surface.
-	// Box is the generic kind-keyed IMAGE map (P6): name → opaque marshaled BoxConfig; consumers
-	// decode the authored BoxConfig via the accessors in uf_box_generic.go (the kernel holds no
-	// per-kind TYPE). Config.Box shares this map.
-	Box   boxMap   `yaml:"box,omitempty" json:"box,omitempty"`
-	Candy candyMap `yaml:"candy,omitempty" json:"candy,omitempty"`
-	// Field-singular cutover: legacy `Deploys *DeploymentsSection
-	// yaml:"deployments"` deleted. The flat `Bundle yaml:"deploy"` map is
-	// the canonical singular surface; the wrapper's `Provides` migrates
-	// to UnifiedFile root (next field).
-	Bundle   map[string]spec.BundleNode `yaml:"deploy,omitempty" json:"deploy,omitempty"`
-	Provides *deploykit.ProvidesConfig  `yaml:"provides,omitempty" json:"provides,omitempty"`
-
-	// Schema v4: first-class target template maps (singular keys).
-	// VM/Pod/K8s/Local/Android (K1 unit-1 follow-up) are NO LONGER dedicated stored fields — they
-	// fold into PluginKinds[disc][name] like every other templated kind (distro/builder/init/
-	// sidecar/resource/agent already do), so the fold has no per-kind-word branch to pick a
-	// destination (foldStandaloneTemplateReply, node_normalize.go). The VM()/Pod()/K8s()/Local()/
-	// Android() methods below are DERIVED accessors reading PluginKinds — the same pattern as the
-	// Distros()/Builders()/Inits() accessors further down this file — not stored data.
-
-	// Agent catalog (kind:agent) — the AI-CLI graders the iterate loop drives — is a
-	// dedicated plugin kind (candy/plugin-agent), so an `agent:` entity lands in
-	// PluginKinds["agent"] as an OPAQUE body. The kernel never types it: the harness
-	// resolves a generic spec.AgentExecSpec via candy/plugin-agent's OpResolve — the
-	// agent de-type, Cutover E. Every consumer now reaches this catalog PLUGIN-SIDE
-	// (candy/plugin-check's checkproject.go exposes it as rp.AgentBodies off the
-	// resolved-project envelope; candy/plugin-check/agent.go's resolveAgentSpec
-	// Invokes candy/plugin-agent's OpResolve directly, shared by the harness AND the
-	// deploy-scope feature-run grader, K1-unblock wave arm 2) — the former
-	// core-side catalog resolver had its one caller move plugin-side and was
-	// deleted with it.
-
-	// PluginKinds holds entities of KINDS contributed by plugins (a kind the core
-	// has no typed map for). Decoded via the plugin's Invoke envelope
-	// (runPluginKind) and stored as the plugin's canonical entity JSON, NAME-KEYED:
-	// kind word → entity NAME (the node key) → canonical body. The entity body
-	// itself stays NAMELESS (the node name is the top-level key, never an authored
-	// body field), so #<Kind>Input is untouched; the NAME is mechanism metadata the
-	// host threads from the node key into the storage key. Name-keyed so consumers
-	// can look an entity up by name (the shape the Agents() / Sidecars() accessors
-	// need) and so the merge is root-wins OVERRIDE (a project entity overrides an
-	// embedded/imported one of the same name — e.g. a project `sidecar: tailscale`
-	// over the embedded one) — see mergePluginKindsMap. Built-in
-	// kinds decode into
-	// their typed maps above. Host-internal — never serialized.
-	PluginKinds map[string]map[string]json.RawMessage `yaml:"-" json:"-"`
-
-	// A check bed is a `disposable: true` bundle in the Bundle map (the separate
-	// kind:check block was removed in the node-form cutover); CheckBeds() derives
-	// the R10 bed set from those disposable bundles. `charly check run <bed>`
-	// drives the full R10 sequence.
-
-	// Calamares-aligned kinds. The Calamares install `target:` (settings.conf), the
-	// netinstall package group (`package-group:`), and the installer module (`module:`)
-	// are no longer core typed maps — each was extracted into a dedicated plugin kind
-	// (candy/plugin-target / candy/plugin-package-group / candy/plugin-module), so such an entity
-	// lands in PluginKinds, not here. Calamares has zero core readers yet
-	// (importers/emitters deferred), so — like module/package-group — `target` has no
-	// accessor; the canonical body sits in PluginKinds for a future importer.
-
-	// Resource (kind:resource) — exclusive host-resource definitions (a token name →
-	// an optional gpu.vendor selector that drives GPU auto-allocation at `charly vm
-	// create`) — is no longer a typed core map either: it was extracted into a dedicated
-	// plugin kind (candy/plugin-resource), so a `resource:` node lands in PluginKinds. The
-	// name-keyed map[string]*ResourceDef the GPU-arbitration code consumes is
-	// reconstructed on demand by the Resources() accessor; the binary-embedded default
-	// set merges UNDER a project's own entries via the generic mergePluginKindsMap.
-
-	// Sidecar — the reusable sidecar-container template library — is a dedicated
-	// plugin kind (candy/plugin-sidecar), so a `sidecar:` node (incl. the binary-
-	// embedded `tailscale` template) lands in PluginKinds["sidecar"] as an OPAQUE
-	// body. The kernel never types it: Config.Sidecar / BundleConfig.Sidecar carry
-	// the raw bodies, and candy/plugin-sidecar's OpResolve owns ALL sidecar business
-	// logic (merge + env-routing + resolution — the sidecar de-type, Cutover D). The
-	// binary-embedded default set (e.g. `tailscale`) merges UNDER a project's own
-	// entries via the generic root-wins mergePluginKindsMap (applyEmbeddedDefaults).
-	// See sidecar.go, /charly-automation:sidecar.
-
-	// Namespaces holds child namespaces mounted by namespaced `import:`
-	// entries (alias → fully-resolved isolated UnifiedFile). NOT authored
-	// directly and NOT flat-merged into the root maps — populated by
-	// materializeLoadedProject (materialize.go) from the walk's namespace
-	// mounts. Entries are referenced qualified, e.g.
-	// `base: cachyos.cachyos` resolves `cachyos` in Namespaces, then its
-	// Box["cachyos"]. Bare refs inside a namespace resolve within that
-	// namespace first (Go package-member semantics). See charly/namespace.go.
-	Namespaces map[string]*UnifiedFile `yaml:"-"`
-
-	// RootDir is this UnifiedFile's OWN base directory — the dir its root document's SrcDir names
-	// (materializeLoadedProject, materialize.go). NOT authored; set once per materialize, for BOTH
-	// the top-level project (matching the dir LoadUnified(dir) was called with) AND each mounted
-	// namespace (K1-unblock wave 2, R1 fix — see fillNamespacedBoxes's doc comment): a namespace's
-	// own local candy scan (subUF.projectCandiesScanned) needs THIS directory, not the caller's
-	// outer project dir, to correctly resolve a discovered candy's relative From: path (set
-	// relative to ITS OWN rootDir by materializeDiscoveredNode, not the caller's). Empty for a
-	// project-less / synthetic UnifiedFile.
-	RootDir string `yaml:"-"`
-}
+// UnifiedFile (K1 keystone, task #24 unit 1) relocated to sdk/loaderkit — see
+// loaderkit.UnifiedFile. Every field type was already sdk-portable (spec.*/deploykit.*/plain
+// maps; Box was already spec.BoxMap via the (now-deleted) boxMap alias, Candy already a plain
+// map[string]json.RawMessage via the (now-deleted) candyMap alias), so the type carried NO
+// charly-core dependency of its own. Every charly/*.go reference is now loaderkit.UnifiedFile.
 
 // ImportEntry, ImportList, DiscoverConfig, and ScanSpec are the kind-blind
 // config-loader document DIRECTIVE types — relocated to sdk/kit
 // (loader_directives.go) so charly core AND sdk/loaderkit share ONE copy (R3).
 // See kit.ImportEntry / kit.ImportList / kit.DiscoverConfig / kit.ScanSpec.
 
-// InlineCandy is a candy declared inline in the unified file's `candy:` map.
-// Mutually exclusive options: `from:` points at a directory to scan via the
-// existing scanCandy (no schema change), OR the inline body defines the candy
-// (same fields as the candy manifest, flattened via yaml:",inline").
-type InlineCandy struct {
-	From           string `yaml:"from,omitempty" json:"from,omitempty"`
-	spec.CandyYAML `yaml:",inline"`
-	// Manifest carries the discovery manifest filename for a `From:` directory
-	// so ProjectCandies→scanCandy reads the right file. Not YAML-authored; carried
-	// through the opaque candy-map fold (P6) via JSON, hence exported + json-tagged.
-	Manifest string `yaml:"-" json:"__manifest,omitempty"`
-}
+// InlineCandy (K1 keystone, task #24 unit 1) relocated to sdk/loaderkit — see
+// loaderkit.InlineCandy.
 
 // DeploymentsSection carries repo-shipped deployment defaults plus per-image
 // deployment entries. Matches the two-tier deploy model: this block is the
 // authored/in-repo defaults; ~/.config/charly/charly.yml is the per-machine overlay.
 // DeploymentsSection — RETIRED by the field-singular cutover (2026-05).
-// UnifiedFile.Deploy is now a flat map; UnifiedFile.Provides moved to
+// loaderkit.UnifiedFile.Deploy is now a flat map; loaderkit.UnifiedFile.Provides moved to
 // root level. The type definition is kept (not deleted) because
 // migrate_unified.go still references it for legacy migration history.
 type DeploymentsSection struct {
@@ -258,7 +114,7 @@ func gateSchemaVersion(root, version string) error {
 	return nil
 }
 
-func LoadUnified(dir string) (*UnifiedFile, bool, error) {
+func LoadUnified(dir string) (*loaderkit.UnifiedFile, bool, error) {
 	root := filepath.Join(dir, UnifiedFileName)
 	if !kit.FileExists(root) {
 		return nil, false, nil
@@ -297,10 +153,10 @@ func LoadUnified(dir string) (*UnifiedFile, bool, error) {
 	if err != nil {
 		return nil, true, err
 	}
-	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *UnifiedFile, exactly as
+	// MATERIALIZE + root-wins MERGE (host, registry kind-decode) → the typed *loaderkit.UnifiedFile, exactly as
 	// the former inline loadUnifiedInto did (materializeLoadedProject, materialize.go).
-	merged := &UnifiedFile{}
-	if err := materializeLoadedProject(&lp, merged, map[int64]*UnifiedFile{}); err != nil {
+	merged := &loaderkit.UnifiedFile{}
+	if err := materializeLoadedProject(&lp, merged, map[int64]*loaderkit.UnifiedFile{}); err != nil {
 		return nil, true, err
 	}
 	normalizeV4Aliases(merged)
@@ -421,7 +277,7 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // collapsed into single canonical singular fields with matching yaml
 // tags. Function kept as a no-op so external callers don't break;
 // remove on next refactor pass.
-func normalizeV4Aliases(u *UnifiedFile) {
+func normalizeV4Aliases(u *loaderkit.UnifiedFile) {
 	_ = u
 }
 
@@ -434,7 +290,7 @@ func normalizeV4Aliases(u *UnifiedFile) {
 // For included files: the same mergeUnified is called but dst already contains
 // the root's values, so those fields stay untouched. src's fields that aren't
 // present in dst get copied over. That's the desired semantics.
-func mergeUnified(dst, src *UnifiedFile, srcDir string) {
+func mergeUnified(dst, src *loaderkit.UnifiedFile, srcDir string) {
 	if src.Version != "" && dst.Version == "" {
 		dst.Version = src.Version
 	}
@@ -501,7 +357,7 @@ func mergeRawTemplateMap(dst *map[string]json.RawMessage, src map[string]json.Ra
 // entry, not two) — the property the agent + sidecar extractions rely on (a project's
 // `sidecar: tailscale` overriding the binary-embedded one, merged in via
 // applyEmbeddedDefaults). Without this,
-// plugin-kind entities decoded into a per-document `sub` UnifiedFile are silently
+// plugin-kind entities decoded into a per-document `sub` loaderkit.UnifiedFile are silently
 // dropped at mergeUnified (every document flows through here).
 func mergePluginKindsMap(dst *map[string]map[string]json.RawMessage, src map[string]map[string]json.RawMessage) {
 	if len(src) == 0 {
@@ -526,7 +382,7 @@ func mergePluginKindsMap(dst *map[string]map[string]json.RawMessage, src map[str
 
 // mergeDeployMaps merges src into dst, dst-wins on name collisions.
 // Field-singular cutover: replaces the legacy mergeDeployments which
-// took *DeploymentsSection wrappers. Provides now lives at UnifiedFile
+// took *DeploymentsSection wrappers. Provides now lives at loaderkit.UnifiedFile
 // root and is merged separately by mergeUnified.
 func mergeDeployMaps(dst *map[string]spec.BundleNode, src map[string]spec.BundleNode) {
 	if len(src) == 0 {
@@ -542,24 +398,8 @@ func mergeDeployMaps(dst *map[string]spec.BundleNode, src map[string]spec.Bundle
 	}
 }
 
-// CheckBeds returns the disposable R10 beds keyed by name. In the unified
-// node-form model a bed IS a `disposable: true` bundle (the separate kind:check
-// block is gone), so the bed set is derived directly from the disposable
-// bundles in the Bundle map. Members are instruments (brought up alongside a
-// driver), never standalone beds. Single enumeration source for
-// `charly check run <bed>` (and the /verify-beds fan-out).
-func (uf *UnifiedFile) CheckBeds() map[string]spec.BundleNode {
-	if uf == nil {
-		return nil
-	}
-	beds := map[string]spec.BundleNode{}
-	for name, node := range uf.Bundle {
-		if node.IsDisposable() && node.MemberOf == "" {
-			beds[name] = node
-		}
-	}
-	return beds
-}
+// CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
+// loaderkit.UnifiedFile.CheckBeds.
 
 // validateCheckBeds enforces the kind:check bed-specific invariants beyond the
 // generic deploy validation (which already runs on the folded beds via
@@ -567,7 +407,7 @@ func (uf *UnifiedFile) CheckBeds() map[string]spec.BundleNode {
 // `box:` requirement). Runs at LOAD time so EVERY command that resolves a
 // bed (charly check run, charly bundle add, charly config, charly box validate, …) sees the
 // same friendly error — not just `charly box validate`.
-func validateCheckBeds(uf *UnifiedFile) error {
+func validateCheckBeds(uf *loaderkit.UnifiedFile) error {
 	for name, node := range uf.CheckBeds() {
 		// An iterate: bed is a benchmark (the former kind:score), NOT a
 		// deterministic R10 bed: it drives the AI loop scoring its plan's
@@ -643,11 +483,11 @@ func validateCheckBeds(uf *UnifiedFile) error {
 // LOAD time alongside validateCheckBeds, so EVERY command that resolves a device
 // (charly bundle add android:, charly check run, charly box validate, …) sees the
 // same friendly error — the faithful breadth the CUE load-gate had.
-func validateAndroidDevices(uf *UnifiedFile) error {
+func validateAndroidDevices(uf *loaderkit.UnifiedFile) error {
 	if uf == nil {
 		return nil
 	}
-	for name, spec := range uf.resolveAndroids() {
+	for name, spec := range resolveAndroids(uf) {
 		if spec == nil {
 			continue
 		}
@@ -672,7 +512,7 @@ func validateAndroidDevices(uf *UnifiedFile) error {
 //   - the bed's plan: carries at least one `check:` step (the scored success
 //     criteria — an include: step's checks expand at collect time, so a plan of
 //     pure include: steps without a single direct check: is rejected here).
-func validateIterateBed(uf *UnifiedFile, name string, node *spec.BundleNode) error {
+func validateIterateBed(uf *loaderkit.UnifiedFile, name string, node *spec.BundleNode) error {
 	it := node.Iterate
 	agents := uf.PluginKinds["agent"] // agent is a plugin kind; opaque name-keyed catalog
 	for _, a := range it.Agent {
@@ -777,7 +617,7 @@ func mergeBoxConfig(dst, src *spec.BoxConfig) {
 // manifest; every discovered manifest is routed by SHAPE. Conflict rule:
 // explicit map entries win over discovered entries. scanRoot resolution is
 // relative to rootDir (the dir containing charly.yml).
-func (uf *UnifiedFile) ApplyDiscover(rootDir string) error {
+func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
 	for _, s := range uf.Discover {
 		manifest := s.Manifest
 		if manifest == "" {
@@ -792,7 +632,7 @@ func (uf *UnifiedFile) ApplyDiscover(rootDir string) error {
 			return fmt.Errorf("discover %q: %w", s.Path, err)
 		}
 		for _, d := range dirs {
-			if err := uf.applyDiscoveredManifest(d, manifest, rootDir); err != nil {
+			if err := applyDiscoveredManifest(uf, d, manifest, rootDir); err != nil {
 				return err
 			}
 		}
@@ -813,7 +653,7 @@ func (uf *UnifiedFile) ApplyDiscover(rootDir string) error {
 // reference (scanCandy parses + validates the manifest and resolves the candy's
 // assets relative to its dir); every other kind normalizes inline. The conflict
 // rule "explicit entry wins" applies to discovered candies.
-func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) error {
+func applyDiscoveredManifest(uf *loaderkit.UnifiedFile, dir, manifest, rootDir string) error {
 	target := filepath.Join(dir, manifest)
 	data, err := os.ReadFile(target)
 	if err != nil {
@@ -874,141 +714,54 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 }
 
 // -----------------------------------------------------------------------------
-// Projections — extract the existing concrete types from UnifiedFile so the
+// Projections — extract the existing concrete types from loaderkit.UnifiedFile so the
 // existing loaders can become thin wrappers.
 // -----------------------------------------------------------------------------
 
-// ProjectConfig returns the *Config equivalent of uf (the box config view).
-func (uf *UnifiedFile) ProjectConfig() *Config {
-	return uf.projectConfigCached(map[*UnifiedFile]*Config{})
-}
-
-// projectConfigCached projects uf (and its import namespaces, recursively) into
-// a *Config. The pointer-keyed cache breaks the intentional main<->cachyos
-// import cycle (the shared UnifiedFile node is projected exactly once).
-func (uf *UnifiedFile) projectConfigCached(cache map[*UnifiedFile]*Config) *Config {
-	if c, ok := cache[uf]; ok {
-		return c
-	}
-	images := uf.Box
-	if images == nil {
-		images = boxMap{}
-	}
-	c := &Config{
-		Defaults: uf.Defaults,
-		Box:      images,
-		Local:    uf.Local(),
-		Sidecar:  uf.PluginKinds["sidecar"], // opaque bodies; candy/plugin-sidecar resolves them
-	}
-	cache[uf] = c // cache BEFORE recursing (cycle break)
-	if len(uf.Namespaces) > 0 {
-		c.Namespaces = make(map[string]*Config, len(uf.Namespaces))
-		for ns, sub := range uf.Namespaces {
-			c.Namespaces[ns] = sub.projectConfigCached(cache)
-		}
-	}
-	return c
-}
+// ProjectConfig/projectConfigCached/ProjectBundleConfig/VM/Pod/K8s/Local/Android/CheckBeds
+// relocated to sdk/loaderkit as loaderkit.UnifiedFile methods (K1 keystone, task #24 unit 1) —
+// they needed no charly-core-only dependency (Config = spec.Config, an alias, so even
+// ProjectConfig's return type was already sdk-native). ResolvePluginKindViaPlugin/
+// DecodePluginKindMap moved too, as exported loaderkit package functions (they already took
+// their registry-coupled resolve callback as a PARAMETER, so the loop itself was pure).
+//
+// What STAYS here as free functions (Go forbids methods on a foreign-package type): every
+// accessor that resolves an opaque PluginKinds body via a plugin's OpResolve leg (Distros/
+// Builders/resolveInits below, and the Project*Config wrappers built on them), or that reaches
+// the registered CandyScanner seam (ProjectCandies/projectCandiesScanned) — these need
+// charly-core's OWN registry/seam access, which a separate sdk package cannot hold.
 
 // Distros reconstructs the name-keyed per-distro build vocabulary from uf.PluginKinds.
 // The `distro` kind is a plugin kind (candy/plugin-distro) — a `distro:` node (incl. the
 // binary-embedded vocabulary) lands in uf.PluginKinds["distro"][<name>] as an OPAQUE
 // canonical body. After the distro de-type (Cutover M) this accessor RESOLVES each body
-// via candy/plugin-distro's OpResolve leg (resolveDistros) into a *DistroDef
+// via candy/plugin-distro's OpResolve leg (resolveDistroViaPlugin) into a *DistroDef
 // (= *spec.ResolvedDistro) — the build-engine value envelope the generator/format code
 // consumes; the kernel never types spec.Distro. Recomputed per call; nil when no distros
 // are configured; a bad entry is skipped rather than poisoning the whole vocabulary.
-func (uf *UnifiedFile) Distros() map[string]*spec.ResolvedDistro {
-	return uf.resolveDistros()
+func Distros(uf *loaderkit.UnifiedFile) map[string]*spec.ResolvedDistro {
+	return loaderkit.ResolvePluginKindViaPlugin(uf, "distro", resolveDistroViaPlugin)
 }
 
 // Builders reconstructs the name-keyed multi-stage builder vocabulary from
 // uf.PluginKinds["builder"] (the `builder` plugin kind, candy/plugin-builder) into the
 // map[string]*BuilderDef shape the generator consumed when builder was a typed core map.
-func (uf *UnifiedFile) Builders() map[string]*BuilderDef {
-	return decodePluginKindMap[BuilderDef](uf, "builder")
+func Builders(uf *loaderkit.UnifiedFile) map[string]*BuilderDef {
+	return loaderkit.DecodePluginKindMap[BuilderDef](uf, "builder")
 }
-
-// VM/Pod/K8s/Local/Android are DERIVED accessors over uf.PluginKinds[disc] (K1 unit-1
-// follow-up) — the 5 standalone-substrate-TEMPLATE kinds no longer get a dedicated stored field
-// (foldStandaloneTemplateReply, node_normalize.go, folds every one of them into PluginKinds
-// generically, with no per-kind-word switch); these methods are the read-side mirror, matching
-// the SAME pattern Distros()/Builders() above already use for the tier-1 kinds. Each returns the
-// opaque name→body map for its kind (nil when none configured) — the kernel never decodes the
-// bodies itself; consuming PLUGINS decode a body into the concrete kind they need
-// (resolveVmViaPlugin / resolveK8sViaPlugin / resolveLocals / resolveAndroids).
-func (uf *UnifiedFile) VM() map[string]json.RawMessage      { return uf.PluginKinds["vm"] }
-func (uf *UnifiedFile) Pod() map[string]json.RawMessage     { return uf.PluginKinds["pod"] }
-func (uf *UnifiedFile) K8s() map[string]json.RawMessage     { return uf.PluginKinds["k8s"] }
-func (uf *UnifiedFile) Local() map[string]json.RawMessage   { return uf.PluginKinds["local"] }
-func (uf *UnifiedFile) Android() map[string]json.RawMessage { return uf.PluginKinds["android"] }
 
 // resolveInits projects the name-keyed init-system vocabulary from
 // uf.PluginKinds["init"] (opaque bodies) into *ResolvedInit value envelopes via
 // candy/plugin-init's OpResolve config leg (the init de-type, Cutover F) — the
 // kernel never types the bodies.
-func (uf *UnifiedFile) resolveInits() map[string]*ResolvedInit {
-	return resolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
-}
-
-// resolvePluginKindViaPlugin projects uf.PluginKinds[kind] (opaque bodies) into *T value
-// envelopes via resolve, a per-body plugin OpResolve leg — the ONE shared loop every
-// "resolve a plugin-kind catalog through its OpResolve leg" accessor uses (K1 unit-2 follow-up,
-// R3): resolveDistros/resolveResources/resolveInits/resolveAndroids each formerly hand-rolled the
-// identical "range bodies { resolve; skip on err/nil; assign }" shape, differing only in the
-// PluginKinds key and which per-body resolveXViaPlugin function to call — those differences are
-// now the only per-kind code left (one line each), never a duplicated loop. A bad entry is
-// skipped rather than poisoning the whole vocabulary (cf. the sibling decodePluginKindMap, which
-// decodes a self-contained body directly with NO plugin round-trip — a different mechanism for
-// kinds like Builder whose body needs no plugin-side resolution).
-func resolvePluginKindViaPlugin[T any](uf *UnifiedFile, kind string, resolve func(json.RawMessage) (*T, error)) map[string]*T {
-	if uf == nil {
-		return nil
-	}
-	bodies := uf.PluginKinds[kind]
-	if len(bodies) == 0 {
-		return nil
-	}
-	out := make(map[string]*T, len(bodies))
-	for name, body := range bodies {
-		v, err := resolve(body)
-		if err != nil || v == nil {
-			continue
-		}
-		out[name] = v
-	}
-	return out
-}
-
-// decodePluginKindMap reconstructs the typed name-keyed map[string]*T for a plugin kind
-// from uf.PluginKinds[kind] (each body the canonical spec.T JSON the kind plugin's Invoke
-// produced) via a PLAIN json.Unmarshal — no plugin OpResolve round-trip, for a kind whose body
-// is already self-contained (Builder). Compare resolvePluginKindViaPlugin above, its sibling for
-// kinds that DO need a plugin-side resolve leg (Distro/Resource/Init/Android). A bad entry is
-// skipped rather than poisoning the whole vocabulary. Returns nil when the kind has no entities.
-func decodePluginKindMap[T any](uf *UnifiedFile, kind string) map[string]*T {
-	if uf == nil {
-		return nil
-	}
-	bodies := uf.PluginKinds[kind]
-	if len(bodies) == 0 {
-		return nil
-	}
-	out := make(map[string]*T, len(bodies))
-	for name, body := range bodies {
-		var v T
-		if err := json.Unmarshal(body, &v); err != nil {
-			continue
-		}
-		out[name] = &v
-	}
-	return out
+func resolveInits(uf *loaderkit.UnifiedFile) map[string]*ResolvedInit {
+	return loaderkit.ResolvePluginKindViaPlugin(uf, "init", resolveInitConfigViaPlugin)
 }
 
 // ProjectDistroConfig returns the *DistroConfig equivalent (distro: section), decoding
-// the build vocabulary from the distro plugin kind (uf.PluginKinds via Distros()).
-func (uf *UnifiedFile) ProjectDistroConfig() *buildkit.DistroConfig {
-	distros := uf.Distros()
+// the build vocabulary from the distro plugin kind (uf.PluginKinds via Distros(uf)).
+func ProjectDistroConfig(uf *loaderkit.UnifiedFile) *buildkit.DistroConfig {
+	distros := Distros(uf)
 	if len(distros) == 0 {
 		return nil
 	}
@@ -1017,9 +770,9 @@ func (uf *UnifiedFile) ProjectDistroConfig() *buildkit.DistroConfig {
 
 // ProjectBuilderConfig returns the *BuilderConfig equivalent (builders: section),
 // decoding the build vocabulary from the builder plugin kind (uf.PluginKinds via
-// Builders()).
-func (uf *UnifiedFile) ProjectBuilderConfig() *buildkit.BuilderConfig {
-	builders := uf.Builders()
+// Builders(uf)).
+func ProjectBuilderConfig(uf *loaderkit.UnifiedFile) *buildkit.BuilderConfig {
+	builders := Builders(uf)
 	if len(builders) == 0 {
 		return nil
 	}
@@ -1027,39 +780,21 @@ func (uf *UnifiedFile) ProjectBuilderConfig() *buildkit.BuilderConfig {
 }
 
 // ProjectInitConfig returns the *InitConfig equivalent (inits: section), decoding the
-// build vocabulary from the init plugin kind (uf.PluginKinds via Inits()).
-func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
-	inits := uf.resolveInits()
+// build vocabulary from the init plugin kind (uf.PluginKinds via resolveInits(uf)).
+func ProjectInitConfig(uf *loaderkit.UnifiedFile) *InitConfig {
+	inits := resolveInits(uf)
 	if len(inits) == 0 {
 		return nil
 	}
 	return &InitConfig{Init: inits}
 }
 
-// ProjectBundleConfig returns the *BundleConfig equivalent (deployments: section
-// of the authored file, independent of any per-machine ~/.config/charly/charly.yml
-// which remains loaded separately by LoadBundleConfig).
-func (uf *UnifiedFile) ProjectBundleConfig() *deploykit.BundleConfig {
-	if uf == nil {
-		return nil
-	}
-	sidecars := uf.PluginKinds["sidecar"] // opaque bodies; candy/plugin-sidecar resolves them
-	if len(uf.Bundle) == 0 && uf.Provides == nil && len(sidecars) == 0 {
-		return nil
-	}
-	return &deploykit.BundleConfig{
-		Provides: uf.Provides,
-		Bundle:   uf.Bundle,
-		Sidecar:  sidecars,
-	}
-}
-
 // ProjectCandies scans or synthesizes a candy per entry in uf.Candy, into its FINAL
 // spec.CandyReader form (W9: the type-Candy move). Thin wrapper over projectCandiesScanned +
 // the ONE choke point (finalizeScannedCandies, no InitCfg in scope for a standalone call) —
 // see ScanAllCandyWithConfigOpts's doc comment for why completion never happens anywhere else.
-func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyReader, error) {
-	scanned, err := uf.projectCandiesScanned(rootDir)
+func ProjectCandies(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.CandyReader, error) {
+	scanned, err := projectCandiesScanned(uf, rootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1071,10 +806,10 @@ func (uf *UnifiedFile) ProjectCandies(rootDir string) (map[string]spec.CandyRead
 // `from:` go through the registered loader plugin's typed CandyScanner seam so directory-based
 // candies behave identically to today. Inline entries synthesize from the embedded CandyYAML
 // (Part A's `directory:` field still applies).
-func (uf *UnifiedFile) projectCandiesScanned(rootDir string) (map[string]spec.ScannedCandy, error) {
+func projectCandiesScanned(uf *loaderkit.UnifiedFile, rootDir string) (map[string]spec.ScannedCandy, error) {
 	out := map[string]spec.ScannedCandy{}
 	for name, raw := range uf.Candy {
-		il, ok := decodeInlineCandy(raw)
+		il, ok := loaderkit.DecodeInlineCandy(raw)
 		if !ok {
 			continue
 		}

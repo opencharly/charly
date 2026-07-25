@@ -41,11 +41,11 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 		t.Fatalf("LoadUnified(box/cachyos): ok=%v err=%v", ok, err)
 	}
 	cfg := uf.ProjectConfig()
-	candyMap, scanErr := ScanAllCandyWithConfig(boxCachyos, cfg)
+	scanned, scanErr := ScanAllCandyWithConfig(boxCachyos, cfg)
 	if scanErr != nil {
 		t.Fatalf("candySourceDirs scan failed: %v", scanErr)
 	}
-	dirs := candyDirsFromScan(candyMap)
+	dirs := candyDirsFromScan(scanned)
 
 	const key = "github.com/opencharly/charly/candy/android-emulator-layer"
 	src, found := dirs[key]

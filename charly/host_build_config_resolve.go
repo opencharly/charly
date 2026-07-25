@@ -66,7 +66,7 @@ func hostBuildConfigResolve(_ context.Context, req spec.ConfigResolveRequest, _ 
 				reply.VmEntities = append(reply.VmEntities, name)
 			}
 		}
-		resources = uf.resolveResources()
+		resources = resolveResources(uf)
 		// The exclusive-resource claimant (requires_exclusive) the handler acquires a preempt
 		// lease for — K1-unblock wave 1: the portable deploykit.FindVMClaimant (also used
 		// plugin-side by candy/plugin-preempt off the resolved-project envelope, R3) replaces the

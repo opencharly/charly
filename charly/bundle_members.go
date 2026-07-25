@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -39,7 +40,7 @@ import (
 // validation); a check bed is itself a `disposable: true` bundle, so a bed's members
 // fold the same way. A member name colliding with any existing deploy/member entry is
 // a hard error.
-func foldMembers(uf *UnifiedFile) error {
+func foldMembers(uf *loaderkit.UnifiedFile) error {
 	if uf == nil || len(uf.Bundle) == 0 {
 		return nil
 	}
@@ -101,7 +102,7 @@ func foldMembers(uf *UnifiedFile) error {
 // (dots are reserved for nested dotted-path addressing) and reference a valid
 // target kind. Pod-target members get the required-image: check via the generic
 // validateDeploymentTree on the folded entry.
-func validateMembers(uf *UnifiedFile) error {
+func validateMembers(uf *loaderkit.UnifiedFile) error {
 	if uf == nil {
 		return nil
 	}

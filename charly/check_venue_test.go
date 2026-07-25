@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
-// newVenueTestUF builds a small UnifiedFile covering every venue class the
+// newVenueTestUF builds a small loaderkit.UnifiedFile covering every venue class the
 // shared check-verb resolver must distinguish.
-func newVenueTestUF() *UnifiedFile {
-	return &UnifiedFile{
+func newVenueTestUF() *loaderkit.UnifiedFile {
+	return &loaderkit.UnifiedFile{
 		PluginKinds: map[string]map[string]json.RawMessage{
 			"vm": rawTemplateMap(map[string]*VmSpec{
 				"cachyos-gpu": {}, // bare kind:vm entity

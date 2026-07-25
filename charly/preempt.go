@@ -236,7 +236,7 @@ func releaseResourceClaim(claimant string) {
 // flip) from the project charly.yml. nil when none / unreadable.
 func gatherResources() map[string]*ResolvedResource {
 	if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
-		return uf.resolveResources()
+		return resolveResources(uf)
 	}
 	return nil
 }

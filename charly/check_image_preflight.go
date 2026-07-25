@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -28,7 +29,7 @@ import (
 // image the AGENT builds during the run, so it is not preflighted here either.
 //
 // Failures abort the check BEFORE any step runs.
-func ensureScoreImages(ctx context.Context, plan []spec.Step, uf *UnifiedFile, projectDir string) error {
+func ensureScoreImages(ctx context.Context, plan []spec.Step, uf *loaderkit.UnifiedFile, projectDir string) error {
 	if uf == nil {
 		return nil
 	}

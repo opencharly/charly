@@ -56,7 +56,7 @@ const (
 	// ClassLoader serves the unified-config PARSE (the single word "loader"): a compiled-in
 	// plugin whose OpLoad parses the project (file read → import resolution → the #NodeDoc CUE
 	// gate → reserved-word node decomposition → discover walk) into a generic, sdk-expressible
-	// ParsedProject the host MATERIALIZES into the typed *UnifiedFile. Registered at init()
+	// ParsedProject the host MATERIALIZES into the typed *loaderkit.UnifiedFile. Registered at init()
 	// before the first LoadUnified call — no bootstrap cycle (the registry seed reads the
 	// embedded providers: manifest via a plain yaml.Unmarshal, never LoadUnified). See
 	// candy/plugin-loader (P6).

@@ -169,10 +169,10 @@ func scanLocalCandies(dir string) (map[string]spec.ScannedCandy, error) {
 		return nil, fmt.Errorf("loading charly.yml: %w", err)
 	}
 	if present {
-		if err := uf.ApplyDiscover(dir); err != nil {
+		if err := ApplyDiscover(uf, dir); err != nil {
 			return nil, fmt.Errorf("discover: %w", err)
 		}
-		return uf.projectCandiesScanned(dir)
+		return projectCandiesScanned(uf, dir)
 	}
 	return legacyScanCandiesDirScanned(dir)
 }
@@ -511,7 +511,7 @@ func completeCandyRunOps(m *spec.CandyModel, v *spec.CandyView) {
 
 // finalizeScannedCandies is the SOLE choke point that produces a spec.CandyReader: every
 // construction path (ScanCandy, legacyScanCandiesDirScanned via scanLocalCandies,
-// (*UnifiedFile).projectCandiesScanned via scanLocalCandies, and
+// (*loaderkit.UnifiedFile).projectCandiesScanned via scanLocalCandies, and
 // ScanAllCandyWithConfigOpts over its combined local+remote set) funnels through here, so no
 // path can ever wrap a candy with a term (InitSystems, RunOps) still missing — there is no
 // OTHER way to obtain a spec.CandyReader. Order: InitSystems (initCfg-gated; a nil initCfg is a

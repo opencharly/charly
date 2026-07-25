@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -82,7 +83,7 @@ codex:
 // passes the guard.
 func TestValidateIterateBed_RejectsUnknownAgent(t *testing.T) {
 	// A catalog (now a plugin kind) containing exactly "claude".
-	uf := &UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{
+	uf := &loaderkit.UnifiedFile{PluginKinds: map[string]map[string]json.RawMessage{
 		"agent": {"claude": json.RawMessage(`{"command":["claude"]}`)},
 	}}
 

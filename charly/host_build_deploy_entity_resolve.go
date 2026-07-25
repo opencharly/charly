@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -134,7 +135,7 @@ func findAndroidSpec(dir, name string) *ResolvedAndroid {
 // lives in candy/plugin-substrate/status_android_collect.go's androidSpecFor, a SEPARATE
 // plugin-local copy since a plugin cannot import charly/ types; this copy now serves ONLY the
 // "deploy-entity-resolve" seam).
-func lookupAndroidSpec(uf *UnifiedFile, name string) *ResolvedAndroid {
+func lookupAndroidSpec(uf *loaderkit.UnifiedFile, name string) *ResolvedAndroid {
 	if uf == nil || uf.Android() == nil || name == "" {
 		return nil
 	}

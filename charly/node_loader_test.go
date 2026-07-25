@@ -1,17 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
 // end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
-// normalizeNodeInto → the projected UnifiedFile maps. Candy + box + a bundle group
+// normalizeNodeInto → the projected loaderkit.UnifiedFile maps. Candy + box + a bundle group
 // with two alongside pod members + an inline cross-member check.
 func TestLoadUnified_NodeForm(t *testing.T) {
 	dir := t.TempDir()
@@ -47,7 +49,7 @@ shop:
 	if err != nil {
 		t.Fatalf("LoadUnified node-form: %v", err)
 	}
-	if redis, ok := decodeInlineCandy(uf.Candy["redis"]); !ok {
+	if redis, ok := loaderkit.DecodeInlineCandy(uf.Candy["redis"]); !ok {
 		t.Errorf("candy redis not loaded; candies=%v", mapKeys(uf.Candy))
 	} else if redis.Version != "2026.150.0000" {
 		t.Errorf("candy redis version = %q", redis.Version)
@@ -123,14 +125,14 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 	}
 }
 
-func mapKeys(m candyMap) []string {
+func mapKeys(m map[string]json.RawMessage) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
 	return out
 }
-func boxKeys(m boxMap) []string {
+func boxKeys(m spec.BoxMap) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
@@ -141,8 +143,8 @@ func boxKeys(m boxMap) []string {
 // boxMapOf folds typed BoxConfig test literals into the generic image map — the
 // test-construction analog of the loader's encodeBox (P6 map-killing). Tests author
 // readable typed boxes; this marshals each opaque exactly as the loader stores them.
-func boxMapOf(m map[string]spec.BoxConfig) boxMap {
-	out := make(boxMap, len(m))
+func boxMapOf(m map[string]spec.BoxConfig) spec.BoxMap {
+	out := make(spec.BoxMap, len(m))
 	for k, v := range m {
 		out[k] = spec.EncodeBox(v)
 	}

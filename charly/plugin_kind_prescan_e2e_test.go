@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/sdk/loaderkit"
 )
 
 // TestExternalKind_PrescanConnectDecode proves F4 END-TO-END: a `kind: examplekind` entity whose
@@ -118,7 +120,7 @@ bad-kind:
 	}
 }
 
-func pluginKindKeys(uf *UnifiedFile) []string {
+func pluginKindKeys(uf *loaderkit.UnifiedFile) []string {
 	out := make([]string, 0, len(uf.PluginKinds))
 	for k := range uf.PluginKinds {
 		out = append(out, k)

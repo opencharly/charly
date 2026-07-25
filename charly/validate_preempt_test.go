@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -50,7 +51,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	}
 
 	t.Run("vm (exclusive venue) qemu backend flagged", func(t *testing.T) {
-		uf := &UnifiedFile{
+		uf := &loaderkit.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
 			Bundle:      map[string]spec.BundleNode{"mydeploy": mkNode("vm")},
 		}
@@ -62,7 +63,7 @@ func TestValidateResourceDefs_ExclusiveVenueTrait(t *testing.T) {
 	})
 
 	t.Run("pod (non-exclusive venue) never flagged", func(t *testing.T) {
-		uf := &UnifiedFile{
+		uf := &loaderkit.UnifiedFile{
 			PluginKinds: map[string]map[string]json.RawMessage{"resource": resources, "vm": vmEntities},
 			Bundle:      map[string]spec.BundleNode{"mydeploy": mkNode("pod")},
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -69,7 +70,7 @@ func ValidatePreemptibleOnNode(name string, node *spec.BundleNode, errs *Validat
 // validatePreemptibleUnified validates preemptible/requires_exclusive across a
 // unified project's deploy map (which includes folded kind:check beds),
 // returning the first batch of errors for the LoadUnified hard-fail path.
-func validatePreemptibleUnified(uf *UnifiedFile) error {
+func validatePreemptibleUnified(uf *loaderkit.UnifiedFile) error {
 	if uf == nil {
 		return nil
 	}
@@ -96,9 +97,9 @@ func validatePreemptibleUnified(uf *UnifiedFile) error {
 //     so auto-allocation would silently fail at create time. Read BY TRAIT
 //     (nodeTraits), never by switching on the substrate kind word (the boundary
 //     law) — the former `node.Target != "vm"` gate was an incomplete seam.
-func validateResourceDefs(uf *UnifiedFile, errs *ValidationError) {
+func validateResourceDefs(uf *loaderkit.UnifiedFile, errs *ValidationError) {
 	// resource is a plugin kind now (candy/plugin-resource); decode the name-keyed vocab once.
-	resources := uf.resolveResources()
+	resources := resolveResources(uf)
 	for name, rdef := range resources {
 		if rdef == nil {
 			continue
