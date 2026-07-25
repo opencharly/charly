@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
@@ -84,40 +82,11 @@ func resolverEnv(res *kit.CheckVarResolver) (map[string]string, bool) {
 	return res.Env, res.HasRuntime
 }
 
-// currentCharlyExecutable is the executable that owns this check run. Keeping it
-// injectable lets the resolver contract prove that host-side plan re-entry uses
-// the active binary rather than whatever a stale PATH happens to select.
-var currentCharlyExecutable = os.Executable
-
-// stampCharlyBin records the active charly executable path into a runtime check-var
-// resolver's Env as CHARLY_BIN, so host-side R10 plan re-entry (a plan step referencing
-// ${CHARLY_BIN}) drives the active binary instead of a stale PATH selection. CHARLY_BIN
-// is deliberately never synthesized from PATH: an unavailable executable leaves the
-// variable unresolved instead of silently selecting an unrelated installed Charly.
-// nil-safe; idempotent.
-func stampCharlyBin(res *kit.CheckVarResolver) *kit.CheckVarResolver {
-	if res == nil {
-		return res
-	}
-	if res.Env == nil {
-		res.Env = map[string]string{}
-	}
-	if path, err := currentCharlyExecutable(); err == nil && strings.TrimSpace(path) != "" {
-		res.Env["CHARLY_BIN"] = path
-	}
-	return res
-}
-
-// newRuntimeCheckVarResolver constructs a runtime check-var resolver (HasRuntime
-// true) from an env map, stamping CHARLY_BIN via stampCharlyBin. The
-// direct-construction analogue of the kit.ResolveCheckVarsRuntime call sites
-// (which stampCharlyBin their result).
-func newRuntimeCheckVarResolver(env map[string]string) *kit.CheckVarResolver {
-	if env == nil {
-		env = map[string]string{}
-	}
-	return stampCharlyBin(&kit.CheckVarResolver{Env: env, HasRuntime: true})
-}
+// CHARLY_BIN stamping (StampCharlyBin / NewRuntimeCheckVarResolver / CurrentCharlyExecutable)
+// moved to sdk/kit (checkvars_charlybin.go, CHECK-cone move) — every dependency was already
+// portable (os.Executable, strings.TrimSpace, kit.CheckVarResolver), and both check
+// (check_members.go) and deploy (check_cmd.go's local --verify path) call sites need it, so
+// it lives in the shared kit rather than either cone's plugin (R3).
 
 // ---------------------------------------------------------------------------
 // Result helpers
