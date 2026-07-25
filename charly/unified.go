@@ -604,26 +604,18 @@ func validateCheckBeds(uf *UnifiedFile) error {
 		case "pod":
 			// box: presence enforced by validateDeployRequiresBox on the
 			// folded Deploy entry — no duplicate check here.
-		case "vm":
+		case "vm", "local", "android":
+			// The 3 template-backed substrates (deployTraitsFor(...).ImageBacked == false,
+			// unlike pod above) share ONE cross-ref shape: a `from: <entity>` naming an
+			// entry in the SAME PluginKinds[target] map every standalone-template kind
+			// folds into (K1 unit-2 follow-up — collapses 3 near-identical case bodies
+			// that only differed by kind word into one generic lookup; no per-word switch
+			// left inside).
 			if node.From == "" {
-				return fmt.Errorf("kind:check bed %q (target: vm) must set `vm: <entity>`", name)
+				return fmt.Errorf("kind:check bed %q (target: %s) must set `%s: <entity>`", name, node.Target, node.Target)
 			}
-			if _, ok := uf.VM()[node.From]; !ok {
-				return fmt.Errorf("kind:check bed %q references vm entity %q which is not defined", name, node.From)
-			}
-		case "local":
-			if node.From == "" {
-				return fmt.Errorf("kind:check bed %q (target: local) must set `local: <template>`", name)
-			}
-			if _, ok := uf.Local()[node.From]; !ok {
-				return fmt.Errorf("kind:check bed %q references local template %q which is not defined", name, node.From)
-			}
-		case "android":
-			if node.From == "" {
-				return fmt.Errorf("kind:check bed %q (target: android) must set `android: <device>`", name)
-			}
-			if _, ok := uf.Android()[node.From]; !ok {
-				return fmt.Errorf("kind:check bed %q references android device %q which is not defined", name, node.From)
+			if _, ok := uf.PluginKinds[node.Target][node.From]; !ok {
+				return fmt.Errorf("kind:check bed %q references %s entity %q which is not defined", name, node.Target, node.From)
 			}
 		default:
 			// An external (out-of-process) deploy substrate (e.g. `exampledeploy`):
