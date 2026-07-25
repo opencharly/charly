@@ -874,7 +874,8 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 			return verr
 		}
 		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
-		// genericNode the candy pre-check + normalizeNodeInto consume is reconstructed per node.
+		// genericNode the candy pre-check + the Materializer seam's DecodeEntity/BuildBundleEntity
+		// callbacks consume is reconstructed per node.
 		_, pp, perr := requireLoaderParser().ParseDoc(&node, loaderThreaded())
 		if perr != nil {
 			// A malformed node-form manifest is a HARD error, never silently
@@ -888,9 +889,10 @@ func (uf *UnifiedFile) applyDiscoveredManifest(dir, manifest, rootDir string) er
 			}
 			// The SAME per-node discovered-fold the LoadUnified walk path uses
 			// (materializeDiscoveredNode, materialize.go) — a LAYER candy registers a lazy
-			// `From:` reference (explicit entry wins), every other kind materializes inline. R3:
-			// one discovered-node handler for both the walk path and this candy-scan path.
-			if err := materializeDiscoveredNode(gn, dir, rootDir, manifest, uf); err != nil {
+			// `From:` reference (explicit entry wins), every other kind materializes via the
+			// registered spec.Materializer (K1 unit 1). R3: one discovered-node handler for both
+			// the walk path and this candy-scan path.
+			if err := materializeDiscoveredNode(gn, pp.Nodes[i], dir, rootDir, manifest, uf); err != nil {
 				return fmt.Errorf("%s: %w", target, err)
 			}
 		}

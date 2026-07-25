@@ -8,12 +8,17 @@ import (
 
 // loader_threaded.go — the host side of the unified-config loader seam (P6/K1/#46). It holds the
 // registered per-document PARSER (activeLoaderParser), the registered whole-project WALKER
-// (activeProjectWalker), and builds the registry-derived kind-recognition snapshot (loaderThreaded)
-// the parse consults instead of querying the provider registry directly (boundary law clause D).
-// The seam CONTRACT types (spec.DocParser / spec.Threaded / spec.WalkSeams / spec.ProjectWalker)
-// live in sdk/spec so neither the host nor the loader plugin imports the other — charly core
-// imports NEITHER loaderkit NOR any other sdk mechanism kit; the WALK mechanism (loaderkit.Walk) is
-// reached exclusively through the compiled-in loader plugin's typed ProjectWalker, resolved here.
+// (activeProjectWalker), the registered per-node kind-decode MATERIALIZER (activeMaterializer,
+// K1 unit 1), and builds the registry-derived kind-recognition snapshot (loaderThreaded) the
+// parse/materialize consult instead of querying the provider registry directly (boundary law
+// clause D). The seam CONTRACT types (spec.DocParser / spec.Threaded / spec.WalkSeams /
+// spec.ProjectWalker / spec.MaterializeSeams / spec.Materializer) live in sdk/spec so neither the
+// host nor the loader plugin imports the other — charly core imports NEITHER loaderkit NOR any
+// other sdk mechanism kit; the WALK mechanism (loaderkit.Walk) and the per-node MATERIALIZE POLICY
+// (loaderkit.Materialize) are reached exclusively through the compiled-in loader plugin's typed
+// ProjectWalker / Materializer, resolved here. The ACTUAL registry resolve + provider dispatch a
+// materialize pass performs (clause M) never leaves this file — it is threaded to the plugin via
+// MaterializeSeams.DecodeEntity/BuildBundleEntity, exactly like WalkSeams' callbacks above.
 
 // activeLoaderParser is the registered config-front-end PARSE — the spec.DocParser of the
 // compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go). There
@@ -111,7 +116,9 @@ func loaderThreaded() spec.Threaded {
 		}
 	}
 	// Parse-time pre-scan declarations (a project plugin's kind/substrate word recognized before
-	// its out-of-process provider connects — recognizedKind/recognizedDeploySubstrate).
+	// its out-of-process provider connects — recognizedDeploySubstrate; the kind-word analogue is
+	// this same declaredKind loop below, now consumed as the spec.Threaded.Kinds DATA snapshot
+	// rather than through a dedicated recognizedKind() function).
 	declaredDeployMu.RLock()
 	for k := range declaredKind {
 		t.Kinds[k] = true
@@ -136,4 +143,62 @@ func loaderThreaded() spec.Threaded {
 		t.Primaries[w] = f
 	}
 	return t
+}
+
+// activeMaterializer is the registered per-node kind-decode DISPATCH POLICY — the spec.Materializer
+// of the compiled-in loader plugin (candy/plugin-loader), wired at registration (plugin_inproc.go).
+// No in-core fallback, mirroring activeProjectWalker: a nil materializer means the loader plugin
+// was not compiled in — a FATAL, never a silent fallback (requireMaterializer). K1 unit 1.
+var activeMaterializer spec.Materializer
+
+// requireMaterializer returns the registered materializer or FATALs with a clear message.
+func requireMaterializer() spec.Materializer {
+	if activeMaterializer == nil {
+		log.Fatal("no loader plugin registered — charly was built without candy/plugin-loader (the config front-end)")
+	}
+	return activeMaterializer
+}
+
+// hostMaterializeSeams builds the MaterializeSeams the registered Materializer plugin calls back
+// into for the actually registry-coupled dispatch: resolving a parsed node's discriminator against
+// the provider registry and invoking the resolved Provider (clause M — provider_registry.go /
+// provider_kind_invoke.go are the TRUE mechanism; this file never redefines it, only threads it
+// through the seam, exactly like hostWalkProject's Boundary/ResolveRef/GateDoc callbacks above).
+func hostMaterializeSeams() spec.MaterializeSeams {
+	return spec.MaterializeSeams{
+		DecodeEntity:             decodeEntityViaRegistry,
+		BuildBundleEntity:        buildBundleEntityViaRegistry,
+		InKindConnectPass:        inKindConnectPass,
+		DeclaredKindConnectError: declaredKindConnectError,
+	}
+}
+
+// decodeEntityViaRegistry implements spec.MaterializeSeams.DecodeEntity: resolves pn's
+// discriminator against the provider registry and, if found, dispatches via the SAME runPluginKind
+// the former in-core normalizeNodeInto called directly (provider_kind_invoke.go — the TRUE
+// clause-M mechanism, unchanged). Reconstructs the genericNode that dispatch reads from pn (mirrors
+// the former materializeParsedNode/parsedNodeToGeneric pairing). found=false (no error) means no
+// provider resolves pn.Disc; the registered Materializer plugin applies its own not-found policy
+// from there.
+func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) (bool, error) {
+	prov, ok := providerRegistry.ResolveKind(pn.Disc)
+	if !ok {
+		return false, nil
+	}
+	gn, err := parsedNodeToGeneric(pn)
+	if err != nil {
+		return true, err
+	}
+	return true, runPluginKind(prov, gn, acc)
+}
+
+// buildBundleEntityViaRegistry implements spec.MaterializeSeams.BuildBundleEntity: the fallback for
+// a recognized-but-not-yet-connected external deploy substrate word, mirroring the former in-core
+// normalizeNodeInto's recognizedDeploySubstrate branch (buildBundleNodeInto, node_bundle.go).
+func buildBundleEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {
+	gn, err := parsedNodeToGeneric(pn)
+	if err != nil {
+		return err
+	}
+	return buildBundleNodeInto(gn, acc)
 }

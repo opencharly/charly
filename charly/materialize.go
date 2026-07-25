@@ -9,23 +9,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// materialize.go — the registry-coupled MATERIALIZE + root-wins MERGE half of project loading
-// (#46). K1 split LoadUnified into two halves at a kind-blind seam: the kind-blind WALK+PARSE
-// (import queue + discover + namespaced-import mounts + per-document parse) is reached via the
-// registered loader plugin's spec.ProjectWalker (hostWalkProject, loader_threaded.go) and returns a
-// generic spec.LoadedProject; THIS file replays the host's decode→materialize→merge over that
-// envelope, reconstructing the typed *UnifiedFile exactly as the former inline loadUnifiedInto did.
+// materialize.go — the root-wins MERGE + per-document/per-namespace ORCHESTRATION half of project
+// loading (#46/K1). K1 split LoadUnified into two halves at a kind-blind seam: the kind-blind
+// WALK+PARSE (import queue + discover + namespaced-import mounts + per-document parse) is reached
+// via the registered loader plugin's spec.ProjectWalker (hostWalkProject, loader_threaded.go) and
+// returns a generic spec.LoadedProject; THIS file replays the host's decode→materialize→merge over
+// that envelope, reconstructing the typed *UnifiedFile exactly as the former inline loadUnifiedInto
+// did.
 //
-// WHY THIS STAYS CORE (the kernel/plugin boundary law, CLAUDE.md "The kernel/plugin boundary law"):
-// the MATERIALIZE is the kind-decode DISPATCH — clause (M), one of the four kind-blind Mechanisms
-// the boundary law permits to live in `charly/` (plugin loading, prescan-dispatch, the kind-decode
-// MATERIALIZE, and the wire broker; every OTHER kind-blind mechanism — parse/render/resolve/walk/
-// engine — belongs to an sdk kit consumed by plugins). It dispatches PURELY by WORD against the
-// provider registry (`materializeProject` → `normalizeNodeInto` → the reserved-word table in
-// `reserved_registry.go`), never branching on a concrete kind in a compiled-in switch, so it never
-// becomes an "incomplete seam" the boundary law would flag. This is why K1 deliberately split the
-// WALK (a plugin-owned Mechanism, sdk/loaderkit, reached via ProjectWalker) from the MATERIALIZE
-// (a core-owned Mechanism, this file) at exactly this seam, rather than moving both out together.
+// CORRECTED CLASSIFICATION (K1 unit 1 — supersedes this file's former "stays core, clause M" self-
+// classification, an incomplete-seam self-misclassification the boundary law's own defines-vs-calls
+// test catches: this file never DEFINES the registry/dispatch mechanism, it only CALLS
+// providerRegistry.ResolveKind transitively via materializeProject; "a capability that uses M1-M4
+// is not thereby M1-M4"). What genuinely stays core (clause M, unchanged, in provider_kind_invoke.go
+// + provider_registry.go — see those files) is the ACTUAL registry resolve + live Provider dispatch.
+// What was an R-item — the per-node NOT-FOUND policy (route to the bundle builder / defer-during-
+// connect-pass / warn-and-skip / hard error) — moved to candy/plugin-loader as the spec.Materializer
+// seam (loaderkit.Materialize), reached via materializeNodeInto (node_parsed.go). THIS file's own
+// orchestration (which document, which discovered node, namespace recursion, the root-wins merge)
+// stays core UNCHANGED — it decides WHICH node to fold, never HOW to fold it, and doesn't itself
+// call the registry — its per-node fold call sites (materializeProject / materializeDiscoveredNode)
+// now route through the Materializer seam instead of the deleted normalizeNodeInto.
 
 // materializeLoadedProject replays the host's MATERIALIZE + root-wins MERGE over a walk envelope,
 // reconstructing the typed *UnifiedFile identically to the former inline loadUnifiedInto:
@@ -85,7 +89,7 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *UnifiedFile, byID 
 				if err != nil {
 					return fmt.Errorf("%s: %w", dm.Dir, err)
 				}
-				if err := materializeDiscoveredNode(gn, dm.Dir, dm.RootDir, dm.Manifest, merged); err != nil {
+				if err := materializeDiscoveredNode(gn, pp.Nodes[k], dm.Dir, dm.RootDir, dm.Manifest, merged); err != nil {
 					return fmt.Errorf("%s: %w", dm.Dir, err)
 				}
 			}
@@ -126,9 +130,11 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *UnifiedFile, byID 
 // materializeDiscoveredNode folds ONE discovered manifest node into uf — the SINGLE per-node
 // handler shared by materializeLoadedProject (the LoadUnified walk path) AND applyDiscoveredManifest
 // (the layers candy-scan path), R3. A LAYER candy registers a lazy `From:` directory reference
-// (scanCandy parses it later; explicit entry wins); every other kind materializes inline via
-// normalizeNodeInto. The candyIsImage pre-check stays core (bootstrap-critical box⊻layer routing).
-func materializeDiscoveredNode(gn *genericNode, dir, rootDir, manifest string, uf *UnifiedFile) error {
+// (scanCandy parses it later; explicit entry wins); every other kind materializes via the
+// registered spec.Materializer (materializeNodeInto, K1 unit 1). The candyIsImage pre-check stays
+// core (bootstrap-critical box⊻layer routing) — it needs gn (genericNode); the fallthrough needs pn
+// (the original spec.ParsedNode) for the Materializer seam, so the caller passes both.
+func materializeDiscoveredNode(gn *genericNode, pn spec.ParsedNode, dir, rootDir, manifest string, uf *UnifiedFile) error {
 	if gn.disc == "candy" && !candyIsImage(gn) {
 		name := filepath.Base(dir)
 		if _, exists := uf.Candy[name]; exists {
@@ -141,7 +147,7 @@ func materializeDiscoveredNode(gn *genericNode, dir, rootDir, manifest string, u
 		uf.SetCandy(name, &InlineCandy{From: rel, Manifest: manifest})
 		return nil
 	}
-	return normalizeNodeInto(gn, uf)
+	return materializeNodeInto(pn, uf)
 }
 
 // materializeDocStream parses an in-memory node-form YAML document STREAM (the binary-embedded
