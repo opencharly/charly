@@ -475,7 +475,14 @@ func (t *pluginDeployTarget) Status(ctx context.Context) (StatusInfo, error) {
 // for t.word — the trait IS the source of truth, matching every other substrate-behaviour consult
 // site in the deploy chain (kit.StampDescent / DescentFromTraits).
 func (t *pluginDeployTarget) bracketedLifecycle() bool {
-	return t.node != nil && t.node.Descent != nil && t.node.Descent.BracketedLifecycle
+	// hasPlan := "this substrate's lifecycle is bracketed" — the DECLARED
+	// #DeployTraits.bracketed_lifecycle trait (plugin-substrate substrateTraits[pod]), resolved
+	// from the provider registry BY WORD, never from the per-word lifecycleStartPlanHooks map
+	// (that map stays the host-side opts-marshaling MECHANISM; the bracket SIGNAL is declared
+	// data). deployTraitsFor resolves everywhere including the dispatch node, whose node.Descent
+	// is not StampDescent-stamped, so read the trait off the registry directly.
+	traits := deployTraitsFor(t.word)
+	return traits != nil && traits.BracketedLifecycle
 }
 
 // Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
