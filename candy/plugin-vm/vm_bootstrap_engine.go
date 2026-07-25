@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/vmshared"
 )
 
@@ -208,7 +209,7 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 		}
 		rootfsCtx.ExtraAptSources = rb.String()
 	}
-	bootstrapScript, err := renderBootstrapScript(builder, rootfsCtx)
+	bootstrapScript, err := buildkit.RenderBootstrapScript(builder, rootfsCtx)
 	if err != nil {
 		return "", fmt.Errorf("rendering bootstrap script: %w", err)
 	}
@@ -217,7 +218,7 @@ func buildBootstrapRootfs(spec *VmSpec, builder *BuilderDef, distro *DistroDef, 
 	if output == "" {
 		output = "/out/rootfs.tar.gz"
 	}
-	if err := RunPrivileged(PrivilegedRun{
+	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
 		Image:      builderRef,
 		Script:     bootstrapScript,
 		OutputPath: output,
@@ -256,7 +257,7 @@ func buildBootstrapDisk(spec *VmSpec, distro *DistroDef, builderRef, rootfsTar, 
 	fullScript := prelude + installBody + finalize
 
 	diskPath := filepath.Join(outputDir, "disk.qcow2")
-	if err := RunPrivileged(PrivilegedRun{
+	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
 		Image:      builderRef,
 		Script:     fullScript,
 		Mounts:     []string{fmt.Sprintf("%s:/in/rootfs.tar.gz:ro", rootfsTar)},

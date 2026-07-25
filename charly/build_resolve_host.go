@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -50,7 +51,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		dir = cwd
 	}
 
-	boxes := normalizeBoxArgs(req.Boxes)
+	boxes := buildkit.NormalizeBoxArgs(req.Boxes)
 	c := &BuildCmd{
 		Boxes:           boxes,
 		Tag:             req.Tag,
@@ -102,7 +103,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		return spec.BuildResolveReply{Error: errString(fmt.Errorf("resolving box order: %w", err))}, nil
 	}
 	if len(gen.RequestedBoxes) > 0 {
-		order, err = filterBox(order, gen.RequestedBoxes, gen.Boxes)
+		order, err = deploykit.FilterBox(order, gen.RequestedBoxes, gen.Boxes)
 		if err != nil {
 			return spec.BuildResolveReply{Error: errString(fmt.Errorf("scoping generation to requested boxes: %w", err))}, nil
 		}
@@ -156,7 +157,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 
 	platform := c.Platform
 	if platform == "" && !c.Push {
-		platform = hostPlatform()
+		platform = buildkit.HostPlatform()
 	}
 
 	// Resolve the build order: filtered → sequential Order; full → level-parallel
@@ -180,17 +181,13 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		}
 	}
 
-	// Privileged builder-bootstrap for every `from: builder:` image in the set.
-	for _, name := range buildSet {
-		img := gen.Boxes[name]
-		if img != nil && strings.HasPrefix(img.From, "builder:") {
-			if err := c.runPrivilegedBootstrap(rt.BuildEngine, dir, name, img); err != nil {
-				return spec.BuildResolveReply{Error: errString(fmt.Errorf("bootstrapping %s: %w", name, err))}, nil
-			}
-		}
-	}
-
 	// Per-box drive descriptors (NO Containerfile content — plugin-build renders).
+	// The privileged builder-bootstrap (a `from: builder:` image) is NO LONGER run
+	// here — plugin-build's drive runs it itself via buildkit.RunPrivileged, fed by
+	// the From/BootstrapBuilderImage/DistroDef/BootstrapBuilder fields below (the
+	// minimal per-image bootstrap slice; host still resolves WHICH builder def
+	// applies since that's a charly.yml lookup, but the privileged exec moved
+	// candy-side alongside the podman drive it was always adjacent to).
 	descriptors := make([]spec.BuildResolveBox, 0, len(buildSet))
 	for _, name := range buildSet {
 		img := gen.Boxes[name]
@@ -208,6 +205,15 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 			d.MergeMaxMB = int64(img.Merge.MaxMB)
 			d.MergeMaxTotalMB = int64(img.Merge.MaxTotalMB)
 		}
+		if strings.HasPrefix(img.From, "builder:") {
+			d.From = img.From
+			d.BootstrapBuilderImage = img.BootstrapBuilderImage
+			d.DistroDef = img.DistroDef
+			builderName := strings.TrimPrefix(img.From, "builder:")
+			if img.BuilderConfig != nil {
+				d.BootstrapBuilder = img.BuilderConfig.Builder[builderName]
+			}
+		}
 		descriptors = append(descriptors, d)
 	}
 
@@ -219,7 +225,7 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		Levels:          levels,
 		Boxes:           descriptors,
 		Jobs:            int64(resolveBuildJobs(c)),
-		PodmanJobs:      int64(resolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
+		PodmanJobs:      int64(buildkit.ResolvePodmanJobs(c.PodmanJobs, c.podmanJobsCap)),
 		Cache:           c.Cache,
 		KeepImages:      int64(resolveIntPtr(def.KeepImages)),
 		ResolvedProject: rp,
