@@ -12,10 +12,11 @@ import (
 // image is a `candy:` node carrying `base:`), where the top-level key `k8s`
 // collides with the `k8s` kind keyword. Two loader/validate sites must handle it:
 //
-//   - applyDiscoveredManifest routes every discovered manifest via kit.ClassifyDoc,
-//     which inspects the VALUE shape (kit.NodeShapedValue: a `<kind>` discriminator)
-//     and reports kit.DocShapeNode — so the box named `k8s` is parsed as a node-form
-//     image (a candy: node with base:), not mis-decoded as a k8s-kind entity.
+//   - ApplyDiscover's walk (loaderkit.RunDiscover, parsing each discovered manifest
+//     via kit.ClassifyDoc) inspects the VALUE shape (kit.NodeShapedValue: a `<kind>`
+//     discriminator) and reports kit.DocShapeNode — so the box named `k8s` is parsed
+//     as a node-form image (a candy: node with base:), not mis-decoded as a k8s-kind
+//     entity.
 //   - validateVocabularyCollections (the root-shape collection validator) would
 //     read top-level `k8s:` as the k8s collection and validate the `candy` child
 //     against #K8s; it skips node-form files (isNodeFormFile).

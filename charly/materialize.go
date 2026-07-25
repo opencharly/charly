@@ -38,7 +38,8 @@ import (
 //     a fresh sub loaderkit.UnifiedFile, materialize its parsed nodes (registry kind-decode), then root-wins
 //     merge the sub into merged (first-seen wins → root wins);
 //  2. the discovered manifests — register a lazy layer-candy `From:` reference OR materialize the
-//     node, explicit-entry-wins (the SAME per-node handler applyDiscoveredManifest uses, R3);
+//     node, explicit-entry-wins (foldDiscoveredManifests, the SAME per-node handler ApplyDiscover
+//     uses, unified.go, R3);
 //  3. the binary-embedded default vocabulary (project-wins);
 //  4. the mounted namespace subtrees — recurse into merged.Namespaces[alias].
 func materializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedFile, byID map[int64]*loaderkit.UnifiedFile) error {
@@ -81,20 +82,8 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedF
 		mergeUnified(merged, &sub, d.SrcDir)
 	}
 	// 2. Discovered manifests (explicit-entry-wins), applied after the documents.
-	for i := range lp.Discovered {
-		dm := &lp.Discovered[i]
-		for j := range dm.Docs {
-			pp := &dm.Docs[j]
-			for k := range pp.Nodes {
-				gn, err := parsedNodeToGeneric(pp.Nodes[k])
-				if err != nil {
-					return fmt.Errorf("%s: %w", dm.Dir, err)
-				}
-				if err := materializeDiscoveredNode(gn, pp.Nodes[k], dm.Dir, dm.RootDir, dm.Manifest, merged); err != nil {
-					return fmt.Errorf("%s: %w", dm.Dir, err)
-				}
-			}
-		}
+	if err := foldDiscoveredManifests(lp.Discovered, merged); err != nil {
+		return err
 	}
 	// 3. Binary-embedded default vocabulary (project-wins).
 	if err := applyEmbeddedDefaults(merged); err != nil {
@@ -128,25 +117,50 @@ func materializeLoadedProject(lp *spec.LoadedProject, merged *loaderkit.UnifiedF
 	return nil
 }
 
+// foldDiscoveredManifests folds every discovered manifest's parsed nodes into uf
+// — the SHARED loop (R3) both materializeLoadedProject's step 2 (the LoadUnified
+// walk path) AND ApplyDiscover (unified.go, the layers candy-scan path) drive over
+// their respective []spec.DiscoveredManifest.
+func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *loaderkit.UnifiedFile) error {
+	for i := range dms {
+		dm := &dms[i]
+		for j := range dm.Docs {
+			pp := &dm.Docs[j]
+			for k := range pp.Nodes {
+				if err := materializeDiscoveredNode(pp.Nodes[k], dm.Dir, dm.RootDir, dm.Manifest, uf); err != nil {
+					return fmt.Errorf("%s: %w", dm.Dir, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // materializeDiscoveredNode folds ONE discovered manifest node into uf — the SINGLE per-node
-// handler shared by materializeLoadedProject (the LoadUnified walk path) AND applyDiscoveredManifest
-// (the layers candy-scan path), R3. A LAYER candy registers a lazy `From:` directory reference
-// (scanCandy parses it later; explicit entry wins); every other kind materializes via the
+// handler foldDiscoveredManifests drives. A LAYER candy registers a lazy `From:` directory
+// reference (scanCandy parses it later; explicit entry wins); every other kind materializes via the
 // registered spec.Materializer (materializeNodeInto, K1 unit 1). The candyIsImage pre-check stays
-// core (bootstrap-critical box⊻layer routing) — it needs gn (genericNode); the fallthrough needs pn
-// (the original spec.ParsedNode) for the Materializer seam, so the caller passes both.
-func materializeDiscoveredNode(gn *genericNode, pn spec.ParsedNode, dir, rootDir, manifest string, uf *loaderkit.UnifiedFile) error {
-	if gn.disc == "candy" && !candyIsImage(gn) {
-		name := filepath.Base(dir)
-		if _, exists := uf.Candy[name]; exists {
-			return nil // explicit entry wins
+// core (bootstrap-critical box⊻layer routing) — it reconstructs the genericNode from pn itself
+// (parsedNodeToGeneric is pure; pn.Disc already carries the discriminator candyIsImage's caller
+// needs, so callers no longer pre-compute gn, R3).
+func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string, uf *loaderkit.UnifiedFile) error {
+	if pn.Disc == "candy" {
+		gn, err := parsedNodeToGeneric(pn)
+		if err != nil {
+			return err
 		}
-		rel, relErr := filepath.Rel(rootDir, dir)
-		if relErr != nil {
-			rel = dir
+		if !candyIsImage(gn) {
+			name := filepath.Base(dir)
+			if _, exists := uf.Candy[name]; exists {
+				return nil // explicit entry wins
+			}
+			rel, relErr := filepath.Rel(rootDir, dir)
+			if relErr != nil {
+				rel = dir
+			}
+			uf.SetCandy(name, &loaderkit.InlineCandy{From: rel, Manifest: manifest})
+			return nil
 		}
-		uf.SetCandy(name, &loaderkit.InlineCandy{From: rel, Manifest: manifest})
-		return nil
 	}
 	return materializeNodeInto(pn, uf)
 }

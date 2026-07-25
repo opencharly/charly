@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
-	"gopkg.in/yaml.v3"
 )
 
 // -----------------------------------------------------------------------------
@@ -514,101 +512,25 @@ func mergeBoxConfig(dst, src *spec.BoxConfig) {
 // manifest; every discovered manifest is routed by SHAPE. Conflict rule:
 // explicit map entries win over discovered entries. scanRoot resolution is
 // relative to rootDir (the dir containing charly.yml).
+//
+// K1 keystone (task #24) unit 3: the WALK+PARSE half (find directories, read +
+// classify + gate + parse each manifest's documents) relocated to
+// loaderkit.RunDiscover — the SAME walker.runDiscover/parseDiscoveredManifest
+// mechanism Walk's own depth-0 discover pass already drives internally, reused
+// here directly rather than duplicated. Only the registry-coupled MATERIALIZE
+// fold (foldDiscoveredManifests, materialize.go — shared with
+// materializeLoadedProject's own discovered-manifest step, R3) stays host-side.
 func ApplyDiscover(uf *loaderkit.UnifiedFile, rootDir string) error {
-	for _, s := range uf.Discover {
-		manifest := s.Manifest
-		if manifest == "" {
-			manifest = UnifiedFileName
-		}
-		scanPath := s.Path
-		if !filepath.IsAbs(scanPath) {
-			scanPath = filepath.Join(rootDir, scanPath)
-		}
-		dirs, err := kit.FindEntityDirs(scanPath, manifest, s.Recursive)
-		if err != nil {
-			return fmt.Errorf("discover %q: %w", s.Path, err)
-		}
-		for _, d := range dirs {
-			if err := applyDiscoveredManifest(uf, d, manifest, rootDir); err != nil {
-				return err
-			}
-		}
+	dms, err := loaderkit.RunDiscover(rootDir, uf.Discover, hostWalkSeams())
+	if err != nil {
+		return err
 	}
-	return nil
+	return foldDiscoveredManifests(dms, uf)
 }
 
 // findEntityDirs (kit.FindEntityDirs) + discoverSkipDir (kit.DiscoverSkipDir)
 // are the discover-walk PRIMITIVES — relocated to sdk/kit
 // (loader_discover.go) so charly core AND sdk/loaderkit share ONE copy (R3).
-
-// applyDiscoveredManifest loads one discovered manifest and routes every
-// document it contains by SHAPE through the SAME classifier the main loader uses
-// (kit.ClassifyDoc): a legacy kind-keyed / root-shape manifest is hard-rejected with
-// a `charly migrate` hint, an empty/directive-only doc is skipped, and a unified
-// node-form doc is validated against #NodeDoc (the sole grammar gate) before its
-// entities are registered. A `candy` node registers a lazy `From:` directory
-// reference (scanCandy parses + validates the manifest and resolves the candy's
-// assets relative to its dir); every other kind normalizes inline. The conflict
-// rule "explicit entry wins" applies to discovered candies.
-func applyDiscoveredManifest(uf *loaderkit.UnifiedFile, dir, manifest, rootDir string) error {
-	target := filepath.Join(dir, manifest)
-	data, err := os.ReadFile(target)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", target, err)
-	}
-	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
-	for {
-		var node yaml.Node
-		if err := decoder.Decode(&node); err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return fmt.Errorf("%s: %w", target, err)
-		}
-		shape, cerr := kit.ClassifyDoc(&node)
-		if cerr != nil {
-			return fmt.Errorf("%s: %w", target, cerr)
-		}
-		if shape == kit.DocShapeEmpty {
-			continue // empty / directive-only document — nothing to register
-		}
-		// VALIDATE-BEFORE-EXECUTE: the whole node-form manifest against #NodeDoc
-		// (strict + closed) — the SAME #NodeDoc gate the walk's GateDoc seam applies to
-		// the root charly.yml, so #NodeDoc is the sole load-time gate for EVERY loaded
-		// document, discovered manifests included.
-		raw, merr := yaml.Marshal(&node)
-		if merr != nil {
-			return fmt.Errorf("%s: re-marshal node-form doc: %w", target, merr)
-		}
-		if verr := validateNodeDocCUE(target, raw); verr != nil {
-			return verr
-		}
-		// The ONE node-form parse is the registered config front-end (P6, sdk/loaderkit); the
-		// genericNode the candy pre-check + the Materializer seam's DecodeEntity/BuildBundleEntity
-		// callbacks consume is reconstructed per node.
-		_, pp, perr := requireLoaderParser().ParseDoc(&node, loaderThreaded())
-		if perr != nil {
-			// A malformed node-form manifest is a HARD error, never silently
-			// dropped (a swallowed parse error would discover "0 candies").
-			return fmt.Errorf("%s: %w", target, perr)
-		}
-		for i := range pp.Nodes {
-			gn, gerr := parsedNodeToGeneric(pp.Nodes[i])
-			if gerr != nil {
-				return fmt.Errorf("%s: %w", target, gerr)
-			}
-			// The SAME per-node discovered-fold the LoadUnified walk path uses
-			// (materializeDiscoveredNode, materialize.go) — a LAYER candy registers a lazy
-			// `From:` reference (explicit entry wins), every other kind materializes via the
-			// registered spec.Materializer (K1 unit 1). R3: one discovered-node handler for both
-			// the walk path and this candy-scan path.
-			if err := materializeDiscoveredNode(gn, pp.Nodes[i], dir, rootDir, manifest, uf); err != nil {
-				return fmt.Errorf("%s: %w", target, err)
-			}
-		}
-	}
-	return nil
-}
 
 // -----------------------------------------------------------------------------
 // Projections — extract the existing concrete types from loaderkit.UnifiedFile so the

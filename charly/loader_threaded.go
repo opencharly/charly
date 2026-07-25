@@ -78,7 +78,15 @@ func requireCandyScanner() spec.CandyScanner {
 // candy/plugin-loader's WalkProject when the host leaves these zero) rather than charly core
 // holding that logic just to thread a function value through a struct literal.
 func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
-	seams := spec.WalkSeams{
+	return requireProjectWalker().WalkProject(dir, rootData, "", hostWalkSeams())
+}
+
+// hostWalkSeams builds the spec.WalkSeams every registry-coupled walk-level entry point threads
+// through: the whole-project walk (hostWalkProject, above) AND the standalone discover-only walk
+// (ApplyDiscover, unified.go — the K1 keystone task #24 unit-3 discover seam) share this ONE
+// construction (R3) rather than each re-deriving it.
+func hostWalkSeams() spec.WalkSeams {
+	return spec.WalkSeams{
 		Parser: requireLoaderParser(),
 		// Boundary: the depth-0 parse pre-scan + connect-declared-kind-plugins registry side effects
 		// (prescanDeclaredPluginWords + connectDeclaredKindPlugins), run at the root file AND each
@@ -92,7 +100,6 @@ func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
 		ResolveRef: canonicalRef,
 		GateDoc:    validateNodeDocCUE,
 	}
-	return requireProjectWalker().WalkProject(dir, rootData, "", seams)
 }
 
 // loaderThreaded builds the spec.Threaded snapshot: the recognized kind / deploy-substrate words
