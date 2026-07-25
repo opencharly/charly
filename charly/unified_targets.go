@@ -467,21 +467,44 @@ func (t *pluginDeployTarget) Status(ctx context.Context) (StatusInfo, error) {
 	return StatusInfo{State: reply.Status.State, Healthy: reply.Status.Healthy, Details: reply.Status.Details}, nil
 }
 
-// Start dispatches OpStart. When this substrate registers a Start plan hook (today only "pod" —
-// vm shells `charly vm start` and manages its own claim) the request carries HasPlan=true, so
-// command:bundle's handleLifecycleSimple brackets its OWN dispatch with the Q1 resource-arbiter
-// claim (the arbiter-bracket-acquire/-release HostBuild seams, host_build_arbiter_bracket.go) —
-// FLOOR-SLIM-proper Unit-8's K4-exit: core no longer brackets the dispatch call itself (the
-// former arbiter_bracket.go). Calls the ACTUAL registered lifecycleStartPlanHooks[t.word] closure
-// (pod_lifecycle_dispatch.go, unmoved) rather than re-deriving its shape here — one source of
-// truth for what the hook produces, R3.
+// bracketedLifecycle reads the DECLARED #DeployTraits.bracketed_lifecycle off the dispatch-merged
+// node's stamped Descent (P9) — the substrate-plugin-declared, self-documenting signal for
+// "accepts direct-mode CLI opts on Start/Stop AND needs the Q1 resource-arbiter claim bracketed
+// around the dispatch" (today only pod; vm shells `charly vm start` and manages its own claim).
+// Never derived from a word comparison or from whether a core-side hook happens to be registered
+// for t.word — the trait IS the source of truth, matching every other substrate-behaviour consult
+// site in the deploy chain (kit.StampDescent / DescentFromTraits).
+func (t *pluginDeployTarget) bracketedLifecycle() bool {
+	// hasPlan := "this substrate's lifecycle is bracketed" — the DECLARED
+	// #DeployTraits.bracketed_lifecycle trait (plugin-substrate substrateTraits[pod]), resolved
+	// from the provider registry BY WORD, never from the per-word lifecycleStartPlanHooks map
+	// (that map stays the host-side opts-marshaling MECHANISM; the bracket SIGNAL is declared
+	// data). deployTraitsFor resolves everywhere including the dispatch node, whose node.Descent
+	// is not StampDescent-stamped, so read the trait off the registry directly.
+	traits := deployTraitsFor(t.word)
+	return traits != nil && traits.BracketedLifecycle
+}
+
+// Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
+// (today only pod) the request carries HasPlan=true, so command:bundle's handleLifecycleSimple
+// brackets its OWN dispatch with the Q1 resource-arbiter claim (the arbiter-bracket-acquire/
+// -release HostBuild seams, host_build_arbiter_bracket.go) — FLOOR-SLIM-proper Unit-8's K4-exit:
+// core no longer brackets the dispatch call itself (the former arbiter_bracket.go). The opts
+// marshal itself is inherently CLI-invocation-context-bound (podStartOptsFromCtx reads a ctx value
+// only `charly start`'s Kong Run() sets — an out-of-process plugin has no access to it), so the
+// registered lifecycleStartPlanHooks[t.word] closure (pod_lifecycle_dispatch.go) still supplies
+// it; the TRAIT, not the map's mere presence, is what decides bracketing now.
 func (t *pluginDeployTarget) Start(ctx context.Context) error {
 	if !t.hasLifecycle {
 		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 	}
-	planHook, hasPlan := lifecycleStartPlanHooks[t.word]
+	hasPlan := t.bracketedLifecycle()
 	var optsJSON json.RawMessage
 	if hasPlan {
+		planHook, ok := lifecycleStartPlanHooks[t.word]
+		if !ok {
+			return fmt.Errorf("substrate %q: declares bracketed_lifecycle but registers no Start plan hook", t.word)
+		}
 		box, instance := deploykit.ParseDeployKey(t.name)
 		var err error
 		optsJSON, err = planHook(ctx, box, instance)
@@ -493,15 +516,19 @@ func (t *pluginDeployTarget) Start(ctx context.Context) error {
 	return err
 }
 
-// Stop mirrors Start — dispatches OpStop, HasPlan-flagged the same way when this substrate
-// registers a Stop plan hook, calling the ACTUAL registered lifecycleStopPlanHooks[t.word] closure.
+// Stop mirrors Start — dispatches OpStop, HasPlan-flagged from the SAME declared trait, calling
+// the registered lifecycleStopPlanHooks[t.word] closure for the opts marshal.
 func (t *pluginDeployTarget) Stop(ctx context.Context) error {
 	if !t.hasLifecycle {
 		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 	}
-	planHook, hasPlan := lifecycleStopPlanHooks[t.word]
+	hasPlan := t.bracketedLifecycle()
 	var optsJSON json.RawMessage
 	if hasPlan {
+		planHook, ok := lifecycleStopPlanHooks[t.word]
+		if !ok {
+			return fmt.Errorf("substrate %q: declares bracketed_lifecycle but registers no Stop plan hook", t.word)
+		}
 		box, instance := deploykit.ParseDeployKey(t.name)
 		var err error
 		optsJSON, err = planHook(ctx, box, instance)

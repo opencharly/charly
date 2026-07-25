@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
 // vm_bootc_engine.go — the bootc-VM disk-build engine (P8b-rest: ported from
@@ -81,7 +83,7 @@ qemu-img convert -O qcow2 /out/disk.raw /out/disk.qcow2
 rm -f /out/disk.raw
 `, spec.DiskSize, rootfs, rootSizeFlag, kargFlag)
 
-	if err := RunPrivileged(PrivilegedRun{
+	if err := buildkit.RunPrivileged(buildkit.PrivilegedRun{
 		Image:      imageRef,
 		Script:     script,
 		OutputPath: "/out/disk.qcow2",

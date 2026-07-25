@@ -98,3 +98,32 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 		}
 	})
 }
+
+// TestPluginDeployTarget_BracketedLifecycle is the regression test for the deploy-cone cutover 1
+// item-1 fix: Start/Stop's "does this substrate need the Q1 resource-arbiter bracket" signal comes
+// from the DECLARED #DeployTraits.bracketed_lifecycle resolved BY the substrate WORD from the
+// provider registry (deployTraitsFor) — never from a hardcoded word comparison, and never from the
+// unstamped dispatch node (t.node is dctx.Node, which StampDescent does not stamp). Keying on
+// t.word — the provider's substrate word set in ResolveDeploy — keeps the bracket POD-SCOPED and
+// safe: pod is bracketed, vm/local are not, and an unknown/empty word resolves nil → not bracketed
+// (never the effectiveTarget "pod" default a node-keyed read would fall into for an untargeted node).
+func TestPluginDeployTarget_BracketedLifecycle(t *testing.T) {
+	cases := []struct {
+		name string
+		word string
+		want bool
+	}{
+		{"empty word (unresolved) → not bracketed", "", false},
+		{"vm (declares bracketed_lifecycle=false) → not bracketed", "vm", false},
+		{"local (declares bracketed_lifecycle=false) → not bracketed", "local", false},
+		{"pod (declares bracketed_lifecycle=true) → bracketed", "pod", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tgt := &pluginDeployTarget{word: c.word}
+			if got := tgt.bracketedLifecycle(); got != c.want {
+				t.Fatalf("bracketedLifecycle(word=%q) = %v, want %v", c.word, got, c.want)
+			}
+		})
+	}
+}

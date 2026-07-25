@@ -3,35 +3,14 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/opencharly/sdk/buildkit"
 )
 
-// TestNormalizeBoxArgs asserts the `all` sentinel collapses to nil ONLY when it
-// is the sole argument — the canonical "every enabled box" shape shared by
-// `charly box build` and `charly box generate`.
-func TestNormalizeBoxArgs(t *testing.T) {
-	cases := []struct {
-		name string
-		in   []string
-		want []string
-	}{
-		{"nil stays nil", nil, nil},
-		{"empty stays empty", []string{}, []string{}},
-		{"lone all → nil", []string{"all"}, nil},
-		{"lone ALL (case-insensitive) → nil", []string{"ALL"}, nil},
-		{"lone All → nil", []string{"All"}, nil},
-		{"single named box passes through", []string{"fedora"}, []string{"fedora"}},
-		{"all alongside another name is literal", []string{"all", "fedora"}, []string{"all", "fedora"}},
-		{"two named boxes pass through", []string{"fedora", "arch"}, []string{"fedora", "arch"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := normalizeBoxArgs(tc.in)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("normalizeBoxArgs(%v) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
+// buildkit.NormalizeBoxArgs's own sentinel-collapse behavior is covered by
+// sdk/buildkit/build_helpers_test.go (TestNormalizeBoxArgs) now that the logic lives there
+// (the BUILD-cone cutover); this file keeps only the charly-side composition with
+// boxResolveOpts below.
 
 // TestBoxResolveOpts asserts the single box-selection rule both build and
 // generate consume: empty → no scoping (all enabled); named → RequestedBoxes
@@ -99,16 +78,16 @@ func TestBoxResolveOpts(t *testing.T) {
 func TestBuildResolveOptsParity(t *testing.T) {
 	for _, sel := range [][]string{nil, {"fedora"}, {"fedora", "arch"}} {
 		for _, incl := range []bool{false, true} {
-			a := boxResolveOpts(normalizeBoxArgs(sel), incl)
-			b := boxResolveOpts(normalizeBoxArgs(sel), incl)
+			a := boxResolveOpts(buildkit.NormalizeBoxArgs(sel), incl)
+			b := boxResolveOpts(buildkit.NormalizeBoxArgs(sel), incl)
 			if !reflect.DeepEqual(a, b) {
 				t.Errorf("parity mismatch for sel=%v incl=%v: %+v vs %+v", sel, incl, a, b)
 			}
 		}
 	}
 	// `all` and the bare form must resolve identically.
-	allOpts := boxResolveOpts(normalizeBoxArgs([]string{"all"}), false)
-	bareOpts := boxResolveOpts(normalizeBoxArgs(nil), false)
+	allOpts := boxResolveOpts(buildkit.NormalizeBoxArgs([]string{"all"}), false)
+	bareOpts := boxResolveOpts(buildkit.NormalizeBoxArgs(nil), false)
 	if !reflect.DeepEqual(allOpts, bareOpts) {
 		t.Errorf("`generate all` opts %+v != bare `generate` opts %+v", allOpts, bareOpts)
 	}

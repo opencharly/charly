@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 )
 
@@ -42,13 +43,13 @@ func renderPrepBox(g *Generator, boxName string) error {
 	img.RenderCandyOrder = candyOrder
 
 	// 3. caps — the candy-contributed capability surface.
-	caps, capsErr := AggregateCandyCapabilities(g.Candies, candyOrder)
+	caps, capsErr := buildkit.AggregateCandyCapabilities(g.Candies, candyOrder)
 	if capsErr != nil {
 		return capsErr
 	}
 	img.CandyCaps = caps
-	if missing := CheckRequiredCapabilities(g.Candies, candyOrder, caps); len(missing) > 0 {
-		return CandyCapabilitiesError(g.Candies, candyOrder, missing)
+	if missing := buildkit.CheckRequiredCapabilities(g.Candies, candyOrder, caps); len(missing) > 0 {
+		return buildkit.CandyCapabilitiesError(g.Candies, candyOrder, missing)
 	}
 
 	// 4. activeInits — the active init systems for this composition.

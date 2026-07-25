@@ -7,33 +7,36 @@ plugin-settings:
             get/set/list/reset/path subcommand grammar (command.go runSettingsCLI) and the output
             formatting. No plugin-specific command LOGIC is left in core.
 
-            The ONE thing the plugin cannot do itself is the config subsystem — read/write the
-            runtime config file ~/.config/charly/config.yml (GetConfigValue / SetConfigValue /
-            ListConfigValues / ResetConfigValue / RuntimeConfigPath), the credential-store backend,
-            and the runtime-engine resolution (ResolveRuntime, DefaultCredentialStore). That
-            subsystem STAYS core (charly/runtime_config.go) and is reached via the generic "settings"
-            HostBuild seam (charly/host_build_settings.go, spec.SettingsRequest{Op,Key,Value} →
-            spec.SettingsReply{Value,Entries,Error}; Op ∈ get/set/list/reset/path, with the get
-            special-cases — engine.* resolved via ResolveRuntime, secret_backend via the resolved
-            credential store — in resolveSettingsGet). "settings" is a class-generic action noun, not
-            a provider word (F11). This is the same "plugin owns the command + a generic seam for the
-            core-coupled bits" doctrine command:clean and the vm + pod deploy plugins established.
+            This plugin OWNS its entire config subsystem — read/write the runtime config file
+            ~/.config/charly/config.yml (GetConfigValue / SetConfigValue / ListConfigValues /
+            ResetConfigValue / RuntimeConfigPath) + the runtime-engine resolution — directly in
+            config.go (ported from charly/runtime_config_values.go + charly/host_build_settings.go),
+            as almost-entirely-pure kit.LoadRuntimeConfig / SaveRuntimeConfig file I/O + validation.
+            The get special-cases live here too (engine.* resolved via kit.ResolveRuntime;
+            secret_backend via the resolved credential store), in resolveSettingsGet. The THREE
+            credential-store touches (vnc.password.* get/set/delete + secret_backend reset/name)
+            dispatch verb:credential DIRECTLY via InvokeProvider — the same plugin-side pattern
+            candy/plugin-pod/enc_cmd.go proves. The "settings" HostBuild seam
+            (charly/host_build_settings.go) is RETIRED: the plugin already holds a real
+            reverse-channel *sdk.Executor at Invoke(OpRun), so there is nothing left for core to do.
+            This is the same "plugin owns the command AND its logic" doctrine the vm + pod deploy
+            plugins established.
 
             settings is COMPILED-IN (listed in charly/charly.yml compiled_plugins) BECAUSE its
             Invoke(OpRun) needs the in-proc reverse channel — threaded by dispatchInProcCommand
-            ("Seam A") — to call HostBuild("settings"). The out-of-process CliMain path has no
-            reverse channel, so it errors: settings cannot run out-of-process, it needs the settings
-            host seam. There is NO hidden core-command forward — the plugin does the work directly,
-            calling back only for the config ops it can't perform; no core symbol crosses the
-            boundary, no ad-hoc podman.
+            ("Seam A") — for its verb:credential InvokeProvider calls. The out-of-process CliMain
+            path has no reverse channel, so it errors: settings cannot run out-of-process. There is
+            NO hidden core-command forward and NO core config seam — the plugin does the config I/O
+            itself, reaching only verb:credential over the reverse channel; no core symbol crosses
+            the boundary, no ad-hoc podman.
 
             command:settings dispatches through the COMPILED-IN registry path (registerCompiledPlugin
             → resolve(ClassCommand,"settings") → dispatchInProcCommand → Invoke(OpRun) with the
             threaded in-proc reverse channel), so NewMeta advertises command:settings while the
             served CUE schema carries no plugin_input (the args are plain CLI tokens). The R10 witness
             is the disposable check-commands-local bed: `charly settings list` exits 0 and lists the
-            resolved runtime-config keys, proving the externalized command + the in-proc
-            HostBuild("settings") dispatch end-to-end.
+            resolved runtime-config keys, proving the externalized command + its plugin-owned
+            config I/O end-to-end.
         plugin:
             source: github.com/opencharly/charly/candy/plugin-settings
             providers:
@@ -42,10 +45,10 @@ plugin-settings:
             - # ADE build-context check: a deterministic check that does NOT depend on a live deployment —
               # it mirrors candy/plugin-doctor's doctor-module-present: a trivial build-context
               # `plugin: command` (the built-in command CHECK verb) running `true`, the mandatory ≥1
-              # deterministic check every candy ships. The full `charly settings` end-to-end — the compiled-in
-              # in-proc HostBuild("settings") dispatch: `charly settings list` → exit 0 with the resolved
+              # deterministic check every candy ships. The full `charly settings` end-to-end — the
+              # plugin-owned config I/O (config.go): `charly settings list` → exit 0 with the resolved
               # runtime-config keys — is exercised by the live R10 bed (check-commands-local).
-              check: the settings command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly settings` end-to-end (the in-proc HostBuild settings dispatch) is exercised by the live R10 (check-commands-local)
+              check: the settings command plugin ships a buildable Go module (go.mod + the provider package) compiled into charly; the full `charly settings` end-to-end (the plugin-owned config I/O, the settings seam retired) is exercised by the live R10 (check-commands-local)
               id: settings-module-present
               context:
                 - build

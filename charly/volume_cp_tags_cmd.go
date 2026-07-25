@@ -5,8 +5,8 @@ package main
 // kit.ResolveBoxName/deploykit.ResolveBoxEngineForDeploy/deploykit.ResolveContainer/
 // deploykit.ResolveSidecarContainer, all already SDK-portable. The former resolveSidecarContainer
 // (this file's own bare duplicate of deploykit.ResolveSidecarContainer) dissolved into that
-// deploykit twin (CHECK-wave container-resolve dedup) — its 2 callers (cmd.go,
-// pod_lifecycle_resolve.go) now call deploykit.ResolveSidecarContainer directly.
+// deploykit twin (CHECK-wave container-resolve dedup) — its caller cmd.go
+// now calls deploykit.ResolveSidecarContainer directly.
 //
 // The tag INVENTORY (charlyImageTags) + invalidateImageTags/matchImageGlob relocated to
 // candy/plugin-clean's retention engine (K1-alpha core-minimization) — ListTagsCmd now reaches

@@ -23,7 +23,7 @@ import (
 // function did not exist before the fix, so this test fails to even compile against the
 // pre-fix tree — the honest signature of "zero prior coverage of this exact seam path".
 func TestResolveActiveInitByName_MissingSystemd_HardErrors(t *testing.T) {
-	initCfg := &InitConfig{Init: map[string]*ResolvedInit{
+	initCfg := &buildkit.InitConfig{Init: map[string]*ResolvedInit{
 		"supervisord": {ManagementTool: "supervisorctl"},
 	}}
 	name, def, err := resolveActiveInitByName(initCfg)
@@ -54,7 +54,7 @@ func TestResolveActiveInitByName_NilInitConfig_HardErrors(t *testing.T) {
 // that DOES declare "systemd" resolves it by name, verbatim, with no error.
 func TestResolveActiveInitByName_SystemdPresent_Resolves(t *testing.T) {
 	want := &ResolvedInit{ManagementTool: "systemctl"}
-	initCfg := &InitConfig{Init: map[string]*ResolvedInit{"systemd": want}}
+	initCfg := &buildkit.InitConfig{Init: map[string]*ResolvedInit{"systemd": want}}
 	name, def, err := resolveActiveInitByName(initCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

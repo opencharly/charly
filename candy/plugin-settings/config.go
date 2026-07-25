@@ -1,19 +1,135 @@
-package main
+package settings
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk"
 	"github.com/opencharly/sdk/kit"
 )
 
-// GetConfigValue returns the value for a dot-notation key from the config file.
+// config.go — the config-subsystem (GetConfigValue/SetConfigValue/ResetConfigValue/
+// ListConfigValues + resolveSettingsGet) ported from charly/runtime_config_values.go +
+// charly/host_build_settings.go (wave γ). Almost entirely pure kit.LoadRuntimeConfig/
+// SaveRuntimeConfig file I/O + validation, already portable; the THREE credential-store touches
+// (vnc.password.* get/set/delete + secret_backend's store reset/name) now dispatch
+// verb:credential DIRECTLY via InvokeProvider — the same plugin-side pattern
+// candy/plugin-pod/enc_cmd.go already proves (each consuming package keeps its own small wire
+// copy; there is no shared exported fixture across modules, the established convention). The
+// "settings" HostBuild seam is RETIRED: this plugin already gets a real reverse-channel
+// *sdk.Executor at Invoke(OpRun) (provider.go), so there is nothing left for core to do.
+
+const credServiceVNC = "charly/vnc"
+
+// credentialInput/credentialReply are the verb:credential wire forms — byte-compatible with
+// charly/credential_plugin.go's copy and candy/plugin-secrets/params.CredentialInput
+// (CUE-sourced there).
+type credentialInput struct {
+	Method  string `json:"method"`
+	Service string `json:"service,omitempty"`
+	Key     string `json:"key,omitempty"`
+	Value   string `json:"value,omitempty"`
+}
+
+type credentialReply struct {
+	Value  string `json:"value,omitempty"`
+	Source string `json:"source,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// credentialCall dispatches one verb:credential operation over exec. A nil exec (the
+// out-of-process CliMain path, which already refuses to run — see plugin.go) errors cleanly.
+func credentialCall(ctx context.Context, exec *sdk.Executor, in credentialInput) (credentialReply, error) {
+	var reply credentialReply
+	if exec == nil {
+		return reply, fmt.Errorf("charly settings: no host reverse channel (settings requires compiled-in placement)")
+	}
+	inJSON, err := json.Marshal(in)
+	if err != nil {
+		return reply, err
+	}
+	resJSON, err := exec.InvokeProvider(ctx, "verb", "credential", sdk.OpRun, inJSON, nil, sdk.InvokeProviderOpts{})
+	if err != nil {
+		return reply, fmt.Errorf("credential invoke: %w", err)
+	}
+	if len(resJSON) > 0 {
+		if uerr := json.Unmarshal(resJSON, &reply); uerr != nil {
+			return reply, uerr
+		}
+	}
+	return reply, nil
+}
+
+// credentialResolve mirrors charly/credential_plugin.go's ResolveCredential's store-branch (the
+// settings call sites here always pass envVar="").
+func credentialResolve(ctx context.Context, exec *sdk.Executor, service, key, defaultVal string) (value, source string) {
+	r, err := credentialCall(ctx, exec, credentialInput{Method: "resolve", Service: service, Key: key})
+	if err != nil {
+		return defaultVal, "unavailable"
+	}
+	if r.Value != "" {
+		return r.Value, r.Source
+	}
+	src := r.Source
+	if src == "" {
+		src = "default"
+	}
+	return defaultVal, src
+}
+
+// credentialSet persists one credential (SetConfigValue's vnc.password.* branch).
+func credentialSet(ctx context.Context, exec *sdk.Executor, service, key, value string) error {
+	r, err := credentialCall(ctx, exec, credentialInput{Method: "set", Service: service, Key: key, Value: value})
+	if err != nil {
+		return err
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// credentialDelete removes one credential (ResetConfigValue's vnc.password.* branch).
+func credentialDelete(ctx context.Context, exec *sdk.Executor, service, key string) error {
+	r, err := credentialCall(ctx, exec, credentialInput{Method: "delete", Service: service, Key: key})
+	if err != nil {
+		return err
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// credentialName reports the active credential store's name (resolveSettingsGet's
+// secret_backend branch) — best-effort, matching core's DefaultCredentialStore().Name()
+// fallback-to-"config" behavior when the plugin is unreachable.
+func credentialName(ctx context.Context, exec *sdk.Executor) string {
+	r, err := credentialCall(ctx, exec, credentialInput{Method: "name"})
+	if err != nil {
+		return "config"
+	}
+	return r.Name
+}
+
+// credentialReset re-probes the keyring — SetConfigValue/ResetConfigValue's secret_backend
+// branch drives it after a backend change so the new backend takes effect immediately.
+func credentialReset(ctx context.Context, exec *sdk.Executor) {
+	_, _ = credentialCall(ctx, exec, credentialInput{Method: "reset"})
+}
+
+// GetConfigValue returns the value for a dot-notation key from the config file. Direct port of
+// charly/runtime_config_values.go's GetConfigValue.
 //
 //nolint:gocyclo // flat dispatch over config keys + dynamic hosts./vnc.password subkeys; uniform getter
-func GetConfigValue(key string) (string, error) {
+func GetConfigValue(ctx context.Context, exec *sdk.Executor, key string) (string, error) {
 	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
 		return "", err
@@ -92,14 +208,14 @@ func GetConfigValue(key string) (string, error) {
 		}
 		if after, ok := strings.CutPrefix(key, "vnc.password."); ok {
 			name := after
-			val, source := ResolveCredential("", CredServiceVNC, name, "")
+			val, source := credentialResolve(ctx, exec, credServiceVNC, name, "")
 			if source == "locked" {
 				return "<LOCKED>", nil
 			}
 			// The keyring backend can be unavailable (e.g. locked) while the value lives
 			// in the keyring; the config.yml shadow index (KeyringKeys, core-owned) still
 			// lists it. Report <LOCKED> rather than empty so the operator knows it exists.
-			if val == "" && source == "unavailable" && slices.Contains(cfg.KeyringKeys, CredServiceVNC+"/"+name) {
+			if val == "" && source == "unavailable" && slices.Contains(cfg.KeyringKeys, credServiceVNC+"/"+name) {
 				return "<LOCKED>", nil
 			}
 			return val, nil
@@ -108,10 +224,11 @@ func GetConfigValue(key string) (string, error) {
 	}
 }
 
-// SetConfigValue sets a value for a dot-notation key in the config file.
+// SetConfigValue sets a value for a dot-notation key in the config file. Direct port of
+// charly/runtime_config_values.go's SetConfigValue.
 //
 //nolint:gocyclo // paired validate+persist switch over ~25 config keys; per-key logic is cohesive
-func SetConfigValue(key, value string) error {
+func SetConfigValue(ctx context.Context, exec *sdk.Executor, key, value string) error {
 	// Validate value before writing
 	switch key {
 	case "engine.build", "engine.run":
@@ -217,7 +334,7 @@ func SetConfigValue(key, value string) error {
 	case "secret_backend":
 		cfg.SecretBackend = value
 		// Reset cached default store so the new backend takes effect
-		resetDefaultStore()
+		credentialReset(ctx, exec)
 	case "keyring_collection_label":
 		cfg.KeyringCollectionLabel = value
 	case "forward_gpg_agent":
@@ -256,16 +373,16 @@ func SetConfigValue(key, value string) error {
 		// Credential keys go through the credential store
 		if after, ok := strings.CutPrefix(key, "vnc.password."); ok {
 			name := after
-			return DefaultCredentialStore().Set(CredServiceVNC, name, value)
+			return credentialSet(ctx, exec, credServiceVNC, name, value)
 		}
 	}
 
 	return kit.SaveRuntimeConfig(cfg)
 }
 
-// ResetConfigValue removes a key from the config file (reverts to default).
-// If key is empty, resets the entire config.
-func ResetConfigValue(key string) error {
+// ResetConfigValue removes a key from the config file (reverts to default). If key is empty,
+// resets the entire config. Direct port of charly/runtime_config_values.go's ResetConfigValue.
+func ResetConfigValue(ctx context.Context, exec *sdk.Executor, key string) error {
 	if key == "" {
 		// Reset entire config
 		return kit.SaveRuntimeConfig(&kit.RuntimeConfig{})
@@ -295,7 +412,7 @@ func ResetConfigValue(key string) error {
 		cfg.VolumesPath = ""
 	case "secret_backend":
 		cfg.SecretBackend = ""
-		resetDefaultStore()
+		credentialReset(ctx, exec)
 	case "keyring_collection_label":
 		cfg.KeyringCollectionLabel = ""
 	case "forward_gpg_agent":
@@ -327,7 +444,7 @@ func ResetConfigValue(key string) error {
 		// Credential keys: delete from credential store
 		if after, ok := strings.CutPrefix(key, "vnc.password."); ok {
 			name := after
-			return DefaultCredentialStore().Delete(CredServiceVNC, name)
+			return credentialDelete(ctx, exec, credServiceVNC, name)
 		}
 		return fmt.Errorf("unknown config key %q (valid: engine.build, engine.run, engine.rootful, run_mode, auto_enable, bind_address, encrypted_storage_path, secret_backend, forward_gpg_agent, forward_ssh_agent, hosts.<alias>, vm.backend, vm.disk_size, vm.root_size, vm.ram, vm.cpus, vm.rootfs, vm.transport, vnc.password.<image>)", key)
 	}
@@ -342,7 +459,9 @@ type configKeySource struct {
 	Source string // "env", "config", "default"
 }
 
-// ListConfigValues returns all config keys with their resolved values and sources.
+// ListConfigValues returns all config keys with their resolved values and sources. Pure —
+// zero credential-store coupling (VNC passwords are not listed by dot-key here). Direct port of
+// charly/runtime_config_values.go's ListConfigValues.
 func ListConfigValues() ([]configKeySource, error) {
 	cfg, err := kit.LoadRuntimeConfig()
 	if err != nil {
@@ -462,4 +581,43 @@ func ListConfigValues() ([]configKeySource, error) {
 		})
 	}
 	return out, nil
+}
+
+// resolveSettingsGet resolves a config key's value for `charly settings get`. Direct port of
+// charly/host_build_settings.go's resolveSettingsGet. Special cases: vnc.password.* + hosts.*
+// resolve via GetConfigValue; engine.* via kit.ResolveRuntime (shows "podman" not "auto");
+// secret_backend via the resolved credential store name.
+func resolveSettingsGet(ctx context.Context, exec *sdk.Executor, key string) (string, error) {
+	if strings.HasPrefix(key, "vnc.password.") {
+		return GetConfigValue(ctx, exec, key)
+	}
+	switch key {
+	case "engine.build", "engine.run", "engine.rootful":
+		if rt, err := kit.ResolveRuntime(); err == nil {
+			switch key {
+			case "engine.build":
+				return rt.BuildEngine, nil
+			case "engine.run":
+				return rt.RunEngine, nil
+			case "engine.rootful":
+				return fmt.Sprintf("%v", rt.Rootful), nil
+			}
+		}
+		// fall through to ListConfigValues if engine detection fails
+	case "secret_backend":
+		return credentialName(ctx, exec), nil
+	}
+	vals, err := ListConfigValues()
+	if err != nil {
+		return "", err
+	}
+	for _, v := range vals {
+		if v.Key == key {
+			return v.Value, nil
+		}
+	}
+	if strings.HasPrefix(key, "hosts.") || strings.HasPrefix(key, "vnc.password.") {
+		return GetConfigValue(ctx, exec, key)
+	}
+	return "", fmt.Errorf("unknown config key %q (run 'charly settings list' to see valid keys)", key)
 }

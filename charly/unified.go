@@ -1023,14 +1023,14 @@ func (uf *UnifiedFile) ProjectBuilderConfig() *buildkit.BuilderConfig {
 	return &buildkit.BuilderConfig{Builder: builders}
 }
 
-// ProjectInitConfig returns the *InitConfig equivalent (inits: section), decoding the
-// build vocabulary from the init plugin kind (uf.PluginKinds via Inits()).
-func (uf *UnifiedFile) ProjectInitConfig() *InitConfig {
+// ProjectInitConfig returns the *buildkit.InitConfig equivalent (inits: section), decoding
+// the build vocabulary from the init plugin kind (uf.PluginKinds via Inits()).
+func (uf *UnifiedFile) ProjectInitConfig() *buildkit.InitConfig {
 	inits := uf.resolveInits()
 	if len(inits) == 0 {
 		return nil
 	}
-	return &InitConfig{Init: inits}
+	return &buildkit.InitConfig{Init: inits}
 }
 
 // ProjectBundleConfig returns the *BundleConfig equivalent (deployments: section

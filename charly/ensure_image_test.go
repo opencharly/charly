@@ -90,22 +90,6 @@ func TestBuildableShortName_RemoteRef(t *testing.T) {
 	}
 }
 
-// TestEnsureScoreImages_NilUnifiedFile returns nil (no-op).
-func TestEnsureScoreImages_NilUnifiedFile(t *testing.T) {
-	if err := ensureScoreImages(context.Background(), nil, nil, ""); err != nil {
-		t.Errorf("nil unified file should be a no-op, got %v", err)
-	}
-}
-
-// TestEnsureScoreImages_EmptyPlan returns nil — no pod-targeted steps means no
-// images to ensure.
-func TestEnsureScoreImages_EmptyPlan(t *testing.T) {
-	uf := &UnifiedFile{}
-	if err := ensureScoreImages(context.Background(), nil, uf, ""); err != nil {
-		t.Errorf("plan with no pod-targeted steps should be a no-op, got %v", err)
-	}
-}
-
 // TestEnsureImagePresent_EmptyImageErrors guards against silent
 // no-ops on empty input.
 func TestEnsureImagePresent_EmptyImageErrors(t *testing.T) {

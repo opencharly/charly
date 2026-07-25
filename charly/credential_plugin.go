@@ -16,8 +16,8 @@ import (
 // the `charly secrets` CLI, the GPG `.secrets` surface) lives OUT-OF-PROCESS in
 // candy/plugin-secrets — the C2 dep-shed removed github.com/zalando/go-keyring from
 // charly/go.mod. Every core credential consumer (enc.go, secrets.go, layer_secrets.go,
-// config_secret_migration.go, runtime_config.go, vnc_helpers.go, host_build_deploy_entity_resolve.go,
-// migrate_charly_cutover4.go) keeps using the SAME CredentialStore interface + the SAME
+// config_secret_migration.go, runtime_config.go, vnc_helpers.go, migrate_charly_cutover4.go)
+// keeps using the SAME CredentialStore interface + the SAME
 // ResolveCredential entry point; pluginCredentialStore forwards every call to
 // verb:credential over the provider registry (built from candy source on a dev host, or
 // the baked /usr/lib/charly/plugins binary on an installed host / in a deployed container).
@@ -50,21 +50,6 @@ type credentialResolver interface {
 // fetched host-side via the hostprobe host-build seam).
 type credentialHealther interface {
 	health() (*CredentialHealth, error)
-}
-
-// credentialResetter is the keyring-re-probe seam (enc.go's unlock-wait drives it between
-// attempts — the cached store lives in the plugin process now, so the reset propagates).
-type credentialResetter interface {
-	reset()
-}
-
-// credentialAwaiter is the event-driven keyring-unlock seam: a store that can BLOCK until its
-// keyring unlocks implements it (enc.go's encrypted-volume mount path drives it when a resolve
-// returns source="locked"). The out-of-process pluginCredentialStore satisfies it by RPCing
-// verb:credential `await-unlock` — the godbus PropertiesChanged subscription runs IN the plugin
-// (the Secret Service owner), which is what sheds godbus from charly's core.
-type credentialAwaiter interface {
-	awaitUnlock(ctx context.Context, service, key string) (value, source string, err error)
 }
 
 // credentialInput / credentialReply / CredentialHealth are the verb:credential wire forms,
@@ -199,16 +184,6 @@ func (s pluginCredentialStore) health() (*CredentialHealth, error) {
 	return r.Health, nil
 }
 
-// reset re-probes the keyring in the plugin process — but ONLY when verb:credential is
-// already connected, so a reset never pays a build/connect just to clear a cache that was
-// never populated (the no-keyring / no-project path stays a no-op).
-func (s pluginCredentialStore) reset() {
-	if _, ok := providerRegistry.ResolveVerb("credential"); !ok {
-		return
-	}
-	_, _ = s.call(credentialInput{Method: "reset"})
-}
-
 var (
 	defaultStoreMu       sync.Mutex
 	defaultStoreVal      CredentialStore
@@ -243,19 +218,6 @@ func resetDefaultCredentialStoreForTest() {
 	defaultStoreOverride = nil
 	defaultStoreMu.Unlock()
 }
-
-// resetDefaultStore forces the active store to re-probe (the secret_backend-change path in
-// runtime_config.go + tests). For the plugin store it propagates as a `reset` RPC; for a
-// test fake implementing credentialResetter it calls its reset.
-func resetDefaultStore() {
-	if r, ok := DefaultCredentialStore().(credentialResetter); ok {
-		r.reset()
-	}
-}
-
-// resetDefaultCredentialStore is the keyring-wait subset alias (enc.go drives it between
-// unlock attempts). Same propagation as resetDefaultStore.
-func resetDefaultCredentialStore() { resetDefaultStore() }
 
 // ResolveCredential checks an env var override, then the active store. Returns the value
 // and its source: "env" | "keyring" | "config" | "locked" | "unavailable" | "default".
