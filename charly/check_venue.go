@@ -64,7 +64,7 @@ func resolveCheckEndpoint(venue *CheckVenue, port int) (*CheckEndpoint, error) {
 func containerPublishedAddr(engine, containerName string, port int) (string, error) {
 	out, err := exec.Command(engine, "port", containerName, strconv.Itoa(port)).Output()
 	if err != nil {
-		if isHostNetworked(engine, containerName) {
+		if kit.IsHostNetworked(engine, containerName) {
 			return fmt.Sprintf("127.0.0.1:%d", port), nil
 		}
 		return "", fmt.Errorf("no port mapping found for %d in %s", port, containerName)
