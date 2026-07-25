@@ -266,10 +266,14 @@ func TestBuilderRunDryRun(t *testing.T) {
 // deleted as dead code in the R5 sweep (Cutover B unit 3+4) — the
 // sdk/kit/profile.go equivalents they duplicated (RenderEnvdBody/
 // ManagedBlockBody/ShellInitFilePath/DetectShellFromPath) carry their own
-// coverage in that package. The two surviving tests below now build their
+// coverage in that package. The two surviving tests below build their
 // marker fences via kit.MarkersForTag instead of the deleted local
-// markersForTag, and TestRemoveEnvdFile covers the one function this file
-// still owns.
+// markersForTag. TestRemoveEnvdFile (the last function this file owned,
+// RemoveEnvdFile) moved to sdk/kit/profile_test.go alongside the relocated
+// function — charly/shell_profile.go is deleted (Layer-1 build-engine
+// mini-cutover: RemoveEnvdFile had zero charly-core dependency, so the
+// deploykit injected-seam pattern collapsed to a direct kit.RemoveEnvdFile
+// call).
 
 // TestRemoveManagedBlockAt proves the LOCAL per-candy teardown strip (the live path
 // reverseRemoveManaged takes when runner==nil): a candy's fenced shell-snippet block is
@@ -314,36 +318,6 @@ func TestRenderManagedBlockStrip(t *testing.T) {
 	}
 	if !strings.Contains(string(got), "USER_VAR") || !strings.Contains(string(got), "alias ll") {
 		t.Errorf("remote strip lost user content:\n%s", got)
-	}
-}
-
-// TestRemoveEnvdFile proves the ONE function shell_profile.go still owns:
-// removal is silent-success both when the file exists and when it's already
-// gone (double-remove). The file is created directly via kit.EnvdFilePath +
-// kit.RenderEnvdBody — the same primitives the live kit.WalkPlans write path
-// uses — rather than through the (now-deleted) charly-local WriteEnvdFile.
-func TestRemoveEnvdFile(t *testing.T) {
-	home := t.TempDir()
-	path := kit.EnvdFilePath(home, "pre-commit")
-	if err := os.MkdirAll(kit.EnvdDir(home), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := kit.RenderEnvdBody("pre-commit", map[string]string{"K": "v"}, []string{"/bin"})
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("file not created: %v", err)
-	}
-	if err := RemoveEnvdFile(home, "pre-commit"); err != nil {
-		t.Fatalf("Remove: %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("file still exists after remove: %v", err)
-	}
-	// Remove again — should not error.
-	if err := RemoveEnvdFile(home, "pre-commit"); err != nil {
-		t.Errorf("double-remove errored: %v", err)
 	}
 }
 

@@ -114,7 +114,7 @@ func rawCandyPair(r spec.CandyReader) (spec.CandyModel, spec.CandyView, bool) {
 // ResolveBox failure appends a spec.Diagnostic and SKIPS that box, so validate runs on a broken
 // project. The box-aggregate collectors already tolerate errors (a failed collector leaves that
 // aggregate empty), so the tolerant branch is confined to the ResolveBox call.
-func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
+func projectResolvedProject(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics) (*spec.ResolvedProject, error) {
 	return projectResolvedProjectWithBoxes(cfg, layers, uf, distroCfg, builderCfg, initCfg, dir, version, opts, diags, nil)
 }
 
@@ -162,7 +162,7 @@ func projectBoxAggregates(cfg *Config, layers map[string]spec.CandyReader, name 
 // on the ResolvedBoxView. When nil (the validate/inspect path), boxes are resolved fresh.
 //
 //nolint:gocyclo // envelope assembler — the box loop (pre-resolved vs fresh-resolve vs intermediate) + the candy/deploy/vocab projections; one branch per projection arm.
-func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
+func projectResolvedProjectWithBoxes(cfg *Config, layers map[string]spec.CandyReader, uf *UnifiedFile, distroCfg *buildkit.DistroConfig, builderCfg *buildkit.BuilderConfig, initCfg *buildkit.InitConfig, dir, version string, opts ResolveOpts, diags *spec.Diagnostics, preResolvedBoxes map[string]*buildkit.ResolvedBox) (*spec.ResolvedProject, error) {
 	rp := &spec.ResolvedProject{Version: version}
 
 	// R1 fix (K1-unblock wave 2): pre-populate opts.DistroCfg/BuilderCfg from the ALREADY-LOADED
@@ -448,7 +448,7 @@ func fillBoxPlans(cfg *Config, layers map[string]spec.CandyReader, prefix string
 // key can never collide across namespaces for the SAME candy (same content, same key); a genuine
 // name clash between two DIFFERENT candies sharing a bare name is a pre-existing
 // resolver-arbitration concern (`charly box reconcile`), not something this fill introduces.
-func fillNamespacedBoxes(uf *UnifiedFile, initCfg *InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*UnifiedFile]bool) {
+func fillNamespacedBoxes(uf *UnifiedFile, initCfg *buildkit.InitConfig, prefix, calver, dir string, opts ResolveOpts, rp *spec.ResolvedProject, visited map[*UnifiedFile]bool) {
 	if uf == nil || visited[uf] {
 		return
 	}
