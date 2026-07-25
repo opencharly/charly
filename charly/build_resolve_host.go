@@ -181,17 +181,13 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		}
 	}
 
-	// Privileged builder-bootstrap for every `from: builder:` image in the set.
-	for _, name := range buildSet {
-		img := gen.Boxes[name]
-		if img != nil && strings.HasPrefix(img.From, "builder:") {
-			if err := c.runPrivilegedBootstrap(rt.BuildEngine, dir, name, img); err != nil {
-				return spec.BuildResolveReply{Error: errString(fmt.Errorf("bootstrapping %s: %w", name, err))}, nil
-			}
-		}
-	}
-
 	// Per-box drive descriptors (NO Containerfile content — plugin-build renders).
+	// The privileged builder-bootstrap (a `from: builder:` image) is NO LONGER run
+	// here — plugin-build's drive runs it itself via buildkit.RunPrivileged, fed by
+	// the From/BootstrapBuilderImage/DistroDef/BootstrapBuilder fields below (the
+	// minimal per-image bootstrap slice; host still resolves WHICH builder def
+	// applies since that's a charly.yml lookup, but the privileged exec moved
+	// candy-side alongside the podman drive it was always adjacent to).
 	descriptors := make([]spec.BuildResolveBox, 0, len(buildSet))
 	for _, name := range buildSet {
 		img := gen.Boxes[name]
@@ -208,6 +204,15 @@ func hostBuildBuildResolve(_ context.Context, req spec.BuildResolveRequest, _ bu
 		if img.Merge != nil {
 			d.MergeMaxMB = int64(img.Merge.MaxMB)
 			d.MergeMaxTotalMB = int64(img.Merge.MaxTotalMB)
+		}
+		if strings.HasPrefix(img.From, "builder:") {
+			d.From = img.From
+			d.BootstrapBuilderImage = img.BootstrapBuilderImage
+			d.DistroDef = img.DistroDef
+			builderName := strings.TrimPrefix(img.From, "builder:")
+			if img.BuilderConfig != nil {
+				d.BootstrapBuilder = img.BuilderConfig.Builder[builderName]
+			}
 		}
 		descriptors = append(descriptors, d)
 	}
