@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/spec"
@@ -324,20 +325,20 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	}
 
 	// Status + info: worst-of status + first-line info parts.
-	effectiveStatus := StatusWorking
+	effectiveStatus := buildkit.StatusWorking
 	var infoParts []string
 	if img.Info != "" {
 		infoParts = append(infoParts, img.Info)
 	}
 	for _, candyName := range candyOrder {
 		layer := g.Candies[candyName]
-		cs := candyStatus(layer)
-		effectiveStatus = worstStatus(effectiveStatus, cs)
+		cs := buildkit.CandyStatus(layer)
+		effectiveStatus = buildkit.WorstStatus(effectiveStatus, cs)
 		if li := deploykit.DescriptionInfo(layer.GetDescription()); li != "" && cs != "working" {
 			infoParts = append(infoParts, candyName+": "+li)
 		}
 	}
-	meta.Status = resolveStatus(effectiveStatus)
+	meta.Status = buildkit.ResolveStatus(effectiveStatus)
 	meta.CheckLevel = kit.ResolveCheckLevel(img.CheckLevel)
 	if len(infoParts) > 0 {
 		meta.Info = strings.ReplaceAll(strings.Join(infoParts, "; "), "\n", " ")

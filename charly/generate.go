@@ -459,61 +459,13 @@ func (g *Generator) collectBuilderRuntimeEnv(candyOrder []string, img *buildkit.
 	return g.toDeploykit().CollectBuilderRuntimeEnv(candyOrder, img)
 }
 
-// resolveStatus returns the effective status string. Empty defaults to "testing".
-// Accepts a single status word (working/testing/broken) — the legacy form
-// used by older callers. Prefer resolveStatusFromTags for new code that
-// reads from Description.Tag directly.
-func resolveStatus(s string) string {
-	if s == "" {
-		return "testing"
-	}
-	return s
-}
-
-// Status rungs. The default (empty) is "testing"; "working" is the most
-// permissive (used as the box-status seed so the candy chain drives the rung).
-const (
-	StatusWorking = "working"
-	StatusTesting = "testing"
-	StatusBroken  = "broken"
-)
-
-// candyStatus returns a candy's authored maturity rung (working|testing|broken),
-// defaulting an unset value to "testing". The authoritative per-candy status
-// source — replaces the retired Description.Tag derivation.
-func candyStatus(c spec.CandyReader) string {
-	if c == nil {
-		return StatusTesting
-	}
-	return resolveStatus(c.GetStatus())
-}
-
 // descriptionInfo moved to sdk/deploykit (deploykit.DescriptionInfo) in K5-Unit-1 —
 // shared with the deploy state-model body (MergeDeployOntoMetadata reads it). charly
 // call sites (config.go / unified.go / host_build_feature.go / render_baked_metadata.go)
-// call deploykit.DescriptionInfo directly.
-
-// statusSeverity returns a numeric severity for status comparison.
-func statusSeverity(s string) int {
-	switch resolveStatus(s) {
-	case "working":
-		return 0
-	case "testing":
-		return 1
-	case "broken":
-		return 2
-	default:
-		return 1 // unknown treated as testing
-	}
-}
-
-// worstStatus returns the more severe of two status values.
-func worstStatus(a, b string) string {
-	if statusSeverity(b) > statusSeverity(a) {
-		return resolveStatus(b)
-	}
-	return resolveStatus(a)
-}
+// call deploykit.DescriptionInfo directly. The candy/box maturity-rung helpers
+// (resolveStatus/candyStatus/statusSeverity/worstStatus/Status*) moved to
+// sdk/buildkit (buildkit.ResolveStatus/CandyStatus/StatusSeverity/WorstStatus/Status*)
+// in the BUILD-cone cutover — pure over spec.CandyReader, no loader coupling.
 
 // createRemoteCandyCopies copies remote candy directories into versioned
 // .build/_candy/<name>.<version>/ dirs
