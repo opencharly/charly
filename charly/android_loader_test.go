@@ -62,7 +62,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf); err == nil {
+	if err := loaderkit.ValidateCheckBeds(uf, loaderThreaded()); err == nil {
 		t.Error("target:android bed without android: should fail validation")
 	}
 
@@ -72,7 +72,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", From: "ghost", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf2); err == nil {
+	if err := loaderkit.ValidateCheckBeds(uf2, loaderThreaded()); err == nil {
 		t.Error("target:android bed referencing an undefined device should fail")
 	}
 
@@ -85,7 +85,7 @@ func TestValidateCheckBeds_Android(t *testing.T) {
 			"bed": {Target: "android", From: "dev", Disposable: new(true)},
 		},
 	}
-	if err := validateCheckBeds(uf3); err != nil {
+	if err := loaderkit.ValidateCheckBeds(uf3, loaderThreaded()); err != nil {
 		t.Errorf("valid target:android bed should pass, got: %v", err)
 	}
 }

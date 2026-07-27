@@ -47,7 +47,7 @@ func TestFlattenBundleVenues_StampsAndHoists(t *testing.T) {
 		},
 	}}
 
-	if err := flattenBundleVenues(uf); err != nil {
+	if err := loaderkit.FlattenBundleVenues(uf); err != nil {
 		t.Fatalf("flattenBundleVenues: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestFlattenBundleVenues_GroupDirectStepRejected(t *testing.T) {
 			},
 		},
 	}}
-	if err := flattenBundleVenues(uf); err == nil {
+	if err := loaderkit.FlattenBundleVenues(uf); err == nil {
 		t.Fatalf("expected error for a direct step under a group bundle, got nil")
 	}
 }

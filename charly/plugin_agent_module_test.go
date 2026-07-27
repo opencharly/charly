@@ -91,7 +91,7 @@ func TestValidateIterateBed_RejectsUnknownAgent(t *testing.T) {
 		Iterate: &spec.Iterate{Agent: []string{"claude"}, Sandbox: "check-sandbox"},
 		Plan:    []spec.Step{{Check: "the service responds"}},
 	}
-	if err := validateIterateBed(uf, "bed", good); err != nil {
+	if err := loaderkit.ValidateIterateBed(uf, "bed", good); err != nil {
 		t.Fatalf("known agent 'claude' was rejected: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestValidateIterateBed_RejectsUnknownAgent(t *testing.T) {
 		Iterate: &spec.Iterate{Agent: []string{"ghost"}, Sandbox: "check-sandbox"},
 		Plan:    []spec.Step{{Check: "the service responds"}},
 	}
-	err := validateIterateBed(uf, "bed", bad)
+	err := loaderkit.ValidateIterateBed(uf, "bed", bad)
 	if err == nil || !strings.Contains(err.Error(), "is not defined in the agent: catalog") {
 		t.Fatalf("unknown agent 'ghost' was NOT rejected by the catalog guard, got err=%v", err)
 	}

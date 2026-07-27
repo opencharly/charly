@@ -89,28 +89,21 @@ const UnifiedFileName = kit.UnifiedFileName
 // loaderkit.LoadUnified now) / loaderkit.NormalizeV4Aliases (called directly by
 // materialize.go's per-document fold).
 
-// LoadUnified (K1 keystone, task #24 unit 2) is now a THIN WRAPPER: the
-// kind-blind orchestration (bootstrap phase, schema gates, walk, materialize,
-// venue flatten, member fold, descent stamp, the validation chain) relocated to
-// loaderkit.LoadUnified. Every step that touches the provider registry, or is a
-// standing K5-final-decision core file (foldMembers/validateMembers,
-// bundle_members.go), is threaded through as a seam — this wrapper's only job is
-// building that loaderkit.LoadSeams from charly-core's existing host-coupled
-// functions.
+// LoadUnified (K1 keystone, task #24 unit 2) is now a THIN, TRANSITIONAL WRAPPER: the kind-blind
+// orchestration (bootstrap phase, schema gates, walk, materialize, venue flatten, member fold,
+// descent stamp, the validation chain) relocated to loaderkit.LoadUnified. Unit C of the K1-LOADER
+// RELOCATION makes those seams PLUGIN-CALLABLE: rather than hand-building a loaderkit.LoadSeams from
+// charly's host functions, this wrapper drives loaderkit.LoadUnified through
+// loaderkit.LoadSeamsFromExecutor over a hostLoaderExecutor — the SAME seam constructor a genuine
+// out-of-module plugin uses (candy/plugin-bundle's execLoaderExecutor witness), but reaching each
+// registry-/host-coupled step by calling the host function DIRECTLY (zero marshal, U3 — a
+// compiled-in TYPED placement pays no envelope tax). The PURE LOAD-half seams (FlattenBundleVenues /
+// FoldMembers / ValidateMembers, plus the DATA-driven StampBundleDescents / ValidateEphemeral /
+// ValidateCheckBeds fed exec.LoaderThreaded()) are wired directly to loaderkit inside
+// LoadSeamsFromExecutor. Deleted by #118 GREEN (no permanent charly→loaderkit wrapper;
+// IMPORT-PURITY end-state).
 func LoadUnified(dir string) (*loaderkit.UnifiedFile, bool, error) {
-	return loaderkit.LoadUnified(dir, loaderkit.LoadSeams{
-		RunBootstrapPhase:        runBootstrapPhase,
-		WalkProject:              hostWalkProject,
-		MaterializeLoadedProject: materializeLoadedProject,
-		FlattenBundleVenues:      flattenBundleVenues,
-		FoldMembers:              foldMembers,
-		StampBundleDescents:      stampBundleDescents,
-		ValidateEphemeral:        validateEphemeralUnified,
-		ValidateCheckBeds:        validateCheckBeds,
-		ValidateAndroidDevices:   validateAndroidDevices,
-		ValidateMembers:          validateMembers,
-		ValidatePreemptible:      validatePreemptibleUnified,
-	})
+	return loaderkit.LoadUnified(dir, loaderkit.LoadSeamsFromExecutor(hostLoaderExecutor{}))
 }
 
 // validateDeploymentTree / validateDeployRequiresBox / validateDeploymentChildren /
@@ -187,83 +180,11 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
 // loaderkit.UnifiedFile.CheckBeds.
 
-// validateCheckBeds enforces the kind:check bed-specific invariants beyond the
-// generic deploy validation (which already runs on the folded beds via
-// validateDeploymentTree → validateDeployRequiresBox, covering the pod
-// `box:` requirement). Runs at LOAD time so EVERY command that resolves a
-// bed (charly check run, charly bundle add, charly config, charly box validate, …) sees the
-// same friendly error — not just `charly box validate`.
-func validateCheckBeds(uf *loaderkit.UnifiedFile) error {
-	for name, node := range uf.CheckBeds() {
-		// An iterate: bed is a benchmark (the former kind:score), NOT a
-		// deterministic R10 bed: it drives the AI loop scoring its plan's
-		// check:/agent-check: steps against an operator-provisioned sandbox, so
-		// the target/disposable/cross-ref requirements do not apply. Validate the
-		// iterate block instead.
-		if node.Iterate != nil {
-			if err := validateIterateBed(uf, name, &node); err != nil {
-				return err
-			}
-			continue
-		}
-		// Disposable is the sole authorization for the destroy+rebuild the
-		// R10 sequence drives; a non-disposable bed can't be rebuilt
-		// unattended (see /charly-internals:disposable).
-		if !node.IsDisposable() {
-			return fmt.Errorf(
-				"kind:check bed %q must set `disposable: true` — `charly check run` destroys + rebuilds it unattended (R10 acceptance gate)",
-				name)
-		}
-		// Bed-target validity is DATA-DRIVEN from the substrate's declared #DeployTraits
-		// (candy/plugin-substrate), never a per-substrate-word switch (the boundary-law
-		// incomplete-seam gate, task #22): bed_target marks pod/vm/local/android as valid bed
-		// targets; k8s (bed_target:false) and unknown words fall to the external/unsupported arm.
-		// image_backed distinguishes pod's box: cross-ref (enforced elsewhere) from the
-		// template-backed vm/local/android from: cross-ref.
-		traits := deployTraitsFor(node.Target)
-		switch {
-		case node.Target == "":
-			// A GROUP bed (no workload cross-ref) — valid ONLY when it carries
-			// sibling Members (subject + driver peers): the §3 group+siblings
-			// shape for cross-deployment probing, where the driver venue is a
-			// bare `${HOST:<subject>}` peer on the shared net (a peer requires a
-			// group root in the tree-position model). The flattened plan
-			// dispatches each step to its member venue; there is no root
-			// container. Same spirit as the iterate-bed exemption above. A group
-			// bed with neither a workload target nor members has nothing to run.
-			if len(node.Members) == 0 {
-				return fmt.Errorf("kind:check bed %q has no workload cross-ref and no sibling members — a group bed must declare member subdeployments (the subject + driver of a cross-deployment probe)", name)
-			}
-		case traits != nil && traits.BedTarget:
-			// A valid bed target. image_backed (pod) enforces box: via
-			// validateDeployRequiresBox on the folded Deploy entry — no duplicate check.
-			// The template-backed substrates (vm/local/android) share ONE cross-ref shape:
-			// a `from: <entity>` naming an entry in the SAME PluginKinds[target] map every
-			// standalone-template kind folds into.
-			if !traits.ImageBacked {
-				if node.From == "" {
-					return fmt.Errorf("kind:check bed %q (target: %s) must set `%s: <entity>`", name, node.Target, node.Target)
-				}
-				if _, ok := uf.PluginKinds[node.Target][node.From]; !ok {
-					return fmt.Errorf("kind:check bed %q references %s entity %q which is not defined", name, node.Target, node.From)
-				}
-			}
-		default:
-			// An external (out-of-process) deploy substrate (e.g. `exampledeploy`):
-			// the provider applies the deployment via the E3b reverse channel; it
-			// composes its candies via add_candy: and carries no from:/image:
-			// cross-ref to validate here. Recognized via a connected OR pre-scanned
-			// EXTERNAL deploy provider (plugin_prescan.go) — NOT a core in-process
-			// substrate (k8s has traits but bed_target:false, stays unsupported as a bed
-			// target), so the bed validates before the provider connects (loadProjectPlugins).
-			if isExternalDeploySubstrate(node.Target) {
-				break
-			}
-			return fmt.Errorf("kind:check bed %q has unsupported target %q (must be pod, vm, local, android, or a registered external deploy substrate)", name, node.Target)
-		}
-	}
-	return nil
-}
+// validateCheckBeds / validateIterateBed relocated to sdk/loaderkit (validate_check_beds.go,
+// K1-LOADER RELOCATION LOAD-half) — registry-free kind:check bed validation reading the
+// spec.Threaded DATA snapshot (DeployTraits for bed-target classification; DeploySubstrates +
+// spec.ResourceKinds for the byte-equivalent isExternalDeploySubstrate) instead of the live
+// registry, reached via the LoadSeams.ValidateCheckBeds seam. See loaderkit.ValidateCheckBeds.
 
 // validateAndroidDevices enforces the kind:android device source invariant: a
 // device is EXACTLY ONE of an in-pod emulator (box:) XOR a remote/physical adb
@@ -290,38 +211,6 @@ func validateAndroidDevices(uf *loaderkit.UnifiedFile) error {
 		case !hasBox && !hasAdb:
 			return fmt.Errorf("kind:android device %q sets neither box: nor adb: — a device must declare EXACTLY ONE source (box: <kind:box emulator> or adb: {host: …})", name)
 		}
-	}
-	return nil
-}
-
-// validateIterateBed enforces the iterate: benchmark invariants (replaces the
-// former validateScoreNode/validateHarnessSemantics). An iterate bed is exempt
-// from the deterministic R10 bed rules (target/disposable/cross-ref); instead:
-//   - every iterate.agent[] entry references an entry in the `agent:` catalog;
-//   - iterate.sandbox names a deployment (non-empty — its target kind is
-//     resolved at run time, possibly against an operator-provisioned sandbox);
-//   - the bed's plan: carries at least one `check:` step (the scored success
-//     criteria — an include: step's checks expand at collect time, so a plan of
-//     pure include: steps without a single direct check: is rejected here).
-func validateIterateBed(uf *loaderkit.UnifiedFile, name string, node *spec.BundleNode) error {
-	it := node.Iterate
-	agents := uf.PluginKinds["agent"] // agent is a plugin kind; opaque name-keyed catalog
-	for _, a := range it.Agent {
-		if _, ok := agents[a]; !ok {
-			return fmt.Errorf("iterate bed %q: agent %q is not defined in the agent: catalog", name, a)
-		}
-	}
-	if strings.TrimSpace(it.Sandbox) == "" {
-		return fmt.Errorf("iterate bed %q: iterate.sandbox must name a deployment (pod|vm|host) where the agent + charly run", name)
-	}
-	checks := 0
-	for i := range node.Plan {
-		if node.Plan[i].Check != "" {
-			checks++
-		}
-	}
-	if checks == 0 {
-		return fmt.Errorf("iterate bed %q: plan must contain at least one `check:` step (the scored success criteria)", name)
 	}
 	return nil
 }

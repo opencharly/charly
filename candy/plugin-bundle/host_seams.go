@@ -13,7 +13,7 @@ import (
 // the K4-C walk port) — LoadUnified-coupled config resolution (resolveTreeRoot/resolveDelNode) and
 // registry-coupled executor-chain derivation (deriveChildExecutorForPath) are core Mechanisms a
 // plugin cannot import (separate module), so the walk reaches them via six narrow host-build
-// seams: deploy-tree-resolve, deploy-node-dispatch (the per-node compile+ResolveTarget+Add
+// seams: deploy-plugins-connect, deploy-node-dispatch (the per-node compile+ResolveTarget+Add
 // terminal step), deploy-members-up/-down, deploy-del-resolve, and deploy-node-del-dispatch (the
 // per-node ResolveTarget+Del terminal step). `from-box` still forwards its WHOLE command to
 // HostBuild("deploy-from-box"), and the whole-file config-management ops (show/export/import/
@@ -45,7 +45,7 @@ func hostDeploySeam(kind string, reqAny any) error {
 
 // hostDeploySeamJSON is hostDeploySeam's reply-carrying sibling (K4-C walk port): the SAME
 // marshal/HostBuild/error-return contract, additionally json-unmarshaling the reply into
-// replyOut when non-nil (a *spec.DeployTreeResolveReply, *spec.DeployDelResolveReply, …).
+// replyOut when non-nil (a *spec.DeployPluginsConnectReply, *spec.DeployDelResolveReply, …).
 func hostDeploySeamJSON(kind string, reqAny any, replyOut any) error {
 	if cmdExec == nil {
 		return fmt.Errorf("bundle %s: no host reverse channel (command not compiled-in?)", kind)

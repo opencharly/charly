@@ -7,6 +7,7 @@ import (
 
 	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -54,7 +55,7 @@ func hostCheckRunPreflight(ctx context.Context, req spec.CheckRunRequest, _ buil
 	}
 	fmt.Fprintf(os.Stderr, "preflight: ensuring %d image(s) present in podman storage\n", len(req.Filter))
 	for _, ref := range req.Filter {
-		if venueIsAgentProvisioned(uf, ref) {
+		if loaderkit.VenueIsAgentProvisioned(uf, ref) {
 			continue
 		}
 		if err := dispatchBuildEnsure(ctx, ref, dir, "", ""); err != nil {

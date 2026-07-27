@@ -78,15 +78,13 @@ func deployTraitDescent(word string) *spec.DescentDescriptor {
 	return kit.DescentFromTraits(deployTraitsFor(word))
 }
 
+// stampBundleDescents is the LoadSeams.StampBundleDescents host wiring. K1-LOADER RELOCATION: the
+// stamp LOOP moved to loaderkit.StampBundleDescents (DATA-driven, registry-free); the host supplies
+// the fresh registry-derived Threaded snapshot (loaderThreaded, post-materialize) it reads. The
+// on-the-fly registry resolvers deployTraitsFor / nodeTraits / deployTraitDescent stay host-side for
+// SYNTHETIC (un-stamped) nodes built outside the loader — they are NOT the load path.
 func stampBundleDescents(uf *loaderkit.UnifiedFile) {
-	if uf == nil {
-		return
-	}
-	for name, node := range uf.Bundle {
-		n := node
-		kit.StampDescent(&n, deployTraitsFor)
-		uf.Bundle[name] = n
-	}
+	loaderkit.StampBundleDescents(uf, loaderThreaded())
 }
 
 // NestedContainerName computes the podman container name used when

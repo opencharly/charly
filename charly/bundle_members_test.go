@@ -29,7 +29,7 @@ func TestFoldMembers_FoldsTopLevelAndInheritsDisposability(t *testing.T) {
 			},
 		},
 	}}
-	if err := foldMembers(uf); err != nil {
+	if err := loaderkit.FoldMembers(uf); err != nil {
 		t.Fatalf("foldMembers: %v", err)
 	}
 	member, ok := uf.Bundle["chrome"]
@@ -57,7 +57,7 @@ func TestFoldMembers_NonDisposableOwnerDoesNotForceDisposable(t *testing.T) {
 			Members: map[string]*spec.BundleNode{"sidecar": {Target: "pod", Image: "chrome-headless"}},
 		},
 	}}
-	if err := foldMembers(uf); err != nil {
+	if err := loaderkit.FoldMembers(uf); err != nil {
 		t.Fatalf("foldMembers: %v", err)
 	}
 	if uf.Bundle["sidecar"].IsDisposable() {
@@ -72,7 +72,7 @@ func TestFoldMembers_CollisionIsError(t *testing.T) {
 		"web": {Target: "pod", Image: "web"},
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"web": {Target: "pod", Image: "chrome-headless"}}},
 	}}
-	err := foldMembers(uf)
+	err := loaderkit.FoldMembers(uf)
 	if err == nil || !strings.Contains(err.Error(), "collides") {
 		t.Fatalf("expected a collision error, got %v", err)
 	}
@@ -83,7 +83,7 @@ func TestFoldMembers_EmptyMemberIsError(t *testing.T) {
 	uf := &loaderkit.UnifiedFile{Bundle: map[string]spec.BundleNode{
 		"bed": {Target: "pod", Image: "web", Members: map[string]*spec.BundleNode{"chrome": nil}},
 	}}
-	if err := foldMembers(uf); err == nil {
+	if err := loaderkit.FoldMembers(uf); err == nil {
 		t.Fatalf("expected an error for a nil member node")
 	}
 }
@@ -95,7 +95,7 @@ func TestValidateMembers_BadTarget(t *testing.T) {
 			"chrome": {Target: "bogus", Image: "chrome-headless"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
+	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
 		t.Fatalf("expected unsupported-target error, got %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestValidateMembers_AcceptsCanonicalSubstrates(t *testing.T) {
 				"side": {Target: target, Image: "side-img"},
 			}},
 		}}
-		if err := validateMembers(uf); err != nil {
+		if err := loaderkit.ValidateMembers(uf); err != nil {
 			t.Errorf("canonical deploy substrate %q must be a valid member target, got: %v", target, err)
 		}
 	}
@@ -129,7 +129,7 @@ func TestValidateMembers_RejectsGroup(t *testing.T) {
 			"grp": {Target: "group", Image: "grp-img"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
+	if err := loaderkit.ValidateMembers(uf); err == nil || !strings.Contains(err.Error(), "unsupported target") {
 		t.Fatalf("group must not be a valid member target, got: %v", err)
 	}
 }
@@ -142,7 +142,7 @@ func TestValidateMembers_AcceptsEmptyTarget(t *testing.T) {
 			"side": {Target: "", Image: "side-img"},
 		}},
 	}}
-	if err := validateMembers(uf); err != nil {
+	if err := loaderkit.ValidateMembers(uf); err != nil {
 		t.Fatalf("the empty target (default pod) must be a valid member target, got: %v", err)
 	}
 }
@@ -155,7 +155,7 @@ func TestValidateMembers_DottedKeyRejected(t *testing.T) {
 			"a.b": {Target: "pod", Image: "chrome-headless"},
 		}},
 	}}
-	if err := validateMembers(uf); err == nil {
+	if err := loaderkit.ValidateMembers(uf); err == nil {
 		t.Fatalf("expected a dotted-key rejection")
 	}
 }
@@ -172,7 +172,7 @@ func TestIsPodMember(t *testing.T) {
 
 // TestSortedMemberKeys is deterministic ascending order.
 func TestSortedMemberKeys(t *testing.T) {
-	got := sortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
+	got := loaderkit.SortedMemberKeys(map[string]*spec.BundleNode{"c": {}, "a": {}, "b": {}})
 	if want := []string{"a", "b", "c"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("sortedMemberKeys = %v, want %v", got, want)
 	}

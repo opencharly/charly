@@ -72,7 +72,6 @@ var kernelFloor = []floorEntry{
 	{"materialize.go", "M — the host MATERIALIZE half of the K1 walk/materialize split (folds the loaderkit LoadedProject envelope; successor of loader_driver.go, mirrors node_parsed.go's P6 split)"},
 	{"node_build.go", "M — the generic entity-body materialize (kind-decode MATERIALIZE)"},
 	{"node_bundle.go", "M — the bundle / resource-member materialize (the ONE member-decode source of truth; kind-decode MATERIALIZE)"},
-	{"node_bundle_venue.go", "M — venue-from-position for bundle plan steps (kind-decode MATERIALIZE)"},
 	{"node_candy.go", "B — the candy constructor (candyIsImage/buildCandy bootstrap-critical routing stays core)"},
 	{"node_desugar.go", "M — the parse-time plugin-verb sugar desugar (kind-blind; runs in the host materialize)"},
 	{"node_normalize.go", "M — the normalizer dispatcher (the node-form materialize decode path; kind-decode MATERIALIZE)"},
@@ -121,7 +120,8 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_members.go", "M — the deploy-members F10 host-builder (reverse-channel; kind-blind)"},
 	{"host_build_deploy_node_del_dispatch.go", "M — the deploy-node-del dispatch F10 host-builder (kind-blind dispatch)"},
 	{"host_build_deploy_node_dispatch.go", "M — the deploy-node dispatch F10 host-builder (kind-blind dispatch)"},
-	{"host_build_deploy_tree_resolve.go", "M — the deploy-tree-resolve F10 host-builder (reverse-channel; kind-blind)"},
+	{"host_build_deploy_plugins_connect.go", "M — the deploy-plugins-connect F10 host-builder (reverse-channel; kind-blind — the K1-LOADER witness preamble: loadDeployPlugins + project dir)"},
+	{"host_build_loader_floor.go", "M/D — the PERMANENT loader reverse legs (loader-bootstrap = bootstrap-phase plugin dispatch; loader-walk = prescan+connectDeclaredKindPlugins; loader-threaded = the registry-derived Threaded D-snapshot) a plugin-side loader always calls back for; the transitional loader legs live in host_build_loader.go (residue)"},
 	{"host_build_pod_config.go", "M — the pod-config F10 reverse-channel dispatch seam (hostEnvJSON host-only; kind-blind)"},
 	{"host_build_pod_config_seams.go", "M — the pod-config F10 host-builders the plugin calls back (loader/registry/credential-coupled reverse-legs)"},
 	{"host_build_pod_lifecycle_dispatch.go", "M — the pod-lifecycle dispatch F10 host-builder wrapping dispatchLifecycleTarget (ResolveTarget+loader+live-executor; kind-blind M)"},
@@ -244,7 +244,6 @@ var residueOwner = map[string]string{
 	"unified.go":                    "P15",
 	"update_deploy_dispatch.go":     "P11",
 	"validate.go":                   "P15",
-	"validate_ephemeral.go":         "P11",
 	"validate_preempt.go":           "P13",
 	"vm_backend_lifecycle.go":       "P11",
 	"vm_lifecycle_preresolve.go":    "P11",
@@ -322,7 +321,8 @@ var residueOwner = map[string]string{
 	// can trigger the one host-only side effect it cannot do itself, and (b) the
 	// host→plugin dispatch into command:bundle's Op{Ephemeral,Teardown}
 	// legs. Both stay in the "ephemeral" cross-substrate lifecycle family — the
-	// SAME family as the still-present validate_ephemeral.go (P11) — rather than
+	// SAME family as the ephemeral load-time validators now relocated to
+	// sdk/loaderkit (validate_ephemeral.go, K1-LOADER RELOCATION) — rather than
 	// following the P13 shape their own comments compare themselves to
 	// (bundle_compile_seam.go's dispatch pattern); the family the seam SERVES
 	// (ephemeral lifecycle, explicitly named in P11's "lifecycle" scope) governs
@@ -330,6 +330,21 @@ var residueOwner = map[string]string{
 	"ephemeral_dispatch.go":            "P11",
 	"host_build_retention_defaults.go": "P15",
 	"retention_plugin.go":              "P15",
+	// load_executor_host.go + host_build_loader.go — Unit C/B of the K1-LOADER
+	// RELOCATION (make loaderkit.LoadUnified plugin-callable). load_executor_host.go
+	// is the compiled-in TYPED loaderkit.LoaderExecutor (the charly→loaderkit
+	// wrapper charly.LoadUnified drives through LoadSeamsFromExecutor). host_build_
+	// loader.go holds ONLY the TRANSITIONAL reverse legs — loader-materialize
+	// (materialize ORCHESTRATION, RULING 1(a), moves to loaderkit at #48) +
+	// loader-android-validate + loader-preempt-validate (capability validators that
+	// move to loaderkit reaching the registry via the generic Threaded/InvokeProvider
+	// seam). Both dissolve as the loader's call sites finish moving into their owning
+	// plugin (K1 loader-orchestration, P15 — the SAME owner as unified.go). The
+	// PERMANENT loader legs (bootstrap-phase dispatch / prescan+connect / the D
+	// snapshot) live in host_build_loader_floor.go, classified FLOOR (kernelFloor
+	// above) so residue→0 GREEN stays reachable.
+	"load_executor_host.go": "P15",
+	"host_build_loader.go":  "P15",
 }
 
 func TestKernelManifest_CoreIsPinnedToTheFabricFloor(t *testing.T) {

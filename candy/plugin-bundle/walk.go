@@ -11,9 +11,12 @@ import (
 )
 
 // walk.go — the K4-C WALK PORT: `charly bundle add`/`del`'s tree-walk CONTROL FLOW now runs
-// plugin-side (P13-KERNEL walk port). resolveTreeRoot/resolveDelNode (LoadUnified-coupled) and
+// plugin-side (P13-KERNEL walk port). `add`'s tree resolution now runs loaderkit.LoadUnified
+// PLUGIN-SIDE (K1-LOADER RELOCATION witness, load_executor.go: resolveTreeViaLoader over the
+// reverse-channel LoaderExecutor) — the host keeps only the deploy-plugins-connect preamble
+// (loadDeployPlugins + project dir). resolveDelNode (LoadUnified-coupled) and
 // deriveChildExecutorForPath (registry-coupled — deployTraitDescent needs the providerRegistry)
-// stay host-side behind the deploy-tree-resolve / deploy-del-resolve / deploy-node-dispatch /
+// stay host-side behind the deploy-del-resolve / deploy-node-dispatch /
 // deploy-node-del-dispatch / deploy-members-up / deploy-members-down seams. The per-node terminal
 // step (resolve+compile+ResolveTarget+Add) reconstructs its OWN parentExec executor chain
 // HOST-side from the ancestor path/node lists this walk sends — a live DeployExecutor never
@@ -24,19 +27,14 @@ import (
 // Run executes `charly bundle add` (plugin-side walk; the deploy-add host-build seam it used to
 // forward the WHOLE Run() to is retired).
 func (c *BundleAddCmd) Run() error {
-	var tr spec.DeployTreeResolveReply
-	if err := hostDeploySeamJSON("deploy-tree-resolve", spec.DeployTreeResolveRequest{
-		Path:     c.Name,
-		AddCandy: c.AddCandy,
-	}, &tr); err != nil {
+	// Unit D WITNESS: drive loaderkit.LoadUnified PLUGIN-SIDE (over the reverse-channel
+	// execLoaderExecutor) to resolve the deploy tree, instead of the former host resolveTreeRoot
+	// seam — proving command:bundle → loaderkit.LoadUnified end-to-end. The host preamble only
+	// connects out-of-tree deploy plugins + hands back the project dir; rootVenueSSH is read from
+	// the loaded tree's stamped node.Descent (load_executor.go).
+	tree, rootVenueSSH, err := resolveTreeViaLoader(c.Name, c.AddCandy)
+	if err != nil {
 		return err
-	}
-
-	tree := make(map[string]spec.BundleNode, len(tr.Tree))
-	for k, v := range tr.Tree {
-		if v != nil {
-			tree[k] = *v
-		}
 	}
 
 	// Resolve the named root + any dotted-path subtree the user targeted. Supports three call
@@ -88,10 +86,11 @@ func (c *BundleAddCmd) Run() error {
 	// is ALSO dispatched node-only: its nested target:pod children deploy IN the guest (the
 	// host can't tree-walk a pod-in-VM), so the VM target's Add deploys them itself after the
 	// VM is up (plugin-deploy-vm's PostApply). A host tree walk would wrongly try to deploy
-	// them locally / double-deploy. tr.RootVenueSSH is the host-resolved (registry-backed)
-	// nodeTraits(rootNode).Venue=="ssh" check; the legacy "vm:"-prefixed name form is checked
-	// here too (a pure string check, no registry needed).
-	if c.NodeOnly || tr.RootVenueSSH || strings.HasPrefix(resolvedPath, "vm:") {
+	// them locally / double-deploy. rootVenueSSH is read plugin-side from the loaded root's
+	// stamped node.Descent.Venue=="ssh" (loaderkit.LoadUnified stamps it — byte-identical to the
+	// former host registry-backed nodeTraits(rootNode).Venue check); the legacy "vm:"-prefixed name
+	// form is checked here too (a pure string check, no registry needed).
+	if c.NodeOnly || rootVenueSSH || strings.HasPrefix(resolvedPath, "vm:") {
 		return c.dispatchOne(resolvedPath, rootNode, ancestorPaths, ancestorNodes)
 	}
 

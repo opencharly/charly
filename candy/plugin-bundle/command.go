@@ -27,7 +27,7 @@ import (
 // LifecycleTarget method dispatches through, see deploy_target.go). The retired
 // K4-C spike's OpDispatch relay (dispatchNode's root-level Add nesting a second HostBuild call)
 // is superseded by the walk port (walk.go): the plugin now drives the WHOLE tree walk itself and
-// calls the deploy-tree-resolve / deploy-node-dispatch / deploy-members-* / deploy-del-resolve /
+// calls the deploy-plugins-connect / deploy-node-dispatch / deploy-members-* / deploy-del-resolve /
 // deploy-node-del-dispatch seams directly, no OpDispatch round-trip needed.
 func (provider) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
 	switch req.GetOp() {
