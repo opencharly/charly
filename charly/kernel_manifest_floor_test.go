@@ -150,6 +150,7 @@ var kernelFloor = []floorEntry{
 	{"host_build_deploy_config_save_state.go", "M — the deploy-config-save-state substrate-neutral F10 host-builder (generic deploy-state persist)"},
 	{"host_build_remote_image_resolve.go", "M — the remote-image-resolve seam for plugin-build's ensure fallback (thin ResolveRemoteImage wrapper; drops non-wire fields)"},
 	{"host_build_render_service.go", "M — the render-service host-builder (wraps plugin-init OpResolve + M16 egress gate; two registry consults)"},
+	{"host_exec.go", "M — the --host CLI pre-dispatch reexec decision (shouldReexecForHost runs before Kong dispatches, reading the core CLI struct + command path — the prescan-dispatch spine, mirroring plugin_command_prescan.go / main_repo.go's --repo; ReexecOverSSH body already moved to kit)"},
 }
 
 // residueOwner maps every tracked-for-removal charly/*.go non-test file to its
@@ -207,7 +208,6 @@ var residueOwner = map[string]string{
 	"host_build_bake_plugins.go":    "P8b",
 	"host_build_render_seam.go":     "P8b",
 	"host_build_vm_build.go":        "P8b",
-	"host_exec.go":                  "P15",
 	"image.go":                      "P14",
 	"k3s_post.go":                   "P11",
 	"k8s_config.go":                 "P11",
