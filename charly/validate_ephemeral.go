@@ -30,44 +30,30 @@ func ValidateEphemeralOnNode(name string, node *spec.BundleNode, errs *Validatio
 	if node == nil {
 		return
 	}
+	// Ephemeral + from_snapshot support is DATA-DRIVEN from the substrate's declared #DeployTraits
+	// (candy/plugin-substrate), never a per-substrate-word comparison (the boundary-law
+	// incomplete-seam gate, task #22): supports_from_snapshot marks the substrates with a backing
+	// chain from_snapshot restores from (vm); supports_ephemeral marks those whose Add/Del path
+	// wires the ephemeral register/teardown seam (vm today). A nil-traits target (external/unknown/
+	// "") is reported elsewhere — treated as no-backing-chain for the from_snapshot mistake check.
+	traits := deployTraitsFor(node.Target)
 	if !node.IsEphemeral() {
-		// Non-ephemeral deploys still get the from_snapshot check —
-		// authoring `from_snapshot:` on a non-ephemeral non-VM is
-		// usually a mistake.
-		if node.FromSnapshot != "" && node.Target != "vm" {
-			errs.Add("deployment %q: from_snapshot is only valid on target=vm (got target=%q)", name, node.Target)
+		// Non-ephemeral deploys still get the from_snapshot check — authoring `from_snapshot:` on a
+		// non-backing-chain substrate is usually a mistake.
+		if node.FromSnapshot != "" && (traits == nil || !traits.SupportsFromSnapshot) {
+			errs.Add("deployment %q: from_snapshot is only valid on a backing-chain substrate (vm) (got target=%q)", name, node.Target)
 		}
 		return
 	}
 
-	switch node.Target {
-	case "host":
-		errs.Add("deployment %q: target=host with ephemeral is not supported (host is inherently non-ephemeral)", name)
-	case "pod", "container":
-		if node.FromSnapshot != "" {
-			errs.Add("deployment %q: target=pod with from_snapshot is not supported (containers don't have backing chains)", name)
+	// The deploy IS ephemeral: reject it on any substrate whose Add/Del path does not (yet) wire the
+	// ephemeral register/teardown seam. vm (supports_ephemeral) is the only one today; pod/k8s/local/
+	// android and host were previously accepted-then-inert (a load-time lie) — reject loudly.
+	if traits != nil && !traits.SupportsEphemeral {
+		if node.FromSnapshot != "" && !traits.SupportsFromSnapshot {
+			errs.Add("deployment %q: target=%s with from_snapshot is not supported (containers/namespaces have no backing chains; only vm restores from a snapshot)", name, node.Target)
 		}
-		// FINAL/K5 unit 6a: the ephemeral REGISTRATION/TEARDOWN mechanism
-		// (candy/plugin-bundle's OpEphemeralRegister/OpEphemeralTeardown, dispatched from
-		// deploy_add_shared.go's registerEphemeralIfMarked) is wired for the vm substrate ONLY —
-		// pod's Add/Del path never calls it. Authoring `ephemeral: true` on a pod deploy was
-		// previously silently accepted here and then silently INERT at runtime (no TTL timer,
-		// no persisted state, no teardown) — a load-time lie. Reject it loudly instead until the
-		// bed-robustness batch wires pod's Add/Del to the same seam vm already uses.
-		errs.Add("deployment %q: target=pod with ephemeral is not yet supported (the ephemeral lifecycle — TTL timer + charly.yml persistence — is wired for target=vm only; tracked for pod in the bed-robustness batch)", name)
-	case "vm":
-		// ok — the only substrate whose Add/Del path actually calls the ephemeral
-		// register/teardown seam today (vm_lifecycle_preresolve.go).
-	case "k8s", "kubernetes":
-		if node.FromSnapshot != "" {
-			errs.Add("deployment %q: target=k8s with from_snapshot is not supported (namespace-per-instance pattern doesn't use backing chains)", name)
-		}
-		// Same gap as pod — see the target=pod case above.
-		errs.Add("deployment %q: target=k8s with ephemeral is not yet supported (the ephemeral lifecycle — TTL timer + charly.yml persistence — is wired for target=vm only; tracked for k8s in the bed-robustness batch)", name)
-	case "":
-		// schema v4 invariant elsewhere; don't double-report
-	default:
-		// unknown target; reported elsewhere
+		errs.Add("deployment %q: target=%s with ephemeral is not yet supported (the ephemeral lifecycle — TTL timer + charly.yml persistence — is wired for target=vm only; tracked for the other substrates in the bed-robustness batch)", name, node.Target)
 	}
 
 	if node.Ephemeral != nil && node.Ephemeral.TTL != "" {

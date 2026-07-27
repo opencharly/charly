@@ -213,8 +213,15 @@ func validateCheckBeds(uf *loaderkit.UnifiedFile) error {
 				"kind:check bed %q must set `disposable: true` — `charly check run` destroys + rebuilds it unattended (R10 acceptance gate)",
 				name)
 		}
-		switch node.Target {
-		case "":
+		// Bed-target validity is DATA-DRIVEN from the substrate's declared #DeployTraits
+		// (candy/plugin-substrate), never a per-substrate-word switch (the boundary-law
+		// incomplete-seam gate, task #22): bed_target marks pod/vm/local/android as valid bed
+		// targets; k8s (bed_target:false) and unknown words fall to the external/unsupported arm.
+		// image_backed distinguishes pod's box: cross-ref (enforced elsewhere) from the
+		// template-backed vm/local/android from: cross-ref.
+		traits := deployTraitsFor(node.Target)
+		switch {
+		case node.Target == "":
 			// A GROUP bed (no workload cross-ref) — valid ONLY when it carries
 			// sibling Members (subject + driver peers): the §3 group+siblings
 			// shape for cross-deployment probing, where the driver venue is a
@@ -226,21 +233,19 @@ func validateCheckBeds(uf *loaderkit.UnifiedFile) error {
 			if len(node.Members) == 0 {
 				return fmt.Errorf("kind:check bed %q has no workload cross-ref and no sibling members — a group bed must declare member subdeployments (the subject + driver of a cross-deployment probe)", name)
 			}
-		case "pod":
-			// box: presence enforced by validateDeployRequiresBox on the
-			// folded Deploy entry — no duplicate check here.
-		case "vm", "local", "android":
-			// The 3 template-backed substrates (deployTraitsFor(...).ImageBacked == false,
-			// unlike pod above) share ONE cross-ref shape: a `from: <entity>` naming an
-			// entry in the SAME PluginKinds[target] map every standalone-template kind
-			// folds into (K1 unit-2 follow-up — collapses 3 near-identical case bodies
-			// that only differed by kind word into one generic lookup; no per-word switch
-			// left inside).
-			if node.From == "" {
-				return fmt.Errorf("kind:check bed %q (target: %s) must set `%s: <entity>`", name, node.Target, node.Target)
-			}
-			if _, ok := uf.PluginKinds[node.Target][node.From]; !ok {
-				return fmt.Errorf("kind:check bed %q references %s entity %q which is not defined", name, node.Target, node.From)
+		case traits != nil && traits.BedTarget:
+			// A valid bed target. image_backed (pod) enforces box: via
+			// validateDeployRequiresBox on the folded Deploy entry — no duplicate check.
+			// The template-backed substrates (vm/local/android) share ONE cross-ref shape:
+			// a `from: <entity>` naming an entry in the SAME PluginKinds[target] map every
+			// standalone-template kind folds into.
+			if !traits.ImageBacked {
+				if node.From == "" {
+					return fmt.Errorf("kind:check bed %q (target: %s) must set `%s: <entity>`", name, node.Target, node.Target)
+				}
+				if _, ok := uf.PluginKinds[node.Target][node.From]; !ok {
+					return fmt.Errorf("kind:check bed %q references %s entity %q which is not defined", name, node.Target, node.From)
+				}
 			}
 		default:
 			// An external (out-of-process) deploy substrate (e.g. `exampledeploy`):
@@ -248,8 +253,8 @@ func validateCheckBeds(uf *loaderkit.UnifiedFile) error {
 			// composes its candies via add_candy: and carries no from:/image:
 			// cross-ref to validate here. Recognized via a connected OR pre-scanned
 			// EXTERNAL deploy provider (plugin_prescan.go) — NOT a core in-process
-			// substrate (k8s stays unsupported as a bed target), so the bed validates
-			// before the provider connects (loadProjectPlugins).
+			// substrate (k8s has traits but bed_target:false, stays unsupported as a bed
+			// target), so the bed validates before the provider connects (loadProjectPlugins).
 			if isExternalDeploySubstrate(node.Target) {
 				break
 			}

@@ -59,11 +59,11 @@ var substrateWords = []string{"pod", "vm", "k8s", "local", "android"}
 // opts AND need the Q1 resource-arbiter claim bracketed — vm manages its own venue lifecycle +
 // resource claim via `charly vm start`/`stop`, so it leaves this false.
 var substrateTraits = map[string]*spec.DeployTraits{
-	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true, BracketedLifecycle: true},
-	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true},
-	"local":   {Venue: "shell", MachineVenue: true},
+	"pod":     {Venue: "container", ImageBacked: true, ImageContext: true, BracketedLifecycle: true, BedTarget: true},
+	"vm":      {Venue: "ssh", MachineVenue: true, ExclusiveVenue: true, BedTarget: true, SupportsEphemeral: true, SupportsFromSnapshot: true},
+	"local":   {Venue: "shell", MachineVenue: true, BedTarget: true},
 	"k8s":     {Venue: "shell", ImageContext: true, LeafOnly: true},
-	"android": {Venue: "parent"},
+	"android": {Venue: "parent", BedTarget: true},
 }
 
 // NewProvider returns the substrate kind provider for in-proc registration or out-of-proc serving.

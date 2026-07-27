@@ -18,10 +18,14 @@ func TestValidateEphemeralOnNode_PodK8sRejected(t *testing.T) {
 		name   string
 		target string
 	}{
+		// Bed-target/ephemeral rejection is data-driven from #DeployTraits by CANONICAL substrate
+		// word (task #22); the legacy "container"/"kubernetes" spellings are normalized to
+		// pod/k8s by classifyNodeTarget BEFORE validation, so validation only ever sees canonical
+		// targets (the alias mapping is classifyNodeTarget's contract, tested there).
 		{"pod substrate", "pod"},
-		{"container substrate", "container"},
 		{"k8s substrate", "k8s"},
-		{"kubernetes substrate", "kubernetes"},
+		{"local substrate", "local"},
+		{"android substrate", "android"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
