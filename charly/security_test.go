@@ -19,7 +19,7 @@ func TestCollectSecurityMergesCapsSmallest(t *testing.T) {
 			"test": {Candy: []string{"big", "small"}},
 		}),
 	}
-	sec := CollectSecurity(cfg, layers, "test")
+	sec := deploykit.CollectSecurity(cfg, layers, "test")
 	if sec.MemoryMax != "4g" {
 		t.Errorf("MemoryMax = %q, want 4g (smallest wins)", sec.MemoryMax)
 	}
@@ -45,7 +45,7 @@ func TestCollectSecurityImageOverridesCaps(t *testing.T) {
 			},
 		}),
 	}
-	sec := CollectSecurity(cfg, layers, "heavy")
+	sec := deploykit.CollectSecurity(cfg, layers, "heavy")
 	if sec.MemoryMax != "16g" {
 		t.Errorf("MemoryMax = %q, want 16g (box override)", sec.MemoryMax)
 	}

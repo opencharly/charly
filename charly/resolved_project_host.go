@@ -140,10 +140,10 @@ func projectBoxAggregates(cfg *Config, layers map[string]spec.CandyReader, name 
 		view.EnvFile = img.EnvFile
 		view.Security = img.Security
 	}
-	if ports, perr := CollectBoxPorts(cfg, layers, name); perr == nil {
+	if ports, perr := deploykit.CollectBoxPorts(cfg, layers, name); perr == nil {
 		view.Ports = ports
 	}
-	if vols, verr := CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
+	if vols, verr := deploykit.CollectBoxVolume(cfg, layers, name, resolved.Home, nil); verr == nil {
 		for _, vm := range vols {
 			view.Volumes = append(view.Volumes, spec.ResolvedVolumeMount(vm))
 		}

@@ -63,7 +63,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	meta.Build = img.BuilderCapabilities
 
 	// Ports (CollectBoxPorts) + per-candy port protocols.
-	boxPorts, _ := CollectBoxPorts(g.Config, g.Candies, boxName)
+	boxPorts, _ := deploykit.CollectBoxPorts(g.Config, g.Candies, boxName)
 	meta.Port = boxPorts
 	portProtos := make(map[string]string)
 	for _, candyName := range candyOrder {
@@ -89,7 +89,7 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	// Volumes: short form names (without charly-<image>- prefix). The wire form is
 	// LabelVolumeEntry{Name, Path} (the ai.opencharly.volume label shape), NOT the deploy-side
 	// VolumeMount{VolumeName, ContainerPath} — the formatter emits the wire form byte-for-byte.
-	volumes, _ := CollectBoxVolume(g.Config, g.Candies, boxName, img.Home, nil)
+	volumes, _ := deploykit.CollectBoxVolume(g.Config, g.Candies, boxName, img.Home, nil)
 	if len(volumes) > 0 {
 		labelVols := make([]spec.LabelVolumeEntry, 0, len(volumes))
 		for _, v := range volumes {
@@ -104,20 +104,20 @@ func buildBakedMetadata(g *Generator, boxName string, candyOrder []string) *spec
 	meta.Alias = collectedAliasesToLabel(aliases)
 
 	// Security: collected from candies + image config.
-	meta.Security = CollectSecurity(g.Config, g.Candies, boxName)
+	meta.Security = deploykit.CollectSecurity(g.Config, g.Candies, boxName)
 
 	// Image-level env vars.
 	imgCfg, _ := g.Config.BoxConfig(boxName)
 	meta.Env = imgCfg.Env
 
 	// Hooks.
-	meta.Hook = CollectHooks(g.Config, g.Candies, boxName)
+	meta.Hook = deploykit.CollectHooks(g.Config, g.Candies, boxName)
 
 	// Description: three-section plan-shaped self-description.
 	meta.Description = deploykit.CollectDescriptions(g.Config, g.Candies, boxName)
 
 	// Shell-init manifest.
-	meta.Shell = CollectShell(g.Config, g.Candies, boxName)
+	meta.Shell = deploykit.CollectShell(g.Config, g.Candies, boxName)
 
 	// Init system label: active init system name + per-init service list.
 	if g.InitConfig != nil {

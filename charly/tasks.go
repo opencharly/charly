@@ -58,7 +58,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 		return frag, false, nil
 	}
 	dg.CollectBoxPorts = func(boxName string) ([]string, error) {
-		return CollectBoxPorts(g.Config, g.Candies, boxName)
+		return deploykit.CollectBoxPorts(g.Config, g.Candies, boxName)
 	}
 	dg.ValidateEgress = ValidateEgress
 	// ValidateTextEgress: the rendered-Containerfile text gate (kind "rendered_text", mode
@@ -98,7 +98,7 @@ func (g *Generator) toDeploykit() *deploykit.Generator {
 	// Wraps the core CollectBoxVolume (reads the live Config + Candy graph). Used by
 	// deploykit.Generator.generateDataImageContainerfile (#67 render-DRIVE move).
 	dg.CollectBoxVolume = func(boxName, home string) ([]deploykit.VolumeMount, error) {
-		return CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
+		return deploykit.CollectBoxVolume(g.Config, g.Candies, boxName, home, nil)
 	}
 	g.dkGen = dg
 	return dg

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/sdk/buildkit"
+	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -352,7 +353,7 @@ func TestCollectBoxPorts(t *testing.T) {
 		}),
 	}
 
-	got, err := CollectBoxPorts(cfg, layers, "child")
+	got, err := deploykit.CollectBoxPorts(cfg, layers, "child")
 	if err != nil {
 		t.Fatalf("CollectBoxPorts() error = %v", err)
 	}
