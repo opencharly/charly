@@ -11,6 +11,7 @@ import (
 
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/deploykit"
+	"github.com/opencharly/sdk/loaderkit"
 	"github.com/opencharly/sdk/spec"
 )
 
@@ -54,15 +55,15 @@ func TestCandyRef(t *testing.T) {
 // the Problem-B regression guard: a repo re-tag of an UNCHANGED candy must not
 // warn. Different per-entity versions warn once and the newest version wins.
 func TestPickCandyVersion(t *testing.T) {
-	mk := func(ver, tag string) candyCandidate {
-		return candyCandidate{
-			scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
-			version: ver,
-			gitTag:  tag,
-			source:  "github.com/o/r@" + tag,
+	mk := func(ver, tag string) loaderkit.CandyCandidate {
+		return loaderkit.CandyCandidate{
+			Scanned: spec.ScannedCandy{Model: spec.CandyModel{Name: "x", Version: ver}},
+			Version: ver,
+			GitTag:  tag,
+			Source:  "github.com/o/r@" + tag,
 		}
 	}
-	capture := func(fn func() candyCandidate) (candyCandidate, string) {
+	capture := func(fn func() loaderkit.CandyCandidate) (loaderkit.CandyCandidate, string) {
 		old := os.Stderr
 		r, w, _ := os.Pipe()
 		os.Stderr = w
@@ -75,8 +76,8 @@ func TestPickCandyVersion(t *testing.T) {
 	}
 
 	// Same per-entity version, different git tags -> NO warning, newest tag wins.
-	got, warn := capture(func() candyCandidate {
-		return pickCandyVersion("github.com/o/r/layers/x", []candyCandidate{
+	got, warn := capture(func() loaderkit.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.141.1600", "v2026.150.900"),
 		})
@@ -84,19 +85,19 @@ func TestPickCandyVersion(t *testing.T) {
 	if warn != "" {
 		t.Errorf("same per-entity version must not warn, got: %q", warn)
 	}
-	if got.gitTag != "v2026.150.900" {
-		t.Errorf("freshness tiebreak: want newest git tag v2026.150.900, got %q", got.gitTag)
+	if got.GitTag != "v2026.150.900" {
+		t.Errorf("freshness tiebreak: want newest git tag v2026.150.900, got %q", got.GitTag)
 	}
 
 	// Different per-entity versions -> exactly one warning, newest version wins.
-	got, warn = capture(func() candyCandidate {
-		return pickCandyVersion("github.com/o/r/layers/x", []candyCandidate{
+	got, warn = capture(func() loaderkit.CandyCandidate {
+		return loaderkit.PickCandyVersion("github.com/o/r/layers/x", []loaderkit.CandyCandidate{
 			mk("2026.141.1600", "v2026.141.1600"),
 			mk("2026.144.0531", "v2026.144.531"),
 		})
 	})
-	if got.version != "2026.144.0531" {
-		t.Errorf("newest per-entity version must win, got %q", got.version)
+	if got.Version != "2026.144.0531" {
+		t.Errorf("newest per-entity version must win, got %q", got.Version)
 	}
 	if !strings.Contains(warn, "resolved to multiple versions") || !strings.Contains(warn, "2026.144.0531") {
 		t.Errorf("expected one multi-version warning naming the winner, got: %q", warn)

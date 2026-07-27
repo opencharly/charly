@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,7 +8,6 @@ import (
 	"github.com/opencharly/sdk/buildkit"
 	"github.com/opencharly/sdk/spec"
 
-	"github.com/opencharly/sdk/deploykit"
 	"github.com/opencharly/sdk/kit"
 	"github.com/opencharly/sdk/loaderkit"
 )
@@ -62,18 +60,14 @@ const UnifiedFileName = kit.UnifiedFileName
 // InlineCandy (K1 keystone, task #24 unit 1) relocated to sdk/loaderkit — see
 // loaderkit.InlineCandy.
 
-// DeploymentsSection carries repo-shipped deployment defaults plus per-image
-// deployment entries. Matches the two-tier deploy model: this block is the
-// authored/in-repo defaults; ~/.config/charly/charly.yml is the per-machine overlay.
-// DeploymentsSection — RETIRED by the field-singular cutover (2026-05).
-// loaderkit.UnifiedFile.Deploy is now a flat map; loaderkit.UnifiedFile.Provides moved to
-// root level. The type definition is kept (not deleted) because
-// migrate_unified.go still references it for legacy migration history.
-type DeploymentsSection struct {
-	Defaults *spec.BundleNode           `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-	Provides *deploykit.ProvidesConfig  `yaml:"provides,omitempty" json:"provides,omitempty"`
-	Box      map[string]spec.BundleNode `yaml:"box,omitempty" json:"box,omitempty"`
-}
+// DeploymentsSection (the legacy v3 plural `deployments:` wrapper type) was
+// DELETED as dead code (radical dead-code removal): after the field-singular
+// cutover (2026-05) loaderkit.UnifiedFile.Bundle is a flat map and Provides moved
+// to root level, and the last real referent — migrate_unified.go — is long gone.
+// Its only surviving mentions were prose (deploy_tree.go's resolveTreeRoot doc
+// comment, this file) plus the TestLoadUnified_DeploymentsSection name (which
+// tests that the legacy `deployments:` YAML key is hard-rejected at load, never
+// the Go type). No code constructed or consumed it.
 
 // -----------------------------------------------------------------------------
 // Entity kind table — drives scanner + router + merge path.
@@ -176,122 +170,18 @@ func canonicalRef(ref, baseDir string) (key, path string, err error) {
 // Merge helpers.
 // -----------------------------------------------------------------------------
 
-// mergeUnified merges src into dst such that dst's existing values WIN on
-// conflict at the same leaf (root-wins). This means when materializeLoadedProject
-// replays the walk's documents in order (the root file first, then its flat
-// imports), the root file's values are already present before any import's
-// fields are considered, so root wins.
-//
-// For included files: the same mergeUnified is called but dst already contains
-// the root's values, so those fields stay untouched. src's fields that aren't
-// present in dst get copied over. That's the desired semantics.
-func mergeUnified(dst, src *loaderkit.UnifiedFile, srcDir string) {
-	if src.Version != "" && dst.Version == "" {
-		dst.Version = src.Version
-	}
-	// Root-wins: the root file (merged first) defines the project's repo
-	// identity; a flat import declaring `repo:` never overrides it.
-	if src.Repo != "" && dst.Repo == "" {
-		dst.Repo = src.Repo
-	}
-	// Discover entries concatenate (not overwrite). Resolve relative
-	// paths to absolute against srcDir so an included file's discover
-	// roots remain anchored to the included file's directory rather
-	// than to the eventual root file's directory. Without this, a
-	// downstream workspace that `include:`-s an upstream charly.yml
-	// would look for upstream's `candy/` inside the workspace tree.
-	if len(src.Discover) > 0 {
-		dst.Discover = append(dst.Discover, kit.AnchorScanSpecs(src.Discover, srcDir)...)
-	}
-	mergeRawTemplateMap(&dst.Box, src.Box)
-	mergeRawTemplateMap(&dst.Candy, src.Candy)
-	// PluginKinds carries every plugin-extracted kind — the build vocabulary
-	// (distro/builder/init/resource), the Calamares target, sidecar/agent/module/
-	// package-group, AND (K1 unit-1 follow-up) the 5 standalone-substrate-TEMPLATE kinds
-	// vm/pod/k8s/local/android (formerly 5 separate mergeRawTemplateMap calls into dedicated
-	// fields — now subsumed here too, since they fold into PluginKinds[disc][name] like every
-	// other templated kind) — merged once here (root-wins, name-keyed override). The former
-	// mergeDistroMap/mergeBuilderMap/mergeInitMap/mergeResourceMap/mergeTargetMap calls
-	// are subsumed by this one generic merge.
-	mergePluginKindsMap(&dst.PluginKinds, src.PluginKinds)
-	mergeDeployMaps(&dst.Bundle, src.Bundle)
-	if dst.Provides == nil && src.Provides != nil {
-		dst.Provides = src.Provides
-	}
-	// Defaults: dst wins per-field if set.
-	mergeBoxConfig(&dst.Defaults, &src.Defaults)
-}
+// mergeUnified + mergeRawTemplateMap + mergePluginKindsMap + mergeDeployMaps +
+// mergeBoxConfig (K1-proper, task #24 follow-up) relocated to sdk/loaderkit
+// (merge.go) — the kind-blind document MERGE half of the loader. They are pure
+// map/struct merges over an already-parsed UnifiedFile with zero charly-core
+// coupling (spec.*/kit.*/json only), so they belong in the sdk loaderkit consumed
+// by the loader plugin, not in charly/ core (boundary law clause M). See
+// loaderkit.MergeUnified (called from materialize.go) / loaderkit.MergePluginKindsMap
+// (called from embed_defaults.go).
 
 // anchorScanSpecs (kit.AnchorScanSpecs) is the discover-path anchoring helper
 // — relocated to sdk/kit (loader_directives.go) so charly core AND
 // sdk/loaderkit share ONE copy (R3).
-
-// mergeRawTemplateMap root-wins merges an OPAQUE substrate-template map (local /
-// android after the Cutover I de-type): copy a name only when ABSENT in dst. One
-// generic helper for both (R3) — the former typed mergeLocalMap/mergeAndroidMap.
-func mergeRawTemplateMap(dst *map[string]json.RawMessage, src map[string]json.RawMessage) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]json.RawMessage)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
-
-// mergePluginKindsMap merges plugin-contributed kind entities (uf.PluginKinds:
-// kind word → entity NAME → canonical entity JSON) across every merged
-// document/file. Root-wins NAME-KEYED OVERRIDE, byte-identical in spirit to the
-// build-vocab map merges (mergeDistroMap et al.): for each kind, an existing dst
-// entry for a given name is PRESERVED and src fills only the names dst does not have.
-// So a project's entity overrides an embedded/imported one of the same name (one
-// entry, not two) — the property the agent + sidecar extractions rely on (a project's
-// `sidecar: tailscale` overriding the binary-embedded one, merged in via
-// applyEmbeddedDefaults). Without this,
-// plugin-kind entities decoded into a per-document `sub` loaderkit.UnifiedFile are silently
-// dropped at mergeUnified (every document flows through here).
-func mergePluginKindsMap(dst *map[string]map[string]json.RawMessage, src map[string]map[string]json.RawMessage) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]map[string]json.RawMessage)
-	}
-	for kind, entities := range src {
-		d := (*dst)[kind]
-		if d == nil {
-			d = make(map[string]json.RawMessage)
-			(*dst)[kind] = d
-		}
-		for name, body := range entities {
-			if _, exists := d[name]; !exists {
-				d[name] = body
-			}
-		}
-	}
-}
-
-// mergeDeployMaps merges src into dst, dst-wins on name collisions.
-// Field-singular cutover: replaces the legacy mergeDeployments which
-// took *DeploymentsSection wrappers. Provides now lives at loaderkit.UnifiedFile
-// root and is merged separately by mergeUnified.
-func mergeDeployMaps(dst *map[string]spec.BundleNode, src map[string]spec.BundleNode) {
-	if len(src) == 0 {
-		return
-	}
-	if *dst == nil {
-		*dst = make(map[string]spec.BundleNode)
-	}
-	for k, v := range src {
-		if _, exists := (*dst)[k]; !exists {
-			(*dst)[k] = v
-		}
-	}
-}
 
 // CheckBeds relocated to sdk/loaderkit (K1 keystone, task #24 unit 1) — see
 // loaderkit.UnifiedFile.CheckBeds.
@@ -428,79 +318,6 @@ func validateIterateBed(uf *loaderkit.UnifiedFile, name string, node *spec.Bundl
 		return fmt.Errorf("iterate bed %q: plan must contain at least one `check:` step (the scored success criteria)", name)
 	}
 	return nil
-}
-
-// mergeBoxConfig preserves dst's already-set fields and fills only the
-// zero-valued ones from src. Used for merging Defaults blocks from includes.
-func mergeBoxConfig(dst, src *spec.BoxConfig) {
-	if src == nil || dst == nil {
-		return
-	}
-	if dst.Base == "" {
-		dst.Base = src.Base
-	}
-	if dst.Tag == "" {
-		dst.Tag = src.Tag
-	}
-	if dst.Registry == "" {
-		dst.Registry = src.Registry
-	}
-	if len(dst.Platforms) == 0 {
-		dst.Platforms = src.Platforms
-	}
-	if len(dst.Distro) == 0 {
-		dst.Distro = src.Distro
-	}
-	if len(dst.Build) == 0 {
-		dst.Build = src.Build
-	}
-	if len(dst.Candy) == 0 {
-		dst.Candy = src.Candy
-	}
-	if dst.User == "" {
-		dst.User = src.User
-	}
-	if dst.UID == nil {
-		dst.UID = src.UID
-	}
-	if dst.GID == nil {
-		dst.GID = src.GID
-	}
-	if dst.UserPolicy == "" {
-		dst.UserPolicy = src.UserPolicy
-	}
-	if dst.Merge == nil {
-		dst.Merge = src.Merge
-	}
-	if len(dst.Builder) == 0 {
-		dst.Builder = src.Builder
-	}
-	if dst.Init == "" {
-		dst.Init = src.Init
-	}
-	// Build-speed tunables (defaults: block) — carried through the same
-	// per-field "dst wins if set" merge as the rest of BoxConfig.
-	if dst.Jobs == nil {
-		dst.Jobs = src.Jobs
-	}
-	if dst.PodmanJobs == nil {
-		dst.PodmanJobs = src.PodmanJobs
-	}
-	if dst.PodmanJobsCap == nil {
-		dst.PodmanJobsCap = src.PodmanJobsCap
-	}
-	if len(dst.ContextIgnore) == 0 {
-		dst.ContextIgnore = src.ContextIgnore
-	}
-	if dst.Cache == "" {
-		dst.Cache = src.Cache
-	}
-	if dst.KeepImages == nil {
-		dst.KeepImages = src.KeepImages
-	}
-	if dst.KeepCheckRuns == nil {
-		dst.KeepCheckRuns = src.KeepCheckRuns
-	}
 }
 
 // -----------------------------------------------------------------------------

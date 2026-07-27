@@ -16,6 +16,7 @@ import (
 	"github.com/opencharly/sdk/spec"
 
 	"github.com/opencharly/sdk/kit"
+	"github.com/opencharly/sdk/loaderkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -630,7 +631,7 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 	// dep carries its own repo/git-tag. Fix-point until no new (repo, git-tag,
 	// ref) surfaces, so cross-repo transitive closures are fully materialized.
 	type repoVer struct{ repo, ver string }
-	candidates := make(map[string][]candyCandidate) // bare ref -> all fetched materializations
+	candidates := make(map[string][]loaderkit.CandyCandidate) // bare ref -> all fetched materializations
 	scanned := make(map[repoVer]map[string]bool)    // (repo, git-tag) -> refs already scanned
 	defaultBranches := make(map[string]string)      // repo → resolved default branch
 
@@ -692,11 +693,11 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 				if sc.Model.Version == "" {
 					return nil, fmt.Errorf("remote candy %q (from %s@%s) declares no version:; its producer repo must declare one", ref, dl.RepoPath, dl.Version)
 				}
-				candidates[ref] = append(candidates[ref], candyCandidate{
-					scanned: sc,
-					version: sc.Model.Version,
-					gitTag:  dl.Version,
-					source:  dl.RepoPath + "@" + dl.Version,
+				candidates[ref] = append(candidates[ref], loaderkit.CandyCandidate{
+					Scanned: sc,
+					Version: sc.Model.Version,
+					GitTag:  dl.Version,
+					Source:  dl.RepoPath + "@" + dl.Version,
 				})
 
 				// Enqueue this materialization's transitive deps. A plain-name dep
@@ -738,11 +739,11 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 		combined[name] = sc
 	}
 	for ref, cands := range candidates {
-		winner := pickCandyVersion(ref, cands)
-		if _, ok := localScanned[winner.scanned.Model.Name]; ok {
-			fmt.Fprintf(os.Stderr, "Note: local candy %q shadows remote candy %q\n", winner.scanned.Model.Name, ref)
+		winner := loaderkit.PickCandyVersion(ref, cands)
+		if _, ok := localScanned[winner.Scanned.Model.Name]; ok {
+			fmt.Fprintf(os.Stderr, "Note: local candy %q shadows remote candy %q\n", winner.Scanned.Model.Name, ref)
 		}
-		combined[ref] = winner.scanned
+		combined[ref] = winner.Scanned
 	}
 
 	// 5. Host-completion (InitSystems, opts.InitCfg-gated — nil by default, matching
@@ -754,40 +755,10 @@ func scanCandyFromLocal(localScanned map[string]spec.ScannedCandy, cfg *Config, 
 	return finalizeScannedCandies(combined, opts.InitCfg), nil
 }
 
-// candyCandidate is one fetched materialization of a bare candy ref. The git tag
-// is the fetch coordinate; version is the candy's own per-entity `version:`.
-type candyCandidate struct {
-	scanned spec.ScannedCandy
-	version string // per-entity version (scanned.Model.Version) — mandatory, never ""
-	gitTag  string // fetch coordinate (the @github :vTAG)
-	source  string // "<repo>@<git-tag>" for warning attribution
-}
-
-// pickCandyVersion arbitrates the candidates of ONE bare ref by per-entity
-// version. Same per-entity version across different git tags => NO warning, the
-// newest git tag wins (freshness). Different per-entity versions => warn once
-// (naming the winner + a loser) and the newest per-entity version wins. This is
-// the sole candy-version arbiter — direct and transitive refs both flow through
-// it. cands is non-empty.
-func pickCandyVersion(bareRef string, cands []candyCandidate) candyCandidate {
-	best := cands[0]
-	for _, c := range cands[1:] {
-		if kit.CompareCalVer(c.version, best.version) > 0 {
-			best = c // newer per-entity version
-		} else if c.version == best.version && kit.CompareSemver(c.gitTag, best.gitTag) > 0 {
-			best = c // same per-entity version: prefer the newest git tag
-		}
-	}
-	for _, c := range cands {
-		if c.version != best.version {
-			fmt.Fprintf(os.Stderr,
-				"Warning: candy %s resolved to multiple versions; using newest %s (from %s), ignoring %s (from %s)\n",
-				bareRef, best.version, best.source, c.version, c.source)
-			break
-		}
-	}
-	return best
-}
+// The per-entity candy-version arbiter (candyCandidate + pickCandyVersion) moved
+// to sdk/loaderkit (candy_version.go) as loaderkit.CandyCandidate /
+// loaderkit.PickCandyVersion — a kind-blind MECHANISM (boundary-law clause M)
+// with zero core coupling. scanCandyFromLocal above calls it directly.
 
 // Inject the VerbCatalog-coupled op-context classifier (checkspec.go's opInContext) into
 // deploykit's swappable seam (deploykit itself holds no VerbCatalog — that vocabulary is

@@ -53,6 +53,6 @@ func applyEmbeddedDefaults(uf *loaderkit.UnifiedFile) error {
 	if err != nil {
 		return err
 	}
-	mergePluginKindsMap(&uf.PluginKinds, def.PluginKinds)
+	loaderkit.MergePluginKindsMap(&uf.PluginKinds, def.PluginKinds)
 	return nil
 }

@@ -94,7 +94,7 @@ func stampBundleDescents(uf *loaderkit.UnifiedFile) {
 // joined with underscores so the result is a legal podman name.
 // Called by the walker when it knows the full dotted path.
 
-// resolveTreeRoot returns the DeploymentsSection's Images map from
+// resolveTreeRoot returns the top-level Bundle (deploy-node) map from
 // the merged loaderkit.UnifiedFile + local overlay, ready for dotted-path
 // traversal. Handles the project charly.yml + local overlay merge
 // the same way deployAddCmd.Run does today.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -60,32 +59,5 @@ func TestRunPluginKind_DecodesViaEnvelope(t *testing.T) {
 	}
 }
 
-// TestMergePluginKindsMap_NameKeyedOverride proves Cutover A's root-wins override on
-// the merge itself: uf.PluginKinds is kind→name→body, and merging a source that
-// authors the SAME kind+name as the destination yields ONE entry — the destination
-// (root/project) wins and the source (embedded/import) is dropped — exactly the
-// build-vocab map merge (mergeDistroMap) rule. A new name in the source is gap-filled. (The
-// pre-cutover append semantics would have produced two entries for the shared name.)
-func TestMergePluginKindsMap_NameKeyedOverride(t *testing.T) {
-	dst := map[string]map[string]json.RawMessage{
-		"sidecar": {"tailscale": json.RawMessage(`{"image":"project"}`)},
-	}
-	src := map[string]map[string]json.RawMessage{
-		"sidecar": {
-			"tailscale": json.RawMessage(`{"image":"embedded"}`), // same name — must NOT override dst
-			"redis":     json.RawMessage(`{"image":"embedded"}`), // new name — must be gap-filled
-		},
-	}
-	mergePluginKindsMap(&dst, src)
-
-	sc := dst["sidecar"]
-	if len(sc) != 2 {
-		t.Fatalf("expected 2 sidecar entries (tailscale override + redis gap-fill), got %d (%v)", len(sc), sc)
-	}
-	if got := string(sc["tailscale"]); got != `{"image":"project"}` {
-		t.Errorf("tailscale not root-wins: got %q, want the project (dst) body", got)
-	}
-	if got := string(sc["redis"]); got != `{"image":"embedded"}` {
-		t.Errorf("redis gap-fill missing/wrong: got %q", got)
-	}
-}
+// TestMergePluginKindsMap_NameKeyedOverride relocated to sdk/loaderkit/merge_test.go
+// alongside MergePluginKindsMap (K1-proper — the merge half of the loader moved to loaderkit).

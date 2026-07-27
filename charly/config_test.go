@@ -160,57 +160,8 @@ func TestResolveImageNotFound(t *testing.T) {
 	}
 }
 
-// TestMergeBoxConfig_BuildTunables guards the regression where new
-// BoxConfig fields are silently dropped during the unified loader's
-// defaults: merge because mergeBoxConfig is a hand-maintained field-by-field
-// merger. The build-speed tunables (jobs / podman_jobs / podman_jobs_cap /
-// context_ignore / cache) MUST survive the merge, or defaults.context_ignore
-// authored in charly.yml never reaches the generator.
-func TestMergeBoxConfig_BuildTunables(t *testing.T) {
-	// dst empty → fills from src (the path that dropped these fields).
-	dst := &spec.BoxConfig{}
-	src := &spec.BoxConfig{
-		Jobs:          new(4),
-		PodmanJobs:    new(0),
-		PodmanJobsCap: new(8),
-		ContextIgnore: []string{"image", ".check"},
-		Cache:         "image",
-		KeepImages:    new(5),
-		KeepCheckRuns: new(10),
-	}
-	mergeBoxConfig(dst, src)
-	if dst.KeepImages == nil || *dst.KeepImages != 5 {
-		t.Errorf("KeepImages not merged from src: %v", dst.KeepImages)
-	}
-	if dst.KeepCheckRuns == nil || *dst.KeepCheckRuns != 10 {
-		t.Errorf("KeepCheckRuns not merged from src: %v", dst.KeepCheckRuns)
-	}
-	if dst.Jobs == nil || *dst.Jobs != 4 {
-		t.Errorf("Jobs not merged from src: %v", dst.Jobs)
-	}
-	if dst.PodmanJobs == nil || *dst.PodmanJobs != 0 {
-		t.Errorf("PodmanJobs (explicit 0) not merged from src: %v", dst.PodmanJobs)
-	}
-	if dst.PodmanJobsCap == nil || *dst.PodmanJobsCap != 8 {
-		t.Errorf("PodmanJobsCap not merged from src: %v", dst.PodmanJobsCap)
-	}
-	if len(dst.ContextIgnore) != 2 {
-		t.Errorf("ContextIgnore not merged from src: %v", dst.ContextIgnore)
-	}
-	if dst.Cache != "image" {
-		t.Errorf("Cache not merged from src: %q", dst.Cache)
-	}
-
-	// dst already set → src must NOT override (per-field "dst wins if set").
-	dst2 := &spec.BoxConfig{Jobs: new(2), Cache: "registry"}
-	mergeBoxConfig(dst2, &spec.BoxConfig{Jobs: new(9), Cache: "image"})
-	if dst2.Jobs == nil || *dst2.Jobs != 2 {
-		t.Errorf("dst Jobs should win, got %v", dst2.Jobs)
-	}
-	if dst2.Cache != "registry" {
-		t.Errorf("dst Cache should win, got %q", dst2.Cache)
-	}
-}
+// TestMergeBoxConfig_BuildTunables relocated to sdk/loaderkit/merge_test.go
+// alongside mergeBoxConfig (K1-proper — the merge half of the loader moved to loaderkit).
 
 func TestImageNames(t *testing.T) {
 	cfg, err := LoadConfig("testdata")
