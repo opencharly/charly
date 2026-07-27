@@ -6,7 +6,7 @@ import (
 
 // readiness_config.go — the out-of-process plugin's readiness ENTRY. The config→resolved resolver
 // AND the CHARLY_READINESS_* field table live ONCE in sdk/vmshared (ResolveReadiness, aliased
-// here as readinessResolve; charly core calls vmshared.ResolveReadiness directly), shared.
+// here as readinessResolve in this candy's own vmshared_aliases.go), shared.
 
 // loadedReadiness resolves this plugin process's readiness bounds ONCE. The out-of-process plugin
 // cannot LoadUnified to read the project's defaults.readiness, so it passes nil — but the host
